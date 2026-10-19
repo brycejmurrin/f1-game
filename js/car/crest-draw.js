@@ -326,8 +326,54 @@ const LiveryCrests = (function () {
       emblemLetter(ctx, f, P, teamId, 0.5, 0.55, 0.2);
       ctx.restore();
     }
+    // Design preview B·D8 (2026-10-19): four more, each a different SILHOUETTE
+    // first — a hexagon, a ring of leaves, a stack, a rhombus — so two cars in
+    // different emblems still differ at the distance only the outline survives.
+    function emblemBolt(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN), pts = [];
+      for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; pts.push([0.5 + Math.cos(a) * 0.45, 0.5 + Math.sin(a) * 0.45]); }
+      ctx.save(); ctx.fillStyle = css(P.mark); poly(ctx, f, pts); ctx.fill();
+      ctx.fillStyle = css(P.alt);
+      poly(ctx, f, [[0.56, 0.14], [0.30, 0.54], [0.47, 0.54], [0.40, 0.86], [0.70, 0.42], [0.53, 0.42]]); ctx.fill();
+      ctx.restore();
+    }
+    function emblemLaurel(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      // seven leaves up each side of an open wreath, tips leaning in toward the crown
+      for (const s of [-1, 1]) {
+        for (let i = 0; i < 7; i++) {
+          const a = Math.PI / 2 + s * (0.35 + i * 0.36), r = 0.38;
+          const cx = 0.5 + Math.cos(a) * r, cy = 0.5 + Math.sin(a) * r, ta = a + s * Math.PI / 2;
+          const lx = Math.cos(ta) * 0.09, ly = Math.sin(ta) * 0.09, nx = -ly * 0.45, ny = lx * 0.45;
+          poly(ctx, f, [[cx - lx, cy - ly], [cx + nx, cy + ny], [cx + lx, cy + ly], [cx - nx, cy - ny]]); ctx.fill();
+        }
+      }
+      emblemLetter(ctx, f, P, teamId, 0.5, 0.5, 0.34);
+      ctx.restore();
+    }
+    function emblemChevrons(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save();
+      for (let i = 0; i < 3; i++) {
+        const y = 0.16 + i * 0.22;
+        ctx.fillStyle = css(i === 1 ? P.alt : P.mark);
+        poly(ctx, f, [[0.10, y + 0.20], [0.50, y], [0.90, y + 0.20], [0.90, y + 0.36], [0.50, y + 0.16], [0.10, y + 0.36]]); ctx.fill();
+      }
+      ctx.restore();
+    }
+    function emblemDiamond(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      poly(ctx, f, [[0.5, 0.04], [0.94, 0.5], [0.5, 0.96], [0.06, 0.5]]); ctx.fill();
+      ctx.strokeStyle = css(P.alt); ctx.lineWidth = swMin(f, 0.04);
+      poly(ctx, f, [[0.5, 0.16], [0.82, 0.5], [0.5, 0.84], [0.18, 0.5]]); ctx.stroke();
+      emblemLetter(ctx, f, P, teamId, 0.5, 0.5, 0.30);
+      ctx.restore();
+    }
     // "team" (or unset) keeps the team's own crest; the garage lists EMBLEM_IDS in this order.
-    const EMBLEMS = Object.freeze({ shield: emblemShield, roundel: emblemRoundel, wings: emblemWings, arrow: emblemArrow, star: emblemStar });
+    const EMBLEMS = Object.freeze({ shield: emblemShield, roundel: emblemRoundel, wings: emblemWings, arrow: emblemArrow, star: emblemStar,
+      bolt: emblemBolt, laurel: emblemLaurel, chevrons: emblemChevrons, diamond: emblemDiamond });
     const EMBLEM_IDS = Object.freeze(["team", ...Object.keys(EMBLEMS)]);
 
     return { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS };

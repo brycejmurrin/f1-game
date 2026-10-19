@@ -38,7 +38,7 @@ test("team / unset / unknown style: mesh byte-identical, colours ignored", () =>
 
 test("each style repaints only the helmet vertices", () => {
   const outside = rest(base);
-  for (const style of ["solid", "cap", "band", "stripe", "chevron"]) {
+  for (const style of H.STYLES.slice(1)) {
     const m = build({ helmetStyle: style, helmetBase: BASE, helmetAccent: ACC });
     assert.deepEqual(rest(m), outside, `${style} touched a non-helmet vertex`);
     assert.ok(!same(base, m), `${style} changed nothing`);
@@ -50,7 +50,7 @@ test("base and accent colours land on the shell, base alone under solid", () => 
   const has = (m, c) => { for (let i = 0; i < m.mat.length; i++) if (inLid(m, i) && f([m.col[i * 3], m.col[i * 3 + 1], m.col[i * 3 + 2]]) === f(c)) return true; return false; };
   const solid = build({ helmetStyle: "solid", helmetBase: BASE, helmetAccent: ACC });
   assert.ok(has(solid, BASE)); assert.ok(!has(solid, ACC), "solid ignores the accent");
-  for (const style of ["cap", "band", "stripe", "chevron"]) {
+  for (const style of H.STYLES.slice(2)) {
     const m = build({ helmetStyle: style, helmetBase: BASE, helmetAccent: ACC });
     assert.ok(has(m, BASE) && has(m, ACC), `${style}: base and accent both present`);
   }
@@ -65,6 +65,29 @@ test("design zones: cap on the crown, band round the shell, stripe front-to-back
   assert.equal(at("band", 0.2, 45), A); assert.equal(at("band", 0.2, 200), A); assert.equal(at("band", 0.8, 45), B);
   assert.equal(at("stripe", 0.8, 0), A); assert.equal(at("stripe", 0.8, 180), A); assert.equal(at("stripe", 0.8, 90), B);
   assert.equal(at("chevron", 0.38, 0), A); assert.equal(at("chevron", 0.38, 180), B);
+  // flash rakes BACK: on the right temple it sits further aft low on the shell than high
+  assert.equal(at("flash", 0.10, 43), A); assert.equal(at("flash", 0.70, 43), B); assert.equal(at("flash", 0.70, 102), A);
+  assert.equal(at("flash", 0.70, 258), A); assert.equal(at("flash", 0.10, 180), A);
+  assert.equal(at("split", 0.5, 270), A); assert.equal(at("split", 0.5, 90), B); assert.equal(at("split", 0.5, 0), B);
+  assert.equal(at("roundel", 0.50, 90), A); assert.equal(at("roundel", 0.36, 90), B); assert.equal(at("roundel", 0.50, 0), B);
+});
+
+test("new styles stay distinct on the FIELD tessellation (not lost under the 12 x 18 mesh)", () => {
+  const des = H.designFor(16, team.color, null);
+  const sig = (style) => {
+    const p = H.painter(H.styled(des, style, BASE, ACC)), out = [];
+    for (let r = 0; r < H.FIELD_RINGS; r++) for (let s = 0; s < H.FIELD_SLICES; s++)
+      out.push(p(Math.pow((r + 0.5) / H.FIELD_RINGS, 1.25) * 0.95, (s + 0.5) * 360 / H.FIELD_SLICES).join() === ACC.join() ? 1 : 0);
+    return out;
+  };
+  const seen = new Map();
+  for (const style of H.STYLES.slice(2)) {
+    const v = sig(style), n = v.reduce((a, b) => a + b, 0);
+    assert.ok(n >= 6, `${style}: only ${n} field cells carry the accent`);
+    const k = v.join("");
+    assert.ok(!seen.has(k), `${style} paints the same field cells as ${seen.get(k)}`);
+    seen.set(k, style);
+  }
 });
 
 test("styled(): team/unknown returns the design itself; missing colours fall back to the design", () => {
@@ -85,5 +108,5 @@ test("the garage lists the HELMET pill row, both colour rows and an editor secti
   // the editor only collects rows that are on the page: a row built but never appended is invisible
   assert.ok(sheet.includes("wrap.appendChild(lidBaseRow); wrap.appendChild(lidAccentRow);"), "helmet colour rows are appended");
   assert.ok(ed.includes('section("HELMET"') && ed.includes('"helmetStyle", "helmetBase", "helmetAccent"'));
-  assert.deepEqual(Array.from(H.STYLES), ["team", "solid", "cap", "band", "stripe", "chevron"]);
+  assert.deepEqual(Array.from(H.STYLES), ["team", "solid", "cap", "band", "stripe", "chevron", "flash", "split", "roundel", "doodle"]);
 });

@@ -770,7 +770,7 @@ test("a legend's car wears its marque crest; a wordmark marque is lettered with 
 
 /* ── CREST STYLE (LD logos slice): original emblems replace the team mark at every station ── */
 test("crestStyle: each original emblem draws distinct, bounded, legible art; team/unset/unknown keep the team mark", () => {
-  assert.deepEqual(Array.from(LT.CREST_STYLE_IDS), ["team", "shield", "roundel", "wings", "arrow", "star"]);
+  assert.deepEqual(Array.from(LT.CREST_STYLE_IDS), ["team", "shield", "roundel", "wings", "arrow", "star", "bolt", "laurel", "chevrons", "diamond"]);
   const R = { x: 0, y: 0, w: 200, h: 200 };
   const ops = (liv) => { const ctx = new RecCtx(); LT.drawCrest(ctx, "ferrari", R, { liv, bare: false }); return JSON.stringify(ctx.ops); };
   const team = ops({});

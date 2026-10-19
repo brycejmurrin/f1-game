@@ -380,7 +380,12 @@ const Helmets = (function () {
      vocabulary. "team" (the default), unset or any unknown id returns `des`
      itself, so the shipped mesh is byte-identical. Colours without a style are
      ignored; the visor, gasket and neck trim are the shell's, never a design's. */
-  const STYLES = ["team", "solid", "cap", "band", "stripe", "chevron"];
+  // flash / split / roundel / doodle (design preview B·D8, 2026-10-19) are the
+  // modern-lid vocabulary the first five lack: a raked side graphic, a two-tone
+  // shell, a temple target and an all-over doodle. Each is drawn wide enough to
+  // survive the FIELD tessellation (12 x 18), where a 10-degree mark has no
+  // vertex to land on.
+  const STYLES = ["team", "solid", "cap", "band", "stripe", "chevron", "flash", "split", "roundel", "doodle"];
   const okCol = (c) => Array.isArray(c) && c.length >= 3 && c.every((v) => typeof v === "number" && isFinite(v));
   function styled(des, style, base, accent) {
     if (!des || STYLES.indexOf(style) < 1) return des;
@@ -390,7 +395,15 @@ const Helmets = (function () {
     const zones = style === "cap" ? [z.cap(0.30, a)]
       : style === "band" ? [z.band(0.16, 0.30, a)]
       : style === "stripe" ? centre(14, a)
-      : style === "chevron" ? [z.chevron(0, 40, 0.04, 0.40, a)] : [];
+      : style === "chevron" ? [z.chevron(0, 40, 0.04, 0.40, a)]
+      // swept side flashes off the brow, tied together by a crown stripe
+      : style === "flash" ? [...z.sides((q) => z.flash(q === 90 ? 40 : 320, 10, 28, 0.06, 0.78, q === 90 ? 70 : -70, a)), ...centre(8, a)]
+      // left half accent, right half base, the join keylined in the base
+      : style === "split" ? [z.wedge(180, 360, a), ...centre(5, b)]
+      // a target on each temple: accent disc, base ring, accent core
+      : style === "roundel" ? z.sides((q) => z.spot(q, 0.50, 0.24, a)).concat(z.sides((q) => z.spot(q, 0.50, 0.15, b)), z.sides((q) => z.spot(q, 0.50, 0.07, a)))
+      // a connected doodle over the whole shell (the NOR level set, coarser)
+      : style === "doodle" ? [z.mottle(0.04, 0.95, 4, 0.55, 2, a)] : [];
     return { name: des.name, base: b, alt: a, visor: des.visor, zones, generated: des.generated, styled: style };
   }
 
