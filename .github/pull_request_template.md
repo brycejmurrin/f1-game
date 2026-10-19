@@ -38,3 +38,13 @@ CHANGELOG: add a fragment `docs/changelog.d/<slug>.md` (lines `Fixed: …`; neve
 <!-- What the next agent (or you, after a restart) should do first; blockers and open
      questions for the user; anything half-done in the tree or uncommitted.
      "Done — ready for review" when every Plan item is ticked or struck. -->
+
+## Locale checklist
+<!-- Fill when this PR adds or edits `locales/<lang>.json` (non-en) or migrates a
+     screen to I18n.t / data-i18n. Skip with "n/a" otherwise.
+     Lint: `node tools/check/i18n-lint.mjs` and `node tools/check/i18n-lint.mjs --guard`. -->
+- [ ] `node tools/check/i18n-lint.mjs` is green (unknown keys, placeholders, CLDR plurals)
+- [ ] Placeholder sets match English; every CLDR plural category for the language is present
+- [ ] `locales/manifest.json` row: `status` is `beta` until a native speaker reviews, then `reviewed`
+- [ ] If this PR migrates a screen: path(s) appended to `tests/data/i18n-migrated.json` in the same commit
+- [ ] No new hard-coded user-facing literals in migrated files (`i18n-lint --guard`)

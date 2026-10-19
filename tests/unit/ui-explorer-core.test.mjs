@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateScenario, stateKey, addGraphStep, minimizeActions } from '../../tools/ui/explorer/core.mjs';
+import { validateScenario, stateKey, addGraphStep, minimizeActions, catalogCoverage } from '../../tools/ui/explorer/core.mjs';
 
 const scenario = actions => ({ id: 'garage-to-race', goal: 'Change the car and start a race', actions });
 const checkpoint = label => ({ type: 'checkpoint', label });
@@ -204,4 +204,28 @@ test('a bug that reproduces without actions reduces to an empty replay; invalid 
   assert.deepEqual(result, { actions: [], attempts: 2, reproduced: true, complete: true });
   const invalid = await minimizeActions([], async () => ({ error: 'not a boolean' }));
   assert.equal(invalid.reason, 'baseline-replay-error');
+});
+
+
+test('catalog coverage requires the observed subview for shared roots', () => {
+  const catalog = [
+    { id: 'home', root: '#settings', view: '#home' },
+    { id: 'display', root: '#settings', view: '#display' },
+    { id: 'legacy', root: '#settings' },
+    { id: 'garage', root: '#garage' },
+  ];
+  const seen = [{ roots: ['settings', 'garage'], views: ['#home'] }];
+  assert.deepEqual(catalogCoverage(catalog, seen).map(c => [c.id, c.visited]),
+    [['home', true], ['display', false], ['legacy', false], ['garage', true]]);
+  assert.equal(catalogCoverage(catalog, seen)[2].basis, 'shared-root-unidentified');
+  assert.equal(catalogCoverage(catalog, [{ roots: ['other'], views: ['#display'] }])[1].visited, false);
+  assert.equal(catalogCoverage(catalog, [...seen, { roots: [{ id: 'settings' }], views: ['#display'] }])[1].visited, true);
+});
+
+test('visible subview identity survives graph normalization and changes state keys', () => {
+  const before = snapshot({ views: ['#home'] }), after = snapshot({ views: ['#display'] });
+  assert.notEqual(stateKey(before), stateKey(after));
+  const graph = { nodes: [], edges: [] };
+  addGraphStep(graph, before, after, { type: 'click', selector: '#display' });
+  assert.deepEqual(graph.nodes.map(n => n.snapshot.views), [['#home'], ['#display']]);
 });

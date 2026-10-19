@@ -23,7 +23,7 @@ APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless H
   shell-poll loops while subscribed).
 - Sync only CONFLICTING/DIRTY or required tip red. Claim via who-is-on-it --claim.
 - Branch: cursor/<topic>-<hash> → ship claude/f1-game-project-26h3ng.
-HASHES: steward=30b2922e check-changes=088e3e46 pr-template=d39664c1
+HASHES: steward=30b2922e check-changes=088e3e46 pr-template=f25176e7
 ```
 
 MCP: call `get_mcp_tools` / schema discovery once per session (or once per

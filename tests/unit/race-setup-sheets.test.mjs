@@ -158,6 +158,91 @@ test("paintPresetState lights CUSTOM when no preset matches; weekend lights week
   assert.equal(h.dom.byId("rs-go").textContent, "START QUALIFYING");
 });
 
+test("preset disclosure keeps its open state and hides when presets do not apply", () => {
+  const h = sheet();
+  h.rs.openRaceSettings("select");
+  const row = h.dom.byId("rs-presets");
+  const fold = row.parentElement;
+  assert.equal(fold.id, "rs-preset-options");
+  assert.match(fold.querySelector("summary").textContent, /CUSTOM/);
+  fold.open = true;
+  h.rs.applyPreset("quick");
+  h.rs.openRaceSettings("select");
+  assert.equal(row.parentElement, fold, "draft paints reuse the existing disclosure");
+  assert.equal(fold.open, true, "repainting does not close a player-opened disclosure");
+  assert.match(fold.querySelector("summary").textContent, /QUICK RACE/);
+  h.G.session = "tt";
+  h.rs.openRaceSettings("select");
+  assert.equal(row.hidden, true);
+  assert.equal(fold.hidden, true, "time trial must not leave an empty preset summary");
+});
+
+test("setting help preserves descriptions, open state and hidden-row ownership across paints", () => {
+  const h = sheet();
+  const body = h.dom.byId("rs-body");
+  const move = (parent, node) => {
+    // mini-dom intentionally does not implement native appendChild reparenting.
+    if (node.parentElement) node.parentElement.removeChild(node);
+    parent.appendChild(node);
+    return node;
+  };
+  const seed = (id, labelText, attributes = {}) => {
+    const row = move(body, h.dom.byId(id));
+    row.className = "set-row";
+    const label = h.dom.document.createElement("span");
+    label.className = "tune-label";
+    label.textContent = labelText;
+    row.appendChild(label);
+    const control = move(row, h.dom.byId(id + "-sel"));
+    const help = move(row, h.dom.byId(id + "-help"));
+    help.className = "adv-help";
+    help.textContent = "Original explanation for " + labelText;
+    for (const [name, value] of Object.entries(attributes)) help.setAttribute(name, value);
+    control.setAttribute("aria-describedby", help.id);
+    return { row, control, help };
+  };
+  const weather = seed("rs-weather", "WEATHER");
+  const mixed = seed("rs-mixed", "CONDITIONS");
+  const duel = seed("rs-duel", "DUEL");
+  const status = seed("rs-test-status", "STATUS", { role: "status" });
+  const live = seed("rs-test-live", "FORECAST", { "aria-live": "polite" });
+
+  h.rs.openRaceSettings("select");
+  assert.equal(duel.help.parentElement, duel.row,
+    "#rs-duel-help stays a visible direct child of #rs-duel (browser-ui-hunt containment)");
+  assert.equal(duel.row.querySelectorAll("[data-rs-help]").length, 0,
+    "Duel help is not wrapped in an optional disclosure");
+  const fold = weather.help.parentElement;
+  assert.equal(fold.tagName, "DETAILS");
+  assert.equal(fold.hasAttribute("data-rs-help"), true);
+  assert.equal(fold.querySelector("summary").textContent, "About weather");
+  assert.equal(h.dom.byId("rs-weather-help"), weather.help, "the original description node survives");
+  assert.equal(weather.control.getAttribute("aria-describedby"), weather.help.id,
+    "the control retains its original description ID reference");
+  assert.equal(weather.help.textContent, "Original explanation for WEATHER");
+  assert.notEqual(fold.open, true, "optional help starts collapsed");
+  fold.open = true;
+  h.rs.applyPreset("quick");
+  h.rs.openRaceSettings("select");
+  assert.equal(weather.help.parentElement, fold, "a repaint reuses the original help disclosure");
+  assert.equal(fold.open, true, "a repaint preserves the player's expanded explanation");
+  assert.equal(weather.row.querySelectorAll("[data-rs-help]").length, 1, "help does not nest on repaint");
+  assert.equal(status.help.parentElement, status.row, "status feedback stays outside optional disclosure");
+  assert.equal(live.help.parentElement, live.row, "live feedback stays outside optional disclosure");
+
+  const mixedFold = mixed.help.parentElement;
+  mixedFold.open = true;
+  h.G.session = "tt";
+  h.rs.openRaceSettings("select");
+  assert.equal(mixed.row.hidden, true);
+  assert.equal(mixedFold.parentElement, mixed.row, "help stays inside the row hidden for Time Trial");
+  assert.equal(mixed.help.parentElement, mixedFold);
+  h.G.session = "race";
+  h.rs.openRaceSettings("select");
+  assert.equal(mixed.row.hidden, false);
+  assert.equal(mixedFold.open, true, "returning to an applicable row preserves its explanation state");
+});
+
 test("race-setup.css keeps a display-only rule for #rs-preset-custom", () => {
   const rules = raceCss();
   assert.equal(decl(rules, "#rs-preset-custom", "cursor"), "default");
@@ -177,19 +262,17 @@ test("race presets restore balanced wrap and a --tap floor (phone portrait 2×2)
   assert.equal(
     decl(rules, "#rs-presets", "--balance-basis", { context: /max-width:\s*480px/ }),
     "calc(50% - var(--gap) * 0.5)",
-    "narrow ≤480px forces a 2×2 basis so FULL WEEKEND / ENDURANCE never share one ~70px column");
+    "local width ≤480px forces a 2×2 basis so FULL WEEKEND / ENDURANCE never share one ~70px column");
   assert.equal(
     decl(rules, "#rs-presets > .preset-btn small", "display", { context: /max-width:\s*480px/ }),
     "none",
     "narrow sheets hide captions so title and small cannot collide inside a tile");
-  // menus.css family pin (ui-improve-pass): no orientation:portrait and no
-  // body[data-shape|data-density] #rs-* selectors in this sheet.
+  // Local sheet density owns the focused task; viewport orientation is not
+  // a proxy for the room left after safe areas and UI enlargement.
   assert.equal(
     rules.filter((r) => r.context.some((c) => /orientation:\s*portrait/.test(c))).length, 0,
     "race-setup must not use orientation:portrait (menus.css family pin)");
-  assert.equal(
-    rules.filter((r) => /data-shape|data-density/.test(r.selector) && /#rs-|race-settings/.test(r.selector)).length, 0,
-    "race-setup must not pair data-shape/density with #rs-* (menus.css family pin)");
+
 });
 
 // ── Season SETUP chrome (tip #1082; pin so this sheet suite owns both) ───────

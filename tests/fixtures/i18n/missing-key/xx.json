@@ -1,0 +1,5 @@
+{
+  "menu.title": "XX-SETTINGS",
+  "race.laps": "{n, plural, one {# XX-lap} other {# XX-laps}}",
+  "menu.invented": "I DO NOT EXIST IN EN"
+}

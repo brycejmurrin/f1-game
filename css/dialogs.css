@@ -59,26 +59,9 @@
    while viewport fitting still protects constrained/high-scale sheets. */
 #howtoplay   { --sheet-w: 1000px; }
 #spotifypanel { --sheet-w: 760px; --fit-at: 300px; }
-/* 760, not 560: on an 852 landscape phone the old cap left ~200px of
-   safe width unused while CLOUDY / 57 (FULL) wrapped inside a 180px
-   column. min(100%, …) still shrinks to the safe box; this only spends
-   room that exists (same number as settings / customize / vsfriend). */
-#race-settings { --sheet-w: 760px; --fit-at: 300px; }
-/* 760, not the 380 default. Seven chip rows at normal density overflow a
-   720-local portrait sheet and a 473-local 860×560 @115% window — REAL
-   sat under BACK/RACE (measured). Compact chrome + the 3-col pin need
-   to fire on those short-in-own-units sheets. inherits:false, so the
-   sheet node, not the dialog.
-   Measured against the ROOM the sheet has (sheetshape.js roomOwn), not
-   its content height: this sheet is content-sized, and its compact grid is
-   358 own px, so measuring the content kept a 1280×800 desktop (776 px of
-   room; the normal two-column layout is 514) on the phone layout for good.
-   Room 776 ≥ 760 → normal; a 390-tall landscape phone (366) stays compact. */
-#race-settings .sheet { --compact-at: 760px; }
 /* --fit-at on wide-shaped sheets (zoom-corrected), not viewport orientation. */
 #results .sheet:not([data-shape="tall"])     { --fit-at: 220px; }
 #standings .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
-#race-settings .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
 #spotifypanel .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
 #customize .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
 #pausemenu .sheet:not([data-shape="tall"])   { --fit-at: 180px; }

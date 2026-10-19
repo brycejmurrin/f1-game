@@ -124,8 +124,12 @@ test("blocking and preload byte census stay under the post-cut ceilings", () => 
   // Dense Home on portrait/desktop/tablet (2026-10-17, #2744): css/menu-destinations.css +~4.9 KiB (incl. the compact-zoom text rules). Same reason it is
   // blocking: the grid columns, tile heights and the sticky utility row decide where the title column sits at first paint.
   // The tip was 221789 B.
-  assert.ok(blocking < 227300, `blocking CSS is ${blocking} B; want < 227300`);
-  assert.ok(preload < 227300, `preload CSS is ${preload} B; want < 227300`);
+  // Default mobile landscape Home (2026-10-18): +~5 KiB of first-paint
+  // composition and saved-width fallback in menu-destinations.css. Keeping this
+  // blocking avoids a title/menu shift before the new container layout loads.
+  // Measured blocking/preload: 232559 B; retain a bounded 233300 B ceiling.
+  assert.ok(blocking < 233300, `blocking CSS is ${blocking} B; want < 233300`);
+  assert.ok(preload < 233300, `preload CSS is ${preload} B; want < 233300`);
   const settingsBytes = SETTINGS_FOUC.reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0);
   assert.ok(settingsBytes > 70000, "the dropped preload still exists as print→all bytes");
 });

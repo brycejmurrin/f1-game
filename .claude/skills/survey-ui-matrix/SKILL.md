@@ -11,6 +11,14 @@ subagent unless `--help` is passed. Delegate only artifact analysis. Subagents r
 with screenshot paths and missing cells; the parent applies fixes via `css-play`
 or `ui-menu-a11y`. This follows AGENTS.md rule 10.
 
+## Default-first visual verification
+
+Follow AGENTS.md’s UI review baseline: fresh shipped appearance and device input defaults first; stress scales,
+imported settings and legacy looks are separately labelled comparisons. Record requested scale and painted zoom.
+Inspect original full-size images with DOM/computed-style evidence. Thumbnails and zero inspector findings are
+insufficient. Exercise real scrolling both ways, the final action, keyboard focus visibility, and state retention
+through resizing and disclosure changes. Capture initial, mid-scroll, end, return, open/closed, and focus/rotation checkpoints. Show individual original captures when reporting usability.
+
 ## Prerequisites
 
 Browsers and Playwright MCP come from the SessionStart hook (AGENTS.md rule 1).

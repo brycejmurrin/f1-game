@@ -82,7 +82,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
 2. `render({what:"view"|"map"|"circuit"|"car"})` — the character raster of the 3D scene. Stale under `headless(true)`;
    `snapCam()` after `park()`/`jump()`.
 3. DOM/a11y snapshot (Playwright MCP `browser_*`, or chrome-devtools) — menu/HUD work; hide `#game`.
-4. Pixel screenshot — visual sign-off only, never an assertion source (live poking: skill `mcp-probe`).
+4. Pixel screenshot — visual sign-off only, never an assertion source (live poking: skill `mcp-probe`). UI reviews use shipped settings and the touch/mouse profile; procedure in skills `ui-menu-a11y` and `survey-ui-matrix`.
 
 This container has no real GPU: renderers blit onto `#game-soft` and a probe waits on `awaitSoftPresent()`
 (`docs/notes/CI-RENDERING-PERFORMANCE.md`). Never run Chrome MCP while Playwright runs.

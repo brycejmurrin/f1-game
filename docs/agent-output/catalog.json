@@ -24,13 +24,13 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 420,
+    "files": 422,
     "classifications": {
-      "entrypoint-candidate": 284,
+      "entrypoint-candidate": 285,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
-      "ambiguous": 53,
+      "ambiguous": 54,
       "library": 42
     },
     "npmScripts": 72,
@@ -1036,6 +1036,28 @@
         "--",
         "node",
         "tools/check/html-sink-lint.mjs"
+      ]
+    },
+    {
+      "path": "tools/check/i18n-lint.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "main-guard",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 19692,
+      "doc": "Locale lint: unknown keys, placeholders, CLDR plurals; --guard bans new literals in migrated files.",
+      "skill": "pwa-cache-service-worker",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/check/i18n-lint.mjs"
       ]
     },
     {
@@ -2242,7 +2264,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 39555,
+      "sourceBytes": 39782,
       "outputPolicy": "keep-native",
       "outputContract": "Empty versus unmatched versus infrastructure; unclaimed paths and sequential cap",
       "doc": "What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`).",
@@ -3024,7 +3046,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 111170,
+      "sourceBytes": 111309,
       "outputPolicy": "job-status",
       "outputContract": "NotStarted/bail, timeouts/empty-run, unchanged-tree stamp, suite terminal line",
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
@@ -4701,7 +4723,7 @@
       "path": "tools/lib/browser-workers.mjs",
       "classification": "library",
       "evidence": [],
-      "sourceBytes": 7135,
+      "sourceBytes": 7147,
       "outputPolicy": "no-direct-output",
       "outputContract": "API signatures, return data and thrown errors.",
       "doc": "GL-aware Playwright / capture worker defaults (llvmpipe vs SwiftShader).",
@@ -5627,7 +5649,7 @@
       "path": "tools/mcp/catalog-discovery.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 7506,
+      "sourceBytes": 7520,
       "outputPolicy": "page-results",
       "outputContract": "Canonical identifiers, availability limitations, total and nextOffset",
       "doc": "Bounded browser-free canonical parts, livery and garage camera discovery; validated audit filters.",
@@ -6802,6 +6824,16 @@
       "npmScripts": []
     },
     {
+      "path": "tools/shot/export-history-evidence.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 3263,
+      "doc": "Export selected committed evidence files, preserving Git blob identities without executing the old checkout.",
+      "skill": null,
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
+    },
+    {
       "path": "tools/shot/flicker-gate.mjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -7274,7 +7306,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 12561,
+      "sourceBytes": 13638,
       "outputPolicy": "artifact-first",
       "outputContract": "Keep prepared versus published state, receipt path, source/dirty provenance, file and asset counts, checksums and URLs. Retrieval must never repeat a publication action.",
       "doc": "Packages generated evidence with provenance and publishes checksum-verified GitHub Release assets outside Git history.",
@@ -8200,7 +8232,7 @@
       "path": "tools/ui/explorer/browser.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 13437,
+      "sourceBytes": 14507,
       "outputPolicy": "no-direct-output",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -8216,7 +8248,7 @@
       "path": "tools/ui/explorer/catalog.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 3737,
+      "sourceBytes": 3704,
       "outputPolicy": "no-direct-output",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -8232,7 +8264,7 @@
       "path": "tools/ui/explorer/core.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 13112,
+      "sourceBytes": 13979,
       "outputPolicy": "no-direct-output",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -8264,7 +8296,7 @@
       "path": "tools/ui/explorer/inspector.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 27004,
+      "sourceBytes": 28644,
       "outputPolicy": "no-direct-output",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -8280,7 +8312,7 @@
       "path": "tools/ui/explorer/modes.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 16122,
+      "sourceBytes": 16229,
       "outputPolicy": "no-direct-output",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -8330,7 +8362,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 17765,
+      "sourceBytes": 18151,
       "outputPolicy": "targeted-summary",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -8408,7 +8440,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 21613,
+      "sourceBytes": 21933,
       "outputPolicy": "targeted-summary",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -8476,7 +8508,7 @@
       "path": "tools/ui/menu-screens.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 42967,
+      "sourceBytes": 42833,
       "outputPolicy": "no-direct-output",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -8492,7 +8524,7 @@
       "path": "tools/ui/ui-scale-axis.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 3034,
+      "sourceBytes": 2977,
       "outputPolicy": "no-direct-output",
       "outputContract": [
         "exit status and explicit failure cause",

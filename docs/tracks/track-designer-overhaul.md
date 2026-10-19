@@ -8,7 +8,7 @@ Bryce pain: designer hard to understand/use; elevation hard on mobile; wants the
 
 | ID | Problem | Evidence / root |
 |---|---|---|
-| UX-1 | Coach card covers SHAPE tools after RANDOMISE | Shots [`16-designer-edit-randomise.png`](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/artifacts/shots/tracks-ui/16-designer-edit-randomise.png?raw=1); `showCoach()` inserts above the tool row |
+| UX-1 | Coach card covers SHAPE tools after RANDOMISE | Shots [`16-designer-edit-randomise.png`](https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/image-9c3dae675bbafd854a215ebee73b0411aaf3a2acbfbde66f3b4039c72ad3b0ea-16-designer-edit-randomise.png); `showCoach()` inserts above the tool row |
 | UX-2 | Rail numbering gap `1 SHAPE → 3 LOOK` | Fixed in #1039 — do not re-do |
 | UX-3 | Dual flat `0 m` elev labels | Fixed in #1039 |
 | UX-4 | Tool modes mixed with stamp kinds | One chip row: SELECT/DRAW + STRAIGHT…S-BEND |

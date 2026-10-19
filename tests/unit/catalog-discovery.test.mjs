@@ -31,6 +31,11 @@ test("liveries expose per-team ids and canonical editable fields without reading
   const spine = fields.rows.find((r) => r.kind === "field" && r.id === "spineLogo");
   assert.ok(spine.values.includes("wrap"));
   assert.ok(spine.stations.includes("spineTop"));
+  const finishes = discoverCatalog({ section: "liveries", filter: "finish", limit: 100 });
+  const finish = finishes.rows.find((r) => r.kind === "field" && r.id === "finish");
+  // The garage offers default gloss before finishes that remap paint surfaces.
+  assert.deepEqual(finish.values, ["gloss", ...Object.keys(M.Car3D.FINISH_SURFACE)]);
+  assert.equal(finish.values.filter((value) => value === "gloss").length, 1);
   assert.ok(result.readOnly && !result.browser);
 });
 test("camera metadata remains byte-for-byte equivalent to the previous CLI source constants", () => {

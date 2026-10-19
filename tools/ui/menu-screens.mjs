@@ -73,6 +73,18 @@ async function openFieldFold(p) {
   if (shut) { await p.click("#rs-fold-field-sum"); await p.waitForFunction(() => document.getElementById("rs-fold-field").open, null, { timeout: 5000, polling: 100 }); }
 }
 
+/** Garage shell visibility precedes its deferred tab build; wait for the requested view. */
+export async function openGarageTab(p, tab) {
+  await p.click("#mb-garage");
+  await p.waitForSelector('#carsetup:not([hidden]):not([aria-busy="true"])', { timeout: 20000 });
+  await p.waitForSelector(`#cs-tab-${tab}`, { state: "attached", timeout: 15000 });
+  // Catalog routes activate an exact native control, as the existing garage
+  // recipes did. Pointer actionability is measured separately by the inspector.
+  await p.evaluate(id => document.getElementById(id).click(), `cs-tab-${tab}`);
+  await p.waitForSelector(`#cs-tab-${tab}[aria-selected="true"]`, { timeout: 15000 });
+  await p.waitForSelector(`#cs-options[aria-labelledby="cs-tab-${tab}"] > *`, { state: "attached", timeout: 15000 });
+}
+
 export const SCREENS = [
   { id: "photostudio", name: "Photo Studio", root: "#photo-studio", open: async (p) => {
       await p.evaluate(() => document.getElementById("mb-photo").click());
@@ -81,10 +93,8 @@ export const SCREENS = [
   { id: "select", name: "Circuit select", root: "#select", mapAxis: true, open: async (p, circuit) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await pickCircuit(p, circuit); } },
-  { id: "garage", name: "Garage", root: "#carsetup", open: async (p) => {
-      await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
-      await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-        (t.find((e) => /ENGINE/i.test(e.textContent)) || t[1] || t[0])?.click(); }); } },
+  { id: "garage", view: "#cs-tab-engine", name: "Garage", root: "#carsetup", open: async (p) => {
+      await openGarageTab(p, "engine"); } },
   // SEASON SETUP is reached through the season select screen, not the title: the
   // CUSTOMISE button only exists in #select's season branch (js/ui/select-screen.js),
   // which is what keeps it out of the Grand Prix pixel golden.
@@ -94,7 +104,7 @@ export const SCREENS = [
       await p.waitForSelector("#season-setup:not([hidden])", { timeout: 15000 }); } },
   { id: "career", name: "Career hub", root: "#career", open: async (p) => {
       await p.click("#mb-career"); await p.waitForSelector("#career:not([hidden])", { timeout: 15000 }); } },
-  { id: "datahub", name: "F1 data hub", root: "#datahub", open: async (p) => {
+  { id: "datahub", view: "#dh-tab-schedule", name: "F1 data hub", root: "#datahub", open: async (p) => {
       await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(1200); } },
   { id: "trackdesigner", name: "Track designer", root: "#trackdesigner", open: async (p) => {
@@ -102,56 +112,56 @@ export const SCREENS = [
       await p.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen() && !TrackDesigner.state().pending, null, { polling: 100, timeout: 15000 }); } },
   { id: "howtoplay", name: "How to play", root: "#howtoplay", open: async (p) => {
       await p.click("#mb-help"); await p.waitForSelector("#howtoplay:not([hidden])", { timeout: 15000 }); } },
-  { id: "settings", name: "Settings", root: "#pmsettings", open: async (p) => {
+  { id: "settings", view: "#pm-settings-index", name: "Settings", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 }); } },
-  { id: "settingscontrols", name: "Settings — controls", root: "#pmsettings", open: async (p) => {
+  { id: "settingscontrols", view: "#pm-panel-controls", name: "Settings — controls", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-controls");
       await p.waitForFunction(() => !document.getElementById("pm-panel-controls").hidden, null, { polling: 100, timeout: 15000 }); } },
-  { id: "settingsdriving", name: "Settings — driving aids", root: "#pmsettings", open: async (p) => {
+  { id: "settingsdriving", view: "#pm-panel-driving", name: "Settings — driving aids", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-driving");
       await p.waitForFunction(() => !document.getElementById("pm-panel-driving").hidden, null, { polling: 100, timeout: 15000 }); } },
-  { id: "settingsdisplay", name: "Settings — HUD & camera", root: "#pmsettings", open: async (p) => {
+  { id: "settingsdisplay", view: "#pm-panel-display", name: "Settings — HUD & camera", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-display");
       await p.waitForFunction(() => !document.getElementById("pm-panel-display").hidden, null, { polling: 100, timeout: 15000 }); } },
-  { id: "settingsgraphics", name: "Graphics", root: "#pmsettings", open: async (p) => {
+  { id: "settingsgraphics", view: "#pm-panel-graphics", name: "Graphics", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-graphics");
       await p.waitForSelector("#pm-panel-graphics:not([hidden])", { timeout: 15000 }); } },
-  { id: "settingsvisual", name: "Visual Studio", root: "#pmsettings", open: async (p) => {
+  { id: "settingsvisual", view: "#pm-panel-visual", name: "Visual Studio", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-visual");
       await p.waitForSelector("#pm-panel-visual:not([hidden])", { timeout: 15000 }); } },
-  { id: "settingsprogress", name: "Progress", root: "#pmsettings", open: async (p) => {
+  { id: "settingsprogress", view: "#pm-panel-progress", name: "Progress", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-progress");
       await p.waitForSelector("#pm-panel-progress:not([hidden])", { timeout: 15000 }); } },
-  { id: "settingsfiles", name: "Saves & Data", root: "#pmsettings", open: async (p) => {
+  { id: "settingsfiles", view: "#pm-panel-files", name: "Saves & Data", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-files");
       await p.waitForSelector("#pm-panel-files:not([hidden])", { timeout: 15000 }); } },
-  { id: "settingspractice", name: "Practice", root: "#pmsettings", open: async (p) => {
+  { id: "settingspractice", view: "#pm-panel-practice", name: "Practice", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       // Inspect the session page without starting a race; unavailable actions stay disabled.
       await p.evaluate(() => SettingsNav.showDirect("practice", true));
       await p.waitForSelector("#pm-panel-practice:not([hidden])", { timeout: 15000 }); } },
-  { id: "settingsstrategy", name: "Pit strategy", root: "#pmsettings", open: async (p) => {
+  { id: "settingsstrategy", view: "#pm-panel-strategy", name: "Pit strategy", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       // Inspect the session page without starting a race; unavailable actions stay disabled.
       await p.evaluate(() => SettingsNav.showDirect("strategy", true));
       await p.waitForSelector("#pm-panel-strategy:not([hidden])", { timeout: 15000 }); } },
-  { id: "settingsreview", name: "Session review", root: "#pmsettings", open: async (p) => {
+  { id: "settingsreview", view: "#pm-panel-review", name: "Session review", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       // Inspect the session page without starting a race; unavailable actions stay disabled.
       await p.evaluate(() => SettingsNav.showDirect("review", true));
       await p.waitForSelector("#pm-panel-review:not([hidden])", { timeout: 15000 }); } },
-  { id: "settingsappearance", name: "Settings — appearance", root: "#pmsettings", open: async (p) => {
+  { id: "settingsappearance", view: "#pm-panel-appearance", name: "Settings — appearance", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-appearance");
       await p.waitForFunction(() => !document.getElementById("pm-panel-appearance").hidden, null, { polling: 100, timeout: 15000 }); } },
-  { id: "settingsa11y", name: "Settings — accessibility", root: "#pmsettings", open: async (p) => {
+  { id: "settingsa11y", view: "#pm-panel-a11y", name: "Settings — accessibility", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-a11y");
       await p.waitForFunction(() => !document.getElementById("pm-panel-a11y").hidden, null, { polling: 100, timeout: 15000 }); } },
@@ -168,10 +178,7 @@ export const SCREENS = [
   // screen's #sel-team-card is gone. Reaching a screen by the route a player
   // takes is the point; when the route moves, the audit's own path has to move.
   { id: "teampicker", name: "Team picker", root: "#teampicker", open: async (p) => {
-      await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
-      await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-        (t.find((e) => /TEAM/i.test(e.textContent)) || t[0])?.click(); });
-      await p.waitForTimeout(400);
+      await openGarageTab(p, "team");
       // iPad landscape: Playwright actionability times out on #cs-team-card while
       // the element is present (menu-mock *, 2026-10-10). Same door as the player.
       // The TEAM tab renders the card after the tab click; a fixed 400 ms lost
@@ -267,24 +274,21 @@ export const SCREENS = [
       await p.waitForSelector("#standings:not([hidden])", { timeout: 15000 }); } },
 
   { id: "customize", name: "Livery editor", root: "#customize", open: async (p) => {
-      await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
+      await openGarageTab(p, "team");
       // EDIT MY TEAM is rendered by the TEAM tab (js/garage/setup-sheet.js), not the
       // LIVERY one — an easy thing to assume wrong, and it costs a whole cell.
-      await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-        t.find((e) => /TEAM/i.test(e.textContent))?.click(); });
-      await p.waitForTimeout(400);
       await p.waitForSelector("#cs-customize", { state: "attached", timeout: 15000 });   // same race as teampicker
       await p.evaluate(() => document.getElementById("cs-customize")?.click());
       await p.waitForSelector("#customize:not([hidden])", { timeout: 15000 }); } },
 
-  { id: "advanced", name: "Advanced input & handling", root: "#pmsettings", open: async (p) => {
+  { id: "advanced", view: "#advanced", name: "Advanced input & handling", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-controls");
       await p.waitForSelector("#pm-panel-controls:not([hidden])", { timeout: 15000 });
       await p.click("#pm-advanced");
       await p.waitForSelector("#advanced:not([hidden])", { timeout: 15000 }); } },
 
-  { id: "audioset", name: "Music & sound", root: "#pmsettings", open: async (p) => {
+  { id: "audioset", view: "#audioset", name: "Music & sound", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-audio");
       await p.waitForSelector("#audioset:not([hidden])", { timeout: 15000 }); } },
@@ -346,25 +350,19 @@ export const SCREENS = [
 
   // ---- sub-views: same root, materially different layout ----
 
-  { id: "garagelivery", name: "Garage — livery tab", root: "#carsetup", open: async (p) => {
-      await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
-      await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-        t.find((e) => /LIVERY/i.test(e.textContent))?.click(); });
-      await p.waitForTimeout(500); } },
+  { id: "garagelivery", view: "#cs-tab-livery", name: "Garage — livery tab", root: "#carsetup", open: async (p) => {
+      await openGarageTab(p, "livery"); } },
 
-  { id: "garageteam", name: "Garage — team tab", root: "#carsetup", open: async (p) => {
-      await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
-      await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-        t.find((e) => /TEAM/i.test(e.textContent))?.click(); });
-      await p.waitForTimeout(500); } },
+  { id: "garageteam", view: "#cs-tab-team", name: "Garage — team tab", root: "#carsetup", open: async (p) => {
+      await openGarageTab(p, "team"); } },
 
-  { id: "datatelemetry", name: "Data hub — telemetry", root: "#datahub", open: async (p) => {
+  { id: "datatelemetry", view: "#dh-tab-telemetry", name: "Data hub — telemetry", root: "#datahub", open: async (p) => {
       await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(1200);
       await p.evaluate(() => document.getElementById("dh-tab-telemetry")?.click());
       await p.waitForTimeout(1500); } },
 
-  { id: "dataschedule", name: "Data hub — schedule", root: "#datahub", open: async (p) => {
+  { id: "dataschedule", view: "#dh-tab-schedule", name: "Data hub — schedule", root: "#datahub", open: async (p) => {
       await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(1200);
       await p.evaluate(() => document.getElementById("dh-tab-schedule")?.click());
@@ -518,7 +516,7 @@ export const SCREENS = [
   // these three are tables and one is a form, and a table is where a narrow
   // sheet runs out of width.
   ...["standings", "results", "live", "export"].map((tab) => ({
-    id: "data" + tab, name: "Data hub — " + tab, root: "#datahub", open: async (p) => {
+    id: "data" + tab, view: tab === "export" ? '#dh-panel[aria-labelledby="dh-tab-export"]' : "#dh-tab-" + tab, name: "Data hub — " + tab, root: "#datahub", open: async (p) => {
       await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(1200);
       await p.evaluate((t) => document.getElementById("dh-tab-" + t)?.click(), tab);
@@ -563,11 +561,8 @@ export const SCREENS = [
   // ONE more parts tab, to MEASURE the claim that the garage's ten remaining
   // categories share one layout rather than assert it. WHEELS is the last tab,
   // so it also exercises the rail scrolled to its end.
-  { id: "garagewheels", name: "Garage — wheels tab (last)", root: "#carsetup", open: async (p) => {
-      await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
-      await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-        (t.find((e) => /WHEELS/i.test(e.textContent)) || t[t.length - 1])?.click(); });
-      await p.waitForTimeout(500); } },
+  { id: "garagewheels", view: "#cs-tab-wheels", name: "Garage — wheels tab (last)", root: "#carsetup", open: async (p) => {
+      await openGarageTab(p, "wheels"); } },
 
   { id: "hudmanual", name: "In-race HUD — manual gears", root: "#hud", open: async (p) => {
       // MANUAL moves the gearbox into the right thumb column and pushes BOOST/OT
