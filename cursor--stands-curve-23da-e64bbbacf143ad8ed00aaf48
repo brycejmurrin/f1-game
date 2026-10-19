@@ -1,1 +1,1 @@
-1792389211	Cursor Agent	#2204 tiered stands follow curve; OWNED js/track/scenery/structures.js js/track/scenery/nature.js js/circuits/scenery/magny_cours.js(jerez/donington if needed) tools/track/clip-audit* tests/unit/stand-curve* REGISTRATION  [cursor/stands-curve-23da; session e64bbbacf143ad8ed00aaf48]
+1792390992	Cursor Agent	#2204 stands-curve: js/track/scenery/{structures,nature}.js magny_cours/jerez tier + clip-baseline + stand-curve-gap  [cursor/stands-curve-23da; session e64bbbacf143ad8ed00aaf48]
