@@ -775,6 +775,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.
   "tests/unit/mirror-glass-night.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
+  "tests/unit/mirror-pass-carbuild.test.mjs",
+  "tests/unit/mirror-pass-prepare.test.mjs",
+  "tests/unit/mirror-pass-watch.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",

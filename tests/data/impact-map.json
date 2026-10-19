@@ -2141,8 +2141,7 @@
         "tests/unit/body-attitude.test.mjs",
         "tests/unit/cam-avoid.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/flyby-shots.test.mjs",
-        "tests/unit/mirror-pass.test.mjs"
+        "tests/unit/flyby-shots.test.mjs"
       ]
     },
     "js/car/car-body-geom.js": {
@@ -4522,7 +4521,6 @@
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs",
-        "tests/unit/mirror-pass.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -6339,7 +6337,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/mirror-pass.test.mjs",
+        "tests/unit/mirror-pass-carbuild.test.mjs",
         "tests/unit/render-lighting-prep.test.mjs",
         "tests/unit/repo-size.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -10243,7 +10241,6 @@
       ],
       "create": [
         "tests/unit/director.test.mjs",
-        "tests/unit/mirror-pass.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
@@ -10299,7 +10296,8 @@
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "*": [
-        "tests/specs/hud-mirror.spec.js"
+        "tests/specs/hud-mirror.spec.js",
+        "tests/unit/mirror-pass.test.mjs"
       ]
     },
     "js/race/car-fields.js": {
@@ -12499,19 +12497,12 @@
       ]
     },
     "js/render/shared/mirror-pass.js": {
-      "cancelPreparation": [
-        "tests/unit/mirror-pass.test.mjs"
-      ],
       "create": [
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/mirror-pass.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "pose": [
         "tests/unit/gfx-backend-canary.test.mjs"
-      ],
-      "prepareRace": [
-        "tests/unit/mirror-pass.test.mjs"
       ],
       "render": [
         "tests/unit/field-lod.test.mjs",
@@ -12521,17 +12512,8 @@
       "setMode": [
         "tests/unit/mirror-pass.test.mjs"
       ],
-      "setSubject": [
-        "tests/unit/mirror-pass.test.mjs"
-      ],
-      "side": [
-        "tests/unit/mirror-pass.test.mjs"
-      ],
       "softGpu": [
         "tests/unit/gfx-backend-canary.test.mjs"
-      ],
-      "standDown": [
-        "tests/unit/mirror-pass.test.mjs"
       ],
       "toggle": [
         "tests/unit/field-lod.test.mjs"
