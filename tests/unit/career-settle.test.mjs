@@ -1240,8 +1240,8 @@ test("a beatRival offer signs the rival it printed: acceptOffer keeps goal.value
     Career.rollover();
     const i = (c.offers || []).findIndex((o) => o.goal && o.goal.type === "beatRival");
     if (i < 0) continue;
-    const printed = c.offers[i].goal.value;
-    assert.equal(typeof printed, "string", "the offer prints a rival id");
+    const printed = "vega:1";                            // a distinctive rival the move could not re-derive by chance
+    c.offers[i].goal.value = printed;
     const deal = Career.acceptOffer(i);
     assert.equal(deal.goal.type, "beatRival");
     assert.equal(deal.goal.value, printed, `seed ${seed}: signed rival ${deal.goal.value}, the button said ${printed}`);

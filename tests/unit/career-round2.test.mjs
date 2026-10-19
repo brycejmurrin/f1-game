@@ -429,3 +429,84 @@ test("calendar protection: a save naming a retired circuit loads read-only, refu
   assert.equal(h.Career.data().season.round, 8);
   assert.equal(JSON.stringify(h.stored.get("career.driver.1") || [...h.stored.values()][0]), before, "the stored save is not rewritten");
 });
+
+// ── economy paths players hit (L18 / C1-17): facility, grants, free money, tier maths, renewals, countback ──
+
+test("facility upgrades charge the geometric ladder, refuse when short or maxed, and cost nothing under free money", () => {
+  const h = started();
+  const { Career } = h, c = Career.data();
+  const costs = [];
+  for (let lvl = 0; lvl < Career.FACILITY_MAX; lvl++) {
+    c.facility = lvl;
+    costs.push(Career.facilityCost());
+  }
+  assert.equal(costs[0], 3000, "level 0 costs the base");
+  for (let i = 1; i < costs.length; i++) assert.ok(costs[i] > costs[i - 1] * 1.5 && costs[i] % 50 === 0, `level ${i} costs ~1.6x the last in 50s (${costs[i]})`);
+  c.facility = 0; c.money = costs[0] - 1;
+  assert.equal(Career.upgradeFacility(), false, "one credit short buys nothing");
+  assert.equal(c.facility, 0); assert.equal(c.money, costs[0] - 1);
+  c.money = costs[0] + 123;
+  assert.equal(Career.upgradeFacility(), true);
+  assert.equal(c.facility, 1); assert.equal(c.money, 123, "the price is deducted, the change stays");
+  assert.equal(Career.facilityDiscount(), Career.FACILITY_DISCOUNT_MAX / 8, "one level takes 5% off research");
+  Career.freeMoney(true);
+  c.money = 0;
+  assert.equal(Career.upgradeFacility(), true, "free money buys the upgrade with an empty purse");
+  assert.equal(c.facility, 2); assert.equal(c.money, 0, "and charges nothing");
+  Career.freeMoney(false);
+  c.facility = Career.FACILITY_MAX; c.money = 1e9;
+  assert.equal(Career.facilityCost(), null, "the top level has no price");
+  assert.equal(Career.upgradeFacility(), false, "and cannot be bought past the cap");
+  assert.equal(c.money, 1e9);
+});
+
+test("grant credits the balance: the default amount, an explicit one, never a negative one; nothing without a career", () => {
+  const h = load();
+  assert.equal(h.Career.grant(10), null, "no career loaded, no grant");
+  const g = started(), c = g.Career.data();
+  const m0 = c.money;
+  assert.equal(g.Career.grant(), m0 + g.Career.GRANT, "no amount grants the default");
+  assert.equal(g.Career.grant(50), m0 + g.Career.GRANT + 50);
+  assert.equal(g.Career.grant(-900), m0 + g.Career.GRANT + 50, "a negative grant adds nothing");
+  assert.equal(c.money, m0 + g.Career.GRANT + 50);
+});
+
+test("tierFinish / expectedFinish: the stronger the tier the better the expected finish, reputation shifts it, both stay on the grid", () => {
+  const h = started(), { Career } = h, c = Career.data();
+  for (let tier = 0; tier <= 4; tier++) assert.equal(Career.tierFinish({ tier }), 2 + tier * 4);
+  c.rep = 50;
+  assert.equal(Career.expectedFinish({ tier: 2 }), Career.tierFinish({ tier: 2 }), "rep 50 is neutral");
+  c.rep = 100;
+  assert.ok(Career.expectedFinish({ tier: 2 }) < Career.tierFinish({ tier: 2 }), "a famous driver is expected higher");
+  c.rep = 0;
+  assert.ok(Career.expectedFinish({ tier: 2 }) > Career.tierFinish({ tier: 2 }), "an unknown one lower");
+  c.rep = 100; assert.equal(Career.expectedFinish({ tier: 0 }), 1, "clamped at P1");
+  c.rep = 0; assert.equal(Career.expectedFinish({ tier: 40 }), 22, "clamped at the back of the grid");
+});
+
+test("renewHire pays the PENDING figure, clamps the term to 1..3 years, and refuses without a renew offer", () => {
+  const h = started({ start: { flavour: "myteam", teamId: "custom" } }), { Career } = h, c = Career.data();
+  const hire = c.roster[0];
+  assert.equal(Career.renewHire(2), false, "no pending offer, nothing to renew");
+  hire.salary = 100; hire.left = 0; hire.pending = { kind: "left", ask: 0 };
+  assert.equal(Career.renewHire(2), false, "a hire who is leaving cannot be renewed");
+  hire.pending = { kind: "renew", ask: 777 };
+  assert.equal(Career.renewHire(9), true);
+  assert.equal(hire.salary, 777, "the renewal figure, not the old salary or the base ask");
+  assert.equal(hire.left, 3, "terms clamp to 3 years");
+  assert.equal(hire.pending, null);
+  hire.pending = { kind: "renew", ask: 800 };
+  Career.renewHire(0);
+  assert.equal(hire.left, 1, "no term defaults to one year");
+});
+
+test("constructors' countback: equal points rank by the best finishes of BOTH cars, then tier, then id", () => {
+  const h = started(), { SeasonCal } = h;
+  // Ids are chosen so the alphabetical fallback would give the OPPOSITE order to the countback.
+  const season = { teamPts: { zed: 40, mid: 40, cee: 40, aye: 40 },
+    finishes: { "zed:0": [1], "zed:1": [0, 0, 1], "mid:0": [0, 2], "mid:1": [0, 1], "cee:0": [0, 0, 4], "aye:0": [0, 0, 4] } };
+  const order = ["aye", "cee", "mid", "zed"].sort((x, y) => SeasonCal.rankTeams(season, x, y));
+  assert.deepEqual(order, ["zed", "mid", "aye", "cee"],
+    "a win beats any number of seconds, then more seconds, then (a full tie) the stable id order");
+  assert.ok(SeasonCal.rankTeams({ teamPts: { x: 5, y: 9 } }, "x", "y") > 0, "points still decide first");
+});
