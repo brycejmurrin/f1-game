@@ -70,3 +70,15 @@ test("carOrbit(0) means the player; carIdx is the player's index without a false
   assert.equal(res.carIdx, 0);
   assert.equal(res.fallback, undefined);
 });
+
+test("carOrbit(0) when the player is not cars[0] still reports the player index, no fallback", () => {
+  const ai = { s: 50, x: 0, speed: 30, human: false, isPlayer: false };
+  const player = { s: 100, x: 0, px: 1, pz: 100, speed: 40, human: true, isPlayer: true, head: 0 };
+  const G = { track: { total: 1000 }, cars: [ai, player], player, dbgCam: null };
+  const api = loadCam(G);
+  const res = api.carOrbit(0, 180, 14, 25, 1.0);
+  assert.ok(res);
+  assert.equal(res.carIdx, 1);
+  assert.equal(res.fallback, undefined);
+  assert.ok(Math.abs(res.target[0] - 1) < 1e-9);
+});

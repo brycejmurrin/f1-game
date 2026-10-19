@@ -130,12 +130,18 @@ test("cinematic camera outside right corner (k<0)", async ({ page }) => {
 test("carOrbit returns eye/target/fov/carIdx/speed", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  const res = await page.evaluate(() => __apex.carOrbit(0, 180, 14, 25));
-  expect(res).not.toBeFalsy();
-  expect(Array.isArray(res.eye)).toBe(true);
-  expect(res.carIdx).toBe(0);
-  expect(typeof res.speed).toBe("number");
-  expect(typeof res.fov).toBe("number");
+  // idx 0 means the player — carIdx is the player's grid index, not the ask (#2976).
+  const r = await page.evaluate(() => {
+    const playerIdx = __apex.cars().findIndex((c) => c.p);
+    const res = __apex.carOrbit(0, 180, 14, 25);
+    return { res, playerIdx };
+  });
+  expect(r.res).not.toBeFalsy();
+  expect(Array.isArray(r.res.eye)).toBe(true);
+  expect(r.res.carIdx).toBe(r.playerIdx);
+  expect(r.res.fallback).toBeFalsy();
+  expect(typeof r.res.speed).toBe("number");
+  expect(typeof r.res.fov).toBe("number");
 });
 
 test("carOrbit fov defaults to 55", async ({ page }) => {

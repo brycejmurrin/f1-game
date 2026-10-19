@@ -312,7 +312,8 @@ carOrbit(idx = 0, az = 180, el = 14, dist = 25, h = 1.0, opts = {}) {
     const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
     G.dbgCam = { eye, target: [cx, cyf, cz], fov, far: opts.far || 4000, fog: opts.fog };
     const out = { eye, target: [cx, cyf, cz], fov, carIdx, speed: +(c.speed || 0).toFixed(1) };
-    if (useFallback && idx !== carIdx) out.fallback = true;
+    // idx 0 is the documented player alias — not a fallback. Flag only a wrong/missing ask.
+    if (useFallback && idx !== 0 && idx !== carIdx) out.fallback = true;
     return out;
   },
 dolly(f, fwd = 0, right = 0, up = 5, opts = {}) {
