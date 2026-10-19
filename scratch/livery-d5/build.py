@@ -21,13 +21,20 @@ def find(team, did, cam):
 
 # Pixel diff: % of pixels whose luminance moved by >24/255 between two designs, same team and camera.
 diffs = {}
+area = {}
 for team, _ in TEAMS:
     for cam, _ in CAMS:
         imgs = {d["id"]: Image.open(p).convert("RGB") for d in DATA["designs"] if (p := find(team, d["id"], cam))}
+        masks = {}
         for a, b in itertools.combinations(imgs, 2):
-            g = ImageChops.difference(imgs[a], imgs[b]).convert("L").point(lambda v: 255 if v > 24 else 0)
-            pct = g.histogram()[255] / (g.width * g.height) * 100
-            diffs.setdefault(tuple(sorted((a, b))), []).append(pct)
+            masks[(a, b)] = ImageChops.difference(imgs[a], imgs[b]).convert("L").point(lambda v: 255 if v > 24 else 0)
+        if not masks: continue
+        union = None
+        for m in masks.values(): union = m if union is None else ImageChops.lighter(union, m)
+        n = union.histogram()[255] or 1
+        area[(team, cam)] = n
+        for (a, b), m in masks.items():
+            diffs.setdefault(tuple(sorted((a, b))), []).append(m.histogram()[255] / n * 100)
 
 def jpg(src, name):
     out = os.path.join(SITE, "img", name)
@@ -47,7 +54,7 @@ for d in sorted(DATA["designs"], key=lambda d: d["rank"]):
             else:
                 shots.append(f'<figure class="missing"><div>not captured</div><figcaption>{tl} · {cl}</figcaption></figure>')
     near = min(((min(v), (set(k) - {d["id"]}).pop()) for k, v in diffs.items() if d["id"] in k), default=None)
-    near_txt = f'Closest other design: <b>{near[1]}</b>, {near[0]:.1f}% of pixels differ (worst of the 4 frames).' if near else ""
+    near_txt = f'Closest other design: <b>{near[1]}</b>, {near[0]:.1f}% of the paint area differs (worst of the 4 frames).' if near else ""
     refs = " · ".join(f'<a href="{html.escape(u)}" target="_blank" rel="noopener">{html.escape(t)}</a>' for t, u in d["refs"])
     cards.append(f'''<section class="design" id="{d["id"]}">
   <header><span class="rank">#{d["rank"]}</span><h2>{html.escape(d["label"])}</h2><code>{d["id"]}</code></header>
