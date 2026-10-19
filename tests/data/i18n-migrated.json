@@ -1,0 +1,13 @@
+{
+  "//": [
+    "Files (and optional index.html #ids) already migrated to I18n.t / data-i18n.",
+    "tools/check/i18n-lint.mjs --guard fails on a new 3+ letter literal reaching",
+    "textContent, setAttribute(aria-label|title|placeholder), or Dom.el text in",
+    "these files unless it is an I18n.t argument or a reasoned `allow` row.",
+    "Key: <file>::<sink>::<snippet>. Slice PRs append paths here in the same commit.",
+    "Empty on purpose until Slice 4+ migrates a screen (plan 2026-10-04-localisation)."
+  ],
+  "files": [],
+  "html": [],
+  "allow": {}
+}
