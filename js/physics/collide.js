@@ -119,12 +119,8 @@ const Collide = (() => {
   // at the call site. span = floor(reach/width)+1 so a car on a bucket edge
   // still sees someone `reach` metres away; if that covers the whole lap we
   // walk occupied ids once instead of duplicating.
-  // `back` (optional): the caller ignores every car more than `back` metres BEHIND
-  // (wrapped). The walk then starts floor(back/W)+2 buckets back, not `span`: a car
-  // in a skipped bucket is more than back + W behind (the spare bucket absorbs
-  // float error), and the ring guard L >= 2(span+2)W keeps it behind after the
-  // wrap as well, so the callback would only have returned on it (#3109).
-  function forArcNear(c, L, reach, fn, progOf, back) {
+  // `backSpan` (optional, from arcBackSpan): walk that many buckets behind, not `span`.
+  function forArcNear(c, L, reach, fn, progOf, backSpan) {
     const nB = _arcNB;
     if (!nB || !fn) return;
     const of = progOf || _arcProg;
@@ -146,12 +142,7 @@ const Collide = (() => {
       }
       return;
     }
-    let d0 = -span;
-    if (back !== undefined && Number.isFinite(back) && back >= 0 && LL >= 2 * (span + 2) * W) {
-      const backSpan = (Math.floor(back / W) | 0) + 2;
-      if (backSpan < span) d0 = -backSpan;
-    }
-    for (let d = d0; d <= span; d++) {
+    for (let d = backSpan > 0 && backSpan < span ? -backSpan : -span; d <= span; d++) {
       let id = b0 + d;
       id %= nB;
       if (id < 0) id += nB;
@@ -164,6 +155,18 @@ const Collide = (() => {
     }
   }
   function _liveProg(c) { return c.prog; }
+  // Buckets forArcNear must walk BEHIND for a caller that ignores every car more
+  // than `back` metres behind (wrapped), or 0 for the full span. floor(back/W)+2: a
+  // car in a skipped bucket is more than back + W behind (the spare bucket absorbs
+  // float error), and the ring guard L >= 2(span+2)W keeps it behind after the wrap
+  // too, so the callback would only have returned on it (#3109). Kept out of
+  // forArcNear so its walk stays small enough to inline at every caller.
+  function arcBackSpan(L, reach, back) {
+    const W = _arcWidth, LL = L || _arcL || 1;
+    if (!_arcNB || !Number.isFinite(reach) || !Number.isFinite(back) || back < 0) return 0;
+    const span = (Math.floor(reach / W) | 0) + 1;
+    return LL >= 2 * (span + 2) * W ? (Math.floor(back / W) | 0) + 2 : 0;
+  }
   const PC = typeof PhysicsConsts !== "undefined" ? PhysicsConsts : {};
   const _towRange = PC.TOW_RANGE || 34, _towHalfW = PC.TOW_HALF_W || 4, _blockerHalfW = PC.BLOCKER_HALF_W || 2.2;
   const _traf = {
@@ -228,7 +231,7 @@ const Collide = (() => {
     s.alongO = null; s.alongDx = 0; s.alongDprog = 0; s.alongAdx = Infinity;
     const reach = Math.max(REJ, blockerReach(c.speed));
     s.REJ = reach;
-    forArcNear(c, L, reach, _onTrafO, _liveProg, BACK);
+    forArcNear(c, L, reach, _onTrafO, _liveProg, arcBackSpan(L, reach, BACK));
     s.roomL = Math.max(0, s.roomL); s.roomR = Math.max(0, s.roomR);
     return s;
   }
@@ -853,5 +856,5 @@ const Collide = (() => {
     return best;
   }
 
-  return { create, LCAR, WCAR, fillArcBuckets, forArcNear, scanTraffic, scanOtAhead, scanTow, parkedAhead };
+  return { create, LCAR, WCAR, fillArcBuckets, forArcNear, arcBackSpan, scanTraffic, scanOtAhead, scanTow, parkedAhead };
 })();

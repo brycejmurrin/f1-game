@@ -264,7 +264,7 @@ test("scanTraffic: a parked car 80 m ahead is a BLOCKER at 50 m/s closing, not a
 });
 
 test("forArcNear's rear trim skips only cars the traffic scan ignores, in the same order (#3109)", () => {
-  // scanTraffic passes BACK: the walk starts floor(BACK/W)+2 buckets back instead of `span`. Every car the
+  // scanTraffic passes arcBackSpan(BACK): the walk starts floor(BACK/W)+2 buckets back instead of `span`. Every car the
   // symmetric walk visits that the scan could act on (wrapped dprog >= -BACK, past the REJ reject) must still
   // be visited, in the same order — that is what keeps blocker/tow/chaser tie-breaks bit-identical.
   const Collide = loadCollide();
@@ -288,7 +288,7 @@ test("forArcNear's rear trim skips only cars the traffic scan ignores, in the sa
         };
         const all = [], kept = [];
         Collide.forArcNear(c, L, reach, (o) => all.push(o), (o) => o.prog);
-        Collide.forArcNear(c, L, reach, (o) => kept.push(o), (o) => o.prog, BACK);
+        Collide.forArcNear(c, L, reach, (o) => kept.push(o), (o) => o.prog, Collide.arcBackSpan(L, reach, BACK));
         if (kept.length < all.length) trimmed++;
         assert.deepEqual(kept.filter(acts).map((o) => o.id), all.filter(acts).map((o) => o.id), `L=${L} car ${c.id} BACK=${BACK.toFixed(1)}`);
       }
