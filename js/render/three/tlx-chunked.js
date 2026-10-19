@@ -167,6 +167,25 @@
     // W2: only a 3-wide 8/16-bit or a 1-wide 16-bit result misses 4 bytes (itemSize 2 of 16 bits is 4 B).
     const pad = fmt24 === false && pad4On && (itemSize === 3 || itemSize === 1);
     if (fmt24 && itemSize === 3 && ok && kind === "unit") {
+      // Validate and pack in one source pass: no padded Float32 temporary
+      // (16 bytes/vertex). fround preserves that temporary's conversion of
+      // JS-array inputs before both the range check and quantisation.
+      if (packOn) {
+        const a = new Int16Array((len / 3) * 4);
+        let fits = true;
+        for (let i = 0; i < len; i++) {
+          const v = Math.fround(src[i]);
+          if (!(v >= -1.0001 && v <= 1.0001)) { fits = false; break; }
+          const q = Math.round(v * 32767);
+          a[i + ((i / 3) | 0)] = q < -32767 ? -32767 : q > 32767 ? 32767 : q;
+        }
+        if (fits) {
+          packStats.small++; packStats.savedMB += a.byteLength / 1048576;
+          return new THREE.BufferAttribute(a, 4, true);
+        }
+      }
+      // Packing off, or an out-of-range/nonfinite normal: retain the wide
+      // fallback and its diagnostics exactly as before.
       src = pad4(src, len); len = (len / 3) * 4; itemSize = 4;
     }
     // NORMAL ONLY, and COLOUR DELIBERATELY LEFT WIDE. Bisected on lavapipe,
