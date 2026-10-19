@@ -1214,7 +1214,8 @@ const Car3D = (function () {
     // Placement is REGULATION (docs/notes/COCKPIT-DATUMS.md): the body must lie inside
     // RV-MIRROR-BODY, Y 470..680 x Z 640..720. At x 0.44 / y 0.735 ours sat
     // inboard of that volume AND above its ceiling — reported as "floating".
-    const mz = ckpt ? 0.92 : 0.24;
+    const onHalo = !ckpt && exHalo && cockpitStyle.mirrorMount === 1;   // see mx below
+    const mz = ckpt ? 0.92 : onHalo ? 0.12 : 0.24;
     const mScale = Math.max(0.85, Math.min(1.35, cockpitStyle.mirror || 1));
     // MIRROR HOUSING (liv.mirrorTint) / MIRROR FINISH (liv.mirrorFinish): the housing is carbon
     // today, which applyFinish never touches, so a tint or an explicit finish makes the housing
@@ -1224,9 +1225,12 @@ const Car3D = (function () {
     const mPaint = !!mTint || (!!mFin && (mFin === "gloss" || Object.hasOwn(CarMaterials.FINISH_SURFACE, mFin)));
     const mHouseC = mTint || [0.09, 0.09, 0.11], mHouseS = mPaint ? SURFACES.paint : SURFACES.carbon;
     const mStalkC = mTint || DARK;
-    const mx = ((ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0)) * mScale;
+    // PREVIEW (B·D4, opt-in, default off): mirrorMount 1 hangs the housings off
+    // the halo's crown corners (Ferrari SF71H, 2018) instead of the tub shoulder.
+    const mx = onHalo ? 0.45 * mScale : ((ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0)) * mScale;
     const msx = (ckpt ? 0.54 : 0.30) * mScale;
-    const mY = (ckpt ? 0.780 : 0.735) + (mSty === 2 ? -0.032 : 0);
+    const mY = onHalo ? 0.830 : (ckpt ? 0.780 : 0.735) + (mSty === 2 ? -0.032 : 0);
+    const mFrame = !ckpt && cockpitStyle.mirrorFrame === 1;
     const mW = mSty === 1 ? 0.235 : 0.215;   // swept style: wider housing
     const mH = mSty === 1 ? 0.065 : 0.075;
     for (const s of [-1, 1]) {
@@ -1241,7 +1245,12 @@ const Car3D = (function () {
       const aY = mY - (ckpt ? 0.780 : 0.735);   // style drop carries into the stalk too
       const stalkTop = ckpt ? mY - mH / 2 + 0.006 : sB + sR*1.5 + aY;
       const stalkZ = mz + (ckpt ? 0.025 : 0); // tuck the stay behind the glass
-      addBlock(out, [
+      if (onHalo) {
+        // Two swept stays from the hoop's crown corner (x 0.30, y ~0.84,
+        // z ~0.02) out to the housing's inboard end, plus a lower brace.
+        addBeamBetween(out, [s * 0.295, 0.845, 0.04], [s * (mx - mW * 0.40), mY + 0.010, mz], 0.014, mStalkC, SURFACES.carbon);
+        addBeamBetween(out, [s * 0.285, 0.820, -0.04], [s * (mx - mW * 0.30), mY - 0.022, mz + 0.02], 0.010, mStalkC, SURFACES.carbon);
+      } else addBlock(out, [
         [xi, sB + aY, mz - (ckpt ? 0.026 : 0.045)], [xi, sB + aY, mz + (ckpt ? 0.026 : 0.045)], [xi, sB + sR + aY, mz + (ckpt ? 0.026 : 0.045)], [xi, sB + sR + aY, mz - (ckpt ? 0.026 : 0.045)],
         [xo, (ckpt ? stalkTop-0.016 : sB+sR*.75+aY), stalkZ - (ckpt ? 0.012 : 0.020)], [xo, (ckpt ? stalkTop-0.016 : sB+sR*.75+aY), stalkZ + (ckpt ? 0.012 : 0.020)],  [xo, stalkTop, stalkZ + (ckpt ? 0.012 : 0.020)], [xo, stalkTop, stalkZ - (ckpt ? 0.012 : 0.020)],
       ], mStalkC);
@@ -1277,8 +1286,18 @@ const Car3D = (function () {
         // Top winglet + the C3.7.5 OUTER stay down to the tub shoulder — the
         // two details every 2026 housing carries.
         addBox(out, s*mx, hy1 + 0.008, mz + 0.01, mW * 0.9, 0.008, 0.055, DARK, SURFACES.carbon);
-        addBeamBetween(out, [s * (mx + mW * 0.38), hy0, mz + 0.02],
+        if (!onHalo) addBeamBetween(out, [s * (mx + mW * 0.38), hy0, mz + 0.02],
                             [s * (msx + 0.06), 0.60, mz + 0.10], 0.012, DARK, SURFACES.carbon);
+      }
+      if (mFrame) {
+        // PREVIEW (B·D4, opt-in): 2019–21 framed mirror (Ferrari SF90/SF1000,
+        // Red Bull RB16) — a lower aero blade and two vertical struts box the
+        // housing, standing 22 mm off it so the frame reads as a ring of air.
+        const g = 0.022, fy0 = hy0 - g, fy1 = hy1 + g, fxI = s * (mx - mW / 2 - g), fxO = s * (mx + mW / 2 + g);
+        addBox(out, s * mx, fy1, mz + 0.012, mW + 2 * g + 0.012, 0.009, 0.075, DARK, SURFACES.carbon);
+        addBox(out, s * mx, fy0, mz + 0.012, mW + 2 * g + 0.012, 0.009, 0.085, DARK, SURFACES.carbon);
+        for (const fx of [fxI, fxO]) addBox(out, fx, (fy0 + fy1) / 2, mz + 0.016, 0.008, fy1 - fy0, 0.070, DARK, SURFACES.carbon);
+        addBox(out, fxO + s * 0.004, fy0 - 0.020, mz + 0.03, 0.006, 0.040, 0.050, DARK, SURFACES.carbon);   // turning-vane foot
       }
     }
 

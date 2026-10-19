@@ -344,6 +344,28 @@ const CarWheels = (function () {
           }
         }
       }
+      // PREVIEW (B·D4, opt-in, default off): brakes `drum` — the 2017–21 carbon
+      // "cake tin" round the disc. A carbon band at 0.80 rimR the width of the
+      // barrel, closed on each face between the hub and the band, with 16 vent
+      // slots near its rim and a foil lip at the OD — read through the spokes.
+      if (!useCover && brakeStyle && brakeStyle.drum) {
+        const dR = Math.max(rimR * 0.80, rotorOuter + 0.012), dIn = rimR * (wheelStyle && wheelStyle.blownAxle ? 0.36 : 0.25);
+        const DRUM = [0.19, 0.19, 0.21], FOIL = [0.66, 0.62, 0.52], SLOT = [0.025, 0.025, 0.03];
+        for (let i = 0; i < SEG; i++) {
+          const a0 = i / SEG * Math.PI * 2, a1 = (i + 1) / SEG * Math.PI * 2;
+          const E = (rad, a, xx) => [xx, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, E(dR, a0, x0 + 0.004), E(dR, a1, x0 + 0.004), E(dR, a1, x1 - 0.004), E(dR, a0, x1 - 0.004), DRUM, SURFACES.carbon);
+          for (const xf of [x0 + 0.004, x1 - 0.004]) {
+            addQuad(out, E(dIn, a0, xf), E(dIn, a1, xf), E(dR, a1, xf), E(dR, a0, xf), DRUM, SURFACES.carbon);
+            addQuad(out, E(dR * 0.95, a0, xf + (xf < cx ? -0.002 : 0.002)), E(dR * 0.95, a1, xf + (xf < cx ? -0.002 : 0.002)),
+                         E(dR, a1, xf + (xf < cx ? -0.002 : 0.002)), E(dR, a0, xf + (xf < cx ? -0.002 : 0.002)), FOIL, SURFACES.metal);
+          }
+        }
+        for (const xf of [x0 + 0.004 - 0.003, x1 - 0.004 + 0.003]) for (let k = 0; k < 16; k++) {
+          const a = k / 16 * Math.PI * 2 + 0.1, rr = dR * 0.80;
+          addBox(out, xf, cy + rr * Math.cos(a), cz + rr * Math.sin(a), 0.003, 0.016, 0.016, SLOT, SURFACES.carbon);
+        }
+      }
       const HUBCAP = RC;                   // raised boss: lighter than the dish floor
       // The deep cover's floor sits OUTBOARD of the plane the hubcap and nut
       // were placed on, so both were buried behind it and gunNut:1 drew
@@ -352,9 +374,27 @@ const CarWheels = (function () {
       // Open hub is smaller so the rotor shows through the spoke gaps; cover
       // keeps the wide boss that sat on the old dish floor.
       const hubFrac = useCover ? 0.46 : 0.22;
+      // PREVIEW (B·D4, opt-in, default off): blownAxle draws the 2017–21 hollow
+      // axle — a wide hub ring round a dark bore, no centre nut — on an open rim.
+      const blownAxle = !useCover && !!(wheelStyle && wheelStyle.blownAxle);
+      const spokeSplit = !!(wheelStyle && wheelStyle.spokeSplit);
       for (const ss of [[x0, -1], [x1, 1]]) {
-        const dir = ss[1], hubX = ss[0] + dir * hubLift, xc0 = hubX - dir * 0.014, hcR = rimR * hubFrac, ctr = [xc0, cy, cz];
-        for (let i = 0; i < SEG; i++) {
+        const dir = ss[1], hubX = ss[0] + dir * hubLift, xc0 = hubX - dir * 0.014, hcR = rimR * (blownAxle ? 0.34 : hubFrac), ctr = [xc0, cy, cz];
+        if (blownAxle) {
+          // Bore radius 0.55 hcR (~43 mm) — the axle's open exit; a dark tube
+          // 60 mm deep behind a machined lip, the ring carrying the spokes.
+          const boreR = hcR * 0.55, BORE = [0.035, 0.035, 0.04];
+          for (let i = 0; i < SEG; i++) {
+            const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+            const P = (rad, a, x) => [x, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+            addQuad(out, P(boreR, a0, xc0), P(boreR, a1, xc0), P(hcR, a1, xc0), P(hcR, a0, xc0), HUBCAP, RS);
+            addQuad(out, P(boreR, a0, xc0 + dir * 0.012), P(boreR * 1.22, a0, xc0 + dir * 0.012),
+                         P(boreR * 1.22, a1, xc0 + dir * 0.012), P(boreR, a1, xc0 + dir * 0.012), LIP, RS);
+            addQuad(out, P(boreR, a0, xc0 + dir * 0.012), P(boreR, a1, xc0 + dir * 0.012),
+                         P(boreR, a1, xc0 - dir * 0.06), P(boreR, a0, xc0 - dir * 0.06), BORE, SURFACES.carbon);
+            addTri(out, [xc0 - dir * 0.06, cy, cz], P(boreR, a0, xc0 - dir * 0.06), P(boreR, a1, xc0 - dir * 0.06), BORE, SURFACES.carbon);
+          }
+        } else for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
           addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
                            [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, RS);   // single face (cull-off → opaque both sides)
@@ -365,7 +405,9 @@ const CarWheels = (function () {
         // when it sets a value (factory rim signatures stay intact).
         const nutCol = (wheelStyle && wheelStyle.nut) || (tyreStyle && tyreStyle.nut) || NUT;
         const gunNut = (wheelStyle && wheelStyle.gunNut) || (tyreStyle && tyreStyle.gunNut) ? 1 : 0;
-        if (!gunNut) {
+        if (blownAxle) {
+          // no centre nut: the bore IS the hub
+        } else if (!gunNut) {
           addBox(out, hubX - dir * 0.002, cy, cz, 0.026, Math.max(hcR * 0.55, rimR * 0.12), Math.max(hcR * 0.55, rimR * 0.12), nutCol, SURFACES.metal);
         } else {
           const nx = hubX - dir * 0.001;
@@ -406,10 +448,29 @@ const CarWheels = (function () {
           const ri = hcR * 1.08, ro = rimR * 0.90;
           const xsF = ss[0] + dir * 0.026, xsB = ss[0] + dir * 0.026 - dir * thick;
           const P = (xs, rad, sgn) => [xs, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
+          if (spokeSplit) {
+            // Y-split (BBS 2022+ forged mag): a trunk to 55 % of the span, then
+            // two thinner tines fanning ±0.19 rad to the lip — 2N tips at the rim.
+            const rm = ri + (ro - ri) * 0.55;
+            spokeBlade(xsF, xsB, [rm, a], [ri, a], hw);
+            for (const da of [-0.19, 0.19]) spokeBlade(xsF, xsB, [rm, a], [ro, a + da], hw * 0.70);
+            continue;
+          }
           addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsF, ro, -1), P(xsF, ri, -1), HUBCAP, RS);
           addQuad(out, P(xsB, ri, -1), P(xsB, ro, -1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, RS);
           addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, RS);
           addQuad(out, P(xsF, ri, -1), P(xsB, ri, -1), P(xsB, ro, -1), P(xsF, ro, -1), HUBCAP, RS);
+        }
+        // An extruded blade between two polar points [rad, angle] on the face.
+        function spokeBlade(xsF, xsB, A, B, hw) {
+          const ay = cy + A[0] * Math.cos(A[1]), az = cz + A[0] * Math.sin(A[1]);
+          const by = cy + B[0] * Math.cos(B[1]), bz = cz + B[0] * Math.sin(B[1]);
+          const L = Math.hypot(by - ay, bz - az) || 1, ny = -(bz - az) / L * hw, nz = (by - ay) / L * hw;
+          const Q = (xs, py, pz, sg) => [xs, py + ny * sg, pz + nz * sg];
+          addQuad(out, Q(xsF, ay, az, 1), Q(xsF, by, bz, 1), Q(xsF, by, bz, -1), Q(xsF, ay, az, -1), HUBCAP, RS);
+          addQuad(out, Q(xsB, ay, az, -1), Q(xsB, by, bz, -1), Q(xsB, by, bz, 1), Q(xsB, ay, az, 1), HUBCAP, RS);
+          addQuad(out, Q(xsF, ay, az, 1), Q(xsF, by, bz, 1), Q(xsB, by, bz, 1), Q(xsB, ay, az, 1), HUBCAP, RS);
+          addQuad(out, Q(xsF, ay, az, -1), Q(xsB, ay, az, -1), Q(xsB, by, bz, -1), Q(xsF, by, bz, -1), HUBCAP, RS);
         }
         // Rim TAPE: face band + short OD bead so the set marks read from a ¾ view.
         if (wheelStyle && wheelStyle.tape) {
