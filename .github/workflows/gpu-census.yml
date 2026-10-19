@@ -151,6 +151,7 @@ jobs:
       run: ${{ steps.gate.outputs.run }}
       reanalysis: ${{ steps.split.outputs.reanalysis }}
       garage_ab: ${{ steps.split.outputs.garage_ab }}
+      live_matrix: ${{ steps.split.outputs.live_matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
@@ -253,6 +254,8 @@ jobs:
           # dispatch/nightly or an unrelated pushed request. Its candidate pin
           # intentionally rejects newer product trees; the four controls do not.
           print("garage_ab=" + str(req.get("leg") == "garage-retry-63a1" and not co).lower())
+          # #2572 render live-debug matrix (tools/perf/live-render-matrix.mjs): opt-in by leg name, push requests only.
+          print("live_matrix=" + str(req.get("leg") == "render-live-matrix-2572").lower())
           # The player camera (hunt 4 H5). A push request bypasses the
           # dispatch form's choice list, so the allowlist is enforced here too.
           cm = str(req.get("cam") or os.environ.get("INPUT_CAM") or "helmet").strip()
@@ -405,6 +408,40 @@ jobs:
             report.md
           if-no-files-found: warn
           retention-days: 7
+
+      # #2572: the scenario matrix TLX and GLX never got on a drawing runner. Opt-in by request leg
+      # `render-live-matrix-2572` (ignored by dispatch, nightly and every other request); pair it with
+      # census_only=true so the four ordinary game checks do not also run. Three backend paths, each
+      # capped, none able to fail the job: the verdict is the `= live-render-matrix` line and the JSON.
+      - name: Live render matrix — GLX (WebGL2)
+        if: ${{ needs.plan.outputs.live_matrix == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 8
+        shell: bash
+        run: node tools/perf/live-render-matrix.mjs --backend webgl2 --json "live-matrix-glx.json"
+
+      - name: Live render matrix — TLX (three, WebGL2 fallback)
+        if: ${{ needs.plan.outputs.live_matrix == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 8
+        shell: bash
+        run: node tools/perf/live-render-matrix.mjs --backend three --gl-fallback 1 --json "live-matrix-tlx-gl.json"
+
+      - name: Live render matrix — TLX (three, native path)
+        if: ${{ needs.plan.outputs.live_matrix == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 8
+        shell: bash
+        run: node tools/perf/live-render-matrix.mjs --backend three --gl-fallback 0 --json "live-matrix-tlx-native.json"
+
+      - name: Upload live render matrix
+        if: ${{ always() && needs.plan.outputs.live_matrix == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-render-matrix-${{ matrix.image }}
+          path: live-matrix-*.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Game check — three.js / WebGPU
         if: ${{ needs.plan.outputs.census_only != 'true' }}
