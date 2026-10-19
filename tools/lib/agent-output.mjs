@@ -58,19 +58,30 @@ export function summarizeOutput(value, { level = 'compact' } = {}) {
     if (Array.isArray(v)) {
       const cap = diagnostic ? 8 : 3;
       const source = pointer.length <= 256 ? { sourcePointer: pointer } : { sourcePointerOmitted: true, retrieval: 'use byte pages for long collection paths' };
+      const hasWarning = item => item && typeof item === 'object' && ['warning', 'warnings'].some(key => {
+        if (!Object.hasOwn(item, key)) return false;
+        const value = item[key];
+        if (typeof value === 'string') return !!value.trim() && !/^0(?:\s+warnings?)?$/i.test(value.trim());
+        if (Array.isArray(value)) return value.length > 0;
+        return value === true || typeof value === 'number' && value > 0 || value && typeof value === 'object' && Object.keys(value).length > 0;
+      });
       // Prioritize observed issue state, independently of a producer's collection name.
-      if (v.some(item => item && typeof item === 'object' && ('status' in item || 'verdict' in item || 'severity' in item || 'level' in item || 'ok' in item || 'pass' in item || 'success' in item || 'valid' in item || 'error' in item))) {
+      if (v.some(item => item && typeof item === 'object' && ('status' in item || 'verdict' in item || 'severity' in item || 'level' in item || 'ok' in item || 'pass' in item || 'success' in item || 'valid' in item || 'error' in item || hasWarning(item)))) {
         const groups = [[], [], [], []], statusCounts = {};
+        let warningFieldCount = 0;
         for (const [index, item] of v.entries()) {
           const status = String(item && typeof item === 'object' ? item.status ?? item.verdict ?? item.severity ?? item.level ?? (item.ok === false || item.pass === false || item.success === false ? 'failed' : item.valid === false ? 'invalid' : item.error ? 'error' : 'unspecified') : 'unspecified').slice(0, 60);
           const label = Object.hasOwn(statusCounts, status) || Object.keys(statusCounts).length < 16 ? status : 'other';
           statusCounts[label] = (statusCounts[label] || 0) + 1;
-          const severity = /fail|error|fatal|critical|^high$/i.test(status) ? 3 : /warn|medium/i.test(status) ? 2 : /unknown|unresolved|invalid|pending|not.?run/i.test(status) ? 1 : 0;
+          const statusSeverity = /fail|error|fatal|critical|^high$/i.test(status) ? 3 : /warn|medium/i.test(status) ? 2 : /unknown|unresolved|invalid|pending|not.?run/i.test(status) ? 1 : 0;
+          const warning = !!hasWarning(item);
+          if (warning) warningFieldCount++;
+          const severity = Math.max(statusSeverity, warning ? 2 : 0);
           if (groups[severity].length < cap) groups[severity].push({ item, index });
         }
         const rows = [...groups[3], ...groups[2], ...groups[1], ...groups[0]].slice(0, cap);
         const out = rows.map(({ item, index }) => visit(item, depth + 1, key, `${pointer}/${index}`));
-        out.push({ totalItems: v.length, displayedItems: rows.length, omittedItems: Math.max(0, v.length - rows.length), displayedIndices: rows.map(row => row.index), ...source, statusCounts, prioritizedIssues: true });
+        out.push({ totalItems: v.length, displayedItems: rows.length, omittedItems: Math.max(0, v.length - rows.length), displayedIndices: rows.map(row => row.index), ...source, statusCounts, ...(warningFieldCount ? { warningFieldCount } : {}), prioritizedIssues: true });
         return out;
       }
       const out = v.slice(0, cap).map((item, index) => visit(item, depth + 1, key, `${pointer}/${index}`));

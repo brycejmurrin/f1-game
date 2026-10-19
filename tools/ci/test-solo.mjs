@@ -110,12 +110,13 @@ child.on("exit", (code, signal) => {
     `(started ${load.toFixed(2)}) — ${code === 0 ? "PASSED" : "FAILED"}.`);
   if (code === 0) {
     console.error(
-      `[test-solo] PASS on a quiet box means a failure under load was contention, not a bug.\n` +
-      `            If any test here ran anywhere near the 120 s budget even SOLO, the budget\n` +
-      `            is the real problem — raise it with a written reason, do not shrug.`);
+      `[test-solo] This run passed at the recorded load. Earlier failures still need diagnosis;\n` +
+      `            a passing retry does not establish their cause. Preserve the earlier failure\n` +
+      `            and measure the slow step before changing any timeout budget.`);
   } else {
     console.error(
-      `[test-solo] FAIL on a quiet box is REAL. It is not the machine. Bisect it.`);
+      `[test-solo] This run failed at the recorded load. Inspect the first failure and environment\n` +
+      `            before attributing a cause.`);
   }
   if (signal) { process.kill(process.pid, signal); return; }
   process.exit(code == null ? 1 : code);

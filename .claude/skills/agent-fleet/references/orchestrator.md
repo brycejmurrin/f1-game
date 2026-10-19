@@ -41,6 +41,9 @@ ORCHESTRATOR: <host>:<your session id>
 USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md,
       scoped to the lane (OWNED globs / issue list, follow-up PRs included), not to PR numbers
 MODE/SEED: permission_mode "auto"; source_revision <deploy branch | NAMED integration branch>; model <id>.
+OUTPUT: <native bounded answer | shared compact entrypoint; diagnostic/full and saved-range escalation>.
+CAPABILITIES: <matching parent receipt, exact workdir, available LSP/CLI routes; query permissions vs daemon ownership>.
+MEASUREMENT: <automatic recorder + exact FIRST command, or not measured; host bytes/tokens unknown unless captured>.
 PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
 DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>
 PUSH: when your own cycle is green, and before any browser run or wait over ~10 min.
@@ -110,3 +113,7 @@ trips `Sandbox allocation failed … rate_limited`.
 
 Merge or arm auto-merge outside role-merge-holder.md's level, force-push, push to a branch a live worker owns, or
 pass a sibling's message off as the user's instruction.
+
+## Bounded workflow experiments
+
+Follow [the experiment protocol](../../../../docs/agent-output/experiments.md). Before launching, supply a shared capability manifest, revision, exact scope, available LSP/CLI routes, fixture/timing recipe, output policy and automatic command recorder. Artifact-only workers use local claims and never mutate the shared board. Keep all comparison arms at the same source, dependencies, model, effort and caps; vary one instruction/output policy at a time. Record command outputs, retrievals, retries, correctness and completion cost. Terminal bytes are a proxy, not host-visible bytes or billed tokens. Do not ask workers to reconstruct missing usage. Reuse preflight receipts until capability/revision drift or a real failure requires rechecking. Batch the final wave digest; do not re-wake idle workers merely to restate retained logs.

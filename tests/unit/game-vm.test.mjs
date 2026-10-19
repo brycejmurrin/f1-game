@@ -264,3 +264,81 @@ test("the driving line never gains speed faster than the car can accelerate at t
     }
   } finally { A.setPhysics({ pace: pace0 }); }
 });
+
+
+test("readiness helpers separate async settling from simulation frames", async () => {
+  const { settle, settleAsync } = require("../../tools/lib/game-vm.cjs");
+  assert.equal(settleAsync, settle);
+  assert.equal(g.settleAsync, g.settle);
+  const before = g.apex.cameraState().simulationTime;
+  let hostTurn = false;
+  setImmediate(() => { hostTurn = true; });
+  assert.equal(await g.settleAsync(() => hostTurn, 2), true);
+  assert.equal(await g.settleAsync(() => g.apex.cameraState().simulationTime > before, 2), false);
+  assert.equal(g.apex.cameraState().simulationTime, before);
+  assert.deepEqual(await g.stepUntil(() => g.apex.cameraState().simulationTime > before, { maxSteps: 1 }), { ok: true, steps: 1 });
+});
+
+test("stepUntil checks initially, honors exact bounds and yields after each frame", async () => {
+  const originalStep = g.step;
+  const dts = [];
+  let turns = 0;
+  g.step = (n, dt) => {
+    assert.equal(n, 1);
+    dts.push(dt);
+    setImmediate(() => { turns++; });
+  };
+  try {
+    assert.deepEqual(await g.stepUntil(() => true), { ok: true, steps: 0 });
+    assert.equal(dts.length, 0);
+    assert.deepEqual(await g.stepUntil(() => false, { maxSteps: 0 }), { ok: false, steps: 0 });
+    assert.deepEqual(await g.stepUntil(async () => turns === 3, { maxSteps: 3, dt: 0.02 }), { ok: true, steps: 3 });
+    assert.deepEqual(dts, [0.02, 0.02, 0.02]);
+    let checks = 0;
+    assert.deepEqual(await g.stepUntil(() => { checks++; return false; }, { maxSteps: 2 }), { ok: false, steps: 2 });
+    assert.equal(checks, 3);
+    assert.equal(dts.length, 5);
+    assert.equal(turns, 5);
+    await assert.rejects(g.stepUntil(() => { throw new Error("predicate failed"); }), /predicate failed/);
+    assert.equal(dts.length, 5);
+  } finally { g.step = originalStep; }
+});
+
+test("stepUntil rejects invalid inputs before advancing simulation", async () => {
+  const before = g.apex.cameraState().simulationTime;
+  await assert.rejects(g.stepUntil(null), /predicate must be a function/);
+  for (const options of [null, [], 1]) await assert.rejects(g.stepUntil(() => true, options), /options must be an object/);
+  for (const maxSteps of [-1, 0.5, NaN, Infinity, "2", Number.MAX_SAFE_INTEGER + 1]) {
+    await assert.rejects(g.stepUntil(() => true, { maxSteps }), /maxSteps must be/);
+  }
+  for (const dt of [0, -1, NaN, Infinity, "0.1"]) await assert.rejects(g.stepUntil(() => true, { dt }), /dt must be/);
+  assert.equal(g.apex.cameraState().simulationTime, before);
+});
+
+
+test("stepUntil arms a real WATCH countdown and advances its replay clock", async () => {
+  const fs = require("node:fs"), vm = require("node:vm");
+  const { ROOT } = require("../../tools/lib/game-vm.cjs");
+  vm.runInContext(fs.readFileSync(`${ROOT}/js/data/real-race-tab.js`, "utf8"), g.ctx);
+  const { D, Teams, Tracks, RR } = vm.runInContext("({ D: DataRealRace, Teams, Tracks, RR: RealRace })", g.ctx);
+  const fixture = JSON.parse(fs.readFileSync(`${ROOT}/tests/fixtures/openf1-baku-2026-race.json`, "utf8"));
+  const script = D.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+  // Synthetic track-frame footage, as in real-replay-vm's WATCH fixtures.
+  const traces = { frame: "track", cars: { 63: { t: [0, 10], prog: [1, 501], x: [0, 0] } } };
+  const previousCars = g.G.cars;
+  try {
+    assert.ok(RR.launch(script, { seat: "RUS", watch: true, camera: "heli", traces }));
+    assert.equal(await g.settleAsync(() => g.G.cars !== previousCars && g.G.state === "count", 8000), true);
+    assert.equal(RR.status().armed, false, "a built field has not run its countdown frame");
+    assert.equal(await g.settleAsync(() => RR.status().armed, 2), false);
+    assert.deepEqual(await g.stepUntil(() => RR.status().armed, { maxSteps: 2 }), { ok: true, steps: 1 });
+    const replay = RR.replay();
+    g.apex.go();
+    const before = replay.status().T;
+    assert.equal(await g.settleAsync(() => replay.status().T > before, 2), false);
+    const progress = await g.stepUntil(() => replay.status().T > before, { maxSteps: 2 });
+    assert.equal(progress.ok, true, JSON.stringify(progress));
+    assert.ok(progress.steps > 0);
+    assert.equal(replay.owns(g.G.player), true);
+  } finally { g.G.quitToMenu(); }
+});

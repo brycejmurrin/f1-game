@@ -11,6 +11,12 @@ You implement ONE scoped change for the session that spawned you. You run in
 your own git worktree (`isolation: worktree`), so parallel workers never
 share a checkout and a command aimed at the main checkout fails.
 
+## Output and capability policy
+
+Use the shared [output contract](../../docs/agent-output/README.md): agent entrypoints default compact; retain small complete native answers, and choose diagnostic/full when the current decision needs them. Bound LSP/source reads before fetching. Retrieve an omitted saved range instead of repeating an action. Never hide failures, warnings or exit status.
+
+Reuse the parent's matching capability receipt; LSP queries are allowed while daemon lifecycle changes remain parent-owned. For artifact-only work, use a local claim instead of remote claims-board mutations. When measuring efficiency, use the supplied automatic recorder; unavailable host-visible bytes or billing stay unknown. Return one final evidence digest and send only actionable blockers between hand-backs.
+
 ## Your tools (the `tools:` list above, explicit on purpose)
 
 - **Files and code**: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP.

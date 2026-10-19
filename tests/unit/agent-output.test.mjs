@@ -325,6 +325,33 @@ test('status-bearing collections prioritize late issues independently of their n
   const plain = summarizeOutput({ rows: Array.from({ length: 20 }, (_, value) => ({ value })) }).rows;
   assert.deepEqual(plain.slice(0, 3), [{ value: 0 }, { value: 1 }, { value: 2 }]);
 });
+test('successful rows with structured warnings retain warning priority and source status counts', () => {
+  const rows = Array.from({ length: 160 }, (_, id) => ({ id, status: 'PASS', detail: 'healthy '.repeat(30) }));
+  rows[130].warning = 'stale sensor receipt';
+  rows[159] = { id: 159, status: 'FAIL', error: 'missing result' };
+  const before = JSON.stringify(rows);
+  for (const level of ['compact', 'diagnostic']) {
+    const result = summarizeOutput({ rows }, { level }).rows;
+    assert.equal(result[0].id, 159);
+    assert.equal(result[1].id, 130);
+    assert.equal(result[1].warning, 'stale sensor receipt');
+    assert.equal(result.at(-1).warningFieldCount, 1);
+    assert.deepEqual(result.at(-1).statusCounts, { PASS: 159, FAIL: 1 });
+  }
+  assert.equal(JSON.stringify(rows), before);
+  assert.deepEqual(summarizeOutput({ rows }, { level: 'full' }).rows, rows);
+});
+
+test('warning-only rows are actionable while empty warning fields and passing names are not', () => {
+  for (const empty of [0, false, '', '0 warnings', [], {}]) {
+    const rows = Array.from({ length: 30 }, (_, id) => ({ id, name: 'a warning is expected', warnings: empty }));
+    rows[28] = { id: 28, warnings: ['camera preference was restored'] };
+    const result = summarizeOutput({ rows }).rows;
+    assert.equal(result[0].id, 28);
+    assert.equal(result.at(-1).warningFieldCount, 1);
+  }
+});
+
 test('MCP summaries deduplicate identical transport text and structured data', () => {
   const data = { verdict: 'failed', cause: 'missing file', checks: [{ status: 'warning' }] };
   const summary = summarizeOutput({ content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data });

@@ -85,6 +85,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
   // gen-cursor-rules, the hooks — asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
+  "tests/unit/agent-experiment.test.mjs",
   // The orchestrator/worker contract (skill agent-fleet): host-correct PR
   // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
   "tests/unit/agent-fleet.test.mjs",

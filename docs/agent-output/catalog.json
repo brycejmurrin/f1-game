@@ -3047,7 +3047,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 5887,
+      "sourceBytes": 5954,
       "outputPolicy": "artifact-first",
       "outputContract": "Inherited stdout; forced busy-run caveat; exits/signals and infrastructure failure",
       "doc": "Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`; refuses (exit 3) while busy (`--max-load`). Foreground.",
@@ -3069,7 +3069,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 111482,
+      "sourceBytes": 111524,
       "outputPolicy": "job-status",
       "outputContract": "NotStarted/bail, timeouts/empty-run, unchanged-tree stamp, suite terminal line",
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
@@ -4710,7 +4710,7 @@
       "path": "tools/lib/agent-output.mjs",
       "classification": "library",
       "evidence": [],
-      "sourceBytes": 14103,
+      "sourceBytes": 14892,
       "outputPolicy": "no-direct-output",
       "outputContract": "Original content and isError, private artifact path/bytes, presentation failures, safe containment, bounded page cursor.",
       "doc": "Shared bounded agent output with private, retrievable original artifacts.",
@@ -4960,7 +4960,7 @@
       "evidence": [
         "main-guard"
       ],
-      "sourceBytes": 42210,
+      "sourceBytes": 43963,
       "outputPolicy": "keep-native",
       "outputContract": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
       "doc": "Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser.",
@@ -8833,7 +8833,7 @@
     },
     {
       "name": "test:agent-output",
-      "command": "node --test tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs",
+      "command": "node --test tests/unit/agent-experiment.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",

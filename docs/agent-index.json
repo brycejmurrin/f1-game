@@ -507,6 +507,7 @@
       "script": "test:agent-output",
       "kind": "node",
       "files": [
+        "tests/unit/agent-experiment.test.mjs",
         "tests/unit/agent-output-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/output-level-mcp.test.mjs",

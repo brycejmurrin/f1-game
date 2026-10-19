@@ -22,6 +22,9 @@ in `_meta["apex/agent-output"].artifact`. Larger previews use
 tiny commands: prefer the existing concise native answer for commands marked
 `keep-native`, such as plain `doctor`, unless retention is needed.
 
+For bounded worker comparisons and automatic command accounting, see
+[workflow experiments](experiments.md).
+
 ## Terminal commands
 
 Use the shared entrypoint for any explicit command, keeping its arguments after

@@ -32,6 +32,9 @@
 //   const { createGame } = require("./game-vm.cjs");
 //   const g = await createGame({ track: "monza" });
 //   g.apex.setInput({ throttle: true }); g.step(60); g.apex.physState();
+//   await g.settleAsync(() => assetsReady()); // async work only; no frames
+//   const ready = await g.stepUntil(() => clock() > 0, { maxSteps: 120 });
+//   if (!ready.ok) throw new Error(`clock stalled after ${ready.steps} frames`);
 // Usage (CLI):
 //   node tools/lib/game-vm.cjs [trackId]      # boot, race, 60 throttle steps, JSON
 //
@@ -554,6 +557,8 @@ function runFile(ctx, relPath, record) {
 
 // Yield to the host event loop until `pred()` holds (scripts inject on
 // setImmediate, startRace awaits ensureScenery). Bounded by `maxTurns`.
+// This NEVER advances simulation frames or flushes VM timers. Use stepUntil
+// for countdown/replay/physics readiness; settleAsync is the explicit alias.
 async function settle(pred, maxTurns) {
   const n = maxTurns || 2000;
   for (let i = 0; i < n; i++) {
@@ -737,6 +742,25 @@ async function createGame(opts) {
         return G.cars[i];
       },
       settle,
+      settleAsync: settle,
+      // Advance one real simulation frame and yield one host async turn per
+      // attempt. Check before stepping and after each turn, including the final
+      // allowed frame. Returns {ok:false, steps:maxSteps} on exhaustion; callers
+      // MUST inspect ok. Predicate errors propagate. No RAF/timer pumping.
+      // Async predicates are supported. maxSteps counts frames, not wall time.
+      async stepUntil(predicate, options = {}) {
+        if (typeof predicate !== "function") throw new TypeError("game-vm: stepUntil predicate must be a function");
+        if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("game-vm: stepUntil options must be an object");
+        const { maxSteps = 600, dt = 1 / 60 } = options;
+        if (!Number.isSafeInteger(maxSteps) || maxSteps < 0) throw new RangeError("game-vm: stepUntil maxSteps must be a nonnegative safe integer");
+        if (!Number.isFinite(dt) || dt <= 0) throw new RangeError("game-vm: stepUntil dt must be finite and positive");
+        for (let steps = 0; ; steps++) {
+          if (await predicate()) return { ok: true, steps };
+          if (steps === maxSteps) return { ok: false, steps };
+          handle.step(1, dt);
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+      },
       flushTimers: (onlyDue) => timers.flush(onlyDue),
       pumpFrame: (now) => { const q = world.rafQueue.splice(0); for (const fn of q) fn(now != null ? now : performance.now()); return q.length; },
       resourceSnapshot,
@@ -752,7 +776,7 @@ async function createGame(opts) {
   }
 }
 
-module.exports = { createGame, settle, ROOT, SKIP, SEATS };
+module.exports = { createGame, settle, settleAsync: settle, ROOT, SKIP, SEATS };
 
 if (require.main === module) {
   (async () => {
