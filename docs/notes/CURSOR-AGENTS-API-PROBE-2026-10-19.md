@@ -76,6 +76,22 @@ one retry on 429/5xx honouring `Retry-After`.
   changes; a bus message to `cursor:<id>` becomes `followup`; `409 agent_busy` is queued and retried
   on the next poll. The PR-comment path stays as the fallback for repos or agents the key cannot see.
 
+## Full transcripts (follow-up, 2026-10-19)
+
+`GET /v1/agents/{id}/runs/{runId}/stream` replays a finished run as SSE with
+`tool_call` (name, args, stored result), `thinking`, `assistant` and step timing
+events; the v0 conversation route is text only. It answers 429 under parallel
+reads: dump one run at a time, 1.5 s apart, exponential backoff. Token fields
+are absent (`token-delta` carries a tiny count; `/usage` returns zeros).
+
+Mined 105 runs of 20 agents (stored characters, a lower-bound proxy; about 20% of
+calls arrive without args): 10,983 calls, 21.5M result characters. edit_file
+results echo the whole file before and after (25% of all result characters; 219
+results over 20K); terminal 10.1M; 759 repeat reads in-run; 306 of 513
+get_mcp_tools calls duplicate one already made. Reproduce with the CLI in the
+tools/ci folder (`cursor-agents.mjs dump` then `digest`); dumps stay in ignored
+`artifacts/cursor-dumps/`.
+
 ## Recommended next step
 
 1. Bryce enables Cursor on-demand usage (with a cap) so launch works, then re-run only the write test

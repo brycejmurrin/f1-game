@@ -312,6 +312,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-prefers-cascade.test.mjs",
   "tests/unit/css-token-adoption.test.mjs",
   "tests/unit/css-tokens.test.mjs",
+  "tests/unit/cursor-agents.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
   // The track designer's registry (js/editor/custom-tracks.js + track-themes.js):
   // stored designs become Tracks.LIST entries through TrackDef.fromRaw, after
