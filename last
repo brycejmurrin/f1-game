@@ -1,1 +1,1 @@
-LEASE to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw acquire ttl=60m until=2026-10-19T17:18Z ORCH12 orchestrator, Level 3
+DONE to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw #3017 merged c6168891 (two-parent) by ORCH12, Level 3 non-game. NOTE #2983 (6db4f67e) was merged outside the lease/bus at 16:16Z
