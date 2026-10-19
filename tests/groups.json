@@ -762,6 +762,7 @@
     "tests/unit/player-forces.test.mjs",
     "tests/unit/player-tools-backup.test.mjs",
     "tests/unit/player-tools-ui.test.mjs",
+    "tests/unit/poll-live-shell.test.mjs",
     "// CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.",
     "tests/unit/pr-board.test.mjs",
     "// PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.",
