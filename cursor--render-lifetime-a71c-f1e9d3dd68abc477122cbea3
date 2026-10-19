@@ -1,1 +1,0 @@
-1792436920	Bryce Murrin	RENDERING/PERFORMANCE: TLX normal-pack construction copies; OWNED js/render/three/tlx-chunked.js tests/unit/tlx-hunt4b.test.mjs docs/changelog.d/tlx-normal-pack-a71c.md. No tlx.js/wgx.js/vendor edits; measuring real-geometry allocation and exact packed parity.  [cursor/render-lifetime-a71c; session f1e9d3dd68abc477122cbea3]
