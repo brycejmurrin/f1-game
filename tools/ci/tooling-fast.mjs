@@ -115,6 +115,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/announcer.test.mjs",
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-arg-guards.test.mjs",
+  "tests/unit/apex-cam-fallback.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
   // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
   "tests/unit/apex-memory.test.mjs",

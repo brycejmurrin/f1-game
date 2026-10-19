@@ -290,8 +290,11 @@ studio(arg = true) {
   },
 carOrbit(idx = 0, az = 180, el = 14, dist = 25, h = 1.0, opts = {}) {
     if (!G.track || !G.cars || !G.cars.length) return false;
-    const c = (idx <= 0 || !G.cars[idx]) ? (G.player || G.cars[0]) : G.cars[idx];
+    // idx 0 / unknown → player. Report the index actually framed (#2976), not the ask.
+    const useFallback = (idx <= 0 || !G.cars[idx]);
+    const c = useFallback ? (G.player || G.cars[0]) : G.cars[idx];
     if (!c) return false;
+    const carIdx = G.cars.indexOf(c);
     // World pose when mirrored (player + field); else Frenet (s, x).
     const s = ((c.s % G.track.total) + G.track.total) % G.track.total;
     Tracks.sample(G.track, s, smp);
@@ -308,7 +311,9 @@ carOrbit(idx = 0, az = 180, el = 14, dist = 25, h = 1.0, opts = {}) {
     eye[1] = Math.max(eye[1], smp.p[1] + 1.2);   // keep the eye above ground (see orbit)
     const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
     G.dbgCam = { eye, target: [cx, cyf, cz], fov, far: opts.far || 4000, fog: opts.fog };
-    return { eye, target: [cx, cyf, cz], fov, carIdx: idx, speed: +(c.speed || 0).toFixed(1) };
+    const out = { eye, target: [cx, cyf, cz], fov, carIdx, speed: +(c.speed || 0).toFixed(1) };
+    if (useFallback && idx !== carIdx) out.fallback = true;
+    return out;
   },
 dolly(f, fwd = 0, right = 0, up = 5, opts = {}) {
     if (!G.track) return false;
