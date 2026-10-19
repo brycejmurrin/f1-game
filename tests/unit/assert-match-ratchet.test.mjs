@@ -20,8 +20,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // 2026-10-19: #1682 first slice (gfx-backend-canary preference / latch / recovery
 // pins → behaviour). Post-merge tip absorb 7401 (other PRs added pins outside
-// canary). Lower this when more pins convert; never raise without a reason.
-const CEILING = 7401;
+// canary); 2026-10-19 net-lobby-lifecycle slice lowered it to 7310. Lower this when more pins convert; never raise without a reason.
+const CEILING = 7310;
 const EXEMPT = new Set([
   "tests/unit/assert-match-ratchet.test.mjs",
 ]);
