@@ -469,8 +469,50 @@ var GameAudio = (function () {
   }, signal);
   const { decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx } = radio;
   let ctxGen = 0;
+  // Offline render (#2966): when set, createCtx builds an OfflineAudioContext
+  // instead of a live one (synth-only; no sample fetch). Cleared after create.
+  let offlinePending = null;
+
+  function wireMasterBuses() {
+    master = ctx.createGain();
+    master.gain.value = isEnabled ? 0.8 : 0;
+    // MASTER LIMITER. Engine + wind + skid + rain + thunder + music summed
+    // straight into the destination and clipped a phone speaker whenever
+    // thunder landed over a full-throttle straight. A brick-wall-ish
+    // compressor (fast attack, high ratio) keeps the peaks legal so the
+    // whole mix can sit higher; the WIDE/NIGHT presets below only move it.
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -10; limiter.knee.value = 6; limiter.ratio.value = 12;
+    limiter.attack.value = 0.003; limiter.release.value = 0.15;
+    master.connect(limiter).connect(ctx.destination);
+    sfxBus = ctx.createGain();
+    mixDuckOn = radioDuckHolds.size > 0 || spotterDuckHold;
+    sfxBus.gain.value = sfxBusTarget();
+    sfxBus.connect(master);
+    focusBus = ctx.createGain(); focusBus.gain.value = sfxBusTarget(); focusBus.connect(master);
+    focusCurve = { at: ctx.currentTime, value: sfxBusTarget(), events: [] };
+    sfxCurve = { at: ctx.currentTime, value: sfxBusTarget(), events: [] };
+    attachRivalPassBy();
+    attachErsLayer();
+  }
 
   function createCtx() {
+    if (offlinePending && typeof OfflineAudioContext !== "undefined") {
+      const o = offlinePending;
+      const sr = o.sampleRate || 44100;
+      const sec = o.seconds || 1;
+      const ch = o.channels || 1;
+      const len = Math.max(1, Math.floor(sr * sec));
+      applySessionType();
+      ctx = new OfflineAudioContext(ch, len, sr);
+      signal.resetContext();
+      ctxGen++;
+      ctxSampleRate = ctx.sampleRate;
+      wireMasterBuses();
+      // Synth path only: sample decode is async and races startRendering.
+      return true;
+    }
+
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
 
@@ -511,26 +553,7 @@ var GameAudio = (function () {
       }
       if (ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
     };
-    master = ctx.createGain();
-    master.gain.value = isEnabled ? 0.8 : 0;
-    // MASTER LIMITER. Engine + wind + skid + rain + thunder + music summed
-    // straight into the destination and clipped a phone speaker whenever
-    // thunder landed over a full-throttle straight. A brick-wall-ish
-    // compressor (fast attack, high ratio) keeps the peaks legal so the
-    // whole mix can sit higher; the WIDE/NIGHT presets below only move it.
-    limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -10; limiter.knee.value = 6; limiter.ratio.value = 12;
-    limiter.attack.value = 0.003; limiter.release.value = 0.15;
-    master.connect(limiter).connect(ctx.destination);
-    sfxBus = ctx.createGain();
-    mixDuckOn = radioDuckHolds.size > 0 || spotterDuckHold;
-    sfxBus.gain.value = sfxBusTarget();
-    sfxBus.connect(master);
-    focusBus = ctx.createGain(); focusBus.gain.value = sfxBusTarget(); focusBus.connect(master);
-    focusCurve = { at: ctx.currentTime, value: sfxBusTarget(), events: [] };
-    sfxCurve = { at: ctx.currentTime, value: sfxBusTarget(), events: [] };
-    attachRivalPassBy();
-    attachErsLayer();
+    wireMasterBuses();
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
@@ -538,6 +561,51 @@ var GameAudio = (function () {
     if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(resumeRejected("create")); }
     loadEngineSamples();
     return true;
+  }
+
+  /** Test hook (#2966): tear any live context and open an OfflineAudioContext. */
+  function initOffline(opts) {
+    if (ctx) {
+      try { stopEngine(); } catch (_) { /* half-graph */ }
+      const dying = ctx;
+      ctx = null;
+      if (dying && typeof dying.close === "function") {
+        try { const p = dying.close(); if (p && p.catch) p.catch(() => {}); } catch (_) { /* already closed */ }
+      }
+    }
+    // Synth-only: buffers decoded on a prior live context are stale on a new
+    // OfflineAudioContext, and a mid-suite sample upgrade would change the
+    // pitch curve under the rpm sweep.
+    samplesReady = false;
+    usingSamples = false;
+    engBuf = null;
+    engLoop = null;
+    engWin = null;
+    enginePeriod = 0;
+    lastRate = 0;
+    offlinePending = {
+      channels: (opts && opts.channels) || 1,
+      sampleRate: (opts && opts.sampleRate) || 44100,
+      seconds: (opts && opts.seconds) || 1,
+    };
+    isEnabled = true;
+    sfxEnabled = true;
+    const ok = createCtx();
+    offlinePending = null;
+    return ok;
+  }
+
+  /** Render the scheduled offline graph; returns an AudioBuffer. One-shot. */
+  function renderOffline() {
+    if (!ctx || typeof ctx.startRendering !== "function") {
+      return Promise.reject(new Error("GameAudio.renderOffline: not an OfflineAudioContext"));
+    }
+    const offline = ctx;
+    return offline.startRendering().then((buf) => {
+      engineOn = false;
+      if (ctx === offline) ctx = null;
+      return buf;
+    });
   }
 
   // "No sound" is the case a player reports, so the first rejected resume() is a
@@ -2172,23 +2240,44 @@ var GameAudio = (function () {
   }
 
   // Tyre squeal from LATERAL (cornering past grip) and LONGITUDINAL
-  // (wheelspin / lock-up) slip. `x` is the combined 0..1 intensity the
-  // live caller already mixes (skidIntensity); pass `{ lat, long, wet }`
-  // or a third `extra` bag when the axes are separate. Silent at or
-  // below SQUEAL_THRESH. Glide, not a `.value =` step — this runs once
-  // per rendered frame and the slide input is unsmoothed.
+  // (wheelspin / lock-up) slip.
+  //
+  // Two input shapes:
+  //   • Scalar `x` (the race path): `player.skidIntensity` is ALREADY gated at
+  //     0.10 rad and normalised to 0..1 in game.js. Treat it as `over` directly
+  //     — applying SQUEAL_THRESH again silenced onset near 0.12 rad (#2975).
+  //   • `{ lat, long, wet }` (or `extra` axes): raw 0..1 slip; squealFromSlip
+  //     still applies SQUEAL_THRESH so unit tests and any raw caller keep the
+  //     grip floor.
+  // Lock-up pitch (+long × 120 Hz) on the scalar path uses carSfxLast.lock
+  // (CarSfx → setCarSfx), since game.js folds wheelLock into the scalar and
+  // cannot pass {lat,long} from this agent (#2975; js/game.js is single-owner).
+  // Glide, not a `.value =` step — once per rendered frame, unsmoothed slide.
   function setSkid(x, wet, extra) {
     if (!engineOn || !skidGain) return;
-    let lat, long;
+    let lat, long, rawAxes = false;
     if (x && typeof x === "object") {
       wet = x.wet; extra = x;
       lat = x.lat != null ? x.lat : (x.slip || 0);
       long = x.long || 0;
+      rawAxes = true;
     } else {
       lat = extra && extra.lat != null ? extra.lat : (x || 0);
       long = extra && extra.long != null ? extra.long : 0;
+      rawAxes = !!(extra && (extra.lat != null || extra.long != null));
     }
-    const q = squealFromSlip(lat, long, wet);
+    let q;
+    if (rawAxes) {
+      q = squealFromSlip(lat, long, wet);
+    } else {
+      const over = clamp01(lat);
+      const longL = clamp01(long || carSfxLast.lock || 0);
+      q = {
+        gain: over * (wet ? 0.10 : 0.16),
+        hz: (wet ? 480 : 760) + over * 320 + (over > 0 ? longL * 120 : 0),
+        lfo: over > 0 ? 60 : 0
+      };
+    }
     const sv = layers.screech ? q.gain * tune.screech : 0;
     const sp = skidGain._apexSkidV;
     if (sp !== sv && (sv === 0 || sp === undefined || Math.abs(sp - sv) >= 1e-4)) { glideLevel(skidGain.gain, sv); skidGain._apexSkidV = sv; }
@@ -2968,6 +3057,8 @@ var GameAudio = (function () {
     sfxBus: () => sfxBus,
     setEnabled,
     enabled,
+    initOffline,
+    renderOffline,
     startEngine,
     stopEngine,
     enginePlaybackGeneration: () => engineActionGeneration,
@@ -3099,7 +3190,7 @@ var GameAudio = (function () {
     // Test hook: the airflow layer's live gain. It sits on sfxBus, so
     // centroidHz() (which taps engGain, upstream of the bus) cannot see it —
     // this is the only way to assert the layer actually tracks speed.
-    windLevel() { return windGain ? +windGain.gain.value : 0; },
+    windLevel() { return windGain ? +(windGain._apexAimTgt ?? windGain.gain.value) : 0; },
     // Same shape as windLevel: the rev-limiter chop lives on limGain, which
     // feeds engGain.gain on the audio thread, so nothing downstream of the
     // engine output can observe its depth.
@@ -3121,7 +3212,7 @@ var GameAudio = (function () {
     harvestCoastLevel() { return +harvCoastLevel.toFixed(5); },
     harvestBrakeLevel() { return +harvBrakeLevel.toFixed(5); },
     cylCutDepth() { return cylCutGain ? +cylCutGain.gain.value : 0; },
-    skidLevel() { return skidGain ? +skidGain.gain.value : 0; },
+    skidLevel() { return skidGain ? +(skidGain._apexSkidV ?? skidGain.gain.value) : 0; },
     boostState() { return { fired: boostFired, peak: +boostPeak.toFixed(4) }; },
     // The engine core's live lowpass corner, so the BRIGHTNESS trim's ceiling
     // is assertable rather than a thing you can only hear.
@@ -3161,6 +3252,14 @@ var GameAudio = (function () {
     // The rev-compensating shelf, in dB. Rises as the engine pitches down.
     tiltDb() { return tiltEq ? +tiltEq.gain.value.toFixed(2) : 0; },
     rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value : 0; },   // exact: tools/check/audio-test.cjs and the tune tests take ratios of it
+    // Last scheduled engine fundamental (Hz): sample-core from rate/period,
+    // synth-core from engA's aim target. OfflineAudioContext pitch tests use
+    // this as the ground truth the rendered spectrum must sit near (#2966).
+    fundamentalHz() {
+      if (usingSamples && enginePeriod > 1 && lastRate > 0) return (ctx.sampleRate * lastRate) / enginePeriod;
+      if (engA && engA.frequency) return +(engA.frequency._apexAimTgt ?? engA.frequency.value);
+      return 0;
+    },
     centroidHz() {
       if (!ctx || !engineOn || !engGain) return 0;
       if (!dbgAnalyser) {

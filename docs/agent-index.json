@@ -553,6 +553,7 @@
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/spotify-refresh.test.mjs",
         "tests/unit/spotter-lifecycle.test.mjs",
+        "tests/unit/tyre-squeal-race-vm.test.mjs",
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/wind-speed.test.mjs"
@@ -680,6 +681,7 @@
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
+        "tests/unit/pre-commit-guards.test.mjs",
         "tests/unit/skill-hint-hook.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/skill-routing-eval.test.mjs",
@@ -1023,7 +1025,7 @@
     {
       "id": "guards",
       "script": "test:guards",
-      "kind": "node",
+      "kind": "command",
       "files": [
         "tests/unit/agent-surface.test.mjs",
         "tests/unit/behind-ship.test.mjs",
@@ -1504,6 +1506,7 @@
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/css-player-smoke.spec.js",
         "tests/specs/dev-tools.spec.js",
+        "tests/specs/engine-audio-offline.spec.js",
         "tests/specs/hud-audit.spec.js",
         "tests/specs/hud-layout.spec.js",
         "tests/specs/menu-keyboard.spec.js",
