@@ -64,6 +64,7 @@ test('real game API: capture/restore, raw preset inheritance, invalid inputs and
     assert.equal(dev.capture().repro.cars.find(c=>c.me).s,scene.repro.cars.find(c=>c.me).s);
     const wrong = structuredClone(scene); wrong.repro.teamIdx = 100000;
     await assert.rejects(dev.restore(wrong),/Team\/halo differ/);
+    g.apex.view("chase"); // leave the helper-owned static scene before previewing a driving rig
     vm.runInContext('CamTune.setGlobal("height", 0.4); CamTune.set("chase","dist",2); CamTune.comfortSet("bob",0.5)',g.ctx);
     const saved = vm.runInContext('JSON.stringify(CamTune.exportPack())',g.ctx);
     const storage = vm.runInContext('localStorage.getItem("apex26.camTune")',g.ctx);
@@ -90,6 +91,53 @@ test('real game API: capture/restore, raw preset inheritance, invalid inputs and
     assert.equal(vm.runInContext('JSON.stringify(CamTune.exportPack())',g.ctx),saved);
     vm.runInContext('__apex.previewCam = originalPreview',g.ctx);
   } finally {g.close();}
+});
+
+
+test('scene restore keeps absent and seeded camera preferences and sparse inheritance on success and failure', async () => {
+  for (const seeded of [false, true]) {
+    const g = await createGame({track:'monza', carMeshes:false});
+    try {
+      vm.runInContext(source, g.ctx);
+      g.apex.go(); g.apex.jump(0.2,60,0);
+      vm.runInContext('CamTune.setGlobal("height",0.4); CamTune.set("chase","dist",2); CamTune.comfortSet("bob",0.5)',g.ctx);
+      if (seeded) vm.runInContext('CamTune.persist(); __apex.camera("cockpit")',g.ctx);
+      const dev = g.ctx.F1Dev, scene = plain(dev.capture());
+      // Restore a different scene mode without changing the player's current camera.
+      scene.repro.cam.mode = seeded ? 'chase' : 'cockpit';
+      const storage = () => vm.runInContext('JSON.stringify(Object.fromEntries(Array.from({length:localStorage.length},(_,i)=>localStorage.key(i)).sort().map(k=>[k,localStorage.getItem(k)])))',g.ctx);
+      const raw = () => vm.runInContext('JSON.stringify(CamTune.exportPack())',g.ctx);
+      const beforeStorage = storage(), beforeRaw = raw(), mode = g.apex.camera().mode;
+      const restored = await dev.restore(scene);
+      assert.equal(restored.result.restored,true);
+      assert.equal(restored.cameraOverride,'static-scene');
+      assert.equal(g.apex.camera().mode,mode);
+      assert.equal(raw(),beforeRaw,'resolved scene knobs must not materialize into raw per-mode overrides');
+      assert.equal(storage(),beforeStorage,'including missing keys and seeded camera mode');
+      assert.deepEqual(plain(g.apex.camState().eye),scene.inspection.frame.eye);
+      assert.deepEqual(plain(g.apex.camState().tgt),scene.inspection.frame.tgt);
+      g.apex.view('chase');
+      vm.runInContext('CamTune.setGlobal("height",0.7)',g.ctx);
+      assert.equal(g.apex.camTune('chase').height,0.7,'the scene must not replace global inheritance with a fixed mode value');
+      const rawBeforeFailure = raw(), original = g.apex.repro;
+      g.apex.repro = function(value) { if (value) throw new Error('placement failed'); return original.call(this); };
+      await assert.rejects(dev.restore(scene),/placement failed/);
+      assert.equal(raw(),rawBeforeFailure);
+      assert.equal(storage(),beforeStorage);
+      assert.equal(g.apex.camera().mode,mode);
+      g.apex.repro = original;
+      for (const corrupt of [
+        s => { delete s.inspection.frame; }, s => { delete s.inspection; },
+        s => { s.inspection.frame.eye[0] = null; }, s => { s.inspection.frame.tgt = [0,1]; },
+        s => { s.inspection.frame.fov = Infinity; }, s => { s.inspection.frame.lens = {far:-1}; },
+      ]) {
+        const malformed = structuredClone(scene); corrupt(malformed);
+        await assert.rejects(dev.restore(malformed),/Invalid scene/);
+        assert.equal(storage(),beforeStorage);
+        assert.equal(raw(),rawBeforeFailure);
+      }
+    } finally { g.close(); }
+  }
 });
 
 test('production WATCH API: batch validation is atomic and timeout restores replay state', async()=>{
@@ -161,7 +209,7 @@ test('plugin advertises the checkout MCP catalog without owning server startup',
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'plugins/f1-dev-tools/plugin.json'), 'utf8'));
   const advertised = manifest.extensions?.['com.openai']?.interface?.capabilities;
   assert.deepEqual(advertised, ['apex-tools', 'playwright-official', 'chrome-devtools', 'js-debugger', 'apex-lsp']);
-  assert.equal(manifest.version, '0.4.0');
+  assert.equal(manifest.version, '0.4.1');
 
   const checkout = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));
   assert.deepEqual(Object.keys(checkout.mcpServers).sort(), [...advertised].sort());
