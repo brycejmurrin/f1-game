@@ -1852,6 +1852,10 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/author-png.mjs",
+      "classification": "library"
+    },
+    {
       "path": "tools/lib/browser-workers.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"

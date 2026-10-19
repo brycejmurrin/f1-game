@@ -50,6 +50,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | Tool | Does | Paired skill |
 |---|---|---|
 | **lib/ai-ratings-math.mjs** | Pure Pearson / means / style zero-mean helpers for `ai-ratings.mjs` (personality dial census). | — |
+| **lib/author-png.mjs** | Author-time PNG codec with distinct material-validation and legacy model-import policies. | — |
 | **lib/browser-workers.mjs** | GL-aware Playwright / capture worker defaults (llvmpipe vs SwiftShader). | — |
 | **lib/census-entry.mjs** | gpu-game-check's --entry api\|menu\|menu-full and --cam A>B parsing, its menu-prep wait and its race gate. | — |
 | **lib/centreline-kinks.cjs** | Centreline kink scan: nodes whose chord-to-chord turn radius is below the road half-width (#2209). | — |

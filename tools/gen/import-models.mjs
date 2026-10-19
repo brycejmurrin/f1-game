@@ -29,7 +29,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import zlib from "node:zlib";
+import { decodePNG } from "../lib/author-png.mjs";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 // ONE writer for the AX26 model format, shared with assets.mjs bake-model and
@@ -48,59 +48,6 @@ const MAT = { FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5, FOLIA
 const COMP = { 5120: [Int8Array, 1], 5121: [Uint8Array, 1], 5122: [Int16Array, 2],
                5123: [Uint16Array, 2], 5125: [Uint32Array, 4], 5126: [Float32Array, 4] };
 const NUM = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
-
-// ── minimal PNG decoder (palette textures are PNG; canvas-emitted, 8-bit) ─────
-// Colour types: 2 = RGB, 6 = RGBA, 3 = indexed (PLTE). Kenney City Kit Roads /
-// Modular Buildings ship indexed colormaps — without type-3 support those
-// imports silently fall back to flat 0.75 grey (materialColour catches the
-// throw) and barriers/cones arrive colourless.
-function decodePNG(buf) {
-  if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error("not a PNG");
-  let off = 8, w = 0, h = 0, colour = 0; const idat = [];
-  let plte = null, trns = null;
-  while (off < buf.length) {
-    const len = buf.readUInt32BE(off), type = buf.toString("ascii", off + 4, off + 8);
-    const data = buf.subarray(off + 8, off + 8 + len);
-    if (type === "IHDR") { w = data.readUInt32BE(0); h = data.readUInt32BE(4);
-      if (data[8] !== 8) throw new Error("bit depth"); colour = data[9];
-      if (colour !== 2 && colour !== 6 && colour !== 3) throw new Error("colour type"); }
-    else if (type === "PLTE") plte = Buffer.from(data);
-    else if (type === "tRNS") trns = Buffer.from(data);
-    else if (type === "IDAT") idat.push(data);
-    else if (type === "IEND") break;
-    off += 12 + len;
-  }
-  if (colour === 3 && (!plte || plte.length < 3)) throw new Error("indexed PNG missing PLTE");
-  const ch = colour === 6 ? 4 : colour === 3 ? 1 : 3;
-  const raw = zlib.inflateSync(Buffer.concat(idat));
-  const stride = w * ch, out = Buffer.alloc(w * h * 4); let prev = Buffer.alloc(stride);
-  for (let y = 0; y < h; y++) {
-    const f = raw[y * (stride + 1)];
-    const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride));
-    for (let i = 0; i < stride; i++) {
-      const a = i >= ch ? line[i - ch] : 0, b = prev[i], c = i >= ch ? prev[i - ch] : 0;
-      let v = line[i];
-      if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1;
-      else if (f === 4) { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-        v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c); }
-      line[i] = v & 0xff;
-    }
-    for (let x = 0; x < w; x++) {
-      const d = (y * w + x) * 4;
-      if (colour === 3) {
-        const idx = line[x], po = idx * 3;
-        out[d] = plte[po]; out[d + 1] = plte[po + 1]; out[d + 2] = plte[po + 2];
-        out[d + 3] = trns && idx < trns.length ? trns[idx] : 255;
-      } else {
-        const s = x * ch;
-        out[d] = line[s]; out[d + 1] = line[s + 1]; out[d + 2] = line[s + 2];
-        out[d + 3] = ch === 4 ? line[s + 3] : 255;
-      }
-    }
-    prev = line;
-  }
-  return { w, h, rgba: out };
-}
 
 // ── glTF reader ───────────────────────────────────────────────────────────────
 function parseGLTF(file) {
@@ -193,8 +140,11 @@ function materialColour(gltf, matIdx) {
     try {
       const t = json.textures[pbr.baseColorTexture.index];
       const img = json.images[t.source];
-      if (img && img.uri && !img.uri.startsWith("data:") && /\.png$/i.test(img.uri))
-        tex = decodePNG(fs.readFileSync(path.join(dir, decodeURIComponent(img.uri))));
+      if (img && img.uri && !img.uri.startsWith("data:") && /\.png$/i.test(img.uri)) {
+        // Keep the original permissive palette-import acceptance/fallback;
+        // the asset validator's stricter PNG policy is a separate profile.
+        tex = decodePNG(fs.readFileSync(path.join(dir, decodeURIComponent(img.uri))), { profile: "model-import" });
+      }
       // JPG and embedded images are skipped — factor colour is used instead.
     } catch (_) { tex = null; }
   }
