@@ -55,6 +55,42 @@ test.describe("jump start (false start)", () => {
     expect(out.timePenaltyS).toBe(0);
   });
 
+  // RC2-14: a MANUAL launch inside the 0.2 s reaction window. Throttle is released through the lights
+  // (so the early-throttle rule is not what fires) and pressed on the very first green step; the
+  // penalty must follow from the launch itself — read from what the car did, not from a build name.
+  test("a manual launch inside the reaction window is a false start, and only when the car really moved", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.unlimitedBudget", JSON.stringify(true));
+    });
+    const fast = {
+      engine: "sprint", aero: "reg26_concept", suspension: "titanium_spring", brakes: "regen_brakes",
+      tyres: "hypersoft", ers: "overcharge", gearbox: "seamless_shift", fuel: "custom_formula",
+      exhaust: "hyper_scav", floor: "venturi", cockpit: "open_cell", wheels: "mag_forged",
+    };
+    await toMenu(page);
+    await pinFreePlay(page, { parts: fast, race: ["monza", "day", "dry"] });
+    await page.waitForFunction(() => window.__apex.info().state === "count", null, { polling: 100, timeout: 30_000 });
+    const out = await page.evaluate(() => {
+      const a = window.__apex;
+      a.setInput({ steer: 0, throttle: false });
+      for (let i = 0; i < 600 && a.info().state === "count"; i++) a.step(1 / 60, 1);
+      const atGreen = { state: a.info().state, raceT: a.timing().raceT, penalty: a.world({ detail: "drive" }).ego.penalties.timePenaltyS };
+      a.setInput({ steer: 0, throttle: true });   // first green frame
+      const speedGate = PhysicsConsts.VMAX * Math.max(a.tuning().pace, 0.05) * SportingRegs.JUMP_START_SPEED_VREF;
+      let crossed = false;
+      for (let i = 0; i < 30; i++) {
+        a.step(1 / 60, 1);
+        if (a.timing().raceT < SportingRegs.JUMP_START_REACT_S && a.physState().speed > speedGate) crossed = true;
+      }
+      a.clearInput();
+      return { atGreen, crossed, penalty: a.world({ detail: "drive" }).ego.penalties.timePenaltyS };
+    });
+    expect(out.atGreen).toEqual({ state: "race", raceT: 0, penalty: 0 });
+    // The assertion is the rule: moved meaningfully inside the window <=> penalised.
+    expect(out.penalty > 0, `crossed=${out.crossed} penalty=${out.penalty}`).toBe(out.crossed);
+    expect(out.crossed, "a full-throttle fast build launches inside 0.2 s: the case must exercise the rule").toBe(true);
+  });
+
   test("auto-throttle is exempt through the reaction window, including a fast legal build", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("apex26.autoThrottle", JSON.stringify(true));
