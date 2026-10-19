@@ -1,0 +1,1 @@
+1792389711	Cursor Agent	#1569 night/wet flyby when: variants; OWNED js/camera/flyby-seq.js js/data/flyby-overrides.js(night/wet) tests/unit/flyby-shots.test.mjs tests/helpers/flyby-audit-rules.mjs tools/lib/flyby-audit.cjs tools/shot/flyby.mjs REGISTRATION  [claude/f1-game-project-26h3ng; session 4e0151517e88b4ff44b841ec]
