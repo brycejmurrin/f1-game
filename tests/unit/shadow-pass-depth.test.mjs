@@ -189,7 +189,7 @@ function dynamicShadowFixture() {
   const sp = ctx.ShadowPass.create(G, { vStd: v => v, teamMesh: () => { calls.mesh++; return {}; } });
   const lights = [0, 10, 0, 10, 10, 10, 50, 0, -1, 0, 0.9, 0.7, 0, 0, 0];
   const frame = (night = false) => ({ sunDir: [0, 0.8, 0.6], sunColor: night ? [0.1, 0.1, 0.1] : [1, 1, 1], lights, lampLum: [10], tailCount: 0 });
-  return { sp, calls, enabled, frame, G, LT: ctx.LightTune.LT };
+  return { sp, calls, enabled, frame, G, LT: ctx.LightTune.LT, setTier: t => { ctx.PerfGov.tier = () => t; } };
 }
 
 test("disabled car maps do not resolve casters; live capability restoration and legacy hooks work", () => {
@@ -241,4 +241,36 @@ test("zero shadow darkness stops only the car map, preserving sun-map readers an
   LT.shadowStr = 0;
   sp.sunPass(frame(), 61, true);
   assert.equal(calls.keep, 0, "zero strength must not keep a stale car map armed");
+});
+
+test("car-shadow eligibility gates keep and redraw together across live policy changes", () => {
+  const cases = [
+    ["enabled", () => {}, true],
+    ["legacy undefined", h => { h.enabled.car = undefined; }, true],
+    ["disabled capability", h => { h.enabled.car = false; }, false],
+    ["zero darkness", h => { h.LT.shadowStr = 0; }, false],
+    ["knob off", h => { h.LT.carShadow = 0; }, false],
+    ["tier three", h => h.setTier(3), false],
+    ["no player", h => { h.G.player = null; }, false],
+    ["menu", h => { h.G.state = "menu"; }, false],
+    ["no caster", () => {}, false, false],
+    ["dark key", () => {}, false, true, true, 0],
+    ["moon disabled", () => {}, false, true, true, 1],
+    ["moon below gate", h => { h.LT.moonShadow = 1; }, false, true, true, 0.01],
+    ["clear moon", h => { h.LT.moonShadow = 1; }, true, true, true, 0.02],
+    ["no Begin hook", h => { h.G.gfx.carShadowBegin = null; }, false],
+  ];
+  for (const [name, change, wanted, caster = true, night = false, moonGate = 0] of cases) {
+    const h = dynamicShadowFixture();
+    h.enabled.car = true; h.G.player.speed = 0;
+    h.sp.sunPass(h.frame(), 0, true); // prime an actual nonempty map
+    assert.equal(h.calls.car, 1, name + ": primed");
+    change(h);
+    const f = h.frame(night); f.moonGate = moonGate;
+    h.sp.sunPass(f, 1, caster);
+    assert.equal(h.calls.keep, wanted ? 1 : 0, name + ": cadence keep");
+    h.sp.sunPass(f, 2, caster);
+    assert.equal(h.calls.car, wanted ? 2 : 1, name + ": redraw");
+    assert.equal(h.calls.mesh, wanted ? 2 : 1, name + ": silhouette resolution");
+  }
 });

@@ -359,13 +359,12 @@ const ShadowPass = (function () {
           // whole shadow pass has faded to zero strength. A cutoff in the MIDDLE of
           // that band pops prop shadows out at ~50% strength on a dusk→night flip /
           // SUN ELEVATION drag while terrain shadows linger.
-          const _shKey = _shKeyG;   // hoisted above; same expression, one source
           // Clear-night moon shadows re-open the gate: props must be in the map for
           // the moonlight floor to have anything to cast (snap-cached, so the night
           // saving only goes when MOON SHADOWS is active and the sky is clear — or,
           // above 0.5, the knob itself forces the gate open regardless of weather;
           // see frame.moonGate above).
-          if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
+          if (_shadowsRead) {
             G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
             // Cull instanced props to the light ortho before cast — same frustum
             // castShadowChunked already uses (shadowCullVP || sun lightVP).
@@ -410,78 +409,74 @@ const ShadowPass = (function () {
         const _carMapWanted = G.gfx.carShadowEnabled !== false && !(LT.shadowStr <= 0);
         const _carShadowWanted = _carMapWanted && G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 &&
             (_hasLivePlayerShadow || _shadowCount > 0) && G.player && G.state !== "menu" &&
-            (_shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01));
+            _shadowsRead;
         if (_carShadowWanted && !_carShadowFrame && G.gfx.carShadowKeep && !_carMapEmpty) G.gfx.carShadowKeep();
-        if (_carMapWanted && G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
-            (_hasLivePlayerShadow || _shadowCount > 0) && G.player && G.state !== "menu") {
-          const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-          // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
-          // the moonlight floor (or the knob's above-0.5 override) active, cars
-          // keep casting so they throw faint moon shadows too instead of popping
-          // to blob-only.
-          if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
-            _shEye[0] = _shadowCtr[0] + sd[0] * CAR_BACK; _shEye[1] = _shadowCtr[1] + sd[1] * CAR_BACK; _shEye[2] = _shadowCtr[2] + sd[2] * CAR_BACK;
-            M4.lookAtTo(_mCView, _shEye, _shadowCtr, up);
-            const cBox = 42 * Math.max(1, sBox / 80);
-            M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, CAR_FAR);
-            M4.mulTo(_mCVP, _mCProj, _mCView);
-            // The depth-comparison bias baked into glsl-lit.js's biasTerm was tuned for the
-            // map's texel size at the DEFAULT ±42m box; cBox growing with SHADOW DISTANCE
-            // grows the car map's real-world texel size at the same fixed 1024² resolution,
-            // so the bias needs to grow proportionally or the car self-shadows into acne
-            // (uCarBiasScale, applied in glsl-lit.js). cBox/42 == 1 at the default, matching the
-            // originally-tuned bias exactly.
-            // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
-            // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
-            // uploads uModel and draws, ~22k verts per silhouette car (wheels +
-            // unsplit helmet; paint-edge splits stay on the colour body), so a
-            // caster outside the
-            // volume costs a full mesh for zero texels — and at night the field pays
-            // it twice, once here and once in the lamp pass.
-            //
-            // The radius is the box's own HORIZONTAL reach, not cBox. The ortho
-            // above is ±cBox on the light's x and y, and along the sun axis spans
-            // CAR_BACK-1 toward the sun to CAR_FAR-CAR_BACK (170 m) away from it,
-            // so a car far away but nearly aligned with a low sun legitimately
-            // lands in frame; culling at cBox would delete exactly those. The test
-            // below is a horizontal distance, and the largest horizontal distance
-            // of any box point from the anchor is reached at one of its 8 corners
-            // (a convex function over a box), so beyond that reach + 8 a caster is
-            // provably outside — no visible change, only skipped draws. The old
-            // hypot(cBox, 170) dropped one ±cBox axis: it is short of the corner
-            // by more than the +8 margin above ~108 m SHADOW DISTANCE, so rivals
-            // inside the box lost their car-map shadow; and it was loose at a high
-            // sun, where the box stands upright and reaches ~hypot(cBox, cBox).
-            let _csH2 = 0;
-            for (let v = 0; v < 8; v++) {
-              const a = v & 1 ? cBox : -cBox, b = v & 2 ? cBox : -cBox, c = v & 4 ? CAR_BACK - 1 : CAR_BACK - CAR_FAR;
-              const hx = a * xx + b * yx + c * zx, hz = a * xz + b * yz + c * zz;
-              if (hx * hx + hz * hz > _csH2) _csH2 = hx * hx + hz * hz;
+        // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
+        // the moonlight floor (or the knob's above-0.5 override) active, cars
+        // keep casting so they throw faint moon shadows too instead of popping
+        // to blob-only. One eligibility decision owns redraw and cadence keep.
+        if (_carShadowWanted && _carShadowFrame) {
+          _shEye[0] = _shadowCtr[0] + sd[0] * CAR_BACK; _shEye[1] = _shadowCtr[1] + sd[1] * CAR_BACK; _shEye[2] = _shadowCtr[2] + sd[2] * CAR_BACK;
+          M4.lookAtTo(_mCView, _shEye, _shadowCtr, up);
+          const cBox = 42 * Math.max(1, sBox / 80);
+          M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, CAR_FAR);
+          M4.mulTo(_mCVP, _mCProj, _mCView);
+          // The depth-comparison bias baked into glsl-lit.js's biasTerm was tuned for the
+          // map's texel size at the DEFAULT ±42m box; cBox growing with SHADOW DISTANCE
+          // grows the car map's real-world texel size at the same fixed 1024² resolution,
+          // so the bias needs to grow proportionally or the car self-shadows into acne
+          // (uCarBiasScale, applied in glsl-lit.js). cBox/42 == 1 at the default, matching the
+          // originally-tuned bias exactly.
+          // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
+          // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
+          // uploads uModel and draws, ~22k verts per silhouette car (wheels +
+          // unsplit helmet; paint-edge splits stay on the colour body), so a
+          // caster outside the
+          // volume costs a full mesh for zero texels — and at night the field pays
+          // it twice, once here and once in the lamp pass.
+          //
+          // The radius is the box's own HORIZONTAL reach, not cBox. The ortho
+          // above is ±cBox on the light's x and y, and along the sun axis spans
+          // CAR_BACK-1 toward the sun to CAR_FAR-CAR_BACK (170 m) away from it,
+          // so a car far away but nearly aligned with a low sun legitimately
+          // lands in frame; culling at cBox would delete exactly those. The test
+          // below is a horizontal distance, and the largest horizontal distance
+          // of any box point from the anchor is reached at one of its 8 corners
+          // (a convex function over a box), so beyond that reach + 8 a caster is
+          // provably outside — no visible change, only skipped draws. The old
+          // hypot(cBox, 170) dropped one ±cBox axis: it is short of the corner
+          // by more than the +8 margin above ~108 m SHADOW DISTANCE, so rivals
+          // inside the box lost their car-map shadow; and it was loose at a high
+          // sun, where the box stands upright and reaches ~hypot(cBox, cBox).
+          let _csH2 = 0;
+          for (let v = 0; v < 8; v++) {
+            const a = v & 1 ? cBox : -cBox, b = v & 2 ? cBox : -cBox, c = v & 4 ? CAR_BACK - 1 : CAR_BACK - CAR_FAR;
+            const hx = a * xx + b * yx + c * zx, hz = a * xz + b * yz + c * zz;
+            if (hx * hx + hz * hz > _csH2) _csH2 = hx * hx + hz * hz;
+          }
+          const _csR = Math.sqrt(_csH2) + 8;   // +8: car length + mesh extent
+          const _csR2 = _csR * _csR;
+          // THE PLAYER IS GATED TOO, by the same bound. It was cast
+          // unconditionally, so a TV / broadcast / replay camera far from it
+          // still drew it, clipped, into an otherwise empty map.
+          const _cpm = _playerMat();
+          const _cpdx = _cpm[12] - _shadowCtr[0], _cpdz = _cpm[14] - _shadowCtr[2];
+          const _carPlayerIn = _hasLivePlayerShadow && _cpdx * _cpdx + _cpdz * _cpdz <= _csR2;
+          let _carAny = _carPlayerIn;
+          for (let i = 0; i < _shadowCount && !_carAny; i++) _carAny = _carCastable(i, _csR2);
+          // NO CASTER, NO PASS: no clear, no submit, and no arm, so the lit
+          // shaders skip the car-map taps — exactly what an empty map returns
+          // (cleared depth 1 passes every compare, and min(sh, 1) = sh). The
+          // map then holds an OLDER frame's cars, so the cadence keep above
+          // stays off until a pass draws it again (_carMapEmpty).
+          _carMapEmpty = !_carAny;
+          if (_carAny) {
+            G.gfx.carShadowBegin(_mCVP, cBox / 42);
+            if (_carPlayerIn) _castPlayer();
+            for (let i = 0; i < _shadowCount; i++) {
+              if (_carCastable(i, _csR2)) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
             }
-            const _csR = Math.sqrt(_csH2) + 8;   // +8: car length + mesh extent
-            const _csR2 = _csR * _csR;
-            // THE PLAYER IS GATED TOO, by the same bound. It was cast
-            // unconditionally, so a TV / broadcast / replay camera far from it
-            // still drew it, clipped, into an otherwise empty map.
-            const _cpm = _playerMat();
-            const _cpdx = _cpm[12] - _shadowCtr[0], _cpdz = _cpm[14] - _shadowCtr[2];
-            const _carPlayerIn = _hasLivePlayerShadow && _cpdx * _cpdx + _cpdz * _cpdz <= _csR2;
-            let _carAny = _carPlayerIn;
-            for (let i = 0; i < _shadowCount && !_carAny; i++) _carAny = _carCastable(i, _csR2);
-            // NO CASTER, NO PASS: no clear, no submit, and no arm, so the lit
-            // shaders skip the car-map taps — exactly what an empty map returns
-            // (cleared depth 1 passes every compare, and min(sh, 1) = sh). The
-            // map then holds an OLDER frame's cars, so the cadence keep above
-            // stays off until a pass draws it again (_carMapEmpty).
-            _carMapEmpty = !_carAny;
-            if (_carAny) {
-              G.gfx.carShadowBegin(_mCVP, cBox / 42);
-              if (_carPlayerIn) _castPlayer();
-              for (let i = 0; i < _shadowCount; i++) {
-                if (_carCastable(i, _csR2)) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
-              }
-              G.gfx.carShadowEnd();
-            }
+            G.gfx.carShadowEnd();
           }
         }
       }
