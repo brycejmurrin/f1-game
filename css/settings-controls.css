@@ -296,7 +296,7 @@
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display > details { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-appearance > details { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-appearance :is(.pm-accent-preview, .pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-appearance :is(.pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
 /* DISPLAY: HUD / METRICS / RENDERER each on their own row (UI SIZE moved to
    APPEARANCE › READABILITY). Named areas so an open fold cannot steal the hole. */

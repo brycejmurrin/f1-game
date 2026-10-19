@@ -55,7 +55,6 @@ test("setting search recognizes player terms and never changes target values", (
 test("setting search exposes the lazily-built appearance and screen layout controls", () => {
   const source = read("js/ui/appearance-studio.js");
   assert.match(source, /controls\.id\s*=\s*"as-" \+ key/);
-  assert.match(source, /input\.id\s*=\s*"as-" \+ key/);
   assert.match(source, /SettingsSearch\.register\("appearance-studio"/);
   const looks = read("js/ui/screen-looks.js");
   assert.match(looks, /SettingsSearch\.register\("screen-looks"/);

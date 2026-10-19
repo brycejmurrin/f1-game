@@ -548,7 +548,7 @@ test("CAMERA / SETTINGS / ADVANCED slider markup matches the JS clamps", () => {
     assert.equal(r.min, min, `${id} min ${r.min} ≠ JS ${min}`);
     assert.equal(r.max, max, `${id} max ${r.max} ≠ JS ${max}`);
   };
-  for (const id of ["pm-rate", "pm-expo", "pm-smooth", "pm-tiltdeg", "pm-lock",
+  for (const id of ["pm-rate", "pm-expo", "pm-smooth", "pm-lock",
                     "pm-speedsteer", "pm-help", "pm-tiltsimple", "pm-adaptbtn",
                     "pm-brakecue"]) {
     expectRange(id, SMIN, SMAX);

@@ -35,6 +35,7 @@ function harness(online) {
       if (options.staleAgeMs != null) staleEvent = {seq: ++staleSeq, at: now - options.staleAgeMs};
       const n = dom.document.createElement('div'); n.className = 'schedule-data'; n.textContent = text;
       if (options.nextFlipInMs != null) n.nextFlipAt = now + options.nextFlipInMs;
+      if (options.dispose) n.dispose = options.dispose;
       request.resolve(n);
     }
     else request.reject(new Error('service failed'));
@@ -100,4 +101,51 @@ test('reopening reuses schedule before NEXT expiry and refreshes at the exact bo
   assert.equal(h.panel().querySelector('.schedule-data').textContent, 'After expiry');
   h.hub.close(); h.hub.open('schedule'); await h.flush();
   assert.equal(h.calls(), 2, 'the replacement has its own expiry');
+});
+
+
+test('superseded and closed tab loads dispose owned nodes without attaching them', async () => {
+  const h = harness(true);
+  let disposed = 0;
+  for (let i = 0; i < 40; i++) {
+    h.hub.open('schedule');
+    h.hub.close();
+    await h.answer(true, 'Obsolete schedule', {dispose: () => disposed++});
+  }
+  assert.equal(disposed, 40, 'a cancelled generation cannot retain a schedule observer');
+  assert.equal(h.panel().querySelector('.schedule-data'), null);
+});
+
+test('schedule cache is disposed only when successfully replaced', async () => {
+  const h = harness(true);
+  let oldDisposed = 0, freshDisposed = 0;
+  h.hub.open('schedule');
+  await h.answer(true, 'Cached schedule', {dispose: () => oldDisposed++});
+  h.hub.close(); h.hub.open('schedule'); await h.flush();
+  assert.equal(h.calls(), 1);
+  assert.equal(oldDisposed, 0, 'hiding and reattaching the cached view preserves its observer');
+  h.hub.close(); h.advance(); h.hub.open('schedule');
+  await h.answer(false);
+  assert.equal(oldDisposed, 0, 'failed refresh keeps the stale view usable');
+  h.click(h.panel().querySelector('.dh-retry'));
+  await h.answer(true, 'Replacement schedule', {dispose: () => freshDisposed++});
+  assert.equal(oldDisposed, 1);
+  h.hub.close(); h.hub.open('schedule'); await h.flush();
+  assert.equal(freshDisposed, 0);
+  assert.equal(h.panel().querySelector('.schedule-data').textContent, 'Replacement schedule');
+});
+
+
+test('reselecting a pending schedule then changing tabs retires superseded completions', async () => {
+  const h = harness(true);
+  let disposed = 0;
+  for (let i = 0; i < 40; i++) h.hub.open('schedule');
+  h.hub.open('standings');
+  for (let i = 0; i < 40; i++) await h.answer(true, 'Delayed schedule', {dispose: () => disposed++});
+  assert.equal(disposed, 39, 'only the latest successfully cached schedule remains owned');
+  assert.equal(h.panel().querySelector('.schedule-data'), null, 'no delayed schedule was attached to the other tab');
+  h.hub.open('schedule'); await h.flush();
+  assert.equal(h.calls(), 40, 'the surviving cached view is reusable');
+  assert.equal(h.panel().querySelector('.schedule-data').textContent, 'Delayed schedule');
+  assert.equal(disposed, 39);
 });

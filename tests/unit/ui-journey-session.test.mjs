@@ -1,6 +1,6 @@
 /* ui-journey-session.test.mjs — leftover session sheets (Step 4).
  *
- * Results, Standings, Race settings, Audio, and Pause already declare
+ * Results, Standings, Audio, and Pause already declare
  * --sheet-w. They also need --fit-at so SheetShape.classifyFit can shrink
  * them at 200% UI size. Standings must not cap its body in viewport units.
  *
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
-const SESSION = ["results", "standings", "race-settings", "pausemenu", "customize"];
+const SESSION = ["results", "standings", "pausemenu", "customize"];
 
 /** `#id { … --fit-at: … }` or a grouped selector list that includes `#id`. */
 function fitAtBlocks(css, id) {
@@ -36,7 +36,6 @@ test("session dialogs declare --fit-at next to --sheet-w so classifyFit can shri
   }
   assert.match(css, /#results\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#standings\s*\{[^}]*--fit-at:\s*300px/);
-  assert.match(css, /#race-settings\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#customize\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#pausemenu\s*\{[^}]*--fit-at:\s*260px/,
     "pause is a short button stack — slightly smaller floor than Settings");
@@ -45,7 +44,7 @@ test("session dialogs declare --fit-at next to --sheet-w so classifyFit can shri
 test("landscape --fit-at uses zoom-correct data-shape selector (not @media orientation)", () => {
   const css = readCssSource("css/components.css");
   // Converted from @media (orientation: landscape) to data-shape="wide" (sheetshape.js).
-  for (const id of ["results", "standings", "race-settings", "customize"]) {
+  for (const id of ["results", "standings", "customize"]) {
     assert.match(css, new RegExp(`#${id} \\.sheet:not\\(\\[data-shape="tall"\\]\\)[^{]*\\{[^}]*--fit-at:\\s*220px`),
       `${id} --fit-at must use data-shape selector`);
   }
@@ -53,6 +52,13 @@ test("landscape --fit-at uses zoom-correct data-shape selector (not @media orien
     "pausemenu --fit-at must use data-shape selector");
   assert.doesNotMatch(css, /@media\s*\(orientation:\s*landscape\)\s*\{[\s\S]*?#pausemenu/,
     "pausemenu must not use @media orientation for --fit-at (zoom-blind)");
+});
+
+test("Race Setup preserves requested size and scrolls the focused task", () => {
+  const css = read("css/race-setup.css");
+  assert.match(css, /#race-settings > \.sheet\s*\{[^}]*--fit-at:\s*0px/);
+  assert.match(css, /#race-settings > \.sheet:is\(\[data-density="compact"\], \[data-shape="tall"\]\)\s*\{[^}]*overflow-y:\s*auto/);
+  assert.match(css, /#race-settings > \.sheet:is\(\[data-density="compact"\], \[data-shape="tall"\]\) > #rs-body\s*\{[^}]*overflow:\s*visible/);
 });
 
 test("standings body uses local leftover height, not a viewport svh cap", () => {

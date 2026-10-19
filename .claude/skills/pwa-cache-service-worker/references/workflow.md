@@ -51,15 +51,15 @@ Playwright hang after a mid-run `version.json` bump.
    Manual: install PWA, go offline, reload — shell and tagged assets should
    serve from `apex26-{build}`.
 
-6. **Pre-push.** `pick-tests` routes `sw.js` / `manifest.json` to `service-worker`
-   only; for shell-only edits (`index.html` / generated roster) that touch precache
-   discovery, also run `npm run test:service-worker` yourself.
+6. **Pre-push.** `node tools/ci/pick-tests.mjs` routes `sw.js`, `manifest.json` and
+   `index.html` to `service-worker`; a generated-roster-only edit (`js/roster.js`)
+   that touches precache discovery is not routed there, so run
+   `npm run test:service-worker` yourself.
 
 ## Common mistakes
 
 - Hand-maintaining a precache manifest parallel to `index.html`.
 - Hand-bumping numeric `?v=N` or only `version.json`.
-- A build bump landing mid Playwright run (step 4).
 - **Stale pause menu after deploy** — pause/settings DOM is inline in
   `index.html` (not `?v=` JS). If buttons/layout are old while in-race HUD
   updated, the installed shell did not reload.

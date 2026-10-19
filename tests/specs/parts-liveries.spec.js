@@ -57,7 +57,9 @@ test.describe("Liveries — catalog", () => {
     await load(page);
     const bad = await page.evaluate(() => {
       const COLOURS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "halo"];
-      const FINISHES = ["gloss", "satin", "chrome"];
+      // Gloss is the default (absent remap); every other id is Car3D.FINISH_SURFACE
+      // (same source as the garage finish chips — do not keep a literal copy).
+      const FINISHES = ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)];
       const all = [...Liveries.UNIVERSAL, ...Object.values(Liveries.BY_TEAM).flat()];
       const problems = [];
       const ids = new Set();

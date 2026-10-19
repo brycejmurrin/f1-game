@@ -19,9 +19,9 @@
 // percentage covers every cell at half the cost.
 
 // No --scale= means "whatever this device defaults to", represented as `null`
-// (not a hard-coded 100): leave nothing stored so first paint uses the CSS
-// `:root` / `(pointer: coarse)` defaults — currently 100% on every pointer,
-// but a future touch-only bump must not be silently overridden by the tools.
+// (not a hard-coded 100): leave nothing stored so first paint uses the device's
+// shipped default. Pointer-specific defaults must not be silently overridden
+// by the tools.
 export function parseScales(argv) {
   const a = argv.find((x) => x.startsWith("--scale="));
   if (!a) return [null];

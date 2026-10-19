@@ -5011,11 +5011,14 @@ const WGX = (function () {
     function cullInstances(batch, planes, opts) {
       if (!batch || !batch.cells) return batch ? batch.instances : 0;
       const shadow = !!(opts && opts.upload === false);
+      // begin/mirrorBegin latch the same origin and budgets used by chunked draws.
+      const eye = shadow ? null : frameEye, cd = shadow ? 0 : frameCullDist,
+            fog = shadow ? null : frameCullFog;
       // MIRROR PASS: the rear-view pass culls the same batches with its own frustum. One shared instBuf + one
       // cell-set key made the main and mirror culls evict each other every frame (a full repack + writeBuffer
       // per batch per pass, measured 43/frame on Monza). The mirror gets its own pack, buffer and key.
       const tb = (!shadow && _mirEncoder && _mirrorView(batch)) || batch;
-      let samePack = !shadow && !!tb._cullPlanes;
+      let samePack = !shadow && !!tb._cullPlanes && InstCells.sameRadial(tb, eye, cd, fog);
       if (samePack) {
         let po = 0;
         for (let pi = 0; pi < 6 && samePack; pi++) {
@@ -5031,7 +5034,7 @@ const WGX = (function () {
       // NOT writing _cullPlanes on a hit is load-bearing.
       const cs = tb.cells, cn = cs.length;
       const ks = InstCells.scratchKeys(tb, cn);
-      let kN = InstCells.collectVisible(planes, cs, ks, Frustum.aabbInFrustum);
+      let kN = InstCells.collectVisible(planes, cs, ks, Frustum.aabbInFrustum, eye, cd, fog);
       if (!shadow && InstCells.enabled() && InstCells.sameKey(tb, ks, kN)) {
         tb.visible = tb._cullN; return tb._cullN;
       }
@@ -5095,6 +5098,7 @@ const WGX = (function () {
         const p = planes[pi];
         for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
       }
+      InstCells.recordRadial(tb, eye, cd, fog);
       tb._cullN = n;
       if (InstCells.enabled()) InstCells.recordKey(tb, ks, kN);
       return n;
@@ -5900,6 +5904,8 @@ const WGX = (function () {
       // shadowed, so arming before the first real pass paints black.
       carShadowKeep,
       lampShadowKeep,
+      get carShadowEnabled() { return !!SHD.carShadowView && !WGX_LITE; },
+      get lampShadowEnabled() { return !!SHD.lampShadowView && !WGX_LITE; },
       carShadowState,
       lampShadowState,
       // container's pixel oracle (tools/gfx/wgx-capture.mjs); WGX-only, so the

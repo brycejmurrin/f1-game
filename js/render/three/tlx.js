@@ -142,6 +142,21 @@ const TLX = (function () {
     ur.length = 0; ur.push(r);
   }
 
+  // Instance packs can keep an unchanged prefix. Union writes until three
+  // consumes the ranges: a second cull before render must not lose the first.
+  function setInstanceRange(attr, start, count) {
+    if (count <= 0) return;
+    let end = start + count;
+    const ur = attr.updateRanges;
+    // A full visible-prefix rewrite supersedes earlier writes, including an
+    // initial full-capacity range left behind by three's buffer allocation.
+    if (start) for (let i = 0; i < ur.length; i++) { start = Math.min(start, ur[i].start); end = Math.max(end, ur[i].start + ur[i].count); }
+    const r = attr.__tlxInstRange || (attr.__tlxInstRange = { start: 0, count: 0 });
+    r.start = start; r.count = end - start;
+    if (ur.length !== 1 || ur[0] !== r) { ur.length = 0; ur.push(r); }
+    attr.needsUpdate = true;
+  }
+
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
@@ -1975,7 +1990,7 @@ const TLX = (function () {
         geo.setAttribute("instanceTint", next);
         return next;
       }
-      function _writeInstanceMatrices(imesh, matrices, colors, n) {
+      function _writeInstanceMatrices(imesh, matrices, colors, n, firstDirty = 0) {
         const cap = imesh.userData.tlxInstCap || n;
         const drawN = Math.min(n, cap);
         const col = _instColorAttr(imesh, cap);
@@ -1990,20 +2005,24 @@ const TLX = (function () {
         // (perf hunt 2026-10-11 A4: 247 vs 27 us per 10k instances).
         const im = imesh.instanceMatrix, ia = im.array;
         const nf = drawN * 16;
-        if (matrices.buffer !== ia.buffer || matrices.byteOffset !== ia.byteOffset) ia.set(matrices.length === nf ? matrices : matrices.subarray(0, nf));
+        const ownMatrices = matrices.buffer === ia.buffer && matrices.byteOffset === ia.byteOffset;
+        if (!ownMatrices) ia.set(matrices.length === nf ? matrices : matrices.subarray(0, nf));
+        const first = Math.max(0, Math.min(drawN, firstDirty));
         if (colors && colors.length && col) {
           const ca = col.array, nc = drawN * 3;
-          if (colors.buffer !== ca.buffer || colors.byteOffset !== ca.byteOffset) ca.set(colors.length === nc ? colors : colors.subarray(0, nc));
+          const ownColors = colors.buffer === ca.buffer && colors.byteOffset === ca.byteOffset;
+          if (!ownColors) ca.set(colors.length === nc ? colors : colors.subarray(0, nc));
           // Dirty the TINT with the write, not beside it. `col` always exists
           // (_instColorAttr mints it), but `colors` is null on every
           // updateInstances call (DebrisWorld) and on every batch built
           // without node colours (graph.js passes null -> packColors null), so
           // marking it outside this branch re-uploaded an unchanged all-ones
           // buffer — drawN x 12 B a frame for bytes nothing had touched.
-          setRange0(col, nc); col.needsUpdate = true;
+          const from = ownColors ? first * 3 : 0;
+          setInstanceRange(col, from, nc - from);
         }
-        setRange0(im, nf);
-        im.needsUpdate = true;
+        const from = ownMatrices ? first * 16 : 0;
+        setInstanceRange(im, from, nf - from);
         imesh.count = drawN;
       }
       // Caller-packed set (DebrisWorld's Rapier pools, PERF-FINDINGS 2h): the
@@ -2074,7 +2093,11 @@ const TLX = (function () {
 
       function cullInstances(batch, planes, opts) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
-        let samePack = !!batch._cullPlanes;
+        const shadow = !!(opts && opts.upload === false);
+        const eye = shadow ? null : (_mirActive ? _mirEye : frameEye);
+        const cd = shadow ? 0 : (_mirActive ? _mirCull : frameCullDist);
+        const fog = shadow ? null : (_mirActive ? _mirFog : frameCullFog);
+        let samePack = !shadow && !!batch._cullPlanes && InstCells.sameRadial(batch, eye, cd, fog);
         if (samePack) {
           let po = 0;
           for (let pi = 0; pi < 6 && samePack; pi++) {
@@ -2091,14 +2114,19 @@ const TLX = (function () {
         // unchanged set skips the copy loop AND the upload. The shadow cull
         // (upload:false) neither consults nor records it — the key means "this
         // pack is in imesh", and a shadow pack never is.
-        const shadow = !!(opts && opts.upload === false);
         const cs = batch.cells;
         const useKey = !shadow && InstCells.enabled();
         const ks = useKey ? InstCells.scratchKeys(batch, cs.length) : null;
-        const kN = useKey ? InstCells.collectVisible(planes, cs, ks, TLXShaders.aabbInFrustum) : -1;
+        const kN = useKey ? InstCells.collectVisible(planes, cs, ks, TLXShaders.aabbInFrustum, eye, cd, fog) : -1;
         // NOT writing _cullPlanes on a hit is load-bearing: it must keep
         // describing the frustum that physically wrote imesh.
         if (useKey && InstCells.sameKey(batch, ks, kN)) { batch.visible = batch._cullN; return batch._cullN; }
+        // The cell order fixes the packed order. A shared prefix already has
+        // the right matrix/tint bytes, even when cells at the tail changed.
+        let firstCell = 0, firstDirty = 0;
+        if (useKey && batch._cellKeyN >= 0) {
+          while (firstCell < kN && firstCell < batch._cellKeyN && batch._cellKey[firstCell] === ks[firstCell]) firstDirty += cs[ks[firstCell++]].idx.length;
+        }
         // A shadow cull packs into its OWN array, as GLX/WGX (_shadowPackFor):
         // packMatrices is the camera pack that a cell-key hit leaves standing and
         // drawWorldMeshes' mirror recorder copies (R3-RENDER-6). Casters read no colour.
@@ -2131,10 +2159,12 @@ const TLX = (function () {
         // or the god-ray march shades (both reject receivers past the radius).
         const reach = shadow && opts.reach && opts.reach[3] > 0 ? opts.reach : null, reach2 = reach ? reach[3] * reach[3] : 0;
         const sc = batch.srcColors, dc = shadow ? null : batch.packColors;
-        let n = 0;
-        for (let ci = 0, cn = useKey ? kN : cs.length; ci < cn; ci++) {
+        let n = firstDirty;
+        for (let ci = firstCell, cn = useKey ? kN : cs.length; ci < cn; ci++) {
           const c = useKey ? cs[ks[ci]] : cs[ci];
           if (!useKey && !TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
+          if (!useKey && eye && (cd > 0 || (fog && fog[0] > 0))
+              && Frustum.radialCulled(c.mn, c.mx, eye[0], eye[1], eye[2], cd, fog)) continue;
           if (reach && TLXShaders.aabbDist2(c.mn, c.mx, reach[0], reach[1], reach[2]) > reach2) continue;
           // Indexed for — `for…of` on c.idx minted an iterator per visible cell
           // per cull (camera + shadow). GLX/WGX already use indexed loops.
@@ -2162,12 +2192,13 @@ const TLX = (function () {
         // visible is the CAMERA count the lit draw reads; a shadow cull's n must
         // not overwrite it (GLX/WGX: the camera count survives the shadow cull).
         batch.visible = n;
-        if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
+        if (batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n, firstDirty);
         const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
         for (let pi = 0, po = 0; pi < 6; pi++) {
           const p = planes[pi];
           for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
         }
+        InstCells.recordRadial(batch, eye, cd, fog);
         batch._cullN = n;
         if (useKey) InstCells.recordKey(batch, ks, kN);
         return n;
@@ -4314,6 +4345,9 @@ const TLX = (function () {
         lampShadowKeep(idx) { return !!(shadowSys && shadowSys.lampShadowKeep(idx)); },
         // `armed` is the frame-live gate the lit uniforms read; `arms` is a
         // lifetime counter that stays true straight through a strobe.
+        // Read by the producer before resolving/packing casters; mobile Begin hooks are no-ops.
+        get carShadowEnabled() { return !!(shadowSys && shadowSys.S.carEnabled); },
+        get lampShadowEnabled() { return !!(shadowSys && shadowSys.S.lampEnabled); },
         carShadowState() {
           const s = shadowSys && shadowSys.S;
           return s ? { enabled: s.carEnabled, arms: s.carArms, armed: s.carArmed } : { enabled: false, arms: 0, armed: false };

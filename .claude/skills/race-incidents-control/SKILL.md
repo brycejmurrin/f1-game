@@ -1,6 +1,6 @@
 ---
 name: race-incidents-control
-description: "Use when debris (debris-world.js), Rapier side-worlds, incident takeovers (incident-sim.js), car launches, the pile-up takeover (c1Pileup), cautions, yellow/red flags, VSC, safety car never deploying or stuck out (race-control.js), overtake gating or reliability retirements (reliability.js) change. AI racing badly or misusing ERS/overtake → ai-racecraft; career DNF money/contracts → career-mode."
+description: "Use when debris (debris-world.js), Rapier side-worlds, incident takeovers (incident-sim.js), car launches/flips, airborne or frozen cars, the pile-up takeover (c1Pileup), cautions, yellow/red flags, VSC, safety car never deploying or stuck out, overtake gating or reliability retirements change. AI racing badly or misusing ERS/overtake → ai-racecraft; career DNF money/contracts → career-mode."
 ---
 
 ## Overview

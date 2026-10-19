@@ -1050,6 +1050,7 @@ function fitHud() {
   // without the row count the published height stayed at the empty box's for
   // the whole 3 s same-key backoff. childElementCount costs no layout.
   const secRows = els.hudSectors ? els.hudSectors.childElementCount : 0;
+  const placedSectors = els.hudSectors && els.hudSectors.hasAttribute("data-hl-user") && els.hudSectors.hasAttribute("data-hl");
   // BUTTON SIZE is independent, including its unset CSS default.
   const mult = _cssMult;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || mult;
@@ -1078,7 +1079,8 @@ function fitHud() {
       boost = _boostOnRightHalf();
       const b = boost ? boost.getBoundingClientRect() : null;
       // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset.
-      if (b && b.width && s.width && s.right > b.left - 8) clash = true;
+      if (b && b.width && s.width && s.right > b.left - 8 && s.left < b.right + 8
+          && s.top < b.bottom && b.top < s.bottom) clash = true;
       else {
         const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
         if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
@@ -1105,6 +1107,9 @@ function fitHud() {
   if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30; _stampKey = "";   // a full fit ran: the next stamp tick probes
   _fitPending = false;
+  // Measure the natural plate, never the previous dock pass's wrapped output.
+  // A saved MOVE & SIZE plate belongs to HudLayout's placement pass below.
+  if (els.hudSectors && els.hudSectors.style) els.hudSectors.style.removeProperty("max-width");
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css:
   // 0.82, 0.92 on the narrow tier), so the base the cap is judged against and
   // the divisor for its measured widths are that floor, not 1 — a flat 1 here
@@ -1278,7 +1283,6 @@ function fitHud() {
       if (!(r && r.width && r.left > half && r.top < tR.bottom + FIT_AIR)) continue;
       capChrome = Math.min(capChrome, (r.left - FIT_AIR - half) / (top / 2));
     }
-
   }
   // THE TOWER MUST CLEAR THE SECTOR PLATE'S ROW ON TOUCH. There #hud-sectors sits at a fixed SCREEN
   // y (8 + tap-hud + 4 + sat, below the pause button — its zoom cancels), while the tower's bottom
@@ -1286,9 +1290,10 @@ function fitHud() {
   // models the two side by side at the screen edge; once it stopped over-shrinking the band (the
   // plate's dock stand-off is no longer read as a safe-area inset) the full-size tower hung 2.2 px
   // below the plate's top and clipped its BEST tile (844x390 cockpit). Solved from the invariants
-  // (the tower's unzoomed top offset and height, the plate's screen top) so it cannot hunt.
+  // (the tower's unzoomed top offset and height, the plate's screen top).
+  // A placed plate has left this row; budgeting its old anchor made the whole band hunt.
   let capRow = Infinity;
-  if (!bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
+  if (!placedSectors && !bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
     const tR = layoutRect(_hudTop), zd = zoomDiv(_hudTop, zTopPub);
     let satPx = 0;
     try { satPx = parseFloat(getComputedStyle(root).getPropertyValue("--sat")) || 0; } catch (_) { /* mini-dom / detached root */ }
@@ -1298,6 +1303,8 @@ function fitHud() {
     if (hInt > 0 && y0 + hInt > 0 && scR.top > tR.top + ROW_AIR) capRow = (scR.top - ROW_AIR - satPx) / (y0 + hInt);
   }
   let capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
+  // Font metrics quantize with zoom. Keep the smaller fit when growth buys less than one screen pixel.
+  if (capTop < scale && capTop > zTopPub && (capTop - zTopPub) * Math.max(top, map, gaps, right, 1) < 1) capTop = zTopPub;
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -1751,20 +1758,16 @@ function fitHud() {
   if (typeof HudLayout !== "undefined") HudLayout.fit();
   // fit() can undo the dock inset; shrink the sector plate before any extra
   // inset widen (widening slides the plate left into #minimap).
-  if (!document.body.classList.contains("desktop") && els.hudSectors && _dockR) {
+  if (!document.body.classList.contains("desktop") && els.hudSectors && _dockR && !placedSectors) {
     const margin = DOCK_AIR;
     const mapR = els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null;
     const mapClear = mapR && mapR.width ? mapR.right + margin : 0;
     const secEl = els.hudSectors;
-    // A PLATE ONLY INTRUDES FROM THE LEFT, AND ONLY ON SHARED ROWS. Shrinking a right-anchored plate
-    // clears a group its right edge reaches into; it does nothing for a plate the player DRAGGED beside
-    // BOOST, above the pedals. Testing `right > group.left` alone squeezed that plate to 48 px, the
-    // wrapped split times grew it 139 px tall into BRAKE's rows, the next fit released it, and the HUD
-    // flipped larger <-> smaller every tick (iPhone 15, BUTTON SIZE 237 %, 2026-10-17). A plate
-    // inside or right of a group is hud-layout.js clearControls' to move, not this pass's to squeeze.
+    // Only automatic plates intruding from the left on shared rows can be
+    // squeezed clear. Saved plates belong to HudLayout; squeezing their split
+    // times into tall wrapped rows made the two solvers fight on later ticks.
     const rowHit = (a, b) => a.top < b.bottom && b.top < a.bottom;
     const intrudes = (a, b) => rowHit(a, b) && a.left < b.left && a.right > b.left - margin;
-    if (secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
     for (let pass = 0; pass < 4; pass++) {
       const secR = secEl.getBoundingClientRect();
       if (!secR.width) break;
@@ -1776,9 +1779,7 @@ function fitHud() {
       }
       if (!(worst > 0.5)) break;
       const zSec = zPaint() || 1;
-      const curW = secR.width / zSec;
-      secEl.style.maxWidth = Math.max(48, curW - worst / zSec).toFixed(1) + "px";
-      void secEl.offsetHeight;
+      secEl.style.maxWidth = Math.max(48, (secR.width - worst) / zSec).toFixed(1) + "px";
     }
     let secR = secEl.getBoundingClientRect();
     let worst = 0;
@@ -1795,7 +1796,6 @@ function fitHud() {
         if (zTop > 0) {
           dockRW = insetFor(left, zTop);
           hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
-          void secEl.offsetHeight;
         }
       }
     }

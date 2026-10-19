@@ -9,11 +9,11 @@ export const MISSIONS = [
   { version: 1, id: "customize-car", goal: "Create and fit a named livery, then return to the title.", actions: [click("#mb-garage"), wait("#carsetup:not([hidden])"), click("#cs-tab-livery"), click("#cs-options .cs-liv-create"), { type: "fill", selector: "#cs-options .cs-liv-ed-name", value: "Explorer livery" }, click("#cs-options .cs-liv-ed-save"), check("Custom livery fitted"), click("#cs-done"), wait("#overlay:not([hidden])")], oracle: { type: "selector", selector: "#mb-race", state: "visible" } },
   { version: 1, id: "return-settings", goal: "Start a race, pause, and find the controls settings.", actions: [click("#mb-race"), click("#sel-go"), click("#rs-go"), wait("#hud:not([hidden])"), click("#pausebtn"), wait("#pausemenu:not([hidden])"), click("#pm-settings"), click("#pm-open-controls"), wait("#pm-panel-controls:not([hidden])"), check("Controls reached from a race")], oracle: { type: "selector", selector: "#pm-panel-controls", state: "visible" } },
   { version: 1, id: "settings-persistence", goal: "Choose the Light theme and verify the control, live preference and saved value before and after reload.",
-    actions: [click("#mb-settings"), click("#pm-open-appearance"), wait("#as-uiTheme"), click("#as-uiTheme > button:nth-of-type(2)"),
-      { type: "assert", oracle: { type: "binding", selector: "#as-uiTheme > button:nth-of-type(2)", runtime: "light", saved: "light" } },
-      check("Light theme applied and saved"), { type: "reload" }, wait("#mb-settings"), click("#mb-settings"), click("#pm-open-appearance"), wait("#as-uiTheme"),
-      { type: "assert", oracle: { type: "binding", selector: "#as-uiTheme > button:nth-of-type(2)", runtime: "light", saved: "light" } }, check("Light theme survived reload")],
-    oracle: { type: "binding", selector: "#as-uiTheme > button:nth-of-type(2)", runtime: "light", saved: "light" } },
+    actions: [click("#mb-settings"), click("#pm-open-appearance"), wait("#pm-uitheme-sel"), { type: "select", selector: "#pm-uitheme-sel", value: "light" },
+      { type: "assert", oracle: { type: "binding", selector: "#pm-uitheme-sel", runtime: "light", saved: "light" } },
+      check("Light theme applied and saved"), { type: "reload" }, wait("#mb-settings"), click("#mb-settings"), click("#pm-open-appearance"), wait("#pm-uitheme-sel"),
+      { type: "assert", oracle: { type: "binding", selector: "#pm-uitheme-sel", runtime: "light", saved: "light" } }, check("Light theme survived reload")],
+    oracle: { type: "binding", selector: "#pm-uitheme-sel", runtime: "light", saved: "light" } },
 ];
 
 /** No navigation hints or debug hooks: independent browser tools get only the goal. */
