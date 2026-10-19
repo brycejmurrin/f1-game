@@ -1,11 +1,16 @@
-# Finish design preview (throwaway branch, not for merge)
+# Finish design lab (throwaway branch, not for merge)
 
 Living gallery: https://claude.ai/artifact/GqcJU9VgByuXYzme5Nrwgj (private; republish to the SAME url each round).
 `finish-lab.html` is the published source; images are artifact assets (`/_blob/<id>`), never committed.
 
-- Preview finishes = ids 60-90 in `js/car/car-materials.js` FINISH_SURFACE, remapped in-shader onto existing
-  surfaces, then tinted after the metal block (GLX `glsl-lit.js`, TLX `tsl-lit.js`, WGX `wgsl-chunks.js`).
-- TLX rule learned the hard way: every value in the preview tint block is snapshotted with `.toVar()`; a bare
-  TSL node shared between branches reads stale/zero (rendered black/white while GLX was right).
-- `fd-v*-patch.py`, `fd-v6-*.py`: the patches as applied (history; already in the js files). `fd-final.sh`: the shoot.
-- `pixdiff.json`: share of car pixels that differ from shipped gloss, TLX garage hero.
+- Round 4: 18 finishes passed the realism cut and are REAL rows (`FINISH_SURFACE` + `FINISH_RESERVED` in
+  `js/car/car-materials.js`, ids 60-85, branched as `surfaceId == N` in GLX / TLX / WGX so `surface-id-parity` and
+  `livery-finish-contract` cover them). The other 13 live in `FINISH_PREVIEW`: their branches key on `finishId`, the
+  garage never offers them, only the whole-car `applyFinish` path takes them for the shoot. Verdicts: `finishes.json`.
+- Each finish rides an existing base branch for its lighting, then one tint after the metal block. Anti-alias inputs
+  are hoisted to uniform control flow: `fnPx` (object-space metres per pixel; pattern cells fade to their mean under
+  ~2 px, so nothing shimmers in motion) and `fnCrease` (normal derivative; angle effects are withheld on hard panel
+  edges). Angle terms read the geometric normal, not the orange-peeled shading normal.
+- TLX rule learned the hard way: every value in the tint block is snapshotted with `.toVar()`; a bare TSL node shared
+  between branches reads stale/zero (rendered black/white while GLX was right).
+- `fd-r4.sh`: this round's shoot. `fd-v*-patch.py`, `fd-final.sh`: earlier rounds (history).

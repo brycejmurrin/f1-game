@@ -471,7 +471,7 @@ function designRegistries() {
     finShape: ids(C3.FIN_SHAPES, "none"), tcam: ids(C3.TCAM_IDS), coverVents: ids(C3.COVER_VENT_IDS),
     spineHeight: ids(C3.SPINE_HEIGHT_IDS), coverBind: ["independent", "saddleWrap", "spineOnly"],
     finHandoff: ["match", "contrast", "hardCut"], wingCarbon: ["paint", "carbon"], bodySplit: ["off", "lr"],
-    finish: ["gloss"].concat(ids(C3.FINISH_SURFACE)), driver: ["0", "1"],
+    finish: ["gloss"].concat(ids(C3.FINISH_SURFACE), ids(C3.FINISH_PREVIEW)), driver: ["0", "1"],
   };
   return { M, ENUMS };
 }

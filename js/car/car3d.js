@@ -2316,6 +2316,7 @@ const Car3D = (function () {
   }
 
   return { build, buildComplete, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+           FINISH_PREVIEW: CarMaterials.FINISH_PREVIEW,   // design shoot only (car-materials.js)
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,

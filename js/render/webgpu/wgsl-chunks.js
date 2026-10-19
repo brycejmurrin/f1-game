@@ -985,6 +985,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // second dpdx/dpdy pair of topNgeo across divergent later uses.
   let saaDxGeo = ccDx;
   let saaDyGeo = ccDy;
+  // Car finish anti-alias inputs (finishes 60-90, glsl-lit.js): object-space metres per pixel, and 1 on a hard panel edge.
+  let fnPx = max(length(abs(dpdx(in.objPos)) + abs(dpdy(in.objPos))), 1e-5);
+  let fnCrease = smoothstep(0.02, 0.20, dot(ccDx, ccDx) + dot(ccDy, ccDy));
   // Paint peel ran for EVERY fragment — road, terrain, buildings — feeding a
   // mix whose factor (carPaint, D.mat1.w) is 0 on all of them. The gate lives
   // INSIDE paintPeelN as a uniform early return (see its header) so these
@@ -1023,29 +1026,24 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let wetness   = F.params1.z;
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
-  // DESIGN PREVIEW finishes 60-64 (not shipped): remapped onto 39/29/20/27/34, tinted after the metal block (glsl-lit.js).
-  let previewId = i32(vMatId + 0.5);
-  var surfaceId = previewId;
-  if (previewId == 60) { surfaceId = 39; } else if (previewId == 61) { surfaceId = 29; }
-  else if (previewId == 62) { surfaceId = 20; } else if (previewId == 63) { surfaceId = 27; }
-  else if (previewId == 64) { surfaceId = 34; } else if (previewId == 65) { surfaceId = 29; }
-  else if (previewId == 66) { surfaceId = 31; } else if (previewId == 67) { surfaceId = 20; }
-  else if (previewId == 68 || previewId == 69) { surfaceId = 20; } else if (previewId == 70) { surfaceId = 34; }
-  else if (previewId == 71) { surfaceId = 28; } else if (previewId == 72 || previewId == 74) { surfaceId = 34; }
-  else if (previewId == 73 || previewId == 75) { surfaceId = 20; }
-  // PREVIEW-REMAP-A
-  if (previewId == 76 || previewId == 79) { surfaceId = 27; }
-  if (previewId == 77 || previewId == 80) { surfaceId = 29; }
-  if (previewId == 78) { surfaceId = 26; }
-  // PREVIEW-REMAP-B
-  if (previewId == 81 || previewId == 83 || previewId == 84) { surfaceId = 20; }
-  if (previewId == 82) { surfaceId = 34; }
-  if (previewId == 85) { surfaceId = 28; }
-  // PREVIEW-REMAP-C
-  if (previewId == 86 || previewId == 88 || previewId == 89) { surfaceId = 20; }
-  if (previewId == 87) { surfaceId = 28; }
-  if (previewId == 90) { surfaceId = 26; }
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 40;
+  // FINISHES 60-90 (CarMaterials.FINISH_RESERVED / FINISH_PREVIEW): ride an existing base branch, tinted after the metal
+  // block (js/render/glx/shaders/glsl-lit.js). Reserved rows test surfaceId (surface-id-parity), preview rows finishId.
+  var surfaceId = i32(vMatId + 0.5);
+  let finishId = surfaceId;
+  if (surfaceId == 62 || surfaceId == 67 || surfaceId == 68 || surfaceId == 69 || surfaceId == 70 || surfaceId == 74 || surfaceId == 81
+    || surfaceId == 82 || surfaceId == 83 || surfaceId == 84) { surfaceId = 20; }
+  if (surfaceId == 61 || surfaceId == 71 || surfaceId == 85) { surfaceId = 28; }
+  if (surfaceId == 63 || surfaceId == 65) { surfaceId = 29; }
+  if (surfaceId == 72) { surfaceId = 34; }
+  if (surfaceId == 60) { surfaceId = 39; }
+  if (surfaceId == 66) { surfaceId = 31; }
+  if (finishId == 73 || finishId == 75 || finishId == 86 || finishId == 87 || finishId == 88 || finishId == 89) { surfaceId = 20; }
+  if (finishId == 64) { surfaceId = 34; }
+  if (finishId == 76 || finishId == 79) { surfaceId = 27; }
+  if (finishId == 77 || finishId == 80) { surfaceId = 29; }
+  if (finishId == 78 || finishId == 90) { surfaceId = 26; }
+  if (finishId == 87) { surfaceId = 28; }
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 90;
   // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (see js/render/glx/shaders/glsl-lit.js); the grain / saturation / rim
   // are layered in the albedo and env blocks (CarMaterialShade.FLAKE / .CANDY).
   let flakeSurface = surfaceId == 34;
@@ -1270,7 +1268,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let fkH = hash21(fkC.xy + fkC.z * 19.7);
       let fkS = smoothstep(0.82, 1.0, fkH);
       albedo = albedo * (1.0 + ((fkH - 0.5) * 0.30 + (fkS - 0.09) * 0.90) * fkF);
-      if (previewId == 64) {   // PREVIEW holo: prismatic sparks
+      if (finishId == 64) {   // PREVIEW starlight: prismatic sparks
         let hoC = mix(vec3<f32>(1.0), 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + fkH * 5.0 + (1.0 - NoV) * 2.0)),
           vec3<f32>(0.55)) * 1.6;
         albedo = mix(albedo, hoC, vec3<f32>(smoothstep(0.975, 1.0, fkH) * fkF));
@@ -1290,6 +1288,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   } else if (goldSurface) {
     albedo = vec3<f32>(0.83, 0.65, 0.23);
   }
+  if (finishId == 74) { albedo = vec3<f32>(0.022, 0.021, 0.020); }   // JPS GOLD: gloss black, set before lighting
+  if (finishId == 84) { albedo = vec3<f32>(0.034, 0.012, 0.060); }   // MIDNIGHT PURPLE: own violet base
   var chamFlip = 0.0;
   var chamHue = vec3<f32>(1.0);
   if (chamSurface) {
@@ -1821,75 +1821,84 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
   if (goldSurface) { color = color * vec3<f32>(1.0, 0.78, 0.27); }   // GOLD PLATE: lit terms take the fixed gold hue
   if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
-  // DESIGN PREVIEW finish tints 60-64 (mirrors glsl-lit.js; tuned against the reference photos).
-  if (previewId >= 60 && previewId <= 90) {
+  // FINISH TINTS 60-90 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells).
+  if (finishId >= 60 && finishId <= 90) {
     let pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
-    let pvG = 1.0 - NoV;
+    let pvG = 1.0 - clamp(dot(Ngeo, V), 0.0, 1.0);
     let pvL = dot(color, vec3<f32>(0.299, 0.587, 0.114));
-    if (previewId == 60) {
-      let film0 = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + pvG * 2.4 + in.objPos.y * 0.6 + in.objPos.z * 0.10));
+    let pvA = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.05);
+    let pvLit = pvL / pvA;
+    let pvSun = max(dot(Ngeo, F.sunDir.xyz), 0.0);
+    let pvNH = max(dot(Ngeo, normalize(F.sunDir.xyz + V)), 0.0);
+    let pvEdge = 1.0 - fnCrease;
+    if (finishId == 60) {
+      let film0 = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + pvG * 0.9 + in.objPos.y * 1.3 + in.objPos.z * 0.32 + in.objPos.x * 0.4));
       let film = mix(vec3<f32>(dot(film0, vec3<f32>(0.3333))), film0, vec3<f32>(0.75));
-      color = mix(color, color * film * 2.4, vec3<f32>(0.35 + 0.65 * smoothstep(0.05, 0.6, pvG)));
-    } else if (previewId == 61) {
+      color = mix(color, color * film * 2.4, vec3<f32>((0.35 + 0.65 * smoothstep(0.05, 0.6, pvG)) * mix(0.35, 1.0, pvEdge)));
+    } else if (finishId == 61) {
       let frC = floor(in.objPos * 140.0);
-      let frH = hash21(frC.xy + frC.z * 19.7);
-      let frF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-      color = mix(color, vec3<f32>(pvL), vec3<f32>(0.12)) * (1.0 + (frH - 0.5) * 0.08 * frF);
-      color = color + (F.ambSky.xyz + F.sunColor.xyz * 0.20) * pvG * pvG * 0.06;
-      color = color + F.sunColor.xyz * pvHue * 0.22 * pow(max(dot(N, normalize(F.sunDir.xyz + V)), 0.0), 6.0);
-    } else if (previewId == 62) {
+      let frF = clamp(0.5 / (140.0 * fnPx) - 0.5, 0.0, 1.0);
+      color = mix(color, vec3<f32>(pvL), vec3<f32>(0.30)) * 0.82 * (1.0 + (hash21(frC.xy + frC.z * 19.7) - 0.5) * 0.10 * frF);
+      color = color + F.sunColor.xyz * mix(pvHue, vec3<f32>(1.0), vec3<f32>(0.45)) * ((pvA * 2.6 + 0.06) * pow(pvNH, 3.0) * pvSun);
+      color = color + (F.ambSky.xyz + F.sunColor.xyz * 0.25) * mix(vec3<f32>(pvA), vec3<f32>(1.0), vec3<f32>(0.5)) * (smoothstep(0.30, 0.9, pvG) * 0.30 * pvEdge);
+    } else if (finishId == 62) {
       let sat = pow(pvHue, vec3<f32>(2.2));
-      color = color + sat * albedo * (F.ambSky.xyz * 2.0 + F.sunColor.xyz * 0.90 * max(dot(N, F.sunDir.xyz), 0.0) + vec3<f32>(0.10));
-    } else if (previewId == 63) {
-      let t = clamp(0.5 - in.objPos.z * 0.30 + pvG * 0.12, 0.0, 1.0);
+      color = color + sat * albedo * (F.ambSky.xyz * 2.0 + F.sunColor.xyz * (0.90 * pvSun) + vec3<f32>(0.10));
+    } else if (finishId == 63) {
+      let t = clamp(0.5 - in.objPos.z * 0.30 + pvG * 0.10, 0.0, 1.0);
       var ox = vec3<f32>(0.85, 0.86, 0.88);
       ox = mix(ox, vec3<f32>(0.95, 0.82, 0.52), vec3<f32>(smoothstep(0.10, 0.25, t)));
       ox = mix(ox, vec3<f32>(0.92, 0.66, 0.30), vec3<f32>(smoothstep(0.25, 0.40, t)));
       ox = mix(ox, vec3<f32>(0.72, 0.42, 0.40), vec3<f32>(smoothstep(0.40, 0.55, t)));
       ox = mix(ox, vec3<f32>(0.50, 0.30, 0.75), vec3<f32>(smoothstep(0.55, 0.70, t)));
       ox = mix(ox, vec3<f32>(0.25, 0.45, 0.95), vec3<f32>(smoothstep(0.70, 0.88, t)));
-      color = vec3<f32>(pvL) * ox * 1.6;
-    } else if (previewId == 65) {
+      color = vec3<f32>(min(pvLit, 2.5)) * ox * 0.85;
+    } else if (finishId == 65) {
       color = vec3<f32>(pvL) * vec3<f32>(1.0, 0.98, 0.94) * 1.55;
-    } else if (previewId == 66) {
-      color = mix(color, vec3<f32>(pvL) * vec3<f32>(0.62, 0.64, 0.70), vec3<f32>(0.75)) * 0.90;
-    } else if (previewId == 67) {
-      var fv = smoothstep(0.72, 0.90, 0.5 + 0.5 * sin(in.objPos.y * 38.0 + in.objPos.x * 22.0 + sin(in.objPos.z * 2.3) * 3.0));
-      fv = fv * smoothstep(1.4, 0.2, in.objPos.z);
-      let fvGlow = vec3<f32>(0.70, 1.0, 0.15) * (F.ambSky.xyz * 2.5 + F.sunColor.xyz * 0.6 * max(dot(N, F.sunDir.xyz), 0.0) + vec3<f32>(0.15));
+    } else if (finishId == 66) {
+      color = mix(color, vec3<f32>(pvL) * vec3<f32>(0.62, 0.64, 0.70), vec3<f32>(0.94)) * 0.90;
+    } else if (finishId == 67) {
+      let fvS = 0.5 + 0.5 * sin(in.objPos.y * 55.0 + in.objPos.x * 30.0 + sin(in.objPos.z * 2.3) * 3.0);
+      let fvPer = 0.114 / fnPx;
+      let fv = mix(smoothstep(0.86, 0.97, fvS), 0.12, 1.0 - smoothstep(1.5, 3.0, fvPer)) * (1.0 - smoothstep(0.2, 1.4, in.objPos.z));
+      let fvGlow = vec3<f32>(0.78, 1.0, 0.30) * (F.ambSky.xyz * 2.5 + F.sunColor.xyz * (0.6 * pvSun) + vec3<f32>(0.15));
       color = mix(color, fvGlow, vec3<f32>(fv * 0.9));
-    } else if (previewId == 68) {
+    } else if (finishId == 68) {
       let cfW = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
-      let cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * clamp(1.0 - (vDist - 10.0) / 10.0, 0.0, 1.0);
-      let cfC = floor(in.objPos * 90.0);
-      let cfM = smoothstep(0.48, 0.58, in.objPos.y + (hash21(cfC.xy + cfC.z * 7.1) - 0.5) * 0.10);
-      let cfL = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.05);
-      color = mix(color * (0.06 / cfL) * (0.84 + 0.32 * cfWv) * vec3<f32>(0.95, 0.97, 1.05), color, vec3<f32>(cfM));
-    } else if (previewId == 69) {
+      let cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * clamp(0.033 / fnPx * 0.5 - 1.0, 0.0, 1.0);
+      let cfN = sin(in.objPos.z * 9.0 + sin(in.objPos.x * 13.0) * 1.5) * 0.5 + sin(in.objPos.z * 23.0 + in.objPos.x * 7.0) * 0.25;
+      let cfM = smoothstep(0.56, 0.64, in.objPos.y + cfN * 0.05);
+      color = mix(vec3<f32>(min(pvLit, 3.0) * 0.065) * (0.84 + 0.32 * cfWv) * vec3<f32>(0.95, 0.97, 1.05), color, vec3<f32>(cfM));
+    } else if (finishId == 69) {
       let sfT = clamp(0.5 - in.objPos.z * 0.28, 0.0, 1.0);
-      let sfCell = fract(vec2<f32>(in.objPos.z, in.objPos.y) * 26.0) - 0.5;
-      let sfS = max(step(length(sfCell), 0.62 * (1.0 - smoothstep(0.25, 0.75, sfT))), 1.0 - smoothstep(0.15, 0.30, sfT));
-      let sfL = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.05);
-      color = mix(color * 0.10, vec3<f32>(pvL / sfL) * vec3<f32>(0.70, 0.72, 0.76), vec3<f32>(sfS));
-    } else if (previewId == 70) {
-      color = color * mix(1.30, 0.40, smoothstep(0.10, 0.75, pvG));
-    } else if (previewId >= 76 && previewId <= 80) {
+      let sfN = abs(Ngeo);
+      var sfUV = in.objPos.xy;
+      if (sfN.y > max(sfN.x, sfN.z)) { sfUV = in.objPos.zx; } else if (sfN.x > sfN.z) { sfUV = in.objPos.zy; }
+      let sfR = 0.62 * (1.0 - smoothstep(0.25, 0.75, sfT));
+      let sfW = max(26.0 * fnPx, 0.02);
+      var sfDot = 1.0 - smoothstep(sfR - sfW, sfR + sfW, length(fract(sfUV * 26.0) - vec2<f32>(0.5)));
+      sfDot = mix(sfDot, min(3.14159 * sfR * sfR, 1.0), smoothstep(0.25, 0.45, sfW));
+      let sfS = max(sfDot, 1.0 - smoothstep(0.15, 0.30, sfT));
+      color = mix(vec3<f32>(min(pvLit, 3.0) * 0.035), vec3<f32>(pvLit) * vec3<f32>(0.70, 0.72, 0.76), vec3<f32>(sfS));
+    } else if (finishId == 70) {
+      color = max(mix(vec3<f32>(pvL), color, vec3<f32>(1.25)), vec3<f32>(0.0)) * mix(1.0, mix(1.45, 0.30, smoothstep(0.10, 0.70, pvG)), pvEdge);
+    } else if (finishId >= 76 && finishId <= 80) {
       // PREVIEW-TINT-A
       let aA = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.18);
       let litA = min(pvL / aA, 3.0);
       let fdA = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-      if (previewId == 76) {
+      if (finishId == 76) {
         let gc1 = floor(in.objPos * 16.0);
         let gc2 = floor(vec3<f32>(in.objPos.x + in.objPos.z, in.objPos.y - in.objPos.z, in.objPos.x - in.objPos.y) * 11.0);
         let gf = fract(hash21(gc1.xy + gc1.z * 19.7) + hash21(gc2.xy + gc2.z * 7.3) * 0.7 + dot(V, vec3<f32>(0.7, 0.3, 0.5)) * 1.5);
         color = vec3<f32>(litA) * vec3<f32>(1.0, 0.74, 0.28) * 1.3 * mix(0.85, 0.30 + 1.9 * gf * gf * gf, fdA);
-      } else if (previewId == 77) {
+      } else if (finishId == 77) {
         color = vec3<f32>(litA) * mix(vec3<f32>(0.06, 0.28, 1.10), vec3<f32>(0.55, 0.70, 1.00), vec3<f32>(0.55 * pvG * pvG)) * 1.1;
-      } else if (previewId == 78) {
+      } else if (finishId == 78) {
         let cbC = floor(in.objPos * 220.0);
         color = vec3<f32>(litA) * vec3<f32>(0.46, 0.32, 0.19) * (1.0 + (hash21(cbC.xy + cbC.z * 19.7) - 0.5) * 0.16 * fdA);
         color = color + F.sunColor.xyz * vec3<f32>(0.9, 0.7, 0.5) * 0.16 * pow(max(dot(N, normalize(F.sunDir.xyz + V)), 0.0), 8.0);
-      } else if (previewId == 79) {
+      } else if (finishId == 79) {
         var etP = vec2<f32>(in.objPos.z, in.objPos.y + in.objPos.x * 0.7) * 9.0;
         etP.x = etP.x + fract(floor(etP.y) * 0.5);
         let etD = fract(etP) - vec2<f32>(0.5);
@@ -1902,63 +1911,63 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         let mgK = mix(mix(vec3<f32>(0.34, 0.24, 0.13), vec3<f32>(0.62, 0.54, 0.24), vec3<f32>(smoothstep(0.2, 0.6, mgB))), vec3<f32>(0.38, 0.43, 0.29), vec3<f32>(smoothstep(0.65, 0.95, mgB)));
         color = vec3<f32>(litA) * mgK * 1.15 * (1.0 + (hash21(mgC.xy + mgC.z * 7.1) - 0.5) * 0.20 * fdA);
       }
-    } else if (previewId >= 81 && previewId <= 85) {
+    } else if (finishId >= 81 && finishId <= 85) {
       // PREVIEW-TINT-B
-      let bL = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.05);
-      let bLit = min(pvL / bL, 1.6);
-      let bSun = max(dot(N, F.sunDir.xyz), 0.0);
-      let bNH = max(dot(N, normalize(F.sunDir.xyz + V)), 0.0);
-      if (previewId == 81) {   // ghostpearl
+      let bL = pvA;
+      let bLit = min(pvLit, 1.6);
+      let bSun = pvSun;
+      let bNH = pvNH;
+      if (finishId == 81) {   // ghostpearl
         let gpK0 = vec3<f32>(1.0) - pvHue;
         let gpK = gpK0 / max(max(gpK0.r, max(gpK0.g, gpK0.b)), 0.04);
         let gpS = max(pvHue.r, max(pvHue.g, pvHue.b)) - min(pvHue.r, min(pvHue.g, pvHue.b));
-        let gpC = mix(vec3<f32>(0.55, 0.40, 1.0), gpK, vec3<f32>(smoothstep(0.15, 0.5, gpS)));
-        let gpE = smoothstep(0.40, 0.85, pvG) * (0.4 + 0.6 * bSun);
-        color = mix(color, vec3<f32>(bLit) * gpC * 0.85, vec3<f32>(gpE * 0.85));
-      } else if (previewId == 82) {   // xirallic
-        let xC = floor(in.objPos * 160.0);
+        let gpC = mix(pvHue, mix(vec3<f32>(0.55, 0.40, 1.0), gpK, vec3<f32>(smoothstep(0.15, 0.5, gpS))), vec3<f32>(0.6));
+        let gpE = (smoothstep(0.30, 0.65, pvG) * (1.0 - smoothstep(0.80, 0.98, pvG)) * (0.35 + 0.65 * bSun) + pow(bNH, 10.0) * 0.5) * pvEdge;
+        color = mix(color, vec3<f32>(bLit) * gpC * 0.85, vec3<f32>(clamp(gpE, 0.0, 1.0) * 0.40));
+      } else if (finishId == 82) {   // xirallic
+        let xC = floor(in.objPos * 120.0);
         let xH = hash21(xC.xy + xC.z * 23.1);
-        let xF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-        let xS = step(0.70, xH) * smoothstep(0.75, 1.0, fract(xH * 53.0 + bNH * 4.0)) * xF;
-        color = color * 1.05 + (F.sunColor.xyz * (0.4 + 2.0 * bSun) + F.ambSky.xyz * 1.5) * (xS * 1.6) + F.sunColor.xyz * (0.06 * (1.0 - xF) * bSun);
-      } else if (previewId == 83) {   // mystichrome
+        let xF = clamp(0.5 / (120.0 * fnPx) - 0.5, 0.0, 1.0);
+        let xS = step(0.70, xH) * smoothstep(0.75, 1.0, fract(xH * 53.0 + bNH * 4.0));
+        color = color * 1.04 + (F.sunColor.xyz * (0.4 + 2.0 * bSun) + F.ambSky.xyz * 1.5) * mix(0.05, xS * 1.6, xF) + F.sunColor.xyz * (0.55 * pow(bNH, 30.0) * bSun);
+      } else if (finishId == 83) {   // mystichrome
         let mcT = clamp(pvG * 1.15 + in.objPos.y * 0.15, 0.0, 1.0);
         var mc = mix(vec3<f32>(0.20, 0.85, 0.35), vec3<f32>(0.15, 0.35, 1.0), vec3<f32>(smoothstep(0.05, 0.40, mcT)));
         mc = mix(mc, vec3<f32>(0.55, 0.15, 0.85), vec3<f32>(smoothstep(0.35, 0.65, mcT)));
         mc = mix(mc, vec3<f32>(0.05, 0.03, 0.08), vec3<f32>(smoothstep(0.65, 0.95, mcT)));
         color = vec3<f32>(bLit) * mc * 1.1;
-      } else if (previewId == 84) {   // midnightpurple
+      } else if (finishId == 84) {   // midnightpurple
         let mpH = pow(bNH, 8.0);
         let mpGlow = mix(vec3<f32>(0.75, 0.25, 1.0), vec3<f32>(0.85, 0.55, 0.20), vec3<f32>(smoothstep(0.3, 0.8, pvG)));
-        color = color * (0.05 / bL) * vec3<f32>(0.55, 0.30, 0.85) + F.sunColor.xyz * mpGlow * (mpH * 0.9 + bSun * 0.18) + F.ambSky.xyz * vec3<f32>(0.10, 0.04, 0.16);
+        color = color + F.sunColor.xyz * mpGlow * (mpH * 0.9 + bSun * 0.10);
       } else {   // ultrablack
         color = vec3<f32>(0.010, 0.010, 0.011) * (1.0 + 0.6 * bLit) + F.ambSky.xyz * (0.010 * pvG);
       }
-    } else if (previewId >= 86 && previewId <= 90) {
+    } else if (finishId >= 86 && finishId <= 90) {
       // PREVIEW-TINT-C
       let cAL = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.05);
       let cLit = pvL / cAL;
-      let cNear = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-      if (previewId == 86) {
+      let cNear = clamp(0.5 / (70.0 * fnPx) - 0.5, 0.0, 1.0);   // footprint fade
+      if (finishId == 86) {
         let wsUp = clamp(N.y, 0.0, 1.0);
         let wsC = floor(in.objPos * 70.0);
         let wsB = step(0.86, hash21(wsC.xy + wsC.z * 13.1)) * cNear;
         color = max(mix(vec3<f32>(pvL), color, vec3<f32>(1.35)), vec3<f32>(0.0)) * 0.55;
         color = color + F.ambSky.xyz * (0.25 + 1.6 * pvG * pvG) * (0.35 + 0.65 * wsUp);
         color = color + (F.sunColor.xyz * 1.2 * pow(max(dot(N, normalize(F.sunDir.xyz + V)), 0.0), 40.0) + F.ambSky.xyz) * (wsB * 0.9);
-      } else if (previewId == 87) {
+      } else if (finishId == 87) {
         let ssX = abs(in.objPos.x);
         let ss = min(step(0.05, ssX) * step(ssX, 0.19) * step(0.35, N.y)
                    + step(0.42, in.objPos.y) * step(in.objPos.y, 0.54) * step(abs(N.y), 0.5), 1.0);
         let ssGl = color * 0.45 + F.ambSky.xyz * (0.20 + 1.4 * pvG * pvG) + F.sunColor.xyz * (2.5 * pow(max(dot(N, normalize(F.sunDir.xyz + V)), 0.0), 90.0));
         color = mix(color * 1.05, ssGl, vec3<f32>(ss));
-      } else if (previewId == 88) {
+      } else if (finishId == 88) {
         let pmX = abs(in.objPos.x);
         let pmM = max(max(step(in.objPos.z, -0.5) * step(0.55, in.objPos.y) * step(pmX, 0.45),
                           step(0.35, pmX) * step(-1.3, in.objPos.z) * step(in.objPos.z, 0.5) * step(in.objPos.y, 0.62)), step(2.1, in.objPos.z));
         let pmG = vec3<f32>(0.50, 0.51, 0.50) * (F.sunColor.xyz * max(dot(N, F.sunDir.xyz), 0.0) + F.ambSky.xyz) * (0.94 + 0.06 * hash21(floor(in.objPos.xz * 6.0 + vec2<f32>(in.objPos.y * 6.0))));
         color = mix(color, pmG, vec3<f32>(pmM));
-      } else if (previewId == 89) {
+      } else if (finishId == 89) {
         let htP = vec3<f32>(in.objPos.x * 1.4, (in.objPos.y - 0.45) * 1.3, (in.objPos.z + 2.35) * 0.55);
         let htC = floor(in.objPos * 12.0);
         let ht = clamp(1.0 - length(htP) / 0.85 + (hash21(htC.xy + htC.z * 5.3) - 0.5) * 0.12, 0.0, 1.0);
@@ -1971,20 +1980,24 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         color = mix(color, vec3<f32>(pvL) * vec3<f32>(1.04, 1.0, 0.94), vec3<f32>(sdE * 0.8));
         color = mix(color, vec3<f32>(0.80, 0.78, 0.74) * cLit, vec3<f32>(sdE * 0.45));
       }
-    } else if (previewId >= 71) {
-      let aL = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.05);
-      let lit = pvL / aL;
-      if (previewId == 71) {
-        color = mix(color, vec3<f32>(pvL) * 1.25, vec3<f32>(0.35 * pvG * pvG)) * 1.04;
-      } else if (previewId == 72) {
+    } else if (finishId >= 71) {
+      let aL = pvA;
+      let lit = pvLit;
+      if (finishId == 71) {   // truematte
+        let tmAlb = mix(vec3<f32>(pvA), albedo, vec3<f32>(0.72));
+        color = tmAlb * (pow(min(pvLit, 0.95), 0.75) * 0.92) + vec3<f32>(dot(F.ambSky.xyz, vec3<f32>(0.299, 0.587, 0.114)) * 0.08 + 0.016)
+          + mix(vec3<f32>(pvA), albedo, vec3<f32>(0.5)) * (0.45 * pvG * pvG * pvEdge);
+      } else if (finishId == 72) {
         color = vec3<f32>(lit) * 0.92 * mix(vec3<f32>(1.0, 0.97, 0.92), vec3<f32>(0.86, 0.92, 1.0), vec3<f32>(smoothstep(0.2, 0.8, pvG)));
-      } else if (previewId == 73) {
+      } else if (finishId == 73) {
         let rw = clamp((0.60 - in.objPos.y) / 0.40, 0.0, 1.0) * (0.55 + 0.45 * hash21(floor(vec2<f32>(in.objPos.z * 8.0, in.objPos.y * 60.0))));
         color = mix(color, vec3<f32>(0.07, 0.06, 0.05) * lit * 1.2, vec3<f32>(rw * 0.75));
-      } else if (previewId == 74) {
-        let jgC = floor(in.objPos * 140.0);
-        let jg = smoothstep(0.96, 1.0, hash21(jgC.xy + jgC.z * 19.7)) * clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-        color = color * (0.06 / aL) + vec3<f32>(0.95, 0.72, 0.28) * (jg * 1.4 + 0.08) * (F.sunColor.xyz * max(dot(N, F.sunDir.xyz), 0.0) + F.ambSky.xyz);
+      } else if (finishId == 74) {   // jpsgold
+        let jgC = floor(in.objPos * 110.0);
+        let jgH = hash21(jgC.xy + jgC.z * 19.7);
+        let jg = smoothstep(0.93, 1.0, jgH) * smoothstep(0.55, 1.0, fract(jgH * 37.0 + pvNH * 3.0));
+        color = color + vec3<f32>(1.0, 0.76, 0.30) * ((F.sunColor.xyz * pvSun + F.ambSky.xyz) * mix(0.06, jg * 2.6, clamp(0.5 / (110.0 * fnPx) - 0.5, 0.0, 1.0))
+          + F.sunColor.xyz * (0.45 * pow(pvNH, 12.0) * pvSun));
       } else {
         let tc = sin(in.objPos.z * 9.0 + sin(in.objPos.y * 7.0) * 2.5) * sin(in.objPos.y * 11.0 + in.objPos.x * 6.0 + sin(in.objPos.z * 5.0) * 2.0);
         color = vec3<f32>(lit) * mix(0.06, 0.85, step(0.0, tc));

@@ -23,22 +23,28 @@ const CarMaterials = (function () {
     satin: 26, chrome: 27, matte: 28, carbon: 31, brushed: 29, pearl: 30,
     flake: 34, candy: 35, tinted: 36, chameleon: 37,   // shader branches exist in GLX/TLX/WGX (surface-id-parity.test.mjs)
     forged: 38, gunmetal: 39, goldplate: 40,
-    // DESIGN PREVIEW (cursor/design-preview-finishes-*, not shipped): ids 60-64 remap in-shader onto 39/28/20/27/34.
-    oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, starlight: 64,   // 64 was 'holo': renamed, Codex shipped holographic (41) alubare: 65, rawcarbon: 66, flovis: 67,
-    carbonfade: 68, silverfade: 69, metalflop: 70,
-    truematte: 71, pearlwhite: 72, raceworn: 73, jpsgold: 74, testcamo: 75,
-    // PREVIEW-IDS-A
-    goldfoil: 76, anodblue: 77, cerabronze: 78, engineturn: 79, magchrom: 80,
-    // PREVIEW-IDS-B
-    ghostpearl: 81, xirallic: 82, mystichrome: 83, midnightpurple: 84, ultrablack: 85,
-    // PREVIEW-IDS-C
-    rainsoak: 86, stealth: 87, primer: 88, heatrear: 89, sunfaded: 90,
+    // FINISHES 60+ (design lane D2, design-preview/finishes): each rides a base branch above and adds one tint after the
+    // metal block, in GLX / TLX / WGX alike. Real-car reference per row in design-preview/finishes/finishes.json.
+    oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, alubare: 65, rawcarbon: 66, flovis: 67, carbonfade: 68,
+    silverfade: 69, metalflop: 70, truematte: 71, pearlwhite: 72, jpsgold: 74, ghostpearl: 81, xirallic: 82,
+    mystichrome: 83, midnightpurple: 84, ultrablack: 85,
   });
   // RESERVED FINISH IDS (garage finishes contract, 2026-10-17). A finish row joins FINISH_SURFACE only when its
   // shader branch exists in GLX, TLX and WGX, so the garage never offers a finish that renders as plain paint;
   // the id is fixed here first so the slices cannot take the same one. tests/unit/livery-finish-contract.test.mjs
   // pins that no id repeats and that every FINISH_SURFACE id is either shipped (<= 33) or reserved.
-  const FINISH_RESERVED = Object.freeze({ flake: 34, candy: 35, tinted: 36, chameleon: 37, forged: 38, gunmetal: 39, goldplate: 40 });
+  const FINISH_RESERVED = Object.freeze({ flake: 34, candy: 35, tinted: 36, chameleon: 37, forged: 38, gunmetal: 39, goldplate: 40,
+    oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, alubare: 65, rawcarbon: 66, flovis: 67, carbonfade: 68, silverfade: 69,
+    metalflop: 70, truematte: 71, pearlwhite: 72, jpsgold: 74, ghostpearl: 81, xirallic: 82, mystichrome: 83,
+    midnightpurple: 84, ultrablack: 85 });
+  // DESIGN PREVIEW (cursor/design-preview-finishes-*): finishes that failed the realism cut or wait for another round.
+  // Their shader branches key on finishId, so they never enter the garage row (built from FINISH_SURFACE) or the
+  // surface-id contract; only the whole-car path of applyFinish takes them, for the design shoot. Drop this table and
+  // the finishId branches to remove them.
+  const FINISH_PREVIEW = Object.freeze({
+    starlight: 64, raceworn: 73, testcamo: 75, goldfoil: 76, anodblue: 77, cerabronze: 78, engineturn: 79, magchrom: 80,
+    rainsoak: 86, stealth: 87, primer: 88, heatrear: 89, sunfaded: 90,
+  });
   const DARK   = [0.05, 0.05, 0.05];
   // Deeper resin base so the shader weave (CarMaterialShade.CARBON) reads at
   // garage and near-track distance instead of flat charcoal paint.
@@ -120,7 +126,7 @@ const CarMaterials = (function () {
         }
       }
     } else {
-      const finishSurface = FINISH_SURFACE[finish];
+      const finishSurface = FINISH_SURFACE[finish] || (Object.hasOwn(FINISH_PREVIEW, finish) && FINISH_PREVIEW[finish]);
       if (finishSurface) {
         for (let i = 0; i < out.mat.length; i++) {
           if (out.mat[i] === SURFACES.paint) out.mat[i] = finishSurface;
@@ -179,7 +185,7 @@ const CarMaterials = (function () {
   const SHADE = (typeof CarMaterialShade !== "undefined") ? CarMaterialShade : null;
 
   return {
-    SURFACES, FINISH_SURFACE, FINISH_RESERVED, SHADE, finishOf,
+    SURFACES, FINISH_SURFACE, FINISH_RESERVED, FINISH_PREVIEW, SHADE, finishOf,
     DARK, CARBON, VISOR, PANEL, TYRE, RIM, HUB, INTAKE, HALO, EXHAUST,
     TYRE_BAND, BRAKE_CALIPER,
     TCAM_IDS, tcamColour,

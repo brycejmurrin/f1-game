@@ -266,7 +266,10 @@ test("FINISH_SURFACE rows flake 34 and candy 35 exist, are accepted by Teams.liv
   assert.equal(CarMaterials.FINISH_SURFACE.flake, 34);
   assert.equal(CarMaterials.FINISH_SURFACE.candy, 35);
   const chips = ["gloss", ...Object.keys(CarMaterials.FINISH_SURFACE)];
-  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon", "forged", "gunmetal", "goldplate"]);
+  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon", "forged", "gunmetal", "goldplate",
+    // finishes 60+ (design lane D2): the realism cut of design-preview/finishes
+    "oilslick", "frozen", "fluoro", "burnt", "alubare", "rawcarbon", "flovis", "carbonfade", "silverfade", "metalflop",
+    "truematte", "pearlwhite", "jpsgold", "ghostpearl", "xirallic", "mystichrome", "midnightpurple", "ultrablack"]);
   const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
   cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
   vm.runInContext(read("js/data/teams.js"), cx, { filename: absSrc("js/data/teams.js") });

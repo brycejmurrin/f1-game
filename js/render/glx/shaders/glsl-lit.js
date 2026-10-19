@@ -974,26 +974,32 @@ void main() {
   vec3 Ngeo = N;
   // Car3D surface ids occupy 20..40, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
-  // DESIGN PREVIEW finishes 60-64 (cursor/design-preview-finishes-*, NOT shipped): each rides an existing branch and
-  // adds one tint after the metal block. 60 oilslick->39, 61 frozen->29, 62 fluoro->20, 63 burnt->27, 64 holo->34.
-  int previewId = int(vMat + 0.5);
-  int surfaceId = previewId == 60 ? 39 : previewId == 61 ? 29 : previewId == 62 ? 20
-    : previewId == 63 ? 27 : previewId == 64 ? 34 : previewId == 65 ? 29 : previewId == 66 ? 31 : previewId == 67 ? 20
-    : previewId == 68 ? 20 : previewId == 69 ? 20 : previewId == 70 ? 34
-    : previewId == 71 ? 28 : previewId == 72 ? 34 : previewId == 73 ? 20 : previewId == 74 ? 34 : previewId == 75 ? 20 : previewId;
-  // PREVIEW-REMAP-A
-  if (previewId == 76 || previewId == 79) surfaceId = 27;
-  if (previewId == 77 || previewId == 80) surfaceId = 29;
-  if (previewId == 78) surfaceId = 26;
-  // PREVIEW-REMAP-B
-  if (previewId == 81 || previewId == 83 || previewId == 84) surfaceId = 20;
-  if (previewId == 82) surfaceId = 34;
-  if (previewId == 85) surfaceId = 28;
-  // PREVIEW-REMAP-C
-  if (previewId == 86 || previewId == 88 || previewId == 89) surfaceId = 20;
-  if (previewId == 87) surfaceId = 28;
-  if (previewId == 90) surfaceId = 26;
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 40;
+  // FINISHES 60-90 (CarMaterials.FINISH_RESERVED / FINISH_PREVIEW): each rides an existing base branch for its
+  // lighting and adds one tint after the metal block (finishId keeps the original id). Reserved rows branch as
+  // "surfaceId == N" so surface-id-parity sees them; preview-only rows (FINISH_PREVIEW, not offered in the garage)
+  // branch on finishId and stay invisible to it until they ship.
+  int surfaceId = int(vMat + 0.5);
+  int finishId = surfaceId;
+  if (surfaceId == 62 || surfaceId == 67 || surfaceId == 68 || surfaceId == 69 || surfaceId == 70 || surfaceId == 74
+    || surfaceId == 81 || surfaceId == 82 || surfaceId == 83 || surfaceId == 84) surfaceId = 20;
+  if (surfaceId == 61 || surfaceId == 71 || surfaceId == 85) surfaceId = 28;
+  if (surfaceId == 63 || surfaceId == 65) surfaceId = 29;
+  if (surfaceId == 72) surfaceId = 34;
+  if (surfaceId == 60) surfaceId = 39;
+  if (surfaceId == 66) surfaceId = 31;
+  if (finishId == 73 || finishId == 75 || finishId == 86 || finishId == 87 || finishId == 88 || finishId == 89) surfaceId = 20;
+  if (finishId == 64) surfaceId = 34;
+  if (finishId == 76 || finishId == 79) surfaceId = 27;
+  if (finishId == 77 || finishId == 80) surfaceId = 29;
+  if (finishId == 78 || finishId == 90) surfaceId = 26;
+  if (finishId == 87) surfaceId = 28;
+  // Finish anti-alias inputs, taken here in uniform control flow (the tint block is a branch): fnPx = metres of
+  // surface under one pixel (a pattern cell under ~2 px fades to its mean, so nothing shimmers in motion), fnCrease
+  // = 1 on a hard panel edge, where an angle-driven effect would draw an outline round every panel.
+  vec3 fnDx = dFdx(Ngeo), fnDy = dFdy(Ngeo);
+  float fnPx = max(length(fwidth(vObjPos)), 1e-5);
+  float fnCrease = smoothstep(0.02, 0.20, dot(fnDx, fnDx) + dot(fnDy, fnDy));
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 90;
   // 34 = METALLIC FLAKE and 35 = CANDY (FINISH_SURFACE.flake / .candy): both are PAINT responses (gloss
   // clearcoat, env mirror, sparkle), so paintSurface includes them; the flake grain and the candy
   // saturation / rim / tinted lacquer are layered on below (CarMaterialShade.FLAKE / .CANDY).
@@ -1228,9 +1234,9 @@ void main() {
       float fkH = hash21(fkC.xy + fkC.z * 19.7);
       float fkS = smoothstep(0.82, 1.0, fkH);
       albedo *= 1.0 + ((fkH - 0.5) * 0.30 + (fkS - 0.09) * 0.90) * fkF;
-      // PREVIEW 64 holo: each spark takes a prismatic hue keyed to its cell and the view angle.
+      // PREVIEW 64 starlight: each spark takes a prismatic hue keyed to its cell and the view angle.
       // (Lunaflair reference: sparse glitter, mostly silver-white, rainbow only in direct light.)
-      if (previewId == 64) albedo = mix(albedo, mix(vec3(1.0), 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fkH * 5.0
+      if (finishId == 64) albedo = mix(albedo, mix(vec3(1.0), 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fkH * 5.0
         + (1.0 - NoV) * 2.0)), 0.55) * 1.6, smoothstep(0.975, 1.0, fkH) * fkF);
       specular = min(1.0, specular + fkS * 0.40 * fkF);
     }
@@ -1249,6 +1255,9 @@ void main() {
   } else if (goldSurface) {
     albedo = vec3(0.83, 0.65, 0.23);
   }
+  // JPS GOLD (74) and MIDNIGHT PURPLE (84) carry their own base colour whatever the livery: set before lighting, so the clearcoat keeps its reflections.
+  if (finishId == 74) albedo = vec3(0.022, 0.021, 0.020);
+  if (finishId == 84) albedo = vec3(0.034, 0.012, 0.060);   // MIDNIGHT PURPLE: its own near-black violet, livery ignored
   float chamFlip = 0.0; vec3 chamHue = vec3(1.0);
   if (chamSurface) {
     // CHAMELEON keeps the team hue face-on and flips toward a fixed blue at grazing angles. The flip is applied to the LIT colour
@@ -1947,76 +1956,86 @@ void main() {
   if (tintedSurface) color *= albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
   if (goldSurface) color *= vec3(1.0, 0.78, 0.27);   // GOLD PLATE: the white lit terms take the fixed gold hue
   if (chamSurface) color *= mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip * 0.90);
-  // DESIGN PREVIEW finish tints (60-64): see the remap at surfaceId. Tuned against the reference photos
-  // (artifacts/finish-designs/refs/finishes): oil film = ordered bands over a dark base, frozen = rich colour with a
-  // soft satin sheen, fluoro = glows even in shade, burnt = the real oxide order, holo = sparse silver glitter.
-  if (previewId >= 60 && previewId <= 90) {
+  // FINISH TINTS 60-90 (see the remap at surfaceId; reserved rows tuned against reference photos, design-preview/finishes).
+  // Angle terms read the GEOMETRIC normal: the shading N carries orange peel, which broke angle-driven bands into jagged
+  // contours. Angle effects are withheld on hard panel edges (fnCrease) and pattern cells fade by footprint (fnPx).
+  if (finishId >= 60 && finishId <= 90) {
     vec3 pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
-    float pvG = 1.0 - NoV;
+    float pvG = 1.0 - clamp(dot(Ngeo, V), 0.0, 1.0);
     float pvL = dot(color, vec3(0.299, 0.587, 0.114));
-    if (previewId == 60) {   // oilslick: thin-film bands on the dark metal's reflections, stronger toward grazing
-      vec3 film = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + pvG * 2.4 + vObjPos.y * 0.6 + vObjPos.z * 0.10));
+    float pvA = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
+    float pvLit = pvL / pvA;   // the lighting with the livery divided out
+    float pvSun = max(dot(Ngeo, uSunDir), 0.0);
+    float pvNH = max(dot(Ngeo, normalize(uSunDir + V)), 0.0);
+    float pvEdge = 1.0 - fnCrease;
+    if (finishId == 60) {   // oilslick: thin-film bands on dark anodised metal, few per panel, stronger toward grazing
+      vec3 film = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + pvG * 0.9 + vObjPos.y * 1.3 + vObjPos.z * 0.32 + vObjPos.x * 0.4));
       film = mix(vec3(dot(film, vec3(0.3333))), film, 0.75);
-      color = mix(color, color * film * 2.4, 0.35 + 0.65 * smoothstep(0.05, 0.6, pvG));
-    } else if (previewId == 61) {   // frozen: satin metal (29) keeps the colour; a faint grain and a soft edge sheen
+      color = mix(color, color * film * 2.4, (0.35 + 0.65 * smoothstep(0.05, 0.6, pvG)) * mix(0.35, 1.0, pvEdge));
+    } else if (finishId == 61) {   // frozen (BMW Individual Frozen): matte METALLIC on the matte base -- greyed face, fine grain,
+      // a broad metallic sun sheen in the paint's own hue and a soft silver lift toward the flop
       vec3 frC = floor(vObjPos * 140.0);
-      float frH = hash21(frC.xy + frC.z * 19.7), frF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-      color = mix(color, vec3(pvL), 0.12) * (1.0 + (frH - 0.5) * 0.08 * frF);
-      color += (uAmbSky + uSunColor * 0.20) * pvG * pvG * 0.06;
-      color += uSunColor * pvHue * 0.22 * pow(max(dot(N, normalize(uSunDir + V)), 0.0), 6.0);   // broad satin sheen
-    } else if (previewId == 62) {   // fluoro: re-emits absorbed light -> glows in its hue, in shade too
+      float frF = clamp(0.5 / (140.0 * fnPx) - 0.5, 0.0, 1.0);
+      color = mix(color, vec3(pvL), 0.30) * 0.82 * (1.0 + (hash21(frC.xy + frC.z * 19.7) - 0.5) * 0.10 * frF);
+      color += uSunColor * mix(pvHue, vec3(1.0), 0.45) * (pvA * 2.6 + 0.06) * pow(pvNH, 3.0) * pvSun;
+      color += (uAmbSky + uSunColor * 0.25) * mix(vec3(pvA), vec3(1.0), 0.5) * smoothstep(0.30, 0.9, pvG) * 0.30 * pvEdge;
+    } else if (finishId == 62) {   // fluoro: re-emits absorbed light -> glows in its hue, in shade too
       vec3 sat = pow(pvHue, vec3(2.2));
-      color += sat * albedo * (uAmbSky * 2.0 + uSunColor * 0.90 * max(dot(N, uSunDir), 0.0) + vec3(0.10));
-    } else if (previewId == 63) {   // burnt titanium: silver nose -> straw -> gold -> bronze -> purple -> blue at the hot tail
-      float t = clamp(0.5 - vObjPos.z * 0.30 + pvG * 0.12, 0.0, 1.0);
+      color += sat * albedo * (uAmbSky * 2.0 + uSunColor * 0.90 * pvSun + vec3(0.10));
+    } else if (finishId == 63) {   // burnt titanium on the satin metal: silver nose -> straw -> gold -> bronze -> purple -> blue tail
+      float t = clamp(0.5 - vObjPos.z * 0.30 + pvG * 0.10, 0.0, 1.0);
       vec3 ox = vec3(0.85, 0.86, 0.88);
       ox = mix(ox, vec3(0.95, 0.82, 0.52), smoothstep(0.10, 0.25, t));
       ox = mix(ox, vec3(0.92, 0.66, 0.30), smoothstep(0.25, 0.40, t));
       ox = mix(ox, vec3(0.72, 0.42, 0.40), smoothstep(0.40, 0.55, t));
       ox = mix(ox, vec3(0.50, 0.30, 0.75), smoothstep(0.55, 0.70, t));
       ox = mix(ox, vec3(0.25, 0.45, 0.95), smoothstep(0.70, 0.88, t));
-      color = vec3(pvL) * ox * 1.6;   // the livery is ignored, like GOLD PLATE
-    } else if (previewId == 65) {   // alubare: polished bare aluminium (W196) -- warm grey, livery ignored
+      color = vec3(min(pvLit, 2.5)) * ox * 0.85;   // the livery is ignored, like GOLD PLATE
+    } else if (finishId == 65) {   // alubare: polished bare aluminium (W196) -- warm grey, livery ignored
       color = vec3(pvL) * vec3(1.0, 0.98, 0.94) * 1.55;
-    } else if (previewId == 66) {   // rawcarbon: unlacquered weave (Koenigsegg KNC) -- cool graphite satin
-      color = mix(color, vec3(pvL) * vec3(0.62, 0.64, 0.70), 0.75) * 0.90;
-    } else if (previewId == 67) {   // flovis: glowing aero-paint streaks running back along the body, gone at the nose
-      float fv = smoothstep(0.72, 0.90, 0.5 + 0.5 * sin(vObjPos.y * 38.0 + vObjPos.x * 22.0 + sin(vObjPos.z * 2.3) * 3.0));
-      fv *= smoothstep(1.4, 0.2, vObjPos.z);
-      vec3 fvGlow = vec3(0.70, 1.0, 0.15) * (uAmbSky * 2.5 + uSunColor * 0.6 * max(dot(N, uSunDir), 0.0) + vec3(0.15));
+    } else if (finishId == 66) {   // rawcarbon: unlacquered weave (Koenigsegg KNC) -- cool graphite satin
+      color = mix(color, vec3(pvL) * vec3(0.62, 0.64, 0.70), 0.94) * 0.90;
+    } else if (finishId == 67) {   // flovis: glowing aero-paint streaks running back along the body, gone at the nose
+      float fvS = 0.5 + 0.5 * sin(vObjPos.y * 55.0 + vObjPos.x * 30.0 + sin(vObjPos.z * 2.3) * 3.0);
+      float fvPer = 0.114 / fnPx;   // streak period in pixels: under ~3 px the streaks are their mean coverage
+      float fv = mix(smoothstep(0.86, 0.97, fvS), 0.12, smoothstep(3.0, 1.5, fvPer)) * smoothstep(1.4, 0.2, vObjPos.z);
+      vec3 fvGlow = vec3(0.78, 1.0, 0.30) * (uAmbSky * 2.5 + uSunColor * 0.6 * pvSun + vec3(0.15));
       color = mix(color, fvGlow, fv * 0.9);
-    } else if (previewId == 68) {   // carbonfade: bare weave below the sidepod line, a ragged edge between
+    } else if (finishId == 68) {   // carbonfade (FW47): neutral lacquered weave below the sidepod line, a soft torn edge between
       vec2 cfW = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
-      float cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * clamp(1.0 - (vDist - 10.0) / 10.0, 0.0, 1.0);
-      vec3 cfC = floor(vObjPos * 90.0);
-      float cfM = smoothstep(0.48, 0.58, vObjPos.y + (hash21(cfC.xy + cfC.z * 7.1) - 0.5) * 0.10);
-      float cfL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
-      color = mix(color * (0.06 / cfL) * (0.84 + 0.32 * cfWv) * vec3(0.95, 0.97, 1.05), color, cfM);
-    } else if (previewId == 69) {   // silverfade: silver nose -> halftone dots -> black tail
+      float cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * clamp(0.033 / fnPx * 0.5 - 1.0, 0.0, 1.0);
+      float cfN = sin(vObjPos.z * 9.0 + sin(vObjPos.x * 13.0) * 1.5) * 0.5 + sin(vObjPos.z * 23.0 + vObjPos.x * 7.0) * 0.25;
+      float cfM = smoothstep(0.56, 0.64, vObjPos.y + cfN * 0.05);
+      color = mix(vec3(min(pvLit, 3.0) * 0.065) * (0.84 + 0.32 * cfWv) * vec3(0.95, 0.97, 1.05), color, cfM);
+    } else if (finishId == 69) {   // silverfade (W17): silver nose -> halftone dots -> black tail
       float sfT = clamp(0.5 - vObjPos.z * 0.28, 0.0, 1.0);
-      vec2 sfCell = fract(vec2(vObjPos.z, vObjPos.y) * 26.0) - 0.5;
-      float sfS = max(step(length(sfCell), 0.62 * (1.0 - smoothstep(0.25, 0.75, sfT))), 1.0 - smoothstep(0.15, 0.30, sfT));
-      float sfL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
-      color = mix(color * 0.10, vec3(pvL / sfL) * vec3(0.70, 0.72, 0.76), sfS);
-    } else if (previewId == 70) {   // metalflop: metallic face/flop lightness split
-      color *= mix(1.30, 0.40, smoothstep(0.10, 0.75, pvG));
-    } else if (previewId >= 76 && previewId <= 80) {
+      vec3 sfN = abs(Ngeo);   // the dot screen is printed per panel plane, so a top panel gets dots, not stripes
+      vec2 sfUV = sfN.y > max(sfN.x, sfN.z) ? vObjPos.zx : (sfN.x > sfN.z ? vObjPos.zy : vObjPos.xy);
+      float sfR = 0.62 * (1.0 - smoothstep(0.25, 0.75, sfT));
+      float sfW = max(26.0 * fnPx, 0.02);   // one pixel in cell units: the dot edge is anti-aliased
+      float sfDot = smoothstep(sfR + sfW, sfR - sfW, length(fract(sfUV * 26.0) - 0.5));
+      sfDot = mix(sfDot, min(3.14159 * sfR * sfR, 1.0), smoothstep(0.25, 0.45, sfW));
+      float sfS = max(sfDot, 1.0 - smoothstep(0.15, 0.30, sfT));
+      color = mix(vec3(min(pvLit, 3.0) * 0.035), vec3(pvLit) * vec3(0.70, 0.72, 0.76), sfS);
+    } else if (finishId == 70) {   // metalflop (AMR25 green): bright face, dark flop, never on a panel crease
+      color = max(mix(vec3(pvL), color, 1.25), vec3(0.0)) * mix(1.0, mix(1.45, 0.30, smoothstep(0.10, 0.70, pvG)), pvEdge);
+    } else if (finishId >= 76 && finishId <= 80) {
       // PREVIEW-TINT-A
       float aA = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.18);
       float litA = min(pvL / aA, 3.0);   // the lighting with the livery divided out
       float fdA = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);   // fine-detail fade (moire)
-      if (previewId == 76) {   // goldfoil: crinkled gold heat-shield foil -- two skewed facet lattices, glints move with the view
+      if (finishId == 76) {   // goldfoil: crinkled gold heat-shield foil -- two skewed facet lattices, glints move with the view
         vec3 gc1 = floor(vObjPos * 16.0);
         vec3 gc2 = floor(vec3(vObjPos.x + vObjPos.z, vObjPos.y - vObjPos.z, vObjPos.x - vObjPos.y) * 11.0);
         float gf = fract(hash21(gc1.xy + gc1.z * 19.7) + hash21(gc2.xy + gc2.z * 7.3) * 0.7 + dot(V, vec3(0.7, 0.3, 0.5)) * 1.5);
         color = vec3(litA) * vec3(1.0, 0.74, 0.28) * 1.3 * mix(0.85, 0.30 + 1.9 * gf * gf * gf, fdA);
-      } else if (previewId == 77) {   // anodblue: dyed anodised aluminium -- saturated blue, highlights blue too, pale grazing sheen
+      } else if (finishId == 77) {   // anodblue: dyed anodised aluminium -- saturated blue, highlights blue too, pale grazing sheen
         color = vec3(litA) * mix(vec3(0.06, 0.28, 1.10), vec3(0.55, 0.70, 1.00), 0.55 * pvG * pvG) * 1.1;
-      } else if (previewId == 78) {   // cerabronze: Cerakote Burnt Bronze -- warm satin brown, ceramic speckle, broad soft sheen
+      } else if (finishId == 78) {   // cerabronze: Cerakote Burnt Bronze -- warm satin brown, ceramic speckle, broad soft sheen
         vec3 cbC = floor(vObjPos * 220.0);
         color = vec3(litA) * vec3(0.46, 0.32, 0.19) * (1.0 + (hash21(cbC.xy + cbC.z * 19.7) - 0.5) * 0.16 * fdA);
         color += uSunColor * vec3(0.9, 0.7, 0.5) * 0.16 * pow(max(dot(N, normalize(uSunDir + V)), 0.0), 8.0);
-      } else if (previewId == 79) {   // engineturn: jewelled aluminium -- offset rows of polished discs, each a bright bow-tie
+      } else if (finishId == 79) {   // engineturn: jewelled aluminium -- offset rows of polished discs, each a bright bow-tie
         vec2 etP = vec2(vObjPos.z, vObjPos.y + vObjPos.x * 0.7) * 9.0;
         etP.x += fract(floor(etP.y) * 0.5);
         vec2 etD = fract(etP) - 0.5;
@@ -2029,63 +2048,64 @@ void main() {
         vec3 mgK = mix(mix(vec3(0.34, 0.24, 0.13), vec3(0.62, 0.54, 0.24), smoothstep(0.2, 0.6, mgB)), vec3(0.38, 0.43, 0.29), smoothstep(0.65, 0.95, mgB));
         color = vec3(litA) * mgK * 1.15 * (1.0 + (hash21(mgC.xy + mgC.z * 7.1) - 0.5) * 0.20 * fdA);
       }
-    } else if (previewId >= 81 && previewId <= 85) {
+    } else if (finishId >= 81 && finishId <= 85) {
       // PREVIEW-TINT-B
-      float bL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
-      float bLit = min(pvL / bL, 1.6);   // the lighting with the livery divided out
-      float bSun = max(dot(N, uSunDir), 0.0);
-      float bNH = max(dot(N, normalize(uSunDir + V)), 0.0);
-      if (previewId == 81) {   // ghostpearl: livery face; complementary pearl only at sunlit grazing edges (violet on neutrals)
+      float bL = pvA;
+      float bLit = min(pvLit, 1.6);
+      float bSun = pvSun;
+      float bNH = pvNH;
+      if (finishId == 81) {   // ghostpearl: livery face; complementary pearl in the sheen's skirt and the mid flop, not the silhouette
         vec3 gpK = vec3(1.0) - pvHue;
         gpK /= max(max(gpK.r, max(gpK.g, gpK.b)), 0.04);
         float gpS = max(pvHue.r, max(pvHue.g, pvHue.b)) - min(pvHue.r, min(pvHue.g, pvHue.b));
-        vec3 gpC = mix(vec3(0.55, 0.40, 1.0), gpK, smoothstep(0.15, 0.5, gpS));
-        float gpE = smoothstep(0.40, 0.85, pvG) * (0.4 + 0.6 * bSun);
-        color = mix(color, vec3(bLit) * gpC * 0.85, gpE * 0.85);
-      } else if (previewId == 82) {   // xirallic: dense sharp crystal glints; each flake lights at its own angle
-        vec3 xC = floor(vObjPos * 160.0);
+        vec3 gpC = mix(pvHue, mix(vec3(0.55, 0.40, 1.0), gpK, smoothstep(0.15, 0.5, gpS)), 0.6);
+        float gpE = (smoothstep(0.30, 0.65, pvG) * (1.0 - smoothstep(0.80, 0.98, pvG)) * (0.35 + 0.65 * bSun) + pow(bNH, 10.0) * 0.5) * pvEdge;
+        color = mix(color, vec3(bLit) * gpC * 0.85, clamp(gpE, 0.0, 1.0) * 0.40);
+      } else if (finishId == 82) {   // xirallic: sharp crystal glints near (footprint-faded to their mean), a crisp white lustre far
+        vec3 xC = floor(vObjPos * 120.0);
         float xH = hash21(xC.xy + xC.z * 23.1);
-        float xF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-        float xS = step(0.70, xH) * smoothstep(0.75, 1.0, fract(xH * 53.0 + bNH * 4.0)) * xF;
-        color = color * 1.05 + (uSunColor * (0.4 + 2.0 * bSun) + uAmbSky * 1.5) * (xS * 1.6) + uSunColor * (0.06 * (1.0 - xF) * bSun);
-      } else if (previewId == 83) {   // mystichrome: topaz green -> cobalt -> royal purple -> onyx; livery ignored
+        float xF = clamp(0.5 / (120.0 * fnPx) - 0.5, 0.0, 1.0);
+        float xS = step(0.70, xH) * smoothstep(0.75, 1.0, fract(xH * 53.0 + bNH * 4.0));
+        color = color * 1.04 + (uSunColor * (0.4 + 2.0 * bSun) + uAmbSky * 1.5) * mix(0.05, xS * 1.6, xF)
+          + uSunColor * 0.55 * pow(bNH, 30.0) * bSun;
+      } else if (finishId == 83) {   // mystichrome: topaz green -> cobalt -> royal purple -> onyx; livery ignored
         float mcT = clamp(pvG * 1.15 + vObjPos.y * 0.15, 0.0, 1.0);
         vec3 mc = mix(vec3(0.20, 0.85, 0.35), vec3(0.15, 0.35, 1.0), smoothstep(0.05, 0.40, mcT));
         mc = mix(mc, vec3(0.55, 0.15, 0.85), smoothstep(0.35, 0.65, mcT));
         mc = mix(mc, vec3(0.05, 0.03, 0.08), smoothstep(0.65, 0.95, mcT));
         color = vec3(bLit) * mc * 1.1;
-      } else if (previewId == 84) {   // midnightpurple: near-black purple, violet sun bloom -> bronze at the flop
+      } else if (finishId == 84) {   // midnightpurple: near-black purple, violet sun bloom -> bronze at the flop
         float mpH = pow(bNH, 8.0);
         vec3 mpGlow = mix(vec3(0.75, 0.25, 1.0), vec3(0.85, 0.55, 0.20), smoothstep(0.3, 0.8, pvG));
-        color = color * (0.05 / bL) * vec3(0.55, 0.30, 0.85) + uSunColor * mpGlow * (mpH * 0.9 + bSun * 0.18) + uAmbSky * vec3(0.10, 0.04, 0.16);
+        color += uSunColor * mpGlow * (mpH * 0.9 + bSun * 0.10);
       } else {   // ultrablack: ~1% reflectance, only a faint hint of shape survives; livery ignored
         color = vec3(0.010, 0.010, 0.011) * (1.0 + 0.6 * bLit) + uAmbSky * (0.010 * pvG);
       }
-    } else if (previewId >= 86 && previewId <= 90) {
+    } else if (finishId >= 86 && finishId <= 90) {
       // PREVIEW-TINT-C
       float cAL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
       float cLit = pvL / cAL;   // the lighting with the livery divided out
-      float cNear = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-      if (previewId == 86) {   // rainsoak: wet paint goes deep and dark, a water sheet mirrors the sky on top, beads glint
+      float cNear = clamp(0.5 / (70.0 * fnPx) - 0.5, 0.0, 1.0);   // bead cells fade by footprint, not distance
+      if (finishId == 86) {   // rainsoak: wet paint goes deep and dark, a water sheet mirrors the sky on top, beads glint
         float wsUp = clamp(N.y, 0.0, 1.0);
         vec3 wsC = floor(vObjPos * 70.0);
         float wsB = step(0.86, hash21(wsC.xy + wsC.z * 13.1)) * cNear;
         color = max(mix(vec3(pvL), color, 1.35), vec3(0.0)) * 0.55;
         color += uAmbSky * (0.25 + 1.6 * pvG * pvG) * (0.35 + 0.65 * wsUp);
         color += (uSunColor * 1.2 * pow(max(dot(N, normalize(uSunDir + V)), 0.0), 40.0) + uAmbSky) * wsB * 0.9;
-      } else if (previewId == 87) {   // stealth: gloss twin stripes + flank band inside a matte body (gloss-on-matte)
+      } else if (finishId == 87) {   // stealth: gloss twin stripes + flank band inside a matte body (gloss-on-matte)
         float ssX = abs(vObjPos.x);
         float ss = min(step(0.05, ssX) * step(ssX, 0.19) * step(0.35, N.y)
                      + step(0.42, vObjPos.y) * step(vObjPos.y, 0.54) * step(abs(N.y), 0.5), 1.0);
         vec3 ssGl = color * 0.45 + uAmbSky * (0.20 + 1.4 * pvG * pvG) + uSunColor * (2.5 * pow(max(dot(N, normalize(uSunDir + V)), 0.0), 90.0));
         color = mix(color * 1.05, ssGl, ss);
-      } else if (previewId == 88) {   // primer: new engine cover, sidepods and front wing in flat test-part grey
+      } else if (finishId == 88) {   // primer: new engine cover, sidepods and front wing in flat test-part grey
         float pmX = abs(vObjPos.x);
         float pmM = max(max(step(vObjPos.z, -0.5) * step(0.55, vObjPos.y) * step(pmX, 0.45),
                             step(0.35, pmX) * step(-1.3, vObjPos.z) * step(vObjPos.z, 0.5) * step(vObjPos.y, 0.62)), step(2.1, vObjPos.z));
         vec3 pmG = vec3(0.50, 0.51, 0.50) * (uSunColor * max(dot(N, uSunDir), 0.0) + uAmbSky) * (0.94 + 0.06 * hash21(floor(vObjPos.xz * 6.0 + vObjPos.y * 6.0)));
         color = mix(color, pmG, pmM);
-      } else if (previewId == 89) {   // heatrear: paint scorched -> straw -> purple -> blue toward the exhaust exit only
+      } else if (finishId == 89) {   // heatrear: paint scorched -> straw -> purple -> blue toward the exhaust exit only
         vec3 htP = vec3(vObjPos.x * 1.4, (vObjPos.y - 0.45) * 1.3, (vObjPos.z + 2.35) * 0.55);
         vec3 htC = floor(vObjPos * 12.0);
         float ht = clamp(1.0 - length(htP) / 0.85 + (hash21(htC.xy + htC.z * 5.3) - 0.5) * 0.12, 0.0, 1.0);
@@ -2098,20 +2118,25 @@ void main() {
         color = mix(color, vec3(pvL) * vec3(1.04, 1.0, 0.94), sdE * 0.8);
         color = mix(color, vec3(0.80, 0.78, 0.74) * cLit, sdE * 0.45);
       }
-    } else if (previewId >= 71) {
-      float aL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
-      float lit = pvL / aL;   // the lighting with the livery divided out
-      if (previewId == 71) {   // truematte: chalky, lighter and greyer toward the edges (rough-surface back-scatter)
-        color = mix(color, vec3(pvL) * 1.25, 0.35 * pvG * pvG) * 1.04;
-      } else if (previewId == 72) {   // pearlwhite: tri-coat white, warm face, cool edge; livery ignored
+    } else if (finishId >= 71) {
+      float aL = pvA;
+      float lit = pvLit;
+      if (finishId == 71) {   // truematte (RB matte navy): no gloss -- capped below any highlight, greyed a touch, shadows lifted
+        // (a rough surface scatters light back) and a soft grey sheen toward the edges
+        vec3 tmAlb = mix(vec3(pvA), albedo, 0.72);
+        color = tmAlb * pow(min(pvLit, 0.95), 0.75) * 0.92 + vec3(dot(uAmbSky, vec3(0.299, 0.587, 0.114)) * 0.08 + 0.016)
+          + mix(vec3(pvA), albedo, 0.5) * 0.45 * pvG * pvG * pvEdge;
+      } else if (finishId == 72) {   // pearlwhite: tri-coat white, warm face, cool edge; livery ignored
         color = vec3(lit) * 0.92 * mix(vec3(1.0, 0.97, 0.92), vec3(0.86, 0.92, 1.0), smoothstep(0.2, 0.8, pvG));
-      } else if (previewId == 73) {   // raceworn: brake dust and rubber streaked back along the low bodywork
+      } else if (finishId == 73) {   // raceworn: brake dust and rubber streaked back along the low bodywork
         float rw = clamp((0.60 - vObjPos.y) / 0.40, 0.0, 1.0) * (0.55 + 0.45 * hash21(floor(vec2(vObjPos.z * 8.0, vObjPos.y * 60.0))));
         color = mix(color, vec3(0.07, 0.06, 0.05) * lit * 1.2, rw * 0.75);
-      } else if (previewId == 74) {   // jpsgold: gloss black with gold flake
-        vec3 jgC = floor(vObjPos * 140.0);
-        float jg = smoothstep(0.96, 1.0, hash21(jgC.xy + jgC.z * 19.7)) * clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-        color = color * (0.06 / aL) + vec3(0.95, 0.72, 0.28) * (jg * 1.4 + 0.08) * (uSunColor * max(dot(N, uSunDir), 0.0) + uAmbSky);
+      } else if (finishId == 74) {   // jpsgold: gloss black (albedo set black above) with gold flake, footprint-faded to its mean
+        vec3 jgC = floor(vObjPos * 110.0);
+        float jgH = hash21(jgC.xy + jgC.z * 19.7);
+        float jg = smoothstep(0.93, 1.0, jgH) * smoothstep(0.55, 1.0, fract(jgH * 37.0 + pvNH * 3.0));
+        color += vec3(1.0, 0.76, 0.30) * ((uSunColor * pvSun + uAmbSky) * mix(0.06, jg * 2.6, clamp(0.5 / (110.0 * fnPx) - 0.5, 0.0, 1.0))
+          + uSunColor * 0.45 * pow(pvNH, 12.0) * pvSun);
       } else {   // testcamo: black/white dazzle; livery ignored
         float tc = sin(vObjPos.z * 9.0 + sin(vObjPos.y * 7.0) * 2.5) * sin(vObjPos.y * 11.0 + vObjPos.x * 6.0 + sin(vObjPos.z * 5.0) * 2.0);
         color = vec3(lit) * mix(0.06, 0.85, step(0.0, tc));
