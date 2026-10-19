@@ -10205,7 +10205,6 @@
       "create": [
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/hud-feel.test.mjs",
-        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs"
@@ -10600,7 +10599,6 @@
         "tests/unit/overtake-mode.test.mjs"
       ],
       "energy": [
-        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/overtake-mode.test.mjs"
       ],
       "lines": [
@@ -10614,7 +10612,6 @@
         "tests/specs/parts-physics.spec.js",
         "tests/unit/damage.test.mjs",
         "tests/unit/hud-feel.test.mjs",
-        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/overtake-mode.test.mjs"
       ],
       "spend": [
@@ -10622,7 +10619,6 @@
       ],
       "*": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
-        "tests/unit/hud-pins.test.mjs",
         "tests/unit/metrics.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
       ]
@@ -14568,9 +14564,7 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-minimap-pitmark.test.mjs",
-        "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
-        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs"
       ],
       "mmPitMark": [
@@ -14753,9 +14747,7 @@
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/hud-minimap-pitmark.test.mjs",
-        "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
-        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/race-insights.test.mjs",
@@ -14896,7 +14888,6 @@
       ],
       "*": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
-        "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs"
       ]
     },
@@ -15369,7 +15360,6 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -15391,6 +15381,7 @@
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/global-registry.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",

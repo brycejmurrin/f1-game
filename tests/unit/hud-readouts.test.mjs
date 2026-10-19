@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { makeDom } from "../helpers/mini-dom.mjs";
+import { bootHud, makeHudCar } from "../helpers/hud-harness.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -175,52 +175,27 @@ test("source: display-only — no Tracks / curvature / racing line, no car write
 
 // ── hud.js wiring, on the mini-dom harness (the hud-feel shape) ──────────────
 function boot(opts = {}) {
-  const dom = makeDom();
-  const rawCreate = dom.document.createElement;
-  dom.document.createElement = (tag) => { const el = rawCreate(tag); if (String(tag).toLowerCase() === "canvas") el.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true }); return el; };
   const timers = [];
-  const sb = {
-    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date, parseFloat, parseInt, isFinite, Infinity, Float32Array,
-    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
-    document: dom.document, innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
-    M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
-    PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000, ES_MJ: 4 },
-    Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
-    GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
-    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
-    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout: () => {},
-    performance: { now: () => 1000 },
-    ...(opts.sandbox || {}),
-  };
-  sb.window = sb;
-  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
-  vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
-  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
-  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
-  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
-  const $ = (id) => dom.byId(id);
-  const els = {
-    pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
-    speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
-    btnOT: $("btn-ot"), btnAero: $("btn-aero"),
-    gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
-    flag: $("hud-flag"), minimap: $("minimap"), gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
-    announceLive: $("announce-live"),
-  };
-  els.minimap.getContext = () => opts.mm || new Proxy({}, { get: () => () => {}, set: () => true });
-  const mk = (o) => ({ team: { id: "t1", color: [1, 0, 0] }, lap: 1, lapTime: 12, best: Infinity, speed: 50, energy: 0.5, gear: 3, rpm: 5000,
-    otT: 0, otE: 0, aeroX: 0, s: 10, prog: 10, retired: false, ...o });
-  const player = mk({ code: "YOU", rank: 2, brakeBias: 0.565 });
-  const rival = mk({ code: "BEA", rank: 1, prog: 10 + 1000 + 300 });
-  const G = {
-    els, player, cars: [rival, player], ranked: [rival, player], timeTrial: false, state: "race", session: "race",
-    lapsTarget: 5, track: { map: [[0, 0], [0.5, 0.5], [1, 1]], total: 1000, def: {} },
-    sectorLast: [null, null, null], sectorBests: [Infinity, Infinity, Infinity], fieldSectorBests: [Infinity, Infinity, Infinity],
-    aeroZones: [{}], ttRecord: Infinity,
-    fmtTime: (t) => (isFinite(t) && t > 0 ? t.toFixed(2) : "-"),
-    dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true, cssCol: () => "#f00",
-  };
-  const hud = sb.GameHud.create(G);
+  const rival = makeHudCar({ code: "BEA", rank: 1, prog: 10 + 1000 + 300 });
+  const { dom, $, els, player, G, hud, sb } = bootHud({
+    W: 1280, H: 800, readouts: true,
+    prepareDom(dom) { if (opts.fonts) dom.document.fonts = opts.fonts; },
+    minimapContext: () => opts.mm || new Proxy({}, { get: () => () => {}, set: () => true }),
+    sandbox: {
+      Float32Array,
+      PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000, ES_MJ: 4 },
+      setTimeout: (fn) => { timers.push(fn); return timers.length; },
+      ...(opts.sandbox || {}),
+    },
+    player: { code: "YOU", rank: 2, brakeBias: 0.565 },
+    game(player) {
+      return {
+        cars: [rival, player], ranked: [rival, player], session: "race",
+        track: { map: [[0, 0], [0.5, 0.5], [1, 1]], total: 1000, def: {} },
+        fmtTime: (t) => (isFinite(t) && t > 0 ? t.toFixed(2) : "-"),
+      };
+    },
+  });
   const flush = () => { while (timers.length) timers.shift()(); };
   return { dom, $, els, player, rival, G, hud, sb, timers, flush, tick: () => hud.updateHud(true), frame: (ms) => hud.updateHud(false, ms) };
 }

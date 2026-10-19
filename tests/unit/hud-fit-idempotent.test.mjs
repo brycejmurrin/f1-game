@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { bootHud } from "../helpers/hud-harness.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -54,70 +55,31 @@ function bootFlipHarness(o = {}) {
   const SCALE = o.scale == null ? 2 : o.scale;
   const W = o.W || 852, H = o.H || 393;
   const SAL = o.sal || 0, PLATE_TOP = o.plateTop == null ? 8 : o.plateTop, PLATE_IN = o.plateInset || 0, TOWER_H = o.towerH || 54;
-  const dom = makeDom();
-  const rawCreate = dom.document.createElement;
-  dom.document.createElement = (tag) => {
-    const el = rawCreate(tag);
-    if (String(tag).toLowerCase() === "canvas") el.getContext = () => ctx2d();
-    return el;
-  };
-  const sb = {
-    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date,
-    parseFloat, parseInt, isFinite, Infinity,
-    Log: o.log || { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false, DEBUG: 4 },
-    document: dom.document, innerWidth: W, innerHeight: H, devicePixelRatio: 1,
-    M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
-    PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
-    Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
-    GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
-    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
-    setTimeout: () => 1, clearTimeout: () => {},
-    performance: { now: () => 1000 },
-    matchMedia: (q) => {
-      const query = String(q || "");
-      const maxW = /max-width:\s*(\d+)/.exec(query);
-      const matches = !!o.portrait
-        && /orientation:\s*portrait/.test(query)
-        && (!maxW || W <= +maxW[1]);
-      return { matches, addListener() {}, removeListener() {} };
+  const { dom, sb, $, els, hud } = bootHud({
+    W, H, canvasContext: ctx2d,
+    prepareDom(dom) {
+      dom.byId("minimap");
+      dom.body.classList.add("in-race");
     },
-    getComputedStyle: () => ({
-      getPropertyValue: (k) => (o.tokens && k in o.tokens ? o.tokens[k] : (ALL_TOKENS[k] || "")),
-      columnGap: "0px", rowGap: "0px", transform: "none",
-    }),
-  };
-  sb.window = sb;
-  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
-  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
-  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
-  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
-
-  const $ = (id) => dom.byId(id);
-  const minimap = $("minimap");
-  minimap.getContext = () => ctx2d();
-  const els = {
-    pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
-    speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
-    btnOT: $("btn-ot"), btnAero: $("btn-aero"),
-    gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
-    flag: $("hud-flag"), minimap, gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
-    announceLive: $("announce-live"), pausebtn: $("pausebtn"), btnCam: $("btn-cam"),
-  };
-  dom.document.body.classList.add("in-race");
-  const player = {
-    team: { id: "t1", color: [1, 0, 0] }, code: "YOU", rank: 1, lap: 1, lapTime: 12, best: Infinity,
-    speed: 50, energy: 0.5, gear: 3, rpm: 5000, boostOn: false,
-    otT: 0, otArmed: false, otE: 0, otEarned: false, aeroX: 0, xArmed: false, s: 10, prog: 10, retired: false,
-  };
-  const G = {
-    els, player, cars: [player], ranked: [player], timeTrial: false, state: "race",
-    lapsTarget: 5, track: { map: [[0, 0], [1, 1]], total: 100, def: {} },
-    sectorLast: [null, null, null], sectorBests: [Infinity, Infinity, Infinity],
-    fieldSectorBests: [Infinity, Infinity, Infinity], aeroZones: [{}], ttRecord: Infinity,
-    fmtTime: (t) => String(t), dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true,
-    cssCol: () => "#f00",
-  };
-  const hud = sb.GameHud.create(G);
+    sandbox: {
+      Log: o.log || { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false, DEBUG: 4 },
+      matchMedia: (q) => {
+        const query = String(q || "");
+        const maxW = /max-width:\s*(\d+)/.exec(query);
+        const matches = !!o.portrait
+          && /orientation:\s*portrait/.test(query)
+          && (!maxW || W <= +maxW[1]);
+        return { matches, addListener() {}, removeListener() {} };
+      },
+      getComputedStyle: () => ({
+        getPropertyValue: (k) => (o.tokens && k in o.tokens ? o.tokens[k] : (ALL_TOKENS[k] || "")),
+        columnGap: "0px", rowGap: "0px", transform: "none",
+      }),
+    },
+    elementIds: { pausebtn: "pausebtn", btnCam: "btn-cam" },
+    player: { code: "YOU", rank: 1, boostOn: false, otArmed: false, otEarned: false, xArmed: false },
+  });
+  const minimap = els.minimap;
   const root = dom.documentElement;
   root.style.setProperty("--hud-scale", String(SCALE));
 
