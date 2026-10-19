@@ -39,7 +39,7 @@ function boot() {
   seedLog(ctx);
   // hash("dur") = 0.99 draws the raw 7-minute MIXED walk so the cap is visible.
   ctx.Career = { inCareer: () => false, hash: (_s, _r, _k, n) => n === "dur" ? 0.99 : 0.1 };
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/weather-arc.js"])
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
   const P = ctx.Particles, TM = ctx.TyreModel;
   let drawn = 0;
@@ -131,9 +131,8 @@ test("MIXED plan duration finishes inside a short race; a host plan is not recap
   const { G, wa } = boot();
   G.track = { total: 3300 };   // street-length 3-lap (~3.5 min at 48 m/s)
   const p = wa.planFor();
-  const raw = 120 + Math.floor(0.99 * 300);   // 417 — the uncapped seed draw
-  assert.equal(raw, 417);
-  assert.ok(p.dur < raw, "3-lap MIXED must not keep a ~7 min walk, got " + p.dur);
+  // boot()'s hash draws the longest seed walk (dur 0.99 -> 417 s uncapped); the cap must bite
+  assert.ok(p.dur < 417, "3-lap MIXED must not keep a ~7 min walk, got " + p.dur);
   assert.ok(p.dur >= 90 && p.dur <= Math.floor(3 * (3300 / 48) * 0.72),
     "cap is 72 % of estimated race time, got " + p.dur);
   wa.changeable = true;
@@ -162,11 +161,26 @@ test("endSession(true) restores the chip's weather but keeps the plan; endSessio
   assert.equal(wa.plan, null, "the flag / a quit to the menu still forgets a solo plan");
 });
 
-test("source guard: MIXED plans go through capPlanDur; host wxArc.dur does not", () => {
-  const src = read("js/race/weather-arc.js");
-  assert.match(src, /function capPlanDur\(dur, laps = capLaps\(\), len = G\.track && G\.track\.total\)/);
-  assert.match(src, /dur: capPlanDur\(120 \+ Math\.floor\(r\("dur"\) \* 300\), laps, len\)/);
-  assert.match(src, /never recapped/);
+test("wetnessAt(s): a local shower wets the road unevenly, and the view reads the player's own spot", () => {
+  const { G, wa } = boot();
+  G.track = { total: 5800 }; G.netPlay = { active: () => false };
+  assert.equal(wa.wetnessAt(1000), wa.wetness(), "no arc: every position reads the one scalar");
+  wa.changeable = true;
+  // RainCells.LOCAL_ODDS is a hash draw per plan: take the first duration whose draw is a local shower
+  for (let dur = 120; dur <= 400 && !(wa.arc && wa.arc.cell); dur += 10) {
+    wa.endSession(); G.raceWeather = "dry"; wa.changeable = true;
+    wa.plan = { to: "rain", dur };
+    wa.startChangeable();
+  }
+  assert.ok(wa.arc && wa.arc.cell, "a MIXED rain arc on a known circuit carries a rain cell for some plan");
+  G.raceT = wa.arc.dur / 2; wa.tick(wa.arc.dur / 2);
+  const samples = [];
+  for (let s = 0; s < 5800; s += 100) samples.push(wa.wetnessAt(s));
+  assert.ok(samples.every((w) => w >= 0 && w <= 1), "wetness stays in [0,1]");
+  assert.ok(Math.max(...samples) - Math.min(...samples) > 0.02, "a shower is local: the road is not uniformly wet, spread " + (Math.max(...samples) - Math.min(...samples)));
+  G.player = { s: 2500 };
+  assert.equal(wa.viewWetness(), wa.wetnessAt(2500), "the view stands on the followed car's segment");
+  assert.equal(wa.wetnessAt(NaN), wa.wetness(), "a non-finite position falls back to the scalar");
 });
 
 // ── 2026-10-14: the arc on the shared clock, the sky off the road, re-target, drying ──
