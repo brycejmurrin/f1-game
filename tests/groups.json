@@ -669,6 +669,8 @@
     "// menuKey has no pane rect (survey-A findings 5–6). VM, no browser.",
     "tests/unit/menu-sentinel-resize.test.mjs",
     "tests/unit/merge-hygiene.test.mjs",
+    "// tools/perf/mesh-census-lib.mjs: pass/source/distance banding + #2657/#2631 recommend (no browser). ~0.1 s.",
+    "tests/unit/mesh-census.test.mjs",
     "tests/unit/metrics.test.mjs",
     "// Night sky-tint fallback on the cockpit mirror glass: dim env bands + matte",
     "// material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.",

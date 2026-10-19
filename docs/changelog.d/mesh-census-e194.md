@@ -1,0 +1,1 @@
+New: `tools/perf/mesh-census.mjs` counts submitted triangles per pass (main vs mirror), distance band (<150 m / ≥150 m), and source (ribbon vs props) for GLX and TLX — the counting step of #2657 / measurement contract of #2631 (`docs/notes/MESH-CENSUS-2026-10-19.md`).

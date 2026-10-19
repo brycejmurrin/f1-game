@@ -264,6 +264,8 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 |---|---|---|
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
+| **perf/mesh-census-lib.mjs** | Pure aggregation for mesh-census: pass/source/distance bands + #2657 recommend. | — |
+| **perf/mesh-census.mjs** | Mesh census (#2657/#2631): main/mirror tris by distance band and source. | playwright-probe / renderer-debug |
 | **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
 | **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |
