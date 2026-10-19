@@ -28,6 +28,55 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const TOOL = path.join(ROOT, "tools/gfx/census-verdict.mjs");
 const WF = parseYAML(fs.readFileSync(path.join(ROOT, ".github/workflows/gpu-census.yml"), "utf8"));
 
+test("historical garage A/B only runs for its explicit full push request; normal census keeps four controls", (t) => {
+  const plan = WF.jobs.plan, split = plan.steps.find((s) => s.id === "split");
+  assert.equal(plan.outputs.garage_ab, "${{ steps.split.outputs.garage_ab }}");
+  const steps = WF.jobs.census.steps;
+  const experiment = ["Garage exact-revision WebGPU A/B", "Validate garage A/B measurements",
+    "Upload garage A/B before control legs", "Garage A/B verdict"];
+  const expected = ["${{ needs.plan.outputs.garage_ab == 'true' }}",
+    "${{ always() && needs.plan.outputs.garage_ab == 'true' }}",
+    "${{ always() && needs.plan.outputs.garage_ab == 'true' }}",
+    "${{ !cancelled() && needs.plan.outputs.garage_ab == 'true' }}"];
+  for (let i = 0; i < experiment.length; i++)
+    assert.equal(steps.find((s) => s.name === experiment[i])?.if, expected[i], experiment[i]);
+  const controls = steps.filter((s) => s.name?.startsWith("Game check —"));
+  assert.equal(controls.length, 4);
+  for (const step of controls) assert.equal(step.if, "${{ needs.plan.outputs.census_only != 'true' }}");
+  assert.equal(steps.find((s) => s.name === "Verdict — fail the job on what the game reported").if,
+    "${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}");
+  assert.equal(WF.jobs.garage_reanalysis.if,
+    "${{ needs.plan.outputs.run != 'false' && needs.plan.outputs.reanalysis == 'true' }}");
+
+  const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-experiment-"));
+  try {
+    fs.mkdirSync(path.join(dir, ".github"));
+    const output = (event, req) => {
+      fs.writeFileSync(path.join(dir, ".github/gpu-census-request.json"), JSON.stringify(req));
+      const r = spawnSync("python3", ["-c", py], { cwd: dir, encoding: "utf8", timeout: 5000,
+        env: { PATH: process.env.PATH, EVENT: event } });
+      if (r.error?.code === "ENOENT") { t.skip("no python3 on this box"); return null; }
+      assert.equal(r.status, 0, r.stderr || String(r.error || ""));
+      return Object.fromEntries(r.stdout.trim().split("\n").map((line) => {
+        const at = line.indexOf("="); return [line.slice(0, at), line.slice(at + 1)];
+      }));
+    };
+    const historical = { leg: "garage-retry-63a1", census_only: false };
+    const dispatch = output("workflow_dispatch", historical);
+    if (!dispatch) return;
+    assert.equal(dispatch.garage_ab, "false", "a default dispatch ignores an inherited historical request");
+    assert.equal(dispatch.census_only, "false", "the ordinary four controls still run");
+    assert.equal(output("schedule", historical).garage_ab, "false", "nightlies never rerun pinned historical A/B");
+    assert.equal(output("push", historical).garage_ab, "true", "the original explicit experiment leg opts in");
+    assert.equal(output("push", { ...historical, census_only: true }).garage_ab, "false", "adapter-only requests skip the experiment too");
+    assert.equal(output("push", { leg: "another-experiment" }).garage_ab, "false");
+    const reanalysis = output("push", { leg: "garage-reanalysis-367dc", census_only: true });
+    assert.equal(reanalysis.garage_ab, "false");
+    assert.equal(reanalysis.reanalysis, "true", "preserved-capture reanalysis remains independent");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // What a healthy macos-latest run writes (run 38550895790): both TLX legs
 // carry backendState + envState with softBlit false; GLX and WGX carry
 // neither; WGX is bound on the swapchain; every UA is HeadlessChrome.
@@ -49,6 +98,27 @@ const wgx = (gfx = {}) => ({ phase: "done", ok: true, frame: { meanLuma: 60 },
 const HW = { anyHardware: true, runs: [] }, SW = { anyHardware: false, runs: [] };
 const healthy = (over = {}) => ({ webgpu: tlx(), webgl2: tlx({ backendState: { ...tlx().gfx.backendState, api: "webgl2", forceWebGL: true } }), glx: glx(), wgx: wgx(), ...over });
 const run = (o) => verdict({ image: "macos-latest", census: HW, legs: healthy(), ...o });
+
+// The fixtures above are hand copies of what the legs write; this pins them to
+// the producers so a renamed field fails here instead of leaving the gate green.
+test("healthy() fixture keys exist in the producers (tlx.js envState/backendState, gpu-game-check)", () => {
+  const tlxSrc = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  const from = tlxSrc.lastIndexOf("backendState() {");
+  assert.ok(from >= 0 && tlxSrc.indexOf("envState() {") >= 0, "tlx.js producers missing");
+  const e = tlxSrc.indexOf("envState() {");
+  const producers = {
+    envState: tlxSrc.slice(e, tlxSrc.indexOf("envFailStack", e)),
+    backendState: tlxSrc.slice(from, from + 6000),
+  };
+  const fx = tlx().gfx;
+  for (const k of Object.keys(fx.envState)) assert.match(producers.envState, new RegExp(`\\b${k}\\b`), `envState().${k}`);
+  for (const k of Object.keys(fx.backendState)) assert.match(producers.backendState, new RegExp(`\\b${k}\\b`), `backendState().${k}`);
+  const check = fs.readFileSync(path.join(ROOT, "tools/gfx/gpu-game-check.mjs"), "utf8");
+  for (const k of ["gpuErrors", "gpuFirstError", "wgxSoftPresent", "headlessUa", "backendState", "envState", "glErrDrain"]) {
+    assert.match(check, new RegExp(`\\b${k}\\b`), `gpu-game-check no longer writes ${k}`);
+  }
+  for (const k of Object.keys(glx().gfx).filter((x) => x !== "glx" && x !== "wgx")) assert.match(check, new RegExp(`\\b${k}\\b`), k);
+});
 
 test("capOverride: only a NON-zero apex26.wgxCapture in the dispatch ls overrides the pin, last one wins", () => {
   assert.equal(capOverride(""), null);

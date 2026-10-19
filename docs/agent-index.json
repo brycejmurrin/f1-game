@@ -503,6 +503,18 @@
       "twinned": false
     },
     {
+      "id": "agent-output",
+      "script": "test:agent-output",
+      "kind": "node",
+      "files": [
+        "tests/unit/agent-output-config.test.mjs",
+        "tests/unit/agent-output.test.mjs",
+        "tests/unit/output-level-mcp.test.mjs",
+        "tests/unit/output-surface.test.mjs"
+      ],
+      "twinned": false
+    },
+    {
       "id": "audio-unit",
       "script": "test:audio-unit",
       "kind": "node",
@@ -573,6 +585,7 @@
         "tests/specs/garage-aero.spec.js",
         "tests/specs/garage-first-frame.spec.js",
         "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/garage-livery-fit.spec.js",
         "tests/specs/garage-out-before-card.spec.js",
         "tests/specs/garage-prebuild.spec.js",
         "tests/specs/livery-sidewall.spec.js",
@@ -651,6 +664,12 @@
         "tests/unit/change-kind.test.mjs",
         "tests/unit/changelog-fragments.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/ci-gpu-census.test.mjs",
+        "tests/unit/ci-pages-train.test.mjs",
+        "tests/unit/ci-ship-filter-geometry.test.mjs",
+        "tests/unit/ci-ship-smoke-renderer.test.mjs",
+        "tests/unit/ci-workflow-triggers.test.mjs",
         "tests/unit/component-inventory.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/diagnostics-tools.test.mjs",
@@ -1011,7 +1030,13 @@
         "tests/unit/change-kind.test.mjs",
         "tests/unit/changelog-fragments.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/ci-gpu-census.test.mjs",
+        "tests/unit/ci-pages-train.test.mjs",
+        "tests/unit/ci-ship-filter-geometry.test.mjs",
+        "tests/unit/ci-ship-smoke-renderer.test.mjs",
         "tests/unit/ci-verdict.test.mjs",
+        "tests/unit/ci-workflow-triggers.test.mjs",
         "tests/unit/committed-images.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
@@ -1211,6 +1236,7 @@
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/flyby-fleet.test.mjs",
+        "tests/unit/flyby-frame-report.test.mjs",
         "tests/unit/foundation-core-vm.test.mjs",
         "tests/unit/slider-effect.test.mjs"
       ],

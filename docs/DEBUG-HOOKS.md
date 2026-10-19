@@ -1026,18 +1026,22 @@ SwiftShader keep CPU/Memory/Timeline/Viewer. Phone: the panel root is `pointer-e
 × button (top right) and `inspector(false)` dispose it. Notes: `docs/notes/THREE-INSPECTOR-2026-10-16.md`.
 
 ### `gpuTimer(on?) → {supported, on, ms, software}`
-Opt-in GPU frame timer (`EXT_disjoint_timer_query_webgl2`). `gpuTimer(true)`
+Opt-in GPU frame timer: WebGL2 uses `EXT_disjoint_timer_query_webgl2`; TLX's
+native WebGPU path uses `timestamp-query` when the device supports it. `gpuTimer(true)`
 starts timing, `gpuTimer(false)` stops, `gpuTimer()` reads the latest sample.
 `ms` is the GPU-side cost of a recent frame (`-1` until a result lands, a few
-frames after enabling, or when unsupported). `software` is `ms < 0`: no sample
-yet, the extension is absent, or the backend is a software rasterizer
-(SwiftShader / Lavapipe). Do not treat a negative `ms` as a GPU millisecond —
-on a real device after a few timed frames `software` goes false and `ms` is the
-sample. This is the GPU-side counterpart to the playwright-probe `references/perf-profile.md` CPU flame chart —
+frames after enabling, or when unsupported). `software` comes from backend
+identity (`softAdapter` / `softwareGL`), independently of sample availability;
+it is `null` when the backend identity is unavailable. Real hardware can return
+`ms:-1, software:false` before a sample arrives. Do not treat a negative `ms`
+as a GPU duration or evidence of software rendering. This is the GPU-side
+counterpart to the playwright-probe `references/perf-profile.md` CPU flame chart —
 use it to tell whether a spike is GPU-bound (fill/fragment) or CPU-bound before
-optimising. **Chrome/Android only**: the extension is absent on iOS Safari
-(`supported:false`) and yields garbage under SwiftShader (CI), where
-GPU_DISJOINT stays set and readings stay at `-1` (`software:true`).
+optimising. Read `supported` on the active backend: availability follows the
+WebGL extension or WebGPU device feature, not a browser-name assumption.
+Software adapters can lack usable timestamps; a missing sample alone does not
+establish whether a backend is hardware. The Three.js Inspector owns timestamp
+queries while enabled, so disable it before collecting this timer's samples.
 ```js
 __apex.race("vegas"); __apex.gpuTimer(true);
 // drive a few frames on a busy night circuit, then:
