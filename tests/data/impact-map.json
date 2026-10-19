@@ -1931,6 +1931,7 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "*": [
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/light-grid.test.mjs"
       ]
     },
@@ -2125,11 +2126,15 @@
       ]
     },
     "js/camera/tuner-panel.js": {
+      "buildCamTunePanel": [
+        "tests/unit/camera-tuner-a11y.test.mjs"
+      ],
       "closeCamTuner": [
         "tests/unit/flyby-panel.test.mjs"
       ],
       "create": [
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -2138,8 +2143,7 @@
         "tests/unit/flyby-panel.test.mjs"
       ],
       "*": [
-        "tests/specs/camera-tuner.spec.js",
-        "tests/unit/camera-tuner-a11y.test.mjs"
+        "tests/specs/camera-tuner.spec.js"
       ]
     },
     "js/camera/vantage.js": {
@@ -5621,6 +5625,9 @@
       "isFlat": [
         "tests/unit/elev-presets.test.mjs"
       ],
+      "plan": [
+        "tests/unit/elev-presets.test.mjs"
+      ],
       "sample": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
@@ -6538,6 +6545,7 @@
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
         "tests/unit/agent-config.test.mjs",
+        "tests/unit/agent-output.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
@@ -13132,6 +13140,7 @@
         "tests/specs/material-shimmer.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/unit/backend-surface-parity.test.mjs",
+        "tests/unit/census-verdict.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
@@ -15976,6 +15985,9 @@
       "saveAndForceCockpit": [
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "setFoveation": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "*": [
         "tests/unit/load-order.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs"
@@ -16036,6 +16048,9 @@
       "stickToSteer": [
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "worldFromAnchorTo": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "*": [
         "tests/unit/phone-pad.test.mjs"
       ]
@@ -16067,6 +16082,9 @@
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
+      "isVisible": [
+        "tests/unit/xr-visibility-pause.test.mjs"
+      ],
       "lastError": [
         "tests/unit/xr-phase0.test.mjs"
       ],
@@ -16096,7 +16114,8 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "onClick": [
-        "tests/unit/xr-backend-pin.test.mjs"
+        "tests/unit/xr-backend-pin.test.mjs",
+        "tests/unit/xr-phase0.test.mjs"
       ],
       "show": [
         "tests/unit/xr-phase0.test.mjs"

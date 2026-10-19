@@ -503,6 +503,18 @@
       "twinned": false
     },
     {
+      "id": "agent-output",
+      "script": "test:agent-output",
+      "kind": "node",
+      "files": [
+        "tests/unit/agent-output-config.test.mjs",
+        "tests/unit/agent-output.test.mjs",
+        "tests/unit/output-level-mcp.test.mjs",
+        "tests/unit/output-surface.test.mjs"
+      ],
+      "twinned": false
+    },
+    {
       "id": "audio-unit",
       "script": "test:audio-unit",
       "kind": "node",
@@ -573,6 +585,7 @@
         "tests/specs/garage-aero.spec.js",
         "tests/specs/garage-first-frame.spec.js",
         "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/garage-livery-fit.spec.js",
         "tests/specs/garage-out-before-card.spec.js",
         "tests/specs/garage-prebuild.spec.js",
         "tests/specs/livery-sidewall.spec.js",
