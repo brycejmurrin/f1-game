@@ -94,7 +94,8 @@ const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "lowe
                           "sideTint", "sunTint",
                           "bandTint2", "plateTint",
                           "fin", "finArt", "logo", "logo2", "logo3", "patternTint", "patternSecond",
-                          "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent", "endplate"];
+                          "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent", "endplate",
+                          "floorTint", "suspTint", "ductTint", "deflectorTint", "cockpitTint", "gripTint", "boardTint", "exhaustTint"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
@@ -104,7 +105,8 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
                           patternRotation: "0", patternStretch: "100", patternWeight: "100",
                           coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit",
-                          podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team" };
+                          podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team",
+                          floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -163,6 +165,18 @@ const LIV_ROW_HINT = {
   mirrorFinish: "MIRROR FINISH — the painted mirror housings; INHERIT uses FINISH. Mirror glass is untouched.",
   mirrorTint: "MIRROR HOUSING — the painted mirror stalks and housings. Unset = the stock dark carbon housing.",
   rimTint: "RIM — the wheel rim colour on all four wheels. Unset = the BRAKES part's rim colour.",
+  rimFinish: "RIM FINISH — the rim lip, spokes and hub boss on all four wheels: CHROME or GOLD-with-RIM rims. INHERIT = bare metal.",
+  floorTint: "FLOOR EDGE — the floor edge rails, floor fences and bargeboard vanes. Unset = bare carbon.",
+  floorFinish: "FLOOR FINISH — the floor edge, fences and bargeboards; INHERIT uses FINISH on a painted floor, bare carbon otherwise.",
+  suspTint: "SUSPENSION — the wishbones, pushrods and rockers. Unset = the suspension part's dark carbon.",
+  suspFinish: "SUSPENSION FINISH — the suspension arms; INHERIT uses FINISH on painted arms, bare carbon otherwise.",
+  ductTint: "BRAKE DUCTS — the brake duct bodies and scoops; the inlet mouths stay dark. Unset = carbon.",
+  deflectorTint: "DEFLECTORS — the over-wheel deflector planes and stalks (when the WHEELS part fits them). Unset = carbon.",
+  cockpitTint: "COCKPIT SURROUND — the headrest pad and the cockpit-side bolsters. Unset = dark pad, PRIMARY bolsters.",
+  gripTint: "GRIPS — the steering-wheel hand grips, seen from the cockpit camera. Unset = black rubber.",
+  noseFinish: "NOSE FINISH — every painted surface ahead of the nose bulkhead (cone, cap, nose stripes); INHERIT uses FINISH.",
+  boardTint: "NUMBER BOARD — the rear-wing endplate board behind the race number. Unset = PRIMARY. The number keeps its own inked patch.",
+  exhaustTint: "EXHAUST HEAT — the heat-tinted exhaust tip. Unset = the FUEL part's flame colour.",
   caliperTint: "CALIPER — the brake caliper colour on all four wheels. Unset = the BRAKES part's caliper colour.",
   sidewallInk: "SIDEWALL INK — the lettering ink on the tyre sidewall; the compound band keeps its colour. Unset = the stock dark lettering.",
   helmetBase: "HELMET BASE — the helmet shell colour. Unset = the driver's own design.",
@@ -1190,6 +1204,9 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("HALO", "halo", true));
   wrap.appendChild(colorRow("RIM", "rimTint", true)); wrap.appendChild(colorRow("CALIPER", "caliperTint", true)); wrap.appendChild(colorRow("SIDEWALL INK", "sidewallInk", true));   // WHEELS & BRAKES section (livery-design-editor.js)
   wrap.appendChild(colorRow("MIRROR HOUSING", "mirrorTint", true));
+  for (const [label, key] of [["COCKPIT SURROUND", "cockpitTint"], ["GRIPS", "gripTint"], ["FLOOR EDGE", "floorTint"], ["SUSPENSION", "suspTint"],
+    ["BRAKE DUCTS", "ductTint"], ["DEFLECTORS", "deflectorTint"], ["NUMBER BOARD", "boardTint"], ["EXHAUST HEAT", "exhaustTint"]])
+    wrap.appendChild(colorRow(label, key, true));   // PAINT ZONES (CarMaterials.PAINT_ZONES); the editor files each into its section
   // HELMET section rows: appended like every other row (the editor only collects rows that are on the page)
   const lidStyled = () => (d.helmetStyle || "team") !== "team";
   const NO_LID = "Needs a HELMET style other than TEAM";
@@ -1232,7 +1249,8 @@ function buildLiveryCreator(container, team) {
   };
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
   for (const [label, key] of [["COVER FINISH", "coverFinish"], ["WING FINISH", "wingFinish"], ["HALO FINISH", "haloFinish"],
-    ["SIDEPOD FINISH", "podFinish"], ["FIN FINISH", "finFinish"], ["MIRROR FINISH", "mirrorFinish"]])
+    ["SIDEPOD FINISH", "podFinish"], ["FIN FINISH", "finFinish"], ["MIRROR FINISH", "mirrorFinish"],
+    ["NOSE FINISH", "noseFinish"], ["FLOOR FINISH", "floorFinish"], ["SUSPENSION FINISH", "suspFinish"], ["RIM FINISH", "rimFinish"]])
     pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
