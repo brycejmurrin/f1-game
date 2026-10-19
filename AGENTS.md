@@ -181,10 +181,7 @@ Shipping is a RELEASE TRAIN: a push to the deploy branch starts `pages.yml`, whi
 of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release train).
 
 ### Backlog
-Work no session has started is a GitHub issue (`.github/ISSUE_TEMPLATE/`; why: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`); the PR body stays the in-flight log, memory stays for facts.
-With no task from the user, take one from the ready queue: `list_issues` with `labels: ["ready"]`, skipping any also labelled `claimed` or `blocked`.
-Claim it (`who-is-on-it.mjs --claim "#<n> <text>"`); the draft PR body says `Closes #<n>`, which closes it on merge (the deploy branch is the default branch). `fleet.yml` derives the `claimed` label from both and keeps the pinned Fleet board issue.
-Work found mid-task becomes a sub-issue (`parent_issue_number`), not scope on your PR; work that waits on another issue gets `blocked` plus "Blocked by #<n>".
+No task from the user: take a `ready` issue not labelled `claimed`/`blocked`, claim it (`who-is-on-it.mjs --claim "#<n> <text>"`), put `Closes #<n>` in the draft PR body. Full protocol: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`.
 
 ### Concurrent PRs
 Three rules bind every session. Fleet launch policy (launch prompts, lanes, caps) is skill `agent-fleet` §Launch policy; Merge Desk procedure is skill `ci-watch`; detail in `docs/TESTING.md` §Merge train and `docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md`.

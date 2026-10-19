@@ -115,13 +115,17 @@
   }
   async function restore(scene) {
     if (scene?.schema !== "f1-dev-scene/v1" || !scene.repro?.track) throw new Error("Invalid scene document.");
-    const a = api(), b = scene.repro, current = a.repro();
+    const a = api(), b = scene.repro, current = a.repro(), frame = scene.inspection?.frame;
     const fail = () => { throw new Error("Invalid scene document. No scene applied."); };
     if (b.v !== 1 || typeof b.track !== "string" || !Tracks.LIST.some(t => t.id === b.track) ||
         !Array.isArray(b.cars) || !b.cars.length || b.cars.filter(c => c?.me === true).length !== 1 ||
         !Number.isInteger(b.teamIdx) || b.teamIdx < 0 || typeof b.teamId !== "string" || typeof b.halo !== "boolean" ||
         !["default", "dawn", "day", "dusk", "night"].includes(b.tod) ||
         !WeatherArc.VALID.includes(b.wx)) fail();
+    // Static scene framing belongs to a temporary view, never the driving-camera save.
+    if (!frame || ![frame.eye, frame.tgt].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite)) ||
+        !Number.isFinite(frame.fov) || frame.fov < 1 || frame.fov > 170 ||
+        (frame.lens?.far != null && (!Number.isFinite(frame.lens.far) || frame.lens.far < 0))) fail();
     const indices = new Set();
     for (const c of b.cars) {
       if (!c || !Number.isInteger(c.i) || c.i < 0 || indices.has(c.i) || typeof c.me !== "boolean" ||
@@ -143,11 +147,17 @@
       await a.race(b.track, b.tod, b.wx);
       a.go();
     }
-    const result = a.repro(clone(b));
+    // Native repro(cam) persists resolved knobs and flattens raw/global inheritance.
+    // Omit that branch; car/world restoration is independent of camera settings.
+    const placement = clone(b);
+    delete placement.cam;
+    const result = a.repro(placement);
     if (!result?.restored || result.teamMatches === false || result.skipped) {
       throw new Error("Scene was only partly restored: " + JSON.stringify(result));
     }
-    return { result, inspection: inspect() };
+    a.view({ eye: clone(frame.eye), target: clone(frame.tgt), fov: frame.fov,
+      ...(frame.lens?.far > 0 ? { far: frame.lens.far } : {}) });
+    return { result: { ...result, cam: b.cam.mode }, cameraOverride: "static-scene", inspection: inspect() };
   }
   function sample(label) {
     const a = api(), damping = a.cameraState(), frame = a.camState();
