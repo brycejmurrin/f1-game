@@ -1931,6 +1931,7 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "*": [
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/light-grid.test.mjs"
       ]
     },
@@ -2125,11 +2126,15 @@
       ]
     },
     "js/camera/tuner-panel.js": {
+      "buildCamTunePanel": [
+        "tests/unit/camera-tuner-a11y.test.mjs"
+      ],
       "closeCamTuner": [
         "tests/unit/flyby-panel.test.mjs"
       ],
       "create": [
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -2138,8 +2143,7 @@
         "tests/unit/flyby-panel.test.mjs"
       ],
       "*": [
-        "tests/specs/camera-tuner.spec.js",
-        "tests/unit/camera-tuner-a11y.test.mjs"
+        "tests/specs/camera-tuner.spec.js"
       ]
     },
     "js/camera/vantage.js": {
