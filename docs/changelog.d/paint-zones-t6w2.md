@@ -1,0 +1,1 @@
+New: eleven more parts of the car can be painted on their own in the garage livery editor — floor edge and bargeboards, suspension arms, brake ducts, wheel deflectors, the cockpit surround, steering-wheel grips, the rear number board and the exhaust tip's heat colour — plus separate finishes for the nose, floor, suspension and wheel rims (chrome or gold rims).

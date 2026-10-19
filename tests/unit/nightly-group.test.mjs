@@ -25,6 +25,20 @@ test("every browser group either rotates or states why it does not", () => {
   }
 });
 
+test("every EXCLUDED key names a real group, and every rotated group is a browser group with a package script", () => {
+  // The placement test above is satisfied by construction (ROTATION is derived
+  // from the same two inputs), so check the inputs against independent sources.
+  for (const g of Object.keys(EXCLUDED)) {
+    assert.ok(g in GROUPS, `EXCLUDED names ${g}, which is not in tests/groups.json — a renamed or deleted group left a dead exclusion`);
+  }
+  for (const g of ROTATION) {
+    assert.equal(GROUPS[g].kind, "browser", `${g} rotates but is not a browser group`);
+    assert.ok(PKG.scripts[g], `${g} rotates but package.json has no such script — the nightly's npm run would fail`);
+  }
+  // Fixture: a dead exclusion is what the check catches.
+  assert.equal("test:no-such-group" in GROUPS, false);
+});
+
 const ROOT = new URL("../../", import.meta.url);
 const WORKFLOWS = path.join(ROOT.pathname, ".github/workflows");
 

@@ -119,7 +119,9 @@ test("tooling-fast npm script uses the sequential runner", () => {
 test("test-bg defaults to sequential (one concurrent group) unless --parallel", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/test-bg.mjs"), "utf8");
   assert.match(src, /--parallel/, "test-bg must expose --parallel for the old concurrent start");
-  assert.match(src, /sequential|maxConcurrent|parallel \? PARALLEL_MAX : 1/,
+  // Comments stripped: the @doc header says "sequential by default" and used to satisfy this match.
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.match(code, /maxConcurrent\s*=\s*force\s*\?\s*Infinity\s*:\s*\(parallel\s*\?\s*PARALLEL_MAX\s*:\s*1\)/,
     "test-bg must default concurrent cap to 1");
 });
 
@@ -139,7 +141,14 @@ test("verify-change --plan exposes a diff-sized tooling-fast budget", () => {
   const unit = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "tests/unit/real-replay-vm.test.mjs"]).out);
   assert.ok(source.fast.toolingFastFiles < 632, "source edits should not plan the full tooling-fast floor");
   assert.ok(unit.fast.toolingFastFiles < source.fast.toolingFastFiles, "a direct unit edit should be narrower than its source pins");
-  assert.ok(source.fast.toolingFastEstimatedMs > unit.fast.toolingFastEstimatedMs);
+  // File count is the size signal. Estimated ms can invert under shard packing:
+  // a narrow unit pin that pulls a few slow tests onto the critical path can
+  // outlast a wider but faster source pin set (hud.js 122 files / ~456s vs
+  // real-replay-vm 29 files / ~514s locally on 2026-10-19).
+  assert.ok(source.fast.toolingFastEstimatedMs > 0);
+  assert.ok(unit.fast.toolingFastEstimatedMs > 0);
+  assert.ok(source.fast.toolingFastCriticalPathMs <= source.fast.toolingFastEstimatedMs);
+  assert.ok(unit.fast.toolingFastCriticalPathMs <= unit.fast.toolingFastEstimatedMs);
 });
 
 test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", (t) => {

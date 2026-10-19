@@ -64,7 +64,7 @@ function rig(lamps) {
   // built[] keeps only the lamp in use at the end of it.
   const settle = () => { for (let t = 0; t <= 10; t += 0.25) step(t); built.splice(0, built.length - 1); return 10; };
   const handovers = () => built.reduce((n, x, i) => n + (i > 0 && x !== built[i - 1] ? 1 : 0), 0);
-  return { ctx, G, frame, track, built, step, settle, handovers };
+  return { ctx, G, frame, track, built, step, settle, handovers, sp };
 }
 
 test("the shipped LAMP FLICKER is on, so the parked case below exercises it", () => {
@@ -131,4 +131,33 @@ test("frame.lampLum is each lamp's level without the flicker; the warm-up stays 
   const em = emitted.slice(600);
   assert.ok(Math.max(...em) - Math.min(...em) > 0.05, "while the emitted level still flickers");
   assert.ok(lumAt[0][0] < 0.9 * steady[0][0], `during the warm-up the level is dimmed (${lumAt[0][0].toFixed(3)})`);
+});
+
+/* R2-27 — what ONLY the lampLum scoring and the candidate filters can hold. */
+test("with LAMP FLICKER cranked past the 20% hysteresis, the pick still does not trade (scores use lampLum)", () => {
+  // At the shipped 0.10 the flicker is +-2-10%, so the 1.2 hysteresis alone masks a
+  // pick scored on the FLICKERED level (the original bug). Raise the knob until the
+  // per-lamp swing exceeds 20%: only scoring the unflickered lampLum keeps the lamp.
+  const r = rig(LAYOUTS["aging pair"]);
+  const max = r.ctx.LightKnobs.TUNE_DEFS.find((d) => d.id === "lampFlicker").max;
+  r.ctx.LightKnobs.LT.lampFlicker = max;
+  r.G.camEye[0] = 0;                       // exactly between: the two floods tie on lampLum
+  const t0 = r.settle();
+  const em = [];
+  for (let i = 1; i <= 180; i++) { r.step(t0 + i / 60); em.push(Math.max(r.frame.lights[3], r.frame.lights[4], r.frame.lights[5])); }
+  const swing = (Math.max(...em) - Math.min(...em)) / Math.max(...em);
+  assert.ok(swing > 0.2, `fixture: the emitted level must swing past 20% (max knob ${max}, swing ${(swing * 100).toFixed(0)}%)`);
+  assert.ok(r.handovers() <= 1, `${r.handovers()} lamp handovers in 180 frames with the flicker at its maximum`);
+});
+
+test("a tail-light or a small mover nearer than every flood never takes the lamp shadow map", () => {
+  const r = rig(LAYOUTS["aging pair"]);
+  const flood = FLOOD(-20), tail = [3, 1, 2, 1, 0.1, 0.1, 20, 0, -1, 0, 0, 0.5, 0, 0, 1];   // rad 20 >= 12: only the RANGE excludes it
+  const mover = [2, 1, 2, 1, 1, 1, 8, 0, -1, 0, 0, 0.5, 0, 0, 1];                           // rad 8 < 12: a washer-sized light
+  r.frame.lights = [...flood, ...mover, ...tail];
+  r.frame.lampLum = [1, 1, 1];
+  r.frame.tailStart = 2; r.frame.tailCount = 1;
+  r.G.camEye[0] = 0;
+  r.sp.lampPass(r.frame, 0, false);
+  assert.deepEqual(r.built, [-20], "only the flood is eligible; the nearer tail-light and mover are skipped");
 });

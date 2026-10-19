@@ -1026,13 +1026,16 @@ export class Lsp {
   async followExports(locs) {
     const key = l => `${l.uri || l.targetUri}:${(l.range || l.targetSelectionRange).start.line}`;
     const seen = new Set(locs.map(key));
-    for (const l of [...locs]) {
+    // Pipeline definition hops: each export/alias row is independent, and under
+    // a contended CI runner serial round-trips dominate the MCP client case.
+    const hops = await Promise.all([...locs].map(async l => {
       const uri = l.uri || l.targetUri, start = (l.range || l.targetSelectionRange).start, file = this.rel(uri);
-      if (!["export", "alias"].includes(this.tag(file, start.line, start.character))) continue;
+      if (!["export", "alias"].includes(this.tag(file, start.line, start.character))) return [];
       this.ensureOpen(file);
-      for (const n of (await this.request("textDocument/definition", { textDocument: { uri }, position: start })) || []) {
-        if (!seen.has(key(n))) { seen.add(key(n)); locs.push(n); }
-      }
+      return (await this.request("textDocument/definition", { textDocument: { uri }, position: start })) || [];
+    }));
+    for (const n of hops.flat()) {
+      if (!seen.has(key(n))) { seen.add(key(n)); locs.push(n); }
     }
   }
   rank(l) { return TAG_RANK[this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)]; }
@@ -1043,11 +1046,14 @@ export class Lsp {
     // A definition through an IIFE's `return { …, name, … }` is the export, not the body: list the declaration first.
     if (declFirst) list.sort((a, b) => this.rank(a) - this.rank(b));
     else list.sort((a, b) => a.uri.localeCompare(b.uri) || a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character);
-    const page = render ? list.slice(offset, offset + limit) : [], rows = [];
-    for (const l of page) {
+    const page = render ? list.slice(offset, offset + limit) : [];
+    // Pipeline enclosing-function lookups: outlineOf caches per file, but the
+    // first hit per file is still an LSP round-trip — serializing the page made
+    // Tracks.curvature refs alone cost tens of seconds on a busy runner.
+    const rows = await Promise.all(page.map(async l => {
       const f = this.rel(l.uri), { line, character } = l.range.start;
-      rows.push(this.row(f, line, character, true, { where: where ? await this.where(f, line, character).catch(() => null) : null, source: !concise }));
-    }
+      return this.row(f, line, character, true, { where: where ? await this.where(f, line, character).catch(() => null) : null, source: !concise });
+    }));
     const per = {};
     for (const l of list) { const f = this.rel(l.uri); per[f] = (per[f] || 0) + 1; }
     const byFile = Object.entries(per).sort((a, b) => b[1] - a[1]);
@@ -1170,19 +1176,23 @@ export async function callTool(lsp, name, a = {}) {
         const tagOf = l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character);
         const locs = all.filter(l => tagOf(l) === "use");
         // An implementation-position query first reaches the IIFE export shorthand.
-        // Query that export to reach the public member's uses.
-        for (const l of all.filter(l => tagOf(l) === "export")) {
-          const refs = (await lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => [])) || [];
-          for (const r of refs) if (tagOf(r) === "use" || tagOf(r) === "alias") all.push(r);
-        }
+        // Query that export to reach the public member's uses. Pipeline: M4.lerp
+        // alone fans out to dozens of alias rows; serial RPCs timed out the MCP
+        // client case on CI (run 39158195670, testTimeoutFailure @ 90 s).
+        const exportRefs = await Promise.all(all.filter(l => tagOf(l) === "export").map(l =>
+          lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: l.range.start, context: { includeDeclaration: false } }).catch(() => [])));
+        for (const refs of exportRefs) for (const r of refs || []) if (tagOf(r) === "use" || tagOf(r) === "alias") all.push(r);
         // Direct and destructured aliases hide real callers behind a local binding.
-        for (const l of all.filter(l => tagOf(l) === "alias")) {
+        const aliasLocs = all.filter(l => tagOf(l) === "alias");
+        const viaAlias = await Promise.all(aliasLocs.map(async l => {
           const f = lsp.rel(l.uri), binding = lsp.aliasBindingAt(f, l.range.start.line, l.range.start.character);
-          if (!binding) continue;
+          if (!binding) return [];
           lsp.ensureOpen(f);
           const refs = (await lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: { line: binding.line, character: binding.character }, context: { includeDeclaration: false } }).catch(() => [])) || [];
-          for (const r of refs) if (r.range.start.line !== binding.line || r.range.start.character !== binding.character) locs.push({ ...r, via: binding.name });
-        }
+          return refs.filter(r => r.range.start.line !== binding.line || r.range.start.character !== binding.character)
+            .map(r => ({ ...r, via: binding.name }));
+        }));
+        for (const batch of viaAlias) locs.push(...batch);
         // Export and alias routes may reach the same use more than once.
         // Keep distinct columns on a line, and never count declarations as calls.
         const seen = new Set(), uses = locs.filter(l => {

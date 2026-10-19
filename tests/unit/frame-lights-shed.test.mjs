@@ -118,9 +118,26 @@ test("a pause, a hitch or a hidden tab does not replay the lamp warm-up; lamps u
 // setFrameLights, so after Monaco's always-on tunnel lights that pin kept the
 // previous world reachable (track-switch-memory: visit2 monza aliveTracks
 // ["monaco","monza"]). The holder must be a WeakRef.
-test("setFrameLights remembers the world via WeakRef, not a strong track pin", () => {
-  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
-  assert.match(src, /_lampTrackRef\s*=\s*track\s*\?\s*new WeakRef\(track\)\s*:\s*null/);
-  assert.equal(src.includes("_lampTrack = track"), false, "no strong track pin");
-  assert.match(src, /_lampTrackRef\s*&&\s*_lampTrackRef\.deref\(\)/);
+test("setFrameLights does not keep a strong reference to the last lit track", async () => {
+  // Behavioural form of the WeakRef rule (track-switch-memory: after Monaco's
+  // always-on tunnel lights, day Monza never enters setFrameLights again, so the
+  // module's own holder is the only thing that could keep Monaco alive). Force a
+  // GC with no further call and the track must be collectable. A source regex
+  // would pass on a renamed or commented-out holder; this fails if anything pins it.
+  const v8 = await import("node:v8");
+  v8.setFlagsFromString("--expose-gc");
+  const gc = vm.runInNewContext("gc");
+  const L = load();
+  const lamps = [];
+  for (let i = 0; i < 10; i++) lamps.push(i * 20, 10, 0, 100, 100, 100, 40, 0, -1, 0, 1, 1, 1, 0, 1);
+  let ref;
+  (() => {
+    const first = { _lights: lamps.slice() };
+    ref = new WeakRef(first);
+    const f = { perChunkLights: 0, time: 0 };
+    for (let i = 0; i < 5; i++) { L.clock.t += 16; L.api.setFrameLights(f, first, [{}], [0, 2, 0], 1, [0, 0, 1], false, null); }
+  })();
+  await new Promise((r) => setImmediate(r));   // WeakRef targets stay alive for the job that made them
+  gc();
+  assert.equal(ref.deref(), undefined, "FrameLights still pins the last lit track");
 });

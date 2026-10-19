@@ -23,6 +23,16 @@ const BUDGET = 48 * 1024;              // per function: headroom for the +40-lin
 // exist (a rename or a split must update this list, so the guard cannot silently stop covering the step).
 const SIM_HOT = ["update", "updateCar", "updateCarBrakePlan", "updateCarLongitudinal", "updateCarLateral", "updateCarBicycle", "updateCarAdvance"];
 
+// A node build that prints no listing proves nothing: skip locally, but FAIL on CI
+// (or with APEX_REQUIRE_BYTECODE=1) so a runner image change cannot turn the
+// guard into a silent pass.
+const required = () => !!(process.env.CI || process.env.APEX_REQUIRE_BYTECODE === "1");
+function noListing(t) {
+  const why = "this node build prints no bytecode listing";
+  if (required()) assert.fail(`${why} — the bytecode budget cannot be checked (CI / APEX_REQUIRE_BYTECODE=1 require it)`);
+  t.skip(why);
+}
+
 let _sizes = null;
 function bytecodeSizes() {
   if (_sizes) return _sizes;
@@ -42,7 +52,7 @@ function bytecodeSizes() {
 
 test("every function of the physics step compiles under the bytecode budget (TurboFan cap 61,440 B)", (t) => {
   const sizes = bytecodeSizes();
-  if (!sizes.size) { t.skip("this node build prints no bytecode listing"); return; }
+  if (!sizes.size) return noListing(t);
   for (const fn of SIM_HOT) {
     assert.ok(sizes.has(fn), `${fn} not found in js/game.js — update SIM_HOT after a rename or split`);
     const n = sizes.get(fn);
@@ -52,6 +62,6 @@ test("every function of the physics step compiles under the bytecode budget (Tur
 
 test("control: the listing parser reads a real size (a 0-length parse would pass everything)", (t) => {
   const sizes = bytecodeSizes();
-  if (!sizes.size) { t.skip("this node build prints no bytecode listing"); return; }
+  if (!sizes.size) return noListing(t);
   assert.ok(sizes.get("updateCar") > 1000, "updateCar's size was not parsed");
 });

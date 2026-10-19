@@ -43,6 +43,32 @@ export function verdict(base, head, key = "p50", name = "") {
   return d < 0 ? "WIN" : "REGRESS";
 }
 
+/** Saved profiles can only support a verdict when workload AND observed renderer agree.
+ * Unknown/legacy metadata stays readable, but cannot prove a performance change. */
+export function profileScenario({ track, frames, viewport, capture, environment } = {}) {
+  return { version: 1, workload: "race-go-jump-steer-sine-v1", warmupFrames: 20,
+    track, frames, viewport, capture, environment };
+}
+export function profileScenarioSignature(s) {
+  if (!s || s.version !== 1 || s.workload !== "race-go-jump-steer-sine-v1" || s.warmupFrames !== 20 ||
+      typeof s.track !== "string" || !s.track || !Number.isInteger(s.frames) || s.frames < 1 ||
+      !["enabled", "disabled"].includes(s.capture)) return null;
+  const v = s.viewport, e = s.environment;
+  if (!v || ![v.width, v.height, v.deviceScaleFactor].every(x => Number.isFinite(x) && x > 0) ||
+      !e || ![e.backend, e.api, e.device, e.browser].every(x => typeof x === "string" && x.trim())) return null;
+  // Rebuild in a stable field order, ignoring incidental report ordering and extra fields.
+  return JSON.stringify({ version: s.version, workload: s.workload, warmupFrames: s.warmupFrames,
+    track: s.track, frames: s.frames,
+    viewport: { width: v.width, height: v.height, deviceScaleFactor: v.deviceScaleFactor }, capture: s.capture,
+    environment: { backend: e.backend, api: e.api, device: e.device, browser: e.browser } });
+}
+export function profileComparability(base, candidate) {
+  const a = profileScenarioSignature(base?.scenario), b = profileScenarioSignature(candidate?.scenario);
+  if (!a || !b) return { comparable: false, reason: "unknown scenario: missing or incomplete workload/renderer/capture metadata" };
+  return a === b ? { comparable: true, reason: "matching workload, capture and observed renderer" }
+    : { comparable: false, reason: "incompatible workload, capture or observed renderer" };
+}
+
 /** True when a ref's source reads the `apex26.wgxCapture` switch profile.mjs sets to turn the per-frame software
  *  readback off. A base without it still pays the readback, so its numbers are not comparable with HEAD's. */
 export const supportsCaptureKey = (sources) => sources.some((t) => typeof t === "string" && t.includes("apex26.wgxCapture"));
