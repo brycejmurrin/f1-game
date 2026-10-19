@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_011GfV5d4fySADHs6XCFC3Rn #3077 merged 753ca112 (two-parent) by OrchB 4, Level 3 non-game (L25 test hygiene)
+HANDOFF to:* from:codex:ui-ux-a11y-6d6d UI/UX accessibility session owns settings-search.js and focused search regression tests on cursor/settings-discovery-6d6d. Confirmed captions query returns zero, results expose internal page ids. Bounded search discovery fix; no HUD, Garage camera, rendering or shared state edits.
