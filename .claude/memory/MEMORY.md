@@ -23,7 +23,7 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Orchestrator may spawn sessions](orchestrator-may-spawn-sessions.md) — fleet work: launch sibling sessions without asking, tell Bryce each time; respect a single denied launch
 - [MCP allow rules, measured](mcp-allow-rules-measured.md) — read `permission_decision` in list_events; a repo can't approve its own .mcp.json servers (auto mode's classifier does); auto siblings need an auto parent + `source_url`; MDN/BrowserStack prompt regardless (claude.ai connector setting)
 - [Survey PRs merge to assets; cap 5](survey-prs-merge-to-assets-cap5.md) — 2026-10-15: green survey PRs merge into track-survey-assets; full-tier cap 5 while queue ok, 3 on hold
-- [Sessions run Sonnet](sessions-run-sonnet.md) — 2026-10-16: lanes/workers/fresh-session scheduled tasks use claude-sonnet-5-5, never Fable
+- [Worker model by task](worker-model-by-task.md) — 2026-10-19: orchestrator picks Opus or Sonnet per worker (launch-policy §Model by task); never Fable
 - [Fixers may screenshot](fixers-may-screenshot.md) — UI sessions: screenshots and screenshot loops allowed (Bryce 06:37Z 10-17); keep the ~15-min per-defect cap
 - [Lanes keep working](lanes-keep-working.md) — 2026-10-17: lanes pull deploy and take the next item in their area after a dry round; no FINAL unless the area is empty
 - [Ask via AskUserQuestion](ask-via-askuserquestion.md) — decisions/asks for Bryce go through AskUserQuestion with what/why/options explained
