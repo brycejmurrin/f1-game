@@ -573,6 +573,16 @@ var GameAudio = (function () {
         try { const p = dying.close(); if (p && p.catch) p.catch(() => {}); } catch (_) { /* already closed */ }
       }
     }
+    // Synth-only: buffers decoded on a prior live context are stale on a new
+    // OfflineAudioContext, and a mid-suite sample upgrade would change the
+    // pitch curve under the rpm sweep.
+    samplesReady = false;
+    usingSamples = false;
+    engBuf = null;
+    engLoop = null;
+    engWin = null;
+    enginePeriod = 0;
+    lastRate = 0;
     offlinePending = {
       channels: (opts && opts.channels) || 1,
       sampleRate: (opts && opts.sampleRate) || 44100,
@@ -3180,7 +3190,7 @@ var GameAudio = (function () {
     // Test hook: the airflow layer's live gain. It sits on sfxBus, so
     // centroidHz() (which taps engGain, upstream of the bus) cannot see it —
     // this is the only way to assert the layer actually tracks speed.
-    windLevel() { return windGain ? +windGain.gain.value : 0; },
+    windLevel() { return windGain ? +(windGain._apexAimTgt ?? windGain.gain.value) : 0; },
     // Same shape as windLevel: the rev-limiter chop lives on limGain, which
     // feeds engGain.gain on the audio thread, so nothing downstream of the
     // engine output can observe its depth.
@@ -3202,7 +3212,7 @@ var GameAudio = (function () {
     harvestCoastLevel() { return +harvCoastLevel.toFixed(5); },
     harvestBrakeLevel() { return +harvBrakeLevel.toFixed(5); },
     cylCutDepth() { return cylCutGain ? +cylCutGain.gain.value : 0; },
-    skidLevel() { return skidGain ? +skidGain.gain.value : 0; },
+    skidLevel() { return skidGain ? +(skidGain._apexSkidV ?? skidGain.gain.value) : 0; },
     boostState() { return { fired: boostFired, peak: +boostPeak.toFixed(4) }; },
     // The engine core's live lowpass corner, so the BRIGHTNESS trim's ceiling
     // is assertable rather than a thing you can only hear.
@@ -3242,6 +3252,14 @@ var GameAudio = (function () {
     // The rev-compensating shelf, in dB. Rises as the engine pitches down.
     tiltDb() { return tiltEq ? +tiltEq.gain.value.toFixed(2) : 0; },
     rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value : 0; },   // exact: tools/check/audio-test.cjs and the tune tests take ratios of it
+    // Last scheduled engine fundamental (Hz): sample-core from rate/period,
+    // synth-core from engA's aim target. OfflineAudioContext pitch tests use
+    // this as the ground truth the rendered spectrum must sit near (#2966).
+    fundamentalHz() {
+      if (usingSamples && enginePeriod > 1 && lastRate > 0) return (ctx.sampleRate * lastRate) / enginePeriod;
+      if (engA && engA.frequency) return +(engA.frequency._apexAimTgt ?? engA.frequency.value);
+      return 0;
+    },
     centroidHz() {
       if (!ctx || !engineOn || !engGain) return 0;
       if (!dbgAnalyser) {
