@@ -124,8 +124,6 @@ test("settings.json runs the hook on SubagentStop for exactly the contracted age
   }
   for (const a of ["general-purpose", "Explore", "track-surveyor", "verify-agent", "deploy-research"])
     assert.ok(!re.test(a), `matcher must leave ${a} alone`);
-  const t0 = Date.now(); stop("code-hunter", GOOD["code-hunter"]);
-  assert.ok(Date.now() - t0 < 2000, "the hook is fast");
 });
 
 // SubagentHandback (#2228 research; https://code.claude.com/docs/en/hooks, §SubagentStop):

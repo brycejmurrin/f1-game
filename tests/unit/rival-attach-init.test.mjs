@@ -15,6 +15,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -76,7 +77,7 @@ function boot(opts = {}) {
   vm.runInContext(MAT4, v);
   if (!opts.stubRival) {
     vm.runInContext(CONSTS, v);
-    vm.runInContext(RIVALS_SRC, v, { filename: "rivals.js" });
+    vm.runInContext(RIVALS_SRC, v, { filename: absSrc("js/audio/rivals.js") });
   }
   if (opts.spyAttach && !opts.stubRival) {
     const RA = vm.runInContext("RivalAudio", v);
@@ -86,7 +87,7 @@ function boot(opts = {}) {
       return orig(ctx, dest);
     };
   }
-  vm.runInContext(ENGINE_SRC, v, { filename: "engine.js" });
+  vm.runInContext(ENGINE_SRC, v, { filename: absSrc("js/audio/engine.js") });
   return {
     A: vm.runInContext("GameAudio", v),
     RivalAudio: () => vm.runInContext("typeof RivalAudio !== 'undefined' ? RivalAudio : null", v),
@@ -95,7 +96,7 @@ function boot(opts = {}) {
     vm: v,
     loadRivals() {
       vm.runInContext(CONSTS, v);
-      vm.runInContext(RIVALS_SRC, v, { filename: "rivals.js" });
+      vm.runInContext(RIVALS_SRC, v, { filename: absSrc("js/audio/rivals.js") });
       return vm.runInContext("RivalAudio", v);
     },
   };

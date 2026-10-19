@@ -11,6 +11,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => readFileSync(join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -50,7 +51,7 @@ test("CareerUI stub prefetches LAZY_CAREER_UI and defers #cr-garage until Career
     },
   };
   sb.window = sb;
-  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb, { filename: "js/career/career-ui-boot.js" });
+  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb, { filename: absSrc("js/career/career-ui-boot.js") });
 
   const opened = [];
   const G = {
@@ -95,7 +96,7 @@ function delayedCareer() {
     UiLayers: { top: () => state.top, inRace: () => state.racing },
     ScriptLoader: { create: () => ({ load: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) }) },
   };
-  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb);
+  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb, { filename: absSrc("js/career/career-ui-boot.js") });
   const ui = sb.CareerUI.create({
     $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") },
     announce: (message) => messages.push(message),

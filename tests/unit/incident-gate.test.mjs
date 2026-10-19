@@ -20,6 +20,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/physics/incident-sim.js"), "utf8");
@@ -52,10 +53,10 @@ function load(over = {}) {
   });
   seedLog(ctx);
   // js/core/mat4.js first — the shared scalar helpers (M4.clamp) incidentsim.js binds at eval.
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(RACE_SRC, ctx, { filename: "js/race/race-control.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/physics/contact-geometry.js"), "utf8"), ctx);
-  vm.runInContext(SRC, ctx, { filename: "js/physics/incident-sim.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(RACE_SRC, ctx, { filename: absSrc("js/race/race-control.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/contact-geometry.js"), "utf8"), ctx, { filename: absSrc("js/physics/contact-geometry.js") });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/physics/incident-sim.js") });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mkCar = (s) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0,
                           yawRateCur: 0, prog: s, finished: false, retired: false, human: false });
@@ -371,7 +372,7 @@ test("an AI car spun round but still sliding forwards is handed back driving for
   ctx.DebrisWorld = { active: () => true, rapierReady: () => true, worldGen: () => 1,
     promoteCarDynamic() { return true; }, demoteCarKinematic() {}, carBodyPose() { return pose; } };
   vm.createContext(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/physics/contact-geometry.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/contact-geometry.js"), "utf8"), ctx, { filename: absSrc("js/physics/contact-geometry.js") });
   vm.runInContext(SRC + "\nglobalThis.IncidentSim = IncidentSim;", ctx);
   const car = { human: false, s: 500, x: 0, speed: 40, vLat: 0, yawRateCur: 0, head: 0, px: 0, pz: 500, prog: 500 };
   const G = { cars: [car], track: { total: 5000 }, smp: {}, PACE: 1, vTop: () => 72, lapsTarget: 5, raceT: 10,

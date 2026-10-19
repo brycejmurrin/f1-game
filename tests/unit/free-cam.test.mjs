@@ -17,6 +17,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const plain = (v) => JSON.parse(JSON.stringify(v));   // VM-realm arrays fail deepStrictEqual on prototype
@@ -51,7 +52,7 @@ function boot() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/clipboard.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/clipboard.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const FC = vm.runInContext("FreeCam", ctx);
   const G = {
     $: (id) => dom.byId(id), photoCam: { pos: [0, 0, 0], yaw: 0, pitch: 0, fov: 60 },
@@ -247,7 +248,7 @@ test("wired into the real photo mode: speed dial drives the fly-cam, Q rolls, EX
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/clipboard.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js", "js/camera/free-cam.js", "js/camera/photo-cam.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/clipboard.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js", "js/camera/free-cam.js", "js/camera/photo-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, photoCam: { pos: [0, 0, 0], pitch: 0, yaw: 0, fov: 60 },
     photoKeys: {}, photoMouse: {}, photoMove: { x: 0, y: 0 }, photoLook: { x: 0, y: 0 },
@@ -330,7 +331,7 @@ test("snap to a corner on built Monza: the real planner frames it from the outsi
   const { buildContext } = createRequire(import.meta.url)(path.join(ROOT, "tools/track/verify-track.cjs"));
   const Trk = buildContext(undefined, { quiet: true });
   const ctx = Trk._vmContext;
-  for (const f of ["js/ui/track-maps.js", "js/camera/flyby-seq.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/ui/track-maps.js", "js/camera/flyby-seq.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const FC = vm.runInContext("FreeCam", ctx), Fly = vm.runInContext("FlybySeq", ctx);
   const track = Trk.buildCenterline(Trk.LIST.find((d) => d.id === "monza"));
 

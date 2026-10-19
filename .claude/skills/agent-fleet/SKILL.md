@@ -3,7 +3,7 @@ name: agent-fleet
 description: "Use when sessions coordinate: sibling workers, blocked/escalating workers, launch prompts, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, Merge Desk approvals, pacing, peer asks to merge, arm or mark ready, or reading session transcript, commands, MCP calls or subagents."
 ---
 
-# Agent fleet: one orchestrator, many workers
+# Agent fleet: peer orchestrators, many workers
 
 **GitHub is the bus; vendor messaging is the fast path.** Claude, Cursor and
 Grok workers share nothing but the repo, so every fact the orchestrator needs
@@ -26,11 +26,14 @@ Read your role's reference before acting:
   [`references/role-pr-owner.md`](references/role-pr-owner.md) (one PR to
   merged: subscribe, CI watch, check-in, fix reds and conflicts unasked); merge
   holder → [`references/role-merge-holder.md`](references/role-merge-holder.md)
-  (no live Merge Desk: the orchestrator holds the queue at the user's level);
+  (each orchestrator merges its own fleet's PRs at the user's level; Merge Desk is dormant unless designated);
   reviewer → [`references/role-reviewer.md`](references/role-reviewer.md)
   (one pass, findings only, STOP AT 120k);
   fleet watch → [`references/role-fleet-watch.md`](references/role-fleet-watch.md)
-  (one session: PR events + 3-min ticks, routine fixes, no merges, dashboard).
+  (one session: PR events + 3-min ticks, routine fixes, no merges, dashboard);
+  sync → [`references/role-sync.md`](references/role-sync.md) (conflict-only
+  resync lane, the only non-owner that syncs). Titles and tags for every role:
+  `references/launch-policy.md` §Session titles and tags.
 - **Worker** → [`references/worker.md`](references/worker.md): the loop with
   the command for each step, the escalation rule, the hand-back, the traps that
   cost real sessions.
@@ -80,14 +83,15 @@ reference §Escalate).
 
 ## Rules that bind both roles
 
-- Nobody in the fleet merges or arms auto-merge on their own initiative. When a
-  **merge desk** session is live it may arm MERGE (merge commit only, ≤ 2 armed).
-  The **orchestrator** (sole coordinator) merges only at the level in
-  references/role-merge-holder.md — Level 3 merges directly with head-sha pin,
-  one merge per green Pages run, `gen:check` on the merge result first. With
-  no live desk, the orchestrator holds that queue. A hold
-  is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
-  Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0.
+- Authority is standing, not per session (AGENTS.md §Concurrent PRs,
+  `references/authority.md`): each **orchestrator** (a peer; one per fleet)
+  merges its own fleet's PRs when `node tools/ci/merge-gate.mjs --pr <n>`
+  exits 0 (references/role-merge-holder.md: the hooks require that receipt,
+  pinned to the gated head; game PRs take the bus `GAME-SLOT` first), archives
+  by `fleet-archive.mjs`, and never re-asks any of it at a hand-off. Workers
+  never merge or arm (their brief says so). A hold is a PR-body line starting
+  `MERGE-HOLD:`, never "do not merge" wording. Draft → ready only after
+  `node tools/ci/ready-gate.mjs --pr <n>` exits 0 (its receipt, too).
 - One owner per path: OWNED / FORBIDDEN globs in the launch prompt, a
   `who-is-on-it.mjs --claim` before editing, and stand down on overlap.
   A claim's age is the only liveness signal today; a branch pushed in the last

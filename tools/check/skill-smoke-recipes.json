@@ -4,7 +4,7 @@
     {
       "skill": "agent-fleet",
       "task": "Exercise the fleet block keys",
-      "fixture": "tests/unit/agent-fleet.test.mjs",
+      "fixture": "tests/unit/agent-config.test.mjs",
       "pattern": "the\\ fleet\\ block\\ keys",
       "expected": {
         "minPass": 1,

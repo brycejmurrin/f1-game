@@ -16,6 +16,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require2 = createRequire(import.meta.url);
@@ -28,7 +29,7 @@ function loadAeroZones(Tracks) {
   const ctx = Tracks._vmContext;
   const src = fs.readFileSync(path.join(ROOT, "js/physics/aero-zones.js"), "utf8")
     .replace(/^const\b/gm, "var");
-  vm.runInContext(src, ctx, { filename: "js/physics/aero-zones.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/physics/aero-zones.js") });
   return ctx.AeroZones;
 }
 

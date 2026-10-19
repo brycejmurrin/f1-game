@@ -6,9 +6,9 @@
  *   node tools/ci/measure-pr-ci-after-close.mjs --hours 24
  *   node tools/ci/measure-pr-ci-after-close.mjs --hours 24 --json
  *
- * GET-only GitHub API via ready-full-cap.mjs `api()`.
+ * GET-only GitHub API via github-api.mjs `api()`.
  */
-import { api, CI_PATH, DEPLOY, REPO } from "./ready-full-cap.mjs";
+import { api, CI_PATH, DEPLOY, REPO } from "./github-api.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const MS_MIN = 60_000;

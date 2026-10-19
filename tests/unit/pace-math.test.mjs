@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -26,9 +27,9 @@ function load() {
   ctx.globalThis = ctx;
   ctx.window = ctx;
   vm.createContext(ctx);
-  vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", ctx);
-  vm.runInContext(read("js/physics/consts.js"), ctx);
-  vm.runInContext(read("js/race/pace-math.js") + "\nthis.PaceMath = PaceMath;", ctx);
+  vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/physics/consts.js"), ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(read("js/race/pace-math.js") + "\nthis.PaceMath = PaceMath;", ctx, { filename: absSrc("js/race/pace-math.js") });
   const api = ctx.PaceMath.create({
     getPACE: () => PACE,
     getVMAX: () => ctx.PhysicsConsts.VMAX,

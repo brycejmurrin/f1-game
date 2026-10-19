@@ -5,8 +5,9 @@
 // destroyed and re-created those GPU textures (Safari's WebGPU keeps a destroyed texture's memory while a bind
 // group that used it waits for GC: WebKit #76225), and every colour's flap set stayed cached (up to 64) with a
 // hidden coalesced TLX run per set: edit N paid for N - 1 paint jobs nobody could see.
-// Contract, measured on the shipped TLX backend: after a warm-up, N more WING colour edits (the flap key; each a
-// colour never seen before, as a dragged picker gives) create NO new GPU textures, and once the edits pause the
+// Contract, measured on the shipped TLX backend: after a warm-up, N more SECONDARY colour (`c2`) edits create NO new
+// GPU textures (c2 is the flap key while the draft sets no own wing colour: wingColorOf = wing || c2 || team.color2;
+// each edit a colour never seen before, as a dragged picker gives), and once the edits pause the
 // next edit leaves the flap meshes, coalesced runs, textures and settled TLX live geometries where the warm-up
 // left them.
 // THE LEAKING CACHE, COUNTED DIRECTLY: CarMesh.flapState() — the base held one more set per wing colour.

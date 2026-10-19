@@ -1,3 +1,7 @@
+## Contents
+
+- Launch policy (moved from AGENTS.md §Concurrent PRs)
+
 ## Launch policy (moved from AGENTS.md §Concurrent PRs)
 
 Binding on every orchestrator, desk or person writing a cloud launch prompt.
@@ -12,6 +16,20 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   - `claude-sonnet-5-5`: everything else: port a known fix, sync, one screen's CSS, tests, docs, PR babysitting, surveys.
   - A Sonnet worker that finds the task is Opus-shaped sets `needs-decision` rather than grinding; never Fable for a worker.
     An Opus lane keeps the Sonnet cost cap (below). Never invent another id. Own notes go to `docs/notes/<topic>.md`.
+- **Session titles and tags** (FLEET-ROLES-2026-10-19.md §4-5; Bryce 2026-10-19 ~18:00Z, "Land it as proposed"). Every
+  `create_session` sets `title` and `tags`; the same ids go in the fleet block (`fleet:`, `slot:`), claims (`[<Fleet>·<Slot>]`
+  prefix, real `--session` id) and bus lines (text starts `<Fleet>·<Slot>`).
+  - Title: `[<Role>] <Fleet>·<Slot> · <scope> · <Model> — <task, ≤ 60 chars>`. Role ∈ Orchestrator | Watch | Worker | Hunter | Owner |
+    Sync | Review | Coordinator | Merge Desk. Fleet = one capital letter per orchestrator fleet (survives rotation). Slot: Orchestrator
+    `O<gen>`, Watch `FW<n>`, Worker `W<wave>·L<lane>`, Hunter `H<n>·<lane>`, Owner/Sync `#<PR>`, Review `R<n>·#<PR>`, Coordinator `<host>`.
+    Scope ∈ game | tests | tools | docs | track | ui | ci | fleet (game = js/, css/, assets/, index.html, sw.js: paced). Model = Opus | Sonnet.
+  - Tags: `fleet:<a|b>`, `role:<orchestrator|watch|worker|hunter|owner|sync|review|merge-desk>`, `orchestrator:<session id>`,
+    `wave:<n>`, `lane:<Lnn|sync|…>`, `scope:<…>`, `pr:<n>` (owner, sync, review), `variant:<medic|survey|synth>`; plus the flag `f1-game-fleet`.
+  - Examples: `[Orchestrator] B·O1 · fleet · Opus — backlog waves, own-fleet gated merges` · `[Watch] B·FW1 · fleet · Sonnet — PR/CI/session watch`
+    · `[Worker] B·W1·L3 · tests · Sonnet — L25 agent-config budgets` · `[Hunter] B·H2·physics · game · Opus — live-debugger round 1`
+    · `[Owner] A·#3020 · game · Sonnet — drive #3020 to merged` · `[Sync] A·#2920 · game · Sonnet — conflict-only resync`
+    · `[Review] B·R1·#3053 · tests · Sonnet — test-review pass` · `[Coordinator] C·cursor · fleet · — Cursor agents (title in PR comments/bus)`
+    · `[Merge Desk] A·MD · fleet · Sonnet — sweep (only when designated)`. Variants: medic (ship-red fix, claim + INCIDENT link), survey, synth.
 - Lane mutex: garage CSS → UI Survey; `js/car/*` → Cars; scenery (`js/circuits/scenery/*`) → Tracks; `js/game.js` needs `who-is-on-it --claim` before an edit. Lighting: ≤ 1 concurrent lighting agent, OWNED=`js/lighting/**` only, no scenery PRs from that lane.
 - Review farm: ≤ 2 concurrent review agents unless the user overrides. ≤ 2 parallel nested subagents inside one cloud agent; more → separate agents with disjoint OWNED.
 - Resolve swarm: only red/dirty PRs with no specialist owner (capped); one `--claim` per PR; stand down if a specialist already owns the paths.
@@ -42,7 +60,7 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 - Pin long Chromium/visual smoke to `apex-sha` or the PR's Pages preview; never bind a loop to the moving production github.io (tip-vs-Pages is Monitor-only).
 - Sync agents: sync with `sync-pr.mjs` only when GitHub reports CONFLICTING/DIRTY or a required tip check is red; a Finish/Update run syncs only if CONFLICTING; one Sync agent per PR (refuse duplicates); ONE conflict-only resync lane serves the queue: it takes only PRs `needs-sync.mjs` rates `conflict` or `stale-red`, never a clean-behind one;
   never Sync and merge in one run (`behind-ship.mjs` warns over 10 behind, never fails). No auto-update-branch bots.
-  `sync-pr.mjs --force-clean-behind` is for the orchestrator or merge desk only;
+  `sync-pr.mjs --force-clean-behind` is for the PR's own orchestrator (or a designated merge desk) only;
   owners and hunters never pass it.
   Abort or stop and report a Finish/Update run past ~120 messages or > 2 tip moves with no progress while clean-behind.
   Normalize a messy merge with `node tools/check/merge-hygiene.mjs --fix`, then `gen-test-groups.mjs`.
@@ -80,8 +98,10 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   about 40 %; Opus to Sonnet halves them again. Keep tool results small (comms.md §Output budget), route verbose reads through a subagent.
 - **Monitoring and reporting.** Every hunter and PR-owner launch prompt carries the block in `role-pr-owner.md` §Monitoring and reporting
   (own the PR to merged or STOP AT; `fleet-status:` line in the fleet block plus a PR comment per state change; decisions to the orchestrator via needs-decision).
-- **Desk field.** Every launch prompt carries `merge_desk: <session id | none>`; `none` means the lane reports `SWEEP-N/A` and never runs
-  `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16).
+- **No desk field.** READY goes to the lane's own orchestrator (`ORCHESTRATOR:` in the brief); no Merge Desk exists
+  unless Bryce designates one, and a lane never runs `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16).
+  The standing rules (merge by `merge-gate`, archive by rule, Plan edits, Pages dispatch) are AGENTS.md §Concurrent PRs
+  and are never quoted as grants or re-asked (2026-10-19).
 - **Before launching an owner:** `who-is-on-it.mjs`, armed auto-merge, PR `updated_at` < 15 min. Skip a PR that is armed and green or is
   being driven (6 owners did no work on 2026-10-17).
 - **Hunters and perf lanes:** stop after the first zero-finding round and put the note in the single docs PR (5 of 13 debugger hunts and

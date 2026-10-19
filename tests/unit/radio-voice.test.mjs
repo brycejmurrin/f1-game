@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 // VM timers are UNREF'd: they still fire while a test awaits, but a cue the
 // module schedules seconds ahead no longer holds the process open after the
 // last assertion (measured 2026-09-24: this file sat idle for most of its run).
@@ -57,7 +58,7 @@ function load({ api = true, voices = [], stored = {} } = {}) {
   const synth = api ? synthStub({ voices }) : null;
   ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
   ctx.GameAudio = { setRadioDuck() {} };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
   return { RV, G, synth, saved, ctx };
@@ -466,7 +467,7 @@ function loadWithSynth(synth) {
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } };
   return { voice: RV.create(G), ducks };
@@ -527,7 +528,7 @@ test("an engine that ends an utterance inside speak() releases ownership without
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const voice = RV.create({ soundOn: true, state: "race",
     store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
@@ -611,7 +612,7 @@ test("LAZY_AUDIO: after the inert stub, create() re-primes on the next valid ges
   ctx.document = doc;
   ctx.MutationObserver = function () { this.observe = () => {}; };
   ctx.GameAudio = { setRadioDuck() {} };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = { soundOn: true, state: "race", store: { get: (_k, d) => d, set: () => {} } };
 
@@ -658,7 +659,7 @@ test("debug() separates what we asked for from what the engine started", async (
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck() {} };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const voice = RV.create({ soundOn: true, state: "race",
     store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
@@ -778,7 +779,7 @@ test("a preempt during the cue cancels the line waiting behind it", () => {
   const synth = synthStub({ voices: [{ name: "A", lang: "en-GB", localService: true }] });
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck() {} };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const saved = new Map([["radioVoice", true]]);
   const v = vm.runInContext("RadioVoice", ctx).create({
     soundOn: true, state: "race",
@@ -893,7 +894,7 @@ test("the pause card and a hidden tab cut the SPOTTER channel too, not only the 
     addEventListener: (t, fn) => { listeners[t] = fn; },
   };
   ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const G = { soundOn: true, state: "race", store: { get: (k, d) => d, set() {} } };
   vm.runInContext("RadioVoice", ctx).create(G);
   const onPause = observers.find((o) => o.el === pause);
@@ -938,7 +939,7 @@ test("a rotate-block pause that re-hides the card in the same task still halts r
     addEventListener() {},
   };
   ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (k === "radioVoice" ? true : k === "radioPack" ? true : d), set() {} } };
   const v = vm.runInContext("RadioVoice", ctx).create(G);
   assert.equal(v.say("BOX BOX BOX", 3, "info", 0.5), true);
@@ -985,7 +986,7 @@ test('in-race commentary uses the announcer voice ladder while excluding network
   const q = load({ voices: [
     {name:'Alex',lang:'en-US',localService:true}, {name:'Daniel',lang:'en-GB',localService:true},
     {name:'Online Daniel',lang:'en-GB',localService:false}], stored: {voiceTune:{announcer:{name:'Online Daniel'}}} });
-  vm.runInContext(read('js/audio/announcer.js'), q.ctx);
+  vm.runInContext(read('js/audio/announcer.js'), q.ctx, { filename: absSrc("js/audio/announcer.js") });
   q.G.announcer = { enabled: () => true };
   const v = q.RV.create(q.G); v.say('Final lap',4,'comm'); await flush();
   const call = q.synth.calls.find(c => c.m === 'speak');
@@ -1238,7 +1239,7 @@ test("race mix audition stops only the preview generation it started", () => {
   const { RV, G, synth, ctx } = load({ voices: [{ name: "Local", lang: "en-US", localService: true }] });
   const timers = new Map(); let next = 0;
   ctx.setTimeout = (fn, ms) => { timers.set(++next, { fn, ms }); return next; }; ctx.clearTimeout = (id) => timers.delete(id);
-  vm.runInContext(read("js/audio/race-mix-audition.js"), ctx);
+  vm.runInContext(read("js/audio/race-mix-audition.js"), ctx, { filename: absSrc("js/audio/race-mix-audition.js") });
   const audition = vm.runInContext("RaceMixAudition", ctx), voice = RV.create(G);
   const audio = { enabled: () => true, init() {}, debug: () => ({ engineOn: false }), currentTrackId: () => "existing", musicBackend: () => null };
   const store = { get: (key, d) => key === "sfx" ? false : key === "radioVoice" ? true : d };
@@ -1280,8 +1281,8 @@ async function loadWithEngine({ mobile = false } = {}) {
   const audio = fakeAudio.install(sb);
   const ctx = vm.createContext(sb);
   seedLog(ctx);
-  vm.runInContext(ENGINE_FILES.map(read).join("\n").replace(/^const\b/gm, "var"), ctx, { filename: "engine.js" });
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(ENGINE_FILES.map(read).join("\n").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/audio/engine.js") });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const GameAudio = vm.runInContext("GameAudio", ctx);
   const RV = vm.runInContext("RadioVoice", ctx);
   GameAudio.init();
@@ -1321,7 +1322,7 @@ for (const mobile of [false, true]) {
 
 test("the title stub exposes context() → null, and the squelch stays silent on it (#2189)", () => {
   const sc = vm.createContext({});
-  vm.runInContext(read("js/audio/stub.js"), sc);
+  vm.runInContext(read("js/audio/stub.js"), sc, { filename: absSrc("js/audio/stub.js") });
   assert.equal(vm.runInContext("GameAudio.context()", sc), null);
   assert.equal(vm.runInContext("GameAudio.sfxBus()", sc), null);
 });

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = fs.readFileSync(path.join(ROOT, 'js/ui/settings-export.js'), 'utf8');
@@ -26,8 +27,8 @@ function boot() {
     localStorage: { get length() { return disk.size; }, key: (i) => Array.from(disk.keys())[i], getItem: (k) => disk.get(k) ?? null },
   });
   ctx.window = ctx;
-  for (const path of ['js/core/mat4.js','js/physics/consts.js','js/garage/setup-tune.js','js/garage/setup-presets.js','js/input/controller-profiles.js']) vm.runInContext(fs.readFileSync(ROOT + '/' + path, 'utf8'), ctx, { filename: path });
-  const api = vm.runInContext(source + ';SettingsExport', ctx, { filename: 'js/ui/settings-export.js' });
+  for (const path of ['js/core/mat4.js','js/physics/consts.js','js/garage/setup-tune.js','js/garage/setup-presets.js','js/input/controller-profiles.js']) vm.runInContext(fs.readFileSync(ROOT + '/' + path, 'utf8'), ctx, { filename: absSrc(path) });
+  const api = vm.runInContext(source + ';SettingsExport', ctx, { filename: absSrc("js/ui/settings-export.js") });
   const tune = vm.runInContext('SetupTune.defaults("mercedes")', ctx);
   return { api, tune: plain(tune), disk, writes, store, G: { gfx: { isMobile: false } }, ctx,
     settings: (driving, display) => api.applySettings({ format: api.FORMAT, settings: { driving, display } }),

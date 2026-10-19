@@ -899,7 +899,7 @@
    "tests/unit/ratchet-reason.test.mjs",
    "tests/unit/ratchets-fold-schedule.test.mjs",
    "tests/unit/ratchets.test.mjs",
-   "tests/unit/ready-full-cap.test.mjs",
+   "ready-full-cap (deleted, #3013)",
    "tests/unit/ready-gate.test.mjs",
    "tests/unit/reject-lint.test.mjs",
    "tests/unit/release-provenance.test.mjs",

@@ -37,6 +37,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
@@ -50,7 +51,7 @@ function load() {
   ctx.window = ctx;   // js/physics/consts.js assigns window.PhysicsConsts
   seedLog(ctx);
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/body-attitude.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const cars = [];
   const G = { cars, player: null };
   const api = vm.runInContext("BodyAttitude", ctx).create(G);

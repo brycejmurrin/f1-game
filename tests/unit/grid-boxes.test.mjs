@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -288,7 +289,7 @@ for (const curvature of [0, 0.01]) {
       vm.runInNewContext(readFileSync(file, "utf8"), {
         require: load, module: mod, __dirname: path.dirname(file), process: proc,
         console: { log: (line) => output.push(line) },
-      }, { filename: file });
+      }, { filename: absSrc(file) });
       assert.equal(proc.exitCode || 0, curvature ? 1 : 0);
       if (asJson) {
         assert.equal(output.length, 1, "JSON stdout contains only the structured report");

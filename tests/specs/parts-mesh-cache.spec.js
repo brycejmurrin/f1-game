@@ -380,10 +380,17 @@ test.describe("Parts mesh caches — eviction bounds", () => {
   });
 
   test("race warm-up builds the shadow casters, so lights-out builds none", async ({ page }) => {
+    // A Monza race() plus 30 drawn frames under SwiftShader: past the 120 s default here (C2-06).
+    test.slow();
     // The car shadow pass fetches teamMesh(team, car, true) for every car in range
     // on its first frame; warmCarAssets builds the same keys behind the loading
     // cover (js/car/car-draw.js). Count silhouette builds in race() vs the frames
-    // after go(), and count caster passes so a run with shadows shed is visible.
+    // after go(), and count caster passes.
+    //
+    // SHADOWS ARE FORCED ON, NOT HOPED FOR. With casters shed (LT.carShadow off,
+    // or the governor at tier 3) frames === 0 holds trivially and the test proved
+    // nothing. govHold pins the feature ladder where the title left it, and the
+    // test FAILS when no caster pass ran — a shed run is a red, not a pass.
     await toMenu(page);
     await page.evaluate(() => {
       const probe = { phase: "warm", warm: 0, frames: 0, passes: 0 };
@@ -394,29 +401,46 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       };
       const begin = GLX.carShadowBegin;
       GLX.carShadowBegin = function () { if (probe.phase === "frames") probe.passes++; return begin.apply(this, arguments); };
+      const carShadow = LightTune.LT.carShadow;
       window.__casterProbe = probe;
+      window.__casterUndo = () => {
+        Car3D.build = build;
+        GLX.carShadowBegin = begin;
+        LightTune.LT.carShadow = carShadow;
+        window.__apex.govHold(false);
+      };
+      window.__apex.govHold(true);
+      LightTune.LT.carShadow = 1;   // before race() too, so the warm-up wants casters
       // A warm cache would make every count 0: drop it AFTER the hook (as below).
       if (window.__apex.clearCarMeshCaches) window.__apex.clearCarMeshCaches();
     });
-    await pinFreePlay(page);
-    await page.evaluate(async () => {
-      // headless(false) BEFORE race(): the warm-up skips casters for a headless
-      // race, because no shadow pass runs there.
-      window.__apex.headless(false);
-      await window.__apex.race("monza");
-    });
-    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
-    const probe = await page.evaluate(() => {
-      const p = window.__casterProbe;
-      p.phase = "frames";
-      window.__apex.headless(false);
-      window.__apex.go();
-      for (let i = 0; i < 30; i++) window.__apex.snapCam(1 / 60);
-      return { warm: p.warm, frames: p.frames, passes: p.passes };
-    });
-    test.info().annotations.push({ type: "casters", description: JSON.stringify(probe) });
-    expect(probe.frames, "silhouette builds after go() " + JSON.stringify(probe)).toBe(0);
-    if (probe.passes > 0) expect(probe.warm, "casters built in race() " + JSON.stringify(probe)).toBeGreaterThan(0);
+    try {
+      await pinFreePlay(page);
+      await page.evaluate(async () => {
+        // headless(false) BEFORE race(): the warm-up skips casters for a headless
+        // race, because no shadow pass runs there.
+        window.__apex.headless(false);
+        await window.__apex.race("monza");
+      });
+      await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
+      const probe = await page.evaluate(() => {
+        const p = window.__casterProbe;
+        // ...and again after it, in case race() re-applied the track's lighting.
+        LightTune.LT.carShadow = 1;
+        const gov = window.__apex.govHold();
+        p.phase = "frames";
+        window.__apex.headless(false);
+        window.__apex.go();
+        for (let i = 0; i < 30; i++) window.__apex.snapCam(1 / 60);
+        return { warm: p.warm, frames: p.frames, passes: p.passes, tier: gov.tier };
+      });
+      test.info().annotations.push({ type: "casters", description: JSON.stringify(probe) });
+      expect(probe.passes, "a car caster pass ran after go() (shadows not shed) " + JSON.stringify(probe)).toBeGreaterThan(0);
+      expect(probe.frames, "silhouette builds after go() " + JSON.stringify(probe)).toBe(0);
+      expect(probe.warm, "casters built in race() " + JSON.stringify(probe)).toBeGreaterThan(0);
+    } finally {
+      await page.evaluate(() => { if (window.__casterUndo) window.__casterUndo(); delete window.__casterUndo; delete window.__casterProbe; });
+    }
   });
 
   test("player wheel centres stay on the road while the chassis pitches under braking", async ({ page }) => {
