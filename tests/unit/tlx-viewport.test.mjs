@@ -126,3 +126,33 @@ test("enabled: uv(view) is bound to the view's size uniform", () => {
   assert.equal(u.op, "div", "screenCoordinate.xy / size");
   assert.equal(u.a[1], v.size);
 });
+
+
+test("scoped readers share live layouts and retire independently of unscoped readers", () => {
+  const { VP } = load(true), texture = {};
+  const root = VP.tex({ value: texture });
+  const old = VP.scope(), next = VP.scope();
+  let retiredReads = 0;
+  const retired = old.tex({ get value() { retiredReads++; return texture; } });
+  const surviving = next.tex({ value: texture });
+  VP.layout(texture, 20, 10, 40, 40);
+  VP.sync();
+  assert.deepEqual([root.ratio.value.x, surviving.ratio.value.y], [0.5, 0.25]);
+  assert.equal(retiredReads, 1);
+  old.dispose(); old.dispose();
+  VP.layout(texture, 10, 20, 40, 40);
+  VP.sync();
+  assert.equal(retiredReads, 1, "retired nodes are no longer read during frame sync");
+  assert.deepEqual([retired.ratio.value.x, retired.ratio.value.y], [0.5, 0.25]);
+  assert.deepEqual([root.ratio.value.x, surviving.ratio.value.y], [0.25, 0.5], "same texture layout stays live for remaining readers");
+  assert.equal(VP.wrapperCount(), 2);
+  next.dispose();
+  assert.equal(VP.wrapperCount(), 1, "scope release preserves the pre-existing unscoped API");
+});
+
+test("disabled scope preserves texture node identity and registers no readers", () => {
+  const { VP } = load(false), scope = VP.scope(), node = { value: null };
+  assert.equal(scope.tex(node), node);
+  scope.dispose(); scope.dispose();
+  assert.equal(VP.wrapperCount(), 0);
+});

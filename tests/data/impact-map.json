@@ -13258,13 +13258,19 @@
       "layout": [
         "tests/unit/tlx-viewport.test.mjs"
       ],
+      "scope": [
+        "tests/unit/tlx-viewport.test.mjs"
+      ],
       "sync": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-viewport.test.mjs"
       ],
       "view": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-viewport.test.mjs"
       ],
       "viewport": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-viewport.test.mjs"
       ]
     },

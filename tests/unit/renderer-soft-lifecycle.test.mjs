@@ -46,6 +46,7 @@ function postHarness(factoryThrows = false) {
   }
   class QuadMesh { constructor() { this.material = null; } }
   const THREE = {
+    Vector2: class { constructor(x, y) { this.x = x; this.y = y; } set(x, y) { this.x = x; this.y = y; } },
     DataTexture, DepthTexture, RenderTarget, QuadMesh, Texture,
     NoColorSpace: "none", HalfFloatType: "f16", UnsignedByteType: "u8",
     RGBAFormat: "rgba", LinearFilter: "linear",
@@ -53,6 +54,11 @@ function postHarness(factoryThrows = false) {
   const renderer = { backend: {}, autoClear: true, setRenderTarget() {} };
   const TLXShaders = {
     post(_THREE, _TSL, ctx) {
+      if (ctx.vp) {
+        ctx.vp.view();
+        ctx.vp.tex({ value: ctx.sceneTex });
+        ctx.vp.tex({ value: ctx.sceneDepthTex });
+      }
       for (let i = 0; i < 2; i++) {
         const material = new Disposable(made.materials);
         ctx.trackMaterial(material);
@@ -72,10 +78,13 @@ function postHarness(factoryThrows = false) {
     { filename: absSrc("js/render/shared/post-common.js") });
   vm.runInNewContext(read("js/render/three/tlx-post.js"), sandbox,
     { filename: absSrc("js/render/three/tlx-post.js") });
+  vm.runInNewContext(read("js/render/three/tsl-viewport.js"), sandbox,
+    { filename: absSrc("js/render/three/tsl-viewport.js") });
   return {
     made,
-    create: () => sandbox.window.TLXShaders.postChain(THREE, {}, {
-      renderer, chunks: {}, shadow: null,
+    viewport: () => sandbox.window.TLXShaders.viewport(THREE, { uniform: (value) => ({ value }) }, { enabled: true }),
+    create: (options = {}) => sandbox.window.TLXShaders.postChain(THREE, {}, {
+      renderer, chunks: {}, shadow: null, ...options,
     }),
   };
 }
@@ -197,6 +206,25 @@ test("TLX post construction failure unwinds targets, textures, and tracked mater
   for (const texture of h.made.data) assert.equal(texture.disposeCount, 1);
   for (const texture of h.made.depth) assert.equal(texture.disposeCount, 1);
   for (const material of h.made.materials) assert.equal(material.disposeCount, 1);
+});
+
+test("TLX post disposal releases only its viewport readers, including failed construction", () => {
+  const h = postHarness(), VP = h.viewport(), sceneView = VP.view();
+  sceneView.set(672, 378);
+  const old = h.create({ fixedTargets: true, vp: VP });
+  const successor = h.create({ fixedTargets: true, vp: VP });
+  assert.equal(VP.wrapperCount(), 4, "both graphs registered their two readers");
+  old.dispose();
+  old.dispose();
+  assert.equal(VP.wrapperCount(), 2, "old disposal is idempotent and preserves the successor");
+  const failed = postHarness(true);
+  assert.throws(() => failed.create({ fixedTargets: true, vp: VP }), /post graph failed/);
+  assert.equal(VP.wrapperCount(), 2, "partial graph registrations unwind without clearing the successor");
+  VP.sync();
+  sceneView.set(480, 270);
+  assert.deepEqual([sceneView.size.value.x, sceneView.size.value.y], [480, 270], "sky's shared view survives both cleanup paths");
+  successor.dispose();
+  assert.equal(VP.wrapperCount(), 0, "no disposed graph remains registered");
 });
 
 test("TLX soft blit pools the unstride buffer and writes ImageData in one pass", () => {

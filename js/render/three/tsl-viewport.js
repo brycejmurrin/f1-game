@@ -32,18 +32,15 @@
     const enabled = !!(opts && opts.enabled);
     const { uniform, vec2, min, screenUV, screenCoordinate } = TSL;
     const layouts = new WeakMap();   // texture -> { lw, lh, pw, ph }
-    const wrappers = [];
-    const views = [];
+    const wrappers = new Set();
 
     /** An output-size slot: a pass sets the logical size of the target it draws. */
     function view() {
       const size = uniform(new THREE.Vector2(1, 1));
-      const v = {
+      return {
         size,
         set(w, h) { size.value.set(w, h); },
       };
-      views.push(v);
-      return v;
     }
 
     /** The 0..1 image uv of the fragment over the output's logical size (top-left origin). */
@@ -62,8 +59,26 @@
         get value() { return node.value; },
         set value(t) { node.value = t; },
       };
-      wrappers.push(w);
+      wrappers.add(w);
       return w;
+    }
+
+    /** Post graphs share layouts with the sky, but own their texture readers.
+     * Releasing one graph must not clear a successor graph's registrations. */
+    function scope() {
+      const owned = new Set();
+      return {
+        enabled, view, uv,
+        tex(node) {
+          const w = tex(node);
+          if (enabled) owned.add(w);
+          return w;
+        },
+        dispose() {
+          for (const w of owned) wrappers.delete(w);
+          owned.clear();
+        },
+      };
     }
 
     function layout(t, lw, lh, pw, ph) {
@@ -75,8 +90,7 @@
 
     /** Push every wrapper's bound-texture rect into its uniforms (once per frame). */
     function sync() {
-      for (let i = 0; i < wrappers.length; i++) {
-        const w = wrappers[i];
+      for (const w of wrappers) {
         const L = layouts.get(w.node.value);
         if (L) {
           w.ratio.value.set(L.lw / L.pw, L.lh / L.ph);
@@ -88,7 +102,7 @@
       }
     }
 
-    return { enabled, view, uv, tex, layout, layoutOf, sync, wrapperCount: () => wrappers.length };
+    return { enabled, view, uv, tex, scope, layout, layoutOf, sync, wrapperCount: () => wrappers.size };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { viewport });

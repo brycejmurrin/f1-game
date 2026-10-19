@@ -67,6 +67,7 @@
     const ownedTextures = new Set();
     const ownedMaterials = new Set();
     let quad = null;
+    let viewportScope = null;
     let disposed = false;
     function ownRT(rt) { ownedRTs.add(rt); return rt; }
     function ownTexture(tex) { if (tex) ownedTextures.add(tex); return tex; }
@@ -75,6 +76,7 @@
       if (disposed) return;
       disposed = true;
       if (quad) quad.material = null;
+      if (viewportScope) viewportScope.dispose();
       for (const mat of ownedMaterials) {
         try { mat.dispose(); } catch (_) { /* device already dying */ }
       }
@@ -173,6 +175,7 @@
     // is rtSetSize and nothing else here changes.
     const VP = ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
+    viewportScope = fixed ? VP.scope() : null;
     let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
 
     // render-target helpers
@@ -364,7 +367,7 @@
       chunks: ctx.chunks, shadow,
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
-      trackMaterial, vp: fixed ? VP : null,
+      trackMaterial, vp: viewportScope,
     });
     ownTexture(P.composite && P.composite.grOffTex);   // the godray slot's own "off" black
     if (P.composite && P.composite.U) P.composite.U.sceneHdr.value = _sceneHdr;
