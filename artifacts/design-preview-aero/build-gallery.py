@@ -29,6 +29,6 @@ for c in C:
     cards.append(f'''<section class="cand" id="{cid}"><header><span class="rank">#{c["rank"]}</span><h2>{c["name"]}</h2><code>{c["cat"]}/{cid} · {c["field"]}: 1</code></header>
 <p class="what">{c["what"]}</p><p class="src"><b>Real car:</b> {c["source"]} · <b>Clones:</b> {base} (same cost and stats)</p>
 <div class="refs">{refhtml}</div>{rows}</section>''')
-html = open(D + "/gallery-template.html").read().replace("%%CARDS%%", "\n".join(cards))
+html = open(D + "/gallery-template.built.html").read().replace("%%CARDS%%", "\n".join(cards))
 html = html.replace("%%TOC%%", "".join(f'<a href="#{c["id"]}"><span>#{c["rank"]}</span> {c["name"]}</a>' for c in C))
 open(D + "/aero-preview.html", "w").write(html); print(len(html)//1024, "KB")

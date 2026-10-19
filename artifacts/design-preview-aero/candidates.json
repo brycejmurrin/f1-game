@@ -1,8 +1,68 @@
 [
- {"id":"x_wings","base":"rake_setup","cat":"aero","field":"xwing","ref":"xwing","rank":0,"name":"X-Wings","source":"Tyrrell 025, 1997 (banned mid-1998)","what":"A winglet on a tall pylon at each sidepod shoulder beside the cockpit, with small end fences. Adds a new silhouette element no current part has."},
- {"id":"bridge_wing","base":"medium","cat":"aero","field":"fwBridge","ref":"bridge","rank":0,"name":"Bridge Wing","source":"McLaren MP4-23, 2008 (also Renault R28)","what":"A raised front-wing element arched over the nose on two struts off the main plane, so the nose reads through a gap."},
- {"id":"beam_twin","base":"high","cat":"aero","field":"beam2","ref":"beam2","rank":0,"name":"Twin Beam Wing","source":"Red Bull RB19, 2023 (2022-25 ground-effect grid)","what":"Two stacked beam-wing planes between the diffuser and the main plane, with side mounts, clear of the rain light."},
- {"id":"double_diffuser","base":"gurney_edge","cat":"floor","field":"ddiff","ref":"ddiff","rank":0,"name":"Double Diffuser","source":"Brawn BGP 001, 2009","what":"An upper diffuser deck stacked over the two legal tunnels, with its own outer walls, feed slots at the step and a raised exit lip."},
- {"id":"monkey_seat","base":"extreme","cat":"aero","field":"monkey","ref":"monkey","rank":0,"name":"Monkey Seat","source":"Mercedes F1 W07, 2016 (2014-17 grid)","what":"A small twin-plane winglet on a single pylon over the crash structure, under the main rear wing."},
- {"id":"spoon_wing","base":"low","cat":"aero","field":"rwSpoon","ref":"spoon","rank":0,"name":"Spoon Wing","source":"Ferrari F1-75, 2022 (Red Bull RB18 low-drag)","what":"The rear main plane gets a deep centre chord and narrow, dropped tips. The upper flap is the active-aero flap owned by another lane, so it stays flat and hides part of the shape."}
+ {
+  "id": "x_wings",
+  "base": "rake_setup",
+  "cat": "aero",
+  "field": "xwing",
+  "ref": "xwing",
+  "rank": 1,
+  "name": "X-Wings",
+  "source": "Tyrrell 025, 1997 (banned mid-1998)",
+  "what": "A winglet on a tall pylon at each sidepod shoulder beside the cockpit, with small end fences. Adds a new silhouette element no current part has."
+ },
+ {
+  "id": "bridge_wing",
+  "base": "medium",
+  "cat": "aero",
+  "field": "fwBridge",
+  "ref": "bridge",
+  "rank": 2,
+  "name": "Bridge Wing",
+  "source": "McLaren MP4-23, 2008 (also Renault R28)",
+  "what": "A raised front-wing element arched over the nose on two struts off the main plane, so the nose reads through a gap."
+ },
+ {
+  "id": "double_diffuser",
+  "base": "gurney_edge",
+  "cat": "floor",
+  "field": "ddiff",
+  "ref": "ddiff",
+  "rank": 3,
+  "name": "Double Diffuser",
+  "source": "Brawn BGP 001, 2009",
+  "what": "An upper diffuser deck stacked over the two legal tunnels, with its own outer walls, feed slots at the step and a raised exit lip."
+ },
+ {
+  "id": "beam_twin",
+  "base": "high",
+  "cat": "aero",
+  "field": "beam2",
+  "ref": "beam2",
+  "rank": 4,
+  "name": "Twin Beam Wing",
+  "source": "Red Bull RB19, 2023 (2022-25 ground-effect grid)",
+  "what": "Two stacked beam-wing planes between the diffuser and the main plane, with side mounts, clear of the rain light."
+ },
+ {
+  "id": "spoon_wing",
+  "base": "low",
+  "cat": "aero",
+  "field": "rwSpoon",
+  "ref": "spoon",
+  "rank": 5,
+  "name": "Spoon Wing",
+  "source": "Ferrari F1-75, 2022 (Red Bull RB18 low-drag)",
+  "what": "The rear main plane gets a deep centre chord and narrow, dropped tips. The upper flap is the active-aero flap owned by another lane, so it stays flat and hides part of the shape."
+ },
+ {
+  "id": "monkey_seat",
+  "base": "extreme",
+  "cat": "aero",
+  "field": "monkey",
+  "ref": "monkey",
+  "rank": 6,
+  "name": "Monkey Seat",
+  "source": "Mercedes F1 W07, 2016 (2014-17 grid)",
+  "what": "A small twin-plane winglet on a single pylon over the crash structure, under the main rear wing."
+ }
 ]
