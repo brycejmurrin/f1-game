@@ -192,7 +192,6 @@ test("C4: the player's look-back key and free-look glance do not spin the PiP or
   const base = solve(pip);
   held = true;
   assert.deepEqual(solve(pip), base, "PiP aim unmirrored with the look-back key held");
-  assert.deepEqual(solve({ att: {}, noLook: true }).tgt.map((x) => +x.toFixed(6)), solve({ att: {}, noLook: true }).tgt.map((x) => +x.toFixed(6)));
   const player = solve({ att: {} });
   assert.ok(Math.abs(Math.abs(aim(player) - aim(base)) - Math.PI) < 1e-6, "the player's own camera still looks back (control)");
   const tv = solve({ att: {}, noLook: true });
@@ -226,20 +225,16 @@ test("C8: a non-finite input never reaches the camera damper (inputs sanitised, 
   const rig = loadRig();
   const track = makeTrack(BEND);
   const ex = { att: {}, carPos: [0, 200], carHead: 0, dt: 1 / 60 };
-  const good = rig.cams.vantage(track, "chase", 200, 0, 60, 0, Object.assign({ snap: true }, ex));
+  rig.cams.vantage(track, "chase", 200, 0, 60, 0, Object.assign({ snap: true }, ex));   // seed the last finite pose
   const finite = (v) => v.eye.concat(v.tgt, [v.fov]).every(Number.isFinite);
   assert.ok(finite(rig.cams.vantage(track, "chase", 200, 0, NaN, 0, ex)), "spd NaN");
   const lastOk = rig.cams.vantage(track, "heli", 200, NaN, 60, 0, ex);
   assert.ok(finite(lastOk), "x NaN");
   const g = { eye: lastOk.eye.slice(), fov: lastOk.fov };
-  void good;
   const bad = rig.cams.vantage(track, "chase", NaN, 0, 60, 0, ex);
   assert.ok(finite(bad), "s NaN");
   assert.deepEqual(bad.eye, g.eye, "the last finite pose is held");
   assert.equal(bad.fov, g.fov);
-  let cam = 100; const damp = (c, t, l, d) => c + (t - c) * (1 - Math.exp(-l * d));
-  for (let i = 0; i < 600; i++) cam = damp(cam, bad.eye[0], 18, 1 / 60);
-  assert.ok(Number.isFinite(cam), "an exponential damper fed the vantage output stays finite");
 });
 
 test("C9: a chicane does not flip the heli/side/cinematic bend side faster than the dwell allows", () => {

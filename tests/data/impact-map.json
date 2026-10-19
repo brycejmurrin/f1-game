@@ -1223,6 +1223,12 @@
       ],
       "detectXr": [
         "tests/unit/cam-comfort.test.mjs"
+      ],
+      "fxGet": [
+        "tests/unit/cam-comfort.test.mjs"
+      ],
+      "fxSet": [
+        "tests/unit/cam-comfort.test.mjs"
       ]
     },
     "js/camera/cam-groups.js": {
@@ -1818,7 +1824,6 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/director.test.mjs",
-        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
