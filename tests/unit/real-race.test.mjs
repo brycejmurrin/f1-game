@@ -390,11 +390,15 @@ test("fieldAt(): the race as it stood at the start of a lap — who was where, o
     if (a.retired) continue;
     assert.ok(a.lap >= 1 && a.lap <= 31, d.code + " lap " + a.lap);
     assert.ok(a.frac >= 0 && a.frac <= 0.98, d.code + " frac " + a.frac);
-    assert.ok(Math.abs(a.into - a.frac * d.laps[a.lap - 1]) < 1e-6 || a.frac === 0.98, d.code + " time into the lap");
+    if (a.frac < 0.98) assert.ok(Math.abs(a.into - a.frac * d.laps[a.lap - 1]) < 1e-6, d.code + " time into the lap");
+    else assert.ok(a.into >= 0.98 * d.laps[a.lap - 1], d.code + " is clamped at 0.98 only when it is at least that far in");
   }
   // A lapped car is a lap down at t0.
-  const lapsDown = script.drivers.filter((d) => !at.by[d.num].retired && at.by[d.num].lap < 31);
-  assert.ok(lapsDown.length >= 0);
+  // (the leader starts lap 31; everyone else is still finishing 30, which is not lapped)
+  const lapsDown = script.drivers.filter((d) => !at.by[d.num].retired && at.by[d.num].lap < 30).map((d) => d.code);
+  assert.deepEqual(lapsDown, ["BOT"], "Bottas is the one car a lap down when the leader starts lap 31");
+  assert.equal(at.by[77].lap, 29);
+  assert.ok(script.drivers.every((d) => at.by[d.num].retired || at.by[d.num].lap <= 31), "nobody is ahead of the leader");
   // A set that came into the race used carries its quali age.
   const aged = { ...script, drivers: [{ ...script.drivers[0], stints: [{ c: "SOFT", from: 1, to: 51, age: 3 }] }] };
   assert.equal(R.fieldAt(aged, 5).by[63].age, 7, "4 laps run plus 3 laps old at the start");
