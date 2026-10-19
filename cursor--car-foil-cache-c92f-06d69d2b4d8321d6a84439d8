@@ -1,1 +1,0 @@
-1792442835	Bryce Murrin	RENDER PERFORMANCE investigation: OWNED js/car/car-geometry.js foilThick implementation only, tests/unit/car-foil.test.mjs existing tests; static foil station evaluation cost from live startup CPU profile. No car-body-geom, car3d, car-mesh, car-draw or rendering backend edits.  [cursor/car-foil-cache-c92f; session 06d69d2b4d8321d6a84439d8]
