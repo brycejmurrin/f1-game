@@ -6513,6 +6513,7 @@
       "update": [
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/agent-config.test.mjs",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/body-attitude.test.mjs",
@@ -6557,7 +6558,6 @@
         "tests/specs/multiplayer-seats.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
-        "tests/unit/agent-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
