@@ -197,8 +197,8 @@ const STRIP = {
   //   Kit pits/tents/billboard; emission 276645 → 273889, strip-after
   //   256198 → 254325.
   // → #2204 curved tiered stands (2026-10-19, merged over #1617): emission
-  //   273889 → 273661, strip-after 254317 → 254054.
-  monaco: { before: 273661, after: 254054 },
+  //   273889 → 273709, strip-after 254317 → 254112.
+  monaco: { before: 273709, after: 254112 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -237,8 +237,8 @@ const STRIP = {
   //   Kit pits/tents/radar/banner; Rettifilo drops synthetic barrier/cone
   //   fallback. Emission 325396 → 320558, strip-after 294760 → 290837.
   // → #2204 curved tiered stands (2026-10-19, merged over #1617): emission
-  //   320558 → 320378, strip-after 290837 → 290692.
-  monza: { before: 320378, after: 290692 },
+  //   320558 → 320414, strip-after 290837 → 290722.
+  monza: { before: 320414, after: 290722 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
