@@ -79,11 +79,11 @@ const CarBodyGeom = (function () {
     const root = CHASSIS.nose[2];
     const st = [...cone, { z: root.z, y: root.y, w: root.w, h: root.h, t: root.t }];
     if (st[1].z < root.z + 0.15) st[1].z = root.z + 0.15;    // keep the mid ahead of the pinned root
-    // noseStep (preview bodies only): the 2012 "platypus" step — a station 10 cm
+    // noseStep (preview bodies only): the 2012 "platypus" step — a station 6 cm
     // ahead of the root whose TOP drops by noseStep, bottom unchanged, so the
     // tub's crown ends in a ledge and the cone runs on lower.
-    const step = Math.max(0, Math.min(0.16, s.noseStep || 0));
-    if (step) st.splice(2, 0, { z: root.z + 0.10, y: root.y - step * 0.5, w: root.w * 0.94, h: root.h - step, t: root.t });
+    const step = Math.max(0, Math.min(0.22, s.noseStep || 0));
+    if (step) st.splice(2, 0, { z: root.z + 0.06, y: root.y - step * 0.5, w: root.w * 0.94, h: root.h - step, t: root.t });
     // The underside is linear in the tip/mid lift; behind the mid only the
     // mid's share of the root-to-mid blend moves, so divide by that share.
     const floor = teamNoseFloor(), up = st.map((p, i) => (i < 2 ? Object.assign({}, p, { y: p.y + 1 }) : p));
