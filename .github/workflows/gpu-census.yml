@@ -373,6 +373,32 @@ jobs:
       # 36.7 fps pinned, hunt 4 I3); GLX shot one stale gen-1 frame (I1). The
       # Verdict gates TLX softBlit and WGX softPresent on hardware unless the
       # dispatch overrode the pin.
+      - name: Garage exact-revision WebGPU A/B
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 14
+        shell: bash
+        run: node scratch/garage-retry-ab.mjs
+
+      - name: Validate garage A/B measurements
+        if: always()
+        continue-on-error: true
+        run: node scratch/analyze-garage-retry.mjs .
+
+      - name: Upload garage A/B before control legs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: garage-retry-ab
+          path: |
+            game-garage-*.json
+            game-garage-*.png
+            game-garage-*.cpuprofile
+            analysis.json
+            report.md
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Game check — three.js / WebGPU
         if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
@@ -462,6 +488,10 @@ jobs:
             --beats 20 --ls apex26.wgxCapture=0 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
+
+      - name: Garage A/B verdict
+        if: ${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}
+        run: node -e 'const r=require("./game-garage-retry-ab.json"); const a=require("./analysis.json"); if(!r.ok || r.software || r.arms.length!==6 || !a.nativeHardwareClaimsAllowed)process.exit(1)'
 
       # THE GATE. The four legs above are continue-on-error, so before this
       # step the job was green whatever the game said (run 33228195259 passed
