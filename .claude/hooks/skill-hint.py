@@ -34,7 +34,10 @@ MIN_SCORE = 4.5
 # notification still routes. Measured 2026-10-19 (Claude Code cloud): a
 # <task-notification> peer-message wake ran this hook and printed an
 # unrelated hint, so the event-name check below does not catch them.
-ENVELOPE = re.compile(r"\s*(?:<task-notification\b|<agent-message\b|(?:<system-reminder>\s*)?\[SYSTEM NOTIFICATION\b)")
+# Cloud launches prepend whole <system-reminder> blocks (CLAUDE.md, memory) before the
+# banner, so any number of complete leading blocks is skipped first (#3038, measured).
+ENVELOPE = re.compile(r"\s*(?:<system-reminder>(?:(?!</system-reminder>).)*</system-reminder>\s*)*"
+                      r"(?:<task-notification\b|<agent-message\b|(?:<system-reminder>\s*)?\[SYSTEM NOTIFICATION\b)", re.S)
 RULE = ("In this repo a task that matches a skill starts with the Skill tool call for it, "
         "before Bash, Read or Grep: its SKILL.md names the commands, hooks and tests to use.")
 

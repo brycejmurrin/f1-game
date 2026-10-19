@@ -117,8 +117,12 @@ test("host envelopes delivered as UserPromptSubmit skip routing; the same words 
     `<task-notification>\n<task-type>queued-remote-notifications</task-type>\n<summary>${body}</summary>\n</task-notification>`,
     `  <agent-message from="session_x">${body}</agent-message>`,
     `<system-reminder>\n[SYSTEM NOTIFICATION - NOT USER INPUT]\n${body}`,
+    // A cloud launch: CLAUDE.md and memory reminders precede the banner (#3038 repro).
+    `<system-reminder>\nContents of CLAUDE.md\n</system-reminder>\n<system-reminder>\nmemory index\n</system-reminder>\n<system-reminder>\n[SYSTEM NOTIFICATION - NOT USER INPUT]\n${body}`,
   ]) {
     for (const mode of ["targeted", "generic"]) assert.deepEqual(ask(envelope, mode), { code: 0, out: "" }, envelope.slice(0, 30));
   }
   assert.match(ask(`${body}; explain the <task-notification> wake`).out, /Skill check:/);
+  // Leading reminders followed by a typed prompt are still a user turn.
+  assert.match(ask(`<system-reminder>\nContents of CLAUDE.md\n</system-reminder>\n${body}`).out, /Skill check:/);
 });
