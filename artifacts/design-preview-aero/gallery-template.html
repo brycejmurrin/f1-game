@@ -1,0 +1,53 @@
+<title>Apex Aero Preview B·D3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+/* Layout: a garage review board — one strip per candidate: reference, then candidate · base · diff at each framing. */
+:root{--bg:#eef0f2;--panel:#ffffff;--fg:#16191d;--muted:#5b6470;--line:#d3d8de;--accent:#e2591b;--diff:#c0168f;
+--display:"Barlow Condensed","Arial Narrow",sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121417;--panel:#1b1f24;--fg:#e8ebee;--muted:#98a2ae;--line:#2c333b;--accent:#ff7a3d;--diff:#ff5cc8;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121417;--panel:#1b1f24;--fg:#e8ebee;--muted:#98a2ae;--line:#2c333b;--accent:#ff7a3d;--diff:#ff5cc8;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px;display:grid;gap:28px}
+h1,h2{font-family:var(--display);text-transform:uppercase;letter-spacing:.02em;text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5vw,46px);line-height:1}
+.lede{color:var(--muted);max-width:68ch;margin:6px 0 0}
+.meta{font-family:var(--mono);font-size:12px;color:var(--muted)}
+nav{display:flex;flex-wrap:wrap;gap:8px}
+nav a{font-family:var(--display);font-size:17px;text-decoration:none;color:var(--fg);border:1px solid var(--line);padding:4px 10px;border-radius:3px}
+nav a span{color:var(--accent)}
+nav a:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cand{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:18px;display:grid;gap:14px;min-width:0}
+.cand header{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px}
+.rank{font-family:var(--display);font-size:28px;color:var(--accent)}
+h2{font-size:28px}
+code{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.what,.src{margin:0;max-width:80ch}
+.refs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.ref-missing{border:1px dashed var(--line);padding:12px;display:grid;gap:4px;font-size:13px}
+.ref-missing span{color:var(--muted)}
+.lic{font-size:12px;color:var(--muted);margin:2px 0 0}
+a{color:var(--accent)}
+.trip h4{margin:0 0 6px;font-family:var(--display);font-size:18px;text-transform:uppercase;letter-spacing:.03em}
+.pct{font-family:var(--mono);font-size:12px;color:var(--diff);text-transform:none;letter-spacing:0;margin-left:6px}
+.tri{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:640px){.tri{grid-template-columns:1fr}}
+figure{margin:0;min-width:0}
+figure img{display:block;width:100%;height:auto;border-radius:2px;background:#0d0f12}
+figcaption{font-size:12px;color:var(--muted);margin-top:3px}
+.ph{aspect-ratio:16/9;max-width:100%;display:grid;place-items:center;border:1px dashed var(--line);color:var(--muted);font-size:12px}
+.short{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:16px 18px}
+details.round{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 18px}
+details.round summary{font-family:var(--display);font-size:20px;text-transform:uppercase;cursor:pointer}
+.short ol{margin:6px 0 0;padding-left:22px}
+</style>
+<div class="wrap">
+<header><p class="meta">Fleet B · lane D3 · %%BRANCH%% · design preview, not shipped</p>
+<h1>Aero parts: six real-car candidates</h1>
+<p class="lede">Each candidate is a new opt-in visual field on a PREVIEW catalog row that copies a shipped row's cost and stats. Every framing shows the candidate, the row it copies, and the changed pixels in magenta. The 11 factory cars build bit-identical meshes to the base commit.</p></header>
+<div class="short"><h2>Ranked shortlist</h2>%%SHORTLIST%%<p class="lic">To ask for a change, name the id: “iterate x_wings”.</p></div>
+%%ROUNDS%%
+<nav>%%TOC%%</nav>
+%%CARDS%%
+</div>

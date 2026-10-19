@@ -1,0 +1,57 @@
+[
+  {
+    "file": "spoon-1.jpg",
+    "subject": "spoon",
+    "car": "Ferrari F1-75",
+    "year": 2022,
+    "view": "3/4 front-left; rear wing only partly visible at top-left (weak for spoon detail)",
+    "source_page_url": "https://commons.wikimedia.org/wiki/File:Ferrari_F1_(53449739644).jpg",
+    "author": "Thomas Vogt (Flickr: Triple-green)",
+    "license": "CC BY 2.0 (Creative Commons Attribution 2.0 Generic)",
+    "notes": "Static display at Essen Motor Show 2023. Thumbnail is 1280px from Commons /thumb/. No clean rear or spoon-focused view found on Commons."
+  },
+  {
+    "file": "beam2-1.jpg",
+    "subject": "beam2",
+    "car": "Red Bull Racing RB19",
+    "year": 2023,
+    "view": "3/4 front-right; rear beam wing visible at top-right (not a pure rear view)",
+    "source_page_url": "https://commons.wikimedia.org/wiki/File:Osaka_Auto_Messe_2024_(136)_-_RedBull_Racing_RB19_showcar_(2023_color).jpg",
+    "author": "Tokumeigakarinoaoshima",
+    "license": "CC BY-SA 4.0 (Creative Commons Attribution-Share Alike 4.0)",
+    "notes": "Showcar at Osaka Auto Messe 2024. Thumbnail is 1280px from Commons /thumb/."
+  },
+  {
+    "file": "beam2-2.jpg",
+    "subject": "beam2",
+    "car": "Red Bull Racing RB19",
+    "year": 2023,
+    "view": "3/4 front-left; rear wing top element visible at top-right (not a pure rear view)",
+    "source_page_url": "https://commons.wikimedia.org/wiki/File:RB19_Petersen.jpg",
+    "author": "HAL333",
+    "license": "CC0 1.0 Universal (per page; license template not separately extracted, verify on page)",
+    "notes": "Static display at Petersen Automotive Museum. Thumbnail is 1280px from Commons /thumb/."
+  },
+  {
+    "file": "monkey-1.jpg",
+    "subject": "monkey",
+    "car": "Mercedes F1 W07 Hybrid",
+    "year": 2016,
+    "view": "3/4 rear-left; rear wing and airbox area visible (monkey-seat winglet not clearly resolved)",
+    "source_page_url": "https://commons.wikimedia.org/wiki/File:Lewis_Hamilton_-_Mercedes_AMG_Petronas_W07_(29976273302).jpg",
+    "author": "lmankram7 (Flickr)",
+    "license": "CC BY 2.0 (Creative Commons Attribution 2.0 Generic)",
+    "notes": "Hamilton, 2016 Malaysian GP. Thumbnail is 1280px from Commons /thumb/."
+  },
+  {
+    "file": "monkey-2.jpg",
+    "subject": "monkey",
+    "car": "Mercedes F1 W07 Hybrid",
+    "year": 2016,
+    "view": "side view (track-side pan); rear wing visible, monkey-seat winglet not resolved",
+    "source_page_url": "https://commons.wikimedia.org/wiki/File:Lewis_Hamilton_-_Mercedes_AMG_Petronas_W07_(29462627934).jpg",
+    "author": "lmankram7 (Flickr)",
+    "license": "CC BY 2.0 (Creative Commons Attribution 2.0 Generic)",
+    "notes": "Hamilton, 2016 Malaysian GP. Image carries a photographer watermark '© M V Elman 2016'. Thumbnail is 1280px from Commons /thumb/."
+  }
+]
