@@ -111,3 +111,20 @@ test("the floor covers a lone steep triangle's extrapolation past its lowest cor
   assert.ok(Math.abs(y + 0.1) < 1e-9, `extrapolated ${y}`);
   assert.ok(y >= track._terrGrid.lo[0], `floor ${track._terrGrid.lo[0]} over ${y}`);
 });
+
+// #3113 F7: a main-thread build leaves road/terrain pos/idx as push-grown plain
+// arrays; once both ribbons are on the GPU they are re-typed like the worker's
+// post (Float64Array / Uint32Array), and terrainY answers exactly as before.
+test("dropRibbonCpuIfReady types a main-thread build's ribbon pos/idx", () => {
+  const terrain = merge(quad(0, 100, 0, 100, 2), quad(100, 200, 0, 100, 5));
+  const road = quad(10, 20, 10, 20, 1);
+  const track = { terrainGeo: terrain, roadGeo: road, meshes: { roadChunked: { chunks: [1] }, terrainChunked: { chunks: [1] } } };
+  const before = [[50, 50], [150, 50], [100, 50], [250, 50]].map(([x, z]) => T.terrainY(track, x, z));
+  T.dropRibbonCpuIfReady(track);
+  assert.ok(track._ribbonCpuDropped, "dropped");
+  for (const g of [track.terrainGeo, track.roadGeo]) {
+    assert.ok(g.pos instanceof Float64Array, "pos typed");
+    assert.ok(g.idx instanceof Uint32Array, "idx typed");
+  }
+  assert.deepEqual([[50, 50], [150, 50], [100, 50], [250, 50]].map(([x, z]) => T.terrainY(track, x, z)), before);
+});

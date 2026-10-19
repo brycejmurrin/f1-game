@@ -809,6 +809,9 @@ const Tracks = (function () {
     if (!ribbonGpuSettled(track, "road") || !ribbonGpuSettled(track, "terrain")) return;
     for (const geo of [track.roadGeo, track.terrainGeo]) {
       geo.nrm = geo.col = geo.mat = null;
+      // A main-thread build's push-grown arrays carry slack; typed as the worker posts them (build-worker.js typedRibbon).
+      if (Array.isArray(geo.pos)) geo.pos = Float64Array.from(geo.pos);
+      if (Array.isArray(geo.idx) && geo.idx.every((v) => v >= 0 && v <= 4294967295 && v === Math.floor(v))) geo.idx = Uint32Array.from(geo.idx);
       if (geo.trk) geo.trk = null;
     }
     track._ribbonCpuDropped = true;

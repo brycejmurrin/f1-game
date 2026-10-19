@@ -188,8 +188,11 @@ const TrackModels = (function () {
       return { ok: false, reason: "invalid or non-finite color" };
     const count = geo.pos.length / 3;
     if (!isNumList(geo.idx)) return { ok: false, reason: "invalid index" };
-    for (let i = 0; i < geo.idx.length; i++) {
-      const v = geo.idx[i];
+    const idx = geo.idx;
+    // A Uint32Array (the sealed props accumulator) holds only non-negative integers.
+    if (idx instanceof Uint32Array) { for (let i = 0; i < idx.length; i++) if (idx[i] >= count) return { ok: false, reason: "invalid index" }; }
+    else for (let i = 0; i < idx.length; i++) {
+      const v = idx[i];
       if (!__isInteger(v) || v < 0 || v >= count)
         return { ok: false, reason: "invalid index" };
     }
