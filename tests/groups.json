@@ -887,6 +887,8 @@
     "// centreline, the highlights list, the field as puppets (follow, speed, a car",
     "// whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.",
     "tests/unit/real-replay-vm.test.mjs",
+    "// Rear wing active aero to FIA 2026 C3.11.6: one rigid RW Flap, one aft pivot, Straight Mode flattens (never inverts). VM, ~1 s.",
+    "tests/unit/rear-wing-active-aero.test.mjs",
     "tests/unit/red-flag-fuel-vm.test.mjs",
     "// ...and its sibling over js/: a try/catch cannot swallow a promise",
     "// REJECTION, and index.html turns an unhandled one into a full-screen",

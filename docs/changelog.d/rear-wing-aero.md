@@ -1,0 +1,1 @@
+Fixed: The rear wing's active aero now moves like a 2026 car's — the upper flaps open together as one piece about a pivot near their trailing edge, opening a slot at the leading edge, and Straight Mode flattens the wing instead of flipping it nose-up through the plane above it.
