@@ -1046,6 +1046,8 @@
         "argv-or-parser"
       ],
       "sourceBytes": 19692,
+      "outputPolicy": "targeted-summary",
+      "outputContract": "Native exit status, locale/key and source locations, placeholder/plural failures, missing-key coverage and length warnings, guard parse errors and stale allow entries; retain exact --json evidence.",
       "doc": "Locale lint: unknown keys, placeholders, CLDR plurals; --guard bans new literals in migrated files.",
       "skill": "pwa-cache-service-worker",
       "nativeOutputFlagMentions": [
@@ -6828,6 +6830,8 @@
       "classification": "ambiguous",
       "evidence": [],
       "sourceBytes": 3263,
+      "outputPolicy": "no-direct-output",
+      "outputContract": "Library return and historical-origin manifest, selected source commit and paths, Git blob/SHA256 identities, missing/unsafe selection failures; exported stored bytes do not prove the rendered revision.",
       "doc": "Export selected committed evidence files, preserving Git blob identities without executing the old checkout.",
       "skill": null,
       "nativeOutputFlagMentions": [],
