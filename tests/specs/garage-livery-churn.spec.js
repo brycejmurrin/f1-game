@@ -7,11 +7,14 @@
 // hidden coalesced TLX run per set: edit N paid for N - 1 paint jobs nobody could see.
 // Contract, measured on the shipped TLX backend: after a warm-up, N more WING colour edits (the flap key; each a
 // colour never seen before, as a dragged picker gives) create NO new GPU textures, and once the edits pause the
-// next edit leaves the flap meshes, coalesced runs and textures where the warm-up left them.
-// THE LEAKING CACHE, COUNTED DIRECTLY: renderer.info.memory.geometries and three's RenderObject count follow what
-// the last frames drew (deploy tip 75864637: 11 → 34 → 12 → 34 …), and even TLX's live-geometry census after a
-// forced GC swings ~22 between edits as the bay's rebuild lands (35/57 on the tip, 38/61 on the base, both flat).
-// None of them is the leak. The flap caches are: CarMesh.flapState() — the base held one more set per wing colour.
+// next edit leaves the flap meshes, coalesced runs, textures and settled TLX live geometries where the warm-up
+// left them.
+// THE LEAKING CACHE, COUNTED DIRECTLY: CarMesh.flapState() — the base held one more set per wing colour.
+// SETTLED GEO LIVE (#2897): renderer.info.memory.geometries follows what the last frames drew and is not a
+// leak meter. Late Bahrain/model-pack builds also stepped the count mid-run (8→11/12) on unrelated PRs. Before
+// the warm baseline and the end sample we wait (sync predicates) until Tracks.building() is clear,
+// Assets.modelsReady has resolved, and memState().geoLive is unchanged for 1.5 s — then assert end.geoLive
+// ≤ warm.geoLive. That keeps a real leak check without treating async landings as churn.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const WARM = 3, EDITS = 6;
@@ -24,7 +27,36 @@ const frames = (page, n) => page.evaluate((k) => new Promise((done) => {
   let i = 0; const f = () => (++i >= k ? done(null) : requestAnimationFrame(f)); requestAnimationFrame(f);
 }), n);
 
-test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and textures flat (TLX)", async ({ page }) => {
+/** Wait out paced track builds, model-pack fetches, and bay rebuild spikes before a geo sample. */
+const settleGeo = async (page) => {
+  await page.evaluate(() => {
+    window.__modelsReadyOk = false;
+    const p = (typeof Assets !== "undefined" && Assets.modelsReady)
+      ? Assets.modelsReady(4000)
+      : Promise.resolve(0);
+    p.then(() => { window.__modelsReadyOk = true; }, () => { window.__modelsReadyOk = true; });
+    window.__geoSettle = { last: -1, since: 0 };
+  });
+  await page.waitForFunction(() => {
+    if (!window.__modelsReadyOk) return false;
+    try {
+      if (typeof Tracks !== "undefined" && Tracks.building && Tracks.building()) {
+        window.__geoSettle.last = -1;
+        window.__geoSettle.since = 0;
+        return false;
+      }
+    } catch (_) { /* Tracks not loaded yet */ }
+    const tlx = (typeof GLX !== "undefined" && GLX.__tlx) ? GLX.__tlx : null;
+    if (!tlx || typeof tlx.memState !== "function") return false;
+    const live = tlx.memState().geoLive | 0;
+    const now = performance.now();
+    const s = window.__geoSettle;
+    if (live !== s.last) { s.last = live; s.since = now; return false; }
+    return (now - s.since) >= 1500;
+  }, null, { polling: 100, timeout: 90000 });
+};
+
+test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, textures and settled geoLive flat (TLX)", async ({ page }) => {
   test.setTimeout(480000);   // ~10 s an edit on SwiftShader, plus boot
   await page.setViewportSize({ width: 844, height: 390 });
   await page.addInitScript(() => {
@@ -54,7 +86,11 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and
     for (let i = 0; i < 2; i++) await cdp.send("HeapProfiler.collectGarbage");   // the second pass collects what the first released
     return page.evaluate(() => {
       const r = window.renderer, co = GLX.__tlx.coState(), f = CarMesh.flapState ? CarMesh.flapState() : null;
-      return { gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures };
+      const ms = GLX.__tlx.memState();
+      return {
+        gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures,
+        geoLive: ms.geoLive, geoKinds: ms.geoKinds, geoRegLen: ms.geoRegLen,
+      };
     });
   };
   let n = 0;
@@ -71,11 +107,13 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and
   for (let i = 0; i < WARM; i++) await edit();
   await pause(page, 2500);   // past the garage's flap idle window (setup-camera.js FLAP_IDLE_MS)
   await edit();
+  await settleGeo(page);   // absorb late track/model geos before the baseline (#2897)
   const warm = await read();
   const rows = [warm];
   for (let i = 0; i < EDITS; i++) { await edit(); rows.push(await read()); }
   await pause(page, 2500);
   await edit();
+  await settleGeo(page);
   const end = await read();
   rows.push(end);
   test.info().annotations.push({ type: "churn", description: JSON.stringify(rows) });
@@ -85,4 +123,5 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and
   expect(end.flaps.sets, `flap sets held: ${rows.map((r) => r.flaps.sets).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.sets);
   expect(end.flaps.elements, `flap elements held: ${rows.map((r) => r.flaps.elements).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.elements);
   expect(end.tex, `textures: ${rows.map((r) => r.tex).join(" → ")}`).toBeLessThanOrEqual(warm.tex);
+  expect(end.geoLive, `settled geoLive: ${rows.map((r) => r.geoLive).join(" → ")} kinds=${JSON.stringify(end.geoKinds)}`).toBeLessThanOrEqual(warm.geoLive);
 });
