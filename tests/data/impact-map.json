@@ -327,27 +327,35 @@
         "tests/unit/driving-cues.test.mjs"
       ],
       "create": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "debug": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "fromSlider": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "labelOf": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "setConditionAware": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "setLevel": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "tick": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "urgencyOf": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "*": [
@@ -3851,7 +3859,6 @@
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "drawRound": [
-        "tests/unit/race-session-fixes.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
       "engage": [
@@ -3993,7 +4000,6 @@
       ],
       "stage": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/race-session-fixes.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
@@ -6401,6 +6407,7 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/start-lights.test.mjs",
         "tests/unit/start-race-latch.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs"
@@ -6478,8 +6485,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/render-rate.test.mjs",
-        "tests/unit/results-cam.test.mjs",
-        "tests/unit/start-lights.test.mjs"
+        "tests/unit/results-cam.test.mjs"
       ],
       "titleIfBare": [
         "tests/unit/flyby-intro.test.mjs",
@@ -6555,7 +6561,6 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
-        "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
@@ -6575,14 +6580,12 @@
         "tests/unit/mobile-sync-web.test.mjs",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/offline-precache-nav.test.mjs",
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
-        "tests/unit/race-session-fixes.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
@@ -9734,9 +9737,7 @@
       ],
       "*": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
-        "tests/unit/pick-tests.test.mjs",
-        "tests/unit/race-step-snap.test.mjs"
+        "tests/unit/pick-tests.test.mjs"
       ]
     },
     "js/physics/consts.js": {
@@ -9767,7 +9768,6 @@
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs",
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/pace-math.test.mjs",
         "tests/unit/parts-ladder.test.mjs",
@@ -10598,14 +10598,12 @@
         "tests/unit/overtake-mode.test.mjs"
       ],
       "crossed": [
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs"
       ],
       "detectFrac": [
         "tests/unit/overtake-mode.test.mjs"
       ],
       "detectS": [
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs"
       ],
       "energy": [
@@ -10791,7 +10789,6 @@
       ],
       "planFor": [
         "tests/unit/pit-lane.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "planInfo": [
@@ -10815,7 +10812,6 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "setPinnedStops": [
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
@@ -10857,7 +10853,6 @@
         "tests/unit/damage.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "*": [
@@ -10918,8 +10913,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/damage.test.mjs",
-        "tests/unit/race-session-fixes.test.mjs"
+        "tests/unit/damage.test.mjs"
       ]
     },
     "js/race/quali-net.js": {
@@ -11038,7 +11032,6 @@
         "tests/unit/incident-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/race-control.test.mjs",
-        "tests/unit/race-session-fixes.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs",
         "tests/unit/storm-weather.test.mjs"
       ],
@@ -11251,7 +11244,6 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/race-setup-sheets.test.mjs",
         "tests/unit/storm-weather.test.mjs",
@@ -11270,6 +11262,7 @@
         "tests/unit/race-setup-sheets.test.mjs"
       ],
       "openRaceSettings": [
+        "tests/unit/duel-row.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/race-setup-sheets.test.mjs"
       ],
@@ -13793,7 +13786,6 @@
     },
     "js/track/core/space.js": {
       "*": [
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs"
       ]
