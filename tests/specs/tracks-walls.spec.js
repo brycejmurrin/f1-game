@@ -100,7 +100,7 @@ test.describe("Apex 26 — track boundaries", () => {
             let back = false, x = 0;
             for (let i = 0; i < 600 && !back; i++) {
               x = window.__apex.probe().x;
-              window.__apex.setInput({ steer: x > 0 ? -0.6 : 0.6, throttle: false, brake: true });
+              window.__apex.setInput({ steer: x > 0 ? -0.6 : 0.6, throttle: true });
               window.__apex.step(1 / 60, 1);
               back = Math.abs(window.__apex.probe().x) < hw;
             }
@@ -114,7 +114,7 @@ test.describe("Apex 26 — track boundaries", () => {
         .toBeFalsy();
       expect(r.finite, `${circuitId} finite`).toBe(true);
       expect(r.maxAbsX, `${circuitId} bounded`).toBeLessThan(60);
-      expect(r.stuck, `${circuitId}: car never re-entered the tarmac after the edge ram`).toEqual([]);
+      expect(r.stuck, `${circuitId}: car never re-entered the tarmac after the edge ram: ${JSON.stringify(r.stuck)}`).toEqual([]);
     });
   }
 });
