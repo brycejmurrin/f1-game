@@ -94,7 +94,7 @@ test("server table names the attached servers and the four that left", () => {
 
 test("wrap map count grows only with a documented MCP tool", () => {
   const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
-  assert.equal(catalog.tools.length, 40,
+  assert.equal(catalog.tools.length, 41,
     "30 → 12 on 2026-09, then 12 → 10 on 2026-09-03 when apex_gfx_probe and " +
     "apex_wgx_validate_static left with the WGX/TLX spike-out (their CLIs are in " +
     "tools/gfx/ now), then 10 → 11 on 2026-09-10 for apex_garage, the one wrap that " +

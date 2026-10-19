@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
+import { runningEndpoint } from "./debug-chrome.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
 import { pathSuffixRegex, workflowMethods } from "./js-debugger-workflow.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
@@ -176,13 +177,19 @@ export class DebugSession {
       screenshot: imagePath, report: reportPath, bytes: image.length,
       note: "Screenshot and state were collected after the exception; this is not the exact failing frame." };
   }
+  // No endpoint: the last one used, else the shared Chromium from tools/mcp/debug-chrome.mjs.
+  resolveEndpoint(endpoint) {
+    const e = endpoint || this.lastEndpoint || runningEndpoint();
+    if (!e) throw Error("endpoint is required: pass endpoint (e.g. http://127.0.0.1:9222), or start the shared browser (node tools/mcp/debug-chrome.mjs start / apex_debug_chrome) and it is found automatically");
+    return e;
+  }
   async listTargets(endpoint, kind = "default") {
+    endpoint = this.resolveEndpoint(endpoint);
     this.lastEndpoint = endpoint;
     return { targets: (await this.discover(endpoint, kind)).map(({ webSocketDebuggerUrl, ...t }) => t) };
   }
   async attach(endpoint, targetId) {
-    endpoint = endpoint || this.lastEndpoint;
-    if (!endpoint) throw Error("endpoint is required: pass endpoint (e.g. http://127.0.0.1:9222) or call debugger_targets first, which remembers it");
+    endpoint = this.resolveEndpoint(endpoint);
     this.lastEndpoint = endpoint;
     if (this.connecting || this.cdp) throw Error("Already attached or attaching; detach first");
     const attachGeneration = ++this.attachGeneration;

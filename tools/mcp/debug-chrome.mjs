@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc CLI, not an MCP tool: start/status/stop a headless Chromium (CDP 9222) plus static server for the js-debugger.
+// @doc CLI + apex_debug_chrome: start/status/stop the shared headless Chromium (CDP 9222) that debug MCPs attach to.
 // Usage: node tools/mcp/debug-chrome.mjs start [--port 9222] [--url <page>] [--webgpu] | status | stop
 // The debugger MCP never launches Chrome; the parent runs this, attaches, and stops it. Kills only its own PIDs.
 import { spawn, spawnSync } from "node:child_process";
@@ -18,8 +18,12 @@ export const SERVER_PORT = 3456;
 // headless=new --window-size is the OUTER window: 844x390 gave an 844x198 viewport. The viewport is
 // therefore set by a small holder process (Emulation.setDeviceMetricsOverride lives only as long as
 // the CDP session that set it) and verified through innerWidth x innerHeight.
+// phone-landscape carries an iPhone UA: GLX.isMobile and the mobile render tier are UA-driven, so
+// viewport + touch alone stayed on the desktop tier (measured 2026-10-19: tier 0 vs 2,
+// docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md). --user-agent is process-wide, so new tabs get it too.
+export const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 export const DEVICES = {
-  "phone-landscape": { width: 844, height: 390, deviceScaleFactor: 2, mobile: true, touch: true },
+  "phone-landscape": { width: 844, height: 390, deviceScaleFactor: 2, mobile: true, touch: true, ua: IPHONE_UA },
   desktop: { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false, touch: false },
 };
 // The proven cloud-container flags (issue #2534). --webgpu only adds the WebGPU switch.
@@ -27,7 +31,7 @@ export function chromeArgs({ port = 9222, url, webgpu = false, device = "phone-l
   const d = DEVICES[device] || DEVICES["phone-landscape"];
   return ["--headless=new", "--no-sandbox", `--remote-debugging-port=${port}`, "--remote-debugging-address=127.0.0.1",
     `--user-data-dir=${PROFILE}`, "--use-angle=swiftshader", "--enable-unsafe-swiftshader", `--window-size=${d.width},${d.height}`,
-    ...(webgpu ? ["--enable-unsafe-webgpu"] : []), url || `http://127.0.0.1:${SERVER_PORT}/`];
+    ...(d.ua ? [`--user-agent=${d.ua}`] : []), ...(webgpu ? ["--enable-unsafe-webgpu"] : []), url || `http://127.0.0.1:${SERVER_PORT}/`];
 }
 // Refuse beside a Playwright/test-bg run (one browser at a time) or a busy box.
 export function refusal({ load = os.loadavg()[0], live = liveRun() } = {}) {
@@ -39,10 +43,29 @@ export function liveRun() {
   const r = spawnSync("python3", [path.join(ROOT, ".claude/hooks/live-run.py"), ROOT], { encoding: "utf8" });
   return (r.stdout || "").trim() || null;
 }
+// browser-use (plugin MCP) finds a local browser only through DevToolsActivePort in a standard profile
+// dir; headless Chromium never writes one, so start writes it (Chrome's format: port, then the browser
+// target path) and stop removes it when it still names our port.
+export const BU_DISCOVERY = path.join(os.homedir(), ".config/chromium/DevToolsActivePort");
+export const discoveryText = (port, wsUrl) => `${port}\n${new URL(wsUrl).pathname}\n`;
+async function writeDiscovery(port, file = BU_DISCOVERY) {
+  const v = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(3000) })).json();
+  mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, discoveryText(port, v.webSocketDebuggerUrl));
+  return file;
+}
+export function removeDiscovery(port, file = BU_DISCOVERY) {
+  try { if (readFileSync(file, "utf8").split("\n")[0] === String(port)) { rmSync(file, { force: true }); return true; } } catch {}
+  return false;
+}
 export const readPids = () => { try { return JSON.parse(readFileSync(PID_FILE, "utf8")); } catch { return null; } };
 const cmdline = pid => { try { return readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " "); } catch { return null; } };
 // A recorded PID is ours only while its command line still carries the marker we launched it with.
 export const owns = (p, read = cmdline) => (read(p.pid) || "").includes(p.marker);
+// The endpoint other tools attach to by default (js-debugger, apex_status), or null when not running.
+export function runningEndpoint({ pids = readPids(), read = cmdline } = {}) {
+  const chrome = pids?.procs?.find(p => p.role === "chrome");
+  return chrome && owns(chrome, read) ? `http://127.0.0.1:${pids.port}` : null;
+}
 export function stop({ kill = (pid, sig) => process.kill(pid, sig), read = cmdline, pids = readPids(), wait = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
   if (!pids) return Promise.resolve({ stopped: [], skipped: [], note: "no pid file; nothing to stop" });
   const stopped = [], skipped = [];
@@ -128,7 +151,7 @@ export async function main(args = process.argv.slice(2)) {
     return 0;
   }
   if (cmd === "_hold") { await hold(Number(args[1]), args[2]); return 0; }
-  if (cmd === "stop") { const r = await stop(); rmSync(PID_FILE, { force: true }); console.log(JSON.stringify(r, null, 2)); return 0; }
+  if (cmd === "stop") { const port = readPids()?.port; const r = await stop(); rmSync(PID_FILE, { force: true }); if (port) r.discoveryRemoved = removeDiscovery(port); console.log(JSON.stringify(r, null, 2)); return 0; }
   if (cmd === "start") {
     const port = Number(argOf(args, "--port", 9222)), url = argOf(args, "--url"), webgpu = args.includes("--webgpu"), headlessGame = args.includes("--headless-game"), device = argOf(args, "--device", "phone-landscape");
     if (!DEVICES[device]) throw Error(`--device must be ${Object.keys(DEVICES).join(" or ")}`);
@@ -150,11 +173,12 @@ export async function main(args = process.argv.slice(2)) {
       if (Array.isArray(t) && t.length) {
         procs.push({ role: "holder", ...launch(process.execPath, [fileURLToPath(import.meta.url), "_hold", String(port), device], "debug-chrome.mjs _hold", "holder.log") });
         writeFileSync(PID_FILE, JSON.stringify({ port, device, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");
+        const discovery = await writeDiscovery(port).then(f => f, e => `failed: ${e.message}`);
         let headless = null;
         if (headlessGame) { try { await runPlan(port, headlessGamePlan(url || `http://127.0.0.1:${SERVER_PORT}/`)); headless = true; } catch (e) { headless = `failed: ${e.message}`; } }
         const want = `${DEVICES[device].width}x${DEVICES[device].height}`; let vp = null;
         for (let j = 0; j < 20 && vp !== want; j++) { await new Promise(r => setTimeout(r, 500)); vp = await viewport(port).catch(() => null); }
-        console.log(JSON.stringify({ started: true, ...(headlessGame ? { headlessGame: headless } : {}), endpoint: `http://127.0.0.1:${port}`, device, viewport: vp, viewportOk: vp === want, serverReused: serverUp, targets: t, pidFile: path.relative(ROOT, PID_FILE) }, null, 2));
+        console.log(JSON.stringify({ started: true, ...(headlessGame ? { headlessGame: headless } : {}), endpoint: `http://127.0.0.1:${port}`, device, viewport: vp, viewportOk: vp === want, browserUseDiscovery: discovery, serverReused: serverUp, targets: t, pidFile: path.relative(ROOT, PID_FILE) }, null, 2));
         return vp === want ? 0 : 1;
       }
       await new Promise(r => setTimeout(r, 500));
@@ -164,6 +188,8 @@ export async function main(args = process.argv.slice(2)) {
   }
   console.log(`debug-chrome — own a headless Chromium for the js-debugger (a CLI, not an MCP tool; the debugger never launches Chrome)
   start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop] [--headless-game]   static server (3456) + Chromium; refuses beside a test run or at loadavg >= 3
+        phone-landscape = 844x390 touch + iPhone UA (mobile render tier); writes ~/.config/chromium/DevToolsActivePort so browser-use attaches;
+        js-debugger and apex_status pick the endpoint up from the pid file; playwright/devtools attach with APEX_PW_CDP / APEX_CDT_BROWSER_URL
   status                                                           chromeAlive, viewport (innerWidth x innerHeight), PIDs, page targets
   stop                                                             kills exactly the PIDs in artifacts/debug-chrome/pids.json`);
   return cmd === "help" ? 0 : 1;
