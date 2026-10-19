@@ -617,67 +617,54 @@
       })();
 
       // ── Biosphère (Expo 67 US pavilion) — Île Sainte-Hélène, far bank. ─────
-      // Wikipedia / ArchDaily / Canadian Encyclopedia: 76 m diameter, 62 m high
-      // geodesic dome (Buckminster Fuller). Sight-line from the hairpin is
-      // approximate — the dome sits on the neighbouring island, not adjacent
-      // to L'Épingle. Dist 320: an 80 m AABB at 210–280 hits the foldback
-      // ribbon (probed); further out still reads across the basin.
-      // Emit body is a named helper so `{ required: true }` stays inside the
-      // contract-test 2200-char window after the montreal-biosphere modelGroup.
+      // BIE, 10 Apr 2019: an open triangulated sphere, 76 m diameter / 61 m high.
+      // https://ppp.bie-paris.org/site/en/latest/blog/entry/a-to-z-of-expo-architects-buckminster-fuller
+      // Retain the existing approximate 62 m height (other references: 62 m);
+      // this is a 61–62 m silhouette, not a surveyed footprint or bearing.
+      // The former opaque frusta hid the frame and clipped the crown; their
+      // midpoint origins also misused the base-anchored addFrustum contract.
       {
-        const k = K(0.30);
-        const a = anchor(k, -1, 320);
+        const a = anchor(K(0.30), -1, 320);
         const b = [a.r, a.u, a.t];
-        const DOME   = [0.86, 0.88, 0.91];
-        const DOME_D = [0.80, 0.82, 0.86];
-        const R = 38, HEIGHT = 62, Y0 = -(2 * R - HEIGHT), STK = 9;
+        const R = 38, HEIGHT = 62, CY = HEIGHT - R;
         const foot = vadd(a.c, a.u, BANK_T - a.c[1]);
         const emitBio = (stage) => {
-          const rAt = (y) => {
-            const t = (y - R) / R;
-            return R * Math.sqrt(Math.max(0, 1 - t * t));
+          const FRAME = [0.80, 0.82, 0.85];
+          const MUSEUM = [0.68, 0.70, 0.73];
+          const MER = 12, levels = [0, 12, CY, 36, 48, 57];
+          // All rings share one sphere. The equator is at CY, the crown at
+          // HEIGHT; no below-ground frame or broad, flat cut across the top.
+          const surf = (y, phi) => {
+            const radius = Math.sqrt(Math.max(0, R * R - (y - CY) * (y - CY)));
+            return vadd(vadd(vadd(foot, a.u, y),
+              a.r, radius * Math.cos(phi)), a.t, radius * Math.sin(phi));
           };
-          let yPrev = Y0;
-          stage._mat = MAT.CONCRETE;   // matte skin: METAL glowed white at night
-          for (let i = 1; i <= STK; i++) {
-            const yTop = Y0 + ((HEIGHT - Y0) * i) / STK;
-            const h = yTop - yPrev;
-            const rb = rAt(yPrev), rt = rAt(yTop);
-            addFrustum(stage, vadd(foot, a.u, (yPrev + yTop) / 2), Math.max(rb, 1.5),
-                       Math.max(rt, 1.0), h, yPrev < R * 0.45 ? DOME_D : DOME, 18, b);
-            yPrev = yTop;
-          }
-          addFrustum(stage, vadd(foot, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 18, b);
-          stage._mat = MAT.METAL;   // dark lattice only
-          const LAT = [0.40, 0.42, 0.46];   // darker lattice band so the dome reads as a geodesic frame, not a smooth ball
-          const surf = (y, phi) => vadd(vadd(vadd(foot, a.u, y),
-                       a.r, rAt(y) * Math.cos(phi)), a.t, rAt(y) * Math.sin(phi));
-          const MER = 10, RN = 8, yTopMax = HEIGHT - 1.5;
-          for (let m = 0; m < MER; m++) {
-            const phi = m / MER * 6.2832;
-            let prev = surf(Math.max(0.5, Y0 + 1), phi);
-            for (let j = 1; j <= RN; j++) {
-              const y = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
-              const cur = surf(y, phi);
-              strut(prev, cur, 0.7, LAT, 3, stage);
-              prev = cur;
-            }
-          }
-          for (let j = 1; j < RN; j++) {
-            const y = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
-            let prev = surf(y, 0);
-            for (let m = 1; m <= MER; m++) {
-              const cur = surf(y, m / MER * 6.2832);
-              strut(prev, cur, 0.6, LAT, 3, stage);
-              prev = cur;
-            }
-          }
-          for (let j = 2; j <= 5; j++) {
-            const y0 = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
-            const y1 = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * (j + 1) / RN;
+          // Matte pale frame: preserves the steel's light daytime appearance
+          // without the emissive-looking night response of the old METAL skin.
+          stage._mat = MAT.CONCRETE;
+          for (let j = 0; j < levels.length; j++) {
             for (let m = 0; m < MER; m++) {
-              strut(surf(y0, m / MER * 6.2832), surf(y1, (m + 1) / MER * 6.2832), 0.45, LAT, 3, stage);
+              const phi = m / MER * Math.PI * 2;
+              const next = (m + 1) / MER * Math.PI * 2;
+              const p = surf(levels[j], phi);
+              strut(p, surf(levels[j], next), 0.55, FRAME, 3, stage);
+              if (j + 1 < levels.length) {
+                strut(p, surf(levels[j + 1], phi), 0.55, FRAME, 3, stage);
+                strut(p, surf(levels[j + 1], next), 0.45, FRAME, 3, stage);
+              } else {
+                strut(p, vadd(foot, a.u, HEIGHT), 0.55, FRAME, 3, stage);
+              }
             }
+          }
+          // The source photograph shows museum platforms inside the frame.
+          // These two decks and their grounded columns are a simplified cue;
+          // their dimensions and arrangement are artistic, not surveyed.
+          for (const x of [-9, 9]) for (const z of [-9, 9]) {
+            addBox(stage, vadd(vadd(vadd(foot, a.r, x), a.t, z), a.u, 12.15),
+              [1.4, 24.3, 1.4], MUSEUM, b);
+          }
+          for (const y of [12, 24]) {
+            addBox(stage, vadd(foot, a.u, y), [24, 0.8, 24], MUSEUM, b);
           }
           stage._mat = 0;
         };
