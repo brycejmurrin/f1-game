@@ -24,34 +24,36 @@ import { fnSource } from "../helpers/fn-source.mjs";
 const read = rel => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 const TLX = read("js/render/three/tlx.js");
 
-/** The source of `function <name>(` through its matching close brace. */
-function lift(src, name) {
-  const start = src.indexOf(`function ${name}(`);
-  assert.notEqual(start, -1, `${name} moved — update this test, do not delete it`);
-  let depth = 0, i = src.indexOf("{", start);
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}" && --depth === 0) break;
-  }
-  return src.slice(start, i + 1);
-}
-
-function load(storage = {}) {
+// One owner for the production selector's closure. Counting and real device
+// writers are distinct dependencies; their batches and expected packs stay in
+// the respective fixtures below.
+function selectorEnvironment(storage = {}, writer) {
   const localStorage = { getItem: k => (k in storage ? storage[k] : null) };
   // eslint-disable-next-line no-new-func
   const Frustum = new Function(read("js/render/shared/frustum.js") + ";return Frustum;")();
   // eslint-disable-next-line no-new-func
   const InstCells = new Function("localStorage", "Frustum",
     read("js/render/shared/inst-cells.js") + ";return InstCells;")(localStorage, Frustum);
-  const writes = [];
-  const _writeInstanceMatrices = (imesh, m, c, n) => { writes.push(n); };
-  const TLXShaders = { aabbInFrustum: Frustum.aabbInFrustum };
+  const bindings = {
+    TLXShaders: { aabbInFrustum: Frustum.aabbInFrustum }, InstCells, Frustum,
+    _instColorAttr: mesh => mesh.tint,
+  };
+  const names = ["cullInstances", "updateInstances"];
+  if (writer) bindings._writeInstanceMatrices = writer;
+  else names.unshift("setInstanceRange", "_writeInstanceMatrices");
+  const declarations = names.map(name => fnSource(TLX, `function ${name}(`)).join("\n");
   // eslint-disable-next-line no-new-func
-  const fns = new Function("TLXShaders", "InstCells", "_writeInstanceMatrices", "Frustum",
+  const fns = new Function(...Object.keys(bindings),
     `"use strict"; const _mirActive = false, frameEye = null, frameCullDist = 0, frameCullFog = null,
       _mirEye = null, _mirCull = 0, _mirFog = null;
-      ${lift(TLX, "cullInstances")}\n${lift(TLX, "updateInstances")}\n` +
-    "return { cullInstances, updateInstances };")(TLXShaders, InstCells, _writeInstanceMatrices, Frustum);
+      ${declarations}
+      return { cullInstances, updateInstances, write: _writeInstanceMatrices };`)(...Object.values(bindings));
+  return { ...fns, Frustum };
+}
+
+function load(storage = {}) {
+  const writes = [];
+  const { Frustum, ...fns } = selectorEnvironment(storage, (imesh, m, c, n) => { writes.push(n); });
   // Ten instances on a line, x = 5, 15, ... 95: one per 10 m cell.
   const n = 10, mats = new Float32Array(n * 16);
   for (let i = 0; i < n; i++) {
@@ -139,23 +141,7 @@ test("apex26.instCellCache=0 turns the cell key off", () => {
 // attributes, while the simulated device arrays change ONLY when an update
 // range is consumed. Checking CPU packs alone would miss a stale GPU suffix.
 function loadGpuPack() {
-  const localStorage = { getItem: () => null };
-  // eslint-disable-next-line no-new-func
-  const Frustum = new Function(read("js/render/shared/frustum.js") + ";return Frustum;")();
-  // eslint-disable-next-line no-new-func
-  const InstCells = new Function("localStorage", "Frustum",
-    read("js/render/shared/inst-cells.js") + ";return InstCells;")(localStorage, Frustum);
-  const TLXShaders = { aabbInFrustum: Frustum.aabbInFrustum };
-  const declarations = ["setInstanceRange", "_writeInstanceMatrices", "cullInstances", "updateInstances"]
-    .map(name => fnSource(TLX, `function ${name}(`)).join("\n");
-  // Radial frame locals match load() — cullInstances reads frameEye/frameCullDist
-  // (and _mir*) after the instance-suffix / radial cull work on this PR.
-  // eslint-disable-next-line no-new-func
-  const fns = new Function("TLXShaders", "InstCells", "_instColorAttr", "Frustum",
-    `"use strict"; const _mirActive = false, frameEye = null, frameCullDist = 0, frameCullFog = null,
-      _mirEye = null, _mirCull = 0, _mirFog = null;
-      ${declarations}
-      return { cullInstances, updateInstances, write: _writeInstanceMatrices };`)(TLXShaders, InstCells, mesh => mesh.tint, Frustum);
+  const fns = selectorEnvironment();
 
   function attribute(length) {
     let version = 0, sentVersion = 0;
