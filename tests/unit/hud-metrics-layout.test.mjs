@@ -237,3 +237,18 @@ test("paintInstruments never paints a negative speed in reverse; the wheel LCD a
   ctx.paintInstruments({ rpm: 5000, speed: 50 });
   assert.equal(els.speed.text, "257", "forward speed is untouched");
 });
+
+// THE TOWER'S WIDTH MAY NOT DEPEND ON WHICH FACE IS PAINTING (#3064). Slots reserved in `ch` measured
+// ~1.32x wider in the fallback face than in Barlow Condensed, so whichever HUD SIZE stamped its fit
+// before fonts-hud.css swapped in capped the band lower (667x375: 0.89 at HUD 200 vs 0.97 at HUD 100).
+test("tower slots reserve in em, and a late font load refits (#3064)", () => {
+  const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
+  const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
+  for (const id of ["hud-pos", "hud-lap", "hud-time", "hud-best", "hud-delta-n"]) {
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, sel, body]) =>
+      new RegExp(`#${id}(?![\\w-])`).test(sel) && /min-width/.test(body));
+    assert.ok(rules.length, `#${id} reserves a min-width`);
+    for (const [, sel, body] of rules) assert.doesNotMatch(body, /\d\s*ch\b/, `${sel.trim()}: min-width in ch follows the fallback face`);
+  }
+  assert.match(hud, /document\.fonts\.addEventListener\("loadingdone"/);
+});

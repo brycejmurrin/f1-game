@@ -106,14 +106,13 @@
   color: var(--dim);
 }
 .hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
-/* A STABLE TOWER. .hud-top is a centred flex row, so a box that changes width re-centres all of
-   them (POS 9/22 -> 10/22, a lap clock starting). Each slot holds its widest spelling PER GLYPH:
-   `ch` is one tabular digit, but .hud-value adds letter-spacing 0.04em after every glyph and its
-   colon and slash are wider, so 7ch held "-" and not "0:00.18" (58.2 vs 60.5 px, #3064). DELTA keeps
-   its place while it waits for a reference (js/ui/hud.js paintHudDelta: data-pending). */
-#hud-pos, #hud-lap { min-width: calc(5.5ch + 5 * 0.04em); }
-#hud-time, #hud-best { min-width: calc(6.75ch + 7 * 0.04em); }
-#hud-delta-n { min-width: 7ch; }
+/* A STABLE TOWER: a box that changes width re-centres the flex row, so each slot holds its widest
+   spelling, 0.04em letter-spacing included ("22/22" 2.41em, "8:88.88" 3.03em, Barlow Condensed 700).
+   In em, not ch: ch follows the face on screen, and a fit measured in the fallback (ch 0.56em vs
+   0.416em) capped 667x375 at 0.89 instead of 0.97 (#3064). DELTA keeps its place (data-pending). */
+#hud-pos, #hud-lap { min-width: 2.489em; }
+#hud-time, #hud-best { min-width: 3.09em; }
+#hud-delta-n { min-width: 2.914em; }
 /* DESKTOP: the labelled plate stays, only its value is invisible, so the four
    live boxes read centred (an invisible 5th box left them 56px off the flag's
    axis). TOUCH: the pending plate leaves the layout — its ~95px capped the

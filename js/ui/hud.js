@@ -2446,12 +2446,14 @@ function invalidateFit() {
   if (typeof HudLayout !== "undefined" && HudLayout.clearReadouts) HudLayout.clearReadouts();
 }
 _invalidateFit = invalidateFit;
-// fonts-hud.css loads late (media="print" swap, index.html), so the first fit
-// measured the gap spellings in the fallback face and kept those widths: the
-// fit key carries no font signal, so the wrong rung held until the 3 s backoff
-// (F-16). Forget the measured widths and refit once the faces are in.
+// fonts-hud.css loads late (media="print" swap, index.html), so the first fit measured the gap spellings
+// in the fallback face and kept those widths: the fit key carries no font signal, so the wrong rung held
+// until the 3 s backoff (F-16). Forget the measured widths and refit once the faces are in, and on each
+// later `loadingdone` (a face is fetched when first painted, often after `ready` resolved: #3064).
 if (typeof document !== "undefined" && document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
-  document.fonts.ready.then(() => { _gapW[0] = _gapW[1] = 0; invalidateFit(); }, () => {});
+  const refit = () => { _gapW[0] = _gapW[1] = 0; invalidateFit(); };
+  document.fonts.ready.then(refit, () => {});
+  if (typeof document.fonts.addEventListener === "function") document.fonts.addEventListener("loadingdone", refit);
 }
 function syncPhoneFit() {
   syncComputedRootVars();
