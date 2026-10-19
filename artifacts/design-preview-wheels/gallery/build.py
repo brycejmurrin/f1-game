@@ -3,8 +3,9 @@
 # Images: <id>-{wheel,cockpit,hero,phone,near,diff}.jpg (current), r<N>/... (archived).
 import html, json
 
-ROUND = 3
+ROUND = 4
 CHANGELOG = [
+    (4, "D8 flagged boxy blocks beside the helmet. Headrest side bolsters and cheek pads are now 10-sided rounded pipes (were 6-sided, squarish), and the T-cam pods are round barrels with a lens instead of 30 mm boxes; this touches shipped cars too. drum: closed into one solid ring (OPEN edges 86.1 → 84.0 m, now below carbon's 84.3). ee07f767."),
     (3, "Fit check added (tools/car/car-fit-audit.mjs from cursor/fit-audit-420b, McLaren, each look vs the factory car and vs its own equivalent). "
         "halomirror: the stays floated 5.7 mm off the halo tube and ended buried inside the housing; they now root on the tube and end at the housing wall (dc9d048b). "
         "The other four add no new FAIL against their equivalents."),
@@ -45,7 +46,7 @@ FIT = [
  ("mirrorframe", "parity", "No new FAIL vs deflector. The frame boxes touch the housing (no mirrors GAP row beyond the factory's own 8.2 mm housing gap)."),
  ("halomirror", "fixed r3", "Round 2: mirrors↔halo GAP 5.7 mm ×2 (stays rooted at y 0.845 over a tube squashed to ±15 mm round crownY). Round 3: rooted on crownY and ended at the housing wall — the row is gone; the remaining mirror row is the factory's own 8.2 mm."),
  ("blownaxle", "parity", "No new FAIL vs open_spoke. Same two extra rotor-mark pieces as ysplit."),
- ("drum", "warn", "No new FAIL vs carbon. OPEN edges +1.8 m (86.1 vs 84.3 m): the drum faces are single-sided annuli drawn cull-off, so their rims count as boundary edges. WARN only; closing them would double the drum's triangles."),
+ ("drum", "fixed r4", "No new FAIL vs carbon. Round 3 had OPEN edges +1.8 m from single-sided faces with a foil band 2 mm proud; round 4 puts the foil in the face plane and adds the inner bore, so the ring is closed: 84.0 m vs carbon 84.3 m."),
 ]
 MEAS = json.load(open("meas.json")) if __import__("os").path.exists("meas.json") else {}
 
@@ -79,7 +80,9 @@ fitsec = f'''<section class="cand" id="fit"><header><div class="hd"><h2>Fit chec
 <p class="meta"><code>node tools/car/car-fit-audit.mjs --team=mclaren --styles=&lt;cat/id,…&gt;</code> (branch cursor/fit-audit-420b) · GAP / PENETRATION / ZFIGHT fail, OPEN warns</p></div></header>
 <p class="src">Each look is compared with the factory McLaren and with its own equivalent part, so rows the equivalent already carries are not counted against the look. The factory car itself has 67 failing rows (front wing, engine cover, brake ducts into tyres…); those belong to other lanes and are unchanged here.</p>
 <div class="tablewrap"><table><thead><tr><th>id</th><th>result</th><th>joints</th></tr></thead><tbody>{fitrows}</tbody></table></div>
-<p class="note">Not included: the boxy cockpit blocks D8 flagged. That list was not sent to this lane. Captures above are round 2; the round-3 stay move is under 2 cm and was not re-shot.</p></section>'''
+<h3>Boxy blocks beside the helmet (D8)</h3>
+<div class="grid g3">{fig("pods-before.jpg","Round 3: box camera pods, 6-sided bolsters")}{fig("pods-after.jpg","Round 4: round camera barrels, 10-sided bolsters")}</div>
+<p class="note">Partly addressed. The camera pods and bolsters are rounder, but from this high rear eye, dark angular shapes still sit beside the helmet. The audit puts only cockpit-section geometry there (plus the helmet, halo and engine cover), and they are not yet pinned to a single builder line. Next step: trace them at D8's own framing. Wheel and cockpit captures above are round 2; the round-3 stay move is under 2 cm and was not re-shot.</p></section>'''
 r1 = "".join(f'<div class="r1row"><h4>{c["name"]} <span class="sid">{c["id"]}</span> · {ROUND1_DIFF[c["id"]]}% changed</h4><div class="grid g3">{fig(f"r1/{c["id"]}-{c["close"]}.jpg", "Round 1 candidate")}{fig(f"r1/{c["id"]}-near.jpg", "Nearest existing")}{fig(f"r1/{c["id"]}-diff.jpg", "Round 1 diff")}</div></div>' for c in C if c["r"] > 1)
 log = "".join(f"<li><b>Round {n}.</b> {html.escape(t)}</li>" for n, t in CHANGELOG)
 ranked = " · ".join(c["id"] for c in C)
