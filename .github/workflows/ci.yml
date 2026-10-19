@@ -2730,7 +2730,9 @@ jobs:
       - name: Stage and stamp _site as the deploy does
         run: |
           set -eu
-          node tools/desktop/stage.mjs --out _site
+          OUT=$(node tools/desktop/stage.mjs --out _site)
+          # A stage with no terser ships source bytes (minify.mjs); this gate must boot the minified tree.
+          node -e 'const m = JSON.parse(process.argv[1]).minified; if (!m || !(m.files > 0)) { console.error("staged-boot: the stage did not minify:", JSON.stringify(m)); process.exit(1); } console.log("minified", JSON.stringify(m));' "$OUT"
           node tools/desktop/stage.mjs --out _site --stamp-only --sha "$GITHUB_SHA"
           grep -q "<meta name=\"apex-sha\" content=\"$GITHUB_SHA\">" _site/index.html
       # APEX_PORT + APEX_REUSE_SERVER: run-playwright starts no server of its own

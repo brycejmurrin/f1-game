@@ -131,7 +131,7 @@ export function stageSite(outDir, opts = {}) {
  * stageSite, then minify the staged js/ (what the CLI and so pages.yml ship).
  * @param {string} outDir
  * @param {{ root?: string, minify?: boolean }} [opts] minify defaults to true
- * @returns {Promise<{ dest: string, minified: null | { files: number, before: number, after: number } }>}
+ * @returns {Promise<{ dest: string, minified: null | { skipped: string } | { files: number, before: number, after: number } }>}
  */
 export async function stageSiteMinified(outDir, opts = {}) {
   const dest = stageSite(outDir, opts);

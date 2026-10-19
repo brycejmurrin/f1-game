@@ -53,6 +53,23 @@ quote_style, comments). terser 5.51.2 was already an exact devDependency.
   `toString()` of a function in js/ (grep, 2026-10-19).
 - **Boot**: the `staged-boot` job (smoke.spec.js against the stamped `_site`).
 
+## Where terser is NOT installed (found on the first full-tier run)
+
+pages.yml's `deploy` and `verify-live` jobs and desktop.yml's pack job run
+`stage.mjs` with no root `npm ci`. A static `import "terser"` failed
+desktop.yml (run 39341343728, `ERR_MODULE_NOT_FOUND`) and would have failed
+the Pages deploy itself. minify.mjs now imports terser lazily; where it cannot
+be resolved the stage ships source bytes with a `::warning::` and
+`minified: { skipped }` (MEASURED from a worktree outside the repo, so no
+parent node_modules: exit 0, skipped). ci.yml `staged-boot` fails unless its
+stage reports `minified.files > 0`.
+
+**So Pages ships minified only once its deploy and verify-live jobs install
+root dependencies before "Stage site"** (two `uses: ./.github/actions/setup-apex`
+steps). That edit is pages.yml publish-path logic, outside this lane's grant:
+raised as NEEDS-DECISION to the orchestrator. Until then this PR changes no
+shipped byte; it lands the stage code, the test and the boot gate.
+
 ## Determinism
 
 pages.yml `verify-live` rebuilds the stamped tree with the same stage.mjs and

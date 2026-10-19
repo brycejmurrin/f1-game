@@ -21,7 +21,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { minify } from "terser";
 import { absSrc } from "../helpers/abs-src.mjs";
-import { MINIFY_OPTIONS, minifyExcluded, minifySource, minifyStaged, minifyTargets } from "../../tools/desktop/minify.mjs";
+import { MINIFY_OPTIONS, canMinify, minifyExcluded, minifySource, minifyStaged, minifyTargets } from "../../tools/desktop/minify.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -144,4 +144,11 @@ test("minifyStaged is byte-deterministic and writes an unlinked .map beside each
     runs.push(pick.map((rel) => fs.readFileSync(path.join(dir, rel), "utf8") + fs.readFileSync(path.join(dir, rel + ".map"), "utf8")));
   }
   assert.deepEqual(runs[0], runs[1]);
+});
+
+test("terser loads lazily: pages.yml deploy/verify-live and desktop.yml stage with no root npm ci", async () => {
+  // A static import failed desktop.yml's pack job (run 39341343728) and would have failed the Pages deploy.
+  const src = read("tools/desktop/minify.mjs");
+  assert.doesNotMatch(src, /^\s*import\b[^;]*["']terser["']/m, "terser must not be a static import");
+  assert.equal(await canMinify(), true, "this checkout has terser (devDependency), so the stage minifies");
 });

@@ -30,7 +30,22 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { minify } from "terser";
+
+// terser is loaded on first use, not at import: pages.yml's deploy and
+// verify-live jobs and desktop.yml's pack job run stage.mjs WITHOUT a root
+// `npm ci`, and a static import would fail the whole stage there. Where terser
+// cannot be resolved the stage ships source bytes and says so (minifyStaged
+// returns { skipped }); ci.yml staged-boot asserts it really minified.
+let _terser = null;
+async function terser() {
+  if (!_terser) _terser = await import("terser");
+  return _terser;
+}
+
+/** Can this checkout minify (is terser resolvable)? */
+export async function canMinify() {
+  try { await terser(); return true; } catch (_) { return false; }
+}
 
 /** terser options: one frozen object so the test and the stage cannot drift. */
 export const MINIFY_OPTIONS = Object.freeze({
@@ -72,6 +87,7 @@ export function minifyTargets(siteRoot) {
  * @param {string} rel staged path, e.g. "js/core/log.js"
  */
 export async function minifySource(src, rel) {
+  const { minify } = await terser();
   const r = await minify({ [rel]: src }, {
     ...MINIFY_OPTIONS,
     format: { ...MINIFY_OPTIONS.format },
@@ -86,9 +102,14 @@ export async function minifySource(src, rel) {
  * Deterministic: same input bytes and options → same output bytes.
  * @param {string} siteRoot
  * @param {{ jobs?: number }} [opts]
- * @returns {Promise<{ files: number, before: number, after: number }>}
+ * @returns {Promise<{ files: number, before: number, after: number } | { skipped: string }>}
  */
 export async function minifyStaged(siteRoot, opts = {}) {
+  if (!(await canMinify())) {
+    const skipped = "terser is not installed here (run npm ci at the repo root); js/ staged unminified";
+    process.stderr.write(`::warning::stage: ${skipped}\n`);
+    return { skipped };
+  }
   const targets = minifyTargets(siteRoot);
   const jobs = Math.max(1, opts.jobs || 8);
   let before = 0, after = 0, next = 0;
