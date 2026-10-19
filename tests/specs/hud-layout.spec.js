@@ -146,7 +146,9 @@ async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
       && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
     const boost = document.getElementById("btn-boost");
     const sectors = document.getElementById("hud-sectors");
-    if (sectors && !sectors.hidden && boost && !boost.hidden) {
+    let sectorsPainted = !!(sectors && !sectors.hidden);
+    try { if (sectorsPainted && getComputedStyle(sectors).display === "none") sectorsPainted = false; } catch (_) { /* */ }
+    if (sectorsPainted && boost && !boost.hidden) {
       const br = boost.getBoundingClientRect();
       if (br.width && (br.left + br.right) / 2 >= window.innerWidth / 2) {
         const s = sectors.getBoundingClientRect();
@@ -196,12 +198,14 @@ async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
     } catch (_) { /* */ }
     const boost = document.getElementById("btn-boost");
     const sectors = document.getElementById("hud-sectors");
-    // MINIMAL (and HUD ELEMENTS off) drop the sector plate — nothing to clear.
+    // MINIMAL / broadcast cams drop the plate via display:none — not .hidden.
     if (!sectors || sectors.hidden) return true;
-    if (!boost || boost.hidden) return false;
+    try { if (getComputedStyle(sectors).display === "none") return true; } catch (_) { /* */ }
     const sec = sectors.getBoundingClientRect();
+    if (!(sec.width > 0)) return true;
+    if (!boost || boost.hidden) return false;
     const br = boost.getBoundingClientRect();
-    if (!(sec.width > 0 && br.width > 0)) return false;
+    if (!(br.width > 0)) return false;
     // Tilt parks BOOST on the left; --dock-r-w is a right-dock standoff only.
     if ((br.left + br.right) / 2 < window.innerWidth / 2) return true;
     if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
@@ -331,10 +335,12 @@ async function race(page, steer, manual, ins, opts) {
       const boost = document.getElementById("btn-boost");
       if (phoneSteer && (!boost || boost.hidden)) return false;
       const sec = document.getElementById("hud-sectors");
-      const sectorsLive = !!(sec && !sec.hidden && sec.childElementCount
-        && sec.getBoundingClientRect().width > 0);
-      // MINIMAL drops #hud-sectors — sector clearance / notch checks never apply
-      // (async predicates used to skip this whole wait — #2825 / #2941).
+      let sectorsLive = false;
+      if (sec && !sec.hidden && sec.childElementCount) {
+        try { sectorsLive = getComputedStyle(sec).display !== "none" && sec.getBoundingClientRect().width > 0; }
+        catch (_) { sectorsLive = sec.getBoundingClientRect().width > 0; }
+      }
+      // MINIMAL drops #hud-sectors via display:none — sector clearance never applies.
       if (!sectorsLive) {
         try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
         if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
@@ -388,8 +394,15 @@ async function race(page, steer, manual, ins, opts) {
         if (m.width > 0 && (m.left < sal - 0.5 || m.right > window.innerWidth - sar + 0.5)) return false;
       }
       // fitHud bumps --hud-fit-stamp only after painted phone clearance lands.
-      const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
-      if (!stamp || !/^\d+$/.test(stamp)) return false;
+      let stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+      if (!stamp || !/^\d+$/.test(stamp)) {
+        // Under CI load a clearance frame can land before the stamp publish;
+        // force one fit pass (same as waitPhoneHudFitClearance).
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+        if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+        stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+        if (!stamp || !/^\d+$/.test(stamp)) return false;
+      }
       // Freeze in the same turn that saw clearance. Non-forced updateHud returns
       // early while frozen — later waits must jump/refreshHud(true) to re-fit.
       try { window.__apex.freeze(true); } catch (_) { /* */ }
@@ -766,12 +779,11 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
         await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; },
           null, { polling: 100, timeout: BOOT_MS });
         await page.evaluate(() => window.GameHud && GameHud.invalidateFit && GameHud.invalidateFit());
-        // invalidateFit voids --hud-fit-stamp; the app republishes it once a full fit has landed. A fixed sleep
-        // read the unfitted 126 px paint when a slow CI frame had not ticked the HUD yet (#2801). The predicate
-        // is synchronous on purpose: waitForFunction does `if (success)`, so an async one (a Promise) is always
-        // truthy and passes at once, which is why waitPhoneHudFitClearance does not wait for the stamp.
+        // invalidateFit voids --hud-fit-stamp; jump → refreshHud(true) clears _fitPending so
+        // syncPhoneFit can republish (ticks alone can starve under CI load — #2801 / #2941).
         await page.waitForFunction(() => {
           if (document.body.classList.contains("desktop")) return false;
+          try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
           GameHud.syncPhoneFit();
           return /^\d+$/.test(document.documentElement.style.getPropertyValue("--hud-fit-stamp"));
         }, null, { polling: 100, timeout: 60_000 });
