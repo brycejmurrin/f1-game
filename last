@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw ORCH12: #3068 changed catalog.json's format, so open PRs with the old catalog conflict ONE more time; sync-pr now regenerates it automatically. Game PRs still wait for SYNC <PR#>.
+LEASE to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw release
