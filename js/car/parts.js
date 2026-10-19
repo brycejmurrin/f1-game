@@ -602,13 +602,15 @@ const Parts = (function () {
     ["ers", "harvest", "style_ers_slim", "Slim Pack", "thin, flush pack with no blister",
       { cells: 2, pack: 0.88, blister: 0, conduit: 0, coolerIntake: 0, led: [0.10, 1.6, 1.95], ledStrip: 1 }],
     ["gearbox", "sequential_pro", "style_gearbox_finned", "Finned Case", "tall strakes and a full heat-fin stack",
-      { strakes: 5, strakeH: 0.32, fin: 1, finSY: 0.30, finSZ: 0.48, heatFins: 5, ribs: 3, louvres: 6, casing: 3, rearFins: 1 }],
+      { strakes: 5, strakeH: 0.42, fin: 1, finSY: 0.34, finSZ: 0.55, heatFins: 5, ribs: 3, louvres: 6, casing: 3, rearFins: 1 }],
+    // Smooth Case: fat painted belly + no strakes. caseWidth < 0.85 triggers the
+    // painted case path in car3d; casing 2 widens the visible fairing.
     ["gearbox", "long_ratio", "style_gearbox_smooth", "Smooth Case", "narrow, bare casing with no strakes",
-      { strakes: 0, fin: 0, heatFins: 0, ribs: 0, louvres: 0, heat: 0, caseWidth: 0.72, casing: 1, rearFins: 0 }],
+      { strakes: 0, fin: 0, heatFins: 0, ribs: 0, louvres: 0, heat: 0, caseWidth: 0.58, casing: 2, rearFins: 0 }],
     ["fuel", "race_blend", "style_fuel_blue", "Blue Flame", "blue-violet exhaust flame and cap",
-      { cap: [0.20, 0.35, 0.98], flame: [0.25, 0.45, 0.98], fxFlame: [0.55, 0.90, 2.90], filler: 2, capBig: 1, hatch: 1, line: 2 }],
+      { cap: [0.12, 0.28, 0.98], flame: [0.18, 0.40, 0.98], fxFlame: [0.55, 0.90, 2.90], filler: 2, capBig: 1, hatch: 1, line: 2, breather: 1 }],
     ["fuel", "high_octane", "style_fuel_green", "Green Flame", "green exhaust flame and cap",
-      { cap: [0.15, 0.95, 0.28], flame: [0.25, 0.98, 0.30], fxFlame: [0.70, 2.80, 0.60], filler: 2, line: 2, breather: 2, hatch: 1, capBig: 1 }],
+      { cap: [0.10, 0.95, 0.22], flame: [0.20, 0.98, 0.25], fxFlame: [0.70, 2.80, 0.60], filler: 2, line: 2, breather: 2, hatch: 1, capBig: 1 }],
     ["exhaust", "megaphone", "style_exhaust_trumpet", "Trumpet", "wide flared bore with a wrapped wastegate",
       { bore: 1.45, flare: 1, wastegate: 2, wrap: 1, lip: 2, stack: 2, shield: 1 }],
     ["exhaust", "free_flow", "style_exhaust_tripipe", "Tri-Pipe", "three narrow outlets, no flare",
@@ -626,7 +628,7 @@ const Parts = (function () {
     // cover:1 is required — spokes:0 alone falls back to OPEN_SPOKES (3). deflector:0
     // so Full Disc does not inherit dished's floating over-wheel winglets.
     ["wheels", "dished", "style_wheels_fulldisc", "Full Disc", "closed disc cover with a deep dish and a bright rim",
-      { cover: 1, spokes: 0, dish: 2, tape: 1, deflector: 0, gunNut: 1, nut: [0.85, 0.12, 0.10], rim: [0.92, 0.92, 0.94] }],
+      { cover: 1, coverVanes: 0, spokes: 0, dish: 2, tape: 1, deflector: 0, gunNut: 1, nut: [0.85, 0.12, 0.10], rim: [0.92, 0.92, 0.94] }],
   ];
   for (const [catId, eqId, id, label, look, visual] of STYLES) {
     const cat = CATALOG.find((c) => c.id === catId);
@@ -670,7 +672,8 @@ const Parts = (function () {
       floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt"]),
       cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror"]),
       // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.
-      wheels: Object.freeze(["spokes", "tape", "dish", "gunNut", "deflector", "cover"]),
+      // coverVanes: wheel-owned vane count on a covered face (0 = sealed Full Disc).
+      wheels: Object.freeze(["spokes", "tape", "dish", "gunNut", "deflector", "cover", "coverVanes"]),
     }),
     material: Object.freeze({
       wheels: Object.freeze(["nut", "rim"]),

@@ -161,7 +161,10 @@ const CarWheels = (function () {
         // no-op when there is no cover to open.
         const aMid = (i + 0.5) / SEG * Math.PI * 2;
         const calClock = brakeStyle && brakeStyle.caliperPos || 0;
-        const peekCal = Math.abs(Math.atan2(Math.sin(aMid - calClock), Math.cos(aMid - calClock))) < 0.28;
+        // Peek holes only when the cover is intentionally open (coverOpen>0). A
+        // closed STYLE Full Disc (cover + coverOpen 0) must stay sealed.
+        const peekCal = useCover && coverOpen > 0
+          && Math.abs(Math.atan2(Math.sin(aMid - calClock), Math.cos(aMid - calClock))) < 0.28;
         const coverSeg = useCover && (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal;
         if (coverSeg || !useCover) {
           for (const sd of [[x1, 1], [x0, -1]]) {
@@ -172,22 +175,30 @@ const CarWheels = (function () {
             addQuad(out, P(rimR, a0, 0), P(rimR, a1, 0),
                          P(rimR * LIP_R, a1, 0), P(rimR * LIP_R, a0, 0), LIP, SURFACES.metal);
             if (!useCover) continue;
+            // Deep dish (Full Disc): flatter closed face so it reads as a sealed
+            // cover, not a ribbed bowl with caliper gaps.
+            const deep = Math.round((wheelStyle && wheelStyle.dish) || 0) >= 2;
+            const dishD = deep ? DISH_D * 0.35 : DISH_D;
+            const faceCol = deep ? RC : COVER;
+            const floorCol = deep ? RC_DEEP : COVER_IN;
             // 2. dish: falls INBOARD as it goes in, so the light gradient across it
             //    reads as a bowl rather than a disc.
             addQuad(out, P(rimR * LIP_R, a0, 0), P(rimR * LIP_R, a1, 0),
-                         P(rimR * DISH_R, a1, DISH_D), P(rimR * DISH_R, a0, DISH_D),
-                         COVER, SURFACES.carbon);
+                         P(rimR * DISH_R, a1, dishD), P(rimR * DISH_R, a0, dishD),
+                         faceCol, SURFACES.carbon);
             // 3. floor of the dish, out to the hubcap that already sits on it.
-            addTri(out, [xw + dir * DISH_D, cy, cz],
-                         P(rimR * DISH_R, a0, DISH_D), P(rimR * DISH_R, a1, DISH_D),
-                         COVER_IN, SURFACES.carbon);
+            addTri(out, [xw + dir * dishD, cy, cz],
+                         P(rimR * DISH_R, a0, dishD), P(rimR * DISH_R, a1, dishD),
+                         floorCol, SURFACES.carbon);
           }
         }
       }
       // Cover-only: five raised spoke ribs across each dish. Proud of the floor
       // by a third of the dish depth so they catch the key. Open rims use real
-      // extruded spokes instead (below).
-      if (useCover) for (const sd of [[x1, 1], [x0, -1]]) {
+      // extruded spokes instead (below). Deep-dish closed covers (Full Disc)
+      // skip the ribs — they read as floating winglets / open spokes.
+      const coverRibs = useCover && Math.round((wheelStyle && wheelStyle.dish) || 0) < 2;
+      if (coverRibs) for (const sd of [[x1, 1], [x0, -1]]) {
         const xw = sd[0], dir = sd[1];
         for (let k = 0; k < 5; k++) {
           const a = (k / 5) * Math.PI * 2 + 0.31, hw = 0.13;
@@ -292,9 +303,14 @@ const CarWheels = (function () {
       // Cover vanes dress a covered face only. On an open rim they densify into
       // a fake dish (factory tyre recipes still set coverVanes:4–12); coverVanes
       // alone never opts the three-ring COVER back in — useCover does.
+      // Wheel recipe wins (STYLE Full Disc sets 0). Deep-dish covers default to
+      // 0 so a closed disc is not dressed with floating vane ribs.
       const VANE = [0.26, 0.26, 0.30];
+      const deepCover = useCover && Math.round((wheelStyle && wheelStyle.dish) || 0) >= 2;
       const coverVanes = useCover
-        ? (tyreStyle && tyreStyle.coverVanes != null ? tyreStyle.coverVanes : 6)
+        ? (wheelStyle && wheelStyle.coverVanes != null ? wheelStyle.coverVanes
+          : tyreStyle && tyreStyle.coverVanes != null ? tyreStyle.coverVanes
+          : (deepCover ? 0 : 6))
         : 0;
       for (const ss of [[x0, -1], [x1, 1]]) {
         const xs = ss[0] + ss[1] * 0.014;
@@ -402,7 +418,9 @@ const CarWheels = (function () {
         const dishWheel = Math.round((wheelStyle && wheelStyle.dish) || 0);
         const dishTyre = Math.round((tyreStyle && tyreStyle.dish) || 0);
         const dish = Math.max(0, Math.min(2, dishWheel || dishTyre));
-        if (dish > 0) {
+        // Deep covered dish already filled the face above — a second dish pass
+        // stacks HUBCAP quads that read as floating winglets on Full Disc.
+        if (dish > 0 && !(useCover && dish >= 2)) {
           const dr = rimR * (dish === 2 ? 0.80 : 0.88);
           const dxOut = ss[0] + dir * 0.014;
           // Cover path keeps the old shallow bowl (cover already fills the face).

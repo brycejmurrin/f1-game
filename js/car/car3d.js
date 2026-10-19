@@ -905,8 +905,9 @@ const Car3D = (function () {
     if (!ckpt && fuelStyle && fuelStyle.capBig) {
       const cz = -0.52, cyb = coverSurfaceY(anchors.coverAt(cz), 0);
       const capC = (fuelStyle.cap || [0.9, 0.5, 0.1]).map((v) => Math.min(v, 1));
-      addBox(out, 0, cyb + 0.018, cz, 0.28, 0.040, 0.55, capC, SURFACES.metal);
-      addBox(out, 0, cyb + 0.040, cz, 0.14, 0.022, 0.28, capC, SURFACES.metal);
+      addBox(out, 0, cyb + 0.022, cz, 0.36, 0.050, 0.70, capC, SURFACES.metal);
+      addBox(out, 0, cyb + 0.048, cz, 0.20, 0.028, 0.36, capC, SURFACES.metal);
+      addBox(out, 0.14, cyb + 0.030, cz + 0.10, 0.10, 0.035, 0.18, capC, SURFACES.metal);
     }
     // SKIRT (STYLE): a painted strip down each floor edge. skirt≥2 widens it.
     if (!ckpt && floorStyle && floorStyle.skirt) {
@@ -1337,11 +1338,13 @@ const Car3D = (function () {
         for (const hi of [4, 5, 7, 9, 10]) {
           const p = hoop[hi];
           if (!p) continue;
-          addBox(out, p[0], p[1] + hr + 0.030, p[2], 0.022, 0.060, 0.095,
+          addBox(out, p[0], p[1] + hr + 0.045, p[2], 0.030, 0.090, 0.120,
                  haloC, haloS);
-          addBox(out, p[0], p[1] + hr + 0.062, p[2], 0.014, 0.018, 0.055,
+          addBox(out, p[0], p[1] + hr + 0.095, p[2], 0.020, 0.028, 0.070,
                  accentC, SURFACES.paint);
         }
+        // Painted brow bar across the crown — open_cell has none.
+        addBox(out, 0, crownY + hr + 0.055, 0.10, 0.42, 0.022, 0.10, accentC, SURFACES.paint);
       }
     }
 
@@ -1909,22 +1912,28 @@ const Car3D = (function () {
       const gbFinSZ   = gbStyle && gbStyle.finSZ ? gbStyle.finSZ : 0.28;
       const gbHeatFins = gbStyle ? Math.max(0, Math.min(5, Math.round(gbStyle.heatFins || 0))) : 0;
       const gbRibs     = gbStyle ? Math.max(0, Math.min(3, Math.round(gbStyle.ribs || 0))) : 0;
-      const gbCaseWmul = Math.max(0.75, Math.min(1.35, (gbStyle && gbStyle.caseWidth) || 1));
+      const gbCaseWmul = Math.max(0.55, Math.min(1.45, (gbStyle && gbStyle.caseWidth) || 1));
+      // STYLE cases: paint strakes / casing so they leave the under-wing shadow.
+      const gbPaint = !!(gbStyle && (gbStyle.rearFins || gbStyle.heatFins || (gbStyle.caseWidth && gbStyle.caseWidth < 0.85)));
+      const gbStrakeC = gbPaint ? accentC : CARBON;
       if (gbStrakes > 0) {
         const half = (gbStrakes - 1) / 2;
         for (let i = 0; i < gbStrakes; i++) {
-          addBox(out, (i - half) * 0.24, 0.13 + gbStrakeH / 2, -2.20, 0.015, gbStrakeH, 0.42, CARBON);
+          addBox(out, (i - half) * 0.24, 0.18 + gbStrakeH / 2, -2.28, 0.022, gbStrakeH, 0.55, gbStrakeC,
+                 gbPaint ? SURFACES.paint : SURFACES.carbon);
         }
       }
       let gbCw = 0, gbCh = 0;
       if (gbCasing > 0) {
         gbCw = (0.15 + gbCasing * 0.05) * gbCaseWmul;
         gbCh = 0.13 + gbCasing * 0.03;
-        addBox(out, 0, 0.44, -1.92, gbCw * 1.08, gbCh * 1.12, 0.04, CARBON, SURFACES.carbon);
+        const caseC = gbPaint && gbCaseWmul < 0.85 ? c2 : CARBON;
+        const caseS = gbPaint && gbCaseWmul < 0.85 ? SURFACES.paint : SURFACES.carbon;
+        addBox(out, 0, 0.44, -1.92, gbCw * 1.08, gbCh * 1.12, 0.04, caseC, caseS);
         addSpan(out,
           { z: -1.94, y: 0.44, w: gbCw * 1.02, h: gbCh, t: 0.90 },
           { z: -2.12, y: 0.435, w: gbCw, h: gbCh * 0.96, t: 0.88 },
-          CARBON, null, SURFACES.carbon);
+          caseC, null, caseS);
         if (gbCasing >= 2) {
           addSpan(out,
             { z: -2.12, y: 0.42, w: gbCw * 0.92, h: gbCh * 0.82, t: 0.88 },
@@ -1937,6 +1946,13 @@ const Car3D = (function () {
                    [0.09, 0.09, 0.10], SURFACES.carbon);
             addBox(out, s * (gbCw * 0.42), 0.32, -2.00, 0.04, 0.05, 0.10, DARK);
           }
+        }
+        // Smooth Case tell: a wide painted belly plate under the crash structure
+        // that long_ratio never gets — readable from the rear camera.
+        if (gbPaint && gbCaseWmul < 0.85 && gbStrakes === 0) {
+          addBox(out, 0, 0.26, -2.32, 0.72, 0.12, 0.55, c2, SURFACES.paint);
+          addBox(out, 0, 0.34, -2.55, 0.58, 0.08, 0.18, accentC, SURFACES.paint);
+          addBox(out, 0, 0.48, -2.40, 0.50, 0.06, 0.30, c2, SURFACES.paint);
         }
       }
       if (gbRibs > 0) {
