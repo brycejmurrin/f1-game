@@ -234,60 +234,71 @@ const Liveries = (function () {
       nose: [0.92, 0.90, 0.82], spineLogo: "number", finish: "matte" },
     { id: "glacier",    name: "Glacier Matte", c1: [0.84, 0.90, 0.94], c2: [0.10, 0.30, 0.52], stripe: [0.44, 0.70, 0.88], accent: [0.10, 0.30, 0.52],
       wing: [0.10, 0.30, 0.52], spineLogo: "shards", finish: "matte" },
-    { id: "pearlwhite", name: "Pearl White",   c1: [0.94, 0.94, 0.92], c2: [0.70, 0.56, 0.30], stripe: [0.70, 0.56, 0.30], accent: [0.16, 0.18, 0.22],
-      halo: [0.70, 0.56, 0.30], spineLogo: "pinstripes", finish: "pearl" },
+    // Pearl White was cream+gold (Haas-adjacent); Champagne Pearl is ivory + teal.
+    { id: "pearlwhite", name: "Champagne Pearl", c1: [0.90, 0.86, 0.78], c2: [0.06, 0.42, 0.48], stripe: [0.06, 0.42, 0.48], accent: [0.52, 0.18, 0.28],
+      halo: [0.06, 0.42, 0.48], spineLogo: "pinstripes", finish: "pearl" },
     { id: "opal",       name: "Opal",          c1: [0.66, 0.84, 0.90], c2: [0.86, 0.48, 0.72], stripe: [0.96, 0.96, 0.98], accent: [0.36, 0.30, 0.62],
       pod: [0.86, 0.48, 0.72], spineLogo: "gradient", finish: "pearl" },
     { id: "blushpearl", name: "Blush Pearl",   c1: [0.92, 0.70, 0.72], c2: [0.20, 0.10, 0.16], stripe: [0.98, 0.92, 0.90], accent: [0.62, 0.20, 0.32],
       nose: [0.20, 0.10, 0.16], spineLogo: "scallops", finish: "pearl" },
-    { id: "titanium",   name: "Titanium",      c1: [0.56, 0.58, 0.60], c2: [0.08, 0.40, 0.86], stripe: [0.08, 0.40, 0.86], accent: [0.90, 0.92, 0.94],
-      wing: [0.08, 0.40, 0.86], spineLogo: "ridge", finish: "brushed" },
+    // Renamed off Audi "Titanium" (audi_titan); warm pewter + violet, not blue.
+    { id: "titanium",   name: "Brushed Alloy", c1: [0.62, 0.58, 0.54], c2: [0.52, 0.18, 0.62], stripe: [0.52, 0.18, 0.62], accent: [0.92, 0.88, 0.82],
+      wing: [0.52, 0.18, 0.62], spineLogo: "ridge", finish: "brushed" },
     { id: "aluminium",  name: "Bare Aluminium", c1: [0.74, 0.75, 0.76], c2: [0.86, 0.10, 0.12], stripe: [0.10, 0.10, 0.12], accent: [0.86, 0.10, 0.12],
       nose: [0.86, 0.10, 0.12], spineLogo: "rungs", finish: "brushed" },
-    { id: "gunmetal",   name: "Gunmetal",      c1: [0.30, 0.32, 0.35], c2: [0.98, 0.70, 0.08], stripe: [0.98, 0.70, 0.08], accent: [0.80, 0.82, 0.85],
-      halo: [0.98, 0.70, 0.08], spineLogo: "chevron", finish: "brushed" },
+    // Renamed off Haas "Gunmetal" (haas_steel); teal accents, not gold.
+    { id: "gunmetal",   name: "Anvil",         c1: [0.28, 0.30, 0.34], c2: [0.10, 0.72, 0.68], stripe: [0.10, 0.72, 0.68], accent: [0.82, 0.86, 0.90],
+      halo: [0.10, 0.72, 0.68], spineLogo: "chevron", finish: "brushed" },
     { id: "metalflake", name: "Metalflake Blue", c1: [0.08, 0.22, 0.70], c2: [0.95, 0.96, 0.98], stripe: [0.95, 0.96, 0.98], accent: [0.98, 0.78, 0.10],
       noseStripe: [0.98, 0.78, 0.10], spineLogo: "stripe", finish: "flake" },
     { id: "glitterrock", name: "Glitter Rock", c1: [0.42, 0.08, 0.52], c2: [0.98, 0.84, 0.30], stripe: [0.98, 0.84, 0.30], accent: [0.96, 0.40, 0.70],
       pod: [0.96, 0.40, 0.70], spineLogo: "lightning", finish: "flake" },
-    { id: "goldflake",  name: "Gold Flake",    c1: [0.74, 0.56, 0.16], c2: [0.08, 0.08, 0.09], stripe: [0.08, 0.08, 0.09], accent: [0.96, 0.90, 0.66],
-      nose: [0.08, 0.08, 0.09], wing: [0.08, 0.08, 0.09], spineLogo: "sunburst", finish: "flake" },
+    // Was dark+gold like Black & Gold; now bright flake gold with crimson.
+    { id: "goldflake",  name: "Gold Flake",    c1: [0.86, 0.68, 0.18], c2: [0.72, 0.06, 0.10], stripe: [0.72, 0.06, 0.10], accent: [0.98, 0.94, 0.86],
+      nose: [0.72, 0.06, 0.10], wing: [0.72, 0.06, 0.10], spineLogo: "sunburst", finish: "flake" },
     { id: "candyapple", name: "Candy Apple",   c1: [0.72, 0.02, 0.06], c2: [0.96, 0.94, 0.90], stripe: [0.96, 0.94, 0.90], accent: [0.20, 0.02, 0.04],
       noseStripe: [0.96, 0.94, 0.90], spineLogo: "twin", finish: "candy" },
     { id: "tangerine",  name: "Candy Tangerine", c1: [0.96, 0.40, 0.04], c2: [0.06, 0.18, 0.30], stripe: [0.98, 0.86, 0.40], accent: [0.06, 0.18, 0.30],
       pod: [0.06, 0.18, 0.30], spineLogo: "speedlines", finish: "candy" },
-    { id: "grape",      name: "Candy Grape",   c1: [0.30, 0.04, 0.42], c2: [0.40, 0.92, 0.70], stripe: [0.40, 0.92, 0.70], accent: [0.92, 0.92, 0.96],
-      halo: [0.40, 0.92, 0.70], spineLogo: "diamonds", finish: "candy" },
+    // Wine candy + mint — distinct from purple Glitter Rock flake.
+    { id: "grape",      name: "Candy Grape",   c1: [0.42, 0.06, 0.22], c2: [0.30, 0.88, 0.62], stripe: [0.30, 0.88, 0.62], accent: [0.96, 0.92, 0.94],
+      halo: [0.30, 0.88, 0.62], spineLogo: "diamonds", finish: "candy" },
     { id: "smokedglass", name: "Smoked Glass", c1: [0.16, 0.18, 0.22], c2: [0.62, 0.88, 0.96], stripe: [0.62, 0.88, 0.96], accent: [0.90, 0.92, 0.95],
       wing: [0.62, 0.88, 0.96], spineLogo: "contours", finish: "tinted" },
     { id: "bottlegreen", name: "Bottle Tint",  c1: [0.04, 0.26, 0.16], c2: [0.94, 0.86, 0.62], stripe: [0.94, 0.86, 0.62], accent: [0.70, 0.12, 0.10],
       nose: [0.94, 0.86, 0.62], spineLogo: "fade", finish: "tinted" },
-    { id: "chameleon",  name: "Chameleon",     c1: [0.10, 0.46, 0.40], c2: [0.62, 0.16, 0.62], stripe: [0.92, 0.94, 0.96], accent: [0.98, 0.70, 0.12],
-      pod: [0.62, 0.16, 0.62], spineLogo: "honeycomb", finish: "chameleon" },
+    // Was green-shift like Bottle Tint; magenta→copper chameleon instead.
+    { id: "chameleon",  name: "Chameleon",     c1: [0.58, 0.12, 0.42], c2: [0.92, 0.48, 0.12], stripe: [0.96, 0.94, 0.90], accent: [0.20, 0.86, 0.72],
+      pod: [0.92, 0.48, 0.12], spineLogo: "honeycomb", finish: "chameleon" },
     { id: "oilslick",   name: "Oil Slick",     c1: [0.10, 0.10, 0.16], c2: [0.30, 0.86, 0.80], stripe: [0.72, 0.30, 0.90], accent: [0.94, 0.80, 0.20],
       halo: [0.30, 0.86, 0.80], spineLogo: "circuit", finish: "chameleon" },
     { id: "beetle",     name: "Scarab",        c1: [0.12, 0.30, 0.10], c2: [0.86, 0.66, 0.14], stripe: [0.86, 0.66, 0.14], accent: [0.30, 0.20, 0.52],
       nose: [0.86, 0.66, 0.14], spineLogo: "scallops", finish: "chameleon" },
-    { id: "rawweave",   name: "Raw Weave",     c1: [0.12, 0.12, 0.13], c2: [0.98, 0.84, 0.0], stripe: [0.98, 0.84, 0.0], accent: [0.92, 0.94, 0.96],
-      wing: [0.98, 0.84, 0.0], spineLogo: "carbon", finish: "carbon" },
+    // Acid lime on carbon — not gold (Black & Gold / old Gunmetal cluster).
+    { id: "rawweave",   name: "Raw Weave",     c1: [0.12, 0.12, 0.13], c2: [0.62, 0.96, 0.18], stripe: [0.62, 0.96, 0.18], accent: [0.92, 0.94, 0.96],
+      wing: [0.62, 0.96, 0.18], spineLogo: "carbon", finish: "carbon" },
     { id: "weaveblue",  name: "Weave & Cobalt", c1: [0.12, 0.12, 0.14], c2: [0.10, 0.46, 0.96], stripe: [0.10, 0.46, 0.96], accent: [0.94, 0.30, 0.20],
       nose: [0.10, 0.46, 0.96], spineLogo: "checker", finish: "carbon" },
-    // Shape-forward retro set — liveries that also move the bodywork (fin
-    // shape, cover vents, spine height), so the era reads in the silhouette.
+    // Shape-forward retro set — finShape / coverVents / spineHeight move mesh.
+    // Haas stock is already finShape none + dorsal, so none-schemes read as paint
+    // on Haas; stub/swept/stepped grow a blade Haas lacks (tallest vs standard spine).
     { id: "gulfrun",    name: "Endurance Blue", c1: [0.52, 0.78, 0.92], c2: [0.98, 0.50, 0.08], stripe: [0.98, 0.50, 0.08], accent: [0.08, 0.10, 0.14],
       nose: [0.98, 0.50, 0.08], finShape: "none", spineHeight: "dorsal", coverVents: "gills", spineLogo: "stripe" },
     { id: "jps",        name: "Black & Gold",  c1: [0.04, 0.04, 0.05], c2: [0.82, 0.66, 0.26], stripe: [0.82, 0.66, 0.26], accent: [0.82, 0.66, 0.26],
       noseStripe: [0.82, 0.66, 0.26], halo: [0.82, 0.66, 0.26], finShape: "stub", coverVents: "spine", spineLogo: "pinstripes" },
-    { id: "rothred",    name: "Seventies Red", c1: [0.90, 0.92, 0.94], c2: [0.80, 0.08, 0.10], stripe: [0.80, 0.08, 0.10], accent: [0.06, 0.20, 0.50],
-      nose: [0.80, 0.08, 0.10], pod: [0.80, 0.08, 0.10], finShape: "swept", spineHeight: "raised", spineLogo: "wedge" },
+    // Crimson body (not Haas white+red); swept fin on a low spine so the rake reads.
+    { id: "rothred",    name: "Seventies Red", c1: [0.78, 0.06, 0.08], c2: [0.94, 0.94, 0.96], stripe: [0.94, 0.94, 0.96], accent: [0.08, 0.22, 0.56],
+      nose: [0.94, 0.94, 0.96], pod: [0.08, 0.22, 0.56], finShape: "swept", coverVents: "gills", spineLogo: "wedge" },
     { id: "turbo86",    name: "Turbo '86",     c1: [0.96, 0.96, 0.98], c2: [0.10, 0.34, 0.20], stripe: [0.98, 0.84, 0.10], accent: [0.10, 0.34, 0.20],
       nose: [0.10, 0.34, 0.20], wing: [0.98, 0.84, 0.10], finShape: "stepped", coverVents: "gills", spineLogo: "tricolour" },
     { id: "groundeffect", name: "Ground Effect", c1: [0.14, 0.30, 0.66], c2: [0.98, 0.80, 0.10], stripe: [0.98, 0.80, 0.10], accent: [0.94, 0.95, 0.97],
-      pod: [0.98, 0.80, 0.10], finShape: "none", spineHeight: "high", spineLogo: "segments" },
-    { id: "highnose",   name: "High Nose '98", c1: [0.72, 0.74, 0.78], c2: [0.06, 0.06, 0.08], stripe: [0.92, 0.18, 0.14], accent: [0.92, 0.18, 0.14],
-      noseStripe: [0.92, 0.18, 0.14], finShape: "stub", coverVents: "spine", spineHeight: "raised", spineLogo: "streaks" },
-    { id: "sharkfin09", name: "Shark Fin '09", c1: [0.98, 0.94, 0.90], c2: [0.86, 0.20, 0.06], stripe: [0.06, 0.08, 0.12], accent: [0.86, 0.20, 0.06],
-      wing: [0.06, 0.08, 0.12], finShape: "swept", coverVents: "gills", spineLogo: "brokenChevron" },
+      pod: [0.98, 0.80, 0.10], finShape: "none", spineHeight: "high", coverVents: "spine", spineLogo: "segments" },
+    // Silver / fluo yellow / black — not Haas white+red; stub fin + high spine.
+    { id: "highnose",   name: "High Nose '98", c1: [0.78, 0.80, 0.84], c2: [0.96, 0.86, 0.08], stripe: [0.06, 0.06, 0.08], accent: [0.96, 0.86, 0.08],
+      noseStripe: [0.06, 0.06, 0.08], wing: [0.06, 0.06, 0.08], finShape: "stub", coverVents: "spine", spineHeight: "high", spineLogo: "streaks" },
+    // Navy + fluoro lime (not cream/orange Haas-like); swept fin, low spine.
+    { id: "sharkfin09", name: "Shark Fin '09", c1: [0.08, 0.12, 0.28], c2: [0.72, 0.96, 0.18], stripe: [0.72, 0.96, 0.18], accent: [0.94, 0.96, 0.98],
+      wing: [0.72, 0.96, 0.18], finShape: "swept", coverVents: "gills", spineLogo: "brokenChevron" },
   ];
   // Per-team heritage / concept schemes.
   // DISPLAY NAMES CARRY NO REAL SPONSOR BRAND (2026-10-03): a few ids still
