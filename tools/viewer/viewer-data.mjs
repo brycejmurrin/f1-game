@@ -8,7 +8,7 @@
 // garage offers can be picked live. Livery DECALS (sponsors, numbers) are a
 // canvas atlas and stay out: the page shows the mesh and its vertex paint.
 import fs from "node:fs";
-import vm from "node:vm";
+import { carSourceFiles, carSourceBundle, loadCarSourceProfile } from "../lib/car-source-vm.mjs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -16,12 +16,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
 
-// Manifest order (tools/manifest.cjs): legends ahead of liveries, which reads it at call time.
-export const CAR_FILES = ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/data/legends.js", "js/car/parts.js",
-  "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js",
-  "js/car/helmets.js", "js/car/liveries.js",
-  "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js",
-  "js/car/car-body-geom.js", "js/car/car3d.js"];
+export const CAR_FILES = carSourceFiles("viewer");
 
 let _tracks = null, _car = null;
 function tracks() {
@@ -30,19 +25,13 @@ function tracks() {
 }
 /** The car roster as ONE classic script. "</script" cannot occur inside it. */
 export function carBundle() {
-  return CAR_FILES.map((f) => `// ── ${f}\n` + fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n;\n")
-    .replace(/<\/script/gi, "<\\/script");
+  return carSourceBundle("viewer");
 }
 function car() {
-  if (_car) return _car;
-  const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array,
-    JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
-  ctx.globalThis = ctx;
-  vm.createContext(ctx);
-  vm.runInContext(carBundle(), ctx, { filename: "viewer-car-bundle.js" });
-  // Script-level `const X = (function(){})()` is lexical: read it by name.
-  const grab = (n) => vm.runInContext(n, ctx);
-  _car = { Teams: grab("Teams") };
+  if (!_car) {
+    const grab = loadCarSourceProfile("viewer");
+    _car = { Teams: grab("Teams") };
+  }
   return _car;
 }
 

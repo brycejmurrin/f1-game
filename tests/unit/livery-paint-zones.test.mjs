@@ -7,20 +7,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
-import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (p) => readFileSync(new URL("../../" + p, import.meta.url), "utf8");
-const M = loadParts();
-// CarWheels and Liveries are not on loadParts' return, so a second small context grabs them.
-const W = (() => {
-  const ctx = { console, Math, Object, Array, Float32Array, JSON, Number, String, Boolean, isFinite, Map, Set, WeakMap };
-  ctx.globalThis = ctx; vm.createContext(ctx);
-  for (const f of ["js/core/log.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-wheels.js", "js/car/liveries.js"])
-    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
-  return { CarWheels: vm.runInContext("CarWheels", ctx), Liveries: vm.runInContext("Liveries", ctx) };
-})();
+const M = loadParts({ liveries: true });
+const W = M;
 const team = M.Teams.LIST.find((t) => t.id === "ferrari");
 const S = M.Car3D.SURFACES, FS = M.Car3D.FINISH_SURFACE;
 const sel = Object.assign({}, M.Parts.defaults ? M.Parts.defaults() : {});

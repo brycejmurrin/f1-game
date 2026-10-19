@@ -6,17 +6,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { absSrc } from "../helpers/abs-src.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
-const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, WeakMap, Map, Set };
-ctx.globalThis = ctx; vm.createContext(ctx);
-for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"])
-  vm.runInContext(read(f), ctx, { filename: absSrc(f) });
-const { Car3D, CarWheels, Parts, Teams } = vm.runInContext("({ Car3D, CarWheels, Parts, Teams })", ctx);
+const { Car3D, CarWheels, Parts, Teams } = loadParts({ shade: true, liveries: true });
 const team = Teams.LIST ? Teams.LIST[0] : Teams[0];
 const parts = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
 const visual = parts._visual || {};

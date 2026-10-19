@@ -15,6 +15,30 @@ import { carBundle, circuitData, viewerHtml, teamIds } from "../../tools/viewer/
 import { parseArgs, resolveSelection, DEFAULT_CIRCUITS } from "../../tools/viewer/build-viewer.mjs";
 import { parseSheet, pixelDiffPct, CAT_FRAME } from "../../tools/viewer/viewer-shots.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { loadCar3D } from "../../tools/car/cockpit-pale-sweep.mjs";
+import { carSourceFiles, loadCarSourceProfile } from "../../tools/lib/car-source-vm.mjs";
+
+test("offline profiles keep shading opt-in for parts and isolate each caller's car state", () => {
+  const flat = loadParts(), shaded = loadParts({ shade: true, liveries: true });
+  assert.equal(flat.CarShade, null, "parts keeps the historical flat baseline");
+  assert.equal(flat.Liveries, null, "livery membership is explicit");
+  assert.ok(shaded.CarShade && shaded.Liveries && shaded.CarWheels);
+  assert.ok(flat.CarMesh && flat.LiveryTex, "decal mesh data remains browser-free");
+  assert.notEqual(flat.Car3D, shaded.Car3D);
+  assert.notEqual(flat.Teams, shaded.Teams);
+  assert.notEqual(flat.CarWheels.tints({}), shaded.CarWheels.tints({}), "tint caches stay in their own realm");
+  const cockpit = loadCar3D();
+  assert.ok(cockpit.Liveries.forTeam(cockpit.Teams.LIST[0]).length > 0,
+    "cockpit guards must see authored player paint");
+  const grab = loadCarSourceProfile("viewer");
+  assert.equal(grab("Map"), Map, "viewer keeps its host collection globals");
+  assert.notEqual(loadCarSourceProfile("cockpit")("Map"), Map, "cockpit keeps realm-native collections");
+  assert.equal(grab("typeof CarShade"), "undefined", "viewer preserves its flat mesh semantics");
+  assert.equal(grab("typeof Legends"), "object", "viewer keeps the legacy livery data source");
+  const files = carSourceFiles("viewer");
+  assert.ok(files.indexOf("js/data/legends.js") < files.indexOf("js/car/liveries.js"));
+  assert.throws(() => carSourceFiles("unknown"), /unknown car source profile/);
+});
 
 test("the page's embedded car roster builds the same mesh the game's loader does", () => {
   // The page builds cars itself from carBundle(); run that exact script in a VM

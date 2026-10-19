@@ -16,8 +16,7 @@
 // Screenshots could not either — under a dusk tone-map a screen-space
 // pale-pixel count returns zero both before AND after the fix.
 // The guard built on this lives in tests/unit/cockpit-pale-surfaces.test.mjs.
-import { readFileSync } from "node:fs";
-import vm from "node:vm";
+import { loadCarSourceProfile } from "../lib/car-source-vm.mjs";
 import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 // Pale = bright in EVERY channel with a modest spread, i.e. reads as a blank
@@ -32,19 +31,16 @@ export const isPale = (c) =>
 export const EYE = [0, 0.82, -0.20];
 
 export function loadCar3D() {
-  const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN };
-  ctx.globalThis = ctx; vm.createContext(ctx);
   // liveries.js joins the load so callers can sweep the ACTUAL paint a player
   // races in. The first version of this loader stopped at teams.js, which is
   // why the guard built on it swept every team with `opts.livery` absent — and
   // therefore could not see nose/pod/halo/stripe/noseStripe at all.
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"])
-    vm.runInContext(readFileSync(f, "utf8"), ctx, { filename: f });
+  const grab = loadCarSourceProfile("cockpit");
   return {
-    Car3D: vm.runInContext("Car3D", ctx),
-    Teams: vm.runInContext("typeof Teams !== 'undefined' ? Teams : null", ctx),
-    Liveries: vm.runInContext("typeof Liveries !== 'undefined' ? Liveries : null", ctx),
-    Parts: vm.runInContext("typeof Parts !== 'undefined' ? Parts : null", ctx),
+    Car3D: grab("Car3D"),
+    Teams: grab("typeof Teams !== 'undefined' ? Teams : null"),
+    Liveries: grab("typeof Liveries !== 'undefined' ? Liveries : null"),
+    Parts: grab("typeof Parts !== 'undefined' ? Parts : null"),
   };
 }
 
