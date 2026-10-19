@@ -5616,6 +5616,9 @@
       "isFlat": [
         "tests/unit/elev-presets.test.mjs"
       ],
+      "plan": [
+        "tests/unit/elev-presets.test.mjs"
+      ],
       "sample": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
@@ -13112,6 +13115,7 @@
         "tests/specs/material-shimmer.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/unit/backend-surface-parity.test.mjs",
+        "tests/unit/census-verdict.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
