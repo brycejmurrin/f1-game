@@ -156,3 +156,15 @@ PR 2 scope, revised from the review (ordered by orchestrator lifetime saved):
 4. A launch-brief generator (`fleet-brief.mjs <role> --pr <n>`) so a brief is one command, not three reads.
 5. Digest-only reads (10k output budget enforced) and one watch channel per PR; echo wakes end with no tool call.
 6. Then the original items: roles by fleet letter, watch in Actions, fleet-block enforcement, Merge Desk retirement.
+
+Round 2 (ORCH15 ~20:34Z) and Bryce's picks (his session, ~20:36Z, AskUserQuestion):
+- Lineage: `get_session` reports `"lineage":{"depth":N,"limit":8}`; read it before launching instead of parsing a refusal
+  (the refusal text at depth 8 is unmeasured). **Seed session per fleet** (Bryce: "Seed session per fleet"): a tiny
+  depth-0 session `[Seed] A·S0 · fleet` that Bryce starts once; its only job is `create_session` for each orchestrator on
+  `SPAWN ORCH <fleet> <brief path>`, confirming repo + auto with `get_session`, then archiving the outgoing one by rule.
+  Order: depth < 7 → the orchestrator spawns its own successor; depth ≥ 7 → SPAWN to the seed; no live seed → one paste-in
+  prompt to Bryce. Never a scheduled trigger or routine.
+- **Bus to owners by PR-comment mirror** (Bryce: "PR-comment mirror"): a workflow posts each `to:#<PR>` bus line as a
+  comment on that PR (never `to:*`), which wakes the owner through its existing subscription; the owner's 50-min check-in
+  reads `fleet-bus.mjs read --to '#<PR>'` as the backstop.
+- Item 5 adds: subscribe once, never re-subscribe on resume (`subscription.created` echoes cost ~4k tokens each).
