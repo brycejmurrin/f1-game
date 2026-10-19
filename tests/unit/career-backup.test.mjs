@@ -28,13 +28,14 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { DOM_SOURCE } from "../helpers/seed-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // The REAL predicate from js/data/teams.js (not a hand copy that can drift from it).
 const realIsReal = (() => {
   const c = vm.createContext({ console, Math, Object, Array, Number, String, JSON });
-  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: "js/data/teams.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: absSrc("js/data/teams.js") });
   return vm.runInContext("Teams.isReal", c);
 })();
 const src = (p) => readFileSync(join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -103,17 +104,17 @@ function loadHarness(options = {}) {
     NativeDownload: { viable: () => false, saveBlob: async () => ({ ok: true }) },
     Hash32: { fnv1a: (s) => String(s).length },
   });
-  vm.runInContext(src("js/core/hash32.js"), ctx);
-  vm.runInContext(src("js/core/mat4.js"), ctx);
-  vm.runInContext(src("js/data/driver-ratings.js"), ctx);
-  vm.runInContext(src("js/career/save-migrate.js"), ctx);
-  vm.runInContext(src("js/core/store.js"), ctx);
-  vm.runInContext(src("js/career/career-backup.js"), ctx);
+  vm.runInContext(src("js/core/hash32.js"), ctx, { filename: absSrc("js/core/hash32.js") });
+  vm.runInContext(src("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(src("js/data/driver-ratings.js"), ctx, { filename: absSrc("js/data/driver-ratings.js") });
+  vm.runInContext(src("js/career/save-migrate.js"), ctx, { filename: absSrc("js/career/save-migrate.js") });
+  vm.runInContext(src("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
+  vm.runInContext(src("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
   // The MY TEAM identity is shape-gated by the GARAGE file's garageValue.
-  if (options.settingsExport !== false) vm.runInContext(src("js/ui/settings-export.js"), ctx);
-  vm.runInContext(src("js/career/team-identity.js"), ctx);
-  vm.runInContext(src("js/career/career.js"), ctx);
-  vm.runInContext(src("js/career/season-cal.js"), ctx);
+  if (options.settingsExport !== false) vm.runInContext(src("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(src("js/career/team-identity.js"), ctx, { filename: absSrc("js/career/team-identity.js") });
+  vm.runInContext(src("js/career/career.js"), ctx, { filename: absSrc("js/career/career.js") });
+  vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: absSrc("js/career/season-cal.js") });
   return {
     ctx,
     SettingsExport: options.settingsExport !== false ? vm.runInContext("SettingsExport", ctx) : null,
@@ -367,7 +368,7 @@ test("standalone qualifying survives backup serialization and restores its drive
   }
   // The real reader must recover the same human lap and grid, not just retain
   // unused JSON. Its track/mode/seat checks are part of the restoration contract.
-  vm.runInContext(src("js/race/quali-model.js"), b.ctx);
+  vm.runInContext(src("js/race/quali-model.js"), b.ctx, { filename: absSrc("js/race/quali-model.js") });
   const cars = [0, 1].map((i) => ({ driverId: "haas:" + i, team: { id: "haas" }, isPlayer: i === 0 }));
   const model = b.ctx.Quali.create({ season: restored, seasonMode: true, cars, track: { def: { id: "t0" } } });
   const results = model.results();
@@ -385,7 +386,7 @@ test("legacy ID-only qualifying grids stay unstamped and retain their order", ()
   const restored = b.SeasonCal.load();
   assert.deepEqual(Array.from(restored.qualiOrder), ["haas:1", "haas:0"]);
   for (const key of ["qualiTrack", "qualiMode", "qualiSeat"]) assert.equal(Object.hasOwn(restored, key), false, key);
-  vm.runInContext(src("js/race/quali-model.js"), b.ctx);
+  vm.runInContext(src("js/race/quali-model.js"), b.ctx, { filename: absSrc("js/race/quali-model.js") });
   const cars = [0, 1].map((i) => ({ driverId: "haas:" + i, team: { id: "haas" }, isPlayer: i === 0 }));
   const model = b.ctx.Quali.create({ season: restored, seasonMode: true, cars, track: { def: { id: "t0" } } });
   assert.deepEqual(Array.from(model.order(cars), (car) => car.driverId), ["haas:1", "haas:0"]);
@@ -407,7 +408,7 @@ function beforeQualifying(season) {
 
 function scoredWeekend({ sprint = true, completedLaps = 1, seedBeforeExport = false, previousRound = false } = {}) {
   const h = loadHarness();
-  vm.runInContext(src("js/race/race-control.js"), h.ctx);
+  vm.runInContext(src("js/race/race-control.js"), h.ctx, { filename: absSrc("js/race/race-control.js") });
   h.SeasonCal.engage("season");
   const season = h.SeasonCal.applyConfig({ trackIds: ["t0", "t1"], sprint, sprintIds: ["t0", "t1"], laps: 10 }).season;
   const cars = [
@@ -509,7 +510,7 @@ test("older backup preserves completed local qualifying, including the first rac
     assert.equal(result.applied.includes("season"), false);
     assert.equal(h.store.keyRevision("season"), revision, "preservation must not rewrite the season");
     assert.equal(h.store.get("season").seed, 77);
-    vm.runInContext(src("js/race/quali-model.js"), h.ctx);
+    vm.runInContext(src("js/race/quali-model.js"), h.ctx, { filename: absSrc("js/race/quali-model.js") });
     const cars = [0, 1].map((i) => ({ driverId: "haas:" + i, team: { id: "haas" }, isPlayer: i === 0 }));
     const model = h.ctx.Quali.create({ season: h.SeasonCal.load(), seasonMode: true, cars, track: { def: { id: "t0" } } });
     assert.deepEqual(Array.from(model.order(cars), (car) => car.driverId), ["haas:1", "haas:0"]);
@@ -581,7 +582,7 @@ test("qualifying completeness follows standalone real/custom/Legends field rules
     const envelope = envWith({ season: beforeQualifying(weekend) });
     assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"), selected);
     assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false, selected);
-    vm.runInContext(src("js/race/quali-model.js"), h.ctx);
+    vm.runInContext(src("js/race/quali-model.js"), h.ctx, { filename: absSrc("js/race/quali-model.js") });
     const cars = weekend.qualiOrder.map(row => ({ driverId: row.id, team: { id: row.id.split(":")[0] },
       isPlayer: row.id === selected + ":0" }));
     const model = h.ctx.Quali.create({ season: h.SeasonCal.load(), seasonMode: true, cars, track: { def: { id: "t0" } } });
@@ -981,8 +982,8 @@ function bootBackupUi(options = {}) {
     PhysicsConsts: { DIFF: { EASY: 1 } },
   };
   sb.window = sb;
-  vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });
-  vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
+  vm.runInNewContext(DOM_SOURCE, sb, { filename: absSrc("js/ui/dom.js") });
+  vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: absSrc("js/career/career-ui.js") });
   const ui = sb.CareerScreen.create(G);
   ui.openSlots();
 
@@ -1629,7 +1630,7 @@ test("import keeps the Daily per-class bests keyed by a JSON records context (#2
   const daily = JSON.parse(b.disk.get("apex26.daily.v1"));
   assert.deepEqual(daily.days["2026-10-15"].classes, { [context]: { best: 80, laps: 1 } }, "the class entry survives import");
 
-  vm.runInContext(src("js/race/daily-challenge.js"), b.ctx);
+  vm.runInContext(src("js/race/daily-challenge.js"), b.ctx, { filename: absSrc("js/race/daily-challenge.js") });
   const d = vm.runInContext("DailyChallenge", b.ctx).create({
     store: b.store, fmtTime: (t) => t.toFixed(3), startRace() {}, ttDistance: 3,
     records: { key: () => context, restoreDaily() {}, prepareDaily() {} },
@@ -1658,7 +1659,7 @@ test("native Daily backup round-trips 61 days of nine full records contexts", as
   const a = loadHarness();
   a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
   a.Career.load();
-  vm.runInContext(src("js/race/daily-challenge.js"), a.ctx);
+  vm.runInContext(src("js/race/daily-challenge.js"), a.ctx, { filename: absSrc("js/race/daily-challenge.js") });
   const daily = vm.runInContext("DailyChallenge", a.ctx).create({ store: a.store });
   // SessionRecords contexts include the complete physics and car config.
   const config = Object.fromEntries(Array.from({ length: 40 }, (_, i) => ["physics" + i, 0.84 + i]));

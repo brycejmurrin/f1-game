@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { makeDom } from '../helpers/mini-dom.mjs';
+import { absSrc } from "../helpers/abs-src.mjs";
 
 function harness(online) {
   const dom = makeDom();
@@ -22,7 +23,7 @@ function harness(online) {
     DataTelemetry: create({ loadTelemetry: empty, closeTelemPopup() {} }),
     DataRealRace: create({ loadRealRace: empty, cancel() {} }), DataExport: create({ loadExport: empty }) });
   for (const file of ['js/ui/dom.js', 'js/data/hub.js']) {
-    vm.runInContext(fs.readFileSync(new URL('../../' + file, import.meta.url), 'utf8'), ctx, { filename: file });
+    vm.runInContext(fs.readFileSync(new URL('../../' + file, import.meta.url), 'utf8'), ctx, { filename: absSrc(file) });
   }
   const hub = vm.runInContext('DataHub', ctx);
   const root = dom.byId('datahub'); root.hidden = true;

@@ -20,6 +20,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -49,9 +50,9 @@ function bootInput({ coarse = false, orientation, pads = null, listeners = null 
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   return vm.runInContext("Input", ctx);
 }
 
@@ -312,7 +313,7 @@ test("the CAM button's accessible name starts with the word it shows", () => {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/camera/mode-switch.js"), ctx, { filename: "js/camera/mode-switch.js" });
+  vm.runInContext(read("js/camera/mode-switch.js"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const G = { $: (id) => (id === "btn-cam" ? btn : null), camMode: 0, store: { set() {} } };
   const cams = vm.runInContext("CamModes", ctx).create(G);
   assert.equal(btn.textContent, "CHASE");
@@ -343,7 +344,7 @@ function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = f
     navigator: { serviceWorker: { controller: controller ? { scriptURL: "https://x.test/sw.js?v=" + controller } : null } },
   };
   vm.createContext(sb);
-  vm.runInContext(read("js/ui/update-check.js"), sb, { filename: "js/ui/update-check.js" });
+  vm.runInContext(read("js/ui/update-check.js"), sb, { filename: absSrc("js/ui/update-check.js") });
   const UC = vm.runInContext("UpdateCheck", sb);
   const u = UC.create({
     now: () => t, inRace: () => racing, chip: () => chip,
@@ -537,7 +538,7 @@ function generationHarness() {
     setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
     setInterval: () => 1, clearInterval() {}, Log: { info() {} },
   });
-  vm.runInContext(read("js/ui/update-check.js"), sb);
+  vm.runInContext(read("js/ui/update-check.js"), sb, { filename: absSrc("js/ui/update-check.js") });
   const UC = vm.runInContext("UpdateCheck", sb), u = UC.create({ booted: 100 });
   return { UC, u, sw, makeWorker, replies, timers, sb };
 }
@@ -586,7 +587,7 @@ function generationLoader(h, appended) {
     createElement: () => ({ dataset: {} }),
     head: { appendChild(node) { appended.push(node.src); queueMicrotask(() => node.onload()); } },
   };
-  vm.runInContext(read("js/core/script-loader.js"), h.sb);
+  vm.runInContext(read("js/core/script-loader.js"), h.sb, { filename: absSrc("js/core/script-loader.js") });
   return vm.runInContext("ScriptLoader.create()", h.sb);
 }
 

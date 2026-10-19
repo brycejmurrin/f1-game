@@ -47,7 +47,7 @@ function loadMenuNav({ document, layer, zoom } = {}) {
   ctx.window.Log = ctx.Log;
   if (zoom) ctx.window.CssZoom = { of: () => zoom, toLocalDelta: (_el, px) => px / zoom };
   ctx.window.addEventListener = () => {};
-  vm.runInNewContext(SRC, ctx, { filename: "menunav.js" });
+  vm.runInNewContext(SRC, ctx, { filename: path.resolve(SRC_PATH) });
   return ctx.window.MenuNav;
 }
 

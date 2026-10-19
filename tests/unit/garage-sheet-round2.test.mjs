@@ -15,6 +15,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -34,7 +35,7 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
   };
   sb.window = sb;
   vm.createContext(sb);
-  const run = (f) => vm.runInContext(src(f), sb, { filename: f });
+  const run = (f) => vm.runInContext(src(f), sb, { filename: absSrc(f) });
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/car/parts.js", "js/data/teams.js", "js/career/regulations.js"]) run(f);
   run("js/garage/experience.js");
   if (era) sb.Parts.setLegality(sb.Regulations.legalityFor(era), era);
@@ -67,7 +68,7 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
     teamSwatch: () => dom.document.createElement("span"), setTeamPicker() {}, openCustomize() {},
     livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
   };
-  vm.runInContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
+  vm.runInContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
   const ui = sb.SetupUI.create(G);
   return { dom, ui, G, sb, saved, parts, team };
 }
@@ -174,7 +175,7 @@ function sceneBoard({ unlimited = false, owned = false, tdev = 0 } = {}) {
   for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/track/core/geom.js", "js/track/core/pit.js",
                    "js/garage/scene-prims.js", "js/garage/scene-equipment.js", "js/garage/scene-live.js", "js/garage/scene-dress.js",
                    "js/garage/experience.js", "js/garage/scene.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const team = vm.runInContext('Teams.LIST.find(t => t.id === "mercedes")', ctx);
   const ownedSet = new Set();
   ctx.Career = {

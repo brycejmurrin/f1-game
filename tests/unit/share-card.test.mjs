@@ -5,12 +5,13 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function load(extra = {}) {
   const ctx = vm.createContext({ Object, Array, String, Number, Math, Promise, setTimeout, clearTimeout, ...extra });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/share/share-card.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/share/share-card.js"), "utf8"), ctx, { filename: absSrc("js/share/share-card.js") });
   return vm.runInContext("ShareCard", ctx);
 }
 
@@ -93,7 +94,7 @@ test("Daily Challenge exposes a delivery hook built from its canonical result", 
       async deliver(...args) { delivered.push(args); return "downloaded"; },
     },
   });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx, { filename: absSrc("js/race/daily-challenge.js") });
   const Daily = vm.runInContext("DailyChallenge", ctx);
   const disk = new Map(), G = {
     store: { get: (k, d) => disk.has(k) ? disk.get(k) : d, set: (k, v) => disk.set(k, v) },
@@ -129,7 +130,7 @@ test("render waits on both card fonts, paints the layout with a real QR, encodes
   }
   const sb = vm.createContext({ Object, Array, String, Number, Math, Promise, setTimeout, clearTimeout, Uint8Array, TextEncoder, OffscreenCanvas });
   for (const f of ["js/net/qr.js", "js/share/share-card-layout.js", "js/share/share-card.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: absSrc(f) });
   const card = vm.runInContext("ShareCard", sb);
   const link = "https://example.test/#share=APXD1.x";
   const model = { kind: "daily", trackName: "Spa-Francorchamps", title: "DAILY", hero: { label: "BEST", value: "1:21.345", medal: "GOLD", streak: 4 },

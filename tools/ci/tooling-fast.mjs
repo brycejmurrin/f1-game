@@ -1312,6 +1312,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/visual-oracle.test.mjs",
   // #2960: opt-in vm-debug-preload turns a no-filename brake-cue load into a file:// URL.
   "tests/unit/vm-debug-preload.test.mjs",
+  // #2961: vm source loads in tests/unit and tests/helpers name absolute filenames (vm-filename-lint).
+  "tests/unit/vm-filename-lint.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",

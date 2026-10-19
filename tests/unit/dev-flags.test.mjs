@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/core/dev-flags.js"), "utf8");
@@ -26,7 +27,7 @@ function boot({ search = "", hash = "", store = {}, gameStore = null } = {}) {
   if (gameStore) sb.GameStore = { store: { raw: (k) => (k in gameStore ? gameStore[k] : null) } };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(SRC, ctx, { filename: "js/core/dev-flags.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/core/dev-flags.js") });
   return vm.runInContext("window.DevFlags", ctx);
 }
 

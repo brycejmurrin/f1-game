@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -56,9 +57,9 @@ function boot(initOpts) {
   sb.KeyboardEvent = class extends sb.Event {};
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   for (const f of ["js/input/controller-profiles.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el(), initOpts);
   const key = (code, down) => (listeners[down ? "keydown" : "keyup"] || [])
@@ -435,7 +436,7 @@ function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = null) {
     sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
     sb.clearTimeout = () => {};
   }
-  vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
+  vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: absSrc("js/ui/key-binds.js") });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
   const store = disk
     ? {
@@ -1381,7 +1382,7 @@ test("nintendo label mode confirms on the physical A (standard index 1) and back
 
 test("I-09: a right/middle mouse button neither presses a hold button nor fires a tap; touch and left mouse do", () => {
   const ctx = vm.createContext({ Math, Set, Map, Object, Array, document: null });
-  vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: "js/input/hold-buttons.js" });
+  vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
   const InputHoldButtons = vm.runInContext("InputHoldButtons", ctx);
   const els = {};
   ctx.document = { getElementById: (id) => (els[id] ||= { l: {}, addEventListener(t, f) { this.l[t] = f; }, setPointerCapture() {} }) };
@@ -1411,7 +1412,7 @@ test("analog hold buttons preserve the strongest remaining touch across release 
       addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
     const ctx = vm.createContext({ document: { getElementById: () => button },
       getComputedStyle: () => ({ display: "block", visibility: "visible" }) });
-    vm.runInContext(read("js/input/hold-buttons.js"), ctx);
+    vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
     const api = vm.runInContext("InputHoldButtons", ctx);
     const resetArgs = [], edges = [], values = [];
     const hb = api.create({ clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll: (v) => resetArgs.push(v) });
@@ -1508,7 +1509,7 @@ test("phone ownership, parked diagnostics and controls refresher preserve drivin
   const disk = { onboarded: 7, onboardRaces: 9, coachStats: { corners: 12 } };
   const r = bootUi(true, {}, disk, (g) => {
     g.__ctx = vm.createContext(g);
-    vm.runInContext(read("js/ui/onboard.js"), g.__ctx);
+    vm.runInContext(read("js/ui/onboard.js"), g.__ctx, { filename: absSrc("js/ui/onboard.js") });
   });
   const { Input, $, sb, kb, fire } = r;
   let now = 100; sb.performance.now = () => now;

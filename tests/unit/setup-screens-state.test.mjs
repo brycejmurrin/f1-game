@@ -30,6 +30,7 @@ import { fileURLToPath } from "node:url";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { DOM_SOURCE } from "../helpers/seed-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -168,9 +169,9 @@ function loadCareerUi(careerOpts = {}, uiGlobals = {}) {
     PhysicsConsts: { DIFF: { EASY: 1 } },
     ...uiGlobals,
   });
-  vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
-  vm.runInNewContext(src("js/career/experience.js"), sb, { filename: "js/career/experience.js" });
-  vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
+  vm.runInNewContext(DOM_SOURCE, sb, { filename: absSrc("js/ui/dom.js") });   // Dom.el, over this sandbox's document
+  vm.runInNewContext(src("js/career/experience.js"), sb, { filename: absSrc("js/career/experience.js") });
+  vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: absSrc("js/career/career-ui.js") });
   const ui = sb.CareerScreen.create(G);
   return { dom, ui, Career, G, $: G.$ };
 }
@@ -459,8 +460,8 @@ function loadSeasonUi(trackIds = ["a", "b"], cal = {}) {
     },
     Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
   });
-  vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
-  vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: "js/career/season-ui.js" });
+  vm.runInNewContext(DOM_SOURCE, sb, { filename: absSrc("js/ui/dom.js") });   // Dom.el, over this sandbox's document
+  vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: absSrc("js/career/season-ui.js") });
   return { dom, ui: sb.SeasonUI.create(G), $: G.$, G };
 }
 
@@ -634,8 +635,8 @@ function loadSetupUi() {
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
     PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
   });
-  vm.runInNewContext(src("js/garage/setup-experiments.js"), sb);
-  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
+  vm.runInNewContext(src("js/garage/setup-experiments.js"), sb, { filename: absSrc("js/garage/setup-experiments.js") });
+  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
   return { dom, ui: sb.SetupUI.create(G), G, $: G.$, observers };
 }
 
@@ -686,8 +687,8 @@ test("garage: Change Car shows the sheet with aria-busy before heavy buildSetup 
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
     PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
   });
-  vm.runInNewContext(src("js/garage/setup-experiments.js"), sb);
-  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
+  vm.runInNewContext(src("js/garage/setup-experiments.js"), sb, { filename: absSrc("js/garage/setup-experiments.js") });
+  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
   const deferred = sb.SetupUI.create(g);
   dom.byId("select").hidden = false;
   deferred.openSetup();

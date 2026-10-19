@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -55,20 +56,20 @@ function load(seasonLen, raceRules = false, onWrite = () => {}) {
   // js/core/mat4.js first — the shared scalar helpers (M4.clamp) career.js binds at eval.
   seedLog(ctx);
   seedHash32(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   // The REAL ratings table, because the goal draw now reaches it: beatRival ranks
   // the grid by DriverRatings.overall(). The driver loader below keeps its own
   // stub instead — its market tests pin overall() per code on purpose.
   vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx,
-    { filename: "js/data/driver-ratings.js" });
+    { filename: absSrc("js/data/driver-ratings.js") });
   if (raceRules) {
     for (const file of ["js/race/sporting-regs.js", "js/race/race-control.js", "js/career/season-cal.js"]) {
-      vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: file });
+      vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
     }
   }
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
-    { filename: "js/career/career.js" });
+    { filename: absSrc("js/career/career.js") });
   return vm.runInContext(raceRules
     ? "({ Career, SeasonCal, SportingRegs, RaceControl })" : "Career", ctx);
 }
@@ -348,16 +349,16 @@ function loadDriver(ratings, opts = {}) {
   });
   seedLog(ctx);
   seedHash32(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   // REGULATIONS TOO, so era() is exercised rather than short-circuiting on
   // `typeof Regulations === "undefined"` — without it every era assertion
   // below passes VACUOUSLY, which is exactly how a wrong guard survives a
   // suite. It reads Parts.CATALOG at call time and the stub supplies one.
   vm.runInContext(readFileSync(join(ROOT, "js/career/regulations.js"), "utf8"), ctx,
-    { filename: "js/career/regulations.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx);
+    { filename: absSrc("js/career/regulations.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
-    { filename: "js/career/career.js" });
+    { filename: absSrc("js/career/career.js") });
   return vm.runInContext("Career", ctx);
 }
 
@@ -509,15 +510,15 @@ function loadWithSeason(n) {
   });
   seedLog(ctx);
   seedHash32(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   // The REAL ratings table, because the goal draw now reaches it: beatRival ranks
   // the grid by DriverRatings.overall(). The driver loader below keeps its own
   // stub instead — its market tests pin overall() per code on purpose.
   vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx,
-    { filename: "js/data/driver-ratings.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx);
+    { filename: absSrc("js/data/driver-ratings.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
-    { filename: "js/career/career.js" });
+    { filename: absSrc("js/career/career.js") });
   return vm.runInContext("Career", ctx);
 }
 

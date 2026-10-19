@@ -19,6 +19,7 @@ import { check, readDefaults, isGarageKey } from "../../tools/gen/garage-default
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
@@ -272,7 +273,7 @@ function loadPartsVm() {
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   return { ctx, ...vm.runInContext("({ Teams, Parts, M4 })", ctx) };
 }
 // A build every swap of which still ends over cap: the most expensive available option in
@@ -336,9 +337,9 @@ test("setup sheet: a swap on an over-cap build is accepted only while G.unlimite
     ctx.GameStore = { store: { get: (key, fallback) => tuneStore.has(key) ? tuneStore.get(key) : fallback,
       set: (key, value) => value === undefined ? tuneStore.delete(key) : tuneStore.set(key, value) } };
     for (const file of ["js/garage/setup-tune.js", "js/garage/setup-experiments.js"])
-      vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: file });
+      vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc(file) });
     const SetupUI = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8").replace(/^const\b/gm, "var")
-      + "\n;SetupUI", ctx, { filename: "js/garage/setup-sheet.js" });
+      + "\n;SetupUI", ctx, { filename: absSrc("js/garage/setup-sheet.js") });
     const ui = SetupUI.create(G);
     ui.openSetup();
     const rows = dom.byId("cs-options").querySelectorAll(".cs-opt")
@@ -375,7 +376,7 @@ test("a fresh garage preserves the uploaded setup sheet, including deliberate tu
   });
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/garage/setup-tune.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const S = vm.runInContext("SetupTune", ctx);
   const shipped = Object.keys(def).filter((k) => k.startsWith("setup."));
   assert.ok(shipped.length > 0);

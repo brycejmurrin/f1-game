@@ -79,7 +79,7 @@ function boot({ queuedFrames = false } = {}) {
   sb.self = sb;
   vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/sheet-shape.js"), "utf8"),
-    sb, { filename: "sheetshape.js" });
+    sb, { filename: path.join(ROOT, "js/ui/sheet-shape.js") });
 
   const styleMutation = () => {
     for (const observer of observers)

@@ -6618,7 +6618,8 @@
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/track-foundation.test.mjs",
-        "tests/unit/traffic-arc-buckets.test.mjs"
+        "tests/unit/traffic-arc-buckets.test.mjs",
+        "tests/unit/vm-filename-lint.test.mjs"
       ]
     },
     "js/garage/arrival.js": {
@@ -8294,12 +8295,14 @@
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
-        "tests/unit/net-lobby-lifecycle.test.mjs"
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs"
       ],
       "deliver": [
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-lobby-lifecycle.test.mjs"
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs"
       ],
       "handOff": [
         "tests/unit/lobby-codes.test.mjs"
@@ -8324,7 +8327,8 @@
       "replace": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
-        "tests/unit/net-lobby-lifecycle.test.mjs"
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs"
       ],
       "*": [
         "tests/unit/net-authority.test.mjs"
@@ -8509,6 +8513,7 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
@@ -8524,6 +8529,7 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
       "nameTheMoment": [
@@ -8535,6 +8541,7 @@
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
       ],
       "ownsClassification": [
@@ -8566,6 +8573,7 @@
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
@@ -8575,6 +8583,7 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
       "strategyState": [

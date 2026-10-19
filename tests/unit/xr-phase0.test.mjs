@@ -7,6 +7,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { waitXrFrames, installIwerFixture } from "../helpers/iwer-install.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -62,9 +63,9 @@ function bootXr() {
   });
   seedLog(ctx);
   // M4 is a dependency of xr-rig.
-  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
-  vm.runInContext(read("js/xr/xr-rig.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-rig.js" });
-  vm.runInContext(read("js/xr/xr-input.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-input.js" });
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/xr/xr-rig.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-rig.js") });
+  vm.runInContext(read("js/xr/xr-input.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-input.js") });
   return ctx;
 }
 
@@ -184,7 +185,7 @@ test("XrSession.sessionInit lists webgpu only when preferred; featureGranted rea
   // sessionInit is pure — reuse the XR VM (no navigator.xr required).
   // Feature detection must NOT trust typeof XRGPUBinding alone (three.js #33497).
   const ctx = bootXr();
-  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
   const a = ctx.XrSession.sessionInit(false);
   assert.ok(!a.optionalFeatures.includes("webgpu"));
   const b = ctx.XrSession.sessionInit(true);
@@ -216,8 +217,8 @@ test("vendor ships XRButton / VRButton / WebGLXRFallback and pinned IWER under t
 
 test("XrBoot façade: comfort off until presenting; applyEyes null outside XR", () => {
   const ctx = bootXr();
-  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   assert.equal(ctx.XrBoot.comfort(), false);
   assert.equal(ctx.XrBoot.loopByXr(), false);
   assert.equal(ctx.XrBoot.camComfort(false), false);
@@ -231,8 +232,8 @@ test("B4: XrBoot.afterTick dedupes window rAF so EXIT VR cannot double-loop", ()
   const ctx = bootXr();
   const rafCalls = [];
   ctx.requestAnimationFrame = (fn) => { rafCalls.push(fn); return rafCalls.length; };
-  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   let ticks = 0;
   const tick = () => { ticks++; };
   ctx.XrBoot.bind({
@@ -256,8 +257,8 @@ test("B4: XrBoot.afterTick dedupes window rAF so EXIT VR cannot double-loop", ()
 
 test("B5: VR cockpit cam override does not persist; restore returns to saved mode", () => {
   const ctx = bootXr();
-  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   let cam = 1; // chase-ish
   const store = [];
   ctx.CamModes = { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }] };
@@ -291,8 +292,8 @@ test("B3: ensureXrBackend refuses silently only when storage is blocked; else pi
   };
   let reloaded = 0;
   ctx.location = { reload() { reloaded++; } };
-  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   // No gfx bound → cannot attach → pin + reload.
   const r = ctx.XrBoot.ensureXrBackend();
   assert.equal(r.ok, false);
@@ -326,7 +327,7 @@ test("CamModes.setCamMode({persist:false}) skips store.write", () => {
   ctx.window = ctx;
   ctx.CamTunerPanel = { refresh() {} };
   ctx.GameAudio = undefined;
-  vm.runInContext(read("js/camera/mode-switch.js").replace(/^window\.CamModes/, "var CamModes").replace(/^const\b/gm, "var"), ctx, { filename: "mode-switch.js" });
+  vm.runInContext(read("js/camera/mode-switch.js").replace(/^window\.CamModes/, "var CamModes").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   // mode-switch assigns window.CamModes — pull it off the sandbox.
   const CamModes = ctx.CamModes || ctx.window.CamModes;
   const api = CamModes.create(G);
@@ -381,7 +382,7 @@ test("XrUi.mount creates hidden #xr-enter until capability probe says yes", () =
     end: async () => {},
     on: () => () => {},
   };
-  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-ui.js" });
+  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-ui.js") });
   const btn = ctx.XrUi.mount(body);
   assert.equal(btn.id, "xr-enter");
   assert.equal(kids.length, 1);
@@ -810,7 +811,7 @@ test("mountUi on a flat session does not fetch LAZY_XR", () => {
   seedLog(ctx);
   ctx.window = ctx;
   ctx.fetched = 0;
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   ctx.XrBoot.mountUi();
   assert.equal(ctx.fetched, 0);
   assert.equal(typeof ctx.window.__apexXr.ensure, "function");
@@ -838,7 +839,7 @@ test("XrBoot.ensureXr: a retry after a failed load injects only the files not ye
     }
     return ok;
   } }) };
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   assert.equal(await ctx.XrBoot.ensureXr(), false);
   assert.deepEqual(injected, ["xr1", "xr2"]);
   assert.equal(await ctx.XrBoot.ensureXr(), true);
@@ -864,7 +865,7 @@ async function mountWith({ xr, ls = {} }) {
     setTimeout: (fn) => setImmediate(fn),   // the probe's cap fires on the next turn
     clearTimeout() {},
   });
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   ctx.XrBoot.mountUi();
   for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
   return loads;
@@ -1000,7 +1001,7 @@ test('immersive cockpit blocks keyboard and latched look-back while flat cockpit
     sample(_, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; return out; },
     banking: (_, __, ___, out) => { out.dy = 0; out.roll = 0; return out; },
   };
-  vm.runInContext(read('js/camera/vantage.js').replace(/^const\b/gm, 'var'), ctx);
+  vm.runInContext(read('js/camera/vantage.js').replace(/^const\b/gm, 'var'), ctx, { filename: absSrc("js/camera/vantage.js") });
   const track = { total: 100, n: 4, py: [0, 0, 0, 0], def: {} };
   const direction = () => { const v = ctx.GameCams.vantage(track, 'cockpit', 10, 0, 0, 0, { att: {}, carPos: [0, 10], carHead: 0 }); return v.tgt[2] - v.eye[2]; };
   assert.ok(direction() < 0, 'flat key look-back remains available');
@@ -1073,8 +1074,8 @@ test("XrRig.worldFromAnchorTo builds an orthonormal basis: -Z is the car's forwa
 
 test("XrBoot.present forwards to gfx.presentXR only when the backend can; setFoveation delegates or reports false", () => {
   const ctx = bootXr();
-  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-session.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   const calls = [];
   const gfx = { presentXR: (e, po) => calls.push([e, po]), setFoveation: (v) => { calls.push(["fov", v]); return "ok"; },
     attachXrSession: async () => ({}), xrCapable: () => true };
@@ -1089,8 +1090,8 @@ test("XrBoot.present forwards to gfx.presentXR only when the backend can; setFov
   assert.equal(ctx.XrBoot.setFoveation(0.5), "ok");
   assert.deepEqual(calls[1], ["fov", 0.5]);
   const bare = bootXr();
-  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), bare, { filename: "xr-session.js" });
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), bare, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), bare, { filename: absSrc("js/xr/xr-session.js") });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), bare, { filename: absSrc("js/xr/xr-boot.js") });
   bare.XrBoot.bind({ gfx: { attachXrSession: async () => ({}), xrCapable: () => true }, tickBody() {}, windowTick() {}, getCamMode: () => 0, setCamMode() {} });
   assert.equal(bare.XrBoot.setFoveation(0.5), false, "backend without setFoveation");
 });
@@ -1106,7 +1107,7 @@ test("XrUi.flashMessage disables the button for 3.5 s then restores the label; o
   ctx.XrSession = { isPresenting: () => false, isSupported: () => true, probe: async () => true,
     start: async () => { starts++; return {}; }, end: async () => {}, on: () => () => {} };
   ctx.XrBoot = { ensureXrBackend: () => ({ ok: false, message: "VR needs WebGL2 (allow site storage)" }) };
-  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-ui.js" });
+  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-ui.js") });
   await ctx.XrUi.onClick({ preventDefault() {}, stopPropagation() {} });
   assert.equal(el.textContent, "VR needs WebGL2 (allow site storage)");
   assert.equal(el.disabled, true);

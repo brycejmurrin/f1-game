@@ -41,6 +41,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import * as espree from "espree";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -182,7 +183,7 @@ function loadStore(seed = {}) {
   sb.window = sb; sb.addEventListener = () => {};
   const ctx = vm.createContext(sb);
   seedSaveMigrate(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/store.js"), "utf8"), ctx, { filename: "js/core/store.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/store.js"), "utf8"), ctx, { filename: absSrc("js/core/store.js") });
   return { GameStore: vm.runInContext("GameStore", ctx), disk };
 }
 const host = (v) => JSON.parse(JSON.stringify(v));

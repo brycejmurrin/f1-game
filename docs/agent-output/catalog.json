@@ -587,6 +587,11 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/check/vm-filename-lint.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/check/vm-portable.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",

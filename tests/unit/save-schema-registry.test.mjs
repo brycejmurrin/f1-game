@@ -14,6 +14,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -74,8 +75,8 @@ function loadRegistry() {
   };
   vm.createContext(ctx);
   seedSaveMigrate(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/save-schema-registry.js"), "utf8"), ctx, { filename: "js/core/save-schema-registry.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8"), ctx, { filename: "js/ui/settings-export.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/save-schema-registry.js"), "utf8"), ctx, { filename: absSrc("js/core/save-schema-registry.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8"), ctx, { filename: absSrc("js/ui/settings-export.js") });
   return vm.runInContext("SaveSchemaRegistry", ctx);
 }
 
