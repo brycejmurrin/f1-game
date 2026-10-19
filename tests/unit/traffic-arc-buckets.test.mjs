@@ -262,3 +262,37 @@ test("scanTraffic: a parked car 80 m ahead is a BLOCKER at 50 m/s closing, not a
   assert.equal(scan(55, 60, 45).blocker, null, "10 m/s closing at 60 m: no blocker");
   assert.equal(scan(55, 30, 55).blocker && scan(55, 30, 55).blocker.id, 1, "inside 34 m is unchanged");
 });
+
+test("forArcNear's rear trim skips only cars the traffic scan ignores, in the same order (#3109)", () => {
+  // scanTraffic passes BACK: the walk starts floor(BACK/W)+2 buckets back instead of `span`. Every car the
+  // symmetric walk visits that the scan could act on (wrapped dprog >= -BACK, past the REJ reject) must still
+  // be visited, in the same order — that is what keeps blocker/tow/chaser tie-breaks bit-identical.
+  const Collide = loadCollide();
+  const rnd = mulberry32(3109);
+  let trimmed = 0;
+  for (const L of [1200, 1500, 3337, 5793, 7004]) {
+    for (let run = 0; run < 60; run++) {
+      const centre = rnd() * L, spread = 40 + rnd() * 600, cars = [];
+      for (let i = 0; i < 22; i++) {
+        const lap = rnd() < 0.15 ? L : 0;
+        const prog = centre + (rnd() - 0.5) * spread + lap;
+        cars.push({ id: i, prog: prog + (rnd() - 0.5) * 2, _snapProg: prog });
+      }
+      Collide.fillArcBuckets(cars, L, TRAFFIC_BUCKET_M, (c) => c._snapProg);
+      for (const c of cars) {
+        const BACK = 5 + rnd() * 120, reach = Math.max(Math.max(34.1, BACK + 0.1), 10 + (rnd() * 90) ** 2 / 22);
+        const acts = (o) => {
+          const raw = o._snapProg - c.prog, ad = Math.abs(raw);
+          if (ad > reach && ad < L - reach) return false;
+          return ((raw + L / 2) % L + L) % L - L / 2 >= -BACK;
+        };
+        const all = [], kept = [];
+        Collide.forArcNear(c, L, reach, (o) => all.push(o), (o) => o.prog);
+        Collide.forArcNear(c, L, reach, (o) => kept.push(o), (o) => o.prog, BACK);
+        if (kept.length < all.length) trimmed++;
+        assert.deepEqual(kept.filter(acts).map((o) => o.id), all.filter(acts).map((o) => o.id), `L=${L} car ${c.id} BACK=${BACK.toFixed(1)}`);
+      }
+    }
+  }
+  assert.ok(trimmed > 100, "the trim must actually fire in this sweep (" + trimmed + ")");
+});
