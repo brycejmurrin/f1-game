@@ -87,6 +87,17 @@ const Car3D = (function () {
     wedge:   Object.freeze({ noseTipZ:  0.52, noseSlim: 1.45, noseDroop: -0.028, airbox: 0.28, fin: 0, mirror: 1, inlet: -0.110, inletH: -0.260, inletW:  0.100, undercutD:  0.220, waist: -0.220, floorStep:  0.120, coverCrown:  0.200, coverLift:  0.200, wingStyle: W({ flaps: 2, arch: 0.55, twist: 0.20, teCurve: 0.090, chordTaper: 0.30, tipRise: 0.024 }) }),
     // Barge (reads): short fat blunt hull, wide low pods, heavy waist, low flat cover.
     barge:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.10, noseDroop: -0.006, airbox: 1.55, fin: 1, mirror: 2, inlet:  0.100, inletH: -0.060, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep: -0.120, coverCrown: -0.080, coverLift: -0.100, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
+    // DESIGN PREVIEW (B·D1, 2026-10-19) — five candidates for Bryce to pick from.
+    // Highnose: 1990 Tyrrell 019 / Benetton B191 raised nose, slim cone, anhedral-ish wing.
+    highnose: Object.freeze({ noseTipZ: 0.16, noseSlim: 0.62, noseDroop:  0.240, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.020, inletH:  0.040, inletW:  0.020, undercutD:  0.040, waist: -0.040, floorStep:  0.020, coverCrown:  0.040, coverLift:  0.040, wingStyle: W({ arch: 1.10, twist: 0.30, teCurve: 0.14, foot: 1.40, tipRise: 0.060 }) }),
+    // Sharkfin: 2008-11 / 2017 tall dorsal fin over a long raised cover, clutter wing.
+    sharkfin: Object.freeze({ noseTipZ: 0.25, noseSlim: 0.70, noseDroop: -0.020, airbox: 0.80, fin: 2, finH: 0.30, finRear: 2.0, finW: 0.045, mirror: 2, inlet: -0.020, inletH: -0.060, inletW:  0.160, undercutD:  0.080, waist: -0.060, floorStep:  0.040, coverCrown:  0.060, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.90, twist: 0.38, teCurve: 0.18, chordTaper: 0.44, canard: 2, tipRise: 0.050 }) }),
+    // Zeropod: 2022 Mercedes W13 — pods squeezed to slivers, tall slot inlet, big airbox.
+    zeropod:  Object.freeze({ noseTipZ: 0.04, noseSlim: 0.92, noseDroop: -0.020, airbox: 1.60, fin: 0, mirror: 1, inlet:  0.000, inletH: -0.250, inletW: -0.300, undercutD:  0.120, waist: -0.300, floorStep:  0.060, coverCrown: -0.040, coverLift: -0.060, wingStyle: W({ arch: 0.45, twist: 0.15, teCurve: 0.06, chordTaper: 0.22, foot: 0.95, tipRise: 0.016 }) }),
+    // Downwash: 2023 RB19 — high wide mouth ramping steeply down to a low tail.
+    lowline:  Object.freeze({ noseTipZ: 0.20, noseSlim: 1.30, noseDroop: -0.028, airbox: 0.40, fin: 0, mirror: 0, inlet: -0.080, inletH: -0.200, inletW:  0.200, undercutD:  0.000, waist:  0.200, floorStep:  0.000, coverCrown: -0.080, coverLift: -0.160, wingStyle: W({ flaps: 2, arch: 0.30, twist: 0.10, teCurve: 0.04, chordTaper: 0.20, foot: 0.85, tipRise: 0.010 }) }),
+    // Stepnose: 2012 Caterham CT01 / Ferrari F2012 — tall tub crown stepping down to a low cone.
+    stepnose: Object.freeze({ noseTipZ: 0.28, noseSlim: 1.20, noseDroop: -0.028, noseStep: 0.20, airbox: 1.30, fin: 1, mirror: 2, inlet:  0.040, inletH:  0.100, inletW:  0.060, undercutD:  0.060, waist: -0.060, floorStep:  0.030, coverCrown:  0.080, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.75, twist: 0.30, teCurve: 0.14, chordTaper: 0.40, canard: 2, tipRise: 0.040 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -269,7 +280,8 @@ const Car3D = (function () {
     // 1900 mm car. The rails carry an edge lip and a gurney another ~45 mm
     // outboard of whatever this returns, so the cap leaves that much room.
     const floorX = (k) => Math.min(CAR_HALF - 0.055, k * floorEdge);
-    const floorStep = teamStyle.floorStep || 0;
+    // ≥ −0.03 (team worst −0.025): barge's −0.12 put the edge rail under the road (#3111 F6).
+    const floorStep = Math.max(-0.03, teamStyle.floorStep || 0);
     const floorStepY = floorStep * 0.85;
     const floorEdgeAt = (z) => {   // hoisted too: the rounded floor plate (CarShade.floor) follows it
       const t = Math.max(0, Math.min(1, (0.78 - z) / 2.36));
@@ -420,7 +432,8 @@ const Car3D = (function () {
     let coverGeom = null;
     if (!ckpt) {
       const engT = tier("engine");
-      const inScale = (engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0)) * teamStyle.airbox;
+      // ≤ 1.9 (grid max 1.85): arched x a 1.40 PU gave 3.36, hoop base over its 0.968 top (#3111 F5).
+      const inScale = Math.min(1.9, (engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0)) * teamStyle.airbox);
       const engSnork = engStyle ? !!engStyle.snork : engT === 2;
       // Roll hoop / snorkel / intake lips: airboxMeshColour (wrap sun wins).
       const airboxC = (typeof LiveryTex !== "undefined" && LiveryTex.airboxMeshColour)
@@ -568,12 +581,16 @@ const Car3D = (function () {
       // so the two never intersect. Garage/near: rounded loft so the ridge
       // is not a square plank where it meets the rear wing (Cadillac et al.).
       if (teamStyle.fin) {
-        const finH = teamStyle.fin >= 2 ? 0.19 : 0.095;
+        const finH = teamStyle.finH || (teamStyle.fin >= 2 ? 0.19 : 0.095);
         const ff = anchors.coverAt(-0.95), fr = anchors.coverAt(-1.85);
-        const bladeF = { z: ff.z, y: ff.top + finH * 0.5, w: 0.016, h: finH };
-        const bladeR = { z: fr.z, y: fr.top + finH * 0.33, w: 0.014, h: finH * 0.66 };
+        // finRear (preview bodies only): rear blade height as a share of finH;
+        // > 1 rakes the fin UP toward the rear wing (2008-10 / 2017 shark fin).
+        const finR = teamStyle.finRear ? Math.min(finH * teamStyle.finRear, 0.92 - fr.top) : finH * 0.66;
+        const finW = teamStyle.finW || 0.016;   // finW (preview): a thicker blade reads at phone size
+        const bladeF = { z: ff.z, y: ff.top + finH * 0.5, w: finW, h: finH };
+        const bladeR = { z: fr.z, y: fr.top + (teamStyle.finRear ? finR * 0.5 : finH * 0.33), w: finW * 0.875, h: finR };
         const crestF = { z: ff.z, y: ff.top + finH + 0.006, w: 0.020, h: 0.014 };
-        const crestR = { z: fr.z, y: fr.top + finH * 0.66 + 0.005, w: 0.018, h: 0.012 };
+        const crestR = { z: fr.z, y: fr.top + finR + 0.005, w: 0.018, h: 0.012 };
         if (shadeFlags.round && shadeFlags.coverHi) {
           CarShade.loft(out, bladeF, bladeR, c1, addTri, { n: 10 });
           CarShade.loft(out, crestF, crestR, accentC, addTri, { n: 8 });
@@ -835,13 +852,12 @@ const Car3D = (function () {
       const fenceN = Math.max(0, Math.min(10, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(2.25, floorStyle.fenceH));
       const fenceStep = fenceN > 1 ? 1.08 / (fenceN - 1) : 0;
-      // Floor fences sit outboard of the pod. Stock heights stay under the
-      // sponsor board (yFrac 0.32..0.80) so a side ray hits the board first
-      // (body-split). Tall STYLE fences (fenceH≫1) are allowed to climb toward
-      // the shoulder so the height knob still reads in a garage 3/4 shot.
+      // Floor fences sit outboard of the pod and stay under the sponsor board
+      // (yFrac 0.32..0.80) so a side ray hits the board first (body-split);
+      // tall STYLE fences climbed to 0.58, into the board (#3111 F14).
       const fenceCap = (z) => {
         const pod = anchors.podAt(z);
-        const frac = 0.28 + 0.30 * Math.max(0, Math.min(1, (fenceH - 1.0) / 1.25));
+        const frac = 0.28 + 0.02 * Math.max(0, Math.min(1, (fenceH - 1.0) / 1.25));
         return pod.bottom + frac * (pod.top - pod.bottom);
       };
       const fenceFit = (y, h, cap) => {
@@ -951,11 +967,13 @@ const Car3D = (function () {
       addBox(out, 0.14, cyb + 0.030, cz + 0.10, 0.10, 0.035, 0.18, capC, SURFACES.metal);
     }
     // SKIRT (STYLE): a painted strip down each floor edge. skirt≥2 widens it.
+    // Ends 4 cm ahead of the rear tyre (was −1.50, 14 cm into it; #3111 F11).
     if (!ckpt && floorStyle && floorStyle.skirt) {
       const sk = Math.max(1, Math.min(2, Math.round(floorStyle.skirt)));
+      const skF = 0.90, skR = AXLES.rearZ + AXLES.wheelY + 0.04;
       for (const s of [-1, 1])
-        addBox(out, s * 0.76, Math.max(CHASSIS.floor.cy + rideDY, 0.052) + 0.03, -0.30,
-               0.035 + 0.030 * (sk - 1), 0.07 + 0.04 * (sk - 1), 2.4, sk >= 2 ? accentC : c2);
+        addBox(out, s * 0.76, Math.max(CHASSIS.floor.cy + rideDY, 0.052) + 0.03, (skF + skR) / 2,
+               0.035 + 0.030 * (sk - 1), 0.07 + 0.04 * (sk - 1), skF - skR, sk >= 2 ? accentC : c2);
     }
 
     part("livery");
@@ -968,6 +986,13 @@ const Car3D = (function () {
     // 580 mm rearward when the nose was cut back to sit behind the front wing,
     // and a literal 2.70 would have painted a stripe in mid-air ahead of it.
     const styledTipZ = styledNoseStations(teamStyle)[0].z;
+    // Raised nose (preview highnose): twin wing pylons from the cone's underside
+    // down to the front-wing main plane, as on the 1990 Tyrrell 019 — without
+    // them the wing reads as floating 30 cm under the nose.
+    if ((teamStyle.noseDroop || 0) > 0.06) {
+      const pz = styledTipZ - 0.20, nb = anchors.noseAt(pz).bottom, wy = 0.10;
+      for (const sx of [-1, 1]) addBox(out, sx * 0.05, (nb + wy) / 2 + 0.01, pz, 0.012, nb - wy + 0.02, 0.16, DARK, SURFACES.carbon);
+    }
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(styledTipZ - 0.04);
     addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, 0.09, 0.016,
            styledTipZ - 0.04, 0, noseAccentFront.top + 0.008, 0.05, 0.014, c2);
@@ -1384,8 +1409,11 @@ const Car3D = (function () {
           addBox(out, p[0], p[1] + hr + 0.095, p[2], 0.020, 0.028, 0.070,
                  accentC, SURFACES.paint);
         }
-        // Painted brow bar across the crown — open_cell has none.
-        addBox(out, 0, crownY + hr + 0.055, 0.10, 0.42, 0.022, 0.10, accentC, SURFACES.paint);
+        // Painted brow bar across the crown — open_cell has none. It spans the
+        // outermost vanes (hoop[4]/[10]) instead of floating at ±0.21 (#3111 F12).
+        const bL = hoop[4], bR = hoop[10];
+        if (bL && bR) addBox(out, 0, (bL[1] + bR[1]) / 2 + hr + 0.055, (bL[2] + bR[2]) / 2,
+                             bR[0] - bL[0] + 0.030, 0.022, 0.10, accentC, SURFACES.paint);
       }
     }
 
@@ -1955,13 +1983,14 @@ const Car3D = (function () {
       const gbRibs     = gbStyle ? Math.max(0, Math.min(3, Math.round(gbStyle.ribs || 0))) : 0;
       const gbCaseWmul = Math.max(0.55, Math.min(1.45, (gbStyle && gbStyle.caseWidth) || 1));
       // STYLE cases: paint strakes / casing so they leave the under-wing shadow.
-      const gbPaint = !!(gbStyle && (gbStyle.rearFins || gbStyle.heatFins || (gbStyle.caseWidth && gbStyle.caseWidth < 0.85)));
+      // STYLE-only markers: heatFins rides factory/sig boxes too, which keep carbon strakes (#3111 F9).
+      const gbPaint = !!(gbStyle && (gbStyle.rearFins || (gbStyle.caseWidth && gbStyle.caseWidth < 0.85)));
       const gbStrakeC = gbPaint ? accentC : CARBON;
       if (gbStrakes > 0) {
         const half = (gbStrakes - 1) / 2;
         for (let i = 0; i < gbStrakes; i++) {
-          addBox(out, (i - half) * 0.24, 0.18 + gbStrakeH / 2, -2.28, 0.022, gbStrakeH, 0.55, gbStrakeC,
-                 gbPaint ? SURFACES.paint : SURFACES.carbon);
+          if (gbPaint) addBox(out, (i - half) * 0.24, 0.18 + gbStrakeH / 2, -2.28, 0.022, gbStrakeH, 0.55, gbStrakeC, SURFACES.paint);
+          else addBox(out, (i - half) * 0.24, 0.13 + gbStrakeH / 2, -2.20, 0.015, gbStrakeH, 0.42, CARBON);
         }
       }
       let gbCw = 0, gbCh = 0;
@@ -2075,9 +2104,11 @@ const Car3D = (function () {
     if (!ckpt && brakeStyle && brakeStyle.bigScoop) {
       const sc = (brakeStyle.cal || [0.85, 0.12, 0.10]).map((v) => Math.min(v, 1));
       const sm = Math.max(1, Math.min(1.45, (brakeStyle.rotorScale || 1) / 1.18));
+      // Grows in x/y only, 1 cm ahead of the tread: a depth x sm sat 8 cm in the tyre (#3111 F10).
+      const zB = AXLES.frontZ + AXLES.wheelY + 0.01;
       for (const s of [-1, 1]) {
-        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.40, 0.20 * sm, 0.26 * sm, 0.20 * sm, DARK);
-        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.52, 0.24 * sm, 0.28 * sm, 0.04, sc, SURFACES.metal);
+        addBox(out, s * 0.60, 0.34, zB + 0.10, 0.20 * sm, 0.26 * sm, 0.20, DARK);
+        addBox(out, s * 0.60, 0.34, zB + 0.22, 0.24 * sm, 0.28 * sm, 0.04, sc, SURFACES.metal);
       }
     }
 

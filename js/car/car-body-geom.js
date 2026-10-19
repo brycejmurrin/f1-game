@@ -27,6 +27,11 @@ const CarBodyGeom = (function () {
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
     const midY = mid.y + (s.noseDroop || 0) * (sil ? 0.85 : 0.45)
       + (sil ? (s.noseSlim < 0.7 ? -0.04 : 0) + (s.noseSlim > 1.2 ? 0.03 : 0) : 0);
+    if (sil) return conceptNose(s, [
+      { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
+        w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
+      { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * midSlim, t: mid.t },
+    ]);
     return [
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
         w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
@@ -37,6 +42,58 @@ const CarBodyGeom = (function () {
         w: root.w * (1 + (s.noseSlim - 1) * (sil ? 0.45 : 0.2)),
         h: root.h * (1 + (s.noseSlim - 1) * (sil ? 0.55 : 0.25)), t: root.t },
     ];
+  }
+  // A concept nose (#3111) keeps its tip and mid, the stations that carry its
+  // silhouette, under two seams the old recipe broke:
+  //  - ROOT: pinned to CHASSIS.nose[2], the section the monocoque starts from.
+  //    Moving it with noseTipZ opened a ~150 mm gap to the tub on the long
+  //    noses (no triangle crossed z 1.12) and on brick/barge put a .78 x .64
+  //    root over a .48 x .38 tub, its bottom at y 0.03 through the tea-tray.
+  //  - UNDERSIDE over the front wing (z 1.96-2.16, the flap solver's NOSE_UNDER
+  //    window): never lower than the lowest TEAM nose there. The flap ceiling
+  //    is derived from the team noses; a fat or drooped concept cone (brick
+  //    -78 mm) sat below it, so a flap solved against it could enter the nose.
+  //    The tip and mid rise together by the deficit, so the cone keeps its
+  //    depth and simply rides higher.
+  const NOSE_WING_Z = [1.96, 2.00, 2.10, 2.16];
+  let _teamNoseFloor = null;
+  function noseBottomAt(st, z) {
+    const n = st.length;
+    if (z >= st[0].z) return st[0].y - st[0].h * 0.5;
+    for (let i = 0; i < n - 1; i++) {
+      const a = st[i], b = st[i + 1];
+      if (z <= a.z && z >= b.z) {
+        const t = (a.z - z) / (a.z - b.z);
+        return (a.y - a.h * 0.5) + ((b.y - b.h * 0.5) - (a.y - a.h * 0.5)) * t;
+      }
+    }
+    return st[n - 1].y - st[n - 1].h * 0.5;
+  }
+  function teamNoseFloor() {
+    if (_teamNoseFloor) return _teamNoseFloor;
+    const styles = [DEFAULT_STYLE, ...Object.values(TEAM_STYLE)];
+    _teamNoseFloor = NOSE_WING_Z.map((z) => Math.min(...styles.map((st) => noseBottomAt(styledNoseStations(st), z))));
+    return _teamNoseFloor;
+  }
+  function conceptNose(s, cone) {
+    const root = CHASSIS.nose[2];
+    const st = [...cone, { z: root.z, y: root.y, w: root.w, h: root.h, t: root.t }];
+    if (st[1].z < root.z + 0.15) st[1].z = root.z + 0.15;    // keep the mid ahead of the pinned root
+    // noseStep (preview bodies only): the 2012 "platypus" step — a station 6 cm
+    // ahead of the root whose TOP drops by noseStep, bottom unchanged, so the
+    // tub's crown ends in a ledge and the cone runs on lower.
+    const step = Math.max(0, Math.min(0.22, s.noseStep || 0));
+    if (step) st.splice(2, 0, { z: root.z + 0.06, y: root.y - step * 0.5, w: root.w * 0.94, h: root.h - step, t: root.t });
+    // The underside is linear in the tip/mid lift; behind the mid only the
+    // mid's share of the root-to-mid blend moves, so divide by that share.
+    const floor = teamNoseFloor(), up = st.map((p, i) => (i < 2 ? Object.assign({}, p, { y: p.y + 1 }) : p));
+    let lift = 0;
+    NOSE_WING_Z.forEach((z, i) => {
+      const d = floor[i] - noseBottomAt(st, z), gain = noseBottomAt(up, z) - noseBottomAt(st, z);
+      if (d > 0 && gain > 1e-6) lift = Math.max(lift, d / gain);
+    });
+    if (lift > 0) { st[0].y += lift; st[1].y += lift; }
+    return st;
   }
 
   // A BODY span: rounded when CarShade is on for this build (js/car/car-shade.js), else trapezoid + crease.
@@ -1017,8 +1074,7 @@ const CarBodyGeom = (function () {
     if (shadeFlags.round) CarShade.floor(out, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
     const nose = noseStations || CHASSIS.nose;
-    bodySpan(out, nose[0], nose[1], c1, 0.022);
-    bodySpan(out, nose[1], nose[2], c1, 0.028);
+    for (let i = 0; i < nose.length - 1; i++) bodySpan(out, nose[i], nose[i + 1], c1, i ? 0.028 : 0.022);
     const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];
     // COCKPIT: this span is the tub the driver sits IN — the deck under the
     // wheel and the rear wall above it, 0.65 m from the eye. In body paint it
@@ -1234,9 +1290,49 @@ const CarBodyGeom = (function () {
         outerBottom: 0.134,
         innerTop: 0.30 + 0.05 * (shoulder - 1) + (sil ? inletH * 0.08 : 0),
         outerTop: 0.27 + (sil ? inletH * 0.05 : 0) },
-    ];
+    ].map(clampPodStation);
+  }
+  // Post-styling validity pass (#3111). The style offsets are raw metres and
+  // BODY_STYLES carries 4-10x the TEAM_STYLE ranges, so on a narrow or low-
+  // shouldered engine a concept body walked its pod inside out: wedge's
+  // inletH -0.26 put the top 18 cm under the bottom, needle's inletW -0.24
+  // put the outer edge inboard of the inner one on the Honda/Audi/Aston pods,
+  // brick/barge's undercutD -0.16 hung the belly 16 cm below the inboard edge,
+  // and inletH +0.28 lifted the shoulder through the mirror housings (y 0.698
+  // up). Each floor below sits UNDER the worst team x catalog-engine value at
+  // its station (body-styles.test.mjs pins that), so every grid car is
+  // bit-identical and only an out-of-envelope body is moved. Order matters:
+  // cap the top, widen, keep the belly in the team undercut envelope, then
+  // restore height by lowering the belly toward the floor rail before raising
+  // the top — a low concept pod stays low instead of turning tall.
+  const POD_MIN_W = { "0.62": 0.10, "0.5": 0.10, "0.22": 0.12, "-0.38": 0.10, "-0.62": 0.06, "-1.05": 0.04, "-1.48": 0.02 };
+  const POD_MIN_H = { "0.62": 0.10, "0.5": 0.10, "0.22": 0.12, "-0.38": 0.12, "-0.62": 0.12, "-1.05": 0.10, "-1.48": 0.08 };
+  const POD_TOP_MAX = 0.65;          // under every mirror housing (lowest bottom ~0.666)
+  const POD_BELLY_MIN = 0.13;        // floor-rail top: the belly never goes under it
+  const POD_UNDERCUT_MIN = -0.04;    // haas: the deepest reversed undercut on the grid
+  function clampPodStation(p) {
+    const minW = POD_MIN_W[String(p.z)], minH = POD_MIN_H[String(p.z)];
+    p.innerTop = Math.min(p.innerTop, POD_TOP_MAX);
+    p.outerTop = Math.min(p.outerTop, POD_TOP_MAX);
+    if (p.outer < p.inner + minW) p.outer = p.inner + minW;
+    if (p.outerBottom < p.innerBottom + POD_UNDERCUT_MIN - 1e-9) p.outerBottom = p.innerBottom + POD_UNDERCUT_MIN;
+    for (const e of ["inner", "outer"]) {
+      const bk = e + "Bottom", tk = e + "Top";
+      if (p[tk] - p[bk] >= minH) continue;
+      p[bk] = Math.max(POD_BELLY_MIN, Math.min(p[bk], p[tk] - minH));
+      if (p[tk] < p[bk] + minH) p[tk] = p[bk] + minH;
+    }
+    // Lowering the inner belly can leave the outer one under the envelope
+    // again; and a reversed undercut stops at the floor rail (or the inboard
+    // belly, when a grid car's already sits under the rail).
+    if (p.outerBottom < p.innerBottom + POD_UNDERCUT_MIN - 1e-9) p.outerBottom = p.innerBottom + POD_UNDERCUT_MIN;
+    const bellyFloor = Math.min(p.innerBottom, POD_BELLY_MIN);
+    if (p.outerBottom < bellyFloor) p.outerBottom = bellyFloor;
+    if (p.outerTop < p.outerBottom + minH) p.outerTop = p.outerBottom + minH;
+    return p;
   }
 
+  const COVER_LIFT_TOP = 0.92;   // a concept coverLift ends under the hoop crown (0.946 at z -0.55)
   const _anchorCache = new WeakMap();
   const _anchorNullKey = {};   // stand-in for a null/undefined parts (legacy bodies)
   function bodyAnchors(parts, teamId, spineHeight, round) {
@@ -1267,6 +1363,14 @@ const CarBodyGeom = (function () {
     // Clamped so a concept body cannot walk the cover through the roll-hoop
     // cap the way an unclamped spineHeight would; TEAM_STYLE leaves it 0.
     const lift = Math.max(-0.16, Math.min(0.22, style.coverLift || 0));
+    // ...and the front crown, where the hoop blade stands (z -0.33..-0.63,
+    // crown 0.968..0.938), stops at COVER_LIFT_TOP: anteater/arched/wedge's
+    // +0.18..0.20 put it ~100 mm OVER the regulation hoop top on every factory
+    // engine (#3111). Only a positive lift is capped, so TEAM_STYLE (lift 0)
+    // and the sunken concept covers are unchanged; the tail keeps the full
+    // lift, which is what reads as a rising or humped cover in side view.
+    const crownBase = 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight;
+    const liftF = lift > 0 ? Math.min(lift, Math.max(0, COVER_LIFT_TOP - crownBase - rise)) : lift;   // a spine rise spends the budget first
     // Two stations only. A third (z -1.13) made coverAt non-linear and broke
     // car-shade: downwash gap vs cover.bottom, and cokeFoot xb<=x. coverCrown
     // pinches x and peaks the profile — it must NOT lift coverAt().top or
@@ -1276,7 +1380,7 @@ const CarBodyGeom = (function () {
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth * (1 - crown * 0.6),
         bottom: 0.52 + 0.08 * (coverHeight - 1) - 0.31 * coverHeight,
-        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise + lift, k: crown },
+        top: crownBase + rise + liftF, k: crown },
       { z: -2.00, x: 0.13 * eng.tailWidth,
         bottom: 0.42 - 0.17 * coverHeight,
         top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL + lift * SPINE_TAIL, k: crown * 0.45 },

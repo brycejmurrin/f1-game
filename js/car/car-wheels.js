@@ -77,6 +77,15 @@ const CarWheels = (function () {
       const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
       // Explicit cover flag only — never infer from coverVanes / dish / spokes.
       const useCover = !!(tyreStyle && tyreStyle.cover) || !!(wheelStyle && wheelStyle.cover);
+      // Deep dish (Full Disc): flatter closed face so it reads as a sealed
+      // cover, not a ribbed bowl with caliper gaps. Its face takes the livery
+      // rim finish (RS) like the rest of the rim. Hoisted out of the per-segment
+      // loop (#3111 F18); hubLift is the F13 boss/nut lift onto its floor.
+      const deepCover = useCover && Math.round((wheelStyle && wheelStyle.dish) || 0) >= 2;
+      const dishD = deepCover ? DISH_D * 0.35 : DISH_D;
+      const faceCol = deepCover ? RC : COVER, faceSurf = deepCover ? RS : SURFACES.carbon;
+      const floorCol = deepCover ? RC_DEEP : COVER_IN;
+      const hubLift = deepCover ? dishD + 0.011 : 0;   // nut back face 1 mm proud of the floor
       const rotorScale = brakeStyle && brakeStyle.rotorScale || 1;
       const tyreShoulder = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.shoulder) || 0)));
       // The DEFAULT profile was [[0,1],[1,1]] — a perfectly cylindrical tread
@@ -183,17 +192,11 @@ const CarWheels = (function () {
             addQuad(out, P(rimR, a0, 0), P(rimR, a1, 0),
                          P(rimR * LIP_R, a1, 0), P(rimR * LIP_R, a0, 0), LIP, RS);
             if (!useCover) continue;
-            // Deep dish (Full Disc): flatter closed face so it reads as a sealed
-            // cover, not a ribbed bowl with caliper gaps.
-            const deep = Math.round((wheelStyle && wheelStyle.dish) || 0) >= 2;
-            const dishD = deep ? DISH_D * 0.35 : DISH_D;
-            const faceCol = deep ? RC : COVER;
-            const floorCol = deep ? RC_DEEP : COVER_IN;
             // 2. dish: falls INBOARD as it goes in, so the light gradient across it
             //    reads as a bowl rather than a disc.
             addQuad(out, P(rimR * LIP_R, a0, 0), P(rimR * LIP_R, a1, 0),
                          P(rimR * DISH_R, a1, dishD), P(rimR * DISH_R, a0, dishD),
-                         faceCol, SURFACES.carbon);
+                         faceCol, faceSurf);
             // 3. floor of the dish, out to the hubcap that already sits on it.
             addTri(out, [xw + dir * dishD, cy, cz],
                          P(rimR * DISH_R, a0, dishD), P(rimR * DISH_R, a1, dishD),
@@ -314,7 +317,6 @@ const CarWheels = (function () {
       // Wheel recipe wins (STYLE Full Disc sets 0). Deep-dish covers default to
       // 0 so a closed disc is not dressed with floating vane ribs.
       const VANE = [0.26, 0.26, 0.30];
-      const deepCover = useCover && Math.round((wheelStyle && wheelStyle.dish) || 0) >= 2;
       const coverVanes = useCover
         ? (wheelStyle && wheelStyle.coverVanes != null ? wheelStyle.coverVanes
           : tyreStyle && tyreStyle.coverVanes != null ? tyreStyle.coverVanes
@@ -343,12 +345,15 @@ const CarWheels = (function () {
         }
       }
       const HUBCAP = RC;                   // raised boss: lighter than the dish floor
+      // The deep cover's floor sits OUTBOARD of the plane the hubcap and nut
+      // were placed on, so both were buried behind it and gunNut:1 drew
+      // nothing (#3111 F13): lift them onto the floor's outer face.
       const NUT = caliperColor || bandColor || [0.85, 0.72, 0.10];
       // Open hub is smaller so the rotor shows through the spoke gaps; cover
       // keeps the wide boss that sat on the old dish floor.
       const hubFrac = useCover ? 0.46 : 0.22;
       for (const ss of [[x0, -1], [x1, 1]]) {
-        const dir = ss[1], xc0 = ss[0] - dir * 0.014, hcR = rimR * hubFrac, ctr = [xc0, cy, cz];
+        const dir = ss[1], hubX = ss[0] + dir * hubLift, xc0 = hubX - dir * 0.014, hcR = rimR * hubFrac, ctr = [xc0, cy, cz];
         for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
           addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
@@ -361,9 +366,9 @@ const CarWheels = (function () {
         const nutCol = (wheelStyle && wheelStyle.nut) || (tyreStyle && tyreStyle.nut) || NUT;
         const gunNut = (wheelStyle && wheelStyle.gunNut) || (tyreStyle && tyreStyle.gunNut) ? 1 : 0;
         if (!gunNut) {
-          addBox(out, ss[0] - dir * 0.002, cy, cz, 0.026, Math.max(hcR * 0.55, rimR * 0.12), Math.max(hcR * 0.55, rimR * 0.12), nutCol, SURFACES.metal);
+          addBox(out, hubX - dir * 0.002, cy, cz, 0.026, Math.max(hcR * 0.55, rimR * 0.12), Math.max(hcR * 0.55, rimR * 0.12), nutCol, SURFACES.metal);
         } else {
-          const nx = ss[0] - dir * 0.001;
+          const nx = hubX - dir * 0.001;
           const nR = Math.max(hcR * 0.55, rimR * 0.10);
           const nDeep = 0.018;
           const HEX = 6;
