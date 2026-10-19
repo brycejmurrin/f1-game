@@ -1,1 +1,1 @@
-New: BODY in the livery designer puts any chassis on any car: another team's nose, sidepods and airbox, or one of six concept bodies (Needle, Brick, Anteater, Arched, Wedge, Barge). Looks only; performance is unchanged.
+New: BODY in the livery designer picks a concept chassis (Needle, Brick, Anteater, Arched, Wedge, Barge) with distinct nose, sidepod and engine-cover outlines. Team-body swaps stay behind `Car3D.ALLOW_TEAM_BODY_SWAP` (off). Looks only; performance is unchanged.

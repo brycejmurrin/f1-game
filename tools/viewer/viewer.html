@@ -181,7 +181,7 @@ function carOptions(teamId) {
   return {
     liveries: Liveries.forTeam(team).map((l) => ({ id: l.id, name: l.name || titleCase(l.id) })),
     finishes: FINISHES,
-    // "" = the livery's own body; then the concept bodies and every team's (Car3D.BODY_STYLE_IDS).
+    // "" = the livery's own body; then Car3D.BODY_STYLE_IDS (concepts; team swaps only when ALLOW_TEAM_BODY_SWAP).
     bodies: (Car3D.BODY_STYLE_IDS || []).map((id) => ({ id, name: Car3D.TEAM_STYLE[id] ? teamOf(id).name + " body" : titleCase(id) })),
     parts: Parts.CATALOG.map((c) => ({ id: c.id, label: titleCase(c.label || c.id),
       options: c.options.map((o) => ({ id: o.id, label: o.label || titleCase(o.id), equivalent: o.equivalent || null })) })),
@@ -431,18 +431,19 @@ if (MODES.length) {
 // each variant on the part that changes, so a 3 cm difference fills the shot
 // instead of 1% of a whole-car still. [eye, target].
 const FRAMES = {
-  side:        [[6.2, 0.7, -0.1], [0, 0.45, -0.1]],
-  nose:        [[1.9, 0.9, 3.9], [0, 0.35, 2.0]],
-  front_wheel: [[2.1, 0.55, 2.3], [0.75, 0.34, 1.7]],
-  front_susp:  [[1.0, 1.25, 3.4], [0.45, 0.32, 1.65]],
-  rear_wheel:  [[2.1, 0.6, -2.3], [0.75, 0.36, -1.6]],
-  sidepod:     [[2.6, 1.5, 0.4], [0.35, 0.5, -0.4]],
-  airbox:      [[1.7, 1.9, 0.9], [0, 0.85, -0.3]],
-  rear:        [[1.7, 1.4, -4.2], [0, 0.6, -2.3]],
-  diffuser:    [[1.3, 0.5, -3.9], [0, 0.3, -2.4]],
-  floor:       [[3.0, 0.25, 0.3], [0.5, 0.1, -0.4]],
-  cockpit:     [[1.0, 1.6, 1.9], [0, 0.8, 0]],
-  top:         [[0.01, 7.5, 0], [0, 0, 0]],
+  side:           [[6.2, 0.7, -0.1], [0, 0.45, -0.1]],
+  three_quarter:  [[4.4, 1.35, 3.4], [0, 0.42, 0]],
+  nose:           [[1.9, 0.9, 3.9], [0, 0.35, 2.0]],
+  front_wheel:    [[2.1, 0.55, 2.3], [0.75, 0.34, 1.7]],
+  front_susp:     [[1.0, 1.25, 3.4], [0.45, 0.32, 1.65]],
+  rear_wheel:     [[2.1, 0.6, -2.3], [0.75, 0.36, -1.6]],
+  sidepod:        [[2.6, 1.5, 0.4], [0.35, 0.5, -0.4]],
+  airbox:         [[1.7, 1.9, 0.9], [0, 0.85, -0.3]],
+  rear:           [[1.7, 1.4, -4.2], [0, 0.6, -2.3]],
+  diffuser:       [[1.3, 0.5, -3.9], [0, 0.3, -2.4]],
+  floor:          [[3.0, 0.25, 0.3], [0.5, 0.1, -0.4]],
+  cockpit:        [[1.0, 1.6, 1.9], [0, 0.8, 0]],
+  top:            [[0.01, 7.5, 0], [0, 0, 0]],
 };
 // Headless hook (tools/viewer/viewer-shots.mjs): select one item, freeze motion
 // at its opening pose, and report once a frame has been drawn.

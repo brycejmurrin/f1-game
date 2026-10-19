@@ -18,13 +18,20 @@ const CarBodyGeom = (function () {
   function styledNoseStations(style) {
     const s = style || DEFAULT_STYLE;
     if (s === DEFAULT_STYLE || (!s.noseTipZ && s.noseSlim === 1 && !s.noseDroop)) return CHASSIS.nose;
-    const tip = CHASSIS.nose[0], mid = CHASSIS.nose[1];
+    const tip = CHASSIS.nose[0], mid = CHASSIS.nose[1], root = CHASSIS.nose[2];
+    // Mid height tracks slim too (was width-only): a needle/brick side silhouette
+    // needs the cone itself to thin or fatten, not only the tip cross-section.
+    // Mid Z rides a fraction of tipZ so a long/short nose moves the whole cone
+    // in side view, not just a pencil tip past the front wing.
+    const midSlim = 1 + (s.noseSlim - 1) * 0.55;
+    const midZ = mid.z + (s.noseTipZ || 0) * 0.45;
     return [
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
         w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
-      { z: mid.z, y: mid.y + s.noseDroop * 0.4,
-        w: mid.w * (1 + (s.noseSlim - 1) * 0.4), h: mid.h, t: mid.t },
-      CHASSIS.nose[2],
+      { z: midZ, y: mid.y + s.noseDroop * 0.45,
+        w: mid.w * midSlim, h: mid.h * midSlim, t: mid.t },
+      { z: root.z + (s.noseTipZ || 0) * 0.12, y: root.y + (s.noseDroop || 0) * 0.15,
+        w: root.w * (1 + (s.noseSlim - 1) * 0.2), h: root.h * (1 + (s.noseSlim - 1) * 0.25), t: root.t },
     ];
   }
 
@@ -1168,7 +1175,11 @@ const CarBodyGeom = (function () {
     const outerWaist = (0.58 - 0.08 * (coke - 1)) * podWidth + waistK;
     const outerTail = (0.38 - 0.09 * (coke - 1)) * tailWidth + waistK * 0.35;
     const inletFloor = 0.235 + 0.11 * (undercut - 1);
-    const shoulderTop = 0.49 + 0.23 * (shoulder - 1);
+    // Concept bodies set coverLift ≠ 0: push inletH onto the pod TOP line so
+    // tall/low inlets read in side view. TEAM_STYLE has no coverLift — keep the
+    // old mild shoulder coupling so grid cars do not jump.
+    const sil = style && Math.abs(style.coverLift || 0) > 1e-6;
+    const shoulderTop = 0.49 + 0.23 * (shoulder - 1) + inletH * (sil ? 0.55 : 0);
     const inletBias = style ? (style.inlet || 0) : 0;
     // THE UNDERCUT. The pod section is a quad from [inner, innerBottom] to
     // [outer, outerBottom]; when outerBottom sits BELOW innerBottom the
@@ -1186,6 +1197,8 @@ const CarBodyGeom = (function () {
     // everywhere instead of only at the inlet. The pod's visible FLANK is
     // shorter by ~85 mm at the shoulder as a result; the sponsor board and its
     // decal are both sized in pod fractions, so they track it together.
+    const waistTop = 0.42 + 0.10 * (shoulder - 1) + (sil ? inletH * 0.35 : 0);
+    const waistOuterTop = 0.38 + 0.08 * (shoulder - 1) + (sil ? inletH * 0.28 : 0);
     return [
       { z: 0.62, inner: 0.30, outer: outerFront, innerBottom: inletFloor,
         outerBottom: 0.258 + 0.09 * (undercut - 1) + undercutD * 0.70,
@@ -1198,23 +1211,25 @@ const CarBodyGeom = (function () {
       { z: 0.22, inner: 0.29, outer: outerShoulder,
         innerBottom: 0.20 + 0.13 * (undercut - 1),
         outerBottom: 0.208 + 0.11 * (undercut - 1) + undercutD,
-        innerTop: shoulderTop + inletH * 0.15, outerTop: shoulderTop - 0.015 + inletH * 0.08 },
+        innerTop: shoulderTop + (sil ? 0 : inletH * 0.15),
+        outerTop: shoulderTop - 0.015 + (sil ? 0 : inletH * 0.08) },
       { z: -0.38, inner: 0.28, outer: outerShoulder * 0.55 + outerWaist * 0.45,
         innerBottom: 0.162 + 0.10 * (undercut - 1),
         outerBottom: 0.176 + 0.09 * (undercut - 1) + undercutD * 0.55,
-        innerTop: shoulderTop * 0.68 + (0.42 + 0.10 * (shoulder - 1)) * 0.32,
-        outerTop: (shoulderTop - 0.015) * 0.62 + (0.38 + 0.08 * (shoulder - 1)) * 0.38 },
+        innerTop: shoulderTop * 0.68 + waistTop * 0.32,
+        outerTop: (shoulderTop - 0.015) * 0.62 + waistOuterTop * 0.38 },
       { z: -0.62, inner: 0.27, outer: outerWaist,
         innerBottom: 0.14 + 0.08 * (undercut - 1),
         outerBottom: 0.160 + 0.07 * (undercut - 1) + undercutD * 0.35,
-        innerTop: 0.42 + 0.10 * (shoulder - 1),
-        outerTop: 0.38 + 0.08 * (shoulder - 1) },
+        innerTop: waistTop, outerTop: waistOuterTop },
       { z: -1.05, inner: 0.25, outer: outerWaist * 0.42 + outerTail * 0.58,
         innerBottom: 0.134, outerBottom: 0.146,
-        innerTop: 0.355 + 0.07 * (shoulder - 1),
-        outerTop: 0.318 + 0.04 * (shoulder - 1) },
+        innerTop: 0.355 + 0.07 * (shoulder - 1) + (sil ? inletH * 0.18 : 0),
+        outerTop: 0.318 + 0.04 * (shoulder - 1) + (sil ? inletH * 0.12 : 0) },
       { z: -1.48, inner: 0.23, outer: outerTail, innerBottom: 0.13,
-        outerBottom: 0.134, innerTop: 0.30 + 0.05 * (shoulder - 1), outerTop: 0.27 },
+        outerBottom: 0.134,
+        innerTop: 0.30 + 0.05 * (shoulder - 1) + (sil ? inletH * 0.08 : 0),
+        outerTop: 0.27 + (sil ? inletH * 0.05 : 0) },
     ];
   }
 
@@ -1244,17 +1259,23 @@ const CarBodyGeom = (function () {
     const style = teamStyleOf(teamId);
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
     const crown = style.coverCrown || 0;
+    // coverLift (BODY_STYLES only): metres on the crown TOP for silhouette.
+    // Clamped so a concept body cannot walk the cover through the roll-hoop
+    // cap the way an unclamped spineHeight would; TEAM_STYLE leaves it 0.
+    const lift = Math.max(-0.12, Math.min(0.18, style.coverLift || 0));
     // Two stations only. A third (z -1.13) made coverAt non-linear and broke
     // car-shade: downwash gap vs cover.bottom, and cokeFoot xb<=x. coverCrown
     // pinches x and peaks the profile — it must NOT lift coverAt().top or
     // spineHeight "high"/"dorsal" walk through the roll-hoop cap (fin-design).
+    // coverLift is the separate silhouette knob for concept bodies.
     // CarShade.coverLoft already walks COVER_Z through coverAt.
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth * (1 - crown * 0.6),
         bottom: 0.52 + 0.08 * (coverHeight - 1) - 0.31 * coverHeight,
-        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise, k: crown },
+        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise + lift, k: crown },
       { z: -2.00, x: 0.13 * eng.tailWidth,
-        bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL, k: crown * 0.45 },
+        bottom: 0.42 - 0.17 * coverHeight,
+        top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL + lift * SPINE_TAIL, k: crown * 0.45 },
     ];
     const podStations = round ? CarShade.downwash(sidepodStations(eng, style), (z) => sampleStations(coverStations, z).bottom, eng.coke) : sidepodStations(eng, style);   // rounded: the downwash ramp
     const noseStations = styledNoseStations(style).map((station) => ({

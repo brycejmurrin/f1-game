@@ -1,10 +1,11 @@
 // BODY styles (livery `bodyStyle`, Car3D.BODY_STYLES / bodyStyleKey): a livery
-// can put any chassis — a concept body or another team's — on any car. Pins that
-// every body builds and actually moves the hull, that an unknown or "team" value
-// falls back to the team's own, that the decal anchors key on the SAME body the
-// mesh is built from (or sponsor boards float off a reshaped nose), and that no
-// concept body lowers CarBodyGeom's NOSE_DROOP_FLOOR — the flap solver's floor
-// is derived over every style, so a deeper droop would move every car's wing.
+// can put a concept chassis (or, when ALLOW_TEAM_BODY_SWAP, another team's) on
+// any car. Pins that every picker body builds and moves nose/cover/pod anchors,
+// that an unknown or "team" value falls back to the team's own, that decal
+// anchors key on the SAME body the mesh is built from, that team ids still
+// resolve when the picker hides them, and that no concept body lowers
+// CarBodyGeom's NOSE_DROOP_FLOOR — the flap solver's floor is derived over every
+// style, so a deeper droop would move every car's wing.
 //
 // Run: node --test tests/unit/body-styles.test.mjs   (npm run test:tooling-fast; ~3 s, no browser)
 import { test } from "node:test";
@@ -27,19 +28,39 @@ test("bodyStyleKey: a known body wins, anything else is the team's own", () => {
   assert.equal(Car3D.bodyStyleKey("ferrari", "needle"), "needle");
   assert.equal(Car3D.bodyStyleKey("ferrari", "mclaren"), "mclaren");
   for (const v of [undefined, null, "", "team", "nope"]) assert.equal(Car3D.bodyStyleKey("ferrari", v), "ferrari", String(v));
-  assert.deepEqual([...Car3D.BODY_STYLE_IDS].sort(), [...Object.keys(Car3D.BODY_STYLES), ...Object.keys(Car3D.TEAM_STYLE)].sort());
+  // Picker list is concepts only while ALLOW_TEAM_BODY_SWAP is off; team keys
+  // still resolve above for saved liveries.
+  assert.equal(Car3D.ALLOW_TEAM_BODY_SWAP, false);
+  assert.deepEqual([...Car3D.BODY_STYLE_IDS].sort(), [...Object.keys(Car3D.BODY_STYLES)].sort());
+  for (const id of Object.keys(Car3D.TEAM_STYLE)) assert.ok(!Car3D.BODY_STYLE_IDS.includes(id), id);
 });
 
 test("every body builds a finite car whose hull differs from the team's own", () => {
   const base = build(undefined);
+  const baseNose = Car3D.bodyAnchors(tiers, Car3D.bodyStyleKey(team.id, undefined)).noseAt(2.2);
+  const baseCover = Car3D.bodyAnchors(tiers, Car3D.bodyStyleKey(team.id, undefined)).coverAt(-0.55);
+  const basePod = Car3D.bodyAnchors(tiers, Car3D.bodyStyleKey(team.id, undefined)).podAt(0.22);
   for (const id of Car3D.BODY_STYLE_IDS) {
     if (id === team.id) continue;
     const d = build(id);
     assert.ok(d.pos.every(Number.isFinite), `${id}: non-finite vertex`);
     let moved = d.pos.length !== base.pos.length ? Infinity : 0;
     for (let i = 0; moved !== Infinity && i < d.pos.length; i++) moved = Math.max(moved, Math.abs(d.pos[i] - base.pos[i]));
-    assert.ok(moved >= 0.005, `${id}: hull moved only ${(moved * 1000).toFixed(1)} mm`);
+    assert.ok(moved >= 0.05, `${id}: hull moved only ${(moved * 1000).toFixed(1)} mm (want ≥50 mm silhouette)`);
+    // Global AABB often stays put (front wing / halo pin zmax/ymax). The outline
+    // that a player reads is nose / cover / pod anchors — those must move.
+    const a = Car3D.bodyAnchors(tiers, Car3D.bodyStyleKey(team.id, id));
+    const nose = a.noseAt(2.2), cover = a.coverAt(-0.55), pod = a.podAt(0.22);
+    const outline = Math.max(
+      Math.abs(nose.top - baseNose.top), Math.abs(nose.side - baseNose.side),
+      Math.abs(cover.top - baseCover.top), Math.abs((pod.x || pod.outer) - (basePod.x || basePod.outer)),
+      Math.abs((pod.top || pod.outerTop) - (basePod.top || basePod.outerTop)));
+    assert.ok(outline >= 0.04, `${id}: nose/cover/pod outline only ${(outline * 1000).toFixed(0)} mm`);
   }
+  // Saved team-body liveries still resolve and build even with the picker gated.
+  const rb = build("redbull");
+  assert.ok(rb.pos.every(Number.isFinite), "redbull body: non-finite");
+  assert.equal(Car3D.bodyStyleKey(team.id, "redbull"), "redbull");
 });
 
 test("decal anchors follow the body the mesh is built from", () => {

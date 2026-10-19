@@ -160,7 +160,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
   "tests/unit/body-split.test.mjs",
-  // Livery BODY styles: every chassis builds, anchors follow it, the flap floor holds. ~3 s.
+  // Livery BODY styles: concept chassis builds, nose/cover/pod anchors move, flap floor holds. ~3 s.
   "tests/unit/body-styles.test.mjs",
   // ...and the DIFF[difficulty] family, one door further out: three readers
   // that took a stored index or object on trust. Executes the shipped source

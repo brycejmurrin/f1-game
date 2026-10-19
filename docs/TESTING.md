@@ -1308,6 +1308,7 @@ Focused browser-free diagnostics contracts also run in `tooling-fast`:
 |---|---|
 | `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
 | `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
+| `tests/unit/body-styles.test.mjs` | Livery BODY styles: every concept chassis builds, nose/cover/pod anchors move, team swaps resolve when gated, flap nose-droop floor holds. ~3 s. |
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 
