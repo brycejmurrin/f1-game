@@ -58,7 +58,14 @@ is live) merges directly — no standing `--auto` arm in practice (Bryce
   PR branch, run **`npm run gen:check`** on that merge result. On failure:
   `npm run gen`, commit generated outputs, re-check — do not merge stale indexes
   (skill **gen-regen**).
-- **Pacing:** at most **one merge per green Pages run**. After a merge, wait for
+- **Non-game batch** (Bryce 2026-10-19, in ORCH6's session, AskUserQuestion pick
+  "Batch non-game PRs (Recommended)"): PRs touching only `tests/`, `tools/`,
+  `docs/`, `.claude/` (no `js/`, `css/`, `assets/`, `index.html`, `sw.js`) merge
+  back-to-back on a green tip, each re-checked: exact head sha, full CI green,
+  `gen:check` on a local merge onto the CURRENT tip. GitHub "clean" is not
+  enough: PRs older than #2899 merged locally failed `gen:check`
+  (a generated catalog file count). Stop on any red.
+- **Pacing (game code):** at most **one merge per green Pages run**. After a merge, wait for
   the next Pages `success` before merging again. **Stop** while **Pages** or
   **ship-push** `ci.yml` is red.
 - **`MERGE-HOLD:`** — a PR-body line starting with that token (outside HTML
