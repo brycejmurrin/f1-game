@@ -601,7 +601,7 @@ const Parts = (function () {
     // sipes. Pirelli's 2019+ wall splits the band into two arcs with the
     // P ZERO / PIRELLI wordmark in the gaps.
     ["tyres", "medium", "style_tyres_arcscript", "Arc Script", "band split into two arcs with white lettering in the gaps",
-      { bandArcs: 2, letters: 1, bandWidth: 0.10, sidewall: 0 }],
+      { bandArcs: 2, letters: 1, bandWidth: 0.10, sidewall: 0, shoulder: 2 }],
     ["tyres", "hard", "style_tyres_quadarc", "Quad Arc Guard", "four short band arcs over a coloured rim-guard lip",
       { bandArcs: 4, letters: 1, rimGuard: 1, bandWidth: 0.09, shoulder: 1 }],
     ["tyres", "intermediate", "style_tyres_chevron", "Chevron Wet", "directional chevron sipes over a split wet band",

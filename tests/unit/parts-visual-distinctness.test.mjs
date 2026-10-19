@@ -50,9 +50,10 @@ test("the catalog census is what the rest of this file assumes", () => {
   assert.equal(M.Parts.CATALOG.length, 12);
   const all = M.Parts.CATALOG.flatMap((c) => c.options);
   // 297 → 321 on 2026-10-18: 24 STYLE reskins, two per category (js/car/parts.js STYLES).
-  assert.equal(all.length, 321);
+  // 321 → 329 on 2026-10-19: 8 D6 design-preview STYLE rows (4 tyres, 4 exhaust).
+  assert.equal(all.length, 329);
   assert.equal(all.filter((o) => o.tag === "SIGNATURE").length, 128);
-  assert.equal(all.filter((o) => o.tag === "STYLE").length, 24);
+  assert.equal(all.filter((o) => o.tag === "STYLE").length, 32);
 });
 
 test("a SIGNATURE or STYLE option is a pure reskin: same cost, same four stat multipliers", () => {
