@@ -646,8 +646,8 @@ const MOODS = {
     washTint: [0.97, 1.0, 1.04], sky: [2.0, 2.05, 2.15], amb: [2.3, 2.4, 2.5], exposure: 1.22, bloom: 0.5, glare: 0.6, sheen: 1.6, backdrop: 4 },
   // Singapore / Bahrain under lights: a warm bright bay against a blue-black
   // pit lane, gantries lit outside, the uplights carrying the team colour.
-  night: { night: true, key: 3.0, fill: 0.5, wash: 0.4, up: 3.0, gantry: 2.0, keyTint: [1.25, 0.95, 0.60],
-    fillTint: [0.75, 0.90, 1.25], sky: [0.10, 0.13, 0.28], amb: [0.35, 0.42, 0.75], bd: [0.010, 0.020, 0.070],
+  night: { night: true, key: 3.4, fill: 0.5, wash: 0.4, up: 3.2, gantry: 2.0, keyTint: [1.25, 0.95, 0.60],
+    fillTint: [0.75, 0.90, 1.25], sky: [0.08, 0.12, 0.30], amb: [0.28, 0.38, 0.85], bd: [0.010, 0.020, 0.070],
     exposure: 1.08, bloom: 2.2, glare: 2.2, sheen: 2.2 },
   // A launch reveal: warm keys straight down on the car, fills nearly off,
   // the room falls to black and the floor turns into a mirror.
@@ -655,8 +655,12 @@ const MOODS = {
     sky: 0.05, amb: 0.12, sun: [0, 0.97, 0.24], bd: [0.004, 0.004, 0.006], exposure: 1.15, bloom: 1.6, glare: 1.8, sheen: 3.0 },
   // Door up on a sunny pit lane: daylight is the key, low and from the
   // door; the ceiling rig is secondary and the outside is bright.
-  daylight: { night: false, key: 0.3, fill: 0.3, wash: 0.5, up: 0.3, sky: [2.6, 2.4, 2.1], amb: [1.4, 1.6, 2.0],
-    sun: [0, 0.42, 0.9075], bd: [0.55, 0.62, 0.72], exposure: 1.0, bloom: 0.9, glare: 0.3, sheen: 1.2 },
+  // The sun is warm and the shade is blue, so the colour split is what reads
+  // as daylight rather than just a brighter room. The rig drops to a cool 6500 K
+  // fill and the outside is bright.
+  daylight: { night: false, key: 0.35, fill: 0.45, wash: 0.6, up: 0.25, keyTint: [0.92, 0.98, 1.10], fillTint: [0.90, 0.97, 1.12],
+    sky: [3.4, 2.75, 1.85], amb: [1.15, 1.45, 2.25], sun: [0, 0.42, 0.9075], bd: [0.62, 0.70, 0.82],
+    exposure: 1.08, bloom: 0.7, glare: 0.25, sheen: 1.3 },
 };
 const SKY_BASE = SKYLIGHT.slice(), AMB_SKY_BASE = AMB_SKY.slice(), AMB_GROUND_BASE = AMB_GROUND.slice();
 const _bdBase = BACKDROP.slice();
