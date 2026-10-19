@@ -2891,6 +2891,11 @@ const WGX = (function () {
       return { vbuf, ibuf: null, sbuf: a.sbuf, attrBG: a.attrBG, count, indexFormat, chunks: null };
     }
     function createMesh(data) {
+      const m = _createMesh(data);
+      m._matReach = _matReach(data);
+      return m;
+    }
+    function _createMesh(data) {
       const b = _interleave(data);
       const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
       const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
@@ -3608,6 +3613,32 @@ const WGX = (function () {
       // per-chunk range from a prior chunked draw would silently rebind that
       // chunk's lamp slice. drawChunked overwrites when per-chunk is active.
       d[base + 32] = 0; d[base + 33] = 0; d[base + 34] = 0;
+      // packDraw (lane 35): 1 = sample the material pack. draw/drawInstanced
+      // clear it for meshes that cannot take a pack mid (_packDraw).
+      d[base + 35] = 1;
+    }
+    // Pack-material reach of a mesh's vertex mat ids: `pack` = some vertex is a
+    // hoisted pack mid (1..16, not identity 3/15), `zero` = some vertex has no
+    // mat (it shades with the draw's surfaceId). Mirrors fs_main's vMatId.
+    const _isPackMid = (m) => { const i = Math.floor(m + 0.5); return i >= 1 && i <= 16 && i !== 3 && i !== 15; };
+    function _matReach(data) {
+      const pos = data && data.pos, mat = data && data.mat;
+      const n = pos ? (pos.length / 3) | 0 : 0;
+      if (!mat || mat.length !== n) return { pack: false, zero: n > 0 };
+      let pack = false, zero = false;
+      for (let i = 0; i < n && !(pack && zero); i++) {
+        const m = mat[i];
+        if (!(m > 0.5)) zero = true;
+        else if (_isPackMid(m)) pack = true;
+      }
+      return { pack, zero };
+    }
+    // Uniform per-draw gate for fs_main's pack taps. Unknown meshes (chunked,
+    // road pieces) and road / buryRibbon draws (LUT-classified asphalt) sample.
+    function _packDraw(mesh, o) {
+      const r = mesh && mesh._matReach;
+      if (!r || o.buryRibbon || o.surfaceId === 16) return 1;
+      return (r.pack || (r.zero && _isPackMid(o.surfaceId || 0))) ? 1 : 0;
     }
     // Post-pass uniforms that are a pure function of the render size / knobs (bloom mip steps, blur taps, FXAA and
     // SGSR texel sizes) were re-uploaded every frame (~12 writeBuffer calls of unchanged bytes). Shadow the last
@@ -3762,6 +3793,7 @@ const WGX = (function () {
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, o);
+      drawRing[slot * DRAW_F32_STRIDE + 35] = _packDraw(mesh, o);
       _setPipe(litPass, _litPipeline(o));
       _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
@@ -5149,6 +5181,7 @@ const WGX = (function () {
       if (opts) { for (const k in opts) o[k] = opts[k]; }
       o._instanced = true;
       _writeDraw(slot, IDENT, o);
+      drawRing[slot * DRAW_F32_STRIDE + 35] = _packDraw(batch, o);
       _setPipe(litPass, _litPipeline(o));
       _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
