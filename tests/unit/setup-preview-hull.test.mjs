@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -45,7 +46,10 @@ function declaredGeomFields() {
 
 const M = loadParts();
 const team = M.Teams.LIST[0];
-const parts = M.Parts.getVisualTiers(M.Parts.defaults ? M.Parts.defaults() : {}, team);
+// Parts.DEFAULTS, the export (there is no Parts.defaults(): the old ternary
+// always fell back to {} and the hull was derived on no parts at all).
+assert.ok(M.Parts.DEFAULTS && M.Parts.DEFAULTS.aero, "Parts.DEFAULTS is the default build");
+const parts = M.Parts.getVisualTiers(M.Parts.DEFAULTS, team);
 const BASE = { c1: [0.9, 0.1, 0.1], c2: [1, 1, 1], finish: null };
 for (const k of OPTIONAL) BASE[k] = null;
 
@@ -108,27 +112,36 @@ test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex
 // Only the pinned cases move: the cap cannot touch a viewport that was already
 // framing correctly, which is the property that makes it safe.
 test("the garage auto-fit is capped below the manual zoom ceiling", () => {
+  // Run setup-camera.js's own fit and clamp statements (not a regex over their
+  // text) over the measured viewports in the table above.
   const src = readFileSync(new URL("../../js/garage/setup-camera.js", import.meta.url), "utf8");
-
-  const fitMax = /const SP_FIT_DIST_MAX = (\d+(?:\.\d+)?)/.exec(src);
-  const distMax = /SP_DIST_MIN = [\d.]+, SP_DIST_MAX = (\d+(?:\.\d+)?)/.exec(src);
-  assert.ok(fitMax, "SP_FIT_DIST_MAX must exist — the auto fit needs its own ceiling");
-  assert.ok(distMax, "SP_DIST_MAX moved; check this test, not the code");
-  assert.ok(Number(fitMax[1]) < Number(distMax[1]),
-    `the AUTO fit ceiling (${fitMax[1]}) must sit below the MANUAL zoom ceiling ` +
-    `(${distMax[1]}): a player who zooms out that far asked for the wide shot, ` +
-    "whereas the auto fit reaching it means the fit diverged on a narrow viewport");
-
-  // And it must actually bound the fit, not merely exist.
-  const fit = /const spFitD = ([\s\S]{0,220}?);/.exec(src);
-  assert.ok(fit, "spFitD moved; check this test, not the code");
-  assert.match(fit[1], /Math\.min\(SP_FIT_DIST_MAX/,
-    "spFitD must be capped by SP_FIT_DIST_MAX — an unbounded fit is the defect");
-
-  // The cap is a MINIMUM over the fit, so it can only ever pull the camera IN.
-  // If this ever became a Math.max the fix would invert into the bug.
-  assert.doesNotMatch(fit[1], /Math\.max\(SP_FIT_DIST_MAX/,
-    "the cap must bound the fit from above, never raise it");
+  const stmt = (head) => {
+    const at = src.indexOf(head);
+    assert.ok(at >= 0, `${head} moved; check this test, not the code`);
+    return src.slice(at, src.indexOf(";", at) + 1);
+  };
+  const consts = [stmt("const SP_FIT_HALF_W ="), stmt("const SP_FIT_DIST_MAX ="), stmt("const SP_EL_MIN =")].join("\n");
+  const fitSrc = stmt("const spFitD =");
+  const ctx = vm.createContext({ Math, clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
+  const { k, fit } = vm.runInContext(consts + "\n({ k: { SP_FIT_DIST_MAX, SP_DIST_MAX, SP_DIST_MIN }, " +
+    "fit: function (gfx, panelFrac) { " + fitSrc + " return spFitD; } })", ctx);
+  assert.ok(k.SP_FIT_DIST_MAX < k.SP_DIST_MAX,
+    `the AUTO fit ceiling (${k.SP_FIT_DIST_MAX}) must sit below the MANUAL zoom ceiling (${k.SP_DIST_MAX})`);
+  const auto = (aspect, pf, stored = 8.5) => {
+    const d = fit({ aspect }, pf);
+    return { fit: d, dist: ctx.clamp(Math.max(stored, d), k.SP_DIST_MIN, k.SP_DIST_MAX) };
+  };
+  // The viewports that framed correctly keep their fit (table: 3.10 half-W column).
+  for (const [vp, aspect, pf, want] of [["1440x900", 1.60, 0.29, 8.40], ["1280x800", 1.60, 0.33, 8.89], ["844x390", 2.16, 0.498, 8.79]])
+    assert.ok(Math.abs(auto(aspect, pf).fit - want) < 0.02, `${vp}: fit ${auto(aspect, pf).fit.toFixed(2)} vs measured ${want}`);
+  // The ones that pinned on the 15 m manual clamp now stop at the auto cap.
+  for (const [vp, aspect, pf] of [["900x820", 1.10, 0.467], ["390x844", 0.46, 0]]) {
+    const r = auto(aspect, pf);
+    assert.equal(r.fit, k.SP_FIT_DIST_MAX, `${vp}: the diverging fit is capped`);
+    assert.ok(r.dist <= k.SP_FIT_DIST_MAX, `${vp}: the camera stays inside the bay (${r.dist})`);
+  }
+  // A full-width panel (the fit's divergence) can only pull the camera IN.
+  assert.equal(fit({ aspect: 1.6 }, 0.999), k.SP_FIT_DIST_MAX);
 });
 
 // The framing the camera USED, not the one the zoom stored. Without this the

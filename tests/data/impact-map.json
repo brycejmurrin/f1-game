@@ -4921,6 +4921,7 @@
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs"
       ],
       "*": [

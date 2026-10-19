@@ -100,5 +100,7 @@ test("two teams of one id with different `factory` resolve their own factory bui
   assert.notEqual(M.Parts.factoryKey(a), M.Parts.factoryKey(b));
   assert.equal(M.Parts.getFactorySetup(a).aero, "minimal", "and the first still resolves to its own");
   // A team with no factory object keeps the string-keyed (preset / DEFAULTS) path.
-  assert.equal(M.Parts.getFactorySetup({ id: "legends", engine: "stock" }).aero, M.Parts.getFactorySetup({ id: "legends", engine: "stock" }).aero);
+  // (It compared a call with itself; now: the DEFAULTS build, not a cached legend's.)
+  assert.equal(M.Parts.getFactorySetup({ id: "legends", engine: "stock" }).aero, M.Parts.DEFAULTS.aero,
+    "a factory-less legends team is not served either cached legend build");
 });

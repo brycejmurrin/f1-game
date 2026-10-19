@@ -21,6 +21,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
+
+const P = loadParts();
 
 function boot(sel = { teamIdx: 0, driverIdx: 0 }, over = {}) {
   const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON,
@@ -100,6 +103,10 @@ test("every legend's seeded sheet fits the garage budget", () => {
     const sheet = store.get("parts.legends", null);
     assert.ok(sheet, `${Legends.LIST[i].id}: a sheet must be written`);
     assert.deepEqual(sheet, Legends.parts(Legends.LIST[i].id));
+    // …and the budget the title claims: the real Parts.getCost of that sheet.
+    const team = Legends.team(Legends.LIST[i].id);
+    const cost = P.Parts.getCost(sheet, team);
+    assert.ok(Number.isFinite(cost) && cost <= P.Parts.BUDGET, `${Legends.LIST[i].id}: sheet costs ${cost} > budget ${P.Parts.BUDGET}`);
   }
 });
 

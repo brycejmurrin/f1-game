@@ -65,10 +65,12 @@ test("every design the map calls LIVE can really spend that row", () => {
   // greying a row the player needs. So the promise is per (fill, design id):
   // SOME car spends it. An id no car can spend is a dead row and fails here.
   const bad = [];
+  let checked = 0;
   for (const f of LT.FILL_SURFACES) {
     for (const [field, ids] of [["spineLogo", f.tops || []], ["spineSide", f.sides || []],
       ["coverBind", f.binds || []]]) {
       for (const id of ids) {
+        checked++;
         const spent = A.Teams.LIST.some((team) => {
           const base = A.Liveries.forTeam(team)[0];
           const design = { [field]: id };
@@ -80,6 +82,7 @@ test("every design the map calls LIVE can really spend that row", () => {
       }
     }
   }
+  assert.ok(checked >= LT.FILL_SURFACES.length, `only ${checked} (fill, design) pairs declared live`);
   assert.deepEqual(bad, [], "declared LIVE but no car can spend the row");
 });
 
@@ -87,17 +90,21 @@ test("a design the map calls INERT paints nothing in that row", () => {
   // The negative half, and the one that makes the gating honest: for a design
   // the map greys out, setting the row must change no cover pixel at all.
   const bad = [];
+  let probed = 0;
   for (const team of A.Teams.LIST.slice(0, 4)) {
     const base = A.Liveries.forTeam(team)[0];
     for (const f of LT.FILL_SURFACES) {
       for (const top of LT.SPINE_LOGO_IDS) {
         const design = { spineLogo: top, spineSide: "none", coverBind: "independent" };
         if (!LT.fillInert(f.key, design)) continue;
+        probed++;
         if (probeLands(team.id, isolate(base, design, f.key)))
           bad.push(`${team.id} ${f.key} declared inert on SPINE TOP ${top}, but it painted`);
       }
     }
   }
+  // A fillInert that always said "live" would make the loop above pass empty.
+  assert.ok(probed > 0, "no design was declared inert: the negative half probed nothing");
   assert.deepEqual(bad, [], "declared inert but the colour reached the car");
 });
 
@@ -105,16 +112,19 @@ test("a design the map calls INERT paints nothing in that row, under EVERY cover
   // The half above runs under INDEPENDENT only, which is how BAND stayed greyed while SADDLE WRAP
   // painted the saddle with it (saddleFill's fallback; livery editor audit 2026-10-18, D4).
   const bad = [];
+  let probed = 0;
   for (const team of A.Teams.LIST.slice(0, 3)) {
     const base = A.Liveries.forTeam(team)[0];
     for (const coverBind of ["saddleWrap", "spineOnly"]) for (const f of LT.FILL_SURFACES) {
       for (const top of LT.SPINE_LOGO_IDS) {
         const design = { spineLogo: top, spineSide: "none", coverBind };
         if (!LT.fillInert(f.key, design)) continue;
+        probed++;
         if (probeLands(team.id, isolate(base, design, f.key)))
           bad.push(`${team.id} ${f.key} declared inert on SPINE TOP ${top} + ${coverBind}, but it painted`);
       }
     }
   }
+  assert.ok(probed > 0, "no design was declared inert under any bind: the negative half probed nothing");
   assert.deepEqual(bad, [], "declared inert but the colour reached the car");
 });

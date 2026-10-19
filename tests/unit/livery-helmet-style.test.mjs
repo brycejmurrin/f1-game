@@ -14,7 +14,7 @@ vm.runInContext(fs.readFileSync(new URL("../../js/car/helmets.js", import.meta.u
 const H = vm.runInContext("Helmets", ctx);
 
 const team = M.Teams.LIST.find((t) => t.id === "ferrari");
-const parts = M.Parts.getVisualTiers(M.Parts.defaults ? M.Parts.defaults() : {}, team);
+const parts = M.Parts.getVisualTiers(M.Parts.DEFAULTS, team);
 const build = (extra) => M.Car3D.build(team.color, team.color2, {
   livery: Object.assign({}, team.livery, extra), teamId: team.id, num: 16, parts, noWheels: true, measure: true,
 });
