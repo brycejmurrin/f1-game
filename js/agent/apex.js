@@ -415,9 +415,9 @@ const api = {
   // the rAF render, and a headless page composites no frames at all, so the
   // whole garage animation was unobservable from a test — which is exactly how
   // "the wings do not move" reached a player instead of a spec. No argument
-  // reads the state; garageStep(dt) advances the ease by dt seconds.
+  // reads the state; garageStep(dt) advances the ease by dt seconds. Shut: garage_closed.
   garageAero(on, opts) {
-    if (!G.setupPreviewOn) return null;
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (on !== undefined) G.setSetupAero(!!on, opts);
     return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
              mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
@@ -433,7 +433,7 @@ const api = {
     try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
   },
   garageStep(dt, n) {
-    if (!G.setupPreviewOn) return null;
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     const [step, count] = stepArgs(dt, n);
     for (let i = 0; i < count; i++) G.stepSetupAero(step);
     return this.garageAero();

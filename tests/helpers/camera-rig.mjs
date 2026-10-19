@@ -37,6 +37,27 @@ export function makeTrack(segs, opts = {}) {
   }
   return { total, n, px, py, pz, tx, tz, kk, hw: new Float64Array(n).fill(opts.hw || 7), def: opts.def || {} };
 }
+/* ---------------- straight elevation track (R1-18) ----------------
+   A straight along +Z with the elevation profile heightAt(s), at buildCenterline's 4 m node spacing, carrying
+   what the ground clamp reads: rx/ry/rz and a street `surface.heightAt` shelf just under the road (TrackSurface.profile's
+   shape). tx/tz/kk make it a valid synthTracks() input, so the same real rig solves it. */
+export function makeElevationTrack(heightAt, { total = 4000, hw = 6 } = {}) {
+  const n = Math.round(total / 4), ds = total / n;
+  const px = new Float64Array(n), py = new Float64Array(n), pz = new Float64Array(n),
+    tx = new Float64Array(n), tz = new Float64Array(n).fill(1), kk = new Float64Array(n);
+  for (let k = 0; k < n; k++) { pz[k] = k * ds; py[k] = heightAt(k * ds); }
+  const rx = new Float64Array(n).fill(1), ry = new Float64Array(n), rz = new Float64Array(n);
+  return { total, n, px, py, pz, tx, tz, kk, rx, ry, rz, hw: new Float64Array(n).fill(hw), def: { street: true },
+    surface: { heightAt: (k, beyond) => py[((Math.round(k) % n) + n) % n] - 0.12 - beyond * 0.004 } };
+}
+/* The real rig with corner lead pinned to 0 (the ride-height maths is what these tests assert); `tune` swaps in a custom CamTune,
+   `files` narrows the loaded scripts (e.g. vantage.js alone for a no-CamFeel solve). */
+export function loadElevationRig(tune, files) {
+  const rig = loadRig(tune ? { CamTune: tune } : null, files);
+  rig.state.lead = 0;
+  return rig.cams;
+}
+
 export function synthTracks() {
   const at = (arr, track, s) => {
     const n = track.n, L = track.total; let v = s % L; if (v < 0) v += L;
@@ -61,8 +82,9 @@ export function loadRig(extraCtx, files) {
     CamTune: camTune(state), Log: { info() {}, warn() {}, debug() {} } }, extraCtx || {}));
   runFiles(ctx, ["js/core/mat4.js"].concat(files || CAM_FILES));
   ctx.Tracks = synthTracks();
-  const cams = vm.runInContext("GameCams", ctx), feel = vm.runInContext("CamFeel", ctx);
-  cams.init({ vmax: 72 });
+  // `files` may leave CamFeel out (a vantage-only solve has no easing and no lens shaping).
+  const cams = vm.runInContext("GameCams", ctx), feel = vm.runInContext("typeof CamFeel === 'undefined' ? null : CamFeel", ctx);
+  if (cams.init) cams.init({ vmax: 72 });
   return { ctx, cams, feel, state };
 }
 export const BEND = [[400, 0], [Math.PI * 60, 1 / 60], [300, 0], [Math.PI * 90 * 2 / 3, -1 / 90], [600, 0]];

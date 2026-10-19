@@ -3,7 +3,10 @@
 Load this before a push, or when a spec fails and you need to decide stale
 expectation vs real regression.
 
-## Universal guards (always, before push)
+## Code guards (apply the checks selected for the changed paths)
+
+For prose-only changes, use `docs/VERIFICATION.md` §Docs and skill changes;
+generated readers and executable changes follow the code gates below.
 
 1. **Build guard for any track touched** — must print `OK <id>: ...`
    (`FAIL <id>: <msg>` means the game would strand on the menu):

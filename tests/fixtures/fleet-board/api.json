@@ -1,0 +1,30 @@
+{
+  "pulls?state=open&base=claude%2Ff1-game-project-26h3ng&per_page=100": [{ "number": 7 }, { "number": 9 }],
+  "pulls/7": {
+    "number": 7, "title": "tool: x", "draft": true, "mergeable_state": "blocked", "comments": 1, "updated_at": "2026-10-19T18:45:25Z",
+    "labels": [{ "name": "run-ci" }], "html_url": "https://github.com/o/r/pull/7", "head": { "sha": "aaaaaaaa11112222", "ref": "cursor/x-1" },
+    "body": "## Next\n```fleet\nworker: claude:session_W7\norchestrator: claude:session_O1\nfleet: b\nstate: implementing\nblocker: none\n```\n"
+  },
+  "pulls/7/files?per_page=100": [{ "filename": "tools/ci/x.mjs" }, { "filename": "docs/x.md" }],
+  "issues/7/comments?per_page=100&page=1": [{ "body": "fleet-status: working | tick 2 | 2026-10-19T18:40:00Z", "created_at": "2026-10-19T18:40:00Z" }],
+  "actions/runs?head_sha=aaaaaaaa11112222&per_page=50": { "workflow_runs": [
+    { "id": 100, "name": "CI", "event": "pull_request", "status": "in_progress", "conclusion": null, "created_at": "2026-10-19T18:44:00Z" },
+    { "id": 101, "name": "CI", "event": "pull_request", "status": "completed", "conclusion": "success", "created_at": "2026-10-19T18:30:00Z", "display_title": "CI ignored: label foo" }
+  ] },
+  "actions/runs/100/jobs?per_page=100": { "jobs": [{ "conclusion": null }, { "conclusion": "skipped" }] },
+  "actions/runs/101/jobs?per_page=100": { "jobs": [{ "conclusion": "success" }] },
+  "pulls/9": {
+    "number": 9, "title": "game: y", "draft": false, "mergeable_state": "dirty", "comments": 0, "updated_at": "2026-10-19T18:46:00Z",
+    "labels": [], "head": { "sha": "bbbbbbbb33334444", "ref": "cursor/y-2" }, "body": "MERGE-HOLD: waiting on Bryce\n"
+  },
+  "pulls/9/files?per_page=100": [{ "filename": "js/game.js" }],
+  "actions/runs?head_sha=bbbbbbbb33334444&per_page=50": { "workflow_runs": [
+    { "id": 200, "name": "CI", "event": "pull_request", "status": "completed", "conclusion": "failure", "created_at": "2026-10-19T18:40:00Z" }
+  ] },
+  "actions/runs/200/jobs?per_page=100": { "jobs": [{ "conclusion": "failure" }, { "conclusion": "success" }] },
+  "commits/cccccccc55556666": { "commit": { "message": "Merge pull request #1 from o/x\n\nbody", "committer": { "date": "2026-10-19T18:41:58Z" } } },
+  "actions/runs?head_sha=cccccccc55556666&per_page=50": { "workflow_runs": [
+    { "id": 300, "name": "Pages", "path": ".github/workflows/pages.yml", "event": "push", "status": "completed", "conclusion": "success", "created_at": "2026-10-19T18:42:00Z" }
+  ] },
+  "actions/runs/300/jobs?per_page=100": { "jobs": [{ "conclusion": "success" }] }
+}

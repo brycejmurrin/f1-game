@@ -511,6 +511,11 @@
       "presentation": "shared-levels",
       "preserve": "Download/parse notes; issue errors even in JSON; no failures inferred from absence"
     },
+    "tools/ci/fleet-board-snapshot.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "One ok/ERR line per source with row counts; the final '= snapshot ok|partial' line; exit 1 when any source failed"
+    },
     "tools/ci/fleet-board.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
