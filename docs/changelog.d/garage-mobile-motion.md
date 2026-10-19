@@ -1,1 +1,1 @@
-Fixed: Garage arrivals and Settings animation previews no longer run at half speed at 10 FPS because of the race camera's frame-time limit.
+Fixed: Garage arrivals, Settings animation previews and the active aero demonstration no longer run at half speed at 10 FPS because of frame-time limits.

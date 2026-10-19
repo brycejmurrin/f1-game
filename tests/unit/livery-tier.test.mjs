@@ -59,8 +59,10 @@ test("desktop: player preview is 1024, hi-res is 2048, AI stays 512×640", () =>
   assert.equal(LiveryTex.atlasDiv(true, false, false), 2, "boot/garage sync path is 1024×1280 preview");
   assert.equal(LiveryTex.atlasDiv(true, false, true), 1, "deferred hi-res is authored 2048×2560");
   assert.equal(LiveryTex.atlasDiv(false, false), 4, "AI cars upload at 512x640");
-  assert.equal(atlasBytes(2), 6990500, "preview mip chain stays ~6.67 MB");
-  assert.equal(atlasBytes(4), 1747620, "desktop AI mip chain stays ~1.67 MB");
+  // Bytes from the divisor the code picks (it fed literal divisors before: atlasDiv never reached them).
+  assert.equal(atlasBytes(LiveryTex.atlasDiv(true, false, false)), 6990500, "preview mip chain stays ~6.67 MB");
+  assert.equal(atlasBytes(LiveryTex.atlasDiv(true, false, true)), 27962020, "hi-res mip chain ~26.7 MB");
+  assert.equal(atlasBytes(LiveryTex.atlasDiv(false, false)), 1747620, "desktop AI mip chain stays ~1.67 MB");
   assert.equal(LiveryTex.playerHiResDeferred(false), true, "desktop player must defer hi-res");
 });
 
@@ -68,8 +70,8 @@ test("mobile keeps the same absolute upload sizes as the 1024-era policy", () =>
   // Divisors doubled with SIZE so jetsam bytes are unchanged: 512 player / 256 AI.
   assert.equal(LiveryTex.atlasDiv(true, true), 4);
   assert.equal(LiveryTex.atlasDiv(false, true), 8);
-  assert.equal(atlasBytes(4), 1747620);
-  assert.equal(atlasBytes(8), 436900);
+  assert.equal(atlasBytes(LiveryTex.atlasDiv(true, true)), 1747620);
+  assert.equal(atlasBytes(LiveryTex.atlasDiv(false, true)), 436900);
   assert.equal(LiveryTex.playerHiResDeferred(true), false, "mobile has no larger player upload to defer");
 });
 
@@ -89,10 +91,11 @@ test("a phone on GRAPHICS: HIGH keeps AI cars at the phone size (M-10); the play
 
 test("the desktop grid stays well under the old every-car-full figure", () => {
   // Steady-state after deferral: player hi-res + 21 AI at 512.
-  const everyFull = 22 * atlasBytes(1);
-  const tiered = atlasBytes(1) + 21 * atlasBytes(4);
+  const full = atlasBytes(LiveryTex.atlasDiv(true, false, true)), ai = atlasBytes(LiveryTex.atlasDiv(false, false));
+  const everyFull = 22 * full;
+  const tiered = full + 21 * ai;
   // Boot / garage-open before deferral completes: player preview + AI.
-  const openPath = atlasBytes(2) + 21 * atlasBytes(4);
+  const openPath = atlasBytes(LiveryTex.atlasDiv(true, false, false)) + 21 * ai;
   const mb = (b) => b / 1048576;
   assert.ok(mb(everyFull) > 500, `every-full ${mb(everyFull).toFixed(2)} MB`);
   assert.ok(mb(tiered) < 70, `tiered ${mb(tiered).toFixed(2)} MB should stay under 70`);

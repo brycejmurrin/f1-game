@@ -109,7 +109,9 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/fleet-board.mjs** | Fleet board: pinned issue of ready/claimed/blocked issues, PRs, live claims; mirrors the `claimed` label; syncs labels. | ci-watch |
 | **ci/fleet-flags.mjs** | Flags model drift, cost over cap, context over 300k and stalled "working" sessions from get_session JSON. | agent-fleet |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
+| **ci/guards-verdict.mjs** | Commit-gate verdict cache for test:guards (#2889 slice 1). | check-changes |
 | **ci/handback.mjs** | Verifies a PR head's CI + ready-gate, prints one SWEEP and one DONE line, lists check-ins to delete. | agent-fleet |
+| **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
 | **ci/measure-guard-commit.mjs** | Measure commit-guard wall time vs a direct test:guards run (#2647). | check-changes |
 | **ci/measure-pr-ci-after-close.mjs** | 24 h scan: PR ci.yml job-minutes starting after close + peak-hour PR wall median (#2213, epic #1949). | steward |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
@@ -123,6 +125,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so the always-on riders (vm-a1 / vm-a2 / slow arms) do not double-bill. | — |
+| **ci/session-ledger.mjs** | Summarise an agent transcript into tool/command-family minutes, timeouts, repeats; redacts secrets. | check-changes |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, verdicts, live run); `--pr` adds live PR state. | check-changes |
 | **ci/session-transcript.mjs** | Digest saved `list_events` pages into a timeline: prompts, replies, commands, MCP calls, subagents, errors. | agent-fleet |
 | **ci/sweep-shards.mjs** | Deterministic measured-time packing for the geometry sweep CI matrix. | — |
@@ -130,6 +133,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 | **ci/verify-live.mjs** | Post-deploy byte and SHA-256 verification for the shell, secondary pages, service worker, and lazy assets. | — |
 | **ci/wait-for.mjs** | The generic background waiter: block until the 1-min load drops, a file is non-empty, or a pid is gone (exit 0 / 124). | — |
+| **ci/webkit-leg-summary.mjs** | Markdown job summary for webkit-leg.yml from artifacts/webkit-leg/report.json. | — |
 | **ci/who-is-on-it.mjs** | Recent pushes per branch, who touched your paths, live claims: the check before fixing a shared red. | check-changes |
 
 ### `tools/check/`
@@ -284,6 +288,8 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 |---|---|---|
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
+| **perf/mesh-census-lib.mjs** | Pure aggregation for mesh-census: pass/source/distance bands + #2657 recommend. | — |
+| **perf/mesh-census.mjs** | Mesh census (#2657/#2631): main/mirror tris by distance band and source. | playwright-probe / renderer-debug |
 | **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
 | **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |

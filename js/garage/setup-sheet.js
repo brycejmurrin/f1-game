@@ -100,7 +100,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
                           coverVents: "none", spineHeight: "standard", spineSide: "none",
-                          coverBind: "independent", finHandoff: "match", bodySplit: "off",
+                          coverBind: "independent", finHandoff: "match", bodySplit: "off", bodyStyle: "team",
                           patternPlacement: "crown", patternSide: "both", patternWidth: "70", patternRepeat: "6",
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
                           patternRotation: "0", patternStretch: "100", patternWeight: "100",
@@ -186,6 +186,7 @@ const LIV_ROW_HINT = {
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
   sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also greys every spine design that writes a sponsor name (TOP wordmark, SIDE wordmark/duo/title).",
+  bodyStyle: "BODY — the chassis shape: TEAM keeps this car's own; NEEDLE, BRICK, ANTEATER, ARCHED, WEDGE and BARGE are concept bodies with distinct outlines. Team-body swaps (another constructor's chassis) stay off the picker until Car3D.ALLOW_TEAM_BODY_SWAP is on. Looks only — it never changes performance.",
   finShape: "FIN SHAPE — the shark-fin blade. NONE removes it, and with it the fin's paint, graphic, style and badge. Every 2026 team car runs NONE.",
   finStyle: "TAIL STYLE — the motif painted on the fin.",
   finBadge: "FIN BADGE — what the fin carries: the mark, the race number, the driver code, or nothing.",
@@ -992,7 +993,7 @@ function buildLiveryCreator(container, team) {
   // choose a fin again and the earlier badge returns — and every control in it
   // is `disabled` for real, so a tap does nothing rather than editing a field
   // the car cannot show. Registered by the row builders; synced on every edit,
-  // after refreshPalettes has rebuilt the palette chips it also disables.
+  // after refreshPalettes has synced the palette chips it also disables.
   // A dep is a ROW (every control in it) or one PILL (a value that paints
   // nothing under the current draft — SPINE TOP "wordmark" with SPONSORS at
   // "clean" has no name to write). The audit behind the rules, from
@@ -1055,9 +1056,16 @@ function buildLiveryCreator(container, team) {
     add(arrToHex(team.color)); add(arrToHex(team.color2));
     return seen;
   };
-  const palRows = [];   // rebuilt on every edit: the palette IS the other slots
+  const palRows = [];   // the palette IS the other slots
+  let paletteKey = null;
   const refreshPalettes = () => {
     const cols = paletteColours();
+    const key = cols.slice().sort().join(",");
+    if (key === paletteKey) {
+      for (const pr of palRows) for (const chip of pr.el.children)
+        chip.classList.toggle("active", (d[pr.key] || "").toLowerCase() === chip.dataset.csColour);
+      return null;   // unchanged chips keep their handlers and keyboard focus
+    }
     const focused = document.activeElement;
     let replacement = null;
     for (let i = 0; i < palRows.length; i++) {
@@ -1079,6 +1087,7 @@ function buildLiveryCreator(container, team) {
         if (ownedFocus && (cols[c] === focusColour || (!cols.includes(focusColour) && cols[c] === (d[pr.key] || "").toLowerCase()))) replacement = chip;
       }
     }
+    paletteKey = key;
     return replacement;
   };
 
@@ -1252,6 +1261,7 @@ function buildLiveryCreator(container, team) {
   // The tail DESIGN: what the fin is shaped like, what is painted on it, what it
   // carries, and whether the crest also repeats on the spine. Four single-choice
   // fields, so four pill rows — the same node shape as FINISH above.
+  pillRow("BODY", "bodyStyle", ["team", ...(Car3D.BODY_STYLE_IDS || [])], "team");
   pillRow("FIN SHAPE", "finShape", Car3D.FIN_SHAPE_IDS || ["standard"], "standard");
   deps.push({ row: pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team"), when: needFin, why: NO_FIN });
   deps.push({ row: pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo"), when: needFin, why: NO_FIN });

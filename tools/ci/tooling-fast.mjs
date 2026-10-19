@@ -133,6 +133,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // falls through to ZONE_COUNT — silently, which is how monza shipped a
   // table nobody read. Node-side via verify-track.cjs, so it is cheap.
   "tests/unit/assert-audit.test.mjs",
+  // #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).
+  "tests/unit/assert-match-ratchet.test.mjs",
   "tests/unit/assets-pack.test.mjs",
   "tests/unit/audio-mix-improvements.test.mjs",
   // Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.
@@ -163,6 +165,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
   "tests/unit/body-split.test.mjs",
+  // Livery BODY styles: concept chassis builds, nose/cover/pod anchors move, flap floor holds. ~3 s.
+  "tests/unit/body-styles.test.mjs",
   // ...and the DIFF[difficulty] family, one door further out: three readers
   // that took a stored index or object on trust. Executes the shipped source
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
@@ -210,6 +214,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
+  "tests/unit/car-presentation-vm.test.mjs",
   "tests/unit/car-shade.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
@@ -685,6 +690,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
   // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
+  "tests/unit/live-run-check.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
@@ -753,6 +759,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
   "tests/unit/menu-sentinel-resize.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
+  // tools/perf/mesh-census-lib.mjs: pass/source/distance banding + #2657/#2631 recommend (no browser). ~0.1 s.
+  "tests/unit/mesh-census.test.mjs",
   "tests/unit/metrics.test.mjs",
   // Night sky-tint fallback on the cockpit mirror glass: dim env bands + matte
   // material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.
@@ -801,6 +809,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
   "tests/unit/parts-distinct-mesh.test.mjs",
+  "tests/unit/parts-factory-key.test.mjs",
   // Both node-only and both under half a second: the catalog LADDER (no paid
   // option dominated by a cheaper one, no row that is never optimal) and the
   // garage's per-vertex MATERIAL column. Neither was in the edit loop, which
@@ -859,6 +868,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pr-body.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
   // answers the question that actually bites, "does the pre-push gate RUN it" —
+  // #2889 slice 1: commit-gate verdict cache (artifacts/pre-commit-guards.ok),
+  // git-config timeout through .githooks/pre-commit. Throwaway repos, ~2 s.
+  "tests/unit/pre-commit-guards.test.mjs",
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
@@ -985,6 +997,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/selected-gate-verdict.test.mjs",
   "tests/unit/session-contracts.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
+  "tests/unit/session-ledger.test.mjs",
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/session-transcript.test.mjs",
@@ -1106,6 +1119,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/terrain-y.test.mjs",
   "tests/unit/test-bg-outcome.test.mjs",
+  "tests/unit/test-bg-waste.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
   "tests/unit/test-groups.test.mjs",
@@ -1234,6 +1248,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tyre-peak-slip.test.mjs",
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
+  // #2975: race skidIntensity onset → GameAudio.skidLevel via game-vm + fake-audio.
+  "tests/unit/tyre-squeal-race-vm.test.mjs",
   // Job 4: slip-driven tyre squeal — threshold, lat/long monotonic gain+pitch,
   // setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.
   "tests/unit/tyre-squeal-slip.test.mjs",
@@ -1319,6 +1335,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/wgx-free-retire.test.mjs",
   // WGX debug labels + pass debug groups; validation-shaped messages name the label; Spector/webgl-lint vendor pin (#2964). VM, < 0.2 s.
   "tests/unit/wgx-labels.test.mjs",
+  // Opt-in torque-balanced wheel state (#1628): lockup / wheelspin VM pins; default OFF.
+  "tests/unit/wheel-state.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
   // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
   // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.

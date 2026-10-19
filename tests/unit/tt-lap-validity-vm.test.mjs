@@ -227,3 +227,62 @@ test("a race lap with a counted cut is DELETED — no best/last lap — but stil
   assert.equal(p.incidentInvalidLap, false, "the next lap starts clean");
 });
 
+
+// T5-23: the cut ladder for the sessions the time-trial cases above do not cover.
+test("a qualifying cut is NO TIME: the lap is deleted, qualiCut is set and no seconds are priced", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    g.G.daily.stop(); g.G.raceWeather = "dry";
+    g.G.session = "quali";
+    await g.G.startRace(); g.apex.go(); g.apex.headless(true);
+    const p = g.G.player;
+    p.penalty = 0; p.cutWarn = 0;
+    const cut = cutOffTrack(g, 200);
+    assert.ok(cut.counted, "the engine never counted a cut — this test is measuring nothing");
+    assert.equal(p.incidentInvalidLap, true, "a counted quali cut invalidates the lap");
+    assert.equal(p.qualiCut, true, "…and marks the session NO TIME");
+    assert.equal(p.penalty, 0, "qualifying has no classification to price");
+    armLap(g, 5);
+    const lastBefore = p.lastLap, bestBefore = p.best;
+    crossLine(g);
+    assert.equal(p.lastLap, lastBefore, "a cut quali lap is not a timed last lap");
+    assert.equal(p.best, bestBefore, "…nor the best");
+  } finally { g.close(); }
+});
+
+test("an AI car's counted cut deletes its lap and pays the race ladder like the player's", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    g.G.daily.stop(); g.G.raceWeather = "dry";
+    await g.G.startRace(); g.apex.go(); g.apex.headless(true);
+    const { G } = g;
+    const idx = G.cars.findIndex((c) => !c.human);
+    const ai = G.cars[idx];
+    for (const o of G.cars) if (o !== ai && !o.human) g.apex.retire(G.cars.indexOf(o));
+    ai.penalty = 0; ai.cutWarn = 0; ai.cuts = 0; ai.lap = Math.max(ai.lap, 2);
+    // Put the AI on the grass at race pace: game.js counts the cut after 1.2 s off the road.
+    g.apex.aiPlace(idx, 0.5, 40, 40);
+    for (let i = 0; i < 100 && !(ai.cuts > 0); i++) g.apex.step(1 / 60, 1);
+    assert.ok(ai.cuts > 0, "the engine never counted an AI cut — this test is measuring nothing");
+    assert.equal(ai.incidentInvalidLap, true, "the AI's cut lap is deleted too (nobody's best or the fastest lap)");
+    assert.equal(ai.cutWarn, 1, "the strike counts toward its own ladder");
+    assert.equal(ai.penalty, 0, "strike 1 is only a warning");
+  } finally { g.close(); }
+});
+
+test("a practice lap (checkpoint set) is not a timed lap, with no cut involved", async () => {
+  const g = await race();
+  try {
+    const { G } = g, p = G.player;
+    armLap(g, 90); crossLine(g);
+    armLap(g, 88); crossLine(g);
+    const cleanBest = p.best;
+    assert.ok(isFinite(cleanBest), "a clean race lap is timed");
+    assert.equal(G.coach.armPractice(), true, "practice can be armed in a one-off race");
+    assert.equal(G.coach.mark(), true, "a checkpoint can be set in a one-off race");
+    assert.equal(G.coach.practiceActive(), true);
+    armLap(g, 5);
+    crossLine(g);
+    assert.equal(p.best, cleanBest, "a practice lap never becomes the best lap");
+  } finally { g.close(); }
+});
