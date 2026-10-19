@@ -1,0 +1,1 @@
+1792437926	Bryce Murrin	User-authorized pre-push blocker fixes: tools/mcp/js-debugger-node.mjs, tools/lib/run-pid.mjs, tests/unit/js-debugger-node.test.mjs, tests/unit/run-pid.test.mjs, tests/unit/sync-pr-robust.test.mjs; no debugger session/MCP transport or tooling-fast roster edits  [cursor/settings-discovery-6d6d; session 75a8d0d2822ffc7d0c1393d0]
