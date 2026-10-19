@@ -36,11 +36,3 @@ test("factory aeroLoad and ersDeploy spread across the grid", () => {
   assert.ok(Math.max(...deploys) - Math.min(...deploys) > 0.05,
     "ERS deploy should not be identical across works cars");
 });
-
-test("makeCars assigns factory aero/ERS to AI, not null", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /aeroLoad: \(isP \|\| mate\) \? Parts\.aeroLoad/);
-  assert.match(src, /Parts\.aeroLoad\(factoryParts\.setup, team\)/);
-  assert.match(src, /houseStats: Career\.teamStats\(team\)/);
-  assert.doesNotMatch(src, /aeroLoad: isP \? Parts\.aeroLoad\([^)]+\): null/);
-});

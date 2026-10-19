@@ -6582,7 +6582,6 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
-        "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
@@ -11285,6 +11284,7 @@
         "tests/unit/race-setup-sheets.test.mjs"
       ],
       "openRaceSettings": [
+        "tests/unit/duel-row.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/race-setup-sheets.test.mjs"
       ],

@@ -264,9 +264,10 @@ test("with a canvas and the livery painter it paints twelve cells and uploads on
   // …and the entrance lamps' RED aspects as a SECOND mesh on the same
   // texture (track.pitSignal), drawn only while this car is called in.
   const sigMesh = up.filter((u) => u[0] === "mesh");
-  assert.equal(sigMesh.length, t.pitSignal ? 2 : 1, "the green aspects are their own mesh");
-  if (t.pitSignal) assert.equal(sigMesh[1][1].idx.length, t.pitSignal.idx.length);
-  up.splice(up.findIndex((u) => u[0] === "mesh" && u[1].idx.length === (t.pitSignal ? t.pitSignal.idx.length : -1)), t.pitSignal ? 1 : 0);
+  assert.ok(t.pitSignal, "the FULL fixture builds the entrance signal (the red-aspect mesh asserted below must exist)");
+  assert.equal(sigMesh.length, 2, "the green aspects are their own mesh");
+  assert.equal(sigMesh[1][1].idx.length, t.pitSignal.idx.length);
+  up.splice(up.findIndex((u) => u[0] === "mesh" && u[1].idx.length === t.pitSignal.idx.length), 1);
   // Array.from: the boxes live in the track VM's realm, and a strict deepEqual
   // compares prototypes across realms.
   const teams = Array.from(t.pit.row.boxes, (b) => b.team);

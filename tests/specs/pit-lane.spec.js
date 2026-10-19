@@ -446,7 +446,10 @@ test.describe("pit lane", () => {
       });
       const cockpitFrames = A.pit();
 
-      // Finish the stop so the car is released with a fresh set.
+      // Finish the stop so the car is released with a fresh set. Back to headless: the crew-draw
+      // frames above were the rendered part; a 300-step release loop rendered on SwiftShader ran
+      // 123-135 s against the 120 s test timeout (RC2-22) and measured rendering, not the stop.
+      A.headless(true);
       for (let i = 0; i < 60 * 5; i++) {
         A.step(1 / 60, 1);
         if (A.pit().state === "out" || A.pit().state === "none") break;
