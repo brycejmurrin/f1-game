@@ -623,7 +623,7 @@ function litRig(src) {
 // switch is inert unless a mood is chosen: GarageScene.mood(id), the URL
 // ?garageMood=<id>, or localStorage apex26.garageMood. Gains scale the rig
 // GROUPS of FIXTURES (key 0-1, fill 2-5, wash 6-9), the team dado uplights
-// and the night gantry; sky/amb scale the skylight and hemisphere ambient
+// and the night gantry; sky/amb (a number or per-channel rgb) scale the skylight and hemisphere ambient
 // IN PLACE (setup-camera reads the arrays per frame); exposure, bloom and
 // glare are read by setup-camera's presentOpts / drawGlow; sheen scales the
 // floor mirror; night forces the hour outside (pit lane, gantry, backdrop).
@@ -634,20 +634,21 @@ const MOODS = {
   shipped: {},
   // Race-weekend TV look: every light box on, ~5600 K, flat even fill, a
   // bright epoxy floor; low contrast so the livery reads at a glance.
-  broadcast: { key: 1.25, fill: 1.9, wash: 1.6, up: 0.45, keyTint: [1.04, 1.0, 0.94], fillTint: [0.96, 1.0, 1.06],
-    washTint: [0.97, 1.0, 1.04], sky: 1.45, amb: 1.6, exposure: 1.10, bloom: 0.6, glare: 0.75, sheen: 1.5, backdrop: 1.8 },
+  broadcast: { key: 2.2, fill: 3.0, wash: 2.5, up: 0.4, keyTint: [1.04, 1.0, 0.94], fillTint: [0.96, 1.0, 1.06],
+    washTint: [0.97, 1.0, 1.04], sky: [2.0, 2.05, 2.15], amb: [2.3, 2.4, 2.5], exposure: 1.22, bloom: 0.5, glare: 0.6, sheen: 1.6, backdrop: 4 },
   // Singapore / Bahrain under lights: a warm bright bay against a blue-black
   // pit lane, gantries lit outside, the uplights carrying the team colour.
-  night: { night: true, key: 1.15, fill: 0.75, wash: 0.55, up: 1.7, gantry: 1.5, keyTint: [1.20, 0.98, 0.70],
-    fillTint: [0.80, 0.92, 1.20], sky: 0.40, amb: 0.55, bd: [0.010, 0.016, 0.040], exposure: 1.0, bloom: 1.7, glare: 1.7, sheen: 1.9 },
-  // A launch reveal: two warm keys straight down on the car, fills nearly
-  // off, the room falls to black and the floor turns into a mirror.
-  showroom: { key: 1.9, fill: 0.18, wash: 0.10, up: 2.4, keyTint: [1.14, 1.0, 0.84], fillTint: [0.70, 0.84, 1.25],
-    sky: 0.20, amb: 0.30, sun: [0, 0.97, 0.24], bd: [0.006, 0.006, 0.008], exposure: 0.96, bloom: 1.4, glare: 1.5, sheen: 2.4 },
+  night: { night: true, key: 3.0, fill: 0.5, wash: 0.4, up: 3.0, gantry: 2.0, keyTint: [1.25, 0.95, 0.60],
+    fillTint: [0.75, 0.90, 1.25], sky: [0.10, 0.13, 0.28], amb: [0.35, 0.42, 0.75], bd: [0.010, 0.020, 0.070],
+    exposure: 1.08, bloom: 2.2, glare: 2.2, sheen: 2.2 },
+  // A launch reveal: warm keys straight down on the car, fills nearly off,
+  // the room falls to black and the floor turns into a mirror.
+  showroom: { key: 4.0, fill: 0.10, wash: 0.05, up: 3.0, keyTint: [1.14, 1.0, 0.84], fillTint: [0.70, 0.84, 1.25],
+    sky: 0.05, amb: 0.12, sun: [0, 0.97, 0.24], bd: [0.004, 0.004, 0.006], exposure: 1.15, bloom: 1.6, glare: 1.8, sheen: 3.0 },
   // Door up on a sunny pit lane: daylight is the key, low and from the
   // door; the ceiling rig is secondary and the outside is bright.
-  daylight: { night: false, key: 0.55, fill: 0.55, wash: 0.75, up: 0.35, sky: 1.85, amb: 1.7, sun: [0, 0.50, 0.866],
-    bd: [0.36, 0.42, 0.50], exposure: 1.02, bloom: 0.8, glare: 0.35, sheen: 1.1 },
+  daylight: { night: false, key: 0.3, fill: 0.3, wash: 0.5, up: 0.3, sky: [2.6, 2.4, 2.1], amb: [1.4, 1.6, 2.0],
+    sun: [0, 0.42, 0.9075], bd: [0.55, 0.62, 0.72], exposure: 1.0, bloom: 0.9, glare: 0.3, sheen: 1.2 },
 };
 const SKY_BASE = SKYLIGHT.slice(), AMB_SKY_BASE = AMB_SKY.slice(), AMB_GROUND_BASE = AMB_GROUND.slice();
 const _bdBase = BACKDROP.slice();
@@ -657,8 +658,9 @@ function mood(id) {
   const m = MOODS[id] ? id : "shipped";
   moodId = m; MD = Object.assign({}, MOOD_DEF, MOODS[m]);
   for (let k = 0; k < 3; k++) {
-    SKYLIGHT[k] = SKY_BASE[k] * MD.sky;
-    AMB_SKY[k] = AMB_SKY_BASE[k] * MD.amb; AMB_GROUND[k] = AMB_GROUND_BASE[k] * MD.amb;
+    const sk = Array.isArray(MD.sky) ? MD.sky[k] : MD.sky, am = Array.isArray(MD.amb) ? MD.amb[k] : MD.amb;
+    SKYLIGHT[k] = SKY_BASE[k] * sk;
+    AMB_SKY[k] = AMB_SKY_BASE[k] * am; AMB_GROUND[k] = AMB_GROUND_BASE[k] * am;
   }
   return moodId;
 }
