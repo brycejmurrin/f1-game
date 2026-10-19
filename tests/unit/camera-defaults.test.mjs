@@ -335,6 +335,24 @@ test("CamTune exports player edits as window.CameraEdits and imports them back",
 // the pack JSON and the APXC1 share code into ONE box. The whole block is what a
 // player pastes back, and decodeShare used to accept only a leading APXC1. or bare
 // JSON, so the block the panel itself produced read "BAD PASTE".
+test("malformed camera imports reject atomically without clearing saved tuning", () => {
+  const C = loadCamTune();
+  C.set("chase", "dist", 2.5); C.setGlobal("fov", 6); C.comfortSet("bob", 0.3);
+  const before = JSON.stringify(C.exportPack());
+  for (const pack of [[], { v: 1, modes: "oops" }, { v: 2, global: [] },
+    { v: 1, comfort: false }, { v: 2, tracks: null }, { v: 2, cars: 7 },
+    { chase: [] }, { v: 1, modes: { chase: "oops" } },
+    { v: 2, tracks: { monaco: { modes: [] } } }]) {
+    assert.equal(C.importText(JSON.stringify(pack)).ok, false, JSON.stringify(pack));
+    assert.equal(JSON.stringify(C.exportPack()), before, "invalid imports leave every store unchanged");
+  }
+  assert.equal(C.importText("{}").ok, true, "empty legacy maps remain valid");
+  assert.equal(C.count("chase"), 0);
+  assert.equal(C.countGlobal(), 1, "legacy maps preserve global settings");
+  assert.equal(C.importText('{"v":2,"modes":{}}').ok, true, "empty authoritative packs remain valid");
+  assert.equal(C.countGlobal(), 0);
+});
+
 test("the whole COPY VALUES block imports back (APXC1 token found anywhere)", () => {
   const A = loadCamTune();
   A.set("chase", "dist", 2.5);

@@ -1405,6 +1405,35 @@ test("I-09: a right/middle mouse button neither presses a hold button nor fires 
   assert.equal(taps, 1);
 });
 
+test("hold teardown detects hidden ancestors while visible capture steals keep their hold", () => {
+  for (const teardown of ["hidden", "display"]) {
+    const ancestor = { hidden: false, display: "block", visibility: "visible" };
+    const button = { l: {}, isConnected: true, parentElement: { parentElement: ancestor },
+      addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
+    const ctx = vm.createContext({ document: { getElementById: () => button },
+      getComputedStyle: (el) => ({ display: el.display || "block", visibility: el.visibility || "visible" }) });
+    vm.runInContext(read("js/input/hold-buttons.js"), ctx);
+    const hb = vm.runInContext("InputHoldButtons", ctx).create({
+      clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll() {} });
+    let held = false;
+    hb.wireHold("gas", (v) => { held = v; });
+    const event = { pointerId: 7, pointerType: "touch", preventDefault() {} };
+    button.l.pointerdown(event);
+    ancestor.visibility = "hidden"; // descendants can explicitly override inherited visibility
+    button.l.lostpointercapture(event);
+    assert.equal(held, true, "a visible descendant survives a capture steal");
+    if (teardown === "hidden") ancestor.hidden = true;
+    else ancestor.display = "none";
+    button.l.lostpointercapture(event);
+    assert.equal(held, false, teardown + " ancestor releases the held button");
+    assert.deepEqual(Array.from(hb.pointerCounts()), [0]);
+    button.l.pointerdown(event);
+    button.l.lostpointercapture(event);
+    assert.equal(held, true, "an already-hidden press is not a new teardown");
+    hb.holdReleaseAll();
+  }
+});
+
 test("analog hold buttons preserve the strongest remaining touch across release paths", () => {
   for (const axis of ["y", "x"]) for (const releasePath of ["pointerup", "pointercancel", "global", "lostpointercapture"]) {
     const button = { l: {}, isConnected: true, hidden: false,

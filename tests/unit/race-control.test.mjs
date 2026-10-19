@@ -905,6 +905,16 @@ test("classify(): a flagged finisher below 90 % of the winner's laps stays in th
     "unclassified follow by laps (flagged finishers first), then distance");
 });
 
+test("classify(): a retirement earns no future crossing ahead of the winner", () => {
+  const RC = load(null);
+  const winner = { id: "winner", lap: 11, prog: 10000, finished: true };
+  const retired = { id: "retired", lap: 11, prog: 10500, retired: true };
+  const runner = { id: "runner", lap: 10, prog: 9900 };
+  const order = RC.classify([winner, retired, runner], [winner], [runner], [retired]);
+  assert.deepEqual(Array.from(order, (c) => c.id), ["winner", "runner", "retired"]);
+  assert.equal(retired.classified, true, "retiring after ten laps still meets the distance cutoff");
+});
+
 test("all-DNF classification uses the retired leader's completed distance, excluding DSQ references", () => {
   const RC = load(null);
   const make = (id, lap, extra = {}) => ({ id, lap, prog: (lap - 1) * 1000 + 100, retired: true, ...extra });

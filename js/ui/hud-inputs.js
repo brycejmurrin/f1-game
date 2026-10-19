@@ -233,5 +233,13 @@ const HudInputs = (function () {
     }
   }
 
+  // Solo pause stops HUD frames, but preference changes still arrive. Clear on
+  // disable immediately so OFF → ON during pause cannot resurrect old samples.
+  const store = typeof GameStore !== "undefined" && GameStore.store;
+  if (store && store.subscribe) store.subscribe((change) => {
+    if (change && (change.clear || change.key === "hudElements" ||
+      Array.isArray(change.keys) && change.keys.includes("hudElements")) && !isOn()) reset();
+  });
+
   return Object.freeze({ N, STEP_S, WINDOW_S, createTrace, levelY, steerY, frame, trace, snapshot, reset, mountReview });
 })();

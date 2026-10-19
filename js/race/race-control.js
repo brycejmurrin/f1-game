@@ -173,7 +173,7 @@ const RaceControl = (function () {
   // short alike (a finisher missing from `order` had finPos 0) — follow by
   // laps, then distance.
   function classify(cars, fin, run, out) {
-    const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
+    const lapsAt = (c) => (c.lap || 0) + (c.finished || c.retired ? 0 : 1);
     const done = (c) => (c.retired ? (c.lap || 0) - 1 : lapsAt(c) - 1);
     const ref = fin.length ? fin : run.length ? run : out.filter((c) => !c.dsq);
     const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
