@@ -1,1 +1,0 @@
-1792438012	Bryce Murrin	SKILLS follow-up on PR3095: OWNED .claude/skills/mcp-probe/SKILL.md and references/offline.md, references/traps-chrome.md. Correct pinned npm fallback, tmux/foreground daemon lifecycle, unsafe age-based Chrome cleanup. Read-only LSP shutdown investigation; no executable/CI changes.  [cursor/source-workflow-6e9a; session 182f018e146232524bf13757]
