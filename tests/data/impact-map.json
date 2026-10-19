@@ -7466,6 +7466,9 @@
       "navBlocksTouch": [
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "onScreenRotate": [
+        "tests/unit/throttle-latch.test.mjs"
+      ],
       "padAxesAreDefault": [
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/key-binds.test.mjs"
@@ -7855,7 +7858,6 @@
         "tests/specs/steer-migration.spec.js"
       ],
       "lockFromSlider": [
-        "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs"
       ],
       "matchPreset": [
@@ -7878,6 +7880,7 @@
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -9673,6 +9676,9 @@
       ]
     },
     "js/physics/collide.js": {
+      "blockerReach": [
+        "tests/unit/traffic-arc-buckets.test.mjs"
+      ],
       "body": [
         "tests/unit/contact-geometry.test.mjs"
       ],
@@ -9709,7 +9715,11 @@
         "tests/unit/mechanics-coherence.test.mjs"
       ],
       "scanOtAhead": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/traffic-arc-buckets.test.mjs"
+      ],
+      "scanTow": [
+        "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "scanTraffic": [
         "tests/unit/collision-contact-vm.test.mjs",
