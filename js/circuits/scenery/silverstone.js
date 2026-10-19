@@ -528,7 +528,9 @@
         // array id is a row centred on s, its scale snapped so a module is a
         // whole number of nodes wide and neighbours abut.
         // MAT.FLAT: the kit is flat-coloured; under the CONCRETE texture its red
-        // trim and door read as one gridded slab.
+        // trim and door read as one gridded slab. rotY turns each module's
+        // front (local +z: door, red trim) to its road edge; the default yaw
+        // showed the road its blank back.
         const yards = [
           [["k_pitsgarageclosed", "k_pitsgarage", "k_pitsgarageclosed"], 0.93, 1, 78, 1.8],
           [["k_pitsgarage", "k_pitsgarageclosed", "k_pitsgarage"], 0.96, 1, 82, 1.8],
@@ -543,7 +545,10 @@
           const scale = row.length > 1 ? step * ds / 5 : sc;
           let placed = 0;
           row.forEach((id, i) => {
-            if (bakedModel(id, k(s) + (i - (row.length - 1) / 2) * step, side, dist, { scale, mat: MAT.FLAT })) placed++;
+            const km = k(s) + (i - (row.length - 1) / 2) * step;
+            const a = anchor(km, side, dist), e = anchor(km, side, 0);
+            const rotY = a && e ? Math.atan2(e.c[0] - a.c[0], e.c[2] - a.c[2]) : undefined;
+            if (bakedModel(id, km, side, dist, { scale, mat: MAT.FLAT, rotY })) placed++;
           });
           return placed > 0;
         };

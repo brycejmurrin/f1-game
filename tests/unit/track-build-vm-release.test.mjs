@@ -198,7 +198,10 @@ const STRIP = {
   //   256198 → 254325.
   // → #2204 curved tiered stands (2026-10-19, merged over #1617): emission
   //   273889 → 273709, strip-after 254317 → 254112.
-  monaco: { before: 273709, after: 254112 },
+  // → #3044 harbour houses (2026-10-19): the three sunk 4 m Racing Kit pieces
+  //   on the shore lip become 10 m procedural houses again. Emission 273709 →
+  //   274207, strip-after 254112 → 254614.
+  monaco: { before: 274207, after: 254614 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -238,7 +241,10 @@ const STRIP = {
   //   fallback. Emission 325396 → 320558, strip-after 294760 → 290837.
   // → #2204 curved tiered stands (2026-10-19, merged over #1617): emission
   //   320558 → 320414, strip-after 290837 → 290722.
-  monza: { before: 320414, after: 290722 },
+  // → #3044 paddock pit blocks (2026-10-19): one x2.6 garage per block becomes
+  //   a row of 3-4 kit garage modules. Emission 320414 → 321026, strip-after
+  //   290722 → 291224 (modules turned to face the road, MAT.FLAT).
+  monza: { before: 321026, after: 291224 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
