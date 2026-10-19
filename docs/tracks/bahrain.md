@@ -62,7 +62,26 @@ ribbon is east of the pit straight.
 | 0.135 / 0.225 / 0.345 / 0.475 / 0.605 / 0.705 / 0.845 | alternating | far (74–96 m) | **Limestone shelves**: low stepped flat-topped ledges, bright sunlit cap over a darker face, scree skirt at the foot — the rocky pavement the circuit was blasted out of. Sparse, so the dune bands keep the skyline |
 
 ## 5. Track features
-Near-flat, with modest real camber in the fast sweeps (3–4°: T1, T4, the T5–T7 sweep, T10, the final right). Signature corners: **Turn 1** right-hand hairpin (heavy braking, prime overtake), **Turn 4** right hairpin after the Turn 3 kink/DRS, the flowing **Turns 5-6-7 sweep**, **Turn 8** downhill right hairpin, and the technical double-apex **Turns 9-10**. Wide asphalt with generous gravel/asphalt run-off; bold red-white sawtooth kerbs at every apex and exit.
+Signature corners: **Turn 1** right-hand hairpin (heavy braking, prime overtake), **Turn 4** right hairpin after the Turn 3 kink/DRS, the flowing **Turns 5-6-7 sweep**, **Turn 8** right hairpin, and the technical **Turns 9-10** left-hand sequence. T10 is downhill and off-camber. Wide asphalt with generous gravel/asphalt run-off; bold red-white sawtooth kerbs at every apex and exit.
+
+### GP-layout numbering and source limits
+
+The [Formula 1 2025 Bahrain guide and numbered map](https://www.formula1.com/en/racing/2025/bahrain)
+(11–13 April 2025 event; consulted 19 October 2026) identify the 5.412 km GP
+layout: T5/6/7 are left/right/left, T8 is the right hairpin, T9/10 are lefts,
+and T14/15 are the final two rights. The circuit definition's `turns` table
+matches those physical bends in the built trace, in racing arc fractions.
+It must not be rotated by `_sceneryShift`. These markers drive numbered corner
+boards as well as agent descriptions; fifteen entries alone do not establish
+correct numbering.
+
+The guide explicitly describes T10 as downhill and **off-camber**. The earlier
+3–4° positive-camber suggestions were unmeasured artistic suggestions, not
+survey evidence. They should not be used
+to certify the current banking profile. Likewise the brief's near-flat
+elevation description is not a measured height profile. Correcting numbering
+does not certify banking, elevation, absolute length, sector timing loops or
+start-line position; those require separate evidence.
 
 ## 6. Modelling notes
 - Light from above: bake bright top faces / floodlit pools so night track reads against black sky.
