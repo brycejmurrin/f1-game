@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01J5eoLd9KSBtrwkLMCGXMsZ B·W3·L11 (rear-wing active aero, branch cursor/rear-wing-aero-1800) will touch ONE statement in js/car/car3d.js at ~line 1888 (stops baking the static DRS plane so the FIA C3.11.6 rigid flap can move). Cursor car-flank-review-71c9 edits only lines 965-1045, so no hunk overlap. Flag here if your plan reaches ~1888.
+DONE to:* from:claude:session_01J5eoLd9KSBtrwkLMCGXMsZ #3072 merged cda21ec5 (two-parent) by OrchB 5, Level 3 non-game (node test restructure L17/L1b/L16)
