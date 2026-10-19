@@ -123,6 +123,9 @@
       ]
     },
     "js/agent/apex-cam.js": {
+      "hooks": [
+        "tests/unit/apex-cam-fallback.test.mjs"
+      ],
       "*": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -181,6 +184,7 @@
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
+        "tests/unit/js-debugger-node.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
@@ -7487,6 +7491,9 @@
       "navBlocksTouch": [
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "onScreenRotate": [
+        "tests/unit/throttle-latch.test.mjs"
+      ],
       "padAxesAreDefault": [
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/key-binds.test.mjs"
@@ -7876,7 +7883,6 @@
         "tests/specs/steer-migration.spec.js"
       ],
       "lockFromSlider": [
-        "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs"
       ],
       "matchPreset": [
@@ -7899,6 +7905,7 @@
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -9700,6 +9707,9 @@
       ]
     },
     "js/physics/collide.js": {
+      "blockerReach": [
+        "tests/unit/traffic-arc-buckets.test.mjs"
+      ],
       "body": [
         "tests/unit/contact-geometry.test.mjs"
       ],
@@ -9736,7 +9746,11 @@
         "tests/unit/mechanics-coherence.test.mjs"
       ],
       "scanOtAhead": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/traffic-arc-buckets.test.mjs"
+      ],
+      "scanTow": [
+        "tests/unit/traffic-arc-buckets.test.mjs"
       ],
       "scanTraffic": [
         "tests/unit/collision-contact-vm.test.mjs",
@@ -15387,7 +15401,6 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/select-screen-fixes.test.mjs",
-        "tests/unit/track-designer-dom.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "drsZoneRangeHtml": [
@@ -15813,6 +15826,7 @@
     },
     "js/ui/track-maps.js": {
       "aspect": [
+        "tests/unit/circuit-axis.test.mjs",
         "tests/unit/track-maps-corners.test.mjs"
       ],
       "corners": [

@@ -45,3 +45,44 @@ test("browser MCP rejects a missing token and lists its tools", async () => {
     await mcp.close();
   }
 });
+
+test("browser MCP refuses a WRONG token (same and different length), even beside a valid query token", async () => {
+  const mcp = await startBrowserMcp({ port: 0, token: "secret" });
+  try {
+    for (const bad of ["secreT", "s", "secret-but-longer"]) {
+      const r = await post(mcp.url, init, bad);
+      assert.equal(r.status, 401, `bearer ${bad}`);
+    }
+    // the Authorization header wins over ?token=, so a bad bearer cannot be rescued by a good query token
+    const mixed = await post(mcp.url + "?token=secret", init, "wrong!");
+    assert.equal(mixed.status, 401);
+  } finally {
+    await mcp.close();
+  }
+});
+
+test("browser MCP answers ping, tools/call (status, unknown tool, no page yet) and an unknown method", async () => {
+  const mcp = await startBrowserMcp({ port: 0, token: "secret" });
+  try {
+    const ping = await (await post(mcp.url, { jsonrpc: "2.0", id: 7, method: "ping" }, "secret")).json();
+    assert.deepEqual(ping, { jsonrpc: "2.0", id: 7, result: {} });
+
+    const status = await (await post(mcp.url, { jsonrpc: "2.0", id: 8, method: "tools/call", params: { name: "browser_status", arguments: {} } }, "secret")).json();
+    const body = JSON.parse(status.result.content[0].text);
+    assert.equal(body.browser, false, "nothing launched by a status call");
+    assert.equal(body.href, null);
+
+    const unknown = await (await post(mcp.url, { jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "nope", arguments: {} } }, "secret")).json();
+    assert.equal(unknown.result.isError, true);
+    assert.match(unknown.result.content[0].text, /unknown tool nope/);
+
+    const early = await (await post(mcp.url, { jsonrpc: "2.0", id: 10, method: "tools/call", params: { name: "browser_eval", arguments: { expression: "1" } } }, "secret")).json();
+    assert.equal(early.result.isError, true);
+    assert.match(early.result.content[0].text, /call browser_open first/);
+
+    const nomethod = await (await post(mcp.url, { jsonrpc: "2.0", id: 11, method: "bogus/method" }, "secret")).json();
+    assert.equal(nomethod.error.code, -32601);
+  } finally {
+    await mcp.close();
+  }
+});

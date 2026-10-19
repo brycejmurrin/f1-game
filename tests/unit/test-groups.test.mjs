@@ -75,7 +75,10 @@ test("a js/game file with its own browser spec routes to that spec's group", () 
     ["js/physics/aero-zones.js", "aero"],
     ["js/garage/scene.js", "car"],
   ];
-  const specific = RULES.slice(2);
+  // The "always" rules are the ones that fire for ANY js edit (tiny boot gate, tooling-fast floor);
+  // identified by behaviour, so reordering RULES cannot change what is checked here.
+  const specific = RULES.filter(([re, gs]) => !(re.test("js/" + "zz-probe.js") && gs.every((g) => g === "tiny" || g === "tooling-fast")));
+  assert.ok(specific.length < RULES.length && specific.length > 10, "the always-rules were found and removed");
   for (const [file, group] of specBacked) {
     const groups = new Set(specific.filter(([re]) => re.test(file)).flatMap(([, g]) => g));
     assert.ok(groups.has(group), `${file} must route to test:${group} (got ${[...groups].join(",") || "nothing"})`);
@@ -289,27 +292,35 @@ test("no test:* group pins a --project that excludes one of the specs it names",
 
   const scripts = JSON.parse(read("package.json")).scripts || {};
   const offenders = [];
+  // The same scan on a synthetic table proves it CAN find an offender, which the real
+  // (dormant: no script names a spec beside --project) table cannot.
+  const SPEC_REF = /tests\/(?:[a-z0-9-]+\/)*([a-z0-9-]+)\.spec\.js/g;
+  const scan = (table) => {
+      const out = [];
+      for (const [name, cmd] of Object.entries(table)) {
+        const proj = cmd.match(/--project=(\w+)/);
+        if (!proj) continue;
+        for (const m of cmd.matchAll(SPEC_REF)) {
+          const inRender = render.has(m[1]);
+          if (proj[1] === "render" && !inRender) out.push(`${name}: ${m[1]}`);
+          if (proj[1] === "headless" && inRender) out.push(`${name}: ${m[1]}`);
+        }
+      }
+      return out;
+    };
+    const anyRender = [...render][0];
+    assert.deepEqual(scan({ ok: `playwright test --project=render tests/specs/${anyRender}.spec.js` }), []);
+    assert.deepEqual(scan({ bad: "playwright test --project=render tests/specs/" + "definitely-not-render.spec.js" }), ["bad: definitely-not-render"]);
+    assert.deepEqual(scan({ bad2: `playwright test --project=headless tests/specs/${anyRender}.spec.js` }), [`bad2: ${anyRender}`]);
+    assert.deepEqual(scan({ unpinned: "playwright test tests/specs/" + "x.spec.js" }), []);
   // The path pattern admits SUBDIRECTORIES. It used to be `tests/([a-z0-9-]+)`,
   // which the tests/ split (AUDIT-SYNTHESIS §R2) would have stopped matching
   // entirely — the loop body would never run, `offenders` would stay empty, and
   // this test would have gone on passing while checking nothing. `matched`
   // below is the part that makes that impossible to repeat: a pattern that
   // finds nothing is a broken pattern, not a clean repo.
-  const SPEC_REF = /tests\/(?:[a-z0-9-]+\/)*([a-z0-9-]+)\.spec\.js/g;
-  let matched = 0;
-  for (const [name, cmd] of Object.entries(scripts)) {
-    const proj = cmd.match(/--project=(\w+)/);
-    if (!proj) continue;                       // no pin, both projects are eligible
-    const wants = proj[1];
-    if (wants !== "render" && wants !== "headless") continue;
-    for (const m of cmd.matchAll(SPEC_REF)) {
-      matched++;
-      const spec = m[1];
-      const inRender = render.has(spec);
-      if (wants === "render" && !inRender) offenders.push(`${name}: ${spec} is not in RENDER_SPECS`);
-      if (wants === "headless" && inRender) offenders.push(`${name}: ${spec} IS in RENDER_SPECS`);
-    }
-  }
+  const matched = Object.values(scripts).reduce((n, cmd) => n + (/--project=(render|headless)\b/.test(cmd) ? [...cmd.matchAll(SPEC_REF)].length : 0), 0);
+  offenders.push(...scan(scripts));
   // WHY the input set is empty matters more than the output set being empty.
   //
   // This guard is DORMANT today, measured: the only scripts carrying

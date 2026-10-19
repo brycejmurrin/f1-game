@@ -30,10 +30,10 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 428,
+    "files": 431,
     "classifications": {
-      "entrypoint-candidate": 289,
-      "ambiguous": 56,
+      "entrypoint-candidate": 290,
+      "ambiguous": 58,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
@@ -2238,6 +2238,12 @@
       "outputPolicy": "keep-native"
     },
     {
+      "path": "tools/mcp/js-debugger-boot.cjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/mcp/js-debugger-cdp.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2270,6 +2276,11 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/mcp/js-debugger-node.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "page-results"
+    },
+    {
       "path": "tools/mcp/js-debugger-session.mjs",
       "classification": "ambiguous",
       "outputPolicy": "page-results"
@@ -2282,6 +2293,11 @@
     },
     {
       "path": "tools/mcp/js-debugger-trace.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "page-results"
+    },
+    {
+      "path": "tools/mcp/js-debugger-workflow.mjs",
       "classification": "ambiguous",
       "outputPolicy": "page-results"
     },
@@ -3353,7 +3369,7 @@
     },
     {
       "name": "test:mcp",
-      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs"
+      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-node.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs"
     },
     {
       "name": "test:mobile-unit",

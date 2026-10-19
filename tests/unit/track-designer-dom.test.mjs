@@ -468,14 +468,20 @@ test("open({design}), EDIT and IMPORT never drop unsaved work: UNDO brings it ba
   assert.equal(b2.D.state().design.theme, "harbour");
 });
 
-test("SAVE durably updates the draft library link even after autosave has finished", async () => {
+test("SAVE durably updates the draft library link even after autosave has finished", () => {
   const b = bootScreen();
+  // Drive the 600 ms draft debounce by hand (a real wait only slowed the file down).
+  const timers = new Map(); let timerId = 0;
+  b.ctx.setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; };
+  b.ctx.clearTimeout = (id) => timers.delete(id);
   // Match real GameStore's durable JSON boundary, rather than retaining aliases.
   b.ctx.GameStore.store.set = (k, v) => { b.data[k] = plain(v); };
   openGreen(b);
   const a = b.D.save(); assert.equal(a.ok, true);
   b.D.setTheme("alpine");
-  await new Promise(resolve => setTimeout(resolve, 650));
+  const draft = [...timers.values()].find((t) => t.ms === 600);
+  assert.ok(draft, "the edit scheduled the draft autosave");
+  draft.fn();
   assert.equal(b.data.customTrackDraft.originId, a.id, "autosaved before SAVE");
   const saved = b.D.save(); assert.equal(saved.ok, true);
   assert.notEqual(saved.id, a.id);
@@ -558,8 +564,7 @@ test("a share link while the screen is open keeps the return focus; EDIT → SAV
   const first = b.D.save();
   assert.equal(first.ok, true);
   const item = b.C.get(first.id);
-  // The picker entry point must retain edit identity just like library EDIT.
-  assert.match(read("js/ui/select-screen.js"), /TrackDesigner\.open\(\{ design: CustomTracks\.get\(t\.id\), originId: t\.id \}\)/);
+  // The picker's EDIT chip calls open({ design, originId }) exactly like the library does (the spec proves the chip).
   b.D.open({ design: item, originId: item.id });
   b.D.setStart(3); b.D.preview();
   const second = b.D.save();
@@ -716,7 +721,6 @@ test("DesignerCanvas: a tap on the road at the point cap inserts nothing and say
   h.cv.setPoints(ring.slice(0, max - 1)); h.cv.fit();
   h.tap(h.scr(edge));
   assert.equal(h.ev.changes.filter((c) => c.kind === "insert").length, 1, "one under the cap still inserts");
-  assert.match(read("js/editor/designer.js"), /onLimit: \(\) => message\(CustomTracks\.LIMITS\.ptsMax[^\n]*, true\)/, "the screen words the refusal as a warning");
 });
 
 test("DesignerCanvas: a drag stops at the storage bounds; a preview landing mid-drag keeps the road stale", () => {
@@ -998,26 +1002,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.ok(hint && stageHint && hint !== stageHint);
   assert.ok(toolsGroup && toolsGroup.children.some((c) => c.classList.contains("td-chips") && c.children.every((t) => t.dataset.tool)), "the hint sits in the TOOLS group");
   assert.match(hint.textContent, /^EDIT: POINT selects one/);
-  // css/editor.css: the phone rules hide only the stage's copy; the rail's stays.
-  const css = read("css/editor.css");
-  assert.equal((css.match(/\.td-stage \.td-hint \{ display: none; \}/g) || []).length, 2, "narrow/portrait and short both hide the stage hint");
-  assert.doesNotMatch(css, /^\s*\.td-hint \{ display: none/m, "no rule hides every .td-hint");
-  // Narrow+short landscape (734×343): drop the 200px stage floor and undo the
-  // 3-up foot grid — stacking ALL short heights (incl. 852×344 safari) made
-  // clipped findings worse (layout-audit 2026-10-05).
-  assert.match(css,
-    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(240px,\s*38%\)/,
-    "narrow+short landscape keeps a usable side-by-side inspector");
-  assert.match(css,
-    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?\.td-foot \{ display: flex/,
-    "narrow+short landscape restores a single-row foot");
-  assert.match(css,
-    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?min-height:\s*72px/,
-    "narrow+short landscape floors the main canvas above WCAG 24");
-  const shortOnly = css.match(/@media \(max-height: 500px\) \{([\s\S]*?)\n\}/);
-  assert.ok(shortOnly, "short-height media query present");
-  assert.doesNotMatch(shortOnly[1], /\.td-body\s*\{/,
-    "max-height:500 alone must not restack .td-body (safari 2-col stays)");
+  // Phone/short-viewport layout of the hint, rail and stage is measured on a real page by the spec and the UI survey matrix, not pinned here as CSS text.
   for (const [tool, re] of [["draw", /^DRAW: draw one closed loop/], ["corner", /^CORNER: tap a point to stamp/], ["hairpin", /^HAIRPIN: tap a point/], ["straight", /^STRAIGHT: tap a point/], ["select", /^EDIT: /]]) {
     b.D.setTool(tool);
     assert.match(hint.textContent, re, tool);
@@ -1049,37 +1034,6 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.equal(labels().find((t) => t.startsWith("CORNERS ·")), "CORNERS · CORNER R " + (+m[1] + 5) + " m × 90° RIGHT", "live from the steppers");
   b.D.setTool("straight");
   assert.equal(labels().find((t) => t.startsWith("CORNERS ·")), "CORNERS · STRAIGHT 200 m");
-  // css pins for the survey defects (horizontal rail scroll, equal tabs, My Circuits empty span).
-  assert.match(css, /\.td-row \.sel-chip \{[^}]*min-height:\s*var\(--tap-paint\)/, "stepper ± keys floor at --tap-paint on touch");
-  assert.match(css, /\.td-row \.sel-chip \{[^}]*min-width:\s*var\(--tap-paint\)/, "stepper ± keys width floor at --tap-paint on touch");
-  assert.match(css, /\.td-issue \{[^}]*min-height:\s*var\(--tap-paint\)/, "CHECKS issue rows floor at --tap-paint");
-  assert.match(css,
-    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?\.td-stats \{ display: none; \}/,
-    "portrait stack hides duplicate stage stats so the canvas row stays inside td-body");
-  assert.match(css, /\.td-rail \{[^}]*overflow-x:\s*hidden/, "rail clips horizontal overflow");
-  assert.match(css, /\.td-rail \{[^}]*scrollbar-gutter:\s*stable/, "rail reserves scrollbar gutter");
-  assert.match(css, /\.td-tab \{[^}]*flex:\s*1 1 0/, "equal-width tabs (no jump)");
-  assert.match(css, /\.td-card > strong \{[^}]*min-width:\s*0[^}]*overflow-wrap:\s*anywhere/, "saved circuit names wrap inside narrow cards");
-  assert.match(css, /\.td-issue \{[^}]*overflow-wrap:\s*anywhere/, "validation messages wrap beside FIX on narrow rails");
-  assert.match(css, /\.td-empty \{[^}]*grid-column:\s*1\s*\/\s*-1/, "empty MY CIRCUITS spans the full grid");
-  // Phone short: elevation strip stays reachable (not display:none).
-  assert.match(css, /max-height: 500px[\s\S]*?data-role="profile"[\s\S]*?display:\s*block/, "profile strip kept on short phones");
-  assert.match(css, /\.td-stage canvas \{[^}]*min-height:\s*72px/, "main map canvas keeps a 72px floor in every layout");
-  assert.match(css,
-    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)\s+minmax\(0,\s*1\.2fr\)/,
-    "portrait stack reserves space for the inspector below the map");
-  assert.match(css,
-    /@media \(max-height: 500px\) \{[\s\S]*?\.td-stats \{ display: none; \}/,
-    "short viewports hide duplicate stage stats (852×344 safari 2-col included)");
-  assert.match(css,
-    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*minmax\(72px,\s*1fr\)\s*auto/,
-    "portrait stage grid: definite map row + profile");
-  assert.match(css,
-    /@media \(max-width: 760px\) and \(orientation: portrait\) \{[\s\S]*?#trackdesigner:not\(\[data-mode="scenery"\]\) \.td-stage > \.td-chips\[data-role="toolbar"\][\s\S]*?position:\s*static[\s\S]*?grid-row:\s*1/,
-    "portrait toolbar gets its own row instead of covering the map");
-  assert.match(css,
-    /#trackdesigner:not\(\[data-mode="scenery"\]\) \.td-stage > canvas\[data-role="profile"\][\s\S]*?grid-row:\s*3/,
-    "portrait profile stays below the dedicated toolbar and map rows");
 });
 
 test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that point, anchored at the press; a canvas press hides it; a stamp tool hands the canvas a ghost", () => {

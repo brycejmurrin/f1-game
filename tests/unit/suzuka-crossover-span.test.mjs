@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { verifyTrack, buildContext } = require("../../tools/track/verify-track.cjs");
+const { buildContext } = require("../../tools/track/verify-track.cjs");
 
 function blockYRange(track, id) {
   const geo = track.propsGeo;
@@ -65,7 +65,10 @@ test("suzuka-crossover-deck soffit seats under the upper ribbon", () => {
   const md = track.modelDiagnostics;
   const deckMeta = md.emitted.find((e) => e.id === "suzuka-crossover-deck");
   assert.ok(deckMeta, "deck meta");
-  // Declared clearance tracks the upper−lower rise (was hardcoded 5.5 → mid-gap).
+  // Requirement: the deck's declared clearance must cover the physical gap between
+  // the two ribbons (rise − 3.0 allows the soffit/deck thickness) and never drop
+  // below 4.8 m, the minimum car-over-car headroom the foundation specs enforce.
+  // (Was hardcoded 5.5 → mid-gap.) verify-track coverage lives in tools/track.
   const rise = upperY - lowerY;
   assert.ok(
     deckMeta.clearance >= 4.8 && deckMeta.clearance >= rise - 3.0,
@@ -80,8 +83,4 @@ test("suzuka-crossover-deck soffit seats under the upper ribbon", () => {
     gap >= -0.15 && gap <= 1.0,
     `deck top ${deck.ymax.toFixed(2)} must sit under upper ${upperY.toFixed(2)} (gap ${gap.toFixed(2)})`,
   );
-});
-
-test("suzuka still verifies after the crossover flush fix", () => {
-  assert.doesNotThrow(() => verifyTrack("suzuka", { quiet: true }));
 });

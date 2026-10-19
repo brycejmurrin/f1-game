@@ -327,6 +327,27 @@ Every failure automatically attaches three things (see `tests/helpers/fixtures.j
 | `apex-logs` | the `Log` ring buffer: retained diagnostics down to `info`, **including ones never printed** |
 | `page-console` | what the page actually said, in order, favicon noise stripped |
 
+### Debug a Node test
+
+Measured on Node v22 in `docs/notes/NODE-DEBUGGING-2026-10-19.md`; skill `js-debugger` drives the tools.
+
+1. **Default: one MCP call.** `debugger_node_test {files:[…], probes:[{file:"js/physics/brake-cue.js", line, expression, captureLocals}]}`
+   runs up to 8 files under the inspector, no attach, and returns hit counts, values and locals. Probe a body line,
+   not the `function` header. Add `runner:"test"` for the real `node --test`.
+2. **Interactive:** `node --inspect-brk=0 tests/unit/<f>.test.mjs` (no `--test`: one process, one ws URL, the runner
+   still reports), then `debugger_targets targetType:"node"` and attach. `--test` with several files hangs a single
+   client, because each file's child waits on its own port.
+3. **Which filename form is debuggable.** V8 reports a vm script under exactly the `filename` it was given:
+   an absolute path is a `file://` URL that url breakpoints and `--experimental-test-coverage` reach (the game-vm
+   family); a relative (`js/…`), bare or missing filename is not (coverage drops it, url breakpoints match 0). The MCP
+   still binds those by source inside an instrumentation pause, capped at `vmPauseBudget` executions, so a probe on
+   an unnamed vm script works but a vm-heavy suite pays for it (`cam-avoid-vm` 121 s uncapped). Issues #2960 (opt-in
+   preload) and #2961 (absolute filenames) track the permanent fix.
+4. **Breakpoint cost.** A logpoint is a condition that logs and returns `false`; a pause-then-resume on every hit
+   costs ~44 ms per round trip (`game-vm.test` 26 s → 84 s).
+5. **Columns shift by 2** on top-level `const` lines (the harness rewrites them to `var`); set line breakpoints.
+6. **Never leave a client attached at exit:** Node prints "Waiting for the debugger to disconnect…" and hangs.
+
 ---
 
 ## 2. Test groups
@@ -450,7 +471,7 @@ tools directly.)
 | `vm-page` | local compatibility alias: runs both vm-page partitions serially through `tests/unit/adapted-specs.test.mjs` |
 | `vm-page-a` | four adapted specs (Albert Park foundation, autopilot, logging, projection), each as its own `APEX_VM_PAGE=1 node --test` child; CI slice `page-a` |
 | `vm-page-b` | seven adapted specs (agent-drive bench, COTA and Imola foundations, livery contrast, physics fixes, pit lane, race control), each as its own child; CI slice `page-b` |
-| `mcp` | Server defect regressions (`lsp-mcp` real-tree MCP client + fixtures, `lsp-reference-fixes`, `lsp-config-freshness`, `lsp-caller-fixes`, `lsp-navigation-efficiency`, `lsp-workflow-fixes`, `apex-server-fixes`, `js-debugger-lifecycle-fixes`, `chrome-server-fixes`); debugger primitive exceptions, reserved-name counts and trace regressions (`js-debugger-trace`); [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. Runs with `--test-concurrency=1` so parallel `tsc --lsp` cold starts cannot starve the MCP client case (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md). The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
+| `mcp` | Server defect regressions (`lsp-mcp` real-tree MCP client + fixtures, `lsp-reference-fixes`, `lsp-config-freshness`, `lsp-caller-fixes`, `lsp-navigation-efficiency`, `lsp-workflow-fixes`, `apex-server-fixes`, `js-debugger-lifecycle-fixes`, `chrome-server-fixes`); debugger primitive exceptions, reserved-name counts and trace regressions (`js-debugger-trace`); Node targets, `debugger_node_test` (probes, captures, parallel files, child auto-attach, `node --test` runner, timeout) and the `debugger_break`/`debugger_collect` workflows against live Node inspectors (`js-debugger-node`, ~6 s, no browser); [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. Runs with `--test-concurrency=1` so parallel `tsc --lsp` cold starts cannot starve the MCP client case (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md). The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
 | `docs-guards` | the unit files that READ the prose trees ci.yml's `paths-ignore` skips (`docs/**`, `**/*.md`, `.claude/**`, `.cursor/**`, `.codex/**`): docs-integrity, generated-docs, agent-config, skill-progressive, hooks-documented, F1 Dev Tools scene/preset/replay helper contracts and the rest of `tests/groups.json`'s list. `.github/workflows/docs-guards.yml` ran this group on every pull request from 2026-09-25 until 2026-10-15, when its required context was removed and the workflow retired (every file is in `tooling-fast`, so ci.yml's guards job already covered a prose PR; the second workflow was one job start per PR event — `docs/notes/CI-CLOG-SURVEY-2026-10-15.md`). The group remains the local alias the docs-only fast path and the agent-config skill call. |
 | `node-slow` | the raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) plus `flyby-fleet` (the flyby's twelve-circuit audit, ~1 min) and `foundation-core-vm` (~26 s, builds all sixteen foundation circuits) — CI guards always, locally when pick-tests names it |
 | `sweeps` | the full-fleet geometry audits (`package.json` `test:sweeps` IS the list; the enumeration that used to stand here had drifted four files behind it, so read the script). Most rebuild every circuit through `tools/lib/track-build-vm.cjs`; a few build no circuit at all (driving-line's synthetic stadium, driving-line-opts' store round-trip, track-build-vm-release.test.mjs's two-circuit harness check) and ride here beside the geometry they serve. `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
@@ -696,7 +717,7 @@ toMenu recovers (cancel, then un-hide the title), `#rs-go` would not.
 | `agent-view` | 117 | shared — **117/117**, 43 min → 11 min |
 | `new-hooks` | 56 | shared — 56/56 |
 | `dev-tools` | 56 | shared |
-| `camera-driving-hooks` | 25 | shared |
+| `camera-driving-hooks` | 26 | shared |
 | `headless-api` | 24 | shared — 24/24 |
 | `logging` | 6 | shared — 6/6 |
 | `career` | 101 | **reverted** — hub/garage flows click through menus |
