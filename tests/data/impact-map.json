@@ -6028,11 +6028,13 @@
         "tests/unit/light-presets.test.mjs"
       ],
       "afterGarageOut": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "announce": [
         "tests/specs/multiplayer-room.spec.js",
         "tests/unit/engineer.test.mjs",
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/onboard.test.mjs",
@@ -6044,6 +6046,9 @@
         "tests/unit/results-cam.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
+      ],
+      "applyLightTune": [
+        "tests/unit/flyby-intro.test.mjs"
       ],
       "armBackendProbe": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -6077,6 +6082,7 @@
         "tests/unit/rival-audio.test.mjs"
       ],
       "cancelIntro": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
@@ -6171,6 +6177,7 @@
         "tests/unit/light-presets.test.mjs"
       ],
       "introBuild": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
@@ -6181,16 +6188,20 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "introNow": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "introPlan": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "introPrepare": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "introWarm": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
@@ -6222,6 +6233,8 @@
         "tests/unit/ghost.test.mjs"
       ],
       "loadTrackStepped": [
+        "tests/unit/flyby-intro.test.mjs",
+        "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ghost.test.mjs"
       ],
@@ -6232,6 +6245,7 @@
         "tests/unit/flyby-lighting.test.mjs"
       ],
       "menuFinish": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "menuIdle": [
@@ -6239,6 +6253,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "menuLampBake": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "motionReduced": [
@@ -6276,6 +6291,7 @@
       "quitToMenu": [
         "tests/specs/wake-lock.spec.js",
         "tests/unit/end-race-music-vm.test.mjs",
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/radio-voice.test.mjs",
@@ -6284,6 +6300,7 @@
         "tests/unit/wake-lock-vm.test.mjs"
       ],
       "raceIntro": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
@@ -6298,6 +6315,7 @@
         "tests/unit/marshal-panels.test.mjs"
       ],
       "reloadFlybyShots": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "render": [
@@ -6403,6 +6421,7 @@
       ],
       "startRaceBody": [
         "tests/unit/audio-recovery.test.mjs",
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -6412,6 +6431,7 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "studioClose": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "studioDone": [
@@ -6419,14 +6439,17 @@
         "tests/unit/loading-card.test.mjs"
       ],
       "studioOpen": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "studioShown": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "studioSkip": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "syncRotateBlocker": [
@@ -6473,6 +6496,7 @@
         "tests/unit/start-lights.test.mjs"
       ],
       "titleIfBare": [
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "trackWetness": [
@@ -7893,7 +7917,6 @@
       "applyRaceSettings": [
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
-        "tests/unit/flyby-shots.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -7902,7 +7925,6 @@
       "create": [
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
-        "tests/unit/flyby-shots.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
@@ -7913,7 +7935,7 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "prebakeLamps": [
-        "tests/unit/flyby-shots.test.mjs"
+        "tests/unit/flyby-intro.test.mjs"
       ],
       "tick": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -8009,11 +8031,11 @@
         "tests/unit/lamp-bake.test.mjs"
       ],
       "budget": [
-        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/lamp-bake.test.mjs"
       ],
       "forTrack": [
-        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/lamp-bake.test.mjs"
       ],
       "liveOnlyAt": [
@@ -8023,7 +8045,7 @@
         "tests/unit/lamp-bake.test.mjs"
       ],
       "reset": [
-        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/lamp-bake.test.mjs"
       ],
       "shadowCol": [
@@ -8033,7 +8055,6 @@
         "tests/unit/lamp-bake.test.mjs"
       ],
       "step": [
-        "tests/unit/flyby-shots.test.mjs",
         "tests/unit/lamp-bake.test.mjs"
       ],
       "toHalf": [
@@ -8292,7 +8313,6 @@
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "cancel": [
-        "tests/unit/flyby-shots.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -9083,7 +9103,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "*": [
-        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/flyby-intro.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ]
@@ -14889,7 +14909,6 @@
     },
     "js/ui/loading-screen.js": {
       "building": [
-        "tests/unit/flyby-shots.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/loading-wipe.test.mjs"
@@ -14974,7 +14993,6 @@
       "stop": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/flyby-shots.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
