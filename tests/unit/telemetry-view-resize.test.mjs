@@ -8,6 +8,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 function driver(dur = 80, r = 1600, speedKmh = 200) {
   const t0 = 1e12;
@@ -86,7 +87,7 @@ test("a DPR change under unchanged boxes refits the map canvas as well as the ch
     "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
     "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
-    vm.runInContext(readFileSync(file, "utf8"), context, { filename: file });
+    vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
   }
   const api = vm.runInContext("DataTelemetry", context).create({
     el, clear: (node) => node.replaceChildren(), emptyMsg: (text) => el("div", "dh-empty", text),

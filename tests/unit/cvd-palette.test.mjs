@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -33,7 +34,7 @@ function load(stored) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/ui/cvd-palette.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/cvd-palette.js" });
+  vm.runInContext(read("js/ui/cvd-palette.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/cvd-palette.js") });
   return { P: vm.runInContext("CvdPalette", ctx), style };
 }
 
@@ -208,8 +209,8 @@ test("set persists through AppearanceOpts and paints the tokens", () => {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/ui/cvd-palette.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/cvd-palette.js" });
-  vm.runInContext(app.replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/appearance-opts.js" });
+  vm.runInContext(read("js/ui/cvd-palette.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/cvd-palette.js") });
+  vm.runInContext(app.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/appearance-opts.js") });
   const A = vm.runInContext("AppearanceOpts", ctx);
   const P = vm.runInContext("CvdPalette", ctx);
   assert.equal(A.setCvdMode("tritan"), "tritan");

@@ -14,14 +14,17 @@ carries everything it needs. Output it in chat in one code block. Never write a
    (AGENTS.md rule 12) and list what is unverified as **Not run**. Then
    `git push -u origin <branch>` and confirm on the remote:
    `git ls-remote origin <branch>` equals `git rev-parse HEAD`.
-2. **Facts**: `node tools/ci/session-status.mjs --pr` for the PR, Plan and Next
-   step. If no PR exists yet, open a DRAFT PR (`draft: true`, template body —
+2. **Facts**: `node tools/ci/session-status.mjs --pr` for branch/PR/CI state;
+   read the current PR body separately for its Plan and Next step (the status
+   command does not retrieve them). If no PR exists yet, open a DRAFT PR (`draft: true`, template body —
    `/ship` step 1's draft route, not `deploy.mjs --pr`, which opens it READY):
    the body is the durable log.
 3. **The prompt**, in this order:
    - repo `brycejmurrin/f1-game`, branch, pushed head sha, PR number and URL
    - Goal in one sentence; Plan: the done / now / next items from the PR body
    - what is not run, unverified or red, with the exact command to reproduce
+   - accessible evidence links; ignored `artifacts/` or `scratch/` paths are
+     local to the old workspace unless separately transferred or published
    - first commands: `git fetch origin <branch> && git checkout <branch>`, then
      `node tools/ci/session-status.mjs --pr`
    - skills to load (`.claude/skills/README.md`), and the user's grants quoted

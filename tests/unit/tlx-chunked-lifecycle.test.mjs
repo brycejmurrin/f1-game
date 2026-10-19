@@ -7,6 +7,7 @@ import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = new URL("../../js/render/three/tlx-chunked.js", import.meta.url);
@@ -40,8 +41,8 @@ function factory(released) {
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
-  vm.runInContext(CHUNK_BINS, sandbox, { filename: "chunk-bins.js" });   // build() bins through ChunkBins at call time
-  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: absSrc("js/render/shared/chunk-bins.js") });   // build() bins through ChunkBins at call time
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: absSrc("js/render/three/tlx-chunked.js") });
   return sandbox.window.TLXShaders.chunked(THREE, {
     isWebGPU: () => false,
     releaseGeometry: geo => released.push(geo),
@@ -100,8 +101,8 @@ function mergeFactory(value, constructors = {}) {
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
-  vm.runInContext(CHUNK_BINS, sandbox, { filename: "chunk-bins.js" });   // build() bins through ChunkBins at call time
-  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: absSrc("js/render/shared/chunk-bins.js") });   // build() bins through ChunkBins at call time
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: absSrc("js/render/three/tlx-chunked.js") });
   return sandbox.window.TLXShaders.chunked(THREE, { isWebGPU: () => false, releaseGeometry() {} });
 }
 function gridMesh() {

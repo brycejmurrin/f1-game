@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -74,8 +75,8 @@ function bootPanelOnAudioInner() {
   const ctx = vm.createContext(sb);
   seedLog(ctx);
   seedDom(ctx);
-  vm.runInContext(read("js/ui/setting-row.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/setting-row.js" });
-  vm.runInContext(`${panelSrc()}; globalThis.__audioPanel = AudioPanel;`, ctx, { filename: "js/audio/panel.js" });
+  vm.runInContext(read("js/ui/setting-row.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/setting-row.js") });
+  vm.runInContext(`${panelSrc()}; globalThis.__audioPanel = AudioPanel;`, ctx, { filename: absSrc("js/audio/panel.js") });
   ctx.__audioPanel.create(G);
   return { dom, details, foldBody, scrollCalls: () => scrollCalls, scrollOpts: () => scrollOpts, scrollFadeCalls };
 }
@@ -97,7 +98,7 @@ test("every ENGINE TONE slider's grid lands on the shipped TUNE_DEF value and sp
   // wrote a value the shipped voice (and the team profile match) could not return to.
   const html = read("index.html");
   const ctx = vm.createContext({});
-  vm.runInContext(read("js/audio/tone-model.js"), ctx, { filename: "js/audio/tone-model.js" });
+  vm.runInContext(read("js/audio/tone-model.js"), ctx, { filename: absSrc("js/audio/tone-model.js") });
   const { TUNE_DEF, TUNE_RANGE } = vm.runInContext("GameAudioToneModel", ctx);
   const rows = [...read("js/audio/panel.js").matchAll(/\{ k: "(\w+)",\s*id: "(as-t-[\w-]+)",\s*lo: ([\d.]+),\s*step: ([\d.]+) \}/g)]
     .map((m) => ({ k: m[1], id: m[2], lo: +m[3], step: +m[4] }));

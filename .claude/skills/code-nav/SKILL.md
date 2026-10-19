@@ -10,6 +10,19 @@ description: "Use when finding where a JS symbol is defined, who uses or calls i
 checker does: script-global IIFEs across files, re-exports, destructures.
 Measurements, sources and limits: [`docs/notes/LSP-MCP-2026-10-18.md`](../../../docs/notes/LSP-MCP-2026-10-18.md).
 
+## Before the first lookup
+
+Run from the checkout root with Node 22+ and the checkout's npm dependencies
+installed (`npm ci` on a fresh checkout). A host without SessionStart setup
+must do this explicitly; an import error such as missing `espree` is a setup
+failure, not a missing symbol. Bootstrap/trust conditions:
+[AGENT-SURFACE.md](../../../docs/AGENT-SURFACE.md#bootstrap-auto-setup).
+
+Use attached `lsp_*` tools when listed by the session. Configured `.mcp.json`
+or an installed plugin does not establish attachment. Without those tools,
+use `bash tools/mcp/lsp-mcp.sh` with the table's commands; do not rebuild the
+server or change global host configuration to perform a lookup.
+
 ## Which call
 
 Configured MCP calls default to compact presentation. Add `outputLevel: "full"`
@@ -101,6 +114,10 @@ bare JS symbol. Take it for the next lookup.
 - A façade passed under another name (`create(ctx)`) is not followed. In this
   tree `ctx` is a different object.
 - Hover types JS parameters as `any` unless JSDoc says otherwise.
+- Factory instances, conditional receivers, callbacks and inline HTML can
+  escape a static query. Follow the returned binding before claiming no
+  consumers; use the bounded cross-check procedure in
+  [code investigations](../../../docs/research/AGENT-CODE-INVESTIGATIONS.md).
 
 ## Verify the tool itself
 

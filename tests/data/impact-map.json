@@ -3046,6 +3046,7 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "getVisualTiers": [
+        "tests/specs/parts-catalog.spec.js",
         "tests/unit/aero-defaults-2026.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
@@ -3054,6 +3055,7 @@
         "tests/unit/livery-wheels.test.mjs"
       ],
       "isOptionAvailable": [
+        "tests/specs/parts-catalog.spec.js",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
@@ -6504,6 +6506,7 @@
       "update": [
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/agent-config.test.mjs",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/body-attitude.test.mjs",
@@ -6548,7 +6551,6 @@
         "tests/specs/multiplayer-seats.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
-        "tests/unit/agent-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
@@ -6621,7 +6623,8 @@
         "tests/unit/tolerance-diff.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
-        "tests/unit/traffic-arc-buckets.test.mjs"
+        "tests/unit/traffic-arc-buckets.test.mjs",
+        "tests/unit/vm-filename-lint.test.mjs"
       ]
     },
     "js/garage/arrival.js": {
@@ -8259,12 +8262,14 @@
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
-        "tests/unit/net-lobby-lifecycle.test.mjs"
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs"
       ],
       "deliver": [
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-lobby-lifecycle.test.mjs"
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs"
       ],
       "handOff": [
         "tests/unit/lobby-codes.test.mjs"
@@ -8289,7 +8294,8 @@
       "replace": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
-        "tests/unit/net-lobby-lifecycle.test.mjs"
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs"
       ],
       "*": [
         "tests/unit/net-authority.test.mjs"
@@ -8474,6 +8480,7 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
@@ -8489,6 +8496,7 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
       "nameTheMoment": [
@@ -8500,6 +8508,7 @@
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
       ],
       "ownsClassification": [
@@ -8531,6 +8540,7 @@
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
@@ -8540,6 +8550,7 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
       "strategyState": [

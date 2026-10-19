@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -47,7 +48,7 @@ function boot(team) {
       { color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122] },
     ] } };
   sb.window = sb;
-  vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: "js/ui/loading-screen.js" });
+  vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
   const store = { get: (k, d) => (k === "team" ? team : d), set() {} };
   const screen = sb.LoadingScreen.create({ $, store,
     Tracks: { LIST: [] }, TrackMaps: { corners: () => [] }, Flags: { svg: () => "" } });

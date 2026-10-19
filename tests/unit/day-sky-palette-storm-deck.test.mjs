@@ -6,6 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (f) => fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
 const plain = (v) => JSON.parse(JSON.stringify(v));        // arrays minted in another vm realm
@@ -20,7 +21,7 @@ function run({ palette, tod = "day", weather = "dry", night = false }) {
   };
   vm.createContext(sandbox);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/lighting/knobs.js", "js/lighting/atmosphere.js"])
-    vm.runInContext(read(f), sandbox, { filename: f });
+    vm.runInContext(read(f), sandbox, { filename: absSrc(f) });
   vm.runInContext("LightTune = { LT: LightKnobs.LT, buildTrackLights: () => [] };", sandbox);
   const wet = weather === "rain" || weather === "storm";
   const G = {

@@ -7,6 +7,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -40,9 +41,9 @@ function boot(opts = {}) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedSaveMigrate(ctx);
-  vm.runInContext(read("js/core/store.js"), ctx, { filename: "js/core/store.js" });
+  vm.runInContext(read("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
   sb.GameStore = vm.runInContext("GameStore", ctx);
-  vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: "js/ui/settings-export.js" });
+  vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: false }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));

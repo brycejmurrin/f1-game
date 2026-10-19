@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // VM objects carry the VM realm's prototypes: compare plain-data copies.
@@ -29,7 +30,7 @@ function load() {
   });
   seedLog(ctx);
   seedHash32(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx, { filename: absSrc("js/race/daily-challenge.js") });
   const D = vm.runInContext("DailyChallenge", ctx);
   const stored = new Map();
   const calls = [];
@@ -206,7 +207,7 @@ test("with no medal passed, the share line carries TODAY's — from today's best
     Quali: { medalFor: (t, pole) => (t <= pole ? "gold" : t <= pole * 1.03 ? "silver" : null) },
   });
   seedLog(ctx); seedHash32(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx, { filename: absSrc("js/race/daily-challenge.js") });
   const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: () => 82 });
   d.open("2026-09-03");
   d.record(84);                                   // within 3 % of pole: silver

@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -27,7 +28,7 @@ test("bitmap-decode-worker posts a transferred ImageBitmap for a Blob", async ()
     },
   });
   ctx.self = ctx;
-  vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: "bitmap-decode-worker.js" });
+  vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: absSrc("js/workers/bitmap-decode-worker.js") });
   const blob = { size: 4, type: "image/png" };
   await ctx.onmessage({ data: { type: "decode", seq: 1, blob, opts: { premultiplyAlpha: "none" } } });
   assert.equal(posted.length, 1);
@@ -46,7 +47,7 @@ test("bitmap-decode-worker answers error without throwing", async () => {
     postMessage: (m) => posted.push(m),
   });
   ctx.self = ctx;
-  vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: "bitmap-decode-worker.js" });
+  vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: absSrc("js/workers/bitmap-decode-worker.js") });
   await ctx.onmessage({ data: { type: "decode", seq: 7, blob: { size: 1 } } });
   assert.equal(posted[0].type, "error");
   assert.equal(posted[0].seq, 7);
@@ -83,7 +84,7 @@ test("bitmap-decode-worker closes only its own bitmap when transfer fails", asyn
         },
       });
       ctx.self = ctx;
-      vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx);
+      vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: absSrc("js/workers/bitmap-decode-worker.js") });
       await ctx.onmessage({ data: { type: "decode", seq: 13, blob: { size: 4 }, crop } });
       assert.equal(closes, mode === "transfer-fails" || mode === "close-fails" ? 1 : 0, mode);
       assert.equal(posted.length, 1, mode);
@@ -107,7 +108,7 @@ test("BitmapDecode client falls back to main-thread createImageBitmap without Wo
     URL, setTimeout, clearTimeout,
   });
   // No Worker on purpose.
-  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), main);
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/workers/bitmap-decode-client.js") });
   const out = await main.BitmapDecode.decode({ size: 8, type: "image/png" });
   assert.equal(out, bmp);
   assert.equal(calls.length, 1);
@@ -137,7 +138,7 @@ test("BitmapDecode client posts to a Worker and resolves the transferred bitmap"
       terminate() {}
     },
   });
-  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), main);
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/workers/bitmap-decode-client.js") });
   const out = await main.BitmapDecode.decode({ size: 2 });
   assert.equal(out, bmp);
   assert.match(worker.src, /bitmap-decode-worker\.js/);
@@ -151,7 +152,7 @@ function controlledClient() {
     createImageBitmap: async () => { fallbacks++; return bmp; },
     Worker: class { constructor() { worker = this; } postMessage(m) { this.request = m; } terminate() {} },
   });
-  vm.runInContext(read("js/workers/bitmap-decode-client.js") + ";window.api = BitmapDecode", ctx);
+  vm.runInContext(read("js/workers/bitmap-decode-client.js") + ";window.api = BitmapDecode", ctx, { filename: absSrc("js/workers/bitmap-decode-client.js") });
   return { api: ctx.window.api, get worker() { return worker; }, fire: () => timer(),
     get clears() { return clears; }, get fallbacks() { return fallbacks; }, bmp };
 }
@@ -190,7 +191,7 @@ test("malformed bitmap replies fallback and malformed crops reject before dispat
     await assert.rejects(h.api.decode({ size: 1 }, null, crop), /invalid crop/);
     assert.equal(h.worker, undefined); assert.equal(h.fallbacks, 0);
     const posted = [], ctx = vm.createContext({ createImageBitmap: () => { throw new Error("must not decode"); }, postMessage: (m) => posted.push(m) });
-    ctx.self = ctx; vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx);
+    ctx.self = ctx; vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: absSrc("js/workers/bitmap-decode-worker.js") });
     await ctx.onmessage({ data: { type: "decode", seq: 2, blob: {}, crop } });
     assert.match(posted[0].message, /invalid crop/);
   }
@@ -203,7 +204,7 @@ test("explicit bitmap abort skips fallback and closes a late worker reply", asyn
     createImageBitmap: async () => { fallbacks++; return {}; },
     Worker: class { constructor() { worker = this; } postMessage(m) { this.request = m; } terminate() {} },
   });
-  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/workers/bitmap-decode-client.js") });
   const controller = new AbortController();
   const pending = ctx.BitmapDecode.decode({}, null, null, controller.signal);
   controller.abort();
@@ -218,7 +219,7 @@ test("aborted page decode disposes its completed bitmap", async () => {
   let finish, closed = 0;
   const ctx = vm.createContext({ URL, setTimeout, clearTimeout,
     createImageBitmap: () => new Promise(r => { finish = r; }) });
-  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/workers/bitmap-decode-client.js") });
   const controller = new AbortController();
   const pending = ctx.BitmapDecode.decode({}, null, null, controller.signal);
   controller.abort(); finish({ close() { closed++; } });

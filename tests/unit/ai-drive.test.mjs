@@ -7,6 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -15,9 +16,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx,
-    { filename: "js/physics/ai-drive.js" });
+    { filename: absSrc("js/physics/ai-drive.js") });
   return vm.runInContext("AiDrive", ctx);
 }
 
@@ -1037,7 +1038,7 @@ test("mistakeChance: optimism raises rate under pressure only (Slice 4)", () => 
 test("PhysicsConsts.DIFF.err is a monotonic ladder: easy >= normal >= hard = 1", () => {
   const src = readFileSync(join(ROOT, "js/physics/consts.js"), "utf8");
   const ctx = vm.createContext({ window: {} });
-  vm.runInContext(src, ctx, { filename: "js/physics/consts.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/physics/consts.js") });
   const DIFF = ctx.window.PhysicsConsts.DIFF;
   assert.ok(DIFF.easy.err >= DIFF.normal.err, "easy errs at least as often as normal");
   assert.ok(DIFF.normal.err >= DIFF.hard.err, "normal errs at least as often as hard");
@@ -1468,7 +1469,7 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
     Tracks: { wallAt: () => 100 },
   });
   for (const path of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, path), "utf8"), ctx, { filename: path });
+    vm.runInContext(readFileSync(join(ROOT, path), "utf8"), ctx, { filename: absSrc(path) });
   }
   const Collide = vm.runInContext("Collide", ctx);
   const pits = { inLane: (o) => !!o.inLane };
@@ -1571,7 +1572,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
   const end = game.indexOf("  // Riding a kerb loses a little grip", start);
   assert.ok(decl && start > 0 && end > start, "the production controller is present");
   const constants = { window: {} };
-  vm.runInNewContext(readFileSync(join(ROOT, "js/physics/consts.js"), "utf8"), constants);
+  vm.runInNewContext(readFileSync(join(ROOT, "js/physics/consts.js"), "utf8"), constants, { filename: absSrc("js/physics/consts.js") });
   const K = { ...constants.window.PhysicsConsts };
   for (const name of ["AI_HEAD_VMIN", "AI_XTRACK_GAIN", "AI_HEAD_MAX", "AI_YAW_LAT", "AI_YAW_MAX"]) {
     const m = game.match(new RegExp("const " + name + " = ([^;]+);"));

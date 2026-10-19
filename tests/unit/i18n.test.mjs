@@ -6,6 +6,7 @@ import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -41,7 +42,7 @@ function loadI18n(extra = {}) {
     "js/core/i18n.js",
     "js/core/dom-apply.js",
   ]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   vm.runInContext("globalThis.GameStore = GameStore;", ctx);
   return ctx;

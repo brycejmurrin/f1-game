@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 import { ROOT, host, scriptIn, line, transportReplay } from "../helpers/real-replay-fixtures.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 // ── BROADCAST (js/race/broadcast.js): the timing tower and the AUTO director ──
 test("BROADCAST tower: the grid at lights out, the leader and gaps at the last line, the car out last, the fastest lap once it is set", async () => {
@@ -87,7 +88,7 @@ test("BROADCAST holds an event through its aftermath and keeps the wall-clock mi
   for (const speed of [0.25, 1, 8]) {
     const ctx = vm.createContext({ Log: { info() {}, debug() {} },
       CamModes: { CAM_MODES: ["side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) } });
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8"), ctx);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8"), ctx, { filename: absSrc("js/race/broadcast.js") });
     const B = vm.runInContext("Broadcast", ctx), cuts = [];
     const cars = [{ code: "AAA" }, { code: "BBB" }];
     const G = { camMode: 0, setCamMode: (m) => { G.camMode = m; } };
@@ -145,7 +146,7 @@ test("BROADCAST battles: reuses one pooled array across calls (Director / PiP / 
 test("BROADCAST battles: the crawl floor rides the pace scale when the caller passes vTop()/VMAX (4-F6)", () => {
   // The same slow corner at OVERALL SPEED pace 1 and pace 0.5: every ground speed and so every progress gap
   // halves. In seconds it is the same fight, but a raw 20 m/s floor reads it twice as tight at the low pace.
-  const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}));
+  const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}), { filename: absSrc("js/race/broadcast.js") });
   const at = (k) => host(B.battles([{ key: "a", prog: 1000 * k, speed: 5 * k }, { key: "b", prog: 1000 * k - 8 * k, speed: 5 * k }], k));
   const full = at(1), half = at(0.5);
   assert.equal(full.length, 1);
@@ -366,7 +367,7 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
       CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
       Broadcast: { create: () => new Proxy({}, { get: (_t, k) => (k === "tick" ? (_dt, st) => { seen = st; } : () => ({})) }) },
       Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx, { filename: absSrc("js/race/real-replay.js") });
     const R = vm.runInContext("RealReplay", ctx);
     const a = { code: "RUS" }, b = { code: "LEC" }, da = { code: "RUS", num: 63, pos: 1, lapStart: [0] }, db = { code: "LEC", num: 16, pos: 2, lapStart: [0] };
     const G = { track: { total: 100000 }, cars: [a, b], state: "race", camMode: 0, followCar: (c) => { G.player = c; }, snapGameCam() {}, setCamMode() {} };
@@ -377,7 +378,7 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
     replay.tick(0);
     const rows = JSON.parse(JSON.stringify(seen.running().map((r) => ({ key: r.key.code, prog: r.prog, speed: r.speed }))));
     replay.stop();
-    const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}));
+    const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}), { filename: absSrc("js/race/broadcast.js") });
     return { rows, fights: JSON.parse(JSON.stringify(B.battles(rows))) };
   };
   const one = grab(1), eight = grab(8);

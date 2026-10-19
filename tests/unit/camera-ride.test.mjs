@@ -36,6 +36,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { loadElevationRig, makeElevationTrack } from "../helpers/camera-rig.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -541,7 +542,7 @@ test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the s
   const dom = makeDom();
   const mctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
   mctx.window = mctx;
-  vm.runInNewContext(readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8"), mctx);
+  vm.runInNewContext(readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8"), mctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = mctx.CamModes.CAM_MODES, hi = modes.findIndex((m) => m.id === "helmet");
   assert.equal(hi, modes.length - 1, "appended: apex26.camMode is an index");
   const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", camCutT: 0 };

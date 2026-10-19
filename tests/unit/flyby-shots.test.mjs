@@ -23,6 +23,7 @@ import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 import { fleetFindings, variedAudit } from "../helpers/flyby-audit-rules.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
@@ -118,7 +119,7 @@ test("flyby CLI advertises and validates condition and variation flags before br
 async function withOverrides(id, fn) {
   return withTrack(id, (track, g) => {
     vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/flyby-overrides.js"), "utf8"),
-      g.sandbox, { filename: "js/data/flyby-overrides.js" });
+      g.sandbox, { filename: absSrc("js/data/flyby-overrides.js") });
     return fn(track, g);
   });
 }
@@ -173,7 +174,7 @@ function loadFlybyRuntime(extra = {}) {
     Float32Array, Uint32Array, isFinite, setTimeout: () => 0,
   }, extra);
   vm.createContext(sb);
-  return vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8") + ";FlybySeq", sb);
+  return vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8") + ";FlybySeq", sb, { filename: absSrc("js/camera/flyby-seq.js") });
 }
 
 test("#1571: the flyby hero reaches the apex at mid-shot on the racing line", () => {
@@ -218,7 +219,7 @@ test("#1572: lights 1-3 select grid shots and light 4 restores the player camera
   };
   const sb = { Math, WeakMap, FlybySeq: FlybySeqStub };
   vm.createContext(sb);
-  const SL = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8") + ";StartLights", sb);
+  const SL = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8") + ";StartLights", sb, { filename: absSrc("js/race/start-lights.js") });
   const track = { id: "grid" };
   const G = { state: "count", lightsLit: 1, track, dbgCam: null };
   const runtime = SL.create(G, { Particles: null });

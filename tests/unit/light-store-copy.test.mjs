@@ -29,6 +29,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -83,7 +84,7 @@ function loadStore({ presets = {}, saved = null, track = "bahrain", tod = "dusk"
   });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/lighting/profiles.js"), "utf8"), ctx,
-    { filename: "js/lighting/profiles.js" });
+    { filename: absSrc("js/lighting/profiles.js") });
   const store = vm.runInContext("LightStore", ctx).create(G);
   const LT = vm.runInContext("LightTune.LT", ctx);
   // Switch the live conditions the way applyRaceSettings does: set, then re-apply.

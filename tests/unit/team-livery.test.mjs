@@ -22,6 +22,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { scanFile } from "../../tools/check/dup-keys.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8");
@@ -399,7 +400,7 @@ test("My Team livery adapters stay within the active slot and invalidate cache w
 
 test("carbon moving flap color overrides hidden wing paint and paint returns when toggled back", () => {
   const ctx = vm.createContext({ Log: { info() {} } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/car-materials.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/car-materials.js"), "utf8"), ctx, { filename: absSrc("js/car/car-materials.js") });
   vm.runInContext(LIVERIES_SRC, ctx);
   const Custom = vm.runInContext(CUSTOM_LIV_SRC + ";CustomLiveries", ctx);
   const liv = Custom.create({ store: { rev: 0, get: (_, fallback) => fallback, set() {} } });

@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "./abs-src.mjs";
 
 export const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -51,8 +52,8 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
     },
   });
   seedLog(ctx);
-  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
-  vm.runInContext(read("js/render/shared/mirror-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: "mirror-pass.js" });
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/render/shared/mirror-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/mirror-pass.js") });
   const calls = [];
   let st = { dead: false, ready: false };
   const gfx = {

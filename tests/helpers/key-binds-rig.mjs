@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "./abs-src.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -52,9 +53,9 @@ export function boot(initOpts) {
   sb.KeyboardEvent = class extends sb.Event {};
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   for (const f of ["js/input/controller-profiles.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el(), initOpts);
   const key = (code, down) => (listeners[down ? "keydown" : "keyup"] || [])
@@ -126,7 +127,7 @@ export function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = 
     sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
     sb.clearTimeout = () => {};
   }
-  vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
+  vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: absSrc("js/ui/key-binds.js") });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
   const store = disk
     ? {

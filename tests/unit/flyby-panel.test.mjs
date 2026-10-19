@@ -23,6 +23,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotErrors as bakeShotErrors, FOV as bakeFov, bake, render, DEFAULT_RE, parseLiteral }
   from "../../tools/gen/bake-flyby.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -44,7 +45,7 @@ function loadPanel() {
   const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console };
   sb.window = sb;
   vm.runInNewContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb,
-    { filename: "js/camera/flyby-panel.js" });
+    { filename: absSrc("js/camera/flyby-panel.js") });
   assert.ok(sb.FlybyPanel, "js/camera/flyby-panel.js assigns the FlybyPanel global");
   return sb.FlybyPanel;
 }
@@ -252,8 +253,8 @@ test("SET SHOT START from a 110° free-camera view saves a shot that passes shot
     Log: { info() {}, warn() {}, debug() {} }, document: anything(), setTimeout: () => 0, clearTimeout() {},
     FreeCam: { enterFrom: (o) => { entered = o; return true; } } };
   sb.window = sb;
-  vm.runInNewContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb);
-  vm.runInNewContext(read("js/camera/flyby-editor.js").replace(/^const\b/gm, "var"), sb);
+  vm.runInNewContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/camera/flyby-panel.js") });
+  vm.runInNewContext(read("js/camera/flyby-editor.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/camera/flyby-editor.js") });
   const G = new Proxy({ $, els: anything(), store: { get: (k, d) => (map.has(k) ? map.get(k) : d), set: (k, v) => { map.set(k, v); return true; } },
     dbgCam: { eye: [0, 5, 0], target: [0, 0, 50], fov: 110 } }, { get: (t, k) => (k in t ? t[k] : anything()) });
   sb.FlybyEditor.create(G);
@@ -446,7 +447,7 @@ function panelWith(saved) {
   const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console,
     Log: { info() {}, warn: (_t, m) => warned.push(String(m)) } };
   sb.window = sb;
-  vm.runInNewContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb);
+  vm.runInNewContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/camera/flyby-panel.js") });
   const map = new Map([["flybyShots", saved]]);
   const G = { $: () => ({ style: {}, dataset: {} }), els: {},
     store: { get: (k, d) => (map.has(k) ? map.get(k) : d), set: (k, v) => { map.set(k, v); return true; } } };
@@ -562,8 +563,8 @@ test("a camera-editor retry after a partial load failure injects only the file t
     } },
   };
   vm.createContext(sb);
-  vm.runInContext(read("js/core/script-loader.js").replace(/^const\b/gm, "var"), sb, { filename: "js/core/script-loader.js" });
-  vm.runInContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb, { filename: "js/camera/flyby-panel.js" });
+  vm.runInContext(read("js/core/script-loader.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/core/script-loader.js") });
+  vm.runInContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/camera/flyby-panel.js") });
   attempt = 1; attempts[1] = [];
   assert.equal(await sb.FlybyPanel.ensureCamEditor(), false, "the first open fails on the dropped file");
   assert.ok(evaluated.has("js/camera/flyby-editor.js"), "flyby-editor.js ran on the first attempt");
@@ -613,7 +614,7 @@ function deferredTool(kind) {
     head: { appendChild(script) { scripts.push(script); requested.push(script.src.replace(/\?v=.*$/, "")); } } };
   vm.createContext(sb);
   for (const file of ["js/core/script-loader.js", "js/camera/flyby-panel.js", "js/camera/cam-tuner-boot.js"])
-    vm.runInContext(read(file).replace(/^const\b/gm, "var"), sb, { filename: file });
+    vm.runInContext(read(file).replace(/^const\b/gm, "var"), sb, { filename: absSrc(file) });
   function install(name, buttonId, openName, closeName) {
     sb[name] = { create() {
       if (beforeCreate) { const run = beforeCreate; beforeCreate = null; run(); }

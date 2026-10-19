@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "./abs-src.mjs";
 
 const CLIPBOARD_JS = fs.readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/core/clipboard.js"),
@@ -15,6 +16,6 @@ const CLIPBOARD_JS = fs.readFileSync(
 
 /** Evaluate js/core/clipboard.js into an existing VM context. */
 export function seedClipboard(ctx) {
-  vm.runInContext(CLIPBOARD_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/clipboard.js" });
+  vm.runInContext(CLIPBOARD_JS.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/clipboard.js") });
   return ctx;
 }

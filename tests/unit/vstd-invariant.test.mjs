@@ -344,6 +344,27 @@ test("does not flag a division, a shift, a lowercase identifier or a single-word
   assert.deepEqual(scan("const f = (c) => c.speed;"), []);
 });
 
+test("flags a raw speed against a file-local numeric const — the A13 shape behind a lowercase name (#3009)", () => {
+  // Red before #3009: a local initialised from a literal hid the raw m/s number.
+  assert.deepEqual(scan("const lim = 30;\nif (c.speed > lim) f();"), ["c.speed > lim"]);
+  assert.deepEqual(scan("const otMin = 15.5;\nc.otArmed = gap < 1 && c.speed >= otMin;"), ["c.speed >= otMin"]);
+  assert.deepEqual(scan("const crawl = 7;\nif (Math.abs(c.speed) < crawl) f();"), ["Math.abs(c.speed) < crawl"]);
+  assert.deepEqual(scan("const lim = 30;\nif (lim < c.speed) f();"), ["lim < c.speed"]);
+  assert.deepEqual(scan("function g(c) {\n  const v0 = 12;\n  return (c.speed || 0) > v0;\n}"), ["(c.speed || 0) > v0"]);
+  // ...and the wrapped form stays clean.
+  assert.deepEqual(scan("const lim = 30;\nif (vStd(c.speed) > lim) f();"), []);
+});
+
+test("a local threshold that is not a bare numeric const stays unflagged (#3009 negatives)", () => {
+  assert.deepEqual(scan("const lim = vTop() * 0.3;\nif (c.speed > lim) f();"), []);   // scale-aware initialiser
+  assert.deepEqual(scan("let lim = 30;\nif (c.speed > lim) f();"), []);               // reassignable
+  assert.deepEqual(scan("const lim = 30;\nfunction g(lim) { return c.speed > lim; }"), []);   // parameter shadows it
+  assert.deepEqual(scan("const lim = 30;\n{ const lim = vTop(); if (c.speed > lim) f(); }"), []); // second declaration
+  assert.deepEqual(scan("const lim = 30;\nif (c.speed > limit) f();"), []);           // a different name
+  assert.deepEqual(scan("const lim = 30;\nif (c.speed > lim.max) f();"), []);         // a property of it
+  assert.deepEqual(scan("const lim = 30;\nif (c.speed > lim(c)) f();"), []);          // a call
+});
+
 test("comments and strings are not code", () => {
   assert.deepEqual(scan("// the old gate was c.speed > 15, see A13\nconst a = 1;"), []);
   assert.deepEqual(scan("/* c.speed > 15 */ const a = 1;"), []);

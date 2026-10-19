@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const src = fs.readFileSync(path.join(ROOT, "js/physics/brake-cue.js"), "utf8")
@@ -134,7 +135,7 @@ test("tick ON: paused, off-race and finished cars are silent", () => {
 
 test("BrakeCue.urgencyOf and DrivingCues.urgencyOf are the same function of their inputs", () => {
   const cx = { window: {}, M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, performance: { now: () => 0 } };
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/audio/driving-cues.js"), "utf8"), cx);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/audio/driving-cues.js"), "utf8"), cx, { filename: absSrc("js/audio/driving-cues.js") });
   const DC = vm.runInNewContext("DrivingCues", cx);
   let checked = 0;
   for (const v of [0, 7, 8, 20, 45, 70]) for (const k of [0, 1 / 2000, 1 / 200, 1 / 40, 1 / 12, -1 / 40])

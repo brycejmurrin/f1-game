@@ -25,6 +25,7 @@ import { fnSource } from "../helpers/fn-source.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import vm from "node:vm";
 import { carDrawVm, WORKS } from "../helpers/car-draw-vm.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -381,7 +382,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   ctx.CamModes.CAM_MODES.push({ id: "helmet" }, { id: "visor" });   // [chase, cockpit, helmet, visor]
   ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });      // a seat that is not the visor's
   for (const f of ["js/camera/vantage.js", "js/render/shared/shadow-pass.js"])
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   v.field((c, i) => 1000 + 9 * i);
   const player = G.player;
   let pass = null;
@@ -484,7 +485,7 @@ test("the first-person caster is the whole car minus the driver, with the player
   const cx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
   cx.globalThis = cx; vm.createContext(cx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js",
-    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
+    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: absSrc(f) });
   const Car3D = vm.runInContext("Car3D", cx);
   const C1 = [0.9, 0.1, 0.1], C2 = [0.1, 0.1, 0.9];
   for (const teamId of ["ferrari", "mclaren", "redbull"]) {

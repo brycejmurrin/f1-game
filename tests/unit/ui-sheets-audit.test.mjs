@@ -36,7 +36,8 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
-import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
+import { seedStore } from "../helpers/seed-store.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -70,10 +71,10 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
   seedLog(ctx);
   seedDom(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
-  vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: "js/career/season-cal.js" });
-  vm.runInContext(src("js/race/race-control.js"), ctx, { filename: "js/race/race-control.js" });   // shortRun: the sheet's points table
-  vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: "js/ui/results-story.js" });
-  vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: "js/ui/results-sheet.js" });
+  vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: absSrc("js/career/season-cal.js") });
+  vm.runInContext(src("js/race/race-control.js"), ctx, { filename: absSrc("js/race/race-control.js") });   // shortRun: the sheet's points table
+  vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: absSrc("js/ui/results-story.js") });
+  vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: absSrc("js/ui/results-sheet.js") });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
   const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next"), resMenu: dom.byId("res-menu") };
   const G = {
@@ -383,8 +384,8 @@ function bootGfx() {
   seedStore(ctx);
   // Both halves of the old gfx-quality.js, in shell order: the GRAPHICS preset
   // button (GfxQuality) and the RENDERER picker that owns the reload confirm.
-  vm.runInContext(src("js/perf/quality-preset.js"), ctx, { filename: "js/perf/quality-preset.js" });
-  vm.runInContext(src("js/perf/renderer-picker.js"), ctx, { filename: "js/perf/renderer-picker.js" });
+  vm.runInContext(src("js/perf/quality-preset.js"), ctx, { filename: absSrc("js/perf/quality-preset.js") });
+  vm.runInContext(src("js/perf/renderer-picker.js"), ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   dom.document.dispatchEvent({ type: "DOMContentLoaded" });
   const Gfx = vm.runInContext("RendererPicker", ctx);
   const sel = dom.byId("pm-renderer");
@@ -523,13 +524,13 @@ function bootAudio({ soundOn, musicEnabled }) {
   seedLog(ctx);
   // The panel's picks are setting rows (js/ui/setting-row.js): load the real
   // module and stand the four rows up in the mini DOM, ids as the shell has them.
-  vm.runInContext(src("js/ui/setting-row.js"), ctx, { filename: "js/ui/setting-row.js" });
+  vm.runInContext(src("js/ui/setting-row.js"), ctx, { filename: absSrc("js/ui/setting-row.js") });
   const SettingRow = vm.runInContext("SettingRow", ctx);
   for (const [id, label] of [["as-music", "MUSIC"], ["as-sound", "SOUND EFFECTS"], ["as-src", "SOURCE"], ["as-p", "PROFILE"]]) {
     dom.body.appendChild(SettingRow.build(id, label).row);
   }
   seedDom(ctx);   // the closed-fold summaries paint through Dom.paintFold
-  vm.runInContext(src("js/audio/panel.js"), ctx, { filename: "js/audio/panel.js" });
+  vm.runInContext(src("js/audio/panel.js"), ctx, { filename: absSrc("js/audio/panel.js") });
   const store = stubStore();
   store.set("musicSource", "builtin");
   // isRaining — SOUND ON mid-race restarts rain from live weather (panel.js),
@@ -799,7 +800,7 @@ test("SettingRow wrap:false clamps the LAPS chevrons at the ends", () => {
   const sb = { document: dom.document };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/ui/setting-row.js"), ctx, { filename: "js/ui/setting-row.js" });
+  vm.runInContext(src("js/ui/setting-row.js"), ctx, { filename: absSrc("js/ui/setting-row.js") });
   const SettingRow = vm.runInContext("SettingRow", ctx);
   const built = SettingRow.build("rs-laps", "LAPS");
   dom.body.appendChild(built.row);

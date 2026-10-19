@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
@@ -64,8 +65,8 @@ function boot() {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const ctxTime = (dt) => { ctx.currentTime += dt; };
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };

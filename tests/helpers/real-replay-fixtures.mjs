@@ -7,6 +7,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "./abs-src.mjs";
 
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
@@ -20,7 +21,7 @@ export const host = (v) => JSON.parse(JSON.stringify(v));   // VM objects into t
 
 export function scriptIn(g) {
   // The tab's builder in the game's own realm (Teams and Tracks are the game's).
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: "real-race-tab.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
   const D = vm.runInContext("DataRealRace", g.ctx);
   const Teams = vm.runInContext("Teams", g.ctx), Tracks = vm.runInContext("Tracks", g.ctx);
   const findTeam = (name) => Teams.LIST.find((t) => t.name === name) || null;
@@ -84,7 +85,7 @@ export function audioHarness() {
     Log: { info() {}, warn() {}, debug() {} }, PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
     CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx, { filename: absSrc("js/race/real-replay.js") });
   const R = vm.runInContext("RealReplay", ctx);
   const a = { code: "RUS", rpm: 12000 }, b = { code: "LEC", rpm: 12000 };
   const da = { code: "RUS", num: 63, pos: 1, lapStart: [0] }, db = { code: "LEC", num: 16, pos: 2, lapStart: [0] };
@@ -108,7 +109,7 @@ export function visibleTransportReplay() {
   }
   const document = { body: element("body"), createElement: element, getElementById: () => null };
   const ctx = vm.createContext({ document, RealReplay: { LEAD_S: 8 } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx, { filename: absSrc("js/ui/watch-transport.js") });
   const fixture = transportReplay({ document, WatchTransport: vm.runInContext("WatchTransport", ctx) });
   const find = (key, parent = document.body) => parent.dataset.wt === key ? parent : parent.children.map((n) => find(key, n)).find(Boolean);
   return { ...fixture, find };

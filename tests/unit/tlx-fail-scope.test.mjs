@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -32,7 +33,7 @@ function boot() {
     render() { if (state.boom) throw new Error("depth pass boom"); }, autoClear: true };
   const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
     Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
-  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx);
+  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   const sys = ctx.window.TLXShaders.shadowSys(mk(), mk(), { renderer, isMobile: false, softwareGL: false });
   return { sys, S: sys.S, state };
 }

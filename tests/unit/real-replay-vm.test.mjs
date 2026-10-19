@@ -16,6 +16,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 import { ROOT, host, scriptIn, line, transportReplay, watchEnvironment } from "../helpers/real-replay-fixtures.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("the highlights list every moment of the race in time order, and the reel keeps the cuts", async () => {
   const g = await createGame({ track: "baku" });
@@ -188,7 +189,7 @@ test("WATCH snaps after posing on mid-race entry and seek, and releases camera o
     Log: { info() {}, warn() {} },
     CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx, { filename: absSrc("js/race/real-replay.js") });
   const R = vm.runInContext("RealReplay", ctx), snaps = [], writes = [];
   const car = { code: "RUS" }, driver = { code: "RUS", num: 63, pos: 1, lapStart: [0, 10] };
   const G = { track: { total: 1000 }, cars: [car], state: "race", camMode: 0,

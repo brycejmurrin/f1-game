@@ -26,6 +26,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -43,7 +44,7 @@ function load() {
   const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console };
   sb.window = sb;
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
-    { filename: "js/ui/loading-screen.js" });
+    { filename: absSrc("js/ui/loading-screen.js") });
   assert.ok(sb.LoadingScreen, "js/ui/loading-screen.js assigns the LoadingScreen global");
   return sb.LoadingScreen;
 }
@@ -242,7 +243,7 @@ function harness(stored = {}, storeOverride = null, docEl = null, nav = undefine
   if (nav !== undefined) sb.navigator = nav;
   sb.window = sb;
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
-    { filename: "js/ui/loading-screen.js" });
+    { filename: absSrc("js/ui/loading-screen.js") });
   const races = [];
   const screen = sb.LoadingScreen.create({
     $: (id) => (els[id] = els[id] || elem()),
@@ -442,7 +443,7 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // calls handoff(); afterPresent stops the card only on a painted present.
   const rep = { Math, Object, Array, Number, String, JSON, Map, Set, console, performance: { now: () => 0 } };
   rep.window = rep;
-  vm.runInNewContext(read("js/perf/race-entry-profile.js").replace(/^const\b/gm, "var"), rep, { filename: "js/perf/race-entry-profile.js" });
+  vm.runInNewContext(read("js/perf/race-entry-profile.js").replace(/^const\b/gm, "var"), rep, { filename: absSrc("js/perf/race-entry-profile.js") });
   const REP = rep.RaceEntryProfile;
   const recScreen = (phase) => { const log = []; return { log, phase: () => phase, handoff: () => log.push("handoff"), stop: () => { log.push("stop"); phase = ""; } }; };
   let sc = recScreen("run");
@@ -541,7 +542,7 @@ const field = (n, me) => Array.from({ length: n }, (_, i) => ({ code: "D" + Stri
 function modules(files) {
   const sb = { Math, Object, Array, Number, String, JSON, Map, Set, WeakMap, RegExp, isFinite, console, Log: { info() {}, warn() {} } };
   sb.window = sb;
-  for (const f of files) vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
+  for (const f of files) vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   return sb;
 }
 
@@ -653,7 +654,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
   };
   sb.window = sb;
   for (const f of ["js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-screen.js"]) {
-    vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
+    vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   }
   const screen = sb.LoadingScreen.create({
     $: (id) => (els[id] = els[id] || elem()),

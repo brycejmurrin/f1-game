@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { ROOT, line, transportReplay, visibleTransportReplay } from "../helpers/real-replay-fixtures.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns the picture", () => {
   for (const owner of ["auto", "manual", "locked", "fixed"]) {
@@ -48,7 +49,7 @@ test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, 
     ctx.RealRace = { replay: () => replay };
     ctx.HudLayout = { setCam: (id) => { layout = id; } };
     ctx.CamTunerPanel = { refresh() {} };
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     G.$ = (id) => id === "btn-cam" ? button : null;
     G.store = { set: (...args) => writes.push(args) };
     const modes = ctx.CamModes.CAM_MODES, cockpit = modes.findIndex((m) => m.id === "cockpit");
@@ -319,7 +320,7 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
   }
   const body = element("body"), doc = { body, createElement: element };
   const ctx = vm.createContext({ document: doc, CamModes: { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "heli", label: "AERIAL" }, { id: "tv", label: "TV" }] }, RealReplay: { LEAD_S: 8 } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx, { filename: absSrc("js/ui/watch-transport.js") });
   const W = vm.runInContext("WatchTransport", ctx), calls = [];
   const state = { T: 0, duration: 100, paused: false, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
   const api = { describe: () => ({ name: "Test GP", drivers: [{ code: "AAA", name: "Alpha" }, { code: "BBB", name: "Beta" }], events: [{ t: 20, lap: 2, kind: "pass", text: "AAA PASSES BBB" }], speeds: [0.5, 1, 2] }),
@@ -386,7 +387,7 @@ test("WATCH transport: no aria-pressed on PLAY, and a focused, playing timeline 
   }
   const body = element("body"), doc = { body, createElement: element, activeElement: null };
   const ctx = vm.createContext({ document: doc, RealReplay: { LEAD_S: 8 } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx, { filename: absSrc("js/ui/watch-transport.js") });
   const W = vm.runInContext("WatchTransport", ctx);
   const state = { T: 10, duration: 100, paused: true, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
   const api = { describe: () => ({ name: "GP", drivers: [{ code: "AAA", name: "Alpha" }], events: [], speeds: [1] }), status: () => state,

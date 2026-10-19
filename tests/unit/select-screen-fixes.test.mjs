@@ -19,6 +19,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -61,7 +62,7 @@ function boot(disk = {}, o = {}) {
     },
   };
   sb.window = sb;
-  vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
+  vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   const $ = (id) => dom.byId(id);
   const selTracks = $("sel-tracks");
   Object.defineProperty(selTracks, "textContent", { get: () => "", set() { selTracks.children.length = 0; } });

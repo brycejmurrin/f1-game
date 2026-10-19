@@ -11,6 +11,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -27,7 +28,7 @@ function boot(document, extras = {}) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/camera/replay-buf.js"), ctx, { filename: "replay-buf.js" });
+  vm.runInContext(src("js/camera/replay-buf.js"), ctx, { filename: absSrc("js/camera/replay-buf.js") });
   return vm.runInContext("ReplayBuf", ctx);
 }
 
@@ -128,7 +129,7 @@ test("instant replay cuts the drone tether on entry, explicit seeks, LAST and ex
       }, curvature: () => 0,
     } });
   for (const file of ["js/core/mat4.js", "js/camera/extra-rigs.js", "js/camera/replay-buf.js"])
-    vm.runInContext(src(file), ctx, { filename: file });
+    vm.runInContext(src(file), ctx, { filename: absSrc(file) });
   const { ExtraRigs, ReplayBuf: R } = vm.runInContext("({ExtraRigs, ReplayBuf})", ctx);
   const c = { s: 0, x: 0, px: 0, py: 0, pz: 0, head: 0, speed: 60 };
   const G = { cars: [c], track: { total: 10000 }, raceT: 10 };

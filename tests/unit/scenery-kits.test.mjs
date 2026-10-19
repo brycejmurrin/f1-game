@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
@@ -13,10 +14,10 @@ function load(file, name, globals = {}) {
   const ctx = vm.createContext(sandbox);
   vm.runInContext(
     fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8").replace(/^const\b/gm, "var"),
-    ctx, { filename: "js/core/log.js" },
+    ctx, { filename: absSrc("js/core/log.js") },
   );
   const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
-  vm.runInContext(source, ctx, { filename: file });
+  vm.runInContext(source, ctx, { filename: absSrc(file) });
   return sandbox[name];
 }
 

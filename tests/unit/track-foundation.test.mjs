@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REQUIRE = (await import("node:module")).createRequire(import.meta.url);
@@ -18,7 +19,7 @@ const P = MANIFEST.PATHS;
 // a file loaded without it is not the file the browser evaluates.
 function runInto(ctx, file) {
   const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
-  vm.runInContext(source, ctx, { filename: file });
+  vm.runInContext(source, ctx, { filename: absSrc(file) });
 }
 function loadGlobal(file, name) {
   const sandbox = { console, Math, Array, Object, Number, Float32Array, Float64Array, Uint32Array, ArrayBuffer, Map, Set };

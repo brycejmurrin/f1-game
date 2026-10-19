@@ -18,12 +18,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function load(extra) {
   const ctx = vm.createContext(Object.assign({ Log: { info() {}, warn() {} } }, extra || {}));
-  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/lamp-bake.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/lamp-bake.js"), "utf8"), ctx, { filename: absSrc("js/lighting/lamp-bake.js") });
   return vm.runInContext("LampBake", ctx);
 }
 

@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -42,7 +43,7 @@ async function run({ env, palette, tod = "default", night = false }) {
   };
   vm.createContext(sandbox);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/lighting/knobs.js", "js/render/shared/assets.js", "js/lighting/atmosphere.js"])
-    vm.runInContext(read(f), sandbox, { filename: f });
+    vm.runInContext(read(f), sandbox, { filename: absSrc(f) });
   await vm.runInContext("Assets", sandbox).manifest();
   vm.runInContext("LightTune = { LT: LightKnobs.LT, buildTrackLights: () => [] };", sandbox);
   const G = {
