@@ -46,6 +46,7 @@ const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs")
 const ENGINE_ONLY = {
   baseHW: "half-width input to realPoints()/applyHwZones, not read after build",
   pal: "raw palette input; built into def.palette by dayPal/nightPal",
+  crossover: "read by tests/helpers/circuit-crossovers.js off the authored def; the engine never reads it",
 };
 
 test("every field a circuit authors survives the copy into Tracks.LIST", () => {
