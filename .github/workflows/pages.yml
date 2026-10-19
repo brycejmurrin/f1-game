@@ -383,7 +383,11 @@ jobs:
     # Same transitive-skip rule as deploy: run exactly when deploy succeeded.
     if: ${{ !cancelled() && needs.deploy.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 15 min: poll-live-shell DEFAULT_ATTEMPTS/backoff worst-case + checkout/stamp/
+    # verify-live.mjs overhead must finish so a wrong shell still emits the clear
+    # error and the failure() auto-issue step (#2923). Kept in lockstep with
+    # VERIFY_LIVE_JOB_TIMEOUT_MINUTES in tools/ci/poll-live-shell.mjs.
+    timeout-minutes: 15
     # issues: write for the failure step only; the poll needs nothing.
     permissions:
       issues: write

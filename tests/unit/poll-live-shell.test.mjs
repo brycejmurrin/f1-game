@@ -1,13 +1,25 @@
 // poll-live-shell: match, superseded (ancestor + build≥), timeout with last live values, incoherent wait.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   parseShellMetas,
   parseVersionJson,
   evaluateLiveSnapshot,
   backoffMs,
   pollLiveShell,
+  worstCasePollMs,
+  DEFAULT_ATTEMPTS,
+  FETCH_TIMEOUT_MS,
+  BACKOFF_BASE_MS,
+  BACKOFF_CAP_MS,
+  VERIFY_LIVE_JOB_TIMEOUT_MINUTES,
+  VERIFY_LIVE_OVERHEAD_MS,
 } from "../../tools/ci/poll-live-shell.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const SHA_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const SHA_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -81,9 +93,39 @@ test("evaluateLiveSnapshot waits while live build is still behind", () => {
 });
 
 test("backoffMs grows then caps", () => {
-  assert.ok(backoffMs(0) >= 5_000);
-  assert.ok(backoffMs(20) <= 20_000);
-  assert.equal(backoffMs(50), 20_000);
+  assert.ok(backoffMs(0) >= BACKOFF_BASE_MS);
+  assert.ok(backoffMs(20) <= BACKOFF_CAP_MS);
+  assert.equal(backoffMs(50), BACKOFF_CAP_MS);
+});
+
+test("worst-case poll plus overhead fits inside the verify-live job timeout", () => {
+  // A wrong shell must exit the poll with a clear error (and reach the
+  // failure() auto-issue step) before Actions kills the job (#2923 DAD).
+  const jobMs = VERIFY_LIVE_JOB_TIMEOUT_MINUTES * 60_000;
+  const pollMs = worstCasePollMs();
+  assert.equal(DEFAULT_ATTEMPTS, 24);
+  assert.ok(FETCH_TIMEOUT_MS <= 10_000, "poll fetch timeout stays short so N×2 fetches fit");
+  assert.ok(
+    pollMs + VERIFY_LIVE_OVERHEAD_MS < jobMs,
+    `poll worst-case ${pollMs}ms + overhead ${VERIFY_LIVE_OVERHEAD_MS}ms must be < job ${jobMs}ms`,
+  );
+  // Leave ≥90s spare so a slow checkout or stamp does not race the kill.
+  assert.ok(jobMs - (pollMs + VERIFY_LIVE_OVERHEAD_MS) >= 90_000);
+
+  const pages = fs.readFileSync(path.join(ROOT, ".github/workflows/pages.yml"), "utf8");
+  const start = pages.indexOf("\n  verify-live:");
+  assert.ok(start >= 0, "pages.yml has a verify-live job");
+  // Skip the job's own header line so the next `\n  name:` is a sibling job (or EOF).
+  const afterHeader = pages.slice(start + "\n  verify-live:".length);
+  const nextJob = afterHeader.search(/\n  [a-z][\w-]*:/);
+  const block = nextJob >= 0 ? afterHeader.slice(0, nextJob) : afterHeader;
+  const m = block.match(/^\s*timeout-minutes:\s*(\d+)\s*$/m);
+  assert.ok(m, "verify-live declares timeout-minutes");
+  assert.equal(
+    Number(m[1]),
+    VERIFY_LIVE_JOB_TIMEOUT_MINUTES,
+    "pages.yml verify-live timeout must match VERIFY_LIVE_JOB_TIMEOUT_MINUTES",
+  );
 });
 
 test("pollLiveShell logs last live values and fails on timeout", async () => {

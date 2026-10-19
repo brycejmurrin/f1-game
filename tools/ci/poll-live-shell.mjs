@@ -15,6 +15,20 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
+// Budget: the verify-live job must finish (checkout + stamp + poll + byte
+// verify + optional issue) before GitHub kills it, or the clear poll error and
+// the `if: failure()` auto-issue step never run (#2923 DAD review).
+// 24 attempts matches the former fixed 24×10s poll; fetch timeout 8s (Pages is
+// usually <1s); backoff 5→12s. Worst-case poll + 3 min overhead fits in 15 min.
+export const DEFAULT_ATTEMPTS = 24;
+export const FETCH_TIMEOUT_MS = 8_000;
+export const BACKOFF_BASE_MS = 5_000;
+export const BACKOFF_CAP_MS = 12_000;
+/** Must match `.github/workflows/pages.yml` › verify-live › timeout-minutes. */
+export const VERIFY_LIVE_JOB_TIMEOUT_MINUTES = 15;
+/** Checkout + stamp + verify-live.mjs + issue create headroom inside the job. */
+export const VERIFY_LIVE_OVERHEAD_MS = 3 * 60_000;
+
 const META_RE = /<meta\s+name="(apex-build|apex-sha)"\s+content="([^"]*)"\s*\/?\s*>/gi;
 
 /** @param {string} html */
@@ -119,10 +133,34 @@ export function evaluateLiveSnapshot({ expectedBuild, expectedSha, version, meta
   return { ok: false, status: "waiting", live, detail: `live build ${liveBuild} does not yet equal ${expectedBuild}` };
 }
 
-/** Backoff delays (ms): ~8 min for 36 attempts under a 10-minute job budget. */
-export function backoffMs(attemptIndex, { baseMs = 5_000, capMs = 20_000 } = {}) {
+/** Backoff delays (ms): grows from base, capped so the poll fits the job. */
+export function backoffMs(attemptIndex, { baseMs = BACKOFF_BASE_MS, capMs = BACKOFF_CAP_MS } = {}) {
   const ms = Math.round(baseMs * Math.pow(1.12, Math.max(0, attemptIndex)));
   return Math.min(capMs, ms);
+}
+
+/**
+ * Worst-case wall time for one full poll that never matches: every fetch hits
+ * its AbortSignal timeout, plus every inter-attempt sleep.
+ * @param {{
+ *   attempts?: number,
+ *   fetchTimeoutMs?: number,
+ *   fetchesPerAttempt?: number,
+ *   baseMs?: number,
+ *   capMs?: number,
+ * }} [opts]
+ */
+export function worstCasePollMs(opts = {}) {
+  const attempts = opts.attempts ?? DEFAULT_ATTEMPTS;
+  const fetchTimeoutMs = opts.fetchTimeoutMs ?? FETCH_TIMEOUT_MS;
+  const fetchesPerAttempt = opts.fetchesPerAttempt ?? 2;
+  const baseMs = opts.baseMs ?? BACKOFF_BASE_MS;
+  const capMs = opts.capMs ?? BACKOFF_CAP_MS;
+  let sleepTotal = 0;
+  for (let i = 0; i < Math.max(0, attempts - 1); i++) {
+    sleepTotal += backoffMs(i, { baseMs, capMs });
+  }
+  return sleepTotal + attempts * fetchesPerAttempt * fetchTimeoutMs;
 }
 
 function defaultIsAncestor(ancestor, descendant) {
@@ -138,7 +176,7 @@ function defaultIsAncestor(ancestor, descendant) {
 }
 
 async function defaultFetchText(url) {
-  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   const text = await response.text();
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return text;
@@ -172,7 +210,7 @@ export async function pollLiveShell(opts) {
     pageUrl,
     build,
     sha,
-    attempts = 36,
+    attempts = DEFAULT_ATTEMPTS,
     runId = String(Date.now()),
     fetchText = defaultFetchText,
     isAncestor = defaultIsAncestor,
@@ -232,7 +270,7 @@ export async function pollLiveShell(opts) {
 }
 
 function parseArgs(argv) {
-  const out = { attempts: 36 };
+  const out = { attempts: DEFAULT_ATTEMPTS };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--url") out.pageUrl = argv[++i];
