@@ -150,6 +150,7 @@ jobs:
       entry: ${{ steps.split.outputs.entry }}
       run: ${{ steps.gate.outputs.run }}
       reanalysis: ${{ steps.split.outputs.reanalysis }}
+      garage_ab: ${{ steps.split.outputs.garage_ab }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
@@ -248,6 +249,10 @@ jobs:
           if co is None:
             co = (os.environ.get("INPUT_CENSUS_ONLY") or "").lower() in ("true", "1")
           print("census_only=" + ("true" if co else "false"))
+          # Historical exact-revision experiment: never part of an ordinary
+          # dispatch/nightly or an unrelated pushed request. Its candidate pin
+          # intentionally rejects newer product trees; the four controls do not.
+          print("garage_ab=" + str(req.get("leg") == "garage-retry-63a1" and not co).lower())
           # The player camera (hunt 4 H5). A push request bypasses the
           # dispatch form's choice list, so the allowlist is enforced here too.
           cm = str(req.get("cam") or os.environ.get("INPUT_CAM") or "helmet").strip()
@@ -376,19 +381,19 @@ jobs:
       # Verdict gates TLX softBlit and WGX softPresent on hardware unless the
       # dispatch overrode the pin.
       - name: Garage exact-revision WebGPU A/B
-        if: ${{ needs.plan.outputs.census_only != 'true' }}
+        if: ${{ needs.plan.outputs.garage_ab == 'true' }}
         continue-on-error: true
         timeout-minutes: 14
         shell: bash
         run: node scratch/garage-retry-ab.mjs
 
       - name: Validate garage A/B measurements
-        if: always()
+        if: ${{ always() && needs.plan.outputs.garage_ab == 'true' }}
         continue-on-error: true
         run: node scratch/analyze-garage-retry.mjs .
 
       - name: Upload garage A/B before control legs
-        if: always()
+        if: ${{ always() && needs.plan.outputs.garage_ab == 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: garage-retry-ab
@@ -492,7 +497,7 @@ jobs:
             --shot "game-wgx-${{ matrix.image }}.png"
 
       - name: Garage A/B verdict
-        if: ${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}
+        if: ${{ !cancelled() && needs.plan.outputs.garage_ab == 'true' }}
         run: node -e 'const r=require("./game-garage-retry-ab.json"); const a=require("./analysis.json"); if(!r.ok || r.software || r.arms.length!==6 || !a.nativeHardwareClaimsAllowed)process.exit(1)'
 
       # THE GATE. The four legs above are continue-on-error, so before this

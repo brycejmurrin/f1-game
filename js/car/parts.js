@@ -569,6 +569,75 @@ const Parts = (function () {
     },
   ];
 
+  // STYLE options (2026-10-18): universal reskins. Each one is its `equivalent`
+  // in everything but the mesh: cost, the four stat multipliers and every other
+  // field are COPIED from it here, so a STYLE row can never drift into a
+  // physics change (tests/unit/parts-visual-distinctness.test.mjs pins it the
+  // way it pins SIGNATURE), and `visual` is the equivalent's recipe with the
+  // listed keys overridden. Open to every team, unlike a SIGNATURE.
+  // Preview: node tools/viewer/build-viewer.mjs --sheet=parts:<category>:<team> --match=^style_
+  const STYLES = [
+    ["engine", "evo_kit", "style_engine_zeropod", "Zero-Pod Concept", "near-vanishing sidepods with a deep undercut",
+      { podWidth: 0.80, shoulderHeight: 0.92, undercut: 1.30, coke: 1.30, tailWidth: 0.76, coverHeight: 0.92, inlet: 0, chimney: 0, twin: 0 }],
+    ["engine", "turbo", "style_engine_bigbox", "Big Airbox", "towering airbox over broad, high-shouldered pods",
+      { in: 1.90, snork: 1, coverHeight: 1.28, podWidth: 1.20, shoulderHeight: 1.24, undercut: 0.78, servicePanel: 4, chimney: 3, scoopLip: 2 }],
+    ["aero", "low", "style_aero_spoon", "Spoon Wing", "deep-swept spoon rear wing and a raised, raked front",
+      { lvl: 0, rearSweep: 0.18, rearTaper: 0.70, frontSweep: 0.14, frontRise: 0.15, fin: 1.40, plate: 3, casc: 3, vane: 3 }],
+    ["aero", "underfloor", "style_aero_twinplane", "Twin-Plane", "swan-neck mount, turning vanes and a high diffuser",
+      { lvl: 4, swan: 1, tvane: 1, gill: 5, duct: 3, slot: 2, floorEdge: 1.22, diffuserRise: 1.42, plate: 4, casc: 4 }],
+    ["suspension", "sport", "style_susp_stance", "Stance Kit", "slammed ride with long, wide-set wishbones",
+      { ride: -0.035, arm: 1.20, wishbone: 1.24, toe: 1.16, rocker: 2, armTint: [0.86, 0.12, 0.10] }],
+    ["suspension", "kerb_spec", "style_susp_rally", "Rally Raise", "tall ride with short arms and an exposed rocker",
+      { ride: 0.055, arm: 0.80, wishbone: 0.82, toe: 0.92, rocker: 0, push: 1, armTint: [0.98, 0.78, 0.10] }],
+    ["brakes", "carbon", "style_brakes_bigdisc", "Big Disc", "oversized rotors behind wide ducts",
+      { rotorScale: 1.70, duct: 1.75, discFace: 2, scoop: 2, caliperPos: 5.7, cal: [0.10, 0.62, 0.95], bigScoop: 1, caliper: 2, coverOpen: 0 }],
+    ["brakes", "sport", "style_brakes_open", "Open Drum", "small rotors left open to the air",
+      { rotorScale: 0.92, duct: 0.55, coverOpen: 2, discFace: 0, scoop: 0, cal: [0.95, 0.80, 0.10], rim: [0.86, 0.70, 0.24] }],
+    ["tyres", "soft", "style_tyres_whitewall", "White Wall", "wide white sidewall band and a deep tread",
+      { band: [0.96, 0.96, 0.98], bandWidth: 0.132, grooves: 4, grooveDepth: 0.075, sidewall: 2, shoulder: 2 }],
+    ["tyres", "compound_c4", "style_tyres_classic", "Classic Grooved", "four-groove tread on a plain dark wall",
+      { band: [0.20, 0.20, 0.22], bandWidth: 0.045, grooves: 4, grooveDepth: 0.075, shoulder: 0, spokes: 8 }],
+    ["ers", "deploy", "style_ers_neon", "Neon Cells", "eight-cell pack under a glowing blister",
+      { cells: 8, pack: 1.35, blister: 2, conduit: 2, coolerIntake: 2, led: [1.9, 0.35, 1.7], ledStrip: 1 }],
+    ["ers", "harvest", "style_ers_slim", "Slim Pack", "thin, flush pack with no blister",
+      { cells: 2, pack: 0.88, blister: 0, conduit: 0, coolerIntake: 0, led: [0.10, 1.6, 1.95], ledStrip: 1 }],
+    ["gearbox", "sequential_pro", "style_gearbox_finned", "Finned Case", "tall strakes and a full heat-fin stack",
+      { strakes: 5, strakeH: 0.42, fin: 1, finSY: 0.34, finSZ: 0.55, heatFins: 5, ribs: 3, louvres: 6, casing: 3, rearFins: 1 }],
+    // Smooth Case: fat painted belly + no strakes. caseWidth < 0.85 triggers the
+    // painted case path in car3d; casing 2 widens the visible fairing.
+    ["gearbox", "long_ratio", "style_gearbox_smooth", "Smooth Case", "narrow, bare casing with no strakes",
+      { strakes: 0, fin: 0, heatFins: 0, ribs: 0, louvres: 0, heat: 0, caseWidth: 0.58, casing: 2, rearFins: 0 }],
+    ["fuel", "race_blend", "style_fuel_blue", "Blue Flame", "blue-violet exhaust flame and cap",
+      { cap: [0.12, 0.28, 0.98], flame: [0.18, 0.40, 0.98], fxFlame: [0.55, 0.90, 2.90], filler: 2, capBig: 1, hatch: 1, line: 2, breather: 1 }],
+    ["fuel", "high_octane", "style_fuel_green", "Green Flame", "green exhaust flame and cap",
+      { cap: [0.10, 0.95, 0.22], flame: [0.20, 0.98, 0.25], fxFlame: [0.70, 2.80, 0.60], filler: 2, line: 2, breather: 2, hatch: 1, capBig: 1 }],
+    ["exhaust", "megaphone", "style_exhaust_trumpet", "Trumpet", "wide flared bore with a wrapped wastegate",
+      { bore: 1.45, flare: 1, wastegate: 2, wrap: 1, lip: 2, stack: 2, shield: 1 }],
+    ["exhaust", "free_flow", "style_exhaust_tripipe", "Tri-Pipe", "three narrow outlets, no flare",
+      { pipes: 3, bore: 0.92, flare: 0, wastegate: 0, wrap: 0, lip: 0, shield: 0, stack: 2 }],
+    ["floor", "fence_array", "style_floor_tallfence", "Tall Fences", "eight tall fences and a raised edge lip",
+      { fences: 8, fenceH: 2.20, edgeLip: 2, skid: 2, skirt: 2, plank: 0, gurney: 0, scroll: 0 }],
+    ["floor", "step_plank", "style_floor_flat", "Flat Board", "fenceless flat floor with a plain painted edge",
+      { fences: 0, fenceH: 1, edgeLip: 0, skid: 0, skirt: 2, plank: 1, gurney: 0, scroll: 0 }],
+    ["cockpit", "deflector", "style_cockpit_aeroscreen", "Aeroscreen", "screened halo with a winged blade and twin camera pods",
+      { screen: 2, haloBlade: 2, haloWing: 1, camPods: 2, headrest: 2, mirror: 1.32 }],
+    ["cockpit", "open_cell", "style_cockpit_fenced", "Fenced Halo", "fenced halo crown, winged headrest and twin camera pods",
+      { screen: 0, halo: 2, haloBlade: 1, haloWing: 1, camPods: 2, headrest: 2, mirror: 1.30 }],
+    ["wheels", "spoked", "style_wheels_starburst", "Starburst", "eight-spoke rim with a gold nut",
+      { spokes: 8, dish: 0, tape: 0, deflector: 0, nut: [0.98, 0.78, 0.10], rim: [0.86, 0.70, 0.24] }],
+    // cover:1 is required — spokes:0 alone falls back to OPEN_SPOKES (3). deflector:0
+    // so Full Disc does not inherit dished's floating over-wheel winglets.
+    ["wheels", "dished", "style_wheels_fulldisc", "Full Disc", "closed disc cover with a deep dish and a bright rim",
+      { cover: 1, coverVanes: 0, spokes: 0, dish: 2, tape: 1, deflector: 0, gunNut: 1, nut: [0.85, 0.12, 0.10], rim: [0.92, 0.92, 0.94] }],
+  ];
+  for (const [catId, eqId, id, label, look, visual] of STYLES) {
+    const cat = CATALOG.find((c) => c.id === catId);
+    const eq = cat.options.find((o) => o.id === eqId);
+    const opt = Object.assign({}, eq, { id, label, tag: "STYLE", equivalent: eqId,
+      desc: `${eq.label} performance — ${look}`, visual: Object.assign({}, eq.visual, visual) });
+    cat.options.push(opt);
+  }
+
   const DEFAULTS = {
     engine: "stock", aero: "medium", suspension: "standard",
     brakes: "standard", tyres: "medium", ers: "standard",
@@ -588,24 +657,27 @@ const Parts = (function () {
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave"]),
-      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper"]),
+      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop"]),
       // cover + coverVanes: opt-in covered face only (open rim is the default).
       // spokes / dish / gunNut: open-rim identity consumed by car-wheels when the
       // wheel part leaves them unset (wheel recipe still wins when set).
       tyres: Object.freeze(["grooves", "grooveDepth", "bandWidth", "coverVanes", "cover",
         "shoulder", "sidewall", "spokes", "dish", "gunNut"]),
-      ers: Object.freeze(["pack", "cells", "conduit", "blister", "coolerIntake"]),
+      ers: Object.freeze(["pack", "cells", "conduit", "blister", "coolerIntake", "ledStrip"]),
       gearbox: Object.freeze(["strakes", "fin", "strakeH", "finSY", "finSZ",
-        "casing", "louvres", "heat", "caseWidth", "heatFins", "ribs"]),
-      fuel: Object.freeze(["filler", "hatch", "vent", "breather"]),
+        "casing", "louvres", "heat", "caseWidth", "heatFins", "ribs", "rearFins"]),
+      fuel: Object.freeze(["filler", "hatch", "vent", "breather", "capBig"]),
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap",
-        "lip", "shield"]),
-      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll"]),
+        "lip", "shield", "stack"]),
+      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt"]),
       cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror"]),
-      wheels: Object.freeze(["spokes", "tape", "dish", "gunNut", "deflector"]),
+      // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.
+      // coverVanes: wheel-owned vane count on a covered face (0 = sealed Full Disc).
+      wheels: Object.freeze(["spokes", "tape", "dish", "gunNut", "deflector", "cover", "coverVanes"]),
     }),
     material: Object.freeze({
-      wheels: Object.freeze(["nut"]),
+      wheels: Object.freeze(["nut", "rim"]),
+      suspension: Object.freeze(["armTint"]),
       brakes: Object.freeze(["cal", "rim"]),
       tyres: Object.freeze(["band", "nut"]),
       ers: Object.freeze(["led"]),

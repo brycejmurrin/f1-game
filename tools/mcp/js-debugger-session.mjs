@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
+import { saveOutputArtifact } from "../agent/output.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
 /** One-line value of an object result from V8's preview, so an agent need not chain debugger_properties for `{a, b}`. */
@@ -26,9 +27,14 @@ function exceptionPreview(value) {
   }
   return out;
 }
-function operationResult(result) {
-  const size = JSON.stringify(result).length;
-  return size <= 4000 ? result : { truncated: true, originalCharacters: size,
+function operationResult(result, id) {
+  const serialized = JSON.stringify(result), size = serialized.length;
+  if (size <= 4000) return result;
+  const artifact = saveOutputArtifact(serialized, {
+    root: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), tool: `debugger-operation-${id}`,
+  });
+  return { truncated: true, originalCharacters: size, artifact,
+    note: "Use output_read with artifact.path for the original response without repeating execution.",
     result: { type: result.result?.type, subtype: result.result?.subtype, description: clip(result.result?.description, 200) },
     hadException: !!result.exceptionDetails };
 }
@@ -92,7 +98,7 @@ export class DebugSession {
       ...(this.lost && !this.cdp ? { detached: `target gone: ${this.lost}` } : {}),
       paused: !!this.pause, pause: this.pause,
       breakpointCount: this.breakpoints.size, breakpoints: [...this.breakpoints.values()].slice(0, 20).map(b => ({ ...b, url: clip(b.url, 300) })),
-      operations: withResults ? ops.map((o, i) => i === ops.length - 1 ? o : { id: o.id, status: o.status, ...(o.timedOut ? { timedOut: true } : {}) }) : ops.map(o => ({ id: o.id, status: o.status, ...(o.timedOut ? { timedOut: true } : {}) })) };
+      operations: withResults ? ops.map((o, i) => i === ops.length - 1 ? o : { id: o.id, status: o.status, ...(o.result?.artifact ? { artifact: o.result.artifact } : {}), ...(o.timedOut ? { timedOut: true } : {}) }) : ops.map(o => ({ id: o.id, status: o.status, ...(o.result?.artifact ? { artifact: o.result.artifact } : {}), ...(o.timedOut ? { timedOut: true } : {}) })) };
   }
   // T11 + T9/T10: report the loss reason, and probe the page when a run has been pending a while.
   async stateWithHealth(probeMs = 1500) {
@@ -437,8 +443,15 @@ export class DebugSession {
         // Completed/exception means cleanup settled, so clients never race GC
         // against release. Unknown executions keep ownership until late reply
         // or detach; neither timeout nor abandonment cancels page JavaScript.
-        if (canSettle()) Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed",
-          result: operationResult(r), ...(operation.timedOut ? { late: true } : {}), ...(cleanupError ? { cleanupError } : {}) });
+        if (canSettle()) {
+          try {
+            Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed",
+              result: operationResult(r, id), ...(operation.timedOut ? { late: true } : {}), ...(cleanupError ? { cleanupError } : {}) });
+          } catch (e) {
+            Object.assign(operation, { status: "unknown", error: `Could not retain operation result: ${clip(e.message)}`,
+              ...(cleanupError ? { cleanupError } : {}) });
+          }
+        }
       })();
       return completion;
     };

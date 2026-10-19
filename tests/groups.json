@@ -33,6 +33,8 @@
     "tests/unit/agent-fleet.test.mjs",
     "// Generated agent index, hook page, coverage page and per-hook help. No browser.",
     "tests/unit/agent-indexes.test.mjs",
+    "tests/unit/agent-output-config.test.mjs",
+    "tests/unit/agent-output.test.mjs",
     "tests/unit/agent-surface.test.mjs",
     "tests/unit/ai-band.test.mjs",
     "tests/unit/ai-corridor.test.mjs",
@@ -708,6 +710,8 @@
     "tests/unit/onboard.test.mjs",
     "// updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.",
     "tests/unit/ot-ahead-scan-gate.test.mjs",
+    "tests/unit/output-level-mcp.test.mjs",
+    "tests/unit/output-surface.test.mjs",
     "tests/unit/over-road-scan.test.mjs",
     "// Stream overlay v1 schema/diffs, transform painter, TV pass/battle/fastest cards, and staged root page.",
     "tests/unit/overlay-feed.test.mjs",
@@ -1283,6 +1287,15 @@
     "test:agent-contract": {
       "files": [
         "tests/unit/agentview-api-contract.test.mjs"
+      ],
+      "kind": "node"
+    },
+    "test:agent-output": {
+      "files": [
+        "tests/unit/agent-output-config.test.mjs",
+        "tests/unit/agent-output.test.mjs",
+        "tests/unit/output-level-mcp.test.mjs",
+        "tests/unit/output-surface.test.mjs"
       ],
       "kind": "node"
     },

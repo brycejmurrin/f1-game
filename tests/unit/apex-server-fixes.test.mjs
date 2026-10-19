@@ -17,8 +17,10 @@ async function fixture() {
   const root = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-server-fixes-"));
   fs.mkdirSync(path.join(root, "tools/shot"), { recursive: true });
   fs.mkdirSync(path.join(root, "tools/track"), { recursive: true });
+  // Long-lived on purpose: the cancellation test must cancel a RUNNING job; a
+  // 500 ms child finished first on a loaded CI runner and the job read "done".
   fs.writeFileSync(path.join(root, "tools/shot/frame-report.mjs"),
-    'await new Promise(r=>setTimeout(r,500)); console.log(JSON.stringify({ok:true,pid:process.pid}));\n');
+    'await new Promise(r=>setTimeout(r,30000)); console.log(JSON.stringify({ok:true,pid:process.pid}));\n');
   fs.writeFileSync(path.join(root, "tools/shot/track-session.mjs"), `
     process.stdin.resume();
     setTimeout(()=>console.log(JSON.stringify({ready:true,track:"monza"})),400);
