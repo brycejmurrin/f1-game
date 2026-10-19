@@ -216,7 +216,35 @@ R1, R2 and R3 together close the #2952 gap. The rest map the remaining blind spo
 
 ## Sweep
 
-Sweep in progress: every 12th `tests/unit` file (71 files), each run with and without the preload; results land at the next push.
+I ran every 12th `tests/unit/*.test.mjs` file, 71 files in all, once plainly with `node --test` and once with the
+preload (`NODE_OPTIONS=--require=…`, `APEX_VM_DEBUG_STATS=1`). **71/71 had identical pass and fail counts, with 0
+failures in either run.**
+
+Preload counters summed over the child processes:
+
+| counter | count | meaning |
+|---|---|---|
+| `abs` | 18 965 | already absolute (game-vm and track-build-vm families) |
+| `relFixed` | 1 853 | relative names made absolute |
+| `hashFixed` | 1 183 | unnamed whole-file loads matched by content |
+| `unknown` | 789 | short expressions and cut-out snippets, left unnamed on purpose |
+
+No test in the sample asserts on vm stack-trace text, so changing filenames is safe there. R2 must still re-check
+the whole tree.
+
+## Status of the MCP work (#2957)
+
+DEBUGGER-A reports PR #2967 (2fd22f22) already covers:
+- R1: `debugger_node_test` spawns `--inspect-brk=127.0.0.1:0` per file, up to 8 in parallel, and attach accepts a
+  `/json/list` endpoint.
+- R2: it closes the socket on `executionContextDestroyed`.
+- R3, solved differently: `runner:"test"` runs `node --test` without inspect flags, and a `NODE_OPTIONS --require`
+  bootloader attaches every child. This is the same trick as VS Code js-debug, and it avoids the v22 concurrency-1
+  path.
+- R5, R6 and R9.
+
+In progress there: R4, with path-suffix `urlRegex` plus the scriptId fallback for unnamed scripts, and R7. R8 and
+R10 are deferred.
 
 ## Reproduce
 
