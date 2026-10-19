@@ -213,6 +213,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
+  // Slot protection, rollback and cross-tab writes: the pre-push floor must catch them (L18 C1-11).
+  "tests/unit/career-cross-tab.test.mjs",
   "tests/unit/career-data-audio-improvements.test.mjs",
   // js/career/*.js never consumes simRnd and uses Math.random only at two allowlisted non-draw sites; source scan, < 50 ms.
   "tests/unit/career-determinism.test.mjs",
