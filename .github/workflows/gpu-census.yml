@@ -373,6 +373,21 @@ jobs:
       # 36.7 fps pinned, hunt 4 I3); GLX shot one stale gen-1 frame (I1). The
       # Verdict gates TLX softBlit and WGX softPresent on hardware unless the
       # dispatch overrode the pin.
+      - name: iPhone garage diagnostic experiments
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 12
+        run: node scratch/iphone-garage-native.mjs
+
+      - name: Upload phone garage captures before controls
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: iphone-garage
+          path: artifacts/iphone-native/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Game check — three.js / WebGPU
         if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
@@ -471,6 +486,10 @@ jobs:
       # faces, and — on an image the census called hardware — absent counts,
       # softAdapter true, WGX not bound, or TLX/WGX off the native present path.
       # It reads IMAGE, CENSUS_LS (job env) and GITHUB_STEP_SUMMARY.
+      - name: Phone garage experiment verdict
+        if: ${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}
+        run: node -e 'if (!require("./artifacts/iphone-native/report.json").ok) process.exit(1)'
+
       - name: Verdict — fail the job on what the game reported
         if: ${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}
         shell: bash
