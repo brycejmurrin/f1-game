@@ -42,6 +42,18 @@ test("anything that interpolates a value is a site, keyed by receiver and sink",
     "a ternary is constant only when BOTH arms are");
 });
 
+test("srcdoc, createContextualFragment and document.write are sinks too", () => {
+  assert.deepEqual(keys(`f.srcdoc = html;`), ["f.js::f.srcdoc"]);
+  assert.deepEqual(keys(`f["srcdoc"] += x;`), ["f.js::f.srcdoc"]);
+  assert.deepEqual(keys(`range.createContextualFragment(html);`), ["f.js::range.createContextualFragment"]);
+  assert.deepEqual(keys(`document.write(x);`), ["f.js::document.write"]);
+  assert.deepEqual(keys(`document.writeln("<b>" + x);`), ["f.js::document.writeln"]);
+  // constants and unrelated `.write` stay quiet (negative controls)
+  assert.deepEqual(keys(`f.srcdoc = "<p>x</p>"; r.createContextualFragment("<i></i>"); document.write("<b>");`), []);
+  assert.deepEqual(keys(`stream.write(x); res.write(chunk);`), [], "only document.write is an HTML sink");
+  assert.deepEqual(keys(`n.toString(); o.constructor(x);`), [], "Object.prototype names are not sinks");
+});
+
 test("the constant test is structural, not a regex over the text", () => {
   const parse = (e) => lintSource(`x.innerHTML = ${e};`, "f.js").sites.length === 0;
   assert.equal(parse(`"a" + ("b" + "c")`), true);

@@ -2472,7 +2472,8 @@
         "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
       "*": [
-        "tests/unit/hud-speed-parity.test.mjs"
+        "tests/unit/hud-speed-parity.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/car/car-shade.js": {
@@ -4629,6 +4630,9 @@
       ],
       "validateKey": [
         "tests/unit/save-schema-registry.test.mjs"
+      ],
+      "*": [
+        "tests/unit/store-registry.test.mjs"
       ]
     },
     "js/core/script-loader.js": {
@@ -6606,6 +6610,7 @@
         "tests/unit/ratchets.test.mjs",
         "tests/unit/ready-gate.test.mjs",
         "tests/unit/report-server.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -6614,6 +6619,7 @@
         "tests/unit/shell-ids.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/steer-lock-taper.test.mjs",
+        "tests/unit/store-registry.test.mjs",
         "tests/unit/survey-hud.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/terrain-normals.test.mjs",
@@ -12308,7 +12314,8 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "*": [
-        "tests/unit/ci-gate-selection.test.mjs"
+        "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/render/shared/assets.js": {
@@ -13205,6 +13212,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/perf-governor.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ]
     },
@@ -15988,6 +15996,9 @@
       ],
       "plan": [
         "tests/unit/xr-opts.test.mjs"
+      ],
+      "*": [
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/xr/xr-boot.js": {
@@ -16086,7 +16097,8 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/xr/xr-plan.js": {
