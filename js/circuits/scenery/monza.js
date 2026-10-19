@@ -540,6 +540,8 @@
         // cube (#3044), its door and trim too faint at that size. An array id
         // is a row, centred on s; the scale is snapped so a module is exactly
         // a whole number of nodes wide and neighbours abut (no coplanar overlap).
+        // MAT.FLAT: the kit is flat-coloured; under the CONCRETE texture its red
+        // trim and door read as one gridded slab.
         const yards = [
           [["k_pitsgarageclosed", "k_pitsgarage", "k_pitsgarageclosed", "k_pitsgarage"], 0.935, -1, 62, 1.8],
           [["k_pitsgarage", "k_pitsgarageclosed", "k_pitsgarage"], 0.958, -1, 64, 1.8],
@@ -551,7 +553,7 @@
           const scale = row.length > 1 ? step * ds / 5 : sc;
           let placed = 0;
           row.forEach((id, i) => {
-            if (bakedModel(id, K(s) + (i - (row.length - 1) / 2) * step, side, dist, { scale })) placed++;
+            if (bakedModel(id, K(s) + (i - (row.length - 1) / 2) * step, side, dist, { scale, mat: MAT.FLAT })) placed++;
           });
           if (!placed)
             building(K(s), side, dist, 18, 12, 14,
