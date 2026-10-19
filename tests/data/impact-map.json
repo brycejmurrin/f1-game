@@ -1899,7 +1899,8 @@
       ],
       "load": [
         "tests/unit/cam-comfort.test.mjs",
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/light-grid.test.mjs"
       ],
       "persist": [
         "tests/unit/camera-defaults.test.mjs"
@@ -1929,9 +1930,6 @@
       "values": [
         "tests/specs/camera-tuner.spec.js",
         "tests/unit/camera-defaults.test.mjs"
-      ],
-      "*": [
-        "tests/unit/light-grid.test.mjs"
       ]
     },
     "js/camera/photo-cam.js": {
@@ -4366,6 +4364,7 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "emit": [
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "enabled": [
@@ -4390,7 +4389,6 @@
         "tests/unit/fin-design.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/legends-team.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -6027,7 +6025,6 @@
         "tests/specs/multiplayer-room.spec.js",
         "tests/unit/engineer.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
@@ -6162,8 +6159,7 @@
         "tests/unit/boot-input-shape.test.mjs"
       ],
       "initRainDrops": [
-        "tests/unit/light-presets.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+        "tests/unit/light-presets.test.mjs"
       ],
       "introBuild": [
         "tests/unit/garage-arrival.test.mjs",
@@ -6323,7 +6319,6 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/mirror-pass.test.mjs",
         "tests/unit/render-lighting-prep.test.mjs",
@@ -6351,9 +6346,6 @@
       ],
       "seedPlayerPose": [
         "tests/unit/car-fields-vm.test.mjs"
-      ],
-      "setLightTune": [
-        "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "setPaused": [
         "tests/specs/ui-button-touch.spec.js",
@@ -6446,7 +6438,6 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/key-binds.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -6494,7 +6485,6 @@
         "tests/unit/director.test.mjs",
         "tests/unit/engineer.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/publish-evidence.test.mjs",
@@ -12664,6 +12654,7 @@
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
