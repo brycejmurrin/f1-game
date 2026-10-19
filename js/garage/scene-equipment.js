@@ -9,6 +9,56 @@ const FAN = [4.5, 3.32];
 const SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90],
                   [0.10, 0.60, 0.25], [0.15, 0.35, 0.85]];   // S M H, inter, wet
+// Castors roll along Z, with horizontal axles and forks joining the chassis.
+// Eight segments put a vertex exactly on the floor (Y=0).
+function caster(out, x, z, radius) {
+  tube(out, [x - 0.035, radius, z], [x + 0.035, radius, z], radius, RUBBER, 8);
+  tube(out, [x - 0.048, radius, z], [x + 0.048, radius, z], radius * 0.36, STEEL, 8, MAT.METAL);
+  for (const sx of [-1, 1]) block(out, x + sx * 0.043, radius + 0.05, z, 0.008, 0.06, 0.018, STEEL, MAT.METAL);
+}
+function starterCart(out, cx, cz, c1) {
+  block(out, cx, 0.40, cz, 0.30, 0.24, 0.24, scale(c1, 0.55));
+  block(out, cx, 0.66, cz, 0.31, 0.02, 0.25, STEEL);
+  // Three drawer fronts and pulls on the aisle-facing side.
+  for (const y of [0.28, 0.42, 0.56]) {
+    block(out, cx, y, cz + 0.245, 0.26, 0.058, 0.008, scale(c1, 0.32));
+    block(out, cx, y + 0.018, cz + 0.262, 0.11, 0.009, 0.012, STEEL, MAT.METAL);
+  }
+  block(out, cx + 0.12, 0.72, cz - 0.05, 0.06, 0.04, 0.04, [0.75, 0.15, 0.10]);
+  block(out, cx - 0.10, 0.688, cz - 0.05, 0.08, 0.008, 0.05, DARK); // charge display
+  for (let i = 0; i < 3; i++) block(out, cx - 0.15 + i * 0.045, 0.699, cz - 0.05, 0.015, 0.004, 0.028, [0.2, 0.9, 0.3]);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) caster(out, cx + sx * 0.24, cz + sz * 0.18, 0.06);
+  for (const sz of [-1, 1]) tube(out, [cx - 0.3, 0.20, cz + sz * 0.18], [cx - 0.55, 0.95, cz + sz * 0.18], 0.02, STEEL, 6, MAT.METAL);
+  tube(out, [cx - 0.55, 0.95, cz - 0.18], [cx - 0.55, 0.95, cz + 0.18], 0.025, RUBBER, 8);
+  // Umbilical is parked at the cart, clear of the car and the walk aisle.
+  hose(out, [[cx + 0.2, 0.62, cz], [cx + 0.55, 0.22, cz + 0.28], [cx + 0.40, 0.08, cz + 0.08], [cx + 0.75, 0.08, cz + 0.42]], 0.02, [0.48, 0.22, 0.06], 6);
+}
+function tyreTrolley(out, x, z, comps, c1) {
+  const dark = scale(STEEL, 0.55);
+  for (const sx of [-1, 1]) tube(out, [x + sx * 0.42, 0.58, z - 1.3], [x + sx * 0.42, 0.58, z + 1.3], 0.025, STEEL, 6, MAT.METAL);
+  for (const ez of [-1.3, 1.3]) tube(out, [x - 0.42, 0.58, z + ez], [x + 0.42, 0.58, z + ez], 0.025, STEEL, 6, MAT.METAL);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    caster(out, x + sx * 0.38, z + sz * 1.2, 0.05);
+    tube(out, [x + sx * 0.38, 0.15, z + sz * 1.2], [x + sx * 0.42, 0.58, z + sz * 1.2], 0.022, STEEL, 6, MAT.METAL);
+  }
+  // Lower rails support the tyres; the end handle stays below the pit board.
+  for (const sz of [-1, 1]) tube(out, [x - 0.38, 0.15, z + sz * 1.2], [x + 0.38, 0.15, z + sz * 1.2], 0.025, STEEL, 6, MAT.METAL);
+  for (const sx of [-1, 1]) {
+    tube(out, [x + sx * 0.12, 0.12, z - 1.3], [x + sx * 0.12, 0.12, z + 1.3], 0.025, STEEL, 6, MAT.METAL);
+    tube(out, [x + sx * 0.42, 0.58, z + 1.3], [x + sx * 0.42, 0.94, z + 1.3], 0.025, STEEL, 6, MAT.METAL);
+  }
+  tube(out, [x - 0.42, 0.94, z + 1.3], [x + 0.42, 0.94, z + 1.3], 0.03, RUBBER, 8);
+  for (let i = 0; i < 4; i++) {
+    const wz = z - 1.0 + i * 0.68;
+    tube(out, [x - 0.17, 0.44, wz], [x + 0.17, 0.44, wz], 0.34, RUBBER, 14);
+    tube(out, [x - 0.15, 0.44, wz], [x + 0.15, 0.44, wz], 0.36, scale(c1, 0.6), 14);   // blanket
+    tube(out, [x - 0.10, 0.44, wz], [x - 0.20, 0.44, wz], 0.20, scale(STEEL, 0.9), 10, MAT.METAL);   // rim face
+    block(out, x + 0.17, 0.62, wz, 0.012, 0.08, 0.12, COMPOUND[comps[i]]);          // sticker
+    hose(out, [[x + 0.19, 0.30, wz], [x + 0.30, 0.20, wz + 0.1], [x + 0.30, 0.20, z + 1.45]], 0.012, HOSE, 5);
+  }
+  block(out, x + 0.30, 0.42, z + 1.50, 0.10, 0.14, 0.06, dark);                     // blanket controller
+  for (let l = 0; l < 4; l++) block(out, x + 0.30 + (l % 2 ? 0.04 : -0.04), 0.50 + (l < 2 ? 0.04 : -0.02), z + 1.565, 0.012, 0.012, 0.005, l % 3 ? [0.2, 0.9, 0.3] : [0.9, 0.5, 0.1]);   // status LEDs
+}
 function buildEquipment(g, liv, ctx) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const team = scale(c1, 0.85);
@@ -54,44 +104,11 @@ function buildEquipment(g, liv, ctx) {
       block(g.mid, gx + sd * 0.09, 0.14, gz, 0.02, 0.09, 0.03, dark);                // trigger grip
     }
   }
-  // STARTER CART and its umbilical into the gearbox: the one prop that touches
-  // the car, and the reason a parked car in a real bay never looks abandoned.
-  {
-    const cx = -1.95;
-    const cz = -4.75;
-    block(g.mid, cx, 0.40, cz, 0.30, 0.24, 0.24, scale(c1, 0.55));               // cabinet
-    block(g.mid, cx, 0.66, cz, 0.31, 0.02, 0.25, STEEL);
-    block(g.mid, cx + 0.12, 0.72, cz - 0.05, 0.06, 0.04, 0.04, [0.75, 0.15, 0.10]); // start button
-    for (let w = 0; w < 4; w++)
-      cyl(g.mid, cx + (w % 2 ? 0.24 : -0.24), 0, cz + (w < 2 ? 0.18 : -0.18), 0.06, 0.12, RUBBER, 8);
-    tube(g.mid, [cx - 0.3, 0.16, cz], [cx - 0.55, 0.95, cz], 0.02, STEEL, 6, MAT.METAL);   // push handle
-    tube(g.mid, [cx - 0.55, 0.95, cz - 0.18], [cx - 0.55, 0.95, cz + 0.18], 0.02, STEEL, 6, MAT.METAL);
-    hose(g.mid, [[cx + 0.2, 0.62, cz], [cx + 0.55, 0.22, cz + 0.28], [cx + 0.40, 0.08, cz + 0.08], [cx + 0.75, 0.08, cz + 0.42]],
-         0.02, [0.48, 0.22, 0.06], 6);                                             // umbilical, parked at the cart
-  }
-  // TYRE TROLLEYS at the deep end: four wheels upright under their blankets,
-  // a cable to the control box, and the compound sticker on each blanket. The
-  // wheel is an oriented tube along X: rubber, then a slightly fatter and
-  // shorter tube of team colour over the tread for the blanket.
-  const trolley = (out, x, z, comps) => {
-    for (const sx of [-1, 1]) tube(out, [x + sx * 0.42, 0.58, z - 1.3], [x + sx * 0.42, 0.58, z + 1.3], 0.025, STEEL, 6, MAT.METAL);
-    for (const ez of [-1.3, 1.3]) tube(out, [x - 0.42, 0.58, z + ez], [x + 0.42, 0.58, z + ez], 0.025, STEEL, 6, MAT.METAL);
-    for (let w = 0; w < 4; w++)
-      cyl(out, x + (w % 2 ? 0.38 : -0.38), 0, z + (w < 2 ? 1.2 : -1.2), 0.05, 0.10, RUBBER, 6);
-    for (let i = 0; i < 4; i++) {
-      const wz = z - 1.0 + i * 0.68;
-      tube(out, [x - 0.17, 0.44, wz], [x + 0.17, 0.44, wz], 0.34, RUBBER, 14);
-      tube(out, [x - 0.19, 0.44, wz], [x + 0.19, 0.44, wz], 0.36, scale(c1, 0.6), 14);   // blanket
-      tube(out, [x - 0.10, 0.44, wz], [x - 0.20, 0.44, wz], 0.20, scale(STEEL, 0.9), 10, MAT.METAL);   // rim face
-      block(out, x + 0.20, 0.62, wz, 0.012, 0.08, 0.12, COMPOUND[comps[i]]);          // sticker
-      hose(out, [[x + 0.19, 0.30, wz], [x + 0.30, 0.20, wz + 0.1], [x + 0.30, 0.20, z + 1.45]], 0.012, HOSE, 5);
-    }
-    block(out, x + 0.30, 0.42, z + 1.50, 0.10, 0.14, 0.06, dark);                     // blanket controller
-    for (let l = 0; l < 4; l++) block(out, x + 0.30 + (l % 2 ? 0.04 : -0.04), 0.50 + (l < 2 ? 0.04 : -0.02), z + 1.565, 0.012, 0.012, 0.005, l % 3 ? [0.2, 0.9, 0.3] : [0.9, 0.5, 0.1]);   // status LEDs
-  };
+  // Existing parking positions and static wall batches are preserved.
+  starterCart(g.mid, -1.95, -4.75, c1);
   const wet = ctx && (ctx.weather === "wet" || ctx.weather === "rain");
-  trolley(g.back, 3.65, -4.85, wet ? [3, 3, 4, 4] : [0, 0, 1, 1]);
-  trolley(g.back, -3.65, -4.85, wet ? [3, 4, 1, 1] : [1, 2, 2, 0]);
+  tyreTrolley(g.back, 3.65, -4.85, wet ? [3, 3, 4, 4] : [0, 0, 1, 1], c1);
+  tyreTrolley(g.back, -3.65, -4.85, wet ? [3, 4, 1, 1] : [1, 2, 2, 0], c1);
   // FLOOR: a painted box at each wheel and the hazard hatch at the threshold.
   const PAINT = [0.66, 0.67, 0.70];
   const HAZ = [0.80, 0.68, 0.10];
@@ -165,6 +182,6 @@ function buildEquipment(g, liv, ctx) {
 }
 
 
-  return { RUBBER, HOSE, FAN, SCREEN, COMPOUND, build: buildEquipment };
+  return { RUBBER, HOSE, FAN, SCREEN, COMPOUND, starterCart, tyreTrolley, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;

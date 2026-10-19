@@ -642,3 +642,47 @@ test("the LEGENDS bay rebuilds when the legend changes, even on the same paint",
   GarageScene.draw(row("senna"), LIV, [0, 1.6, 0], null, 0);
   assert.notEqual(GarageScene.debug().geomKey, a, "a new legend is a new bay");
 });
+
+test("equipment props stay grounded, inside their parking envelopes and material-complete", () => {
+  const { ctx } = harness();
+  const equipment = vm.runInContext("GarageEquipment", ctx);
+  for (const [name, build, limit, bounds] of [
+    ["cart", out => equipment.starterCart(out, 0, 0, LIV.c1), 650, [[-0.58, 0, -0.28], [0.78, 0.98, 0.45]]],
+    ["trolley", out => equipment.tyreTrolley(out, 0, 0, [0, 0, 1, 1], LIV.c1), 1450, [[-0.46, 0, -1.37], [0.46, 0.98, 1.58]]],
+  ]) {
+    const mesh = { pos: [], nrm: [], col: [], idx: [], mat: [] };
+    build(mesh);
+    assert.ok(mesh.idx.length / 3 <= limit, `${name} triangle budget`);
+    assert.equal(mesh.mat.length, mesh.pos.length / 3);
+    assert.equal(mesh.nrm.length, mesh.pos.length);
+    assert.equal(mesh.col.length, mesh.pos.length);
+    assert.ok([...mesh.pos, ...mesh.nrm, ...mesh.col].every(Number.isFinite));
+    assert.ok(mesh.idx.every(i => Number.isInteger(i) && i >= 0 && i < mesh.pos.length / 3));
+    for (let axis = 0; axis < 3; axis++) {
+      const values = mesh.pos.filter((_, i) => i % 3 === axis);
+      assert.ok(Math.min(...values) >= bounds[0][axis] - 1e-6, `${name} min axis ${axis}`);
+      assert.ok(Math.max(...values) <= bounds[1][axis] + 1e-6, `${name} max axis ${axis}`);
+      if (axis === 1) assert.ok(Math.abs(Math.min(...values)) < 1e-6, `${name} touches floor`);
+    }
+    // A caster's rubber end caps must face along X, never vertically like a floor puck.
+    const capNormals = mesh.nrm.filter((_, i) => i % 3 === 0 && mesh.pos[i + 1] < 0.13 &&
+      mesh.col[i] === equipment.RUBBER[0] && Math.abs(mesh.nrm[i]) > 0.99);
+    assert.ok(capNormals.length >= 4 * 16, `${name} has four horizontal wheel axles`);
+  }
+});
+
+test("parked trolley compound labels still follow dry and wet garage context", () => {
+  const { ctx } = harness(), equipment = vm.runInContext("GarageEquipment", ctx);
+  for (const [weather, expected] of [["dry", [3, 3, 2, 0, 0]], ["rain", [0, 2, 0, 3, 3]], ["wet", [0, 2, 0, 3, 3]]]) {
+    const empty = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [] });
+    const groups = { mid: empty(), back: empty(), nx: empty(), px: empty() };
+    equipment.build(groups, LIV, { weather });
+    for (let compound = 0; compound < 5; compound++) {
+      const color = equipment.COMPOUND[compound];
+      let vertices = 0;
+      for (let i = 0; i < groups.back.col.length; i += 3)
+        if (color.every((v, axis) => Math.abs(groups.back.col[i + axis] - v) < 1e-9)) vertices++;
+      assert.equal(vertices, expected[compound] * 24, `${weather} compound ${compound}`);
+    }
+  }
+});

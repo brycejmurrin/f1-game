@@ -6820,8 +6820,13 @@
       ]
     },
     "js/garage/scene-equipment.js": {
+      "starterCart": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "tyreTrolley": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "*": [
-        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
