@@ -1549,12 +1549,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Tile atlas: the indirection names this tile's slot (empty -> live loop);
   // the slot's gutter holds the neighbours, so the bilinear tap matches the
   // full grid and never crosses slots. Bounce = the same slot + 0.5 v.
+  // Taps gated like GLX (glsl-lit.js): no bake, a non-upward normal or an
+  // out-of-grid fragment skips the load and both samples. Outside the gate
+  // bSlot stays -1, so bIn is false and bakeW 0; at N.y <= 0.55 the weight
+  // was smoothstep(0.55, ...) == 0 anyway, so the colour adds are unchanged.
   let bG = bUv * F.bakeD.xy;
   let bTile = clamp(floor(bG), vec2<f32>(0.0), max(F.bakeD.xy - 1.0, vec2<f32>(0.0)));
-  let bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
-  let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
-  let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
-  let bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
+  var bSlot = vec2<f32>(-1.0);
+  var bT = vec4<f32>(0.0);
+  var bB = vec3<f32>(0.0);
+  if (F.bakeB.w > 0.5 && N.y > 0.55 && all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0))) {
+    bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
+    if (bSlot.x >= 0.0) {
+      let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
+      bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
+      bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
+    }
+  }
   let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0)) && bSlot.x >= 0.0;
   let bakeW = select(0.0, smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(in.wpos.y - bT.a))),
                      F.bakeB.w > 0.5 && bIn);
