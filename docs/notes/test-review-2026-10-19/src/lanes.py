@@ -148,3 +148,38 @@ LANES = [
   ids=[], verify="node --test tests/unit/<new: test-pattern-lint>.test.mjs && npm run test:guards",
   effort="S", model=SON, deps="L2, L5 and L0 PR 2 landed (so the lint lands green)"),
 ]
+# ---- Pass 3 (REVIEW-SYNTH-2): tooling-5 (final) and the render-2 mutation addendum, folded into existing lanes
+# plus two new ones. Owned globs stay disjoint: each added file is named once.
+_FOLD = {
+ "L1": (["render-2"], [], ["R2-28"]),
+ "L3": (["render-2", "tooling-5"], ["tests/unit/glx-resize-hysteresis.test.mjs", "tests/unit/glx-occlusion.test.mjs", "tests/unit/renderer-soft-lifecycle.test.mjs", "tests/unit/road-lut-frame.test.mjs", "tests/unit/three-inspector.test.mjs", "tests/unit/wgsl-bindings.test.mjs"],
+        ["R2-32", "R2-33", "R2-38", "R2-39", "T5-27", "T5-28"]),
+ "L4": (["render-2"], [], ["R2-22", "R2-25", "R2-27", "R2-30", "R2-31"]),
+ "L5": (["render-2"], [], ["R2-26", "R2-35", "R2-40"]),
+ "L9": (["tooling-5"], [], ["T5-20"]),
+ "L15": (["tooling-5"], ["tests/unit/tt-lap-validity-vm.test.mjs"], ["T5-23"]),
+ "L16": (["tooling-5"], ["tests/unit/wind.test.mjs"], ["T5-19"]),
+ "L19": (["tooling-5"], ["tests/unit/surface-id-parity.test.mjs"], ["T5-18"]),
+ "L21": (["tooling-5"], ["tests/unit/wind-speed.test.mjs"], ["T5-21"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD:
+        _b, _o, _i = _FOLD[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + _o
+        _L["ids"] = _L["ids"] + _i
+LANES[-1:-1] = [
+ dict(id="L22", name="Tooling CLI tests that can fail", batches=["tooling-5"],
+  goal="tool tests run their CLI on fixtures and assert outcomes: no shared-Map tautologies, no live-repo `doesNotMatch`, no CI-absent skips, untested branches of tooling-fast and test-bg covered",
+  owned=["tests/unit/verify-live.test.mjs","tests/unit/validation-cli.test.mjs","tests/unit/test-observed.test.mjs","tests/unit/tumftm-import.test.mjs","tests/unit/trim-comments.test.mjs","tests/unit/wake-lock-vm.test.mjs","tests/unit/who-is-on-it.test.mjs","tests/unit/workflow-lint.test.mjs","tests/unit/tools-runnable.test.mjs","tests/unit/test-groups.test.mjs","tests/unit/sweep-shards.test.mjs","tests/unit/twinned-specs.test.mjs","tests/unit/sync-pr-robust.test.mjs","tests/unit/tools-a12-guards.test.mjs","tests/unit/tooling-fast-runner.test.mjs","tests/unit/test-bg-outcome.test.mjs","tests/unit/twin-fidelity.test.mjs","tests/unit/viewer.test.mjs"],
+  ids=["T5-04","T5-05","T5-06","T5-07","T5-08","T5-09","T5-10","T5-11","T5-12","T5-13","T5-14","T5-15","T5-17","T5-22","T5-24","T5-25","T5-26","T5-29","T5-30"],
+  verify="npm run test:tooling-fast (every owned file is a node unit test)",
+  effort="M (18 files, mostly S each)", model=SON, deps="none; T5-30 (split validation-cli) needs a tests/groups.json row per new file + `npm run gen`",
+  slices=["PR 1: T5-04, T5-05, T5-06, T5-08, T5-10, T5-15 (dead or always-true asserts)","PR 2: T5-07, T5-09, T5-11–T5-14, T5-17, T5-22, T5-24–T5-26, T5-29, T5-30 (coverage gaps, split)"]),
+ dict(id="L23", name="Yaw, throttle and traffic scanners on the real code", batches=["tooling-5"],
+  goal="yaw and throttle tests assert the quantity the title names, and the traffic-arc equivalence test runs the production scanTow/scanOtAhead instead of two in-test copies",
+  owned=["tests/unit/traffic-arc-buckets.test.mjs","tests/unit/yaw-low-speed-substep.test.mjs","tests/unit/yaw-damp-speed.test.mjs","tests/unit/throttle-latch.test.mjs"],
+  ids=["T5-01","T5-02","T5-03","T5-16"],
+  verify="node --test tests/unit/traffic-arc-buckets.test.mjs tests/unit/yaw-low-speed-substep.test.mjs tests/unit/yaw-damp-speed.test.mjs tests/unit/throttle-latch.test.mjs",
+  effort="S", model=SON, deps="none; T5-01's copies drop finished cars that collide.js keeps: the rewrite must show red against a copy that skips finished cars"),
+]

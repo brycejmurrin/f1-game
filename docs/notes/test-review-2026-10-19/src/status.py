@@ -1,10 +1,10 @@
-UPDATED = "2026-10-19 05:34Z (22:34 Pacific, 10-18); product-bug issues #2974-#2978 filed 05:40Z"
-FINAL = {"render-1", "render-2", "physics-1", "physics-2", "car-1", "ui-1"}
+UPDATED = "2026-10-19 05:55Z (22:55 Pacific, 10-18): pass 3 folds tooling-5 and the render-2 mutation addendum"
+FINAL = {"render-1", "render-2", "physics-1", "physics-2", "car-1", "ui-1", "tooling-5"}
 PARTIAL = {"render-3": "1/2", "race-2": "1/n"}
 ALL = ["audio-1","physics-1","physics-2","race-1","race-2","render-1","render-2","render-3","tracks-1","tracks-2","car-1","car-2","modes-1","ui-1","ui-2","tooling-1","tooling-2","tooling-3","tooling-4","tooling-5","net","platform"]
 k_final = len(FINAL); k_partial = len(PARTIAL); k_in = k_final + k_partial
 PENDING = [b for b in ALL if b not in FINAL and b not in PARTIAL]
-REP = {"render-1": "[render-1](reports/render-1.md)", "render-2": "[render-2](reports/render-2.md)", "render-3": "[part 1/2](reports/render-3.part-1of2.md)",
+REP = {"render-1": "[render-1](reports/render-1.md)", "render-2": "[render-2](reports/render-2.md) + [mutation addendum](reports/render-2.addendum-mutation.md)", "tooling-5": "[tooling-5](reports/tooling-5.md)", "render-3": "[part 1/2](reports/render-3.part-1of2.md)",
        "physics-1": "[physics-1](reports/physics-1.md) + [debugger addendum](reports/physics-1.addendum-debugger.md)",
        "physics-2": "[part 1/2](reports/physics-2.part-1of2.md) + [part 2/2](reports/physics-2.part-2of2.md) (stopped at the context cap; counted final)",
        "race-2": "[part 1/n](reports/race-2.part-1ofn.md)", "car-1": "[car-1](reports/car-1.md)", "ui-1": "[ui-1](reports/ui-1.md)"}
@@ -13,6 +13,8 @@ NOT_RUN = [
  "- **render-3:** 15 of 21 specs pending part 2/2; no browser debugger column yet.",
  "- **physics-2** (capped at 300k context): browser chain C never read (understeer-cue, parts-ers, sliders, steer-migration, tilt-pipeline, touch-steer, gamepad, agent-drive-bench, parts-persistence, persistence-dom, camera-driving-hooks, css-player-smoke, garage-aero, menu-traversal, menu-baseline, parts-physics); drift, active-aero, aero-zones, world-physics, collisions ran only as VM twins; collisions-deep, collision-ai-fixes and persistence ran in neither; no spec debugger pass.",
  "- **race-2** (part 1/n): terrain-over-road still running, perf-race-entry not run, jump-start/pit-lane/race-control only as VM twins, debris failed 1/5 (Singapore wall-hit wait, 60 s), no spec debugger column.",
+ "- **tooling-5:** 38/38 files pass; 5 skips come from the files themselves (workflow-lint without actionlint/zizmor, test-observed without artifacts/logs: rows T5-06, T5-11).",
+ "- **render-2 mutation addendum:** batch `muts9` not run and the suite-wide cross-check stopped early; survivors were checked against the batch only unless the row says otherwise.",
  "- **physics-1, car-1, ui-1:** every file ran and passed (physics-1: 742/743 with 1 skip by design, the provenance ancestry check needs a full clone). Files with no executable code under test had no debugger target (physics-1: 4, ui-1: 11).",
 ]
 PATTERNS = [
@@ -48,6 +50,7 @@ VERIFY = [
  "- Partly: R1-09 the `MAT_LAYERS = 17` / `[17]` literal is in 2 test files, not 5. R1-11 both limits exist (45 deg/s in `tests/helpers/flyby-audit-rules.mjs:19`, PAN_MAX 25 deg), but whether they measure the same thing is unproven, so it is ranked low.",
  "- Line drift: reported lines for render-rate (252 → 99) and lamp-fixture-anchor (302 → 330) differ on the tip; rows carry both. Reviewers worked on the 2026-10-19 tip; a pass-2 lane re-locates by the quoted code, not the line.",
  "- Batches folded on 2026-10-19 ~05:50Z (physics-1, physics-2, race-2 part 1, car-1, ui-1) were normalized by two read-only subagents, which re-read their batch's highest-severity cites on cd907d4c; their `synth_check` says what they found.",
+ "- Pass 3 (tip a51c6cc8 / 83328f1b): T5-01…T5-05 confirmed; R2-22, R2-26, R2-27 confirmed; R2-28 partly (the paths run, but nothing asserts FRAME_DT, the retired skip or the re-entry guard). The mutation addendum refutes no earlier row: R2-05 is narrower (only the presenting-exit carry survives, R2-34), and R2-19 names the wrong module path (`js/perf/gfx-debug-overlay.js`, not js/render/); its claim holds (mutant GO3 survives).",
  "- Not checked by the synthesis: rows marked `subagent-unverified` without a `synth_check` (R1-12…R1-15, R1-17, R3-07, R3-09, R3-14). They rank one point lower until a lane re-reads them.",
 ]
 HIDDEN_BUG = {"R1-01": "tuner-panel.js scope buttons never set aria-pressed (shipped a11y bug)"}

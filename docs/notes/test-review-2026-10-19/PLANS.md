@@ -32,7 +32,7 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 
 - **Goal:** camera tests drive the real rig on a curved track, the tuner scope bug is fixed with its test, and vacuous asserts are gone
 - **Owned:** `tests/unit/cam-*.test.mjs`, `tests/unit/camera-*.test.mjs`, `tests/unit/free-cam.test.mjs`, `tests/unit/results-cam.test.mjs`, `tests/specs/camera*.spec.js`, `tests/helpers/camera-*.mjs (new)`, `js/camera/tuner-panel.js`
-- **Closes:** R1-01, R1-03, R1-05, R1-07, R1-12, R1-14, R1-16, R1-18, R2-06, R3-12, P2-15 (11 findings; effort S×8 M×3 L×0)
+- **Closes:** R1-01, R1-03, R1-05, R1-07, R1-12, R1-14, R1-16, R1-18, R2-06, R3-12, P2-15, R2-28 (12 findings; effort S×8 M×4 L×0)
 - **Draws from batches:** render-1, render-2, render-3 — waiting on: render-3
 - **Verify:** `node --test tests/unit/cam-*.test.mjs tests/unit/camera-*.test.mjs tests/unit/free-cam.test.mjs tests/unit/results-cam.test.mjs && npm test -- tests/specs/camera-tuner.spec.js`
 - **Effort:** M
@@ -55,9 +55,9 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L3 — TLX/WGX behaviour over text pins (draft)
 
 - **Goal:** TLX and WGX tests run the lifted code on fake GL/GPU instead of matching source; WGX text pins move to one labelled file
-- **Owned:** `tests/unit/tlx-*.test.mjs`, `tests/unit/hunt-tlx-*.test.mjs`, `tests/unit/webgpu-lifecycle.test.mjs`, `tests/unit/<new: wgx-source-pins>.test.mjs`, `tests/unit/tex-census.test.mjs`
-- **Closes:** R2-08, R3-04, R3-05, R3-06, R3-15, R3-17 (6 findings; effort S×4 M×2 L×0)
-- **Draws from batches:** render-2, render-3 — waiting on: render-3
+- **Owned:** `tests/unit/tlx-*.test.mjs`, `tests/unit/hunt-tlx-*.test.mjs`, `tests/unit/webgpu-lifecycle.test.mjs`, `tests/unit/<new: wgx-source-pins>.test.mjs`, `tests/unit/tex-census.test.mjs`, `tests/unit/glx-resize-hysteresis.test.mjs`, `tests/unit/glx-occlusion.test.mjs`, `tests/unit/renderer-soft-lifecycle.test.mjs`, `tests/unit/road-lut-frame.test.mjs`, `tests/unit/three-inspector.test.mjs`, `tests/unit/wgsl-bindings.test.mjs`
+- **Closes:** R2-08, R3-04, R3-05, R3-06, R3-15, R3-17, R2-32, R2-33, R2-38, R2-39, T5-27, T5-28 (12 findings; effort S×8 M×4 L×0)
+- **Draws from batches:** render-2, render-3, tooling-5 — waiting on: render-3
 - **Verify:** `node --test tests/unit/tlx-*.test.mjs tests/unit/hunt-tlx-*.test.mjs tests/unit/webgpu-lifecycle.test.mjs tests/unit/tex-census.test.mjs; a real WGSL compile needs gpu-census.yml (path rule render-wgx)`
 - **Effort:** M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -67,7 +67,7 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 
 - **Goal:** preset and lamp tests run the real resolver and fail on NaN, missing geometry or a scoped run
 - **Owned:** `tests/unit/light-*.test.mjs`, `tests/unit/lamp-*.test.mjs`, `tests/unit/lighting-*.test.mjs`, `tests/unit/night-washout-presets.test.mjs`, `tests/unit/image-grade-shaders.test.mjs`, `tests/specs/image-grade-visual.spec.js`
-- **Closes:** R2-04, R2-07, R2-09, R2-14, R2-15, R2-20, R3-09, P1-20 (8 findings; effort S×4 M×4 L×0)
+- **Closes:** R2-04, R2-07, R2-09, R2-14, R2-15, R2-20, R3-09, P1-20, R2-22, R2-25, R2-27, R2-30, R2-31 (13 findings; effort S×9 M×4 L×0)
 - **Draws from batches:** render-1, render-2, render-3, physics-1 — waiting on: render-3
 - **Verify:** `node --test tests/unit/light-*.test.mjs tests/unit/lamp-*.test.mjs tests/unit/lighting-*.test.mjs && npm test -- tests/specs/image-grade-visual.spec.js`
 - **Effort:** M
@@ -78,7 +78,7 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 
 - **Goal:** perf tests either gate on something real or are labelled telemetry; dead assert in perf-try fixed; globals restored
 - **Owned:** `tests/unit/perf-*.test.mjs`, `tests/unit/render-rate.test.mjs`, `tests/unit/frame-*.test.mjs`, `tests/specs/perf-frametime.spec.js`, `tests/specs/perf-race-entry.spec.js`, `tests/helpers/perf-frametime.mjs`
-- **Closes:** R1-04, R1-17, R2-01, R2-05, R2-11, R3-03, RC2-15 (7 findings; effort S×5 M×2 L×0)
+- **Closes:** R1-04, R1-17, R2-01, R2-05, R2-11, R3-03, RC2-15, R2-26, R2-35, R2-40 (10 findings; effort S×8 M×2 L×0)
 - **Draws from batches:** render-1, render-2, render-3 — waiting on: render-3
 - **Verify:** `node --test tests/unit/perf-*.test.mjs tests/unit/render-rate.test.mjs tests/unit/frame-*.test.mjs && npm test -- tests/specs/perf-frametime.spec.js`
 - **Effort:** M
@@ -123,8 +123,8 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 
 - **Goal:** tooling tests run on fixtures instead of live repo state, misplaced smokes move home, local shader validation is honest
 - **Owned:** `tests/unit/apex-memory.test.mjs`, `tests/unit/census-verdict.test.mjs`, `tests/unit/shader-validate.test.mjs`, `tests/unit/skill-render-ui-surface.test.mjs`, `tests/unit/game-tools-help.test.mjs`, `tests/unit/assets-pack.test.mjs`, `tests/unit/vertex-pack.test.mjs`, `tests/unit/elev-presets.test.mjs`, `tests/unit/change-driver-tools.test.mjs`, `tests/unit/vstd-invariant.test.mjs`, `tools/env/apex-memory.mjs`
-- **Closes:** R1-02, R1-09, R1-13, R1-15, R2-10, R2-18, R3-16, P1-09, P1-23, P2-19 (10 findings; effort S×9 M×1 L×0)
-- **Draws from batches:** render-1, render-2, render-3 — waiting on: render-3
+- **Closes:** R1-02, R1-09, R1-13, R1-15, R2-10, R2-18, R3-16, P1-09, P1-23, P2-19, T5-20 (11 findings; effort S×10 M×1 L×0)
+- **Draws from batches:** render-1, render-2, render-3, tooling-5 — waiting on: render-3
 - **Verify:** `node --test tests/unit/apex-memory.test.mjs tests/unit/census-verdict.test.mjs tests/unit/shader-validate.test.mjs tests/unit/game-tools-help.test.mjs tests/unit/assets-pack.test.mjs tests/unit/elev-presets.test.mjs && npm run test:tooling-fast`
 - **Effort:** S–M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -178,9 +178,9 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L15 — Race session, quali, start and radio (draft)
 
 - **Goal:** race-session, quali, start-light and radio tests run the shipped code (no copied announce queue or step accounting, no game.js regex for sector maths)
-- **Owned:** `tests/unit/race-session-*.test.mjs`, `tests/unit/race-settings-vm.test.mjs`, `tests/unit/race-radio.test.mjs`, `tests/unit/start-lights.test.mjs`, `tests/unit/race-step-snap.test.mjs`, `tests/unit/brake-cue.test.mjs`, `tests/unit/quali-persist.test.mjs`, `tests/specs/quali.spec.js`, `tests/specs/jump-start.spec.js`
-- **Closes:** RC2-03, RC2-04, RC2-09, RC2-10, RC2-11, RC2-12, RC2-14, RC2-16, RC2-18, P1-18, P1-21 (11 findings; effort S×6 M×5 L×0)
-- **Draws from batches:** physics-1, race-2 — waiting on: race-2
+- **Owned:** `tests/unit/race-session-*.test.mjs`, `tests/unit/race-settings-vm.test.mjs`, `tests/unit/race-radio.test.mjs`, `tests/unit/start-lights.test.mjs`, `tests/unit/race-step-snap.test.mjs`, `tests/unit/brake-cue.test.mjs`, `tests/unit/quali-persist.test.mjs`, `tests/specs/quali.spec.js`, `tests/specs/jump-start.spec.js`, `tests/unit/tt-lap-validity-vm.test.mjs`
+- **Closes:** RC2-03, RC2-04, RC2-09, RC2-10, RC2-11, RC2-12, RC2-14, RC2-16, RC2-18, P1-18, P1-21, T5-23 (12 findings; effort S×6 M×6 L×0)
+- **Draws from batches:** physics-1, race-2, tooling-5 — waiting on: race-2
 - **Verify:** `node --test tests/unit/race-session-*.test.mjs tests/unit/race-settings-vm.test.mjs tests/unit/race-radio.test.mjs tests/unit/start-lights.test.mjs tests/unit/brake-cue.test.mjs tests/unit/quali-persist.test.mjs && npm test -- tests/specs/jump-start.spec.js`
 - **Effort:** M–L
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -189,9 +189,9 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L16 — Weather, real-race replay and debris (draft)
 
 - **Goal:** weather tests assert the arc not their own arithmetic, real-race laps-down is checked, and the debris wall-hit flake is root-caused
-- **Owned:** `tests/unit/weather-*.test.mjs`, `tests/unit/storm-weather.test.mjs`, `tests/unit/real-race.test.mjs`, `tests/specs/debris.spec.js`
-- **Closes:** RC2-05, RC2-07, RC2-08, RC2-17 (4 findings; effort S×4 M×0 L×0)
-- **Draws from batches:** race-2 — waiting on: race-2
+- **Owned:** `tests/unit/weather-*.test.mjs`, `tests/unit/storm-weather.test.mjs`, `tests/unit/real-race.test.mjs`, `tests/specs/debris.spec.js`, `tests/unit/wind.test.mjs`
+- **Closes:** RC2-05, RC2-07, RC2-08, RC2-17, T5-19 (5 findings; effort S×5 M×0 L×0)
+- **Draws from batches:** race-2, tooling-5 — waiting on: race-2
 - **Verify:** `node --test tests/unit/weather-*.test.mjs tests/unit/storm-weather.test.mjs tests/unit/real-race.test.mjs && npm test -- tests/specs/debris.spec.js (run 5×; AGENTS rule 9: a retry-pass is a red)`
 - **Effort:** M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -222,9 +222,9 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L19 — Car render, garage and livery (ready to launch)
 
 - **Goal:** car and garage tests run the mesh/material builders instead of ~370 source pins, hidden-class asserts are unconditional, and garage specs can fail
-- **Owned:** `tests/unit/car-*.test.mjs`, `tests/unit/garage-*.test.mjs`, `tests/unit/crest-marks.test.mjs`, `tests/unit/carve-a-modules.test.mjs`, `tests/unit/finish-coast-rev-vm.test.mjs`, `tests/specs/garage-aero.spec.js`, `tests/specs/parts-persistence.spec.js`
-- **Closes:** C1-02, C1-05, C1-06, C1-08, C1-09, C1-10, C1-12, C1-13, C1-14, C1-15, C1-18, P2-12, P2-16 (13 findings; effort S×7 M×4 L×2)
-- **Draws from batches:** physics-1, physics-2, car-1
+- **Owned:** `tests/unit/car-*.test.mjs`, `tests/unit/garage-*.test.mjs`, `tests/unit/crest-marks.test.mjs`, `tests/unit/carve-a-modules.test.mjs`, `tests/unit/finish-coast-rev-vm.test.mjs`, `tests/specs/garage-aero.spec.js`, `tests/specs/parts-persistence.spec.js`, `tests/unit/surface-id-parity.test.mjs`
+- **Closes:** C1-02, C1-05, C1-06, C1-08, C1-09, C1-10, C1-12, C1-13, C1-14, C1-15, C1-18, P2-12, P2-16, T5-18 (14 findings; effort S×8 M×4 L×2)
+- **Draws from batches:** physics-1, physics-2, car-1, tooling-5
 - **Verify:** `node --test tests/unit/car-*.test.mjs tests/unit/garage-*.test.mjs tests/unit/crest-marks.test.mjs tests/unit/carve-a-modules.test.mjs && npm test -- tests/specs/garage-aero.spec.js`
 - **Effort:** L (car-presentation-canary split is the bulk)
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -244,13 +244,36 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L21 — Audio paths the race actually takes (ready to launch)
 
 - **Goal:** audio tests call GameAudio the way the race does (scalar skid, pause/resume), so the double-gated squeal and lock-up pitch are caught
-- **Owned:** `tests/unit/tyre-squeal-slip.test.mjs`, `tests/unit/pause-silence.test.mjs`
-- **Closes:** P2-13, U1-04 (2 findings; effort S×2 M×0 L×0)
-- **Draws from batches:** physics-2, ui-1, car-1
+- **Owned:** `tests/unit/tyre-squeal-slip.test.mjs`, `tests/unit/pause-silence.test.mjs`, `tests/unit/wind-speed.test.mjs`
+- **Closes:** P2-13, U1-04, T5-21 (3 findings; effort S×3 M×0 L×0)
+- **Draws from batches:** physics-2, ui-1, car-1, tooling-5
 - **Verify:** `node --test tests/unit/tyre-squeal-slip.test.mjs tests/unit/pause-silence.test.mjs`
 - **Effort:** S (test) + a product fix for P2-13
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
 - **Depends on:** audio-1 report pending; P2-13 is a product bug: open a sub-issue
+
+### L22 — Tooling CLI tests that can fail (ready to launch)
+
+- **Goal:** tool tests run their CLI on fixtures and assert outcomes: no shared-Map tautologies, no live-repo `doesNotMatch`, no CI-absent skips, untested branches of tooling-fast and test-bg covered
+- **Owned:** `tests/unit/verify-live.test.mjs`, `tests/unit/validation-cli.test.mjs`, `tests/unit/test-observed.test.mjs`, `tests/unit/tumftm-import.test.mjs`, `tests/unit/trim-comments.test.mjs`, `tests/unit/wake-lock-vm.test.mjs`, `tests/unit/who-is-on-it.test.mjs`, `tests/unit/workflow-lint.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/test-groups.test.mjs`, `tests/unit/sweep-shards.test.mjs`, `tests/unit/twinned-specs.test.mjs`, `tests/unit/sync-pr-robust.test.mjs`, `tests/unit/tools-a12-guards.test.mjs`, `tests/unit/tooling-fast-runner.test.mjs`, `tests/unit/test-bg-outcome.test.mjs`, `tests/unit/twin-fidelity.test.mjs`, `tests/unit/viewer.test.mjs`
+- **Closes:** T5-04, T5-05, T5-06, T5-07, T5-08, T5-09, T5-10, T5-11, T5-12, T5-13, T5-14, T5-15, T5-17, T5-22, T5-24, T5-25, T5-26, T5-29, T5-30 (19 findings; effort S×15 M×4 L×0)
+- **Draws from batches:** tooling-5
+- **Verify:** `npm run test:tooling-fast (every owned file is a node unit test)`
+- **Effort:** M (18 files, mostly S each)
+- **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
+- **Depends on:** none; T5-30 (split validation-cli) needs a tests/groups.json row per new file + `npm run gen`
+- **PR slices:** PR 1: T5-04, T5-05, T5-06, T5-08, T5-10, T5-15 (dead or always-true asserts); PR 2: T5-07, T5-09, T5-11–T5-14, T5-17, T5-22, T5-24–T5-26, T5-29, T5-30 (coverage gaps, split)
+
+### L23 — Yaw, throttle and traffic scanners on the real code (ready to launch)
+
+- **Goal:** yaw and throttle tests assert the quantity the title names, and the traffic-arc equivalence test runs the production scanTow/scanOtAhead instead of two in-test copies
+- **Owned:** `tests/unit/traffic-arc-buckets.test.mjs`, `tests/unit/yaw-low-speed-substep.test.mjs`, `tests/unit/yaw-damp-speed.test.mjs`, `tests/unit/throttle-latch.test.mjs`
+- **Closes:** T5-01, T5-02, T5-03, T5-16 (4 findings; effort S×3 M×1 L×0)
+- **Draws from batches:** tooling-5
+- **Verify:** `node --test tests/unit/traffic-arc-buckets.test.mjs tests/unit/yaw-low-speed-substep.test.mjs tests/unit/yaw-damp-speed.test.mjs tests/unit/throttle-latch.test.mjs`
+- **Effort:** S
+- **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
+- **Depends on:** none; T5-01's copies drop finished cars that collide.js keeps: the rewrite must show red against a copy that skips finished cars
 
 ### L11 — Test-tree lints (draft)
 
