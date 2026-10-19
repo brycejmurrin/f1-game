@@ -14,9 +14,9 @@
 // leak meter. Late Bahrain/model-pack builds also stepped the count mid-run (8→11/12) on unrelated PRs.
 // The menu/flyby lazy build (scheduleFlybyTrack) often STARTS after a Tracks.building()-only settle: ensureScenery
 // and ensureTrackBuild run with prep.building still false, so warm can sample garage-only geoLive (~35) and then
-// Bahrain lands mid-edits (~50). Force-await the menu world on #select before opening the garage, and before each
-// geo sample wait until menuPrep.building, Tracks.building, Assets.modelsReady, and a 1.5 s stable geoLive all clear
-// — then assert end.geoLive ≤ warm.geoLive. Flap/GPU texture assertions stay strict.
+// Bahrain lands mid-edits (~50). Force-await menuPrep world+done+!warming on #select before the garage. Before each
+// geo sample: menuPrep idle, Tracks.building clear, modelsReady, and 1.5 s of post-GC geoLive stability (bay rebuild
+// WeakRefs only drop after HeapProfiler GC) — then assert end.geoLive ≤ warm.geoLive. Flap/GPU texture asserts stay strict.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import fs from "node:fs";
 
@@ -80,8 +80,13 @@ const awaitMenuTrackBuilt = async (page) => {
   // #endregion
 };
 
-/** Wait out menu prep, paced builds, model-pack fetches, and bay rebuild spikes before a geo sample. */
-const settleGeo = async (page, label) => {
+/**
+ * Wait out menu prep / paced builds / model-pack / bay rebuild spikes, then return a post-GC sample.
+ * Bay rebuilds leave ~15 mesh WeakRefs that only drop after HeapProfiler GC (warm geoRegLen=236 with
+ * geoLive=221). Settling without GC can lock the high plateau and fail end≤warm; settle WITH the same
+ * double-GC read() uses so warm and end share the post-GC floor.
+ */
+const settleGeo = async (page, cdp, label) => {
   // #region agent log
   dbg("B", "garage-livery-churn.spec.js:settleGeo:enter", "settle enter " + label, await snapPrep(page));
   // #endregion
@@ -91,36 +96,43 @@ const settleGeo = async (page, label) => {
       ? Assets.modelsReady(4000)
       : Promise.resolve(0);
     p.then(() => { window.__modelsReadyOk = true; }, () => { window.__modelsReadyOk = true; });
-    window.__geoSettle = { last: -1, since: 0 };
   });
-  await page.waitForFunction(() => {
-    if (!window.__modelsReadyOk) return false;
-    try {
-      const p = (window.__apex && typeof window.__apex.menuPrep === "function") ? window.__apex.menuPrep() : null;
-      if (p && (p.building || p.warming)) {
-        window.__geoSettle.last = -1;
-        window.__geoSettle.since = 0;
-        return false;
-      }
-    } catch (_) { /* */ }
-    try {
-      if (typeof Tracks !== "undefined" && Tracks.building && Tracks.building()) {
-        window.__geoSettle.last = -1;
-        window.__geoSettle.since = 0;
-        return false;
-      }
-    } catch (_) { /* Tracks not loaded yet */ }
-    const tlx = (typeof GLX !== "undefined" && GLX.__tlx) ? GLX.__tlx : null;
-    if (!tlx || typeof tlx.memState !== "function") return false;
-    const live = tlx.memState().geoLive | 0;
-    const now = performance.now();
-    const s = window.__geoSettle;
-    if (live !== s.last) { s.last = live; s.since = now; return false; }
-    return (now - s.since) >= 1500;
-  }, null, { polling: 100, timeout: 90000 });
-  // #region agent log
-  dbg("B", "garage-livery-churn.spec.js:settleGeo:exit", "settle exit " + label, await snapPrep(page));
-  // #endregion
+  const deadline = Date.now() + 90000;
+  let last = -1, since = 0, sample = null;
+  while (Date.now() < deadline) {
+    const ready = await page.evaluate(() => {
+      if (!window.__modelsReadyOk) return false;
+      try {
+        const p = (window.__apex && typeof window.__apex.menuPrep === "function") ? window.__apex.menuPrep() : null;
+        if (p && (p.building || p.warming)) return false;
+      } catch (_) { /* */ }
+      try {
+        if (typeof Tracks !== "undefined" && Tracks.building && Tracks.building()) return false;
+      } catch (_) { /* */ }
+      return !!(typeof GLX !== "undefined" && GLX.__tlx && typeof GLX.__tlx.memState === "function");
+    });
+    if (!ready) { last = -1; since = 0; await pause(page, 100); continue; }
+    for (let i = 0; i < 2; i++) await cdp.send("HeapProfiler.collectGarbage");
+    sample = await page.evaluate(() => {
+      const r = window.renderer, co = GLX.__tlx.coState(), f = CarMesh.flapState ? CarMesh.flapState() : null;
+      const ms = GLX.__tlx.memState();
+      return {
+        gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures,
+        geoLive: ms.geoLive, geoKinds: ms.geoKinds, geoRegLen: ms.geoRegLen,
+      };
+    });
+    const live = sample.geoLive | 0;
+    const now = Date.now();
+    if (live !== last) { last = live; since = now; await pause(page, 100); continue; }
+    if (now - since >= 1500) {
+      // #region agent log
+      dbg("B", "garage-livery-churn.spec.js:settleGeo:exit", "settle exit " + label, { sample, prep: await snapPrep(page) });
+      // #endregion
+      return sample;
+    }
+    await pause(page, 100);
+  }
+  throw new Error("settleGeo timed out (" + label + ")");
 };
 
 test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, textures and settled geoLive flat (TLX)", async ({ page }) => {
@@ -184,8 +196,7 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
       return !!(f && f.sets > 0);
     } catch (_) { return false; }
   }, null, { polling: 100, timeout: 120000 });
-  await settleGeo(page, "warm");   // absorb late model/bay geos before the baseline (#2897)
-  const warm = await read();
+  const warm = await settleGeo(page, cdp, "warm");   // post-GC stable baseline (#2897)
   // #region agent log
   dbg("C", "garage-livery-churn.spec.js:warm", "warm baseline", { warm, prep: await snapPrep(page) });
   // #endregion
@@ -193,8 +204,7 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
   for (let i = 0; i < EDITS; i++) { await edit(); rows.push(await read()); }
   await pause(page, 2500);
   await edit();
-  await settleGeo(page, "end");
-  const end = await read();
+  const end = await settleGeo(page, cdp, "end");
   rows.push(end);
   // #region agent log
   dbg("C", "garage-livery-churn.spec.js:end", "end sample", { end, prep: await snapPrep(page), series: rows.map((r) => r.geoLive) });
