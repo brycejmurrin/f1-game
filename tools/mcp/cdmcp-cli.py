@@ -827,7 +827,7 @@ def cmd_look_survey(argv: list[str]) -> None:
       python3 tools/mcp/cdmcp-cli.py look-survey monaco --frac 0.45
       # Specific subset
       python3 tools/mcp/cdmcp-cli.py look-survey bahrain --frac 0.12 \\
-        --combos dawn|dry,day|dry,night|dry,night|rain
+        --combos 'dawn|dry,day|dry,night|dry,night|rain'
       # Batch plan (shoots only missing PNGs)
       python3 tools/mcp/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
       # Stitch the contact sheet after shooting

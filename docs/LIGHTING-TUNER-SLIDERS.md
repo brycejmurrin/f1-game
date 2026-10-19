@@ -789,7 +789,7 @@ Two tools exist for measuring and visualising slider effects. They use
 | Camera lock | Yes — `A.view({eye,target})` pinned between shots | No — each shot parks fresh |
 | renderClock | Pinned to 0 (no sky drift) | Not pinned |
 | Pixel diff | `filter.png`, `heat.png`, MAD/p99 stats | No — raw screenshots only |
-| Stitched sheet | `sheet.png` per knob | `docs/look-survey/<id>_grid.png` (via look-survey-sheet.py; commit on `track-survey-assets`) |
+| Stitched sheet | `sheet.png` per knob | [Capture and stitching instructions](look-survey/README.md#how-to-shoot) |
 | Can run together | **No** — check `pgrep -a chromium` first | **No** |
 
 ### slider-effect quick reference
@@ -823,25 +823,11 @@ node tools/lighting/slider-effect.mjs --filter --a a.png --b b.png --out dir/
 
 ### look-survey quick reference
 
-```sh
-# Serve the game first (required — Chrome MCP needs a URL):
-npx serve -l 3456 .
-
-# All 20 conditions for a circuit
-python3 tools/mcp/cdmcp-cli.py look-survey monaco --frac 0.45
-
-# Subset
-python3 tools/mcp/cdmcp-cli.py look-survey bahrain --frac 0.12 \
-  --combos dawn|dry,day|dry,dusk|dry,night|dry,night|wet,night|rain
-
-# Batch plan (shoots only missing PNGs across all circuits)
-python3 tools/mcp/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
-
-# Stitch the 4×5 contact sheet
-python3 tools/lighting/look-survey-sheet.py monaco
-# Or all circuits that have shots:
-python3 tools/lighting/look-survey-sheet.py --ready
-```
+Use look-survey for a circuit's full time-of-day × weather matrix. It captures
+raw screenshots without pinning the camera or render clock; it does not measure
+pixel differences. Follow the [look-survey capture and stitching instructions](look-survey/README.md#how-to-shoot)
+for single circuits, quoted condition subsets, batch plans and output paths.
+Do not run it alongside slider-effect's browser captures.
 
 ### When a slider appears inert
 
