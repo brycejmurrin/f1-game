@@ -1071,13 +1071,13 @@
       // the slope and clipped the re-seated landmarks. Harbour already has
       // pastelStreetRow(0.595, 0.655); no replacement row.
       {
-        // Harbour-side Racing Kit modules (CC0) — pits offices / tents stand in
-        // for the retired synthetic suburban boxes (#1617 Slice C).
+        // Harbour-side Racing Kit at the old kenney_ footprint/scale (#1617).
+        // ×1.15 matches the synthetic suburban boxes so clip stays at baseline 8.
         const houses = [
-          ["k_pitsoffice", 0.605, 1, 28, 2.8],
-          ["k_pitsgarage", 0.635, 1, 30, 2.8],
-          ["k_tentclosed", 0.665, 1, 29, 2.6],
-          ["k_pitsofficecorner", 0.620, -1, 22, 2.8],
+          ["k_pitsoffice", 0.605, 1, 28, 1.15],
+          ["k_pitsgarage", 0.635, 1, 30, 1.15],
+          ["k_tentclosed", 0.665, 1, 29, 1.15],
+          ["k_pitsofficecorner", 0.620, -1, 22, 1.15],
         ];
         for (const [id, s, side, dist, sc] of houses) {
           if (!bakedModel(id, K(s), side, dist, { scale: sc }))

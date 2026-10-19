@@ -196,7 +196,7 @@ const STRIP = {
   // → #1617 kenney_→k_ kit swap (2026-10-19): harbour suburban boxes → Racing
   //   Kit pits/tents/billboard; emission 276645 → 273889, strip-after
   //   256198 → 254325.
-  monaco: { before: 273889, after: 254325 },
+  monaco: { before: 273889, after: 254317 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

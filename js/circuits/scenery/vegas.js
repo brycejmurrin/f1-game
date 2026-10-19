@@ -397,9 +397,10 @@
         // skyscraper, so that slot stays a procedural lit tower; the rest
         // place pits / tents where the synthetic commercial boxes stood.
         const pads = [
-          ["k_pitsoffice", 0.08, 1, 62, 2.8],
-          ["k_pitsgarageclosed", 0.11, -1, 58, 2.8],
-          ["k_tentlong", 0.20, -1, 60, 2.6],
+          // dist 95 clears the neonTowerBody that sat on the old kenney_ box at 62 m (#1617 CI clip).
+          ["k_pitsoffice", 0.085, 1, 95, 2.4],
+          ["k_pitsgarageclosed", 0.11, -1, 70, 2.4],
+          ["k_tentlong", 0.20, -1, 72, 2.4],
         ];
         for (const [id, s, side, dist, sc] of pads) {
           const ks = K(sl(s));
