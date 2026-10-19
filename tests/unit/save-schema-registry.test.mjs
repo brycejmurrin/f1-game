@@ -11,11 +11,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
-import { fileURLToPath } from "node:url";
 import * as espree from "espree";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+import { ROOT, jsFiles, walk, storageReceiver } from "../helpers/store-key-scan.mjs";
 
 const WRITE_OPS = new Set(["set", "write", "rawSet", "setItem", "remove", "removeItem"]);   // removes count: a stale or unregistered key is dropped or migrated by name
 const PREFIX_WRITES = [
@@ -27,6 +25,18 @@ const PREFIX_WRITES = [
   { prefix: "pitPlan.", re: /["']pitPlan\.["']\s*\+/ },
   { prefix: "setup.", re: /\bKEY\s*\+\s*teamId/ },
 ];
+
+/** Literal keys READ but deliberately unregistered, by file: hand-set dev / A-B flags with no writer
+ *  (store-registry.test.mjs WRITERLESS) and one latch whose writer lives in another file. */
+const READ_EXEMPT = new Map([
+  ["js/camera/cockpit-opts.js", new Set(["cockpitTurnChase"])],   // hand-set reload-only camera A/B flag
+  ["js/car/car-mesh.js", new Set(["aeroEdge"])],   // hand-set aero-edge mesh toggle, default off
+  ["js/game.js", new Set(["tlxWarmBeforePack"])],   // hunt 5 A kill switch, set by hand
+  ["js/render/renderer-boot.js", new Set(["gfxBootStepMs"])],   // slow-CI boot step cap, set by specs
+  ["js/render/three/tlx.js", new Set(["tlxFixedTargets", "tlxPackAsync"])],   // hand-set TLX A/B kill switches
+  ["js/xr/xr-opts.js", new Set(["xrCaps"])],   // latch written by js/xr/apex-xr.js (LS_CAPS const, not a literal there)
+]);
+const READ_OPS = new Set(["get", "getItem", "raw"]);   // M1-17: a read of a key the registry cannot resolve is a typo or an orphan
 
 /** Files whose DYNAMIC-key writes relay keys named elsewhere (SPEC / PREFIX helpers).
  *  Literal keys in these files are still checked. */
@@ -56,16 +66,6 @@ const LITERAL_EXEMPT = new Map([
   ["js/perf/phone-recorder.js", new Set(["phoneRec"])],   // transient soak-run scratch blob, kept out of export/backup on purpose
 ]);
 
-function walk(node, fn) {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node)) { for (const n of node) walk(n, fn); return; }
-  if (typeof node.type === "string") fn(node);
-  for (const k of Object.keys(node)) {
-    if (k === "type" || k === "loc" || k === "range" || k === "parent") continue;
-    walk(node[k], fn);
-  }
-}
-
 function loadRegistry() {
   const ctx = {
     console, Math, JSON, Object, Array, Number, String, Map, Set, isFinite,
@@ -79,17 +79,7 @@ function loadRegistry() {
   return vm.runInContext("SaveSchemaRegistry", ctx);
 }
 
-function jsFiles(dir, out = []) {
-  for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
-    const p = `${dir}/${e.name}`;
-    if (e.isDirectory()) {
-      if (!/^js\/circuits$|vendor|three\/lib/.test(p)) jsFiles(p, out);
-    } else if (e.name.endsWith(".js") && !e.name.endsWith("presets.js")) out.push(p);
-  }
-  return out;
-}
-
-function scanStoreWrites(file) {
+function scanStoreCalls(file, ops) {
   const rel = file;
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   const lines = src.split("\n");
@@ -109,14 +99,9 @@ function scanStoreWrites(file) {
     const c = n.callee;
     if (!c || c.type !== "MemberExpression" || c.computed) return;
     const how = c.property && c.property.name;
-    if (!WRITE_OPS.has(how)) return;
-    const obj = c.object;
-    const onLs = obj && obj.type === "Identifier" && obj.name === "localStorage";
-    const onStore = obj && (
-      (obj.type === "Identifier" && obj.name === "store")
-      || (obj.type === "MemberExpression" && !obj.computed && obj.property
-        && (obj.property.name === "store"
-          || (obj.object && obj.object.type === "Identifier" && obj.object.name === "GameStore" && obj.property.name === "store"))));
+    if (!ops.has(how)) return;
+    const recv = storageReceiver(c.object);
+    const onLs = recv === "ls", onStore = recv === "store";
     if (!onLs && !onStore) return;
     const kNode = n.arguments && n.arguments[0];
     if (!kNode) return;
@@ -137,6 +122,10 @@ function scanStoreWrites(file) {
   });
   return sites;
 }
+
+const scanStoreWrites = (file) => scanStoreCalls(file, WRITE_OPS);
+/** Reads with a literal / const-alias key; a dynamic read key is never a finding (see PASSTHROUGH_FILES). */
+const scanStoreReads = (file) => scanStoreCalls(file, READ_OPS).filter((x) => x.key);
 
 function dynamicCovered(text) {
   for (const p of PREFIX_WRITES) if (p.re.test(text)) return p.prefix + "*";
@@ -173,6 +162,33 @@ test("every store/localStorage write in js/ resolves in the manifest", () => {
     }
   }
   assert.deepEqual(bad, [], `unregistered write site(s):\n${bad.join("\n")}`);
+});
+
+test("every literal store/localStorage READ in js/ resolves in the manifest (M1-17)", () => {
+  const R = loadRegistry();
+  const bad = [];
+  let seen = 0;
+  for (const f of jsFiles("js")) for (const site of scanStoreReads(f)) {
+    seen++;
+    if (LITERAL_EXEMPT.get(site.file)?.has(site.key) || READ_EXEMPT.get(site.file)?.has(site.key)) continue;
+    if (!R.resolve(site.key)) bad.push(`${site.file}:${site.line} apex26.${site.key}`);
+  }
+  assert.ok(seen > 100, `only ${seen} literal reads scanned — the read scan has stopped seeing the store`);
+  assert.deepEqual(bad, [], `read of unregistered key(s):\n${bad.join("\n")}`);
+});
+
+test("the read scan sees literal and aliased reads and ignores writes and dynamic keys (positive control)", async () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "ssr-"));
+  try {
+    const rel = path.relative(ROOT, path.join(dir, "probe.js"));
+    fs.writeFileSync(path.join(ROOT, rel), [
+      'const K = "apex26.aliasRead";',
+      'store.get("litRead", 1); G.store.raw("rawRead"); localStorage.getItem("apex26.lsRead"); localStorage.getItem(K);',
+      'store.set("writeOnly", 1); store.get(dyn); other.get("notStore");',
+    ].join("\n"));
+    assert.deepEqual(scanStoreReads(rel).map((x) => x.key).sort(), ["aliasRead", "litRead", "lsRead", "rawRead"]);
+    assert.deepEqual(scanStoreWrites(rel).map((x) => x.key), ["writeOnly"]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("career validator rejects non-objects and accepts a minimal save", () => {

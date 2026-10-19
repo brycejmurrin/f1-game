@@ -644,6 +644,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",
   "tests/unit/js-debugger-trace.test.mjs",
+  "tests/unit/js-debugger-tracks.test.mjs",
+  "tests/unit/js-debugger-transport.test.mjs",
+  "tests/unit/key-binds-calibration.test.mjs",
+  "tests/unit/key-binds-hunt.test.mjs",
+  "tests/unit/key-binds-pad-menu.test.mjs",
+  "tests/unit/key-binds-ui.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
   // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
@@ -730,6 +736,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lsp-caller-fixes.test.mjs",
   "tests/unit/lsp-config-freshness.test.mjs",
   // apex-lsp as an MCP client: shared warmed child for definition / references / callers / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). Pipelined alias fan-out; test:mcp runs --test-concurrency=1 (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md).
+  "tests/unit/lsp-mcp-fixture.test.mjs",
   "tests/unit/lsp-mcp.test.mjs",
   "tests/unit/lsp-navigation-efficiency.test.mjs",
   "tests/unit/lsp-reference-fixes.test.mjs",
@@ -765,6 +772,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.
   "tests/unit/mirror-glass-night.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
+  "tests/unit/mirror-pass-carbuild.test.mjs",
+  "tests/unit/mirror-pass-prepare.test.mjs",
+  "tests/unit/mirror-pass-watch.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",
@@ -1068,6 +1078,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 track engine: surfaceFolds / centreline diagnostics, running-surface fold clamp, opt-in splineAlpha (unset = byte-identical path).
   "tests/unit/spline-fold-diagnostics.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
+  "tests/unit/spotify-native.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
   // #2204: terrace / spectatorHill / vaultStand curve follow — outside-of-bend
   // gap ≤ 0.5 m on moderate bends, no severe terrace self-pairs on jerez.
@@ -1333,6 +1344,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // guard the two tools a session reaches for at push time.
   // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
   "tests/unit/wgx-free-retire.test.mjs",
+  // WGX debug labels + pass debug groups; validation-shaped messages name the label; Spector/webgl-lint vendor pin (#2964). VM, < 0.2 s.
+  "tests/unit/wgx-labels.test.mjs",
   // Opt-in torque-balanced wheel state (#1628): lockup / wheelspin VM pins; default OFF.
   "tests/unit/wheel-state.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
