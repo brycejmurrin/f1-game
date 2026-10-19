@@ -1,0 +1,271 @@
+== helmets rc=0 1s
+== hud-helmet-placement rc=0 0s
+   js/camera/cam-groups.js 27/129
+== legend-parts-seed rc=0 0s
+   js/career/save-migrate.js 1/25
+   js/data/legends.js 11/15
+   js/core/mat4.js 3/13
+   js/career/custom-team.js 41/50
+== legends-team rc=0 0s
+   js/core/log.js 10/24
+   js/car/parts.js 13/26
+   js/data/legends.js 14/16
+   js/data/teams.js 2/9
+   js/core/mat4.js 3/13
+== livery-contrast rc=0 194s
+   js/car/crest-paths.js 0/0
+   js/car/car-material-shade.js 1/1
+   js/data/teams.js 1/9
+   js/car/livery-design.js 10/12
+   js/core/log.js 10/24
+   js/car/liverytex.js 109/131
+   js/car/livery-graphics.js 11/12
+   js/car/crest-draw.js 11/19
+   js/car/car-wheels.js 12/20
+   js/core/mat4.js 2/13
+   js/car/car-geometry.js 24/25
+   js/car/car-mesh.js 26/121
+   js/car/liveries.js 3/3
+   js/car/car3d.js 36/54
+   js/car/helmets.js 74/90
+   js/car/car-materials.js 8/12
+   js/car/car-body-geom.js 82/99
+   js/car/parts.js 9/25
+== livery-decal-surfaces rc=0 4s
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/data/teams.js 1/9
+   js/core/log.js 10/24
+   js/car/car-body-geom.js 100/104
+   js/car/car-wheels.js 11/20
+   js/core/mat4.js 2/13
+   js/car/crest-draw.js 2/16
+   js/car/livery-graphics.js 2/8
+   js/car/car-geometry.js 24/25
+   js/car/car-mesh.js 32/121
+   js/car/car3d.js 41/54
+   js/car/liverytex.js 5/72
+   js/car/helmets.js 74/90
+   js/car/car-materials.js 8/12
+   js/car/parts.js 9/25
+   js/car/car-shade.js 90/96
+== livery-design rc=0 33s
+   js/car/crest-paths.js 0/0
+   js/car/car-material-shade.js 1/1
+   js/car/car-mesh.js 1/92
+   js/car/parts.js 10/25
+   js/car/crest-draw.js 14/35
+   js/car/liverytex.js 177/250
+   js/car/livery-graphics.js 18/24
+   js/core/mat4.js 2/13
+   js/data/teams.js 2/18
+   js/car/car-wheels.js 2/9
+   js/core/log.js 20/48
+   js/car/car-geometry.js 24/25
+   js/car/livery-design.js 29/31
+   js/car/car3d.js 40/55
+   js/car/helmets.js 76/90
+   js/car/car-materials.js 8/12
+   js/car/liveries.js 8/22
+   js/car/car-body-geom.js 84/99
+== livery-draft-mesh-cache rc=0 0s
+   js/data/teams.js 1/9
+   js/core/log.js 10/24
+   js/car/car-draw.js 17/81
+   js/core/mat4.js 2/13
+   js/car/field-lod.js 2/16
+   js/render/shared/mirror-pass.js 2/5
+== livery-finish-contract rc=0 0s
+   js/car/car-material-shade.js 1/1
+   js/car/car-materials.js 5/10
+== livery-helmet-style rc=0 2s
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/data/teams.js 1/9
+   js/car/car-mesh.js 1/92
+   js/core/log.js 10/24
+   js/car/helmets.js 130/164
+   js/core/mat4.js 2/13
+   js/car/crest-draw.js 2/16
+   js/car/livery-graphics.js 2/8
+   js/car/car-wheels.js 2/9
+   js/car/car-geometry.js 24/25
+   js/car/liverytex.js 4/72
+   js/car/car3d.js 40/55
+   js/car/car-body-geom.js 70/94
+   js/car/car-materials.js 8/12
+   js/car/parts.js 9/25
+== livery-tier rc=0 0s
+   js/car/crest-paths.js 0/0
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/car/car-materials.js 1/9
+   js/data/teams.js 1/9
+   js/car/car-mesh.js 1/92
+   js/core/log.js 10/24
+   js/core/mat4.js 2/13
+   js/car/car-geometry.js 2/20
+   js/car/liveries.js 2/3
+   js/car/car3d.js 2/6
+   js/car/car-wheels.js 2/9
+   js/car/parts.js 3/22
+   js/car/helmets.js 37/70
+   js/car/livery-graphics.js 5/11
+   js/car/crest-draw.js 5/17
+   js/car/car-body-geom.js 5/66
+   js/car/liverytex.js 57/117
+== livery-wheels rc=0 1s
+   js/car/car-material-shade.js 1/1
+   js/car/liveries.js 1/3
+   js/data/teams.js 1/9
+   js/core/log.js 10/24
+   js/car/parts.js 11/25
+   js/car/car-wheels.js 18/21
+   js/core/mat4.js 2/13
+   js/car/car-geometry.js 26/26
+   js/car/helmets.js 37/70
+   js/car/car3d.js 41/53
+   js/car/car-body-geom.js 69/94
+   js/car/car-materials.js 8/12
+   js/car/car-shade.js 91/96
+== livery-zone-finish rc=0 1s
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/data/teams.js 1/9
+   js/car/car-mesh.js 1/92
+   js/core/log.js 10/24
+   js/core/mat4.js 2/13
+   js/car/crest-draw.js 2/16
+   js/car/livery-graphics.js 2/8
+   js/car/car-wheels.js 2/9
+   js/car/car-geometry.js 24/25
+   js/car/liverytex.js 4/72
+   js/car/car3d.js 42/55
+   js/car/car-body-geom.js 70/94
+   js/car/helmets.js 74/90
+   js/car/car-materials.js 8/12
+   js/car/parts.js 9/25
+== loading-card rc=0 1s
+   js/camera/flyby-seq.js 11/113
+   js/race/radio-lines.js 11/15
+   js/ui/loading-screen.js 63/77
+   js/audio/radio-voice.js 8/41
+== particles-dirty rc=0 0s
+   js/core/log.js 10/24
+   js/fx/particles.js 24/40
+   js/core/hash32.js 3/4
+== parts-distinct-mesh rc=0 19s
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/data/teams.js 1/9
+   js/car/car-mesh.js 1/92
+   js/core/log.js 10/24
+   js/car/car-wheels.js 17/20
+   js/core/mat4.js 2/13
+   js/car/crest-draw.js 2/16
+   js/car/livery-graphics.js 2/8
+   js/car/car-geometry.js 26/26
+   js/car/car3d.js 38/54
+   js/car/liverytex.js 5/72
+   js/car/car-body-geom.js 70/94
+   js/car/helmets.js 76/90
+   js/car/car-materials.js 8/12
+   js/car/parts.js 9/25
+== parts-ladder rc=0 0s
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/car/car-materials.js 1/9
+   js/data/teams.js 1/9
+   js/car/car-mesh.js 1/92
+   js/core/log.js 10/24
+   js/car/parts.js 11/25
+   js/core/mat4.js 2/13
+   js/car/crest-draw.js 2/16
+   js/car/car-geometry.js 2/20
+   js/car/car3d.js 2/6
+   js/car/liverytex.js 2/72
+   js/car/livery-graphics.js 2/8
+   js/car/car-wheels.js 2/9
+   js/car/helmets.js 37/70
+   js/car/car-body-geom.js 5/66
+== parts-locked-equivalent rc=0 1s
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/car/car-materials.js 1/9
+   js/data/teams.js 1/9
+   js/car/car-mesh.js 1/92
+   js/core/log.js 10/24
+   js/car/parts.js 14/26
+   js/core/mat4.js 2/13
+   js/car/crest-draw.js 2/16
+   js/car/car-geometry.js 2/20
+   js/car/car3d.js 2/6
+   js/car/liverytex.js 2/72
+   js/car/livery-graphics.js 2/8
+   js/car/car-wheels.js 2/9
+   js/car/helmets.js 37/70
+   js/car/car-body-geom.js 5/66
+== parts-visual-distinctness rc=0 125s
+   js/car/livery-graphics.js 10/40
+   js/core/mat4.js 10/65
+   js/car/crest-draw.js 10/80
+   js/car/car-geometry.js 122/126
+   js/car/car3d.js 202/275
+   js/car/liverytex.js 25/360
+   js/car/helmets.js 365/450
+   js/car/car-materials.js 40/60
+   js/car/car-body-geom.js 420/495
+   js/car/parts.js 45/125
+   js/car/livery-design.js 5/30
+   js/data/teams.js 5/45
+   js/car/car-mesh.js 5/460
+   js/car/car-material-shade.js 5/5
+   js/core/log.js 50/120
+   js/car/car-wheels.js 61/100
+== share-card-data rc=0 0s
+   js/share/share-card-data.js 5/5
+== share-card-layout rc=0 0s
+   js/share/share-card-layout.js 4/5
+== share-card rc=0 0s
+   js/race/daily-challenge.js 16/20
+   js/share/share-card.js 3/8
+== team-livery rc=0 6s
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/car/car-mesh.js 1/92
+   js/core/log.js 10/24
+   js/car/custom-liveries.js 16/17
+   js/core/mat4.js 2/13
+   js/car/crest-draw.js 2/16
+   js/car/car-materials.js 2/18
+   js/car/car-geometry.js 2/20
+   js/car/car3d.js 2/6
+   js/car/liverytex.js 2/72
+   js/car/livery-graphics.js 2/8
+   js/car/car-wheels.js 2/9
+   js/car/parts.js 3/22
+   js/car/helmets.js 37/70
+   js/car/liveries.js 5/6
+   js/car/car-body-geom.js 5/66
+   js/data/teams.js 9/12
+== team-style-relief rc=0 0s
+   js/car/car-material-shade.js 1/1
+   js/car/livery-design.js 1/6
+   js/car/car-materials.js 1/9
+   js/data/teams.js 1/9
+   js/car/car-mesh.js 1/92
+   js/core/log.js 10/24
+   js/car/car-body-geom.js 19/72
+   js/core/mat4.js 2/13
+   js/car/crest-draw.js 2/16
+   js/car/car-geometry.js 2/20
+   js/car/liverytex.js 2/72
+   js/car/livery-graphics.js 2/8
+   js/car/car-wheels.js 2/9
+   js/car/parts.js 3/22
+   js/car/car3d.js 3/6
+   js/car/helmets.js 37/70
+   js/car/car-shade.js 6/53
+== title-home-scene-prepaint rc=0 0s
+== ui-fit-garage-livery-r6 rc=0 0s
+== ui-journey-career rc=0 1s
