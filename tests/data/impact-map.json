@@ -1210,6 +1210,9 @@
         "tests/unit/service-worker.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
+      "releaseExcept": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
       "remaining": [
         "tests/unit/voice-pack.test.mjs"
       ],
