@@ -10,8 +10,7 @@
 // next edit leaves the flap meshes, coalesced runs, textures and settled TLX live geometries where the warm-up
 // left them.
 // THE LEAKING CACHE, COUNTED DIRECTLY: CarMesh.flapState() — the base held one more set per wing colour.
-// SETTLED GEO LIVE (#2897): renderer.info.memory.geometries follows what the last frames drew and is not a
-// leak meter. Late Bahrain/model-pack builds also stepped the count mid-run (8→11/12) on unrelated PRs.
+// SETTLED GEO (#2897): renderer.info.memory.geometries follows what the last frames drew and is not a leak meter.
 // The menu/flyby lazy build (scheduleFlybyTrack) often STARTS after a Tracks.building()-only settle: ensureScenery
 // and ensureTrackBuild run with prep.building still false, so warm can sample garage-only geoLive (~35) and then
 // Bahrain lands mid-edits (~50). Force-await menuPrep world+done+!warming on #select before the garage. Before each
@@ -19,18 +18,8 @@
 // is bimodal from bay rebuilds (~+15 mesh) even after GC, so the leak assert uses sticky kinds (chunk+carSh+tex) —
 // late Bahrain steps chunk; bay mesh churn is excluded. Flap/GPU texture asserts stay strict.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import fs from "node:fs";
 
 const WARM = 3, EDITS = 6;
-// #region agent log
-const dbg = (hypothesisId, location, message, data) => {
-  try {
-    fs.appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({
-      hypothesisId, location, message, data, timestamp: Date.now(),
-    }) + "\n");
-  } catch (_) { /* debug sink optional */ }
-};
-// #endregion
 // The page's own clock, polled on a timer (wait-polling-lint): past the garage's flap idle window.
 const pause = async (page, ms) => {
   const t0 = await page.evaluate(() => performance.now());
@@ -40,21 +29,6 @@ const frames = (page, n) => page.evaluate((k) => new Promise((done) => {
   let i = 0; const f = () => (++i >= k ? done(null) : requestAnimationFrame(f)); requestAnimationFrame(f);
 }), n);
 
-/** Snapshot menu prep + TLX geo for the debug log (no secrets). */
-const snapPrep = async (page) => page.evaluate(() => {
-  const p = (window.__apex && typeof window.__apex.menuPrep === "function") ? window.__apex.menuPrep() : null;
-  const tlx = (typeof GLX !== "undefined" && GLX.__tlx) ? GLX.__tlx : null;
-  const ms = tlx && tlx.memState ? tlx.memState() : null;
-  let tracksBuilding = null;
-  try { tracksBuilding = !!(typeof Tracks !== "undefined" && Tracks.building && Tracks.building()); } catch (_) { tracksBuilding = null; }
-  let trackId = null;
-  try { trackId = window.__apex && window.__apex.info && window.__apex.info().track; } catch (_) { /* */ }
-  return {
-    menu: p ? { trackId: p.trackId, world: !!p.world, building: !!p.building, done: !!p.done, warming: !!p.warming } : null,
-    tracksBuilding, trackId, geoLive: ms ? (ms.geoLive | 0) : null, geoKinds: ms ? ms.geoKinds : null,
-  };
-});
-
 /**
  * Force the select-screen flyby prep to finish WHILE #select is still up.
  * scheduleFlybyTrack's ensureScenery / ensureTrackBuild window is invisible to Tracks.building();
@@ -63,9 +37,6 @@ const snapPrep = async (page) => page.evaluate(() => {
  * Wait for world + done + !warming so Bahrain geos and shader warm both land before the garage.
  */
 const awaitMenuTrackBuilt = async (page) => {
-  // #region agent log
-  dbg("A", "garage-livery-churn.spec.js:awaitMenuTrackBuilt:enter", "await menu prep done on select", await snapPrep(page));
-  // #endregion
   await page.waitForFunction(() => {
     const A = window.__apex;
     if (!A || typeof A.menuPrep !== "function") return false;
@@ -76,21 +47,14 @@ const awaitMenuTrackBuilt = async (page) => {
     } catch (_) { /* */ }
     return true;
   }, null, { polling: 100, timeout: 180000 });
-  // #region agent log
-  dbg("A", "garage-livery-churn.spec.js:awaitMenuTrackBuilt:exit", "menu prep done", await snapPrep(page));
-  // #endregion
 };
 
 /**
  * Wait out menu prep / paced builds / model-pack / bay rebuild spikes, then return a post-GC sample.
- * Bay rebuilds leave ~15 mesh WeakRefs that only drop after HeapProfiler GC (warm geoRegLen=236 with
- * geoLive=221). Settling without GC can lock the high plateau and fail end≤warm; settle WITH the same
- * double-GC read() uses so warm and end share the post-GC floor.
+ * Bay rebuilds leave transient mesh WeakRefs; settle with the same double-GC read() uses so warm and end
+ * share one post-GC floor before the sticky-kind assert.
  */
 const settleGeo = async (page, cdp, label) => {
-  // #region agent log
-  dbg("B", "garage-livery-churn.spec.js:settleGeo:enter", "settle enter " + label, await snapPrep(page));
-  // #endregion
   await page.evaluate(() => {
     window.__modelsReadyOk = false;
     const p = (typeof Assets !== "undefined" && Assets.modelsReady)
@@ -125,12 +89,7 @@ const settleGeo = async (page, cdp, label) => {
     const live = sample.geoLive | 0;
     const now = Date.now();
     if (live !== last) { last = live; since = now; await pause(page, 100); continue; }
-    if (now - since >= 1500) {
-      // #region agent log
-      dbg("B", "garage-livery-churn.spec.js:settleGeo:exit", "settle exit " + label, { sample, prep: await snapPrep(page) });
-      // #endregion
-      return sample;
-    }
+    if (now - since >= 1500) return sample;
     await pause(page, 100);
   }
   throw new Error("settleGeo timed out (" + label + ")");
@@ -198,18 +157,12 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
     } catch (_) { return false; }
   }, null, { polling: 100, timeout: 120000 });
   const warm = await settleGeo(page, cdp, "warm");   // post-GC stable baseline (#2897)
-  // #region agent log
-  dbg("C", "garage-livery-churn.spec.js:warm", "warm baseline", { warm, prep: await snapPrep(page) });
-  // #endregion
   const rows = [warm];
   for (let i = 0; i < EDITS; i++) { await edit(); rows.push(await read()); }
   await pause(page, 2500);
   await edit();
   const end = await settleGeo(page, cdp, "end");
   rows.push(end);
-  // #region agent log
-  dbg("C", "garage-livery-churn.spec.js:end", "end sample", { end, prep: await snapPrep(page), series: rows.map((r) => r.geoLive) });
-  // #endregion
   test.info().annotations.push({ type: "churn", description: JSON.stringify(rows) });
   expect(end.gpuTex - warm.gpuTex, `GPU textures created by ${EDITS + 1} edits after the warm-up (each edit used to make new ones): ${JSON.stringify(rows)}`).toBe(0);
   expect(end.runs, `coalesced flap runs: ${rows.map((r) => r.runs).join(" → ")}`).toBeLessThanOrEqual(warm.runs);
