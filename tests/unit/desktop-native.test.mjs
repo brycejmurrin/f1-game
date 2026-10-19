@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import vm from "node:vm";
 import { seedStore } from "../helpers/seed-store.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -213,7 +214,7 @@ function loadSpotify(opts = {}) {
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   seedStore(ctx);
-  vm.runInContext(SPOTIFY, ctx, { filename: "js/audio/spotify.js" });
+  vm.runInContext(SPOTIFY, ctx, { filename: absSrc("js/audio/spotify.js") });
   return sandbox.SpotifyMusic;
 }
 
@@ -248,7 +249,7 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
     sandbox.window = sandbox;
     const ctx = vm.createContext(sandbox);
     for (const file of ["js/core/native.js", "js/net/handshake.js", "js/car/ghost-share.js", "js/ui/share-code.js"])
-      vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: file });
+      vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
     const base = kind === "web" ? origin + "/custom/index.html" : publicBase;
     assert.equal(vm.runInContext("Native.shareBase()", ctx), base);
     assert.equal(vm.runInContext("NetHandshake.inviteUrl('INVITE')", ctx), base + "#vs=INVITE");
@@ -271,7 +272,7 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
     const native = vm.runInContext("Native", ctx);
     const pad = vm.runInNewContext(readFileSync(join(ROOT, "js/input/phone-pad.js"), "utf8") + ";PhonePad", {
       location: sandbox.location, URL,
-    });
+    }, { filename: absSrc("js/input/phone-pad.js") });
     const nodes = new Map(), qrs = [];
     const $ = (id) => {
       if (!nodes.has(id)) nodes.set(id, { textContent: "", hidden: true, setAttribute() {}, scrollIntoView() {}, append() {} });
@@ -284,7 +285,7 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
       PhonePad: { padUrl: pad.padUrl, host: (ui) => { pairingUi = ui; return { cancel() {} }; } },
       LobbyCodes: { paintQr: (_wrap, _canvas, url) => qrs.push(url) },
     });
-    vm.runInContext(readFileSync(join(ROOT, "js/ui/platform-session.js"), "utf8"), ctx);
+    vm.runInContext(readFileSync(join(ROOT, "js/ui/platform-session.js"), "utf8"), ctx, { filename: absSrc("js/ui/platform-session.js") });
     const session = vm.runInContext("PlatformSession", ctx).create({ $, els: {}, store: {} }, { ensureNet: async () => true });
     session.wirePhone();
     $("pm-phonepad").onclick();

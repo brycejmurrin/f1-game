@@ -32,6 +32,7 @@ test("a healthy page reports ok", () => {
   const s = g.apex.persistState();
   assert.equal(s.ok, true);
   assert.equal(s.broken, null);
+  assert.equal(s.mirror.inFlight, 0, "persistState exposes uncommitted mirror work separately from pending and flushed");
 });
 
 test("a failing write is recorded, logged, and reported by persistState()", () => {

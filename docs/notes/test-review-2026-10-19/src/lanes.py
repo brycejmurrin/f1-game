@@ -198,7 +198,7 @@ LANES[-1:-1] = [
   effort="S", model=SON, deps="none; T5-01's copies drop finished cars that collide.js keeps: the rewrite must show red against a copy that skips finished cars"),
  dict(id="L24", name="CI selection, gates and ratchets on fixtures", batches=["tooling-4"],
   goal="the selector's main entry select(), the ratchet auto-raise refusal and the gate tools run on fixtures and can fail; retired-tool tests and stale headers go",
-  owned=["tests/unit/select-specs.test.mjs","tests/unit/ratchets.test.mjs","tests/unit/poll-live-shell.test.mjs","tests/unit/sim-bytecode-budget.test.mjs","tests/unit/ratchet-merge-hotspot.test.mjs","tests/unit/queue-depth.test.mjs","tests/unit/select-budget.test.mjs","tests/unit/ready-full-cap.test.mjs","tests/unit/source-pin-hygiene.test.mjs"],
+  owned=["tests/unit/select-specs.test.mjs","tests/unit/ratchets.test.mjs","tests/unit/poll-live-shell.test.mjs","tests/unit/sim-bytecode-budget.test.mjs","tests/unit/ratchet-merge-hotspot.test.mjs","tests/unit/queue-depth.test.mjs","tests/unit/select-budget.test.mjs","ready-full-cap (deleted, #3013)","tests/unit/source-pin-hygiene.test.mjs"],
   ids=["T4-01","T4-03","T4-08","T4-16","T4-21","T4-22","T4-27","T4-29","T4-30"],
   verify="npm run test:tooling-fast", effort="M", model=SON,
   deps="T4-30 moves a ceiling into tests/data/ratchets.json: edit the source and `npm run gen`, never the generated file; no ratchet raise",

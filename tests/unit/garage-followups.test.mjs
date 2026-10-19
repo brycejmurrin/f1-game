@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { makeDom } from '../helpers/mini-dom.mjs';
+import { absSrc } from "../helpers/abs-src.mjs";
 const read = p => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 const sheet = read('js/garage/setup-sheet.js');
 const plain = v => JSON.parse(JSON.stringify(v));
@@ -15,8 +16,8 @@ function tuneFixture() {
     renderStatBars() {}, csTabId: x => x, getTeamParts: () => ({}), GameAudio: {},
     Parts: { RH_GAIN: .06, aeroLoad: (_p, _t, tune) => Math.min(1, Math.max(0, 1 + .06 * (tune?.rake || 0))) }, G: { soundOn: false, $: id => dom.byId(id), getTeamParts: () => ({}) },
   });
-  vm.runInContext(read('js/garage/setup-tune.js') + '; globalThis.S = SetupTune;', context);
-  vm.runInContext(read("js/garage/setup-experiments.js") + ";globalThis.experiments = SetupExperiments.create(G, () => {});", context);
+  vm.runInContext(read('js/garage/setup-tune.js') + '; globalThis.S = SetupTune;', context, { filename: absSrc("js/garage/setup-tune.js") });
+  vm.runInContext(read("js/garage/setup-experiments.js") + ";globalThis.experiments = SetupExperiments.create(G, () => {});", context, { filename: absSrc("js/garage/setup-experiments.js") });
   const team = { id: 'haas', short: 'HAA' }, container = dom.byId('fixture');
   const build = () => { container.replaceChildren(); context.experiments.build(container, team); };
   const button = text => container.querySelectorAll('button').find(b => b.textContent === text);
@@ -143,7 +144,7 @@ test('palette rebuild preserves only palette-owned focus, including repeated mat
     LiveryTex: { NUM_FONT_IDS: ['default'], SPONSOR_PACK_IDS: ['default'], SPINE_LOGO_IDS: ['stripe', 'contours'], FILL_SURFACES: [] },
   });
   context.window = context;
-  const run = path => vm.runInContext(read(path), context, { filename: path });
+  const run = path => vm.runInContext(read(path), context, { filename: absSrc(path) });
   for (const path of ['js/core/mat4.js', 'js/physics/consts.js', 'js/car/parts.js', 'js/data/teams.js',
     'js/garage/experience.js', 'js/garage/setup-tune.js', 'js/garage/setup-experiments.js', 'js/garage/surface-inspection.js',
     'js/car/livery-design.js', 'js/garage/livery-design-editor.js']) run(path);

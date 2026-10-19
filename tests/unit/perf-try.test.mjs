@@ -35,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import { bootGlx } from "../helpers/glx-mock.mjs";
 import { cssRules, ruleFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -45,7 +46,7 @@ const shader = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\
 // backends read through PostCommon.knob.
 const tuneDefs = () => {
   const sb = {}; vm.createContext(sb);
-  vm.runInContext(read("js/lighting/knobs.js").replace(/^const\b/gm, "var"), sb);
+  vm.runInContext(read("js/lighting/knobs.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/lighting/knobs.js") });
   return sb.LightKnobs.TUNE_DEFS;
 };
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
@@ -221,7 +222,7 @@ test("props fuse uses sealed typed accumulators", () => {
   // The model helper in a VM: scratch() hands out growable typed accumulators
   // and sealGeometry() trims them to exact-length TypedArrays.
   const ctx = vm.createContext({ Math, Number, Array, Float64Array, Float32Array, Uint32Array, Object, JSON });
-  vm.runInContext(read("js/track/scenery/models.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/track/scenery/models.js" });
+  vm.runInContext(read("js/track/scenery/models.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/track/scenery/models.js") });
   const TM = vm.runInContext("TrackModels", ctx);
   const geo = TM.scratch(4);
   assert.equal(geo.pos.length, 0);
@@ -339,7 +340,7 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   // shared entry function, which also serves contextual Settings cross-links.
   const dom = makeDom(), selected = [];
   const sb = { document: dom.document, window: {}, Log: { info() {}, warn() {} } };
-  vm.runInNewContext(nav.replace(/^const SettingsNav/m, "var SettingsNav"), sb);
+  vm.runInNewContext(nav.replace(/^const SettingsNav/m, "var SettingsNav"), sb, { filename: absSrc("js/ui/settings-tabs.js") });
   const navigation = sb.SettingsNav.create(null, id => selected.push(id));
   const door = dom.byId("pm-open-controls");
   door.onclick();
@@ -388,7 +389,7 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
   // The omitted-knob default comes from the registry (PostCommon.knob ->
   // LightKnobs.TUNE_DEFS). knobs.js loads AFTER glx.js in the manifest (it
   // reads GLX.isMobile at eval), so the GLX-only mock never has it: run it in.
-  vm.runInContext(read("js/lighting/knobs.js").replace(/^const\b/gm, "var"), h.sandbox);
+  vm.runInContext(read("js/lighting/knobs.js").replace(/^const\b/gm, "var"), h.sandbox, { filename: absSrc("js/lighting/knobs.js") });
   const blitMask = (frame, opts) => {
     h.GLX.begin(frame); h.reset(); h.GLX.present(opts);
     const blit = h.calls.find((c) => c[0] === "blitFramebuffer");

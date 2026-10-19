@@ -9,6 +9,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -21,7 +22,7 @@ function make(uploads) {
     PerfGov: { autoShed: () => 0 },
   });
   seedLog(ctx);
-  const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx);
+  const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
   P.init({
     drawParticles: (data, floats, additive, dirty) => {
       uploads.push({ floats, additive: !!additive, dirty: dirty !== false, data: data || null });

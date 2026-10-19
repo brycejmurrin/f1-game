@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const read = (p) => fs.readFileSync(new URL("../../" + p, import.meta.url), "utf8");
 function boot({ lazy = false } = {}) {
   const dom = makeDom({ readyState: "loading" });
@@ -17,8 +18,8 @@ function boot({ lazy = false } = {}) {
   for (const id of ["pm-open-controls", "pm-open-display", "pm-open-driving", "pm-open-appearance", "pm-open-a11y", "pm-open-files", "pm-advanced", "pm-audio"]) el("button", id, index);
   let complete;
   const ctx = vm.createContext({ document: dom.document, window: {}, Log: { info() {}, warn() {} }, GameAudio: { _stub: lazy }, AudioPanel: { _ensure: () => new Promise((r) => { complete = r; }) } });
-  vm.runInContext(read("js/ui/settings-search.js") + ";this.Search=SettingsSearch;", ctx);
-  vm.runInContext(read("js/ui/settings-tabs.js") + ";this.Nav=SettingsNav;", ctx);
+  vm.runInContext(read("js/ui/settings-search.js") + ";this.Search=SettingsSearch;", ctx, { filename: absSrc("js/ui/settings-search.js") });
+  vm.runInContext(read("js/ui/settings-tabs.js") + ";this.Nav=SettingsNav;", ctx, { filename: absSrc("js/ui/settings-tabs.js") });
   const nav = ctx.Nav.create(null, () => {});
   const search = index.querySelector("input"), result = (query) => { search.value = query; search.oninput(); return [...index.querySelectorAll("button")].find((b) => b.dataset.settingResult); };
   return { dom, el, ctx, nav, index, body, search, result, complete: () => complete(true) };

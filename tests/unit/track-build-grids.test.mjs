@@ -21,6 +21,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -33,7 +34,7 @@ function engine() {
   for (const rel of M.TRACK_VM) {
     if (rel === "@circuits") break;
     const src = readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
-    vm.runInContext(src, ctx, { filename: rel });
+    vm.runInContext(src, ctx, { filename: absSrc(rel) });
     if (rel === "js/track/core/hidden-faces.js") break;
   }
   return ctx;

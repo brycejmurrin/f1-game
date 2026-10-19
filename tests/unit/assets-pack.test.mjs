@@ -21,6 +21,7 @@ import { createRequire } from "node:module";
 import cp from "node:child_process";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -42,7 +43,7 @@ test("GLTF accessors stay inside their declared bufferView and reject invalid st
     ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array,
     TextDecoder, Log: { enabled: () => false },
   });
-  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx);
+  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx, { filename: absSrc("js/render/shared/gltf.js") });
   const makeGlb = (viewLength, stride) => {
     const bin = Buffer.alloc(48);
     for (let i = 0; i < 9; i++) bin.writeFloatLE(i % 3 === 2 ? 0 : i, i * 4);
@@ -77,7 +78,7 @@ function assetLoader(overrides = {}) {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8"), sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8"), sandbox, { filename: absSrc("js/render/shared/assets.js") });
   return sandbox.Assets;
 }
 
@@ -1034,7 +1035,7 @@ function realMAT() {
   seedLog(sandbox);
   // Top-level `const` is block-scoped inside a VM and never lands on the
   // sandbox — the same rewrite tools/track/verify-track.cjs uses.
-  vm.runInContext(src.replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
+  vm.runInContext(src.replace(/^const\b/gm, "var"), sandbox, { filename: absSrc("js/track/core/geom.js") });
   const G = sandbox.TrackGeom;
   assert.ok(G && G.MAT, "TrackGeom.MAT not reachable from the VM sandbox");
   // Copy into a THIS-realm object: a VM object carries the sandbox's
@@ -1428,7 +1429,7 @@ test("TrackGeom.addMesh transforms a baked model correctly", () => {
   vm.createContext(sandbox);
   seedLog(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js", "track", "core", "geom.js"), "utf8")
-    .replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
+    .replace(/^const\b/gm, "var"), sandbox, { filename: absSrc("js/track/core/geom.js") });
   const G = sandbox.TrackGeom;
   assert.equal(typeof G.addMesh, "function");
 
@@ -1479,7 +1480,7 @@ test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () =>
   const vm = require("node:vm");
   const load = (rel, sandbox) => {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
-    vm.runInContext(src, sandbox, { filename: rel });
+    vm.runInContext(src, sandbox, { filename: absSrc(rel) });
   };
   const sandbox = {
     Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int16Array,
@@ -1550,7 +1551,7 @@ test("webbake writes a ZIP that real unzip accepts", () => {
     vm.createContext(sandbox);
     seedLog(sandbox);
     vm.runInContext(fs.readFileSync(path.join(ROOT, "assets", "pack", "webbake.js"), "utf8")
-      .replace(/^const\b/gm, "var"), sandbox, { filename: "webbake.js" });
+      .replace(/^const\b/gm, "var"), sandbox, { filename: absSrc("assets/pack/webbake.js") });
 
     const enc = new TextEncoder();
     const payload = '{"version":1,"materials":{"size":512}}\n';
@@ -1801,7 +1802,7 @@ test("verify refuses model files outside the pack, unhashed, or with out-of-rang
 
 test("glTF supplied normals match transformed triangle normals for rotations, nonuniform scale and parents", () => {
   const ctx = vm.createContext({ ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, Log: { enabled: () => false } });
-  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx);
+  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx, { filename: absSrc("js/render/shared/gltf.js") });
   const glb = (nodes, supplied) => {
     const bin = Buffer.from(new Float32Array([0,0,0, 1,0,0, 0,1,1, 0,-Math.SQRT1_2,Math.SQRT1_2, 0,-Math.SQRT1_2,Math.SQRT1_2, 0,-Math.SQRT1_2,Math.SQRT1_2]).buffer);
     const json = { asset: { version: "2.0" }, buffers: [{ byteLength: bin.length }],
@@ -1907,4 +1908,71 @@ test("obsolete Safari fallback stops at a layer task and closes both crop and fu
   assert.equal(await pending,false);assert.equal(uploads,0);assert.equal(maps,0);
   assert.deepEqual(calls,["blob-crop","full","fallback-crop"],"cancellation neither decodes another layer nor retries the full strip");
   assert.deepEqual(bitmaps.map(b=>b.closed),[1,1]);
+});
+
+
+test("model decode lane paces ready bodies, shares duplicates, and survives failures and unload", async () => {
+  const tasks = [], events = [], fetched = [];
+  let assets;
+  class ParseView extends DataView {
+    constructor(buf) {
+      super(buf); events.push("parse");
+      if (buf.byteLength === 1) throw new RangeError("decode failed");
+    }
+  }
+  assets = assetLoader({ DataView: ParseView,
+    setTimeout(fn) { events.push("task"); tasks.push(fn); },
+    fetch: async (url) => {
+      if (/manifest\.json$/.test(url)) return { ok: true, json: async () => ({ models: {
+        a: { file: "a.bin" }, b: { file: "b.bin" }, c: { file: "c.bin" },
+      } }) };
+      fetched.push(url);
+      return { ok: true, arrayBuffer: async () => url.endsWith("a.bin") ? new ArrayBuffer(1) : MODEL_V2() };
+    },
+  });
+  const a = assets.model("a"), b = assets.model("b"), c = assets.model("c");
+  assert.strictEqual(assets.model("b"), b, "duplicate callers share one request and decode");
+  await new Promise(setImmediate);
+  assert.equal(fetched.length, 3, "all downloads start before parsing is admitted");
+  assert.deepEqual(events, ["task"]);
+  tasks.shift()(); await new Promise(setImmediate);
+  assert.equal(await a, null, "malformed decode settles without blocking the lane");
+  assert.deepEqual(events, ["task", "parse", "task"]);
+  tasks.shift()(); await new Promise(setImmediate);
+  assert.ok(await b);
+  assert.deepEqual(events, ["task", "parse", "task", "parse", "task"]);
+  assets.unload();
+  tasks.shift()();
+  assert.equal(await c, null, "unload during admission prevents obsolete parsing");
+  assert.equal(events.filter(e => e === "parse").length, 2);
+  assert.equal(assets.modelSync("b"), null);
+  const fresh = assets.model("c");
+  await new Promise(setImmediate);
+  tasks.shift()();
+  assert.ok(await fresh, "fresh generation runs after canceled jobs");
+});
+
+
+test("model admission tail drops decoded payloads across cache generations", async () => {
+  // Expose the existing admission promise without changing its scheduling or
+  // parser. Its fulfilled value would otherwise retain arrays after unload.
+  const source = fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8")
+    .replace("return { init,", "return { decodeTail: () => _modelDecodeTail, init,");
+  let downloads = 0;
+  const assets = vm.runInNewContext(source + ";Assets", { fetch: async (url) => {
+    if (/manifest\.json$/.test(url)) return { ok: true, json: async () => ({ models: { box: { file: "box.bin" } } }) };
+    downloads++;
+    return { ok: true, arrayBuffer: async () => MODEL_V2() };
+  } });
+  const first = await assets.model("box");
+  assert.ok(first.pos.length, "first generation actually decoded a payload");
+  assert.strictEqual(assets.modelSync("box"), first);
+  assert.equal(await assets.decodeTail(), null, "fulfilled admission state owns no decoded payload");
+  assets.unload();
+  assert.equal(assets.modelSync("box"), null);
+  assert.equal(await assets.decodeTail(), null, "unload leaves no payload in the queue tail");
+  const second = await assets.model("box");
+  assert.ok(second.pos.length); assert.notStrictEqual(second, first);
+  assert.equal(downloads, 2, "next generation obtains its own model");
+  assert.equal(await assets.decodeTail(), null);
 });

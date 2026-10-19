@@ -7,12 +7,12 @@ orbit PNGs. The hook tables and corner-name rules are in track-geometry.md.
 
 ```sh
 # official turn count vs curvature peaks:
-node tools/shot/apex-eval.mjs spa "({official:a.info().turns, peaks:a.corners().length})"
-node tools/shot/apex-eval.mjs spa "a.trackInfo({what:'corners'})" --raw   # curated FIA list
+node tools/shot/apex-eval.mjs spa "({official:a.info().turns, peaks:a.corners().length})" --vm
+node tools/shot/apex-eval.mjs spa "a.trackInfo({what:'corners'})" --raw --vm   # curated FIA list
 
-node tools/shot/apex-eval.mjs monza "a.wallStats()"
-node tools/shot/apex-eval.mjs monaco "a.groundY(0.18, 10)"          # gap finder at a corner
-node tools/shot/apex-eval.mjs suzuka "a.trackProfile(40)" --raw     # full elevation profile
+node tools/shot/apex-eval.mjs monza "a.wallStats()" --vm
+node tools/shot/apex-eval.mjs monaco "a.groundY(0.18, 10)" --vm          # gap finder at a corner
+node tools/shot/apex-eval.mjs suzuka "a.trackProfile(40)" --raw --vm     # full elevation profile
 ```
 
 ## Street circuits (`street: true`)
@@ -27,7 +27,7 @@ changes). `wallStats().street` mirrors the flag; `trackProfile().hw` is still th
 
 ```sh
 for id in monaco singapore vegas baku jeddah; do
-  node tools/shot/apex-eval.mjs "$id" "(({id:'$id', hw:a.trackProfile(80).map(p=>p.hw), w:a.wallStats()}))" --raw
+  node tools/shot/apex-eval.mjs "$id" "(({id:'$id', hw:a.trackProfile(80).map(p=>p.hw), w:a.wallStats()}))" --raw --vm
 done
 ```
 
@@ -62,9 +62,10 @@ for one known window (the spa id and the 0.13-0.18 frac range below are an examp
 Script under `scratch/`; `f` is the RACING frac (`s = f * total`, already past `_sceneryShift`), `lat` is metres, +right.
 ```js
 const {createGame}=require("../tools/lib/game-vm.cjs");
-(async()=>{const g=await createGame({track:"spa"}),a=g.apex;let w={overRoad:-9};
+(async()=>{let g;try{g=await createGame({track:"spa"});const a=g.apex;let w={overRoad:-9};
 for(let f=0.13;f<=0.18;f+=0.0025)for(const lat of [-12,-6,0,6,12]){const r=a.groundY(f,lat);
 if(r&&r.overRoad!=null&&r.overRoad>w.overRoad)w={f,lat,overRoad:r.overRoad};}
-console.log(w);process.exit(0);})();
+console.log(w);}finally{if(g)g.close();}
+})().catch(e=>{console.error(e.stack);process.exitCode=1;});
 ```
 `overRoad > 0` is terrain above the banked surface (a defect). Pick lat values inside the half-width (`trackProfile(n)[i].hw`).

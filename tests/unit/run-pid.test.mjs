@@ -2,11 +2,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { descendants, register, release, stop, runFile } from "../../tools/lib/run-pid.mjs";
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "run-pid-"));
+const tmp = () => mkTmpDir("run-pid-");
 
 test("descendants: deepest first, root last, unrelated pids excluded", () => {
   const table = [[10, 1], [11, 10], [12, 11], [13, 10], [99, 1]];

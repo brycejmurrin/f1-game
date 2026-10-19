@@ -52,7 +52,7 @@ function buildHarness() {
   const runFile = (relPath) => {
     const src = fs.readFileSync(path.join(ROOT, relPath), "utf8")
       .replace(/^const\b/gm, "var");
-    vm.runInContext(src, ctx, { filename: relPath });
+    vm.runInContext(src, ctx, { filename: path.join(ROOT, relPath) });
   };
   // Load list comes from tools/manifest.cjs (TRACK_VM) — the same source of
   // truth verify-track.cjs and the load-order test use.

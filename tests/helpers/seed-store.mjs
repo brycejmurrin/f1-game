@@ -21,6 +21,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog, seedLogGlobal } from "./seed-log.mjs";
 import { seedSaveMigrate, seedSaveMigrateGlobal } from "./seed-save-migrate.mjs";
+import { absSrc } from "./abs-src.mjs";
 
 const STORE_JS = fs.readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/core/store.js"),
@@ -31,7 +32,7 @@ const STORE_JS = fs.readFileSync(
 export function seedStore(ctx) {
   if (vm.runInContext("typeof Log === \"undefined\"", ctx)) seedLog(ctx);
   if (vm.runInContext("typeof SaveMigrate === \"undefined\"", ctx)) seedSaveMigrate(ctx);
-  vm.runInContext(STORE_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/store.js" });
+  vm.runInContext(STORE_JS.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/store.js") });
   return ctx;
 }
 

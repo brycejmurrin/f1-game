@@ -8,6 +8,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const LAP = 5000;
@@ -25,7 +26,7 @@ function loadRaceStack() {
   ctx.CamModes = { CAM_MODES: [{ id: "chase" }] };
   for (const f of ["js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/race-facts.js",
     "js/race/event-journal.js", "js/race/race-radio.js"]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   const get = (n) => vm.runInContext(n, ctx);
   return { G: null, RF: get("RaceFacts"), RR: get("RaceRadio"), EJ: get("EventJournal") };

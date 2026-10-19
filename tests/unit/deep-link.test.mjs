@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const SRC = readFileSync(new URL("../../js/ui/deep-link.js", import.meta.url), "utf8");
 const MANIFEST = JSON.parse(readFileSync(new URL("../../manifest.json", import.meta.url), "utf8"));
@@ -25,7 +26,7 @@ function boot({ search = "", overlayHidden = false, inRace = false, top = null, 
     Log: { info: (_c, m) => logs.push(m) },
     setTimeout: (fn) => { timers.push(fn); return timers.length; },
   });
-  vm.runInContext(SRC + ";globalThis.DeepLink = DeepLink;", ctx, { filename: "js/ui/deep-link.js" });
+  vm.runInContext(SRC + ";globalThis.DeepLink = DeepLink;", ctx, { filename: absSrc("js/ui/deep-link.js") });
   const hub = { id: "dh-tab-schedule", click() { clicks.push("dh-tab-schedule"); } };
   const state = { hubUp: false };
   const G = { els: { overlay: { hidden: overlayHidden } },

@@ -14,6 +14,7 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -45,7 +46,7 @@ function boot({ soundOn, musicEnabled, raceRadio, data = {}, extra = {} }) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx); seedDom(ctx);
-  vm.runInContext(read("js/audio/panel.js").replace(/^const\b/gm, "var") + "; globalThis.__audioPanel = AudioPanel;", ctx, { filename: "js/audio/panel.js" });
+  vm.runInContext(read("js/audio/panel.js").replace(/^const\b/gm, "var") + "; globalThis.__audioPanel = AudioPanel;", ctx, { filename: absSrc("js/audio/panel.js") });
   const panel = ctx.__audioPanel.create(G);
   calls.length = 0;
   panel.init();
@@ -175,8 +176,8 @@ for (const readyState of ["loading", "interactive", "complete"]) {
     context.window = context;
     seedLog(context); seedStore(context);
     context.Log.info = (...args) => inits.push(args.join(" "));
-    vm.runInContext(read("js/audio/music-lib.js"), context);
-    vm.runInContext(read("js/audio/spotify.js"), context);
+    vm.runInContext(read("js/audio/music-lib.js"), context, { filename: absSrc("js/audio/music-lib.js") });
+    vm.runInContext(read("js/audio/spotify.js"), context, { filename: absSrc("js/audio/spotify.js") });
     const add = elements.get("as-add"), file = elements.get("as-file");
     const save = elements.get("as-sp-save");
     if (readyState === "loading") {

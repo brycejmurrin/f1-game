@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
@@ -30,7 +31,7 @@ seedLog(ctx);
 ctx.window = ctx;
 for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
                  "js/car/parts.js", "js/physics/tyre-model.js"]) {
-  vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+  vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
 }
 const T = vm.runInContext("TyreModel", ctx);
 const PC = vm.runInContext("PhysicsConsts", ctx);

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { absSrc } from "../helpers/abs-src.mjs";
 const root = new URL('../../', import.meta.url);
 const read = (p) => fs.readFileSync(new URL(p, root), 'utf8');
 const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -26,7 +27,7 @@ function boot() {
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     RTCPeerConnection: class { constructor() { this.connectionState = 'new'; } close() {} },
   });
-  for (const f of ['js/net/bytes.js', 'js/net/transport.js', 'js/input/tilt-roll.js', 'js/input/phone-pad.js']) vm.runInContext(read(f), ctx, { filename: f });
+  for (const f of ['js/net/bytes.js', 'js/net/transport.js', 'js/input/tilt-roll.js', 'js/input/phone-pad.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const { P, T } = vm.runInContext('({P:PhonePad,T:NetTransport})', ctx);
   return { ctx, P, T, clock, document, window, beat: () => { for (const fn of intervals.values()) fn(); } };
 }
@@ -150,7 +151,7 @@ test('actual scanner stops on manual connect/cancel and invalidates pending sens
     class Detector { static async getSupportedFormats() { return ['qr_code']; } async detect() { return codes; } }
     h.window.BarcodeDetector = Detector;
     if (mode.includes('sensor')) h.ctx.DeviceOrientationEvent = { requestPermission: () => new Promise(r => { grant = r; }) };
-    vm.runInContext(read('js/net/scan.js'), h.ctx);
+    vm.runInContext(read('js/net/scan.js'), h.ctx, { filename: absSrc("js/net/scan.js") });
     const Scan = vm.runInContext('NetScan', h.ctx), dom = { body: element(), status: element(), scan: element(), scanBox: element(), video: element(), buttons: {} };
     Object.assign(dom.video, { play: async () => {}, readyState: 4, videoWidth: 640, videoHeight: 480 });
     const ctl = h.P.pad(dom, { deps: { scan: () => Scan, rtc: () => wire(), prefetchIce: async () => null,
@@ -181,7 +182,7 @@ test('an old cancelled camera start cannot hide or stop the newer scan panel', a
   const h = boot(), requests = []; let oldStops = 0, newStops = 0;
   h.ctx.navigator.mediaDevices = { getUserMedia: () => new Promise(r => requests.push(r)) };
   class Detector { static async getSupportedFormats() { return ['qr_code']; } async detect() { return []; } }
-  h.window.BarcodeDetector = Detector; vm.runInContext(read('js/net/scan.js'), h.ctx);
+  h.window.BarcodeDetector = Detector; vm.runInContext(read('js/net/scan.js'), h.ctx, { filename: absSrc("js/net/scan.js") });
   const Scan = vm.runInContext('NetScan', h.ctx), dom = { status: element(), scan: element(), scanBox: element(), video: element(), buttons: {} };
   dom.video.play = async () => {};
   const ctl = h.P.pad(dom, { deps: { scan: () => Scan } });

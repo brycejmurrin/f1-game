@@ -26,7 +26,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { api, DEPLOY } from "./ready-full-cap.mjs";
+import { api, DEPLOY } from "./github-api.mjs";
 import { ciState } from "./pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");

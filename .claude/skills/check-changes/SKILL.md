@@ -20,6 +20,10 @@ Codex run the command by hand — it is `pick-tests`, 0.1 s, read-only):
 
 ## Prerequisites
 
+For prose-only edits, take the [canonical docs/skill fast path](../../../docs/VERIFICATION.md#docs-and-skill-changes)
+before choosing the code gate below. Generated documentation is not prose-only;
+agent-surface edits also run the focused `agent-config` checks.
+
 `--fast` needs only Node modules; browser batches need the headless shell.
 The SessionStart hook installs both (AGENTS.md §Verification 1); the manual
 fallback is `bash tools/env/cloud-agent-install.sh`.
@@ -36,13 +40,15 @@ node tools/ci/verify-change.mjs              # fast gate + start batch 1 (backgr
 node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
 ```
 
-`--fast` is the edit-loop rung; before a push run `node tools/ci/deploy.mjs --gate-only`
+`--fast` is the edit-loop rung; before a code push run `node tools/ci/deploy.mjs --gate-only`
 once (the ladder: AGENTS.md rule 3). A started batch's verdict is its log's `= run …` line
 (`references/triage.md`).
 
 - **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /
   pages / nightly conclusions; `verify-agent --base <ref>` answers `DELTA: same-red |
   new-on-session | already-red-on-ref`; a red you did not cause → `who-is-on-it.mjs` first.
+  A baseline comparison with no selected checks or unread results is unknown;
+  both scoped runs green means no red, not a pre-existing failure.
 - **Which groups, in what order?** `--plan`'s `batches` can exceed AGENTS.md §Verification's
   cap. Order: plan, then the two most specific groups one at a time (the master-gate spec
   alone for a quick signal), the rest named not-run, then the gate: `references/engine-physics.md`.
