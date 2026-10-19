@@ -20,7 +20,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseJunit, parseLiveLog, mergeRows, emptyDb, serialise, saveDb, loadDb,
@@ -45,7 +45,7 @@ const JUNIT = `<testsuites id="" name="" tests="3" failures="0" time="120">
 </testsuite>
 </testsuites>`;
 
-const tmpdir = () => fs.mkdtempSync(path.join(os.tmpdir(), "spec-timings-"));
+const tmpdir = () => mkTmpDir("spec-timings-");
 
 test("parseJunit reads Playwright's shape: suite timestamp, testcase time, tests/ prefix", () => {
   const rows = parseJunit(JUNIT);

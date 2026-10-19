@@ -26,6 +26,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "./abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MANIFEST = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
@@ -156,7 +157,7 @@ export function bootGlx(opts = {}) {
   for (const [k, v] of Object.entries(opts.ls || {})) sandbox.localStorage.setItem(k, v);
   sandbox.window = sandbox; sandbox.self = sandbox; sandbox.globalThis = sandbox;
   const ctx = vm.createContext(sandbox);
-  for (const [f, src] of SOURCES) vm.runInContext(src, ctx, { filename: f });
+  for (const [f, src] of SOURCES) vm.runInContext(src, ctx, { filename: absSrc(f) });
   const GLX = vm.runInContext("GLX", ctx);
   const inited = GLX.init(canvas);
   if (!inited) throw new Error("glx-mock: GLX.init() refused the mock context");

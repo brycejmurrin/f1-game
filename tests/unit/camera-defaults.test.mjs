@@ -5,6 +5,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { loadRig, makeTrack, BEND } from "../helpers/camera-rig.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -31,7 +32,7 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
     const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
       setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
     ctx.window = ctx;
-    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx);
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race" };
     const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
     const fire = type => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1 });
@@ -65,7 +66,7 @@ function loadCockpitOpts(disk) {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(root, "js/camera/cockpit-opts.js"), "utf8") + "\nthis.exported = CockpitOpts;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/cockpit-opts.js") });
   return ctx.exported;
 }
 
@@ -82,7 +83,7 @@ function loadCamTune(disk = new Map()) {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/offsets.js") });
   return ctx.exported;
 }
 
@@ -225,7 +226,7 @@ test("broadcast cameras carry per-mode cut ease durations", () => {
   const dom = makeDom();
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
   ctx.window = ctx;
-  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx);
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = ctx.CamModes.CAM_MODES, idx = (id) => modes.findIndex((m) => m.id === id);
   assert.equal(modes[idx("cinematic")].cut, 0.6);
   assert.equal(modes[idx("heli")].cut, 0.55);
@@ -424,7 +425,7 @@ test("persist(which) writes only the named CamTune store", () => {
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
     Log: { info() {}, debug() {}, enabled() { return false; } },
   };
-  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;", ctx);
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;", ctx, { filename: absSrc("js/camera/offsets.js") });
   const CamTune = ctx.exported;
   CamTune.set("chase", "dist", 2); CamTune.setGlobal("fov", 5); CamTune.comfortSet("bob", 0.5);
 

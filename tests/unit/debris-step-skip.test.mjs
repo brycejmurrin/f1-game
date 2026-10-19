@@ -27,62 +27,19 @@ function extractFn(src, name) {
   throw new Error(`unbalanced braces reading ${name}()`);
 }
 
-test("asleep-skip helpers exist and share the despawn path with the WASM tick", () => {
-  for (const name of ["_ageAndCullPool", "_carNearLiveDebris", "_needSolve", "_anyAwake", "_playerSample"]) {
-    assert.match(SRC, new RegExp(`function ${name}\\(`), `${name} missing`);
-  }
-  const age = extractFn(SRC, "_ageAndCullPool");
-  assert.match(age, /isSleeping\(\)/);
-  assert.match(age, /restT/);
-  assert.match(age, /setEnabled\(false\)/);
-  const wake = extractFn(SRC, "_carNearLiveDebris");
-  assert.match(wake, /FURN_WAKE_M/, "wake radius must stay the furniture constant");
-  assert.match(wake, /_marbles/, "marbleGrip reads sleeping live marbles — they must wake the solve");
-  const need = extractFn(SRC, "_needSolve");
-  assert.match(need, /_anyAwake/);
-  assert.match(need, /_carNearLiveDebris/);
-  assert.match(need, /_carNearFurn/);
-  assert.match(need, /_dynCars/);
-});
-
-test("step() skips world.step on the asleep path and zeros panel force first", () => {
-  const step = extractFn(SRC, "step");
-  const skipAt = step.indexOf("if (!_needSolve");
-  const wasmAt = step.indexOf("world.step(_events)");
-  assert.ok(skipAt >= 0, "tier-2 skip must gate on !_needSolve");
-  assert.ok(wasmAt > skipAt, "world.step(_events) must stay on the needSolve path, after the skip return");
-  const skipBody = step.slice(skipAt, step.indexOf("_tick++"));
-  assert.match(skipBody, /_stepSkips\+\+/);
-  assert.match(skipBody, /_ageAndCullPool/);
-  assert.match(skipBody, /\.force = 0/);
-  assert.match(skipBody, /updatePanels/);
-  assert.doesNotMatch(skipBody, /world\.step/);
-  assert.doesNotMatch(skipBody, /setNextKinematic/);
-});
-
-test("status() reports stepSkips; reset() zeroes it", () => {
-  assert.match(extractFn(SRC, "status"), /stepSkips:\s*_stepSkips/);
-  assert.match(extractFn(SRC, "reset"), /_stepSkips = 0/);
-});
-
-test("Rapier is not imported inside the boot burst; prime() starts it if a race comes first", () => {
-  // create() used to call setEnabled(true) synchronously, which import()ed
-  // 2.2 MB of Rapier + compiled its WASM while the shaders, the asset pack and
-  // the first track were all in flight. The side-world is not needed before a
-  // race is primed, so the load waits for an idle slice; prime() kicks it at
-  // once if the player is faster, and step() builds the world lazily.
-  const create = extractFn(SRC, "create");
-  assert.doesNotMatch(create, /setEnabled\(true\)/, "create() must not start the Rapier load synchronously");
-  assert.match(create, /requestIdleCallback\(kick, \{ timeout: \d+ \}\)/, "the boot kick waits for an idle slice");
-  assert.match(create, /else setTimeout\(kick, \d+\)/, "Safari has no requestIdleCallback — a timer fallback is required");
-  assert.match(extractFn(SRC, "prime"), /if \(_enabled && _loadState === 0\) _load\(\);/,
-    "prime() must start the load when a race arrives before the deferred kick");
-  assert.match(extractFn(SRC, "step"), /if \(!world && !_buildWorldSafe\(track, cars\)\) return;/,
-    "step() builds lazily, so a load that lands after prime still gets a world");
+test("a fresh create() imports no Rapier: the boot burst stays clear until ready()/prime() asks", () => {
+  // create() used to import 2.2 MB of Rapier + compile its WASM while shaders,
+  // the asset pack and the first track were in flight. requestIdleCallback is a
+  // no-op in the harness, so nothing may have been requested by create() alone.
+  const d = lateRapier();
+  assert.equal(d.imports(), 0, "create() must not start the Rapier load synchronously");
+  assert.equal(d.M.active(), false);
+  d.M.ready();
+  assert.equal(d.imports(), 1, "a race arriving first starts it at once");
 });
 
 function lateRapier({ enabled = true } = {}) {
-  let finish, fail, imports = 0, builds = 0, imported;
+  let finish, fail, imports = 0, builds = 0, solves = 0, imported;
   const urls = [], timers = [];
   const arm = () => { imported = new Promise((resolve, reject) => { finish = resolve; fail = reject; }); };
   arm();
@@ -97,21 +54,46 @@ function lateRapier({ enabled = true } = {}) {
     Log: { warn() {}, info() {} },
     __importRapier: (url) => { imports++; urls.push(url); return imported; },
     __build: () => { builds++; },
+    __solve: () => { solves++; },
+    Tracks: { sample(_t, _s, out) { out.p = [0, 0, 0]; out.r = [1, 0, 0]; out.t = [0, 0, 1]; return out; } },
   });
   // Mock only the external import and costly WASM construction. All readiness,
   // activation and first-step decisions execute the real module.
-  const src = SRC.replace("import(url)", "__importRapier(url)")
+  // __marbles exposes the private pool so a test can seat a settled body without Rapier.
+  const src = SRC.replace("import(url)", "__importRapier(url)").replace("return { create, active,", "return { __marbles: () => _marbles, create, active,")
     .replace(extractFn(SRC, "buildWorld"), `function buildWorld(track, cars) {
-      __build(); world = { timestep: FIXED_DT }; _worldTrack = track;
-      _mirrors = cars.map(() => ({}));
+      __build(); world = { timestep: FIXED_DT, step() { __solve(); } }; _worldTrack = track;
+      _mirrors = cars.map(() => ({ setNextKinematicTranslation() {}, setNextKinematicRotation() {} }));
     }`);
   vm.runInContext(src, ctx);
   const M = vm.runInContext("DebrisWorld", ctx);
   M.create(G);
-  return { M, G, finish: () => finish({ default: { init: () => Promise.resolve() } }), fail: (e) => fail(e), arm,
+  return { M, G, ctx, solves: () => solves, finish: () => finish({ default: { init: () => Promise.resolve() } }), fail: (e) => fail(e), arm,
     imports: () => imports, builds: () => builds, urls, timers,
     fire: () => { for (const t of timers) if (t.live) { t.live = false; t.fn(); } } };
 }
+
+test("two-tier idle: a settled marble far from every car skips the solve; a car inside the wake radius brings it back", async () => {
+  const d = lateRapier();
+  const p = d.M.ready(); d.finish(); await p;
+  d.G.player = null;
+  d.G.cars = [{ s: 0, x: 0, px: 5000, pz: 0 }];
+  assert.equal(d.M.prime(), true);
+  const marble = { live: true, restT: 0, body: { isSleeping: () => true, translation: () => ({ x: 0, y: 0.1, z: 0 }), setEnabled() {} } };
+  d.M.__marbles().push(marble);
+  const before = d.M.status();
+  d.M.step(1 / 60);
+  assert.equal(d.M.status().stepSkips, before.stepSkips + 1, "asleep and no car near: JS bookkeeping only");
+  assert.equal(d.solves(), 0, "world.step is not called");
+  d.G.cars[0].px = 3;   // inside FURN_WAKE_M of the settled marble
+  d.M.step(1 / 60);
+  assert.equal(d.solves(), 1, "a car in the wake radius runs the solve so it can punt the marble");
+  assert.equal(d.M.status().stepSkips, before.stepSkips + 1, "and that frame is not counted as a skip");
+  d.G.cars[0].px = 5000;
+  marble.body.isSleeping = () => false;
+  d.M.step(1 / 60);
+  assert.equal(d.solves(), 2, "an awake body always solves");
+});
 
 test("race readiness waits for a late import: setup builds once and the first green step does not build", async () => {
   const d = lateRapier();
@@ -232,6 +214,7 @@ test("idle Rapier mirrors start incidents at the current human and AI pose", asy
       assert.ok(Math.abs(pose.y - 4.45) < 1e-4, "seed current road height");
       assert.ok(Math.abs(pose.qy - Math.sin(yaw / 2)) < 1e-6, "AI uses tangent, human uses heading");
       debris.step(1 / 60); incident.postStep(1 / 60);
+      assert.equal(debris.status().stepped, stepped + 1, "an owned car wakes the solve: exactly one WASM step");
       assert.equal(incident.status().fallbacks, 0, "the first dynamic step must survive position validation");
       assert.equal(incident.owns(car), true);
       assert.ok(car.px > (human ? 2000 : 3000), "launch advances from the current car position");

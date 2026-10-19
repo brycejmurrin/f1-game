@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -43,7 +44,7 @@ function makeDroplets({ mobile = false, preset = "high", staticEl = true } = {})
     GLX: { isMobile: mobile }, GfxQuality: { current: () => preset },
   });
   seedLog(ctx);
-  const D = vm.runInContext(read("js/fx/droplets.js") + ";Droplets", ctx);
+  const D = vm.runInContext(read("js/fx/droplets.js") + ";Droplets", ctx, { filename: absSrc("js/fx/droplets.js") });
   return { D, el, calls };
 }
 
@@ -136,7 +137,7 @@ function makeParticles(mobile = false) {
     PerfGov: { autoShed: () => 0 },
   });
   seedLog(ctx);
-  const P = vm.runInContext(read("js/fx/particles.js") + ";Particles", ctx);
+  const P = vm.runInContext(read("js/fx/particles.js") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
   P.init({ mobileTier: mobile, drawParticles() {} });
   return P;
 }

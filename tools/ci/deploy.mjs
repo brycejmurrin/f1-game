@@ -109,9 +109,9 @@ export function run(cmd, args, what, options) {
   if (r.status !== 0) throw childFailure(r, `${what} failed`);
 }
 
-export function preflight() {
+export function preflight(cwd = ROOT) {
   const problems = [];
-  if (git(["status", "--porcelain"]).out) problems.push("working tree is dirty — commit first");
+  if (git(["status", "--porcelain"], { cwd }).out) problems.push("working tree is dirty — commit first");
   const load = os.loadavg()[0];
   if (load >= 3) problems.push(`loadavg ${load.toFixed(2)} >= 3 — a verification now measures the box`);
   const ps = spawnSync("pgrep", ["-f", "run-playwrigh[t]|playwright tes[t]"], { encoding: "utf8" });
@@ -192,7 +192,7 @@ export function plan() {
   return { branch, head, tip, fastForward: ancestor, theirCommits: theirs, ourCommits: ours, theirDiffstat: stat, conflicts,
     touchedCircuits: touchedCircuits(tip),
     steps: [
-      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers; then `npm run gen` re-derives every generated file on the union, conflict or not, and commits any drift)",
+      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers, docs/agent-output/catalog.json from gen-output-surface; then `npm run gen` re-derives every generated file on the union, conflict or not, and commits any drift)",
       `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       touchesGeometry(tip) ? "test:sweeps (~10 min — this union can move geometry)"
@@ -330,6 +330,7 @@ function manifestMoved() {
 
 const RATCHETS = "tests/data/ratchets.json";
 const TOOLS_README = "tools/README.md";
+const OUTPUT_CATALOG = "docs/agent-output/catalog.json";
 /* Every number in ratchets.json, flattened to `scope/name` -> value, so the
    three sides of a conflict can be compared metric by metric. */
 export function ratchetMetrics(json) {
@@ -420,13 +421,18 @@ export function cureableConflicts(conflicted) {
   // package.json does: take either side to give the generator something
   // parseable, then regenerate from the merged sources.
   const toolsF = conflicted.filter((f) => f === TOOLS_README);
+  // docs/agent-output/catalog.json is GENERATED (gen-output-surface.mjs) from
+  // the tools tree, package.json scripts, .mcp.json and policies.json; two PRs
+  // that each add a tool can touch neighbouring rows. Same cure: regenerate.
+  // (policies.json is hand-written, so a conflict THERE still stops the merge.)
+  const catalogF = conflicted.filter((f) => f === OUTPUT_CATALOG);
   // (The gate-ladder figures used to be cured here too; since 2026-09-30 no
   // doc commits them — tools/gen/gen-ladder-figures.mjs only reports — so
   // there is nothing left to conflict.)
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF, toolsF };
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length === conflicted.length;
+  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF };
 }
 
 /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
@@ -493,11 +499,11 @@ export function mergeDeployTip() {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF, toolsF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -546,6 +552,13 @@ export function mergeDeployTip() {
     run("node", ["tools/gen/gen-tools-readme.mjs"], "regenerate the tools index from the merged tree");
     must(git(["add", TOOLS_README]), "add");
     did.push("tools index regenerated");
+  }
+  if (catalogF.length) {
+    // After the package.json cure: the catalog lists npm scripts too.
+    must(git(["checkout", "--ours", "--", OUTPUT_CATALOG]), `checkout --ours ${OUTPUT_CATALOG}`);
+    run("node", ["tools/gen/gen-output-surface.mjs"], "regenerate the agent output catalog from the merged tree");
+    must(git(["add", OUTPUT_CATALOG]), "add");
+    did.push("agent output catalog regenerated");
   }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   installIfLockMoved(before);

@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/driving-line-opts.js"), "utf8").replace(/^const\b/gm, "var");
@@ -46,7 +47,7 @@ function load({ stored = {}, readyState = "complete" } = {}) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(SRC, ctx, { filename: "js/ui/driving-line-opts.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/driving-line-opts.js") });
   return { M: vm.runInContext("DrivingLineOpts", ctx), rows, line, written, doc: sb.document };
 }
 

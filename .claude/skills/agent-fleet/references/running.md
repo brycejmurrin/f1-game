@@ -9,7 +9,7 @@ Launch by role (SKILL.md §roles): a hunter finds and fixes, then sends
 per PR (role-pr-owner.md) within minutes, quoting the user's grants; the owner
 replies `ARMED`, drives the PR, and sends `DONE <PR> <merge sha>`; you verify
 two parents and archive the owner, never the hunter. With no live Merge Desk
-you are the merge holder (role-merge-holder.md). Spawning stays here by
+you merge your own fleet's PRs (role-merge-holder.md). Spawning stays here by
 default: a grandchild acting on a quote of a quote is relayed authority, and
 the auto-mode classifier refused relayed `.claude` edits, CI re-runs and merges
 on 2026-10-16. `.claude/**` edits are done by you or approved by the user in

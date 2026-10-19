@@ -32,13 +32,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
-import { makeDom } from "../helpers/mini-dom.mjs";
+import { bootSheetShape } from "../helpers/sheetshape-boot.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /**
  * Boot sheet-shape.js against a phone-shaped DOM whose two viewports can be
@@ -56,8 +51,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
  * the bug under test and would have "proved" it on healthy code.
  */
 function boot() {
-  const dom = makeDom();
-
   const winListeners = new Map();
   const vvListeners = new Map();
   const add = (map) => (type, fn) => {
@@ -73,33 +66,17 @@ function boot() {
 
   const frames = [];
   const timers = [];
-  class RO { observe() {} unobserve() {} disconnect() {} }
-  class MO { observe() {} disconnect() {} }
 
-  const sb = {
-    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet,
-    RegExp, Date, parseFloat, parseInt, isFinite, Infinity, NaN,
-    ResizeObserver: RO,
-    MutationObserver: MO,
-    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
-    getComputedStyle: () => ({ getPropertyValue: () => "" }),
+  const { dom, sb } = bootSheetShape(() => ({
     requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
-    cancelAnimationFrame: () => {},
     // Timers QUEUE (never run unless a test drains them) so the rotation-settle
     // test below can step the clock; the keyboard tests never drain them.
     setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
     clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].live = false; },
-    addEventListener: add(winListeners), removeEventListener: () => {},
+    addEventListener: add(winListeners),
     visualViewport: vv,
-    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     innerWidth: 390, innerHeight: 844, devicePixelRatio: 3,
-    document: dom.document,
-  };
-  sb.window = sb;
-  sb.self = sb;
-  vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/sheet-shape.js"), "utf8"),
-    sb, { filename: "sheetshape.js" });
+  }));
 
   const fire = (target, type) => {
     const map = target === "vv" ? vvListeners : winListeners;

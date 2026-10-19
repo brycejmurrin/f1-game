@@ -17,6 +17,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -37,7 +38,7 @@ function harness() {
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
   return { GarageScene, meshes, ctx, draws };
@@ -113,7 +114,7 @@ test("selected home shots stay composed under reduced motion and restore the ori
 
 test("first home framing fits the real car silhouette into the current visible pane", () => {
   const { ctx, GarageScene } = harness(), Experience = vm.runInContext("GarageExperience", ctx);
-  vm.runInContext(read("js/core/mat4.js"), ctx);
+  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   const M4 = vm.runInContext("M4", ctx), M = loadParts(), team = M.Teams.LIST[0];
   const liv = { c1: [0.9, 0.1, 0.1], c2: [1, 1, 1] };
   const mesh = M.Car3D.build(liv.c1, liv.c2, { livery: liv, teamId: team.id, num: 1,
@@ -172,7 +173,7 @@ test("earned career facility levels add material-complete workstations", () => {
 
 test("part comparison reports the fitted-to-candidate tradeoff without fitting it", () => {
   const { ctx } = harness();
-  vm.runInContext(read("js/car/parts.js"), ctx);
+  vm.runInContext(read("js/car/parts.js"), ctx, { filename: absSrc("js/car/parts.js") });
   const Parts = vm.runInContext("Parts", ctx), Experience = vm.runInContext("GarageExperience", ctx);
   const cat = Parts.CATALOG.find((c) => c.id === "engine");
   const current = cat.options.find((o) => o.id === "performance");
@@ -305,7 +306,7 @@ function liveAtlasHarness(isMobile = true) {
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const scene = vm.runInContext("GarageScene", ctx);
   scene.init(gfx);
   return { scene, uploads, warns, gfx, wall(t) { now = t; }, failTrace(on) { failTrace = on; },
@@ -410,7 +411,7 @@ test("a failed trace upload preserves its decal and retries after recovery", () 
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
 
@@ -460,7 +461,7 @@ test("garage dress upload retries after a transient failure, and a new team clea
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const garage = vm.runInContext("GarageScene", ctx);
   garage.init(gfx);
   const draw = (team = TEAM) => garage.draw(team, LIV, [0, 1.6, 0], null, 0);

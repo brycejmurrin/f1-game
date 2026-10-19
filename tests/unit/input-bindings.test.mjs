@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -23,7 +24,7 @@ function boot(activePad = () => null) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/input/bindings.js"), ctx, { filename: "js/input/bindings.js" });
+  vm.runInContext(read("js/input/bindings.js"), ctx, { filename: absSrc("js/input/bindings.js") });
   const InputBindings = vm.runInContext("InputBindings", ctx);
   const B = InputBindings.create({
     onKeysChanged() { counts.keys++; },
@@ -219,7 +220,7 @@ test("InputBindings.parseHoldMode round-trips and rejects junk", () => {
     navigator: {}, Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
   };
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/input/bindings.js"), ctx, { filename: "js/input/bindings.js" });
+  vm.runInContext(read("js/input/bindings.js"), ctx, { filename: absSrc("js/input/bindings.js") });
   const parse = vm.runInContext("InputBindings.parseHoldMode", ctx);
   const defs = vm.runInContext("InputBindings.holdModeDefaults", ctx);
   assert.deepEqual(plain(defs()), { throttle: "hold", lookBack: "hold" });
@@ -265,9 +266,9 @@ function bootInput(holdMode) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(readJs("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readJs("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
-    vm.runInContext(readJs(f), ctx, { filename: f });
+    vm.runInContext(readJs(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el("canvas"));
   if (holdMode) Input.setHoldMode(holdMode);

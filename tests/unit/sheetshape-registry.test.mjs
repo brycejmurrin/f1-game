@@ -23,17 +23,11 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
-import { makeDom } from "../helpers/mini-dom.mjs";
+import { bootSheetShape } from "../helpers/sheetshape-boot.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** Boot sheetshape.js in a VM, returning the module plus the observer spies. */
 function boot() {
-  const dom = makeDom();
   const observed = [], unobserved = [];
   const mutationCbs = [];
 
@@ -49,29 +43,8 @@ function boot() {
     disconnect() {}
   }
 
-  const sb = {
-    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet,
-    RegExp, Date, parseFloat, parseInt, isFinite, Infinity, NaN,
-    ResizeObserver: RO,
-    MutationObserver: MO,
-    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
-    getComputedStyle: () => ({ getPropertyValue: () => "" }),
-    requestAnimationFrame: (fn) => { fn(0); return 1; },
-    cancelAnimationFrame: () => {},
-    setTimeout: () => 1, clearTimeout: () => {},
-    addEventListener: () => {}, removeEventListener: () => {},
-    visualViewport: null,
-    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
-    innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
-    document: dom.document,
-  };
-  sb.window = sb;
-  sb.self = sb;
-  vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/sheet-shape.js"), "utf8"),
-    sb, { filename: "sheetshape.js" });
-
-  return { dom, sheet: sb.SheetShape, observed, unobserved, mutationCbs, sb };
+  const { dom, sheet, sb } = bootSheetShape(() => ({ ResizeObserver: RO, MutationObserver: MO }));
+  return { dom, sheet, observed, unobserved, mutationCbs, sb };
 }
 
 /** A managed card with a real size, attached to the document like a popup. */

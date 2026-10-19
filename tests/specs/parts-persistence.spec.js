@@ -12,7 +12,7 @@
 // The team-isolation test's reload was only there to make a stored team the
 // live one, which pinFreePlay + #mb-race now does in place. openSetup() walks
 // back to the title first and starts from forgotten parts, as clearState on a
-// fresh page did. UNVERIFIED IN A BROWSER at conversion time.
+// fresh page did..
 import { sharedTest as test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
@@ -203,6 +203,15 @@ test.describe("Parts persistence — team isolation", () => {
     // fitted that team's gearbox in an earlier test.
     const other = await page.evaluate(() =>
       Teams.LIST.findIndex((t) => t.id !== Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")].id));
+    // Read BOTH slots before pinFreePlay: it writes parts.<other> = {} below, which
+    // would erase a write-side leak (the pick landing in the other team's slot).
+    const slots = await page.evaluate((o) => {
+      const mine = Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")].id;
+      const S = GameStore.store;
+      return { mine: S.get("parts." + mine), other: S.get("parts." + Teams.LIST[o].id) };
+    }, other);
+    expect(slots.mine && slots.mine.gearbox, "the pick is stored under the team it was made for").toBe("f1_spec");
+    expect((slots.other || {}).gearbox, "the pick must not leak into another team's slot").not.toBe("f1_spec");
     await toMenu(page);
     await pinFreePlay(page, { team: other, click: false });
 

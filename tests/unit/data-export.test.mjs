@@ -142,7 +142,7 @@ function boot(fetchImpl, nativeDownload) {
   });
   seedLog(context);
   vm.runInContext(sources + "\nglobalThis.DataExport=DataExport;\nglobalThis.F1API=F1API;", context, {
-    filename: "data-export-harness.js",
+    filename: "data-export-harness",
   });
 
   const flush = () => new Promise((resolve) => { setImmediate(resolve); });

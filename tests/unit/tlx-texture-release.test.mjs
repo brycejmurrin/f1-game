@@ -17,6 +17,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import vm from "node:vm";
 import { loadCrests } from "../../tools/car/crest-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
@@ -68,7 +69,7 @@ test("phone AI atlases snapshot before scratch reuse on STANDARD and HIGH, inclu
     const ctx = vm.createContext({ document, GLX: { isMobile, mobileTier }, console: { log() {}, warn() {}, error() {}, info() {} } });
     for (const file of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js",
       "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
-      vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: file });
+      vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
     const painter = vm.runInContext("LiveryTex", ctx), copies = new Map(); let uploads = 0;
     const upload = tex => { uploads++; copies.set(tex, tex.image.generation); tex.onUpdate?.(tex); };
     const gfx = liftTextures({ isMobile, mobileTier, initTexture: upload });

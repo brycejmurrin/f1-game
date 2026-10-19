@@ -160,6 +160,21 @@ test("preflight returns a list of refusals, never throws", () => {
   for (const p of problems) assert.equal(typeof p, "string");
 });
 
+test("preflight(cwd) judges the fixture repo's tree, not the checkout's", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-preflight-"));
+  try {
+    const g = (...a) => execFileSync("git", ["-C", dir, ...a], { stdio: "ignore" });
+    g("init", "-q");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.writeFileSync(path.join(dir, "a.txt"), "x");
+    g("add", "-A"); g("commit", "-q", "-m", "init");
+    const dirty = (cwd) => preflight(cwd).some((p) => p.startsWith("working tree is dirty"));
+    assert.equal(dirty(dir), false, "clean fixture repo is not dirty");
+    fs.writeFileSync(path.join(dir, "b.txt"), "y");
+    assert.equal(dirty(dir), true, "an untracked file in the fixture is dirty");
+  } finally { rmTemp(dir); }
+});
+
 /* THE RATCHETS AUTO-CURE. tests/data/ratchets.json is derived, so a conflict in
  * it is arithmetic and not a disagreement — deploy.mjs takes theirs and re-runs
  * `ratchets.mjs --update` on the merged tree. What makes that safe to automate
@@ -229,6 +244,11 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.deepEqual(parts.pkgF, ["package.json"]);
   assert.deepEqual(parts.shellF, ["index.html"]);
   assert.deepEqual(parts.ratchetF, ["tests/data/ratchets.json"]);
+
+  // The agent output catalog is derived (gen-output-surface.mjs); its policy source is not.
+  assert.equal(cure(["docs/agent-output/catalog.json", "tools/README.md"]), true, "two tool indexes regenerate together");
+  assert.deepEqual(cureableConflicts(["docs/agent-output/catalog.json"]).catalogF, ["docs/agent-output/catalog.json"]);
+  assert.equal(cure(["docs/agent-output/catalog.json", "docs/agent-output/policies.json"]), false, "policies.json is hand-written");
 });
 
 test("prose docs are never cured: no doc carries generated ladder digits any more", () => {

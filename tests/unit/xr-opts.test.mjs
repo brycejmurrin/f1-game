@@ -6,6 +6,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -45,9 +46,9 @@ function bootOpts(lsSeed, ssSeed) {
       },
     },
   };
-  vm.runInContext(read("js/xr/xr-plan.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-plan.js" });
-  vm.runInContext(read("js/xr/xr-opts.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-opts.js" });
-  vm.runInContext(read("js/xr/apex-xr.js").replace(/^const\b/gm, "var"), ctx, { filename: "apex-xr.js" });
+  vm.runInContext(read("js/xr/xr-plan.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-plan.js") });
+  vm.runInContext(read("js/xr/xr-opts.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-opts.js") });
+  vm.runInContext(read("js/xr/apex-xr.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/apex-xr.js") });
   return { ctx, ls, ss };
 }
 

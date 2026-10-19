@@ -18,10 +18,16 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/debris-opts.js";
 const SRC = fs.readFileSync(path.join(ROOT, FILE), "utf8").replace(/^const\b/gm, "var");
+const DEFAULTS = (() => {   // the REAL shipped SettingsDefaults, not a stub that answers "0" for everything
+  const ctx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/settings-defaults.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/data/settings-defaults.js") });
+  return vm.runInContext("SettingsDefaults", ctx);
+})();
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 
 function load({ stored = {}, readyState = "complete", world = true } = {}) {
@@ -30,7 +36,8 @@ function load({ stored = {}, readyState = "complete", world = true } = {}) {
   const sb = {
     Math, console, Object, Array, JSON, String, Number,
     GameStore: { store: {
-      raw: (k) => (k in stored ? stored[k] : "0"),
+      // like GameStore.raw: the stored value, else the shipped default for a listed key, else null
+      raw: (k) => (k in stored ? stored[k] : DEFAULTS.has(k.replace(/^apex26\./, "")) ? DEFAULTS.get(k.replace(/^apex26\./, "")) : null),
       rawSet: (k, v) => { stored[k] = String(v); return true; },
     } },
     SettingRow: {
@@ -42,7 +49,7 @@ function load({ stored = {}, readyState = "complete", world = true } = {}) {
   if (world) sb.DebrisWorld = { setEnabled: (on) => { calls.push(on); return { enabled: on }; } };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(SRC, ctx, { filename: FILE });
+  vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   return { M: vm.runInContext("DebrisOpts", ctx), rows, calls, stored, doc: sb.document };
 }
 
@@ -55,6 +62,7 @@ test("it claims pm-debris, and the shell declares that row with its select", () 
 });
 
 test("an unset key reads OFF from the shipped SettingsDefaults value", () => {
+  assert.equal(DEFAULTS.get("debris"), "0", "the shipped default is OFF");
   const { M, rows } = load();
   assert.equal(M.on(), false);
   assert.equal(rows.get("pm-debris").read(), "off");
@@ -110,11 +118,12 @@ test("the key is registered for settings export/import", () => {
 });
 
 test("it reaches nothing from game.js — the reason it is its own file", () => {
-  const bare = SRC.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
-  for (const forbidden of ["G\\.", "Tracks", "player", "gfx"]) {
-    assert.ok(!new RegExp("\\b" + forbidden).test(bare),
-      `the module must not reference ${forbidden} — it needs only the store, SettingRow and DebrisWorld`);
-  }
+  // load() runs in a sandbox with no G, Tracks, player or gfx: any reach for one
+  // throws a ReferenceError during wiring, a read or a write.
+  const { M, rows, doc } = load({ readyState: "loading" });
+  doc._handlers.DOMContentLoaded();
+  const row = rows.get("pm-debris");
+  assert.doesNotThrow(() => { M.on(); row.read(); row.write("on"); row.write("off"); });
 });
 
 test("a Rapier build that throws degrades debris off instead of rejecting race entry (bug-hunt 7.2)", async () => {

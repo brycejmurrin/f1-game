@@ -15,6 +15,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/ui/onboard.js"), "utf8");
@@ -49,7 +50,7 @@ function load(opts = {}) {
     BrakeCue: { debug: () => ({ on: true, urgency: opts.urgency != null ? opts.urgency : 0 }) },
   });
   seedLog(ctx);
-  vm.runInContext(SRC, ctx, { filename: "js/ui/onboard.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/onboard.js") });
   const O = vm.runInContext("Onboard", ctx);
   const G = {
     state: "race",

@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/pause-opts.js";
@@ -109,7 +110,7 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   });
   // ScreenLooks loads AFTER pause-opts.js, so a stub is installed after eval
   // too — the module must read it at call time, never capture it.
-  vm.runInContext(SRC, ctx, { filename: FILE });
+  vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   if (looks) ctx.ScreenLooks = looks;
   // A click as the browser dispatches it: capture listeners on #pausemenu
   // first; unless one stopped it, the button's own handler (js/game.js) runs.

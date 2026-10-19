@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -25,7 +26,7 @@ const sandbox = {
 const vctx = vm.createContext(sandbox);
 for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                  "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
-  vm.runInContext(read(f), vctx, { filename: f });
+  vm.runInContext(read(f), vctx, { filename: absSrc(f) });
 const GarageLive = vm.runInContext("GarageLive", vctx);
 const GarageScene = vm.runInContext("GarageScene", vctx);
 

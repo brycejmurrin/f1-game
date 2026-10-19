@@ -10,6 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CIRCUITS, parseCircuits, circuitTag } from "../../tools/ui/circuit-axis.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("the spread actually spans tall to wide", () => {
   const aspects = CIRCUITS.map(([, a]) => a);
@@ -33,7 +34,7 @@ test("the recorded aspects are what TrackMaps.aspect() measures on the shipped d
   const ctx = Tracks._vmContext;
   const src = fs.readFileSync(new URL("../../js/ui/track-maps.js", import.meta.url), "utf8")
     .replace(/^const\b/gm, "var");
-  vm.runInContext(`${src}\nthis.TrackMaps = TrackMaps;`, ctx, { filename: "js/ui/track-maps.js" });
+  vm.runInContext(`${src}\nthis.TrackMaps = TrackMaps;`, ctx, { filename: absSrc("js/ui/track-maps.js") });
   for (const [id, recorded] of CIRCUITS) {
     const def = Tracks.LIST.find((d) => d.id === id);
     assert.ok(def, `${id} is not in Tracks.LIST`);
