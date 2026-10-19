@@ -2394,6 +2394,7 @@
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
@@ -2412,6 +2413,7 @@
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
@@ -2424,7 +2426,8 @@
         "tests/unit/aero-flap-travel.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/cockpit-pale-surfaces.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs"
       ],
       "carDecalData": [
         "tests/specs/parts-physics.spec.js"
@@ -2611,6 +2614,7 @@
       "buildWheelLayers": [
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
@@ -2619,6 +2623,7 @@
         "tests/unit/car-wing-foil.test.mjs"
       ],
       "tints": [
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
@@ -2709,6 +2714,7 @@
       "*": [
         "tests/unit/body-styles.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -2904,6 +2910,7 @@
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
@@ -4386,6 +4393,7 @@
         "tests/unit/legends-team.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
@@ -6432,6 +6440,7 @@
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
@@ -6459,6 +6468,7 @@
       "tickBody": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -6672,6 +6682,7 @@
         "tests/unit/livery-helmet-style.test.mjs"
       ],
       "*": [
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs"
@@ -6733,6 +6744,9 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "stop": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "tick": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "timed": [
@@ -6827,6 +6841,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "init": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
@@ -6873,7 +6888,6 @@
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
-        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
@@ -6894,6 +6908,9 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "driveOutLeft": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "endGarageRes": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "endHome": [
@@ -6925,8 +6942,14 @@
       "presentOpts": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "renderSetupPreview": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "spMeshBust": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
+      ],
+      "startArrivalPreview": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "startDriveOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7045,6 +7068,7 @@
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
@@ -9066,6 +9090,7 @@
         "tests/unit/thermal-drift.test.mjs"
       ],
       "init": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
@@ -9073,6 +9098,7 @@
         "tests/unit/render-rate.test.mjs"
       ],
       "setMode": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ]
     },

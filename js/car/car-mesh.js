@@ -1026,8 +1026,8 @@ function _wheelRimRetro(out, CARB, RUB, GRIP, acc) {
   for(let i=0;i<7;i++) _rigDisc(out, -0.042+i*0.014, 0.071, -0.016, 0.0035, 8, [0.12,0.15,0.10]);
   _wheelPaddles(out, false);
 }
-function _wheelRimRound(out, GRIP, acc) {
-  const R=0.165, MET=[0.46,0.48,0.50], LEATHER=[0.14,0.095,0.065];
+function _wheelRimRound(out, GRIP, acc, grip) {
+  const R=0.165, MET=[0.46,0.48,0.50], LEATHER=grip||[0.14,0.095,0.065];
   const path=Array.from({length:41},(_,i)=>[R*Math.cos(i/40*Math.PI*2),R*Math.sin(i/40*Math.PI*2)]);
   _rigGrip(out,path,0.016,0.019,LEATHER);
   for(const s of [-1,1]) _rigPlate(out, [[s*0.025,-0.020],[s*0.146,-0.026],[s*0.151,0.007],[s*0.027,0.018]],0.018,0.009,MET);
@@ -1059,8 +1059,11 @@ function getCockpitWheel(liv, style) {
   const c1 = _wheelTint(liv && liv.c1, 0.45);
   const acc = _wheelTint(liv && (liv.accent || liv.c2), 0.55);
   const c2 = _wheelTint(liv && liv.c2, 0.40);
+  // GRIPS (liv.gripTint): the hand-grip rubber / round-wheel leather in the picked colour, at the
+  // same ~55% the accent lands at. Unset = today's black rubber, and the key gains nothing.
+  const gt = _wheelTint(liv && typeof CarMaterials !== "undefined" && CarMaterials.zoneColour(liv.gripTint), 0.55);
   const kc = (c) => c ? c.map((v) => v.toFixed(2)).join(",") : "-";
-  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2);
+  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2) + (gt ? "|g" + kc(gt) : "");
   if (cockpitWheelMesh && _cockpitWheelKey !== wantKey) {
     if (_gfx.freeMesh) _gfx.freeMesh(cockpitWheelMesh);
     cockpitWheelMesh = null;
@@ -1068,9 +1071,9 @@ function getCockpitWheel(liv, style) {
   if (cockpitWheelMesh) return cockpitWheelMesh;
   _cockpitWheelKey = wantKey;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  const CARB = [0.09, 0.095, 0.105], RUB = [0.11, 0.115, 0.12];
+  const CARB = [0.09, 0.095, 0.105], RUB = gt || [0.11, 0.115, 0.12];
   const GRIP = c1 || RUB;
-  if (st === "round") _wheelRimRound(out, GRIP, acc);
+  if (st === "round") _wheelRimRound(out, GRIP, acc, gt);
   else if (st === "retro") _wheelRimRetro(out, CARB, RUB, GRIP, acc);
   else {
     _wheelRimF1(out, CARB, RUB, GRIP, acc, st);

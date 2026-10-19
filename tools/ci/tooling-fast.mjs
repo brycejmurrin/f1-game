@@ -666,6 +666,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-draft-mesh-cache.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
   "tests/unit/livery-helmet-style.test.mjs",
+  // PAINT ZONES (floor/susp/duct/deflector/cockpit/board/exhaust tints, floor/susp/nose/rim finishes): unset = byte-identical. VM, ~3 s.
+  "tests/unit/livery-paint-zones.test.mjs",
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",
@@ -697,7 +699,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/low-speed-lock.test.mjs",
   "tests/unit/lsp-caller-fixes.test.mjs",
   "tests/unit/lsp-config-freshness.test.mjs",
-  // apex-lsp as an MCP client: definition / references / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). ~2 s.
+  // apex-lsp as an MCP client: shared warmed child for definition / references / callers / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). Pipelined alias fan-out; test:mcp runs --test-concurrency=1 (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md).
   "tests/unit/lsp-mcp.test.mjs",
   "tests/unit/lsp-navigation-efficiency.test.mjs",
   "tests/unit/lsp-reference-fixes.test.mjs",
