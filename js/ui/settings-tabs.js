@@ -48,7 +48,7 @@ const SettingsNav = (function () {
     for (let route = id; route; route = routes[route].parent || (route === "home" ? null : "home")) names.unshift(routes[route].title);
     return names.join(" › ");
   }
-  let live = null, jumpWired = false;
+  let live = null, enterLive = null, jumpWired = false;
   // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
   // wizard disarms itself here). Module-level so a subscriber needs no instance.
   const leaveFns = [], enterFns = [];
@@ -275,10 +275,11 @@ const SettingsNav = (function () {
         const b = e.target && e.target.closest ? e.target.closest("[data-settings-jump]") : null;
         if (!b || !live) return;
         const target = b.getAttribute("data-jump-target");
-        live.enter(b.getAttribute("data-settings-jump"), b,
+        enterLive(b.getAttribute("data-settings-jump"), b,
           () => typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(document.querySelector("#" + target)));
       });
     }
+    enterLive = enter;
     live = {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return
@@ -287,7 +288,7 @@ const SettingsNav = (function () {
       returnToSearch: () => { direct = false; stack.length = 0; show("home", false); return !!search && search.restore(); },
       showDirect: (id, focus) => { direct = true; stack.length = 0; show(id, focus); },
       current: () => current,
-      show, enter, back, invalidate: () => { stopRestore(); generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
+      show, back, invalidate: () => { stopRestore(); generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
     };
     return live;
   }

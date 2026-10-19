@@ -1059,7 +1059,8 @@
       "connect": [
         "tests/specs/music-library.spec.js",
         "tests/unit/audio-mix-improvements.test.mjs",
-        "tests/unit/spotify-refresh.test.mjs"
+        "tests/unit/spotify-refresh.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
       ],
       "connectRemote": [
         "tests/unit/spotify-refresh.test.mjs"
@@ -1070,7 +1071,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "disconnect": [
-        "tests/unit/spotify-refresh.test.mjs"
+        "tests/unit/spotify-refresh.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
       ],
       "emit": [
         "tests/unit/audio-panel-boot.test.mjs"
@@ -9069,7 +9071,8 @@
         "tests/unit/perf-governor.test.mjs"
       ],
       "current": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/perf-try.test.mjs"
       ],
       "defaultId": [
         "tests/unit/perf-governor.test.mjs"
@@ -9082,7 +9085,6 @@
       "*": [
         "tests/unit/light-grid.test.mjs",
         "tests/unit/light-store-cond-layer.test.mjs",
-        "tests/unit/perf-try.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ]
     },
@@ -12976,6 +12978,7 @@
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13458,6 +13461,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
@@ -13975,6 +13979,7 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
@@ -15374,7 +15379,6 @@
       "*": [
         "tests/specs/ui-resize.spec.js",
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/perf-try.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
@@ -15624,6 +15628,7 @@
     },
     "js/ui/settings-tabs.js": {
       "back": [
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
@@ -15633,6 +15638,7 @@
         "tests/unit/settings-tabs.test.mjs"
       ],
       "create": [
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
@@ -15648,7 +15654,6 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
-        "tests/unit/perf-try.test.mjs",
         "tests/unit/settings-one-home.test.mjs"
       ]
     },

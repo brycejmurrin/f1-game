@@ -1554,7 +1554,7 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
 /* ── SettingsNav on the mini DOM ────────────────────────────────────────── */
 function bootSettingsNav() {
   const dom = makeDom();
-  const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
+  const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} disconnect() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
   for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress"])
