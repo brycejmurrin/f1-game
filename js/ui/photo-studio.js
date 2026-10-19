@@ -467,7 +467,15 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("Save failed: " + text(e.message)); }
     finally { if (gen === st.generation) busy(false); }
   }
-  function useBackground() { if (last) say(setBackground(thumbnail(last)) ? "Personal photo set as menu background. Select My Photo in Appearance." : "Device storage is full. Download the photo to keep it."); }
+  function sceneIsPhoto() {
+    return typeof GameStore !== "undefined" && GameStore.store
+      ? GameStore.store.get("homeScene", "photo") === "photo" : true;
+  }
+  function useBackground() {
+    if (!last) return;
+    if (!sceneIsPhoto()) { say("Set Appearance Scene to My photo first."); return; }
+    say(setBackground(thumbnail(last)) ? "Personal photo set as menu background." : "Device storage is full. Download the photo to keep it.");
+  }
   async function paintLibrary() {
     const gen = st.generation, paint = ++libraryPaint;
     let photos; try { photos = await library("list"); } catch (_) { photos = []; }
@@ -481,7 +489,15 @@ function create(G, deps) {
   function paintPhotos(box, photos) {
     photos = photos.concat(session).sort((a, b) => b.at - a.at).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
+    const bgOk = sceneIsPhoto();
     for (const p of photos) {
+      const bg = button("MENU BACKGROUND", () => {
+        if (!sceneIsPhoto()) { say("Set Appearance Scene to My photo first."); return; }
+        say(setBackground(p.thumb) ? "Personal menu background selected." : "Device storage is unavailable.");
+      });
+      bg.classList.add("ps-use-bg");
+      bg.disabled = !bgOk;
+      if (!bgOk) bg.setAttribute("aria-disabled", "true");
       const row = mk("div", { className: "pane" }, [mk("img", { src: p.thumb, alt: p.title || "Saved photo" }), mk("span", { textContent: p.title || "Photo" }),
         button("DOWNLOAD", async () => {
           if (downloading) return;
@@ -491,7 +507,7 @@ function create(G, deps) {
           catch (e) { if (gen === st.generation) say("Download failed: " + text(e.message)); }
           finally { downloading = false; }
         }),
-        button("MENU BACKGROUND", () => say(setBackground(p.thumb) ? "Personal menu background selected." : "Device storage is unavailable.")),
+        bg,
         button("DELETE", async () => { const i = session.findIndex((x) => x.id === p.id); if (i >= 0) session.splice(i, 1); else try { await library("delete", p.id); } catch (_) { say("Photo could not be deleted."); return; } paintLibrary(); }),
       ]);
       box.appendChild(row);

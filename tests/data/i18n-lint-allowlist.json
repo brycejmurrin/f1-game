@@ -1,0 +1,14 @@
+{
+  "//": [
+    "Reviewed exceptions for tools/check/i18n-lint.mjs. Do not hide violations —",
+    "each row needs a reason. keep: keys allowed identical to English (brands,",
+    "proper nouns). identical: <lang>::<key> already reviewed as intentionally",
+    "untranslated. unknown: <lang>::<key> retained after a rename window.",
+    "sites: reserved for future per-site notes. Ship tree is English-only today,",
+    "so all lists start empty (baseline measured 2026-10-19)."
+  ],
+  "keep": [],
+  "identical": [],
+  "unknown": [],
+  "sites": {}
+}

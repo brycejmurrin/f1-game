@@ -1,5 +1,6 @@
 // apex-tools-mcp.test.mjs — apex-tools MCP (local CLI wrap).
 // APEX_MCP_MOCK=1 / dryRun only — no Chromium, no network.
+import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, spawn } from "node:child_process";
@@ -13,6 +14,25 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const MCP = path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs");
 const SH = path.join(ROOT, "tools/mcp/apex-tools-mcp.sh");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
+
+/** Temp dir guaranteed outside artifacts/ and scratch/ (TMPDIR may live under artifacts/). */
+function mkOutsideTemp(prefix = "apex-mcp-outside-") {
+  const artifacts = path.join(ROOT, "artifacts");
+  const scratch = path.join(ROOT, "scratch");
+  const inside = (base, target) => {
+    const rel = path.relative(base, target);
+    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  };
+  for (const parent of [os.tmpdir(), "/tmp", path.join(ROOT, "..")]) {
+    try {
+      const dir = fs.mkdtempSync(path.join(parent, prefix));
+      if (!inside(artifacts, dir) && !inside(scratch, dir) && !inside(ROOT, dir)) return dir;
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch { /* try next parent */ }
+  }
+  throw new Error("could not allocate a temp directory outside the repo roots");
+}
+
 
 function rpc(lines, env = {}) {
   const r = spawnSync(process.execPath, [MCP, "serve"], {
@@ -60,7 +80,7 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
 });
 
 test(".mcp.json registers apex-tools alongside the separate debugger server", () => {
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const cfg = nativeMcpConfig(JSON.parse(fs.readFileSync(MCP_JSON, "utf8")));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-lsp",
@@ -80,8 +100,8 @@ test(".mcp.json registers apex-tools alongside the separate debugger server", ()
 });
 
 test("playwright-official pin matches the wrapper's audited package and never @latest", () => {
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
+  const cfg = nativeMcpConfig(JSON.parse(fs.readFileSync(MCP_JSON, "utf8")));
+  const cursorCfg = nativeMcpConfig(JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8")));
   const pw = fs.readFileSync(path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "utf8")
     .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
   // The catalog launches the wrapper's `run` (2026-10-05: the bare package
@@ -1025,7 +1045,7 @@ test("positional values cannot replace pinned CLI flags", () => {
 });
 
 test("output preflight resolves existing and nearest ancestors without creating paths", () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mcp-output-"));
+  const outside = mkOutsideTemp("apex-mcp-output-");
   const dir = path.join(ROOT, "scratch", `apex-mcp-output-${process.pid}`);
   fs.mkdirSync(dir, { recursive: true });
   try {
@@ -2212,7 +2232,7 @@ test("apex_shot_survey report images cannot escape artifact roots", () => {
 
 test("saved gallery cannot write through an assets directory symlink", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "survey-gallery-symlink-"));
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "apex-gallery-outside-"));
+  const outside = mkOutsideTemp("apex-gallery-outside-");
   try {
     const image = path.join(dir, "source.jpg"), report = path.join(dir, "report.json"), out = path.join(dir, "out");
     fs.writeFileSync(image, "JPEG fixture");
@@ -2418,6 +2438,11 @@ test('garage plan uses canonical frame/paint/team selectors and explicit budgets
   const b = JSON.parse(r.stdout);
   assert.equal(b.browser, false); assert.equal(b.planOnly, true);
   assert.equal(b.plan.shotCount, 1); assert.equal(b.plan.budget, 180);
+  const gloss = callCli('apex_garage_plan', { team: 'mclaren', frames: ['spineTop'], field: 'finish', options: ['gloss', 'chrome'], maxShots: 2, budgetSeconds: 180 });
+  assert.equal(gloss.status, 0, gloss.stderr + gloss.stdout);
+  const finishPlan = JSON.parse(gloss.stdout);
+  assert.equal(finishPlan.browser, false); assert.equal(finishPlan.planOnly, true);
+  assert.equal(finishPlan.plan.shotCount, 2); assert.equal(finishPlan.withinBudget, true);
 });
 
 test('canonical catalog and car filters integrate with the published MCP schemas', () => {

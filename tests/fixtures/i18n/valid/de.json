@@ -1,0 +1,5 @@
+{
+  "menu.title": "OPTIONEN",
+  "race.laps": "{n, plural, one {# Runde} other {# Runden}}",
+  "radio.overtake": "P{pos}. GUT GEMACHT"
+}

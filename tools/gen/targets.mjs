@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
  *  exports `TARGET`, the repo-relative file it writes. */
 export const GENERATORS = [
   "./gen-tools-readme.mjs",
+  "./gen-output-surface.mjs",
   "./gen-slider-doc.mjs",
   "./gen-hooks-table.mjs",
   "./gen-arch-table.mjs",

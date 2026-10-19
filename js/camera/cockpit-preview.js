@@ -110,7 +110,7 @@ const CockpitPreview = (function () {
         const p=s.parts || {}, visual=p._visual || {}, tyre=visual.tyres, brake=visual.brakes;
         const wt=CarWheels.tints(s.livery);
         const layers=Car3D.buildWheelLayers(.32,tyre && tyre.band || Car3D.TYRE_BAND[p.tyres || 1],
-          wt.cal || (brake ? brake.cal : Car3D.BRAKE_CALIPER[p.brakes || 1]),wt.rim || (brake && brake.rim),false,tyre,brake,visual.wheels,wt.ink);
+          wt.cal || (brake ? brake.cal : Car3D.BRAKE_CALIPER[p.brakes || 1]),wt.rim || (brake && brake.rim),false,tyre,brake,visual.wheels,wt.ink,wt.surf);
         tyres=[GLX.createMesh(layers.rotating),GLX.createMesh(layers.fixed)];
       }
       const eye = [0,lay.eyeU,lay.eyeF], target = [0,lay.eyeU-.055,lay.eyeF+1];
