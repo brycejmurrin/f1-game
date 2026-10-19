@@ -2648,6 +2648,7 @@
         "tests/unit/team-livery.test.mjs"
       ],
       "*": [
+        "tests/unit/body-styles.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
@@ -2844,6 +2845,7 @@
         "tests/unit/fin-design.test.mjs"
       ],
       "*": [
+        "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
@@ -4903,6 +4905,7 @@
         "tests/specs/parts-physics.spec.js",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs"
       ],
       "*": [
@@ -6976,6 +6979,9 @@
       "resetSetupCam": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "setSetupAero": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "setSetupSpin": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -6993,7 +6999,11 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
+      "stepSetupAero": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "*": [
+        "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
@@ -8597,7 +8607,8 @@
     "js/net/qr.js": {
       "encode": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
-        "tests/unit/net-qr.test.mjs"
+        "tests/unit/net-qr.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "*": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
@@ -9781,6 +9792,7 @@
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -13614,6 +13626,9 @@
     "js/share/share-card-layout.js": {
       "layout": [
         "tests/unit/share-card-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/share-card.test.mjs"
       ]
     },
     "js/share/share-card.js": {

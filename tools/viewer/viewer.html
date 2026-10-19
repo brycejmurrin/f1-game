@@ -84,6 +84,7 @@ code { font-family: var(--f-mono); font-size: 12px; }
   <section class="custom" id="custom" hidden aria-label="Customise this car">
     <div class="field"><label for="c-livery">Livery</label><select id="c-livery"></select></div>
     <div class="field"><label for="c-finish">Finish</label><select id="c-finish"></select></div>
+    <div class="field"><label for="c-body">Body</label><select id="c-body"></select></div>
     <div class="field"><label for="c-num">Number</label><input id="c-num" type="number" min="0" max="99" inputmode="numeric" placeholder="Driver's"></div>
     <div class="actions"><button type="button" id="c-random">Randomise</button><button type="button" id="c-reset">Factory</button></div>
     <details class="parts-box"><summary>Garage parts</summary><div class="parts" id="c-parts"></div></details>
@@ -171,7 +172,7 @@ const HAS_CARS = typeof Car3D !== "undefined" && typeof Parts !== "undefined";
 const FINISHES = HAS_CARS ? ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)] : [];
 const teamOf = (id) => Teams.LIST.find((t) => t.id === id) || Teams.LIST[0];
 const titleCase = (s) => String(s).replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
-let spec = { team: null, livery: null, finish: "", num: null, parts: {} }, framedTeam = null;
+let spec = { team: null, livery: null, finish: "", body: "", num: null, parts: {} }, framedTeam = null, turntable = null;
 try { const s = JSON.parse(store.get("car") || "null"); if (s && s.team) spec = Object.assign(spec, s); } catch (e) {}
 
 /** Everything a picker can offer for one team: the garage's own lists. */
@@ -180,6 +181,8 @@ function carOptions(teamId) {
   return {
     liveries: Liveries.forTeam(team).map((l) => ({ id: l.id, name: l.name || titleCase(l.id) })),
     finishes: FINISHES,
+    // "" = the livery's own body; then Car3D.BODY_STYLE_IDS (concepts; team swaps only when ALLOW_TEAM_BODY_SWAP).
+    bodies: (Car3D.BODY_STYLE_IDS || []).map((id) => ({ id, name: Car3D.TEAM_STYLE[id] ? teamOf(id).name + " body" : titleCase(id) })),
     parts: Parts.CATALOG.map((c) => ({ id: c.id, label: titleCase(c.label || c.id),
       options: c.options.map((o) => ({ id: o.id, label: o.label || titleCase(o.id), equivalent: o.equivalent || null })) })),
     factory: Parts.getFactorySetup(team),
@@ -192,6 +195,7 @@ function resolveLivery(team, s) {
   const o = { c1: l.c1, c2: l.c2 };
   for (const f of Liveries.FIELDS) o[f] = l[f] != null ? l[f] : null;
   o.finish = s.finish ? (s.finish === "gloss" ? null : s.finish) : (l.finish || null);
+  if (s.body) o.bodyStyle = s.body;
   return { o, name: l.name || titleCase(l.id), finish: o.finish || "gloss" };
 }
 function carGeometry(s) {
@@ -218,7 +222,7 @@ function carGeometry(s) {
 }
 
 function buildCar(teamId) {
-  if (teamId !== spec.team) spec = { team: teamId, livery: null, finish: "", num: null, parts: {} };
+  if (teamId !== spec.team) spec = { team: teamId, livery: null, finish: "", body: "", num: null, parts: {} };
   store.set("car", JSON.stringify(spec));
   clearWorld(); world = new THREE.Group(); scene.add(world);
   scene.environment = studio();
@@ -240,6 +244,7 @@ function buildCar(teamId) {
     controls.target.set(0, 0.45, 0.1);
   }
   controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 1.5; controls.maxDistance = 14; controls.update();
+  turntable = spin;
   tick = (dt) => { if (!reduced) spin.rotation.y += dt * 0.25; };
   $("eyebrow").textContent = "Apex 26 · Car3D.buildComplete · built in this page";
   $("title").textContent = C.team.name;
@@ -261,6 +266,7 @@ function fillCustom() {
   };
   sel($("c-livery"), O.liveries.map((l) => ({ id: l.id, label: l.name })), spec.livery || O.liveries[0].id);
   sel($("c-finish"), [{ id: "", label: "Livery's own" }, ...O.finishes.map((f) => ({ id: f, label: titleCase(f) }))], spec.finish || "");
+  sel($("c-body"), [{ id: "", label: "Team's own" }, ...O.bodies.map((b) => ({ id: b.id, label: b.name }))], spec.body || "");
   $("c-num").value = spec.num != null ? spec.num : "";
   const parts = $("c-parts"); parts.innerHTML = "";
   for (const cat of O.parts) {
@@ -275,14 +281,15 @@ function setSpec(patch) { spec = Object.assign({}, spec, patch); buildCar(spec.t
 function wireCustom() {
   $("c-livery").addEventListener("change", (e) => setSpec({ livery: e.target.value }));
   $("c-finish").addEventListener("change", (e) => setSpec({ finish: e.target.value }));
+  $("c-body").addEventListener("change", (e) => setSpec({ body: e.target.value }));
   $("c-num").addEventListener("change", (e) => setSpec({ num: e.target.value === "" ? null : Math.max(0, Math.min(99, +e.target.value | 0)) }));
   $("c-parts").addEventListener("change", (e) => { if (e.target.dataset.cat) setSpec({ parts: Object.assign({}, spec.parts, { [e.target.dataset.cat]: e.target.value }) }); });
   $("c-random").addEventListener("click", () => {
     const O = carOptions(spec.team), pick = (a) => a[Math.floor(Math.random() * a.length)];
     const parts = {}; for (const c of O.parts) parts[c.id] = pick(c.options).id;
-    setSpec({ livery: pick(O.liveries).id, finish: pick(["", ...O.finishes]), parts });
+    setSpec({ livery: pick(O.liveries).id, finish: pick(["", ...O.finishes]), body: pick(["", ...O.bodies.map((b) => b.id)]), parts });
   });
-  $("c-reset").addEventListener("click", () => setSpec({ livery: null, finish: "", num: null, parts: {} }));
+  $("c-reset").addEventListener("click", () => setSpec({ livery: null, finish: "", body: "", num: null, parts: {} }));
 }
 
 // ── circuits ─────────────────────────────────────────────────────────
@@ -424,18 +431,23 @@ if (MODES.length) {
 // each variant on the part that changes, so a 3 cm difference fills the shot
 // instead of 1% of a whole-car still. [eye, target].
 const FRAMES = {
-  side:        [[6.2, 0.7, -0.1], [0, 0.45, -0.1]],
-  nose:        [[1.9, 0.9, 3.9], [0, 0.35, 2.0]],
-  front_wheel: [[2.1, 0.55, 2.3], [0.75, 0.34, 1.7]],
-  front_susp:  [[1.0, 1.25, 3.4], [0.45, 0.32, 1.65]],
-  rear_wheel:  [[2.1, 0.6, -2.3], [0.75, 0.36, -1.6]],
-  sidepod:     [[2.6, 1.5, 0.4], [0.35, 0.5, -0.4]],
-  airbox:      [[1.7, 1.9, 0.9], [0, 0.85, -0.3]],
-  rear:        [[1.7, 1.4, -4.2], [0, 0.6, -2.3]],
-  diffuser:    [[1.3, 0.5, -3.9], [0, 0.3, -2.4]],
-  floor:       [[3.0, 0.25, 0.3], [0.5, 0.1, -0.4]],
-  cockpit:     [[1.0, 1.6, 1.9], [0, 0.8, 0]],
-  top:         [[0.01, 7.5, 0], [0, 0, 0]],
+  side:           [[6.2, 0.7, -0.1], [0, 0.45, -0.1]],
+  // Tighter chassis side for BODY sheets: at the wide `side` the car is ~17% of
+  // pixels, so a real outline move still tags SUBTLE (<8% of the whole frame).
+  side_close:     [[3.6, 0.72, 0.15], [0.05, 0.48, 0.05]],
+  three_quarter:  [[4.4, 1.35, 3.4], [0, 0.42, 0]],
+  three_quarter_close: [[2.8, 1.1, 2.4], [0.15, 0.48, 0.1]],
+  nose:           [[1.9, 0.9, 3.9], [0, 0.35, 2.0]],
+  front_wheel:    [[2.1, 0.55, 2.3], [0.75, 0.34, 1.7]],
+  front_susp:     [[1.0, 1.25, 3.4], [0.45, 0.32, 1.65]],
+  rear_wheel:     [[2.1, 0.6, -2.3], [0.75, 0.36, -1.6]],
+  sidepod:        [[2.6, 1.5, 0.4], [0.35, 0.5, -0.4]],
+  airbox:         [[1.7, 1.9, 0.9], [0, 0.85, -0.3]],
+  rear:           [[1.7, 1.4, -4.2], [0, 0.6, -2.3]],
+  diffuser:       [[1.3, 0.5, -3.9], [0, 0.3, -2.4]],
+  floor:          [[3.0, 0.25, 0.3], [0.5, 0.1, -0.4]],
+  cockpit:        [[1.0, 1.6, 1.9], [0, 0.8, 0]],
+  top:            [[0.01, 7.5, 0], [0, 0, 0]],
 };
 // Headless hook (tools/viewer/viewer-shots.mjs): select one item, freeze motion
 // at its opening pose, and report once a frame has been drawn.
@@ -448,10 +460,13 @@ window.APEX_VIEWER = {
   // Aim at one close-up; framedTeam stays set, so a rebuild of the next variant keeps the shot.
   frame: (name) => { const f = FRAMES[name]; if (!f) return false; controls.minDistance = 0.3;
     camera.position.set(...f[0]); controls.target.set(...f[1]); controls.update(); return true; },
-  car: (s) => { if (mode !== "cars") setMode("cars"); spec = Object.assign({ livery: null, finish: "", num: null, parts: {} }, s);
+  car: (s) => { if (mode !== "cars") setMode("cars"); spec = Object.assign({ livery: null, finish: "", body: "", num: null, parts: {} }, s);
     for (const b of $("picker").children) b.setAttribute("aria-pressed", String(b.dataset.id === spec.team));
     return buildCar(spec.team); },
-  still: () => new Promise((done) => { frozen = true; $("hint").hidden = true; requestAnimationFrame(() => requestAnimationFrame(() => done(true))); }),
+  // A still is always shot at yaw 0: the turntable runs until the first still,
+  // so without the reset the first shot of a sheet is turned and every pair
+  // against it reads as a large difference.
+  still: () => new Promise((done) => { frozen = true; if (turntable) turntable.rotation.y = 0; $("hint").hidden = true; requestAnimationFrame(() => requestAnimationFrame(() => done(true))); }),
 };
 requestAnimationFrame(frame);
 </script>
