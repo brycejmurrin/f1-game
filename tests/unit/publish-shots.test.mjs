@@ -40,6 +40,14 @@ const png = (name, bytes = PNG) => {
   return p;
 };
 
+// Each test that needs an already-published topic cuts its own, so any one test runs alone
+// (--test-name-pattern) and a reorder changes nothing.
+const publishTopic = (topic, file, readme) => {
+  const r = tool([topic, png(file), "--readme", `${file}=${readme}`]);
+  assert.equal(r.code, 0, r.out);
+  return git(REMOTE, "rev-parse", `refs/heads/shots/${topic}`);
+};
+
 before(() => {
   fs.rmSync(TMP, { recursive: true, force: true });
   fs.mkdirSync(SHOTS, { recursive: true });
@@ -153,7 +161,8 @@ test("full publish: branch cut from ship tip, README, push, cleanup", () => {
   assert.match(r.out, /shots\/t1\/a\.png/);
   assert.match(r.out, /shots\/t1\/b\.png/);
   assert.equal(git(REMOTE, "rev-parse", `${sha}^`), shipTip);
-  assert.deepEqual(remoteRefs(), [`refs/heads/${SHIP}`, "refs/heads/shots/t1"]);
+  assert.ok(remoteRefs().includes("refs/heads/shots/t1"), "the topic branch is on the remote");
+  assert.ok(remoteRefs().includes(`refs/heads/${SHIP}`));
   const files = git(REMOTE, "ls-tree", "-r", "--name-only", sha).split("\n");
   assert.deepEqual(files.sort(), ["seed.txt", "shots/t1/README.md", "shots/t1/a.png", "shots/t1/b.png"]);
   assert.ok(!files.includes("node_modules"), "the symlink is never committed");
@@ -166,29 +175,29 @@ test("full publish: branch cut from ship tip, README, push, cleanup", () => {
 });
 
 test("an existing topic is refused without --append", () => {
+  const tip = publishTopic("refuse", "a.png", "first");
   const before = remoteRefs();
-  const tip = git(REMOTE, "rev-parse", "refs/heads/shots/t1");
-  const r = tool(["t1", png("c.png")]);
+  const r = tool(["refuse", png("c.png")]);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /--append/);
   assert.deepEqual(remoteRefs(), before);
-  assert.equal(git(REMOTE, "rev-parse", "refs/heads/shots/t1"), tip);
+  assert.equal(git(REMOTE, "rev-parse", "refs/heads/shots/refuse"), tip);
 });
 
 test("--append stacks a fast-forward commit on the existing branch", () => {
-  const first = git(REMOTE, "rev-parse", "refs/heads/shots/t1");
-  const r = tool(["t1", png("c.png"), "--readme", "c.png=the later shot", "--append"]);
+  const first = publishTopic("app", "a.png", "proves the A thing");
+  const r = tool(["app", png("c.png"), "--readme", "c.png=the later shot", "--append"]);
   assert.equal(r.code, 0, r.out);
-  const sha = git(REMOTE, "rev-parse", "refs/heads/shots/t1");
+  const sha = git(REMOTE, "rev-parse", "refs/heads/shots/app");
   assert.notEqual(sha, first);
   assert.equal(git(REMOTE, "rev-parse", `${sha}^`), first);
   const files = git(REMOTE, "ls-tree", "-r", "--name-only", sha).split("\n");
-  assert.ok(files.includes("shots/t1/a.png") && files.includes("shots/t1/c.png"));
-  const readme = git(REMOTE, "show", `${sha}:shots/t1/README.md`);
+  assert.ok(files.includes("shots/app/a.png") && files.includes("shots/app/c.png"));
+  const readme = git(REMOTE, "show", `${sha}:shots/app/README.md`);
   assert.match(readme, /a\.png.*proves the A thing/);
   assert.match(readme, /c\.png.*the later shot/);
   // Re-adding a file that is already on the branch is refused, not silently overwritten.
-  const dup = tool(["t1", png("c.png"), "--append"]);
+  const dup = tool(["app", png("c.png"), "--append"]);
   assert.equal(dup.code, 1, dup.out);
   assert.match(dup.out, /c\.png/);
 });

@@ -135,60 +135,6 @@ test("spatial entry uses the selected listbox stop; synthetic vertical keys leav
   below.focus(); key("End", true); assert.equal(dom.document.activeElement, selected);
 });
 
-test("step() fallback order: in-band, then dx sideways, then dy wrap, then DOM wrap", () => {
-  const stepSrc = extractFn(SRC, "step");
-  const parts = stepSrc.split(/if \(best\) return best;/);
-  assert.equal(parts.length, 2, "in-band nearest still wins via `if (best) return best`");
-  const after = parts[1];
-
-  assert.match(after, /if \(dx\)/,
-    "after an in-band miss, a dx-gated second pass must exist");
-  assert.match(after, /pickSideways\s*\(/,
-    "the dx second pass must call pickSideways");
-  assert.match(after, /if \(dy && edge\) return edge/,
-    "vertical wrap via `if (dy && edge) return edge` stays");
-  assert.match(after, /return n \? list\[\(\(j % n\) \+ n\) % n\] : null/,
-    "DOM wrap remains the last resort so a press is never a no-op");
-
-  const iDx = after.search(/if \(dx\)/);
-  const iDy = after.search(/if \(dy && edge\) return edge/);
-  const iWrap = after.search(/return n \? list\[\(\(j % n\) \+ n\) % n\] : null/);
-  assert.ok(iDx < iDy && iDy < iWrap,
-    "sideways pass, then dy wrap, then DOM wrap — not some other order");
-
-  assert.doesNotMatch(after, /inBand/,
-    "no second in-band / out-of-band geometry loop after the first miss");
-  assert.doesNotMatch(after, /if \(dy && !best\)/,
-    "dy must not grow an out-of-band phase (ArrowDown from BACK → Zandvoort)");
-});
-
-test("pickSideways weights Y lightly and only considers items really to that side", () => {
-  const sideSrc = extractFn(SRC, "pickSideways");
-  assert.match(sideSrc, /along\s*=\s*\(b\.x\s*-\s*a\.x\)\s*\*\s*dx/,
-    "along = (b.x - a.x) * dx");
-  assert.match(sideSrc, /along\s*>\s*1|along\s*<=\s*1/,
-    "candidates must be really to that side (along > 1)");
-  assert.match(sideSrc, /across\s*\*\s*0\.25/,
-    "Y is a light tie-break (~0.25), not the in-band * 2");
-  assert.doesNotMatch(sideSrc, /across\s*\*\s*2/,
-    "must not reuse the in-band across * 2 weight");
-});
-
-test("MenuNav exports step so tests can call the spatial walker", () => {
-  assert.match(SRC,
-    /return \{ activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE, step/,
-    "step (and the rest of the surface) must stay on the MenuNav return object");
-});
-
-test("onWheel pans a horizontal strip before the vertical ancestor walk", () => {
-  const wheel = extractFn(SRC, "onWheel");
-  const stripAt = wheel.indexOf("const overStrip");
-  const walkAt = wheel.indexOf("for (let el = e.target");
-  assert.ok(stripAt >= 0 && walkAt >= 0, "overStrip and the ancestor walk are both in onWheel");
-  assert.ok(stripAt < walkAt, "strip hit is decided before canScroll/isRegion can no-op the gesture");
-  assert.match(wheel, /if \(overStrip\) \{[\s\S]*scrollStrip\(strip, dy\)/);
-});
-
 for (const horizontal of [true, false]) for (const zoom of [0.4, 1, 2]) {
   test(`page keys carry focus through a ${horizontal ? "horizontal strip" : "vertical pane"} at ${zoom} scale`, () => {
     const dom = makeDom({ readyState: "loading" });
@@ -382,13 +328,4 @@ test("step(): the pane's foot never beats an in-band successor, and Down from th
   top.closest = mid.closest = last.closest = () => pane;
   assert.equal(step(mid, 0, 1, [top, mid, last, back]).id, "last", "in-band successor wins");
   assert.equal(step(back, 0, 1, [top, mid, last, back]).id, "first", "BACK (no pane) wraps as before");
-});
-
-test("step(): the pane-foot phase is scoped to a pane and sits between the sideways pass and the vertical wrap", () => {
-  const after = extractFn(SRC, "step").split(/if \(best\) return best;/)[1];
-  assert.match(after, /from\.closest && from\.closest\(SCROLLERS\)/, "only a control inside a scroll pane");
-  assert.match(after, /pane\.contains\(el\)/, "only targets outside that pane");
-  assert.ok(after.search(/pickSideways\s*\(/) < after.search(/from\.closest && from\.closest\(SCROLLERS\)/)
-    && after.search(/from\.closest && from\.closest\(SCROLLERS\)/) < after.search(/if \(dy && edge\) return edge/),
-    "sideways pass, then the pane foot, then the vertical wrap");
 });

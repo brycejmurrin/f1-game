@@ -30,7 +30,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -44,23 +44,33 @@ const walk = (dir, ext, out = []) => {
   return out;
 };
 
-test("every js/ file still parses", () => {
-  // vendor/ is excluded: it is a vendored three.js island of ES modules, not
-  // ours to keep parsing, and `node --check` reads it as a script.
+// Classic-script grammar: js/ files load via <script>, so stray import/export or
+// top-level await must fail here. `node --check` would read them as ESM
+// (package.json type:module) and miss exactly that class.
+const classicParseError = (src, filename) => {
+  try { new vm.Script(src, { filename }); return null; }
+  catch (e) { return String(e && e.message || e); }
+};
+
+test("classic-script parse check rejects ESM syntax and top-level await", () => {
+  assert.equal(classicParseError("var a = 1;", "ok.js"), null);
+  assert.ok(classicParseError("export const a = 1;", "bad.js"));
+  assert.ok(classicParseError("import x from 'y';", "bad.js"));
+  assert.ok(classicParseError("await Promise.resolve();", "bad.js"));
+});
+
+test("every js/ file still parses as a classic script", () => {
   const files = walk("js", ".js");
   assert.ok(files.length > 100, `expected the whole js tree, found ${files.length}`);
   const broken = [];
   for (const f of files) {
-    try {
-      execFileSync(process.execPath, ["--check", path.join(ROOT, f)], { stdio: "pipe" });
-    } catch (e) {
-      broken.push(`${f}: ${String(e.stderr || e).split("\n").find((l) => /Error/.test(l)) || "parse failed"}`);
-    }
+    const err = classicParseError(fs.readFileSync(path.join(ROOT, f), "utf8"), f);
+    if (err) broken.push(`${f}: ${err}`);
   }
   assert.deepEqual(broken, [],
-    "a js file does not parse. Every file here is a plain <script>, so a SyntaxError " +
-    "means the global it assigns never exists and everything downstream silently " +
-    "degrades — no error, no failing test, just a different layout");
+    "a js file does not parse as a classic <script>. A SyntaxError means the global " +
+    "it assigns never exists and everything downstream silently degrades — no error, " +
+    "no failing test, just a different layout");
 });
 
 test("every css/ file has balanced braces outside comments", () => {

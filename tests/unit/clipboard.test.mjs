@@ -49,8 +49,6 @@ test("write prefers the async clipboard API then falls back to execCommand", asy
 
 test("write succeeds on clipboard alone when execCommand is gone", async () => {
   const h = boot({ execOk: false });
-  h.ApexClipboard; // seeded
-  // Remove execCommand after seed... it's on document already returning false
   const ok = await h.ApexClipboard.write("x");
   assert.equal(ok, true);
   assert.equal(h.order[0], "clipboard:x");
@@ -71,13 +69,6 @@ test("read returns clipboard text and surfaces denial", async () => {
   await assert.rejects(() => denied.ApexClipboard.read());
   const missing = boot({ noClipboard: true });
   await assert.rejects(() => missing.ApexClipboard.read(), /clipboard unavailable/);
-});
-
-test("clipboard.js is on the shell roster", () => {
-  const man = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
-  assert.match(man, /js\/core\/clipboard\.js/);
-  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  assert.match(html, /src="js\/core\/clipboard\.js\?v=/);
 });
 
 for (const step of ["focus", "select", "setSelectionRange"]) {

@@ -18,7 +18,7 @@ test("harness exports display helpers and clears a dead DISPLAY for headless", a
   const src = readFileSync(harnessPath, "utf8");
   assert.match(src, /export function displaySocketAlive/, "probe X11 socket before launch");
   assert.match(src, /export function clearDeadDisplay/, "shared clear for shot tools");
-  assert.match(src, /clearDeadDisplay\(/, "launchChromium must call it");
+  assert.match(src, /clearDeadDisplay\(\{ headed/, "launchChromium must call it (not just declare it)");
   assert.match(src, /\/tmp\/\.X11-unix\/X/, "local :N displays use the unix socket");
 
   const { displaySocketAlive, clearDeadDisplay, x11SocketPath } =

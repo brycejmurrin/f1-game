@@ -176,7 +176,8 @@ test("every car's gear and rpm track its speed, not just the player's", () => {
   a.setInput({ throttle: true, steer: 0 });
   g.step(180);
   a.clearInput();
-  const { IDLE_RPM } = g.G.PhysicsConsts || { IDLE_RPM: 5000 };
+  const { IDLE_RPM } = require("node:vm").runInContext("PhysicsConsts", g.ctx);
+  assert.ok(Number.isFinite(IDLE_RPM), "IDLE_RPM comes from the real PhysicsConsts");
   const moving = g.G.cars.filter((c) => !c.human && (c.speed || 0) > 12);
   assert.ok(moving.length >= 5, `only ${moving.length} AI cars are up to speed`);
   assert.ok(moving.every((c) => c.rpm > IDLE_RPM),

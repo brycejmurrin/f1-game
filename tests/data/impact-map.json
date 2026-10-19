@@ -12299,6 +12299,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs"
       ],
+      "gpuAdapterAvailable": [
+        "tests/unit/boot-idle-prefetch.test.mjs"
+      ],
       "proved": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -12609,8 +12612,10 @@
       ]
     },
     "js/render/shared/post-common.js": {
+      "keepNearest": [
+        "tests/unit/godray-keep-nearest.test.mjs"
+      ],
       "*": [
-        "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",

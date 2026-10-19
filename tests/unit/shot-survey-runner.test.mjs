@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { buildSurveyGallery, galleryEntries } from "../../tools/shot/build-gallery.cjs";
 import {
@@ -10,6 +9,14 @@ import {
   prepareSurveyPlans,
   runSurvey,
 } from "../../tools/shot/lib/survey-runner.mjs";
+
+// Scratch dirs live under the ignored artifacts/ tree, never the system tmp (AGENTS.md).
+const TMP_BASE = (() => {
+  const d = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..", "artifacts", "tmp");
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+})();
+
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 
@@ -44,7 +51,7 @@ test("#1983: a fixture with colliding names keeps distinct gallery entries", () 
   assert.equal(entries.length, 2);
   assert.notEqual(entries[0].cellId, entries[1].cellId);
   assert.notEqual(entries[0].image, entries[1].image);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-gallery-collide-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-gallery-collide-"));
   try {
     const built = buildSurveyGallery(dir, { track: "monza", label: "repro", shots });
     assert.equal(built.entries.length, 2);
@@ -73,7 +80,7 @@ test("#1982: CLI-shaped and MCP-shaped inputs produce the same survey manifest",
     mcp.plans.get("monza").shots.map((s) => ({ name: s.name, frac: s.frac, cam: s.cam })),
   );
 
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "apex-survey-par-"));
+  const root = fs.mkdtempSync(path.join(TMP_BASE, "apex-survey-par-"));
   try {
     const { surveyTerminalState } = await import("../../tools/lib/track-shot-survey.mjs");
     const runOne = async (spec, name) => {
@@ -108,7 +115,7 @@ test("#1982: a failed shot is a failed manifest for both transports", async () =
   });
   const plans = prepareSurveyPlans(spec.planArgs, spec.tracks);
   const failName = plans.get("monza").shots[1].name;
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "apex-survey-fail-"));
+  const root = fs.mkdtempSync(path.join(TMP_BASE, "apex-survey-fail-"));
   try {
     const outs = [];
     for (const name of ["cli", "mcp"]) {

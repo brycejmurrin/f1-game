@@ -29,18 +29,41 @@ function walk(dir, out = []) {
   return out;
 }
 
+// Blank out comments and string/template contents (keeping newlines) so a `//` inside a
+// string literal ('http://…') does not swallow the rest of the line, and prose or string
+// text mentioning console.log never counts.
+function codeMask(src) {
+  let out = "", i = 0;
+  const blank = (t) => t.replace(/[^\n]/g, " ");
+  while (i < src.length) {
+    const c = src[i], d = src[i + 1];
+    if (c === "/" && d === "/") { const e = src.indexOf("\n", i); const j = e < 0 ? src.length : e; out += blank(src.slice(i, j)); i = j; }
+    else if (c === "/" && d === "*") { const e = src.indexOf("*/", i + 2); const j = e < 0 ? src.length : e + 2; out += blank(src.slice(i, j)); i = j; }
+    else if (c === "'" || c === '"' || c === "`") {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) { if (src[j] === "\\") j++; j++; }
+      out += c + blank(src.slice(i + 1, j)) + (src[j] || ""); i = j + 1;
+    } else { out += c; i++; }
+  }
+  return out;
+}
+const bareConsole = (src) => [...codeMask(src).matchAll(/\bconsole\s*\.\s*(log|warn|error|info|debug|trace)\s*\(/g)]
+  .map((m) => m[1]);
+
+test("the bare-console scan detects known-bad fixtures and ignores prose", () => {
+  assert.deepEqual(bareConsole("console.log(1);"), ["log"]);
+  assert.deepEqual(bareConsole("const u = 'http://x.test'; console.warn(u);"), ["warn"],
+    "a // inside a string must not hide a later console call");
+  assert.deepEqual(bareConsole("x();\n  console\n .error('e')"), ["error"]);
+  assert.deepEqual(bareConsole("// console.log(1)\n/* console.warn(2) */ const s = 'console.info(3)';"), []);
+});
+
 test("no bare console.* outside js/core/log.js (allowlisted seams excepted)", () => {
   const bad = [];
   for (const p of walk(path.join(ROOT, "js"))) {
     const rel = path.relative(ROOT, p).split(path.sep).join("/");
     if (ALLOW[rel]) continue;
-    const src = fs.readFileSync(p, "utf8");
-    // Strip comments so prose mentioning console.log does not count.
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-    for (const m of code.matchAll(/\bconsole\s*\.\s*(log|warn|error|info|debug|trace)\s*\(/g)) {
-      const line = code.slice(0, m.index).split("\n").length;
-      bad.push(`${rel}:~${line} console.${m[1]}`);
-    }
+    for (const kind of bareConsole(fs.readFileSync(p, "utf8"))) bad.push(`${rel} console.${kind}`);
   }
   assert.deepEqual(bad, [],
     "bare console.* in js/ — route through Log (namespace first arg; " +
