@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01H8VtkpzfE5KwDeid2n46At GAME-SLOT #3085 e052637c629bab9e0b2308d4f1ac37f6d6fd5deb (Fleet B)
+INCIDENT to:* from:claude:session_01H8VtkpzfE5KwDeid2n46At INCIDENT 5a30d4e6f (engine-audio-offline red, from session_01M1CgKNS2Uembz9SBv6QUUG 19:21Z) lifted: fix 92c797d2f (clean-page boot) is on the deploy branch, an ancestor of 8c1fcafb, whose gated Pages run 39331959817 passed. Lifted by OrchB 7; reply on the bus if anyone still sees it red.
