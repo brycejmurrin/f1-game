@@ -384,3 +384,34 @@ LANES[-1:-1] = [
   owned=_files(_RUN), ids=_RUN, verify="each owned spec alone via test-bg.mjs at loadavg < 3; smoke.spec.js first",
   effort="M", model=SON, deps=_PLAT + "; smoke, dev-tools-dom and ui-audit were red on 120 s timeouts: re-run each alone before classifying"),
 ]
+
+# ---- late continuations: car-2 part 2/2 (final), physics-2 part 3b (partial)
+_FOLD7 = {
+ "L0": (["physics-2"], ["P2-27"]),
+ "L10": (["physics-2"], ["P2-25"]),
+ "L12": (["physics-2"], ["P2-26"]),
+ "L13": (["physics-2"], ["P2-28"]),
+ "L19": (["car-2"], ["C2-22", "C2-23", "C2-24"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD7:
+        _b, _i = _FOLD7[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"] and not f.startswith("js/")]
+        _L["ids"] = _L["ids"] + _i
+
+# ---- late continuations 2: race-2 part 3/3 (race-2b), physics-2 part 3c (physics-2c), both final
+_FOLD8 = {
+ "L10": (["physics-2"], ["P2-29", "P2-31"]),
+ "L12": (["physics-2"], ["P2-30"]),
+ "L14": (["physics-2"], ["P2-33"]),
+ "L15": (["race-2"], ["RC2-22"]),
+ "L17": (["race-2"], ["RC2-23", "RC2-24"]),
+ "L19": (["physics-2"], ["P2-32"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD8:
+        _b, _i = _FOLD8[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i

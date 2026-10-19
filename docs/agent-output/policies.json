@@ -491,6 +491,11 @@
       "presentation": "shared-levels",
       "preserve": "Unknown served/configured metrics and stalled/disconnected evidence"
     },
+    "tools/ci/fleet-tick.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Changed-only rows versus first tick; ship/Pages red; dry-run state not saved"
+    },
     "tools/ci/geometry-paths.mjs": {
       "action": "protocol-only",
       "presentation": "native",
@@ -1292,6 +1297,11 @@
       "preserve": "Progress terminal state, timestamp, findings and index paths plus resume validity."
     },
     "tools/lib/tumftm.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/ui-device-profile.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
