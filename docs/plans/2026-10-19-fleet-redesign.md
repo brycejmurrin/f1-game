@@ -189,10 +189,14 @@ Design (one protocol for every host; the bus and the PR are the only shared chan
 1. **Fleet letters are hosts' identities.** A = Claude acct 1, B = Claude acct 2, C = Codex coordinator, D = Cursor
    coordinator; a stand-alone lane takes the next free letter. Every bus line, claim text and fleet block starts
    `<Fleet>·<Slot>`; `fleet-bus.mjs --as <host>:<id>` already carries the host. No fleet acts on another's sessions.
-2. **Ownership is by narrow path claim, released on request with a deadline.** A claim lists the files in the claimant's
-   actual diff (not a directory glob) plus `--session <messageable id or PR#>`. A `RELEASE? <paths> for <reason>` bus line
-   to `#<PR>` gets an answer within one owner check-in: `RELEASED <paths>` or `HELD <paths> until #<PR> merges`. No answer
-   in 60 min = released. Directory-wide claims need a reason line and lapse after 120 min like any other.
+2. **Ownership is computed, not negotiated** (ORCH15 round 3). Any path in an OPEN PR's current diff
+   (`git diff --name-only <base>...<head>`) is HELD automatically until that PR merges or closes — no reply needed, so a
+   green game PR waiting an hour for its slot is safe. A claim covers only paths outside every open diff, lists files (not
+   directory globs) and carries `--session <messageable id or PR#>`; a `RELEASE? <id> <paths>` line on such a claim gets one
+   tool-computed `RELEASED <id>` / `HELD <id> until #<PR>` answer, and 60 min of silence releases ONLY claimed paths outside
+   every open diff. Each RELEASE? carries an id and is answered once (C·O1 re-sent three asks in 252311de). A tool
+   (`fleet-owner.mjs <paths>`) prints the owner of each path from open diffs + claims; hand-typed answers missed a file
+   (W6: `tools/gfx/gpu-mem-census.mjs`, corrected in 9fb540c).
 3. **One merge protocol for every host**: `merge-gate.mjs` + receipt + `GAME-SLOT` + `DONE` on the bus (host, sha, game|non-game).
    Close the Codex MCP gap: `.codex/hooks.json` gains an MCP matcher running github-mcp-guard.sh (needs Bryce's typed yes:
    `.codex/` config). Any host that merges without a bus DONE is treated as Bryce (`bryce-merges-manually`) and paced around.
@@ -203,3 +207,10 @@ Design (one protocol for every host; the bus and the PR are the only shared chan
    `RELEASE?` round, never a standing negotiation.
 6. **Who may start new fleets is Bryce.** A coordinator on any host launches only inside its own fleet; a new fleet
    (letter) starts with Bryce's word and a bus `FLEET <letter> LIVE <host>:<id> scope:<…>` line.
+7. **The bus refuses an unaddressable `to:`** (ORCH15 round 3): a recipient must be a session id
+   (`<host>:session_…` / a Codex thread id / a Cursor agent id), `#<PR>`, a fleet letter or `*`. C·O1 sent lines to
+   `claude:1923dcd1…` and `claude:7207507…` (claims-board hashes), which no session can receive.
+8. **A PR whose host cannot merge gets a named merger** (ORCH15 round 3): Codex lanes #3103 (non-game) and #3107 (game)
+   say "no merge grant". The merger is the orchestrator of the fleet whose OPEN paths it touches most, else the current
+   GAME-SLOT holder's fleet for a game PR, else any orchestrator for a non-game PR; it merges through the same gate and
+   posts DONE naming the PR's host.
