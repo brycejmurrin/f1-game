@@ -322,9 +322,6 @@ test("rounding OFF draws today's decal sheet, and ON moves only the flank band",
 test("the cockpit nose decal is the race decal, not its mirror image", () => {
   const parts = partsFor({});
   const dec = CarMesh.carDecalData(2, parts, false, TEAM.id, "standard", null);
-  const ck = CarMesh.getCockpitDecalMesh
-    ? null : null;   // the mesh goes to the GPU; read the data path instead
-  assert.equal(ck, null);
   // Both quads paint REGIONS.num onto the nose top. Pair each corner with its
   // uv and check the two agree on which END of the car carries vB: flipping v
   // alone, with u already pre-flipped, is a REFLECTION, and the driver number
@@ -342,10 +339,29 @@ test("the cockpit nose decal is the race decal, not its mirror image", () => {
   assert.ok(noseNum.length >= 4, "the race nose-number quad is gone");
   const raceFrontIsVB = noseNum.filter((c) => Math.abs(c.v - vB) < 1e-6).every((c) => c.z > 1.9);
   assert.ok(raceFrontIsVB, "the race quad no longer maps the atlas front-at-the-bottom");
-  // The cockpit builder is a private function; assert its shape from the source
-  // it is written in — the same corner order, front (z 2.10) first.
-  const src = CarMesh.getCockpitDecalMesh.toString();
-  const zOrder = (src.match(/,\s*(1\.72|2\.10)\]/g) || []).map((m) => m.replace(/[^\d.]/g, ""));
-  assert.deepEqual(zOrder, ["2.10", "2.10", "1.72", "1.72"],
-    "the cockpit quad lists its corners rear-first again — that flips v alone, which mirrors the number");
+  // The cockpit quad, BUILT (it was a regex over Function.toString()): its own
+  // CarMesh instance, so init() on a recording renderer leaves M's untouched.
+  const C = loadParts(), made = [];
+  C.CarMesh.init({ createTexMesh: (d) => { made.push(d); return { d }; }, freeMesh() {} });
+  const ck = C.CarMesh.getCockpitDecalMesh(C.Parts.getVisualTiers({}, C.Teams.LIST.find((t) => t.id === TEAM.id)), TEAM.id);
+  assert.ok(ck && made.length === 1, "the cockpit nose decal builds one textured quad");
+  const corners = [];
+  for (let j = 0; j < ck.d.pos.length / 3; j++)
+    corners.push({ x: ck.d.pos[j * 3], z: ck.d.pos[j * 3 + 2], u: ck.d.uv[j * 2], v: ck.d.uv[j * 2 + 1] });
+  assert.equal(corners.length, 4);
+  const zFront = Math.max(...corners.map((c) => c.z));
+  for (const c of corners) {
+    assert.equal(Math.abs(c.v - vB) < 1e-6, c.z === zFront,
+      `cockpit corner z ${c.z} v ${c.v}: the atlas front-at-the-bottom must sit at the nose, as on the race quad — a v-only flip mirrors the number`);
+  }
+  // …and u keeps the race quad's pre-flip: the same side of the car carries uR.
+  const uR = (R.x + R.w) / S;
+  const sideOfUR = (pts) => Math.sign(pts.filter((c) => Math.abs(c.u - uR) < 1e-6).reduce((a, c) => a + c.x, 0));
+  const race = [];
+  for (let j = 0; j < dec.pos.length / 3; j++) {
+    const z = dec.pos[j * 3 + 2], u = dec.uv[j * 2];
+    if (z < 1.60 || z > 2.20 || u < R.x / S - 1e-6 || u > uR + 1e-6) continue;
+    race.push({ x: dec.pos[j * 3], u });
+  }
+  assert.ok(sideOfUR(corners) !== 0 && sideOfUR(corners) === sideOfUR(race), "the cockpit quad's u runs the race quad's way");
 });

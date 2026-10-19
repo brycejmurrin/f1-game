@@ -30,6 +30,7 @@ export const EXCLUDED = {
   "test": "the whole suite — hours, and the point of a rotation is to fit one night",
   "test:gfx": "macOS/Metal, and it already has its own renderer-macos job",
   "test:xr": "IWER emulated-VR — path-gated xr job in ci.yml, not a nightly rotation slot",
+  "test:webkit": "WebKit iPhone-path proxy — dispatch-only webkit-leg.yml, not a nightly rotation slot",
   "test:baseline": "the golden trial runs itself on the nightly, non-blocking",
   "test:gallery": "a screenshot gallery with no assertions — nothing to go red",
   "test:render": "a PARTITION (--project=render), not a topical group: every RENDER_SPECS file also sits in a topical group the rota already runs",

@@ -4905,6 +4905,7 @@
         "tests/specs/parts-physics.spec.js",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs"
       ],
       "*": [
@@ -6978,6 +6979,9 @@
       "resetSetupCam": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "setSetupAero": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "setSetupSpin": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -6994,6 +6998,9 @@
       "stepDriveOut": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
+      ],
+      "stepSetupAero": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "*": [
         "tests/unit/body-styles.test.mjs",
@@ -8600,7 +8607,8 @@
     "js/net/qr.js": {
       "encode": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
-        "tests/unit/net-qr.test.mjs"
+        "tests/unit/net-qr.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "*": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
@@ -9784,6 +9792,7 @@
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -13602,6 +13611,9 @@
     "js/share/share-card-layout.js": {
       "layout": [
         "tests/unit/share-card-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/share-card.test.mjs"
       ]
     },
     "js/share/share-card.js": {

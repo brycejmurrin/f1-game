@@ -91,6 +91,21 @@ const XR_SPECS = [
   "xr-plan",
 ].map((n) => `**/${n}.spec.js`);
 
+// WebKit iPhone-path proxy — JavaScriptCore + WebKit WebGL (ANGLE-Metal on
+// macos-latest). Ignored by headless/render/xr. The project itself is OPT-IN
+// via APEX_WEBKIT=1 (npm run test:webkit / webkit-leg.yml) so a bare
+// `npm test` never asks for a WebKit binary this container cannot install.
+// Not the phone's Safari (playwright-core 1.63.0 pins WebKit 26.6).
+// See docs/TESTING.md §WebKit leg.
+const WEBKIT_SPECS = [
+  "webkit-boot",
+].map((n) => `**/${n}.spec.js`);
+// Opt-in when the job sets APEX_WEBKIT=1, or when the CLI asks for the
+// project by name (npm run test:webkit → --project=webkit). Bare `npm test`
+// has neither, so the project is absent and no WebKit binary is required.
+const WEBKIT_PROJECT = process.env.APEX_WEBKIT === "1"
+  || process.argv.some((a) => a === "--project=webkit" || /^--project=([^,]*,)*webkit(,|$)/.test(a));
+
 // XR launch: playwright-webxr guidance (force SwiftShader + unsafe flag).
 const XR_LAUNCH = {
   ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
@@ -219,7 +234,7 @@ export default defineConfig({
       //   npx playwright test --project=headless --workers=8
       name: "headless",
       // A project's testIgnore REPLACES the top-level one: repeat the manual rule.
-      testIgnore: [...RENDER_SPECS, ...XR_SPECS, ...MANUAL_IGNORE],
+      testIgnore: [...RENDER_SPECS, ...XR_SPECS, ...WEBKIT_SPECS, ...MANUAL_IGNORE],
       use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
     },
     {
@@ -227,7 +242,7 @@ export default defineConfig({
       // CPU thrash:  npx playwright test --project=render --workers=4
       name: "render",
       testMatch: RENDER_SPECS,
-      testIgnore: MANUAL_IGNORE,
+      testIgnore: [...WEBKIT_SPECS, ...MANUAL_IGNORE],
       use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
     },
     {
@@ -235,9 +250,18 @@ export default defineConfig({
       // Quest GPU / multiview / foveation / XRGPUBinding need a headset.
       name: "xr-emulated",
       testMatch: XR_SPECS,
-      testIgnore: MANUAL_IGNORE,
+      testIgnore: [...WEBKIT_SPECS, ...MANUAL_IGNORE],
       use: { ...devices["Desktop Chrome"], launchOptions: XR_LAUNCH },
     },
+    ...(WEBKIT_PROJECT ? [{
+      // iPhone-path proxy (JavaScriptCore + WebKit WebGL). Dispatch-only via
+      // .github/workflows/webkit-leg.yml / `npm run test:webkit` (sets
+      // APEX_WEBKIT=1). Desktop Safari device descriptor; no Chromium args.
+      name: "webkit",
+      testMatch: WEBKIT_SPECS,
+      testIgnore: MANUAL_IGNORE,
+      use: { ...devices["Desktop Safari"] },
+    }] : []),
   ],
   webServer: {
     // python's http.server starts instantly with no package resolution, unlike
