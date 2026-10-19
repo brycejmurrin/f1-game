@@ -47,6 +47,37 @@ recorded here: transcripts carry prompts and paths, so they stay uncommitted. Th
    correction is to stay silent while the repo's `.claude/hooks/live-run.py`
    (which `stop-guard.sh` already uses) reports a live run.
 
+8. **A session keeps the MCP servers it started with.** This session started on a tree whose `.mcp.json` predates
+   the output-level gateway (#2899 merged mid-session). Its attached apex-tools and apex-lsp run the old servers: no
+   `outputLevel`, no `output_read`, and none of #3022's MCP changes. The experiments below had to call the
+   working-tree gateway over stdio. Long-lived owner sessions run whatever MCP code they booted with.
+9. **Each subagent hand-back woke the parent twice.** The first wake was the report message; the second was a
+   `task-notification` "finished" event pointing back to it. In a four-agent wave that is eight wakes for four
+   results, even when the parent stays silent until the last one.
+10. **`skill-hint.py` also misfires on typed prompts.** Two short prompts from Bryce matched unrelated skills
+    (`ci-watch` + `perf-memory-census`; `pages-red-triage` + `survey-ui-matrix` on a peer message before the
+    envelope fix). The envelope skip does not address typed prompts; the score floor (`MIN_SCORE`) is the lever,
+    and `tests/unit/skill-hint-hook.test.mjs` holds the routing-eval floor that any change must keep.
+
+## Compact MCP output: a four-agent experiment (2026-10-19)
+
+Four Sonnet subagents ran in one wave. Each took a slice of the non-browser apex-tools (plus apex-lsp, and browser
+tools only with `dryRun`), and compared compact, diagnostic and full output for the same arguments. Each also ran
+one invalid-input control and one `output_read` recovery. The four used about 412 K subagent tokens, made 149
+gateway calls and edited no repository files. Their raw output stays under `artifacts/mcp-exp/` and is not
+committed.
+
+| Finding | Evidence | Action in #3022 |
+|---|---|---|
+| Compact hid a real problem row. The `apex_car_audit` ladder showed engine, aero and suspension, and omitted tyres, the only category with dead parts. Its rows have no status field, only issue lists (`dead`, `traps`). | full row 4 `dead: [intermediate, …]`; compact `displayedIndices [0,1,2]` | Fixed. Non-empty `errors`/`failures`/`failed`/`dead`/`missing`/`broken`/`violations`/`issues`/`problems` lists now rank like warnings, and `issueFieldCount` reports them. The re-run shows `displayedIndices [4,0,1]`. Test added. |
+| Compact was larger than full for small results in 12 of 12 pairs in one slice, and in many in the others (doctor 1265 vs 1028 B, status 3745 vs 2693, unit_test 742 vs 499). | agents A–D | Partly fixed. A result is now passed through natively, with the receipt in `_meta`, whenever it is no larger on the wire than the envelope. Before, this applied only up to 1 KB. Re-measured: status 3745 → 2928 B. The remaining overhead is the ~240 B receipt. |
+| `isError`, exit codes, verdicts (`running`, hollow, exit 124) and omission counts survived compact in every negative control. | agents B, C, D | Nothing to fix. |
+| Omitted rows were recoverable without a rerun: `output_read` `format=collection` returned 12/12 ladder rows, 7/7 CI jobs and 7/7 pick groups. | agents A, C | Nothing to fix. |
+| `apex_select_specs` and `apex_garage_plan` at compact drop many top-level fields (`testsSelected`, `cap`, `overBudget`, `estSeconds`). Only an `omittedFields` count shows that they are gone. | agents B, C | Open. Name the omitted keys, or keep budget/verdict-like keys. |
+| `apex_frame_report` at compact keeps 2 of 8 frame rows, and the rest are reachable only as byte pages, because the rows are stdout text, not JSON. | agent B | Open. This needs a producer-side `--json`. |
+| `output_read` `format=original` is refused for compact receipts, and a missing artifact returns JSON-RPC `-32602` rather than `isError`. | agents A–D | Open. The behaviour is documented, but the error shape is inconsistent. |
+| `apex_graph_parity` with `all:true` silently started background jobs from a read-only-looking call. | agent B | Open. Report it to the tool owner. |
+
 ## The digester
 
 `node tools/ci/claude-usage.mjs` reads the current repo's transcript directory by default. It streams each line,

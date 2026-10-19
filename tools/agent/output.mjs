@@ -58,30 +58,34 @@ export function summarizeOutput(value, { level = 'compact' } = {}) {
     if (Array.isArray(v)) {
       const cap = diagnostic ? 8 : 3;
       const source = pointer.length <= 256 ? { sourcePointer: pointer } : { sourcePointerOmitted: true, retrieval: 'use byte pages for long collection paths' };
-      const hasWarning = item => item && typeof item === 'object' && ['warning', 'warnings'].some(key => {
+      const hasField = (item, keys) => item && typeof item === 'object' && keys.some(key => {
         if (!Object.hasOwn(item, key)) return false;
         const value = item[key];
-        if (typeof value === 'string') return !!value.trim() && !/^0(?:\s+warnings?)?$/i.test(value.trim());
+        if (typeof value === 'string') return !!value.trim() && !/^(?:0|none)(?:\s+\w+)?$/i.test(value.trim());
         if (Array.isArray(value)) return value.length > 0;
         return value === true || typeof value === 'number' && value > 0 || value && typeof value === 'object' && Object.keys(value).length > 0;
       });
+      const hasWarning = item => hasField(item, ['warning', 'warnings']);
+      // Rows that report problems as non-empty lists (car_audit `dead`, a check's `failures`) and carry no status.
+      const hasIssue = item => hasField(item, ['errors', 'failures', 'failed', 'dead', 'missing', 'broken', 'violations', 'issues', 'problems']);
       // Prioritize observed issue state, independently of a producer's collection name.
-      if (v.some(item => item && typeof item === 'object' && ('status' in item || 'verdict' in item || 'severity' in item || 'level' in item || 'ok' in item || 'pass' in item || 'success' in item || 'valid' in item || 'error' in item || hasWarning(item)))) {
+      if (v.some(item => item && typeof item === 'object' && ('status' in item || 'verdict' in item || 'severity' in item || 'level' in item || 'ok' in item || 'pass' in item || 'success' in item || 'valid' in item || 'error' in item || hasWarning(item) || hasIssue(item)))) {
         const groups = [[], [], [], []], statusCounts = {};
-        let warningFieldCount = 0;
+        let warningFieldCount = 0, issueFieldCount = 0;
         for (const [index, item] of v.entries()) {
           const status = String(item && typeof item === 'object' ? item.status ?? item.verdict ?? item.severity ?? item.level ?? (item.ok === false || item.pass === false || item.success === false ? 'failed' : item.valid === false ? 'invalid' : item.error ? 'error' : 'unspecified') : 'unspecified').slice(0, 60);
           const label = Object.hasOwn(statusCounts, status) || Object.keys(statusCounts).length < 16 ? status : 'other';
           statusCounts[label] = (statusCounts[label] || 0) + 1;
           const statusSeverity = /fail|error|fatal|critical|^high$/i.test(status) ? 3 : /warn|medium/i.test(status) ? 2 : /unknown|unresolved|invalid|pending|not.?run/i.test(status) ? 1 : 0;
-          const warning = !!hasWarning(item);
+          const warning = !!hasWarning(item), issue = !!hasIssue(item);
           if (warning) warningFieldCount++;
-          const severity = Math.max(statusSeverity, warning ? 2 : 0);
+          if (issue) issueFieldCount++;
+          const severity = Math.max(statusSeverity, warning || issue ? 2 : 0);
           if (groups[severity].length < cap) groups[severity].push({ item, index });
         }
         const rows = [...groups[3], ...groups[2], ...groups[1], ...groups[0]].slice(0, cap);
         const out = rows.map(({ item, index }) => visit(item, depth + 1, key, `${pointer}/${index}`));
-        out.push({ totalItems: v.length, displayedItems: rows.length, omittedItems: Math.max(0, v.length - rows.length), displayedIndices: rows.map(row => row.index), ...source, statusCounts, ...(warningFieldCount ? { warningFieldCount } : {}), prioritizedIssues: true });
+        out.push({ totalItems: v.length, displayedItems: rows.length, omittedItems: Math.max(0, v.length - rows.length), displayedIndices: rows.map(row => row.index), ...source, statusCounts, ...(warningFieldCount ? { warningFieldCount } : {}), ...(issueFieldCount ? { issueFieldCount } : {}), prioritizedIssues: true });
         return out;
       }
       const out = v.slice(0, cap).map((item, index) => visit(item, depth + 1, key, `${pointer}/${index}`));
@@ -126,9 +130,13 @@ export function presentMcpResult(result, { root = process.cwd(), tool = 'mcp', l
   const envelope = { outputLevel: level, summary: summarizeOutput(result, { level }), artifact };
   // Preserve useful small native answers and their outputSchema. The receipt
   // is transport metadata, not an extra copy of the original payload.
+  // A summary no smaller than the complete original saves nothing (measured 2026-10-19: compact
+  // exceeded full on 1-6 KB results across apex-tools and apex-lsp), so the original wins there too.
   const native = { ...result, _meta: { ...result._meta, 'apex/agent-output': { outputLevel: level, artifact } } };
-  if (!Object.hasOwn(result._meta ?? {}, 'apex/agent-output') && !result.content?.some(block => ['image', 'audio', 'resource'].includes(block.type)) && artifact.bytes <= 1024 && JSON.stringify(native).length < JSON.stringify(envelope).length * 2) return native;
-  return { content: [{ type: 'text', text: JSON.stringify(envelope) }], structuredContent: envelope, ...(Object.hasOwn(result, 'isError') ? { isError: result.isError } : {}) };
+  const wrapped = { content: [{ type: 'text', text: JSON.stringify(envelope) }], structuredContent: envelope, ...(Object.hasOwn(result, 'isError') ? { isError: result.isError } : {}) };
+  // Both sides as sent: the envelope travels twice (text mirror + structuredContent).
+  if (!Object.hasOwn(result._meta ?? {}, 'apex/agent-output') && !result.content?.some(block => ['image', 'audio', 'resource'].includes(block.type)) && JSON.stringify(native).length <= JSON.stringify(wrapped).length) return native;
+  return wrapped;
 }
 function openOutputArtifact(root, artifact) {
   const ref = typeof artifact === 'string' ? artifact : artifact?.path;
