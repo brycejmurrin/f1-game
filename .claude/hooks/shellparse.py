@@ -73,6 +73,42 @@ class ParseError(ValueError):
     """The text is not tokenisable; a strict reader (commit) must fail CLOSED."""
 
 
+class AgentRunError(ParseError):
+    """A recognized execution wrapper cannot safely be inspected."""
+
+
+class LiteralWord(str):
+    """An argv word containing quoted/escaped shell punctuation."""
+
+
+def protect_literal_operators(text):
+    """Keep shlex from losing the distinction between ';' and shell `;`.
+    Restore the characters after lexing; never reparse a leaf argv as shell."""
+    prefix = "\ue000"
+    while prefix in text:
+        prefix += "\ue000"
+    protected, replacements, out, quote, i = {}, {}, [], None, 0
+    def literal(c):
+        if c in replacements:
+            return replacements[c]
+        key = prefix + str(len(protected)) + "\ue001"
+        protected[key] = c
+        replacements[c] = key
+        return key
+    while i < len(text):
+        c = text[i]
+        if c == "\\" and quote != "'" and i + 1 < len(text):
+            nxt = text[i + 1]
+            if nxt in ";&|()<>\n`" and (quote is None or nxt in "`\n"):
+                out.append(literal(nxt)); i += 2; continue
+            out.extend((c, nxt)); i += 2; continue
+        if c in "\"'" and (quote is None or quote == c):
+            quote = None if quote else c
+        out.append(literal(c) if quote and c in ";&|()<>\n`" else c)
+        i += 1
+    return "".join(out), protected
+
+
 _HEREDOC = re.compile(r"(?<!<)<<(?!<)-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?")
 # A heredoc whose consumer is a shell (or `source`/`eval`) feeds its body to the
 # shell AS COMMANDS: `bash <<EOF ... git commit ... EOF` is a commit (15-F6). The
@@ -125,12 +161,19 @@ def tokens(text):
     quoted string stays in its word, so a multi-line -m message never reads
     as commands."""
     # A backslash-newline is a line continuation, not a word character.
-    lx = shlex.shlex(strip_heredocs(text).replace("\\\n", " "), posix=True, punctuation_chars=";&|()<>\n`")
+    source, protected = protect_literal_operators(strip_heredocs(text).replace("\\\n", " "))
+    lx = shlex.shlex(source, posix=True, punctuation_chars=";&|()<>\n`")
     lx.whitespace = " \t\r"
     lx.whitespace_split = True
     lx.commenters = ""
     try:
-        return list(lx)
+        out = []
+        for word in lx:
+            literal = any(key in word for key in protected)
+            for key, value in protected.items():
+                word = word.replace(key, value)
+            out.append(LiteralWord(word) if literal else word)
+        return out
     except ValueError:
         return None
 
@@ -141,7 +184,7 @@ def split_commands(toks, seps=None):
     marks a pipeline stage, so `echo 'git push -f' | bash` can be read)."""
     cmds, cur, last = [], [], ""
     for t in toks:
-        if t in SEPS or (t and set(t) <= set(";&|()\n`")):
+        if not isinstance(t, LiteralWord) and (t in SEPS or (t and set(t) <= set(";&|()\n`"))):
             if cur:
                 cmds.append(cur)
                 if seps is not None:
@@ -260,7 +303,80 @@ def _echo_text(argv):
     return None
 
 
-def commands(text, cwd=None, depth=0, strict=False):
+def agent_run_leaf(argv, cwd):
+    """Unwrap only this checkout's known shell:false runner. None means an
+    unrelated command; [] means help/read, which never execute a child."""
+    if not argv:
+        return None
+    trusted = os.path.realpath(os.path.join(os.path.dirname(__file__), "../../tools/agent-run.mjs"))
+    if os.path.realpath(os.path.join(cwd or os.getcwd(), argv[0])) == trusted:
+        args = argv[1:]  # Executable shebang form of the same trusted script.
+    else:
+        if os.path.basename(argv[0]) not in ("node", "nodejs"):
+            return None
+        matches = [i for i, arg in enumerate(argv[1:], 1)
+                   if os.path.realpath(os.path.join(cwd or os.getcwd(), arg)) == trusted]
+        if not matches:
+            return None
+        if matches[0] != 1 and not argv[1].startswith("-"):
+            return None  # A path passed as DATA to an unrelated node script.
+        if matches[0] != 1:
+            raise AgentRunError("agent-run requires node SCRIPT without Node options for guard inspection")
+        args = argv[2:]
+    boundary = args.index("--") if "--" in args else len(args)
+    options, command = args[:boundary], args[boundary + 1:]
+    if "--help" in options or "-h" in options or options[:1] == ["help"]:
+        return []
+    values = {"--output-level": "compact", "--offset": "0", "--limit": "16384"}
+    allowed = {"--output-level", "--read", "--offset", "--limit", "--timeout-ms", "--status", "--since", "--pointer"}
+    i = 0
+    while i < len(options):
+        if options[i] == "--progress":
+            values["--progress"] = True
+            i += 1
+            continue
+        name, eq, value = options[i].partition("=")
+        if name not in allowed:
+            raise AgentRunError("unknown agent-run option " + name)
+        if not eq:
+            i += 1
+            value = options[i] if i < len(options) else ""
+        if not value and name != "--pointer":
+            raise AgentRunError(name + " needs a value")
+        values[name] = value
+        i += 1
+    if values["--output-level"] not in ("compact", "diagnostic", "full"):
+        raise AgentRunError("invalid agent-run output level")
+    for name in ("--offset", "--limit", "--timeout-ms"):
+        if name in values:
+            try:
+                # Match Number(value)'s common integer forms; reject ambiguous
+                # forms conservatively rather than hide an executable child.
+                number = float(values[name])
+                if not number.is_integer() or number < (0 if name == "--offset" else 1) or number > 9007199254740991:
+                    raise ValueError()
+            except ValueError:
+                raise AgentRunError("invalid agent-run numeric option " + name)
+    if "--read" in values and "--status" in values:
+        raise AgentRunError("agent-run --read and --status are exclusive")
+    if "--read" in values or "--status" in values:
+        if command:
+            raise AgentRunError("agent-run readers cannot execute a command")
+        if "--progress" in values or "--timeout-ms" in values:
+            raise AgentRunError("agent-run execution options require a command")
+        if "--since" in values and "--status" not in values:
+            raise AgentRunError("agent-run --since requires --status")
+        if "--status" in values and ("--pointer" in values or float(values["--offset"]) != 0 or float(values["--limit"]) != 16384):
+            raise AgentRunError("agent-run collection/page options require --read")
+        return []
+    if not command:
+        raise AgentRunError("agent-run requires -- executable [args...]")
+    if "--since" in values or "--pointer" in values or float(values["--offset"]) != 0 or float(values["--limit"]) != 16384:
+        raise AgentRunError("agent-run read options require a reader")
+    return command
+
+
+def commands(text, cwd=None, depth=0, strict=False, agent_leaves=None):
     """Yield (env, argv, redirects, cwd) for every simple command, with
     `sh -c BODY` unwrapped and `cd` tracked. `strict` raises ParseError on
     untokenisable text (here or in a `-c` / eval body) instead of yielding
@@ -273,7 +389,7 @@ def commands(text, cwd=None, depth=0, strict=False):
     # a malformed one raises under `strict` like any other untokenisable text.
     for body in shell_bodies:
         if depth < 4:
-            yield from commands(body, cwd, depth + 1, strict)
+            yield from commands(body, cwd, depth + 1, strict, agent_leaves)
     toks = tokens(text)
     if toks is None:
         if strict:
@@ -288,24 +404,24 @@ def commands(text, cwd=None, depth=0, strict=False):
         i = 0
         while i < len(raw):
             t = raw[i]
-            if t in REDIRS or t in (">", ">>"):
+            if not isinstance(t, LiteralWord) and (t in REDIRS or t in (">", ">>")):
                 tgt = raw[i + 1] if i + 1 < len(raw) else ""
                 # `2>&1` style: shlex gives ">" then "&" — a separator, already split.
                 redirs.append((t, tgt))
                 i += 2
                 continue
-            if t == "<<<":
+            if not isinstance(t, LiteralWord) and t == "<<<":
                 herestr = raw[i + 1] if i + 1 < len(raw) else ""
                 i += 2
                 continue
-            if t == "<":
+            if not isinstance(t, LiteralWord) and t == "<":
                 stdin_file = raw[i + 1] if i + 1 < len(raw) else ""
                 i += 2
                 continue
-            if t in ("<<", "<<-", ">&", "<&") or re.match(r"^[<>]+&$", t):
+            if not isinstance(t, LiteralWord) and (t in ("<<", "<<-", ">&", "<&") or re.match(r"^[<>]+&$", t)):
                 i += 2   # a heredoc delimiter, or an fd dup (2>&1)
                 continue
-            if re.match(r"^\d$", t) and i + 1 < len(raw) and (raw[i + 1] in REDIRS or raw[i + 1].endswith("&")):
+            if re.match(r"^\d$", t) and i + 1 < len(raw) and not isinstance(raw[i + 1], LiteralWord) and (raw[i + 1] in REDIRS or raw[i + 1].endswith("&")):
                 i += 1
                 continue
             argv.append(t)
@@ -313,6 +429,17 @@ def commands(text, cwd=None, depth=0, strict=False):
         env, argv = peel(argv)
         if not argv:
             continue
+        for _ in range(8):
+            leaf = agent_run_leaf(argv, cwd)
+            if leaf is None:
+                break
+            extra_env, argv = peel(leaf or ["true"])
+            env.update(extra_env)
+            if leaf and agent_leaves is not None:
+                assignments = " ".join(k + "=" + shlex.quote(v) for k, v in env.items())
+                agent_leaves.append((assignments + " " if assignments else "") + shlex.join(argv))
+        else:
+            raise AgentRunError("agent-run nesting exceeds guard limit")
         prev = argv
         base = os.path.basename(argv[0])
         if base in ("cd", "pushd") and len(argv) > 1 and cwd:
@@ -331,10 +458,10 @@ def commands(text, cwd=None, depth=0, strict=False):
                     elif stdin_file and os.path.isfile(_abs(stdin_file, cwd)):
                         body = _read(_abs(stdin_file, cwd))
                 if body is not None:
-                    yield from commands(body, cwd, depth + 1, strict)
+                    yield from commands(body, cwd, depth + 1, strict, agent_leaves)
                     continue
         if base == "eval" and depth < 4 and len(argv) > 1:
-            yield from commands(" ".join(argv[1:]), cwd, depth + 1, strict)
+            yield from commands(" ".join(argv[1:]), cwd, depth + 1, strict, agent_leaves)
             continue
         yield env, argv, redirs, cwd
 
@@ -917,6 +1044,17 @@ def guard(payload, root):
     cmd = str((payload.get("tool_input") or {}).get("command") or "")
     sub = bool(payload.get("agent_id") or payload.get("agent_type")
                or "/subagents/" in str(payload.get("transcript_path") or ""))
+    # Invalid trusted wrappers must not fall through raw-command regexes: the
+    # dangerous leaf is behind node and those fallbacks cannot see it.
+    try:
+        list(commands(cmd, os.getcwd(), strict=True))
+    except AgentRunError as error:
+        sys.stderr.write("BLOCKED: cannot inspect agent-run command: " + str(error) + ".\n")
+        return 2
+    except ParseError:
+        if "agent-run.mjs" in cmd:
+            sys.stderr.write("BLOCKED: cannot parse agent-run command; use a literal supported invocation.\n")
+            return 2
     try:
         allc = commit_info(cmd)
         c = [x for x in allc if not x.get("dry") and not x.get("skip")]
@@ -1325,6 +1463,18 @@ if __name__ == "__main__":
         except Exception:
             pl = {}
         sys.exit(guard(pl if isinstance(pl, dict) else {}, sys.argv[2] if len(sys.argv) > 2 else os.getcwd()))
+    elif mode == "agent-run":
+        leaves = []
+        try:
+            list(commands(text, sys.argv[2] if len(sys.argv) > 2 else os.getcwd(), strict=True, agent_leaves=leaves))
+        except AgentRunError as error:
+            sys.stderr.write("BLOCKED: cannot inspect agent-run command: " + str(error) + ".\n")
+            sys.exit(2)
+        except ParseError:
+            if "agent-run.mjs" in text:
+                sys.stderr.write("BLOCKED: cannot parse agent-run command; use a literal supported invocation.\n")
+                sys.exit(2)
+        print("\n".join(leaves))
     elif mode == "gh":
         try:
             print(json.dumps(gh_issues(text)))

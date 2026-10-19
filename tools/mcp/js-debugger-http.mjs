@@ -91,7 +91,8 @@ export async function debuggerRequest(path, body, port = debuggerPort()) {
   let response;
   try {
     response = await fetch(`http://127.0.0.1:${port}${path}`, {
-      method: body ? "POST" : "GET", redirect: "error", signal: AbortSignal.timeout(35000),
+      // debugger_node_test runs whole test files; every other tool answers in seconds.
+      method: body ? "POST" : "GET", redirect: "error", signal: AbortSignal.timeout(body?.params?.name === "debugger_node_test" ? 660000 : 35000),
       headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-06-18" },
       body: body ? JSON.stringify(body) : undefined,
     });

@@ -1,4 +1,4 @@
-// pick-unit-slices — path → six-slice node matrix (fail-safe → all).
+// pick-unit-slices — path → nine-slice node matrix (fail-safe → all).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -13,15 +13,15 @@ import {
 function runJson(...args) {
   return JSON.parse(
   execFileSync("node", ["tools/ci/pick-unit-slices.mjs", "--json", ...args],
-    { encoding: "utf8" }));
+    { cwd: ROOT, encoding: "utf8" }));
 }
 
-test("SLICES / NODE_SLICES match the six-slice ci.yml matrix", () => {
+test("SLICES / NODE_SLICES match the ci.yml matrix", () => {
   assert.deepEqual(SLICES, [
     "guards", "vm-a1", "vm-a2", "vm-b1", "vm-b2", "page-a", "page-b", "slow", "driving-model",
   ]);
   assert.deepEqual(NODE_SLICES, ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page-a", "page-b", "slow"]);
-  const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
+  const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(ci, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
 });
 
@@ -115,7 +115,7 @@ test("--costs exposes the per-slice planning estimates", () => {
   const out = execFileSync(process.execPath, ["tools/ci/pick-unit-slices.mjs", "--all", "--costs"], {
     cwd: ROOT, encoding: "utf8",
   });
-  assert.match(out, /vm-b1\tselected\tp50=455s/);
+  assert.ok(out.includes(`vm-b1\tselected\tp50=${SLICE_COST_P50_SEC["vm-b1"]}s`), `vm-b1 row carries its table p50: ${out}`);
   assert.match(out, /selected=\d+s all=\d+s saved=0s/);
 });
 
@@ -136,7 +136,7 @@ test("--github-output writes any_node / driving / slices", () => {
       "tools/ci/pick-unit-slices.mjs", "--github-output",
       "js/circuits/scenery/monaco.js",
     ],
-    { encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: ghOut } },
+    { cwd: ROOT, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: ghOut } },
   );
   const text = fs.readFileSync(ghOut, "utf8");
   assert.match(text, /^any_node=true$/m);
@@ -165,7 +165,7 @@ test("--github-output writes any_node / driving / slices", () => {
     "tools/ci/pick-unit-slices.mjs", "--github-output",
     "js/circuits/scenery/monaco.js",
     ],
-    { encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: "" } },
+    { cwd: ROOT, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: "" } },
   );
   const localSlices = local.split("\n").find((l) => l.startsWith("slices="));
   assert.ok(localSlices);
@@ -208,7 +208,7 @@ test("15-F1: every other source an ADAPTED spec reads schedules the page slice (
   assert.ok(!slices("js/track/core/mesh.js").has("page-a") && !slices("js/track/core/mesh.js").has("page-b"));
 });
 
-test("--needed-only (a pull request) lists only the needed rows; a deploy push keeps all six names", () => {
+test("--needed-only (a pull request) lists only the needed rows; a deploy push keeps every slice name", () => {
   const scenery = pick(["js/circuits/scenery/monaco.js"]);
   const draft = ciOutputs(scenery, { neededOnly: true });
   assert.deepEqual(draft.slices.map((r) => r.slice), ["vm-a1", "vm-a2"], "a scenery diff on a pull request runs the two elevation shards only");
@@ -217,7 +217,7 @@ test("--needed-only (a pull request) lists only the needed rows; a deploy push k
   const docs = ciOutputs(pick(["docs/TESTING.md"]), { neededOnly: true });
   assert.deepEqual(docs.slices, [], "nothing needed → an empty matrix; ci.yml's node-suites `if:` skips the job on any_node=false");
   assert.equal(docs.any_node, "false");
-  const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
+  const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(ci, /NEEDED_ONLY: \$\{\{ github\.event_name == 'pull_request' \}\}/,
     "ci.yml asks for needed rows only on every pull request (CI is the one required check since 2026-10-15)");
   assert.match(ci, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
@@ -229,7 +229,7 @@ test("SLICE_SCRIPTS mirrors ci.yml's case arms script for script (2026-10-15)", 
   // ran them on vm-b1: a js/audio diff selected a runner that never ran
   // audio-unit, and nothing said so. Parse the step's `<slice>)` … `;;` arms
   // and compare the `npm run test:*` lines with the table, both ways.
-  const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
+  const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   const at = ci.indexOf("- name: Pure-node unit suites");
   assert.ok(at > 0, "the step exists");
   const step = ci.slice(at).split(/\n      - name: /)[0];

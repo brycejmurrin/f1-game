@@ -173,15 +173,58 @@ test("TrackBuildClient.idleWarm is agent-gated; spawn() no-ops when build worker
   assert.equal(main.TrackBuildClient.spawn(), null);
 });
 
-test("renderer-boot caps requestAdapter and idle-preloads three vendor", () => {
+// Run the real gpuAdapterAvailable() (sliced out of renderer-boot.js by brace depth, then
+// evaluated) against a fake navigator.gpu and fake timers, so the adapter race runs.
+function adapterProbe({ requestAdapter, withTimers = true }) {
   const boot = read("js/render/renderer-boot.js");
-  assert.match(boot, /Promise\.race\(\[\s*adapterP,/, "adapter probe is raced");
-  // Hang cap must be seconds-scale: a 250 ms race loses to real CI adapters and
-  // leaves unset backend undefined instead of "three" (render-boot / tlx-probes).
-  // The cap resolves a SLOW marker, not null: a slow adapter is not an absent one (#2285).
-  assert.match(boot, /setTimeout\(\(\) => resolve\(SLOW\), 4000\)/, "4 s adapter hang cap");
-  assert.match(boot, /clearTimeout\(timer\)/, "clear hang timer when adapter settles first");
-  assert.match(boot, /typeof setTimeout !== "function"/, "VM harness without timers still awaits adapter");
+  const at = boot.indexOf("let _adapterWhy");
+  const fnAt = boot.indexOf("async function gpuAdapterAvailable()");
+  assert.ok(at >= 0 && fnAt > at, "adapter probe not found in renderer-boot.js");
+  let depth = 0, i = boot.indexOf("{", fnAt);
+  for (; i < boot.length; i++) {
+    if (boot[i] === "{") depth++;
+    else if (boot[i] === "}" && --depth === 0) break;
+  }
+  const timers = [], cleared = [];
+  const sandbox = { navigator: { gpu: { requestAdapter } }, Promise };
+  if (withTimers) {
+    sandbox.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return timers.length; };
+    sandbox.clearTimeout = (id) => { cleared.push(id); };
+  }
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(boot.slice(at, i + 1) + "\nthis.probe = async () => ({ ok: await gpuAdapterAvailable(), slow: _adapterSlow, why: _adapterWhy });", ctx,
+    { filename: "js/render/renderer-boot.js" });
+  return { probe: ctx.probe, timers, cleared };
+}
+
+test("renderer-boot: a never-resolving requestAdapter hits the 4 s cap and reads as SLOW, not absent", async () => {
+  const h = adapterProbe({ requestAdapter: () => new Promise(() => {}) });
+  const p = h.probe();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(h.timers.length, 1, "the hang timer was armed");
+  assert.equal(h.timers[0].ms, 4000, "seconds-scale hang cap");
+  h.timers[0].fn();
+  const r = await p;
+  assert.equal(r.ok, false);
+  assert.equal(r.slow, true, "a slow adapter is not an absent one (#2285)");
+  assert.deepEqual(h.cleared, [1], "the hang timer is cleared on the way out");
+});
+
+test("renderer-boot: an adapter that settles first wins, clears the timer, and null reads as absent", async () => {
+  const good = adapterProbe({ requestAdapter: async () => ({}) });
+  const g = await good.probe();
+  assert.deepEqual({ ok: g.ok, slow: g.slow }, { ok: true, slow: false });
+  assert.deepEqual(good.cleared, [1]);
+  const none = adapterProbe({ requestAdapter: async () => null });
+  const n = await none.probe();
+  assert.deepEqual({ ok: n.ok, slow: n.slow }, { ok: false, slow: false });
+  assert.match(n.why, /returned null/);
+  const noTimers = adapterProbe({ requestAdapter: async () => ({}), withTimers: false });
+  assert.equal((await noTimers.probe()).ok, true, "a VM harness without timers still awaits the adapter");
+});
+
+test("renderer-boot idle-preloads the three vendor island on an idle slice", () => {
+  const boot = read("js/render/renderer-boot.js");
   assert.match(boot, /requestIdleCallback\(kick, \{ timeout: 800 \}\)/,
     "three modulepreload waits for an idle slice");
   assert.match(boot, /rel = "modulepreload"/);

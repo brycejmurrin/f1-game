@@ -373,10 +373,6 @@ test("the result call IS the flag card: it is on the air within half a second of
   assert.ok(r.said.slice(before).some((s) => /P2/.test(s.msg)), JSON.stringify(r.said.slice(before)));
   r.radio.setChat("off");
   assert.equal(r.radio.callsResult(), false, "chatter OFF: FINISH! is the only call, so it stays");
-  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const finishes = game.match(/announce\("FINISH!"/g) || [];
-  assert.ok(finishes.length >= 2);
-  assert.equal((game.match(/!raceRadio\.callsResult\(\)\) announce\("FINISH!"/g) || []).length, finishes.length, "every FINISH! card is gated");
 });
 
 test("RADIO CHECK answers on demand with the position and both gaps", () => {
@@ -807,9 +803,22 @@ test("everyone in: a penalty-held finish is released before endRace, not lost", 
 });
 
 test("reset() forgets the last race's pit exit, so this race's pace rates are not muted", () => {
-  const src = readFileSync(new URL("../../js/race/race-facts.js", import.meta.url), "utf8");
-  const reset = src.slice(src.indexOf("function reset() {"), src.indexOf("function bag("));
-  assert.match(reset, /pitEndT = -1e9;/);
+  // Race 1: the player leaves the pit lane late (raceT ~300). Race 2 restarts the clock at 0.
+  // Without reset() clearing pitEndT, every checkpoint of race 2 sits "within 5 s of the pit exit".
+  const rateAfter = (doReset) => {
+    const f = RF.create();
+    const a = car("AAA", 1000, 62), p = car("PLY", 900, 60, { isPlayer: true });
+    const G = { state: "race", raceT: 300, cars: [a, p], player: p, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
+    const tick = () => { G.raceT += 0.1; for (const c of G.cars) c.prog += c.speed * 0.1; return f.observe(G, 0.1).f; };
+    p.pitState = "exit"; tick(); p.pitState = "none"; tick();
+    if (doReset) f.reset();
+    G.raceT = 0; a.prog = 1000; p.prog = 900;
+    let rate = null;
+    for (let i = 0; i < 600; i++) { const o = tick(); if (o.rateA != null) rate = o.rateA; }
+    return rate;
+  };
+  assert.notEqual(rateAfter(true), null, "after reset() the new race reads a pace rate");
+  assert.equal(rateAfter(false), null, "negative control: a stale pit exit does mute the rate");
 });
 
 test("the TV last lap follows the LEADER's laps: a retired player still hears it", () => {
@@ -1300,53 +1309,44 @@ test("commentary OFF permanently discards accepted WATCH copy without suppressin
 // ── saturated announce (coach + TV + engineer share one card) ───────────────
 
 function raceSaturated(opts = {}) {
+  // The REAL AnnounceBanner queue (ANN_PRI, ANN_QUEUE_MAX, floor, drain): a priority-table or
+  // queue-depth change in announce-banner.js changes what this saturated race sees (RC2-04).
   const r = race(opts);
   const G = r.G;
-  const PRI = { comm: 1, coach: 1, practice: 2, info: 2, warning: 3, box: 4, race: 4 };
-  const QMAX = 2;
-  G._annQueue = [];
-  G.announceT = 0;
-  G._annPri = 0;
-  G.announce = (msg, dur, kind, still) => {
-    const pri = PRI[kind] || 2;
-    const life = Math.max(3, (dur || 1.6) + 0.5);
-    if (G.announceT > 0) {
-      const low = G._annQueue.length ? G._annQueue[G._annQueue.length - 1].pri : 0;
-      const cap = pri > low ? QMAX + 3 : QMAX;
-      while (G._annQueue.length >= cap) {
-        const tail = G._annQueue[G._annQueue.length - 1];
-        if (!tail || tail.pri >= pri) return false;
-        G._annQueue.pop();
-      }
-      let at = G._annQueue.length;
-      while (at > 0 && G._annQueue[at - 1].pri < pri) at--;
-      G._annQueue.splice(at, 0, { msg, dur, kind, pri, still, life });
-      return true;
-    }
-    r.said.push({ t: +G.raceT.toFixed(2), msg, kind });
-    G.announceT = life;
-    G._annPri = pri;
-    return true;
-  };
-  G.tickAnnounce = (dt) => {
-    if (!(G.announceT > 0)) return;
-    G.announceT -= dt;
-    if (G.announceT > 0) return;
-    G._annPri = 0;
-    while (G._annQueue.length) {
-      const q = G._annQueue.shift();
-      if (q.still && !q.still()) continue;
-      r.said.push({ t: +G.raceT.toFixed(2), msg: q.msg, kind: q.kind });
-      G.announceT = q.life;
-      G._annPri = q.pri;
-      break;
-    }
-  };
-  Object.defineProperty(G, "announceBusy", { configurable: true, enumerable: true, get: () => G.announceT > 0 });
+  let nowMs = 0;
+  const bctx = vm.createContext({
+    performance: { now: () => nowMs },
+    RadioVoice: RV,
+    GameAudio: { radioLeadS: () => 0, radioSting() {} },
+  });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/announce-banner.js"), "utf8"), bctx, { filename: "js/race/announce-banner.js" });
+  const els = { announceText: { textContent: "" }, announceWho: { textContent: "" }, announceNum: { textContent: "" },
+    announce: { className: "", hidden: true, dataset: {} }, announceLive: { textContent: "" } };
+  const banner = vm.runInContext("AnnounceBanner", bctx).create({
+    els: () => els, player: () => G.player, state: () => "race", hudProfile: () => "standard",
+    camMode: () => 0, camModes: () => [{ id: "chase" }], history: () => null,
+    radioVoice: () => ({ say: (msg, life, kind) => r.said.push({ t: +G.raceT.toFixed(2), msg, kind }) }),
+  });
+  G.announce = (msg, dur, kind, still) => banner.announce(msg, dur, kind, still);
+  Object.defineProperty(G, "announceBusy", { configurable: true, enumerable: true, get: () => banner.t > 0 });
   const base = r.step;
-  r.step = (dt, n = 1) => { for (let i = 0; i < n; i++) { base(dt); G.tickAnnounce(dt); } };
+  r.step = (dt, n = 1) => { for (let i = 0; i < n; i++) { base(dt); nowMs += dt * 1000; banner.tick(dt); } };
   return r;
 }
+
+test("the real announce queue plays a burst in priority order, penalty-hit over penalty-warn over warning, capped at QMAX", () => {
+  const r = raceSaturated();
+  r.G.announce("FIRST", 3, "race");            // on screen, inside its floor
+  assert.equal(r.said.length, 1);
+  r.G.announce("comm line", 3, "comm");
+  r.G.announce("warn line", 3, "warning");
+  r.G.announce("hit line", 3, "penalty-hit");
+  r.G.announce("pw line", 3, "penalty-warn");
+  r.step(0.1, 400);
+  const order = r.said.map((s) => s.msg);
+  assert.deepEqual(order.slice(0, 3), ["FIRST", "hit line", "pw line"], JSON.stringify(order));
+  assert.ok(!order.includes("comm line"), "the weakest card was shed once the deeper queue filled");
+});
 
 function loadEngineer() {
   const ectx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });

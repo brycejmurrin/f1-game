@@ -91,6 +91,13 @@ export function lintSource(src, file = "<src>") {
     const arg = n.arguments[1];
     const opts = n.arguments[2];
     const predicate = n.arguments[0];
+    // Playwright polls `const success = predicate(); if (success) fulfill(success)`.
+    // An `async` predicate returns a Promise (always truthy), so the wait passes on
+    // the first poll and never waits for the condition (#2825, #2801).
+    if (predicate && (predicate.type === "ArrowFunctionExpression" || predicate.type === "FunctionExpression")
+        && predicate.async) {
+      sites.push({ line: n.loc.start.line, method: n.callee.property.name, kind: "async-predicate" });
+    }
     const misplaced = n.arguments.length === 2 &&
       (hasKey(arg, "timeout") || hasKey(arg, "polling")) &&
       (predicate?.type === "ArrowFunctionExpression" || predicate?.type === "FunctionExpression") &&
@@ -158,13 +165,23 @@ export function count(root = ROOT) {
 
 function main() {
   const rows = lintAll();
+  const asyncSites = rows.flatMap((r) => (r.sites || []).filter((s) => s.kind === "async-predicate")
+    .map((s) => `${r.file}:${s.line}`));
   const n = rows.reduce((a, r) => a + r.sites.length, 0);
-  console.log(`waitForFunction calls with misplaced options, timeout without polling, or (tests/specs) no options: ${n}`);
+  console.log(`waitForFunction calls with async predicates, misplaced options, timeout without polling, or (tests/specs) no options: ${n}`);
   for (const r of rows.sort((a, b) => b.sites.length - a.sites.length)) {
     if (r.parseError) { console.log(`  PARSE ${r.file}: ${r.parseError}`); continue; }
     console.log(`  ${String(r.sites.length).padStart(3)}  ${r.file}`);
   }
-  console.log("\nREPORT ONLY: this CLI exits 0 whatever it finds; the count is held by the ratchet (tests/data/ratchets.json).");
+  if (asyncSites.length) {
+    console.error("\nREJECT: async waitForFunction predicates never wait (Playwright treats a Promise as success):");
+    for (const s of asyncSites) console.error(`  ${s}`);
+    console.error("Fix: use a synchronous predicate; move await/rAF outside the wait (or page.evaluate).");
+    process.exitCode = 1;
+    return;
+  }
+  console.log("\nAsync-predicate check: clean (hard reject). Other kinds: REPORT ONLY — count held by");
+  console.log("the waitNoPolling ratchet (tests/data/ratchets.json).");
   console.log("Fix: pass null before { polling: 100, timeout: N }. Options belong in");
   console.log("argument three; timer polling avoids render-loop rAF starvation.");
 }
