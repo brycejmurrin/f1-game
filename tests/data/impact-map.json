@@ -5106,6 +5106,7 @@
     "js/data/settings-defaults.js": {
       "*": [
         "tests/specs/debris.spec.js",
+        "tests/unit/debris-opts.test.mjs",
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/i18n.test.mjs",
@@ -11366,6 +11367,7 @@
       "*": [
         "tests/unit/engineer.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs"
       ]
     },
@@ -11778,6 +11780,7 @@
       ],
       "endSession": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "planFor": [
@@ -11821,7 +11824,8 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "viewWetness": [
-        "tests/unit/rain-cells.test.mjs"
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "weather": [
         "tests/unit/weather-blend.test.mjs"
@@ -11836,7 +11840,8 @@
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "wetnessAt": [
-        "tests/unit/rain-cells.test.mjs"
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ]
     },
     "js/race/wind.js": {

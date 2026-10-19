@@ -105,6 +105,33 @@ test("level OFF is a true no-op: calm state, vmaxMul exactly 1, latA exactly 0",
   assert.ok(W.sync(5, "storm", "bahrain", 120).ms > 0);
 });
 
+test("gustCall fires with a bucket in a strong gust, once per ~90 s bucket, and never in calm air", () => {
+  const W = load();
+  let fired = null;
+  for (let seed = 1; seed <= 80 && !fired; seed++) for (let t = 0; t < 900 && !fired; t += 0.5) {
+    const st = W.sync(seed, "storm", "bahrain", t);
+    if (st.ms >= W.GUST_CALL_MS && st.gust > 0.5) fired = { seed, t, call: W.gustCall() };
+  }
+  assert.ok(fired, "a storm at Bahrain reaches a callable gust");
+  assert.equal(fired.call, Math.floor(fired.t / 90), "the call is the 90 s bucket id the engineer dedupes on");
+  W.sync(1, "fog", "monaco", 10);
+  assert.equal(W.gustCall(), null, "calm fog has nothing to call");
+});
+
+test("pin() holds a fixed wind with no gusts; level off keeps it calm; null releases it", () => {
+  const W = load();
+  const p = W.pin({ speed: 10, dir: 0 });
+  assert.equal(p.ms, 10); assert.equal(p.wz, 10); assert.ok(Math.abs(p.wx) < 1e-12, "dir 0 blows toward +z");
+  assert.equal(p.gust, 0); assert.equal(p.kmh, 36); assert.equal(p.pinned, true);
+  assert.equal(W.sync(7, "storm", "bahrain", 500).ms, 10, "sync cannot move a pinned wind");
+  assert.equal(W.pin({ speed: 999 }).ms, W.MAX_SPEED, "a pinned speed is clamped to MAX_SPEED");
+  W.setLevel("off");
+  assert.equal(W.sync(7, "storm", "bahrain", 500).ms, 0, "the level still gates a pinned wind");
+  W.setLevel("real");
+  assert.equal(W.pin(null), null);
+  assert.ok(W.sync(7, "storm", "bahrain", 500).ms !== 10 || !W.state().pinned, "released: the seeded wind is back");
+});
+
 test("race settings offer WIND off/real and persist it (phone players can turn it off)", () => {
   const src = readFileSync(join(ROOT, "js/race/race-settings.js"), "utf8");
   assert.match(src, /function ensureWindRow[\s\S]*?\$\("rs-dirty"\)[\s\S]*?id="rs-wind-label">WIND</, "WIND row injected after DIRTY AIR");
