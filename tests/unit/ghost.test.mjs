@@ -407,6 +407,47 @@ test("clearing one ghost cancels its pending PB before a foreign merge", () => {
   assert.equal(saved.spa.time, 60);
 });
 
+test("clearing a track removes every context and pending write without prefix collisions", () => {
+  const h = createHarness({ deferWrites: true });
+  const save = (track, context, time) => {
+    h.Ghost.setTrack(track, context);
+    h.Ghost.startLap();
+    for (let i = 0; i < 12; i++) h.Ghost.record(i, i * 10, 0);
+    assert.equal(h.Ghost.finishLap(time), true);
+  };
+  save("custom-a", "ctx1", 41);
+  save("custom-a", "ctx2", 40);
+  save("custom-a-long", "ctx1", 39);
+
+  h.Ghost.clear("custom-a");
+  assert.equal(h.Ghost.hasGhost(), true, "the selected prefix-collision track stays active");
+  h.flushTimers();
+
+  const saved = JSON.parse(h.store.getItem("apex26.ghost.v1"));
+  assert.equal(saved["v2:custom-a:ctx1"], undefined);
+  assert.equal(saved["v2:custom-a:ctx2"], undefined);
+  assert.equal(saved["v2:custom-a-long:ctx1"].time, 39,
+    "another track and its pending write survive track-wide cleanup");
+});
+
+test("clearing an exact context key preserves sibling contexts and clears the selected ghost", () => {
+  const h = createHarness();
+  const save = (context, time) => {
+    h.Ghost.setTrack("monza", context);
+    h.Ghost.startLap();
+    for (let i = 0; i < 12; i++) h.Ghost.record(i, i * 10, 0);
+    assert.equal(h.Ghost.finishLap(time), true);
+  };
+  save("wet", 42);
+  save("dry", 40);
+  h.Ghost.clear("v2:monza:dry");
+  assert.equal(h.Ghost.hasGhost(), false);
+
+  const saved = JSON.parse(h.store.getItem("apex26.ghost.v1"));
+  assert.equal(saved["v2:monza:dry"], undefined);
+  assert.equal(saved["v2:monza:wet"].time, 42);
+});
+
 function recordLap(Ghost, time) {
   Ghost.startLap();
   for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, i * 0.2);

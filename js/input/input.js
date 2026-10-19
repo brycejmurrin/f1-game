@@ -348,7 +348,9 @@ const Input = (function () {
   }
   function remoteSample(s) {
     if (!s) return false;
-    remoteOwner = typeof s.source === "string" ? s.source.slice(0, 32) : "remote";
+    const owner = typeof s.source === "string" ? s.source.slice(0, 32) : "remote";
+    if (owner !== remoteOwner) remSeq = null;
+    remoteOwner = owner;
     const n = nowMs();
     // A STICK (an XR thumbstick, js/xr/xr-input.js) is an analog steer
     // command, not a lean: it used to be dressed up as a roll (steerToTilt) and
@@ -417,13 +419,20 @@ const Input = (function () {
     fn();
     return true;
   }
+  // Forget the current remote command without tearing down the paired transport.
+  // reset() uses this on blur/visibility loss; the next fresh sample can take
+  // control again, while a real link loss additionally clears remoteOwner below.
+  function clearRemoteControls(clearSequence) {
+    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0;
+    if (clearSequence) remSeq = null;
+    if (tiltRemote || !gyroAttached) tiltSeen = false;
+  }
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
   // keep steering a device whose own sensor is not attached.
   function remoteLost(source) {
     if (source != null && source !== remoteOwner) return false;
     remoteOwner = null;
-    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0; remSeq = null;
-    if (tiltRemote || !gyroAttached) tiltSeen = false;
+    clearRemoteControls(true);
   }
   function setRemoteHaptics(fn) {
     const had = !!remoteHaptics;
@@ -2300,7 +2309,7 @@ const Input = (function () {
     clearDriveToggles();
     lookStickX = 0; lookStickY = 0;
     lookMouseDx = 0; lookMouseDy = 0; lookMouseDown = false;
-    remThr = remBrk = 0; remHeld = 0;   // the phone re-sends within 100 ms if still held
+    clearRemoteControls();   // paired remotes may take control again with their next fresh sample
     recoverPressed = false;
     radioPressed = false;
     mirrorPressed = false;

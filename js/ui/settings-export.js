@@ -704,16 +704,44 @@ function garageValue(k, v) {
 function applyGarage(file) {
   if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: `not an ${GARAGE_FORMAT} file`, applied: 0, skipped: 0 };
   const g = file.garage || {};
-  let applied = 0, skipped = 0, failed = 0, droppedLiveries = 0;
+  const prepared = {};
+  let applied = 0, skipped = 0, failed = 0, droppedLiveries = 0, remappedLiveries = 0;
   for (const k of Object.keys(g)) {
     if (!isGarageKey(k)) { skipped++; continue; }
     const v = garageValue(k, g[k]);
     if (v === undefined) { skipped++; continue; }
     if (k.indexOf("livery.custom.") === 0 && Array.isArray(g[k])) droppedLiveries += g[k].length - v.length;
-    try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { failed++; }
+    prepared[k] = v;
+  }
+  // Repair each team as one import unit so a selected colliding id follows the
+  // custom paint to its new id regardless of key order in the JSON file.
+  for (const k of Object.keys(prepared)) {
+    if (k.indexOf("livery.custom.") !== 0) continue;
+    const teamId = k.slice("livery.custom.".length), selectedKey = "livery." + teamId;
+    const hasImportedSelection = Object.prototype.hasOwnProperty.call(prepared, selectedKey);
+    const normalized = CustomLiveries.normalizeImported(
+      teamId, prepared[k], hasImportedSelection ? prepared[selectedKey] : undefined);
+    prepared[k] = normalized.liveries;
+    if (hasImportedSelection) prepared[selectedKey] = normalized.selectedId;
+    else if (normalized.catalogAvailable) {
+      prepared[selectedKey] = CustomLiveries.coherentImportedSelection(
+        teamId, normalized.liveries, GameStore.store.get(selectedKey, "default"));
+    }
+    remappedLiveries += normalized.repaired;
+  }
+  for (const k of Object.keys(prepared)) {
+    if (k.indexOf("livery.") !== 0 || k.indexOf("livery.custom.") === 0) continue;
+    const teamId = k.slice("livery.".length), customKey = "livery.custom." + teamId;
+    const customs = Object.prototype.hasOwnProperty.call(prepared, customKey)
+      ? prepared[customKey] : GameStore.store.get(customKey, []);
+    prepared[k] = CustomLiveries.coherentImportedSelection(teamId, customs, prepared[k]);
+  }
+  for (const k of Object.keys(prepared)) {
+    try { if (GameStore.store.set(k, prepared[k]) !== false) applied++; else failed++; } catch (_) { failed++; }
   }
   const res = { ok: true, applied, skipped, failed, reason: null };
   if (droppedLiveries) { res.droppedLiveries = droppedLiveries; Log.warn("ui", "garage file: livery rows failed the shape check", { droppedLiveries }); }
+  if (remappedLiveries) res.remappedLiveries = remappedLiveries;
   return res;
 }
 // RESET TO THE SHIPPED GARAGE. Fresh installs never need this — GameStore.get

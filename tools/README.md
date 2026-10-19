@@ -446,6 +446,9 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/tinyfish-mcp.sh** | Local TinyFish MCP proxy helper: `setup`/`start`/`stop`/`status`/`fetch`/`search`/`deploy-check`/`deploy-js` on :3711. | mcp-probe |
 | **mcp/tinyfish-rpc.py** | Unwraps TinyFish `fetch_content`/`search` JSON-RPC results: `unwrap` / `deploy-summary` / `live-build` / `tool-names`. | mcp-probe |
 | **mcp/ui-tools.mjs** | Bounded semantic UI inspection and saved inspection comparison for Apex MCP. | ui-menu-a11y |
+| **mcp/workflow-harness-client.mjs** | CLI client for bounded workflow-harness calls with file-based probe arguments. | — |
+| **mcp/workflow-harness-core.mjs** | Core contracts for frozen-source workflow experiments; imported by the server and fixture tests. | — |
+| **mcp/workflow-harness.mjs** | Authenticated loopback server for bounded, frozen-source agent workflow experiments. | — |
 
 ### `tools/viewer/`
 

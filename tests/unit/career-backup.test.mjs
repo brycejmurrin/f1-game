@@ -210,6 +210,28 @@ test("a v0 save exports and imports through the migration ladder", () => {
   assert.ok(h.Career.data().season);
 });
 
+test("a current digit-string version imports durably without rerunning old migrations", () => {
+  const h = loadHarness();
+  const data = Object.assign(save({ v: String(h.SaveMigrate.CAREER_V), money: 777 }), {
+    briefStake: { year: 2026, round: 3, committed: true, escrow: 50 },
+    sponsorPicks: { "2026:3": 1 },
+  });
+  const envelope = { format: h.CareerBackup.FORMAT, slots: [
+    { flavour: "driver", i: 0, data },
+  ] };
+  assert.equal(h.CareerBackup.validate(envelope).ok, true);
+  const applied = h.CareerBackup.apply(envelope);
+  assert.equal(applied.ok, true);
+  assert.equal(applied.durable, true);
+  const stored = h.store.get("career.driver.0");
+  assert.equal(stored.v, h.SaveMigrate.CAREER_V);
+  assert.deepEqual(JSON.parse(JSON.stringify(stored.briefStake)), data.briefStake);
+  assert.deepEqual(JSON.parse(JSON.stringify(stored.sponsorPicks)), data.sponsorPicks);
+  h.Career.load();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.Career.data().briefStake)), data.briefStake);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.Career.data().sponsorPicks)), data.sponsorPicks);
+});
+
 test("hostile payloads are rejected with a reason and change nothing", () => {
   const h = loadHarness();
   fillSix(h);
@@ -1605,6 +1627,54 @@ test("a future schema in the last incoming backup row rejects the whole bag befo
   assert.deepEqual([...target.disk.entries()], before);
 });
 
+test("bulk import preserves destinations with invalid explicit versions and accepts current controls", () => {
+  const incoming = { format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: save({ money: 777 }) },
+  ] };
+  for (const v of ["3 ", Number.MAX_SAFE_INTEGER + 1, { toString: 1 }]) {
+    const h = loadHarness();
+    const key = "career.driver.0";
+    const existing = { v, flavour: "driver", future: { intact: true } };
+    h.store.set(key, existing);
+    const before = h.disk.get("apex26." + key);
+    const result = h.CareerBackup.apply(incoming);
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "invalid-version");
+    assert.equal(result.slot, "driver:0");
+    assert.equal(h.disk.get("apex26." + key), before, `${JSON.stringify(v)} destination changed`);
+  }
+
+  for (const v of [2, "2", undefined]) {
+    const h = loadHarness();
+    const existing = { flavour: "driver", money: 1 };
+    if (v !== undefined) existing.v = v;
+    h.store.set("career.driver.0", existing);
+    const result = h.CareerBackup.apply(incoming);
+    assert.equal(result.ok, true, `${JSON.stringify(v)} current control was refused`);
+    assert.equal(h.store.get("career.driver.0").money, 777);
+  }
+});
+
+test("single-slot recovery writer preserves invalid-version destinations", () => {
+  for (const v of ["3 ", Number.MAX_SAFE_INTEGER + 1, { toString: 1 }]) {
+    const h = loadHarness();
+    const key = "career.driver.1";
+    h.store.set(key, { v, flavour: "driver", future: { intact: true } });
+    const before = h.disk.get("apex26." + key);
+    const result = h.CareerBackup.writeSlot("driver", 1, save({ money: 888 }));
+    assert.equal(result.ok, false);
+    assert.equal(result.durable, false);
+    assert.equal(result.reason, "invalid-version");
+    assert.equal(h.disk.get("apex26." + key), before, `${JSON.stringify(v)} destination changed`);
+  }
+
+  const h = loadHarness();
+  h.store.set("career.driver.1", save({ v: "2", money: 1 }));
+  const result = h.CareerBackup.writeSlot("driver", 1, save({ money: 888 }));
+  assert.equal(result.ok, true);
+  assert.equal(h.store.get("career.driver.1").money, 888);
+});
+
 // #2165: a Daily class key is Ghost.contextKey() — JSON of the car/tune config,
 // full of `{`, `"` and `,`. cleanDayEntry ran it through ID_RE and dropped every
 // class on import, so a fresh-device restore's share line read "NO LAP".
@@ -1869,7 +1939,8 @@ test("backup imports repair malformed JSON numeric leaves without mutating the e
 });
 
 test("object schema versions are refused before coercion or any import write", () => {
-  for (const v of [{ toString: "oops" }, [], true]) {
+  for (const v of [{ toString: "oops" }, [], true, null, "", " 2", "2.0", "2e0", "-1", -1, 1.5,
+    Number.MAX_SAFE_INTEGER + 1, String(Number.MAX_SAFE_INTEGER + 1)]) {
     const h = loadHarness();
     fillSix(h);
     const envelope = h.CareerBackup.build();

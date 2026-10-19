@@ -243,6 +243,65 @@ test("a failed flush retains pending laps across a foreign write for a later ret
   assert.equal(reloaded.InputGhost.bestTime(), 21);
 });
 
+test("clear(track) removes all contexts and their pending writes but preserves other tracks", () => {
+  const h = createHarness({ deferWrites: true });
+  const save = (track, context, time) => {
+    h.InputGhost.setTrack(track, context);
+    assert.equal(driveLap(h.InputGhost, 40, time), true);
+  };
+  save("custom-a", "ctx1", 21);
+  save("custom-a", "ctx2", 20);
+  save("custom-a-long", "ctx1", 19);
+  assert.equal(h.InputGhost.beginReplay(), true);
+  h.InputGhost.next();
+
+  h.InputGhost.clear("custom-a");
+  assert.equal(h.InputGhost.hasGhost(), true, "the selected prefix-collision track stays active");
+  assert.equal(h.InputGhost.replayIndex(), 1, "unrelated active replay state stays intact");
+  h.InputGhost.flush();
+
+  const saved = JSON.parse(h.disk.get("apex26.inputGhost.v1"));
+  assert.equal(saved["v2:custom-a:ctx1"], undefined);
+  assert.equal(saved["v2:custom-a:ctx2"], undefined);
+  assert.equal(saved["v2:custom-a-long:ctx1"].time, 19,
+    "another track and its pending write survive track-wide cleanup");
+});
+
+test("clear supports exact context keys and resets a cleared active replay", () => {
+  const h = createHarness();
+  h.InputGhost.setTrack("monza", "wet");
+  assert.equal(driveLap(h.InputGhost, 40, 22), true);
+  h.InputGhost.flush();
+  h.InputGhost.setTrack("monza", "dry");
+  assert.equal(driveLap(h.InputGhost, 40, 20), true);
+  h.InputGhost.flush();
+  assert.equal(h.InputGhost.beginReplay(), true);
+  h.InputGhost.next();
+
+  h.InputGhost.clear("v2:monza:dry");
+  assert.equal(h.InputGhost.hasGhost(), false);
+  assert.equal(h.InputGhost.replayIndex(), 0);
+  assert.equal(h.InputGhost.next(), null);
+
+  const saved = JSON.parse(h.disk.get("apex26.inputGhost.v1"));
+  assert.equal(saved["v2:monza:dry"], undefined);
+  assert.equal(saved["v2:monza:wet"].time, 22);
+});
+
+test("clear() removes every pending input ghost and resets replay state", () => {
+  const h = createHarness({ deferWrites: true });
+  h.InputGhost.setTrack("monza", "dry");
+  assert.equal(driveLap(h.InputGhost, 40, 20), true);
+  assert.equal(h.InputGhost.beginReplay(), true);
+  h.InputGhost.next();
+
+  h.InputGhost.clear(null);
+  h.InputGhost.flush();
+  assert.equal(h.InputGhost.hasGhost(), false);
+  assert.equal(h.InputGhost.replayIndex(), 0);
+  assert.deepEqual(JSON.parse(h.disk.get("apex26.inputGhost.v1")), {});
+});
+
 test("quantizeSteer / packFlags are stable helpers", () => {
   const { InputGhost: IG } = createHarness();
   assert.equal(IG.quantizeSteer(1), 127);

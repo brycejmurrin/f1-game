@@ -385,11 +385,12 @@ const Ghost = (function () {
       return;
     }
     const store = loadStore();
-    const target = context != null && id === trackId ? storageId : id;
-    pending.delete(target);
-    delete store[target];
+    const contextPrefix = id.startsWith("v2:") ? null : "v2:" + id + ":";
+    const matches = key => key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+    for (const key of pending.keys()) if (matches(key)) pending.delete(key);
+    for (const key of Object.keys(store)) if (matches(key)) delete store[key];
     saveStore(store);
-    if (id === trackId) best = null;
+    if (storageId != null && matches(storageId)) best = null;
   }
   function speedAt(t) {
     if (!best || !Number.isFinite(t) || t < 0 || t > best.time) return null;

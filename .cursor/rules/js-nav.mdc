@@ -17,3 +17,10 @@ alwaysApply: false
   (`window.X`, a file ending in `module.exports`): the rows come from text.
 - grep stays right for text, comments, log strings and CSS. Workflows and limits:
   skill `code-nav`.
+- For broad impact, get global `files:true` references/callers before expanding
+  concise rows or a `path` scope. A scoped answer cannot establish absence elsewhere.
+- A definition-only result can miss factory instances, aliases, callbacks or inline
+  HTML consumers: follow the returned binding or use a bounded text cross-check.
+- For bug hunts, trace a supported input through validation/state and its actual
+  consumer, and leave probe retry budget. Examples and evidence rules:
+  [investigations](../skills/code-nav/references/investigations.md).

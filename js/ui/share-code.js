@@ -230,21 +230,43 @@ const ShareCode = (function () {
     if (decoded.kind === "livery") {
       const customKey = "livery.custom." + decoded.team;
       let next = null;
+      let selectedId = decoded.livery ? decoded.livery.id : decoded.id;
       if (decoded.livery) {
         const stored = store.get(customKey, []);
         const arr = Array.isArray(stored) ? stored : [];
-        const kept = arr.filter((l) => !l || l.id !== decoded.livery.id);
+        // A generated suffix is not provenance: another player may already own
+        // `default_imported`. A catalog collision replaces an earlier import
+        // only when the paint itself is identical; otherwise it receives the
+        // next free id and every unrelated row survives.
+        const incoming = CustomLiveries.normalizeImported(decoded.team, [decoded.livery], decoded.livery.id);
+        const catalogCollision = incoming.repaired > 0;
+        let replaceId = catalogCollision ? null : decoded.livery.id;
+        if (catalogCollision) {
+          const keys = Object.keys(decoded.livery).filter((k) => k !== "id").sort();
+          const same = arr.find((liv) => liv && keys.length === Object.keys(liv).filter((k) => k !== "id").length
+            && keys.every((k) => JSON.stringify(liv[k]) === JSON.stringify(decoded.livery[k])));
+          if (same) { replaceId = same.id; selectedId = same.id; }
+        }
+        const kept = replaceId == null ? arr.slice() : arr.filter((l) => !l || l.id !== replaceId);
         // Re-sharing a livery the player already has replaces it in place; a NEW one
         // at the cap is refused before anything is written — never trim their list.
         if (kept.length === arr.length && arr.length >= LIVERY_CAP) {
           return { ok: false, kind: "livery", reason: "livery-full", team: decoded.team };
         }
-        next = kept.concat([decoded.livery]);
+        next = kept.concat([replaceId && catalogCollision
+          ? Object.assign({}, decoded.livery, { id: replaceId }) : decoded.livery]);
       }
       const values = {};
-      if (next) values[customKey] = next;
+      if (next) {
+        const normalized = CustomLiveries.normalizeImported(decoded.team, next, selectedId);
+        next = normalized.liveries;
+        selectedId = normalized.selectedId;
+        values[customKey] = next;
+      }
+      selectedId = CustomLiveries.coherentImportedSelection(
+        decoded.team, next || store.get(customKey, []), selectedId);
       // Select the livery that was actually stored (a crafted code could name another id).
-      values["livery." + decoded.team] = decoded.livery ? decoded.livery.id : decoded.id;
+      values["livery." + decoded.team] = selectedId;
       const failed = importValues(store, decoded, values);
       if (failed) return failed;
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);

@@ -185,9 +185,10 @@ const afterMirror = (fn) => (typeof queueMicrotask === "function" ? queueMicrota
 let previewOpenRaf = 0;
 
 function fittedLivery(t) {
-  const id = store.get("livery." + t.id, "default");
-  const custom = store.get("livery.custom." + t.id, []) || [];
-  const list = ((typeof Liveries !== "undefined" && Liveries.forTeam) ? Liveries.forTeam(t) : []).concat(custom);
+  // These adapters also own the active My Team career slot. Reading the store
+  // directly here made its garage TEAM swatch show the unrelated GP paint.
+  const id = G.getLiveryId(t.id);
+  const list = G.getLiveries(t);
   return list.find((l) => l.id === id) || list[0] || null;
 }
 

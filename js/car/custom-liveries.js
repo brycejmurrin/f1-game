@@ -6,6 +6,67 @@
 "use strict";
 
 const CustomLiveries = (function () {
+  // Import doors use this before persistence so a custom row can never hide
+  // behind a catalog row (catalog is resolved first), and two custom rows can
+  // never claim the same identity. Sound, unique ids are left byte-for-byte
+  // alone; repaired ids are deterministic so a garage file is a fixed point.
+  function normalizeImported(teamId, rows, selectedId) {
+    const team = typeof Teams !== "undefined" && Teams.LIST
+      ? Teams.LIST.find((t) => t && t.id === teamId) : null;
+    const catalog = team && typeof Liveries !== "undefined" && Liveries.forTeam
+      ? Liveries.forTeam(team) : [];
+    const catalogIds = new Set(catalog.map((l) => l && l.id).filter((id) => typeof id === "string"));
+    // Reserve every sound original identity before allocating a suffix. Without
+    // this pass, repairing `default` to `default_imported` could steal that id
+    // from a legitimate later row and move its selection to the wrong paint.
+    const used = new Set(catalogIds);
+    for (const liv of Array.isArray(rows) ? rows : []) {
+      if (liv && typeof liv.id === "string" && !catalogIds.has(liv.id)) used.add(liv.id);
+    }
+    const claimed = new Set();
+    const nextSuffix = new Map();
+    const remap = new Map();
+    let repaired = 0;
+    const liveries = (Array.isArray(rows) ? rows : []).map((liv) => {
+      const original = liv.id;
+      if (!catalogIds.has(original) && !claimed.has(original)) { claimed.add(original); return liv; }
+      const stem = ((original || "custom") + "_imported").slice(0, 64);
+      let id = stem, n = nextSuffix.get(stem) || 2;
+      while (used.has(id)) {
+        const suffix = "_" + n++;
+        id = stem.slice(0, 64 - suffix.length) + suffix;
+      }
+      nextSuffix.set(stem, n);
+      used.add(id);
+      if (!remap.has(original)) remap.set(original, id);
+      repaired++;
+      return Object.assign({}, liv, { id });
+    });
+    return {
+      liveries,
+      // A sibling duplicate leaves the first row on the original id, so its
+      // selection remains meaningful. A catalog collision leaves no custom row
+      // on that id and must follow the first repaired paint instead.
+      selectedId: liveries.some((liv) => liv.id === selectedId)
+        ? selectedId : (remap.has(selectedId) ? remap.get(selectedId) : selectedId),
+      repaired,
+      catalogAvailable: !!team && typeof Liveries !== "undefined" && !!Liveries.forTeam,
+    };
+  }
+
+  function coherentImportedSelection(teamId, rows, selectedId) {
+    const team = typeof Teams !== "undefined" && Teams.LIST
+      ? Teams.LIST.find((t) => t && t.id === teamId) : null;
+    // An unknown team or unavailable catalog is outside this importer's
+    // authority. Preserve its value so a newer game's data is not rewritten.
+    if (!team || typeof Liveries === "undefined" || !Liveries.forTeam) return selectedId;
+    const catalog = Liveries.forTeam(team);
+    const ids = new Set(catalog.map((l) => l && l.id).filter((id) => typeof id === "string"));
+    for (const liv of Array.isArray(rows) ? rows : []) if (liv && typeof liv.id === "string") ids.add(liv.id);
+    if (ids.has(selectedId)) return selectedId;
+    return catalog[0] && typeof catalog[0].id === "string" ? catalog[0].id : selectedId;
+  }
+
   function create(deps) {
     const { store } = deps;
 
@@ -115,6 +176,6 @@ const CustomLiveries = (function () {
     };
   }
 
-  return { create };
+  return { create, normalizeImported, coherentImportedSelection };
 })();
 Object.freeze(CustomLiveries);

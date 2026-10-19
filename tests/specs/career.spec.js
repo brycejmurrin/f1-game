@@ -650,6 +650,38 @@ test.describe.parallel("Career — MY TEAM", () => {
     page.evaluate((o) => window.__apex.career(o),
       Object.assign({ flavour: "myteam", name: "Team Boss", code: "BOS", num: 8, seed: 55 }, opts || {}));
 
+  test("the My Team garage swatch paints the active slot livery", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => {
+      GameStore.store.set("livery.custom.custom", [{ id: "gp-green", name: "GP green", c1: [0,1,0], c2: [0,0,0] }]);
+      GameStore.store.set("livery.custom", "gp-green");
+    });
+    await startMyTeam(page);
+    expect(await page.evaluate(() =>
+      Career.setIdentityValue("livery.custom.custom", [{ id: "career-red", name: "Career red", c1: [1,0,0], c2: [0,0,0] }]) &&
+      Career.setIdentityValue("livery.custom", "career-red"))).toBe(true);
+    await page.locator("#cr-garage").click();
+    await expect(page.locator("#carsetup")).toBeVisible();
+    // openSetup shows the sheet before its deferred DOM build completes.
+    await expect(page.locator("#cs-tab-team")).toBeAttached({ timeout: RACE_BUILD_MS });
+    const painted = await page.evaluate(() => {
+      // TEAM is the default tab; leave it so the next click rebuilds its card.
+      document.querySelector('#cs-tabs [data-cs-cat]:not([data-cs-cat="team"])').click();
+      const original = LiveryTex.paintSwatch, calls = [];
+      LiveryTex.paintSwatch = function (ctx, crest, liv, ...rest) {
+        calls.push({ canvas: ctx.canvas, id: liv.id, c1: liv.c1 });
+        return original.call(this, ctx, crest, liv, ...rest);
+      };
+      try {
+        document.getElementById("cs-tab-team").click();
+        const card = document.getElementById("cs-team-card");
+        const call = calls.find((entry) => entry.canvas === card.querySelector("canvas"));
+        return { id: call?.id, c1: call?.c1, locked: card.disabled, gp: GameStore.store.get("livery.custom") };
+      } finally { LiveryTex.paintSwatch = original; }
+    });
+    expect(painted).toEqual({ id: "career-red", c1: [1,0,0], locked: true, gp: "gp-green" });
+  });
+
   test("the setup screen offers a driver market", async ({ page }) => {
     await boot(page);
     await page.evaluate(() => document.getElementById("mb-career").click());

@@ -1292,6 +1292,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
   // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
   "tests/unit/wind.test.mjs",
+  "tests/unit/workflow-harness.test.mjs",
   // tools/check/workflow-lint.mjs: actionlint + zizmor (offline) over .github/workflows; fails a planted bad workflow, passes the tree.
   // Skips loudly when a binary is absent; the CI `lints` job fails a SKIP. ~3 s.
   "tests/unit/workflow-lint.test.mjs",

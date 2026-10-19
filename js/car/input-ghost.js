@@ -478,13 +478,22 @@ const InputGhost = (function () {
     const store = loadStore();
     if (id == null) {
       for (const k of Object.keys(store)) delete store[k];
+      pending.clear();
       best = null;
+      replayStep = 0;
+      replayNative = false;
     } else {
-      delete store[id];
-      if (storageId === id) best = null;
+      const contextPrefix = id.startsWith("v2:") ? null : "v2:" + id + ":";
+      const matches = key => key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+      for (const key of pending.keys()) if (matches(key)) pending.delete(key);
+      for (const key of Object.keys(store)) if (matches(key)) delete store[key];
+      if (storageId != null && matches(storageId)) {
+        best = null;
+        replayStep = 0;
+        replayNative = false;
+      }
     }
     saveStore(store);
-    pending.clear();
   }
 
   function flush() {
