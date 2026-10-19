@@ -140,6 +140,17 @@ test("all 11 chassis still build and every car maps the four new decal regions",
   }
 });
 
+test("every station quad winds counter-clockwise about its normal, like every other decal", () => {
+  const d = M.CarMesh.carDecalData(2, {}, false, "williams", "standard");
+  const P = (i) => [d.pos[i * 3], d.pos[i * 3 + 1], d.pos[i * 3 + 2]], N = (i) => [d.nrm[i * 3], d.nrm[i * 3 + 1], d.nrm[i * 3 + 2]];
+  for (let t = 0; t < d.idx.length; t += 3) {
+    const a = P(d.idx[t]), b = P(d.idx[t + 1]), c = P(d.idx[t + 2]), n = N(d.idx[t]);
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const w = (e1[1] * e2[2] - e1[2] * e2[1]) * n[0] + (e1[2] * e2[0] - e1[0] * e2[2]) * n[1] + (e1[0] * e2[1] - e1[1] * e2[0]) * n[2];
+    assert.ok(w > 0, "triangle " + t / 3 + " faces away from its normal (culled)");
+  }
+});
+
 test("driver code comes from the race number, else the team short name", () => {
   assert.equal(M.S.driverCode("mercedes", 63), "RUS");
   assert.equal(M.S.driverCode("ferrari", 44), "HAM");

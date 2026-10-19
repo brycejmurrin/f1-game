@@ -35,8 +35,15 @@ const LiveryStations = (function () {
 
   // Decal geometry. quadUv(corners, normal, uvs) with corners [BL, BR, TR, TL] seen from outside;
   // uvOf(region) → { uL, uR, vT, vB } with u pre-flipped for the model reflection (car-mesh quad()).
-  function emit(quadUv, uvOf, R, anchors, ctx) {
+  function emit(quadUv0, uvOf, R, anchors, ctx) {
     if (!anchors) return;   // imported bodies: no anchors, no stations
+    // Every decal winds counter-clockwise about its normal (back faces are culled): a quad
+    // given the other way round is reversed here, each corner keeping its own uv.
+    const quadUv = (c, n, uv) => {
+      const e1 = [c[1][0] - c[0][0], c[1][1] - c[0][1], c[1][2] - c[0][2]], e2 = [c[2][0] - c[0][0], c[2][1] - c[0][1], c[2][2] - c[0][2]];
+      const w = (e1[1] * e2[2] - e1[2] * e2[1]) * n[0] + (e1[2] * e2[0] - e1[0] * e2[2]) * n[1] + (e1[0] * e2[1] - e1[1] * e2[0]) * n[2];
+      if (w < 0) quadUv0([c[3], c[2], c[1], c[0]], n, [uv[3], uv[2], uv[1], uv[0]]); else quadUv0(c, n, uv);
+    };
     const lerp = (a, b, t) => a + (b - a) * t;
     const norm = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
 
