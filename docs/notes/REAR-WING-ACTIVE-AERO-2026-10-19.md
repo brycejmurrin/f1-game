@@ -55,22 +55,31 @@ fixed main plane.
 | rearMid | shared (-2.556, 0.753) | +30.0° | 0.0° | 135 mm |
 | rear | shared (-2.556, 0.753) | +32.1° | +2.0° | 95 mm |
 
-Clearance to the static baked DRS plane (below) at aeroX 0 / 0.5 / 1, every
-catalog aero option: ≥ 31 mm. Per-frame cost is unchanged: the solve stays
+Before the drs plane flew, its clearance to the moving stack at aeroX 0 / 0.5 / 1 was ≥ 31 mm on every catalog
+aero option. It now moves with the stack, so the gap is fixed. Per-frame cost is unchanged: the solve stays
 inside the `_flapSpecs` memo, and the draw path (`drawAeroFlaps`,
 `getAeroFlapSet`, `drawAeroEdge`, `wingBandGeom`) already rotates each mesh
 about an arbitrary `(y, z)` pivot — `buildFlapGeom` emits design-pose geometry
 minus the pivot — so no draw code changed.
 
-## Not fixed here (needs `js/car/car3d.js`)
+## The static drs plane (granted car3d.js change)
 
 Every shipped aero recipe has `drs: 1`, and `car3d.js` (`if (aDrs)` in the rear
-wing build) BAKES an extra plane at the crown over the moving stack. Under
-C3.11.6 that plane is part of RW Flap and should move with it; today it is
-static, so the topmost element a chase camera sees never moves. The fix is to
-stop baking it and fly it as the stack's top element in `rearFlap()` (plus move
-`wingBandGeom`'s drs branch onto that record). `car3d.js` belongs to another
-lane; raised to the orchestrator as NEEDS-DECISION.
+wing build) BAKED an extra plane at the crown over the moving stack, so the
+topmost element a chase camera sees never moved. Under C3.11.6 it is part of
+the RW Flap. With the orchestrator's grant (option A), that one statement no
+longer bakes it; `rearFlap()` flies it as `rearDrs` (top of the stack, flagged
+`paint: "rearWing"`), and `drawAeroFlaps` / `getAeroFlapSet` paint it in the
+livery's `rearWing || c2` colour as `Car3D.build` did, so Aston Martin keeps
+its light-blue top plane. `rearDrs` incidence is 33.3° → 3.3°. The sponsor band
+(`wingBandGeom`) now sits on `rearDrs` at its rest pose, the same rule the
+non-DRS recipes already follow: it is a static decal, so it lifts off as the
+wing opens. Per-car body triangles drop by the 100 the plane used to bake
+(`tests/data/car-wing-foil-tris.json` re-measured).
+
+Tools only: `Car3D.buildComplete` (parts sweep, viewer) appends every flap in
+the flap colour, so there the drs plane shows the wing colour rather than
+`rearWing`. car3d.js is another lane's file, so this was left as is.
 
 The front wing still hinges mid-chord (0.52) where C3.10.10 asks for a
 LE-near axis; a LE hinge hid the cascade under the nose (see the `HINGE`

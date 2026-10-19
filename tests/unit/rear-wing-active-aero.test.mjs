@@ -100,3 +100,32 @@ test("the slot opens: the leading edge rises a DRS-sized amount, the trailing ed
     assert.ok(lift >= 0.060, `${id}: slot opens only ${(lift * 1000).toFixed(0)} mm`);
   }
 });
+
+test("the drs plane flies with the stack, in the livery's REAR WING colour", () => {
+  // car3d.js used to bake it static in rearC; it is part of the RW Flap, so
+  // drawAeroFlaps hands its rest set and its moving mesh `rearCol` instead of
+  // the flap colour, and a different rear colour must not share a cached set.
+  const { Car3D: C, CarMesh } = loadParts();
+  CarMesh.init({ createMesh: (data) => ({ data }), freeMesh() {} });
+  const st = C.aeroStyleOf({});
+  assert.equal(st.drs ? 1 : 0, 1, "the 2026 default lost drs:1");
+  const rear = C.aeroFlaps(st.lvl, st).filter((e) => e.wing === "rear");
+  const top = rear[rear.length - 1];
+  assert.equal(top.id, "rearDrs");
+  assert.equal(top.paint, "rearWing");
+  const wing = [0.9, 0.1, 0.1], blue = [0.55, 0.72, 0.88];
+  const has = (mesh, c) => {
+    for (let i = 0; i < mesh.data.col.length; i += 3) {
+      if (Math.abs(mesh.data.col[i] - c[0]) < 1e-6 && Math.abs(mesh.data.col[i + 1] - c[1]) < 1e-6) return true;
+    }
+    return false;
+  };
+  for (const open of [false, true]) {
+    const set = CarMesh.getAeroFlapSet(st.lvl, wing, st, "", open, "rear", "paint", blue);
+    assert.ok(has(set, blue), `open=${open}: the drs plane lost its rear-wing colour`);
+    assert.ok(has(set, wing), `open=${open}: the flaps under it lost the wing colour`);
+    const plain = CarMesh.getAeroFlapSet(st.lvl, wing, st, "", open, "rear", "paint", wing);
+    assert.notEqual(plain, set, "a different rear colour shared one cached set");
+    assert.equal(CarMesh.getAeroFlapSet(st.lvl, wing, st, "", open, "rear", "paint", blue), set);
+  }
+});

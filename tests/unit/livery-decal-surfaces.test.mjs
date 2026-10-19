@@ -96,21 +96,24 @@ test("Car3D.wingBand places the band on the flap's POSED skin, not its design ch
   }
 });
 
-test("with a DRS package the band moves to the baked plane that roofs the stack", () => {
+test("with a DRS package the band rides the drs plane, which flies with the RW Flap", () => {
+  // The drs plane used to be BAKED static over the stack; under FIA C3.11.6 it
+  // is part of the RW Flap, so rearFlap() flies it as `rearDrs` and the band
+  // sits on its posed skin at rest, like every other top element.
   for (const aero of ["active_aero", "circuit_adaptive"]) {
     const parts = partsFor({ aero });
     const style = Car3D.aeroStyleOf(parts);
     assert.equal(style.drs ? 1 : 0, 1, `${aero} lost its DRS package`);
     const lvl = Car3D.aeroLevelOf(parts);
     const B = Car3D.wingBand(lvl, style);
-    assert.equal(B.elem, "drs", `${aero}: the band is not on the baked DRS plane`);
-    const car = Car3D.build(TEAM.color, TEAM.color2, { livery: {}, teamId: TEAM.id, num: 16, parts });
-    const tris = trisOf(car, (p) => p[2] > -2.75 && p[2] < -2.30);
-    assert.ok(tris.length > 50, `${aero}: no rear-wing geometry to land on`);
+    assert.equal(B.elem, "rearDrs", `${aero}: the band is not on the drs plane`);
+    const top = Car3D.aeroFlaps(lvl, style).filter((f) => f.wing === "rear").pop();
+    assert.equal(top.id, "rearDrs", `${aero}: the drs plane is not the topmost rear element`);
+    const tris = posedFlapTris(top);
     for (const st of B.stations) {
       for (const pt of [st.front, st.rear]) {
         const d = nearest([st.x, pt.y, pt.z], tris);
-        assert.ok(d < 0.012, `${aero}: band corner is ${(d * 1000).toFixed(0)} mm off the baked plane`);
+        assert.ok(d < 0.012, `${aero}: band corner is ${(d * 1000).toFixed(0)} mm off the drs plane`);
       }
     }
   }

@@ -432,8 +432,8 @@ const CarBodyGeom = (function () {
     };
     const zAngle = relax(REAR_INC.corner - natural, -1) ?? 0;
     const xAngle = Math.min(zAngle, relax(REAR_INC.straight - natural, +1) ?? zAngle);
-    return stack.map(([id, le, te, thick, sweepMul, half]) => ({
-      id, wing: "rear", z: pz, y: py, le, te, thick, half, sweepMul,
+    return stack.map(([id, le, te, thick, sweepMul, half, paint]) => ({
+      id, wing: "rear", z: pz, y: py, le, te, thick, half, sweepMul, paint: paint || null,
       chord: Math.hypot(le[0] - te[0], te[1] - le[1]),
       natural: Math.atan2(te[1] - le[1], le[0] - te[0]),
       hinge: (pz - le[0]) / (te[0] - le[0]),   // the pivot's station on THIS chord; off-line for all but "rear"
@@ -527,10 +527,13 @@ const CarBodyGeom = (function () {
     const ep = endplateGeom(a, st), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
     const rearMain = elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0);
-    const stack = [];   // [id, le, te, thick, sweepMul, half] bottom-up
+    const stack = [];   // [id, le, te, thick, sweepMul, half, paint?] bottom-up
     if (a >= 2) stack.push(["rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9, 0.51]);
     stack.push(["rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1, 0.51]);
     if (a >= 4 && !(st.drs || 0)) stack.push(["rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1, 0.50]);
+    // The drs plane car3d.js used to bake STATIC over this stack. It is part of
+    // the RW Flap too, so it flies with it, in the livery's rearWing colour.
+    if (st.drs || 0) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
     for (const el of rearFlap(stack, rearMain)) {
       out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 }));
     }
@@ -586,8 +589,8 @@ const CarBodyGeom = (function () {
   // separately with no atlas UVs of its own — so rest is the pose it is authored
   // for and it lifts off as the wing opens, as the sponsor does on the real
   // element; making it follow means giving buildFlapGeom a UV channel. The
-  // TOPMOST rear surface carries it (`rearTop` at max downforce, the baked DRS
-  // plane with that package); both would otherwise draw straight over it. Chord
+  // TOPMOST rear surface carries it (`rearTop` at max downforce, `rearDrs` with
+  // a DRS package); both would otherwise draw straight over it. Chord
   // fractions clear the leading curl and the trailing edge, HALF is inside the
   // element's own 0.51, the span is cut into addWingFoil's own five segments so
   // the band follows the sweep, `proud` is along the local normal, not +Y.
@@ -596,38 +599,18 @@ const CarBodyGeom = (function () {
     const a = aLvl == null ? 2 : aLvl;
     const st = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
     const W = WING_BAND;
-    let spec = null, pivot = null, ang = 0, elem = "";
-    if (st.drs) {
-      // A DRS package BAKES an extra plane over the whole moveable stack (see
-      // part("rearWing")). It never rotates, so it is both the surface the camera
-      // sees and the one that keeps the band attached at every wing angle.
-      const crownY = endplateGeom(a, st).rear.top - 0.018;
-      const rearSweep = Math.max(-0.06, Math.min(0.20, st.rearSweep));
-      const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
-      spec = { zLead: -2.44, yLead: crownY - 0.050, zTrail: -2.60, yTrail: crownY,
-               half: 0.49, thick: 0.016, taper: rearTaper, sweep: rearSweep * 1.15,
-               rise: 0, attachHalf: 0.50 };
-      elem = "drs";
-    } else {
-      const flaps = aeroFlapsGeom(a, st);
-      let fg = null;
-      for (const f of flaps) if (f.wing === "rear") fg = f;   // the TOPMOST one
-      if (!fg) return null;
-      // Exactly what buildFlapGeom hands addWingFoil, and exactly the pose
-      // drawAeroFlaps hangs it at with the wing closed.
-      spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
-               half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
-               rise: fg.rise, attachHalf: fg.attachHalf };
-      pivot = { y: fg.y, z: fg.z };
-      ang = fg.zAngle;
-      elem = fg.id;
-    }
-    const ca = Math.cos(ang), sa = Math.sin(ang);
+    let fg = null;
+    for (const f of aeroFlapsGeom(a, st)) if (f.wing === "rear") fg = f;   // the TOPMOST one
+    if (!fg) return null;
+    // Exactly what buildFlapGeom hands addWingFoil, and exactly the pose
+    // drawAeroFlaps hangs it at with the wing closed.
+    const spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
+                   half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
+                   rise: fg.rise, attachHalf: fg.attachHalf };
+    const elem = fg.id, ca = Math.cos(fg.zAngle), sa = Math.sin(fg.zAngle);
     const pose = (p) => {
-      const top = p.y + p.h;
-      if (!pivot) return { y: top, z: p.z };
-      const dy = top - pivot.y, dz = p.z - pivot.z;
-      return { y: dy * ca - dz * sa + pivot.y, z: dy * sa + dz * ca + pivot.z };
+      const dy = p.y + p.h - fg.y, dz = p.z - fg.z;
+      return { y: dy * ca - dz * sa + fg.y, z: dy * sa + dz * ca + fg.z };
     };
     const st8 = [];
     for (let i = 0; i <= W.seg; i++) {
