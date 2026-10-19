@@ -164,6 +164,18 @@ _FOLD = {
         ["T5-21"] + ['A1-01', 'A1-02', 'A1-03', 'A1-04', 'A1-05', 'A1-06', 'A1-07', 'A1-08', 'A1-09', 'A1-10', 'A1-11', 'A1-12', 'A1-13', 'A1-14', 'A1-16', 'A1-17', 'A1-18', 'A1-19', 'A1-20', 'A1-21', 'A1-22']),
  "L17": ([], ["tests/specs/terrain-over-road.spec.js"], ["RC2-19", "RC2-20", "RC2-21"]),
 }
+_FOLD2 = {  # tooling-4 (final), pass 4
+ "L19": (["tooling-4"], ["tests/unit/setup-preview-hull.test.mjs"], ["T4-02"]),
+ "L4": (["tooling-4"], ["tests/unit/slider-effect.test.mjs"], ["T4-05", "T4-17"]),
+ "L10": (["tooling-4"], ["tests/unit/speed-coupling.test.mjs"], ["T4-11"]),
+ "L5": (["tooling-4"], ["tests/unit/ribbon-cpu-release.test.mjs"], ["T4-12"]),
+ "L8": (["tooling-4"], ["tests/unit/scroll-strips.test.mjs"], ["T4-13"]),
+ "L13": (["tooling-4"], ["tests/unit/store-cross-tab.test.mjs", "tests/unit/store-registry.test.mjs"], ["T4-14", "T4-15"]),
+ "L17": (["tooling-4"], ["tests/unit/road-under-floor.test.mjs"], ["T4-04"]),
+}
+for _k, (_b, _o, _i) in _FOLD2.items():
+    _p = _FOLD.get(_k, ([], [], []))
+    _FOLD[_k] = (_p[0] + _b, _p[1] + _o, _p[2] + _i)
 for _L in LANES:
     if _L["id"] in _FOLD:
         _b, _o, _i = _FOLD[_L["id"]]
@@ -184,4 +196,22 @@ LANES[-1:-1] = [
   ids=["T5-01","T5-02","T5-03","T5-16"],
   verify="node --test tests/unit/traffic-arc-buckets.test.mjs tests/unit/yaw-low-speed-substep.test.mjs tests/unit/yaw-damp-speed.test.mjs tests/unit/throttle-latch.test.mjs",
   effort="S", model=SON, deps="none; T5-01's copies drop finished cars that collide.js keeps: the rewrite must show red against a copy that skips finished cars"),
+ dict(id="L24", name="CI selection, gates and ratchets on fixtures", batches=["tooling-4"],
+  goal="the selector's main entry select(), the ratchet auto-raise refusal and the gate tools run on fixtures and can fail; retired-tool tests and stale headers go",
+  owned=["tests/unit/select-specs.test.mjs","tests/unit/ratchets.test.mjs","tests/unit/poll-live-shell.test.mjs","tests/unit/sim-bytecode-budget.test.mjs","tests/unit/ratchet-merge-hotspot.test.mjs","tests/unit/queue-depth.test.mjs","tests/unit/select-budget.test.mjs","tests/unit/ready-full-cap.test.mjs","tests/unit/source-pin-hygiene.test.mjs"],
+  ids=["T4-01","T4-03","T4-08","T4-16","T4-21","T4-22","T4-27","T4-29","T4-30"],
+  verify="npm run test:tooling-fast", effort="M", model=SON,
+  deps="T4-30 moves a ceiling into tests/data/ratchets.json: edit the source and `npm run gen`, never the generated file; no ratchet raise",
+  slices=["PR 1: T4-01 select() fixtures, T4-03 ratchet refusal, T4-16 skip→fail (high)","PR 2: T4-08, T4-21, T4-22, T4-27, T4-29, T4-30"]),
+ dict(id="L25", name="Test-infra hygiene and agent-surface tools", batches=["tooling-4"],
+  goal="source-integrity parses js/ as classic scripts, agent-surface tool tests drive the real CLI, and tests stop using sleeps, os.tmpdir() and order-dependent state",
+  owned=["tests/unit/source-integrity.test.mjs","tests/unit/shot-survey-runner.test.mjs","tests/unit/profile-mcp.test.mjs","tests/unit/skill-gameplay-surface.test.mjs","tests/unit/skill-progressive.test.mjs","tests/unit/report-server.test.mjs","tests/unit/publish-shots.test.mjs","tests/unit/ready-gate.test.mjs","tests/unit/sheetshape-*.test.mjs","tests/unit/script-loader-throw.test.mjs"],
+  ids=["T4-06","T4-07","T4-09","T4-18","T4-19","T4-23","T4-24","T4-25","T4-26","T4-28"],
+  verify="npm run test:tooling-fast", effort="M", model=SON,
+  deps="T4-06 must show red on a classic-script syntax error before the fix (vm.Script per file, not node --check); T4-25's other 7 tmpdir users are listed in reports/tooling-4.md"),
+ dict(id="L26", name="Net worker and rival attach", batches=["tooling-4","net"],
+  goal="the rendezvous worker's alarm, expiry, OPTIONS/405 and bad-slot paths are tested; rival-attach dead code removed",
+  owned=["tests/unit/rendezvous-worker.test.mjs","tests/unit/rival-attach-init.test.mjs"],
+  ids=["T4-10","T4-20"], verify="node --test tests/unit/rendezvous-worker.test.mjs tests/unit/rival-attach-init.test.mjs",
+  effort="S", model=SON, deps="the net batch report is pending: fold its rows here before launch"),
 ]

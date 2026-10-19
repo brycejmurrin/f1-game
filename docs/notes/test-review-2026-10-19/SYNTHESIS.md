@@ -4,26 +4,27 @@ Generated from `findings.jsonl`, `reports/` and the status table below; issue #2
 
 ## Status
 
-- Reports in: **9/22** batches (7 final, 2 partial). Updated 2026-10-19 05:55Z (22:55 Pacific, 10-18): pass 3 folds tooling-5 and the render-2 mutation addendum.
-- Findings: 234 rows, 225 after de-duplication; 195 reviewer-verified, 39 subagent-unverified; 56 re-checked by the synthesis on the tree.
-- Not yet in: audio-1, race-1, tracks-1, tracks-2, car-2, modes-1, ui-2, tooling-1, tooling-2, tooling-3, tooling-4, net, platform.
+- Reports in: **11/22** batches (9 final, 2 partial). Updated 2026-10-19 06:15Z (23:15 Pacific, 10-18): pass 4 folds audio-1, tooling-4 and race-2 part 2/2.
+- Findings: 264 rows, 255 after de-duplication; 225 reviewer-verified, 39 subagent-unverified; 61 re-checked by the synthesis on the tree.
+- Not yet in: race-1, tracks-1, tracks-2, car-2, modes-1, ui-2, tooling-1, tooling-2, tooling-3, net, platform.
 
 Not run inside reported batches:
 
 - **render-3:** 15 of 21 specs pending part 2/2; no browser debugger column yet.
 - **physics-2** (capped at 300k context): browser chain C never read (understeer-cue, parts-ers, sliders, steer-migration, tilt-pipeline, touch-steer, gamepad, agent-drive-bench, parts-persistence, persistence-dom, camera-driving-hooks, css-player-smoke, garage-aero, menu-traversal, menu-baseline, parts-physics); drift, active-aero, aero-zones, world-physics, collisions ran only as VM twins; collisions-deep, collision-ai-fixes and persistence ran in neither; no spec debugger pass.
-- **race-2** (part 1/n): terrain-over-road still running, perf-race-entry not run, jump-start/pit-lane/race-control only as VM twins, debris failed 1/5 (Singapore wall-hit wait, 60 s), no spec debugger column.
+- **race-2** (part 2/2, reviewer handed off at its context limit): terrain-over-road 22/56 done with 1 environment red (monaco BOOT_MS wait at loadavg 4.7, not re-run alone), perf-race-entry and the APEX_WITH_TWINNED browser re-runs of debris/jump-start/pit-lane/race-control queued but never reported, debris 1/5 unconfirmed, no spec debugger column (proposed breakpoints in the report).
+- **audio-1:** 18 unit + 2 specs reviewed; see the report for run totals. **tooling-4:** 775 tests, 773 pass, 0 fail, 2 skipped (T4-16, T4-17 are those skips), 276 s.
 - **tooling-5:** 38/38 files pass; 5 skips come from the files themselves (workflow-lint without actionlint/zizmor, test-observed without artifacts/logs: rows T5-06, T5-11).
 - **render-2 mutation addendum:** batch `muts9` not run and the suite-wide cross-check stopped early; survivors were checked against the batch only unless the row says otherwise.
 - **physics-1, car-1, ui-1:** every file ran and passed (physics-1: 742/743 with 1 skip by design, the provenance ancestry check needs a full clone). Files with no executable code under test had no debugger target (physics-1: 4, ui-1: 11).
 
 | batch | state | report |
 |---|---|---|
-| audio-1 | pending | — |
+| audio-1 | final | [audio-1](reports/audio-1.md) |
 | physics-1 | final | [physics-1](reports/physics-1.md) + [debugger addendum](reports/physics-1.addendum-debugger.md) |
 | physics-2 | final | [part 1/2](reports/physics-2.part-1of2.md) + [part 2/2](reports/physics-2.part-2of2.md) (stopped at the context cap; counted final) |
 | race-1 | pending | — |
-| race-2 | partial 1/n | [part 1/n](reports/race-2.part-1ofn.md) |
+| race-2 | partial 2/2 (handoff; spec runs unreported) | [part 1/n](reports/race-2.part-1ofn.md) + [part 2/2](reports/race-2.part-2of2.md) |
 | render-1 | final | [render-1](reports/render-1.md) |
 | render-2 | final | [render-2](reports/render-2.md) + [mutation addendum](reports/render-2.addendum-mutation.md) |
 | render-3 | partial 1/2 | [part 1/2](reports/render-3.part-1of2.md) |
@@ -37,7 +38,7 @@ Not run inside reported batches:
 | tooling-1 | pending | — |
 | tooling-2 | pending | — |
 | tooling-3 | pending | — |
-| tooling-4 | pending | — |
+| tooling-4 | final | [tooling-4](reports/tooling-4.md) |
 | tooling-5 | final | [tooling-5](reports/tooling-5.md) |
 | net | pending | — |
 | platform | pending | — |
@@ -83,12 +84,12 @@ Counted over de-duplicated rows; a row can carry several patterns. Counts grow a
 
 | pattern | rows | what it looks like | examples |
 |---|---|---|---|
-| Source-text scans standing in for behaviour | 55 | regex / indexOf / slice over js, css or md source; nothing under test executes (debugger n.a. or not-hit) | R1-01, R1-06, R1-07, R1-08, R1-09, R2-02, R2-03, R2-08, R2-11, R2-12, R2-13, R3-04, R3-05, R3-06, R3-08, R3-11, R3-16, P1-02, P1-05, P1-06, P1-09, P1-20, P1-21, P2-18, RC2-03, RC2-04, RC2-07, RC2-09, RC2-10, RC2-16, C1-02, C1-03, C1-06, C1-10, C1-14, C1-16, U1-01, U1-03, U1-09, U1-10, U1-12, U1-14, U1-15, U1-16, T5-10, T5-16, T5-18, T5-19, T5-20, T5-24, T5-27, A1-03, A1-07, A1-10, A1-12 |
-| Condition-wrapped or early-return asserts | 13 | `if (x) assert…`, `if (!gc) return`; the guard turns the test off in the very case it should catch | R1-04, R1-10, R1-12, R2-07, R2-14, R3-07, P1-13, RC2-12, RC2-15, C1-05, T5-06, T5-11, T5-15 |
-| Tautologies | 31 | asserts a stub's own return, a constant against its copy, `>= 0`, or a disjunction any outcome satisfies | R1-03, R1-12, R1-13, R1-14, R2-10, R2-16, R3-07, R3-10, R3-14, P1-06, P1-08, P1-11, P2-03, P2-07, P2-09, P2-10, P2-12, RC2-05, RC2-07, RC2-12, C1-03, C1-08, U1-04, U1-05, U1-07, T5-02, T5-03, T5-05, T5-07, A1-01, A1-04 |
-| Stub copies of real modules | 43 | a hand copy of the code or data under test (resolver, damper, shader maths, field list, track stub) that cannot drift with it | R1-03, R1-05, R1-12, R1-14, R1-15, R1-18, R2-04, R2-06, R2-09, R2-15, R3-09, R3-15, P1-01, P1-02, P1-04, P1-05, P1-06, P1-20, P2-02, P2-08, P2-12, RC2-01, RC2-03, RC2-04, RC2-06, RC2-08, RC2-09, C1-01, C1-06, C1-07, C1-09, U1-01, U1-04, U1-07, U1-10, U1-16, T5-01, T5-21, R2-27, A1-01, A1-04, A1-05, A1-14 |
+| Source-text scans standing in for behaviour | 62 | regex / indexOf / slice over js, css or md source; nothing under test executes (debugger n.a. or not-hit) | R1-01, R1-06, R1-07, R1-08, R1-09, R2-02, R2-03, R2-08, R2-11, R2-12, R2-13, R3-04, R3-05, R3-06, R3-08, R3-11, R3-16, P1-02, P1-05, P1-06, P1-09, P1-20, P1-21, P2-18, RC2-03, RC2-04, RC2-07, RC2-09, RC2-10, RC2-16, C1-02, C1-03, C1-06, C1-10, C1-14, C1-16, U1-01, U1-03, U1-09, U1-10, U1-12, U1-14, U1-15, U1-16, T5-10, T5-16, T5-18, T5-19, T5-20, T5-24, T5-27, A1-03, A1-07, A1-10, A1-12, T4-01, T4-02, T4-07, T4-13, T4-18, T4-19, T4-29 |
+| Condition-wrapped or early-return asserts | 17 | `if (x) assert…`, `if (!gc) return`; the guard turns the test off in the very case it should catch | R1-04, R1-10, R1-12, R2-07, R2-14, R3-07, P1-13, RC2-12, RC2-15, C1-05, T5-06, T5-11, T5-15, T4-03, T4-04, T4-16, T4-17 |
+| Tautologies | 36 | asserts a stub's own return, a constant against its copy, `>= 0`, or a disjunction any outcome satisfies | R1-03, R1-12, R1-13, R1-14, R2-10, R2-16, R3-07, R3-10, R3-14, P1-06, P1-08, P1-11, P2-03, P2-07, P2-09, P2-10, P2-12, RC2-05, RC2-07, RC2-12, C1-03, C1-08, U1-04, U1-05, U1-07, T5-02, T5-03, T5-05, T5-07, A1-01, A1-04, T4-05, T4-08, T4-09, T4-11, T4-21 |
+| Stub copies of real modules | 45 | a hand copy of the code or data under test (resolver, damper, shader maths, field list, track stub) that cannot drift with it | R1-03, R1-05, R1-12, R1-14, R1-15, R1-18, R2-04, R2-06, R2-09, R2-15, R3-09, R3-15, P1-01, P1-02, P1-04, P1-05, P1-06, P1-20, P2-02, P2-08, P2-12, RC2-01, RC2-03, RC2-04, RC2-06, RC2-08, RC2-09, C1-01, C1-06, C1-07, C1-09, U1-01, U1-04, U1-07, U1-10, U1-16, T5-01, T5-21, R2-27, A1-01, A1-04, A1-05, A1-14, T4-07, T4-26 |
 | vm code without a filename | 1 | vm.runInContext / eval with no filename: no breakpoint by URL, coverage without lines | DBG-02 |
-| Slow files in fast groups | 7 | a file over ~20 s in toolingFast, the pre-push floor | R1-10, P1-09, P1-12, P1-22, RC2-16, C1-12, C1-15 |
+| Slow files in fast groups | 8 | a file over ~20 s in toolingFast, the pre-push floor | R1-10, P1-09, P1-12, P1-22, RC2-16, C1-12, C1-15, T4-06 |
 
 - **Source-text scans** dominate the three render reports: gfx-backend-canary alone has ~160 (884 `assert.match`), webgpu-lifecycle ~306 asserts. The cheapest structural fix is a lint over `tests/` for fixed-width `slice(x, x+N)` windows and asserts after `//` on one line (R2-01, R2-02), then one lane per subsystem converting the highest-risk scans to behaviour.
 - **vm code without a filename** is counted once (DBG-02) but touches every vm-loaded module in these batches: governor.js, lamp-bake, chunked.js, lighting/*, spans.js, renderer-boot.js, and every `evalmachine.<anonymous>` render-1 met.
@@ -101,10 +102,12 @@ Counted over de-duplicated rows; a row can carry several patterns. Counts grow a
 - **camera**: R1-16 cam-comfort.js fxSet clamp/round never runs (coverage NOT-HIT); CamTune override tests misplaced in this file; R2-28 8 of 19 results-cam mutants survive, mostly tick()/lifecycle: RC10 orbit frozen, RC9 chequered cut skipped, RC11 30 fps cap removed, RC12 reset leaves the camera installed, RC4 retired car can be subject, RC17 out-of-window tags kept, RC18 highlights re-entrant
 - **car-audio**: C1-18 checks only the player with an OR of two arbitrary bounds; AI finishers and the netPlay/incidentSim/realRace rpm branches (game.js:4713-4723) are untested
 - **career**: C1-16 the Math.random lint's comment-strip regex can swallow code after // in a string and is evaded by Math['random'], aliasing, or files outside js/career; no dynamic twin; C1-17 no test hits upgradeFacility, grant/freeMoney, tierFinish, renewHire price (:1521), season-cal rank countback via finishes, or engage refused under calendar protection (:79-80)
+- **ci**: T4-01 select() (select-specs.mjs:1363, the selector's main entry) is not imported; the only mention slices its source text (:643-645); bp at :1364 never fires and no unit test imports select
 - **hud**: U1-06 HIDDEN BUG: width-stability probes 9.99 and 9.94 but not the 9.95 boundary; GAP_FINE_LT = 9.95 (js/ui/hud-readouts.js:34) gives 9.949 -> '9.95' but 9.95 -> (9.95).toFixed(1) = '9.9' (3 chars, numerically below its neighbour) and 9.951 -> '10.0'
 - **i18n**: U1-13 js/core/dom-apply.js is loaded but untested; I18n.boot('de'), the 404 fallback, manifest hash mismatch and dir=rtl are untested; PhotoKit.setGrid/mountOverlays/showOverlays (photo-kit.js:139,154,177) untested
 - **input**: P2-20 untested anywhere: tiltCurve/touchCurve/padCurve clamps, tilt deadzone->maxTilt re-clamp (input.js:2006), retrySave RETRY->SAVE RESTORED (select-screen.js:76-96), rear-slip haptic cue (player-forces.js:289-294)
 - **lighting**: R2-20 LightStore.set() clamp and rebuild/reinitRain/liveEffects branches, tuned(), reset() never run by a test that calls set(); C1-09 DriveTune/LapRecord tests copy literals; StormFlash covers only the went-dry branch (storm-flash.js:54-65), not raining (`exposure = base + .22*f*lf`) or thunder; LightTuneEdit sets localStorage = undefined so the throw is swallowed; R2-25 mutants LS2/LS7 (base() ignores the shared stamp / the player '*' layer, profiles.js) survive the batch AND the rest of the unit suite: apply() and base() duplicate the same layering and nothing compares them; R2-30 mutants LB6 (LAMP NEAR CLAMP ignored, lamp-bake.js ~329) and LB10 (back-facing surfaces lit, ~345) survive; the oracle never sets a clamp that matters or a back-facing normal; R2-31 mutants TL2/TL3/TL7/TL9/TL10/TL8b (density boundary < vs <=, fill lamps one side, thinning wrap, fill copies the signal kind, densify wrap-around span) survive
+- **net**: T4-10 Room.alarm (storage.deleteAll), the GET-expiry branch, bad-slot 400, OPTIONS and unsupported methods have no test; alarm appears only as a counter in the fake (:8, :13)
 - **persistence**: A1-22 apex26.volMusic/volSfx/tune load-from-localStorage parsing is stubbed to null in audio-tune; only the audio-smoke clamp test covers it
 - **physics**: R3-08 no test of nose-in heading align (wall-clamp.js:121-123), first-strike speed loss (:113), steer-into-wall scrub/wallT (:178-184), the left wall (every human test uses +x), wallHits, WallEndFace (:45), DebrisWorld hooks (:50-65, stubs never asserted); :322-327 regexes game.js
 - **physics-gate**: P1-13 the blessing hash (tests/helpers/baseline-blessing.mjs:17) is an unkeyed sha256 of the data and the ancestry half skips on a shallow clone (as on CI checkouts here); P2-11 the master gate samples 4 monza/dry scenarios and 6 fields (s,x,speed,slipDeg,head,prog): no right-hand loaded corner, BOOST/ERS, X-mode, wet, kerb, gear/rpm, yawRate or AI car; the hard expect loop (:148) stops at the first drifted scenario
@@ -144,8 +147,9 @@ Synthesis spot checks (`git show origin/claude/f1-game-project-26h3ng:<file>`, t
 - Line drift: reported lines for render-rate (252 → 99) and lamp-fixture-anchor (302 → 330) differ on the tip; rows carry both. Reviewers worked on the 2026-10-19 tip; a pass-2 lane re-locates by the quoted code, not the line.
 - Batches folded on 2026-10-19 ~05:50Z (physics-1, physics-2, race-2 part 1, car-1, ui-1) were normalized by two read-only subagents, which re-read their batch's highest-severity cites on cd907d4c; their `synth_check` says what they found.
 - Pass 3 (tip a51c6cc8 / 83328f1b): T5-01…T5-05 confirmed; R2-22, R2-26, R2-27 confirmed; R2-28 partly (the paths run, but nothing asserts FRAME_DT, the retired skip or the re-entry guard). The mutation addendum refutes no earlier row: R2-05 is narrower (only the presenting-exit carry survives, R2-34), and R2-19 names the wrong module path (`js/perf/gfx-debug-overlay.js`, not js/render/); its claim holds (mutant GO3 survives).
+- Pass 4 (tip 7b27c153): T4-01, T4-02, T4-03, T4-06, T4-10 confirmed; A1-01, A1-02, A1-03, A1-05 confirmed, A1-04 partly (the curve loop covers both branches; only curve=1 is untested); RC2-19 confirmed, RC2-20 partly (the crossover set feeds the in-page scan as knownCrossover; roadFails itself is not relaxed). No HIDDEN BUG in audio-1 or tooling-4 (T4-02 `Parts.defaults` is a test-side mistake: parts.js exports DEFAULTS).
 - Not checked by the synthesis: rows marked `subagent-unverified` without a `synth_check` (R1-12…R1-15, R1-17, R3-07, R3-09, R3-14). They rank one point lower until a lane re-reads them.
 
 ## Rows by subsystem
 
-audio 20, tooling 17, render 14, lighting 14, camera 10, player-physics 9, career 8, hud 8, test-infra 8, render-perf 6, input 6, collision 6, render-tlx 5, debugger 5, garage 5, race-session 4, flyby 3, xr 3, physics 3, aero 3, weather 3, car-render 3, ci 3, tracks 3, ui-css 2, assets 2, ui 2, render-wgx 2, steering 2, ai-physics 2, persistence 2, physics-gate 2, race-ux 2, tyres 2, track-geometry 2, css 2, pwa 2, camera-ui 1, track-editor 1, agent-api 1, net 1, ers 1, dev-api 1, race-radio 1, real-race 1, career-reliability 1, start-lights 1, quali 1, scenery 1, race-regs 1, perf 1, ai 1, debris 1, car-sim 1, livery 1, car-audio 1, data-hub 1, hud-dock 1, a11y 1, i18n 1, loading 1, ai-traffic 1, deploy 1, lighting-tools 1, track-designer 1, fleet-tools 1, race-rules 1
+tooling 24, audio 21, render 14, lighting 14, test-infra 11, camera 10, player-physics 10, career 8, hud 8, ci 7, render-perf 6, input 6, collision 6, garage 6, render-tlx 5, debugger 5, persistence 4, race-session 4, flyby 3, ui 3, xr 3, physics 3, aero 3, track-geometry 3, weather 3, car-render 3, css 3, lighting-tools 3, tracks 3, ui-css 2, assets 2, agent-api 2, render-wgx 2, steering 2, ai-physics 2, net 2, physics-gate 2, race-ux 2, tyres 2, perf 2, debris 2, loading 2, pwa 2, deploy 2, camera-ui 1, track-editor 1, ers 1, dev-api 1, race-radio 1, real-race 1, career-reliability 1, start-lights 1, quali 1, scenery 1, race-regs 1, ai 1, car-sim 1, livery 1, car-audio 1, data-hub 1, hud-dock 1, a11y 1, i18n 1, ai-traffic 1, track-designer 1, fleet-tools 1, race-rules 1

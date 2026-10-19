@@ -1,18 +1,19 @@
-UPDATED = "2026-10-19 05:55Z (22:55 Pacific, 10-18): pass 3 folds tooling-5 and the render-2 mutation addendum"
-FINAL = {"render-1", "render-2", "physics-1", "physics-2", "car-1", "ui-1", "tooling-5"}
-PARTIAL = {"render-3": "1/2", "race-2": "1/n"}
+UPDATED = "2026-10-19 06:15Z (23:15 Pacific, 10-18): pass 4 folds audio-1, tooling-4 and race-2 part 2/2"
+FINAL = {"render-1", "render-2", "physics-1", "physics-2", "car-1", "ui-1", "tooling-5", "audio-1", "tooling-4"}
+PARTIAL = {"render-3": "1/2", "race-2": "2/2 (handoff; spec runs unreported)"}
 ALL = ["audio-1","physics-1","physics-2","race-1","race-2","render-1","render-2","render-3","tracks-1","tracks-2","car-1","car-2","modes-1","ui-1","ui-2","tooling-1","tooling-2","tooling-3","tooling-4","tooling-5","net","platform"]
 k_final = len(FINAL); k_partial = len(PARTIAL); k_in = k_final + k_partial
 PENDING = [b for b in ALL if b not in FINAL and b not in PARTIAL]
 REP = {"render-1": "[render-1](reports/render-1.md)", "render-2": "[render-2](reports/render-2.md) + [mutation addendum](reports/render-2.addendum-mutation.md)", "tooling-5": "[tooling-5](reports/tooling-5.md)", "render-3": "[part 1/2](reports/render-3.part-1of2.md)",
        "physics-1": "[physics-1](reports/physics-1.md) + [debugger addendum](reports/physics-1.addendum-debugger.md)",
        "physics-2": "[part 1/2](reports/physics-2.part-1of2.md) + [part 2/2](reports/physics-2.part-2of2.md) (stopped at the context cap; counted final)",
-       "race-2": "[part 1/n](reports/race-2.part-1ofn.md)", "car-1": "[car-1](reports/car-1.md)", "ui-1": "[ui-1](reports/ui-1.md)"}
+       "race-2": "[part 1/n](reports/race-2.part-1ofn.md) + [part 2/2](reports/race-2.part-2of2.md)", "audio-1": "[audio-1](reports/audio-1.md)", "tooling-4": "[tooling-4](reports/tooling-4.md)", "car-1": "[car-1](reports/car-1.md)", "ui-1": "[ui-1](reports/ui-1.md)"}
 TABLE = [(b, "final" if b in FINAL else (f"partial {PARTIAL[b]}" if b in PARTIAL else "pending"), REP.get(b, "—")) for b in ALL]
 NOT_RUN = [
  "- **render-3:** 15 of 21 specs pending part 2/2; no browser debugger column yet.",
  "- **physics-2** (capped at 300k context): browser chain C never read (understeer-cue, parts-ers, sliders, steer-migration, tilt-pipeline, touch-steer, gamepad, agent-drive-bench, parts-persistence, persistence-dom, camera-driving-hooks, css-player-smoke, garage-aero, menu-traversal, menu-baseline, parts-physics); drift, active-aero, aero-zones, world-physics, collisions ran only as VM twins; collisions-deep, collision-ai-fixes and persistence ran in neither; no spec debugger pass.",
- "- **race-2** (part 1/n): terrain-over-road still running, perf-race-entry not run, jump-start/pit-lane/race-control only as VM twins, debris failed 1/5 (Singapore wall-hit wait, 60 s), no spec debugger column.",
+ "- **race-2** (part 2/2, reviewer handed off at its context limit): terrain-over-road 22/56 done with 1 environment red (monaco BOOT_MS wait at loadavg 4.7, not re-run alone), perf-race-entry and the APEX_WITH_TWINNED browser re-runs of debris/jump-start/pit-lane/race-control queued but never reported, debris 1/5 unconfirmed, no spec debugger column (proposed breakpoints in the report).",
+ "- **audio-1:** 18 unit + 2 specs reviewed; see the report for run totals. **tooling-4:** 775 tests, 773 pass, 0 fail, 2 skipped (T4-16, T4-17 are those skips), 276 s.",
  "- **tooling-5:** 38/38 files pass; 5 skips come from the files themselves (workflow-lint without actionlint/zizmor, test-observed without artifacts/logs: rows T5-06, T5-11).",
  "- **render-2 mutation addendum:** batch `muts9` not run and the suite-wide cross-check stopped early; survivors were checked against the batch only unless the row says otherwise.",
  "- **physics-1, car-1, ui-1:** every file ran and passed (physics-1: 742/743 with 1 skip by design, the provenance ancestry check needs a full clone). Files with no executable code under test had no debugger target (physics-1: 4, ui-1: 11).",
@@ -51,6 +52,7 @@ VERIFY = [
  "- Line drift: reported lines for render-rate (252 → 99) and lamp-fixture-anchor (302 → 330) differ on the tip; rows carry both. Reviewers worked on the 2026-10-19 tip; a pass-2 lane re-locates by the quoted code, not the line.",
  "- Batches folded on 2026-10-19 ~05:50Z (physics-1, physics-2, race-2 part 1, car-1, ui-1) were normalized by two read-only subagents, which re-read their batch's highest-severity cites on cd907d4c; their `synth_check` says what they found.",
  "- Pass 3 (tip a51c6cc8 / 83328f1b): T5-01…T5-05 confirmed; R2-22, R2-26, R2-27 confirmed; R2-28 partly (the paths run, but nothing asserts FRAME_DT, the retired skip or the re-entry guard). The mutation addendum refutes no earlier row: R2-05 is narrower (only the presenting-exit carry survives, R2-34), and R2-19 names the wrong module path (`js/perf/gfx-debug-overlay.js`, not js/render/); its claim holds (mutant GO3 survives).",
+ "- Pass 4 (tip 7b27c153): T4-01, T4-02, T4-03, T4-06, T4-10 confirmed; A1-01, A1-02, A1-03, A1-05 confirmed, A1-04 partly (the curve loop covers both branches; only curve=1 is untested); RC2-19 confirmed, RC2-20 partly (the crossover set feeds the in-page scan as knownCrossover; roadFails itself is not relaxed). No HIDDEN BUG in audio-1 or tooling-4 (T4-02 `Parts.defaults` is a test-side mistake: parts.js exports DEFAULTS).",
  "- Not checked by the synthesis: rows marked `subagent-unverified` without a `synth_check` (R1-12…R1-15, R1-17, R3-07, R3-09, R3-14). They rank one point lower until a lane re-reads them.",
 ]
 HIDDEN_BUG = {"R1-01": "tuner-panel.js scope buttons never set aria-pressed (shipped a11y bug)"}
