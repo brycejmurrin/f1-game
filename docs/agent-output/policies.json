@@ -36,6 +36,16 @@
       "presentation": "shared-levels",
       "preserve": "Literal argv, no command-argument persistence, no implicit timeout, child cancellation ownership, separate stream retention, --read cursor/limits, full-mode compatibility."
     },
+    "tools/agent/output.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Original content and isError, private artifact path/bytes, presentation failures, safe containment, bounded page cursor."
+    },
+    "tools/agent/process.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Child stdio choice and original exit/signal, timeout and cleanup outcomes."
+    },
     "tools/car/audit-aero.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -536,6 +546,11 @@
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
     },
+    "tools/ci/live-run-check.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Advisory WARN line when a push would cancel a live ci.yml run; exit 0 always, never blocks"
+    },
     "tools/ci/measure-guard-commit.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -695,6 +710,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Missing evidence, infra-retry and partial drops; failure exits 1"
+    },
+    "tools/ci/session-ledger.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-family minutes, timeouts and repeats summary line; secrets, emails and out-of-repo paths stay redacted"
     },
     "tools/ci/session-status.mjs": {
       "action": "keep-native",
@@ -2190,16 +2210,6 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
-    },
-    "tools/agent/output.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "Original content and isError, private artifact path/bytes, presentation failures, safe containment, bounded page cursor."
-    },
-    "tools/agent/process.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "Child stdio choice and original exit/signal, timeout and cleanup outcomes."
     }
   }
 }
