@@ -1280,13 +1280,20 @@ const SceneryNature = (function () {
           // Terrace tread: a wide flat step. Guarded — a bank creeping toward
           // the tarmac must be dropped, not left overhanging the road.
           const tc = vadd(vadd(ac, a.u, up + rise * 0.5), a.r, side * back);
-          // At an inside bend the offset terrace is shorter than the road
-          // centreline's arc step. Fit each box between the bisectors of its
-          // neighbours, including the radial and vertical projected extents:
-          // both ends yield equally, so rotated adjacent treads cannot draw
-          // overlapping tops (Red Bull's Green Hill, three rows).
-          let treadSpan = spacing;
+          // #2204 — Fit each tread to the neighbour bisector (shorten inside,
+          // lengthen outside) without clamping to `spacing`, then cap at the
+          // curvature-scaled arc so a hairpin fold cannot stretch a tread
+          // across the apex.
           const nodes = Math.max(1, Math.round(spacing / ds));
+          const prev = anchor((k - nodes + n) % n, side, gap);
+          const next = anchor((k + nodes) % n, side, gap);
+          const e1x = a.c[0] - prev.c[0], e1z = a.c[2] - prev.c[2];
+          const e2x = next.c[0] - a.c[0], e2z = next.c[2] - a.c[2];
+          const l1 = Math.hypot(e1x, e1z) || 1, l2 = Math.hypot(e2x, e2z) || 1;
+          const κ = Math.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) / ((l1 + l2) / 2);
+          const x = side * (hw[k] + gap + back);
+          const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 + κ * x));
+          let treadSpan = curveCap;
           for (const dk of [-nodes, nodes]) {
             const q = anchor((k + dk + n) % n, side, gap);
             const qc = vadd(vadd(vadd(q.c, q.t, sShift), q.u, up + rise * 0.5), q.r, side * back);
@@ -1300,7 +1307,17 @@ const SceneryNature = (function () {
             // even when its along projection is zero. Such a row cannot fit;
             // otherwise keep the actual positive span, however short it is.
             if (!(available > 0)) { treadSpan = 0; break; }
-            if (along > 0) treadSpan = Math.min(treadSpan, available / along);
+            // Cap at the Euclidean neighbour distance: available/along OVERSIZES
+            // when the neighbour is not purely along a.t (along < 1 on a bend),
+            // which is exactly when jerez's Expo bank measured 1.5 m of overlap.
+            if (along > 0) treadSpan = Math.min(treadSpan, available / along, d * 0.98);
+          }
+          if (treadSpan > 0) {
+            // On a meaningful bend, also shrink by |κ|·|x| so neighbouring
+            // stations' depth-corners cannot re-overlap after the terrain
+            // footing extends the front tread (jerez Expo bank, frac 0.262).
+            const bend = Math.min(0.35, Math.abs(κ * x));
+            treadSpan *= 0.96 * (1 - bend);
           }
           if (!(treadSpan > 0) || rejBox(tc, [depth, rise + 0.5, treadSpan], b)) { previousRow = false; continue; }
           // The anchor reads the road-extrapolated ground, not the drawn

@@ -75,8 +75,10 @@
       // Bleached-earth terracing / banking option blocks, reused everywhere.
       const TERR  = { conc: CONC, concAlt: CONC_ALT, rows: 10, rise: 1.45, depth: 2.5 };
       const TERR_LO = { conc: CONC, concAlt: CONC_ALT, rows: 6, rise: 1.4, depth: 2.5 };
-      const HILL  = { grass: OCHRE, riser: DUST, rows: 5, rise: 1.2, density: 0.45 };
-      const HILL_BARE = { grass: OCHRE, riser: DUST, rows: 4, rise: 1.1, density: 0.06 };
+      // step 8 (#2204): default step 5 packed treads into each other on the
+      // Expo / Dry Sack bends; a wider stride lets the curve-scaled span close.
+      const HILL  = { grass: OCHRE, riser: DUST, rows: 5, rise: 1.2, density: 0.45, step: 8 };
+      const HILL_BARE = { grass: OCHRE, riser: DUST, rows: 4, rise: 1.1, density: 0.06, step: 8 };
       // Dry Sack's four 2 m-deep treads occupy gap 36..44. Allow for
       // the clump's full 2.74 m crown, hill phase and curved end segments.
       const scrubCrown = 2.74, bankPhase = 0.3, bankDepth = 2;

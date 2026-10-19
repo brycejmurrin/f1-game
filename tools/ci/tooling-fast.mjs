@@ -1031,6 +1031,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/spline-fold-diagnostics.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
+  // #2204: terrace / spectatorHill / vaultStand curve follow — outside-of-bend
+  // gap ≤ 0.5 m on moderate bends, no severe terrace self-pairs on jerez.
+  "tests/unit/stand-curve-gap.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
   // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
   "tests/unit/start-lights.test.mjs",
