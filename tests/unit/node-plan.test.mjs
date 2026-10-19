@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds, unitFileOwnership } from "../../tools/ci/node-plan.mjs";
 import { filesFor } from "../../tools/ci/run-group.mjs";
-import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
+import { TOOLING_FAST_FILES, selectToolingFastChanged } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
 import { ADAPTED, ADAPTED_RUNNER } from "../../tools/ci/twinned-specs.mjs";
 
@@ -139,7 +139,7 @@ test("fail safe: no diff, an infra path, a unit file, a harness, or an unrouted 
   for (const changed of [[], ["package.json"], ["tests/unit/" + "new-unregistered.test.mjs"], ["tools/lib/game-vm.cjs"],
                          ["tests/data/physics-baseline.json"], ["some/unknown/file.txt"], [".github/workflows/ci.yml"],
                          ["tools/ci/pick-unit-slices.mjs"], ["tools/ci/node-plan.mjs"],
-                         ["tools/ci/geometry-paths.mjs"], ["tools/ci/twinned-specs.mjs"],
+                         ["tools/ci/geometry-paths.mjs"], ["tools/ci/twinned-specs.mjs"], ["tools/ci/docs-only-policy.mjs"],
                          ["tools/ci/ci-select-specs-step.sh"], ["tools/ci/ci-resolve-before.sh"]]) {
     const p = plan(changed);
     assert.equal(p.all, true, `${JSON.stringify(changed)} must run everything (${p.reason})`);
@@ -235,4 +235,21 @@ test("L9: a circuit an ADAPTED spec builds keeps test:vm-page in the plan (2026-
   assert.ok(cota.run.includes("test:vm-page-b"), JSON.stringify(cota.skip));
   assert.ok(!cota.run.includes("test:vm-page-a"));
   assert.ok(!plan(["js/circuits/dijon.js"]).run.some((s) => s.startsWith("test:vm-page")));
+});
+
+
+test("extracted docs policy retains the selector owner's full verification plan", () => {
+  const owner = "tools/ci/select-specs.mjs";
+  const leaf = "tools/ci/docs-only-policy.mjs";
+  const before = plan([owner]), after = plan([leaf]);
+  assert.equal(after.all, true);
+  assert.equal(after.skipTf, false, "infra edits retain the full tooling floor");
+  assert.deepEqual(after.run, before.run);
+  assert.deepEqual(after.run.slice().sort(), Object.keys(SCOPED).sort());
+  assert.deepEqual(after.skip, []);
+  const formerFloor = selectToolingFastChanged([owner]);
+  const policyFloor = selectToolingFastChanged([leaf]);
+  assert.equal(policyFloor.reason, "tracked");
+  assert.deepEqual(policyFloor.files, formerFloor.files);
+  assert.deepEqual(policyFloor.files, TOOLING_FAST_FILES.filter((f) => !f.startsWith("//")));
 });
