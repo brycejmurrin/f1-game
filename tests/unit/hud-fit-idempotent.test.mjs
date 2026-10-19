@@ -252,12 +252,30 @@ test("fitHud: on touch the tower clears the sector plate's row without shrinking
   settle(6);
   const z = h.pub();
   // The tower's bottom at the published zoom sits above the plate's top (56) by ROW_AIR.
+  // +0.25px: --hud-z-top ceils onto a 0.01 grid (#2882), so a raw 0.928 publishes 0.93.
   const bottom = z * (8 + PHONE.towerH);
-  assert.ok(bottom <= 56 - 2 + 0.01, "tower bottom " + bottom.toFixed(2) + " clears the plate's top at y 56");
+  assert.ok(bottom <= 56 - 2 + 0.25, "tower bottom " + bottom.toFixed(2) + " clears the plate's top at y 56");
   assert.ok(z > 0.85 && z < 1, "and the band is only as small as that row needs (" + z.toFixed(3) + "), not the old 0.575 read off the dock stand-off");
   // Stable: more ticks do not move it.
   settle(4);
   assert.equal(h.pub(), z, "the cap does not hunt");
+});
+
+test("fitHud: larger HUD SIZE never paints a smaller top band on the same phone viewport (#2882)", () => {
+  // Live 844×390 pin-look: HUD 100 published 0.947 and HUD 200 published 0.945
+  // (sub-pixel intrinsic noise). Ceil-to-0.01 makes both 0.95 so gearW is monotonic.
+  const painted = [];
+  for (const scale of [0.7, 1, 1.5, 2]) {
+    const h = bootFlipHarness({ ...PHONE, scale });
+    for (let i = 0; i < 8; i++) { h.paintAt(h.pub()); h.invalidate(); h.tick(); }
+    painted.push({ scale, z: h.pub(), w: PHONE.intrinsic.top * h.pub() });
+  }
+  for (let i = 1; i < painted.length; i++) {
+    assert.ok(painted[i].w + 1e-6 >= painted[i - 1].w,
+      "HUD SIZE " + painted[i - 1].scale + " -> " + painted[i].scale + " shrank the tower: " + JSON.stringify(painted));
+  }
+  assert.match(read("js/ui/hud.js"), /Math\.ceil\(cap \* 100/,
+    "top/bot caps ceil onto a 0.01 grid so cross-scale noise cannot undercut");
 });
 
 test("fitHud: hiding the sector plate frees the row (touch), and a plate level with the tower is not a row to clear", () => {

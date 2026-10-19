@@ -1642,7 +1642,17 @@ function fitHud() {
     if (cap >= base) root.style.removeProperty(prop);   // fits: the player's number, untouched
     else {
       const floor = (portraitPhone && prop === "--hud-z-top") ? READABLE_Z : 0.4;
-      root.style.setProperty(prop, String(Math.max(floor, Math.round(cap * 1000) / 1000)));
+      // Readout bands: ceil onto a 0.01 grid. Sub-pixel intrinsic noise at a
+      // larger --hud-scale (844×390 pin-look: 0.947 at HUD 100, 0.945 at 200)
+      // otherwise paints the timing tower SMALLER as HUD SIZE grows (#2882).
+      // The dock keeps milli-rounding — heightCap already keeps BUTTON SIZE
+      // monotonic (hud-control-clearance).
+      let q = Math.round(cap * 1000) / 1000;
+      if (prop === "--hud-z-top" || prop === "--hud-z-bot") {
+        q = Math.ceil(cap * 100 - 1e-9) / 100;
+        if (q >= base) { root.style.removeProperty(prop); return; }
+      }
+      root.style.setProperty(prop, String(Math.max(floor, q)));
     }
   };
   set("--hud-z-top", capTop, scale);

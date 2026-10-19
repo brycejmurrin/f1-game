@@ -94,11 +94,18 @@ const PIN_PREVIOUS_LOOK = () => {
   } catch (_) {}
 };
 
+/** Two animation frames so sibling style invalidation lands before a sync wait (#2825). */
+async function settlePaint(page) {
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
 /** Touch: fitHud painted clearance + published --hud-fit-stamp before probes. */
 async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
   const o = opts || {};
-  await page.waitForFunction(async ({ needRel, prevStamp }) => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  // Predicate must stay synchronous: Playwright does `if (predicate())`, so an
+  // async function (a Promise) is always truthy and never waits (#2825).
+  await settlePaint(page);
+  await page.waitForFunction(({ needRel, prevStamp }) => {
     if (document.body.classList.contains("desktop")) return true;
     if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
     const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
@@ -145,8 +152,8 @@ async function waitTowerClearsGaps(page, timeoutMs = 30_000) {
 }
 
 async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
-  await page.waitForFunction(async () => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await settlePaint(page);
+  await page.waitForFunction(() => {
     if (document.body.classList.contains("desktop")) return true;
     const boost = document.getElementById("btn-boost");
     const sectors = document.getElementById("hud-sectors");
@@ -224,11 +231,9 @@ async function race(page, steer, manual, ins, opts) {
     // green, and not a longer timeout. toFixed(1) in fitHud rounds own-unit
     // height to 0.1px.
     // API: https://playwright.dev/docs/api/class-page#page-wait-for-function
-    await page.waitForFunction(async (broadcastCamera) => {
-      // Published inputs can precede Chromium's sibling style invalidation:
-      // captured rules/vars were correct while map/gaps still had base top:8px.
-      // Cross a paint boundary within this same 5 s budget before measuring.
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Sync predicate (#2825): double-rAF once before the wait, not inside it.
+    await settlePaint(page);
+    await page.waitForFunction((broadcastCamera) => {
       const tower = document.querySelector(".hud-top");
       if (!tower || document.body.classList.contains("hud-bcam") !== broadcastCamera) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
@@ -243,8 +248,8 @@ async function race(page, steer, manual, ins, opts) {
     // passed on replay on the same tree and on the base — the clusters were
     // read before fitHud had published --hud-top-h for the booted fonts.
     // Same wait as the broadcast branch minus the hud-bcam expectation.
-    await page.waitForFunction(async () => {
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await settlePaint(page);
+    await page.waitForFunction(() => {
       const tower = document.querySelector(".hud-top");
       if (!tower) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
@@ -713,6 +718,12 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
       // cap (fit-to-screen), so a fixed ratio cannot hold there (667x375: 100 and 200 both 81.23 px,
       // #2882). The roomy shape must keep at least one uncapped step, so the check never goes vacuous.
       const sizes = [70, 100, 200], uncapped = [];
+      // #2882: a larger HUD SIZE never paints the timing tower smaller than a
+      // smaller size on the same viewport (fit-to-screen may plateau, not shrink).
+      for (let i = 1; i < sizes.length; i++) {
+        expect(gearW[sizes[i]] + 0.05, `monotonic HUD SIZE ${sizes[i - 1]} -> ${sizes[i]} ${JSON.stringify({ gearW, zTop })}`)
+          .toBeGreaterThanOrEqual(gearW[sizes[i - 1]]);
+      }
       for (let a = 0; a < sizes.length; a++) for (let b = a + 1; b < sizes.length; b++) {
         if (zTop[sizes[b]] !== "") {
           // Excluded only on evidence: the cap really binds at the larger size (a zoom below that HUD SIZE).
@@ -887,8 +898,8 @@ async function enableOptIns(page) {
     if (typeof HudElements === "undefined") throw new Error("HudElements missing");
     for (const id of ["rel", "strat", "inputs"]) HudElements.set(id, true);
   });
-  await page.waitForFunction(async () => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await settlePaint(page);
+  await page.waitForFunction(() => {
     const rel = document.getElementById("hud-rel");
     const inp = document.getElementById("hud-inputs");
     if (!rel || !inp || rel.hidden || inp.hidden) return false;
