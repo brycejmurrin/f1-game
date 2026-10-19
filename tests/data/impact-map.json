@@ -6901,6 +6901,15 @@
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "mood": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
+      "moodCtx": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
+      "moodDef": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
       "prepare": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",

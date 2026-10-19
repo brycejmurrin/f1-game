@@ -491,19 +491,19 @@ const LED_OPTS = { emissive: 0.62, roughness: 1.0, specular: 0, noAlphaWrite: tr
 // Stride-15 records: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
 // bleed, volW, glareW] — see js/render/gfx.js. volW stays 0 (godrays are off).
 const _rig = [];
-let _rigK0 = NaN, _rigK1 = NaN, _rigK2 = NaN;
+let _rigK0 = NaN, _rigK1 = NaN, _rigK2 = NaN, _rigMood = "";
 function lights(liv) {
   const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]);
   // Numeric key — avoid c1.join(",") string alloc every live() frame.
-  if (_rig.length && c1[0] === _rigK0 && c1[1] === _rigK1 && c1[2] === _rigK2) return _rig;
+  if (_rig.length && c1[0] === _rigK0 && c1[1] === _rigK1 && c1[2] === _rigK2 && _rigMood === moodId) return _rig;
   _rig.length = 0;
-  _rigK0 = c1[0]; _rigK1 = c1[1]; _rigK2 = c1[2];
+  _rigK0 = c1[0]; _rigK1 = c1[1]; _rigK2 = c1[2]; _rigMood = moodId;
   for (let i = 0; i < FIXTURES.length; i++) {
-    const F = FIXTURES[i], e = F[4] * E, t = F[3];
+    const F = FIXTURES[i], e = F[4] * E * fixGain(i), t = fixTint(i, F[3]);
     _rig.push(F[0], F[1], F[2], t[0] * e, t[1] * e, t[2] * e, F[5],
               F[6], F[7], F[8], F[9], F[10], F[11], 0, F[12]);
   }
-  const m = Math.max(c1[0], c1[1], c1[2]) || 1, ue = (3.0 / m) * E;
+  const m = Math.max(c1[0], c1[1], c1[2]) || 1, ue = (3.0 / m) * E * MD.up;
   for (let s = -1; s <= 1; s += 2)
     _rig.push(s * 5.05, 0.25, 0, c1[0] * ue, c1[1] * ue, c1[2] * ue, 6,
               -s * 0.26, 0.97, 0, 0.90, 0.55, 0.05, 0, 0.12);
@@ -547,7 +547,8 @@ function live(liv, now, ctx) {
   const rig = lights(liv);
   liveNow = now;
   nightNow = !!(ctx && ctx.night);
-  const ge = nightNow ? 6.5 * E : 0;
+  for (let k = 0; k < 3; k++) BACKDROP[k] = MD.bd ? MD.bd[k] : _bdBase[k] * MD.backdrop;
+  const ge = nightNow ? 6.5 * E * MD.gantry : 0;
   for (let i = 0; i < 4; i++) {
     const o = (GANTRY_AT + i) * 15;
     rig[o + 3] = GANTRY_TINT[0] * ge; rig[o + 4] = GANTRY_TINT[1] * ge; rig[o + 5] = GANTRY_TINT[2] * ge;
@@ -560,7 +561,7 @@ function live(liv, now, ctx) {
   {
     const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]), m = Math.max(c1[0], c1[1], c1[2]) || 1;
     const d = ctx && Number.isFinite(ctx.door) ? Math.max(0, Math.min(1, ctx.door)) : 1;
-    const ue = (3.0 / m) * E * (1 + 2.2 * Math.sin(d * Math.PI));
+    const ue = (3.0 / m) * E * MD.up * (1 + 2.2 * Math.sin(d * Math.PI));
     for (let k = 0; k < 2; k++) {
       const o = (FIXTURES.length + k) * 15;
       rig[o + 3] = c1[0] * ue; rig[o + 4] = c1[1] * ue; rig[o + 5] = c1[2] * ue;
@@ -589,8 +590,8 @@ function live(liv, now, ctx) {
   // a drop only when they line up, so it flickers rarely rather than strobes.
   {
     const t = now / 1000, f = (Math.sin(t * 23.1) + Math.sin(t * 7.3) + Math.sin(t * 41.7)) / 3;
-    const on = ctx && ctx.ambient === false ? 1 : f > 0.62 ? 0.30 : f > 0.50 ? 0.72 : 1, F = FIXTURES[8], e = F[4] * E * on, o = 8 * 15;
-    rig[o + 3] = F[3][0] * e; rig[o + 4] = F[3][1] * e; rig[o + 5] = F[3][2] * e;
+    const on = ctx && ctx.ambient === false ? 1 : f > 0.62 ? 0.30 : f > 0.50 ? 0.72 : 1, F = FIXTURES[8], e = F[4] * E * fixGain(8) * on, o = 8 * 15, t8 = fixTint(8, F[3]);
+    rig[o + 3] = t8[0] * e; rig[o + 4] = t8[1] * e; rig[o + 5] = t8[2] * e;
   }
   const u = (now - pulseAt) / 2200;
   if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return litRig(rig);
@@ -616,6 +617,61 @@ function litRig(src) {
     for (let k = 0; k < 15; k++) _lit.push(src[o + k]);
   }
   return _lit;
+}
+// ── lighting MOODS (design preview behind a dev switch) ─────────────────────
+// "shipped" is the identity — every factor 1, nothing overridden — so the
+// switch is inert unless a mood is chosen: GarageScene.mood(id), the URL
+// ?garageMood=<id>, or localStorage apex26.garageMood. Gains scale the rig
+// GROUPS of FIXTURES (key 0-1, fill 2-5, wash 6-9), the team dado uplights
+// and the night gantry; sky/amb scale the skylight and hemisphere ambient
+// IN PLACE (setup-camera reads the arrays per frame); exposure, bloom and
+// glare are read by setup-camera's presentOpts / drawGlow; sheen scales the
+// floor mirror; night forces the hour outside (pit lane, gantry, backdrop).
+// Real-garage references for each mood are cited in the design gallery.
+const MOOD_DEF = { key: 1, fill: 1, wash: 1, up: 1, gantry: 1, keyTint: null, fillTint: null, washTint: null,
+  sky: 1, amb: 1, sun: null, bd: null, backdrop: 1, exposure: 1, bloom: 1, glare: 1, sheen: 1, night: null };
+const MOODS = {
+  shipped: {},
+  // Race-weekend TV look: every light box on, ~5600 K, flat even fill, a
+  // bright epoxy floor; low contrast so the livery reads at a glance.
+  broadcast: { key: 1.25, fill: 1.9, wash: 1.6, up: 0.45, keyTint: [1.04, 1.0, 0.94], fillTint: [0.96, 1.0, 1.06],
+    washTint: [0.97, 1.0, 1.04], sky: 1.45, amb: 1.6, exposure: 1.10, bloom: 0.6, glare: 0.75, sheen: 1.5, backdrop: 1.8 },
+  // Singapore / Bahrain under lights: a warm bright bay against a blue-black
+  // pit lane, gantries lit outside, the uplights carrying the team colour.
+  night: { night: true, key: 1.15, fill: 0.75, wash: 0.55, up: 1.7, gantry: 1.5, keyTint: [1.20, 0.98, 0.70],
+    fillTint: [0.80, 0.92, 1.20], sky: 0.40, amb: 0.55, bd: [0.010, 0.016, 0.040], exposure: 1.0, bloom: 1.7, glare: 1.7, sheen: 1.9 },
+  // A launch reveal: two warm keys straight down on the car, fills nearly
+  // off, the room falls to black and the floor turns into a mirror.
+  showroom: { key: 1.9, fill: 0.18, wash: 0.10, up: 2.4, keyTint: [1.14, 1.0, 0.84], fillTint: [0.70, 0.84, 1.25],
+    sky: 0.20, amb: 0.30, sun: [0, 0.97, 0.24], bd: [0.006, 0.006, 0.008], exposure: 0.96, bloom: 1.4, glare: 1.5, sheen: 2.4 },
+  // Door up on a sunny pit lane: daylight is the key, low and from the
+  // door; the ceiling rig is secondary and the outside is bright.
+  daylight: { night: false, key: 0.55, fill: 0.55, wash: 0.75, up: 0.35, sky: 1.85, amb: 1.7, sun: [0, 0.50, 0.866],
+    bd: [0.36, 0.42, 0.50], exposure: 1.02, bloom: 0.8, glare: 0.35, sheen: 1.1 },
+};
+const SKY_BASE = SKYLIGHT.slice(), AMB_SKY_BASE = AMB_SKY.slice(), AMB_GROUND_BASE = AMB_GROUND.slice();
+const _bdBase = BACKDROP.slice();
+let moodId = "shipped", MD = Object.assign({}, MOOD_DEF);
+function mood(id) {
+  if (id === undefined) return moodId;
+  const m = MOODS[id] ? id : "shipped";
+  moodId = m; MD = Object.assign({}, MOOD_DEF, MOODS[m]);
+  for (let k = 0; k < 3; k++) {
+    SKYLIGHT[k] = SKY_BASE[k] * MD.sky;
+    AMB_SKY[k] = AMB_SKY_BASE[k] * MD.amb; AMB_GROUND[k] = AMB_GROUND_BASE[k] * MD.amb;
+  }
+  return moodId;
+}
+function moodDef() { return MD; }
+// The hour outside is part of the mood: garageCtx() hands its ctx through here.
+function moodCtx(ctx) { if (ctx && MD.night !== null) ctx.night = MD.night; return ctx; }
+function fixGain(i) { return i < 2 ? MD.key : i < 6 ? MD.fill : MD.wash; }
+function fixTint(i, t) { return (i < 2 ? MD.keyTint : i < 6 ? MD.fillTint : MD.washTint) || t; }
+{
+  let id = null;
+  try { id = (typeof location !== "undefined" && new URLSearchParams(location.search).get("garageMood"))
+    || (typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageMood")); } catch (_) { /* storage blocked */ }
+  if (id) mood(id);
 }
 // Column-major T * Ry(ay) * Rz(az), written into `out`.
 function mk(out, tx, ty, tz, ay, az) {
@@ -643,7 +699,7 @@ function mirrorSheen(eye, carMat) {
   const d = Math.hypot(ex - cx, ez - cz);
   const lateral = 1 / (1 + Math.max(0, d - 2.2) * 0.18);
   const height = 1 / (1 + Math.max(0, ey - 2.5) * 0.25);
-  return MIRROR_SHEEN_PEAK * lateral * height;
+  return MIRROR_SHEEN_PEAK * MD.sheen * lateral * height;
 }
 function ensureMirrorFade() {
   if (mirrorFadeMesh || !_gfx) return;
@@ -1047,7 +1103,7 @@ function rebuild(team, liv, info, ctx) {
     buildApron(flr); buildPitLane(flr, liv, !!(ctx && ctx.night)); buildBayFloor(flr, liv);
     // The clear colour beyond the apron rim follows the hour outside.
     const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
-    BACKDROP[0] = bd[0]; BACKDROP[1] = bd[1]; BACKDROP[2] = bd[2];
+    BACKDROP[0] = _bdBase[0] = bd[0]; BACKDROP[1] = _bdBase[1] = bd[1]; BACKDROP[2] = _bdBase[2] = bd[2];
     floorMesh = _gfx.createMesh(flr);
     const g = {};
     for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
@@ -1412,7 +1468,7 @@ function release() {
   previewMeshes.clear(); previewHulls.clear();
   dressCanvas = null; liveCanvas = null; releaseDress();
   cacheKey = ""; geomKey = ""; liveKey = ""; dressIdKey = ""; dressFullKey = ""; dressFail = 0; dressRetryAt = 0; liveFail = 0; liveRetryAt = 0; traceFail = 0; lastTrace = -1e9;
-  _rigK0 = NaN; _rigK1 = NaN; _rigK2 = NaN; _rig.length = 0; _chase.length = 0;
+  _rigK0 = NaN; _rigK1 = NaN; _rigK2 = NaN; _rigMood = ""; _rig.length = 0; _chase.length = 0;
   return n;
 }
 
@@ -1421,7 +1477,7 @@ function debug() {
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
-  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, draw, framingHull, recentre,
+  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, mood, moodDef, moodCtx, MOODS, draw, framingHull, recentre,
            previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, release };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;
