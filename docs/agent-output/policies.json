@@ -496,6 +496,11 @@
       "presentation": "shared-levels",
       "preserve": "Unknown served/configured metrics and stalled/disconnected evidence"
     },
+    "tools/ci/fleet-tick.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Changed-only rows versus first tick; ship/Pages red; dry-run state not saved"
+    },
     "tools/ci/geometry-paths.mjs": {
       "action": "protocol-only",
       "presentation": "native",
@@ -1301,6 +1306,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/ui-device-profile.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/ui-mock-core.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1466,6 +1476,11 @@
       "presentation": "native",
       "preserve": "planOnly/withinBudget/limitation and argv"
     },
+    "tools/mcp/js-debugger-boot.cjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Child inspector port report and release handshake"
+    },
     "tools/mcp/js-debugger-cdp.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1496,6 +1511,11 @@
       "presentation": "native",
       "preserve": "@c10"
     },
+    "tools/mcp/js-debugger-node.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "Per-file exit, test counts, probe hit counts, captured locals, cleanup"
+    },
     "tools/mcp/js-debugger-session.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -1510,6 +1530,11 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Ring retention, total counts, clear/stop semantics"
+    },
+    "tools/mcp/js-debugger-workflow.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "Pause cause and token, locals, hit counts and values, cleanup"
     },
     "tools/mcp/lsp-eval.mjs": {
       "action": "keep-native",

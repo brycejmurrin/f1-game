@@ -123,21 +123,30 @@ test("the audit finds real tests, and its titles match real log lines", (t) => {
   const declared = rows.reduce((a, r) => a + (r.declared || 0), 0);
   assert.ok(declared > 500, `expected the suite to declare 500+ tests, got ${declared}`);
 
-  // The observed half needs Playwright logs to compare against, and
-  // `artifacts/` is GITIGNORED — it does not exist in CI at all, and locally it
-  // often holds only node TAP / gate logs, where every title is legitimately
-  // unobserved. Asserting observed > 0 unconditionally turned CI red for an
-  // environment fact rather than a defect. So gate on a live-reporter result
-  // line naming a spec that still exists (a deleted spec's line can never
-  // match a declared title), and say so when there is nothing to check.
+  assert.ok(rows.some((r) => r.declared > 0 && !r.parseError), "at least one spec parsed");
+});
+
+test("a live-reporter result line for a declared title round-trips to that title (no logs needed)", () => {
+  // The format-compat half used to be skipped whenever artifacts/logs was absent
+  // (always, in CI). A synthetic reporter line for a real declared test needs no log.
+  const spec = "tests/specs/smoke.spec.js";
+  const declared = titlesIn(fs.readFileSync(path.join(ROOT, spec), "utf8"), spec).filter((d) => !d.dynamic && !d.skipped);
+  assert.ok(declared.length > 0, "smoke.spec.js declares static tests");
+  for (const d of declared.slice(0, 5)) {
+    const key = d.reporter || d.full;
+    const [file, ...rest] = key.split(" › ");
+    const line = `[06:07:16] + pass  3/9 ${file} › ${rest.join(" › ")} (1.2s)`;
+    assert.equal(parseLiveReporterLine(line), key, `reporter line for ${key} must parse back to the declared title`);
+    assert.equal(parseLiveReporterLine(`2026-10-19T06:07:16.000Z ${line.replace("+ pass", "x FAIL")}`), key);
+  }
+});
+
+test("when local Playwright logs exist, observed titles match declared ones", (t) => {
   const reported = [...observedTitles().keys()]
     .filter((title) => fs.existsSync(path.join(ROOT, title.split(" › ")[0])));
-  if (!reported.length) {
-    t.skip("no Playwright live-reporter line for a current spec in artifacts/logs — observed half not checkable here");
-    return;
-  }
-  const observed = rows.reduce((a, r) => a + (r.observed || 0), 0);
+  if (!reported.length) { t.skip("no live-reporter line for a current spec in artifacts/logs (gitignored; covered by the round-trip test above)"); return; }
+  const observed = audit().reduce((a, r) => a + (r.observed || 0), 0);
   assert.ok(observed > 0,
     `${reported.length} live-reporter titles in artifacts/logs, none matching a declared title — ` +
-    "extraction and the live-reporter format have diverged, which makes the tool useless rather than wrong");
+    "extraction and the live-reporter format have diverged");
 });

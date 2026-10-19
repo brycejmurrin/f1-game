@@ -273,7 +273,9 @@ test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt ze
   // PAUSED car reads PAUSED_NET_INPUT (game.js inputOf), so input.js keeps
   // reading the stick under menus (ui-improve-pass pins that on purpose).
   assert.match(fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8"), /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
-  const rot = input.match(/function onScreenRotate\(\) \{[\s\S]*?\n  \}/)[0];
+  const rotMatch = input.match(/function onScreenRotate\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(rotMatch, "onScreenRotate() not found in input.js");
+  const rot = rotMatch[0];
   assert.doesNotMatch(rot, /calibrate/, "a rotation must not re-sample the neutral mid-corner");
   const bindings = fs.readFileSync(path.join(ROOT, "js/input/bindings.js"), "utf8");
   for (const k of ["AltLeft", "AltRight", "ControlLeft", "ControlRight"])

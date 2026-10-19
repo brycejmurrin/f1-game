@@ -87,6 +87,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness the audits and VM tests load the engine through. | agent-view |
 | **lib/track-shot-survey.mjs** | Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey). | survey-track |
 | **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
+| **lib/ui-device-profile.mjs** | Consistent device identities for UI probes; CSS viewports are never inferred from screenshot pixels. | — |
 | **lib/ui-mock-core.mjs** | Core of hud-mock/menu-mock: held rAF loop, labelled boxes, CDP capture (png\|jpeg, clip), contact sheet, cell cache. | — |
 | **lib/vm-script-cache.cjs** | Persist vm.Script cachedData for game-vm manifest eval (content-hash keyed). | — |
 | **lib/webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | mcp-probe |
@@ -442,14 +443,17 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/debug-chrome.mjs** | CLI, not an MCP tool: start/status/stop a headless Chromium (CDP 9222) plus static server for the js-debugger. | — |
 | **mcp/diagnostics-tools.mjs** | Typed background diagnostics and bounded report queries for Apex MCP. | renderer-debug / mcp-probe |
 | **mcp/garage-plan.mjs** | Browser-free bounded garage matrix planning over canonical cameras and livery fields. | garage-parts-livery |
+| **mcp/js-debugger-boot.cjs** | Child-process auto-attach bootloader for debugger_node_test (NODE_OPTIONS=--require): every Node | — |
 | **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
 | **mcp/js-debugger-cli.mjs** | Separate debugger server CLI: stdio, persistent loopback daemon and state-preserving shell calls. | — |
 | **mcp/js-debugger-http.mjs** | Persistent loopback JSON-RPC bridge for the debugger's separate shell-call processes. | — |
 | **mcp/js-debugger-mcp.mjs** | Opt-in stdio JavaScript debugger MCP: attach, breakpoints, step, scopes; no browser launch. | — |
 | **mcp/js-debugger-mcp.sh** | Separate JavaScript debugger MCP wrapper: serve, serve-http, call, status, list-tools and parent-only smoke. | — |
+| **mcp/js-debugger-node.mjs** | debugger_node_test: run Node test files under the inspector, in parallel, with counting probes, | — |
 | **mcp/js-debugger-session.mjs** | Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution. | — |
 | **mcp/js-debugger-smoke.mjs** | Parent-only native Chromium smoke for js-debugger-mcp's real stdio/CDP debugging workflow. | — |
 | **mcp/js-debugger-trace.mjs** | Non-pausing debugger tools: logpoints, exception log, listener counts, live-object counts (CDP). | — |
+| **mcp/js-debugger-workflow.mjs** | Batched debugger workflows: break-and-inspect, logpoint collect, and the scope-locals reader they share. | — |
 | **mcp/lsp-eval.mjs** | apex-lsp vs grep on fixed code questions with known answers: correctness, output chars, time; `--json`. | — |
 | **mcp/lsp-mcp.mjs** | Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics. | — |
 | **mcp/lsp-mcp.sh** | apex-lsp MCP wrapper: serve (stdio), or def\|refs\|sym\|hover\|diag from a shell over TypeScript 7 `tsc --lsp`. | — |
@@ -548,6 +552,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
 | **ci/fleet-bus.mjs** | Merge lease (one holder, expiry, refusal) and typed fleet bus on the claude/fleet-bus branch, any host. |
+| **ci/fleet-tick.mjs** | One fleet-watch fast tick: board + sync + ship/Pages CI, diffed against the saved state; prints only what changed. |
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |

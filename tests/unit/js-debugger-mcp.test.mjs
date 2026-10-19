@@ -37,7 +37,7 @@ test("loopback validation refuses remote/rebinding/credentials and wrong protoco
   for (const u of ["http://127.0.0.1:9222", "http://localhost:9222", "http://[::1]:9222"]) assert.equal(localUrl(u).protocol, "http:");
 });
 test("tools expose actual debugger operations; malformed arguments fail before attachment", async () => {
-  assert.equal(TOOLS.length, 19);
+  assert.equal(TOOLS.length, 22);
   const s = new DebugSession();
   for (const [name, args] of [["debugger_breakpoint", { url: "x", line: 0 }], ["debugger_control", { action: "unknown" }],
     ["debugger_source", { scriptId: "s1", count: 201 }], ["debugger_state", { surprise: true }], ["debugger_evaluate", { pauseToken: "x", expression: "x", allowSideEffects: "true" }]]) {
@@ -195,7 +195,8 @@ test("new pause arriving before step response remains authoritative", async () =
 test("URL breakpoint survives context clearing while scripts/frame handles expire", async () => {
   const { s, c } = await attached();
   await s.setBreakpoint(frame.url, 4, 3, "x === 1");
-  assert.deepEqual(c.calls.at(-1).params, { url: frame.url, lineNumber: 3, columnNumber: 2, condition: "x === 1" });
+  // A query-less URL matches the script under any ?v= query (deferred backends load ?v=<n>).
+  assert.deepEqual(c.calls.at(-1).params, { urlRegex: "^http://127\\.0\\.0\\.1:3456/fixture\\.js(?:[?#].*)?$", lineNumber: 3, columnNumber: 2, condition: "x === 1" });
   c.emit("Debugger.scriptParsed", { scriptId: "s1", url: frame.url, startLine: 0, endLine: 9 }); paused(c);
   c.emit("Runtime.executionContextsCleared");
   assert.equal(s.pause, null); assert.equal(s.scripts.size, 0); assert.equal(s.breakpoints.size, 1);
@@ -315,7 +316,7 @@ test("async expression can await its promise without blocking MCP control", asyn
   const { s, c } = await attached();
   c.reply = async () => ({ result: { value: 42 } });
   s.run("Promise.resolve(42)", true); await new Promise(setImmediate);
-  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate").params.awaitPromise, true);
+  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate" && !x.params.expression.includes("__apexDbgClients")).params.awaitPromise, true);
   assert.equal(s.state(true).operations[0].result.result.value, 42);
 });
 test("tool responses carry only the latest operation result, not the last ten", async () => {
@@ -334,7 +335,7 @@ test("a run paused on a breakpoint reports paused, then pending after resume, ne
   };
   s.run("fixture()"); await new Promise(setImmediate);
   assert.equal(s.state().operations[0].status, "paused");
-  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate").timeout, 600000);
+  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate" && !x.params.expression.includes("__apexDbgClients")).timeout, 600000);
   c.emit("Debugger.resumed"); assert.equal(s.state().operations[0].status, "pending");
   finish({ result: { value: 1 } }); await new Promise(setImmediate); assert.equal(s.state().operations[0].status, "completed");
 });
@@ -352,7 +353,7 @@ test("a failed breakpoint removal on detach stays an error", async () => {
 });
 test("dead endpoint and missing tool name give actionable messages", async () => {
   const { targets } = await import("../../tools/mcp/js-debugger-cdp.mjs");
-  await assert.rejects(targets("http://127.0.0.1:1"), /Cannot reach Chrome at http:\/\/127\.0\.0\.1:1/);
+  await assert.rejects(targets("http://127.0.0.1:1"), /Cannot reach a debug endpoint at http:\/\/127\.0\.0\.1:1/);
   const r = spawnSync(process.execPath, ["tools/mcp/js-debugger-cli.mjs", "call"], { encoding: "utf8" });
   assert.match(r.stdout, /call needs a tool name/);
   await assert.rejects(debuggerRequest("/healthz", null, 1), /on port 1|nothing listening on 127\.0\.0\.1:1/);
@@ -393,7 +394,7 @@ test("T1: scripts hide anonymous rows by default, list named URLs first, report 
 test("T1: an unresolved breakpoint warns loudly and suggests the exact parsed URL", async () => {
   const { s, c } = await attached();
   c.emit("Debugger.scriptParsed", { scriptId: "g", url: "http://127.0.0.1:3456/js/game.js?v=dev", startLine: 0, endLine: 9 });
-  const bp = await s.setBreakpoint("http://127.0.0.1:3456/js/game.js", 5);
+  const bp = await s.setBreakpoint("http://127.0.0.1:3456/js/game.js?v=old", 5);
   assert.deepEqual(bp.locations, []); assert.match(bp.warning, /NO LOCATIONS/); assert.match(bp.warning, /game\.js\?v=dev/);
   const r = await callTool(s, "debugger_breakpoint", { url: "http://127.0.0.1:3456/never.js", line: 1 });
   assert.match(r.structuredContent.warning, /not parsed yet/);
@@ -454,7 +455,7 @@ test("A3: listeners counts by type via DOMDebugger.getEventListeners and release
   const r = await callTool(s, "debugger_listeners", { target: "#hud", detail: 2 });
   assert.deepEqual(r.structuredContent.byType, { keydown: 2, resize: 1 }); assert.equal(r.structuredContent.total, 3);
   assert.equal(r.structuredContent.listeners[0].url, frame.url); assert.equal(r.structuredContent.listeners.length, 2);
-  assert.match(c.calls.find(x => x.method === "Runtime.evaluate").params.expression, /querySelector\("#hud"\)/);
+  assert.match(c.calls.find(x => x.method === "Runtime.evaluate" && !x.params.expression.includes("__apexDbgClients")).params.expression, /querySelector\("#hud"\)/);
   assert.ok(c.calls.some(x => x.method === "Runtime.releaseObjectGroup" && x.params.objectGroup === "apex-dbg-listeners"));
 });
 test("A4: instances queries the prototype, reads the array length and releases the group", async () => {
@@ -482,7 +483,7 @@ test("JSON-RPC protocol responds to initialize/list/ping, not notifications", as
   const s = new DebugSession();
   const request = method => ({ jsonrpc: "2.0", id: 1, method });
   assert.equal((await handleRpc(s, request("initialize"))).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 19);
+  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 22);
   assert.equal(await handleRpc(s, { jsonrpc: "2.0", method: "notifications/initialized" }), null);
   assert.equal((await handleRpc(s, request("missing"))).error.code, -32601);
   assert.equal((await handleRpc(s, [])).error.code, -32600);
@@ -503,7 +504,7 @@ test("real stdio subprocess discovery and malformed JSON recovery, no browser la
   child.stdin.end('bad json\n{"jsonrpc":"2.0","id":1,"method":"initialize"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"debugger_state","arguments":null}}\n');
   const [code] = await once(child, "exit"); assert.equal(code, 0, err);
   const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 4); assert.equal(rows[0].error.code, -32700);
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 19);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 22);
   assert.equal(rows.find(r => r.id === 3).error.code, -32602);
 });
 test("project catalogs launch the separate debugger wrapper and discover its tools", async () => {
@@ -518,7 +519,7 @@ test("project catalogs launch the separate debugger wrapper and discover its too
   assert.equal((await once(child, "exit"))[0], 0, err);
   const rows = out.trim().split("\n").map(JSON.parse);
   assert.equal(rows.find(r => r.id === 1).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 19);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 22);
   assert.equal(rows.find(r => r.id === 3).result.structuredContent.connected, false);
 });
 
@@ -618,7 +619,7 @@ test("wrapper validates port and missing-daemon calls fail without creating a se
   const daemon = await startDebuggerHttp({ port: 0 }); const port = daemon.server.address().port; await daemon.close();
   const result = await shell(["call", "debugger_state", "{}"], port);
   assert.equal(result.code, 1); assert.match(result.body.error, /start js-debugger-mcp.sh serve-http/);
-  assert.equal((await shell(["list-tools"], port)).body.length, 19);
+  assert.equal((await shell(["list-tools"], port)).body.length, 22);
 });
 test("daemon shutdown drops incomplete uploads before cleaning up a paused target", { timeout: 3000 }, async () => {
   const { s, c } = await attached(); paused(c);

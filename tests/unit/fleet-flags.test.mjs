@@ -35,3 +35,10 @@ test("format prints one row per session and tolerates missing fields", () => {
   const t = format([assess(sess(), NOW), assess({}, NOW)]);
   assert.equal(t.split("\n").length, 3); assert.match(t, /ok/);
 });
+
+test("cost is read from external_metadata.usage.cost_usd; an explicit cost_usd wins", () => {
+  const s = sess(); s.ccr.external_metadata.usage = { cost_usd: 20.5 };
+  assert.equal(assess(s, NOW).cost, 20.5);
+  assert.ok(assess(s, NOW).flags.some((x) => /cost \$20\.50 > cap \$15/.test(x)));
+  assert.equal(assess({ ...s, cost_usd: 3 }, NOW).cost, 3);
+});

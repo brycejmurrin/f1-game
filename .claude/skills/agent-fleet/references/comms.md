@@ -12,6 +12,8 @@ restated. Tools are the `claude-code-remote` MCP: `send_message`,
 
 - Authority (the rule everything else hangs on)
 - Messaging
+- Incident broadcast
+- Output budget (2026-10-19)
 - PR subscription
 - Quota park
 - Claims
@@ -57,8 +59,8 @@ HANDOFF <PR> <to session>, <state>, branch <name> @ <sha7>
 STAND-DOWN <PR> <who is pushing>
 ```
 
-Rotation is routine: an owner hands off at ~350 k context, the orchestrator at
-300 k (owners reached 400-550 k, $15-25, before anyone rotated). The HANDOFF
+Rotation is routine: a worker or owner hands off at 150 k context (STOP AT table, launch-policy.md), the orchestrator at
+200 k (owners reached 400-550 k, $15-25, before anyone rotated). The HANDOFF
 message body (after the one-line `HANDOFF <PR> …` first line above), so the successor starts cold with no questions:
 
 ```
@@ -89,6 +91,44 @@ every HANDOFF/DONE. The child prompt is a full standalone brief (it sees no
 parent context): goal, PR numbers, branch, OWNED/FORBIDDEN paths, what is
 delegated, and "follow `.claude/skills/steward/references/ownership.md`". Point to the
 skill, do not retype its rules.
+
+## Incident broadcast
+
+When a fleet-wide incident needs a corrective order (orchestrator → workers /
+owners), use one tested superseding message — not a stream of contradictory
+broadcasts. Counter-example: the Oct 17 commit-hook incident sent **seven**
+broadcasts in **24 minutes** (2:24–2:48 PM PT: HALT LOOP, FIX, ROOT-CAUSE FIX,
+"Before your next commit", COMMIT UNBLOCK, Correction, then a later FLEET
+BROADCAST), including reversing `pkill -f` / `core.hooksPath` /
+`APEX_SKIP_GUARDS` mid-window. Cross-link: orchestrator.md Hard line 11
+(`RETRACT`, no peer fan-out).
+
+1. **Test on one agent first.** Before broadcasting a fix, have one affected
+   agent apply it and confirm the outcome (for example, a commit that went
+   through). Only then broadcast.
+2. **One consolidated message.** Each incident broadcast is numbered
+   (`INCIDENT <date> #N`) and starts by naming what it replaces
+   ("Supersedes #N-1; ignore it"). Never send partial fixes as separate orders.
+3. **No back-and-forth orders.** Do not reverse an instruction within the same
+   incident unless the reversal is itself tested and explicitly supersedes the
+   earlier one. Never tell agents to bypass a repo guard (`pkill -f`,
+   `core.hooksPath`, `APEX_SKIP_GUARDS`) unless the repo change allowing it has
+   landed first.
+4. **One state file.** Keep live incident state in a single note
+   (`docs/notes/INCIDENT-<date>.md`) that later briefs link to, rather than
+   repeating instructions in messages.
+5. **Default while waiting.** Until a tested fix arrives, agents pause the
+   affected step (commit WIP locally, do not retry in a loop) and do not emit
+   needs-decision for the incident itself.
+
+## Output budget (2026-10-19)
+
+No tool result over 10k characters enters context.
+- `list_sessions`: `limit` <= 10, or save the page and parse it with `python3 -I`.
+- `list_events`: pass `kinds`, or save the page and digest it with `session-transcript.mjs --summary` (transcripts.md).
+- `actions_list` / `pull_request_read`: `minimal_output`, `per_page` <= 5.
+- Prefer `ci-watch.mjs --once` and `pr-board.mjs --json` over raw API pages.
+- A long web page goes to a subagent that returns the facts, not into the main context.
 
 ## PR subscription
 

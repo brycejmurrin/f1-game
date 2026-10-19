@@ -44,6 +44,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
+import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 import { CliArgError, makeFlags, runCli } from "../lib/cli-args.mjs";
 import { probeHudElements, analyzeOverlap, overlapArea } from "../lib/hud-geometry.mjs";
 import { DEVICES, HUD_TARGETS, normalizeCell, cellId } from "../lib/hud-survey-matrix.mjs";
@@ -119,7 +120,9 @@ function mockWidgets(opt) {
 // ── node ──────────────────────────────────────────────────────────────────
 async function bootPage(browser, plan, touch) {
   const first = DEVICES[plan.cells.find((c) => DEVICES[c.device].touch === touch).device];
-  const ctx = await browser.newContext({ viewport: { width: first.w, height: first.h }, hasTouch: touch, deviceScaleFactor: 1 });
+  // DPR 1 deliberately reduces raster cost for these CSS-geometry mock shots.
+  const ctx = await browser.newContext(resolveUIProfile({ touch,
+    viewport: { width: first.w, height: first.h }, deviceScaleFactor: 1 }).contextOptions);
   const page = await ctx.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(String(e && e.message || e).slice(0, 200)));

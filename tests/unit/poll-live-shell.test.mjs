@@ -221,3 +221,20 @@ test("pollLiveShell eventually matches after behind snapshots", async () => {
   assert.equal(result.ok, true);
   assert.equal(result.status, "match");
 });
+
+test("pollLiveShell cache-busts every fetch with a query unique per attempt and per file pair", async () => {
+  const urls = [];
+  await pollLiveShell({
+    pageUrl: "https://example.test/game", build: 50, sha: SHA_A, attempts: 3, runId: "t",
+    wait: async () => {}, log: () => {}, isAncestor: () => false,
+    fetchText: async (url) => {
+      urls.push(url);
+      return url.includes("version.json") ? JSON.stringify({ build: 40, sha: SHA_B }) : shellHtml(40, SHA_B);
+    },
+  });
+  assert.equal(urls.length, 6, "version.json + index.html on each of 3 attempts");
+  const busts = urls.map((u) => new URL(u).searchParams.get("_"));
+  assert.ok(busts.every((b) => /^t-\d+-\d+$/.test(b)), `bust shape runId-attempt-time: ${busts}`);
+  assert.equal(new Set(busts.filter((_, i) => i % 2 === 0)).size, 3, "each attempt busts differently");
+  assert.equal(busts[0], busts[1], "the pair within one attempt shares its bust");
+});

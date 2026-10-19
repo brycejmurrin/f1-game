@@ -25,7 +25,7 @@ import { bootEditor } from "../helpers/editor-vm.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
 
-test("catalog: 25 upstream stems, three true missing, Nuerburgring flagged layout-diff", () => {
+test("catalog: 25 upstream stems, four with no shipped circuit (Nuerburgring flagged layout-diff)", () => {
   assert.equal(CATALOG.length, 25);
   assert.equal(LICENSE, "LGPL-3.0");
   assert.match(SOURCE_URL, /TUMFTM\/racetrack-database/);
@@ -94,9 +94,10 @@ test("racelineOffsets: inset raceline reports a consistent bias", () => {
   const off = racelineOffsets(design.pts, race);
   assert.equal(off.length, design.pts.length);
   const mean = off.reduce((a, b) => a + b, 0) / off.length;
-  // Inside bias on a CCW oval → offsets should not all be zero.
-  assert.ok(Math.abs(mean) > 0.05 || off.some((v) => Math.abs(v) > 0.5),
-    `expected non-trivial offsets, mean=${mean}`);
+  // The synthetic raceline is inset 2 m toward the inside of a CCW oval: every offset is on the
+  // same (negative = left of travel) side, and the mean is ~2 m (measured -1.89, range -2.46..-1.44).
+  assert.ok(mean < -1.7 && mean > -2.1, `mean offset should be ~ -2 m, got ${mean}`);
+  assert.ok(off.every((v) => v < -1 && v > -3), `every sample inset ~2 m on the same side: ${off.map((v) => v.toFixed(2))}`);
 });
 
 test("fileEnvelope carries LGPL attribution and the designer format key", () => {

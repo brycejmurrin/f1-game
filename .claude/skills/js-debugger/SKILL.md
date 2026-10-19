@@ -49,6 +49,15 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
 `timeoutMs`, `pageUnresponsive`, `sw.js`/worker targets and `--device` →
 [references/tools.md](references/tools.md).
 
+## One call first
+
+- A Node test or tool question → `debugger_node_test` (no attach, files in parallel, probes return
+  counts, values and locals). Interactive Node: [references/tools.md](references/tools.md).
+- "Stop here and show me the locals" → `debugger_break {breakpoints, trigger}`: stack, cause and
+  locals in one reply, paused with a token (or `resume:true`).
+- "How often, with what values" on a running page → `debugger_collect {logpoints, trigger}`.
+- Use the step-by-step loop below when the next step depends on what a pause shows.
+
 ## Reproduce → pause → inspect → resume
 
 1. Call `debugger_targets` with the real CDP `endpoint`; attach its exact
@@ -56,7 +65,8 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
    `__apex.info()` and call `__apex.agentHelp()` once per page session.
 2. Find the function first (`Grep` `js/` for its symbol), then narrow `debugger_scripts` by that file name, then use `debugger_source` (it needs
    that row's `scriptId`, not a URL) to find the statement. Preserve the returned URL including its query suffix.
-   Source lines/columns are one-based; frame indices are zero-based.
+   Source lines/columns are one-based; frame indices are zero-based. A URL without a query
+   (or a bare `js/agent/apex.js`) matches every `?v=`, so a deferred `?v=1695` script resolves.
 3. Set `debugger_breakpoint` at that URL/line, optionally with a condition
    isolating the reproduction from background animation calls. Conditions run
    code. Trigger with `debugger_run`; use `awaitPromise:true` for an async flow.
@@ -66,8 +76,10 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
    frame or `debugger_properties` on a current scope/object ID. Properties are
    descriptors: getters are not invoked. Lexical globals such as `PhonePad`
    need not be properties of `window`.
-5. `debugger_control` supports `over`, `into`, `out` and `resume`. Read state
-   again after each command: acknowledgments are not pause evidence. A step
+5. `debugger_control` supports `over`, `into`, `out` and `resume`. A step waits
+   (`waitMs`, default 1500) and returns the new pause; without one, read state again:
+   acknowledgments are not pause evidence. A pause with `cause:"unowned"` is not yours
+   (another client on the target, or a `debugger` statement): its resume is theirs. A step
    can stop at another column on the same line; follow the returned location,
    not an assumed number of steps. Always use the new token and handles.
 6. Use `debugger_exceptions` with `all` to inspect caught errors, `uncaught`
