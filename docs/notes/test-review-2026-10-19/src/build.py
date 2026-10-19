@@ -82,6 +82,7 @@ open(f"{D}/SYNTHESIS.md", "w").write("\n".join(out))
 # PLANS
 o = []; w = o.append
 w("# Test suite review 2026-10-19 — pass-2 fix plans\n")
+w(f"**PLANS FINAL** ({st.UPDATED.split(':')[0]}:{st.UPDATED.split(':')[1][:3]}): all 22 batches reported; {sum(1 for L in lanes.LANES if all(b in st.FINAL for b in L['batches']) and L.get('ready', True))} of {len(lanes.LANES)} lanes are ready to launch. A draft lane names the continuation it waits on; fold that continuation into its row file and lane, then launch.\n")
 w("Generated with `SYNTHESIS.md`. Each lane is one PR-sized owner session; OWNED globs are disjoint between lanes. A lane stays **draft** until every batch it draws from has a final report.\n")
 for line in lanes.PREAMBLE: w(line)
 w("\n## Order and dependencies\n")

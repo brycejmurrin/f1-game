@@ -357,3 +357,30 @@ LANES[-1:-1] = [
   owned=_files(_MODES), ids=_MODES, verify="node --test on the owned units; time-trial.spec.js alone via test-bg.mjs",
   effort="L (M1-04 converts the ghost/season-cal/replay-buf scans)", model=SON, deps="none (modes-1 final)"),
 ]
+
+# ---- pass 7: platform (partial 1/n); race-1 2/2, tracks-2 2/2 (final); ui-2 2/n
+_FOLD6 = {
+ "L15": (["race-1"], ["RC1-22"]),
+ "L20": (["ui-2"], ["U2-22"]),
+ "L28": (["platform"], ["PL-14", "PL-15"]),
+ "L30": (["platform"], ["PL-09", "PL-10", "PL-11", "PL-26"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD6:
+        _b, _i = _FOLD6[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i
+_PLAT = "platform is partial 1/n (7 of 22 specs read but never run, no debugger pass): fold its continuation before launch"
+_UIS = _r("PL", 4, 17, 18, 19, 20, 21)
+_RUN = _r("PL", 1, 2, 3, 5, 6, 7, 8, 12, 13, 16, 22, 23, 24, 25)
+LANES[-1:-1] = [
+ dict(id="L35", name="UI specs on the shipped look and the phone profile", batches=["platform"],
+  goal="ui-resize, ui-scale, ui-redesign, ui-audit and button-touch specs run with the shipped appearance defaults (large text, high contrast) and a phone profile (844x390 landscape, hasTouch + isMobile) instead of pinning desktop defaults",
+  owned=_files(_UIS), ids=_UIS, verify="each owned spec alone via test-bg.mjs at 844x390 touch first (fleet-core); remote-group.mjs for a whole group",
+  effort="M", model=SON, deps=_PLAT),
+ dict(id="L36", name="Boot, smoke and runtime specs that can fail", batches=["platform"],
+  goal="smoke, audit, boot-guard, wake-lock, soak, autopilot and dev-tools specs assert an outcome that a regression would change (the audit rival coast compares against a non-player speed, boot-guard covers the lazy-script exemption and offline), and the 120 s timeouts are triaged alone before any assert change",
+  owned=_files(_RUN), ids=_RUN, verify="each owned spec alone via test-bg.mjs at loadavg < 3; smoke.spec.js first",
+  effort="M", model=SON, deps=_PLAT + "; smoke, dev-tools-dom and ui-audit were red on 120 s timeouts: re-run each alone before classifying"),
+]
