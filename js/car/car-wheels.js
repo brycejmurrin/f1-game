@@ -358,10 +358,13 @@ const CarWheels = (function () {
           const a0 = i / SEG * Math.PI * 2, a1 = (i + 1) / SEG * Math.PI * 2;
           const E = (rad, a, xx) => [xx, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
           addQuad(out, E(dR, a0, x0 + 0.004), E(dR, a1, x0 + 0.004), E(dR, a1, x1 - 0.004), E(dR, a0, x1 - 0.004), FOIL, SURFACES.metal);
+          // Faces, foil and the bore share their edges with the band, so the
+          // drum is one closed ring (fit-audit OPEN: +1.8 m when the foil sat
+          // 2 mm proud and the bore was open).
+          addQuad(out, E(dIn, a1, x0 + 0.004), E(dIn, a0, x0 + 0.004), E(dIn, a0, x1 - 0.004), E(dIn, a1, x1 - 0.004), DRUM, SURFACES.carbon);
           for (const xf of [x0 + 0.004, x1 - 0.004]) {
-            const xo = xf + (xf < cx ? -0.002 : 0.002);
             addQuad(out, E(dIn, a0, xf), E(dIn, a1, xf), E(dR * 0.80, a1, xf), E(dR * 0.80, a0, xf), DRUM, SURFACES.carbon);
-            addQuad(out, E(dR * 0.80, a0, xo), E(dR * 0.80, a1, xo), E(dR, a1, xo), E(dR, a0, xo), FOIL, SURFACES.metal);
+            addQuad(out, E(dR * 0.80, a0, xf), E(dR * 0.80, a1, xf), E(dR, a1, xf), E(dR, a0, xf), FOIL, SURFACES.metal);
           }
         }
         for (const xf of [x0 + 0.004 - 0.003, x1 - 0.004 + 0.003]) for (const [rf, n] of [[0.38, 12], [0.55, 18], [0.70, 24]]) for (let k = 0; k < n; k++) {

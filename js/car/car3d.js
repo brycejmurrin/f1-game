@@ -1185,8 +1185,10 @@ const Car3D = (function () {
         [s * 0.11, 0.760, -0.20],
         [s * 0.12, 0.812, -0.14],
         0.014, DARK);
-      addBox(out, s * 0.12, 0.818, -0.118, 0.030, 0.026, 0.042, DARK);
-      addBox(out, s * 0.12, 0.818, -0.094, 0.016, 0.014, 0.008, VISOR, SURFACES.glass);
+      // A round camera barrel, not a box: D8's helmet shots read the 30x26 mm
+      // cube either side of the helmet as a "boxy block" (2026-10-19).
+      addTube(out, [[s * 0.12, 0.818, -0.140], [s * 0.12, 0.818, -0.097]], 0.014, 10, DARK, SURFACES.carbon);
+      addTube(out, [[s * 0.12, 0.818, -0.098], [s * 0.12, 0.818, -0.092]], 0.008, 10, VISOR, SURFACES.glass);
     }
     if (cockpitStyle.screen && exHalo) {
       addLoft(out, 0.48, 0, 0.655, 0.40, 0.028,
