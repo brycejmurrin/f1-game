@@ -7,7 +7,14 @@ const CarWheels = (function () {
   // Unset = NO_TINTS = today's catalog colour. `key` joins every wheel mesh cache key so a livery
   // change rebuilds the wheels; "" when nothing is set (keys stay byte-identical).
   const _tintMemo = new WeakMap();
-  const NO_TINTS = Object.freeze({ rim: null, cal: null, ink: null, key: "" });
+  const NO_TINTS = Object.freeze({ rim: null, cal: null, ink: null, surf: null, key: "" });
+  // RIM FINISH (livery rimFinish): the rim lip, spokes and hub boss take that finish's surface id
+  // instead of bare metal ("gloss" = paint). Unset / "inherit" = null = metal, today's wheel.
+  function rimSurfOf(v) {
+    const M = typeof CarMaterials !== "undefined" ? CarMaterials : null;
+    if (!M || typeof v !== "string") return null;
+    return v === "gloss" ? M.SURFACES.paint : Object.hasOwn(M.FINISH_SURFACE, v) ? M.FINISH_SURFACE[v] : null;
+  }
   function tintColour(v) {
     if (!v) return null;
     if (Array.isArray(v)) return v.length >= 3 && v.slice(0, 3).every(Number.isFinite) ? [v[0], v[1], v[2]] : null;
@@ -21,8 +28,9 @@ const CarWheels = (function () {
     if (!liv || typeof liv !== "object") return NO_TINTS;
     let t = _tintMemo.get(liv);
     if (t) return t;
-    const rim = tintColour(liv.rimTint), cal = tintColour(liv.caliperTint), ink = tintColour(liv.sidewallInk);
-    t = !rim && !cal && !ink ? NO_TINTS : Object.freeze({ rim, cal, ink, key: "|w" + q255(rim) + ";" + q255(cal) + (ink ? ";" + q255(ink) : "") });
+    const rim = tintColour(liv.rimTint), cal = tintColour(liv.caliperTint), ink = tintColour(liv.sidewallInk), surf = rimSurfOf(liv.rimFinish);
+    t = !rim && !cal && !ink && !surf ? NO_TINTS : Object.freeze({ rim, cal, ink, surf,
+      key: "|w" + q255(rim) + ";" + q255(cal) + (ink ? ";" + q255(ink) : "") + (surf ? ";f" + surf : "") });
     _tintMemo.set(liv, t);
     return t;
   }
@@ -49,7 +57,7 @@ const CarWheels = (function () {
     const OPEN_SPOKES = 3;
 
     function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
-                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor) {
+                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor, rimSurf) {
       // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
       // DIED here: RC was computed and never read once, so the nine catalog
       // options that set a rim colour painted nothing. The clamp scan
@@ -58,7 +66,7 @@ const CarWheels = (function () {
       // like. The rim faces below take RC now. RIM_DEF reproduces the hardcoded
       // value those faces used before, so a car with no `rim` set is byte-identical.
       const RIM_DEF = [0.31, 0.31, 0.34];
-      const RC = rimColor || RIM_DEF;
+      const RC = rimColor || RIM_DEF, RS = rimSurf || SURFACES.metal;   // RS: livery RIM FINISH (tints().surf); unset = metal
       const RC_DEEP = [RC[0] * 0.39, RC[1] * 0.39, RC[2] * 0.41];   // dish floor, in shadow
       // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
       // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
@@ -170,7 +178,7 @@ const CarWheels = (function () {
               cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
             // 1. rim lip: bright annulus at the wall plane (both paths).
             addQuad(out, P(rimR, a0, 0), P(rimR, a1, 0),
-                         P(rimR * LIP_R, a1, 0), P(rimR * LIP_R, a0, 0), LIP, SURFACES.metal);
+                         P(rimR * LIP_R, a1, 0), P(rimR * LIP_R, a0, 0), LIP, RS);
             if (!useCover) continue;
             // 2. dish: falls INBOARD as it goes in, so the light gradient across it
             //    reads as a bowl rather than a disc.
@@ -195,7 +203,7 @@ const CarWheels = (function () {
             cy + rad * Math.cos(aa), cz + rad * Math.sin(aa)];
           addQuad(out, P(rimR * DISH_R, a - hw, DISH_D * 0.22), P(rimR * DISH_R, a + hw, DISH_D * 0.22),
                        P(rimR * 0.28, a + hw * 1.8, DISH_D * 0.22), P(rimR * 0.28, a - hw * 1.8, DISH_D * 0.22),
-                       LIP, SURFACES.metal);
+                       LIP, RS);
         }
       }
       const rotorOuter = r * Math.min(0.40, 0.32 * rotorScale);
@@ -326,7 +334,7 @@ const CarWheels = (function () {
         for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
           addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
-                           [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, SURFACES.metal);   // single face (cull-off → opaque both sides)
+                           [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, RS);   // single face (cull-off → opaque both sides)
         }
         // Tyre recipes may own open-rim identity (spokes / dish / nut / gunNut)
         // when the wheel part leaves them unset — coverVanes alone never builds
@@ -375,10 +383,10 @@ const CarWheels = (function () {
           const ri = hcR * 1.08, ro = rimR * 0.90;
           const xsF = ss[0] + dir * 0.026, xsB = ss[0] + dir * 0.026 - dir * thick;
           const P = (xs, rad, sgn) => [xs, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
-          addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsF, ro, -1), P(xsF, ri, -1), HUBCAP, SURFACES.metal);
-          addQuad(out, P(xsB, ri, -1), P(xsB, ro, -1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, SURFACES.metal);
-          addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, SURFACES.metal);
-          addQuad(out, P(xsF, ri, -1), P(xsB, ri, -1), P(xsB, ro, -1), P(xsF, ro, -1), HUBCAP, SURFACES.metal);
+          addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsF, ro, -1), P(xsF, ri, -1), HUBCAP, RS);
+          addQuad(out, P(xsB, ri, -1), P(xsB, ro, -1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, RS);
+          addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, RS);
+          addQuad(out, P(xsF, ri, -1), P(xsB, ri, -1), P(xsB, ro, -1), P(xsF, ro, -1), HUBCAP, RS);
         }
         // Rim TAPE: face band + short OD bead so the set marks read from a ¾ view.
         if (wheelStyle && wheelStyle.tape) {
@@ -419,13 +427,13 @@ const CarWheels = (function () {
             if (useCover) {
               addQuad(out,
                 [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, iy1, iz1], [dxOut, iy0, iz0],
-                HUBCAP, SURFACES.metal);
+                HUBCAP, RS);
               addQuad(out,
                 [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
-                RC_DEEP, SURFACES.metal);
+                RC_DEEP, RS);
               addTri(out, [dxIn, cy, cz],
                      [dxIn, iy0, iz0],
-                     [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
+                     [dxIn, iy1, iz1], HUBCAP, RS);
             } else {
               // Open: narrow rim lip + recess wall only (inner radius stays near
               // the lip — not the old hub-reaching floor). Spokes / rotor show.
@@ -434,10 +442,10 @@ const CarWheels = (function () {
               const ly1 = cy + lipInner * Math.cos(a1), lz1 = cz + lipInner * Math.sin(a1);
               addQuad(out,
                 [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, ly1, lz1], [dxOut, ly0, lz0],
-                HUBCAP, SURFACES.metal);
+                HUBCAP, RS);
               addQuad(out,
                 [dxOut, ly0, lz0], [dxOut, ly1, lz1], [dxIn, ly1, lz1], [dxIn, ly0, lz0],
-                RC_DEEP, SURFACES.metal);
+                RC_DEEP, RS);
             }
           }
         }
@@ -494,18 +502,18 @@ const CarWheels = (function () {
       }
     }
 
-    function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor) {
+    function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
       const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
-        grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor);
+        grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor, rimSurf);
       return out;
     }
-    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor) {
+    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
       const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const width = w || 0.34;
       addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
-        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor);
+        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor, rimSurf);
       // Upright and hub carrier give the wishbones/caliper a visible termination.
       // The hub carrier the wishbones and caliper terminate in. It was a cube
       // sitting inside the rim, visible through the spokes from every angle.
