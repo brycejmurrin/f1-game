@@ -2,6 +2,7 @@
  * updateCar() returned for netPlay.owns(c) before c.rpm was set; poseRemote writes gear/speed only.
  * Run: node --test tests/unit/net-audio-revs-vm.test.mjs
  */
+import { handFedNetSession as fakeSession } from "../helpers/hand-fed-net-session.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -13,28 +14,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const { createGame, settle } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 const { install } = require("./fake-audio-vm.cjs");
 
-function fakeSession() {
-  const h = new Map();
-  let stateFn = null;
-  return {
-    clearHandlers() { h.clear(); stateFn = null; return this; },
-    onState(fn) { stateFn = fn; return this; },
-    onClose() { return this; },
-    onEvent(t, fn) { (h.get(t) || h.set(t, []).get(t)).push(fn); return this; },
-    sendEvent() { return true; },
-    sendState() { return true; },
-    pump() { return true; },
-    alive: () => true,
-    lagMs: () => 0,
-    rtt: () => 0,
-    synced: () => true,
-    peerToLocal: (t) => t,
-    localToPeer: (t) => t,
-    stats: () => ({}),
-    close() { return true; },
-    deliverState(bytes, at) { if (stateFn) stateFn(bytes, at); },
-  };
-}
 
 async function bootRaceNetGuest() {
   let fa = null;

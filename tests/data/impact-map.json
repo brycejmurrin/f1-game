@@ -8514,7 +8514,6 @@
       ],
       "onState": [
         "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
@@ -8723,9 +8722,7 @@
       ],
       "pump": [
         "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
-        "tests/unit/net-roster.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-transport.test.mjs",

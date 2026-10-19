@@ -17,6 +17,7 @@
  *
  * Run: node --test tests/unit/net-grid-separation.test.mjs
  */
+import { handFedNetSession as fakeSession } from "../helpers/hand-fed-net-session.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
@@ -63,25 +64,6 @@ function gridG(n, { preOrdered }) {
   return G;
 }
 
-/** The session surface NetPlay binds to — the same shape
- *  tests/unit/net-authority.test.mjs feeds it. */
-function fakeSession() {
-  const handlers = new Map();
-  const closeHandlers = [];
-  return {
-    sent: [], closed: 0,
-    clearHandlers() { handlers.clear(); closeHandlers.length = 0; return this; },
-    onState() { return this; },
-    onClose(fn) { closeHandlers.push(fn); return this; },
-    onEvent(t, fn) { if (!handlers.has(t)) handlers.set(t, []); handlers.get(t).push(fn); return this; },
-    sendEvent(t, d) { this.sent.push({ t, d }); return true; },
-    sendState() { return true; },
-    pump() { return true; },
-    alive: () => true, lagMs: () => 0, rtt: () => 0, synced: () => true,
-    peerToLocal: (t) => t, localToPeer: (t) => t, stats: () => ({}),
-    close() { this.closed++; handlers.clear(); closeHandlers.length = 0; return true; },
-  };
-}
 
 /** Start a host holding two guests, so THREE humans share the grid. */
 function startWithPeers(G) {

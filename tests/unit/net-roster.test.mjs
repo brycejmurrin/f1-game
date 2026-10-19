@@ -20,6 +20,7 @@
  *
  * Run: node --test tests/unit/net-roster.test.mjs   (npm run test:net-unit)
  */
+import { handFedNetSession as fakeSession } from "../helpers/hand-fed-net-session.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -41,45 +42,65 @@ const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 // poseRemote samples the track for yawVis; a straight is enough here.
 globalThis.Tracks = { sample: (_t, _s, out) => { out.t[0] = 0; out.t[2] = 1; return out; } };
 
-function fakeSession() {
-  const handlers = new Map();
-  const sent = [];
-  let onClose = null, onStateFn = null;
-  return {
-    sent, closed: 0,
-    clearHandlers() { handlers.clear(); return this; },
-    onState(fn) { onStateFn = fn; return this; },
-    deliverState(bytes) { if (onStateFn) onStateFn(bytes); },
-    onClose(fn) { onClose = fn; return this; },
-    onEvent(type, fn) {
-      if (!handlers.has(type)) handlers.set(type, []);
-      handlers.get(type).push(fn);
-      return this;
-    },
-    sendEvent(t, d) { sent.push({ t, d }); return true; },
-    sendState() { return true; },
-    pump() { return true; },
-    alive: () => true,
-    lagMs: () => 0,
-    rtt: () => 0,
-    synced: () => true,
-    peerToLocal: (t) => t,
-    localToPeer: (t) => t,
-    stats: () => ({}),
-    // Mirror real NetSession.close(): fire onClose("local") so stop() teardown
-    // cannot hide a re-entrant onClose the way a silent stub did.
-    close() {
-      this.closed++;
-      const fn = onClose;
-      handlers.clear();
-      onClose = null;
-      if (fn) fn("local");
-      return true;
-    },
-    deliver(type, data) { for (const fn of handlers.get(type) || []) fn(data); },
-    drop(why) { if (onClose) onClose(why); },
+
+// Compare the double's observable lifecycle with a real NetSession over a
+// controlled transport, without network, clock pumping or a full game boot.
+function realLifecycleSession() {
+  let receive, closed;
+  const transport = {
+    onMessage(fn) { receive = fn; }, onClose(fn) { closed = fn; },
+    send: () => true, close() { closed(); },
   };
+  const context = vm.createContext({ NetSnapshot, NetTransport: { STATE: "state", EVENT: "event" },
+    Log: { info() {} }, TextDecoder, Uint8Array, DataView, ArrayBuffer });
+  const real = vm.runInContext(src("js/net/session.js") + ";NetSession", context).create({ transport });
+  return { session: real, deliver: (type, data) => receive("event", JSON.stringify({ t: type, d: data })) };
 }
+
+function lifecycleTrace(make) {
+  const { session: s, deliver } = make();
+  const trace = [];
+  s.onEvent("hello", () => trace.push("first"));
+  s.onEvent("hello", () => trace.push("second"));
+  deliver("hello", {});
+  s.onClose(() => trace.push("cleared close handler"));
+  s.clearHandlers();
+  deliver("hello", {});
+  s.onClose((why) => { trace.push([why, s.alive()]); s.close(); });
+  s.onClose((why) => trace.push(["second close", why]));
+  s.close();
+  s.close();
+  return trace;
+}
+
+test("shared hand-fed session matches real clear/multiple-handler/reentrant-close lifecycle", () => {
+  const makeFake = () => { const session = fakeSession(); return { session, deliver: (t, d) => session.deliver(t, d) }; };
+  const expected = ["first", "second", ["local", false], ["second close", "local"]];
+  assert.deepEqual(lifecycleTrace(realLifecycleSession), expected, "independent real-session lifecycle anchor");
+  assert.deepEqual(lifecycleTrace(makeFake), expected);
+});
+
+test("hand-fed state/close handlers clear together and fresh sessions stay isolated", () => {
+  const a = fakeSession(), b = fakeSession();
+  const seen = [];
+  a.onState((bytes, at) => seen.push([bytes, at]));
+  a.onState(() => seen.push("second state"));
+  a.onClose((why) => seen.push(why));
+  b.deliverState("other", 1);
+  a.deliverState("packet", 2);
+  assert.deepEqual(seen, [["packet", 2], "second state"]);
+  a.clearHandlers();
+  a.deliverState("stale", 3);
+  a.close();
+  assert.deepEqual(seen, [["packet", 2], "second state"], "state and close callbacks were removed");
+  assert.equal(a.alive(), false);
+  assert.equal(b.alive(), true);
+  assert.equal(a.closed, 1);
+  b.sendEvent("hello", {});
+  assert.equal(a.sent.length, 0);
+  assert.equal(b.sent.length, 1);
+});
+
 
 function stubG(n) {
   const car = (i, local) => ({
