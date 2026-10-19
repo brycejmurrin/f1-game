@@ -560,6 +560,17 @@ const Car3D = (function () {
           Math.min(0.18 * engStyle.heatShield, 1.9 * COVER_CROWN * p.x),
           sh, 0.30, [0.30,0.28,0.26], SURFACES.metal);
       }
+      // SHOULDER LOUVRES (`louvre` 1-3 = 4/7/10 slats a side): the stacked
+      // exit slats a hot-climate cover opens on its shoulders. Rooted on the
+      // cover skin like the fuel collar; default 0 draws nothing.
+      const louvre = Math.max(0, Math.min(3, Math.round(engStyle.louvre || 0)));
+      for (let i = 0, n = louvre * 3 + 1; louvre && i < n; i++) {
+        const z = -0.86 - i * 0.042, p = anchors.coverAt(z);
+        for (const s of [-1, 1]) {
+          const x = s * p.x * 0.58, y = coverSurfaceY(p, x);
+          addBox(out, x, y + 0.004, z, Math.max(0.05, p.x * 0.42), 0.014, 0.016, DARK);
+        }
+      }
       // Team-style DORSAL FIN along the engine-cover ridge: 1 = low blade,
       // 2 = tall blade. A SECONDARY ridge blade distinct from the sharkFin
       // tail plate below (which every non-cockpit car carries). Body-colour
