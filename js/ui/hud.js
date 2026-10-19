@@ -444,23 +444,6 @@ let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-s
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
 let _fitStamped = false, _fitClashRun = 0;
-// Session mono floor (#2882): ceil-to-0.01 still let independent boots publish
-// 0.95 then 0.94 (844×390 HUD 100→200). sessionStorage survives page.reload().
-function _hudZMonoRaise(prop, q, base) {
-  try {
-    if (typeof sessionStorage === "undefined") return q;
-    const key = "apex26.hudZMono", field = prop === "--hud-z-top" ? "top" : "bot";
-    const vp = (innerWidth | 0) + "x" + (innerHeight | 0);
-    let memo = null;
-    try { memo = JSON.parse(sessionStorage.getItem(key) || "null"); } catch (_) { /* */ }
-    if (!memo || memo.vp !== vp || base + 1e-9 < (+memo.scale || 0)) memo = { vp, scale: base, top: 0, bot: 0 };
-    else if (base > (+memo.scale || 0) + 1e-9) memo.scale = base;
-    if ((+memo[field] || 0) > q) q = +memo[field];
-    memo[field] = q;
-    sessionStorage.setItem(key, JSON.stringify(memo));
-  } catch (_) { /* private mode / harness */ }
-  return q;
-}
 // The post-write clash probe's skip key (#2240): what decides a clash, read without layout.
 let _stampKey = "", _stampWait = 0;
 const FIT_CLASH_TRIES = 5;
@@ -1124,6 +1107,20 @@ function fitHud() {
   if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30; _stampKey = "";   // a full fit ran: the next stamp tick probes
   _fitPending = false;
+  // CAPS AT A CANONICAL ZOOM, LENGTHS AT THE PAINTED ONE (#2882, #2941). Font metrics
+  // quantize with zoom, so caps read at the zoom on screen were path-dependent (844x390:
+  // 0.95 from HUD 100, 0.94 from 200). The cap pass reads both bands at zoom 1: one cap
+  // per viewport, min(scale, cap) monotonic. The paint pass re-measures under it, so
+  // --hud-top-h is the painted tower (667x375: 48 px painted vs 46.4 published).
+  const zWas = [root.style.getPropertyValue("--hud-z-top"), root.style.getPropertyValue("--hud-z-bot")];
+  _fitCanon = null;
+  if (fitPass(true, scale, btnScale, placedSectors)) fitPass(false, scale, btnScale, placedSectors);
+  else ["--hud-z-top", "--hud-z-bot"].forEach((p, i) => (zWas[i] ? root.style.setProperty(p, zWas[i]) : root.style.removeProperty(p)));   // nothing laid out
+}
+let _fitCanon = null;   // the cap pass's { top, bot }, consumed by the paint pass
+function fitPass(canon, scale, btnScale, placedSectors) {
+  const root = document.documentElement;
+  if (canon) { root.style.setProperty("--hud-z-top", "1"); root.style.setProperty("--hud-z-bot", "1"); }
   // Measure the natural plate, never the previous dock pass's wrapped output.
   // A saved MOVE & SIZE plate belongs to HudLayout's placement pass below.
   if (els.hudSectors && els.hudSectors.style) els.hudSectors.style.removeProperty("max-width");
@@ -1184,7 +1181,7 @@ function fitHud() {
   let retry = !top;
   if (!top && !wide(els.minimap, zTopPub) && !wide(els.hudSectors, zTopPub) && !span(_hudBottom, zBotPub) && !wide(_dockL, zDockPub) && !wide(_dockR, zDockPub)) {
     if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; }   // nothing fitted: no --hud-fit-stamp yet
-    return;
+    return false;
   }
   // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
   // harness without rects takes every tick, so the bail stays free of computed-style passes.
@@ -1284,21 +1281,26 @@ function fitHud() {
   // oscillate. Only the rendered spelling can be measured, so each is
   // remembered as it is seen; until both have been, they share one number —
   // one tick, then it converges.
-  if (gaps) _gapW["gapShort" in root.dataset ? 0 : 1] = gaps;
+  // Canonical widths only: the paint pass's quantized ones would seed the next cap pass.
+  if (gaps && canon) _gapW["gapShort" in root.dataset ? 0 : 1] = gaps;
   const wShort = _gapW[0] || gaps, wLong = _gapW[1] || gaps;
   const leftFor = (w) => (map ? 10 + map + 8 + w : 0) + FIT_AIR;
   const capLong = capFor(leftFor(wLong)), capShort = capFor(leftFor(wShort));
   const capNo = capFor(leftN);
-  _gapTight = capLong < scale;
-  _gapDrop = _gapTight && capShort < scale;
-  // HUD chrome fits around independently sized camera/pause controls.
+  if (canon) { _gapTight = capLong < scale; _gapDrop = _gapTight && capShort < scale; }
+  let satPx = 0;
+  try { satPx = parseFloat(getComputedStyle(root).getPropertyValue("--sat")) || 0; } catch (_) { /* mini-dom / detached root */ }
+  // HUD chrome fits around independently sized camera/pause controls: the larger of the
+  // zoom clearing one sideways and the zoom clearing it from above (not the measured zoom's row).
   let capChrome = Infinity;
   if (!bcast && top) {
-    const tR = layoutRect(_hudTop);
+    const tR = layoutRect(_hudTop), botInt = (tR.bottom - satPx) / zoomDiv(_hudTop, zTopPub);
     for (const el of [els.btnCam, els.pausebtn]) {
       const r = el && !el.hidden ? layoutRect(el) : null;
-      if (!(r && r.width && r.left > half && r.top < tR.bottom + FIT_AIR)) continue;
-      capChrome = Math.min(capChrome, (r.left - FIT_AIR - half) / (top / 2));
+      if (!(r && r.width && r.left > half)) continue;
+      const zSide = (r.left - FIT_AIR - half) / (top / 2);
+      const zAbove = botInt > 0 ? (r.top - FIT_AIR - satPx) / botInt : -Infinity;
+      capChrome = Math.min(capChrome, Math.max(zSide, zAbove));
     }
   }
   // THE TOWER MUST CLEAR THE SECTOR PLATE'S ROW ON TOUCH. There #hud-sectors sits at a fixed SCREEN
@@ -1312,16 +1314,12 @@ function fitHud() {
   let capRow = Infinity;
   if (!placedSectors && !bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
     const tR = layoutRect(_hudTop), zd = zoomDiv(_hudTop, zTopPub);
-    let satPx = 0;
-    try { satPx = parseFloat(getComputedStyle(root).getPropertyValue("--sat")) || 0; } catch (_) { /* mini-dom / detached root */ }
     const y0 = (tR.top - satPx) / zd, hInt = tR.height / zd;
     // Only a plate that STARTS BELOW the tower's top is a row to clear; one level with it shares the
     // tower's row and is the right-half budget's business (a vertical limit there only drives the band to the floor).
     if (hInt > 0 && y0 + hInt > 0 && scR.top > tR.top + ROW_AIR) capRow = (scR.top - ROW_AIR - satPx) / (y0 + hInt);
   }
   let capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
-  // Font metrics quantize with zoom. Keep the smaller fit when growth buys less than one screen pixel.
-  if (capTop < scale && capTop > zTopPub && (capTop - zTopPub) * Math.max(top, map, gaps, right, 1) < 1) capTop = zTopPub;
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -1627,6 +1625,8 @@ function fitHud() {
   // position:fixed, so dockH is 0 and the block above never runs. The tyre
   // rides one box above the column and the column's bottom:112px is zoomed,
   // so HUD 200% put the tyre through CAM and ERS through AERO (393×852).
+  // It reads the TOP band's painted bottoms, so the paint pass re-applies it at the painted zoom.
+  let capPortrait = Infinity;
   if (!document.body.classList.contains("desktop") && _hudBottom
       && window.matchMedia && window.matchMedia("(orientation: portrait)").matches) {
     const zNowP = zoomDiv(_hudBottom, zBotPub) || 1;
@@ -1642,10 +1642,10 @@ function fitHud() {
       try { sabPx = parseFloat(getComputedStyle(root).getPropertyValue("--sab")) || 0; } catch (_) { /* */ }
       const avail = window.innerHeight - sabPx - ceilY;
       const denom = 112 + stackR.height / zNowP + 48;
-      if (avail > 0 && denom > 0) capBot = Math.min(capBot, avail / denom);
+      if (avail > 0 && denom > 0) capPortrait = avail / denom;
     }
   }
-  if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
+  capBot = Math.min(capBot, capPortrait);
   // EACH CAP IS COMPARED AGAINST THE SLIDER THAT DRIVES IT. The readout bands
   // ride --hud-scale; the touch dock rides --hud-btn-scale (BUTTON SIZE, its
   // own slider — css/overlays.css), which defaults to --hud-scale and is only
@@ -1659,30 +1659,28 @@ function fitHud() {
     if (cap >= base) root.style.removeProperty(prop);   // fits: the player's number, untouched
     else {
       const floor = (portraitPhone && prop === "--hud-z-top") ? READABLE_Z : 0.4;
-      // Readout bands: ceil onto a 0.01 grid. Sub-pixel intrinsic noise at a
-      // larger --hud-scale (844×390 pin-look: 0.947 at HUD 100, 0.945 at 200)
-      // otherwise paints the timing tower SMALLER as HUD SIZE grows (#2882).
-      // The dock keeps milli-rounding — heightCap already keeps BUTTON SIZE
-      // monotonic (hud-control-clearance).
+      // Readout bands: ceil onto a 0.01 grid (the cap pass's zoom-1 widths
+      // already make the cap independent of HUD SIZE, #2882). The dock keeps
+      // milli-rounding — heightCap already keeps BUTTON SIZE monotonic
+      // (hud-control-clearance).
       let q = Math.round(cap * 1000) / 1000;
       if (prop === "--hud-z-top" || prop === "--hud-z-bot") {
         q = Math.ceil(cap * 100 - 1e-9) / 100;
         if (q >= base) { root.style.removeProperty(prop); return; }
-        // Cross-boot floor: independent reloads at a higher HUD SIZE can land a
-        // full cent below the prior capped zoom (CI: 0.95 → 0.94). Keep the
-        // higher published value for this viewport while scale does not drop.
-        q = _hudZMonoRaise(prop, q, base);
       }
       root.style.setProperty(prop, String(Math.max(floor, q)));
     }
   };
+  if (canon) { set("--hud-z-top", capTop, scale); set("--hud-z-bot", capBot, scale); _fitCanon = { top: capTop, bot: capBot }; return true; }
+  capTop = _fitCanon.top; capBot = Math.min(_fitCanon.bot, capPortrait);
+  if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
   // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
   // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
-  // The length itself was measured with zTopPub (pre-cap published zoom that
-  // matches the rects this pass read) — never re-divide by a lagging
-  // currentCSSZoom (ui-redesign: mmCss 142 = 110×staleZoom/zTop).
+  // The paint pass measured it under the zoom the cap pass published, so it is
+  // the painted tower's length — never re-divide by a lagging currentCSSZoom
+  // (ui-redesign: mmCss 142 = 110×staleZoom/zTop).
   if (_hudTop) void _hudTop.offsetHeight;
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
