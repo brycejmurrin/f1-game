@@ -43,7 +43,7 @@ function bootArc(hash) {
   let wa = null;
   const G = {
     raceWeather: "dry", soundOn: false, track: null, announce() {}, applyRaceSettings() {},
-    simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3, netRoom: false,
+    simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3,
     netPlay: { active: () => false },
     isWetRoad: () => wa.wetness() >= 0.25,
     isRaining: () => wa.wetness() >= 0.72,
@@ -110,8 +110,14 @@ test("MIXED: a drawn rain escalates to storm, in a friend room too", () => {
   assert.equal(solo.wa.planFor().to, "storm");
   const room = bootArc(hash);
   room.G.raceWeather = "dry";
-  room.G.netRoom = true;
+  room.G.netPlay = { active: () => true };   // what weather-arc actually reads for a friend room
   assert.equal(room.wa.planFor().to, "storm", "a room's plan may name storm (lobby.js lists it)");
+  // the room-specific behaviour weather-arc keys on G.netPlay.active(): a host's plan survives endSession, a solo plan does not
+  for (const [who, b, kept] of [["room", room, true], ["solo", solo, false]]) {
+    b.wa.plan = { to: "storm", dur: 200 };
+    b.wa.endSession();
+    assert.equal(!!b.wa.plan, kept, who + (kept ? ": the host's plan is kept for the next start" : ": a solo plan is forgotten"));
+  }
   const odds = bootArc((_s, _r, _k, n) => (n === "to" ? 0.6 : n === "storm" ? 0.4 : 0.5));
   odds.G.raceWeather = "dry";
   assert.equal(odds.wa.planFor().to, "rain", "1 in 4 only");

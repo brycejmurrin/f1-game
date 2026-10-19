@@ -126,6 +126,32 @@ function shaderSources() {
   };
 }
 
+// C1-10 (short term): ONE table over every constant CarMaterialShade owns. The
+// per-finish pins below check each formula's shape; this is the cross-dialect
+// parity net — add a constant to CarMaterialShade, or change its number, and
+// all three hand-maintained dialects must carry it (generating them at gen time
+// is the follow-up). 0 / 1 are skipped: they appear in any shader.
+test("every CarMaterialShade constant is spelled in GLX, TLX and WGX (table)", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const src = shaderSources();
+  const rows = [];
+  for (const [family, obj] of Object.entries(CarMaterialShade)) {
+    if (!obj || typeof obj !== "object") continue;
+    for (const [key, v] of Object.entries(obj)) {
+      const nums = typeof v === "number" ? [v] : Array.isArray(v) ? v.filter((x) => typeof x === "number") : [];
+      for (const n of nums) if (n !== 0 && n !== 1) rows.push([`${family}.${key}`, n]);
+    }
+  }
+  assert.ok(rows.length >= 60, `the table covers the shade contract (${rows.length} constants)`);
+  const spellings = (n) => [...new Set([String(n), n.toFixed(1), n.toFixed(2), n.toFixed(3)])];
+  const miss = [];
+  for (const [what, n] of rows) for (const [dialect, text] of Object.entries(src)) {
+    const hit = spellings(n).some((t) => new RegExp(`(?<![\\d.])${t.replace(/[.]/g, "\\.")}(?!\\d)`).test(text));
+    if (!hit) miss.push(`${dialect}: ${what}=${n}`);
+  }
+  assert.deepEqual(miss, [], "shade constants missing from a dialect — the three backends have drifted from CarMaterialShade");
+});
+
 test("FINISH_SURFACE rows tinted 36 and chameleon 37 exist, in the reserved ids", () => {
   const { CarMaterials } = loadMaterials();
   assert.equal(CarMaterials.FINISH_SURFACE.tinted, 36);

@@ -1,0 +1,1 @@
+Fixed: paint the first telemetry trace before uploading its live atlas, avoiding a second full atlas upload on entry and paint changes while preserving floor reflections. Release the arrival crew meshes with the garage when a race starts.

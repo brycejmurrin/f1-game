@@ -95,11 +95,9 @@ export function collect({ files = walkTools(), read = file => fs.readFileSync(pa
     if (server.timeout !== undefined) row.timeout = server.timeout;
     return row;
   });
-  const classifications = {};
-  for (const row of tools) classifications[row.classification] = (classifications[row.classification] ?? 0) + 1;
   return {
     generatedBy: "tools/gen/gen-output-surface.mjs",
-    version: 2,
+    version: 3,
     runner: RUNNER,
     output: {
       levels: LEVELS,
@@ -120,11 +118,21 @@ export function collect({ files = walkTools(), read = file => fs.readFileSync(pa
       coverage: "Wrapper presentation, not native verbosity flags. Reconstruct candidate argv as catalog.runner + interpreter + path (or npm run <name>). Protocol entrypoints keep exact native stdout and are never recommended through the terminal wrapper. Libraries, ambiguous modules and assets are not asserted to be executable commands. Preservation contracts live in docs/agent-output/policies.json (including @contract refs).",
       limitations: "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog.",
     },
-    counts: { files: tools.length, classifications, npmScripts: npmScripts.length, configuredMcpServers: mcpRoutes.length },
     tools,
     npmScripts,
     mcpRoutes,
   };
+}
+
+/* MERGE-STABLE ON DISK (2026-10-19). The committed catalog holds only per-entry
+   rows, sorted by a stable key, so two PRs that each add a tool touch disjoint
+   lines. Global aggregates (the former `counts` block: totals per
+   classification, npm script and MCP server counts) changed on EVERY unrelated
+   merge and conflicted or went stale; derive them at read time instead. */
+export function catalogCounts(catalog) {
+  const classifications = {};
+  for (const row of catalog.tools) classifications[row.classification] = (classifications[row.classification] ?? 0) + 1;
+  return { files: catalog.tools.length, classifications, npmScripts: catalog.npmScripts.length, configuredMcpServers: catalog.mcpRoutes.length };
 }
 
 export function render(options) { return JSON.stringify(collect(options), null, 2) + "\n"; }

@@ -65,6 +65,7 @@ function boot(opts = {}) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: "js/ui/" + file + ".js" });
   }
   vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: "js/input/controller-profiles.js" });
+  vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: "js/car/custom-liveries.js" });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: "js/ui/settings-export.js" });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
@@ -810,6 +811,83 @@ test("a garage file reports the livery rows it could not keep, never drops them 
   assert.equal(r.droppedLiveries, 2);
   assert.equal(JSON.parse(b.disk.get("apex26.livery.custom.mclaren")).length, 3);
   assert.equal(b.loadGarage({ format: "apex26-garage-v1", garage: { "livery.custom.mclaren": [sound("a")] } }).droppedLiveries, undefined, "a clean file adds no field");
+});
+
+test("garage import repairs catalog and sibling id collisions and remaps the selected paint", () => {
+  const b = boot({ globals: {
+    Teams: { LIST: [{ id: "mclaren" }] },
+    Liveries: { forTeam: () => [{ id: "default" }, { id: "special" }] },
+  } });
+  const rows = [sound("default", { c1: [1, 0, 1] }), sound("same"), sound("same", { c1: [0, 1, 0] }), sound("unique")];
+  const r = b.loadGarage({ format: "apex26-garage-v1", garage: {
+    "livery.mclaren": "default",
+    "livery.custom.mclaren": rows,
+  } });
+  const kept = JSON.parse(b.disk.get("apex26.livery.custom.mclaren"));
+  assert.equal(r.remappedLiveries, 2);
+  assert.deepEqual(kept.map((l) => l.id), ["default_imported", "same", "same_imported", "unique"]);
+  assert.equal(JSON.parse(b.disk.get("apex26.livery.mclaren")), "default_imported");
+  assert.deepEqual(kept[0].c1, [1, 0, 1], "the selected imported paint remains reachable");
+  const sibling = b.loadGarage({ format: "apex26-garage-v1", garage: {
+    "livery.mclaren": "same", "livery.custom.mclaren": [sound("same"), sound("same", { c1: [0, 1, 0] })],
+  } });
+  assert.equal(sibling.remappedLiveries, 1);
+  assert.equal(JSON.parse(b.disk.get("apex26.livery.mclaren")), "same", "the first previously-resolvable sibling keeps selection");
+
+  const reserved = boot({ globals: {
+    Teams: { LIST: [{ id: "mclaren" }] }, Liveries: { forTeam: () => [{ id: "default" }] },
+  } });
+  reserved.loadGarage({ format: "apex26-garage-v1", garage: {
+    "livery.mclaren": "default_imported",
+    "livery.custom.mclaren": [sound("default"), sound("default_imported", { c1: [0, 1, 0] })],
+  } });
+  const once = reserved.garage();
+  const saved = once.garage["livery.custom.mclaren"];
+  assert.deepEqual(saved.map((l) => l.id), ["default_imported_2", "default_imported"]);
+  assert.equal(once.garage["livery.mclaren"], "default_imported", "repair cannot steal a later valid selected id");
+  const fresh = boot({ globals: {
+    Teams: { LIST: [{ id: "mclaren" }] }, Liveries: { forTeam: () => [{ id: "default" }] },
+  } });
+  fresh.loadGarage(once);
+  assert.deepEqual(fresh.garage().garage, once.garage, "a repaired garage export is a deterministic import fixed point");
+});
+
+test("garage import repairs dangling selections against imported or current custom rows", () => {
+  const globals = { Teams: { LIST: [{ id: "mclaren" }] }, Liveries: { forTeam: () => [{ id: "default" }] } };
+  const b = boot({ globals, disk: {
+    "apex26.livery.custom.mclaren": JSON.stringify([sound("current")]),
+  } });
+  b.loadGarage({ format: "apex26-garage-v1", garage: { "livery.mclaren": "current" } });
+  assert.equal(JSON.parse(b.disk.get("apex26.livery.mclaren")), "current", "selected-only import sees current customs");
+  b.loadGarage({ format: "apex26-garage-v1", garage: { "livery.mclaren": "gone" } });
+  assert.equal(JSON.parse(b.disk.get("apex26.livery.mclaren")), "default", "selected-only dangling id falls back coherently");
+  b.loadGarage({ format: "apex26-garage-v1", garage: {
+    "livery.custom.mclaren": [sound("new")], "livery.mclaren": "stale_v3",
+  } });
+  assert.equal(JSON.parse(b.disk.get("apex26.livery.mclaren")), "default", "an imported list cannot retain stale selection metadata");
+
+  const customOnly = boot({ globals, disk: {
+    "apex26.livery.mclaren": JSON.stringify("old"),
+    "apex26.livery.custom.mclaren": JSON.stringify([sound("old")]),
+  } });
+  customOnly.loadGarage({ format: "apex26-garage-v1", garage: {
+    "livery.custom.mclaren": [sound("new")],
+  } });
+  assert.equal(JSON.parse(customOnly.disk.get("apex26.livery.mclaren")), "default",
+    "custom-only replacement stages a coherent selection instead of leaving old dangling");
+});
+
+test("duplicate-id repair stays deterministic for a large admitted custom list", () => {
+  const b = boot({ globals: {
+    Teams: { LIST: [{ id: "mclaren" }] }, Liveries: { forTeam: () => [{ id: "default" }] },
+  } });
+  const rows = Array.from({ length: 5000 }, () => sound("repeat"));
+  const r = b.loadGarage({ format: "apex26-garage-v1", garage: { "livery.custom.mclaren": rows } });
+  const kept = JSON.parse(b.disk.get("apex26.livery.custom.mclaren"));
+  assert.equal(r.remappedLiveries, 4999);
+  assert.equal(new Set(kept.map((l) => l.id)).size, rows.length);
+  assert.deepEqual(kept.slice(0, 4).map((l) => l.id), ["repeat", "repeat_imported", "repeat_imported_2", "repeat_imported_3"]);
+  assert.equal(kept.at(-1).id, "repeat_imported_4999");
 });
 
 test("M26: a livery id longer than 64 characters is dropped", () => {

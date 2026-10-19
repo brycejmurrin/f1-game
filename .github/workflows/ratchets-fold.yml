@@ -46,9 +46,9 @@ jobs:
         with:
           ref: claude/f1-game-project-26h3ng
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
+      # Node 22 + npm ci: ratchets.mjs imports tools/check/check-gctx.mjs, which
+      # needs espree (run 39259294196 failed "Cannot find package 'espree'").
+      - uses: ./.github/actions/setup-apex
 
       - name: Skip while a fold PR is open
         id: open
@@ -73,10 +73,14 @@ jobs:
             echo "nothing to fold"; exit 0
           fi
           node tools/check/ratchets.mjs
+          # docs/agent-index.json embeds each file's ratchetLines from ratchets.json,
+          # so the fold changes a generated file: regenerate it, or the commit hook's
+          # test:guards blocks the commit (run 39277641065).
+          npm run -s gen
           git config user.name "apex-ratchets-bot"
           git config user.email "noreply@anthropic.com"
           git checkout -B bot/ratchets-fold
-          git add -A tests/data
+          git add -A tests/data docs/agent-index.json docs/notes/CEILING-HISTORY.md
           git commit -m "chore(ratchets): fold ratchets.d fragments into ratchets.json
 
           $(cat fold.log)"

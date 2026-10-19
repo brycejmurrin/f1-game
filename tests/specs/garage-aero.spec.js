@@ -20,7 +20,7 @@
 // rear wing" on CI #3233). It retries the enter up to three times, and treats
 // "#carsetup already showing" after a wait timeout as success: soft-present
 // ReadPixels stalls can make waitForFunction miss a bay that is already up
-// (Selected specs 2026-09-09). UNVERIFIED IN A BROWSER.
+// (Selected specs 2026-09-09).
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { toMenu } from "../helpers/shared-page.js";
 

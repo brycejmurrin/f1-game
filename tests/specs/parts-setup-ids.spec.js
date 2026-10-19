@@ -6,7 +6,7 @@
 // walks the shared page back to the title first (toMenu) — the TEAM-tab tests
 // leave a picker, MY TEAM or the garage itself up, and the route tests assert
 // which screens are hidden, so the walk back is what makes those assertions
-// mean what they did on a fresh page. UNVERIFIED IN A BROWSER at conversion time.
+// mean what they did on a fresh page..
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
 
@@ -208,7 +208,8 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
   test("the select screen's card summarises what the garage chose", async ({ page }) => {
     await openTeamTab(page);
     const chips = await page.locator("#cs-driver .sel-chip").count();
-    if (chips > 1) await page.locator("#cs-driver .sel-chip").nth(1).click();
+    expect(chips, "the TEAM tab shows one chip per driver").toBeGreaterThanOrEqual(2);
+    await page.locator("#cs-driver .sel-chip").nth(1).click();
     // NO .toUpperCase(). This read the chip's own text and then transformed it
     // into something the chip cannot contain: the label is "#81 Oscar Piastri"
     // (js/garage/setup-sheet.js builds "#" + num + " " + name, and teams.js stores
@@ -381,9 +382,10 @@ test.describe("Car setup — preview camera", () => {
     }, [id, n]);
     // Never let the camera end up inside the car or in the next postcode.
     await mash("cs-view-in", 30);
-    expect((await cam(page)).dist).toBeGreaterThan(4);
+    // the clamp is SP_DIST_MIN 4.6 / SP_DIST_MAX 15 (setup-camera.js): pin them, not "somewhere sane"
+    expect((await cam(page)).dist).toBeGreaterThanOrEqual(4.55);
     await mash("cs-view-out", 40);
-    expect((await cam(page)).dist).toBeLessThan(16);
+    expect((await cam(page)).dist).toBeLessThanOrEqual(15.05);
 
     // Drag across the car region: azimuth moves, distance does not, and taking
     // hold of the car stops the turntable fighting the drag.

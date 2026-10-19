@@ -299,7 +299,7 @@ function previewHarness({ saved = null, carsetupOpen = false, was = false } = {}
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   const src = cam.slice(cam.indexOf('// THE ARRIVAL PREVIEW'), cam.indexOf('const arrivalCar'));
   const { $ } = harness();
-  $('carsetup').hidden = !carsetupOpen; $('garrival-inner').hidden = false;
+  $('carsetup').hidden = !carsetupOpen; $('garrival-inner').hidden = false; $('garrival').hidden = false;
   const frames = [], keys = [];
   const G = { setupPreviewOn: was, store: { get: (k, d) => (k === 'garageArrival' ? saved : d) } };
   const c = vm.createContext({ $, G, GarageArrival: Arrival, driveOut: null, endHome() {}, reducedMotion: () => false, Log: { info() {} },
@@ -316,6 +316,7 @@ test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canv
     assert.equal(h.start(dir, btn), true, dir + ': starts');
     assert.equal(h.G.setupPreviewOn, true, 'the garage renders meanwhile');
     assert.equal(h.$('garrival-inner').hidden, true, 'the panel stands aside for the playback');
+    assert.equal(h.$('ga-preview-stop').hidden, false, 'the touch exit remains shown');
     const first = h.step(0.05);
     assert.equal(first.active, true);
     assert.equal(first.fov, 66, 'the saved lens');
@@ -334,11 +335,51 @@ test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canv
     }
     assert.equal(h.G.setupPreviewOn, false, 'setupPreviewOn restored');
     assert.equal(h.$('garrival-inner').hidden, false, 'the panel is back');
+    assert.equal(h.$('ga-preview-stop').hidden, true, 'the playback-only exit is reset');
     assert.equal(btn.focused, true, 'focus returns to the PREVIEW button');
     assert.equal(h.frames.length, 1, 'one more frame is asked for');
     h.frames[0]();
     assert.equal(h.frames[1], 'render:0', 'a paused race redraws its own frame over the garage');
   }
+});
+test('PREVIEW has a reachable touch exit outside the hidden sheet and releases the canvas before settings closes', () => {
+  const h = previewHarness();
+  const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const html = shell.slice(shell.indexOf('<div id="garrival"'), shell.indexOf('<!-- title layout editor:'));
+  const nodes = new Map(), stack = [];
+  // Follow the shipped ancestors, so an onclick on a hidden descendant cannot
+  // masquerade as a reachable touch control (the original DONE regression).
+  for (const tag of html.matchAll(/<\/?([a-z][a-z0-9-]*)\b[^>]*>/gi)) {
+    if (tag[0].startsWith('</')) { stack.pop(); continue; }
+    const id = /\bid="([^"]+)"/.exec(tag[0])?.[1];
+    const node = { id, parent: stack.at(-1), hidden: /\bhidden\b/.test(tag[0]) };
+    if (id) { nodes.set(id, node); h.$(id).hidden = node.hidden; }
+    if (!['input', 'br', 'hr', 'img', 'meta', 'link'].includes(tag[1])) stack.push(node);
+  }
+  const reachable = (id) => {
+    let node = nodes.get(id);
+    if (!node) return false;
+    for (; node; node = node.parent) if (node.id ? h.$(node.id).hidden : node.hidden) return false;
+    return true;
+  };
+  h.$('garrival').hidden = false;
+  Arrival.bindSettings(h.$, { get: () => null, set() {} }, { preview: h.start });
+  const btn = h.$('ga-preview-in');
+  assert.equal(reachable('ga-close'), true, 'DONE is reachable before playback');
+  assert.equal(h.start('in', btn), true);
+  assert.equal(reachable('ga-close'), false, 'DONE in the hidden sheet cannot be tapped');
+  assert.equal(reachable('ga-preview-stop'), true, 'STOP has no hidden ancestor');
+  assert.equal(h.$('ga-preview-stop').focused, true, 'keyboard focus moves out of the hidden sheet');
+  h.$('ga-preview-stop').onclick();
+  assert.equal(h.playing(), null);
+  assert.equal(h.G.setupPreviewOn, false, 'touch stop releases preview ownership');
+  assert.equal(h.$('garrival').hidden, false, 'stopping returns to the tuner');
+  assert.equal(h.$('garrival-inner').hidden, false);
+  assert.equal(reachable('ga-preview-stop'), false);
+  assert.equal(btn.focused, true);
+  h.$('ga-close').onclick();
+  assert.equal(h.$('garrival').hidden, true, 'DONE now returns to settings');
+  assert.equal(h.$('ga-preview-stop').hidden, true, 'closing settings leaves no playback control');
 });
 test('PREVIEW: Escape and DONE stop it; refused while the garage or the drive-out owns the room', () => {
   const h = previewHarness({ was: true });
@@ -347,6 +388,7 @@ test('PREVIEW: Escape and DONE stop it; refused while the garage or the drive-ou
   const ev = { key: 'Escape', preventDefault() { this.dp = true; }, stopPropagation() { this.sp = true; } };
   for (const k of h.keys) k(ev);
   assert.equal(h.playing(), null, 'Escape stops it');
+  assert.equal(h.$('ga-preview-stop').hidden, true, 'Escape hides the playback exit too');
   assert.ok(ev.dp && ev.sp, 'and Escape goes no further');
   assert.equal(h.G.setupPreviewOn, true, 'a garage preview that was already on stays on');
   assert.equal(h.frames.length, 0, 'and needs no hand-back frame');
@@ -1139,4 +1181,36 @@ test('garage ticks retain the 100 ms background-stall bound and other render pat
     world.tick(60000);
     assert.deepEqual(world.c.worldFrames, [0.05], 'world and paused-camera visual damping stay at 50 ms');
   }
+});
+
+
+test('garage aero keeps authored opening and closing rates at 10, 20 and 60 FPS', () => {
+  const camera = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const start = camera.indexOf('function stepSetupAero(dt) {');
+  const end = camera.indexOf('function setSetupAero(on, opts)', start);
+  assert.ok(start >= 0 && end > start, 'exercise the production garage aero step');
+  const c = vm.createContext({ window: {}, setupPreviewXOn: true, setupPreviewAeroX: 0,
+    clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) });
+  vm.runInContext(readFileSync(new URL('../../js/physics/consts.js', import.meta.url), 'utf8'), c);
+  vm.runInContext('const { X_OPEN_RATE, X_CLOSE_RATE } = window.PhysicsConsts;' + camera.slice(start, end), c);
+  const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 1e-12,
+    `${label}: ${actual} versus ${expected}`);
+  for (const fps of [10, 20, 60]) {
+    c.setupPreviewXOn = true; c.setupPreviewAeroX = 0;
+    for (let i = 0; i < fps / 5; i++) c.stepSetupAero(1 / fps);
+    near(c.setupPreviewAeroX, c.window.PhysicsConsts.X_OPEN_RATE * 0.2, `${fps} FPS opening`);
+    for (let i = 0; i < fps; i++) c.stepSetupAero(1 / fps);
+    assert.equal(c.setupPreviewAeroX, 1, 'opening reaches the endpoint without overshoot');
+    c.setupPreviewXOn = false;
+    for (let i = 0; i < fps / 10; i++) c.stepSetupAero(1 / fps);
+    near(c.setupPreviewAeroX, 1 - c.window.PhysicsConsts.X_CLOSE_RATE * 0.1, `${fps} FPS closing`);
+    for (let i = 0; i < fps; i++) c.stepSetupAero(1 / fps);
+    assert.equal(c.setupPreviewAeroX, 0, 'closing reaches the endpoint without overshoot');
+  }
+  c.setupPreviewXOn = true; c.setupPreviewAeroX = 0;
+  c.stepSetupAero(60);
+  near(c.setupPreviewAeroX, c.window.PhysicsConsts.X_OPEN_RATE * 0.1, 'background gap bounds opening');
+  c.setupPreviewXOn = false; c.setupPreviewAeroX = 1;
+  c.stepSetupAero(60);
+  near(c.setupPreviewAeroX, 1 - c.window.PhysicsConsts.X_CLOSE_RATE * 0.1, 'background gap bounds closing');
 });

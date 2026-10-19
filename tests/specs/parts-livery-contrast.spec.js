@@ -12,7 +12,6 @@
 // ONE BOOT PER WORKER (sharedTest): seven boots became none. Every test here is
 // pure — it reads Liveries/Teams/Car3D/LiveryTex off the loaded page and never
 // touches a screen or a race — so a live page is all load() has to guarantee.
-// UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { ensureLive } from "../helpers/shared-page.js";
 
@@ -20,14 +19,12 @@ async function load(page) {
   await ensureLive(page);
 }
 
-// WCAG contrast, computed in the page against the SAME helpers the atlas uses.
+// WCAG contrast from the SAME exported helpers the atlas uses (LiveryTex.contrast
+// / LiveryTex.inkOn) — a local copy of the maths cannot catch a regression in
+// the real one (the gamma-luminance bug this file exists for).
 const CONTRAST_FN = `
-  const lin = (u) => (u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4));
-  const lum = (c) => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
-  const ratio = (a, b) => {
-    const la = lum(a), lb = lum(b);
-    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-  };
+  const ratio = (a, b) => LiveryTex.contrast(a, b);
+  const lum = (c) => (LiveryTex.contrast(c, [0, 0, 0]) * 0.05 - 0.05);
 `;
 
 test.describe("Livery atlas — ink contrast", () => {
@@ -50,9 +47,8 @@ test.describe("Livery atlas — ink contrast", () => {
       ${CONTRAST_FN}
       const D = [0.06,0.06,0.08], L = [0.97,0.97,0.98];
       const inkOn = (bgs) => {
-        const w = (i) => Math.min.apply(null, bgs.map((b) => ratio(i, b)));
-        const d = w(D), l = w(L);
-        return { ink: d >= l ? D : L, worst: Math.max(d, l) };
+        const ink = LiveryTex.inkOn(bgs);
+        return { ink: ink[0] < 0.5 ? D : L, worst: ink.worst };
       };
       const bad = [];
       let scored = 0;

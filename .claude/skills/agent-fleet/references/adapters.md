@@ -22,8 +22,9 @@ launching Cursor workers uses the Cursor API column (needs a key).
   `.cursor/rules/`, and Claude Code's skills, agents, hooks and MCP config
   (`grok inspect` lists what it found). The guard hooks therefore bind a Grok
   worker too. Give it `--deny "Bash(git push --force*)"`; deny always wins.
-- Grok Bot is the orchestrator, not a worker: it launches and reads workers,
-  holds merges at role-merge-holder.md's level and watches ship/Pages. A cloud
+- A Grok agent is a coordinator host (role 8 in FLEET-ROLES-2026-10-19.md §4), not a worker: it
+  launches and reads its own fleet's workers, merges its own PRs at
+  role-merge-holder.md's level and watches ship/Pages. A cloud
   worker reaches it only through its PR (`fleet-status:` line and comments).
 - Cursor sessions do not appear in Claude's session list, and `send_message`
   to one fails ("target session could not be verified"): reach them through

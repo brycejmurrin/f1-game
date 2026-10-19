@@ -43,6 +43,11 @@ const FILE = "js/race/car-fields.js";
 const SRC = readFileSync(new URL("../../" + FILE, import.meta.url), "utf8");
 const CarFieldsStandalone = new Function(SRC.replace(/^const CarFields\b/m, "var CarFields") + "\nreturn CarFields;")();
 const KEYS = CarFieldsStandalone.KEYS;
+// The hidden-class asserts below compile %HaveSameMap / %HasFastProperties. They
+// used to sit behind `if (same)` and skip SILENTLY where natives were missing —
+// vacuous on exactly the runtime (a Node upgrade) where map drift would appear.
+const NATIVES_GONE = "V8 natives syntax (%HaveSameMap / %HasFastProperties) is unavailable on this Node: " +
+  "every hidden-class assertion in this file would be vacuous — port the probes, do not skip them";
 
 /** Boot the game. `predeclare` false swaps the module's call for a no-op BEFORE the race is built. Until
  * the manifest lists the file the module is injected the way the manifest would (the manifest test below
@@ -111,6 +116,17 @@ test("manifest loads car-fields.js before game.js", () => {
   assert.ok(i < MANIFEST.FULL.indexOf("js/game.js"));
 });
 
+test("precondition: this Node compiles the V8 natives every hidden-class check uses", () => {
+  assert.equal(typeof nativeSameMap(), "function");
+  assert.equal(typeof nativeFast(), "function");
+  const a = { x: 1 }, b = { x: 2 }, c = { y: 1 };
+  assert.equal(nativeSameMap()(a, b), true, "two literals of one shape share a map");
+  assert.equal(nativeSameMap()(a, c), false, "…and a different shape does not: %HaveSameMap discriminates");
+  const d = { p: 1, q: 2 }; delete d.p;
+  assert.equal(nativeFast()(a), true);
+  assert.equal(nativeFast()(d), false, "a delete drops an object to dictionary mode: %HasFastProperties discriminates");
+});
+
 test("game.js makeCars calls CarFields.predeclare once per spawned car", () => {
   const src = gameSource();
   assert.equal((src.match(/CarFields\.predeclare\(/g) || []).length, 1);
@@ -133,25 +149,21 @@ test("every key is present on every car after the race is built, and a plain rac
     const order = Object.keys(g.G.cars[0]).join();
     for (const c of g.G.cars) assert.equal(Object.keys(c).join(), order, "same key ORDER on every car (hidden-class sharing)");
     // V8: one hidden class. Natives syntax is switched on for this one compile only.
-    v8.setFlagsFromString("--allow-natives-syntax");
-    let same = null;
-    try { same = new Function("a", "b", "return %HaveSameMap(a, b)"); } catch { same = null; }
-    v8.setFlagsFromString("--no-allow-natives-syntax");
-    if (same) for (const c of g.G.cars) assert.ok(same(g.G.cars[0], c), `${c.code} left the shared hidden class`);
+    const same = nativeSameMap();
+    for (const c of g.G.cars) assert.ok(same(g.G.cars[0], c), `${c.code} left the shared hidden class`);
     const fast = nativeFast();
-    if (fast) {
-      const slow = [...g.G.cars].filter((c) => !fast(c)).map((c) => c.code);   // spread: a main-realm array
-      assert.deepEqual(slow, [], "cars fell into dictionary mode after 1500 frames (a keyed store, a delete, or too many fields?)");
-    }
+    const slow = [...g.G.cars].filter((c) => !fast(c)).map((c) => c.code);   // spread: a main-realm array
+    assert.deepEqual(slow, [], "cars fell into dictionary mode after 1500 frames (a keyed store, a delete, or too many fields?)");
   } finally { g.close(); }
 });
 
-/** %HasFastProperties, compiled with natives syntax switched on for that one compile; null when unavailable. */
+/** %HasFastProperties, compiled with natives syntax switched on for that one compile; throws when unavailable. */
 function nativeFast() {
   v8.setFlagsFromString("--allow-natives-syntax");
   let f = null;
   try { f = new Function("o", "return %HasFastProperties(o)"); } catch { f = null; }
   v8.setFlagsFromString("--no-allow-natives-syntax");
+  assert.ok(f, NATIVES_GONE);
   return f;
 }
 
@@ -180,11 +192,7 @@ test("without the call the cars DO split into several hidden classes (the check 
     g.apex.setInput({ throttle: true, steer: 0 });
     let now = 1000;
     for (let i = 0; i < 600; i++) { now += 16.667; g.pumpFrame(now); }
-    v8.setFlagsFromString("--allow-natives-syntax");
-    let same = null;
-    try { same = new Function("a", "b", "return %HaveSameMap(a, b)"); } catch { same = null; }
-    v8.setFlagsFromString("--no-allow-natives-syntax");
-    if (!same) return;   // natives unavailable on this runtime: the key-order assertions above still guard
+    const same = nativeSameMap();
     const maps = []; for (const c of g.G.cars) { const m = maps.find((x) => same(x, c)); if (!m) maps.push(c); }
     assert.ok(maps.length > 1, "expected the unpatched cars to diverge; if V8 changed, retire this control");
   } finally { g.close(); }
@@ -291,15 +299,12 @@ async function lapAndPit(opts) {
     const widened = [];
     for (const [k, g0] of grid) if (repRank(seen.get(k)) > repRank(g0)) widened.push(k);
     const fast = nativeFast();
-    v8.setFlagsFromString("--allow-natives-syntax");
-    let sameFn = null;
-    try { sameFn = new Function("a", "b", "return %HaveSameMap(a, b)"); } catch { sameFn = null; }
-    v8.setFlagsFromString("--no-allow-natives-syntax");
+    const sameFn = nativeSameMap();
     return {
       digest: chain, widened, added: [...added], steps, pitted: P.pitStops || 0, done: done(), unknownMutable,
-      slow: fast ? [...G.cars].filter((c) => !fast(c)).map((c) => c.code) : null,   // spread: a main-realm array
+      slow: [...G.cars].filter((c) => !fast(c)).map((c) => c.code),   // spread: a main-realm array
       // The AI field only: the harness's carRole() hand-over gives the player car a `netInput` key no race adds.
-      same: sameFn ? [...G.cars].filter((c) => c !== G.player).every((c, i, ai) => sameFn(ai[0], c)) : null,
+      same: [...G.cars].filter((c) => c !== G.player).every((c, i, ai) => sameFn(ai[0], c)),
     };
   } finally { g.close(); }
 }
@@ -323,8 +328,8 @@ test("a lap plus a pit stop: warmShape changes no value, no field widens outside
     "a race widened these car fields' value kinds after the grid: add them to WARM_GROUPS in js/race/car-fields.js");
   assert.deepEqual(on.added, [], "a lap plus a pit stop added keys CarFields does not declare");
   assert.deepEqual(on.unknownMutable, [], "MUTABLE names a field the cars do not have at the grid (renamed? drop it)");
-  if (on.slow) assert.deepEqual(on.slow, [], "cars fell into dictionary mode (warmShape must never add a key)");
-  if (on.same != null) assert.ok(on.same, "every car still shares one hidden class");
+  assert.deepEqual(on.slow, [], "cars fell into dictionary mode (warmShape must never add a key)");
+  assert.equal(on.same, true, "every car still shares one hidden class");
   const off = await lapAndPit({ warm: false });
   assert.equal(off.steps, on.steps, "the same run length with warmShape a no-op");
   assert.equal(off.digest, on.digest, "warmShape changed the simulation");
@@ -349,7 +354,7 @@ test("a race to the flag and results adds no car key and leaves every car in fas
     added.delete("netInput");   // the harness's carRole() hand-over, not the race
     assert.deepEqual([...added], [], "the finish added car keys CarFields does not declare");
     const fast = nativeFast();
-    if (fast) assert.deepEqual([...G.cars].filter((c) => !fast(c)).map((c) => c.code), [], "cars fell into dictionary mode by results");
+    assert.deepEqual([...G.cars].filter((c) => !fast(c)).map((c) => c.code), [], "cars fell into dictionary mode by results");
   } finally { g.close(); }
 });
 
@@ -405,12 +410,13 @@ function scratchTable(g) {
   ];
 }
 
-/** %HaveSameMap, compiled with natives syntax switched on for that one compile; null when unavailable. */
+/** %HaveSameMap, compiled with natives syntax switched on for that one compile; throws when unavailable. */
 function nativeSameMap() {
   v8.setFlagsFromString("--allow-natives-syntax");
   let f = null;
   try { f = new Function("a", "b", "return %HaveSameMap(a, b)"); } catch { f = null; }
   v8.setFlagsFromString("--no-allow-natives-syntax");
+  assert.ok(f, NATIVES_GONE);
   return f;
 }
 
@@ -419,7 +425,6 @@ function nativeSameMap() {
  * map), so `o` is never written; a Smi field fails by re-mapping the clone. */
 function fracKeepsMap(g, o, k) {
   const same = nativeSameMap();
-  if (!same) return null;
   const twin = vm.runInContext("(o) => ({ ...o })", g.ctx)(o);
   if (!same(twin, o)) return null;
   vm.runInContext("(k) => new Function('x', 'x.' + k + ' = 0.25')", g.ctx)(k)(twin);
@@ -437,7 +442,7 @@ test("scratch objects: the named fields are born Double (a fractional store keep
     g.apex.setInput({ throttle: true, steer: 0 });
     for (let i = 0; i < 120; i++) g.step(1, 1 / 60);
     const probe = fracKeepsMap(g, vm.runInContext("({ hunt5Control: 1, sep: 0 })", g.ctx), "sep");
-    if (probe === null) return;   // natives or map-cloning unavailable on this runtime
+    assert.notEqual(probe, null, "the {...o} twin must share the source map, or this probe cannot run");
     assert.equal(probe, false, "a Smi field must re-map on a fractional store, or this probe proves nothing");
     const twins = gameTwins(g), table = [];
     assert.deepEqual(Object.keys(twins).sort(), Object.keys(GAME_SCRATCH).sort(), "the game.js warmDoubles declarations");
@@ -486,5 +491,5 @@ test("game.js declares its scratch literals through CarFields.warmDoubles, and t
   const on = await run(false), off = await run(true);
   assert.ok(Number.isFinite(on.hash) && on.hash !== 0);
   assert.equal(on.hash, off.hash, "warmDoubles changed the simulation");
-  if (on.pitV !== null) assert.deepEqual([on.pitV, off.pitV], [true, false], "the source-twin probe sees the warm (and its absence)");
+  assert.deepEqual([on.pitV, off.pitV], [true, false], "the source-twin probe sees the warm (and its absence)");
 });
