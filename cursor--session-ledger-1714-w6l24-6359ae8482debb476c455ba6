@@ -1,0 +1,1 @@
+1792449920	Claude	A·W6·L24 #1714 wire live-run-check into bash-guard push advisory; OWNED .claude/hooks/bash-guard.sh (push advisory only) tests/unit/bash-guard*.test.mjs tests/unit/live-run-check.test.mjs docs/changelog.d/session-ledger-*.md  [cursor/session-ledger-1714-w6l24; session 6359ae8482debb476c455ba6]
