@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -62,4 +63,32 @@ test("no zone field set = the whole-car finish path, byte for byte", () => {
   const out = { mat: [P, CM.SURFACES.glass, P] };
   CM.applyFinish(out, "satin", [], { podFinish: "inherit" });
   assert.deepEqual(out.mat, [26, CM.SURFACES.glass, 26]);
+});
+
+// Build-through (C2-22): the tests above read the contract off the data tables; these run the
+// real Car3D.build and read the material column the mesh carries.
+const { Car3D } = loadParts();
+const buildMat = (livery) => Car3D.build([0.8, 0.05, 0.05], [0.9, 0.9, 0.9], { teamId: "ferrari", livery, noDriver: true }).mat;
+const histogram = (mat) => { const h = {}; for (const v of mat) h[v] = (h[v] || 0) + 1; return h; };
+
+test("every finish moves exactly the paint vertices of a built car to its surface id", () => {
+  const gloss = histogram(buildMat({ finish: "gloss" }));
+  const PAINT = CM.SURFACES.paint;
+  assert.ok(gloss[PAINT] > 1000, "a built car has a large paint area to finish");
+  for (const [name, id] of Object.entries(Car3D.FINISH_SURFACE)) {
+    const h = histogram(buildMat({ finish: name }));
+    assert.equal(h[PAINT] || 0, 0, `${name}: paint vertices left unfinished`);
+    // `satin` shares its id with a non-paint surface already on the car, so compare the id's GAIN.
+    assert.equal((h[id] || 0) - (gloss[id] || 0), gloss[PAINT], `${name}: the finish id ${id} did not take the paint vertices`);
+    for (const k of Object.keys(gloss)) if (+k !== PAINT && +k !== id) assert.equal(h[k], gloss[k], `${name}: touched non-paint surface ${k}`);
+  }
+});
+
+test("a zone finish reaches the built mesh for its section only", () => {
+  const PAINT = CM.SURFACES.paint, CHROME = Car3D.FINISH_SURFACE.chrome;
+  const plain = histogram(buildMat({ finish: "gloss" }));
+  const pods = histogram(buildMat({ finish: "gloss", podFinish: "chrome" }));
+  assert.ok((pods[CHROME] || 0) > 0, "no sidepod vertex took the zone finish");
+  assert.ok(pods[PAINT] > 0 && pods[PAINT] < plain[PAINT], "the zone finish must replace some paint, not all of it");
+  assert.equal((pods[CHROME] || 0) + pods[PAINT], plain[PAINT], "every changed vertex was paint");
 });
