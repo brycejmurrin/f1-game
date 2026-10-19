@@ -1315,6 +1315,10 @@
       ]
     },
     {
+      "path": "tools/desktop/minify.mjs",
+      "classification": "ambiguous"
+    },
+    {
       "path": "tools/desktop/pack-dry-run.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

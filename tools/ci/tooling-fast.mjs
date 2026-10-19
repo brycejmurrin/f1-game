@@ -1087,6 +1087,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/sporting-regs.test.mjs",
   "tests/unit/spotify-native.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
+  // The deploy-only minify (#3110): ~20 s, it minifies every js/ file twice
+  // (once to check top-level names and directives, once for the scenery scans).
+  "tests/unit/stage-minify.test.mjs",
   // #2204: terrace / spectatorHill / vaultStand curve follow — outside-of-bend
   // gap ≤ 0.5 m on moderate bends, no severe terrace self-pairs on jerez.
   "tests/unit/stand-curve-gap.test.mjs",

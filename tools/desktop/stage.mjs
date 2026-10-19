@@ -9,6 +9,10 @@
  *   node tools/desktop/stage.mjs --out _site --stamp --at 3695 --sha <hex>
  *   node tools/desktop/stage.mjs --out _site --stamp-only --sha "$GITHUB_SHA"   (pages.yml)
  *
+ * The stage MINIFIES the copied js/**\/*.js (tools/desktop/minify.mjs; #3110)
+ * before any stamp, so the ?v= hashes and SRI cover the shipped bytes.
+ * `--no-minify` stages the source bytes as they are (the A/B baseline).
+ *
  * Without `--stamp`, tags stay `?v=dev` (matches a local serve of the repo).
  * With `--stamp`, runs `bump-cache.mjs --apply` so packaged shells are
  * content-addressed like the live site. `--stamp-only` stamps the tree already
@@ -28,6 +32,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { STAGE_DIRS, STAGE_ROOT_FILES } from "./stage-files.mjs";
+import { minifyStaged } from "./minify.mjs";
 
 const require = createRequire(import.meta.url);
 const { appVersionFrom, readApexVersion } = require("../../desktop/lib/version.cjs");
@@ -122,6 +127,18 @@ export function stageSite(outDir, opts = {}) {
   return dest;
 }
 
+/**
+ * stageSite, then minify the staged js/ (what the CLI and so pages.yml ship).
+ * @param {string} outDir
+ * @param {{ root?: string, minify?: boolean }} [opts] minify defaults to true
+ * @returns {Promise<{ dest: string, minified: null | { files: number, before: number, after: number } }>}
+ */
+export async function stageSiteMinified(outDir, opts = {}) {
+  const dest = stageSite(outDir, opts);
+  const minified = opts.minify === false ? null : await minifyStaged(dest);
+  return { dest, minified };
+}
+
 /** `git <args>` in `root`, trimmed stdout; throws on a non-zero exit. */
 function gitOut(args, root) {
   const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
@@ -211,13 +228,14 @@ export function desktopVersionFromBuild(build, apexVersion) {
 function usage() {
   console.log(`usage: node tools/desktop/stage.mjs --out <dir> [--stamp] [--at N] [--sha HEX]
   --out     destination folder (replaced)
+  --no-minify   stage js/ unminified (default: minify, tools/desktop/minify.mjs)
   --stamp       run bump-cache --apply on the staged copy
   --stamp-only  stamp the tree already staged at --out (no re-copy)
   --at N        build number for the stamp (default: 2000 + git rev-list --count HEAD; refuses a shallow clone)
   --sha HEX     commit for <meta name="apex-sha"> (default: git rev-parse HEAD)`);
 }
 
-function main() {
+async function main() {
   if (flag("--help") || flag("-h")) {
     usage();
     process.exit(0);
@@ -228,13 +246,13 @@ function main() {
     process.exit(2);
   }
   const outAbs = path.isAbsolute(out) ? out : path.join(ROOT, out);
-  let dest;
+  let dest, minified = null;
   if (flag("--stamp-only")) {
     assertStageDest(outAbs, ROOT);
     if (!fs.existsSync(path.join(outAbs, "index.html"))) throw new Error(`stage: --stamp-only: nothing staged at ${outAbs}`);
     dest = outAbs;
   } else {
-    dest = stageSite(outAbs);
+    ({ dest, minified } = await stageSiteMinified(outAbs, { minify: !flag("--no-minify") }));
   }
   let build = null;
   if (flag("--stamp") || flag("--stamp-only")) {
@@ -252,9 +270,10 @@ function main() {
     dirs: STAGE_DIRS.length,
     build: ver.build,
     stamped: build,
+    minified,
     desktopVersion: desktopVersionFromBuild(ver.build),
   }));
 }
 
 const isMain = process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
-if (isMain) main();
+if (isMain) main().catch((e) => { console.error(e && e.stack || e); process.exit(1); });
