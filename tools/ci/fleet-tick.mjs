@@ -27,7 +27,7 @@ const DEPLOY = "claude/f1-game-project-26h3ng";
 export function rowOf(r) {
   const plan = r.plan && r.plan.state !== "none" ? `${r.plan.items - (r.plan.open || []).length}/${r.plan.items}` : null;
   return {
-    state: r.draft ? "draft" : "ready", sha: r.sha || "", ci: r.ci, mergeable: r.mergeableState || null,
+    state: r.draft ? "draft" : "ready", sha: (r.sha || "").slice(0, 7), ci: r.ci, mergeable: r.mergeableState || null,
     suggest: r.suggest, hold: !!r.hold, gate: r.gate || null, plan,
     fleet: r.fleet ? `${r.fleet.state}${r.fleet.reason ? ": " + r.fleet.reason : ""}` : null,
     sync: r.sync && r.sync.verdict ? r.sync.verdict : null,
@@ -77,6 +77,8 @@ const run = (args) => {
   const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 });
   return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
 };
+/** Last `= …` verdict line of a ci-watch run, minus the `[ci-watch] ` prefix and the sha=/run= tail. */
+export const verdictOf = (out) => (out.split("\n").map((l) => l.replace(/^\[ci-watch\]\s*/, "").trim()).filter((l) => l.startsWith("= ")).pop() || "").replace(/\s+sha=\S+.*$/, "");
 const lastLine = (out, re) => (out.split("\n").filter((l) => re.test(l)).pop() || "").trim();
 
 export function collect({ sessionsFile } = {}) {
@@ -85,9 +87,9 @@ export function collect({ sessionsFile } = {}) {
   try { for (const r of JSON.parse(b.out).rows) cur.prs[r.number] = rowOf(r); } catch { cur.boardError = lastLine(b.out, /./) || "pr-board produced no JSON"; }
   const tip = spawnSync("git", ["rev-parse", `origin/${DEPLOY}`], { cwd: ROOT, encoding: "utf8" }).stdout.trim();
   const ci = run(["tools/ci/ci-watch.mjs", "--sha", tip, "--once"]);
-  cur.ship = { sha: tip.slice(0, 7), line: lastLine(ci.out, /^= ci /).replace(/\s+sha=\S+.*$/, "") };
+  cur.ship = { sha: tip.slice(0, 7), line: verdictOf(ci.out) };
   const pg = run(["tools/ci/ci-watch.mjs", "--sha", tip, "--pages", "--once"]);
-  cur.pages = { line: lastLine(pg.out, /^= (pages|ci) /).replace(/\s+sha=\S+.*$/, "") };
+  cur.pages = { line: verdictOf(pg.out) };
   if (sessionsFile) {
     const data = JSON.parse(fs.readFileSync(sessionsFile, "utf8"));
     for (const s of Array.isArray(data) ? data : data.data || data.sessions || [data]) {

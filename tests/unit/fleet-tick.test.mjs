@@ -1,9 +1,9 @@
 /* fleet-tick.test.mjs — tools/ci/fleet-tick.mjs: row compaction, state diff and rendering, no network. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rowOf, diffState, render, MAX_ROWS } from "../../tools/ci/fleet-tick.mjs";
+import { rowOf, diffState, render, verdictOf, MAX_ROWS } from "../../tools/ci/fleet-tick.mjs";
 
-const board = (o = {}) => ({ number: 7, draft: true, sha: "abc1234", ci: "success", mergeableState: "clean", suggest: "WAIT", hold: false, gate: "passed", plan: { state: "open", items: 4, open: ["x"] }, fleet: { state: "working", reason: "tests" }, ...o });
+const board = (o = {}) => ({ number: 7, draft: true, sha: "abc1234def5678", ci: "success", mergeableState: "clean", suggest: "WAIT", hold: false, gate: "passed", plan: { state: "open", items: 4, open: ["x"] }, fleet: { state: "working", reason: "tests" }, ...o });
 const st = (prs = {}, extra = {}) => ({ prs, ship: { sha: "d1", line: "= ci passed" }, pages: { line: "= pages passed" }, sessions: {}, ...extra });
 
 test("rowOf compacts a board row", () => {
@@ -39,4 +39,10 @@ test("first tick is flagged as baseline and output is capped", () => {
   const lines = render(diffState(null, st(prs)), 1);
   assert.equal(lines.length, MAX_ROWS + 1);
   assert.match(lines.at(-1), /^= tick 1 \d+ changed \(\d+ more not shown\) \(first tick: baseline\)$/);
+});
+
+test("verdictOf takes the last `= ` line without prefix or sha/run tail", () => {
+  const out = "[ci-watch] CI › Smoke → success\n[ci-watch] = ci running (35 jobs, 0 failed) sha=217b834 run=#1 push\n";
+  assert.equal(verdictOf(out), "= ci running (35 jobs, 0 failed)");
+  assert.equal(verdictOf("nothing"), "");
 });
