@@ -20,8 +20,7 @@ window.FlybyOverrides = (function () {
     }),
     spa: Object.freeze({
       // Eau Rouge and Raidillon from the compression: the eye stays below the
-      // climb while the look runs through the left crest.
-      // Rekey the original physical anchors to 2025 GP T3/T4 after adding T2.
+      // climb; GP T3/T4 preserve the original compression/left-crest anchors.
       "turn-mid": Object.freeze({
         eye: [{ at: "corner", n: 3, off: -115, x: 10, y: 3.2 },
               { at: "corner", n: 3, off: -58, x: 12, y: 4.2 }],
