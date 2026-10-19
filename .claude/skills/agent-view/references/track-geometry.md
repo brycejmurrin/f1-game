@@ -48,10 +48,12 @@ keyed by `def._sceneryShift`-shifted fracs: read the comment for which frame a n
 
 ## No browser: Node-VM route (verified 2026-09-30)
 
-Every hook above except `render`/screens runs in `tools/lib/game-vm.cjs` (~5 s per track, no GPU):
-`const {createGame}=require("./tools/lib/game-vm.cjs"); const g=await createGame({track:"spa"}); const a=g.apex;`
-then `a.info() / a.corners() / a.trackProfile(400) / a.trackInfo({what:"corners"})` as usual (end with `process.exit(0)`;
-write the script under `scratch/`, not `/tmp`). Compare circuits: loop `createGame` per id;
+Every hook above except `render`/screens runs in `tools/lib/game-vm.cjs` (~5 s per track, no GPU).
+Use the whole-lap script below as the lifecycle template, replacing its body with
+`a.info() / a.corners() / a.trackProfile(400) / a.trackInfo({what:"corners"})` as needed.
+Close each VM in `finally`, including on a failed probe; catch outer rejections
+and set `process.exitCode=1`. Write scripts under `scratch/`, not `/tmp`.
+Compare circuits: loop `createGame` per id and close each one;
 elevation range = max−min of `trackProfile(n).y`, tightest radius = `1/max|k|`.
 Measure, never quote a number from this file: circuits are re-surveyed and every figure drifts.
 `1/max|k|` is the instantaneous peak; `trackInfo` corners' `radiusM` is averaged over the corner window, so the two
@@ -66,7 +68,7 @@ grade % = `100·slope/√(1−slope²)`; `+` is uphill in the driving direction.
 ```js
 // scratch/lap-grade.cjs — node scratch/lap-grade.cjs interlagos
 const {createGame}=require("../tools/lib/game-vm.cjs");
-(async()=>{ try { const g=await createGame({track:process.argv[2]||"spa"}); const a=g.apex;
+(async()=>{ let g; try { g=await createGame({track:process.argv[2]||"spa"}); const a=g.apex;
   const p=a.trackProfile(1000), L=a.info().total;
   const top=p.map(q=>({frac:q.frac, m:Math.round(q.frac*L), pct:+(100*q.slope/Math.sqrt(1-q.slope*q.slope)).toFixed(1)}))
     .sort((x,y)=>Math.abs(y.pct)-Math.abs(x.pct)).slice(0,5);
@@ -74,7 +76,8 @@ const {createGame}=require("../tools/lib/game-vm.cjs");
   for(let i=0;i<500;i++) for(const lat of [-1,0,1]){ const f=i/500, r=a.groundY(f, lat*p[Math.floor(f*1000)].hw);
     if(r && r.overRoad!=null && r.overRoad>worst.overRoad) worst={frac:f, lat, overRoad:+r.overRoad.toFixed(3)}; }
   process.stdout.write(JSON.stringify({steepest:top, worstOverRoad:worst})+"\n");
-  process.exit(0); } catch(e){ process.stderr.write(e.stack+"\n"); process.exit(1);} })();
+  } finally { if(g) g.close(); }
+})().catch(e=>{ process.stderr.write(e.stack+"\n"); process.exitCode=1; });
 ```
 The VM swallows a rejected promise silently (exit 0, no output), hence the
 try/catch; `overRoad` is null where no terrain is sampled. Verified on monza

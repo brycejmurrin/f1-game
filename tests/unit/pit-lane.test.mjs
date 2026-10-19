@@ -35,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -45,17 +46,17 @@ function load() {
   // Tracks is only reached at call time (hwAt), and none of the pure geometry
   // below touches it — a stub keeps the VM honest about that.
   ctx.Tracks = { sample: () => { throw new Error("pure geometry must not sample the track"); } };
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   // The pit complex model (TrackPit) is what PitLane reads its pitch and, on
   // a built track, its window and row from — loaded beside it, as the game does.
-  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   return vm.runInContext("PitLane", ctx);
 }
 const P = load();
 const TP = (() => {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
-  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
   return vm.runInContext("TrackPit", ctx);
 })();
 
@@ -244,9 +245,9 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real 
   ctx.Teams = { LIST: ["mercedes", "ferrari", "mclaren", "redbull", "alpine",
                        "racingbulls", "haas", "williams", "audi", "astonmartin",
                        "cadillac", "custom"].map((id) => ({ id })) };
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  if (real) vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  if (real) vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   const track = real ? real.track : { total, n: 1346, def: {} };
   const said = [];
@@ -1073,8 +1074,8 @@ function laneOn(straightM, total = 5386) {
   const track = trackWithStraight(straightM, total);
   ctx.Tracks = { sample: () => { throw new Error("entry geometry must not sample"); },
                  curvature: curvatureStub(track) };
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   return { Pl, track, entry: Pl.entryRunM(track), zone: Pl.zoneOf(track) };
 }
@@ -1128,8 +1129,8 @@ test("a circuit may still override the entry by hand", () => {
   const track = trackWithStraight(600);
   track.def = { pitZone: { entryM: 275 } };
   ctx.Tracks = { sample: () => { throw new Error("no"); }, curvature: curvatureStub(track) };
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   assert.equal(Pl.zoneOf(track).lenM, 275 + P.EXIT_M, "an authored entryM was ignored");
 });
@@ -1290,8 +1291,8 @@ test("windowOf names a rival's window for the gap chips: P<lap> within three lap
 function strategySession(laps) {
   const s = commitSession();
   const { ctx, G } = s;
-  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8") + "\n;globalThis.AiDrive = AiDrive;", ctx, { filename: "ai-drive.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + "\n;globalThis.SportingRegs = SportingRegs;", ctx, { filename: "sporting-regs.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8") + "\n;globalThis.AiDrive = AiDrive;", ctx, { filename: absSrc("js/physics/ai-drive.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + "\n;globalThis.SportingRegs = SportingRegs;", ctx, { filename: absSrc("js/race/sporting-regs.js") });
   ctx.TyreModel.AI_CLASS = {
     soft: { code: "S", life: 0.48 }, medium: { code: "M", life: 0.74 }, hard: { code: "H", life: 1.05 }, wet: { code: "W", life: 0.72 },
   };

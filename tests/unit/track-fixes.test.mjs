@@ -12,9 +12,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bootEditor, ellipse, design, read, plain } from "../helpers/editor-vm.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const B = bootEditor();
-vm.runInContext(read("js/editor/fixes.js").replace(/^const\b/gm, "var"), B.ctx, { filename: "js/editor/fixes.js" });
+vm.runInContext(read("js/editor/fixes.js").replace(/^const\b/gm, "var"), B.ctx, { filename: absSrc("js/editor/fixes.js") });
 const { V, S, TR } = B, F = B.ctx.TrackFixes;
 const q = (v) => Math.round(v * 4) / 4;
 // The VM's arrays are another realm's: compare results as plain JSON.

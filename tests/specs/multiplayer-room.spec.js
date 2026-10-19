@@ -28,7 +28,6 @@
 // cleared only by a race start, so a test that ends in the room leaves it set
 // (js/game.js clearMenuScreens) — harmless to this file, whose every test
 // re-enters a room, and noted for anyone sharing a worker with it.
-// UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { lobbyReset, pinFreePlay } from "../helpers/shared-page.js";
 

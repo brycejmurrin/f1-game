@@ -432,6 +432,10 @@ const WGX = (function () {
       device.lost.then(function (info) { _bornLost = (info && info.reason) || "unknown"; });
       await null; await null;
       if (_bornLost) return _fail("device arrived lost (" + _bornLost + ")");
+      // Every GPU object gets a `label`; passes push/pop debug groups (#2964).
+      try {
+        if (typeof WGXDebugLabels !== "undefined" && WGXDebugLabels.install) WGXDebugLabels.install(device);
+      } catch (_) { /* labels must never refuse a healthy device */ }
       const _devHas = function (name) {
         return !!(device.features && device.features.has && device.features.has(name));
       };

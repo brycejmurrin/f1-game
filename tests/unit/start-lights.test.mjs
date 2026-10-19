@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8");
@@ -142,7 +143,7 @@ test("game.js wires StartLights and the particle pool exposes the lamp flare", (
 function runAt(hz, seconds, mobile = false) {
   const ctx = vm.createContext({ Math, Float32Array, Uint8Array, Array, Object });
   seedLog(ctx);
-  const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx);
+  const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
   let frameB = 0;
   P.init({ mobileTier: mobile, drawParticles: (data, floats, additive) => {
     if (!additive) return;
@@ -243,6 +244,6 @@ test("#1882: countCredit gives nothing back at full rate and caps a resumed tab 
 
 test("#1882: the race-session stub answers countCredit with no credit", () => {
   const sb = vm.createContext({ console, Log: { info() {}, warn() {}, debug() {} } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-stub.js"), "utf8"), sb, { filename: "js/race/session-stub.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-stub.js"), "utf8"), sb, { filename: absSrc("js/race/session-stub.js") });
   assert.equal(vm.runInContext("StartLights.create({}).countCredit(30, 0.25, 0.1)", sb), 0);
 });

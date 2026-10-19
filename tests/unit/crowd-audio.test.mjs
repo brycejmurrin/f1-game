@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/audio/crowd.js"), "utf8");
@@ -88,8 +89,8 @@ function boot(opts) {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(SIGNAL, vctx, { filename: "signal.js" });
-  vm.runInContext(SRC, vctx, { filename: "crowd.js" });
+  vm.runInContext(SIGNAL, vctx, { filename: absSrc("js/audio/signal.js") });
+  vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/crowd.js") });
   const CrowdAudio = vm.runInContext("CrowdAudio", vctx);
   const GameAudioSignal = vm.runInContext("GameAudioSignal", vctx);
   const host = {
@@ -208,7 +209,7 @@ test("GameAudioSignal.lastHost is published for the crowd leaf", () => {
   const sb = { Math, console, Object, Array, Number, isFinite, Float32Array, CrowdAudio: undefined };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(SIGNAL, vctx, { filename: "signal.js" });
+  vm.runInContext(SIGNAL, vctx, { filename: absSrc("js/audio/signal.js") });
   const GameAudioSignal = vm.runInContext("GameAudioSignal", vctx);
   const host = { context: () => ctx, bus: () => bus, sfxOk: () => true, now: () => 0 };
   GameAudioSignal.create(host);

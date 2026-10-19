@@ -14,6 +14,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MANIFEST = createRequire(import.meta.url)("../../tools/manifest.cjs");
@@ -29,7 +30,7 @@ function loadTrackMaps() {
   const runFile = (relPath) => {
     const src = fs.readFileSync(path.join(ROOT, relPath), "utf8")
       .replace(/^const\b/gm, "var");
-    vm.runInContext(src, ctx, { filename: relPath });
+    vm.runInContext(src, ctx, { filename: absSrc(relPath) });
   };
   for (const entry of MANIFEST.TRACK_VM) {
     if (entry === "@circuits") {
@@ -163,7 +164,7 @@ test("fitCanvas never commits a 1px transient during layout convergence", () => 
 function withAeroZones() {
   const ctx = loadTrackMaps();
   const src = fs.readFileSync(path.join(ROOT, "js/physics/aero-zones.js"), "utf8").replace(/^const\b/gm, "var");
-  vm.runInContext(src, ctx, { filename: "js/physics/aero-zones.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/physics/aero-zones.js") });
   return ctx;
 }
 

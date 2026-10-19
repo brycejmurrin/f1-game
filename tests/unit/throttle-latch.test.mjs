@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
@@ -70,9 +71,9 @@ function boot(initOpts) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el(), initOpts);
   const pedal = el("btn-throttle");

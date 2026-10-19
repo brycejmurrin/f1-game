@@ -20,6 +20,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -57,13 +58,13 @@ function loadStore({ presets = {}, tod = "night", track = "vegas",
   });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/lighting/profiles.js"), "utf8"), ctx,
-    { filename: "js/lighting/profiles.js" });
+    { filename: absSrc("js/lighting/profiles.js") });
   const store = vm.runInContext("LightStore", ctx).create(G);
   const LT = vm.runInContext("LightTune.LT", ctx);
   store.apply();
   // The REAL preset module (not a stub): its set() calls LightStore.reapply().
   vm.runInContext(readFileSync(join(ROOT, "js/perf/quality-preset.js"), "utf8"), ctx,
-    { filename: "js/perf/quality-preset.js" });
+    { filename: absSrc("js/perf/quality-preset.js") });
   const GfxQuality = vm.runInContext("GfxQuality", ctx);
   return { store, LT, stored, GfxQuality, gfx };
 }

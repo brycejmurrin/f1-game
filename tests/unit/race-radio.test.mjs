@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { gameSource } from "../helpers/game-source.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -32,7 +33,7 @@ function load() {
   ctx.window = ctx;
   ctx.CamModes = { CAM_MODES: [{ id: "chase" }, { id: "cockpit" }, { id: "heli" }] };
   for (const f of ["js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/race-facts.js", "js/race/race-radio.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   const get = (n) => vm.runInContext(n, ctx);
   return { ctx, RV: get("RadioVoice"), RL: get("RadioLines"), RF: get("RaceFacts"), RR: get("RaceRadio") };
@@ -782,7 +783,7 @@ test("two finishers are ordered by their own flag times, not by the tick the rad
 test("everyone in: a penalty-held finish is released before endRace, not lost", () => {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Map, Set });
   seedLog(ctx); ctx.window = ctx;
-  for (const f of ["js/race/race-facts.js", "js/race/race-control.js"]) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+  for (const f of ["js/race/race-facts.js", "js/race/race-control.js"]) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const RF = vm.runInContext("RaceFacts", ctx), RC = vm.runInContext("RaceControl", ctx);
   const facts = RF.create();
   const p = { isPlayer: true, human: true, name: "You", prog: 0, lap: 1, penalty: 0 };
@@ -1038,7 +1039,7 @@ test("a WATCH has no spotter: no 'car left' round a puppet, and a live race stil
   sb.window = sb;
   sb.CamModes = { CAM_MODES: [{ id: "chase" }] };
   for (const f of ["js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/race-facts.js", "js/race/spotter.js", "js/race/race-radio.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), sb, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), sb, { filename: absSrc(f) });
   }
   const RRs = vm.runInContext("RaceRadio", sb);
   const run = (watching) => {
@@ -1077,7 +1078,7 @@ test("trafficSide: the spotter's left/right occupancy reaches the HUD with the s
   sb.window = sb;
   sb.CamModes = { CAM_MODES: [{ id: "chase" }] };
   for (const f of ["js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/race-facts.js", "js/race/spotter.js", "js/race/race-radio.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), sb, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), sb, { filename: absSrc(f) });
   }
   const RRs = vm.runInContext("RaceRadio", sb), Sp = vm.runInContext("Spotter", sb);
   const me = car("PLY", 340, 60, { isPlayer: true, local: true, s: 340, x: 0 });
@@ -1155,7 +1156,7 @@ test("observe reuses one answer: f is the latest facts, ev only this tick's even
 // every few seconds. A quiet second of 60 steps sorts at most ceil(60/6) times.
 test("observe ranks the field at 10 Hz, not every physics step", () => {
   const rctx = vm.createContext({});
-  vm.runInContext(readFileSync(join(ROOT, "js/race/race-facts.js"), "utf8"), rctx, { filename: "js/race/race-facts.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/race-facts.js"), "utf8"), rctx, { filename: absSrc("js/race/race-facts.js") });
   const sorts = { n: 0 };
   rctx.__sorts = sorts;
   vm.runInContext("(() => { const s = Array.prototype.sort; Array.prototype.sort = function (cmp) { if (cmp && cmp.name === 'byRace') __sorts.n++; return s.call(this, cmp); }; })()", rctx);
@@ -1319,7 +1320,7 @@ function raceSaturated(opts = {}) {
     RadioVoice: RV,
     GameAudio: { radioLeadS: () => 0, radioSting() {} },
   });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/announce-banner.js"), "utf8"), bctx, { filename: "js/race/announce-banner.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/announce-banner.js"), "utf8"), bctx, { filename: absSrc("js/race/announce-banner.js") });
   const els = { announceText: { textContent: "" }, announceWho: { textContent: "" }, announceNum: { textContent: "" },
     announce: { className: "", hidden: true, dataset: {} }, announceLive: { textContent: "" } };
   const banner = vm.runInContext("AnnounceBanner", bctx).create({
@@ -1354,7 +1355,7 @@ function loadEngineer() {
   ectx.window = ectx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
     "js/car/parts.js", "js/physics/tyre-model.js", "js/race/engineer.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ectx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ectx, { filename: absSrc(f) });
   }
   return vm.runInContext("RaceEngineer", ectx);
 }
@@ -1366,7 +1367,7 @@ test("engineer lines and a BOX call survive a saturated announce queue; announce
   seedLog(tctx);
   tctx.window = tctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/car/parts.js", "js/physics/tyre-model.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), tctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), tctx, { filename: absSrc(f) });
   }
   const TyreModel = vm.runInContext("TyreModel", tctx);
   const tm = TyreModel.create({

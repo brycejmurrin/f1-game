@@ -6,6 +6,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -13,7 +14,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 function bootPlan() {
   const ctx = vm.createContext({ console, Math });
   seedLog(ctx);
-  vm.runInContext(read("js/xr/xr-plan.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-plan.js" });
+  vm.runInContext(read("js/xr/xr-plan.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-plan.js") });
   return ctx.XRPlan;
 }
 

@@ -21,6 +21,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -32,7 +33,7 @@ const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/t
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
-  vm.runInThisContext(read(f), { filename: f });
+  vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 // Compile one lit mesh on a fresh renderer and return every shader source three handed GL.
 async function litGLSL(ctxOver = {}, matOpts = { clearcoat: 0.8, carPaint: 1 }) {
@@ -336,7 +337,7 @@ test("R5: apex26.tlxSkyCache512 is off by default, '1' = mobileTier only, 'all' 
   assert.equal(size("all", false), 512, "'all' is the desktop A/B lever");
   assert.match(TLX, /TLXShaders\.sky\(THREE, TSL, \{ chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize, vp: vport, sceneView \}\)/);
   // The real sky factory honours the size (its NUMBERS block derives W and the texel from S).
-  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: "tsl-sky.js" });
+  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: absSrc("js/render/three/tsl-sky.js") });
   for (const [cacheSize, want] of [[512, 512], [0, 768]]) {
     const sky = globalThis.TLXShaders.sky(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), cache: true, cacheSize });
     assert.equal(sky.cacheState().size, want);

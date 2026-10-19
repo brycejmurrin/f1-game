@@ -12,9 +12,9 @@
  *           empty one)
  *   hash    sha256 of the scenario data as serialised — a number edited by
  *           hand no longer matches, so the edit has to be a regen
- *   sha     a full commit id; when this checkout can see that commit on some
- *           ref (not a shallow CI clone) it must be an ancestor of HEAD — a baseline
- *           blessed on some other branch is not this tree's measurement
+ *   sha     a full commit id; WHERE it sits in history is the landing-commit
+ *           case below (the old whole-tree ancestry case skipped on CI's
+ *           shallow clone and is dropped, #3037)
  *   at      an ISO timestamp
  *
  * Neither reader of the file looks at the key: the spec and the twin iterate
@@ -48,34 +48,8 @@ test("the data hash matches — the numbers were written by the spec, not by han
     "without regenerating. Run the spec with APEX_UPDATE_BASELINE=1 and READ THE DIFF.");
 });
 
-test("the blessing sha is a commit this tree descends from (when the checkout can see it)", (t) => {
+test("the blessing sha is a full commit id", () => {
   assert.match(b.sha || "", /^[0-9a-f]{40}$/, "sha must be a full commit id");
-  let known = false;
-  // A SHALLOW clone can hold the object and have a ref reach it while its
-  // history is cut, so merge-base --is-ancestor fails on a healthy tree: the
-  // ancestry half cannot be checked there (unshallow to check it).
-  let shallow = false;
-  try { shallow = cp.execSync("git rev-parse --is-shallow-repository", { cwd: ROOT, encoding: "utf8" }).trim() === "true"; } catch (_) {}
-  if (shallow) return t.skip("shallow clone: ancestry cannot be checked (git fetch --unshallow)");
-  try {
-    cp.execSync(`git cat-file -e ${b.sha}^{commit}`, { cwd: ROOT, stdio: "ignore" });
-    known = true;
-  } catch (_) { /* shallow clone or no git: the ancestry half cannot be checked here */ }
-  // An object no ref reaches is a stray in this clone's pack (a rebased-away
-  // commit GitHub happened to send), not history: a clone without it skips
-  // this check, so one with it must too — or the verdict depends on the pack.
-  if (known) {
-    try {
-      known = cp.execSync(`git for-each-ref --contains ${b.sha} --count=1`, { cwd: ROOT, encoding: "utf8" }).trim() !== "";
-    } catch (_) { known = false; }
-  }
-  if (!known) return;
-  let ancestor = false;
-  try {
-    cp.execSync(`git merge-base --is-ancestor ${b.sha} HEAD`, { cwd: ROOT, stdio: "ignore" });
-    ancestor = true;
-  } catch (_) {}
-  assert.ok(ancestor, `baseline was blessed at ${b.sha}, which is not an ancestor of HEAD — it was measured on another branch`);
 });
 
 // WHICH tree the numbers were measured on (#2952 P1-13). The hash is unkeyed,

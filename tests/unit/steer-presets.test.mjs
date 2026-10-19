@@ -29,6 +29,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/input/steer-tuning.js"), "utf8");
@@ -168,7 +169,7 @@ function bootTuning(input = {}) {
   const listeners = {};
   sb.window = { matchMedia: () => ({ matches: false }), addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } };
   const ctx = vm.createContext(sb);
-  vm.runInContext(SRC, ctx, { filename: "js/input/steer-tuning.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/input/steer-tuning.js") });
   const api = vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
     clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   const move = (id, v) => $(id).oninput({ target: { value: String(v) } });

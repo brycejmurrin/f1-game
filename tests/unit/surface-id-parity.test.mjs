@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -72,7 +73,7 @@ test("every id the shaders branch on is a real Car3D surface, and vice versa", (
   // SURFACES / FINISH_SURFACE live in car-materials.js (pure-moved from car3d); the
   // REAL tables, evaluated, not a regex over them.
   const ctx = vm.createContext({});
-  vm.runInContext(read("js/car/car-materials.js").replace(/^const CarMaterials\b/m, "var CarMaterials"), ctx);
+  vm.runInContext(read("js/car/car-materials.js").replace(/^const CarMaterials\b/m, "var CarMaterials"), ctx, { filename: absSrc("js/car/car-materials.js") });
   const { SURFACES, FINISH_SURFACE } = ctx.CarMaterials;
   const all = new Set([...Object.values(SURFACES), ...Object.values(FINISH_SURFACE)]);
   // The low ids are the unclassified path (custom: 0 takes the default shading):

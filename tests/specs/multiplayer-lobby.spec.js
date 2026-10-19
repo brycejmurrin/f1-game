@@ -24,8 +24,8 @@
 // the shared page back to the title with the lobby cancelled and the fake peer
 // dropped and re-armed (lobbyReset), which is what the per-test boot plus
 // lobbyFake(true) used to establish. The invite-link test keeps its two real
-// navigations: a link OPENING the game is its subject. UNVERIFIED IN A BROWSER
-// at conversion time.
+// navigations: a link OPENING the game is its subject.
+
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { lobbyReset } from "../helpers/shared-page.js";
 

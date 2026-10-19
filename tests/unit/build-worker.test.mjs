@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
+import { absSrc } from "../helpers/abs-src.mjs";
 const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/track/verify-track.cjs");
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -37,10 +38,10 @@ function spawnWorker() {
   ctx.importScripts = (...files) => {
     for (const f of files) {
       const rel = f.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
-      vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), ctx, { filename: rel });
+      vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), ctx, { filename: absSrc(rel) });
     }
   };
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), ctx, { filename: absSrc("js/track/build-worker.js") });
   // onmessage is async (a build awaits the model pack): send() returns it.
   return { send: (m) => ctx.onmessage({ data: m }), posted, transferred };
 }
@@ -71,7 +72,7 @@ function recorder() {
 const PHYS = ["px", "py", "pz", "hw", "barL", "barR", "lineX", "lineK"];
 const physics = (t) => PHYS.filter((k) => t[k]).map((k) => k + ":" + createHash("sha1").update(Buffer.from(Float64Array.from(t[k]).buffer)).digest("hex").slice(0, 16));
 
-vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8").replace(/^const\b/gm, "var"), main);
+vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/track/build-client.js") });
 const worker = spawnWorker();
 worker.send({ type: "init", files: vmFiles.map((f) => "http://x/" + f + "?v=1") });
 
@@ -203,7 +204,7 @@ test("turning BUILD IN BACKGROUND off terminates the worker; on spawns a fresh o
     ApexRoster: { TRACK_VM: ["js/track/core/geom.js"], TRACK_WORKER_EXTRA: [] },
     Worker: class { constructor() { this.terminated = 0; this.posted = []; made.push(this); }
       postMessage(m) { this.posted.push(m.type); } terminate() { this.terminated++; } } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx, { filename: "build-client.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx, { filename: absSrc("js/track/build-client.js") });
   const C = vm.runInContext("TrackBuildClient", ctx);
   C.set(true);
   assert.equal(made.length, 1, "on: the worker spawns and parses the build modules now");
@@ -263,7 +264,7 @@ function pageWithWorker({ workerPack = true, workerRefuses = () => false } = {})
     localStorage: { getItem: (k) => (k === "apex26.buildWorker" ? "1" : null), setItem() {} },
     ApexRoster: { TRACK_VM: vmFiles, TRACK_WORKER_EXTRA: MANIFEST.TRACK_WORKER_EXTRA } });
   for (const f of ["js/render/shared/assets.js", "js/track/build-client.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), page, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), page, { filename: absSrc(f) });
   const posts = [], workerFetched = [], workers = [];
   page.Worker = class {
     constructor() {
@@ -276,10 +277,10 @@ function pageWithWorker({ workerPack = true, workerRefuses = () => false } = {})
       wctx.importScripts = (...files) => {
         for (const f of files) {
           const rel = f.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
-          vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), wctx, { filename: rel });
+          vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), wctx, { filename: absSrc(rel) });
         }
       };
-      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), wctx);
+      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), wctx, { filename: absSrc("js/track/build-worker.js") });
       this.wctx = wctx;
       workers.push(this);
     }
@@ -406,7 +407,7 @@ function smallClient(extra = {}) {
     localStorage: { getItem: () => "1" }, ApexRoster: { TRACK_VM: ["missing.js"] },
     Log: { info() {}, warn() {} }, TrackSurface: { profile: () => ({}) }, ...extra });
   ctx.window = ctx;
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx, { filename: absSrc("js/track/build-client.js") });
   return ctx.TrackBuildClient;
 }
 
@@ -421,7 +422,7 @@ test("caught worker import failure settles the build, drops the worker and allow
         postMessage(data) { queueMicrotask(() => me.onmessage({ data })); },
       });
       this.ctx.self = this.ctx;
-      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), this.ctx);
+      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), this.ctx, { filename: absSrc("js/track/build-worker.js") });
     }
     postMessage(data) { void this.ctx.onmessage({ data }); }
     terminate() { this.terminated = true; }
