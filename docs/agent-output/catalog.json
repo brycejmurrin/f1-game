@@ -779,6 +779,16 @@
       ]
     },
     {
+      "path": "tools/ci/fleet-board-snapshot.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-board.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",

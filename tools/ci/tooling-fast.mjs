@@ -461,6 +461,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
   // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
   "tests/unit/flaky-quarantine.test.mjs",
+  // Fleet Board snapshot (tools/ci/fleet-board-snapshot.mjs): dashboard datasets from fixtures, no network. < 1 s.
+  "tests/unit/fleet-board-snapshot.test.mjs",
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
