@@ -120,10 +120,10 @@ export function tableRows(agg, frames) {
 export function formatBandTable(rows, { title } = {}) {
   const lines = [];
   if (title) lines.push(`### ${title}`, "");
-  lines.push("| pass | source | band | calls/frame | tris/frame |");
+  lines.push(`| pass | source | band (<${rows[0]?.threshold ?? 150} m = near) | calls/frame | tris/frame |`);
   lines.push("|---|---|---|---:|---:|");
   for (const r of rows) {
-    lines.push(`| ${r.pass} | ${r.source} | ${r.band} (<${r.threshold} m = near) | ${r.calls} | ${r.tris} |`);
+    lines.push(`| ${r.pass} | ${r.source} | ${r.band} | ${r.calls} | ${r.tris} |`);
   }
   if (rows.length === 0) lines.push("| — | — | — | 0 | 0 |");
   return lines.join("\n");
@@ -143,6 +143,9 @@ export function recommend(stats) {
   const mainTris = stats.mainTris || 0;
   const mirrorTris = stats.mirrorTris || 0;
   const farShare = mainRibbon > 0 ? mainFar / mainRibbon : 0;
+  // GLX draws carry no distance at the GL wrap: an unbanded ribbon leaves the far share unmeasured, not 0.
+  const unbanded = stats.mainRibbonUnknown;
+  const farUnmeasured = mainRibbon === 0 && Number.isFinite(unbanded) && unbanded > 0;
   const mirrorShare = mainTris > 0 ? mirrorTris / mainTris : 0;
   const mirrorRibbonShare = mirrorTris > 0 ? mirrorRibbon / mirrorTris : 0;
   const culled = stats.culledChunks || 0;
@@ -171,7 +174,7 @@ export function recommend(stats) {
   return {
     lodPays,
     passFirst,
-    farShare: +farShare.toFixed(3),
+    farShare: farUnmeasured ? null : +farShare.toFixed(3),
     mirrorShare: +mirrorShare.toFixed(3),
     mirrorRibbonShare: +mirrorRibbonShare.toFixed(3),
     culledShare: +culledShare.toFixed(3),
@@ -181,7 +184,7 @@ export function recommend(stats) {
         (passFirst === "mirror"
           ? ` (mirror ribbon ≈ ${mirrorRibbon} tris/frame into a tiny target).`
           : ` (main far ribbon share ${(farShare * 100).toFixed(0)}% / ${mainFar} tris).`)
-      : `#2657 step 2 does NOT clearly pay on these counts (far ribbon share ${(farShare * 100).toFixed(0)}%, mirror/main ${(mirrorShare * 100).toFixed(0)}%); keep as a phone-timeline experiment only.`,
+      : `#2657 step 2 does NOT clearly pay on these counts (far ribbon share ${farUnmeasured ? "unmeasured on this backend" : (farShare * 100).toFixed(0) + "%"}, mirror/main ${(mirrorShare * 100).toFixed(0)}%); keep as a phone-timeline experiment only.`,
   };
 }
 

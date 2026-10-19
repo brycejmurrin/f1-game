@@ -458,6 +458,7 @@ async function runOne(page, track, backend) {
   const rec = recommend({
     mainRibbonNear: cell("main", "ribbon", "near"),
     mainRibbonFar: cell("main", "ribbon", "far"),
+    mainRibbonUnknown: cell("main", "ribbon", "unknown"),
     mirrorRibbon: cell("mirror", "ribbon", "near") + cell("mirror", "ribbon", "far") + cell("mirror", "ribbon", "unknown"),
     mainPropsFar: cell("main", "props", "far"),
     mainTris, mirrorTris,

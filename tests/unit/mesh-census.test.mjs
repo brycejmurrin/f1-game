@@ -93,6 +93,16 @@ test("recommend: no clear pay when far share and mirror are small", () => {
   assert.match(r.summary, /does NOT clearly pay/);
 });
 
+test("recommend: unbanded GLX ribbon leaves the far share unmeasured", () => {
+  const r = recommend({
+    mainRibbonUnknown: 120_000, mirrorRibbon: 35_000,
+    mainTris: 195_000, mirrorTris: 59_000, mainCalls: 117, mirrorCalls: 36,
+  });
+  assert.equal(r.lodPays, false);
+  assert.equal(r.farShare, null);
+  assert.match(r.summary, /far ribbon share unmeasured on this backend/);
+});
+
 test("parseSummaryLine reads = mesh-census JSON", () => {
   const log = "noise\n= mesh-census {\"tracks\":[\"monaco\"],\"errors\":0}\n";
   assert.deepEqual(parseSummaryLine(log), { tracks: ["monaco"], errors: 0 });
