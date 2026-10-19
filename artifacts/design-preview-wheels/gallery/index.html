@@ -1,0 +1,102 @@
+<title>Wheel and Cockpit Candidates</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one pit-wall sheet per candidate, ranked top to bottom; reference left, candidate, nearest part. */
+:root{--bg:#f3f4f2;--panel:#ffffff;--fg:#17191c;--muted:#5b6168;--line:#d9dcd8;--accent:#d2560f;--chip:#e8ebe6;--new:#0b7a55;
+--display:"Barlow Condensed","Arial Narrow",sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121417;--panel:#1a1d21;--fg:#e8eaec;--muted:#9aa1a8;--line:#2c3036;--accent:#ff8a3d;--chip:#262a30;--new:#4fd1a1;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121417;--panel:#1a1d21;--fg:#e8eaec;--muted:#9aa1a8;--line:#2c3036;--accent:#ff8a3d;--chip:#262a30;--new:#4fd1a1;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px}
+main{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font:700 clamp(30px,5vw,46px)/1.05 var(--display);letter-spacing:.01em;margin:0;text-wrap:balance}
+.lede{max-width:68ch;color:var(--muted);margin:8px 0 0}
+.kv{font:13px var(--mono);color:var(--muted);overflow-wrap:anywhere} .kv b{color:var(--fg);font-weight:500}
+ol.short,ul.log{margin:0;padding-left:22px;display:grid;gap:4px;max-width:90ch} ol.short li::marker{font:600 15px var(--display);color:var(--accent)}
+.cand{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:10px}
+.cand header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-start}
+.rank{font:700 40px/1 var(--display);color:var(--accent);min-width:2ch}
+.hd{flex:1 1 280px;min-width:0} h2{font:700 30px/1.05 var(--display);margin:0;letter-spacing:.01em}
+.sid{font:500 13px var(--mono);color:var(--accent);vertical-align:middle;margin-left:6px}
+.new{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--new);margin-left:6px}
+.meta{margin:4px 0 0;color:var(--muted);font-size:13px;overflow-wrap:anywhere} code{font:12.5px var(--mono)}
+.chip{display:inline-block;background:var(--chip);border-radius:3px;padding:1px 7px;font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--fg);margin-right:6px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 22px;margin:0} .stats div{display:flex;flex-direction:column}
+dt{font:500 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)} dd{margin:0;font:500 18px var(--mono);font-variant-numeric:tabular-nums}
+.src{margin:0;max-width:80ch} h3{font:600 13px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:10px 0 0}
+h4{font:600 20px var(--display);margin:6px 0}
+.grid{display:grid;gap:10px} .g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))} .g4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+figure{margin:0;display:flex;flex-direction:column;gap:4px;min-width:0} figure img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:3px;background:var(--chip)}
+figure.ref img{object-fit:contain} figcaption{font-size:12.5px;color:var(--muted)} figcaption a{color:var(--accent)}
+.noref{display:grid;place-items:center;aspect-ratio:16/9;border:1px dashed var(--line);border-radius:3px;color:var(--muted);font-size:13px}
+.note{margin:0;font-size:13px;color:var(--muted)}
+details{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 20px} summary{cursor:pointer;font:600 22px var(--display)}
+summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+footer{color:var(--muted);font-size:13px;max-width:80ch}
+</style>
+<main>
+<div><h1>Wheel and Cockpit Candidates</h1>
+<p class="lede">B·D4 design preview for the garage catalog: shapes real F1 cars ran, each behind an opt-in field the shipped grid never sets. McLaren livery, garage lighting, same camera for candidate and nearest existing part. Say “iterate &lt;id&gt;” to send a design back for another round.</p>
+<p class="kv">round <b>2</b> · branch <b>cursor/design-preview-wheels-c1da</b> @ <b>929758b6</b> · based on #3118 head · no PR</p></div>
+<div><h3>Changelog</h3><ul class="log"><li><b>Round 2.</b> drum: pale drilled face (3 rings of 54 holes) and a wide gold heat-foil band, so it no longer reads as the dark carbon disc. blownaxle: hub ring 0.34→0.44 of the rim, bore 0.55→0.62, orange machined lip and six drive pegs. Reference hunt stopped (Commons 429 fleet-wide): ysplit, drum and halomirror marked &#x27;no CC photo found&#x27;.</li><li><b>Round 1.</b> Five candidates on opt-in fields: ysplit, mirrorframe, halomirror, blownaxle, drum.</li></ul></div>
+<div><h3>Ranked shortlist</h3><ol class="short">
+<li><b>ysplit</b>: reads at every distance, the only one still visible at phone size.</li>
+<li><b>mirrorframe</b>: clear in close-up and 3/4, with two good period references.</li>
+<li><b>halomirror</b>: the largest geometric move; reads in the cockpit close-up.</li>
+<li><b>blownaxle</b>: round 2 hub is wider with a coloured lip; reads in close-up and 3/4.</li>
+<li><b>drum</b>: round 2 face is now pale and drilled with a gold band, clearly not the carbon disc up close.</li></ol></div>
+<section class="cand" id="ysplit">
+<header><div class="rank">#1</div><div class="hd"><h2>Y-Split Mag <span class="sid">ysplit</span></h2>
+<p class="meta"><span class="chip">Wheels</span><code>style_wheels_ysplit</code> · field <code>wheels.spokeSplit</code> </p></div>
+<dl class="stats"><div><dt>Hausdorff vs nearest</dt><dd>131 mm</dd></div><div><dt>Moved area</dt><dd>1.01 m²</dd></div><div><dt>Close-up pixels changed</dt><dd>4.28%</dd></div></dl></header>
+<p class="src"><b>Real-car source.</b> BBS forged-magnesium 18-inch rims, 2022 onward (Y-split spoke pairs, visible on 2026 open rims)</p><p class="src"><b>What changed.</b> Five spokes fork into ten tines at 55% of the span, so the lip carries ten thin tips instead of eight straight blades.</p>
+<h3>Close-up next to its reference</h3>
+<div class="grid g3"><figure class="ref"><img src="ref-baseline.jpg" alt="Real car: Mercedes-AMG F1 W17 E Performance 2026 · CC BY 4.0 · &lt;a href=&quot;https://commons.wikimedia.org/wiki/File:2026_Chinese_GP_-_Mercedes_-_George_Russell_-_Qualifying.jpg&quot;&gt;source&lt;/a&gt;" loading="lazy"><figcaption>Real car: Mercedes-AMG F1 W17 E Performance 2026 · CC BY 4.0 · <a href="https://commons.wikimedia.org/wiki/File:2026_Chinese_GP_-_Mercedes_-_George_Russell_-_Qualifying.jpg">source</a></figcaption></figure><figure class=""><img src="ysplit-wheel.jpg" alt="Candidate" loading="lazy"><figcaption>Candidate</figcaption></figure><figure class=""><img src="ysplit-near.jpg" alt="Nearest existing: mag_forged (Forged Mag)" loading="lazy"><figcaption>Nearest existing: mag_forged (Forged Mag)</figcaption></figure></div>
+<p class="note">No CC photo found of a modern rim close-up. The 2026 W17 shot is the baseline wheel at race distance.</p>
+<h3>Pixel diff vs nearest, and the other angles</h3>
+<div class="grid g4"><figure class=""><img src="ysplit-diff.jpg" alt="Changed pixels (magenta) over the nearest part" loading="lazy"><figcaption>Changed pixels (magenta) over the nearest part</figcaption></figure><figure class=""><img src="ysplit-cockpit.jpg" alt="Cockpit close-up" loading="lazy"><figcaption>Cockpit close-up</figcaption></figure><figure class=""><img src="ysplit-hero.jpg" alt="3/4 garage view" loading="lazy"><figcaption>3/4 garage view</figcaption></figure><figure class=""><img src="ysplit-phone.jpg" alt="Phone 844×390" loading="lazy"><figcaption>Phone 844×390</figcaption></figure></div>
+</section><section class="cand" id="mirrorframe">
+<header><div class="rank">#2</div><div class="hd"><h2>Framed Mirrors <span class="sid">mirrorframe</span></h2>
+<p class="meta"><span class="chip">Cockpit</span><code>style_cockpit_mirrorframe</code> · field <code>cockpit.mirrorFrame</code> </p></div>
+<dl class="stats"><div><dt>Hausdorff vs nearest</dt><dd>59 mm</dd></div><div><dt>Moved area</dt><dd>0.40 m²</dd></div><div><dt>Close-up pixels changed</dt><dd>1.02%</dd></div></dl></header>
+<p class="src"><b>Real-car source.</b> Ferrari SF90 / SF1000 and Red Bull RB16, 2019–2021</p><p class="src"><b>What changed.</b> A lower aero blade and two vertical struts box each housing, 22 mm off it, plus a turning-vane foot outboard.</p>
+<h3>Close-up next to its reference</h3>
+<div class="grid g3"><figure class="ref"><img src="ref-mirrorframe.jpg" alt="Real car: Red Bull Racing RB16 2020 · CC BY 3.0 · &lt;a href=&quot;https://commons.wikimedia.org/wiki/File:Alexander_Albon-Red_Bull_RB16_(3).jpg&quot;&gt;source&lt;/a&gt;" loading="lazy"><figcaption>Real car: Red Bull Racing RB16 2020 · CC BY 3.0 · <a href="https://commons.wikimedia.org/wiki/File:Alexander_Albon-Red_Bull_RB16_(3).jpg">source</a></figcaption></figure><figure class="ref"><img src="ref-mirrorframe_alt.jpg" alt="Real car: Ferrari SF1000 2020 · CC BY 3.0 · &lt;a href=&quot;https://commons.wikimedia.org/wiki/File:Charles_Leclerc-Ferrari_SF1000_(2).jpg&quot;&gt;source&lt;/a&gt;" loading="lazy"><figcaption>Real car: Ferrari SF1000 2020 · CC BY 3.0 · <a href="https://commons.wikimedia.org/wiki/File:Charles_Leclerc-Ferrari_SF1000_(2).jpg">source</a></figcaption></figure><figure class=""><img src="mirrorframe-cockpit.jpg" alt="Candidate" loading="lazy"><figcaption>Candidate</figcaption></figure><figure class=""><img src="mirrorframe-near.jpg" alt="Nearest existing: deflector (Deflector)" loading="lazy"><figcaption>Nearest existing: deflector (Deflector)</figcaption></figure></div>
+<p class="note">RB16 and SF1000 both show the winglet frame round the housing.</p>
+<h3>Pixel diff vs nearest, and the other angles</h3>
+<div class="grid g4"><figure class=""><img src="mirrorframe-diff.jpg" alt="Changed pixels (magenta) over the nearest part" loading="lazy"><figcaption>Changed pixels (magenta) over the nearest part</figcaption></figure><figure class=""><img src="mirrorframe-wheel.jpg" alt="Wheel close-up" loading="lazy"><figcaption>Wheel close-up</figcaption></figure><figure class=""><img src="mirrorframe-hero.jpg" alt="3/4 garage view" loading="lazy"><figcaption>3/4 garage view</figcaption></figure><figure class=""><img src="mirrorframe-phone.jpg" alt="Phone 844×390" loading="lazy"><figcaption>Phone 844×390</figcaption></figure></div>
+</section><section class="cand" id="halomirror">
+<header><div class="rank">#3</div><div class="hd"><h2>Halo Mirrors <span class="sid">halomirror</span></h2>
+<p class="meta"><span class="chip">Cockpit</span><code>style_cockpit_halomirror</code> · field <code>cockpit.mirrorMount</code> </p></div>
+<dl class="stats"><div><dt>Hausdorff vs nearest</dt><dd>194 mm</dd></div><div><dt>Moved area</dt><dd>0.35 m²</dd></div><div><dt>Close-up pixels changed</dt><dd>1.18%</dd></div></dl></header>
+<p class="src"><b>Real-car source.</b> Ferrari SF71H, 2018 (from the Spanish GP); halo-strut mounts still run in 2026</p><p class="src"><b>What changed.</b> Housings move up onto the halo crown corners (y 0.83, 12 cm further forward) on two swept stays; the tub stalk and outer stay go.</p>
+<h3>Close-up next to its reference</h3>
+<div class="grid g3"><figure class="ref"><img src="ref-halomirror.jpg" alt="Real car: Red Bull Racing (2026 livery; model not named on page) 2026 · CC BY-SA 4.0 · &lt;a href=&quot;https://commons.wikimedia.org/wiki/File:British_Grand_Prix_2026_Silverstone_(55383745741).jpg&quot;&gt;source&lt;/a&gt;" loading="lazy"><figcaption>Real car: Red Bull Racing (2026 livery; model not named on page) 2026 · CC BY-SA 4.0 · <a href="https://commons.wikimedia.org/wiki/File:British_Grand_Prix_2026_Silverstone_(55383745741).jpg">source</a></figcaption></figure><figure class=""><img src="halomirror-cockpit.jpg" alt="Candidate" loading="lazy"><figcaption>Candidate</figcaption></figure><figure class=""><img src="halomirror-near.jpg" alt="Nearest existing: faired_halo (Faired Halo)" loading="lazy"><figcaption>Nearest existing: faired_halo (Faired Halo)</figcaption></figure></div>
+<p class="note">No CC photo found of the SF71H mount. The 2026 Red Bull shot shows a mirror on the halo strut.</p>
+<h3>Pixel diff vs nearest, and the other angles</h3>
+<div class="grid g4"><figure class=""><img src="halomirror-diff.jpg" alt="Changed pixels (magenta) over the nearest part" loading="lazy"><figcaption>Changed pixels (magenta) over the nearest part</figcaption></figure><figure class=""><img src="halomirror-wheel.jpg" alt="Wheel close-up" loading="lazy"><figcaption>Wheel close-up</figcaption></figure><figure class=""><img src="halomirror-hero.jpg" alt="3/4 garage view" loading="lazy"><figcaption>3/4 garage view</figcaption></figure><figure class=""><img src="halomirror-phone.jpg" alt="Phone 844×390" loading="lazy"><figcaption>Phone 844×390</figcaption></figure></div>
+</section><section class="cand" id="blownaxle">
+<header><div class="rank">#4</div><div class="hd"><h2>Blown Axle <span class="sid">blownaxle</span></h2>
+<p class="meta"><span class="chip">Wheels</span><code>style_wheels_blownaxle</code> · field <code>wheels.blownAxle</code> <span class="new">changed in round 2</span></p></div>
+<dl class="stats"><div><dt>Hausdorff vs nearest</dt><dd>60 mm</dd></div><div><dt>Moved area</dt><dd>1.13 m²</dd></div><div><dt>Close-up pixels changed</dt><dd>3.55%</dd></div></dl></header>
+<p class="src"><b>Real-car source.</b> Hollow "blown" front axles, Mercedes W08–W11 and Ferrari SF70H–SF21, 2017–2021</p><p class="src"><b>What changed.</b> The centre nut gives way to a wide hub ring (0.44 of the rim) round a dark bore, with an orange machined lip and six drive pegs.</p>
+<h3>Close-up next to its reference</h3>
+<div class="grid g3"><figure class="ref"><img src="ref-blownaxle.jpg" alt="Real car: Ferrari SF70H 2017 · CC BY-SA 4.0 · &lt;a href=&quot;https://commons.wikimedia.org/wiki/File:2017_Ferrari_SF70H.jpg&quot;&gt;source&lt;/a&gt;" loading="lazy"><figcaption>Real car: Ferrari SF70H 2017 · CC BY-SA 4.0 · <a href="https://commons.wikimedia.org/wiki/File:2017_Ferrari_SF70H.jpg">source</a></figcaption></figure><figure class=""><img src="blownaxle-wheel.jpg" alt="Candidate" loading="lazy"><figcaption>Candidate</figcaption></figure><figure class=""><img src="blownaxle-near.jpg" alt="Nearest existing: open_spoke (Open Spoke)" loading="lazy"><figcaption>Nearest existing: open_spoke (Open Spoke)</figcaption></figure></div>
+<p class="note">Only a hint: the SF70H garage shot shows the hollow duct behind the wheel, not a clean hub.</p>
+<h3>Pixel diff vs nearest, and the other angles</h3>
+<div class="grid g4"><figure class=""><img src="blownaxle-diff.jpg" alt="Changed pixels (magenta) over the nearest part" loading="lazy"><figcaption>Changed pixels (magenta) over the nearest part</figcaption></figure><figure class=""><img src="blownaxle-cockpit.jpg" alt="Cockpit close-up" loading="lazy"><figcaption>Cockpit close-up</figcaption></figure><figure class=""><img src="blownaxle-hero.jpg" alt="3/4 garage view" loading="lazy"><figcaption>3/4 garage view</figcaption></figure><figure class=""><img src="blownaxle-phone.jpg" alt="Phone 844×390" loading="lazy"><figcaption>Phone 844×390</figcaption></figure></div>
+</section><section class="cand" id="drum">
+<header><div class="rank">#5</div><div class="hd"><h2>Cake-Tin Drum <span class="sid">drum</span></h2>
+<p class="meta"><span class="chip">Brakes</span><code>style_brakes_drum</code> · field <code>brakes.drum</code> <span class="new">changed in round 2</span></p></div>
+<dl class="stats"><div><dt>Hausdorff vs nearest</dt><dd>65 mm</dd></div><div><dt>Moved area</dt><dd>2.78 m²</dd></div><div><dt>Close-up pixels changed</dt><dd>3.22%</dd></div></dl></header>
+<p class="src"><b>Real-car source.</b> Carbon brake drums ("cake tins") round the disc, 2017–2021 front corners</p><p class="src"><b>What changed.</b> A pale weave drum encloses the disc: three rings of cooling holes on each face and a wide gold heat-foil band at the outer edge.</p>
+<h3>Close-up next to its reference</h3>
+<div class="grid g3"><div class="noref">No CC photo found</div><figure class=""><img src="drum-wheel.jpg" alt="Candidate" loading="lazy"><figcaption>Candidate</figcaption></figure><figure class=""><img src="drum-near.jpg" alt="Nearest existing: carbon (Carbon), same Open Spoke wheel" loading="lazy"><figcaption>Nearest existing: carbon (Carbon), same Open Spoke wheel</figcaption></figure></div>
+<p class="note">No CC photo found (three searches; Commons rate-limited).</p>
+<h3>Pixel diff vs nearest, and the other angles</h3>
+<div class="grid g4"><figure class=""><img src="drum-diff.jpg" alt="Changed pixels (magenta) over the nearest part" loading="lazy"><figcaption>Changed pixels (magenta) over the nearest part</figcaption></figure><figure class=""><img src="drum-cockpit.jpg" alt="Cockpit close-up" loading="lazy"><figcaption>Cockpit close-up</figcaption></figure><figure class=""><img src="drum-hero.jpg" alt="3/4 garage view" loading="lazy"><figcaption>3/4 garage view</figcaption></figure><figure class=""><img src="drum-phone.jpg" alt="Phone 844×390" loading="lazy"><figcaption>Phone 844×390</figcaption></figure></div>
+</section>
+<details><summary>Round 1 (earlier designs, changed since)</summary><div class="r1row"><h4>Blown Axle <span class="sid">blownaxle</span> · 3.53% changed</h4><div class="grid g3"><figure class=""><img src="r1/blownaxle-wheel.jpg" alt="Round 1 candidate" loading="lazy"><figcaption>Round 1 candidate</figcaption></figure><figure class=""><img src="r1/blownaxle-near.jpg" alt="Nearest existing" loading="lazy"><figcaption>Nearest existing</figcaption></figure><figure class=""><img src="r1/blownaxle-diff.jpg" alt="Round 1 diff" loading="lazy"><figcaption>Round 1 diff</figcaption></figure></div></div><div class="r1row"><h4>Cake-Tin Drum <span class="sid">drum</span> · 1.86% changed</h4><div class="grid g3"><figure class=""><img src="r1/drum-wheel.jpg" alt="Round 1 candidate" loading="lazy"><figcaption>Round 1 candidate</figcaption></figure><figure class=""><img src="r1/drum-near.jpg" alt="Nearest existing" loading="lazy"><figcaption>Nearest existing</figcaption></figure><figure class=""><img src="r1/drum-diff.jpg" alt="Round 1 diff" loading="lazy"><figcaption>Round 1 diff</figcaption></figure></div></div></details>
+<footer>Diff threshold: any channel moving more than 24/255. Hausdorff and moved area come from tools/car/parts-sweep.mjs compare() on the full car mesh against the candidate's equivalent. Phone frames use the garage hero view at 844×390. Reference photos are from Wikimedia Commons under the licences shown; authors are on each source page. Ranked: ysplit · mirrorframe · halomirror · blownaxle · drum.</footer>
+</main>
