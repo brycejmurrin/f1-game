@@ -5,7 +5,13 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 - Cloud launch prompts must include `OWNED:` / `FORBIDDEN:` path globs, done-when, shot/test caps, and the exact line `Do not enable auto-merge or merge.` (it limits that worker's own actions; it is not a veto and never goes into a PR body — a hold is `MERGE-HOLD:`),
   mark ready only after `ready-gate.mjs` exits 0; stand down on overlap. The template in `references/orchestrator.md` carries every field.
 - **Hard lines** (full list and why: `orchestrator.md` §Hard lines): `permission_mode: "auto"`; `source_revision` = the deploy branch or a NAMED integration branch; model stated; who opens the PR and its base; the full deliverable checklist in the first brief. **Quota gate:** read `rate_limit_info` from `get_session` before each `create_session` and each Agent wave > 5, stop at `allowed_warning`, stagger launches ≥ 30 s and confirm each (#2380).
-- Model id `default` only for a cloud launch; never invent another. Own notes go to `docs/notes/<topic>.md`.
+- **Model by task** (Bryce 2026-10-19, "decide which workers should be opus or [sonnet] based on the issue. Make this standard."). Every
+  `create_session` and fresh-session scheduled task passes an explicit model, and the brief carries `MODEL: <id> — <reason>`:
+  - `claude-opus-5-5`: a design or look call, a rework of a rejected approach, a red with no known cause, or a change in physics,
+    a renderer backend or `js/game.js`.
+  - `claude-sonnet-5-5`: everything else: port a known fix, sync, one screen's CSS, tests, docs, PR babysitting, surveys.
+  - A Sonnet worker that finds the task is Opus-shaped sets `needs-decision` rather than grinding; never Fable for a worker.
+    An Opus lane keeps the Sonnet cost cap (below). Never invent another id. Own notes go to `docs/notes/<topic>.md`.
 - Lane mutex: garage CSS → UI Survey; `js/car/*` → Cars; scenery (`js/circuits/scenery/*`) → Tracks; `js/game.js` needs `who-is-on-it --claim` before an edit. Lighting: ≤ 1 concurrent lighting agent, OWNED=`js/lighting/**` only, no scenery PRs from that lane.
 - Review farm: ≤ 2 concurrent review agents unless the user overrides. ≤ 2 parallel nested subagents inside one cloud agent; more → separate agents with disjoint OWNED.
 - Resolve swarm: only red/dirty PRs with no specialist owner (capped); one `--claim` per PR; stand down if a specialist already owns the paths.
