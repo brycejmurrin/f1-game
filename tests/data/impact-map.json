@@ -1931,6 +1931,7 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "*": [
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/light-grid.test.mjs"
       ]
     },
@@ -2125,11 +2126,15 @@
       ]
     },
     "js/camera/tuner-panel.js": {
+      "buildCamTunePanel": [
+        "tests/unit/camera-tuner-a11y.test.mjs"
+      ],
       "closeCamTuner": [
         "tests/unit/flyby-panel.test.mjs"
       ],
       "create": [
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -2138,8 +2143,7 @@
         "tests/unit/flyby-panel.test.mjs"
       ],
       "*": [
-        "tests/specs/camera-tuner.spec.js",
-        "tests/unit/camera-tuner-a11y.test.mjs"
+        "tests/specs/camera-tuner.spec.js"
       ]
     },
     "js/camera/vantage.js": {
@@ -6444,6 +6448,7 @@
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
@@ -6471,6 +6476,7 @@
       "tickBody": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -6533,6 +6539,7 @@
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
         "tests/unit/agent-config.test.mjs",
+        "tests/unit/agent-output.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
@@ -6748,6 +6755,9 @@
       "stop": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "tick": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "timed": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -6840,6 +6850,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "init": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
@@ -6886,7 +6897,6 @@
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
-        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
@@ -6907,6 +6917,9 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "driveOutLeft": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "endGarageRes": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "endHome": [
@@ -6938,8 +6951,14 @@
       "presentOpts": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "renderSetupPreview": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "spMeshBust": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
+      ],
+      "startArrivalPreview": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "startDriveOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -9082,6 +9101,7 @@
         "tests/unit/thermal-drift.test.mjs"
       ],
       "init": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
@@ -9089,6 +9109,7 @@
         "tests/unit/render-rate.test.mjs"
       ],
       "setMode": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ]
     },

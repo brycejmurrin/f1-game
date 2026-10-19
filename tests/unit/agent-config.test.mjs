@@ -30,6 +30,84 @@ const stripFrontmatter = (text) => {
   return { fm: m ? m[1] : "", body: m ? text.slice(m[0].length) : text };
 };
 
+// Parse only the first YAML document: a body line must never satisfy the schema.
+const memoryType = (text) => {
+  const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] || "";
+  const data = parseYAML(fm);
+  return data?.type ?? data?.metadata?.type;
+};
+const MEMORY_TYPES = new Set(["user", "feedback", "project", "reference"]);
+
+// Local Markdown targets are relative to their topic. Wiki targets name another
+// topic in this store. This checks paths, not the continued truth of the prose.
+function memoryLinkIssues(files, targetExists) {
+  const issues = [];
+  const linked = new Set();
+  for (const [file, text] of files) {
+    const body = stripFrontmatter(text).body
+      .replace(/```[^\n]*\n[\s\S]*?```|~~~[^\n]*\n[\s\S]*?~~~/g, "")
+      .replace(/`[^`\n]*`/g, "");
+    const definitions = new Map([...body.matchAll(/^ {0,3}\[([^\]\n]+)\]:\s*(<[^>]+>|[^\s]+)(?:[^\n]*)$/gm)]
+      .map((m) => [m[1].toLowerCase(), m[2].replace(/^<|>$/g, "")]));
+    const targets = [
+      ...[...body.matchAll(/!?\[[^\]\n]*\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+["'][^\n]*?["'])?\s*\)/g)]
+        .map((m) => ({ raw: m[1].replace(/^<|>$/g, ""), wiki: false })),
+      ...[...body.matchAll(/!?\[([^\]\n]+)\]\[([^\]\n]*)\]/g)]
+        .map((m) => ({ raw: definitions.get((m[2] || m[1]).toLowerCase()), wiki: false })),
+      ...[...body.matchAll(/\[\[([^\]\n]+)\]\]/g)]
+        .map((m) => ({ raw: m[1].split("|")[0], wiki: true })),
+    ];
+    for (const { raw, wiki } of targets) {
+      if (!raw || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(raw)) continue;
+      let rel;
+      try { rel = decodeURIComponent(raw.split(/[?#]/)[0]); }
+      catch { issues.push(`${file}: invalid link ${raw}`); continue; }
+      if (!rel) continue;
+      if (wiki && !path.extname(rel)) rel += ".md";
+      const target = path.resolve(".claude/memory", rel);
+      if (file === "MEMORY.md" && path.dirname(target) === path.resolve(".claude/memory"))
+        linked.add(path.basename(target));
+      if (!targetExists(rel)) issues.push(`${file}: missing link ${raw}`);
+    }
+  }
+  for (const file of files.keys())
+    if (file !== "MEMORY.md" && !linked.has(file)) issues.push(`${file}: orphan topic missing from MEMORY.md`);
+  return issues;
+}
+
+test("memory type schema only accepts top-level or metadata type in the first frontmatter", () => {
+  for (const type of MEMORY_TYPES) {
+    assert.equal(memoryType(`---\ntype: ${type}\n---\nbody\n`), type);
+    assert.equal(memoryType(`---\r\ntype: ${type}\r\n---`), type);
+    assert.equal(memoryType(`---\nmetadata:\n  type: ${type}\n---\nbody\n`), type);
+  }
+  for (const text of [
+    "---\nmetadata:\n  type: invented\n---\n\ntype: feedback\n---\nbody\n",
+    "---\nname: missing\n---\n\ntype: user\n---\n",
+    "---\nother:\n  type: feedback\n---\nbody\n",
+    "---\ntype: invented\nmetadata:\n  type: user\n---\n",
+    "body\n---\ntype: feedback\n---\n",
+  ]) assert.ok(!MEMORY_TYPES.has(memoryType(text)), `accepted invalid topic: ${text}`);
+  assert.throws(() => memoryType("---\ntype: [broken\n---\nbody\n"));
+});
+
+test("memory link guard catches missing Markdown/wiki targets and orphan topics", () => {
+  const files = new Map([
+    ["MEMORY.md", "- [A](a.md)\n- [B](b.md)\n"],
+    ["a.md", "---\ntype: user\n---\n[B](b.md#section) [[b|B]] [docs](../../docs/topic.md) [web](https://example.com) [anchor](#local) `[[ignored]]`\n```md\n[[example]]\n```\n"],
+    ["b.md", "---\ntype: feedback\n---\nbody\n"],
+  ]);
+  const exists = (rel) => ["a.md", "b.md", "../../docs/topic.md"].includes(rel);
+  assert.deepEqual(memoryLinkIssues(files, exists), []);
+  files.set("a.md", "[gone](missing.md#part) [[missing-wiki]] [reference][gone]\n[gone]: absent.md\n");
+  files.set("orphan.md", "body");
+  assert.deepEqual(memoryLinkIssues(files, exists), [
+    "a.md: missing link missing.md#part", "a.md: missing link absent.md", "a.md: missing link missing-wiki", "orphan.md: orphan topic missing from MEMORY.md",
+  ]);
+  files.set("MEMORY.md", "- [A](a.md)\n- [Missing](gone.md)\n");
+  assert.ok(memoryLinkIssues(files, exists).includes("MEMORY.md: missing link gone.md"));
+});
+
 for (const name of ["compound-debug", "compound-review", "compound-verify"]) {
   test(`portable ${name} keeps the explicit F1 project contract`, () => {
     const base = `.claude/skills/${name}`;
@@ -442,9 +520,16 @@ test("auto memory is on, synced, and its tracked copy stays small, typed and sec
     // latter shape (2026-09-30: it dropped a top-level `type` and this pin
     // reddened PR #498's guards), and the auto-memory format defines both.
     if (f !== "MEMORY.md")
-      assert.match(text, /^---\n[\s\S]*?^\s*type:\s*(user|feedback|project|reference)\s*$[\s\S]*?^---/m,
+      assert.ok(MEMORY_TYPES.has(memoryType(text)),
         `.claude/memory/${f} needs frontmatter with type: user|feedback|project|reference (top level or under metadata:)`);
   }
+});
+
+test("shared memory has no orphan topics or missing relative Markdown/wiki links", () => {
+  const dir = path.join(ROOT, ".claude/memory");
+  const files = new Map(fs.readdirSync(dir).filter((f) => f.endsWith(".md"))
+    .map((f) => [f, fs.readFileSync(path.join(dir, f), "utf8")]));
+  assert.deepEqual(memoryLinkIssues(files, (rel) => fs.existsSync(path.resolve(dir, rel))), []);
 });
 
 // docs/notes/SECOND-BRAIN-2026-10-14.md: GitHub Copilot Memory stores the code

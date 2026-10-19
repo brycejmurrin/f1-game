@@ -1044,3 +1044,99 @@ test('a settings change abandons the warm wait and restores its owner', async ()
   assert.equal(h.intros.length, 0);
   assert.equal(h.announcements.length, 0);
 });
+
+// Run the production rAF tick, RenderRate gate and garage dispatch into the
+// actual arrival/preview clocks. Calling Arrival.step(0.1) alone misses the
+// outer render clamp which used to halve playback speed at 10 FPS.
+function arrivalTickHarness({ paused = false, preview = false, garage = true, rate = 'auto' } = {}) {
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const camera = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const { $, arrival } = harness();
+  const noop = () => {};
+  const c = { $, arrival, GarageArrival: Arrival, Log: { info: noop },
+    lastFrame: 0, paused, setupPreviewOn: garage && !preview, state: paused || !garage ? 'race' : 'menu',
+    headlessMode: false, track: null, player: null, cars: [], soundOn: false, raceT: 0,
+    _poseAt: null, _audioParamStep: true, _carWarm: { busy: false }, _studio: null,
+    _menuGate: { warm: 0, garageWarm: 0 }, _softEl: null, canvas: { style: {} },
+    loadingScreen: { phase: () => '', lowerWaitPlate: noop, active: () => false },
+    gfx: { warming: () => false, resize: noop },
+    uiExperience: { renderHome: () => false, trackActive: () => false },
+    UiExperience: { resumeHolding: () => false }, PerfGov: { tick: noop }, PerfSpans: { begin: noop, end: noop },
+    mirrorPass: { preparing: () => false, cancelPreparation: noop },
+    Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop },
+    onboard: { tick: noop }, netPlay: { tick: noop, active: () => false }, director: { tick: noop },
+    replayBuf: { isScrubbing: () => false, tickScrub: noop, onTick: noop }, banner: { tick: noop },
+    feel: { hitStop: 0 }, frozen: true, physAcc: 0, PHYS_DT: 1 / 60, renderAlpha: 1,
+    clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), photoMode: false,
+    GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetRoad: noop, vTop: noop,
+    XrBoot: { comfort: () => false }, updateHud: noop,
+    els: { overlay: { hidden: true }, lighting: { hidden: false }, camtune: { hidden: true }, flyby: { hidden: true }, pmsettings: { hidden: true } },
+    home: { active: false }, driveOut: null, endHome: noop, reducedMotion: () => false,
+    pinGarageRes: noop, endGarageRes: noop, setupCam: { endGarageRes: noop }, studioShown: noop,
+    window: { addEventListener: noop }, requestAnimationFrame: noop,
+    previewFrames: [], worldFrames: [],
+  };
+  c.G = { get setupPreviewOn() { return c.setupPreviewOn; }, set setupPreviewOn(v) { c.setupPreviewOn = v; }, store: { get: () => null } };
+  vm.createContext(c);
+  vm.runInContext(readFileSync(new URL('../../js/perf/render-rate.js', import.meta.url), 'utf8'), c);
+  vm.runInContext(`RenderRate.init({ isMobile: true }); RenderRate.setMode(${JSON.stringify(rate)});`, c);
+  const previewStart = camera.indexOf('// THE ARRIVAL PREVIEW'), previewEnd = camera.indexOf('const arrivalCar', previewStart);
+  assert.ok(previewStart >= 0 && previewEnd > previewStart);
+  vm.runInContext(camera.slice(previewStart, previewEnd), c);
+  const dispatchStart = camera.indexOf('function renderSetupPreview(dt,'), dispatchEnd = camera.indexOf('\n  if (!home.active &&', dispatchStart);
+  assert.ok(dispatchStart >= 0 && dispatchEnd > dispatchStart);
+  vm.runInContext(camera.slice(dispatchStart, dispatchEnd) + '\n  previewFrames.push({ dt, pose: arriving }); return true;\n}', c);
+  const renderStart = game.indexOf('function render(dt) {'), renderEnd = game.indexOf('  setupCam.endGarageRes();', renderStart);
+  const lostStart = game.lastIndexOf('function gfxContextLost()', renderStart);
+  assert.ok(lostStart >= 0 && renderStart > lostStart && renderEnd > renderStart);
+  vm.runInContext(game.slice(lostStart, renderEnd) + '\n worldFrames.push(dt);\n}', c);
+  const tickStart = game.indexOf('function tickBody(now) {'), tickEnd = game.indexOf('\n// ---------- car setup panel', tickStart);
+  assert.ok(tickStart >= 0 && tickEnd > tickStart);
+  vm.runInContext(game.slice(tickStart, tickEnd), c);
+  if (preview) assert.equal(vm.runInContext("startArrivalPreview('in')", c), true);
+  else if (garage) arrival.start();
+  return { c, arrival, tick: (ms) => c.tickBody(ms),
+    playing: () => preview ? !!vm.runInContext('preview', c) : arrival.state.active,
+    pose: () => c.previewFrames.at(-1)?.pose };
+}
+
+test('the real menu tick keeps WORK ON CAR arrivals at their authored pace at 10 and 60 FPS', () => {
+  for (const [rate, fps] of [['auto', 10], ['auto', 60], ['30', 10], ['30', 60], ['half', 60]]) {
+    const h = arrivalTickHarness({ rate });
+    for (let i = 1; i <= fps * 5; i++) h.tick(i * 1000 / fps);
+    const expected = Arrival.pose(5, Arrival.DEFAULT);
+    assert.ok(Math.abs(h.pose().z - expected.z) < 1e-8, `${rate}/${fps} FPS: five wall seconds reach the same authored position`);
+    let frame = fps * 5;
+    while (h.playing() && frame < fps * 20) h.tick(++frame * 1000 / fps);
+    assert.ok(Math.abs(frame / fps - Arrival.DURATION) <= 0.21,
+      `${rate}/${fps} FPS: finishes in ${frame / fps}s, rather than slow motion`);
+    assert.equal(h.arrival.state.z, 0);
+  }
+});
+
+test('the real paused tick keeps settings PREVIEW IN at wall pace on a slow phone', () => {
+  for (const fps of [10, 60]) {
+    const h = arrivalTickHarness({ paused: true, preview: true });
+    for (let i = 1; i <= fps * 5; i++) h.tick(i * 1000 / fps);
+    const expected = Arrival.pose(5, Arrival.DEFAULT);
+    assert.ok(Math.abs(h.pose().z - expected.z) < 1e-8, `${fps} FPS: preview advances five authored seconds`);
+    let frame = fps * 5;
+    while (h.playing() && frame < fps * 20) h.tick(++frame * 1000 / fps);
+    assert.ok(Math.abs(frame / fps - Arrival.DURATION) <= 0.11, `${fps} FPS: preview ends at the saved speed`);
+    assert.equal(h.c.setupPreviewOn, false);
+  }
+});
+
+test('garage ticks retain the 100 ms background-stall bound and other render paths retain 50 ms', () => {
+  for (const paused of [false, true]) {
+    const h = arrivalTickHarness({ paused });
+    h.tick(60000);
+    assert.equal(h.c.previewFrames.length, 1);
+    assert.equal(h.c.previewFrames[0].dt, 0.1, 'a minute-long background gap is only one bounded garage step');
+    assert.equal(h.arrival.state.door, Arrival.pose(0.1).door);
+    assert.equal(h.arrival.state.active, true);
+    const world = arrivalTickHarness({ paused, garage: false });
+    world.tick(60000);
+    assert.deepEqual(world.c.worldFrames, [0.05], 'world and paused-camera visual damping stay at 50 ms');
+  }
+});

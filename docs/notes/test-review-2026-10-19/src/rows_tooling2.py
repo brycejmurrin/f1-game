@@ -1,0 +1,166 @@
+# Rows for batch tooling-2 (final).
+# Synth checks run against origin/claude/f1-game-project-26h3ng @ 7b27c153.
+#
+# ---- tooling-2 (REPORT final, comment 6260857784)
+# status: FINAL. 67 unit files, 0 specs (~15.9k lines); every file run alone with `node --test <file>`: 67/67 pass, 0 fail,
+#   0 skipped, no retry, no flake seen (single run each). Reads split across 2 read-only subagents (test + module under
+#   test); reviewer ran every file, drove the debugger, and re-read cvd-palette:225, deploy-tool:61 + deploy.mjs:133,
+#   flaky-quarantine:200-221, fill-gating:95, dev-tools-vm:262 directly (duel-row confirmed by the debugger); findings
+#   8-13 and the gap bullets are subagent reads not individually re-verified (rows T2-08..T2-13 are U).
+#   About 32 of 67 files are game/render/camera/car/UI/desktop unit tests, not tooling (mis-batched; move for pass 2).
+# debugger: js-debugger MCP lists Chrome page targets only (#2957, = DBG-01) -> hand-rolled CDP client on
+#   node --inspect-brk --experimental-test-isolation=none (setBreakpointByUrl, hitBreakpoints counts); vm-evaluated code via
+#   beforeScriptExecution pause then setBreakpoint on the function-declaration line (cdp,vm); child processes via
+#   NODE_V8_COVERAGE (function-level only). Gotcha: a console.log condition silently reports 0 hits in vm contexts (no
+#   `console`), count hitBreakpoints instead (re-confirms DBG-02). A "hit" means the function ran, not that a branch did.
+#   n.a. (pure text scans): day-sky-palette-storm-deck, delta-sign-colour, comment-citations, component-inventory,
+#   curvature-channels, committed-images, docs-integrity (only ladder imports run); cross-tool-guards and environment-json
+#   test bash hooks. Not hit: race-settings.js:434 chooseDuel (duel-row), flake-tally.mjs:419 listAllRuns; daily-challenge
+#   plan :28 reported 0 hits (default-param signature) though it runs under every assertion.
+# slowest: cover-legibility 192s, coplanar-faces 173s (child CLI rebuilds every circuit), classification-vm 37s,
+#   dev-tools-vm 28s, deploy-tool 24s, episode-transients 22s, ci-coverage 18s; all others < 12s.
+# not run: nothing skipped. Debugger not completed for cover-legibility (bp on crest-sweep.mjs:278 stalled the run >8 min,
+#   killed) and coplanar-faces (sweep is a child CLI, not re-run under the inspector); bash in ci-pr-base,
+#   cross-tool-guards, environment-json not instrumented; no mutation testing.
+# low-impact gaps (not rows): desktop/app-protocol.js handleScheme/registerScheme (206/416/traversal) never run (T2-14 covers
+#   the file); deploy.mjs openPr/gateOnly/main flow untested; packDryRun negative paths, stampStaged hash determinism, darwin
+#   findUnpackedBinary; flake-tally listAllRuns :419; fleet-board main()/--apply; ci-rerun.decide() with null
+#   pull_requests or schedule events; daily-challenge class !== "open" selection; update-check stop()/checkController;
+#   controller-profiles __proto__ keys; evaluate-scope-lint false-negative classes (aliases, shadowing) and its real-file
+#   regression test t.skip()s in shallow CI (commit 58614db2 absent).
+# consolidation candidates (hygiene, not rows): class-usage vs component-inventory (two CSS class parsers); desktop.yml
+#   asserts in desktop-native vs desktop-unpacked-bin L70-88; CAM_MODES order pinned in director and extra-rigs; duel vs
+#   duel-row; deploy-staging vs deploy-stamp (same bump-cache fixtures); oversized: ci-coverage 2144 lines / 6+ concerns,
+#   deploy-tool 807, docs-integrity 1073, fin-design 931, followup-platform (3 unrelated subjects, section() has no
+#   found-assert). Large source-regex blocks inside behavioural files: field-lod L157-180/L384-420, desktop-native
+#   L21-65/L111-146, droplets-spray L174-179, fov-fit L102-117, director L358-368, forecast L263-268, deploy-tool L463-570.
+
+NEW = [
+("T2-01","tooling-2","tests/unit/flaky-quarantine.test.mjs","200-231","hygiene","high","high",
+ "asserts the LIVE ledger: FILE.quarantine[0] owner/evidence/expires (:201-208) and the menu-baseline row with expires === \"2026-10-23\" (:220, :222-230)",
+ "retiring, reordering or extending a quarantine row (as the ledger tells you to) throws TypeError or reds the unit gate on unrelated PRs; the menu-baseline row expires 4 days from this review",
+ "rewrite against temp-dir fixture ledgers, as the test at :233-246 already does","S","ci",R,
+ "confirmed@7b27c153: :201 FILE.quarantine[0] row fields asserted, :220 row.expires === \"2026-10-23\", :218 row from .find() dereferenced unguarded; tests/data/flaky-quarantine.json holds exactly those two live rows","pipeline",[],None),
+("T2-02","tooling-2","tests/unit/deploy-tool.test.mjs","61-65","vacuous","high","high",
+ "touchedCircuits(\"HEAD~1\") returns [] when git diff fails (changedPaths(...) || [], deploy.mjs:133); the test only asserts isArray plus a loop over a possibly empty list",
+ "in a depth-1 clone it asserts nothing; the function that routes which circuit sweeps run has no real assertion",
+ "temp repo with a known js/circuits/<new:x>.js commit; assert the exact ids","S","ci",R,
+ "confirmed@7b27c153: test :61-65 isArray + for-loop only; deploy.mjs:133-134 `(changedPaths(base, cwd) || [])`","pipeline",["condition-wrapped"],None),
+("T2-03","tooling-2","tests/unit/deploy-tool.test.mjs","137-141","vacuous","high","high",
+ "preflight() is only checked to return an array of strings; no refusal (dirty tree, wrong branch) is asserted",
+ "preflight is the push safety function and every refusal path could break with the test green",
+ "stub git state in a temp repo; assert each named refusal","M","ci",R,
+ "confirmed@7b27c153: test :137-141 isArray + typeof string loop; preflight() defined deploy.mjs:93","pipeline",["tautology"],None),
+("T2-04","tooling-2","tests/unit/cvd-palette.test.mjs","187,225","tautology","med","high",
+ "assert.equal(rows.size, 0) where rows = new Map() (:187) is never written anywhere in the file; also :113 `|| lin[2]===0` disjunction",
+ "reads like a UI-row check but cannot fail",
+ "delete it or assert on the rows AppearanceOpts really builds","S","ui-a11y",R,None,"player",["tautology"],None),
+("T2-05","tooling-2","tests/unit/dev-tools-vm.test.mjs","262,274,281,347,398-399","tautology","high","high",
+ "typeof x === \"number\" accepts NaN/Infinity for the probe/physState/scan fields; virgin() (:31) picks the boot by fn.toString().includes(\".race(\")",
+ "the __apex probe surface agents rely on can go NaN with the suite green",
+ "use Number.isFinite; dedupe :123-127; pass an explicit {race:true} to virgin()","S","agent-api",R,
+ "confirmed@7b27c153: :262 `assert.equal(typeof p[k], \"number\")` over x/angle/k/hw/speed/s","pipeline",["tautology"],None),
+("T2-06","tooling-2","tests/unit/duel-row.test.mjs","29-34,56-65","wrong-target","high","high",
+ "round trip runs on pick(), a hand copy of the wire() handler; debugger shows chooseDuel (race-settings.js:434) never hit in the whole file, only duelValue (:75)",
+ "choosing a legend could set the wrong rival in game with all 12 tests green",
+ "drive the real handler via create(G) with a fake G; merge with duel.test.mjs","M","race-ui",R,
+ "confirmed@7b27c153: test pick() :29-34 re-implements st.duel/st.legend; real chooseDuel race-settings.js:434-440 also calls paintDuel/closeDuelPicker/uiSelect, none exercised","player",["stub-copy"],None),
+("T2-07","tooling-2","tests/unit/day-sky-palette-storm-deck.test.mjs","9-26","source-scan","high","high",
+ "whole file is regex over atmosphere.js and three shader sources; nothing runs; /fogSun/ and >= 0.45) are satisfied by a comment",
+ "no day-sky blend or storm-deck behaviour is verified; any rewrite or comment edit flips it without a real change",
+ "VM-load atmosphere.js and assert day/storm outputs, or delete if a lighting spec covers it","M","lighting",R,
+ "confirmed@7b27c153: all 3 tests are assert.match on src text (:10-13,:19-21,:25); no module executed","player",["source-scan"],None),
+("T2-08","tooling-2","tests/unit/docs-integrity.test.mjs","345-347,554-557,570,1023-1041,1047-1073","hygiene","med","med",
+ "claim-scanning loops have no minimum-match floor; :1047-1073 pins a one-time prose decision (#1637) that fails on any reword",
+ "a doc rewording makes a guard silently check nothing; an unrelated rewording reds the commit hook",
+ "add seen >= 1 per loop; delete the decision pin; split the 1073-line file","M","test-infra",U,None,"hygiene",["condition-wrapped"],None),
+("T2-09","tooling-2","tests/unit/episode-transients.test.mjs","34-44","gap","med","med",
+ "no positive control that episodeLeaks reports a leaked per-car field; if snapshot() returned no per-car keys both track tests would still pass",
+ "the post-reset determinism guard could be dead without anyone noticing",
+ "plant cars[i]._leak = n once and assert it is reported","S","determinism",U,None,"pipeline",["tautology"],None),
+("T2-10","tooling-2","tests/unit/deploy-pr-rest.test.mjs","83-89","flaky","med","med",
+ "expected PR title is computed from the real repo's git refs; .find(Boolean) can be undefined in shallow/detached CI",
+ "the oracle depends on checkout shape, not on the code under test",
+ "temp repo with a trailing merge commit and openPrRest with cwd","S","ci",U,None,"pipeline",[],None),
+("T2-11","tooling-2","tests/unit/dirty-air.test.mjs","25-26","stub-copy","med","med",
+ "TOW constants and DF = 0.65 are copied into the test instead of read from PhysicsConsts / game.js",
+ "\"CLASSIC bit-compatible\" can be false in game while the test stays green",
+ "read PhysicsConsts.DOWNFORCE and pin game.js TOW_* by import or value check","S","player-physics",U,None,"player",["stub-copy"],None),
+("T2-12","tooling-2","tests/unit/diagnostics-tools.test.mjs","21,35,51-57","tautology","med","med",
+ "assert.throws without class or message over 8+ invalid inputs; an unrelated TypeError satisfies it; no case shows diagnosticPlan rejects for the right reason",
+ "a bug in plan building passes as correct rejection",
+ "match the expected error text per input","S","agent-api",U,None,"pipeline",["tautology"],None),
+("T2-13","tooling-2","tests/unit/event-journal.test.mjs","89-98","gap","med","med",
+ "asserts event kinds exist and \"pos\" in e, not values; ring eviction at CAP 256 not asserted",
+ "wrong pos/gain/severity payloads in the race event log pass",
+ "assert field values and eviction order","S","race-ui",U,None,"player",[],None),
+("T2-14","tooling-2","tests/unit/desktop-app-protocol.test.mjs","89,94-97","tautology","high","high",
+ "existsSync of a module already require()d and an always-true startsWith(\"file:\"); pins Electron \"44.4.5\"; handleScheme (206/416/traversal) is never executed",
+ "tautologies plus a copied constant that reds on a routine bump while the desktop byte-range and path-traversal handling has no run",
+ "delete :94-97; relax the version pin; add a handleScheme test with a fake electron","M","desktop",R,
+ "confirmed@7b27c153: :89 devDependencies.electron === \"44.4.5\", :94-97 existsSync(app-protocol.js) after require and startsWith(\"file:\") on a pathToFileURL string","player",["tautology"],None),
+("T2-15","tooling-2","tests/unit/fill-gating.test.mjs","95,113","vacuous","med","med",
+ "`if (!fillInert) continue;` and loops with no counter; same shape in fin-design.test.mjs:892 (`if (!out.crown) continue;`) and front-wing-decal.test.mjs:105-119 (no vertex count, try{}catch{continue} :74)",
+ "if fillInert always returned false, no team painted a crown, or isFrontPlate matched nothing, each test passes vacuously",
+ "count combos/vertices measured and assert > 0","S","garage",R,None,"player",["condition-wrapped"],None),
+("T2-16","tooling-2","tests/unit/ci-coverage.test.mjs","68-92,131","hygiene","med","high",
+ "title says \"floor 3\" but the test pins an exact 12-spec array and FIXED_BLOCKING_FLOOR is dead; :131 split(\"\\n  job:\")[1] TypeErrors instead of asserting; 2144 lines, 6+ concerns",
+ "any legitimate blocking-spec change reddens it, and a job rename produces a TypeError not a diagnosis",
+ "split into >= 4 files; assert on the floor, not the array; guard the split","M","ci",R,None,"pipeline",["source-scan"],None),
+("T2-17","tooling-2","tests/unit/comment-citations.test.mjs","187,194-202","hygiene","low","high",
+ "CITATION_CEILING = 0 makes :187 degenerate and :194-202 a permanent t.skip",
+ "dead test branches that read as coverage",
+ "collapse to one zero-citation assertion","S","test-infra",R,None,"hygiene",[],None),
+("T2-18","tooling-2","tests/unit/delta-sign-colour.test.mjs","36,45-50","source-scan","med","high",
+ "regex over css/js only: :36 color: also matches background-color, :45-50 pins comment prose, and the JS delta sign is never executed",
+ "the positive-delta-is-slower colour contract is not tested at runtime",
+ "run the delta formatter in a VM and assert the sign-to-class mapping","S","hud",R,None,"player",["source-scan"],None),
+("T2-19","tooling-2","tests/unit/chunked-index-ranges.test.mjs","406-465","source-scan","med","med",
+ "draw-loop guards are regexes on chunked.js source and :465 silently returns on a Uint32 index buffer",
+ "torn-geometry guard weakens to a text check on large meshes",
+ "execute the draw loop against the GL stub for both index widths","M","render-glx",R,None,"player",["source-scan","condition-wrapped"],None),
+("T2-20","tooling-2","tests/unit/component-inventory.test.mjs","72","source-scan","low","high",
+ "dead-class check is a substring includes(); a second CSS class parser exists beside class-usage.mjs",
+ "a class name that is a substring of another counts as documented",
+ "word-boundary match or merge into class-usage","S","ui-css",R,None,"hygiene",["source-scan"],None),
+("T2-21","tooling-2","tests/unit/damage.test.mjs","178","source-scan","low","high",
+ "regex catches only c|a|b parameter names for the physics-never-reads-damage contract",
+ "a differently named parameter reading damage evades the guard",
+ "AST-based scan","S","player-physics",R,None,"player",["source-scan"],None),
+("T2-22","tooling-2","tests/unit/desktop-native.test.mjs","21-65,111-146","source-scan","med","high",
+ "Electron/web-shell security contracts are regex pins, duplicated by followup-platform and desktop-unpacked-bin L70-88; unpacked-bin L90-96 pins prose; desktop-pack-dry-run and desktop-stage lack negative cases (dry-run returning [] fails only on checked>=15; stage pins `dereference: true` by regex instead of a symlink fixture)",
+ "desktop shell hardening is checked by text shape; real failure modes of the pack inputs go undetected",
+ "merge workflow asserts into one file; add missing-icon and symlink fixtures","M","desktop",R,None,"pipeline",["source-scan"],None),
+("T2-23","tooling-2","tests/unit/f1-dev-tools.test.mjs","160-188","source-scan","low","high",
+ "pins nine English phrases, version 0.4.0 and an absolute /workspace path in the plugin skill text",
+ "reds on a wording edit or on a checkout outside /workspace",
+ "assert structure, not phrases; drop the absolute path","S","agent-api",R,None,"hygiene",["source-scan"],None),
+("T2-24","tooling-2","tests/unit/field-lod.test.mjs","157-180,384-420","source-scan","med","high",
+ "exact game.js/car-draw.js/tlx.js source regexes and an indentation-coupled eval of a tlx.js slice stand in for LOD behaviour",
+ "reformatting reds it; the render-side LOD wiring is not run",
+ "split the source pins out and run the slice through a real harness","M","render-perf",R,None,"hygiene",["source-scan"],None),
+("T2-25","tooling-2","tests/unit/curvature-channels.test.mjs","","source-scan","low","med",
+ "SITES list hand-copied; the alias regex misses {curvature: c} and [\"curvature\"] readers",
+ "a new curvature reader in an unclassified form evades the arc-must-not-reach-driver ratchet",
+ "make the scan AST-based","M","track-engine",R,None,"player",["source-scan"],None),
+("T2-26","tooling-2","tests/unit/coplanar-faces.test.mjs","290","slow","med","high",
+ "173 s file (child CLI rebuilds every circuit) lives in the unit tier; OVERHEAD_BASELINE = {} at :290 and ~170 lines of stale header narrative; cover-legibility.test.mjs is 192 s with the base colour approximated and only livery [0] checked",
+ "the two slowest files here add ~6 min to a unit run that belongs to the sweeps tier",
+ "move both to test:sweeps / node-slow; trim the header","S","track-geometry",R,None,"pipeline",["slow-in-fast"],None),
+("T2-27","tooling-2","tests/unit/clipboard.test.mjs","52,76-81","hygiene","low","high",
+ "no-op `h.ApexClipboard; // seeded` with a stale comment; :76-81 text scan duplicates shell guards",
+ "dead statement and duplicated pin",
+ "delete both","S","test-infra",R,None,"hygiene",["source-scan"],None),
+("T2-28","tooling-2","tests/unit/deploy-staging.test.mjs","","gap","low","med",
+ "referenced() covers vendor/ only, not assets or worker URLs; deploy-stamp's poll-live-shell /Date\\.now\\(\\)/ pin matches any text",
+ "a staged-file miss for assets/ or worker URLs is not caught",
+ "extend referenced() to the other roots; merge with deploy-stamp (same bump-cache fixtures)","S","deploy",R,None,"pipeline",["source-scan"],None),
+("T2-29","tooling-2","tests/unit/extra-rigs.test.mjs","51-59,61-74","stub-copy","low","med",
+ "CAM_MODES pin duplicates director.test; tickPitAuto stub indices differ from the real ones; stale comment at :61-74",
+ "the rig test can pass on indices the game never produces",
+ "share the CAM_MODES constant; use real indices","S","camera",R,None,"player",["stub-copy"],None),
+("T2-30","tooling-2","tests/unit/contact-geometry.test.mjs","150","tautology","low","med",
+ "a.x<0 || a.prog!==0 disjunction accepts either outcome",
+ "weak assertion on the collision response side",
+ "assert the specific expected outcome","S","player-physics",R,None,"player",["tautology"],None),
+]

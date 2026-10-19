@@ -49,11 +49,13 @@ test("flapSig hashes every recipe field the flap solver reads", () => {
 test("the catalog census is what the rest of this file assumes", () => {
   assert.equal(M.Parts.CATALOG.length, 12);
   const all = M.Parts.CATALOG.flatMap((c) => c.options);
-  assert.equal(all.length, 297);
+  // 297 → 321 on 2026-10-18: 24 STYLE reskins, two per category (js/car/parts.js STYLES).
+  assert.equal(all.length, 321);
   assert.equal(all.filter((o) => o.tag === "SIGNATURE").length, 128);
+  assert.equal(all.filter((o) => o.tag === "STYLE").length, 24);
 });
 
-test("a SIGNATURE is a pure reskin: same cost, same four stat multipliers", () => {
+test("a SIGNATURE or STYLE option is a pure reskin: same cost, same four stat multipliers", () => {
   // Nothing asserted this. Compare RESOLVED stats, not the literal objects — an
   // absent multiplier means 1.0, so copying `speed: 1.05` onto an equivalent
   // that omits `speed` is a silent physics change dressed as a cosmetic option,
@@ -62,7 +64,7 @@ test("a SIGNATURE is a pure reskin: same cost, same four stat multipliers", () =
   for (const cat of M.Parts.CATALOG) {
     const byId = Object.fromEntries(cat.options.map((o) => [o.id, o]));
     for (const o of cat.options) {
-      if (o.tag !== "SIGNATURE") continue;
+      if (o.tag !== "SIGNATURE" && o.tag !== "STYLE") continue;
       const eq = byId[o.equivalent];
       if (!eq) { bad.push(`${cat.id}/${o.id}: equivalent "${o.equivalent}" is not in this category`); continue; }
       if (o.cost !== eq.cost) bad.push(`${cat.id}/${o.id}: cost ${o.cost} != ${eq.cost}`);
