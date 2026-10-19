@@ -1,0 +1,1 @@
+1792398137	Bryce Murrin	User-approved full-screen capture profiles: tools/lib/capture-devices.mjs tools/shot capture-options + screenshot entrypoint defaults; tools/ui defaults; playwright config and focused viewport contract tests. No renderer/perf/MCP ownership.  [cursor/capture-device-defaults-b731; session 2364f491e71d4cd182d7dc38]
