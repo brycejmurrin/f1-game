@@ -117,7 +117,9 @@ session_01MPvWMa3ctnK79nmCzwK3SP). So an orchestrator hands off through a one-sh
    `add_repo brycejmurrin/f1-game` (access push), clone it as the tool says, `register_repo_root`, check out the
    deploy branch; GitHub reads go through `gh` (proxy-configured) when the GitHub MCP is absent.
 4. After it fires, `get_trigger` gives `last_run.session_id`; confirm with `get_session` (status, model, no
-   `parent_session_id`), then delete the trigger and post the bus HANDOFF naming the new id.
+   `parent_session_id`) and post the bus HANDOFF naming the new id. NEVER `delete_trigger` it: deleting a scheduled
+   task deletes every session it started (ORCH14 lost its first ORCH15 that way, 2026-10-19 20:12Z). A fired one-shot
+   is already disabled; leave it.
 
 ### Pre-launch quota check (#2380)
 
