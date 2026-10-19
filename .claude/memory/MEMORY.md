@@ -25,3 +25,4 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Orchestrator dispatches Pages](orchestrator-dispatches-pages.md) — dispatch pages.yml after merges instead of waiting for the cron; never dual-dispatch
 - [Archive only after Bryce is done](archive-only-after-bryce-done.md) — a DONE line is not enough; Bryce may still be using the session
 - [Bryce merges manually](bryce-merges-manually.md) — merges with no bus line are usually Bryce's; keep pacing, do not chase
+- [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it
