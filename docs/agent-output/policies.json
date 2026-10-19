@@ -471,6 +471,11 @@
       "presentation": "native",
       "preserve": "Missing coverage failure and actual inputs; generated HTML is artifact"
     },
+    "tools/ci/cursor-agents.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "BLOCKED/ERROR lines and exit status (2 no key, 1 API); dump written/skipped counts; digest figures are stored-character proxies, not tokens"
+    },
     "tools/ci/debug-unit.mjs": {
       "action": "keep-native",
       "presentation": "native",

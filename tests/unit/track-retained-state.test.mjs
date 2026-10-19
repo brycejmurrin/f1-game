@@ -19,7 +19,8 @@ test('production track releases graph while late ribbon upload keeps required ch
   assert.ok(tr.props.count>0);
   assert.equal(tr.props.count,tr.props.list.length);
   assert.equal(tr.props.spanCount,tr.props.spans.length);
-  assert.equal(Object.getOwnPropertyDescriptor(tr.props,'dropped').get,undefined);
+  const dropped=Object.getOwnPropertyDescriptor(tr.props,'dropped');
+  assert.ok(!dropped||dropped.get===undefined,'dropped is not a lazy getter holding build state');
   for(const name of ['road','terrain']){
     const geo=tr[name+'Geo'];
     assert.ok(Array.isArray(geo.pos) && Array.isArray(geo.idx));
@@ -30,7 +31,12 @@ test('production track releases graph while late ribbon upload keeps required ch
       assert.ok(Array.isArray(geo[channel]),`${name}.${channel} preserves authored precision for late upload`);
     }
     if(name==='road') assert.ok(Array.isArray(geo.trk));
-    assert.equal(gfx.createMesh(geo).verts,geo.pos.length/3);
+    // geometry is self-consistent (the faked gfx.createMesh is not evidence)
+    assert.equal(geo.pos.length%3,0);
+    assert.equal(geo.nrm.length,geo.pos.length,`${name} nrm matches pos`);
+    assert.equal(geo.col.length,geo.pos.length,`${name} col matches pos`);
+    const nv=geo.pos.length/3;
+    assert.ok(geo.idx.every(i=>i>=0&&i<nv),`${name} idx within vertices`);
   }
   const p=tr.terrainGeo.pos;
   assert.equal(typeof T.terrainY(tr,p[0],p[2]),'number');

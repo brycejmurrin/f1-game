@@ -160,6 +160,8 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   }
 });
 
+// RC2-21: tests/unit/terrain-falloff.test.mjs now carries a node twin of this Madrid check.
+// The browser copy stays until select-budget.test.mjs (not in this lane's globs) drops its 4 + roster pin to 3.
 test("Madrid terrain drops away from the road instead of forming a raised floor", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
@@ -205,8 +207,9 @@ for (const trk of TRACKS) {
 
     const offenders = [];
     await page.evaluate((t) => __apex.race(t, "day", "dry"), trk);
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.waitForFunction(() => !!window.__apex.trackGeometry(), null, { polling: 100, timeout: BOOT_MS });
+    // ONE readiness wait (was two back-to-back BOOT_MS budgets inside a 180 s test): the
+    // meshes exist only once the track is loaded, so the second implies the first.
+    await page.waitForFunction(() => window.__apex.info().track != null && !!window.__apex.trackGeometry(), null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate((knownCrossover) => {
       const caps = window.__apex.trackGeometry();
       if (!caps) return { err: "no meshes" };
@@ -241,11 +244,26 @@ for (const trk of TRACKS) {
       // The scan itself is tools/lib/over-road-scan.cjs (injected below); unit-tested in node.
       const scan = (name) => window.__overRoadScan(caps[name],
         { name, tps, px, pz, M, ladder: LADDER.length, trackNodeCount, knownCrossover });
-      return { road: scan("road"), terr: scan("terrain") };
+      // NEGATIVE CONTROL: a face 1 m over the line at lap node M/3 must be reported by the very
+      // same in-page scan (same tps, same injected function). If the page wiring broke (wrong
+      // road set, wrong units, scan not injected) every circuit would otherwise pass vacuously.
+      // A STRIP over 9 consecutive lap nodes across the whole ladder (a single small triangle is
+      // rejected by the scan's neighbour guard on circuits with sparse nodes — mugello,
+      // nurburgring, paul_ricard read 0 in CI): the same shape a real over-road wedge has.
+      // The scan ignores faces wholly under y = -0.5 (underground), so plant where the lap is
+      // highest; a lap that never rises above y = -1.5 cannot host the control (control = null).
+      let m0 = 0; for (let i = 0; i < M - 9; i++) if (tps[i * LADDER.length + 2].y > tps[m0 * LADDER.length + 2].y) m0 = i;
+      const L = LADDER.length, pp = [], ii = [];
+      for (let i = m0; i < m0 + 9; i++) for (const si of [0, L - 1]) { const t = tps[i * L + si]; pp.push(t.x, t.y + 1, t.z); }
+      for (let q = 0; q < 8; q++) { const v = q * 2; ii.push(v, v + 1, v + 2, v + 1, v + 3, v + 2); }
+      const planted = { pos: pp, idx: ii };
+      const control = window.__overRoadScan(planted, { name: "terrain", tps, px, pz, M, ladder: LADDER.length, trackNodeCount, knownCrossover: false });
+      return { road: scan("road"), terr: scan("terrain"), control: tps[m0 * L + 2].y + 1 < -0.5 ? null : control.max };
     }, CROSSOVER_TRACKS.has(trk));
     console.log(`over-road ${trk}: road=${r.road?.max ?? "?"} terr=${r.terr?.max ?? "?"}${r.err ? " ERR:" + r.err : ""}`);
     if (r.err) offenders.push(`${trk}: ${r.err}`);
     else {
+      if (r.control !== null) expect(r.control, `${trk}: the scan must see a planted face 1 m over the line (wiring check)`).toBeGreaterThan(0.9);
       if (r.terr.max > TOL) offenders.push(
         `${trk} TERRAIN ${r.terr.max}m over road @${JSON.stringify(r.terr.fr)} worst=${JSON.stringify(r.terr.worst)}`
       );
@@ -254,8 +272,5 @@ for (const trk of TRACKS) {
       );
     }
     expect(offenders, `circuits with geometry over the racing line:\n${offenders.join("\n")}`).toEqual([]);
-    await page.evaluate(() => {
-      try { window.__apex.headless(true); } catch (_) {}
-    });
   });
 }
