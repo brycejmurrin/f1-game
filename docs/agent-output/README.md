@@ -157,11 +157,15 @@ are distinguished from executable candidates; the inventory does not execute
 scripts to guess what they do.
 
 [Per-file policies](policies.json) record the reviewed output decision and
-preservation contract for every tool file. The generator attaches these to
-catalog entries. Libraries and control protocols receive no invented verbosity
-flags; protocol entrypoints have no terminal-wrapper recommendation. Shared
-profiles apply to report, artifact, collection and long-job producers, so npm
-aliases inherit the same behavior without separate implementations.
+preservation contract for every tool file. Shared `contracts` entries are
+referenced as `@name` preserve values so repeated prose is not duplicated.
+The generated catalog stores only `outputPolicy` (action); look up the preserve
+text in policies.json. Libraries and control protocols receive no invented
+verbosity flags; protocol entrypoints have no terminal-wrapper recommendation.
+Shared profiles apply to report, artifact, collection and long-job producers, so
+npm aliases inherit the same behavior without separate implementations.
+Candidate argv is `catalog.runner` + `interpreter` + `path` (or
+`npm run <name>`), not a duplicated argv array on every row.
 
 Native retention exceptions are fixed at their producer: probe-mcp emits valid
 JSON and saves oversized originals under `artifacts/probe-mcp/`; cdmcp-measure
@@ -185,6 +189,7 @@ whole inventory into an agent conversation. For example, with `jq`:
 
 ```sh
 jq '.tools[] | select(.path == "tools/check/doctor.mjs")' docs/agent-output/catalog.json
+jq '.tools["tools/check/doctor.mjs"]' docs/agent-output/policies.json
 ```
 
 Hosted tools outside these configured servers, such as Cursor's built-in file
