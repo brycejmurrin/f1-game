@@ -90,6 +90,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-fleet.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
+  "tests/unit/agent-output-config.test.mjs",
+  "tests/unit/agent-output.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
@@ -241,11 +243,17 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/chromium-shell.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
+  "tests/unit/ci-gate-selection.test.mjs",
+  "tests/unit/ci-gpu-census.test.mjs",
   // CI guards born 2026-10-15: ci-rerun.mjs refuses a superseded/live/green/re-run run; ci-cancel-on-close.yml joins ci.yml's PR group. Pure, no network or browser.
   "tests/unit/ci-guard-tools.test.mjs",
+  "tests/unit/ci-pages-train.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
+  "tests/unit/ci-ship-filter-geometry.test.mjs",
+  "tests/unit/ci-ship-smoke-renderer.test.mjs",
   "tests/unit/ci-verdict.test.mjs",
   "tests/unit/ci-watch.test.mjs",
+  "tests/unit/ci-workflow-triggers.test.mjs",
   "tests/unit/circuit-axis.test.mjs",
   "tests/unit/circuit-corner-anchors.test.mjs",
   // Round-2: manifest.json / meta description circuit counts pinned to Tracks.LIST.
@@ -448,11 +456,19 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
   "tests/unit/fleet-flags.test.mjs",
+  // fleet-tick: the diff of two watcher states into changed rows, pure fixtures; < 0.1 s.
+  "tests/unit/fleet-tick.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
   // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
   // runs only in ci.yml's non-blocking flicker-gate job.
   "tests/unit/flicker-metric.test.mjs",
   "tests/unit/floodmast-lamp-register.test.mjs",
+  // The flyby audit's RULES, shown to fail: a stub sequencer fed through auditTrack
+  // and fleetFindings must yield a finding per rule (negative control), no VM.
+  "tests/unit/flyby-audit-rules.test.mjs",
+  // The intro/menu planning lifecycle split out of flyby-shots (game.js source +
+  // small vm harnesses, ~0.4 s): runs beside the real-VM file, not behind it.
+  "tests/unit/flyby-intro.test.mjs",
   // The ORDERING that lights the flyby: raceIntro() applies the race settings
   // before the loading screen starts, so a dawn race stops showing a day sky.
   "tests/unit/flyby-lighting.test.mjs",
@@ -649,6 +665,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/light-store-copy.test.mjs",
   "tests/unit/light-store-perchunk-pin.test.mjs",
+  "tests/unit/lighting-ab-catalog.test.mjs",
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
   "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -759,6 +776,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/onboard.test.mjs",
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
+  "tests/unit/output-level-mcp.test.mjs",
+  "tests/unit/output-surface.test.mjs",
   "tests/unit/over-road-scan.test.mjs",
   // Stream overlay v1 schema/diffs, transform painter, TV pass/battle/fastest cards, and staged root page.
   "tests/unit/overlay-feed.test.mjs",
@@ -1006,7 +1025,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/skill-gameplay-surface.test.mjs",
   "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
-  "tests/unit/skill-render-ui-surface.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",

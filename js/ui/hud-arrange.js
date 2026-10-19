@@ -1,14 +1,14 @@
 "use strict";
 /* Apex 26 — HudArrange: ARRANGE HUD, the on-screen editor for MOVE & SIZE.
 
-   The slider editor (js/ui/hud-layout.js, SETTINGS › DISPLAY › HUD › MOVE & SIZE)
+   The numeric editor (js/ui/hud-layout.js, SETTINGS › DISPLAY › HUD › MOVE & SIZE)
    edits one element at a time behind a settings sheet. This is the
    same setting edited by hand: a button on the pause card, every HUD element
    gets a dashed outline, DRAG moves it, a PINCH (or the toolbar's − / +) sizes
    it, and a pair of elements — or an element and a touch control — that overlap
    turn red. It writes the offsets HudLayout already stores (x / y as a share of
    the screen in %, s as a percent, per HUD style and camera set), so presets,
-   RESET, the camera sets and the fit's clamps keep working unchanged.
+   RESET and camera sets keep working; explicit placements bypass automatic fitting.
 
    Mirrors DockLayout's REPOSITION editor: entering hides SETTINGS and PAUSED
    (showModal dialogs make the rest of the document inert, so a drag could not
@@ -23,13 +23,12 @@
 const HudArrange = (() => {
   const STEP = 10;     // toolbar − / + size step, %
   const MIN_CLASH = 3; // px of overlap on BOTH axes before a pair is a clash (touching is not)
-  const clamp = M4.clamp;   // the shared one (js/core/mat4.js); a private copy is what shared-math.test forbids
+  const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
 
   /** Pure: offsets {x, y} (share of the screen, %) after a drag of (dx, dy) screen px on a W x H screen. */
   function dragTo(orig, dx, dy, W, H) {
-    const x = clamp((orig && orig.x || 0) + (dx / Math.max(1, W)) * 100, ...HudLayout.LIM.x);
-    const y = clamp((orig && orig.y || 0) + (dy / Math.max(1, H)) * 100, ...HudLayout.LIM.y);
-    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+    const x = finite(orig && orig.x, 0), y = finite(orig && orig.y, 0);
+    return { x: finite(x + (dx / Math.max(1, W)) * 100, x), y: finite(y + (dy / Math.max(1, H)) * 100, y) };
   }
   /** Pure: the offset that keeps an auto-placed radio card where it is (left/top screen px) once moving it
    *  hangs it from css/hud.css's fixed point (50vw, 25svh) instead. Its first drag starts from here. */
@@ -38,15 +37,19 @@ const HudArrange = (() => {
     const w = Math.max(1, W), h = Math.max(1, H);
     return Object.assign({}, orig, { x: (left - w / 2) / w * 100, y: (top - h / 4) / h * 100 });
   }
-  /** Pure: size s0 (%) after a pinch from finger distance d0 to d1, on the slider's 5 % steps. */
+  /** Pure: a positive finite size after a pinch, without visual bounds. */
   function pinchTo(s0, d0, d1) {
     if (!(d0 > 0) || !(d1 > 0)) return s0;
-    return clamp(Math.round((s0 * d1 / d0) / 5) * 5, ...HudLayout.LIM.s);
+    const next = s0 * (d1 / d0);
+    return Number.isFinite(next) && next > 0 ? next : s0;
   }
   // Layout pieces and individual toggles share HudLayout's mapping. The
   // tower remains a group, while race messages and flags are event-driven.
   /** Pure: s (%) stepped by `dir` (±1) on the toolbar's step. */
-  const stepSize = (s, dir) => clamp(Math.round((s + dir * STEP) / 5) * 5, ...HudLayout.LIM.s);
+  const stepSize = (s, dir) => {
+    const next = dir < 0 && s <= STEP ? s / 2 : s + dir * STEP;
+    return Number.isFinite(next) && next > 0 ? next : s;
+  };
   /** Pure: every pair of rects [{id, l, t, r, b}] that overlap by more than `min` px on both axes.
    *  Pairs are [a.id, b.id] in input order; a pair where neither id starts with "#" is two HUD pieces. */
   function clashes(rects, min) {
@@ -116,7 +119,7 @@ const HudArrange = (() => {
       hintEl = document.createElement("span");
       hintEl.id = "hud-arrange-hint";
       hintEl.setAttribute("aria-live", "polite");
-      hintEl.style.cssText = "color:var(--dim,#bbb);white-space:nowrap;max-width:30vw;overflow:hidden;text-overflow:ellipsis;";
+      hintEl.style.cssText = "color:var(--dim,#bbb);white-space:normal;overflow-wrap:anywhere;flex:1 1 14rem;min-width:0;max-width:100%;";
       picker = document.createElement("select");
       picker.id = "hud-arrange-element";
       picker.setAttribute("aria-label", "HUD element; use arrow keys on the Move button to position");
@@ -131,6 +134,9 @@ const HudArrange = (() => {
       bar.appendChild(hintEl);
       bar.appendChild(mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"));
       bar.appendChild(mk("+", "Larger", () => size(1), "hud-arrange-larger"));
+      const recover = mk("BRING INTO VIEW", "Bring selected element into view without changing its size", bringIntoView, "hud-arrange-recover");
+      recover.setAttribute("aria-describedby", "hud-arrange-hint");
+      bar.appendChild(recover);
       bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); HudLayout.resetEl(selected, context.set, context.profile); after(); } }, "hud-arrange-reset"));
       visibilityRow = document.createElement("label");
       visibilityRow.textContent = "VISIBILITY ";
@@ -177,19 +183,19 @@ const HudArrange = (() => {
       bar.style.transform = "none";
       bar.style.left = boxes[best].l + "px"; bar.style.top = boxes[best].t + "px";
     }
-    function paintBar(clash) {
+    function paintBar(clash, message) {
       if (!bar) return;
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
-      nameEl.textContent = cur ? cur.s + "%" : "";
+      nameEl.textContent = cur ? Number(cur.s.toPrecision(4)) + "%" : "";
       nameEl.hidden = !cur;
       const visibility = selected && HudLayout.visibility(selected);
       const off = visibility && visibility.value === "off";
-      hintEl.textContent = clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
+      hintEl.textContent = message || (clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
         : off ? "hidden in the race \u00b7 SHOW brings it back"
         : visibility && visibility.value === "mixed" ? "some tower readouts are hidden"
         : selected && !visibility ? "VISIBILITY: shown automatically with race events"
-        : "";
+        : "");
       hintEl.hidden = !hintEl.textContent;
       if (visibilityRow) {
         SettingRow.paint(visibilityRow, visibility ? visibility.value : "", visibility ? visibility.choices : []);
@@ -230,24 +236,30 @@ const HudArrange = (() => {
       }
       return pairs.map((p) => p.map((id) => (id[0] === "#" ? id.slice(1).toUpperCase() : id)));
     }
-    function after() {
+    function after(message) {
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
-      paintBar(markClashes());
+      paintBar(markClashes(), message);
     }
     const current = (id) => HudLayout.get(id, context.set, context.profile);
     function dragOrig(id) {
-      const orig = current(id), el = id === "announce" ? elOf(id) : null;
-      const r = el && el.getBoundingClientRect();
-      if (r) return placedOrig(orig, r.left, r.top, window.innerWidth, window.innerHeight);
-      // The first real map edit adopts its temporary screen-pixel clearance.
-      const map = id === "map" ? elOf(id) : null;
-      if (map && !map.hasAttribute("data-hl-user") && map.style.getPropertyValue) {
-        return Object.assign({}, orig, {
-          x: orig.x + (parseFloat(map.style.getPropertyValue("--hud-clear-x")) || 0) / window.innerWidth * 100,
-          y: orig.y + (parseFloat(map.style.getPropertyValue("--hud-clear-y")) || 0) / window.innerHeight * 100,
-        });
-      }
-      return orig;
+      const orig = current(id), el = elOf(id);
+      if (!el || el.hasAttribute("data-hl-v4")) return orig;
+      // Adopt the painted location when handing a widget from automatic to
+      // manual anchors, before a drag or size change. The finger never jumps.
+      const before = el.getBoundingClientRect();
+      if (!(before.width > 0 && before.height > 0)) return orig;
+      HudLayout.set(id, orig, context.set, context.profile);
+      let after = el.getBoundingClientRect();
+      const size = after.width > 0 ? orig.s * before.width / after.width : orig.s;
+      const base = Object.assign({}, orig, { s: Number.isFinite(size) && size > 0 ? size : orig.s });
+      HudLayout.set(id, base, context.set, context.profile);
+      after = el.getBoundingClientRect();
+      const adopted = Object.assign({}, base, {
+        x: orig.x + (before.left - after.left) / window.innerWidth * 100,
+        y: orig.y + (before.top - after.top) / window.innerHeight * 100,
+      });
+      HudLayout.set(id, adopted, context.set, context.profile);
+      return adopted;
     }
     function flush() {
       if (raf) {
@@ -288,9 +300,37 @@ const HudArrange = (() => {
     function size(dir) {
       if (!selected) return;
       flush();
-      const orig = selected === "map" ? dragOrig(selected) : current(selected);
+      const orig = dragOrig(selected);
       HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile);
       after();
+    }
+
+    // Recovery is an explicit move, never an automatic placement constraint.
+    // Keep the current size; oversized axes expose their leading edge instead
+    // of shrinking a widget the player deliberately enlarged.
+    function bringIntoView() {
+      if (!selected) return;
+      flush(); drag = null; pinch = null; pointers.clear();
+      const el = elOf(selected);
+      const cs = el && typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+      if (!visible(el) || (cs && (cs.display === "none" || cs.visibility === "hidden"))) {
+        after(labelOf(selected) + " has no visible box in this mode. Change visibility or camera first.");
+        return;
+      }
+      const bounds = HudLayout.screenBounds();
+      const rect = el.getBoundingClientRect();
+      const oversized = rect.width > bounds.right - bounds.left || rect.height > bounds.bottom - bounds.top;
+      const message = oversized ? "Oversized widget: leading edge in view. Size unchanged." : "Brought into view. Size unchanged.";
+      const move = r => ({
+        x: Math.max(bounds.left, Math.min(r.left, bounds.right - r.width)) - r.left,
+        y: Math.max(bounds.top, Math.min(r.top, bounds.bottom - r.height)) - r.top,
+      });
+      let delta = move(rect);
+      if (!delta.x && !delta.y) { after(oversized ? message : "Already in view. Size unchanged."); return; }
+      const orig = dragOrig(selected);
+      delta = move(el.getBoundingClientRect());
+      HudLayout.set(selected, Object.assign({}, orig, dragTo(orig, delta.x, delta.y, window.innerWidth, window.innerHeight)), context.set, context.profile);
+      after(message);
     }
 
     /* ---- pieces the race hides until something happens: show them with sample content ---- */
@@ -539,7 +579,7 @@ const HudArrange = (() => {
       if (dirs[e.key] && selected && e.target && e.target.id === "hud-arrange-move") {
         e.preventDefault(); e.stopPropagation(); flush();
         const cur = dragOrig(selected), d = dirs[e.key], step = e.shiftKey ? 5 : 1;
-        HudLayout.set(selected, { x: clamp(cur.x + d[0] * step, ...HudLayout.LIM.x), y: clamp(cur.y + d[1] * step, ...HudLayout.LIM.y) }, context.set, context.profile);
+        HudLayout.set(selected, { x: cur.x + d[0] * step, y: cur.y + d[1] * step }, context.set, context.profile);
         after(); return;
       }
       if (e.key !== "Escape") return;

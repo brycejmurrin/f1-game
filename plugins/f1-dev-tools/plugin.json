@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "f1-dev-tools",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Inspect, profile, debug and validate Apex 26 UI, memory, rendering, garage parts, cameras and replay using the game checkout\u2019s developer tools.",
   "author": {
     "name": "F1 Game"

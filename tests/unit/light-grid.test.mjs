@@ -35,6 +35,9 @@ import vm from "node:vm";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+// Backend sources with comments removed: a knob only NAMED in a comment (a TODO, a
+// header, "dual: WGSL ...") is not wired, and used to satisfy the parity scans below.
+const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/[^\n]*/g, "$1");
 
 /** TUNE_DEFS entries are object literals, usually one per line — but at least
  *  one (carEnvCube) wraps, so split on the `{ id:` boundary rather than by
@@ -244,7 +247,7 @@ test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
   // WGX used to pack T.hgAniso / T.hgFloor — ids that do not exist on LT — so
   // GOD-RAY FOCUS and GOD-RAY HAZE were stuck at the 0.60 / 0.020 fallbacks
   // on WebGPU no matter where the sliders sat.
-  const wgx = read("js/render/webgpu/wgx.js");
+  const wgx = stripComments(read("js/render/webgpu/wgx.js"));
   // The composite reads go through PostCommon.knob(T, id) (TUNE_DEFS default).
   assert.match(wgx, /T\.godrayAniso|PostCommon\.knob\(T, "godrayAniso"\)/, "WGX must read T.godrayAniso");
   assert.match(wgx, /T\.godrayFloor|PostCommon\.knob\(T, "godrayFloor"\)/, "WGX must read T.godrayFloor");
@@ -254,7 +257,7 @@ test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
 
 test("WGX T.* reads are TUNE_DEFS ids (no silent fallbacks)", () => {
   const ids = new Set(defs().map((d) => d.id));
-  const wgx = read("js/render/webgpu/wgx.js");
+  const wgx = stripComments(read("js/render/webgpu/wgx.js"));
   // Both read forms: the frame-UBO `T.foo` reads and the composite's
   // PostCommon.knob(T, "foo") reads (defaults from the registry).
   const keys = [...wgx.matchAll(/\bT\.(\w+)/g), ...wgx.matchAll(/PostCommon\.knob\(T, "(\w+)"\)/g)].map((m) => m[1]);
@@ -270,37 +273,46 @@ test("TLX k()/gk() keys are TUNE_DEFS ids (no silent fallbacks)", () => {
   const ids = new Set(defs().map((d) => d.id));
   const src = ["js/render/three/tsl-lit.js", "js/render/three/tlx-post.js",
     "js/render/three/tsl-fx.js", "js/render/three/tsl-sky.js",
-    "js/render/three/tlx.js"].map(read).join("\n");
+    "js/render/three/tlx.js"].map(read).map(stripComments).join("\n");
   const keys = [...src.matchAll(/\b(?:k|gk)\(\s*["'](\w+)["']/g)].map((m) => m[1]);
   const unknown = [...new Set(keys)].filter((k) => !ids.has(k));
   assert.deepEqual(unknown, [],
     "TLX k()/gk() reads a key that is not a TUNE_DEFS id — the slider is a no-op on three.js.");
 });
 
-test("every TUNE_DEFS uniform lives on GLX, WGX, and TLX", () => {
+// Knobs a backend honestly lacks. Each entry must be admitted in the knob's own help
+// text, and goes stale (test fails) the moment the backend wires the uniform.
+const BACKEND_GAPS = { wgx: { windSpeed: /WGX has no per-vertex sway/ } };
+
+test("every TUNE_DEFS uniform is wired in executable code on GLX, WGX, and TLX", () => {
   // A new `u:` knob that ships on GLX only is the project's most persistent
-  // look-drift: the slider moves, two backends ignore it. Name-presence is
-  // the cheap half (upload + consume formulas stay in gfx-backend-canary).
-  const glx = ["js/render/glx/glx.js", "js/render/glx/post.js", "js/render/glx/shadow.js",
-    "js/render/glx/shaders/glsl-lit.js", "js/render/glx/shaders/glsl-post.js", "js/render/glx/shaders/glsl-sky.js"]
-    .map(read).join("\n");
-  const wgx = ["js/render/webgpu/wgx.js", "js/render/webgpu/wgsl-chunks.js",
-    "js/render/webgpu/wgsl-post.js"].map(read).join("\n");
-  const tlx = ["js/render/three/tlx.js", "js/render/three/tlx-post.js",
-    "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js",
-    "js/render/three/tsl-sky.js", "js/render/three/tsl-fx.js"].map(read).join("\n");
-  const hit = (src, d) => {
-    const names = [d.id, d.u].filter(Boolean);
-    return names.some((n) => src.includes(n));
+  // look-drift: the slider moves, two backends ignore it. Name-presence in
+  // CODE (comments stripped) is the cheap half (upload + consume formulas stay
+  // in gfx-backend-canary).
+  const load = (files) => files.map(read).map(stripComments).join("\n");
+  const backends = {
+    glx: load(["js/render/glx/glx.js", "js/render/glx/post.js", "js/render/glx/shadow.js",
+      "js/render/glx/shaders/glsl-lit.js", "js/render/glx/shaders/glsl-post.js", "js/render/glx/shaders/glsl-sky.js"]),
+    wgx: load(["js/render/webgpu/wgx.js", "js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"]),
+    tlx: load(["js/render/three/tlx.js", "js/render/three/tlx-post.js",
+      "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js",
+      "js/render/three/tsl-sky.js", "js/render/three/tsl-fx.js"]),
   };
-  const missing = [];
-  for (const d of defs().filter((x) => x.u)) {
-    if (!hit(glx, d)) missing.push(`${d.id} (${d.u}) missing on GLX`);
-    if (!hit(wgx, d)) missing.push(`${d.id} (${d.u}) missing on WGX`);
-    if (!hit(tlx, d)) missing.push(`${d.id} (${d.u}) missing on TLX`);
+  const hit = (src, d) => [d.id, d.u].filter(Boolean).some((n) => src.includes(n));
+  const uniforms = defs().filter((x) => x.u);
+  assert.ok(uniforms.length > 50, `only ${uniforms.length} u: knobs — the registry parse broke`);
+  const missing = [], staleGaps = [];
+  for (const d of uniforms) {
+    for (const [name, src] of Object.entries(backends)) {
+      const gap = BACKEND_GAPS[name] && BACKEND_GAPS[name][d.id];
+      if (hit(src, d)) { if (gap) staleGaps.push(`${d.id} is wired on ${name} now: drop its BACKEND_GAPS entry`); continue; }
+      if (gap && gap.test(d.help || "")) continue;
+      missing.push(`${d.id} (${d.u}) has no executable use on ${name.toUpperCase()}`);
+    }
   }
+  assert.deepEqual(staleGaps, []);
   assert.deepEqual(missing, [],
-    "a TUNE_DEFS u: knob is unnamed on a backend — the slider is a no-op there:\n  " +
+    "a TUNE_DEFS u: knob is unwired on a backend (named only in comments, or nowhere) — the slider is a no-op there:\n  " +
     missing.join("\n  "));
 });
 

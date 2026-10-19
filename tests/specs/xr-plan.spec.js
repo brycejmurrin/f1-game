@@ -93,7 +93,8 @@ test("armed webgpu without XRGPUBinding: path falls back to webgl2 with a fallba
   // IWER / SwiftShader typically has no XRGPUBinding — expect the ladder.
   if (!info.hasBinding) {
     expect(info.path).toBe("webgl2");
-    expect(info.fallbacks.length).toBeGreaterThan(0);
+    expect(info.fallbacks.map((f) => [f.from, f.to, f.reason]))
+      .toEqual([["webgpu", "webgl2", "no XRGPUBinding"]]);
   } else {
     // If a binding exists in this Chromium, either path is acceptable — record it.
     expect(["webgl2", "webgpu"]).toContain(info.path);

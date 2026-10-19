@@ -35,6 +35,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { staleStrictIds } from "../../tools/lib/stale-rows.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -142,7 +143,10 @@ test("floating scenery stays within the per-circuit baseline", () => {
     "\n\nRun `node tools/track/float-audit.cjs <id> --why` — it names each floater's SOURCE LINE.");
 });
 
-test("baseline has no stale entries — a cap below the measured count is a lie", () => {
+// #2183 policy (tools/lib/stale-rows.mjs, shared with scenery-ground-audit): on a PR only the circuits its diff
+// touches (or every row when it edits float-baseline.json) fail on a stale cap; the rest are advisories.
+test("baseline has no stale entries — a cap above the measured count is a lie", (t) => {
+  const strict = staleStrictIds("tools/track/float-baseline.json");
   const measured = new Map(sweep().map((r) => [r.id, r.floating.length]));
   const slack = [];
   // Only the SCOPED baseline rows: under APEX_CIRCUITS the sweep measured that subset.
@@ -150,7 +154,10 @@ test("baseline has no stale entries — a cap below the measured count is a lie"
   for (const [id, cap] of Object.entries(BASELINE).filter(([id]) => scope([id]).length)) {
     const now = measured.get(id);
     assert.notEqual(now, undefined, `BASELINE names unknown circuit "${id}"`);
-    if (now < cap) slack.push(`${id}: baseline ${cap} but measured ${now} — lower it`);
+    if (!(now < cap)) continue;
+    const line = `${id}: baseline ${cap} but measured ${now} — lower it`;
+    if (strict === null || strict.has(id)) slack.push(line);
+    else t.diagnostic(`STALE (advisory: not in this diff) ${line}`);
   }
   assert.deepEqual(slack, [], "stale baseline entries:\n  " + slack.join("\n  "));
 });
