@@ -197,15 +197,21 @@ const PlayerForces = (function () {
     const bbSlipF = Math.sqrt(Math.max(0, 1 - afF * afF));
     const bbSlipR = Math.sqrt(Math.max(0, 1 - afR * afR));
     c.slipFactor = bbSlipR;   // the DRIVEN axle's circle: setEngine() reads it for slip01; unassigned it read a constant 1
+    // When WheelState is ON, long/lat ellipse spend comes from κ (latScale below),
+    // not from the legacy axFrac→bbSlip term — keep that term at 1 so OFF stays
+    // the only path that multiplies bbSlip into mu (byte-identical tip).
+    const useWheel = typeof WheelState !== "undefined" && WheelState.enabled();
+    const ellipseF = useWheel ? 1 : bbSlipF;
+    const ellipseR = useWheel ? 1 : bbSlipR;
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * weatherGrip * modsCornering * bankMu * (1 + vertLoad) * marbleMu * tyreMu;
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
-    const muF = Math.max(0.5, muBase * bbSlipF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
+    const muF = Math.max(0.5, muBase * ellipseF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
     // Grip steer: own-state driverDelta cap (js/physics/grip-steer.js). Identity at OFF.
     const gripped = (typeof GripSteer !== "undefined" && GripSteer.forPlayer)
       ? GripSteer.forPlayer(driverDelta, c, { muF, csFront: CS_FRONT, af, ar, braking, shaped: steer, dt })
       : driverDelta;
     delta = clamp(gripped + assistDelta + lineDelta, -0.7, 0.7);
-    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
+    const muR = Math.max(0.5, muBase * ellipseR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
@@ -223,10 +229,28 @@ const PlayerForces = (function () {
     const vx = Math.max(vAbs, 4), dirS = clamp(c.speed / DIR_BLEND, -1, 1);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - dirS * delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
+    // WHEEL STATE (opt-in, default OFF — tip path skips this block entirely).
+    // Torque-balanced κ replaces heuristic wheelLock / axFrac telemetry and
+    // scales Fy by the long/lat ellipse. Longitudinal speed still comes from
+    // game.js (follow-up wiring; Refs #1628).
+    let latScaleF = 1, latScaleR = 1;
+    if (useWheel) {
+      const ws = WheelState.stepPlayer(c, {
+        dt, loadF, loadR, braking, thrOn,
+        throttleLvl: c.human ? throttleLvl : 1,
+        gearMult, deploy, weatherGrip, surfaceMu, kerbGrip,
+        aeroGrip, tyreMu, tyreAx, slipF, slipR,
+        csFront: CS_FRONT, csRear: csR, muLatF: muF, muLatR: muR,
+        brakeBias: c.brakeBias,
+      });
+      latScaleF = ws.latScaleF;
+      latScaleR = ws.latScaleR;
+    }
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
     // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.
     if (typeof DebrisWorld !== "undefined" && DebrisWorld.active()) {
-      _marbleArg.lock = axFrac;
+      // Prefer live c.axFrac (κ-based when WheelState is ON; legacy otherwise).
+      _marbleArg.lock = c.axFrac != null ? c.axFrac : axFrac;
       _marbleArg.slip = Math.max(Math.abs(slipF), Math.abs(slipR));
       _marbleArg.speed = c.speed;
       DebrisWorld.tyreMarble(c, _marbleArg);
@@ -234,8 +258,8 @@ const PlayerForces = (function () {
     // Soft-saturating lateral tyre force (accel units): linear slope = stiffness
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
-    const Fyf = tyreSat(CS_FRONT, slipF, muF) * sp;
-    const Fyr = tyreSat(csR, slipR, muR, TyreModel.CURVE_FLOOR_R, TyreModel.CURVE_FALL_W_R, TyreModel.CURVE_HOLD_R) * sp;   // the rear's wider limit zone and gentler fall
+    const Fyf = tyreSat(CS_FRONT, slipF, muF) * sp * latScaleF;
+    const Fyr = tyreSat(csR, slipR, muR, TyreModel.CURVE_FLOOR_R, TyreModel.CURVE_FALL_W_R, TyreModel.CURVE_HOLD_R) * sp * latScaleR;   // the rear's wider limit zone and gentler fall
     const cosD = Math.cos(delta);
     // Where each axle sits on its tyre curve: x = cs·α/mu, the curve's own
     // abscissa (peak at TyreModel.CURVE_PEAK_X for the rear, CURVE_PEAK_X_F for

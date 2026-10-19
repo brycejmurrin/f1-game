@@ -24,3 +24,4 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Watcher tiered cadence](watcher-tiered-cadence.md) — fleet watcher: CI reds every 1 min, rest every 3 min, no per-PR subscriptions; takes over stale non-Claude PRs
 - [Orchestrator dispatches Pages](orchestrator-dispatches-pages.md) — dispatch pages.yml after merges instead of waiting for the cron; never dual-dispatch
 - [Archive only after Bryce is done](archive-only-after-bryce-done.md) — a DONE line is not enough; Bryce may still be using the session
+- [Bryce merges manually](bryce-merges-manually.md) — merges with no bus line are usually Bryce's; keep pacing, do not chase

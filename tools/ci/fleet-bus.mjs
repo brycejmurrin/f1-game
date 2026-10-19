@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// fleet-bus.mjs — the host-neutral merge lease and message bus: one git branch every host can push.
+// fleet-bus.mjs — the host-neutral message bus (and a generic lease mutex, no longer a merge gate since 2026-10-19 17:50Z): one git branch every host can push.
 // @doc Merge lease (one holder, expiry, refusal) and typed fleet bus on the claude/fleet-bus branch, any host.
 // Full description: The cross-host fleet channel. The claude/fleet-bus branch's TREE holds the merge lease (lease.json) and its COMMIT LOG is the message bus (one typed line per commit subject). Every write is a fast-forward push, so a lease acquire is compare-and-swap: two hosts racing for it cannot both win. `lease acquire|renew|release|break|check` and `send`/`read` (cursor reads, only new lines).
 // @section runner

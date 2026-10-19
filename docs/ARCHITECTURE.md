@@ -448,6 +448,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `body-attitude.js` | `BodyAttitude` | tag | C2 visual suspension: cosmetic body attitude (pitch / roll / heave). |
 | `tyre-model.js` | `TyreModel` | tag | TYRE MODEL: wear, the grip it costs, and the fuel burn that argues with it. |
 | `grip-steer.js` | `GripSteer` | tag | GripSteer: own-state steering cap at the front's peak slip. |
+| `wheel-state.js` | `WheelState` | tag | WHEEL STATE: torque-balanced per-axle rim speed and slip ratio. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | @ts-check |

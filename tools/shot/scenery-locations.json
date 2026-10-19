@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "1c11f77318f4d4b41ab642105f53d98ef42974802591286b7199c965be9feabf",
+  "sourceDigest": "88c717b50d34b74d3b0e4df26b5db3d99b67b6894518ec4e0e2e9e714a2601e8",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
