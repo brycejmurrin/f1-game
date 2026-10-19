@@ -22,3 +22,5 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Preview must look different](preview-must-look-different.md) — design sheets must differ in the picture (pixel-diff, close-up framing), not just in mm metrics; Bryce: "they all look the same"
 - [Synced plugins not in child sessions](synced-plugins-not-in-child-sessions.md) — dated Claude sibling-session limitation; verify availability on each host
 - [Watcher tiered cadence](watcher-tiered-cadence.md) — fleet watcher: CI reds every 1 min, rest every 3 min, no per-PR subscriptions; takes over stale non-Claude PRs
+- [Orchestrator dispatches Pages](orchestrator-dispatches-pages.md) — dispatch pages.yml after merges instead of waiting for the cron; never dual-dispatch
+- [Archive only after Bryce is done](archive-only-after-bryce-done.md) — a DONE line is not enough; Bryce may still be using the session

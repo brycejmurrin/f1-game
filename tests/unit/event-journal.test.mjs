@@ -59,6 +59,9 @@ test("capacity is 256 events", () => {
   assert.equal(EJ.CAP, 256);
   for (let i = 0; i < 300; i++) j.onFacts([{ type: "caution", level: 1, prev: 0 }], { t: i * 0.1, pos: 1 });
   assert.equal(j.count(), 256);
+  const ts = j.events().map((e) => e.t);
+  assert.equal(ts[0], 44 * 0.1, "the 44 oldest rows were evicted first");
+  assert.equal(ts.at(-1), 299 * 0.1, "the newest row is kept");
 });
 
 test("short race records pass, retire, fastest and caution", () => {
@@ -91,11 +94,25 @@ test("short race records pass, retire, fastest and caution", () => {
   assert.ok(kinds.has("retire"), "expected retirement edge");
   assert.ok(kinds.has("fastest"), "expected fastest-lap edge");
   assert.ok(kinds.has("caution"), "expected caution edge");
-  for (const e of journal.events()) {
-    assert.ok(Number.isFinite(e.t));
-    assert.ok(typeof e.kind === "string");
-    assert.ok("pos" in e && "gain" in e && "sev" in e);
-  }
+  const by = (k) => journal.events().find((e) => e.kind === k);
+  const pass = by("pass");
+  assert.equal(pass.car.code, "BBB", "the passer");
+  assert.equal(pass.meta.b.code, "AAA", "the car passed");
+  assert.equal(pass.pos, 1);
+  assert.equal(pass.gain, 1);
+  assert.equal(pass.sev, 0);
+  const caution = by("caution");
+  assert.equal(caution.car, null);
+  assert.equal(caution.sev, 3, "the caution row carries its level");
+  assert.equal(caution.meta.prev, 0);
+  const fastest = by("fastest");
+  assert.equal(fastest.car.code, "BBB");
+  assert.equal(fastest.meta.time, 92.1);
+  const retire = by("retire");
+  assert.equal(retire.car.code, "AAA");
+  assert.equal(retire.meta.why, "mechanical");
+  const ev = journal.events();
+  for (let i = 1; i < ev.length; i++) assert.ok(ev[i].t >= ev[i - 1].t, "events are in time order");
 });
 
 test("edge detectors log penalty, wheelLock, contact and pile-up without writing cars", () => {

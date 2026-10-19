@@ -33,12 +33,19 @@ test("the gap stays a gap at other scales", () => {
   }
 });
 
-test("a shared edge and float-sized cracks stay covered", () => {
+test("a shared edge stays covered", () => {
   const geo = merge(quad(0, 100, 0, 100, 3), quad(100, 200, 0, 100, 3));
-  assert.equal(at(geo, 100, 50), 3);
-  assert.equal(at(geo, 100.004, 50), 3);
-  assert.equal(at(geo, 99.996, 50), 3);
-  assert.equal(at(geo, 50, 50), 3);
+  for (const x of [99.996, 100, 100.004, 50]) assert.equal(at(geo, x, 50), 3, `x=${x}`);
+});
+
+// TRI_EPS (tracks.js) decides these: the quads do NOT touch, so a probe in the
+// sliver between them is covered only by the 1 cm slack. TRI_EPS = 0 answers null
+// on the first loop; an over-wide slack answers 3 on the second.
+test("a float-sized crack (5 mm) is covered, a 5 cm gap is not", () => {
+  const crack = merge(quad(0, 100, 0, 100, 3), quad(100.005, 200, 0, 100, 3));
+  for (const x of [100.001, 100.0025, 100.004]) assert.equal(at(crack, x, 50), 3, `crack x=${x}`);
+  const gap = merge(quad(0, 100, 0, 100, 3), quad(100.05, 200, 0, 100, 3));
+  assert.equal(at(gap, 100.025, 50), null, "5 cm gap is real");
 });
 
 test("exact maximum grid edges are covered; just beyond is not", () => {

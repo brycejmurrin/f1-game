@@ -472,6 +472,70 @@ test('reload blocks subsequent replay actions until the game boot boundary', asy
   assert.deepEqual(seen, ['document', 'boot-pending', 'pause-menu-rendering']);
 });
 
+// Device resolution is independent of CSS layout size; mobile identity must be complete.
+test("UI profiles preserve descriptor browser chrome, DPR and touch while labeling custom sizes", async () => {
+  const { resolveUIProfile, uiTestOptions } = await import("../../tools/lib/ui-device-profile.mjs");
+  const { devices } = await import("playwright");
+  const phone = resolveUIProfile({ touch: true });
+  assert.equal(phone.contextOptions.userAgent, devices['iPhone 13'].userAgent);
+  assert.equal(phone.contextOptions.deviceScaleFactor, 3);
+  assert.equal(phone.contextOptions.isMobile, true);
+  assert.equal(phone.contextOptions.hasTouch, true);
+  assert.deepEqual(phone.contextOptions.viewport, devices['iPhone 13'].viewport);
+  assert.deepEqual(phone.contextOptions.screen, devices['iPhone 13'].screen);
+  assert.equal(phone.profile.kind, 'device-emulation');
+  const tablet = uiTestOptions({ device: 'iPad Mini' });
+  assert.deepEqual(tablet.contextOptions.screen, { width: 768, height: 1024 });
+  assert(!Object.hasOwn(tablet, 'screen'), 'screen must use the Playwright Test contextOptions channel');
+  assert.equal(tablet.isMobile, true);
+  const desktop = uiTestOptions({ device: 'Desktop Chrome' });
+  assert.deepEqual(desktop.contextOptions.screen, devices['Desktop Chrome'].screen);
+  assert.notDeepEqual(desktop.contextOptions.screen, desktop.viewport, 'desktop monitor and browser window are independent');
+  assert(!Object.hasOwn(phone.contextOptions, 'defaultBrowserType'));
+  const stress = resolveUIProfile({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
+  assert.equal(stress.profile.kind, 'custom-css-viewport');
+  assert.equal(stress.profile.raster, 'geometry-override');
+  assert.deepEqual(stress.contextOptions.screen, { width: 844, height: 390 });
+  assert.equal(stress.contextOptions.isMobile, true);
+  assert.equal(resolveUIProfile({ viewport: { width: 390, height: 844 } }).contextOptions.hasTouch, false);
+  assert.throws(() => resolveUIProfile({ device: 'made-up phone' }));
+  assert.throws(() => resolveUIProfile({ viewport: { width: NaN, height: 390 } }));
+  assert.throws(() => resolveUIProfile({ deviceScaleFactor: 0 }));
+  const opts = parseOptions(['inspect', '--device', 'iPhone 13', '--settings', 'appearance.json']);
+  assert.equal(opts.device, 'iPhone 13'); assert.equal(opts.settingsFile, 'appearance.json');
+  assert.throws(() => parseOptions(['inspect', '--device', 'made-up phone']));
+});
+
+test("full-screen catalog cells stay full-screen when Playwright's browser-chrome descriptors change", async () => {
+  const { VIEWPORTS } = await import('../../tools/ui/menu-screens.mjs');
+  for (const [id, width, height] of [['ios-iphone-portrait',393,852],['ios-iphone-landscape',852,393],['ios-iphone-landscape-844',844,390]]) {
+    const [, options] = VIEWPORTS.find(([name]) => name === id);
+    assert.deepEqual(options.viewport, { width, height });
+    assert.deepEqual(options.screen, { width, height });
+    assert(options.isMobile && options.hasTouch);
+  }
+});
+
+test("replay emits native taps for mobile profiles and clicks for desktop", async () => {
+  const calls = [];
+  const page = { locator: () => ({ tap: async () => calls.push('tap'), click: async () => calls.push('click') }) };
+  await performAction({ page, profile: { hasTouch: true } }, { type: 'click', selector: '#mb-garage' });
+  await performAction({ page, profile: { hasTouch: false } }, { type: 'click', selector: '#mb-garage' });
+  assert.deepEqual(calls, ['tap', 'click']);
+});
+
+test("invalid supplied settings never silently become shipped defaults or acquire a browser", async () => {
+  const fs = await import('node:fs');
+  fs.mkdirSync('scratch', { recursive: true });
+  const dir = fs.mkdtempSync('scratch/invalid-ui-settings-');
+  try {
+    for (const value of [null, false, 0, [], {}, { format: 'other' }]) {
+      const file = dir + '/settings.json'; fs.writeFileSync(file, JSON.stringify(value));
+      await assert.rejects(main(['inspect', '--settings', file]), /requires an Apex settings export/);
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 
 test("MCP UI summary retains bounded console and request evidence without claiming a pass", async () => {
   const { summarizeUIInspection } = await import("../../tools/mcp/ui-tools.mjs");

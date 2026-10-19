@@ -145,6 +145,15 @@ test("detach retries an owned ring whose per-logpoint cleanup failed", async () 
   assert.equal(session.logpointRings.size, 0);
 });
 
+test("detach drops the previous target's operations (B10)", async () => {
+  const session = new DebugSession({ discover: async () => [target], open: async () => new FakeCdp() });
+  await session.attach(endpoint, "t");
+  session.operations.set(1, { id: 1, status: "completed" });
+  assert.equal(session.state().operations.length, 1);
+  await session.detach();
+  assert.equal(session.state().operations.length, 0, "stale operations survived detach");
+  assert.deepEqual(session.operations.size, 0);
+});
 
 test("large operation values and exceptions remain retrievable after newer runs and bounded state eviction", async () => {
   const { session, client } = await attachedPage();

@@ -28,6 +28,13 @@ import { seedHash32 } from "../helpers/seed-hash32.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+// The REAL predicate from js/data/teams.js (not a hand copy that can drift from it).
+const realIsReal = (() => {
+  const c = vm.createContext({ console, Math, Object, Array, Number, String, JSON });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: "js/data/teams.js" });
+  return vm.runInContext("Teams.isReal", c);
+})();
+
 const LEGEND_CODES = ["MSC", "SEN", "VET", "MAN", "FAN", "CLK", "LAU", "PRO", "STE", "MOS", "GHL", "HAK"];
 
 function load() {
@@ -45,8 +52,7 @@ function load() {
     },
     Teams: {
       POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
-      // The predicate under test, verbatim from js/data/teams.js.
-      isReal: (t) => !!t && !t.custom && !t.legends,
+      isReal: realIsReal,   // the predicate under test, loaded from js/data/teams.js
       LIST: [
         { id: "ferrari", tier: 1, drivers: [{ name: "L", code: "LEC", num: 16 }, { name: "H", code: "HAM", num: 44 }] },
         { id: "haas", tier: 4, drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }] },
@@ -57,15 +63,12 @@ function load() {
       ],
     },
     Parts: { getFactorySetup: () => ({}) },
-    DriverRatings: {
-      get: () => ({ pace: 70, craft: 70, awareness: 70, consistency: 70, experience: 70 }),
-      overall: () => 70,
-    },
     Tracks: { LIST: [] },
   });
   seedLog(ctx);
   seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx, { filename: "js/data/driver-ratings.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx, { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
 }
