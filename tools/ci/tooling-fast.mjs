@@ -243,11 +243,17 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/chromium-shell.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
+  "tests/unit/ci-gate-selection.test.mjs",
+  "tests/unit/ci-gpu-census.test.mjs",
   // CI guards born 2026-10-15: ci-rerun.mjs refuses a superseded/live/green/re-run run; ci-cancel-on-close.yml joins ci.yml's PR group. Pure, no network or browser.
   "tests/unit/ci-guard-tools.test.mjs",
+  "tests/unit/ci-pages-train.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
+  "tests/unit/ci-ship-filter-geometry.test.mjs",
+  "tests/unit/ci-ship-smoke-renderer.test.mjs",
   "tests/unit/ci-verdict.test.mjs",
   "tests/unit/ci-watch.test.mjs",
+  "tests/unit/ci-workflow-triggers.test.mjs",
   "tests/unit/circuit-axis.test.mjs",
   "tests/unit/circuit-corner-anchors.test.mjs",
   // Round-2: manifest.json / meta description circuit counts pinned to Tracks.LIST.

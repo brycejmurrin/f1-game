@@ -6240,9 +6240,6 @@
       "menuLampBake": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "menuPrep": [
-        "tests/unit/ci-coverage.test.mjs"
-      ],
       "motionReduced": [
         "tests/unit/storm-vm.test.mjs"
       ],
@@ -6543,6 +6540,7 @@
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
+        "tests/unit/ci-coverage.test.mjs",
         "tests/unit/ci-pr-base.test.mjs",
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/css-play.test.mjs",
@@ -8048,7 +8046,7 @@
       "*": [
         "tests/specs/lighting-ab.spec.js",
         "tests/specs/lighting-tuner-grade.spec.js",
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/lamp-density.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
@@ -11093,7 +11091,7 @@
       ],
       "*": [
         "tests/specs/race-control.spec.js",
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
@@ -12018,7 +12016,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "push": [
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
@@ -12227,7 +12225,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "*": [
-        "tests/unit/ci-coverage.test.mjs"
+        "tests/unit/ci-gate-selection.test.mjs"
       ]
     },
     "js/render/shared/assets.js": {
@@ -12656,7 +12654,7 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "place": [
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-try.test.mjs",
@@ -13116,7 +13114,7 @@
         "tests/specs/tlx-probes.spec.js",
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/census-verdict.test.mjs",
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
@@ -14015,7 +14013,7 @@
         "tests/specs/new-hooks.spec.js",
         "tests/specs/season-format.spec.js",
         "tests/unit/camera-ride.test.mjs",
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/coplanar-faces.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
@@ -16080,7 +16078,7 @@
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
       "*": [
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/global-registry.test.mjs"
       ]
     },
