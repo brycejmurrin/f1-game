@@ -21,8 +21,20 @@ run is long, hung, or targets a worker.
 - A `timeoutMs` deadline leaves the op `timedOut` but tracked; page JS is not
   cancelled and its late result still lands.
 
+## Node tests (one call, parallel)
+
+- `debugger_node_test {files, probes:[{file?, line, expression?, condition?, captureLocals?}]}` runs
+  up to 8 test files under the inspector at once and returns exit code, TAP pass/fail, failing test
+  names, per-probe hit counts, values and locals. No attach; it runs beside a page session.
+- Probing `js/` game code a test loads through `vm`: give the repo path (`js/physics/brake-cue.js`);
+  every filename form and unnamed copies bind (see the reference §Node). Probe a body line, not the
+  `function` header line.
+- `runner:"test"` = real `node --test`; `children:true` auto-attaches Node processes the test spawns.
+- Interactive instead: `node --inspect-brk=127.0.0.1:9229 <file>`, then `debugger_targets` on
+  `http://127.0.0.1:9229` and attach the `node` row (stops at Break on start; repo paths as URLs).
+
 ## Targets and viewport
 
-- `debugger_targets targetType:"service_worker"|"worker"` reaches `sw.js` and workers.
+- `debugger_targets targetType:"service_worker"|"worker"|"node"` reaches `sw.js`, workers and Node.
 - `node tools/mcp/debug-chrome.mjs start --device phone-landscape|desktop` guarantees
   the viewport (default `phone-landscape`, 844x390 touch; see `status`).
