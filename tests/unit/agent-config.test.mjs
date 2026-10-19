@@ -671,6 +671,129 @@ test("the Codex skill mirror is tracked symlinks and the repair script exists", 
   assert.match(read("tools/env/mirror-skills.sh"), /ln -s/, "the repair makes symlinks, the tracked form");
 });
 
+test("live process profiles share runner recognition without weakening source protection", () => {
+  const r = spawnSync("python3", ["-", ROOT], {
+    cwd: path.dirname(ROOT), encoding: "utf8", timeout: 5000,
+    input: String.raw`
+import builtins, contextlib, importlib.util, io, os, runpy, sys, tempfile
+from unittest.mock import patch
+root = sys.argv[1]
+hooks = os.path.join(root, ".claude/hooks")
+spec = importlib.util.spec_from_file_location("live_process", os.path.join(hooks, "live_process.py"))
+mod = importlib.util.module_from_spec(spec)
+with patch("builtins.open", side_effect=AssertionError("import opened a file")), patch("os.listdir", side_effect=AssertionError("import scanned processes")):
+    spec.loader.exec_module(mod)
+# Explicit guard/advice expectations pin the two caller policies independently.
+cases = [
+    (["node", "/x/node_modules/@playwright/test/cli.js", "test"], True, True),
+    (["node", "/x/playwright.js", "test"], True, True),
+    (["playwright", "--debug", "test"], True, True),
+    (["node", "/x/run-playwright.mjs", "--list"], True, False),
+    (["playwright", "test", "--list"], True, False),
+    (["sh", "/x/playwright", "test"], True, False),
+    (["bash", "-c", "echo playwright test"], False, False),
+    (["bash", "-c", "run-playwright.mjs"], True, False),
+    (["bash", "-lc", "run-playwright.mjs"], True, False),
+    (["bash", "--noprofile", "-c", "sleep 100", "run-playwright.mjs"], True, False),
+    (["bash", "--noprofile", "-c", "run-playwright.mjs"], True, False),
+    (["sh", "-e", "-ec", "run-playwright.mjs"], True, False),
+    (["bash", "-o", "errexit", "-c", "run-playwright.mjs"], True, False),
+    (["bash", "--rcfile", "/x/profile", "-lc", "run-playwright.mjs"], True, False),
+    (["sh", "--", "/x/playwright", "test", "-c"], True, False),
+    (["bash", "--", "run-playwright.mjs", "-c"], True, False),
+    (["sh", "/x/playwright", "test", "-c", "quoted command"], True, False),
+    (["bash", "/x/script", "-c", "run-playwright.mjs"], True, False),
+    (["sh", "-e", "/x/playwright", "test", "-c"], True, False),
+    (["node", "unrelated.js", "playwright test"], False, False),
+    (["node", "/x/cli.js", "install"], False, False),
+    ([], False, False),
+]
+for argv, guard, advice in cases:
+    assert mod.is_playwright_run(argv) == guard, argv
+    assert mod.is_playwright_run(argv, advisory=True) == advice, argv
+# BASE advice excluded every shell executable, independent of its arguments.
+# Retain that exact contract across all fixed-case argument variants/shells.
+base_shells = ("bash", "sh", "dash", "zsh")
+for argv, _, _ in cases:
+    for shell in base_shells:
+        shell_argv = [shell, *argv[1:]]
+        base_advice = False # live-run.py skipped these argv[0] basenames first
+        assert mod.is_playwright_run(shell_argv, advisory=True) == base_advice, shell_argv
+# Compare every generated guard decision with the actual baseline algorithm.
+from itertools import product
+for argv in product(["node", "sh", "/x/cli.js", "/x/run-playwright.mjs", "playwright", "test", "--list", "-c"], repeat=3):
+    names = [os.path.basename(arg) for arg in argv]
+    before = ("run-playwright.mjs" in names or any(b in ("playwright", "playwright.js", "cli.js") and "test" in argv[i + 1:i + 3] for i, b in enumerate(names)))
+    assert mod.is_playwright_run(argv) == before, argv
+with tempfile.TemporaryDirectory(prefix="live-process-", dir=root) as tmp:
+    checkout = os.path.join(tmp, "checkout")
+    os.makedirs(os.path.join(checkout, "nested"))
+    alias = os.path.join(tmp, "alias")
+    os.symlink(checkout, alias)
+    proc = os.path.join(tmp, "proc")
+    os.mkdir(proc)
+    for pid, cwd, argv in [
+        ("1", alias, ["node", "/x/cli.js", "test"]),
+        ("2", os.path.join(checkout, "nested"), ["playwright", "test", "--list"]),
+        ("3", checkout + "-other", ["playwright", "test"]),
+        ("4", checkout, []),
+    ]:
+        d = os.path.join(proc, pid)
+        os.mkdir(d)
+        with open(os.path.join(d, "cmdline"), "wb") as fh:
+            fh.write(b"\0".join(a.encode() for a in argv) + b"\0")
+        os.symlink(cwd, os.path.join(d, "cwd"))
+    os.mkdir(os.path.join(proc, "5")) # vanished cmdline
+    os.mkdir(os.path.join(proc, "6"))
+    with open(os.path.join(proc, "6", "cmdline"), "wb") as fh:
+        fh.write(b"playwright\0test\0") # vanished cwd
+    assert set(mod.playwright_pids(alias, proc=proc)) == {"1", "2"}
+    assert list(mod.playwright_pids(alias, advisory=True, proc=proc)) == ["1"]
+    try:
+        list(mod.playwright_pids(checkout, proc=os.path.join(tmp, "missing")))
+    except FileNotFoundError:
+        pass
+    else:
+        raise AssertionError("caller must own enumeration failure policy")
+# The edit adapter retains fail-open enumeration policy, independently of CLI.
+import ast
+with open(os.path.join(hooks, "protect-files.py")) as fh:
+    tree = ast.parse(fh.read())
+fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "live_playwright_in")
+ns = {"playwright_pids": lambda root: (_ for _ in ()).throw(PermissionError("proc"))}
+exec(compile(ast.Module(body=[fn], type_ignores=[]), "<edit-adapter>", "exec"), ns)
+assert ns["live_playwright_in"](root) is False
+# Exercise the actual CLI adapter: its PID/starttime/log stdout stays byte exact.
+sys.modules["live_process"] = mod
+real_open = builtins.open
+for vanished, log in ((False, ""), (False, "artifacts/logs/a run.log"), (True, "")):
+    def read_file(file, *args, **kwargs):
+        if str(file) == "/proc/42/stat":
+            if vanished:
+                raise FileNotFoundError(file)
+            return io.StringIO("42 (runner name) " + " ".join(["S"] * 19 + ["123"]))
+        if str(file) == os.path.join(root, "artifacts/logs/test-bg.json"):
+            return io.StringIO('{"runs": [{"pid": 7, "log": "' + log + '"}]}')
+        return real_open(file, *args, **kwargs)
+    out = io.StringIO()
+    with patch.object(sys, "argv", ["live-run.py", root]), patch.object(mod, "playwright_pids", return_value=iter(["42"])), patch("builtins.open", side_effect=read_file), patch("os.kill"), contextlib.redirect_stdout(out):
+        try:
+            runpy.run_path(os.path.join(hooks, "live-run.py"), run_name="__main__")
+        except SystemExit as e:
+            assert e.code == 0
+    assert out.getvalue() == ("" if vanished else "42:123 " + (log or "-") + "\n"), out.getvalue()
+print("22 policy cases; 512 baseline guard comparisons; checkout/vanishing/import/CLI contracts passed")
+`,
+  });
+  assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
+  assert.match(r.stdout, /512 baseline guard comparisons/);
+  const help = spawnSync("python3", [path.join(ROOT, ".claude/hooks/live-run.py"), "--help"], {
+    cwd: path.dirname(ROOT), encoding: "utf8", timeout: 5000,
+  });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stderr, /usage: live-run\.py/);
+});
+
 test("env install scripts and live-run.py answer --help without side effects", () => {
   // --help used to run the install body (npm / apt / MCP clones) or crash
   // live-run.py with IndexError when argv was missing.
