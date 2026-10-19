@@ -236,6 +236,11 @@
       "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
       "presentation": "shared-levels"
     },
+    "tools/check/i18n-lint.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; unknown-key/placeholder/plural findings, --guard literal hits, allowlist and coverage warnings.",
+      "presentation": "shared-levels"
+    },
     "tools/check/lifecycle-census.mjs": {
       "action": "artifact-first",
       "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
@@ -1771,6 +1776,11 @@
         "existing return or artifact contract",
         "scope/coverage and omitted-count distinctions where applicable"
       ],
+      "presentation": "native"
+    },
+    "tools/shot/export-history-evidence.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data, thrown errors; Git blob identity verification and _historical-origin.json receipt under artifacts/promoted-evidence/.",
       "presentation": "native"
     },
     "tools/shot/flicker-gate.mjs": {

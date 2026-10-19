@@ -1046,6 +1046,8 @@
         "argv-or-parser"
       ],
       "sourceBytes": 19692,
+      "outputPolicy": "targeted-summary",
+      "outputContract": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; unknown-key/placeholder/plural findings, --guard literal hits, allowlist and coverage warnings.",
       "doc": "Locale lint: unknown keys, placeholders, CLDR plurals; --guard bans new literals in migrated files.",
       "skill": "pwa-cache-service-worker",
       "nativeOutputFlagMentions": [
@@ -6828,6 +6830,8 @@
       "classification": "ambiguous",
       "evidence": [],
       "sourceBytes": 3263,
+      "outputPolicy": "no-direct-output",
+      "outputContract": "API signatures, return data, thrown errors; Git blob identity verification and _historical-origin.json receipt under artifacts/promoted-evidence/.",
       "doc": "Export selected committed evidence files, preserving Git blob identities without executing the old checkout.",
       "skill": null,
       "nativeOutputFlagMentions": [],
