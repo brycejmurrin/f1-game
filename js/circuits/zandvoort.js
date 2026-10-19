@@ -71,6 +71,7 @@
     // an 8 m cosine bump makes survey() groundCliffs along that corridor
     // (CLIFF_SLOPE 0.55). Rises are capped so relief ≈ 4.3 m and cliffs = 0;
     // the old single hump at 0.56 put the crest between T8 and T9 (flat).
+    crossover: true,   // road crosses itself: terrain-over-road scans the other deck by mesh provenance
     elevations: [
       { s: 0.2957, halfM: 360, rise: 4.2 },  // T4 Hunserug crest (climb from T3 exit, fall to T5)
       { s: 0.4260, halfM: 150, rise: 3.94 }, // T5 -> T6 climb, crest just past T6

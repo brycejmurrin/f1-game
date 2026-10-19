@@ -90,8 +90,8 @@ test("declaredTests expands the auditTracks() roster (terrain-over-road)", () =>
   // was cancelled at its cap with 0 failures — which skipped poke-train.
   const roster = createRequire(import.meta.url)("../../tools/manifest.cjs").CIRCUITS.length;
   assert.ok(roster >= 40, `expected a full circuit roster, got ${roster}`);
-  // 4 named single-circuit tests + one per circuit in the roster.
-  assert.equal(declaredTests("tests/specs/terrain-over-road.spec.js"), 4 + roster,
+  // 3 named single-circuit tests + one per circuit in the roster.
+  assert.equal(declaredTests("tests/specs/terrain-over-road.spec.js"), 3 + roster,
     "terrain-over-road bills one test per audited circuit, not one for the loop");
 });
 

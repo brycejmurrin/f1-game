@@ -1,0 +1,6 @@
+{ "tip": "dead00beef", "entries": [
+  { "sha": "1111111111", "at": 1792435200, "type": "HANDOFF", "to": "*", "from": "claude:session_O1", "text": "GAME-SLOT #1 abc (old)" },
+  { "sha": "2222222222", "at": 1792435260, "type": "HANDOFF", "to": "*", "from": "claude:session_O1", "text": "GAME-SLOT #2 def (new)" },
+  { "sha": "3333333333", "at": 1792435320, "type": "DONE", "to": "*", "from": "claude:session_O1", "text": "#2 merged" },
+  { "sha": "4444444444", "at": 1792435380, "type": "HANDOFF", "to": "*", "from": "claude:session_O2", "text": "OrchB LIVE" }
+] }

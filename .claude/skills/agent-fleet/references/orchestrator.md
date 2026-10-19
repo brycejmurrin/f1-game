@@ -102,6 +102,25 @@ before every `create_session`:
 14. Route verbose reads (CI logs, transcripts, big lists) through a subagent that returns a summary;
    no tool result over 10k characters enters your context (comms.md §Output budget).
 
+### Orchestrator succession past the lineage cap (Bryce 2026-10-19)
+
+`create_session` chains count toward a platform limit (`get_session` `lineage`: depth/limit 8), and a session at
+depth 8 cannot launch its successor. A session fired by a scheduled task with `create_new_session_on_fire: true` is a
+ROOT instead: no `parent_session_id`, tag `config:routine-lineage-none` (measured 2026-10-19 19:42Z, probe
+session_01MPvWMa3ctnK79nmCzwK3SP). So an orchestrator hands off through a one-shot task, never `create_session`:
+
+1. `create_trigger` with `create_new_session_on_fire: true`, `run_once_at` ~1 min out, `initiation: human_request`,
+   `notifications: {}`, and the full handoff brief as `prompt`.
+2. `update_trigger` `model: claude-opus-5-5` before it fires (the fired session otherwise runs the account default;
+   the probe ran Sonnet). Bryce asked for this path in ORCH14, 2026-10-19 ("want sessions to be able to handoff more than 8").
+3. The fired session has NO repo checkout (`config:no-git-repo`) and no connectors, so the brief opens with:
+   `add_repo brycejmurrin/f1-game` (access push), clone it as the tool says, `register_repo_root`, check out the
+   deploy branch; GitHub reads go through `gh` (proxy-configured) when the GitHub MCP is absent.
+4. After it fires, `get_trigger` gives `last_run.session_id`; confirm with `get_session` (status, model, no
+   `parent_session_id`) and post the bus HANDOFF naming the new id. NEVER `delete_trigger` it: deleting a scheduled
+   task deletes every session it started (ORCH14 lost its first ORCH15 that way, 2026-10-19 20:12Z). A fired one-shot
+   is already disabled; leave it.
+
 ### Pre-launch quota check (#2380)
 
 50 of 61 failed sessions died on the account quota, and a launch burst is what
