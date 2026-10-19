@@ -20,7 +20,8 @@ export function exportHistoryEvidence({ root, sha, paths }) {
   const git = (...args) => execFileSync("git", ["-C", root, ...args], { maxBuffer: 256 * 2 ** 20 });
   if (git("rev-parse", "HEAD").toString().trim() !== sha) throw new Error("capture checkout does not match source_commit");
   const entries = git("ls-tree", "-r", "-z", sha, "--", ...paths).toString().split("\0").filter(Boolean).map((row) => {
-    const [header, name] = row.split("\t");
+    const separator = row.indexOf("\t");
+    const header = row.slice(0, separator), name = row.slice(separator + 1);
     const [mode, kind, blob] = header.split(" ");
     if (kind !== "blob" || !["100644", "100755"].includes(mode)) throw new Error("historical evidence must contain only regular files");
     validateHistorySelection(sha, [name]);

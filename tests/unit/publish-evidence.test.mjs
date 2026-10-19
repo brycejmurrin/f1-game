@@ -154,6 +154,11 @@ test("historical selections reject traversal, ref/pathspec injection, missing pa
   assert.throws(() => exportHistoryEvidence({ root: f.root, sha: "f".repeat(40), paths: ["gallery/missing.png"] }), /does not match/);
   assert.throws(() => exportHistoryEvidence({ root: f.root, sha, paths: ["gallery/missing.png"] }), /missing/);
   assert.equal(fs.existsSync(path.join(f.root, "artifacts/promoted-evidence")), false);
+  fs.mkdirSync(path.join(f.root, "gallery"));
+  fs.writeFileSync(path.join(f.root, "gallery", "unsafe\tname.png"), "image");
+  f.git("add", "gallery"); f.git("commit", "-m", "unsupported path");
+  assert.throws(() => exportHistoryEvidence({ root: f.root, sha: f.git("rev-parse", "HEAD"), paths: ["gallery"] }), /unsafe historical path/);
+  assert.equal(fs.existsSync(path.join(f.root, "artifacts/promoted-evidence")), false);
 });
 
 test("historical export refuses committed links and symlinked output before writing outside the checkout", (t) => {

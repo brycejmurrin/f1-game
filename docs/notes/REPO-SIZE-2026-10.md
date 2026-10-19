@@ -1,4 +1,4 @@
-# Repository size — 2026-10-01/02
+# Repository size — October 2026
 
 What makes a clone of this repository big, measured on FULL history with
 `.github/workflows/repo-size.yml` (`tools/ci/repo-size.mjs`). Dated: re-run the

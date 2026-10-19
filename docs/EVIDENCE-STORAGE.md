@@ -67,6 +67,10 @@ captures inherited by old branches and combines duplicate snapshots. Publication
 alone is insufficient: download, check the checksum, compare the manifest and
 extracted bytes to Git, then inspect the gallery before replacing links. A verified
 snapshot does not authorize deleting other revisions, recovery refs or PR history.
+Archived reports can retain links to original Git sources or full-resolution images
+in producer metadata. Byte-for-byte migration preserves those historical links;
+opening the extracted gallery does not prove that every external link is independent
+of Git. Audit those consumers separately before any later history-removal proposal.
 
 A workflow already present on the default branch can be tested from a topic branch
 with `gh workflow run archive-evidence.yml --ref <branch> …`; the publisher then

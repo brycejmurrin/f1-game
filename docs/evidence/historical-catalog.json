@@ -21,7 +21,53 @@
       "entryPoints": [
         "artifacts/track-survey/buddh-report/index.html"
       ],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188591877",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-buddh-survey-a1-83520016bc210339",
+        "tag": "evidence-legacy-buddh-survey-a1-83520016bc210339",
+        "archiveName": "legacy-buddh-survey-a1-031beb824665.tar.gz",
+        "archiveSha256": "83520016bc210339de2b6a31649b563f1bdca1d364f9feb6a7073a46e7e42feb",
+        "archiveBytes": 1447687,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:10:13.309471+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 1,
+        "assets": [
+          {
+            "name": "legacy-buddh-survey-a1-031beb824665.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-buddh-survey-a1-83520016bc210339/legacy-buddh-survey-a1-031beb824665.tar.gz",
+            "size": 1447687,
+            "digest": "sha256:83520016bc210339de2b6a31649b563f1bdca1d364f9feb6a7073a46e7e42feb"
+          },
+          {
+            "name": "legacy-buddh-survey-a1-031beb824665.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-buddh-survey-a1-83520016bc210339/legacy-buddh-survey-a1-031beb824665.tar.gz.sha256",
+            "size": 212,
+            "digest": "sha256:1e47b7afdb67f8425e26f55c8cc581f78c1414e1061c54d4d54f1e0d285739fe"
+          },
+          {
+            "name": "legacy-buddh-survey-a1-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-buddh-survey-a1-83520016bc210339/legacy-buddh-survey-a1-manifest.json",
+            "size": 757,
+            "digest": "sha256:218ac989286589033854a7d4945433578eec4cb8b05190e47216b38023a46d1e"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:11:22.585Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/track-survey/buddh-report/index.html",
+              "title": "Buddh Survey",
+              "imageElements": 63,
+              "loadedImages": 63,
+              "bodyText": "Buddh International Circuit (BUDDH)\n\nIndia \u00b7 Indian GP 2011-13 (retired, classic) \u00b7 theme green \u00b7 DAY \u00b7 clockwise \u00b7 build 6508220 (deploy branch tip) \u00b7 survey 2",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-buddh-survey-b1",
@@ -40,7 +86,53 @@
       "entryPoints": [
         "artifacts/track-survey/buddh-report/index.html"
       ],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188599646",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-buddh-survey-b1-511ab629087a795d",
+        "tag": "evidence-legacy-buddh-survey-b1-511ab629087a795d",
+        "archiveName": "legacy-buddh-survey-b1-b940f15526da.tar.gz",
+        "archiveSha256": "511ab629087a795d46e4b4ddb31794d7f785b7e7aef2b0f317f1f7ae756015d0",
+        "archiveBytes": 3748398,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:10:13.522081+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 80,
+        "assets": [
+          {
+            "name": "legacy-buddh-survey-b1-b940f15526da.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-buddh-survey-b1-511ab629087a795d/legacy-buddh-survey-b1-b940f15526da.tar.gz",
+            "size": 3748398,
+            "digest": "sha256:511ab629087a795d46e4b4ddb31794d7f785b7e7aef2b0f317f1f7ae756015d0"
+          },
+          {
+            "name": "legacy-buddh-survey-b1-b940f15526da.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-buddh-survey-b1-511ab629087a795d/legacy-buddh-survey-b1-b940f15526da.tar.gz.sha256",
+            "size": 212,
+            "digest": "sha256:4b826f1f3efe7b2b87bd2268ebca61a73d31b17352b6dba9597c4d0c197d3d8f"
+          },
+          {
+            "name": "legacy-buddh-survey-b1-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-buddh-survey-b1-511ab629087a795d/legacy-buddh-survey-b1-manifest.json",
+            "size": 16285,
+            "digest": "sha256:6241e52686754c4c72a8d7e98efbf9e4ec17c07d995eed45900e2d59063587be"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:11:23.402Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/track-survey/buddh-report/index.html",
+              "title": "Buddh Survey Report",
+              "imageElements": 79,
+              "loadedImages": 52,
+              "bodyText": "Buddh International Circuit (BUDDH) - survey\n\nIndia - Indian GP 2011-13 (retired, classic) - theme green - day - clockwise - branch cursor/buddh-survey-b1 (pre-",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-survey-albert-park-a1",
@@ -59,7 +151,53 @@
       "entryPoints": [
         "artifacts/track-survey/albert_park-report/index.html"
       ],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188607683",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-survey-albert-park-a1-444e8c298f961c83",
+        "tag": "evidence-legacy-survey-albert-park-a1-444e8c298f961c83",
+        "archiveName": "legacy-survey-albert-park-a1-24090b73d4ae.tar.gz",
+        "archiveSha256": "444e8c298f961c8336dc389c6388b6e779c9b93973b5e969a9a657d04f3cc513",
+        "archiveBytes": 3401784,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:10:13.593623+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 63,
+        "assets": [
+          {
+            "name": "legacy-survey-albert-park-a1-24090b73d4ae.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-albert-park-a1-444e8c298f961c83/legacy-survey-albert-park-a1-24090b73d4ae.tar.gz",
+            "size": 3401784,
+            "digest": "sha256:444e8c298f961c8336dc389c6388b6e779c9b93973b5e969a9a657d04f3cc513"
+          },
+          {
+            "name": "legacy-survey-albert-park-a1-24090b73d4ae.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-albert-park-a1-444e8c298f961c83/legacy-survey-albert-park-a1-24090b73d4ae.tar.gz.sha256",
+            "size": 224,
+            "digest": "sha256:f5149539b8efbf79ffc277321b391f606a3ccde40d484d9f51bb6dd6bb3f44e5"
+          },
+          {
+            "name": "legacy-survey-albert-park-a1-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-albert-park-a1-444e8c298f961c83/legacy-survey-albert-park-a1-manifest.json",
+            "size": 13494,
+            "digest": "sha256:58a86b000969beb838bafa51d71a131e0f534d94495b92f76f3b1b91f61c0558"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:11:24.504Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/track-survey/albert_park-report/index.html",
+              "title": "Albert Park survey",
+              "imageElements": 62,
+              "loadedImages": 62,
+              "bodyText": "Albert Park \u2014 circuit survey\n\nAustralian GP \u00b7 Australia \u00b7 theme green / park \u00b7 day \u00b7 build 6508220 (branch cursor/survey-albert_park-a1) \u00b7 surveyed 2026-10-15 \u00b7",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-survey-brands-hatch-a1",
@@ -78,7 +216,53 @@
       "entryPoints": [
         "artifacts/track-survey/brands_hatch-report/index.html"
       ],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188614663",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-survey-brands-hatch-a1-1c649aba23e3b1da",
+        "tag": "evidence-legacy-survey-brands-hatch-a1-1c649aba23e3b1da",
+        "archiveName": "legacy-survey-brands-hatch-a1-afcad6000ec7.tar.gz",
+        "archiveSha256": "1c649aba23e3b1da1957621af6efca8e8edc6dd028c1787415d1b8ba1f6c98e7",
+        "archiveBytes": 4983393,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:10:16.116345+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 79,
+        "assets": [
+          {
+            "name": "legacy-survey-brands-hatch-a1-afcad6000ec7.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-brands-hatch-a1-1c649aba23e3b1da/legacy-survey-brands-hatch-a1-afcad6000ec7.tar.gz",
+            "size": 4983393,
+            "digest": "sha256:1c649aba23e3b1da1957621af6efca8e8edc6dd028c1787415d1b8ba1f6c98e7"
+          },
+          {
+            "name": "legacy-survey-brands-hatch-a1-afcad6000ec7.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-brands-hatch-a1-1c649aba23e3b1da/legacy-survey-brands-hatch-a1-afcad6000ec7.tar.gz.sha256",
+            "size": 226,
+            "digest": "sha256:e9aa42ee7c9da055c7e854dc3ac25a99ff18c58d3592529ffcfe38c3fecfb91c"
+          },
+          {
+            "name": "legacy-survey-brands-hatch-a1-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-brands-hatch-a1-1c649aba23e3b1da/legacy-survey-brands-hatch-a1-manifest.json",
+            "size": 17045,
+            "digest": "sha256:40985e1399da9e819a6b2d80b315e6a302fa80c1b57070366fc115461e6031ea"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:11:25.945Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/track-survey/brands_hatch-report/index.html",
+              "title": "Brands Hatch survey",
+              "imageElements": 88,
+              "loadedImages": 88,
+              "bodyText": "Brands Hatch \u00b7 circuit survey\n\nUK \u00b7 British GP (retired circuit, classic: true) \u00b7 theme green \u00b7 day circuit \u00b7 built from commit 6508220 (2026-10-14) plus merges",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-survey-gallery-fix-a1",
@@ -97,7 +281,55 @@
         "gallery/tracks/index.html",
         "gallery/tracks/manifest.json"
       ],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188670359",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-survey-gallery-fix-a1-cf691abfb28e9605",
+        "tag": "evidence-legacy-survey-gallery-fix-a1-cf691abfb28e9605",
+        "archiveName": "legacy-survey-gallery-fix-a1-78c61cf70793.tar.gz",
+        "archiveSha256": "cf691abfb28e96059311d1ec73a85ed1317468699c679a437a871ecc4adf0a45",
+        "archiveBytes": 145843850,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:11:44.451984+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 7024,
+        "assets": [
+          {
+            "name": "legacy-survey-gallery-fix-a1-78c61cf70793.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-gallery-fix-a1-cf691abfb28e9605/legacy-survey-gallery-fix-a1-78c61cf70793.tar.gz",
+            "size": 145843850,
+            "digest": "sha256:cf691abfb28e96059311d1ec73a85ed1317468699c679a437a871ecc4adf0a45"
+          },
+          {
+            "name": "legacy-survey-gallery-fix-a1-78c61cf70793.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-gallery-fix-a1-cf691abfb28e9605/legacy-survey-gallery-fix-a1-78c61cf70793.tar.gz.sha256",
+            "size": 224,
+            "digest": "sha256:c7134a04bc4b4b8aec108415c53e17c00c5509e4b36807c2d946b3ed9179b6e6"
+          },
+          {
+            "name": "legacy-survey-gallery-fix-a1-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-survey-gallery-fix-a1-cf691abfb28e9605/legacy-survey-gallery-fix-a1-manifest.json",
+            "size": 1615177,
+            "digest": "sha256:bcf655f28cfa4f28ace872035dfa3fedd99ceb843a481c8d5602c1e82e5b030c"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:12:05.219Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "gallery/tracks/index.html",
+              "title": "Apex 26 \u2014 circuit survey gallery",
+              "imageElements": 115,
+              "loadedImages": 24,
+              "bodyText": "Apex 26 \u2014 circuit survey gallery\n\nAll open cursor/*-survey* branches + seeds \u00b7 3512 shots \u00b7 rebuild npm run gallery:tracks\n\nabudhabi (114)\nalbert_park (69)\nande",
+              "pageErrors": []
+            }
+          ],
+          "mediaReferencesChecked": 7024,
+          "missingMediaReferences": 0
+        }
+      }
     },
     {
       "label": "legacy-track-gallery-a-8090",
@@ -113,7 +345,53 @@
       "fileCount": 104,
       "sourceBytes": 5917720,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188680375",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-track-gallery-a-8090-1e3140846314e4f5",
+        "tag": "evidence-legacy-track-gallery-a-8090-1e3140846314e4f5",
+        "archiveName": "legacy-track-gallery-a-8090-cf193d6c11e3.tar.gz",
+        "archiveSha256": "1e3140846314e4f51cbaa8ca655e5037665e1cc34a45179afa335e8a9d1445d5",
+        "archiveBytes": 5831009,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:11:34.519475+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 104,
+        "assets": [
+          {
+            "name": "legacy-track-gallery-a-8090-cf193d6c11e3.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-a-8090-1e3140846314e4f5/legacy-track-gallery-a-8090-cf193d6c11e3.tar.gz",
+            "size": 5831009,
+            "digest": "sha256:1e3140846314e4f51cbaa8ca655e5037665e1cc34a45179afa335e8a9d1445d5"
+          },
+          {
+            "name": "legacy-track-gallery-a-8090-cf193d6c11e3.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-a-8090-1e3140846314e4f5/legacy-track-gallery-a-8090-cf193d6c11e3.tar.gz.sha256",
+            "size": 222,
+            "digest": "sha256:75f36e51abb80f69003da876c10fbabd2ceb0d9793aa0a15a24ed0f17185084b"
+          },
+          {
+            "name": "legacy-track-gallery-a-8090-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-a-8090-1e3140846314e4f5/legacy-track-gallery-a-8090-manifest.json",
+            "size": 21217,
+            "digest": "sha256:e66a51b95bd234fea7103a82742ca0f3c3060da9bf1518519e7cd1a9268cefbc"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:12:06.276Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/shots/gallery/abudhabi/chase-fast-corner__rain.jpg",
+              "title": "chase-fast-corner__rain.jpg (1280\u00d7720)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-track-gallery-b-8f0c",
@@ -129,7 +407,53 @@
       "fileCount": 91,
       "sourceBytes": 7626564,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188686111",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-track-gallery-b-8f0c-b286bfd3902d004d",
+        "tag": "evidence-legacy-track-gallery-b-8f0c-b286bfd3902d004d",
+        "archiveName": "legacy-track-gallery-b-8f0c-2e8398a47c40.tar.gz",
+        "archiveSha256": "b286bfd3902d004daf299c29efc06cef22503d84dc14f21dd7c6bff5697dde16",
+        "archiveBytes": 7483923,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:11:34.947840+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 91,
+        "assets": [
+          {
+            "name": "legacy-track-gallery-b-8f0c-2e8398a47c40.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-b-8f0c-b286bfd3902d004d/legacy-track-gallery-b-8f0c-2e8398a47c40.tar.gz",
+            "size": 7483923,
+            "digest": "sha256:b286bfd3902d004daf299c29efc06cef22503d84dc14f21dd7c6bff5697dde16"
+          },
+          {
+            "name": "legacy-track-gallery-b-8f0c-2e8398a47c40.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-b-8f0c-b286bfd3902d004d/legacy-track-gallery-b-8f0c-2e8398a47c40.tar.gz.sha256",
+            "size": 222,
+            "digest": "sha256:e76a725d275000617da48f96b7e31af75cb44228c05f02f0263c8eed6c3fb731"
+          },
+          {
+            "name": "legacy-track-gallery-b-8f0c-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-b-8f0c-b286bfd3902d004d/legacy-track-gallery-b-8f0c-manifest.json",
+            "size": 18636,
+            "digest": "sha256:ac0b205198fd48e5c168b209a9b8a38594afcbfba9fa5e8efb22849a5912b325"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:12:08.036Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/shots/gallery/fuji/chase-fast-corner__day-rain.jpg",
+              "title": "chase-fast-corner__day-rain.jpg (1280\u00d7720)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-track-gallery-c-900c",
@@ -145,7 +469,53 @@
       "fileCount": 91,
       "sourceBytes": 7604174,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188695318",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-track-gallery-c-900c-300df8294731c1ef",
+        "tag": "evidence-legacy-track-gallery-c-900c-300df8294731c1ef",
+        "archiveName": "legacy-track-gallery-c-900c-73528604bb00.tar.gz",
+        "archiveSha256": "300df8294731c1ef1f2a04822a4bc918e933258210ad951b28af84d8220ee102",
+        "archiveBytes": 7504632,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:11:37.318417+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 91,
+        "assets": [
+          {
+            "name": "legacy-track-gallery-c-900c-73528604bb00.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-c-900c-300df8294731c1ef/legacy-track-gallery-c-900c-73528604bb00.tar.gz",
+            "size": 7504632,
+            "digest": "sha256:300df8294731c1ef1f2a04822a4bc918e933258210ad951b28af84d8220ee102"
+          },
+          {
+            "name": "legacy-track-gallery-c-900c-73528604bb00.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-c-900c-300df8294731c1ef/legacy-track-gallery-c-900c-73528604bb00.tar.gz.sha256",
+            "size": 222,
+            "digest": "sha256:d1d4d7a0a3d6f1b574747698ec71e4f612c9c2b42183a3ea1475c2d9cdfce55b"
+          },
+          {
+            "name": "legacy-track-gallery-c-900c-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-c-900c-300df8294731c1ef/legacy-track-gallery-c-900c-manifest.json",
+            "size": 18398,
+            "digest": "sha256:caabce35c0501bfa37cedfbf9e0c0219468bc70d63292dda6c1d013a574c5436"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:12:08.793Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/shots/gallery/magny_cours/chase-fast-corner__dusk.jpg",
+              "title": "chase-fast-corner__dusk.jpg (1152\u00d7648)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-track-gallery-d-08f2",
@@ -161,7 +531,53 @@
       "fileCount": 91,
       "sourceBytes": 5949755,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188767252",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-track-gallery-d-08f2-9e41506dca1b98e0",
+        "tag": "evidence-legacy-track-gallery-d-08f2-9e41506dca1b98e0",
+        "archiveName": "legacy-track-gallery-d-08f2-4d6257134003.tar.gz",
+        "archiveSha256": "9e41506dca1b98e0bb5bb481db3b4b6d9bbad536dcd752388c76523335b5df7f",
+        "archiveBytes": 5833394,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:12:44.214064+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 91,
+        "assets": [
+          {
+            "name": "legacy-track-gallery-d-08f2-4d6257134003.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-d-08f2-9e41506dca1b98e0/legacy-track-gallery-d-08f2-4d6257134003.tar.gz",
+            "size": 5833394,
+            "digest": "sha256:9e41506dca1b98e0bb5bb481db3b4b6d9bbad536dcd752388c76523335b5df7f"
+          },
+          {
+            "name": "legacy-track-gallery-d-08f2-4d6257134003.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-d-08f2-9e41506dca1b98e0/legacy-track-gallery-d-08f2-4d6257134003.tar.gz.sha256",
+            "size": 222,
+            "digest": "sha256:6366328a2458440aa1cc60dcdab3c4c37f5662a579e345bd54fe2c2be3769102"
+          },
+          {
+            "name": "legacy-track-gallery-d-08f2-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-gallery-d-08f2-9e41506dca1b98e0/legacy-track-gallery-d-08f2-manifest.json",
+            "size": 18567,
+            "digest": "sha256:b7e794178c04ce2f4be1c85c36946da7fb04222b390d5e42ff9e4bc81feeac92"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:13:06.663Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/shots/gallery/qatar/chase-fast-corner__night-dry.jpg",
+              "title": "chase-fast-corner__night-dry.jpg (1280\u00d7720)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-shots-1354",
@@ -177,7 +593,53 @@
       "fileCount": 6,
       "sourceBytes": 641377,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-1354-09aa0da3d264f3e5",
+        "tag": "evidence-legacy-shots-1354-09aa0da3d264f3e5",
+        "archiveName": "legacy-shots-1354-1c910d787b84.tar.gz",
+        "archiveSha256": "09aa0da3d264f3e5684574bda63d92413b0514bb384a17e269e744830be0d4cd",
+        "archiveBytes": 643708,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:08:31.867175+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 6,
+        "assets": [
+          {
+            "name": "legacy-shots-1354-1c910d787b84.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1354-09aa0da3d264f3e5/legacy-shots-1354-1c910d787b84.tar.gz",
+            "size": 643708,
+            "digest": "sha256:09aa0da3d264f3e5684574bda63d92413b0514bb384a17e269e744830be0d4cd"
+          },
+          {
+            "name": "legacy-shots-1354-1c910d787b84.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1354-09aa0da3d264f3e5/legacy-shots-1354-1c910d787b84.tar.gz.sha256",
+            "size": 202,
+            "digest": "sha256:6492bbabb93c9780ece06f2f3a1f9e34a4f1a36a2b9e3c36aff8a3cf785f3755"
+          },
+          {
+            "name": "legacy-shots-1354-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1354-09aa0da3d264f3e5/legacy-shots-1354-manifest.json",
+            "size": 1532,
+            "digest": "sha256:8f7fe46acfbb312fe923cfee873425d3bb17b0bfae2188de762eb68b55d4276f"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:08:47.633Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "shots/1354/1-tlx-boot-cockpit.png",
+              "title": "1-tlx-boot-cockpit.png (960\u00d7540)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        },
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188511454",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55"
+      }
     },
     {
       "label": "legacy-shots-1356",
@@ -193,7 +655,53 @@
       "fileCount": 22,
       "sourceBytes": 4620377,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188772424",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-1356-66bf12c846b576d0",
+        "tag": "evidence-legacy-shots-1356-66bf12c846b576d0",
+        "archiveName": "legacy-shots-1356-7e2417d9ab11.tar.gz",
+        "archiveSha256": "66bf12c846b576d072a689215f358f126e618ce8e7d3787a1dcbbdb11ae7fc30",
+        "archiveBytes": 4621811,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:12:44.203421+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 22,
+        "assets": [
+          {
+            "name": "legacy-shots-1356-7e2417d9ab11.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1356-66bf12c846b576d0/legacy-shots-1356-7e2417d9ab11.tar.gz",
+            "size": 4621811,
+            "digest": "sha256:66bf12c846b576d072a689215f358f126e618ce8e7d3787a1dcbbdb11ae7fc30"
+          },
+          {
+            "name": "legacy-shots-1356-7e2417d9ab11.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1356-66bf12c846b576d0/legacy-shots-1356-7e2417d9ab11.tar.gz.sha256",
+            "size": 202,
+            "digest": "sha256:12f1c8cfbeb21d5032b19583e54d9919dad685982165fbfe6f3693255d7fc7e6"
+          },
+          {
+            "name": "legacy-shots-1356-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1356-66bf12c846b576d0/legacy-shots-1356-manifest.json",
+            "size": 4303,
+            "digest": "sha256:9ec23026208bc0f7b9195fb1a7a3baddb32f694b279fbdedc273392012c6e1b5"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:13:07.404Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "shots/1356/daily-1-garage-driveout.png",
+              "title": "daily-1-garage-driveout.png (844\u00d7390)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-shots-1360",
@@ -209,7 +717,53 @@
       "fileCount": 7,
       "sourceBytes": 1827445,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188778003",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-1360-6ad31e173dafa6d5",
+        "tag": "evidence-legacy-shots-1360-6ad31e173dafa6d5",
+        "archiveName": "legacy-shots-1360-dd49b2aca9df.tar.gz",
+        "archiveSha256": "6ad31e173dafa6d54d00d4e834d5d11c26fc3088bfac47a0e6180167f3251605",
+        "archiveBytes": 1830121,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:12:44.492785+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 7,
+        "assets": [
+          {
+            "name": "legacy-shots-1360-dd49b2aca9df.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1360-6ad31e173dafa6d5/legacy-shots-1360-dd49b2aca9df.tar.gz",
+            "size": 1830121,
+            "digest": "sha256:6ad31e173dafa6d54d00d4e834d5d11c26fc3088bfac47a0e6180167f3251605"
+          },
+          {
+            "name": "legacy-shots-1360-dd49b2aca9df.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1360-6ad31e173dafa6d5/legacy-shots-1360-dd49b2aca9df.tar.gz.sha256",
+            "size": 202,
+            "digest": "sha256:fa573bb87707b8949d9a308339a736c70cbe18897bdaa25180cc0c2b2266fcf3"
+          },
+          {
+            "name": "legacy-shots-1360-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1360-6ad31e173dafa6d5/legacy-shots-1360-manifest.json",
+            "size": 1711,
+            "digest": "sha256:1eebc6dc1b038bc0b2077e2cb2b9cb009146798b1f1784210e08ac62132fdb42"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:13:08.043Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "shots/1360/btn0.7-default.png",
+              "title": "btn0.7-default.png (844\u00d7390)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-shots-1361",
@@ -225,7 +779,53 @@
       "fileCount": 9,
       "sourceBytes": 942293,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188787054",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-1361-7a0672b724d26a93",
+        "tag": "evidence-legacy-shots-1361-7a0672b724d26a93",
+        "archiveName": "legacy-shots-1361-9bd46b735df4.tar.gz",
+        "archiveSha256": "7a0672b724d26a939a17e38699cefbc9dc121f728c4c698c9abaa588fe5a688e",
+        "archiveBytes": 923910,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:12:46.644065+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 9,
+        "assets": [
+          {
+            "name": "legacy-shots-1361-9bd46b735df4.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1361-7a0672b724d26a93/legacy-shots-1361-9bd46b735df4.tar.gz",
+            "size": 923910,
+            "digest": "sha256:7a0672b724d26a939a17e38699cefbc9dc121f728c4c698c9abaa588fe5a688e"
+          },
+          {
+            "name": "legacy-shots-1361-9bd46b735df4.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1361-7a0672b724d26a93/legacy-shots-1361-9bd46b735df4.tar.gz.sha256",
+            "size": 202,
+            "digest": "sha256:1196f4123569839a4d848715eacbb600933918cb9bd0d4a0038e3bf6afaab441"
+          },
+          {
+            "name": "legacy-shots-1361-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1361-7a0672b724d26a93/legacy-shots-1361-manifest.json",
+            "size": 2054,
+            "digest": "sha256:b908601f74ab74e995a9eecb1b0d725e81fcd0e98fbd5da61d5ffc860384fb47"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:13:08.549Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "shots/1361/desk-1-designer.png",
+              "title": "desk-1-designer.png (1180\u00d7720)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-shots-1978",
@@ -241,7 +841,53 @@
       "fileCount": 3,
       "sourceBytes": 787545,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188851350",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-1978-138739f91fc7d309",
+        "tag": "evidence-legacy-shots-1978-138739f91fc7d309",
+        "archiveName": "legacy-shots-1978-c1b87d65619b.tar.gz",
+        "archiveSha256": "138739f91fc7d309c52a9faa4e3a0b1b06cf495abeca2c8ad6a5c00d5eb4f701",
+        "archiveBytes": 788437,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:13:48.954141+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 3,
+        "assets": [
+          {
+            "name": "legacy-shots-1978-c1b87d65619b.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1978-138739f91fc7d309/legacy-shots-1978-c1b87d65619b.tar.gz",
+            "size": 788437,
+            "digest": "sha256:138739f91fc7d309c52a9faa4e3a0b1b06cf495abeca2c8ad6a5c00d5eb4f701"
+          },
+          {
+            "name": "legacy-shots-1978-c1b87d65619b.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1978-138739f91fc7d309/legacy-shots-1978-c1b87d65619b.tar.gz.sha256",
+            "size": 202,
+            "digest": "sha256:add36c471b580e248a80ab04c59a135363d272e520d1f88eef9e767067b134b4"
+          },
+          {
+            "name": "legacy-shots-1978-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-1978-138739f91fc7d309/legacy-shots-1978-manifest.json",
+            "size": 1059,
+            "digest": "sha256:5dc5f3b44afdfbcf92ca22bae4d0f4f7502414f8e133ceefa41300acbc4e60c2"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:14:02.493Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "qa/replay/auto-cut-phone.png",
+              "title": "auto-cut-phone.png (844\u00d7390)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-shots-a11y-mcp",
@@ -257,7 +903,53 @@
       "fileCount": 6,
       "sourceBytes": 723199,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188863874",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-a11y-mcp-22e658bb1fc63d1f",
+        "tag": "evidence-legacy-shots-a11y-mcp-22e658bb1fc63d1f",
+        "archiveName": "legacy-shots-a11y-mcp-80d2f7e1f7cd.tar.gz",
+        "archiveSha256": "22e658bb1fc63d1fe667f12ebb65e5e9c7bc800bdffad2d03e5f60baedf8afa3",
+        "archiveBytes": 720889,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:13:48.718332+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 6,
+        "assets": [
+          {
+            "name": "legacy-shots-a11y-mcp-80d2f7e1f7cd.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-a11y-mcp-22e658bb1fc63d1f/legacy-shots-a11y-mcp-80d2f7e1f7cd.tar.gz",
+            "size": 720889,
+            "digest": "sha256:22e658bb1fc63d1fe667f12ebb65e5e9c7bc800bdffad2d03e5f60baedf8afa3"
+          },
+          {
+            "name": "legacy-shots-a11y-mcp-80d2f7e1f7cd.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-a11y-mcp-22e658bb1fc63d1f/legacy-shots-a11y-mcp-80d2f7e1f7cd.tar.gz.sha256",
+            "size": 210,
+            "digest": "sha256:0bed067871991f9b7ec6e8b313896fe5c95b7493d900b5939c8c8d636518d2f4"
+          },
+          {
+            "name": "legacy-shots-a11y-mcp-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-a11y-mcp-22e658bb1fc63d1f/legacy-shots-a11y-mcp-manifest.json",
+            "size": 1608,
+            "digest": "sha256:7f4a385e14b49f20f4282e0f907eb032bef3bbec6c5552cd74727c833a72c101"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:14:02.923Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "shots/a11y-mcp/1339-continue-card.png",
+              "title": "1339-continue-card.png (844\u00d7390)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-shots-hud-1346-1351",
@@ -273,7 +965,53 @@
       "fileCount": 4,
       "sourceBytes": 1152085,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188872251",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-hud-1346-1351-9fb56ecf3050e8d5",
+        "tag": "evidence-legacy-shots-hud-1346-1351-9fb56ecf3050e8d5",
+        "archiveName": "legacy-shots-hud-1346-1351-6407549a57d9.tar.gz",
+        "archiveSha256": "9fb56ecf3050e8d5efcaedf73db832da5d90df9f13ff7c39d70a7582c13b1601",
+        "archiveBytes": 1123306,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:13:48.769745+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 4,
+        "assets": [
+          {
+            "name": "legacy-shots-hud-1346-1351-6407549a57d9.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-hud-1346-1351-9fb56ecf3050e8d5/legacy-shots-hud-1346-1351-6407549a57d9.tar.gz",
+            "size": 1123306,
+            "digest": "sha256:9fb56ecf3050e8d5efcaedf73db832da5d90df9f13ff7c39d70a7582c13b1601"
+          },
+          {
+            "name": "legacy-shots-hud-1346-1351-6407549a57d9.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-hud-1346-1351-9fb56ecf3050e8d5/legacy-shots-hud-1346-1351-6407549a57d9.tar.gz.sha256",
+            "size": 220,
+            "digest": "sha256:24acee09b7ded6401f978fcacb714538e687592af44f2e1ac268567c928bd3b6"
+          },
+          {
+            "name": "legacy-shots-hud-1346-1351-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-hud-1346-1351-9fb56ecf3050e8d5/legacy-shots-hud-1346-1351-manifest.json",
+            "size": 1272,
+            "digest": "sha256:89201cfe527f3347d13b9802c9b325169ac76c11703c97194cb0149ab1a05514"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:14:03.409Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "shots/1346/pause-844x390-ui200.png",
+              "title": "pause-844x390-ui200.png (2026\u00d7936)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-shots-hud-survey",
@@ -289,7 +1027,53 @@
       "fileCount": 13,
       "sourceBytes": 2121722,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188881873",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-hud-survey-464ff4a590dccfb8",
+        "tag": "evidence-legacy-shots-hud-survey-464ff4a590dccfb8",
+        "archiveName": "legacy-shots-hud-survey-0d4bdd8fd9a6.tar.gz",
+        "archiveSha256": "464ff4a590dccfb81100c1cecf63130ef6eb857ce398d64d89e7d496c05518da",
+        "archiveBytes": 1855471,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:13:50.966898+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 13,
+        "assets": [
+          {
+            "name": "legacy-shots-hud-survey-0d4bdd8fd9a6.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-hud-survey-464ff4a590dccfb8/legacy-shots-hud-survey-0d4bdd8fd9a6.tar.gz",
+            "size": 1855471,
+            "digest": "sha256:464ff4a590dccfb81100c1cecf63130ef6eb857ce398d64d89e7d496c05518da"
+          },
+          {
+            "name": "legacy-shots-hud-survey-0d4bdd8fd9a6.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-hud-survey-464ff4a590dccfb8/legacy-shots-hud-survey-0d4bdd8fd9a6.tar.gz.sha256",
+            "size": 214,
+            "digest": "sha256:7d318bff316b775196d425de44603872499386f50959e6e1d2ffe4f554842899"
+          },
+          {
+            "name": "legacy-shots-hud-survey-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-hud-survey-464ff4a590dccfb8/legacy-shots-hud-survey-manifest.json",
+            "size": 2874,
+            "digest": "sha256:e2ad843da2b06e055a0a37e15e204eb5a5f595dac348493ae6493fa6a5909d5e"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:14:03.904Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "shots/hud-survey/before-after-phone-landscape-844x390.jpg",
+              "title": "before-after-phone-landscape-844x390.jpg (1256\u00d71575)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-shots-scenery",
@@ -305,7 +1089,53 @@
       "fileCount": 17,
       "sourceBytes": 2989862,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188935015",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-shots-scenery-6795a99ed895981c",
+        "tag": "evidence-legacy-shots-scenery-6795a99ed895981c",
+        "archiveName": "legacy-shots-scenery-ecc67a06245d.tar.gz",
+        "archiveSha256": "6795a99ed895981ce3efe74ec879333c7573b2b54c42d54f6e86e8b6e3b29827",
+        "archiveBytes": 2977148,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:14:25.846402+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 17,
+        "assets": [
+          {
+            "name": "legacy-shots-scenery-ecc67a06245d.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-scenery-6795a99ed895981c/legacy-shots-scenery-ecc67a06245d.tar.gz",
+            "size": 2977148,
+            "digest": "sha256:6795a99ed895981ce3efe74ec879333c7573b2b54c42d54f6e86e8b6e3b29827"
+          },
+          {
+            "name": "legacy-shots-scenery-ecc67a06245d.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-scenery-6795a99ed895981c/legacy-shots-scenery-ecc67a06245d.tar.gz.sha256",
+            "size": 208,
+            "digest": "sha256:3c497ef30abd9951cb8aa33aa2d15086a32d7a0a2ecb355e7226039a331f9d6f"
+          },
+          {
+            "name": "legacy-shots-scenery-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-shots-scenery-6795a99ed895981c/legacy-shots-scenery-manifest.json",
+            "size": 3525,
+            "digest": "sha256:e836a6872eda4e6a31fadc67fb960ee9839f50a6c8dbfbcbe4bd0bb75bf3e057"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:14:52.884Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "shots/scenery/1350-hun-after-0.36-night.png",
+              "title": "1350-hun-after-0.36-night.png (1024\u00d7576)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-look-survey",
@@ -319,7 +1149,203 @@
       "fileCount": 26,
       "sourceBytes": 48301054,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188943550",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-look-survey-7c4004602495dd34",
+        "tag": "evidence-legacy-look-survey-7c4004602495dd34",
+        "archiveName": "legacy-look-survey-cb0cb2c386db.tar.gz",
+        "archiveSha256": "7c4004602495dd34b41bf27d225ebb5b1bfc336876b8cfe18323afa2cf2473d7",
+        "archiveBytes": 48276024,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:14:31.681153+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 26,
+        "assets": [
+          {
+            "name": "image-0902cf30ba8141fc371dc1cc20ff90f4c35d3611bb7b25b5367df34cf24ef17e-singapore-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-0902cf30ba8141fc371dc1cc20ff90f4c35d3611bb7b25b5367df34cf24ef17e-singapore-grid.png",
+            "size": 1914437,
+            "digest": "sha256:0902cf30ba8141fc371dc1cc20ff90f4c35d3611bb7b25b5367df34cf24ef17e"
+          },
+          {
+            "name": "image-219ee392e4d96e1dea721297ff3e38d476eb0626851fbacb74b0075bd0eae646-hockenheim-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-219ee392e4d96e1dea721297ff3e38d476eb0626851fbacb74b0075bd0eae646-hockenheim-grid.png",
+            "size": 1862135,
+            "digest": "sha256:219ee392e4d96e1dea721297ff3e38d476eb0626851fbacb74b0075bd0eae646"
+          },
+          {
+            "name": "image-288d8de820bdff200d7c5c4683d302820837c8834a439dcdc86e2573c3b31b31-baku-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-288d8de820bdff200d7c5c4683d302820837c8834a439dcdc86e2573c3b31b31-baku-grid.png",
+            "size": 2060572,
+            "digest": "sha256:288d8de820bdff200d7c5c4683d302820837c8834a439dcdc86e2573c3b31b31"
+          },
+          {
+            "name": "image-2b5ac1683654b14bc0aac686cb1c5a37e5b262f6c75d0e6c64f35d134c70e707-imola-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-2b5ac1683654b14bc0aac686cb1c5a37e5b262f6c75d0e6c64f35d134c70e707-imola-grid.png",
+            "size": 1987582,
+            "digest": "sha256:2b5ac1683654b14bc0aac686cb1c5a37e5b262f6c75d0e6c64f35d134c70e707"
+          },
+          {
+            "name": "image-33f05a791fe9db628586e5bb7e8e7866314a96a612ec674631d2ad20ae3991a0-buenos-aires-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-33f05a791fe9db628586e5bb7e8e7866314a96a612ec674631d2ad20ae3991a0-buenos-aires-grid.png",
+            "size": 1982075,
+            "digest": "sha256:33f05a791fe9db628586e5bb7e8e7866314a96a612ec674631d2ad20ae3991a0"
+          },
+          {
+            "name": "image-355aef1634b63de5cd5bc2b8713ad9b38aad8ce67f7a4996519522cb5d16217a-bahrain-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-355aef1634b63de5cd5bc2b8713ad9b38aad8ce67f7a4996519522cb5d16217a-bahrain-grid.png",
+            "size": 1880322,
+            "digest": "sha256:355aef1634b63de5cd5bc2b8713ad9b38aad8ce67f7a4996519522cb5d16217a"
+          },
+          {
+            "name": "image-37925f0817e4d6e6795c66e88a29c0dabf412aef592d835facacfe8e3edf4956-abudhabi-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-37925f0817e4d6e6795c66e88a29c0dabf412aef592d835facacfe8e3edf4956-abudhabi-grid.png",
+            "size": 1919095,
+            "digest": "sha256:37925f0817e4d6e6795c66e88a29c0dabf412aef592d835facacfe8e3edf4956"
+          },
+          {
+            "name": "image-4ad180f02a69783d16940629b0b1a769242df90b827f7d65fe79c2f4c9f2d9aa-estoril-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-4ad180f02a69783d16940629b0b1a769242df90b827f7d65fe79c2f4c9f2d9aa-estoril-grid.png",
+            "size": 1931723,
+            "digest": "sha256:4ad180f02a69783d16940629b0b1a769242df90b827f7d65fe79c2f4c9f2d9aa"
+          },
+          {
+            "name": "image-5d2566efe61a76666c3ada52653239d871b0b295da10df6458cc331fae060b0d-spa-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-5d2566efe61a76666c3ada52653239d871b0b295da10df6458cc331fae060b0d-spa-grid.png",
+            "size": 1938006,
+            "digest": "sha256:5d2566efe61a76666c3ada52653239d871b0b295da10df6458cc331fae060b0d"
+          },
+          {
+            "name": "image-5d5d11187290aee951dc46b2ce62af92ff9528d9d5cf6121bb7e5fb40bf042be-vegas-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-5d5d11187290aee951dc46b2ce62af92ff9528d9d5cf6121bb7e5fb40bf042be-vegas-grid.png",
+            "size": 1912949,
+            "digest": "sha256:5d5d11187290aee951dc46b2ce62af92ff9528d9d5cf6121bb7e5fb40bf042be"
+          },
+          {
+            "name": "image-5fbc3be014487b1918e3552bfa26f204ef3225eba9c235f5ab1f6c4ca014157f-catalunya-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-5fbc3be014487b1918e3552bfa26f204ef3225eba9c235f5ab1f6c4ca014157f-catalunya-grid.png",
+            "size": 2051274,
+            "digest": "sha256:5fbc3be014487b1918e3552bfa26f204ef3225eba9c235f5ab1f6c4ca014157f"
+          },
+          {
+            "name": "image-6c634fdc6a450cfd807da1cfd8ecbbac08631f51e271c23df1b108ca209896c9-suzuka-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-6c634fdc6a450cfd807da1cfd8ecbbac08631f51e271c23df1b108ca209896c9-suzuka-grid.png",
+            "size": 1985317,
+            "digest": "sha256:6c634fdc6a450cfd807da1cfd8ecbbac08631f51e271c23df1b108ca209896c9"
+          },
+          {
+            "name": "image-765081f5a3f2160d521854b6399ef416630c101f1f2757cff3db534d5af551be-indianapolis-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-765081f5a3f2160d521854b6399ef416630c101f1f2757cff3db534d5af551be-indianapolis-grid.png",
+            "size": 1868030,
+            "digest": "sha256:765081f5a3f2160d521854b6399ef416630c101f1f2757cff3db534d5af551be"
+          },
+          {
+            "name": "image-85c1a2f1666c2b938ca34f6139b1c93b16bf3930c5412e0a973e2853c2433cc7-qatar-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-85c1a2f1666c2b938ca34f6139b1c93b16bf3930c5412e0a973e2853c2433cc7-qatar-grid.png",
+            "size": 1790254,
+            "digest": "sha256:85c1a2f1666c2b938ca34f6139b1c93b16bf3930c5412e0a973e2853c2433cc7"
+          },
+          {
+            "name": "image-895b09444315c5e726faad56648c7f66337bed629b0dba731c12bc90f06f03bd-monaco-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-895b09444315c5e726faad56648c7f66337bed629b0dba731c12bc90f06f03bd-monaco-grid.png",
+            "size": 1979418,
+            "digest": "sha256:895b09444315c5e726faad56648c7f66337bed629b0dba731c12bc90f06f03bd"
+          },
+          {
+            "name": "image-8c5946d5c9d161cd07e1ef2b86879cbbaa1e5fc538af2cf48236726abec93999-interlagos-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-8c5946d5c9d161cd07e1ef2b86879cbbaa1e5fc538af2cf48236726abec93999-interlagos-grid.png",
+            "size": 1962095,
+            "digest": "sha256:8c5946d5c9d161cd07e1ef2b86879cbbaa1e5fc538af2cf48236726abec93999"
+          },
+          {
+            "name": "image-9587d886b9455603dc7f55866cf9126cc75750a06ef59628157864987bd8adf6-istanbul-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-9587d886b9455603dc7f55866cf9126cc75750a06ef59628157864987bd8adf6-istanbul-grid.png",
+            "size": 1963600,
+            "digest": "sha256:9587d886b9455603dc7f55866cf9126cc75750a06ef59628157864987bd8adf6"
+          },
+          {
+            "name": "image-9b499fdfaecafac5f9ca1ae9d84d770cbb006a34f543370397252f8ea678bcb6-jeddah-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-9b499fdfaecafac5f9ca1ae9d84d770cbb006a34f543370397252f8ea678bcb6-jeddah-grid.png",
+            "size": 2014153,
+            "digest": "sha256:9b499fdfaecafac5f9ca1ae9d84d770cbb006a34f543370397252f8ea678bcb6"
+          },
+          {
+            "name": "image-c156e07ee2060ce4cb44de8a255b9a500ec8ce427043c481fd7bb22e79e4f2e8-cota-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-c156e07ee2060ce4cb44de8a255b9a500ec8ce427043c481fd7bb22e79e4f2e8-cota-grid.png",
+            "size": 1837900,
+            "digest": "sha256:c156e07ee2060ce4cb44de8a255b9a500ec8ce427043c481fd7bb22e79e4f2e8"
+          },
+          {
+            "name": "image-c48a4a2af37d963151578ca29cc59641504277572368f3fce20badc301617b3a-jacarepagua-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-c48a4a2af37d963151578ca29cc59641504277572368f3fce20badc301617b3a-jacarepagua-grid.png",
+            "size": 1879946,
+            "digest": "sha256:c48a4a2af37d963151578ca29cc59641504277572368f3fce20badc301617b3a"
+          },
+          {
+            "name": "image-c6ab2879e47e08cdad56113d16fc26eb501edaadd035b10714fe7c3b9f6a0e93-zandvoort-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-c6ab2879e47e08cdad56113d16fc26eb501edaadd035b10714fe7c3b9f6a0e93-zandvoort-grid.png",
+            "size": 2031507,
+            "digest": "sha256:c6ab2879e47e08cdad56113d16fc26eb501edaadd035b10714fe7c3b9f6a0e93"
+          },
+          {
+            "name": "image-d6a3096d7ec3c97f05f3092c26d0322ffcde9f8c914b06b2f2946874f3468682-kyalami-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-d6a3096d7ec3c97f05f3092c26d0322ffcde9f8c914b06b2f2946874f3468682-kyalami-grid.png",
+            "size": 1817774,
+            "digest": "sha256:d6a3096d7ec3c97f05f3092c26d0322ffcde9f8c914b06b2f2946874f3468682"
+          },
+          {
+            "name": "image-e9685287007064b8f7f453f2a4d7ab65a7ee433c9d198de43486786db8fef6fd-monza-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-e9685287007064b8f7f453f2a4d7ab65a7ee433c9d198de43486786db8fef6fd-monza-grid.png",
+            "size": 1888830,
+            "digest": "sha256:e9685287007064b8f7f453f2a4d7ab65a7ee433c9d198de43486786db8fef6fd"
+          },
+          {
+            "name": "image-eda2284e0e0ac1b801bc7581885411a5447cfad5c64271ef2d60d8b8a84e8cfe-albert-park-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-eda2284e0e0ac1b801bc7581885411a5447cfad5c64271ef2d60d8b8a84e8cfe-albert-park-grid.png",
+            "size": 1993148,
+            "digest": "sha256:eda2284e0e0ac1b801bc7581885411a5447cfad5c64271ef2d60d8b8a84e8cfe"
+          },
+          {
+            "name": "image-f1b48a4b2f0ed0ac618f2424e0a86b6355f1477c6dbe48781c737cc6db497568-silverstone-grid.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-f1b48a4b2f0ed0ac618f2424e0a86b6355f1477c6dbe48781c737cc6db497568-silverstone-grid.png",
+            "size": 1846838,
+            "digest": "sha256:f1b48a4b2f0ed0ac618f2424e0a86b6355f1477c6dbe48781c737cc6db497568"
+          },
+          {
+            "name": "legacy-look-survey-cb0cb2c386db.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/legacy-look-survey-cb0cb2c386db.tar.gz",
+            "size": 48276024,
+            "digest": "sha256:7c4004602495dd34b41bf27d225ebb5b1bfc336876b8cfe18323afa2cf2473d7"
+          },
+          {
+            "name": "legacy-look-survey-cb0cb2c386db.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/legacy-look-survey-cb0cb2c386db.tar.gz.sha256",
+            "size": 4069,
+            "digest": "sha256:897f1cb19a31c0d58fb0eb031a333cbeee1f45ac57b78db0018a5aa8b1d89efb"
+          },
+          {
+            "name": "legacy-look-survey-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/legacy-look-survey-manifest.json",
+            "size": 11375,
+            "digest": "sha256:d82e4857ae1201ed53ce5d0feff1f1d799b6862fef69b9d0ef9d12aec6228aa9"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:14:54.028Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "docs/look-survey/abudhabi_grid.png",
+              "title": "abudhabi_grid.png (2110\u00d7868)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-track-designer",
@@ -333,7 +1359,59 @@
       "fileCount": 1,
       "sourceBytes": 179986,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188948660",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-track-designer-5a29f67456742bc7",
+        "tag": "evidence-legacy-track-designer-5a29f67456742bc7",
+        "archiveName": "legacy-track-designer-cb0cb2c386db.tar.gz",
+        "archiveSha256": "5a29f67456742bc7ec1614cea3e67743beffee38dc3666cd90c875a3a0a459ab",
+        "archiveBytes": 175916,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:14:25.740002+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 1,
+        "assets": [
+          {
+            "name": "image-9c3dae675bbafd854a215ebee73b0411aaf3a2acbfbde66f3b4039c72ad3b0ea-16-designer-edit-randomise.png",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/image-9c3dae675bbafd854a215ebee73b0411aaf3a2acbfbde66f3b4039c72ad3b0ea-16-designer-edit-randomise.png",
+            "size": 179986,
+            "digest": "sha256:9c3dae675bbafd854a215ebee73b0411aaf3a2acbfbde66f3b4039c72ad3b0ea"
+          },
+          {
+            "name": "legacy-track-designer-cb0cb2c386db.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/legacy-track-designer-cb0cb2c386db.tar.gz",
+            "size": 175916,
+            "digest": "sha256:5a29f67456742bc7ec1614cea3e67743beffee38dc3666cd90c875a3a0a459ab"
+          },
+          {
+            "name": "legacy-track-designer-cb0cb2c386db.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/legacy-track-designer-cb0cb2c386db.tar.gz.sha256",
+            "size": 378,
+            "digest": "sha256:23c30583d4eee403178dd7cece804d4f62899d8525a8e9aa69f6308031348bc4"
+          },
+          {
+            "name": "legacy-track-designer-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/legacy-track-designer-manifest.json",
+            "size": 1078,
+            "digest": "sha256:0fe625d57c27253466a3719598e4b2c4e9146acb330e325fe83139b020651981"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:14:54.973Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "artifacts/shots/tracks-ui/16-designer-edit-randomise.png",
+              "title": "16-designer-edit-randomise.png (1440\u00d7900)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     },
     {
       "label": "legacy-garage-finishes",
@@ -347,7 +1425,65 @@
       "fileCount": 1,
       "sourceBytes": 62505,
       "entryPoints": [],
-      "publication": null
+      "publication": {
+        "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188957294",
+        "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+        "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-garage-finishes-451ecada81bf082f",
+        "tag": "evidence-legacy-garage-finishes-451ecada81bf082f",
+        "archiveName": "legacy-garage-finishes-014ff2d6c226.tar.gz",
+        "archiveSha256": "451ecada81bf082f19ae53506b54c49770b63735c5f802118760882975409814",
+        "archiveBytes": 51887,
+        "verifiedDownload": true,
+        "verifiedAt": "2026-10-19T02:14:27.877085+00:00",
+        "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+        "fileCount": 1,
+        "assets": [
+          {
+            "name": "image-ab0cd5f477761efe9a5c535b752ab9b588791ef80199ec4f2f797963c603339f-garage-finishes-current.jpg",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/image-ab0cd5f477761efe9a5c535b752ab9b588791ef80199ec4f2f797963c603339f-garage-finishes-current.jpg",
+            "size": 62505,
+            "digest": "sha256:ab0cd5f477761efe9a5c535b752ab9b588791ef80199ec4f2f797963c603339f"
+          },
+          {
+            "name": "legacy-garage-finishes-014ff2d6c226.tar.gz",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/legacy-garage-finishes-014ff2d6c226.tar.gz",
+            "size": 51887,
+            "digest": "sha256:451ecada81bf082f19ae53506b54c49770b63735c5f802118760882975409814"
+          },
+          {
+            "name": "legacy-garage-finishes-014ff2d6c226.tar.gz.sha256",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/legacy-garage-finishes-014ff2d6c226.tar.gz.sha256",
+            "size": 377,
+            "digest": "sha256:bf7859266656756c30468ee5e31a93fc3170cd5fd0e955d1615a188a4ca731f1"
+          },
+          {
+            "name": "legacy-garage-finishes-manifest.json",
+            "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/legacy-garage-finishes-manifest.json",
+            "size": 1065,
+            "digest": "sha256:21009d7bbc7f2f87b89e558443ea7bc07cdb2eb836f1c9ebb71c44aa5686cf97"
+          }
+        ],
+        "inspection": {
+          "verifiedAt": "2026-10-19T02:14:55.500Z",
+          "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+          "pages": [
+            {
+              "path": "gallery/garage-finishes/garage-finishes-current.jpg",
+              "title": "garage-finishes-current.jpg (1920\u00d7540)",
+              "imageElements": 1,
+              "loadedImages": 1,
+              "bodyText": "",
+              "pageErrors": []
+            }
+          ]
+        }
+      }
     }
+  ],
+  "limitations": [
+    "Captures prove original stored Git bytes, not the actual game revision rendered.",
+    "Archived HTML/producer metadata may retain original Git/full-resolution source links; audit those separately before any future purge.",
+    "Historical snapshots on other branches, PR descriptions and external consumers are not rewritten by this documentation migration.",
+    "This catalog does not authorize deleting history, recovery refs, backups or PR refs."
   ]
 }
