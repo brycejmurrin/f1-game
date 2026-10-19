@@ -584,9 +584,7 @@
   box-sizing: border-box;
   font-size: var(--fs-micro);
   min-height: var(--tap);
-  /* Floor at the longest word, padding included (#3041): at 200% UI scale a chip
-     never shrinks under its label; the wrapping row takes the overflow instead. */
-  min-width: max(var(--tap), min-content);
+  min-width: var(--tap);
   max-width: 100%;
   flex: 1 1 4.5rem;
   /* Leading-edge bias so the -6deg parallelogram does not slice the tail. */
@@ -668,7 +666,9 @@
 #trackdesigner [data-role="mode-bar"] [data-role="context-help"] { flex: none; }
 #trackdesigner .td-stage { container-type: inline-size; container-name: designer-map; }
 @media (min-height: 501px) {
-  #trackdesigner .td-stage > .td-chips[data-role="toolbar"] .sel-chip { flex: 1 1 0; min-width: 0; padding-inline: calc(var(--gap) / 3); }
+  /* Floor at the longest word, padding included (#3041): at 200% UI scale the chips
+     used to shrink under their label; the wrapping toolbar takes the overflow instead. */
+  #trackdesigner .td-stage > .td-chips[data-role="toolbar"] .sel-chip { flex: 1 1 auto; min-width: min-content; padding-inline: calc(var(--gap) / 3); }
   @container designer-map (max-width: 520px) {
     #trackdesigner .td-stage > .td-stats, #trackdesigner .td-stage > .td-hint { display: none; }
     #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: max(56px, calc(var(--chip-h) * 1.5)); min-height: 56px; }
