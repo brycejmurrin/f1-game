@@ -576,6 +576,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
   // repo stays untouched; every fixture-repo test imports the scrub first). ~2.5 s.
   "tests/unit/git-fixture-env.test.mjs",
+  // Shared GET-only GitHub REST helper (#3013).
+  "tests/unit/github-api.test.mjs",
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
@@ -864,7 +866,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
   "tests/unit/poll-live-shell.test.mjs",
-  // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
+  // CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.
   "tests/unit/pr-board.test.mjs",
   // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.
   "tests/unit/pr-body.test.mjs",
@@ -920,8 +922,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ratchet-reason.test.mjs",
   "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
-  // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
-  "tests/unit/ready-full-cap.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
   // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
   // director lays it over a stub field — grid, plans, the pace loop, the

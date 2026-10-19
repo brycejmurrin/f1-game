@@ -482,7 +482,6 @@ test("github-mcp-guard: merge commits only, asks before merge/arm and the draftâ
     assert.equal(d?.hookEventName, "PreToolUse");
     assert.equal(d?.permissionDecision, "ask", `${name} ${JSON.stringify(input)}`);
     assert.match(d.permissionDecisionReason, /ready-gate\.mjs/);
-    assert.doesNotMatch(d.permissionDecisionReason, /ready-full-cap/, "the ready cap was retired 2026-10-16");
     assert.equal(decision(run(name, input, { APEX_MERGE_DESK: "1" })), null, `Merge Desk passes ${name}`);
   }
   for (const input of [{ pullNumber: 1, body: "x" }, { pullNumber: 1, title: "t" }, { pullNumber: 1, draft: true }])

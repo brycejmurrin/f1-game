@@ -35,7 +35,6 @@ test("livePrLines: head, draft/ready, mergeable_state, CI — each stamped as a 
   assert.match(md, /CI.*running/);
   assert.equal((md.match(/snapshot read 2026-10-10T08:00:00Z/g) || []).length, 3);
   assert.match(md, /ready-gate\.mjs/);
-  assert.doesNotMatch(md, /ready-full-cap/, "the ready cap was retired 2026-10-16");
   assert.doesNotMatch(md, /LOCAL HEAD != PR HEAD/);
 });
 

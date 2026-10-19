@@ -656,11 +656,6 @@
       "presentation": "native",
       "preserve": "Informational gauge versus historical hold policy; timeout 124 and API 3"
     },
-    "tools/ci/ready-full-cap.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Cap/exclude flags and no-token/API failure; do not hide row identities"
-    },
     "tools/ci/ready-gate.mjs": {
       "action": "keep-native",
       "presentation": "native",

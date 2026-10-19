@@ -1057,7 +1057,6 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
-        "tests/unit/ready-full-cap.test.mjs",
         "tests/unit/selected-gate-verdict.test.mjs",
         "tests/unit/shell-ids.test.mjs",
         "tests/unit/test-coverage-audit.test.mjs",
