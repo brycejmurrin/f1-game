@@ -836,6 +836,7 @@
     {
       "path": "tools/ci/guards-verdict.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "npmScripts": [
         "test:guards"
