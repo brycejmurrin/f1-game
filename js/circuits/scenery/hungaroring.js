@@ -395,8 +395,10 @@
         a.u = [0, 1, 0];
         a.t = [a.t[0] / tLen, 0, a.t[2] / tLen];
         let floorY = -Infinity, footingY = Infinity;
-        for (let j = 0; j <= 35; j++) for (const x of [-11, -5.5, 0, 5.5, 11]) {
-          const p = vadd(vadd(a.c, a.r, x), a.t, (j / 35 - 0.5) * (LEN + 8));
+        // Sample the actual ground-storey footprint, including door projections;
+        // upper balconies and the padded model bounds do not set its floor.
+        for (let j = 0; j <= 35; j++) for (const x of [-5.95, -3, 0, 3, 5.95]) {
+          const p = vadd(vadd(a.c, a.r, x), a.t, (j / 35 - 0.5) * LEN);
           const gy = terrainYAt(p[0], p[2]);
           if (gy != null) { floorY = Math.max(floorY, gy); footingY = Math.min(footingY, gy); }
         }
