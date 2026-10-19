@@ -1,0 +1,1 @@
+1792386340	Bryce Murrin	Verified hunt fixes: js/input/hold-buttons.js ancestor teardown; js/race/race-control.js retired classification; js/camera/offsets.js malformed import validation; matching unit tests only. Separate PR, no token-output wrapper edits.  [cursor/hunt-regressions-20261019; session 6ad9950f67b6804834cf4d21]
