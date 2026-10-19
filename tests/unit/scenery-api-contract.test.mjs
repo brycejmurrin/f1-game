@@ -15,6 +15,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const fs = require("node:fs");
@@ -166,7 +167,7 @@ test("Silverstone camping preserves every object on grounded running gear and fl
   const vm = require("node:vm");
   const ROOT = path.resolve(path.dirname(require("node:url").fileURLToPath(import.meta.url)), "../..");
   const sandbox = { Math, Number }; sandbox.window = sandbox;
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/track/core/geom.js"), "utf8").replace(/^const\b/gm, "var"), sandbox);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/track/core/geom.js"), "utf8").replace(/^const\b/gm, "var"), sandbox, { filename: absSrc("js/track/core/geom.js") });
   const Geom = sandbox.TrackGeom, groups = [], stageGroups = new Map(), flags = [], poles = [];
   const buffer = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 });
   const wrapped = { ...Geom };
@@ -178,7 +179,7 @@ test("Silverstone camping preserves every object on grounded running gear and fl
     return part;
   };
   sandbox.TrackGeom = wrapped;
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/circuits/scenery/silverstone.js"), "utf8"), sandbox);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/circuits/scenery/silverstone.js"), "utf8"), sandbox, { filename: absSrc("js/circuits/scenery/silverstone.js") });
   const ground = (x, z) => x * 0.025 + z * 0.03;
   const grade = Math.atan(0.03), r = [1, 0, 0], u = [0, Math.cos(grade), -Math.sin(grade)], t = [0, Math.sin(grade), Math.cos(grade)];
   const out = buffer(), n = 1000;

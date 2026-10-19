@@ -8,6 +8,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
 const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -114,8 +115,8 @@ test("the HUD hides eligible garage work during a friend race and restores it wh
     performance: { now: () => 1000 }, Log: globalThis.Log, M4: globalThis.M4,
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 } };
   sb.window = sb;
-  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb);   // GameHud.create builds its HudMinimap (#1656)
-  const hud = vm.runInNewContext(src("js/ui/hud.js") + ";GameHud", sb).create(G);
+  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  const hud = vm.runInNewContext(src("js/ui/hud.js") + ";GameHud", sb, { filename: absSrc("js/ui/hud.js") }).create(G);
   const tick = () => hud.updateHud(true);
   tick();
   assert.equal(els.workBtn.hidden, true, "an eligible pit-box car cannot open the pausing garage in multiplayer");

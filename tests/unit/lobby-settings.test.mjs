@@ -9,6 +9,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -43,9 +44,9 @@ function peers(hostStored) {
       },
     };
     for (const f of ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/custom-tracks.js"]) {
-      vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+      vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
     }
-    vm.runInContext(read("js/net/lobby-settings.js").replace(/^const\b/gm, "var"), ctx, { filename: "lobby-settings.js" });
+    vm.runInContext(read("js/net/lobby-settings.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/net/lobby-settings.js") });
     return { Tracks, ctx, C: ctx.CustomTracks, S: ctx.LobbySettings };
   }
   const host = boot(hostStored);

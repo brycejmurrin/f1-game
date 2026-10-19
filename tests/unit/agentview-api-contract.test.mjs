@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -51,7 +52,7 @@ function evalGlobals(files, extras) {
   // js/core/mat4.js first, always: it is the second <script> tag in the shell and the
   // home of the shared scalar helpers (M4.clamp), which agentview.js binds at eval.
   for (const f of ["js/core/mat4.js", ...files]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return (name) => vm.runInContext(name, ctx);
 }

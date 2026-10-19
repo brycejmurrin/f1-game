@@ -7,6 +7,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -16,7 +17,7 @@ function load() {
   const sb = { Math, JSON, Object, Array, Number, String, RegExp, URLSearchParams, console };
   sb.window = sb;
   vm.runInNewContext(read("js/ui/survey-hud.js").replace(/^const\b/gm, "var"), sb,
-    { filename: "js/ui/survey-hud.js" });
+    { filename: absSrc("js/ui/survey-hud.js") });
   assert.ok(sb.SurveyHud, "js/ui/survey-hud.js assigns SurveyHud");
   return sb.SurveyHud;
 }
@@ -230,7 +231,7 @@ test("armed and boot tolerate a denied global storage getter, including query ac
   const ctx = vm.createContext({ URLSearchParams, location: { search: "", hash: "" } });
   vm.runInContext('Object.defineProperty(globalThis, "localStorage", { get() { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); } });', ctx);
   assert.throws(() => vm.runInContext("typeof localStorage", ctx), { name: "SecurityError" });
-  vm.runInContext(read("js/ui/survey-hud.js") + ";this.SH=SurveyHud;", ctx);
+  vm.runInContext(read("js/ui/survey-hud.js") + ";this.SH=SurveyHud;", ctx, { filename: absSrc("js/ui/survey-hud.js") });
   const fx = fakeDom();
   assert.equal(ctx.SH.armed(), false);
   assert.equal(ctx.SH.boot(fx), false);

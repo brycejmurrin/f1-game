@@ -37,9 +37,12 @@ prints the load beside the verdict. PASS solo = contention, done — do NOT
 "fix" the test. FAIL solo = real; bisect.
 
 **2. Could the failure be a code regression at all?** Diff the tree the
-failing run served against the last passing run's tree. If the delta is
-docs/tools/tests only, a rendering-path failure is impossible — say so and
-move on (measured: a `.claude/`-markdown-only delta "broke" two smoke specs).
+failing run served against the last passing run's tree. A prose-only delta
+does not change the served game or harness. Tools, fixtures and tests can
+change backend choice, initialization, assets or serving: inspect those
+deltas before ruling out a regression. The measured `.claude/`-Markdown-only
+case produced unrelated smoke failures; it does not establish the same for
+executable tool/test changes.
 
 **3. Did a `waitForFunction` overrun its declared timeout?** (3 s declared,
 100+ s observed.) That is rAF starvation: the default polling clock is

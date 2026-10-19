@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -23,7 +24,7 @@ function load() {
   const gfx = { createMesh: (d) => ({ n: d.pos.length }), freeMesh() {}, draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
   return { Crew, Arrival, draws };

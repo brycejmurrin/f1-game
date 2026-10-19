@@ -6,6 +6,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
 import vm from "vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
@@ -130,7 +131,7 @@ test("the title's idle prefetch spawns no build worker on a multi-core device (3
       head: { appendChild(node) { queueMicrotask(() => node.onload && node.onload()); } },
     },
   });
-  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/track/build-client.js") });
   assert.equal(ctx.TrackBuildClient.enabled(), true, "the worker is default ON here, as on every multi-core phone");
   vm.runInContext(read("js/core/script-loader.js") + "\n" + read("js/core/lazy-bundles.js") + `
     const lb = LazyBundles.create({
@@ -167,7 +168,7 @@ test("TrackBuildClient.idleWarm is agent-gated; spawn() no-ops when build worker
     setTimeout() {},
     URL,
   });
-  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), main);
+  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/track/build-client.js") });
   assert.equal(typeof main.TrackBuildClient.idleWarm, "function");
   assert.equal(main.TrackBuildClient.idleWarm(true), null, "off: idleWarm reports nothing and does not spawn");
   assert.equal(main.TrackBuildClient.spawn(), null);
@@ -193,7 +194,7 @@ function adapterProbe({ requestAdapter, withTimers = true }) {
   }
   const ctx = vm.createContext(sandbox);
   vm.runInContext(boot.slice(at, i + 1) + "\nthis.probe = async () => ({ ok: await gpuAdapterAvailable(), slow: _adapterSlow, why: _adapterWhy });", ctx,
-    { filename: "js/render/renderer-boot.js" });
+    { filename: absSrc("js/render/renderer-boot.js") });
   return { probe: ctx.probe, timers, cleared };
 }
 
@@ -246,7 +247,7 @@ test("Assets strip decode gives a future task a turn between successive layers",
         : { ok: true, blob: async () => ({ size: 3 }) },
       createImageBitmap: async (_, x, y) => { decoded.push(y); return { close() { closed.push(y); } }; },
     });
-    const assets = vm.runInContext(read("js/render/shared/assets.js") + ";Assets", ctx);
+    const assets = vm.runInContext(read("js/render/shared/assets.js") + ";Assets", ctx, { filename: absSrc("js/render/shared/assets.js") });
     assets.init({ createTextureArray() { uploads++; return {}; }, setMaterialMaps() { installed++; } });
     const pending = assets.load();
     const settle = () => new Promise(setImmediate);

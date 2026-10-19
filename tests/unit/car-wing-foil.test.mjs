@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { writeFileSync } from "node:fs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/car/car3d.js"), "utf8");
@@ -31,7 +32,7 @@ function load() {
   seedLog(ctx);
   // Deliberately omit car-shade.js: this suite pins the flat-loft car; car-shade.test covers rounding.
   for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return vm.runInContext("({ Car3D, Parts, Teams })", ctx);
 }

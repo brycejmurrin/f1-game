@@ -9,6 +9,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -68,9 +69,9 @@ function postHarness(factoryThrows = false) {
   // PostCommon (js/render/shared/post-common.js) owns the lens-dirt generator
   // and god-ray select tlx-post calls at init / present.
   vm.runInNewContext(read("js/render/shared/post-common.js"), sandbox,
-    { filename: "post-common.js" });
+    { filename: absSrc("js/render/shared/post-common.js") });
   vm.runInNewContext(read("js/render/three/tlx-post.js"), sandbox,
-    { filename: "tlx-post.js" });
+    { filename: absSrc("js/render/three/tlx-post.js") });
   return {
     made,
     create: () => sandbox.window.TLXShaders.postChain(THREE, {}, {
@@ -157,8 +158,8 @@ test("TLX post sheds SSAO targets after closed presents and does not grow them a
     Log: { info() {}, warn() {} },
     performance: { now: () => 0 },
   };
-  vm.runInNewContext(read("js/render/shared/post-common.js"), sandbox, { filename: "post-common.js" });
-  vm.runInNewContext(read("js/render/three/tlx-post.js"), sandbox, { filename: "tlx-post.js" });
+  vm.runInNewContext(read("js/render/shared/post-common.js"), sandbox, { filename: absSrc("js/render/shared/post-common.js") });
+  vm.runInNewContext(read("js/render/three/tlx-post.js"), sandbox, { filename: absSrc("js/render/three/tlx-post.js") });
   const chain = sandbox.window.TLXShaders.postChain(THREE, {}, {
     renderer: { backend: {}, autoClear: true, setRenderTarget() {} },
     chunks: {}, shadow: null,
@@ -431,7 +432,7 @@ test("all renderers share zero/reveal, orientation, and UI-scale CSS-size semant
     removeEventListener(type, fn) { if (listeners.get(type) === fn) listeners.delete(type); },
   };
   const ctx = vm.createContext({ window, ResizeObserver: RO, Number, Math });
-  vm.runInContext(read("js/render/shared/canvas-css-size.js"), ctx);
+  vm.runInContext(read("js/render/shared/canvas-css-size.js"), ctx, { filename: absSrc("js/render/shared/canvas-css-size.js") });
   const CanvasCssSize = vm.runInContext("CanvasCssSize", ctx);
   let w = 0, h = 0, reads = 0;
   const canvas = {};

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function load() {
@@ -21,7 +22,7 @@ function load() {
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/race/wind.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return vm.runInContext("Wind", ctx);
 }

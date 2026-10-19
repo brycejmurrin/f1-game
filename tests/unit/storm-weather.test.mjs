@@ -18,9 +18,10 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
-const run = (ctx, f) => vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+const run = (ctx, f) => vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
 
 function context(extra) {
   const rng = makeRng(0x5707);

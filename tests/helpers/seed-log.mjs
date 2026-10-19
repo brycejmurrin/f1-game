@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "./abs-src.mjs";
 
 const LOG_JS = fs.readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/core/log.js"),
@@ -22,7 +23,7 @@ const LOG_JS = fs.readFileSync(
 
 /** Evaluate js/core/log.js into an existing VM context. */
 export function seedLog(ctx) {
-  vm.runInContext(LOG_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/log.js" });
+  vm.runInContext(LOG_JS.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/log.js") });
   return ctx;
 }
 

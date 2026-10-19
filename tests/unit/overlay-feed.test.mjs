@@ -6,6 +6,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const source = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -13,8 +14,8 @@ const source = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 function load() {
   const ctx = { console };
   vm.createContext(ctx);
-  vm.runInContext(source("js/race/broadcast.js") + ";this.Broadcast=Broadcast;", ctx);
-  vm.runInContext(source("js/overlay/feed.js") + ";this.OverlayFeed=OverlayFeed;", ctx);
+  vm.runInContext(source("js/race/broadcast.js") + ";this.Broadcast=Broadcast;", ctx, { filename: absSrc("js/race/broadcast.js") });
+  vm.runInContext(source("js/overlay/feed.js") + ";this.OverlayFeed=OverlayFeed;", ctx, { filename: absSrc("js/overlay/feed.js") });
   return ctx.OverlayFeed;
 }
 
@@ -107,7 +108,7 @@ test("overlay source is display-only", () => {
 test("query options clamp scale/rows and select chroma + side", () => {
   const ctx = { console, URLSearchParams };
   vm.createContext(ctx);
-  vm.runInContext(source("js/overlay/render.js") + ";this.OverlayRender=OverlayRender;", ctx);
+  vm.runInContext(source("js/overlay/render.js") + ";this.OverlayRender=OverlayRender;", ctx, { filename: absSrc("js/overlay/render.js") });
   assert.deepEqual(JSON.parse(JSON.stringify(ctx.OverlayRender.options("?demo=1&scale=9&rows=3&side=right&chroma=green"))),
     { scale: 2, rows: 3, side: "right", chroma: "green", demo: true, only: "" });
 });
@@ -126,7 +127,7 @@ test("painter builds fixed rows once, moves by transform and skips unchanged tex
 
   const ctx = { console, document: dom.document, URLSearchParams, OverlayFeed: load() };
   vm.createContext(ctx);
-  vm.runInContext(source("js/overlay/render.js") + ";this.OverlayRender=OverlayRender;", ctx);
+  vm.runInContext(source("js/overlay/render.js") + ";this.OverlayRender=OverlayRender;", ctx, { filename: absSrc("js/overlay/render.js") });
   const painter = ctx.OverlayRender.create(root, { rows: 4 });
   assert.equal(tower.children.length, 20, "rows are built once");
   const frame = ctx.OverlayFeed.frame({ seq: 1, ranked: cars(.4) });
@@ -145,7 +146,7 @@ test("painter builds fixed rows once, moves by transform and skips unchanged tex
 function loadTv(document) {
   const ctx = { console, document, OverlayFeed: load() };
   vm.createContext(ctx);
-  vm.runInContext(source("js/race/tv-graphics.js") + ";this.TvGraphics=TvGraphics;", ctx);
+  vm.runInContext(source("js/race/tv-graphics.js") + ";this.TvGraphics=TvGraphics;", ctx, { filename: absSrc("js/race/tv-graphics.js") });
   return ctx.TvGraphics;
 }
 

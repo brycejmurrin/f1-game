@@ -6,6 +6,7 @@ import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import path from "path";
 import vm from "vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -25,7 +26,7 @@ test("session stub installs PitLane/Reliability and create() is inert", () => {
     console,
     Log: { info() {}, warn() {}, debug() {} },
   };
-  vm.runInNewContext(src("js/race/session-stub.js"), sb, { filename: "js/race/session-stub.js" });
+  vm.runInNewContext(src("js/race/session-stub.js"), sb, { filename: absSrc("js/race/session-stub.js") });
   assert.equal(sb.PitLane._stub, true);
   assert.ok(sb.Reliability.isLevel("off"));
   assert.equal(sb.Reliability.isLevel("nope"), false);

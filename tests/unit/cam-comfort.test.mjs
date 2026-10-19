@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -12,7 +13,7 @@ function load() {
   const ctx = { Log: { info() {} } };
   vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, "js/camera/cam-comfort.js"), "utf8") + "\nthis.exported = CamComfort;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/cam-comfort.js") });
   return ctx.exported;
 }
 
@@ -43,7 +44,7 @@ function loadCamTune() {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/offsets.js") });
   return ctx.exported;
 }
 

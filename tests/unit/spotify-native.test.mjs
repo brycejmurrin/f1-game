@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedStore } from "../helpers/seed-store.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SPOTIFY = readFileSync(join(ROOT, "js/audio/spotify.js"), "utf8");
@@ -53,7 +54,7 @@ function loadSpotify(opts = {}) {
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   seedStore(ctx);
-  vm.runInContext(SPOTIFY, ctx, { filename: "js/audio/spotify.js" });
+  vm.runInContext(SPOTIFY, ctx, { filename: absSrc("js/audio/spotify.js") });
   return sandbox.SpotifyMusic;
 }
 

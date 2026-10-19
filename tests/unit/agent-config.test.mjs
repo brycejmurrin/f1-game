@@ -23,6 +23,8 @@ import { parse as parseYAML } from "yaml";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+// Every size/word budget lives in one data file (raise a number there, with the reason).
+const BUDGET = JSON.parse(read("tests/data/agent-config-budgets.json"));
 const exists = (p) => fs.existsSync(path.join(ROOT, p));
 
 const stripFrontmatter = (text) => {
@@ -130,7 +132,7 @@ test("AGENTS.md stays under 200 lines and emphasises at most one line", () => {
   // full, so the cap applies to the imported file, not the stub.
   const text = read("AGENTS.md");
   const lines = text.trimEnd().split("\n").length;
-  assert.ok(lines <= 200, `AGENTS.md is ${lines} lines — move procedure to a skill, evidence to docs/notes/`);
+  assert.ok(lines <= BUDGET.agentsMdLines, `AGENTS.md is ${lines} lines — move procedure to a skill, evidence to docs/notes/`);
   const important = (text.match(/\bIMPORTANT\b/g) || []).length;
   assert.ok(important <= 1, `AGENTS.md shouts IMPORTANT ${important} times; one line, or none`);
   // A bolded run is emphasis; the asset-pack "Ships ON." claim is test-owned
@@ -183,8 +185,8 @@ test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)
   const fleet = stripFrontmatter(read(".claude/rules/fleet-core.md"));
   assert.equal(fleet.fm.trim(), "", "fleet-core is always-on (no paths:)");
   const fleetLines = fleet.body.trimEnd().split("\n").length;
-  assert.ok(fleetLines <= 30, `fleet-core.md is ${fleetLines} lines — keep ≤30`);
-  assert.ok(Buffer.byteLength(read(".claude/rules/fleet-core.md")) <= 2048,
+  assert.ok(fleetLines <= BUDGET.fleetCoreLines, `fleet-core.md is ${fleetLines} lines — keep ≤${BUDGET.fleetCoreLines}`);
+  assert.ok(Buffer.byteLength(read(".claude/rules/fleet-core.md")) <= BUDGET.fleetCoreBytes,
     "fleet-core.md over 2 KB — trim before growing AGENTS.md");
   const cursorFleet = stripFrontmatter(read(".cursor/rules/fleet-core.mdc"));
   assert.match(cursorFleet.fm, /alwaysApply:\s*true/);
@@ -509,7 +511,7 @@ test("auto memory is on, synced, and its tracked copy stays small, typed and sec
   assert.match(read(".gitignore"), /^!\.claude\/memory\/$/m, ".claude/memory/ must be tracked");
   const dir = path.join(ROOT, ".claude/memory");
   const index = read(".claude/memory/MEMORY.md");
-  assert.ok(index.split("\n").length <= 200, "MEMORY.md past 200 lines is silently truncated at load — move detail into topic files");
+  assert.ok(index.split("\n").length <= BUDGET.memoryIndexLines, "MEMORY.md past 200 lines is silently truncated at load — move detail into topic files");
   for (const [, file] of index.matchAll(/\]\(([^)]+\.md)\)/g))
     assert.ok(fs.existsSync(path.join(dir, file)), `MEMORY.md links ${file}, which does not exist`);
   const SECRET = /(gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|(api[_-]?key|token|password|secret)\s*[:=]\s*\S{12,})/i;
@@ -712,8 +714,8 @@ test("the always-on instruction surface stays inside its budget", () => {
   // Reported ceiling for reliable instruction-following is ~150-200 TOTAL, and
   // Claude Code's own system prompt already spends ~50 of them before this file
   // is read. 75 leaves room for the skills, which add their own on invocation.
-  assert.ok(agents <= 75,
-    `AGENTS.md carries ~${agents} rule-bearing lines (budget 75) — promote one to a hook or a test, or delete it`);
+  assert.ok(agents <= BUDGET.agentsMdRuleLines,
+    `AGENTS.md carries ~${agents} rule-bearing lines (budget ${BUDGET.agentsMdRuleLines}) — promote one to a hook or a test, or delete it`);
 
   // Skill DESCRIPTIONS are always loaded for routing, so they are part of the
   // same budget even though the bodies are not (progressive disclosure).
@@ -730,8 +732,8 @@ test("the always-on instruction surface stays inside its budget", () => {
   }
   // Raised 1600 -> 1700 on 2026-10-16 (Bryce: "Raise the skill budget"): 40 skills left
   // ~0 slack, so every skill edit traded routing recall (skill-hint-hook floor) for budget.
-  assert.ok(descWords <= 1700,
-    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1700) — tighten one, or retire a skill`);
+  assert.ok(descWords <= BUDGET.skillDescriptionWords,
+    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget ${BUDGET.skillDescriptionWords}) — tighten one, or retire a skill`);
 });
 
 // ── BYTE AND ROUTING BUDGETS (2026-10-14, docs/notes/AGENT-GUARDS-2026-10-14.md) ──
@@ -742,8 +744,8 @@ test("the always-on instruction surface stays inside its budget", () => {
 // so a long root file silently truncates the nested one — js/track's carries
 // the test-frozen scenery contract. The 2026-10-14 trim took the root to
 // ~22.5 KB; the caps pin a margin above it (raise them only with a reason).
-const AGENTS_MAX = 28500;
-const CHAIN_MAX = 31000;
+const AGENTS_MAX = BUDGET.agentsMdBytes;
+const CHAIN_MAX = BUDGET.agentsChainBytes;
 const nestedAgents = () => spawnSync("git", ["ls-files", "*/AGENTS.md"], { cwd: ROOT, encoding: "utf8" })
   .stdout.split("\n").filter(Boolean);
 
@@ -783,7 +785,7 @@ test("skill descriptions: a char budget, every arrow resolves, every skill has r
   for (const name of skills) {
     const desc = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm).description;
     // The Agent Skills spec caps a description at 1,024 characters.
-    assert.ok(desc.length <= 1024, `${name}: description is ${desc.length} chars (spec max 1,024)`);
+    assert.ok(desc.length <= BUDGET.skillDescriptionCharsEach, `${name}: description is ${desc.length} chars (spec max ${BUDGET.skillDescriptionCharsEach})`);
     chars += desc.length;
     for (const m of desc.matchAll(/(?:→|->)\s*(?:agent\s+)?\**`?([a-z0-9][a-z0-9-]*)/g))
       assert.ok(skills.includes(m[1]) || agents.includes(m[1]), `${name}: "→ ${m[1]}" names no skill or agent`);
@@ -792,7 +794,7 @@ test("skill descriptions: a char budget, every arrow resolves, every skill has r
   }
   // 11,986 chars on 2026-10-14, rounded up to the next 100. Raised to 12,800 on 2026-10-16
   // (Bryce: "Raise the skill budget") for the same reason as the word budget. Trim one to add one.
-  assert.ok(chars <= 12800, `${skills.length} skill descriptions are ${chars} chars (budget 12,800)`);
+  assert.ok(chars <= BUDGET.skillDescriptionChars, `${skills.length} skill descriptions are ${chars} chars (budget ${BUDGET.skillDescriptionChars})`);
   for (const f of fs.readdirSync(path.join(ROOT, "tests/data/skill-routing/queries"))) {
     const rows = JSON.parse(read(`tests/data/skill-routing/queries/${f}`));
     assert.ok(skills.includes(f.replace(/\.json$/, "")), `${f}: no such skill`);
@@ -1007,4 +1009,103 @@ test("stop-guard.sh lets a stop through when Claude is already continuing, and o
   assert.equal(cont.stdout, "");
   const junk = run("not json at all");
   assert.notEqual(junk.status, 1, `a malformed payload must not crash the hook: ${junk.stderr}`);
+});
+
+// ── AGENT-FLEET CONTRACT (merged from agent-fleet.test.mjs, findings T1-18) ──
+// The orchestrator/worker contract every vendor's session reads (.claude/skills/agent-fleet,
+// docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md). Each case is a mistake a real session made on 2026-10-10.
+const FLEET_SKILL = read(".claude/skills/agent-fleet/SKILL.md");
+const FLEET_ORCH = read(".claude/skills/agent-fleet/references/orchestrator.md");
+const FLEET_WORKER = read(".claude/skills/agent-fleet/references/worker.md");
+const FLEET_ADAPT = read(".claude/skills/agent-fleet/references/adapters.md");
+
+test("every host's PR-subscription tool is named for its host, and none is called fake", () => {
+  for (const [file, text] of [["AGENTS.md", read("AGENTS.md")],
+    ["steward/SKILL.md", read(".claude/skills/steward/SKILL.md")],
+    ["agent-fleet/SKILL.md", FLEET_SKILL], ["references/worker.md", FLEET_WORKER]]) {
+    assert.doesNotMatch(text, /fake name|never invent `subscribe_pr_activity`/,
+      `${file} must not call Claude Code's subscribe_pr_activity fake`);
+    assert.match(text, /subscribe_pr_activity/, `${file} names the Claude Code tool`);
+    assert.match(text, /subscribe_github_ci/, `${file} names the Cursor tool`);
+  }
+});
+
+test("a subscription never stands alone: each host's timer is named beside it", () => {
+  // anthropics/claude-code#62561: subscribe_pr_activity dropped check_run completions
+  // and sessions sat idle through a red; the timer wake that reads CI is the fallback.
+  for (const [file, text] of [["AGENTS.md", read("AGENTS.md")],
+    ["steward/SKILL.md", read(".claude/skills/steward/SKILL.md")],
+    ["agent-fleet/SKILL.md", FLEET_SKILL], ["references/worker.md", FLEET_WORKER]]) {
+    assert.match(text, /send_later/, `${file} names Claude Code's timer`);
+    assert.match(text, /subscribe_timer/, `${file} names Cursor's timer`);
+  }
+  assert.match(FLEET_WORKER, /ci-watch\.mjs --sha <head> --once/, "worker reads CI on every wake");
+  assert.match(FLEET_WORKER, /tooling-fast\.mjs --changed/);
+  assert.match(FLEET_WORKER, /tooling-fast\.mjs --changed --jobs=3/, "worker's edit loop keeps the rule-4 job cap");
+});
+
+test("the adapter table covers each host's verified spawn path", () => {
+  // The table moved from orchestrator.md to adapters.md (2026-10-18 split); the pins moved with it.
+  const table = FLEET_ADAPT.match(/## Per-vendor adapters[\s\S]*?\n\| spawn \|([^\n]*)/);
+  assert.ok(table, "adapters.md has the adapter table with a spawn row");
+  assert.match(table[1], /create_session/, "Claude Code spawn");
+  assert.match(table[1], /environment: "cloud"/, "Cursor in-agent Task spawn");
+  assert.match(table[1], /POST \/v1\/agents/, "Cursor API spawn");
+  assert.match(table[1], /grok [^|]*-p /, "Grok Build headless spawn");
+  assert.match(FLEET_ADAPT, /--deny "Bash\(git push --force\*\)"/, "a Grok worker is denied force-push");
+});
+
+test("the steward card's hashes match the files it lets sessions skip", async () => {
+  const { createHash } = await import("node:crypto");
+  const card = read("docs/notes/APEX-STEWARD-CARD-2026-10-05.md");
+  const line = card.match(/^HASHES: (.*)$/m);
+  assert.ok(line, "card carries a HASHES line");
+  const files = { steward: ".claude/skills/steward/SKILL.md",
+    "check-changes": ".claude/skills/check-changes/SKILL.md",
+    "pr-template": ".github/pull_request_template.md" };
+  for (const [, key, want] of line[1].matchAll(/([a-z-]+)=([0-9a-f]{8})/g)) {
+    assert.ok(files[key], `unknown HASHES key ${key}`);
+    const got = createHash("sha256").update(fs.readFileSync(path.join(ROOT, files[key]))).digest("hex").slice(0, 8);
+    assert.equal(got, want, `card says ${key}=${want} but ${files[key]} hashes to ${got}: refresh the card`);
+  }
+});
+
+test("the fleet block keys are the same in the skill and the worker reference", () => {
+  const block = FLEET_SKILL.match(/```fleet\n([\s\S]*?)```/);
+  assert.ok(block, "SKILL.md carries the fenced fleet block");
+  const keys = [...block[1].matchAll(/^([a-z-]+):/gm)].map((m) => m[1]);
+  assert.deepEqual(keys, ["worker", "orchestrator", "owned", "state", "blocker", "needs-orchestrator"]);
+  assert.match(block[1], /state: .*\bblocked\b/);
+  for (const k of ["state: blocked", "needs-orchestrator: yes"]) {
+    assert.ok(FLEET_WORKER.includes(k), `worker.md escalation uses \`${k}\``);
+    assert.ok(FLEET_ORCH.includes(k), `orchestrator.md launch template uses \`${k}\``);
+  }
+  assert.ok(FLEET_WORKER.includes("@orchestrator BLOCKED:") && FLEET_ORCH.includes("@orchestrator BLOCKED:"),
+    "one escalation comment prefix, the same in both references");
+});
+
+test("the launch template carries every field the agent-fleet launch policy requires", () => {
+  const tpl = FLEET_ORCH.match(/## Launch template[\s\S]*?```text\n([\s\S]*?)```/);
+  assert.ok(tpl, "orchestrator.md has the fenced launch template");
+  for (const field of ["OWNED:", "FORBIDDEN:", "DONE WHEN:", "CAPS:", "ORCHESTRATOR:",
+    "ready-gate.mjs", "Do not enable auto-merge or merge."]) {
+    assert.ok(tpl[1].includes(field), `launch template lost ${field}`);
+  }
+  assert.ok(!tpl[1].includes("ready-full-cap"), "the ready cap was retired 2026-10-16");
+  assert.ok(!tpl[1].includes("PUSH SLOT"), "paced push was retired 2026-10-16");
+  // The policy moved from AGENTS.md §Concurrent PRs to the skill (2026-10-14 trim); the pin moved with it.
+  const policy = read(".claude/skills/agent-fleet/references/launch-policy.md").split("## Launch policy")[1] || "";
+  assert.match(policy, /the exact line `Do not enable auto-merge or merge\.`/,
+    "the template's last line is the one the skill's §Launch policy mandates verbatim");
+  assert.match(read("AGENTS.md"), /skill `agent-fleet` §Launch policy/, "AGENTS.md points launch policy at the skill");
+});
+
+test("the skill routes to both references and to its evidence note", () => {
+  for (const ref of ["references/orchestrator.md", "references/authority.md", "references/adapters.md",
+    "references/running.md", "references/worker.md"]) {
+    assert.ok(FLEET_SKILL.includes(ref), `SKILL.md links ${ref}`);
+  }
+  const note = "docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md";
+  assert.ok(FLEET_SKILL.includes(note) && fs.existsSync(path.join(ROOT, note)), "evidence note exists and is linked");
+  assert.match(read("AGENTS.md"), /skill `agent-fleet`/, "AGENTS.md points multi-agent runs at the skill");
 });

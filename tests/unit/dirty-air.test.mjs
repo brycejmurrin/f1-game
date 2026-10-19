@@ -12,13 +12,14 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
   ctx.window = ctx;
-  vm.runInContext(readFileSync(join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: "consts.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
   return vm.runInContext("PhysicsConsts.DirtyAir", ctx);
 }
 const D = load();

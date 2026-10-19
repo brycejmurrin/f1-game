@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const SOURCE = await readFile(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
 const LOBBY_CODES = await readFile(new URL("../../js/net/lobby-codes.js", import.meta.url), "utf8");
@@ -150,11 +151,11 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   });
   seedLog(context);
   seedClipboard(context);
-  vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: "lobby-codes.js" });
-  vm.runInContext(LOBBY_ROSTER.replace(/^const\b/gm, "var"), context, { filename: "lobby-roster.js" });
-  vm.runInContext(LOBBY_SETTINGS.replace(/^const\b/gm, "var"), context, { filename: "lobby-settings.js" });
-  context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: "netplay.js" });
-  const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: "lobby.js" });
+  vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-codes.js") });
+  vm.runInContext(LOBBY_ROSTER.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-roster.js") });
+  vm.runInContext(LOBBY_SETTINGS.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-settings.js") });
+  context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: absSrc("js/net/netplay.js") });
+  const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: absSrc("js/net/lobby.js") });
   const G = {
     teamIdx: 0, driverIdx: 0, trackIdx: 0, raceLaps: 3,
     raceWeather: "dry", raceTimeOfDay: "day", raceQuali: false, difficulty: "normal",

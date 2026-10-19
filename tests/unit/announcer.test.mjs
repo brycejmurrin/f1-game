@@ -23,6 +23,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 // VM timers are UNREF'd: they still fire while a test awaits, but a cue the
 // module schedules seconds ahead no longer holds the process open after the
 // last assertion (measured 2026-09-24: this file sat idle for most of its run).
@@ -56,13 +57,13 @@ function load({ api = true, voices = [], stored = {}, soundOn = true, lore = tru
   if (synth) synth._voices = voices;
   ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
   ctx.GameAudio = { setRadioDuck() {} };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   // The authored half. Loaded by default because the shipped game always has
   // it; `lore: false` is how a test asks for the derived-only floor, which is
   // what a circuit with no row still gets.
-  if (lore) vm.runInContext(read("js/data/circuit-lore.js"), ctx, { filename: "js/data/circuit-lore.js" });
-  vm.runInContext(read("js/audio/announcer-recorded.js"), ctx, { filename: "js/audio/announcer-recorded.js" });
-  vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: "js/audio/announcer.js" });
+  if (lore) vm.runInContext(read("js/data/circuit-lore.js"), ctx, { filename: absSrc("js/data/circuit-lore.js") });
+  vm.runInContext(read("js/audio/announcer-recorded.js"), ctx, { filename: absSrc("js/audio/announcer-recorded.js") });
+  vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: absSrc("js/audio/announcer.js") });
   const A = vm.runInContext("Announcer", ctx);
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = {
@@ -700,7 +701,7 @@ test("recorded introductions preserve voice identity, skip unknown stories and c
     speak: (id, text, o) => { calls.push({ id, text, o }); return true; },
   } } };
   const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document: { hidden: false } });
-  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/audio/announcer-recorded.js") });
   const a = sb.RecordedAnnouncer.create(G);
   assert.equal(a.play(["Welcome", "unknown career detail", "Let's go racing"], 5000, true), true);
   assert.equal(a.speaking(), true);
@@ -727,7 +728,7 @@ function recordedLifecycle() {
     speak: (_id, text, options) => { spoken.push({ text, options }); return true; },
   } } };
   const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document });
-  vm.runInContext(read("js/audio/announcer-recorded.js"), sb);
+  vm.runInContext(read("js/audio/announcer-recorded.js"), sb, { filename: absSrc("js/audio/announcer-recorded.js") });
   return { a: sb.RecordedAnnouncer.create(G), clock, spoken, pending, stops, G, document };
 }
 
@@ -842,7 +843,7 @@ test("recorded introductions reserve the closing cue before adding optional colo
     speak: (_id, text, o) => { calls.push(text); return true; },
   } } };
   const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout });
-  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/audio/announcer-recorded.js") });
   // This fake finishes each clip at its recorded duration, just like WebAudio.
   G.radio.pack.speak = (_id, text, o) => { calls.push(text); clock.setTimeout(o.onEnd, duration[text] * 1000); return true; };
   const a = sb.RecordedAnnouncer.create(G);
@@ -862,7 +863,7 @@ test("unrecorded numbered sprints and named duels retain a recorded closing cue 
     speak: (_id, text) => { calls.push({ text, at: clock.now() }); return true; },
   } } };
   const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout });
-  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/audio/announcer-recorded.js") });
   const a = sb.RecordedAnnouncer.create(G);
   for (const [i, original] of ["the sprint. 5 laps, flat out from the start. let's go racing.",
     "a duel with senna. just the two of you, and no one else on the road.", "120 laps. let's go racing."].entries()) {

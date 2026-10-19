@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
@@ -49,10 +50,10 @@ async function hostLobby(game) {
     NetPlay: null,
   });
   seedLog(context);
-  vm.runInContext(src("net/lobby-codes.js").replace(/^const\b/gm, "var"), context, { filename: "lobby-codes.js" });
-  vm.runInContext(src("net/lobby-roster.js").replace(/^const\b/gm, "var"), context, { filename: "lobby-roster.js" });
-  vm.runInContext(src("net/lobby-settings.js").replace(/^const\b/gm, "var"), context, { filename: "lobby-settings.js" });
-  context.NetPlay = vm.runInContext(src("net/netplay.js") + ";NetPlay", context, { filename: "netplay.js" });
+  vm.runInContext(src("net/lobby-codes.js").replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-codes.js") });
+  vm.runInContext(src("net/lobby-roster.js").replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-roster.js") });
+  vm.runInContext(src("net/lobby-settings.js").replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-settings.js") });
+  context.NetPlay = vm.runInContext(src("net/netplay.js") + ";NetPlay", context, { filename: absSrc("js/net/netplay.js") });
   const writes = [];
   const sessions = [];
   const built = { promise: null };
@@ -62,7 +63,7 @@ async function hostLobby(game) {
       sendEvent() { return true; }, deliver(t, d) { const fn = h.get(t); if (fn) fn(d); }, pump() {}, close() {}, clearHandlers() {} };
     sessions.push(s); return s;
   } };
-  const NetLobby = vm.runInContext(src("net/lobby.js") + ";NetLobby", context, { filename: "lobby.js" });
+  const NetLobby = vm.runInContext(src("net/lobby.js") + ";NetLobby", context, { filename: absSrc("js/net/lobby.js") });
   const own = { teamIdx: 0, driverIdx: 0, trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
     raceQuali: false, difficulty: "normal", store: { get: (_k, d) => d, set() {} },
     netPlay: { start: () => ({ ok: true }), hostStart() {} } };

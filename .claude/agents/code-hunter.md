@@ -38,8 +38,12 @@ its last turn, so a long hunt that reports at the end returns nothing.
    -- <slice>` shows what moved recently. That IS one simple command — run it
    exactly so, one path per call (`git log --oneline -15 -- js/net/`), never
    with `git -C`, a pipe or a second command after it.
-2. For each suspect: find the callers (`Grep` across `js/`, `tools/`,
-   `tests/`), the guard, the test that should catch it. A dead-code claim needs
+2. For each suspect: follow `code-nav` for named JS definitions/references/callers;
+   without attached LSP tools use `bash tools/mcp/lsp-mcp.sh` through Bash.
+   Follow factory instances, aliases and callbacks where a static binding stops;
+   use bounded text cross-checks for HTML/string consumers, tools and tests.
+   A clipped caller page is not complete coverage. Find the guard and the test
+   that should catch it. A dead-code claim needs
    every reference checked, including `index.html`, `tools/manifest.cjs`,
    `__apex` hooks and string lookups.
 3. Node-only checks are allowed: `node --test <one unit file>`; a VM run via

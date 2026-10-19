@@ -7,10 +7,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const ctx = vm.createContext({ PhysicsConsts: { X_OPEN_RATE: 1, X_CLOSE_RATE: 1 } });
-vm.runInContext(read("js/garage/setup-camera.js"), ctx);
+vm.runInContext(read("js/garage/setup-camera.js"), ctx, { filename: absSrc("js/garage/setup-camera.js") });
 const { panelCover, presentOpts, glareScale } = vm.runInContext("SetupCamera", ctx);
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 const noCam = () => { throw new Error("camTop must only be read on the portrait axis"); };

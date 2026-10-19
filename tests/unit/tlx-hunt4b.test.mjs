@@ -17,6 +17,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -30,7 +31,7 @@ const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
   "js/render/three/tlx-shadow.js"])
-  vm.runInThisContext(read(f), { filename: f });
+  vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 // ── A-W2 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 // The real module, loaded with a given apex26.* store (the knob is read once, at load, like apex26.tlxPack).
@@ -38,7 +39,7 @@ function packer(ls = {}) {
   const sb = { window: {}, localStorage: { getItem: (k) => (k in ls ? ls[k] : null) }, Frustum: {},
     Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Math };
   vm.createContext(sb);
-  vm.runInContext(CHUNKED, sb, { filename: "tlx-chunked.js" });
+  vm.runInContext(CHUNKED, sb, { filename: absSrc("js/render/three/tlx-chunked.js") });
   return sb.window.TLXShaders;
 }
 function decodeHalf(h) {

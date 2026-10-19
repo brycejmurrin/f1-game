@@ -17,6 +17,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
@@ -27,7 +28,7 @@ const host = (v) => JSON.parse(JSON.stringify(v));   // VM objects into this rea
 
 function scriptIn(g) {
   // The tab's builder in the game's own realm (Teams and Tracks are the game's).
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: "real-race-tab.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
   const D = vm.runInContext("DataRealRace", g.ctx);
   const Teams = vm.runInContext("Teams", g.ctx), Tracks = vm.runInContext("Tracks", g.ctx);
   const findTeam = (name) => Teams.LIST.find((t) => t.name === name) || null;
@@ -247,7 +248,7 @@ test("WATCH snaps after posing on mid-race entry and seek, and releases camera o
     Log: { info() {}, warn() {} },
     CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx, { filename: absSrc("js/race/real-replay.js") });
   const R = vm.runInContext("RealReplay", ctx), snaps = [], writes = [];
   const car = { code: "RUS" }, driver = { code: "RUS", num: 63, pos: 1, lapStart: [0, 10] };
   const G = { track: { total: 1000 }, cars: [car], state: "race", camMode: 0,
@@ -347,7 +348,7 @@ test("BROADCAST holds an event through its aftermath and keeps the wall-clock mi
   for (const speed of [0.25, 1, 8]) {
     const ctx = vm.createContext({ Log: { info() {}, debug() {} },
       CamModes: { CAM_MODES: ["side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) } });
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8"), ctx);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8"), ctx, { filename: absSrc("js/race/broadcast.js") });
     const B = vm.runInContext("Broadcast", ctx), cuts = [];
     const cars = [{ code: "AAA" }, { code: "BBB" }];
     const G = { camMode: 0, setCamMode: (m) => { G.camMode = m; } };
@@ -405,7 +406,7 @@ test("BROADCAST battles: reuses one pooled array across calls (Director / PiP / 
 test("BROADCAST battles: the crawl floor rides the pace scale when the caller passes vTop()/VMAX (4-F6)", () => {
   // The same slow corner at OVERALL SPEED pace 1 and pace 0.5: every ground speed and so every progress gap
   // halves. In seconds it is the same fight, but a raw 20 m/s floor reads it twice as tight at the low pace.
-  const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}));
+  const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}), { filename: absSrc("js/race/broadcast.js") });
   const at = (k) => host(B.battles([{ key: "a", prog: 1000 * k, speed: 5 * k }, { key: "b", prog: 1000 * k - 8 * k, speed: 5 * k }], k));
   const full = at(1), half = at(0.5);
   assert.equal(full.length, 1);
@@ -662,7 +663,7 @@ test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, 
     ctx.RealRace = { replay: () => replay };
     ctx.HudLayout = { setCam: (id) => { layout = id; } };
     ctx.CamTunerPanel = { refresh() {} };
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     G.$ = (id) => id === "btn-cam" ? button : null;
     G.store = { set: (...args) => writes.push(args) };
     const modes = ctx.CamModes.CAM_MODES, cockpit = modes.findIndex((m) => m.id === "cockpit");
@@ -1276,7 +1277,7 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
   }
   const body = element("body"), doc = { body, createElement: element };
   const ctx = vm.createContext({ document: doc, CamModes: { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "heli", label: "AERIAL" }, { id: "tv", label: "TV" }] }, RealReplay: { LEAD_S: 8 } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx, { filename: absSrc("js/ui/watch-transport.js") });
   const W = vm.runInContext("WatchTransport", ctx), calls = [];
   const state = { T: 0, duration: 100, paused: false, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
   const api = { describe: () => ({ name: "Test GP", drivers: [{ code: "AAA", name: "Alpha" }, { code: "BBB", name: "Beta" }], events: [{ t: 20, lap: 2, kind: "pass", text: "AAA PASSES BBB" }], speeds: [0.5, 1, 2] }),
@@ -1343,7 +1344,7 @@ test("WATCH transport: no aria-pressed on PLAY, and a focused, playing timeline 
   }
   const body = element("body"), doc = { body, createElement: element, activeElement: null };
   const ctx = vm.createContext({ document: doc, RealReplay: { LEAD_S: 8 } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx, { filename: absSrc("js/ui/watch-transport.js") });
   const W = vm.runInContext("WatchTransport", ctx);
   const state = { T: 10, duration: 100, paused: true, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
   const api = { describe: () => ({ name: "GP", drivers: [{ code: "AAA", name: "Alpha" }], events: [], speeds: [1] }), status: () => state,
@@ -1379,7 +1380,7 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
       CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
       Broadcast: { create: () => new Proxy({}, { get: (_t, k) => (k === "tick" ? (_dt, st) => { seen = st; } : () => ({})) }) },
       Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx, { filename: absSrc("js/race/real-replay.js") });
     const R = vm.runInContext("RealReplay", ctx);
     const a = { code: "RUS" }, b = { code: "LEC" }, da = { code: "RUS", num: 63, pos: 1, lapStart: [0] }, db = { code: "LEC", num: 16, pos: 2, lapStart: [0] };
     const G = { track: { total: 100000 }, cars: [a, b], state: "race", camMode: 0, followCar: (c) => { G.player = c; }, snapGameCam() {}, setCamMode() {} };
@@ -1390,7 +1391,7 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
     replay.tick(0);
     const rows = JSON.parse(JSON.stringify(seen.running().map((r) => ({ key: r.key.code, prog: r.prog, speed: r.speed }))));
     replay.stop();
-    const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}));
+    const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}), { filename: absSrc("js/race/broadcast.js") });
     return { rows, fights: JSON.parse(JSON.stringify(B.battles(rows))) };
   };
   const one = grab(1), eight = grab(8);
@@ -1408,7 +1409,7 @@ function audioHarness() {
     Log: { info() {}, warn() {}, debug() {} }, PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
     CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx, { filename: absSrc("js/race/real-replay.js") });
   const R = vm.runInContext("RealReplay", ctx);
   const a = { code: "RUS", rpm: 12000 }, b = { code: "LEC", rpm: 12000 };
   const da = { code: "RUS", num: 63, pos: 1, lapStart: [0] }, db = { code: "LEC", num: 16, pos: 2, lapStart: [0] };
@@ -1474,7 +1475,7 @@ function visibleTransportReplay() {
   }
   const document = { body: element("body"), createElement: element, getElementById: () => null };
   const ctx = vm.createContext({ document, RealReplay: { LEAD_S: 8 } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx, { filename: absSrc("js/ui/watch-transport.js") });
   const fixture = transportReplay({ document, WatchTransport: vm.runInContext("WatchTransport", ctx) });
   const find = (key, parent = document.body) => parent.dataset.wt === key ? parent : parent.children.map((n) => find(key, n)).find(Boolean);
   return { ...fixture, find };

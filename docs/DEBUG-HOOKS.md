@@ -1956,9 +1956,9 @@ the `selector car assets ready` log line carries — or `null`. The GPU census's
 entry (`tools/gfx/gpu-game-check.mjs --entry menu`) waits on `done && warmFrames 0 &&
 !warming` before it presses START RACE.
 
-### `garageAero(on?, opts?) → {xOn, aeroX, mode} | null`
-Read or set the GARAGE live preview's active-aero pose. `null` unless the setup
-preview is on (`G.setupPreviewOn`). `mode` is `"X"` once the flap travel passes
+### `garageAero(on?, opts?) → {xOn, aeroX, mode} | {ok:false, error:"garage_closed"}`
+Read or set the GARAGE live preview's active-aero pose. `{ok:false, error:"garage_closed"}`
+unless the setup preview is on (`G.setupPreviewOn`). `mode` is `"X"` once the flap travel passes
 0.05, else `"Z"`. Pass `{ keepCam: true }` to skip the auto-aim at `wingRear`
 so a same-camera CORNER/STRAIGHT pair stays framed. The preview eases on the
 rAF render, which a headless page never composites — so a test drives the ease
@@ -1971,7 +1971,7 @@ on a write clears it. No argument reads. Live on the next flap draw — no reloa
 
 ### `garageStep(dt?, n?) → garageAero()`
 Advance the garage aero ease by `dt` seconds (default 1/60), `n` times (default
-1), then return `garageAero()`. `null` when the preview is off.
+1), then return `garageAero()`. `{ok:false, error:"garage_closed"}` when the preview is off.
 
 ### `garageTeam(id, seat?) → {ok, switched?, label?, seat?, error?}`
 Switch the garage car by team id without opening `#teampicker`. Writes the same

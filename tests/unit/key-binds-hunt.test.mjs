@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { read, boot, plain, bootUi, rawPad, setBtn, menuRig } from "../helpers/key-binds-rig.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 // ---- round 2 input hunt: I-01 / I-02 / I-05 / I-06 / I-08 / I-09 + nintendo A/B ---------------
 
@@ -256,7 +257,7 @@ test("nintendo label mode confirms on the physical A (standard index 1) and back
 
 test("I-09: a right/middle mouse button neither presses a hold button nor fires a tap; touch and left mouse do", () => {
   const ctx = vm.createContext({ Math, Set, Map, Object, Array, document: null });
-  vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: "js/input/hold-buttons.js" });
+  vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
   const InputHoldButtons = vm.runInContext("InputHoldButtons", ctx);
   const els = {};
   ctx.document = { getElementById: (id) => (els[id] ||= { l: {}, addEventListener(t, f) { this.l[t] = f; }, setPointerCapture() {} }) };
@@ -286,7 +287,7 @@ test("analog hold buttons preserve the strongest remaining touch across release 
       addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
     const ctx = vm.createContext({ document: { getElementById: () => button },
       getComputedStyle: () => ({ display: "block", visibility: "visible" }) });
-    vm.runInContext(read("js/input/hold-buttons.js"), ctx);
+    vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
     const api = vm.runInContext("InputHoldButtons", ctx);
     const resetArgs = [], edges = [], values = [];
     const hb = api.create({ clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll: (v) => resetArgs.push(v) });
@@ -383,7 +384,7 @@ test("phone ownership, parked diagnostics and controls refresher preserve drivin
   const disk = { onboarded: 7, onboardRaces: 9, coachStats: { corners: 12 } };
   const r = bootUi(true, {}, disk, (g) => {
     g.__ctx = vm.createContext(g);
-    vm.runInContext(read("js/ui/onboard.js"), g.__ctx);
+    vm.runInContext(read("js/ui/onboard.js"), g.__ctx, { filename: absSrc("js/ui/onboard.js") });
   });
   const { Input, $, sb, kb, fire } = r;
   let now = 100; sb.performance.now = () => now;

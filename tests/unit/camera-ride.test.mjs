@@ -35,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -55,9 +56,9 @@ function loadGameCams(Tracks, CamTune) {
   seedLog(ctx);
   // js/core/mat4.js first — it is the second <script> tag in the shell and the home of
   // the shared scalar helpers (M4.clamp/lerp), which cameras.js binds at eval.
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/camera/vantage.js"), "utf8"), ctx,
-    { filename: "js/camera/vantage.js" });
+    { filename: absSrc("js/camera/vantage.js") });
   return vm.runInContext("GameCams", ctx);
 }
 
@@ -383,7 +384,7 @@ test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same ca
 test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
   // Check the fitted geometry, so a curved bulkhead can replace a square slab.
   const ctx=vm.createContext({ GaragePrims:{ block() {} } }); seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT,"js/car/car-mesh.js"),"utf8")+"\n;this.mesh=CarMesh;",ctx);
+  vm.runInContext(readFileSync(join(ROOT,"js/car/car-mesh.js"),"utf8")+"\n;this.mesh=CarMesh;",ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.mesh.init({ createMesh:d=>d });
   const dash=ctx.mesh.getCockpitDash(), x=[], y=[];
   for(let i=0;i<dash.pos.length;i+=3) if(dash.pos[i+2]>0.28) {x.push(dash.pos[i]);y.push(dash.pos[i+1]);}
@@ -602,7 +603,7 @@ test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the s
   const dom = makeDom();
   const mctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
   mctx.window = mctx;
-  vm.runInNewContext(readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8"), mctx);
+  vm.runInNewContext(readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8"), mctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = mctx.CamModes.CAM_MODES, hi = modes.findIndex((m) => m.id === "helmet");
   assert.equal(hi, modes.length - 1, "appended: apex26.camMode is an index");
   const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", camCutT: 0 };

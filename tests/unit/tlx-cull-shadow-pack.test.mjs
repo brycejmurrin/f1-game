@@ -17,6 +17,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 function span(src, from, endMark) {
@@ -36,8 +37,8 @@ function load() {
   assert.ok(rec, "drawWorldMeshes' mirror recorder");
   const casts = [];
   const ctx = vm.createContext({ localStorage: { getItem: () => null }, Math, Float32Array, Float64Array, Int32Array, Array });
-  vm.runInContext(read("js/render/shared/frustum.js").replace(/^const Frustum/m, "var Frustum"), ctx);
-  vm.runInContext(read("js/render/shared/inst-cells.js").replace(/^const InstCells/m, "var InstCells"), ctx);
+  vm.runInContext(read("js/render/shared/frustum.js").replace(/^const Frustum/m, "var Frustum"), ctx, { filename: absSrc("js/render/shared/frustum.js") });
+  vm.runInContext(read("js/render/shared/inst-cells.js").replace(/^const InstCells/m, "var InstCells"), ctx, { filename: absSrc("js/render/shared/inst-cells.js") });
   Object.assign(ctx, { _mirActive: false, frameEye: null, frameCullDist: 0, frameCullFog: null });
   ctx.TLXShaders = { aabbInFrustum: ctx.Frustum.aabbInFrustum };
   ctx._writeInstanceMatrices = (imesh, m, c, n) => { imesh.gpu = Array.from(m.subarray(0, n * 16)); };

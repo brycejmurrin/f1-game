@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -69,7 +70,7 @@ test("DrivingCoach.update runs once per G._s8Stamp", () => {
     IncidentSim: { reset() {} }, DebrisWorld: { reset() {} },
     PhysicsConsts: { BRAKE: 22, REVISION: "test" },
   });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/driving-coach.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/driving-coach.js"), "utf8"), ctx, { filename: absSrc("js/race/driving-coach.js") });
   const coach = vm.runInContext("DrivingCoach", ctx).create(G);
   // insights.update fires when elapsed crosses 0.1 s — one 0.12 s tick trips it once.
   G._s8Stamp = 1;
@@ -91,7 +92,7 @@ test("RaceControl.update runs once per G._s8Stamp", () => {
     DebrisWorld: { active: () => true, hazards: () => ({ total: 12, redTotal: 12, sectors: [0, 12, 0], worst: { count: 12, sector: 1, frac: 0.4 } }) },
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx, { filename: absSrc("js/race/race-control.js") });
   const RC = vm.runInContext("RaceControl", ctx);
   const saved = new Map([["caution", true]]);
   const G = {
@@ -127,7 +128,7 @@ test("RaceRadio.update runs once per G._s8Stamp", () => {
   ctx.window = ctx;
   ctx.CamModes = { CAM_MODES: [{ id: "chase" }, { id: "cockpit" }, { id: "heli" }] };
   for (const f of ["js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/race-facts.js", "js/race/race-radio.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   const RR = vm.runInContext("RaceRadio", ctx);
   let observes = 0;

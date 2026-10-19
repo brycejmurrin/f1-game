@@ -14,12 +14,12 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 
 ## The job
 
-0. No run, id or SHA given? Pick one and say which: the newest
-   `failure` run of `pages.yml`, then `ci.yml`, on the deploy branch
-   (`curl -sS "https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/pages.yml/runs?branch=claude/f1-game-project-26h3ng&status=failure&per_page=1"`,
-   same for `ci.yml`); if neither tip run is red, the newest red `ci.yml` run
-   on an open PR head (`…/actions/runs?event=pull_request&status=failure&per_page=5`).
-   Triage that one run; list the others you saw as `not triaged:`.
+0. No run, id or SHA given? Resolve the current deploy tip and latest Pages
+   run, then current open PR heads and each head's latest CI runs. Select a
+   current failure and say which. Do not filter history to `status=failure`
+   first: that can revive an old red after a newer successful run. If current
+   heads have no confirmed red, report that instead of choosing a stale run.
+   Historical failures are triaged only when explicitly requested; label them.
 1. Identify the run. The parent gives a run URL, a run id, or a SHA. With a
    SHA, list the runs on that `head_sha` and take the newest run
    per workflow INCLUDING cancelled. Inspect failed/cancelled jobs and elapsed
@@ -30,17 +30,25 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    before 2026-09-24 a branch push and its PR run did the same). Say which,
    and read the live sibling for dedupe. A newest cancelled run with failed jobs
    or timeout-cap evidence is a real red; identify its job and assertion.
-2. Tell the three trains apart and say which this is: PR CI (`ci.yml` on a
-   PR head), ship-push CI (`ci.yml` on the deploy branch), or Pages
-   (`pages.yml`, which calls `ci.yml` with a `before_sha` and may select
-   different specs). A green PR run proves nothing about Pages.
+2. Identify PR CI (`ci.yml` on a PR head), manual CI, or Pages (`pages.yml`,
+   which calls reusable `ci.yml` with a `before_sha` and may select different
+   specs). Current deploy pushes start Pages, not a separate ship-push CI run;
+   historical ship-push runs retain their original trigger label. Inspect the
+   failed Pages job: deployment/verify-live failures are not nested test failures.
+   A green PR run proves nothing about Pages.
 3. Read FAILED jobs and CANCELLED jobs with timing/timeout evidence. Prefer the GitHub MCP read tools when the session
    has them (`mcp__github__actions_list` for the runs on a SHA,
    `mcp__github__actions_get`, `mcp__github__get_job_logs` with `run_id` and
    `failed_only` (pass `run_id` with `failed_only` — omitting it errors),
    `mcp__github__get_check_run`, `mcp__github__pull_request_read` for a PR's head);
-   otherwise (tools absent) the fallback is `curl` + `jq` on the public API, never python3: `curl -sS https://api.github.com/repos/brycejmurrin/f1-game/actions/runs/<id>/jobs`
-   and the job log URLs it returns. Grep the log for `Expected`, `Received`,
+   otherwise use the host's authenticated GitHub CLI/API when available:
+   `gh run view <id> --repo brycejmurrin/f1-game --log-failed`. Job metadata is
+   `/repos/brycejmurrin/f1-game/actions/runs/<id>/jobs`; raw log retrieval is
+   `/repos/brycejmurrin/f1-game/actions/jobs/<job-id>/logs` (redirects to log bytes,
+   not the HTML `html_url`). Public metadata via `curl` + `jq` does not prove
+   permission to download logs. A missing/expired credential, inaccessible log
+   or purged artifact stays unread; never infer the assertion or print tokens.
+   Grep the log for `Expected`, `Received`,
    `x FAIL`, `Timeout`, `timed out`, `not ok`, `= run `. `node tools/ci/junit-failed.mjs`
    reads a downloaded junit artifact. A Pages run's job list is large
    (~136 KB from `list_workflow_jobs`: the nested `ci / …` legs): never dump it

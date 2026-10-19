@@ -11,6 +11,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -56,7 +57,7 @@ function loadStore({
   });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/lighting/profiles.js"), "utf8"), ctx,
-    { filename: "js/lighting/profiles.js" });
+    { filename: absSrc("js/lighting/profiles.js") });
   const store = vm.runInContext("LightStore", ctx).create(G);
   const LT = vm.runInContext("LightTune.LT", ctx);
   store.apply();
@@ -99,7 +100,7 @@ test("Monaco shipped roadChunkLamps profile is unchanged by perChunk merge", () 
   const presetsPath = join(ROOT, "js/lighting/presets.js");
   const ctx = vm.createContext({ window: {}, console, Math, Object, Array, Number, isFinite, JSON });
   seedLog(ctx);
-  vm.runInContext(readFileSync(presetsPath, "utf8"), ctx, { filename: presetsPath });
+  vm.runInContext(readFileSync(presetsPath, "utf8"), ctx, { filename: absSrc(presetsPath) });
   const F = ctx.window.LightPresets;
   const shipped = F["monaco|night|dry"];
   assert.ok(shipped, "monaco|night|dry preset");

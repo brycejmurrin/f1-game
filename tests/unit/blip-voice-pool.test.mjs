@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SIGNAL_SRC = fs.readFileSync(path.join(ROOT, "js/audio/signal.js"), "utf8")
@@ -76,7 +77,7 @@ function loadSignal(ctx) {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(SIGNAL_SRC, vctx, { filename: "js/audio/signal.js" });
+  vm.runInContext(SIGNAL_SRC, vctx, { filename: absSrc("js/audio/signal.js") });
   const Signal = vm.runInContext("GameAudioSignal", vctx);
   const api = Signal.create({
     context: () => ctx, bus: () => ctx.destination, sfxOk: () => true, now: () => ctx.currentTime,
@@ -155,8 +156,8 @@ test("sustained lift: GameAudio overrun blips stay within the pool cap", async (
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8")
-    .replace(/^const\b/gm, "var"), vctx);
-  vm.runInContext(ENGINE_SRC, vctx, { filename: "js/audio/engine.js" });
+    .replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(ENGINE_SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const Signal = vm.runInContext("GameAudioSignal", vctx);
   GameAudio.init();

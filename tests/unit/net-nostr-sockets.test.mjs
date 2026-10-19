@@ -17,6 +17,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { webcrypto } from "node:crypto";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -59,13 +60,13 @@ function boot({ joinMs } = {}) {
     __importNostr: () => Promise.resolve(mod),
   };
   const ctx = vm.createContext(sb);
-  for (const f of ["js/net/bytes.js", "js/net/rendezvous.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+  for (const f of ["js/net/bytes.js", "js/net/rendezvous.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const src = read("js/net/nostr.js");
   assert.ok(src.includes('import("@trystero-p2p/nostr")'), "the vendored import is the seam this test replaces");
   let patched = src.replace('import("@trystero-p2p/nostr")', "__importNostr()").replace(/^const\b/gm, "var");
   // A shortened guest find-window, so the reply-deadline case runs in seconds.
   if (joinMs) patched = patched.replace("const JOIN_TIMEOUT_MS = 12000", "const JOIN_TIMEOUT_MS = " + joinMs);
-  vm.runInContext(patched, ctx, { filename: "js/net/nostr.js" });
+  vm.runInContext(patched, ctx, { filename: absSrc("js/net/nostr.js") });
   const NetNostr = vm.runInContext("NetNostr", ctx);
   const tick = () => new Promise((r) => setTimeout(r, 20));
   // The topics are PBKDF2-stretched (120 000 rounds) before any socket opens.

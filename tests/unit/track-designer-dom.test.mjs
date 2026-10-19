@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/workspace.js", "js/editor/designer.js"];
 
@@ -36,7 +37,7 @@ function bootScreen(stored = {}) {
   ctx.queueMicrotask = (fn) => Promise.resolve().then(fn);
   ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
   ctx.devicePixelRatio = 1;
-  for (const f of SCREEN_FILES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+  for (const f of SCREEN_FILES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const G = { soundOn: false, trackIdx: 0 };
   const clicks = [];
   for (const id of ["mb-race", "mb-tt"]) dom.byId(id).addEventListener("click", () => clicks.push(id));
@@ -65,7 +66,7 @@ function bootPersistedScreen(disk = new Map()) {
     removeItem: (k) => disk.delete(k),
   };
   for (const f of ["js/career/save-migrate.js", "js/core/store.js"]) {
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), b.ctx, { filename: f });
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), b.ctx, { filename: absSrc(f) });
   }
   const store = b.ctx.GameStore.store;
   // CustomTracks captured its store at eval; retain that reference while using
@@ -636,7 +637,7 @@ test("arrow nudges coalesce into one UNDO; arrows pass to MenuNav with nothing s
   // MenuNav: a <canvas> owns the arrows unless it says data-arrows="pass".
   const sb = { Math, Object, Array, Number, String, JSON, Map, Set, WeakMap, RegExp, Promise, Date, document: b.dom.document, UiLayers: { LAYER_IDS: [], shown: () => true, top: () => null }, Log: { info() {}, warn() {}, debug() {} }, addEventListener() {}, removeEventListener() {}, setTimeout: () => 0, clearTimeout() {}, getComputedStyle: () => ({ getPropertyValue: () => "" }), innerWidth: 800, innerHeight: 600, requestAnimationFrame: () => 0 };
   sb.window = sb;
-  vm.runInNewContext(read("js/ui/menu-nav.js").replace(/^const\b/gm, "var"), sb, { filename: "js/ui/menu-nav.js" });
+  vm.runInNewContext(read("js/ui/menu-nav.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/menu-nav.js") });
   key("]");
   assert.equal(sb.MenuNav.ownsArrows(canvas, "ArrowDown", { isTrusted: false }), true, "a selected point: the pad's arrows nudge it");
   // B on a pad arrives as `cancel` on the dialog; Escape as a keydown. Window capture runs first.

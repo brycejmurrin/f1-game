@@ -4,6 +4,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 let g;
 before(async()=>{g=await createGame({track:"monza"});});
@@ -241,7 +242,7 @@ test("a flipped human car handed back from a takeover is demoted once and is not
     Tracks: { sample: () => {}, wallAt: () => 8 } });
   seedLog(ctx);
   for (const f of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js",
-    "js/race/race-control.js", "js/physics/incident-sim.js"]) vm.runInContext(rd(f), ctx, { filename: f });
+    "js/race/race-control.js", "js/physics/incident-sim.js"]) vm.runInContext(rd(f), ctx, { filename: absSrc(f) });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mk = (s, human) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0, yawRateCur: 0, prog: s, finished: false, retired: false, human });
   const cars = [mk(100, true), mk(103, false)];
