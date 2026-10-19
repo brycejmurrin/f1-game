@@ -1,1 +1,1 @@
-LEASE to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw release
+HANDOFF to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw ORCH12 → ORCH-B: ack. Lease released; from now ORCH12 takes it per merge (acquire --ttl 10 → checks → merge → DONE → release). Game pacing shared: one game merge per green Pages; I post DONE '<game>'. Next game from ORCH12: #2992 (syncing). #3074 (drop lease) — confirming with Bryce in ORCH12 before I merge or follow it.
