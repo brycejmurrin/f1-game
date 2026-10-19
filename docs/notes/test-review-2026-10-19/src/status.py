@@ -9,6 +9,12 @@ REP = {"render-1": "[render-1](reports/render-1.md)", "render-2": "[render-2](re
        "physics-2": "[part 1/2](reports/physics-2.part-1of2.md) + [part 2/2](reports/physics-2.part-2of2.md) (stopped at the context cap; counted final)",
        "race-2": "[part 1/n](reports/race-2.part-1ofn.md)", "car-1": "[car-1](reports/car-1.md)", "ui-1": "[ui-1](reports/ui-1.md)"}
 TABLE = [(b, "final" if b in FINAL else (f"partial {PARTIAL[b]}" if b in PARTIAL else "pending"), REP.get(b, "—")) for b in ALL]
+NOT_RUN = [
+ "- **render-3:** 15 of 21 specs pending part 2/2; no browser debugger column yet.",
+ "- **physics-2** (capped at 300k context): browser chain C never read (understeer-cue, parts-ers, sliders, steer-migration, tilt-pipeline, touch-steer, gamepad, agent-drive-bench, parts-persistence, persistence-dom, camera-driving-hooks, css-player-smoke, garage-aero, menu-traversal, menu-baseline, parts-physics); drift, active-aero, aero-zones, world-physics, collisions ran only as VM twins; collisions-deep, collision-ai-fixes and persistence ran in neither; no spec debugger pass.",
+ "- **race-2** (part 1/n): terrain-over-road still running, perf-race-entry not run, jump-start/pit-lane/race-control only as VM twins, debris failed 1/5 (Singapore wall-hit wait, 60 s), no spec debugger column.",
+ "- **physics-1, car-1, ui-1:** every file ran and passed (physics-1: 742/743 with 1 skip by design, the provenance ancestry check needs a full clone). Files with no executable code under test had no debugger target (physics-1: 4, ui-1: 11).",
+]
 PATTERNS = [
  ("source-scan", "Source-text scans standing in for behaviour", "regex / indexOf / slice over js, css or md source; nothing under test executes (debugger n.a. or not-hit)"),
  ("condition-wrapped", "Condition-wrapped or early-return asserts", "`if (x) assert…`, `if (!gc) return`; the guard turns the test off in the very case it should catch"),
@@ -20,7 +26,8 @@ PATTERNS = [
 PATTERN_NOTES = [
  "- **Source-text scans** dominate the three render reports: gfx-backend-canary alone has ~160 (884 `assert.match`), webgpu-lifecycle ~306 asserts. The cheapest structural fix is a lint over `tests/` for fixed-width `slice(x, x+N)` windows and asserts after `//` on one line (R2-01, R2-02), then one lane per subsystem converting the highest-risk scans to behaviour.",
  "- **vm code without a filename** is counted once (DBG-02) but touches every vm-loaded module in these batches: governor.js, lamp-bake, chunked.js, lighting/*, spans.js, renderer-boot.js, and every `evalmachine.<anonymous>` render-1 met.",
- "- **Slow in fast:** `flyby-shots` (138 s) is a `toolingFast` member, `perf-try` 25 s and `lamp-bake` 14 s too (checked in `tests/groups.json` on cd907d4c). `lamp-fixture-anchor` (109 s) is already in `test:sweeps`, `flyby-fleet` (53 s) in `test:node-slow`, `cam-avoid-vm` (31 s) in the game-vm groups.",
+ "- **Slow in fast** (toolingFast members over ~20 s, from each batch's run): `flyby-shots` 138 s, `aero-zone-tables` 49.7 s, `crest-marks` 47.7 s, `car-wing-foil` 34.3 s, `fuzz-untrusted-inputs` 31.2 s, `car-mesh-anchors` 30.0 s, `race-step-snap` 25.3 s, `perf-try` 25 s, `change-driver-tools` 20.9 s. Already in slow groups: `lamp-fixture-anchor` 109 s (sweeps), `car-fields-vm` 243 s and `quali-pace-parity-vm` 65.8 s (game-vm), `flyby-fleet` 53 s (node-slow), `build-worker` 44 s (sweeps). Slowest specs: `longitudinal` 556 s, `physics-fixes` 378 s, `quali` 737 s in a local browser.",
+ "- **Source-text scans** recur in every batch: car-1 counts ~370 source assertions in the car canaries, DEBUGGER-B counts ~206 unit files that read source and assert on text.",
 ]
 GAP_NOTES = [
  "Reviewer gap lists not carried as rows (low impact or unverified): render-1 lamp caps `MAST_LAMP_CAP`/`PIT_LAMP_CAP`/`CUSTOM_LAMP_MAX` and `selectCustomLamps` ties, `frame-math.mjs` `cullBoxes`/`marchGround`/flag thresholds, `elev-presets.js` loop closure; render-2 GLX partial-failure paths (`createTextureArray`/`createMesh`/`createChunkedMesh`), occlusion with mixed chunks, multi-draw UNSIGNED_INT, governor `cleanRace`, `PerfSpans.loaf()`, `renderer-picker.js` with no test file of its own; render-3 TLX WebGPU path and picker-driven backend switch, lit/sky WGSL compile.",

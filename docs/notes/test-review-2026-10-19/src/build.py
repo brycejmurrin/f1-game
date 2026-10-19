@@ -17,9 +17,12 @@ def score(f):
     s = W[f["severity"]] * 2 + {"high": 2, "med": 1, "low": 0}[f["confidence"]] + CL[f["impact_class"]]
     if f["verified"] != "reviewer" and not (f["synth_check"] or "").startswith("confirmed"): s -= 1
     if (f["synth_check"] or "").startswith("confirmed"): s += 0.5
-    if f["id"] in st.HIDDEN_BUG: s += 1.5
+    if f["id"] in HIDDEN: s += 1.5
     return s
 live = [f for f in F if not f["dup_of"]]
+HIDDEN = dict(st.HIDDEN_BUG)
+for f in F:
+    if f["defect"].startswith("HIDDEN BUG:") and not f["dup_of"]: HIDDEN[f["id"]] = f["defect"][len("HIDDEN BUG:"):].strip()
 ranked = sorted(live, key=lambda f: (-score(f), f["id"]))
 # lane coverage: every live finding in exactly one lane
 own = collections.Counter(i for L in lanes.LANES for i in L["ids"])
@@ -39,6 +42,9 @@ w("## Status\n")
 w(f"- Reports in: **{st.k_in}/22** batches ({st.k_final} final, {st.k_partial} partial). Updated {st.UPDATED}.")
 w(f"- Findings: {len(F)} rows, {len(live)} after de-duplication; {sum(1 for f in F if f['verified']=='reviewer')} reviewer-verified, {sum(1 for f in F if f['verified']!='reviewer')} subagent-unverified; {sum(1 for f in F if (f['synth_check'] or '').startswith('confirmed'))} re-checked by the synthesis on the tree.")
 w(f"- Not yet in: {', '.join(st.PENDING)}.\n")
+w("Not run inside reported batches:\n")
+for line in st.NOT_RUN: w(line)
+w("")
 w("| batch | state | report |\n|---|---|---|")
 for b, s_, r in st.TABLE: w(f"| {b} | {s_} | {r} |")
 w("\n## Top 25 by player or pipeline impact\n")
@@ -47,7 +53,7 @@ w("| # | id | cite | kind | sev | defect → impact | fix | lane | verified |\n|
 for n, f in enumerate(ranked[:25], 1):
     v = f["verified"] + (f" · synth: {f['synth_check']}" if f["synth_check"] else "")
     w(f"| {n} | {f['id']} | {esc(cite(f))} | {f['kind']} | {f['severity']} | {esc(f['defect'])} → **{esc(f['impact'])}** | {esc(f['fix'])} | {lane_of.get(f['id'],'—')} | {esc(v)} |")
-w("\n**Hidden product bugs** (a test passes over a real defect): " + "; ".join(f"{k} {v}" for k, v in st.HIDDEN_BUG.items()) + ".\n")
+w("\n**Hidden product bugs** (a test passes over a real defect): " + "; ".join(f"{k} {esc(v)}" for k, v in HIDDEN.items()) + ".\n")
 w("\n## Recurring patterns\n")
 w("Counted over de-duplicated rows; a row can carry several patterns. Counts grow as batches arrive.\n")
 w("| pattern | rows | what it looks like | examples |\n|---|---|---|---|")

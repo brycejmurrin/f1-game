@@ -234,3 +234,9 @@ ROWS = [
  "exact-URL breakpoints on js/<module>.js?v=dev missed the deferred ?v=<hash> script; debugger_source failed on a parsed script",
  "breakpoints on deferred render modules silently never resolve","fixed in #2967 (query-less URL becomes a urlRegex)","S","debugger",R,"confirmed: #2967 note B7","pipeline",[],None),
 ]
+# Later batches live in per-batch files (normalized by read-only subagents; headers carry each report's status).
+import os as _os
+for _f in ("rows_physics.py", "rows_race_car_ui.py"):
+    _g = {"R": R, "U": U}
+    exec(open(_os.path.join(_os.path.dirname(__file__), _f)).read(), _g)
+    ROWS += _g["NEW"]
