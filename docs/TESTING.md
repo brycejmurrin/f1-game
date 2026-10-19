@@ -1308,6 +1308,7 @@ Focused browser-free diagnostics contracts also run in `tooling-fast`:
 |---|---|
 | `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
 | `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters; heap-census input, completeness, actual-backend and budget contracts; identity-deduplicated track/audio observations and installed Three memory fields. |
+| `tests/unit/gpu-allocation-estimator.test.mjs` | Requested GPU allocation estimator: context/unit/face/level ownership, format and mip accounting, subranges, deletion and unknown coverage; observed storage is not physical residency. |
 | `tests/unit/i18n-lint.test.mjs` | Locale contribution lint (`tools/check/i18n-lint.mjs`): fixture locales (valid / missing-key / bad-placeholder / wrong-plural), ship `locales/` clean, `--guard` on `tests/data/i18n-migrated.json`. |
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:

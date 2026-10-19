@@ -349,6 +349,40 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 16,
+    title: "evict shared bind groups when their final owner releases them",
+    file: "build/three.webgpu.js",
+    why: "Move the per-context cache from NodeBuilder to Bindings so its existing usedTimes lifetime evicts retired binding graphs. Preserve patch 13 texture/name keys and clone groups.",
+    upstream: "mrdoob/three.js#34707, dc20084a8b7d875641c3edfcb552cb1d17a2f249 (2026-09-29), adapted to bundled r186.1; fixes #34705 (game #2969)",
+    edits: [
+      {
+        find: "const _bindingGroupsCache = new WeakMap();\n",
+        replace: "",
+        count: 1
+      },
+      {
+        find: "\t\tif ( sharedGroup ) {\n\n\t\t\tlet cacheKeyString = '';\n\n\t\t\tfor ( const binding of bindings ) {\n\n\t\t\t\tif ( binding.isNodeUniformsGroup ) {\n\n\t\t\t\t\tbinding.uniforms.sort( ( a, b ) => a.nodeUniform.node.id - b.nodeUniform.node.id );\n\n\t\t\t\t\tfor ( const uniform of binding.uniforms ) {\n\n\t\t\t\t\t\tcacheKeyString += uniform.nodeUniform.node.id + ',';\n\n\t\t\t\t\t}\n\n\t\t\t\t} else if ( binding.nodeUniform !== undefined ) {\n\n\t\t\t\t\tcacheKeyString += 'u' + binding.nodeUniform.id + ',';\n\n\t\t\t\t} else {\n\n\t\t\t\t\tcacheKeyString += ( binding.isSampler === true ? 's' : 't' ) + ( binding.textureNode ? binding.textureNode.id : '' ) + ':' + binding.name + ',';\n\n\t\t\t\t}\n\n\t\t\t}\n\n\t\t\t// TODO: Remove this hack ._currentRenderContext\n\n\t\t\tconst currentContext = this.renderer._currentRenderContext || this.renderer; // use renderer as fallback until we have a compute context\n\n\t\t\tlet bindingGroupsCache = _bindingGroupsCache.get( currentContext );\n\n\t\t\tif ( bindingGroupsCache === undefined ) {\n\n\t\t\t\tbindingGroupsCache = new Map();\n\n\t\t\t\t_bindingGroupsCache.set( currentContext, bindingGroupsCache );\n\n\t\t\t}\n\n\t\t\t//\n\n\t\t\tconst cacheKey = hashString( cacheKeyString );\n\n\t\t\tbindGroup = bindingGroupsCache.get( cacheKey );\n\n\t\t\tif ( bindGroup === undefined ) {\n\n\t\t\t\tbindGroup = new BindGroup( groupName, bindings );\n\n\t\t\t\tbindingGroupsCache.set( cacheKey, bindGroup );\n\n\t\t\t}\n",
+        replace: "\t\tif ( sharedGroup && this.renderer._bindings !== undefined ) {\n\n\t\t\tbindGroup = this.renderer._bindings.getSharedBindGroup( groupName, bindings );\n",
+        count: 1
+      },
+      {
+        find: "\t\tthis.pipelines.bindings = this; // assign bindings to pipelines",
+        replace: "\t\tthis._sharedBindGroups = new WeakMap();\n\n\t\tthis.pipelines.bindings = this; // assign bindings to pipelines",
+        count: 1
+      },
+      {
+        find: "\t/**\n\t * Updates the bindings for the given compute node.",
+        replace: "\t/**\n\t * Returns the shared bind group for the given bindings and the current render context.\n\t * If it does not exist yet, it is created with the given name and bindings.\n\t *\n\t * @param {string} name - The bind group's name.\n\t * @param {Array<Binding>} bindings - An array of bindings.\n\t * @return {BindGroup} The shared bind group.\n\t */\n\tgetSharedBindGroup( name, bindings ) {\n\n\t\t// build cache key\n\n\t\tlet cacheKeyString = '';\n\n\t\tfor ( const binding of bindings ) {\n\n\t\t\tif ( binding.isNodeUniformsGroup ) {\n\n\t\t\t\tbinding.uniforms.sort( ( a, b ) => a.nodeUniform.node.id - b.nodeUniform.node.id );\n\n\t\t\t\tfor ( const uniform of binding.uniforms ) {\n\n\t\t\t\t\tcacheKeyString += uniform.nodeUniform.node.id + ',';\n\n\t\t\t\t}\n\n\t\t\t} else if ( binding.nodeUniform !== undefined ) {\n\n\t\t\t\tcacheKeyString += 'u' + binding.nodeUniform.id + ',';\n\n\t\t\t} else {\n\n\t\t\t\tcacheKeyString += ( binding.isSampler === true ? 's' : 't' ) + ( binding.textureNode ? binding.textureNode.id : '' ) + ':' + binding.name + ',';\n\n\t\t\t}\n\n\t\t}\n\n\t\tconst cacheKey = hashString( cacheKeyString );\n\n\t\t// lookup bind group cache\n\n\t\tconst renderer = this.backend.renderer;\n\t\tconst renderContext = renderer._currentRenderContext || renderer; // use renderer as fallback until we have a compute context\n\n\t\tlet bindGroupsCache = this._sharedBindGroups.get( renderContext );\n\n\t\tif ( bindGroupsCache === undefined ) {\n\n\t\t\tbindGroupsCache = new Map();\n\n\t\t\tthis._sharedBindGroups.set( renderContext, bindGroupsCache );\n\n\t\t}\n\n\t\t// lookup bind group\n\n\t\tlet bindGroup = bindGroupsCache.get( cacheKey );\n\n\t\tif ( bindGroup === undefined ) {\n\n\t\t\tbindGroup = new BindGroup( name, bindings );\n\n\t\t\tbindGroupsCache.set( cacheKey, bindGroup );\n\n\t\t\tconst groupData = this.get( bindGroup );\n\t\t\tgroupData.renderContext = renderContext;\n\t\t\tgroupData.cacheKey = cacheKey;\n\n\t\t}\n\n\t\treturn bindGroup;\n\n\t}\n\n\t/**\n\t * Updates the bindings for the given compute node.",
+        count: 1
+      },
+      {
+        find: "\t\t\t\tthis.backend.deleteBindGroupData( bindGroup );",
+        replace: "\t\t\t\tif ( groupData.cacheKey !== undefined ) {\n\n\t\t\t\t\tconst bindGroupsCache = this._sharedBindGroups.get( groupData.renderContext );\n\t\t\t\t\tbindGroupsCache.delete( groupData.cacheKey );\n\n\t\t\t\t}\n\n\t\t\t\tthis.backend.deleteBindGroupData( bindGroup );",
+        count: 1
+      }
+    ]
+  }
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */

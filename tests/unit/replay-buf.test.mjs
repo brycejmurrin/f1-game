@@ -776,3 +776,23 @@ test("frame controls use adjacent recorded samples across gaps, discontinuities 
   api.endScrub();
   assert.deepEqual(field[0], before, "live pose and absent interpolation fields are restored exactly");
 });
+
+
+test("ring byte accounting includes Float64 timestamps and separates fixed typed-array state", () => {
+  const allocations = [];
+  const tracked = Type => class extends Type { constructor(...args) { super(...args); allocations.push(this); } };
+  const R = boot(undefined, { Float32Array: tracked(Float32Array), Float64Array: tracked(Float64Array), Uint8Array: tracked(Uint8Array) });
+  const G = { cars: cars(24), raceTime: 0 };
+  const r = R.create(G); r.reset(G.cars);
+  assert.equal(R.frameBytes(24), 8 + 24 * (9 * 4 + 1) + 1);
+  const info = r.window();
+  const capacity = R.capacityFor(24);
+  assert.equal(info.allocatedBytes, R.frameBytes(24) * capacity);
+  assert.equal(info.fixedBytes, 3 * 9 * 4 + 24);
+  assert.equal(info.allocatedBytes + info.fixedBytes, allocations.reduce((n, a) => n + a.byteLength, 0));
+  assert.equal(info.bytes, 0, "empty ring reports no populated frames but still reserves capacity");
+  assert.ok(info.allocatedBytes <= R.MAX_BYTES);
+  r.sample(0, G.cars); r.sample(1 / R.HZ, G.cars);
+  assert.equal(r.window().bytes, R.frameBytes(24) * r.window().frames);
+  assert.equal(r.window().allocatedBytes, info.allocatedBytes);
+});

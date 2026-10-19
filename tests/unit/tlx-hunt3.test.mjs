@@ -709,3 +709,87 @@ test("R1: owned run retirement uses the real warm-aware wrapper queue and preser
   for(const v of views){assert.equal(v.objects,1);assert.equal(v.geometries,1);assert.equal(v.mesh.geometry,null);assert.equal(v.mesh.material,null);}
   assert.equal(sourceDisposals,0,"the source geometry is borrowed; only each owned run view retires");
 });
+
+test("shared bind groups: last-owner eviction, context isolation and robust keys", async (t) => {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const manager = renderer._bindings;
+  const uniforms = (...ids) => [{ isNodeUniformsGroup: true, uniforms: ids.map(id => ({ nodeUniform: { node: { id } } })) }];
+  const shared = (bindings) => manager.getSharedBindGroup("render", bindings);
+  assert.notEqual(shared(uniforms(1, 23)), shared(uniforms(12, 3)), "uniform IDs have delimiters");
+  assert.notEqual(shared([{nodeUniform: {id: 123}}]), shared(uniforms(123)), "standalone uniforms have their own prefix");
+  const tex = name => [{ isSampler: true, isSampledTexture: true, texture: null, textureNode: {id: 7}, name, release() {} }];
+  assert.notEqual(shared(tex("a")), shared(tex("b")), "sampler names distinguish program layouts without nodeUniform");
+  assert.notEqual(shared(tex("a")), shared([{ ...tex("a")[0], isSampler: false }]), "texture and sampler keys differ");
+  const binding = tex("lifecycle");
+  binding[0].texture = new THREE.Texture();
+  const group = shared(binding);
+  const context = renderer;
+  let creates = 0, destroys = 0, releases = 0;
+  binding[0].release = () => { releases++; };
+  const oldCreate = renderer.backend.createBindings, oldDelete = renderer.backend.deleteBindGroupData;
+  renderer.backend.createBindings = () => { creates++; };
+  renderer.backend.deleteBindGroupData = () => { destroys++; };
+  t.after(() => { renderer.backend.createBindings = oldCreate; renderer.backend.deleteBindGroupData = oldDelete; });
+  manager._createBindings([group]); manager._createBindings([group]);
+  assert.equal(manager.get(group).usedTimes, 2);
+  binding[0].texture = null; // texture disposal may clear this before its group retires
+  manager._destroyBindings([group]);
+  assert.equal(shared(tex("lifecycle")), group, "first owner leaves shared group usable");
+  assert.equal(destroys, 0); assert.equal(releases, 0);
+  const key = manager.get(group).cacheKey;
+  manager._destroyBindings([group]);
+  assert.equal(manager._sharedBindGroups.get(context).has(key), false, "null texture cannot prevent eviction");
+  assert.equal(manager.has(group), false);
+  assert.equal(creates, 1); assert.equal(destroys, 1); assert.equal(releases, 1);
+  const fresh = shared(tex("lifecycle"));
+  assert.notEqual(fresh, group, "same key creates fresh bindings after last release");
+  renderer._currentRenderContext = {};
+  const renderBinding = tex("lifecycle");
+  renderBinding[0].texture = new THREE.Texture();
+  const renderGroup = shared(renderBinding);
+  assert.notEqual(renderGroup, fresh, "render and compute fallback contexts are isolated");
+  manager._createBindings([renderGroup]); renderBinding[0].texture = null; manager._destroyBindings([renderGroup]);
+  assert.equal(manager._sharedBindGroups.get(renderer._currentRenderContext).size, 0);
+  renderer._currentRenderContext = null;
+  assert.equal(shared(tex("lifecycle")), fresh);
+  let uboCreates = 0, uboDestroys = 0, uboReleases = 0;
+  const oldUboCreate = renderer.backend.createUniformBuffer, oldUboDestroy = renderer.backend.destroyUniformBuffer;
+  renderer.backend.createUniformBuffer = () => { uboCreates++; };
+  renderer.backend.destroyUniformBuffer = () => { uboDestroys++; };
+  t.after(() => { renderer.backend.createUniformBuffer = oldUboCreate; renderer.backend.destroyUniformBuffer = oldUboDestroy; });
+  const uboCount = renderer.info.memory.uniformBuffers;
+  const ubo = shared([{isUniformBuffer: true, nodeUniform: {id: 999}, byteLength: 16, release() { uboReleases++; }}]);
+  manager._createBindings([ubo]); manager._createBindings([ubo]);
+  assert.equal(renderer.info.memory.uniformBuffers, uboCount + 1);
+  manager._destroyBindings([ubo]);
+  assert.equal(uboDestroys, 0);
+  manager._destroyBindings([ubo]);
+  assert.deepEqual([uboCreates, uboDestroys, uboReleases], [1, 1, 1]);
+  assert.equal(renderer.info.memory.uniformBuffers, uboCount);
+  const builder = new THREE.GLSLNodeBuilder(null, {});
+  const unshared = [{groupNode: {shared: false}}];
+  assert.notEqual(builder._getBindGroup("object", unshared), builder._getBindGroup("object", unshared));
+  const eligible = [{groupNode: {shared: true}}];
+  assert.notEqual(builder._getBindGroup("render", eligible), builder._getBindGroup("render", eligible), "lightweight renderer fallback is uncached");
+});
+
+test("memState reports the renderer's primitive resource counts and byte sizes", () => {
+  const start = TLX.indexOf("const inf = renderer && renderer.info;", TLX.indexOf("memState()"));
+  const end = TLX.indexOf("if (inf.render)", start);
+  assert.ok(start >= 0 && end > start);
+  const report = new Function("renderer", "o", TLX.slice(start, end) + "} return o;");
+  const memory = { programs: 7, textures: 3, texturesSize: 4097, attributes: 9, attributesSize: 17,
+    uniformBuffers: 2, uniformBuffersSize: 1024, total: 5138, unusedObject: {} };
+  const result = report({info: {memory, programs: new Array(99)}}, {});
+  assert.equal(result.progs, 7);
+  assert.equal(result.resources.texturesSize, 4097, "bytes stay exact, without KB rounding");
+  assert.equal(result.resources.attributes, 9);
+  assert.equal(result.resources.total, 5138);
+  assert.equal(result.resources.uniformBuffersSize, 1024);
+  assert.equal("unusedObject" in result.resources, false);
+  assert.equal("readbackBuffers" in result.resources, false, "missing telemetry is absent, rather than a fabricated zero");
+  assert.equal(report({info: {}}, {}).progs, null);
+});

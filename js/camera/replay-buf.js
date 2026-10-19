@@ -21,7 +21,7 @@ const ReplayBuf = (function () {
   const MAX_FRAMES = HZ * WINDOW_S;           // 600
   const FLOATS = 9;                           // s, x, yaw, speed, px, py, pz, steer, yawVis
   const MAX_CARS = 24;                         // MY TEAM / LEGENDS grids run 23-24 cars
-  const MAX_BYTES = 720 * 1024;               // 0.7 MB hard cap
+  const MAX_BYTES = 720 * 1024;               // ring typed-array cap; fixed scratch/status reported separately
   const TAG_CAP = 64;
   const JUMP_M = 50;                          // pose jump past speed*dt that no car drives: a teleport
   const RATES = [0.25, 0.5, 1];
@@ -29,7 +29,7 @@ const ReplayBuf = (function () {
     "rPrevS", "rPrevX", "rPrevPx", "rPrevPz", "rPrevHead", "rPrevYawVis"];
 
   function frameBytes(nCars) {
-    return nCars * FLOATS * 4 + nCars + 1;    // floats + Uint8 status lane + segment-break flag
+    return 8 + nCars * FLOATS * 4 + nCars + 1; // Float64 timestamp + poses + status + break
   }
   function budgetOk(nCars, frames) {
     return frameBytes(nCars) * frames <= MAX_BYTES;
@@ -172,12 +172,17 @@ const ReplayBuf = (function () {
       tags.push({ kind: String(kind || ""), t: +t || 0, car: carIdx | 0 });
     }
     function windowInfo() {
-      if (!count) return { t0: 0, t1: 0, frames: 0, bytes: 0, cars: nCars };
+      const allocatedBytes = (times ? times.byteLength : 0) + (data ? data.byteLength : 0)
+        + (status ? status.byteLength : 0) + (brk ? brk.byteLength : 0);
+      const fixedBytes = _a.byteLength + _b.byteLength + _o.byteLength + (prevStatus ? prevStatus.byteLength : 0);
+      // bytes = populated ring lanes; allocatedBytes = reserved ring capacity.
+      // Dynamic JS objects (tags/live snapshots) are outside this typed-array budget.
+      if (!count) return { t0: 0, t1: 0, frames: 0, bytes: 0, cars: nCars, allocatedBytes, fixedBytes };
       const oldest = times[head];
       const newest = times[(head + count - 1) % cap];
       return {
         t0: oldest, t1: newest, frames: count, cars: nCars,
-        bytes: frameBytes(nCars) * count,
+        bytes: frameBytes(nCars) * count, allocatedBytes, fixedBytes,
       };
     }
     function frameIndexAt(t) {

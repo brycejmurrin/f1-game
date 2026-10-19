@@ -137,3 +137,21 @@ test("#2184: ciSummary ignores a label-noise run", () => {
   const noise = { id: 2, name: "CI", created_at: "2026-10-15T00:05:00Z", status: "completed", conclusion: "success", display_title: "CI ignored: label bug" };
   assert.equal(ciSummary([real, noise]), "failure");
 });
+
+
+test("deploy verdict requires its outer terminal, never a nested tooling pass", () => {
+  const prefix = "[deploy] guard suite: node tools/ci/tooling-fast.mjs --jobs=2\n"
+    + "[tooling-fast] = run passed (721 passed, 0 failed)\n"
+    + "[deploy] Pages gate: test:sweeps: npm run test:sweeps\n";
+  assert.match(parseVerdict(prefix), /no deploy verdict yet/);
+  assert.match(parseVerdict(prefix + "= run failed (1 failed)"), /^failed/);
+  assert.match(parseVerdict(prefix + "[deploy] ERROR geometry sweeps failed (exit 1)"), /^failed/);
+  const result = { gate: "only", verified: ["tooling-fast", "test:sweeps"], pushed: false, notCovered: [], seconds: 123 };
+  assert.equal(parseVerdict(prefix + "[deploy] " + JSON.stringify(result)), "passed (deploy gate only)");
+  assert.equal(parseVerdict(prefix + JSON.stringify(result, null, 2)), "passed (deploy gate only)");
+  assert.match(parseVerdict(prefix + JSON.stringify(result, null, 2).slice(0, -1)), /no deploy verdict yet/);
+  assert.equal(parseVerdict(prefix + "= deploy done exit=0 at=now"), "passed (deploy exit 0)");
+  assert.match(parseVerdict(prefix + "= deploy done exit=1 at=now"), /^failed/);
+  assert.match(parseVerdict(prefix + "[deploy] " + JSON.stringify(result) + "\n= deploy start pid=7 mode=--gate-only at=now"), /no deploy verdict yet/);
+  assert.equal(parseVerdict("[tooling-fast] = run passed (721 passed, 0 failed)"), "passed (721 passed, 0 failed)");
+});

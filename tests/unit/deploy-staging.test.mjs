@@ -24,9 +24,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
+import { createRequire } from "node:module";
+import { stageSite } from "../../tools/desktop/stage.mjs";
 import { fileURLToPath } from "node:url";
 import { STAGE_DIRS, STAGE_ROOT_FILES, stagedNames } from "../../tools/desktop/stage-files.mjs";
 
+const { SW_LOCALES } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
@@ -61,6 +65,9 @@ function referenced() {
   for (const m of sw.matchAll(/"((?:\.\/)?(?:js|css|icons|assets|vendor|worker)\/[^"]+)"/g)) {
     add(m[1], "sw.js precache");
   }
+
+  for (const url of SW_LOCALES) add(url, "manifest SW_LOCALES");
+  for (const locale of Object.keys(JSON.parse(read("locales/manifest.json")))) add(`locales/${locale}.json`, "locale catalog");
 
   // Runtime URLs built in JS — `new URL("../../vendor/…", src)` is how the
   // debris world reaches rapier, and no tag or importmap mentions it.
@@ -118,7 +125,7 @@ test("everything the stage allow-list names actually exists in the repo", () => 
   }
 });
 
-test("importmap and precache targets are real files", () => {
+test("importmap targets are real files", () => {
   // Staging the right directory does not help if the path inside it is wrong.
   const map = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
   for (const [spec, target] of Object.entries(map)) {
@@ -173,4 +180,31 @@ test("the stamp maps every staged lazy file to its content hash; one changed fil
 
 test("the repo shell carries no lazy map (it is stamped at deploy only)", () => {
   assert.doesNotMatch(html, /id="apex-lazy-v"/);
+});
+
+
+test("real stageSite preserves manifest-declared locale catalogs and SW locale bytes", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "locale-stage-"));
+  const root = path.join(tmp, "source"), dest = path.join(tmp, "site");
+  const put = (rel, bytes) => {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), bytes);
+  };
+  try {
+    for (const name of STAGE_ROOT_FILES) put(name, "fixture\n");
+    for (const name of STAGE_DIRS) fs.mkdirSync(path.join(root, name), { recursive: true });
+    const manifest = JSON.parse(read("locales/manifest.json"));
+    // A future translated catalog must follow the same staging path as English.
+    manifest.zz = { name: "Fixture", dir: "ltr" };
+    put("locales/manifest.json", JSON.stringify(manifest));
+    for (const locale of Object.keys(manifest)) {
+      put(`locales/${locale}.json`, locale === "zz" ? '{"hello":"Fixture é"}\n' : fs.readFileSync(path.join(ROOT, `locales/${locale}.json`)));
+    }
+    stageSite(dest, { root });
+    const targets = new Set([...SW_LOCALES, "locales/manifest.json", ...Object.keys(manifest).map((locale) => `locales/${locale}.json`)]);
+    for (const rel of targets) {
+      assert.deepEqual(fs.readFileSync(path.join(dest, rel)), fs.readFileSync(path.join(root, rel)), rel);
+    }
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dest, "locales/manifest.json"))), manifest);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

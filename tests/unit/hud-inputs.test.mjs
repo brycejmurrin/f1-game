@@ -243,3 +243,70 @@ test("review T B S legend occupies separated rows even when all channels coincid
   assert.equal(new Set(legend.map(p=>p.x)).size,1,"legend stays in reserved right column");
   assert.ok(legend[1].y-legend[0].y>=20&&legend[2].y-legend[1].y>=20,"16px labels have separate readable rows at equal inputs");
 });
+
+test("hidden paint keeps fixed-step input samples without canvas/DOM work and redraws on show", () => {
+  const d = fakeDom();
+  const I = load({ document: d.doc, window: d.win, HudElements: { isOn: () => true } });
+  const p = { throttleDemand: 1, brakeDemand: 0, steerCommand: 0.5, gear: 4 };
+  I.frame({}, p, 100);
+  const before = { ...d.calls }, width = d.cv.width, label = d.cv.attrs["aria-label"];
+  let reads = 0;
+  Object.defineProperty(d.cv, "clientWidth", { get() { reads++; return 180; } });
+  for (let i = 0; i < 30; i++) { p.throttleDemand = i / 30; I.frame({}, p, 1000 / 30, false); }
+  assert.equal(reads, 0, "hidden canvas is never measured");
+  assert.deepEqual(d.calls, before, "hidden canvas is never painted");
+  assert.equal(d.cv.width, width);
+  assert.equal(d.cv.attrs["aria-label"], label);
+  assert.ok(I.trace.count >= 32, "hidden frames still record inputs");
+  p.gear = 7;
+  I.frame({}, p, 1, true);
+  assert.ok(reads > 0, "show remeasures even at the same viewport and DPR");
+  assert.equal(d.cv.width, 360);
+  assert.ok(d.calls.stroke > before.stroke);
+  assert.equal(d.gear.textContent, "7");
+});
+
+test("hidden caller's live mode state overrides stale camera classes without changing trace policy", () => {
+  const d = fakeDom();
+  d.doc.body.classList.contains = (name) => name === "hud-bcam";
+  const I = load({ document: d.doc, window: d.win, HudElements: { isOn: () => true } });
+  const p = { throttleDemand: 1, gear: 3 };
+  I.frame({}, p, 100, false, false);
+  assert.ok(I.trace.count > 0, "a hidden change back to standard resumes sampling");
+  I.frame({}, p, 100, false, true);
+  assert.equal(I.trace.count, 0, "a hidden switch to a suppressed mode clears the window");
+  assert.equal(d.calls.stroke, 0);
+});
+
+for (const background of [false, true]) test(`HUD-hidden resets clear the independent review (background=${background})`, () => {
+  for (const reason of ["no-player", "suppressed", "replacement"]) {
+    const d = fakeDom(), dom = makeDom(), host = dom.document.createElement("div"), listeners = {};
+    d.doc.addEventListener = (name, fn) => { listeners[name] = fn; };
+    d.doc.querySelector = () => host;
+    d.doc.createElement = (tag) => {
+      const el = dom.document.createElement(tag);
+      if (tag === "canvas") el.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true });
+      return el;
+    };
+    const I = load({ document: d.doc, window: d.win, HudElements: { isOn: () => true } });
+    I.mountReview();
+    const p = { throttleDemand: 0.7, gear: 4, lap: 3 };
+    I.frame({}, p, 100);
+    const fold = host.children[0], note = fold.children[1], canvas = fold.children[2];
+    fold.open = true; dom.dispatch(fold, { type: "toggle" });
+    assert.equal(canvas.hidden, false);
+    d.doc.hidden = background;
+    const oldNote = note.textContent;
+    I.frame({}, reason === "no-player" ? null : reason === "replacement" ? { ...p, lap: 4 } : p,
+      17, false, reason === "suppressed");
+    if (background) {
+      assert.equal(fold.open, true, "background document defers DOM reset");
+      assert.equal(note.textContent, oldNote);
+      d.doc.hidden = false;
+      listeners.visibilitychange(); // paused: no HUD frame needed to complete reset
+    }
+    assert.equal(fold.open, false, reason);
+    assert.equal(canvas.hidden, true, reason);
+    assert.match(note.textContent, /No continuous input samples/, reason);
+  }
+});

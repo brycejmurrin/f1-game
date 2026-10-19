@@ -1909,3 +1909,70 @@ test("obsolete Safari fallback stops at a layer task and closes both crop and fu
   assert.deepEqual(calls,["blob-crop","full","fallback-crop"],"cancellation neither decodes another layer nor retries the full strip");
   assert.deepEqual(bitmaps.map(b=>b.closed),[1,1]);
 });
+
+
+test("model decode lane paces ready bodies, shares duplicates, and survives failures and unload", async () => {
+  const tasks = [], events = [], fetched = [];
+  let assets;
+  class ParseView extends DataView {
+    constructor(buf) {
+      super(buf); events.push("parse");
+      if (buf.byteLength === 1) throw new RangeError("decode failed");
+    }
+  }
+  assets = assetLoader({ DataView: ParseView,
+    setTimeout(fn) { events.push("task"); tasks.push(fn); },
+    fetch: async (url) => {
+      if (/manifest\.json$/.test(url)) return { ok: true, json: async () => ({ models: {
+        a: { file: "a.bin" }, b: { file: "b.bin" }, c: { file: "c.bin" },
+      } }) };
+      fetched.push(url);
+      return { ok: true, arrayBuffer: async () => url.endsWith("a.bin") ? new ArrayBuffer(1) : MODEL_V2() };
+    },
+  });
+  const a = assets.model("a"), b = assets.model("b"), c = assets.model("c");
+  assert.strictEqual(assets.model("b"), b, "duplicate callers share one request and decode");
+  await new Promise(setImmediate);
+  assert.equal(fetched.length, 3, "all downloads start before parsing is admitted");
+  assert.deepEqual(events, ["task"]);
+  tasks.shift()(); await new Promise(setImmediate);
+  assert.equal(await a, null, "malformed decode settles without blocking the lane");
+  assert.deepEqual(events, ["task", "parse", "task"]);
+  tasks.shift()(); await new Promise(setImmediate);
+  assert.ok(await b);
+  assert.deepEqual(events, ["task", "parse", "task", "parse", "task"]);
+  assets.unload();
+  tasks.shift()();
+  assert.equal(await c, null, "unload during admission prevents obsolete parsing");
+  assert.equal(events.filter(e => e === "parse").length, 2);
+  assert.equal(assets.modelSync("b"), null);
+  const fresh = assets.model("c");
+  await new Promise(setImmediate);
+  tasks.shift()();
+  assert.ok(await fresh, "fresh generation runs after canceled jobs");
+});
+
+
+test("model admission tail drops decoded payloads across cache generations", async () => {
+  // Expose the existing admission promise without changing its scheduling or
+  // parser. Its fulfilled value would otherwise retain arrays after unload.
+  const source = fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8")
+    .replace("return { init,", "return { decodeTail: () => _modelDecodeTail, init,");
+  let downloads = 0;
+  const assets = vm.runInNewContext(source + ";Assets", { fetch: async (url) => {
+    if (/manifest\.json$/.test(url)) return { ok: true, json: async () => ({ models: { box: { file: "box.bin" } } }) };
+    downloads++;
+    return { ok: true, arrayBuffer: async () => MODEL_V2() };
+  } });
+  const first = await assets.model("box");
+  assert.ok(first.pos.length, "first generation actually decoded a payload");
+  assert.strictEqual(assets.modelSync("box"), first);
+  assert.equal(await assets.decodeTail(), null, "fulfilled admission state owns no decoded payload");
+  assets.unload();
+  assert.equal(assets.modelSync("box"), null);
+  assert.equal(await assets.decodeTail(), null, "unload leaves no payload in the queue tail");
+  const second = await assets.model("box");
+  assert.ok(second.pos.length); assert.notStrictEqual(second, first);
+  assert.equal(downloads, 2, "next generation obtains its own model");
+  assert.equal(await assets.decodeTail(), null);
+});

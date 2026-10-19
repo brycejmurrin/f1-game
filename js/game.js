@@ -1969,7 +1969,7 @@ async function loadTrackStepped(idx, live) {
     const opts = trackBuildOpts(sessionDark, wantSlots);
     const switchInSession = (state === "race" || state === "count");
     const msg = switchInSession && typeof TrackBuildClient !== "undefined"
-      && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
+      && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null, live);
     if (track !== null || !live()) return false;   // a sync loadTrack, or the player backed out, meanwhile
     // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
     if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx, undefined, live); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }

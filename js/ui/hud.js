@@ -1903,6 +1903,38 @@ function syncAlong() {
   hData(els.hud, "along", ALONG[side] || null);
 }
 
+// Visibility uses explicit state only: checking it must never flush layout.
+let _paintSuspended = false;
+function hudPaintHidden() {
+  return document.hidden === true || document.visibilityState === "hidden"
+    || !!(els.hud && els.hud.hidden) || document.body.classList.contains("hud-hidden");
+}
+// Spoken race information is independent of the visual HUD toggle.
+function speakHud(player, cars, timeTrial) {
+  if (_speak && G.state === "race" && sessionOf(timeTrial) === "race") {
+    _speak.tick(typeof performance !== "undefined" ? performance.now() : Date.now(),
+      { rank: player.retired ? 0 : player.rank, of: cars.length, best: player.best }, G.fmtTime);
+  }
+  if (!els.flag) return;
+  const cn = G.cautionInfo ? G.cautionInfo() : null;
+  const caution = !!(cn && (cn.level > 0 || cn.owed > 0));
+  const txt = !caution ? "" : cn.level === 1 ? "YELLOW" + (cn.sector >= 0 ? " S" + (cn.sector + 1) : "")
+    : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : cn.level === 3 ? "SAFETY CAR" : "";
+  if (caution) {
+    if (txt !== _flagSaid) { _flagSaid = txt; if (txt) sayFlag(cn); }
+  } else _flagSaid = "";
+  const blueCar = !caution && !timeTrial && _ro && G.track && G.state === "race"
+    ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26) : null;
+  if (blueCar) {
+    const lapsUp = Math.round(((blueCar.prog || 0) - (player.prog || 0)) / G.track.total);
+    if (blueCar !== _blueSaid || lapsUp !== _blueLaps) {
+      _blueSaid = blueCar; _blueLaps = lapsUp;
+      sayFlag(null, "BLUE FLAG, LET " + (blueCar.code || "THE LEADER") + " THROUGH");
+    }
+  }
+  return { cn, caution, blueCar, txt };
+}
+
 function updateHud(force, dtMs) {
   if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
@@ -1912,6 +1944,25 @@ function updateHud(force, dtMs) {
   // stamp/wait green, identical S3×BOOST + REL×BRAKE on probe). jump/camera
   // use refreshHud(true) to re-fit while frozen.
   if (G.frozen && !force) return;
+  const paint = !hudPaintHidden();
+  if (_trace && G.track) _trace.sample(player, G.track.total);
+  if (!paint) {
+    // Camera/profile classes are intentionally not painted while hidden. Use
+    // their source state so an invisible mode change still clears input history.
+    const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
+    const modeId = modes && modes[G.camMode] ? modes[G.camMode].id : "chase";
+    if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs, false,
+      G.hudProfile === "minimal" || !!BCAM_IDS[modeId] || document.body.classList.contains("bc-on"));
+    _paintSuspended = true;
+    hudT -= dtMs;
+    if (force || hudT <= 0) { hudT = HUD_TICK_MS; speakHud(player, cars, timeTrial); }
+    return;
+  }
+  if (_paintSuspended) {
+    _paintSuspended = false;
+    invalidateFit(); _minimap.invalidate();
+    force = true;   // repaint/refit immediately, even inside the 10 Hz throttle
+  }
   syncHudCamClasses();
   const skinRev = G.store ? G.store.rev : 0;
   if (player.team && (player.team.id !== _teamSkin || skinRev !== _teamSkinRev)) {
@@ -1933,8 +1984,7 @@ function updateHud(force, dtMs) {
   // synchronous layout on every tick on a phone. Same writes, same frame.
   const tick = force || !(hudT - dtMs > 0);   // exactly the throttle test below
   if (!tick) paintInstruments(player);
-  if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs);   // opt-in INPUTS trace: samples per frame, draws at 10 Hz itself
-  if (_trace && G.track) _trace.sample(player, G.track.total);   // the race DELTA's best-lap reference
+  if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs);
   hudT -= dtMs;
   if (!force && hudT > 0) return;
   hudT = HUD_TICK_MS;
@@ -1991,14 +2041,8 @@ function updateHud(force, dtMs) {
       hText(_rx.bb, bb);
       hAttr(_rx.bb, "aria-label", "Brake bias " + bb.slice(3) + " front");
     }
-    // Positions mean nothing in practice or qualifying (rank is road order there).
-    // G.practice, not G.session: PRACTICE is a flag on a race session, so the
-    // old `session !== "practice"` test was always true and practice spoke.
-    if (_speak && G.state === "race" && sessionOf(timeTrial) === "race") {
-      _speak.tick(typeof performance !== "undefined" ? performance.now() : Date.now(),
-        { rank: player.retired ? 0 : player.rank, of: cars.length, best: player.best }, G.fmtTime);
-    }
   }
+  const spokenFlag = speakHud(player, cars, timeTrial);
   // TYRES (js/physics/tyre-model.js). The widget is hidden entirely while the
   // setting is off — the shipped default — so a player who never turns it on
   // pays nothing for it, not even a greyed-out bar. `spent` is wear as a
@@ -2305,39 +2349,22 @@ function updateHud(force, dtMs) {
   // state machine in js/race/race-control.js, read via G.cautionInfo (READ-ONLY
   // w.r.t. the cars; the debris side-world never moves one). Hidden when green.
   if (els.flag) {
-    const cn = G.cautionInfo ? G.cautionInfo() : null;
-    // A place gained under a caution owes a give-back inside a 5 s window
-    // (js/race/sporting-regs.js), which can outlast the caution itself.
+    const { cn, caution, blueCar, txt } = spokenFlag;
+    // A give-back window can outlast the caution that created it.
     const owed = !!(cn && cn.owed > 0);
-    const caution = !!(cn && (cn.level > 0 || owed));
-    // BLUE FLAG: a caution outranks it (the chip holds one flag); no field, no flag.
-    const blueCar = !caution && !timeTrial && _ro && G.track && G.state === "race"
-      ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26) : null;
     const show = caution || !!blueCar;
     if (caution) {
-      const txt = cn.level === 1 ? "YELLOW" + (cn.sector >= 0 ? " S" + (cn.sector + 1) : "")
-                : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : cn.level === 3 ? "SAFETY CAR" : "";
       // The window counts down on the chip at this 10 Hz tick ("SC · LET VER BY
       // 4s"): the banner can be queued behind the caution's own radio card.
-      // "SC" keeps the chip short on a phone; the spoken flag below keys on the
+      // "SC" keeps the chip short on a phone; the spoken flag keys on the
       // level text only, so the countdown never re-reads the flag.
       const owe = owed ? "LET " + (cn.owedCode || "THE CAR") + (cn.owed > 1 ? " +" + (cn.owed - 1) : "") + " BY " + Math.ceil(cn.owedT) + "s" : "";
       hText(els.flag, owe ? (txt === "SAFETY CAR" ? "SC" : txt) + (txt ? " \u00b7 " : "") + owe : txt);
       hClass(els.flag, cn.level === 4 ? "flag-red" : cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
-      if (txt !== _flagSaid) { _flagSaid = txt; if (txt) sayFlag(cn); }
-    } else _flagSaid = "";
+    }
     if (blueCar) {
       hText(els.flag, "BLUE FLAG " + (blueCar.code || ""));
       hClass(els.flag, "");
-      // Once per lapping car PER LAP IT GAINS: a gap breathing across the 1.2 s
-      // window must not re-speak it, but the same car coming round to lap the
-      // player AGAIN is a new flag (it used to stay silent: _blueSaid held the
-      // car for the rest of the race). Laps up is stable inside one encounter.
-      const lapsUp = Math.round(((blueCar.prog || 0) - (player.prog || 0)) / G.track.total);
-      if (blueCar !== _blueSaid || lapsUp !== _blueLaps) {
-        _blueSaid = blueCar; _blueLaps = lapsUp;
-        sayFlag(null, "BLUE FLAG, LET " + (blueCar.code || "THE LEADER") + " THROUGH");
-      }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
     if (_ro && _ro.paintFlag) _ro.paintFlag(els.flag, show ? (caution ? { caution: cn } : blueCar ? { blue: true } : null) : null);
@@ -2408,7 +2435,7 @@ function invalidateFit() {
   _fitKey = ""; _fitRetry = 0;
   _fitPending = true;
   invalidateLaneRects();   // MOVE & SIZE / HUD ELEMENTS / scale — clippers moved
-  if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
+  if (!_hudTop || hudPaintHidden()) return;
   const root = document.documentElement;
   hStyle(root, "--hud-fit-stamp", "");
   _fitStamped = false;
@@ -2423,9 +2450,12 @@ _invalidateFit = invalidateFit;
 // fit key carries no font signal, so the wrong rung held until the 3 s backoff
 // (F-16). Forget the measured widths and refit once the faces are in.
 if (typeof document !== "undefined" && document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
-  document.fonts.ready.then(() => { _gapW[0] = _gapW[1] = 0; invalidateFit(); }, () => {});
+  const fontsChanged = () => { _gapW[0] = _gapW[1] = 0; invalidateFit(); };
+  document.fonts.ready.then(fontsChanged, () => {});
+  if (document.fonts.addEventListener) document.fonts.addEventListener("loadingdone", fontsChanged);
 }
 function syncPhoneFit() {
+  if (hudPaintHidden()) return false;
   syncComputedRootVars();
   phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale, true);
   const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");

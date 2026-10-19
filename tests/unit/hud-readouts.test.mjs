@@ -175,6 +175,7 @@ test("source: display-only — no Tracks / curvature / racing line, no car write
 // ── hud.js wiring, on the mini-dom harness (the hud-feel shape) ──────────────
 function boot(opts = {}) {
   const dom = makeDom();
+  if (opts.fonts) dom.document.fonts = opts.fonts;
   const rawCreate = dom.document.createElement;
   dom.document.createElement = (tag) => { const el = rawCreate(tag); if (String(tag).toLowerCase() === "canvas") el.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true }); return el; };
   const timers = [];
@@ -577,4 +578,120 @@ test("PERF-2: a steady tick does not re-run announceLane's layout reads; a chang
   cs = 0;
   hud.updateHud(true);
   assert.equal(cs, 1, "a forced refresh always re-clips");
+});
+
+for (const mode of ["api", "class", "document"]) test(`hud.js: ${mode} hidden skips visual work, preserves lap reference and repaints on show`, () => {
+  const h = boot(), { $, player, G, dom, sb, hud, frame } = h;
+  h.els.hud = $("hud");
+  G.cars = [player]; G.ranked = [player];
+  h.tick();
+  const oldSpeed = $("hud-speed-n").textContent;
+  const hide = (on) => {
+    if (mode === "api") h.els.hud.hidden = on;
+    if (mode === "class") dom.document.body.classList.toggle("hud-hidden", on);
+    if (mode === "document") dom.document.hidden = on;
+  };
+  hide(true);
+  const css = sb.getComputedStyle;
+  sb.getComputedStyle = () => { throw new Error("hidden style read"); };
+  const rects = new Map();
+  const walk = (el) => {
+    if (!el) return;
+    rects.set(el, el.getBoundingClientRect);
+    el.getBoundingClientRect = () => { throw new Error("hidden rect read: " + el.id); };
+    for (const c of el.children) walk(c);
+  };
+  walk(dom.document.documentElement);
+  const before = JSON.stringify([$("hud-speed-n").textContent, $("hud-time").textContent, $("hud-pos").textContent,
+    dom.document.documentElement.style._decls, dom.document.body.className]);
+  player.speed = 70;
+  for (let s = 0; s <= 995; s += 5) { player.s = s; player.lapTime = s / 50; frame(16); }
+  player.lap = 2; player.s = 1; player.lapTime = 0.02; player.best = 20; player.lastLap = 20; frame(16);
+  hud.invalidateFit();
+  assert.equal(hud.syncPhoneFit(), false, "external fit probe cannot measure a hidden HUD");
+  assert.equal(JSON.stringify([$("hud-speed-n").textContent, $("hud-time").textContent, $("hud-pos").textContent,
+    dom.document.documentElement.style._decls, dom.document.body.className]), before, "hidden frames do not paint readouts or fit styles");
+  sb.innerWidth = 844; sb.innerHeight = 390;
+  hide(false);
+  sb.getComputedStyle = css;
+  for (const [el, rect] of rects) el.getBoundingClientRect = rect;
+  player.s = 500; player.lapTime = 10.5;
+  frame(1);   // visibility must bypass the remaining HUD throttle
+  assert.notEqual($("hud-speed-n").textContent, oldSpeed);
+  assert.equal($("hud-delta").dataset.pending, undefined);
+  assert.equal($("hud-delta-n").textContent, "+0.500", "the hidden lap became the best reference");
+  assert.equal($("hud-delta").dataset.ref, "best");
+});
+
+test("hud.js: hidden camera changes retain INPUTS suppression policy without painting camera classes", () => {
+  const calls = [];
+  const h = boot({ sandbox: { CamModes: { CAM_MODES: [{ id: "chase" }, { id: "heli" }] },
+    HudInputs: { frame(...args) { calls.push(args.slice(3)); } } } });
+  h.els.hud = h.$("hud"); h.els.hud.hidden = true;
+  h.G.camMode = 1; h.frame(17);
+  assert.deepEqual(calls.at(-1), [false, true]);
+  assert.equal(h.dom.document.body.classList.contains("hud-bcam"), false);
+  h.G.camMode = 0; h.frame(17);
+  assert.deepEqual(calls.at(-1), [false, false]);
+  h.G.hudProfile = "minimal"; h.frame(17);
+  assert.deepEqual(calls.at(-1), [false, true]);
+});
+
+test("hud.js: hidden caution still speaks once, then show does not repeat the same flag", () => {
+  const h = boot(); h.els.hud = h.$("hud"); h.els.hud.hidden = true;
+  const said = [];
+  h.sb.LiveRegion = { ...h.sb.LiveRegion, say: (text) => { said.push(text); } };
+  h.G.cautionInfo = () => ({ level: 2 });
+  h.frame(100); h.frame(100);
+  assert.deepEqual(said, ["RACE CONTROL: VIRTUAL SAFETY CAR"]);
+  h.els.hud.hidden = false; h.frame(1);
+  assert.equal(said.length, 1);
+});
+
+test("hud.js: fonts arriving while hidden invalidate without measuring, and show repaints", () => {
+  let ready, loaded;
+  const h = boot({ fonts: { ready: { then(fn) { ready = fn; } },
+    addEventListener(type, fn) { assert.equal(type, "loadingdone"); loaded = fn; } } });
+  h.els.hud = h.$("hud"); h.tick(); h.els.hud.hidden = true;
+  const css = h.sb.getComputedStyle;
+  h.sb.getComputedStyle = () => { throw new Error("hidden font style read"); };
+  const before = JSON.stringify(h.dom.document.documentElement.style._decls);
+  const car = JSON.stringify(h.player);
+  ready(); loaded(); h.frame(17);
+  assert.equal(JSON.stringify(h.player), car, "sampling never advances physics");
+  assert.equal(JSON.stringify(h.dom.document.documentElement.style._decls), before);
+  h.els.hud.hidden = false; h.sb.getComputedStyle = css;
+  h.player.speed = 80; h.frame(1);
+  assert.equal(h.$("hud-speed-n").textContent, "288");
+});
+
+test("hud.js: hidden rank changes retain hold timing and speak once across show", () => {
+  let now = 1000;
+  const h = boot({ sandbox: { performance: { now: () => now } } });
+  h.els.hud = h.$("hud"); h.els.hud.hidden = true;
+  const said = [];
+  h.sb.LiveRegion = { ...h.sb.LiveRegion, say: (text) => { said.push(text); } };
+  h.frame(100); h.player.rank = 1; now = 1100; h.frame(100);
+  now = 3099; h.frame(100);
+  assert.equal(said.length, 0, "position must hold for two seconds while hidden too");
+  now = 3100; h.frame(100);
+  assert.deepEqual(said, ["Position 1 of 2"]);
+  now = 6000; h.frame(100);
+  h.els.hud.hidden = false; h.frame(1);
+  assert.equal(said.length, 1, "show does not repeat the held rank");
+});
+
+test("hud.js: hidden blue-flag changes preserve per-car/per-lap speech across show", () => {
+  const h = boot(); h.els.hud = h.$("hud"); h.els.hud.hidden = true;
+  const said = [];
+  h.sb.LiveRegion = { ...h.sb.LiveRegion, say: (text) => { said.push(text); } };
+  h.G.track.total = 1000; h.player.prog = 2000; h.player.speed = 60; h.rival.speed = 70;
+  h.rival.prog = h.player.prog + 1000 - 20;
+  h.frame(100); h.frame(100);
+  assert.deepEqual(said, ["RACE CONTROL: BLUE FLAG, LET BEA THROUGH"]);
+  h.rival.prog = h.player.prog + 1200; h.frame(100); // through
+  h.rival.prog = h.player.prog + 2000 - 20; h.frame(100);
+  assert.equal(said.length, 2, "the later lapping is spoken while HUD-hidden");
+  h.els.hud.hidden = false; h.frame(1);
+  assert.equal(said.length, 2, "show does not repeat the same lapping");
 });

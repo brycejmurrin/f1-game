@@ -71,7 +71,7 @@ function readUsage() {
 }
 
 /** A diagnostic budget is not a leak verdict. Missing evidence cannot pass it. */
-export function summariseCensus(o, rows, errors, { completed = true, failure = null } = {}) {
+export function summariseCensus(o, rows, errors, { completed = true, failure = null, failureDetails = null } = {}) {
   const incomplete = [], incorrect = [], growth = {}, growthBytes = {}, heapSeriesBytes = {};
   const finite = (n) => typeof n === "number" && Number.isFinite(n) && n >= 0;
   const visits = rows.filter((r) => r.cycle != null);
@@ -113,7 +113,11 @@ export function summariseCensus(o, rows, errors, { completed = true, failure = n
     growthAvailable, growthPolicy: "last minus penultimate visit; first visit excluded; >=3 cycles required; not proof of leak absence",
     budget: { status: budget, maxGrowthMiB: o.maxGrowthMb, worstGrowthMiB: worst },
     ...(o.maxGrowthMb == null ? {} : { maxGrowthMb: o.maxGrowthMb }),
-    presentation: { status: "unverified", reason: "animation callbacks/menu warm completion do not establish scene-specific visible presentation" },
+    presentation: { status: failureDetails?.presentation || visits.some((r) => r.presentation?.ok === false) ? "failed"
+      : o.mode === "picker" && completed && visits.length === o.cycles * o.tracks.length && visits.length > 0
+        && visits.every((r) => r.presentation?.ok === true && r.presentation.id === r.track) ? "verified" : "unverified",
+      boundary: "renderer display completion; not physical scanout",
+      reason: "picker receipts identify the final warm submission; race mode and legacy samples remain unverified" },
     pageErrors: errors.length, verdict: ok ? "ok" : "failed", ok };
 }
 
@@ -131,7 +135,7 @@ async function snapshot(cdp, file) {
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  let srv, browser, completed = false, failure = null;
+  let srv, browser, completed = false, failure = null, failureDetails = null, activeVisit = null;
   const args = ["--disable-background-timer-throttling", "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows", "--enable-precise-memory-info", "--use-angle=swiftshader"];
   const rows = [], errors = [];
@@ -159,17 +163,19 @@ async function main() {
     emit({ step: "boot", ...(await censusAfterGc(page, cdp)) });
     for (let cycle = 1; cycle <= o.cycles; cycle++) {
       for (const id of o.tracks) {
+        activeVisit = { cycle, track: id };
         const t0 = Date.now();
         if (o.mode === "picker") await pickTrack(page, id);
         else {
           await page.evaluate((tid) => { window.__apex.race(tid); }, id);
           await page.waitForFunction((tid) => { try { const i = window.__apex.info(); return i.track === tid && (i.state === "race" || i.state === "count"); } catch (_) { return false; } }, id, { polling: 100, timeout: 240000 });
         }
-        if (o.mode === "picker") await waitUntilDrawn(page, id);   // race mode warms at the lights, in front of the player
+        const presentation = o.mode === "picker" ? await waitUntilDrawn(page, id) : null;
         await waitFrames(page, 15);
         await sleep(o.settle * 1000);
         const r = await censusAfterGc(page, cdp);
-        const row = { step: `${cycle}:${id}`, cycle, track: id, buildS: +((Date.now() - t0) / 1000 - o.settle).toFixed(1), ...r };
+        const row = { step: `${cycle}:${id}`, cycle, track: id, buildS: +((Date.now() - t0) / 1000 - o.settle).toFixed(1), ...r,
+          ...(presentation ? { presentation } : {}) };
         if (r.aliveTracks.length > 1) {
           row.observation = "more than one observed built track reachable after GC; inspect owners";
           // The moment to look: a snapshot now has the stale world in it, and
@@ -177,6 +183,7 @@ async function main() {
           if (o.snapshot) { row.snapshot = join(o.snapshot, `leak-${o.backend}-${cycle}-${id}.heapsnapshot`); await snapshot(cdp, row.snapshot); }
         }
         emit(row);
+        activeVisit = null;
       }
       if (o.snapshot) {
         const file = join(o.snapshot, `${o.backend}-${o.mode}-cycle${cycle}.heapsnapshot`);
@@ -187,12 +194,13 @@ async function main() {
     completed = true;
   } catch (e) {
     failure = String(e && e.stack || e);
+    failureDetails = { visit: activeVisit, presentation: e?.presentation ?? null };
   } finally {
-    const summary = summariseCensus(o, rows, errors, { completed, failure });
+    const summary = summariseCensus(o, rows, errors, { completed, failure, failureDetails });
     console.log("= mem-census " + JSON.stringify(summary));
     if (errors.length && !o.quiet) console.log("page errors: " + JSON.stringify(errors.slice(0, 5)));
     try {
-      if (o.json) { mkdirSync(dirname(o.json), { recursive: true }); writeFileSync(o.json, JSON.stringify({ summary, rows, errors, failure }, null, 2)); }
+      if (o.json) { mkdirSync(dirname(o.json), { recursive: true }); writeFileSync(o.json, JSON.stringify({ summary, rows, errors, failure, failureDetails }, null, 2)); }
     } finally {
       await shutdown();
     }

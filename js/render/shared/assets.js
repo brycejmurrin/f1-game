@@ -641,6 +641,23 @@ const Assets = (function () {
     return { pos, nrm, col, mat, idx };
   }
 
+  // One admission lane for ALL model callers. Fetch/body reads stay parallel;
+  // only synchronous parses are serialized across real browser task boundaries.
+  // Keep the tail fulfilled so a failed decode cannot strand later jobs.
+  let _modelDecodeTail = Promise.resolve();
+  function _decodeModel(buf, generation) {
+    const job = _modelDecodeTail.then(async () => {
+      if (generation !== _loadGeneration) return null;
+      await _yieldDecode();
+      if (generation !== _loadGeneration) return null;
+      const parsed = _parseModel(buf);
+      return generation === _loadGeneration ? parsed : null;
+    });
+    // The admission tail must never retain the last parsed model after unload.
+    _modelDecodeTail = job.then(() => null, () => null);
+    return job;
+  }
+
   function model(id) {
     if (id in _models) return Promise.resolve(_models[id]);
     if (_modelPromises[id]) return _modelPromises[id];
@@ -653,7 +670,7 @@ const Assets = (function () {
         if (!rec || !rec.file) { if (m) _models[id] = null; return null; }
         const res = await fetch(PACK_DIR + rec.file);
         if (!res.ok || generation !== _loadGeneration) return null;
-        const parsed = _parseModel(await res.arrayBuffer());
+        const parsed = await _decodeModel(await res.arrayBuffer(), generation);
         if (parsed && generation === _loadGeneration) _models[id] = parsed;
         return parsed;
       } catch (_) {
@@ -705,13 +722,11 @@ const Assets = (function () {
     const m = await manifest();
     const ids = _idsNamedIn(m, String(src));
     if (!ids.length) return 0;
-    // Fetch in parallel (shared model() memos), but parse/settle one at a time
-    // with a yield so a multi-model scenery set does not glue one long task
-    // onto race entry / flyby build.
+    // Fetch in parallel (shared model() memos). The shared decode lane in
+    // model() supplies task boundaries before synchronous model parses.
     const pending = ids.map((id) => model(id));
     let n = 0;
     for (let i = 0; i < pending.length; i++) {
-      if (i) await _yieldDecode();
       if (await pending[i]) n++;
     }
     return n;

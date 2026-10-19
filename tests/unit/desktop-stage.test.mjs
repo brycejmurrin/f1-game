@@ -131,7 +131,7 @@ test("missing stage inputs leave a previous stage intact", () => {
   fs.writeFileSync(path.join(dest, "index.html"), "previous complete site");
   fs.writeFileSync(path.join(dest, "version.json"), "{}");
   try {
-    assert.throws(() => stageSite(dest, { root }), /missing directory vendor/);
+    assert.throws(() => stageSite(dest, { root }), /missing directory locales/);
     assert.equal(fs.readFileSync(path.join(dest, "index.html"), "utf8"), "previous complete site");
     assert.equal(fs.readdirSync(dest).length, 2);
   } finally { fs.rmSync(fixture, { recursive: true, force: true }); }

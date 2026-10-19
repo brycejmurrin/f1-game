@@ -1030,6 +1030,14 @@ test("WGX timer ignores late readbacks and waits for a timed pass after enabling
   gfx.gpuTimer(true); // an idempotent enable preserves the in-flight sample
   pending.shift()(); await Promise.resolve();
   assert.equal(gfx.gpuMs(), 6);
+  assert.equal(gfx.gpuTimer().scope, "lit-pass");
+  assert.equal(gfx.gpuTimer().samples, 1);
+  assert.equal(gfx.gpuTimer().sampleAgeMs, 0);
+  h.advanceTime(25);
+  assert.equal(gfx.gpuTimer().sampleAgeMs, 25);
+  gfx.gpuTimer(false);
+  assert.equal(gfx.gpuTimer().samples, 0);
+  assert.equal(gfx.gpuTimer().sampleAgeMs, -1);
   assert.equal(buffer.mapState, "unmapped");
 });
 
@@ -3628,4 +3636,75 @@ test("revoked WGX late successful self-test preserves successor failure and boun
   finish();assert.equal(await pending,null);
   assert.equal(storage.get("apex26.gfxWgxFail"),"successor-failure");
   assert.equal(session.get("apex26.gfxBound"),"webgl2");assert.equal(h.canvasClaimedBy(),null);assert.equal(destroys,1);
+});
+
+// Exercise the actual capture helpers and both submit handoffs, including the
+// shadow encoder's finish order, without booting a browser or a GPU allocator.
+for (const fullPost of [false, true]) test(`capture submission releases readbacks (full post=${fullPost})`, async () => {
+  const between = (source, start, end) => {
+    const a = source.indexOf(start), b = source.indexOf(end, a);
+    assert.ok(a >= 0 && b > a, start);
+    return source.slice(a, b);
+  };
+  const helpers = between(WGX_MAIN_SOURCE, "    function capturePixels() {", "    // Destroy buffers AND textures") +
+    between(WGX_MAIN_SOURCE, "    // Before submission the encoded readback", "    //    (SSAO -> godray");
+  const shadow = between(WGX_SHADOW_SOURCE, "    function _frameSubmitList(mainEnc) {", "    // Same-model dedupe.");
+  const declaration = fullPost ? "      const _cap = _capEncode();" : "        const cap = _capEncode();";
+  const handoff = between(WGX_MAIN_SOURCE, declaration, "_softDisplayFinish(disp);") + "_softDisplayFinish(disp);";
+  const outerCatch = between(WGX_MAIN_SOURCE, '        _jsStrike("present", e);', "      }\n    }\n\n    // Runs BEFORE");
+  for (const failure of ["success", "main", "shadow", "submit", "submit-destroy", "copy", "map", "work-reject", "work-throw", "no-request", "deferred"]) {
+    let injected = failure;
+    const original = new Error(failure);
+    const buffers = [];
+    const state = { rejects: 0, resolves: 0, aborts: 0, finishes: 0, strike: null };
+    const encoder = {
+      copyTextureToBuffer() { if (injected === "copy") throw original; },
+      finish() { if (injected === "main") throw original; return {}; },
+    };
+    const device = {
+      createBuffer({ size }) {
+        const b = { destroys: 0, destroy() { this.destroys++; if (injected === "submit-destroy") throw new Error("destroy failed"); }, unmap() {},
+          mapAsync: () => injected === "map" ? Promise.reject(original) : Promise.resolve(),
+          getMappedRange: () => new ArrayBuffer(size) };
+        buffers.push(b); return b;
+      },
+      queue: {
+        submit() { if (["submit", "submit-destroy", "no-request", "deferred"].includes(injected)) throw original; },
+        onSubmittedWorkDone() {
+          if (injected === "work-throw") throw original;
+          return injected === "work-reject" ? Promise.reject(original) : Promise.resolve();
+        },
+      },
+    };
+    const context = vm.createContext({ device, encoder, state, original,
+      GPUBufferUsage: { COPY_DST: 1, MAP_READ: 2 }, GPUMapMode: { READ: 1 },
+      _softDisplayAbort() { state.aborts++; }, _softDisplayFinish() { state.finishes++; },
+      _retireFlush() {}, _jsStrike(where, error) { state.strike = error; }, disp: {},
+    });
+    vm.runInContext(`let _lost=false, _capReq=null, _softGpu=${failure !== "deferred"}, _swapCopyable=false, _wantCopyable=false;
+      const softPresentTex={width:3,height:2}, ctx={getCurrentTexture:()=>softPresentTex}, format='bgra8unorm';
+      let _pendingShadowEnc=${failure === "shadow" ? '{finish(){throw original;}}' : 'null'}, _shadowSlot=0, _shadowFlushed=0, _shadowOverflow=0;
+      ${helpers}\n${shadow}\nconst SHD={frameSubmitList:_frameSubmitList};`, context);
+    const request = () => vm.runInContext(`capturePixels().then(v=>{state.resolves++;return v;},e=>{state.rejects++;state.error=e;});`, context);
+    const run = () => vm.runInContext(`try { ${handoff} } catch(e) { ${outerCatch} }`, context);
+    const pending = failure === "no-request" ? null : request();
+    run(); await pending;
+    const succeeds = ["success", "work-reject", "work-throw"].includes(failure);
+    assert.equal(state.resolves, succeeds ? 1 : 0, failure);
+    assert.equal(state.rejects, succeeds || failure === "no-request" ? 0 : 1, failure);
+    assert.ok(buffers.every(b => b.destroys === 1), failure + ": destroy exactly once");
+    assert.equal(buffers.length, ["no-request", "deferred"].includes(failure) ? 0 : 1, failure);
+    assert.equal(vm.runInContext("_capReq", context), null, failure);
+    if (state.rejects) assert.equal(state.error, original, "original rejection survives cleanup");
+    const submitFailed = ["main", "shadow", "submit", "submit-destroy", "no-request", "deferred"].includes(failure);
+    assert.equal(state.aborts, submitFailed ? 1 : 0, failure);
+    assert.equal(state.finishes, submitFailed ? 0 : 1, failure);
+    if (submitFailed) assert.equal(state.strike, original);
+    // A following request must be usable after every failure, including deferred COPY_SRC.
+    injected = "success";
+    vm.runInContext("_softGpu=true;", context);
+    const next = request(); run(); await next;
+    assert.equal(state.resolves, succeeds ? 2 : 1, failure + ": next capture resolves");
+    assert.ok(buffers.every(b => b.destroys === 1), failure + ": no double destruction");
+  }
 });

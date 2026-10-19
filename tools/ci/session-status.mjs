@@ -43,6 +43,9 @@ const git = (...args) => {
  *  tooling-fast's `[tooling-fast] = run <s>`, or test-bg's `= bg exit N` trailer
  *  (the only line a run that died before its reporter's summary still has). */
 export function parseVerdict(text) {
+  // Deploy owns a larger run than its nested tooling/browser summaries. Only
+  // its own terminal metadata or final gate result can establish a full pass.
+  if (/^(?:\[deploy\] |= deploy (?:start|done) )/m.test(String(text))) return deployVerdict(text);
   let last = null, bgExit = null;
   for (const line of String(text).split("\n")) {
     const m = line.match(/^(?:\[(?:tooling-fast|\d{2}:\d{2}:\d{2})\] )?= run (passed|failed|timedout|interrupted)\b(.*)$/);
@@ -59,6 +62,37 @@ export function parseVerdict(text) {
   if (bgExit !== null && bgExit !== "0") return `failed (exit ${bgExit}${last ? `; last summary: ${last}` : "; no reporter summary"})`;
   if (!last && bgExit !== null) return "exited 0 (no reporter summary)";
   return last || "no verdict yet (running, or died before its summary)";
+}
+
+function deployVerdict(text) {
+  let verdict = null, failure = null, jsonLines = null;
+  for (const line of String(text).split("\n")) {
+    if (/^= deploy start\b/.test(line) || /^\[deploy\] guard suite:/.test(line)) {
+      verdict = failure = null; jsonLines = null;
+    }
+    const done = line.match(/^= deploy done exit=(\d+)\b/);
+    if (done) { verdict = Number(done[1]) === 0 ? "passed (deploy exit 0)" : `failed (deploy exit ${done[1]})`; continue; }
+    if (/^\[deploy\] (?:ERROR|REFUSED:|FAILED\b)/.test(line)) failure = line.replace(/^\[deploy\] /, "");
+    const nested = line.match(/^(?:\[(?:tooling-fast|\d{2}:\d{2}:\d{2})\] )?= run (failed|timedout|interrupted)\b(.*)$/);
+    if (nested) failure = `${nested[1]} ${nested[2].trim()}`.trim();
+    const exit = line.match(/^= bg exit ([1-9]\d*)\s*$/);
+    if (exit) failure = `exit ${exit[1]}`;
+    const clean = line.replace(/^\[deploy\] /, "");
+    if (!jsonLines && /^\{/.test(clean)) jsonLines = [];
+    if (jsonLines) {
+      jsonLines.push(clean);
+      try {
+        const result = JSON.parse(jsonLines.join("\n"));
+        if (result.gate === "only" && Array.isArray(result.verified) && result.verified.includes("tooling-fast")
+          && result.pushed === false && Array.isArray(result.notCovered) && Number.isFinite(result.seconds)) {
+          verdict = "passed (deploy gate only)";
+        }
+        jsonLines = null;
+      } catch (_) { if (jsonLines.length > 1000) jsonLines = null; /* incomplete pretty JSON is not a verdict */ }
+    }
+  }
+  if (failure) return `failed (deploy: ${failure})`;
+  return verdict || "no deploy verdict yet (running, or died before its summary)";
 }
 
 export function collect() {

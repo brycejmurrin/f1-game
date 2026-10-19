@@ -2256,7 +2256,7 @@ const api = {
     const s = GameStore.store;
     // `foreign` = cross-tab invalidations applied (store.js onForeignWrite): non-zero means a second tab is in play.
     const m = s.mirror || {};
-    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0, mirror: { supported: !!m.supported, restored: m.restored | 0, flushed: m.flushed | 0, failed: m.failed | 0, pending: m.pending | 0 } };
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0, mirror: { supported: !!m.supported, restored: m.restored | 0, flushed: m.flushed | 0, failed: m.failed | 0, pending: m.pending | 0, inFlight: m.inFlight | 0 } };
   },
 
   // settingsFile(mode) — the SETTINGS FILE object (js/ui/settings-export.js):

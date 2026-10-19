@@ -1,3 +1,4 @@
+import { presentationDeadline, presentationDiagnostics, installPickerReceipt, pickerReceiptStatus } from "./presentation.mjs";
 import { runtimeMemory } from "../perf/runtime-memory.mjs";
 // mem-census.mjs — the page half of the memory census, shared by
 // @doc Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec.
@@ -114,22 +115,25 @@ export async function censusAfterGc(page, cdp) {
   return { ...census, runtimeMemory: await runtimeMemory(cdp) };
 }
 
-/** Leak verdict over the forced-GC heap readings (MB) of repeated visits to ONE
- *  circuit, `heaps[0]` the first visit. The first visit is warm-up and the step
- *  into the second is excluded; of the intervals after that the SMALLEST is the
- *  growth. A leak adds its per-pick growth to EVERY interval (#773: ~17 MB a pick;
- *  2026-10-04: 14-26 MB a round), while a bounded one-time warm-up step lands in
- *  at most a few of them — on Metal's WebGPU path the live world's CPU vertex
- *  mirrors are kept once TLX's mirror pass has compiled and the step lands at
- *  visit 2 or 3 (docs/notes/TRACK-SWITCH-METAL-2026-10-17.md), so a single
- *  interval compared against the bound failed on timing alone. Needs >= 3 readings. */
+/** Growth evidence for forced-GC heap readings (MiB) from repeated visits to
+ * one circuit. Exclude the first-visit warm-up interval. Median growth catches
+ * repeated drift despite an occasional flat/negative interval; min is retained
+ * for consumers of the old policy. A meaningful policy check needs five visits:
+ * three post-warm-up intervals tolerate one measured late warm-up step.
+ * Passing this sampled budget does not establish that the application is leak-free. */
 export function sustainedGrowthMB(heaps) {
   if (!Array.isArray(heaps) || heaps.length < 3 || heaps.some((h) => typeof h !== "number" || !isFinite(h))) {
     throw new Error("sustainedGrowthMB needs >= 3 finite heap readings, got " + JSON.stringify(heaps));
   }
-  const intervals = [];
-  for (let i = 2; i < heaps.length; i++) intervals.push(+(heaps[i] - heaps[i - 1]).toFixed(1));
-  return { intervals, min: Math.min(...intervals) };
+  const rawIntervals = [];
+  for (let i = 2; i < heaps.length; i++) rawIntervals.push(heaps[i] - heaps[i - 1]);
+  const intervals = rawIntervals.map((value) => +value.toFixed(1));
+  const ordered = [...rawIntervals].sort((a, b) => a - b);
+  const middle = Math.floor(ordered.length / 2);
+  const median = ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+  return { intervals, rawIntervals, min: Math.min(...intervals), median,
+    netAfterWarmupMB: heaps.at(-1) - heaps[1], visits: heaps.length,
+    policyReady: heaps.length >= 5 };
 }
 
 /** Wait for `n` animation callbacks, bounded by `timeoutMs`.
@@ -139,9 +143,11 @@ export async function waitFrames(page, n = 15, timeoutMs = 120000) {
   await page.waitForFunction(([f, k]) => window.__memCensus && window.__memCensus.frames >= f + k, [f0, n], { polling: 100, timeout: timeoutMs });
 }
 
-/** Wait until the picker's hidden warm frames have drawn circuit `id`: the
- *  "menu warm drawn <id>" Log record game.js writes when the last of them
- *  renders, newer than the "build done <id>" record pickTrack returned on.
+/** Wait for the pre-click receipt's final warm submission to complete for `id`.
+ *  The "menu warm drawn <id>" record occurs BEFORE that draw, so it identifies
+ *  the present to observe rather than proving successful display completion.
+ *  The receipt freezes a scene-specific target; the paused picker may never
+ *  submit another frame after its final warm draw.
  *  pickTrack returns at "build done"; the picker then prepares car assets
  *  (~5 s on software GL), waits MENU_IDLE_MS of quiet and only then arms two
  *  hidden warm frames. A fixed settle after the build log races that work —
@@ -150,15 +156,26 @@ export async function waitFrames(page, n = 15, timeoutMs = 120000) {
  *  before the new world drew (run 37330132243, 10 again with that wait in
  *  place). Reads the Log ring directly: no __apex call (lazyTrackEnsure). */
 export async function waitUntilDrawn(page, id, timeoutMs = 180000) {
-  await page.waitForFunction((tid) => {
-    try {
-      const recs = Log.records();
-      let built = -1;
-      for (let i = recs.length - 1; i >= 0; i--) if (String(recs[i].msg).startsWith("build done " + tid + " ")) { built = recs[i].id; break; }
-      if (built < 0) return false;
-      return recs.some((r) => r.id > built && r.msg === "menu warm drawn " + tid);
-    } catch (_) { return false; }
-  }, id, { polling: 100, timeout: timeoutMs });
+  const bounded = presentationDeadline(timeoutMs);
+  let latest = null;
+  try {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      latest = await bounded("picker receipt status", () => page.evaluate(pickerReceiptStatus, id));
+      if (Date.now() >= deadline) throw new Error("picker presentation deadline exceeded");
+      if (latest.error) throw new Error(latest.error);
+      if (latest.ok) return latest;
+      await bounded("picker poll delay", () => page.waitForTimeout(Math.min(100, deadline - Date.now())));
+    }
+    throw new Error("picker presentation deadline exceeded");
+  } catch (error) {
+    error.presentation = { ok: false, receipt: latest };
+    try { error.presentation.diagnostics = await presentationDeadline(1000)("failure diagnostics", () => page.evaluate(presentationDiagnostics)); } catch (_) { /* page may be blocked */ }
+    throw error;
+  } finally {
+    // Do not let cleanup of a blocked page hide the bounded failure.
+    try { await presentationDeadline(1000)("restore observer", () => page.evaluate(() => window.__pickerPresentation?.restore?.())); } catch (_) { /* best effort */ }
+  }
 }
 
 /** Let the page run for `ms` of its own clock (the picker draws the world in
@@ -174,6 +191,13 @@ export async function settle(page, ms) {
  *  Opens the picker first when it is closed. Resolves when the newest
  *  "build done" log line is this circuit and the world is installed. */
 export async function pickTrack(page, id, timeoutMs = 240000) {
+  const bounded = presentationDeadline(timeoutMs);
+  const rawPage = page;
+  page = new Proxy(rawPage, { get(target, key) {
+    const value = target[key];
+    return typeof value === "function"
+      ? (...args) => bounded("picker " + String(key), () => value.apply(target, args)) : value;
+  } });
   const open = await page.evaluate(() => { const s = document.getElementById("select"); return !!s && !s.hidden; });
   if (!open) {
     await page.evaluate(() => document.getElementById("mb-race").click());
@@ -181,6 +205,7 @@ export async function pickTrack(page, id, timeoutMs = 240000) {
   }
   const idx = await page.evaluate((tid) => Tracks.LIST.findIndex((t) => t.id === tid), id);
   if (idx < 0) throw new Error("unknown circuit " + id);
+  await page.evaluate(installPickerReceipt, id);
   await page.evaluate((i) => {
     const row = document.querySelector('.track-row[data-track-idx="' + i + '"]');
     if (!row) throw new Error("no picker row for index " + i);
@@ -195,7 +220,7 @@ export async function pickTrack(page, id, timeoutMs = 240000) {
   // the same task that logs "build done", and waitUntilDrawn() follows anyway.
   await page.waitForFunction((tid) => {
     try {
-      const done = Log.records().filter((r) => String(r.msg).startsWith("build done "));
+      const done = Log.records().filter((r) => r.id > (window.__pickerPresentation?.after ?? Infinity) && String(r.msg).startsWith("build done "));
       return done.length > 0 && String(done[done.length - 1].msg).startsWith("build done " + tid + " ");
     } catch (_) { return false; }
   }, id, { polling: 100, timeout: timeoutMs });

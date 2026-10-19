@@ -6101,9 +6101,17 @@ const TLX = (function () {
             try {
               const inf = renderer && renderer.info;
               if (inf) {
-                o.progs = (inf.programs && inf.programs.length) || 0;
+                o.progs = inf.memory && typeof inf.memory.programs === "number" ? inf.memory.programs : null;
                 if (inf.memory) {
                   o.rGeo = inf.memory.geometries; o.rTex = inf.memory.textures;
+                  // Copy only existing primitive resource telemetry (bytes stay bytes).
+                  o.resources = {};
+                  for (const key of ["total", "geometries", "textures", "texturesSize", "programs", "programsSize",
+                    "attributes", "attributesSize", "indexAttributes", "indexAttributesSize", "storageAttributes", "storageAttributesSize",
+                    "indirectStorageAttributes", "indirectStorageAttributesSize", "readbackBuffers", "readbackBuffersSize",
+                    "renderTargets", "uniformBuffers", "uniformBuffersSize"]) {
+                    if (typeof inf.memory[key] === "number") o.resources[key] = inf.memory[key];
+                  }
                   // Uniform buffers three holds. With the frame block in
                   // objectGroup this scaled with draws (one clone per pooled
                   // mesh, plus one per lamp array); shared, it is one per
