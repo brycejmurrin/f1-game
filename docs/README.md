@@ -58,10 +58,11 @@ Local screenshot galleries: [builder and viewer workflow](notes/LOCAL-SURVEY-GAL
 |---|---|
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs vs wrap — which `apex_*` exists, which stay CLI-only, and why the ones that left, left. |
 | [EVIDENCE-STORAGE.md](EVIDENCE-STORAGE.md) | Publish generated screenshots and galleries as checksum-verified release assets, with source provenance, durable links and retention guidance. |
+| [evidence/historical-catalog.json](evidence/historical-catalog.json) | Reviewed historical capture selections, retention reasons, release links and download-verification receipts. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
 | [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 191 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
-| [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit, committed on `track-survey-assets`, not here); written by `tools/lighting/look-survey-sheet.py`. |
+| [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit, archived as release assets); written by `tools/lighting/look-survey-sheet.py`. |
 
 ## `notes/` — the dated ledgers
 
@@ -84,7 +85,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/SECOND-BRAIN-2026-10-14.md](notes/SECOND-BRAIN-2026-10-14.md) | Obsidian and agent-memory tools (Basic Memory, Mem0, Zep/Graphiti, Letta, MCP memory, Notion, Logseq) weighed for an agent fleet: keep knowledge in git, Obsidian as a human viewer only; the context-rot and memory-poisoning evidence behind the hidden-Unicode, memory `source:` and `Supersedes:` guards. |
 | [notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md](notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md) | Round-2 whole-tree hunt on the 2026-10-09 tip: 79 findings by area with where each went (merged PR, sibling #1289, handed, open), the method, and the lessons (auto-merge skips the non-required geometry sweeps; stale-baseline ratchets; test-group registration). |
 | [notes/BUG-HUNT-OPUS-2026-10-10.md](notes/BUG-HUNT-OPUS-2026-10-10.md) | Six read-only Opus hunters on the 78cb4831be tip, one per area: the race-runtime items fixed in their PR (hidden-tab intro clock, pit-garage pause, spotter churn), the renderer / track / physics / menus findings with each hunter's confidence, and the lane for each follow-up. |
-| [notes/REPO-SIZE-2026-10.md](notes/REPO-SIZE-2026-10.md) | What makes a clone big, on FULL history: 1,080 MB packed, 892 MB of it history-only (90% PNG, mostly a June 2026 screenshot burst); why a shallow agent clone measures it wrong; the 15.6 MB blobless clone; why the history rewrite is parked |
+| [notes/REPO-SIZE-2026-10.md](notes/REPO-SIZE-2026-10.md) | Full-history measurements, partial-clone guidance, and the October 19 local rewrite rehearsal: clone-pack savings, retained PR objects, changed commit identities and signature loss. |
 | [notes/NIGHT-MAST-POOLS-2026-10-05.md](notes/NIGHT-MAST-POOLS-2026-10-05.md) | Why Qatar/Bahrain nights read washed out (flood-mast throw radius × the fleet POOL RADIUS 1.9, cone-less LAMP BOUNCE, the mast foot inside the 37° core, the moon key), the BEAM CORE knob, the shipped preset table, before/after bake ratios and live `lightState`. |
 | [notes/MIXED-DYNAMIC-WEATHER-SURVEY-2026-10-05.md](notes/MIXED-DYNAMIC-WEATHER-SURVEY-2026-10-05.md) | What weather already ships (enum + continuous wetness + MIXED one-shot arc), gaps vs evolving sessions / local wet / HUD, ranked PR list; starter: MIXED `capPlanDur` so short races finish the walk. |
 | [notes/REAL-RACE-2026-09-27.md](notes/REAL-RACE-2026-09-27.md) | REAL RACE (Data Hub RACE IT): the OpenF1 bodies a race script needs and their measured sizes, the script shape, the director's arm / pace-loop / flag design over the live field, and the v1 limits |

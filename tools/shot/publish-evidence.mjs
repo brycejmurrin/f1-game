@@ -25,7 +25,7 @@ const inside = (base, target) => {
   const rel = path.relative(base, target);
   return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 };
-const runDefault = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], ...opts });
+const runDefault = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], maxBuffer: 16 * 2 ** 20, ...opts });
 
 export function inspectEvidence({ root = ROOT, dir, label }) {
   if (!/^[a-z0-9][a-z0-9-]{0,47}$/.test(label || "")) throw new Error("--label must be 1–48 lowercase letters, digits or hyphens");
@@ -91,14 +91,26 @@ export function prepareEvidence(opts, run = runDefault) {
     } finally { fs.closeSync(fd); fs.closeSync(dest); }
     return { path: f.path, bytes: size, sha256: digest.digest("hex") };
   });
-  const manifest = { schemaVersion: 1, repository: REPOSITORY, storageAnchorSha: STORAGE_ANCHOR, label: plan.label, createdAt: (opts.now || new Date()).toISOString(), ...provenance, files };
+  const directAssets = [];
+  if (opts.linkableFiles) {
+    if (!Array.isArray(opts.linkableFiles) || opts.linkableFiles.length > 997) throw new Error("select at most 997 linkable images");
+    for (const selected of new Set(opts.linkableFiles)) {
+      const file = files.find((f) => f.path === selected);
+      if (!file || !/\.(png|jpe?g|webp|gif|avif)$/i.test(file.path)) throw new Error("linkable files must be selected images");
+      const basename = path.basename(file.path).toLowerCase().replace(/[^a-z0-9.-]/g, "-").slice(-100);
+      const name = `image-${file.sha256}-${basename}`;
+      if (!directAssets.some((a) => a.name === name)) fs.copyFileSync(path.join(stage, "files", file.path), path.join(work, name));
+      directAssets.push({ path: file.path, name, sha256: file.sha256 });
+    }
+  }
+  const manifest = { schemaVersion: 1, repository: REPOSITORY, storageAnchorSha: STORAGE_ANCHOR, label: plan.label, createdAt: (opts.now || new Date()).toISOString(), ...provenance, files, ...(directAssets.length ? { directAssets } : {}) };
   const manifestName = `${plan.label}-manifest.json`;
   fs.writeFileSync(path.join(work, manifestName), JSON.stringify(manifest, null, 2) + "\n");
   fs.copyFileSync(path.join(work, manifestName), path.join(stage, "manifest.json"));
   const archiveName = `${plan.label}-${sourceSha.slice(0, 12)}.tar.gz`;
   try { run("tar", ["-czf", path.join(work, archiveName), "-C", stage, "."]); }
   finally { fs.rmSync(stage, { recursive: true }); }
-  const assets = [archiveName, manifestName].map((name) => {
+  const assets = [...new Set([archiveName, manifestName, ...directAssets.map((a) => a.name)])].map((name) => {
     const bytes = fs.statSync(path.join(work, name)).size;
     if (bytes >= MAX_ASSET_BYTES) throw new Error("each asset must be under 2 GiB; split evidence into smaller captures");
     return { name, bytes, sha256: hashFile(path.join(work, name)) };
@@ -128,7 +140,7 @@ export function publishEvidence(receiptPath, run = runDefault) {
   const dir = path.dirname(receiptPath);
   const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
   if (receipt.schemaVersion !== 1 || receipt.repository !== REPOSITORY || receipt.storageAnchorSha !== STORAGE_ANCHOR || !/^evidence-[a-z0-9-]+$/.test(receipt.tag) || !/^[a-f0-9]{40}$/.test(receipt.sourceSha)) throw new Error("invalid evidence receipt");
-  if (!Array.isArray(receipt.assets) || receipt.assets.length !== 3) throw new Error("invalid evidence assets");
+  if (!Array.isArray(receipt.assets) || receipt.assets.length < 3 || receipt.assets.length > 1000) throw new Error("invalid evidence assets");
   for (const asset of receipt.assets) {
     if (path.basename(asset.name) !== asset.name || !/^[a-z0-9.-]+$/.test(asset.name)) throw new Error("invalid asset filename");
     if (hashFile(path.join(dir, asset.name)) !== asset.sha256) throw new Error(`local asset changed: ${asset.name}`);
@@ -138,7 +150,7 @@ export function publishEvidence(receiptPath, run = runDefault) {
   if (!release) {
     const tag = optionalApi(`repos/${REPOSITORY}/git/ref/tags/${receipt.tag}`, run);
     if (tag && (tag.object?.type !== "commit" || tag.object?.sha !== STORAGE_ANCHOR)) throw new Error("existing evidence tag points at another storage anchor");
-    const notes = `Generated evidence for ${receipt.label}.\n\nPackaging checkout: ${receipt.sourceSha}\nWorking tree dirty at packaging: ${receipt.dirty}\nStorage anchor: ${STORAGE_ANCHOR}\n\nThe checkout describes packaging provenance; consult producer metadata to establish the actual captured revision.\n\nDownload the three uploaded assets, not the automatic source-code archives (those contain only the storage scaffold). Verify with sha256sum -c, then extract and open files/index.html when present. The manifest records file hashes and provenance.\n\nEvidence storage policy: docs/EVIDENCE-STORAGE.md\n`;
+    const notes = `Generated evidence for ${receipt.label}.\n\nPackaging checkout: ${receipt.sourceSha}\nWorking tree dirty at packaging: ${receipt.dirty}\nStorage anchor: ${STORAGE_ANCHOR}\n\nThe checkout describes packaging provenance; consult producer metadata to establish the actual captured revision.\n\nDownload the uploaded archive, manifest and checksum file, not the automatic source-code archives (those contain only the storage scaffold). Additional image assets support direct documentation links. Verify with sha256sum -c, then extract and open the gallery under files/ when present. The manifest records file hashes, provenance and direct image mappings.\n\nEvidence storage policy: docs/EVIDENCE-STORAGE.md\n`;
     const notesPath = path.join(dir, "release-notes.md");
     fs.writeFileSync(notesPath, notes);
     // No --clobber, edits or deletions. gh stages assets in a draft before publication.

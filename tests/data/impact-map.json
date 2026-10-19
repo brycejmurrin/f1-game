@@ -6484,6 +6484,7 @@
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
+        "tests/unit/publish-evidence.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
