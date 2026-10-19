@@ -259,7 +259,9 @@ test("--changed selector: one case per branch (empty, docs-only, tracked, unmatc
   assert.equal(docs.reason, "docs-only");
   assert.deepEqual(docs.files, ["tests/unit/docs-integrity.test.mjs"], "prose runs only the docs tests");
 
-  const tracked = sel(["package.json"]);
+  // A dependencies edit is not scripts-only (#2890), so it still fails safe; pinned here so the case never reads the checkout's real diff.
+  const pkgPair = { name: "f1-game", scripts: { a: "1" }, dependencies: { x: "1" } };
+  const tracked = sel(["package.json"], { filePairs: { "package.json": { before: JSON.stringify(pkgPair), after: JSON.stringify({ ...pkgPair, dependencies: { x: "2" } }) } } });
   assert.equal(tracked.reason, "tracked");
   assert.equal(tracked.because, "package.json");
   assert.deepEqual(tracked.files, all, "a selector-machinery edit fails safe to the whole floor");
