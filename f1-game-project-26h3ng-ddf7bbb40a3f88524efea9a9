@@ -1,0 +1,1 @@
+1792389062	Cursor Agent	#2890 #1712 tooling-fast --changed narrow + inputs-hash verdict cache; OWNED tools/ci/tooling-fast.mjs(selectToolingFastChanged+) tools/ci/select-specs.mjs(TRACKED) tools/ci/inputs-hash.mjs .github/workflows/ci.yml(cache lookup) tests/unit/tooling-fast* tests/unit/inputs-hash*  [claude/f1-game-project-26h3ng; session ddf7bbb40a3f88524efea9a9]
