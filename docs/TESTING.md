@@ -1329,20 +1329,6 @@ the structural floor; its files are listed in `tests/groups.json`.
 
 The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`.
 
-Focused browser-free diagnostics contracts also run in `tooling-fast`:
-
-| Unit file | Coverage |
-|---|---|
-| `tests/unit/fleet-bus.test.mjs` | `fleet-bus.mjs`: merge-lease rules (acquire, renew, release, break, expiry, TTL clamp), bus line grammar and addressing, and a real-git race on a local bare origin (one holder; cursor reads return only new lines). |
-| `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
-| `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
-| `tests/unit/body-styles.test.mjs` | Livery BODY styles: every concept chassis builds, nose/cover/pod anchors move, team swaps resolve when gated, flap nose-droop floor holds. ~3 s. |
-| `tests/unit/fleet-tick.test.mjs` | `fleet-tick.mjs`: board-row compaction, state diff (changed fields, new/gone PRs, ship/Pages, new session flags) and the 40-row cap, fixtures only. |
-| `tests/unit/i18n-lint.test.mjs` | Locale contribution lint (`tools/check/i18n-lint.mjs`): fixture locales (valid / missing-key / bad-placeholder / wrong-plural), ship `locales/` clean, `--guard` on `tests/data/i18n-migrated.json`. |
-| `tests/unit/session-ledger.test.mjs` | Transcript → minutes by tool/family (`tools/ci/session-ledger.mjs --from-transcript`); redaction fixture (no tokens, emails, or paths outside the repo). |
-| `tests/unit/live-run-check.test.mjs` | Advisory WARN when a push would cancel live ci.yml runs (`tools/ci/live-run-check.mjs`); bash-guard wiring is a Refs follow-up. |
-| `tests/unit/test-bg-waste.test.mjs` | `test-bg.mjs` prints `WASTE:` when a browser group starts on a docs-only diff. |
-
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 
 ```sh
