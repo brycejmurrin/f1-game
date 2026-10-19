@@ -134,8 +134,10 @@ export function presentMcpResult(result, { root = process.cwd(), tool = 'mcp', l
   // exceeded full on 1-6 KB results across apex-tools and apex-lsp), so the original wins there too.
   const native = { ...result, _meta: { ...result._meta, 'apex/agent-output': { outputLevel: level, artifact } } };
   const wrapped = { content: [{ type: 'text', text: JSON.stringify(envelope) }], structuredContent: envelope, ...(Object.hasOwn(result, 'isError') ? { isError: result.isError } : {}) };
-  // Both sides as sent: the envelope travels twice (text mirror + structuredContent).
-  if (!Object.hasOwn(result._meta ?? {}, 'apex/agent-output') && !result.content?.some(block => ['image', 'audio', 'resource'].includes(block.type)) && JSON.stringify(native).length <= JSON.stringify(wrapped).length) return native;
+  // Both sides as sent. A summary that saves under a third is not worth the excerpt: measured
+  // 2026-10-19, lsp_definition body:true compacted 2451 -> ~2050 B but cut the requested body,
+  // and recovering it cost an output_read of ~2.4 KB.
+  if (!Object.hasOwn(result._meta ?? {}, 'apex/agent-output') && !result.content?.some(block => ['image', 'audio', 'resource'].includes(block.type)) && JSON.stringify(native).length <= JSON.stringify(wrapped).length * 1.5) return native;
   return wrapped;
 }
 function openOutputArtifact(root, artifact) {

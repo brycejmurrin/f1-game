@@ -255,6 +255,10 @@ test('a mid-size answer the summary cannot shrink stays native; one it can shrin
   assert.deepEqual(kept.structuredContent, flat);
   assert.equal(kept.isError, false);
   assert.ok(kept._meta['apex/agent-output'].artifact.bytes > 1024);
+  // A bounded LSP body (~2 KB text): excerpting it would save little and force a re-read.
+  const body = Array.from({ length: 30 }, (_, i) => `    ${10 + i}  const line${i} = compute(${i}); // ${'x'.repeat(30)}`).join('\n');
+  const lsp = { content: [{ type: 'text', text: `1 definition\n${body}` }] };
+  assert.equal(presentMcpResult(lsp, { root }).content[0].text, lsp.content[0].text);
   // Many long rows: the summary is far smaller, so the envelope still wins.
   const rows = Array.from({ length: 200 }, (_, id) => ({ id, detail: 'x'.repeat(200) }));
   const big = { content: [{ type: 'text', text: JSON.stringify({ rows }) }], structuredContent: { rows } };
