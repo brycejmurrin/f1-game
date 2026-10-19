@@ -15399,7 +15399,6 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/select-screen-fixes.test.mjs",
-        "tests/unit/track-designer-dom.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "drsZoneRangeHtml": [
