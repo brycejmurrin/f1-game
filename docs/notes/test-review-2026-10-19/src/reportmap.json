@@ -15,4 +15,15 @@
  "6260692878": ["tooling-4", "final"],
  "6260849328": ["tracks-2.part-1ofn", "partial 1/n"],
  "6260857784": ["tooling-2", "final"],
- "6260858521": ["tracks-1", "final"]}
+ "6260858521": ["tracks-1", "final"],
+ "6260865509": ["race-1.part-1ofn", "partial 1/n (49/49 files read and run)"],
+ "6260874560": ["physics-2.part-3aof3", "partial 3a/3 (continuation physics-2b; stopped at the 120k reviewer cap)"],
+ "6260879946": ["render-1.amended-debugger", "final (amended debugger column; supersedes the debugger column of reports/render-1.md)"],
+ "6260884152": ["ui-2.part-1ofn", "partial 1/n (stopped at the 120k reviewer cap)"],
+ "6260904751": ["render-3.part-2of2", "partial 2/2 (specs)"],
+ "6260935083": ["tracks-2.addendum-specs", "partial (addendum: the pending spec runs finished)"],
+ "6260959859": ["tooling-1", "final"],
+ "6260962676": ["tooling-3", "final"],
+ "6261047255": ["car-2.part-1ofn", "partial 1/n (46/46 run, 1 environment fail)"],
+ "6261061793": ["modes-1", "final"],
+ "6261099563": ["net", "final"]}
