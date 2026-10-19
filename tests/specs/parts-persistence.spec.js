@@ -12,7 +12,7 @@
 // The team-isolation test's reload was only there to make a stored team the
 // live one, which pinFreePlay + #mb-race now does in place. openSetup() walks
 // back to the title first and starts from forgotten parts, as clearState on a
-// fresh page did. UNVERIFIED IN A BROWSER at conversion time.
+// fresh page did..
 import { sharedTest as test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";

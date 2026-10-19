@@ -229,6 +229,11 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.deepEqual(parts.pkgF, ["package.json"]);
   assert.deepEqual(parts.shellF, ["index.html"]);
   assert.deepEqual(parts.ratchetF, ["tests/data/ratchets.json"]);
+
+  // The agent output catalog is derived (gen-output-surface.mjs); its policy source is not.
+  assert.equal(cure(["docs/agent-output/catalog.json", "tools/README.md"]), true, "two tool indexes regenerate together");
+  assert.deepEqual(cureableConflicts(["docs/agent-output/catalog.json"]).catalogF, ["docs/agent-output/catalog.json"]);
+  assert.equal(cure(["docs/agent-output/catalog.json", "docs/agent-output/policies.json"]), false, "policies.json is hand-written");
 });
 
 test("prose docs are never cured: no doc carries generated ladder digits any more", () => {

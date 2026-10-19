@@ -24,7 +24,7 @@
 // session (quitToMenu calls netPlay.stop; netStop() drops the fake peer too) —
 // pins the default car (McLaren seat 0: the loopback peers below sit in Red
 // Bull and Ferrari seats, and the seat rule would move a colliding local car),
-// and races. UNVERIFIED IN A BROWSER at conversion time.
+// and races..
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 

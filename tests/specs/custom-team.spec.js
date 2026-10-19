@@ -7,7 +7,7 @@
 // custom car cached by an earlier test is rebuilt and captured just the same.
 // The livery-buttons test used to seed storage from an init script and boot;
 // on a shared page the seed goes through the store and #mb-race re-reads the
-// team. UNVERIFIED IN A BROWSER at conversion time.
+// team..
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 

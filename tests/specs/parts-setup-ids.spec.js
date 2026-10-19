@@ -6,7 +6,7 @@
 // walks the shared page back to the title first (toMenu) — the TEAM-tab tests
 // leave a picker, MY TEAM or the garage itself up, and the route tests assert
 // which screens are hidden, so the walk back is what makes those assertions
-// mean what they did on a fresh page. UNVERIFIED IN A BROWSER at conversion time.
+// mean what they did on a fresh page..
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
 

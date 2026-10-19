@@ -9,8 +9,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -136,7 +136,7 @@ function hasViewDeps() {
 test("slider-effect-view.py isolates changed pixels on a synthetic pair", {
   skip: hasViewDeps() ? false : "Pillow/numpy not installed (GitHub-hosted CI)",
 }, () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "slider-effect-"));
+  const dir = mkTmpDir("slider-effect-");
   try {
     const mk = spawnSync("python3", ["-c", `
 from pathlib import Path
@@ -350,7 +350,7 @@ a.save(d / (n + "a.png")); b.save(d / (n + "b.png"))
 }
 
 test("slider-effect-view.py --batch-summary produces summary.png from a synthetic batch", { skip: NO_VIEW_DEPS }, () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "se-batch-"));
+  const dir = mkTmpDir("se-batch-");
   try {
     synthPair(dir);
     const files = { a: path.join(dir, "a.png"), b: path.join(dir, "b.png") };
@@ -374,7 +374,7 @@ test("slider-effect-view.py --batch-summary produces summary.png from a syntheti
 });
 
 test("slider-effect-view.py writes filter/heat/diff/sheet/view.json and signs the diff", { skip: NO_VIEW_DEPS }, () => {
-  const tmp = mkdtempSync(path.join(tmpdir(), "se-view-"));
+  const tmp = mkTmpDir("se-view-");
   try {
     synthPair(tmp);
     const out = path.join(tmp, "out");

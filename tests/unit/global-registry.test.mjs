@@ -145,6 +145,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts
   "js/workers/bitmap-decode-client.js": ["__APEX_BUILD"], // stamps the bitmap decode Worker's URL like build-client
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
+  "js/agent/apex-gpu-capture.js": ["SPECTOR"], // vendored Spector.js bundle (vendor/gpu-capture); window["SPECTOR"] after enable (#2964)
   "js/render/three/tlx.js": ["__apexReportError", "XRWebGLLayer"], // shell error card; WebXR immersive layer (browser API)
   "js/render/glx/glx.js": ["__apexReportError"], // shell error card: the third visible context loss says so, like TLX
   "js/xr/xr-session.js": ["XRRigidTransform"], // WebXR recenter offset (browser API)
@@ -232,14 +233,23 @@ test("call-time reads resolve to SOME manifest global, or a documented external"
 // way — an entry here is a permanent blind spot in the registry.
 const KNOWN_UNSCANNABLE_SITES = [];
 
+const unscannableSites = (files, known) => Object.entries(files)
+  .flatMap(([f, r]) => r.unscannable.map((u) => `${f}:${u.line}`))
+  .filter((s) => !known.includes(s));
+
 test("the unscannable window[<expr>] class stays extinct", () => {
-  const sites = Object.entries(graph.files)
-    .flatMap(([f, r]) => r.unscannable.map((u) => `${f}:${u.line}`))
-    .filter((s) => !KNOWN_UNSCANNABLE_SITES.includes(s));
+  const sites = unscannableSites(graph.files, KNOWN_UNSCANNABLE_SITES);
   assert.deepEqual(sites, [],
     "dynamic window[expr] access defeats the whole registry — name the global " +
     "statically; if truly unavoidable, record the site in KNOWN_UNSCANNABLE_SITES " +
     "as \"file:line\" with a comment saying why it cannot be static");
+});
+
+test("positive control: an unscannable site is reported unless baselined", () => {
+  // KNOWN_UNSCANNABLE_SITES is empty today, so the failure branch above has never run.
+  const files = { "fixture-a": { unscannable: [{ line: 7 }] }, "fixture-b": { unscannable: [] } };
+  assert.deepEqual(unscannableSites(files, []), ["fixture-a:7"]);
+  assert.deepEqual(unscannableSites(files, ["fixture-a:7"]), []);
 });
 
 // Every `window.__X = …` the shipped code writes, with ONE file that reads it

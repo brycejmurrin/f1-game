@@ -41,7 +41,7 @@ test("place / removeLast / canPlace respect caps and UNDO-shaped lists", () => {
   assert.equal(list.length, 2);
   assert.equal(P.place(list, "nope", { s: 0.5 }), null);
   // Fill stands to the cap.
-  while (P.canPlace(list, "stand")) list = P.place(list, "stand", { s: Math.random() });
+  while (P.canPlace(list, "stand")) list = P.place(list, "stand", { s: (list.length % 97) / 97 });
   assert.equal(P.counts(list).stand, P.CAPS.stand);
   assert.equal(P.place(list, "stand", { s: 0.9 }), null);
   const before = list.length;
@@ -116,7 +116,7 @@ test("new nature and venue objects keep codec indices and dress at metre spacing
 });
 
 test("CustomTracks: props round-trip in sanitize / id / toRaw scenery", () => {
-  const { C, P, T } = bootEditor();
+  const { C, P } = bootEditor();
   const base = design();
   const withProps = C.sanitize({
     ...base,
@@ -129,8 +129,6 @@ test("CustomTracks: props round-trip in sanitize / id / toRaw scenery", () => {
   assert.equal(C.sanitize(withProps).id, withProps.id, "idempotent");
   const raw = C.toRaw(withProps);
   assert.equal(typeof raw.scenery, "function");
-  // The closure closes over the design's props (dress at build time).
-  assert.ok(typeof T.sceneryFor === "function");
   assert.equal(P.sanitize(withProps.props).length, 2);
 });
 

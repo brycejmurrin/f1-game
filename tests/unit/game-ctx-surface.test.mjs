@@ -116,14 +116,29 @@ test("the usage extractor finds the G reference sites it is supposed to check", 
   assert.ok(destructures > 8, `only ${destructures} \`const {…} = ctx\` destructures extracted`);
 });
 
+/** Split the dead-member rows ("name (js/game.js:N)") against the baseline set. */
+function judgeDead(dead, known) {
+  return {
+    surprises: dead.filter((d) => !known.has(d.split(" ")[0])),
+    gone: [...known].filter((n) => !dead.some((d) => d.startsWith(n + " "))),
+  };
+}
+
 test("no NEW G member is published for a consumer that does not exist", () => {
   const dead = deadMembers().map((m) => `${m.name} (js/game.js:${m.line})`).sort();
-  const surprises = dead.filter((d) => !KNOWN_UNREAD.has(d.split(" ")[0]));
+  const { surprises, gone } = judgeDead(dead, KNOWN_UNREAD);
   assert.deepEqual(surprises, [],
     "a G member is declared but no module reads it — either wire the consumer or drop the member; " +
     "this is the `countT` defect with the arrow reversed");
-  const gone = [...KNOWN_UNREAD].filter((n) => !dead.some((d) => d.startsWith(n + " ")));
   assert.deepEqual(gone, [], "a baselined unread member now has a reader (or was removed) — delete it from KNOWN_UNREAD");
+});
+
+test("positive control: the KNOWN_UNREAD judge fails on both drift directions", () => {
+  const dead = ["orphan (js/game.js:12)"];
+  // KNOWN_UNREAD is empty today, so neither failure branch above has ever run.
+  assert.deepEqual(judgeDead(dead, new Set()), { surprises: dead, gone: [] }, "an unbaselined unread member is a surprise");
+  assert.deepEqual(judgeDead(dead, new Set(["orphan"])), { surprises: [], gone: [] }, "a baselined one passes");
+  assert.deepEqual(judgeDead([], new Set(["orphan"])), { surprises: [], gone: ["orphan"] }, "a baselined member that gained a reader is flagged");
 });
 
 test("tsc accepts every module's use of G against types/game-ctx.d.ts", (t) => {

@@ -23,6 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { scan, RUNTIME_IDS } from "../../tools/check/shell-ids.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -42,7 +43,7 @@ test("no shell id is declared twice", () => {
 });
 
 test("a duplicated shell id is caught", () => {
-  const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "apex-shell-dup-"));
+  const tmp = mkTmpDir("apex-shell-dup-");
   try {
     fs.mkdirSync(path.join(tmp, "js"));
     fs.writeFileSync(path.join(tmp, "index.html"),
@@ -64,7 +65,7 @@ test("the check actually resolves the shell, not an empty set", () => {
 test("a renamed shell id is caught", () => {
   // The failure this exists for, exercised on a scratch copy of the real tree
   // rather than trusted. Uses the mover's own idiom: prove the guard bites.
-  const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "apex-shell-ids-"));
+  const tmp = mkTmpDir("apex-shell-ids-");
   try {
     fs.mkdirSync(path.join(tmp, "js"));
     fs.writeFileSync(path.join(tmp, "index.html"), '<div id="kept"></div>\n');
@@ -76,7 +77,7 @@ test("a renamed shell id is caught", () => {
 });
 
 test("isolated cockpit document IDs are checked against their own host", () => {
-  const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "apex-cockpit-host-"));
+  const tmp = mkTmpDir("apex-cockpit-host-");
   try {
     fs.mkdirSync(path.join(tmp,"js/camera"),{recursive:true});
     fs.writeFileSync(path.join(tmp,"index.html"),'<div id="view"></div>');
