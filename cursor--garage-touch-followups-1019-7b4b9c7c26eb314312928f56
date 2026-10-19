@@ -1,0 +1,1 @@
+1792387326	Bryce Murrin	Garage followup texture ownership correction: TLX createTexture final player anisotropy before eager source release; car-draw player texture option only; existing tlx-texture-release regression. Coordinated parent garage interactions lane; no geometry/paint-zone changes.  [cursor/garage-touch-followups-1019; session 7b4b9c7c26eb314312928f56]
