@@ -131,6 +131,8 @@ export function runGuards({
       cwd,
       encoding: "utf8",
       stdio: "inherit",
+      // Node treats inherited test context as recursion and skips all files.
+      env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "NODE_TEST_CONTEXT")),
     }),
 } = {}) {
   const roster = loadGuardFiles(root);

@@ -365,3 +365,30 @@ test("unavailable Git observations never establish a clean cacheable tree", (t) 
   assert.throws(() => unstagedTracked(repo.dir), /Cannot inspect/, "Git failure is unknown, not clean");
   assert.equal(fs.existsSync(okPath(repo.dir)), false);
 });
+
+test("the default guard runner executes every file even inside another Node test runner", (t) => {
+  const repo = scratchRepo("guards-nested-");
+  t.after(repo.rm);
+  const pass = writeTinyPass(repo.dir);
+  const fail = writeTinyPass(repo.dir, "nested-fail.test.mjs");
+  fs.writeFileSync(path.join(repo.dir, fail), 'import { test } from "node:test"; test("must run", () => { throw Error("expected fixture failure"); });');
+  guardRoster(repo.dir, [pass, fail]);
+  repo.g("add", "-A");
+  const inherited = process.env.NODE_TEST_CONTEXT;
+  try {
+    process.env.NODE_TEST_CONTEXT = "child-v8";
+    const red = runGuards({ root: repo.dir });
+    assert.equal(red.status, 1, "the failing file must produce a real red");
+    assert.equal(red.wrote, false);
+    assert.equal(checkVerdict({ root: repo.dir }).hit, false);
+    writeTinyPass(repo.dir, "nested-fail.test.mjs");
+    repo.g("add", "-A");
+    const recovered = runGuards({ root: repo.dir });
+    assert.equal(recovered.status, 0);
+    assert.equal(recovered.wrote, true, "a complete successful nested rerun can be cached");
+    assert.equal(checkVerdict({ root: repo.dir }).hit, true);
+  } finally {
+    if (inherited === undefined) delete process.env.NODE_TEST_CONTEXT;
+    else process.env.NODE_TEST_CONTEXT = inherited;
+  }
+});
