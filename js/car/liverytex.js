@@ -117,8 +117,12 @@ const LiveryTex = (function () {
     tech:   ["QUBITWARE", "NEURALIX", "CLOUDFORGE", "SYNAPSE", "VECTORA", "LATTICE"],
     energy: ["VOLTSHOT", "FUSIONFUEL", "RAPTORADE", "KINETIQ", "SURGE", "IONBLAST"],
     clean:  [],
+    // B·D8 design preview (2026-10-19). Invented names, checked against no real sponsor.
+    garage: ["TORQSMITH", "BOLTWORKS", "HEXDRIVE", "SPANNERCO", "RATCHETA", "GRIDFORGE"],
+    aero:   ["SKYWARDO", "AIRFOILX", "STRATOLUX", "VORTEXA", "JETSTRIDE", "ALTIMERA"],
+    coast:  ["SOLMARE", "DUNEWAVE", "PALMERA", "RIVIERO", "SALTLINE", "AZURIO"],
   };
-  const SPONSOR_PACK_IDS = ["default", "retro", "tech", "energy", "clean"];
+  const SPONSOR_PACK_IDS = ["default", "retro", "tech", "energy", "clean", "garage", "aero", "coast"];
   // NUMBER FONTS. Real numbers are the driver's own design — most are a bold
   // italic — so the default stays today's italic Arial Narrow. Each recipe
   // gives the CSS font for a size and how the glyph is layered.
@@ -129,6 +133,12 @@ const LiveryTex = (function () {
     narrow:  { font: (px) => "800 " + px + "px 'Arial Narrow', 'Liberation Sans Narrow', Arial, sans-serif", style: "layered" },
     rounded: { font: (px) => "900 " + px + "px Verdana, 'DejaVu Sans', Arial, sans-serif", style: "rounded" },
     outline: { font: (px) => "italic 900 " + px + "px 'Arial Narrow', Arial, sans-serif", style: "outline" },
+    // B·D8 design preview (2026-10-19): a slab serif, a typewriter mono and a
+    // heavy italic stencil — three shapes the six above do not cover. Each falls
+    // back to a face every platform ships.
+    slab:    { font: (px) => "900 " + px + "px Rockwell, 'Roboto Slab', 'DejaVu Serif', Georgia, serif", style: "layered" },
+    mono:    { font: (px) => "700 " + px + "px 'Courier New', 'DejaVu Sans Mono', 'Liberation Mono', monospace", style: "layered" },
+    rally:   { font: (px) => "italic 900 " + px + "px 'Arial Black', Impact, Arial, sans-serif", style: "stencil" },
   };
   const NUM_FONT_IDS = Object.keys(NUM_FONTS);
 
