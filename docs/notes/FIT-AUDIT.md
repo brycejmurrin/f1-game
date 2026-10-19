@@ -35,9 +35,9 @@ that basename, and the MCP-surface guard resolves tools by basename.
 | check | what | fails when |
 |---|---|---|
 | GAP | a visible cluster not touching the car (the cluster holding the chassis); value = its nearest distance to anything else | > `GAP_MM` 3 mm |
-| PENETRATION | vertices of section A inside a CLOSED piece of section B: nearest other-section face within 60 mm, normal-sign test (summed normals of tied faces at an edge/corner); only under a visible face | > `TYRE_PEN_MM` 3 mm into a tyre, else > `PEN_MM` 20 mm |
+| PENETRATION | (a) vertices of section A inside a CLOSED piece of section B: nearest other-section face within 60 mm, normal-sign test (summed normals of tied faces at an edge/corner), only under a visible face; (b) TYRES: the tyre is open lathe bands, so each wheel's tyre is fitted as an analytic annulus (axle centre, bead and tread radii, width from its rubber/sidewall faces) and any other section's vertex inside it counts, depth = distance to the nearest annulus face | (b) > `TYRE_PEN_MM` 3 mm; (a) > `PEN_MM` 20 mm |
 | ZFIGHT | visible same-facing faces (cos > 0.999) sharing no vertex, closer than 0.25 mm, of different colour or surface id; 4 samples per face | > 1 cm² per section pair |
-| OPEN | welded boundary edges on visible faces (car bodies are back-face culled, so these are see-through holes or paper rims) | > 50 mm per section |
+| OPEN | welded boundary edges on visible faces that are not SEALED (no other surface within 3 mm of the edge midpoint); cars draw doubleSided, so these are paper rims showing the shell's inside | > 50 mm per section: WARN on an absolute run, gates as NEW/WORSE under `--base` |
 
 Every threshold is `FIT` in `tools/car/lib/fit-geom.mjs` with its derivation
 (the parts-sweep optical anchor: ~6 mm/px at the audit camera, ~2 mm/px at the
@@ -48,7 +48,8 @@ Rows are keyed `team|style|check|A|B` and folded (count `xN`, worst value, its
 position in car metres, +X right, +Y up, +Z forward). `--base` charges a style
 the base cannot build (a branch-only preview option) against the base FACTORY
 car, so it is charged only for what it adds. WORSE = past the base value by the
-check's own threshold, or more failing instances.
+check's own threshold, or a count (vertices inside, face pairs, open edges,
+floating clusters) up by a quarter and at least 3.
 
 ## Blind spots
 
@@ -60,3 +61,15 @@ check's own threshold, or more failing instances.
 - PENETRATION needs a closed target; an open shell (no boundary-free piece) has
   no inside and is never penetrated. The per-car piece counts say how many are closed.
 - One pose: the baked (DRS-closed) mesh, wheels straight.
+
+## Fixtures (measured 2026-10-19 on the deploy tip, mclaren)
+
+| fixture | what the audit says vs the factory car |
+|---|---|
+| F12 Fenced Halo brow (`cockpit/style_cockpit_fenced`) | NEW `GAP halo → halo` 56.9 mm, x6: the crest vanes float over the crown (unit-tested) |
+| F10 Big Disc scoop (`brakes/style_brakes_bigdisc`) | `PENETRATION brakeDucts → tyre LF/RF` 59 mm with 110/116 vertices inside vs 74/80: WORSE by count. The factory duct is already 59 mm into the front tyre on all 11 cars |
+| F11 floor skirt (`floor/style_floor_tallfence`) | NEW `PENETRATION bodyDetail → tyre LR/RR` 18.2 mm: the skirt runs into the rear tyre |
+
+The first version tested tyres with the closed-piece rule and missed F10 and
+F11 entirely: every tyre band is open (48 boundary edges), so it had no
+inside. That is why the tyre test is analytic.

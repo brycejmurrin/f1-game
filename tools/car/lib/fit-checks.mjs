@@ -81,7 +81,7 @@ export function gaps(A) {
     const b = bestT >= 0 ? A.S.names[A.sec[bestT]] : "(nothing within " + FIT.GAP_SEARCH_MM + " mm)";
     const gapMM = bestT >= 0 ? mm(best) : FIT.GAP_SEARCH_MM;
     const bb = bbox(A, members);
-    rows.push({ check: "GAP", a: secs.join("+"), b, value: gapMM, unit: "mm", fail: gapMM > FIT.GAP_MM,
+    rows.push({ check: "GAP", a: secs.join("+"), b, value: gapMM, unit: "mm", fail: gapMM > FIT.GAP_MM, count: 1,
       where: at(from || bb.c), note: `floating cluster of ${members.length} piece(s), size ${bb.s.map((v) => mm(v)).join("x")} mm` });
   }
   const joints = [...contacts.entries()].map(([k, n]) => ({ pair: k, contacts: n })).sort((x, y) => x.pair < y.pair ? -1 : 1);
@@ -126,7 +126,7 @@ export function penetration(A) {
       for (const [t] of ties) if (A.piece[t] === q.id) { nx += A.nrm[t * 3]; ny += A.nrm[t * 3 + 1]; nz += A.nrm[t * 3 + 2]; }
       const [, cx, cy, cz] = ties[0];
       if ((x - cx) * nx + (y - cy) * ny + (z - cz) * nz >= 0) continue;
-      const a = A.S.names[p.sec], b = A.S.names[q.sec], tyre = TYRE_MATS.has(q.mat);
+      const a = A.S.names[p.sec], b = A.S.names[q.sec], tyre = false;   // tyres: tyrePenetration()
       const key = a + ">" + b + (tyre ? ":tyre" : "");
       const g = agg.get(key) || { a, b: tyre ? b + " (tyre)" : b, tyre, depth: 0, n: 0, where: null };
       g.n++;
@@ -134,10 +134,11 @@ export function penetration(A) {
       agg.set(key, g);
     }
   }
+  tyrePenetration(A, agg);
   return [...agg.values()].map((g) => {
     const lim = g.tyre ? FIT.TYRE_PEN_MM : FIT.PEN_MM, v = mm(g.depth);
     return { check: "PENETRATION", a: g.a, b: g.b, value: v, unit: "mm", fail: v > lim, where: at(g.where),
-             note: `${g.n} vertex(es) inside; limit ${lim} mm` };
+             count: g.n, note: `${g.n} vertex(es) inside; limit ${lim} mm` };
   });
 }
 
@@ -148,6 +149,62 @@ function sameLook(A, t, u) {
   return Math.abs(m.col[a * 3] - m.col[b * 3]) + Math.abs(m.col[a * 3 + 1] - m.col[b * 3 + 1]) + Math.abs(m.col[a * 3 + 2] - m.col[b * 3 + 2]) < 0.06;
 }
 
+// The tyre is a lathe of OPEN bands (each 48 boundary edges: the bead and
+// tread rims are left open), so the closed-piece test above can never see
+// inside it. Instead fit each wheel's tyre as an analytic annulus from its
+// rubber/sidewall faces: axle centre (y, z) from their bbox, outer radius the
+// furthest rubber vertex, inner radius the nearest (the bead seat, outside the
+// rim lip), width the x extent. A vertex of any OTHER section inside that
+// annulus is in the tyre; its depth is the distance to the nearest annulus
+// face. The rim barrel (r < inner) is open space, so uprights, brake ducts
+// and drums living there are not charged.
+export function tyreSolids(A) {
+  const W = A.S.names.indexOf("wheels"), by = new Map();
+  for (const p of A.pieces) if (p.sec === W && TYRE_MATS.has(p.mat)) {
+    const t = p.tris[0], o = t * 9;
+    // car +X is right: x < 0 is the LEFT side (docs: lateral x +right)
+    const key = (A.T.a[o] < 0 ? "L" : "R") + (A.T.a[o + 2] > 0 ? "F" : "R");
+    if (!by.has(key)) by.set(key, []);
+    by.get(key).push(p);
+  }
+  const out = [];
+  for (const [key, ps] of by) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const p of ps) for (const t of p.tris) for (let k = 0; k < 3; k++) {
+      const o = t * 9 + k * 3, x = A.T.a[o], y = A.T.a[o + 1], z = A.T.a[o + 2];
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
+    }
+    const cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
+    let rIn = Infinity, rOut = 0;
+    for (const p of ps) for (const t of p.tris) for (let k = 0; k < 3; k++) {
+      const o = t * 9 + k * 3, r = Math.hypot(A.T.a[o + 1] - cy, A.T.a[o + 2] - cz);
+      if (r < rIn) rIn = r; if (r > rOut) rOut = r;
+    }
+    out.push({ key, x0, x1, cy, cz, rIn, rOut });
+  }
+  return out;
+}
+
+function tyrePenetration(A, agg) {
+  const W = A.S.names.indexOf("wheels"), tyres = tyreSolids(A), P = A.mesh.pos;
+  for (let v = 0; v < P.length / 3; v++) {
+    const s = A.S.of[v];
+    if (s === W) continue;
+    const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
+    for (const T of tyres) {
+      if (x <= T.x0 || x >= T.x1) continue;
+      const r = Math.hypot(y - T.cy, z - T.cz);
+      if (r <= T.rIn || r >= T.rOut) continue;
+      const d = Math.min(x - T.x0, T.x1 - x, r - T.rIn, T.rOut - r);
+      const a = A.S.names[s], key = a + ">tyre" + T.key;
+      const g = agg.get(key) || { a, b: "tyre " + T.key, tyre: true, depth: 0, n: 0, where: null };
+      g.n++;
+      if (d > g.depth) { g.depth = d; g.where = [x, y, z]; }
+      agg.set(key, g);
+    }
+  }
+}
+
 // ── Z-FIGHT ────────────────────────────────────────────────────────────────
 // Two VISIBLE, same-facing faces (cos > ZFIGHT_COS) that share no vertex and
 // lie within ZFIGHT_MM of each other: four samples per face (centroid and the
@@ -155,7 +212,7 @@ function sameLook(A, t, u) {
 // face. Summed per section pair (a section may fight itself: two plates of
 // one part).
 export function zfight(A) {
-  const r = FIT.ZFIGHT_MM / 1000, cp = new Float64Array(4), agg = new Map(), T = A.T;
+  const r = FIT.ZFIGHT_MM / 1000, cp = new Float64Array(4), agg = new Map(), T = A.T, pairs = new Map();
   for (let t = 0; t < T.n; t++) {
     if (!A.vis[t] || !A.live(t)) continue;
     const o = t * 9, w0 = A.wid[A.mesh.idx[t * 3]], w1 = A.wid[A.mesh.idx[t * 3 + 1]], w2 = A.wid[A.mesh.idx[t * 3 + 2]];
@@ -165,7 +222,7 @@ export function zfight(A) {
     const hits = new Map();
     for (const [x, y, z] of samples) {
       eachNear(A, x, y, z, r, (u) => {
-        if (u <= t || !A.vis[u]) return;   // each unordered pair once
+        if (u === t || !A.vis[u]) return;
         const dot = A.nrm[t * 3] * A.nrm[u * 3] + A.nrm[t * 3 + 1] * A.nrm[u * 3 + 1] + A.nrm[t * 3 + 2] * A.nrm[u * 3 + 2];
         if (dot < FIT.ZFIGHT_COS) return;
         for (let k = 0; k < 3; k++) { const w = A.wid[A.mesh.idx[u * 3 + k]]; if (w === w0 || w === w1 || w === w2) return; }
@@ -174,29 +231,54 @@ export function zfight(A) {
         hits.set(u, (hits.get(u) || 0) + 1);
       });
     }
+    // Sampled from BOTH faces (a small plate on a big panel is only hit from
+    // the plate's side); each unordered pair keeps its larger hit count.
     for (const [u, n] of hits) {
-      const a = A.S.names[A.sec[t]], b = A.S.names[A.sec[u]], key = a < b ? a + "|" + b : b + "|" + a;
-      const g = agg.get(key) || { a: a < b ? a : b, b: a < b ? b : a, area: 0, n: 0, where: null, big: 0 };
-      const add = Math.min(A.area[t], A.area[u]) * n / 4;
-      g.area += add; g.n++;
-      if (add > g.big) { g.big = add; g.where = [gx, gy, gz]; }
-      agg.set(key, g);
+      const pk = t < u ? t * T.n + u : u * T.n + t, prev = pairs.get(pk);
+      if (!prev || n > prev.n) pairs.set(pk, { t, u, n, gx, gy, gz });
     }
   }
+  for (const { t, u, n, gx, gy, gz } of pairs.values()) {
+    const a = A.S.names[A.sec[t]], b = A.S.names[A.sec[u]], key = a < b ? a + "|" + b : b + "|" + a;
+    const g = agg.get(key) || { a: a < b ? a : b, b: a < b ? b : a, area: 0, n: 0, where: null, big: 0 };
+    const add = Math.min(A.area[t], A.area[u]) * n / 4;
+    g.area += add; g.n++;
+    if (add > g.big) { g.big = add; g.where = [gx, gy, gz]; }
+    agg.set(key, g);
+  }
   return [...agg.values()].map((g) => ({ check: "ZFIGHT", a: g.a, b: g.b, value: Math.round(g.area * 1e6) / 100, unit: "cm2",
-    fail: g.area > FIT.ZFIGHT_AREA_M2, where: at(g.where), note: `${g.n} face pair(s) within ${FIT.ZFIGHT_MM} mm` }));
+    fail: g.area > FIT.ZFIGHT_AREA_M2, where: at(g.where), count: g.n, note: `${g.n} face pair(s) within ${FIT.ZFIGHT_MM} mm` }));
 }
 
 // ── OPEN EDGES ─────────────────────────────────────────────────────────────
-// Welded boundary edges (one face) on VISIBLE faces, summed per section: a
+// Welded boundary edges (one face) on VISIBLE faces, not SEALED, summed per section: a
 // hole or a paper-thin unclosed rim the player can see. Non-manifold counts
 // (edges of 3+ faces: welded primitives sharing a rim) ride along in `note`;
 // they render fine and never fail.
+// WARN, not FAIL, on an absolute run: car meshes draw doubleSided (game.js
+// _wheelOpts; glx.js "cars are doubleSided"), so an open rim shows the inside
+// of the shell — a paper edge — never daylight, and the shipped cars carry
+// tens of metres of it. Under --base it still gates: a NEW or WORSE open-edge
+// row is a part that added paper rims.
 export function openEdges(A) {
   const agg = new Map(), T = A.T;
+  const r = FIT.ATTACH_MM / 1000, cp = new Float64Array(4), idx = A.mesh.idx;
   for (const e of A.openEdges) {
     if (!A.vis[e.t]) continue;
     const o = e.t * 9, k2 = (e.k + 1) % 3;
+    // SEALED: the rim butts against another surface (the next tyre band, a
+    // plate closing a loft) within the ATTACH seam, so no daylight shows.
+    const wa = A.wid[idx[e.t * 3 + e.k]], wb = A.wid[idx[e.t * 3 + k2]];
+    const mx = (T.a[o + e.k * 3] + T.a[o + k2 * 3]) / 2, my = (T.a[o + e.k * 3 + 1] + T.a[o + k2 * 3 + 1]) / 2, mz = (T.a[o + e.k * 3 + 2] + T.a[o + k2 * 3 + 2]) / 2;
+    let sealed = false;
+    eachNear(A, mx, my, mz, r, (u) => {
+      if (u === e.t) return;
+      let shared = 0;
+      for (let k = 0; k < 3; k++) { const w = A.wid[idx[u * 3 + k]]; if (w === wa || w === wb) shared++; }
+      if (shared === 2) return;
+      if (closestOnTri(T, u, mx, my, mz, cp) <= r) { sealed = true; return false; }
+    });
+    if (sealed) continue;
     const len = Math.hypot(T.a[o + e.k * 3] - T.a[o + k2 * 3], T.a[o + e.k * 3 + 1] - T.a[o + k2 * 3 + 1], T.a[o + e.k * 3 + 2] - T.a[o + k2 * 3 + 2]);
     const s = A.S.names[A.sec[e.t]], g = agg.get(s) || { len: 0, n: 0, big: 0, where: null };
     g.len += len; g.n++;
@@ -206,6 +288,6 @@ export function openEdges(A) {
   const nm = new Map();
   for (const p of A.pieces) nm.set(p.sec, (nm.get(p.sec) || 0) + p.nonManifold);
   return [...agg.entries()].map(([s, g]) => ({ check: "OPEN", a: s, b: "-", value: mm(g.len), unit: "mm",
-    fail: mm(g.len) > FIT.OPEN_MM, where: at(g.where),
+    fail: mm(g.len) > FIT.OPEN_MM, warn: true, where: at(g.where), count: g.n,
     note: `${g.n} visible boundary edge(s); ${nm.get(A.S.names.indexOf(s)) || 0} non-manifold` }));
 }

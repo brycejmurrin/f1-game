@@ -14,7 +14,8 @@
 //                solid (nearest-face normal-sign test), mm; tyres are strict
 //   ZFIGHT       same-facing visible faces of different colour/surface closer
 //                than the depth buffer resolves, cm^2 of overlap
-//   OPEN         visible boundary edges (holes in a back-face-culled shell), mm
+//   OPEN         visible boundary edges (paper rims on a double-sided shell), mm;
+//                WARN on an absolute run, gating only as NEW/WORSE under --base
 //
 // Thresholds are FIT in tools/car/lib/fit-geom.mjs, each with its derivation;
 // the method and its known blind spots are docs/notes/FIT-AUDIT.md.
@@ -30,7 +31,7 @@
 //   node tools/car/car-fit-audit.mjs --write-baseline f.json / --baseline f.json
 //        the same comparison against a saved run
 //
-// Exit 1 on any FAIL (or, with --base/--baseline, any NEW/WORSE failure).
+// Exit 1 on any FAIL (OPEN is WARN), or with --base/--baseline on any NEW/WORSE row.
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -60,6 +61,7 @@ function merge(rows) {
     const k = r.check + "|" + r.a + "|" + r.b, g = by.get(k);
     if (!g) { by.set(k, { ...r, n: 1, nFail: r.fail ? 1 : 0 }); continue; }
     g.n++; if (r.fail) g.nFail++;
+    g.count += r.count;
     if (r.value > g.value) Object.assign(g, { value: r.value, where: r.where, note: r.note });
     g.fail = g.fail || r.fail;
   }
@@ -114,7 +116,10 @@ export function compareRuns(head, base) {
     for (const r of c.rows) {
       if (!r.fail) continue;
       const b = idx.get(c.team + "|" + style + "|" + r.check + "|" + r.a + "|" + r.b);
-      r.status = !b ? "NEW" : (r.value > b.value + SLACK[r.check] || r.nFail > b.nFail) ? "WORSE" : "PRE-EXISTING";
+      // count: vertices inside / face pairs / open edges / floating clusters;
+      // a quarter more (and at least 3 more) is a part that grew into the fault.
+      const grew = r.nFail > b?.nFail || r.count > b?.count * 1.25 + 2;
+      r.status = !b ? "NEW" : (r.value > b.value + SLACK[r.check] || grew) ? "WORSE" : "PRE-EXISTING";
       r.baseValue = b ? b.value : null;
     }
   }
@@ -140,7 +145,7 @@ function table(res) {
     const fails = c.rows.filter((r) => r.fail);
     lines.push(`\n${c.team} · ${c.style} · ${c.pieces} pieces · ${fails.length} failing row(s)`);
     for (const r of fails)
-      lines.push("  " + F(r.status || "FAIL", 13) + F(r.check, 12) + F(r.a, 26) + F(r.b, 22) +
+      lines.push("  " + F(r.status || (r.warn ? "WARN" : "FAIL"), 13) + F(r.check, 12) + F(r.a, 26) + F(r.b, 22) +
         F(r.value + " " + r.unit + (r.baseValue != null ? " (base " + r.baseValue + ")" : ""), 22) +
         F("x" + r.nFail, 5) + "@" + JSON.stringify(r.where) + "  " + r.note);
   }
@@ -150,7 +155,7 @@ function table(res) {
 export function summary(res) {
   const t = {};
   for (const c of res.cars) for (const r of c.rows) if (r.fail) {
-    const k = r.status || "FAIL";
+    const k = r.status || (r.warn ? "WARN" : "FAIL");
     t[k] = (t[k] || 0) + 1;
   }
   return t;
