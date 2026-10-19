@@ -57,9 +57,9 @@ your only escalation path besides the user; ask it instead of guessing.
    with a failing test first → `steward`). On a CI wake, `ci-watch --sha
    <current head> --once` — `= ci running (0 failed)` is **not** stale; only
    `= ci passed` on that head dismisses. Re-read the head SHA before every
-   push (paced by the brief's `PUSH SLOT`: `launch-policy.md`, Paced push); merge the base in, never rebase or force-push. Mark ready only after
-   `ready-gate.mjs` exits 0. Arming is the merge desk's when live; the merge
-   desk or orchestrator merges only at the level in role-merge-holder.md; always
+   push; merge the base in, never rebase or force-push. Mark ready only after
+   `ready-gate.mjs` exits 0. Arming is the designated merge desk's, if any; the
+   PR's own orchestrator merges only at the level in role-merge-holder.md; always
    a merge commit pinned to head sha. Never write "do not merge" lines in the PR
    body; the only hold is a line starting `MERGE-HOLD:`.
 8. **Hand back**: `--release` the claim, set `state: done`, and tell the

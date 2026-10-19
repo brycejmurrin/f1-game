@@ -9,7 +9,7 @@ no merges**; **events plus 3-minute ticks**; **Sonnet**; **a live dashboard page
 
 One fleet-watch session runs per orchestrator. It finds problems in seconds to
 minutes, fixes the routine ones itself, and sends the orchestrator only what
-needs a decision or a merge. Merging stays with the merge holder
+needs a decision or a merge. Merging stays with the PR's own orchestrator
 (role-merge-holder.md) or a designated Merge Desk.
 
 ## Contents
