@@ -344,21 +344,23 @@ function createEditorOpener(G, buttonId, ensure, method) {
   return { open: () => open(false), cancel, bind };
 }
 
+function loadSaved(store) {
+  let saved = null;
+  try { saved = store.get("flybyShots", null); } catch (_) { return null; }
+  if (!saved) return null;
+  const list = fromSaved(saved);
+  if (!list) { Log.warn("game", "saved flyby shots predate the current pose meaning — playing the shipped sequence"); return null; }
+  const bad = shotErrors(list);
+  if (bad.length) { Log.warn("game", "saved flyby shots unusable: " + bad[0]); return null; }
+  return clone(list);
+}
+
 let _refresh = null;
 function create(G) {
   Log.info("game", "FlybyPanel.create");
   const { store } = G;
   let real = null, _apiLoader = null;
-  function loadSaved() {
-    let saved = null;
-    try { saved = store.get("flybyShots", null); } catch (_) { return null; }
-    if (!saved) return null;
-    const list = fromSaved(saved);
-    if (!list) { Log.warn("game", "saved flyby shots predate the current pose meaning — playing the shipped sequence"); return null; }
-    const bad = shotErrors(list);
-    if (bad.length) { Log.warn("game", "saved flyby shots unusable: " + bad[0]); return null; }
-    return clone(list);
-  }
+
   function ensure() {
     if (real) return Promise.resolve(real);
     return ensureCamEditor().then((ok) => {
@@ -377,11 +379,11 @@ function create(G) {
     closeFlyby: (show) => { opener.cancel(); if (real) real.closeFlyby(show); },
     isOpen: () => !!(real && real.isOpen && real.isOpen()),
     setApiLoader: (fn) => { _apiLoader = fn; if (real && real.setApiLoader) real.setApiLoader(fn); },
-    loadSaved,
+    loadSaved: () => loadSaved(store),
     list: () => real && real.list ? real.list() : [],
   };
 }
 
-return Object.assign({ create, ensureCamEditor, createEditorOpener, refresh: () => { if (_refresh) _refresh(); } }, ops);
+return Object.assign({ create, loadSaved, ensureCamEditor, createEditorOpener, refresh: () => { if (_refresh) _refresh(); } }, ops);
 })();
 Object.freeze(FlybyPanel);

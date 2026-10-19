@@ -4,7 +4,7 @@
 const FlybyEditor = (function () {
 "use strict";
 const {
-  clone, fromSaved, shotErrors, toBlob, savedForm, EASES, AT_KINDS, FIELD,
+  clone, toBlob, savedForm, EASES, AT_KINDS, FIELD,
   FIELD_IDS, FOV, SLOTS, CORNER_NS, RANKS, DUR, addShot, duplicateShot, deleteShot, moveShot,
   normaliseDurs, validateShots, switchPoseAt, poseFields, fieldLabel,
 } = FlybyPanel;
@@ -57,16 +57,7 @@ function persist() {
  *  NORMALISE on plays exactly as previewed and must not be thrown away.
  *  A COPY: store.get() hands out its cache object, and the panel edits its list
  *  in place — sharing it made game.js's flybyShots move under every slider. */
-function loadSaved() {
-  let saved = null;
-  try { saved = store.get("flybyShots", null); } catch (_) { return null; }
-  if (!saved) return null;
-  const list = fromSaved(saved);
-  if (!list) { Log.warn("game", "saved flyby shots predate the current pose meaning — playing the shipped sequence"); return null; }
-  const bad = shotErrors(list);
-  if (bad.length) { Log.warn("game", "saved flyby shots unusable: " + bad[0]); return null; }
-  return clone(list);
-}
+function loadSaved() { return FlybyPanel.loadSaved(store); }
 
 function ensure() { if (!shots) shots = loadSaved() || defaults(); return shots; }
 
