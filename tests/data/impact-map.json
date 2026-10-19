@@ -2855,6 +2855,9 @@
       "timeAt": [
         "tests/specs/time-trial.spec.js",
         "tests/unit/ghost-share.test.mjs"
+      ],
+      "*": [
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/car/helmets.js": {
@@ -13778,9 +13781,11 @@
     },
     "js/track/scenery/build-props.js": {
       "bakedModel": [
+        "tests/unit/baked-model-instancing.test.mjs",
         "tests/unit/scenery-guards.test.mjs"
       ],
       "build": [
+        "tests/unit/baked-model-instancing.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
