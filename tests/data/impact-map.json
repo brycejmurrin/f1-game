@@ -9973,8 +9973,12 @@
     },
     "js/physics/player-forces.js": {
       "create": [
+        "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
+        "tests/unit/player-forces.test.mjs"
+      ],
+      "slipBudget": [
         "tests/unit/player-forces.test.mjs"
       ],
       "step": [

@@ -261,3 +261,21 @@ test("rear cue compares each axle to its own edge without changing any force int
   assert.equal(weakBrakes.car._cueBraking, .5);
   assert.deepEqual(weakBrakes.force, rear.force, "advisory braking-capacity field cannot feed forces");
 });
+
+test("shared whole-car slip budget preserves stored zero, fallback grouping and driven-axle distinction", () => {
+  const { PlayerForces } = load();
+  const cases = [
+    [{ axFrac: 0, axEstSm: 100, slipFactor: 0.1 }, 34, 0.8, 0, 1],
+    [{ axFrac: 0.6, axEstSm: 100, slipFactor: 0.1 }, 34, 0.8, 0.6, 0.8],
+    [{ axFrac: null, axEstSm: -8 }, 20, 0.5, 0.8, Math.sqrt(0.36)],
+    [{ axEstSm: 100 }, 20, 0.5, 1, 0],
+    [{}, 34, 1, 0, 1],
+  ];
+  for (const [p, longGrip, grip, ax, slip] of cases) {
+    Object.freeze(p);
+    const result = PlayerForces.slipBudget(p, longGrip, grip);
+    assert.equal(result.axFrac, ax);
+    assert.ok(Math.abs(result.slipFactor - slip) < 1e-14);
+    assert.notEqual(result, PlayerForces.slipBudget(p, longGrip, grip), "each query keeps its fresh result object");
+  }
+});

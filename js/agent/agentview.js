@@ -82,14 +82,8 @@ const AgentView = (function () {
       .concat(cars.filter((c) => c.retired).sort(byProg));
   }
 
-  // THE SLIP BUDGET for world(), obs() and physState() alike (#2172): the axFrac
-  // player-forces.js STORES (per-axle, mods.braking-scaled) — the weather-scaled
-  // axEstSm estimate only before the first tick — and the whole-car circle
-  // sqrt(1 − axFrac²). The driven axle's c.slipFactor is physState().drivenSlip.
-  function slipBudget(p, longGrip, gripMul) {
-    const axFrac = p.axFrac ?? Math.min(1, Math.abs(p.axEstSm ?? 0) / (longGrip * gripMul));
-    return { axFrac, slipFactor: Math.sqrt(Math.max(0, 1 - axFrac * axFrac)) };
-  }
+  // PlayerForces owns the shared whole-car budget; this alias keeps world/obs/physState aligned.
+  const slipBudget = PlayerForces.slipBudget;
 
   function syncRenderAnchors(cars) {
     const list = Array.isArray(cars) ? cars : [cars];
