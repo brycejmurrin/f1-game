@@ -536,6 +536,11 @@
       "presentation": "native",
       "preserve": "Never reveal token or child auth stdout"
     },
+    "tools/ci/guards-verdict.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "check exit code (0 hit / non-zero miss) and run's guard suite exit status; cache file path and format shared with bash-guard"
+    },
     "tools/ci/handback.mjs": {
       "action": "keep-native",
       "presentation": "native",
