@@ -53,6 +53,7 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
 
 - A Node test or tool question → `debugger_node_test` (no attach, files in parallel, probes return
   counts, values and locals). Interactive Node: [references/tools.md](references/tools.md).
+  Which vm filenames bind, breakpoint cost and the hang-on-exit trap: `docs/TESTING.md` §Debug a Node test.
 - "Stop here and show me the locals" → `debugger_break {breakpoints, trigger}`: stack, cause and
   locals in one reply, paused with a token (or `resume:true`).
 - "How often, with what values" on a running page → `debugger_collect {logpoints, trigger}`.
