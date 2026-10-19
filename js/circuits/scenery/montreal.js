@@ -627,7 +627,34 @@
         const a = anchor(K(0.30), -1, 320);
         const b = [a.r, a.u, a.t];
         const R = 38, HEIGHT = 62, CY = HEIGHT - R;
-        const foot = vadd(a.c, a.u, BANK_T - a.c[1]);
+        let foot = vadd(a.c, a.u, BANK_T - a.c[1]);
+        const baseRadius = Math.sqrt(R * R - CY * CY);
+        // The far-bank slab meets a higher island ribbon on one side. Seat
+        // the level ring above its highest sampled ground, rather than bury
+        // two whole members beneath that ribbon. Short piers bridge the low
+        // side; the spherical frame keeps its shape and authored XZ site.
+        let baseLift = 0;
+        const basePoint = (phi) => vadd(vadd(foot, a.r, baseRadius * Math.cos(phi)),
+          a.t, baseRadius * Math.sin(phi));
+        for (let m = 0; m < 12; m++) {
+          const p0 = basePoint(m / 12 * Math.PI * 2);
+          const p1 = basePoint((m + 1) / 12 * Math.PI * 2);
+          for (let j = 0; j <= 4; j++) {
+            const f = j / 4;
+            // Sample the actual polygon chord, including its finite width;
+            // a circular arc alone misses terrain between the frame nodes.
+            for (const side of [-1, 0, 1]) {
+              const phi = (m + f) / 12 * Math.PI * 2;
+              const p = p0.map((v, k) => v + (p1[k] - v) * f +
+                side * 0.55 * (a.r[k] * Math.cos(phi) + a.t[k] * Math.sin(phi)));
+              const gy = groundUnder(p[0], p[2]);
+              if (gy !== null) baseLift = Math.max(baseLift, gy - p[1]);
+            }
+          }
+        }
+        // Radius + clearance keeps the lower member faces above the land,
+        // rather than placing only their centreline on the highest surface.
+        foot = vadd(foot, a.u, baseLift + 0.55 + 0.05);
         const emitBio = (stage) => {
           const FRAME = [0.80, 0.82, 0.85];
           const MUSEUM = [0.68, 0.70, 0.73];
@@ -647,6 +674,12 @@
               const phi = m / MER * Math.PI * 2;
               const next = (m + 1) / MER * Math.PI * 2;
               const p = surf(levels[j], phi);
+              if (j === 0) {
+                const gy = groundUnder(p[0], p[2]);
+                if (gy !== null && p[1] - gy > 0.15) {
+                  strut([p[0], gy - 0.1, p[2]], p, 0.65, MUSEUM, 3, stage);
+                }
+              }
               strut(p, surf(levels[j], next), 0.55, FRAME, 3, stage);
               if (j + 1 < levels.length) {
                 strut(p, surf(levels[j + 1], phi), 0.55, FRAME, 3, stage);
@@ -660,8 +693,13 @@
           // These two decks and their grounded columns are a simplified cue;
           // their dimensions and arrangement are artistic, not surveyed.
           for (const x of [-9, 9]) for (const z of [-9, 9]) {
-            addBox(stage, vadd(vadd(vadd(foot, a.r, x), a.t, z), a.u, 12.15),
-              [1.4, 24.3, 1.4], MUSEUM, b);
+            const p = vadd(vadd(foot, a.r, x), a.t, z);
+            const gy = groundUnder(p[0], p[2]);
+            const bottom = p.slice();
+            if (gy !== null) bottom[1] = Math.min(p[1], gy - 0.1);
+            const h = 24.3 + p[1] - bottom[1];
+            addBox(stage, vadd(bottom, a.u, h / 2),
+              [1.4, h, 1.4], MUSEUM, b);
           }
           for (const y of [12, 24]) {
             addBox(stage, vadd(foot, a.u, y), [24, 0.8, 24], MUSEUM, b);
@@ -669,8 +707,9 @@
           stage._mat = 0;
         };
         modelGroup("montreal-biosphere", {
-          center: vadd(foot, a.u, HEIGHT * 0.5),
-          size: [R * 2 + 4, HEIGHT + 4, R * 2 + 4],
+          // Include the low-side piers as well as the raised spherical crown.
+          center: vadd(foot, a.u, HEIGHT * 0.5 - 1),
+          size: [R * 2 + 4, HEIGHT + 8, R * 2 + 4],
           basis: b,
         }, emitBio, { required: true });
       }
