@@ -329,7 +329,7 @@ test("the mirror fallback covers each cockpit lens just driver-side, and the lim
   const draw=read("js/car/car-draw.js");
   assert.match(draw,/getLedStrip\(rpmF > 0\.965 \? \(motionReduced\(\) \|\| [^)]*\? 9 : 8\)/,"limiter alternates SHIFT and full ramp, never 0");
   // The live glass is TRIED only while the pass draws; the fallback is drawn
-  // whenever it is not shown (car-presentation-canary runs the either/or).
+  // whenever it is not shown (car-presentation-vm runs the either/or).
   assert.match(draw,/mp && mp\.drawing\(\) && typeof gfx\.drawMirrorGlass === "function" \? getMirrorGlass\(quads\)/,
     "the live glass only while the mirror pass is drawing");
 });
