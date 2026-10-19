@@ -232,14 +232,23 @@ test("call-time reads resolve to SOME manifest global, or a documented external"
 // way — an entry here is a permanent blind spot in the registry.
 const KNOWN_UNSCANNABLE_SITES = [];
 
+const unscannableSites = (files, known) => Object.entries(files)
+  .flatMap(([f, r]) => r.unscannable.map((u) => `${f}:${u.line}`))
+  .filter((s) => !known.includes(s));
+
 test("the unscannable window[<expr>] class stays extinct", () => {
-  const sites = Object.entries(graph.files)
-    .flatMap(([f, r]) => r.unscannable.map((u) => `${f}:${u.line}`))
-    .filter((s) => !KNOWN_UNSCANNABLE_SITES.includes(s));
+  const sites = unscannableSites(graph.files, KNOWN_UNSCANNABLE_SITES);
   assert.deepEqual(sites, [],
     "dynamic window[expr] access defeats the whole registry — name the global " +
     "statically; if truly unavoidable, record the site in KNOWN_UNSCANNABLE_SITES " +
     "as \"file:line\" with a comment saying why it cannot be static");
+});
+
+test("positive control: an unscannable site is reported unless baselined", () => {
+  // KNOWN_UNSCANNABLE_SITES is empty today, so the failure branch above has never run.
+  const files = { "fixture-a": { unscannable: [{ line: 7 }] }, "fixture-b": { unscannable: [] } };
+  assert.deepEqual(unscannableSites(files, []), ["fixture-a:7"]);
+  assert.deepEqual(unscannableSites(files, ["fixture-a:7"]), []);
 });
 
 // Every `window.__X = …` the shipped code writes, with ONE file that reads it

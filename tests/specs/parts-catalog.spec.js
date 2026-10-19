@@ -9,8 +9,8 @@
 // became none. openSetup() walks back to the title, pins the team through the
 // store AND the #mb-race handler that copies it into the game (the team-switch
 // tests used to seed localStorage and reload for exactly that), forgets the
-// fitted parts, and comes in through START. UNVERIFIED IN A BROWSER at
-// conversion time — tests/helpers/shared-page.js has the mechanics.
+// fitted parts, and comes in through START.
+// tests/helpers/shared-page.js has the mechanics.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";

@@ -11,7 +11,7 @@
 // none. The catalog and finish tests only read modules off a live page; the
 // creator tests used to seed storage and reload so the boot would read it —
 // the same keys now go through the store (cache and disk) and #mb-race's own
-// re-read of the team. UNVERIFIED IN A BROWSER at conversion time.
+// re-read of the team..
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
