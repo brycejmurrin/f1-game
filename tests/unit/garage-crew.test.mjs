@@ -81,3 +81,31 @@ test("the angle map lights the chosen eye, both for the cut, and draws the bay, 
   assert.ok(litX(left) < 60 && litX(right) > 60, "LEFT is drawn on the left of the plan, RIGHT on the right");
   assert.match(Arrival.angleMap("cut"), />1<\/text>.*>2<\/text>/s, "the cut numbers its two eyes in order");
 });
+
+test("design-preview crew looks: each builds valid, distinct geometry; classic stays the default", () => {
+  const meshes = [];
+  const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
+  const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
+  Crew.init(gfx);
+  assert.equal(Crew.look(), "classic");
+  const sizes = {};
+  for (const id of Crew.LOOKS) {
+    meshes.length = 0;
+    assert.equal(Crew.setLook(id), id);
+    Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(2.5, Arrival.settings({}), true));
+    let verts = 0;
+    for (const d of meshes) {
+      const n = d.pos.length / 3;
+      assert.equal(d.nrm.length, d.pos.length); assert.equal(d.col.length, d.pos.length);
+      assert.ok(d.pos.every(Number.isFinite), id + ": finite positions");
+      assert.ok(d.idx.every((i) => i >= 0 && i < n), id + ": indices in range");
+      verts += n;
+    }
+    sizes[id] = verts;
+  }
+  assert.equal(new Set(Object.values(sizes)).size, Crew.LOOKS.length, "every look is different geometry: " + JSON.stringify(sizes));
+  assert.equal(Crew.setLook("nope"), "welcome", "an unknown id keeps the look");
+});

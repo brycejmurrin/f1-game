@@ -6811,6 +6811,9 @@
       ],
       "layout": [
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "setLook": [
+        "tests/unit/garage-crew.test.mjs"
       ]
     },
     "js/garage/scene-dress.js": {
