@@ -15,6 +15,8 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { firstDiff } from "../../tools/gen/gen-lib.mjs";
+import { collectAgentSurface, render as renderHooksTable } from "../../tools/gen/gen-hooks-table.mjs";
+import { agentHelpGroupsFromSource } from "../../tools/lib/agent-help-source.mjs";
 import { renderCoverage } from "../../tools/docs/gen-coverage-table.mjs";
 import {
   agentHelpFromSource, flattenHooks, renderIndex, renderHookPage, renderImpact, buildIndex,
@@ -100,4 +102,52 @@ test("agent index carries no volatile test counts (#2808)", () => {
   const index = JSON.parse(read("docs/agent-index.json"));
   assert.ok(index.groups.length > 10);
   for (const g of index.groups) assert.ok(!("declaredTests" in g), `${g.id} carries a declaredTests count`);
+});
+
+
+test("shared agentHelp index reader evaluates constants and its supported static grammar", () => {
+  const src = `const version = 3; const prefix = "base";
+    const calls = [prefix + " call", -2, null, undefined];
+    function agentHelp() { return {
+      apiVersion: version, perceive: { "thing()": prefix + " summary" },
+      extra: { calls, missing: undefined }, label: \`literal\`, sum: 2 + 3
+    }; }`;
+  assert.deepEqual(agentHelpFromSource(src), {
+    apiVersion: 3, perceive: { "thing()": "base summary" },
+    extra: { calls: ["base call", -2, null, undefined], missing: undefined }, label: "literal", sum: 5,
+  });
+  for (const expr of ["unknown", "someCall()", "[unknown]", "{ [key]: 1 }", "[1,,2]", '"x" + 1', "`a${version}b`"]) {
+    assert.throws(() => agentHelpFromSource(`const version = 3; function agentHelp() { return { perceive: { x: ${expr} } }; }`), /did not evaluate/);
+  }
+  assert.throws(() => agentHelpFromSource("function unrelated() { return {}; }"), /return object not found/);
+});
+
+test("shared agentHelp table reader retains its separate legacy string grammar and renderer escaping", () => {
+  const src = `function agentHelp() { return {
+    model: { ignored: arbitraryCall() },
+    perceive: { "a|b()": "  first\\nline | " + "second", n: 2 + 3, t: \`a\${ignored}b\` },
+    act: { ok: true }, perceive: { repeated: "last" }
+  }; }`;
+  assert.deepEqual(agentHelpGroupsFromSource(src), [
+    { group: "perceive", calls: [
+      { call: "a|b()", says: "  first\nline | second" }, { call: "n", says: "23" }, { call: "t", says: "ab" },
+    ] },
+    { group: "act", calls: [{ call: "ok", says: "true" }] },
+    { group: "perceive", calls: [{ call: "repeated", says: "last" }] },
+  ]);
+  const table = collectAgentSurface(src);
+  assert.equal(table[0].calls[0].call, "a\\|b()");
+  assert.equal(table[0].calls[0].says, " first line \\| second");
+  assert.throws(() => collectAgentSurface("function agentHelp() { return { act: { bad: SOME_CONSTANT } }; }"), /cannot fold Identifier at line 1/);
+  assert.throws(() => collectAgentSurface("function unrelated() {}"), /could not find function agentHelp/);
+  assert.throws(() => collectAgentSurface("function agentHelp() { return 1; }"), /no object return/);
+  assert.throws(() => collectAgentSurface("function agentHelp() { return { model: {} }; }"), /no perceive\/detail\/know\/act groups/);
+});
+
+test("shared agentHelp readers preserve current generated hook reference bytes", () => {
+  const doc = read("docs/DEBUG-HOOKS.md");
+  assert.equal(firstDiff(doc, renderHooksTable(doc)), "identical");
+  const table = collectAgentSurface();
+  assert.deepEqual(table.map((g) => g.group), ["perceive", "detail", "know", "act"]);
+  assert.ok(flattenHooks(agentHelpFromSource()).some((h) => h.group === "model"));
 });

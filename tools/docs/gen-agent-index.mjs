@@ -19,12 +19,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { agentHelpFromSource as readAgentHelp } from "../lib/agent-help-source.mjs";
 import { argGate, emit, isMain, readRepo, ROOT } from "../gen/gen-lib.mjs";
 import { fileGlobal, rosterOf } from "../gen/gen-arch-table.mjs";
 import { isTwinned } from "../ci/twinned-specs.mjs";
 
 const require = createRequire(import.meta.url);
-const espree = require("espree");
 const MANIFEST = require("../manifest.cjs");
 
 export const INDEX_TARGET = "docs/agent-index.json";
@@ -36,91 +36,9 @@ export const TARGETS = [INDEX_TARGET, HOOKS_TARGET, IMPACT_TARGET];
 const HOOK_GROUPS = ["perceive", "detail", "know", "act", "fields", "read", "control", "model"];
 const CALL_GROUPS = new Set(["read", "control"]);
 
-function walk(node, fn) {
-  if (!node || typeof node !== "object") return;
-  if (typeof node.type === "string") fn(node);
-  for (const k of Object.keys(node)) {
-    if (k === "loc" || k === "range" || k === "parent") continue;
-    const v = node[k];
-    if (Array.isArray(v)) { for (const c of v) walk(c, fn); }
-    else if (v && typeof v.type === "string") walk(v, fn);
-  }
-}
-
-function evalNode(node, consts) {
-  if (!node) return undefined;
-  switch (node.type) {
-    case "Literal": return node.value;
-    case "TemplateLiteral":
-      if (node.expressions.length) return undefined;
-      return node.quasis[0].value.cooked;
-    case "Identifier":
-      if (node.name === "undefined") return undefined;
-      return consts.has(node.name) ? consts.get(node.name) : undefined;
-    case "UnaryExpression":
-      if (node.operator === "-" && node.argument.type === "Literal" && typeof node.argument.value === "number")
-        return -node.argument.value;
-      return undefined;
-    case "BinaryExpression": {
-      if (node.operator !== "+") return undefined;
-      const l = evalNode(node.left, consts);
-      const r = evalNode(node.right, consts);
-      if (typeof l === "string" && typeof r === "string") return l + r;
-      if (typeof l === "number" && typeof r === "number") return l + r;
-      return undefined;
-    }
-    case "ArrayExpression": {
-      const out = [];
-      for (const el of node.elements) {
-        if (!el) return undefined;
-        const v = evalNode(el, consts);
-        if (v === undefined && !(el.type === "Identifier" && el.name === "undefined") && el.type !== "Literal")
-          return undefined;
-        out.push(v);
-      }
-      return out;
-    }
-    case "ObjectExpression": {
-      const out = {};
-      for (const p of node.properties) {
-        if (p.type !== "Property" || p.computed) return undefined;
-        const key = p.key.type === "Identifier" ? p.key.name
-          : p.key.type === "Literal" ? String(p.key.value) : null;
-        if (key == null) return undefined;
-        const v = evalNode(p.value, consts);
-        if (v === undefined && !(p.value.type === "Identifier" && (p.value.name === "undefined" || consts.has(p.value.name))) && p.value.type !== "Literal")
-          return undefined;
-        out[key] = v;
-      }
-      return out;
-    }
-    default: return undefined;
-  }
-}
-
-/** The object `agentHelp()` returns, evaluated from source. */
+/** The object `agentHelp()` returns, evaluated from source with the index grammar. */
 export function agentHelpFromSource(src = readRepo("js/agent/agentview.js")) {
-  const ast = espree.parse(src, { ecmaVersion: "latest", sourceType: "script", range: true });
-  const decls = [];
-  let ret = null;
-  walk(ast, (n) => {
-    if (n.type === "VariableDeclarator" && n.id?.type === "Identifier" && n.init) decls.push(n);
-    if (n.type === "FunctionDeclaration" && n.id?.name === "agentHelp" && !ret) {
-      walk(n.body, (inner) => {
-        if (!ret && inner.type === "ReturnStatement" && inner.argument?.type === "ObjectExpression") ret = inner.argument;
-      });
-    }
-  });
-  if (!ret) throw new Error("agentHelp() return object not found in js/agent/agentview.js");
-  decls.sort((a, b) => (a.range?.[0] ?? 0) - (b.range?.[0] ?? 0));
-  const consts = new Map();
-  for (const d of decls) {
-    const v = evalNode(d.init, consts);
-    if (v !== undefined) consts.set(d.id.name, v);
-  }
-  const obj = evalNode(ret, consts);
-  if (!obj || typeof obj !== "object") throw new Error("agentHelp() return did not evaluate to an object");
-  return obj;
+  return readAgentHelp(src);
 }
 
 function oneLine(s, cap = 180) {

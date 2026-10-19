@@ -27,6 +27,7 @@
  *   node tools/gen/gen-hooks-table.mjs --check    # exit 1 when committed ≠ generated
  */
 import { createRequire } from "node:module";
+import { agentHelpGroupsFromSource } from "../lib/agent-help-source.mjs";
 import { emit, isMain, readRepo, replaceBlock } from "./gen-lib.mjs";
 
 const require = createRequire(import.meta.url);
@@ -149,32 +150,14 @@ export function collectHooks() {
   return hooks;
 }
 
-/** Fold a string-concatenation expression into its text. */
-function stringOf(node) {
-  if (node.type === "Literal") return String(node.value);
-  if (node.type === "TemplateLiteral") return node.quasis.map((q) => q.value.cooked).join("");
-  if (node.type === "BinaryExpression" && node.operator === "+") return stringOf(node.left) + stringOf(node.right);
-  throw new Error(`agentHelp(): cannot fold ${node.type} at line ${node.loc.start.line}`);
-}
-
-export function collectAgentSurface() {
-  const src = readRepo(AGENTVIEW);
-  const ast = parse(src);
-  const fn = find(ast, (n) => n.type === "FunctionDeclaration" && n.id && n.id.name === "agentHelp");
-  if (!fn) throw new Error(`${AGENTVIEW}: could not find function agentHelp()`);
-  const ret = find(fn.body, (n) => n.type === "ReturnStatement" && n.argument && n.argument.type === "ObjectExpression");
-  if (!ret) throw new Error("agentHelp(): no object return");
-  const groups = [];
-  for (const p of ret.argument.properties) {
-    if (p.type !== "Property" || p.value.type !== "ObjectExpression") continue;
-    const g = keyName(p);
-    if (!["perceive", "detail", "know", "act"].includes(g)) continue;
-    const calls = p.value.properties.filter((q) => q.type === "Property")
-      .map((q) => ({ call: keyName(q).replace(/\|/g, "\\|"), says: stringOf(q.value).replace(/\s+/g, " ").replace(/\|/g, "\\|") }));
-    groups.push({ group: g, calls });
-  }
-  if (!groups.length) throw new Error("agentHelp(): no perceive/detail/know/act groups found");
-  return groups;
+export function collectAgentSurface(src = readRepo(AGENTVIEW)) {
+  return agentHelpGroupsFromSource(src).map(({ group, calls }) => ({
+    group,
+    calls: calls.map(({ call, says }) => ({
+      call: call.replace(/\|/g, "\\|"),
+      says: says.replace(/\s+/g, " ").replace(/\|/g, "\\|"),
+    })),
+  }));
 }
 
 export function renderBlock() {

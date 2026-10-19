@@ -1847,6 +1847,10 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/agent-help-source.mjs",
+      "classification": "library"
+    },
+    {
       "path": "tools/lib/ai-ratings-math.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"

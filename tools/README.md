@@ -49,6 +49,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **lib/agent-help-source.mjs** | Reads agentHelp source with the existing hook-table and agent-index grammar profiles. | — |
 | **lib/ai-ratings-math.mjs** | Pure Pearson / means / style zero-mean helpers for `ai-ratings.mjs` (personality dial census). | — |
 | **lib/author-png.mjs** | Author-time PNG codec with distinct material-validation and legacy model-import policies. | — |
 | **lib/browser-workers.mjs** | GL-aware Playwright / capture worker defaults (llvmpipe vs SwiftShader). | — |
