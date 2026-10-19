@@ -215,3 +215,53 @@ LANES[-1:-1] = [
   ids=["T4-10","T4-20"], verify="node --test tests/unit/rendezvous-worker.test.mjs tests/unit/rival-attach-init.test.mjs",
   effort="S", model=SON, deps="the net batch report is pending: fold its rows here before launch"),
 ]
+
+# ---- pass 5: tooling-2 (final), tracks-1 (final), tracks-2 (partial 1/n)
+def _files(ids):
+    import rows as _r
+    by = {x[0]: x[2] for x in _r.ROWS}
+    return sorted({by[i] for i in ids if by[i].endswith((".mjs", ".cjs", ".js"))})
+_FOLD3 = {
+ "L1": (["tooling-2"], ["T2-29"]),
+ "L4": (["tooling-2"], ["T2-07"]),
+ "L5": (["tooling-2"], ["T2-19", "T2-24"]),
+ "L8": (["tooling-2"], ["T2-04", "T2-18", "T2-20"]),
+ "L9": (["tooling-2"], ["T2-14", "T2-22"]),
+ "L10": (["tooling-2", "tracks-2"], ["T2-11", "T2-21", "T2-30", "TK2-18"]),
+ "L13": (["tooling-2"], ["T2-09"]),
+ "L15": (["tooling-2"], ["T2-06", "T2-13"]),
+ "L17": (["tooling-2", "tracks-1", "tracks-2"], ["T2-25", "T2-26", "TK1-11", "TK1-14", "TK1-23", "TK2-02", "TK2-09", "TK2-11", "TK2-15"]),
+ "L19": (["tooling-2", "tracks-1", "tracks-2"], ["T2-15", "TK1-04", "TK2-07"]),
+ "L22": (["tooling-2"], ["T2-05", "T2-12", "T2-23"]),
+ "L24": (["tooling-2", "tracks-1"], ["T2-01", "T2-02", "T2-03", "T2-10", "T2-16", "T2-28", "TK1-10"]),
+ "L25": (["tooling-2", "tracks-1", "tracks-2"], ["T2-08", "T2-17", "T2-27", "TK1-03", "TK1-09", "TK1-15", "TK2-04", "TK2-08"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD3:
+        _b, _i = _FOLD3[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i
+_TRK = "the tracks-2 report is partial (tracks-walls, vegas, zandvoort verdicts and the props-over-road tail from spa are unfinished): fold its continuation here before launch"
+LANES[-1:-1] = [
+ dict(id="L27", name="Circuit data and foundation specs", batches=["tracks-1", "tracks-2"],
+  goal="per-circuit foundation specs and circuit-data units assert real grounding numbers (no `gap === null ||` escapes, no probes that never touch terrain), and def-field checks read the shipped defs instead of copies",
+  owned=_files(["TK1-06", "TK1-16", "TK1-17", "TK1-18", "TK1-19", "TK1-20", "TK1-21", "TK1-22", "TK1-26", "TK2-01", "TK2-05", "TK2-10", "TK2-12", "TK2-16", "TK2-19"]) + ["tests/specs/*-foundation.spec.js"],
+  ids=["TK1-06", "TK1-16", "TK1-17", "TK1-18", "TK1-19", "TK1-20", "TK1-21", "TK1-22", "TK1-26", "TK2-01", "TK2-05", "TK2-10", "TK2-12", "TK2-16", "TK2-17", "TK2-19"],
+  verify="node tools/track/verify-track.cjs <id> for each touched circuit, then that circuit's foundation spec alone via test-bg.mjs; the node units with node --test",
+  effort="M", model=SON, deps=_TRK + "; TK2-01 needs one browser read of groundY on the lat ±6 probes before the assert is tightened",
+  slices=["PR 1: TK2-01, TK2-05, TK2-12, TK2-19 (foundation-spec escapes; one circuit per commit)", "PR 2: TK1-06, TK1-16–TK1-22, TK1-26, TK2-10, TK2-16, TK2-17 (circuit-data units and accuracy spec)"]),
+ dict(id="L28", name="Track scenery build tests that bite", batches=["tracks-1", "tracks-2"],
+  goal="scenery guards, night override and lazy build run the real build and fail on a floating, missing or wrongly lit prop; span kinds and the scenery(api) contract are asserted from the engine, not a list copy",
+  owned=_files(["TK1-01", "TK1-02", "TK1-05", "TK1-07", "TK1-08", "TK1-12", "TK1-25", "TK2-03"]),
+  ids=["TK1-01", "TK1-02", "TK1-05", "TK1-07", "TK1-08", "TK1-12", "TK1-25", "TK2-03"],
+  verify="node --test on the owned units; props-over-road.spec.js alone via test-bg.mjs (or remote-group.mjs on the pushed branch)",
+  effort="M", model=SON, deps=_TRK + "; L0's absolute-filename helper first for TK1-07 (vm-no-filename)",
+  slices=["PR 1: TK1-01, TK1-02 (high)", "PR 2: TK1-05, TK1-07, TK1-08, TK1-12, TK1-25, TK2-03"]),
+ dict(id="L29", name="Track designer tests on the real editor", batches=["tracks-1", "tracks-2"],
+  goal="designer DOM, canvas, toolbar fit and fleet validation drive js/editor/ and assert what the player sees; the designer spec is green alone before any assert change",
+  owned=_files(["TK1-13", "TK1-24", "TK2-06", "TK2-13", "TK2-14"]),
+  ids=["TK1-13", "TK1-24", "TK2-06", "TK2-13", "TK2-14"],
+  verify="node --test on the owned units; track-designer.spec.js alone via test-bg.mjs",
+  effort="S", model=SON, deps="TK2-06 may be an environment timeout: re-run track-designer.spec.js alone at loadavg < 3 before changing it"),
+]
