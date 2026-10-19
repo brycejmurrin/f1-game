@@ -54,9 +54,9 @@ const GarageCrew = (function () {
   // A pose: the stand with overrides; a [l, r] pair is per side, else mirrored in x.
   const POSES = {
     stand: {},
-    kneel: { footL: [0.14, 0.05, 0.40], kneeL: [0.14, 0.52, 0.38], footR: [-0.12, 0.06, -0.36], kneeR: [-0.12, 0.08, 0.06],
+    kneel: { footL: [0.14, 0.05, 0.40], kneeL: [0.14, 0.52, 0.38], footR: [-0.12, 0.07, -0.36], kneeR: [-0.12, 0.09, 0.06],
       hip: [0.10, 0.55, 0.04], pelvis: [0, 0.58, 0.03], chest: [0, 0.90, 0.16], neck: [0, 1.02, 0.20], head: [0, 1.16, 0.24],
-      shoulder: [0.22, 0.95, 0.16], elbow: [0.20, 0.62, 0.30], hand: [0.07, 0.42, 0.46] },
+      shoulder: [0.22, 0.95, 0.16], elbow: [0.25, 0.62, 0.30], hand: [0.07, 0.42, 0.46] },
     jack: { chest: [0, 1.26, 0.16], neck: [0, 1.38, 0.22], head: [0, 1.53, 0.27], shoulder: [0.22, 1.30, 0.16],
       elbow: [0.22, 1.08, 0.36], hand: [0.08, 0.92, 0.50], footL: [0.12, 0.05, 0.22], kneeL: [0.12, 0.50, 0.18] },
     carry: { shoulder: [0.22, 1.38, 0.02], elbow: [0.30, 1.08, 0.18], hand: [0.36, 0.88, 0.48] },
@@ -126,11 +126,15 @@ const GarageCrew = (function () {
     tube(out, [g[0], g[1], g[2] - 0.1], [g[0], 0.06, -0.15], 0.022, HOSE, 6);        // air line
     tube(out, [g[0], 0.03, -0.15], [g[0] + 0.4, 0.03, -1.6], 0.022, HOSE, 6);
   }
-  function frontJack(out) {
-    tube(out, [0, 0.92, 0.52], [0, 0.16, 1.48], 0.03, ALLOY, 8);                     // the long handle
+  // A manual jack from the hands to a saddle at height sy, 1.5 m ahead: the
+  // saddle's face stops at local z 1.62, so the figure stands 1.62 m off the
+  // nose tip or the rear crash structure and the jack touches it, never enters.
+  function jack(out, sy) {
+    tube(out, [0, 0.92, 0.52], [0, sy, 1.46], 0.03, ALLOY, 8);                       // the long handle
     block(out, 0, 0.92, 0.52, 0.16, 0.025, 0.025, JACK);                             // its T-bar
-    block(out, 0, 0.14, 1.52, 0.2, 0.06, 0.12, JACK);                                // lift saddle
-    for (const s of [-1, 1]) tube(out, [s * 0.17, 0.07, 1.42], [s * 0.23, 0.07, 1.42], 0.07, RUBBER, 10);
+    block(out, 0, sy, 1.52, 0.2, 0.06, 0.10, JACK);                                  // lift saddle
+    tube(out, [0, sy - 0.06, 1.46], [0, 0.07, 1.36], 0.03, JACK, 6);                 // its leg to the axle
+    for (const s of [-1, 1]) tube(out, [s * 0.17, 0.07, 1.36], [s * 0.23, 0.07, 1.36], 0.07, RUBBER, 10);
   }
   // A tyre about centre c, half-width ax along x (on the car) or along z (held
   // face-on toward the hub, the way the tyre-on man offers it).
@@ -138,9 +142,8 @@ const GarageCrew = (function () {
     const at = (w) => alongZ ? [c[0], c[1], c[2] + w] : [c[0] + w, c[1], c[2]];
     const a = at(-ax), b = at(ax);
     if (blanket) {
-      tube(out, a, b, 0.37, BLANKET, 16);
-      tube(out, at(-(ax - 0.004)), at(ax + 0.004), 0.36, BLANKET, 16);
-      tube(out, at(-(ax * 0.25)), at(ax * 0.25), 0.375, mark, 16);   // the compound band
+      tube(out, a, b, 0.355, BLANKET, 16);
+      tube(out, at(-(ax * 0.25)), at(ax * 0.25), 0.36, mark, 16);    // the compound band
     } else {
       tube(out, a, b, 0.35, RUBBER, 16);
       tube(out, at(-(ax - 0.006)), at(ax + 0.006), 0.26, mark, 14);  // sidewall stripe
@@ -179,11 +182,11 @@ const GarageCrew = (function () {
           (o) => tyre(o, [0, 0.88, 0.5], 0.17, false, soft, true));                                            // tyre on
         person(m, c1, c2, "stand", "helmet", wx + s * 1.55, wz + (wz > 0 ? -0.9 : 0.9), FACE_X(s));    // tyre off
       }
-      person(m, c1, c2, "jack", "helmet", 0, 3.25 + 1.5, Math.PI, frontJack);
-      person(m, c1, c2, "jack", "helmet", 0, -2.75 - 1.5, 0, frontJack);
+      person(m, c1, c2, "jack", "helmet", 0, 3.18 + 1.62, Math.PI, (o) => jack(o, 0.16));          // nose tip
+      person(m, c1, c2, "jack", "helmet", 0, -2.69 - 1.62, 0, (o) => jack(o, 0.34));             // crash structure
       for (const s of [-1, 1]) person(m, c1, c2, "crouch", "helmet", s * 1.35, 0.1, FACE_X(s));        // stabilisers
     } else if (id === "workshop") {
-      for (const [wx, wz] of wheels) tyre(m, [wx * 1.0, 0.345, wz], 0.215, true, wz > 0 ? soft : med); // blankets on
+      for (const [wx, wz] of wheels) tyre(m, [wx, 0.36, wz], 0.215, true, wz > 0 ? soft : med);       // blankets on, resting on the floor
       person(m, c1, c2, "lean", "cap", 1.25, 0.3, -Math.PI / 2);                                        // in the cockpit
       person(m, c1, c2, "crouch", "cap", -1.55, 1.9, Math.PI / 2);                                      // at the front corner
       person(m, c1, c2, "tablet", "cap", -2.4, -1.4, Math.PI / 2 - 0.5, tablet);                        // engineer

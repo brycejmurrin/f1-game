@@ -103,6 +103,10 @@ test("design-preview crew looks: each builds valid, distinct geometry; classic s
       assert.ok(d.pos.every(Number.isFinite), id + ": finite positions");
       assert.ok(d.idx.every((i) => i >= 0 && i < n), id + ": indices in range");
       verts += n;
+      // FIT: nothing below the bay floor (y 0); the baked looks also stand ON it.
+      let minY = Infinity;
+      for (let i = 1; i < d.pos.length; i += 3) minY = Math.min(minY, d.pos[i]);
+      if (n > 1000) assert.ok(minY >= -1e-3 && minY < 0.03, `${id}: the crew stands on the floor (min y ${minY.toFixed(3)})`);
     }
     sizes[id] = verts;
   }
