@@ -432,7 +432,11 @@ if (MODES.length) {
 // instead of 1% of a whole-car still. [eye, target].
 const FRAMES = {
   side:           [[6.2, 0.7, -0.1], [0, 0.45, -0.1]],
+  // Tighter chassis side for BODY sheets: at the wide `side` the car is ~17% of
+  // pixels, so a real outline move still tags SUBTLE (<8% of the whole frame).
+  side_close:     [[3.6, 0.72, 0.15], [0.05, 0.48, 0.05]],
   three_quarter:  [[4.4, 1.35, 3.4], [0, 0.42, 0]],
+  three_quarter_close: [[2.8, 1.1, 2.4], [0.15, 0.48, 0.1]],
   nose:           [[1.9, 0.9, 3.9], [0, 0.35, 2.0]],
   front_wheel:    [[2.1, 0.55, 2.3], [0.75, 0.34, 1.7]],
   front_susp:     [[1.0, 1.25, 3.4], [0.45, 0.32, 1.65]],

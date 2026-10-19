@@ -71,19 +71,22 @@ const Car3D = (function () {
   // above the shipped team worst so CarBodyGeom's NOSE_DROOP_FLOOR is unchanged.
   // Values are silhouette-first (DAD #2924 side sheet): nose length/height,
   // sidepod width/height, airbox and cover crown must read at a glance.
+  // DAD #2924 @2ff4f76: side/3-4 must clear SUBTLE_PCT (8%). Brick/barge already
+  // read; needle/anteater/arched/wedge need brick-level outline moves in Y/Z
+  // (width alone is invisible in pure side).
   const BODY_STYLES = Object.freeze({
-    // Long thin needle: tip far forward, skinny tip+waist, tall slim inlet, low flat cover.
-    needle:  Object.freeze({ noseTipZ:  0.38, noseSlim: 0.28, noseDroop: -0.028, airbox: 0.38, fin: 0, mirror: 0, inlet: -0.080, inletH:  0.160, inletW: -0.200, undercutD:  0.160, waist: -0.200, floorStep:  0.080, coverCrown: -0.060, coverLift: -0.090, wingStyle: W({ arch: 0.28, twist: 0.08, teCurve: 0.030, chordTaper: 0.14, foot: 0.75, tipRise: 0.006 }) }),
-    // Boxy brick (already reads): blunt fat nose, slab pods, tall airbox, raised box cover.
-    brick:   Object.freeze({ noseTipZ: -0.30, noseSlim: 2.20, noseDroop:  0,     airbox: 1.85, fin: 1, mirror: 1, inlet:  0.100, inletH:  0.180, inletW:  0.200, undercutD: -0.140, waist:  0.220, floorStep:  0.080, coverCrown: -0.060, coverLift:  0.070, wingStyle: W({ flaps: 2, arch: 0.28, twist: 0.06, teCurve: 0.025, chordTaper: 0.12, foot: 0.75, canard: 0, tipRise: 0.006 }) }),
-    // Anteater: long low protruding snout, low wide mouth, humped cover behind.
-    anteater: Object.freeze({ noseTipZ: 0.34, noseSlim: 0.62, noseDroop: -0.028, airbox: 0.90, fin: 0, mirror: 2, inlet: -0.040, inletH: -0.140, inletW:  0.140, undercutD:  0.040, waist:  0.030, floorStep: -0.070, coverCrown:  0.200, coverLift:  0.110, wingStyle: W({ arch: 0.95, twist: 0.42, teCurve: 0.190, chordTaper: 0.48, canard: 2, tipRise: 0.065 }) }),
-    // Arched: tall airbox + high crowned cover, deep undercut, moderate nose.
-    arched:  Object.freeze({ noseTipZ:  0.06, noseSlim: 0.95, noseDroop: -0.022, airbox: 1.95, fin: 1, mirror: 0, inlet:  0.030, inletH:  0.160, inletW: -0.020, undercutD:  0.140, waist: -0.080, floorStep:  0.030, coverCrown:  0.240, coverLift:  0.160, wingStyle: W({ arch: 1.15, twist: 0.36, teCurve: 0.170, foot: 1.55, tipRise: 0.065 }) }),
-    // Wedge: long rising nose, low inlet / deep undercut, high rear cover, tiny airbox.
-    wedge:   Object.freeze({ noseTipZ:  0.36, noseSlim: 1.35, noseDroop: -0.008, airbox: 0.42, fin: 0, mirror: 1, inlet: -0.090, inletH: -0.160, inletW:  0.080, undercutD:  0.180, waist: -0.180, floorStep:  0.100, coverCrown:  0.160, coverLift:  0.140, wingStyle: W({ flaps: 2, arch: 0.55, twist: 0.20, teCurve: 0.090, chordTaper: 0.30, tipRise: 0.024 }) }),
-    // Barge: short fat blunt hull, wide low pods, heavy waist, low flat cover.
-    barge:   Object.freeze({ noseTipZ: -0.30, noseSlim: 1.95, noseDroop: -0.006, airbox: 1.45, fin: 1, mirror: 2, inlet:  0.080, inletH: -0.040, inletW:  0.200, undercutD: -0.140, waist:  0.220, floorStep: -0.100, coverCrown: -0.060, coverLift: -0.070, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
+    // Needle: spike nose past the wing, pencil tip+waist, tower inlet, sunken flat cover.
+    needle:  Object.freeze({ noseTipZ:  0.55, noseSlim: 0.16, noseDroop: -0.028, airbox: 0.22, fin: 0, mirror: 0, inlet: -0.100, inletH:  0.280, inletW: -0.240, undercutD:  0.200, waist: -0.260, floorStep:  0.100, coverCrown: -0.080, coverLift: -0.140, wingStyle: W({ arch: 0.22, twist: 0.06, teCurve: 0.020, chordTaper: 0.12, foot: 0.70, tipRise: 0.004 }) }),
+    // Brick (reads): blunt fat nose, slab pods, tall airbox, raised box cover.
+    brick:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.40, noseDroop:  0,     airbox: 2.00, fin: 1, mirror: 1, inlet:  0.120, inletH:  0.220, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep:  0.100, coverCrown: -0.080, coverLift:  0.100, wingStyle: W({ flaps: 2, arch: 0.28, twist: 0.06, teCurve: 0.025, chordTaper: 0.12, foot: 0.75, canard: 0, tipRise: 0.006 }) }),
+    // Anteater: long low snout (mid cone drops), flat low pods, humped cover.
+    anteater: Object.freeze({ noseTipZ: 0.52, noseSlim: 0.48, noseDroop: -0.028, airbox: 0.70, fin: 0, mirror: 2, inlet: -0.050, inletH: -0.240, inletW:  0.180, undercutD:  0.060, waist:  0.050, floorStep: -0.100, coverCrown:  0.260, coverLift:  0.180, wingStyle: W({ arch: 0.95, twist: 0.42, teCurve: 0.190, chordTaper: 0.48, canard: 2, tipRise: 0.065 }) }),
+    // Arched: short stock nose, tower airbox + high cover crown, tall pods.
+    arched:  Object.freeze({ noseTipZ:  0.02, noseSlim: 0.90, noseDroop: -0.022, airbox: 2.40, fin: 1, mirror: 0, inlet:  0.040, inletH:  0.280, inletW: -0.040, undercutD:  0.180, waist: -0.100, floorStep:  0.040, coverCrown:  0.280, coverLift:  0.200, wingStyle: W({ arch: 1.15, twist: 0.36, teCurve: 0.170, foot: 1.55, tipRise: 0.065 }) }),
+    // Wedge: long low tip, scooped low inlet, rising high cover, tiny airbox.
+    wedge:   Object.freeze({ noseTipZ:  0.52, noseSlim: 1.45, noseDroop: -0.028, airbox: 0.28, fin: 0, mirror: 1, inlet: -0.110, inletH: -0.260, inletW:  0.100, undercutD:  0.220, waist: -0.220, floorStep:  0.120, coverCrown:  0.200, coverLift:  0.200, wingStyle: W({ flaps: 2, arch: 0.55, twist: 0.20, teCurve: 0.090, chordTaper: 0.30, tipRise: 0.024 }) }),
+    // Barge (reads): short fat blunt hull, wide low pods, heavy waist, low flat cover.
+    barge:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.10, noseDroop: -0.006, airbox: 1.55, fin: 1, mirror: 2, inlet:  0.100, inletH: -0.060, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep: -0.120, coverCrown: -0.080, coverLift: -0.100, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
