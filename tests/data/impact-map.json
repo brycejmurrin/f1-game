@@ -1579,11 +1579,13 @@
       ],
       "cornerS": [
         "tests/unit/flyby-pose-inverse.test.mjs",
-        "tests/unit/flyby-shots.test.mjs"
+        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/free-cam.test.mjs"
       ],
       "cornerSide": [
         "tests/unit/flyby-pose-inverse.test.mjs",
-        "tests/unit/flyby-shots.test.mjs"
+        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/free-cam.test.mjs"
       ],
       "cornerTurn": [
         "tests/unit/flyby-shots.test.mjs"
@@ -1629,6 +1631,7 @@
       "reset": [
         "tests/unit/flyby-pose-inverse.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/free-cam.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "setDuration": [
@@ -1659,6 +1662,7 @@
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/flyby-pose-inverse.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/free-cam.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "swayAt": [
@@ -15788,6 +15792,7 @@
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/free-cam.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
     },
