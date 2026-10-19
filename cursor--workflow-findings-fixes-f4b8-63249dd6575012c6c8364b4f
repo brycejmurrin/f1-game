@@ -1,1 +1,0 @@
-1792392759	Bryce Murrin	PR #2992: validated game fixes and workflow harness; missing-ripgrep CI fix reviewed and real smoke green, canonical post-fix gate running before exact-head CI.  [cursor/workflow-findings-fixes-f4b8; session 63249dd6575012c6c8364b4f]
