@@ -90,6 +90,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-fleet.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
+  "tests/unit/agent-output-config.test.mjs",
+  "tests/unit/agent-output.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
@@ -665,6 +667,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-draft-mesh-cache.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
   "tests/unit/livery-helmet-style.test.mjs",
+  // PAINT ZONES (floor/susp/duct/deflector/cockpit/board/exhaust tints, floor/susp/nose/rim finishes): unset = byte-identical. VM, ~3 s.
+  "tests/unit/livery-paint-zones.test.mjs",
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",
@@ -696,7 +700,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/low-speed-lock.test.mjs",
   "tests/unit/lsp-caller-fixes.test.mjs",
   "tests/unit/lsp-config-freshness.test.mjs",
-  // apex-lsp as an MCP client: definition / references / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). ~2 s.
+  // apex-lsp as an MCP client: shared warmed child for definition / references / callers / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). Pipelined alias fan-out; test:mcp runs --test-concurrency=1 (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md).
   "tests/unit/lsp-mcp.test.mjs",
   "tests/unit/lsp-navigation-efficiency.test.mjs",
   "tests/unit/lsp-reference-fixes.test.mjs",
@@ -758,6 +762,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/onboard.test.mjs",
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
+  "tests/unit/output-level-mcp.test.mjs",
+  "tests/unit/output-surface.test.mjs",
   "tests/unit/over-road-scan.test.mjs",
   // Stream overlay v1 schema/diffs, transform painter, TV pass/battle/fastest cards, and staged root page.
   "tests/unit/overlay-feed.test.mjs",
@@ -822,6 +828,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-forces.test.mjs",
   "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
+  "tests/unit/poll-live-shell.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
   "tests/unit/pr-board.test.mjs",
   // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.

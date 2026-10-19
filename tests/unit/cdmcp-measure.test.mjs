@@ -256,3 +256,30 @@ with tempfile.TemporaryDirectory(dir=${JSON.stringify(path.join(ROOT, "scratch")
   assert.equal(result.status, "failed");
   assert.match(result.failures.join("\n"), /navigation failed: ERR_CONNECTION_REFUSED/);
 });
+
+test("measure retains complete private JSON beyond the former saved-character cap", () => {
+  const script = `
+import contextlib, importlib.util, io, json, pathlib, stat, tempfile
+spec=importlib.util.spec_from_file_location("measure", "tools/mcp/cdmcp-measure.py")
+m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+with tempfile.TemporaryDirectory() as directory:
+    m.ROOT=pathlib.Path(directory); m.LOGDIR=m.ROOT/"logs"
+    m.LOG_PATH=m.LOGDIR/"measure.log"; m.JSON_PATH=m.LOGDIR/"measure.json"
+    m.LOGDIR.mkdir(); m.JSON_PATH.write_text("old"); m.JSON_PATH.chmod(0o644)
+    class Client:
+        def __init__(self,*args): pass
+        def start(self): pass
+        def close(self): pass
+    m.McpClient=Client
+    def boot(c,log,url,summary): summary.update(boot={"ok":True},payload="x"*600000,tail="retained")
+    m.measure_boot=boot
+    with contextlib.redirect_stdout(io.StringIO()): code=m.run_measure("boot","about:blank")
+    result=json.loads(m.JSON_PATH.read_text())
+    assert code==0 and result["status"]=="passed" and result["tail"]=="retained"
+    assert result["payload"]=="x"*600000
+    assert stat.S_IMODE(m.JSON_PATH.stat().st_mode)==0o600
+print("ok")
+`;
+  const r = spawnSync("python3", ["-c", script], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
+  assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout.trim(), "ok");
+});

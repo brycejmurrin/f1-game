@@ -3573,6 +3573,12 @@ const TLX = (function () {
       // Every geometry this backend creates, held WEAKLY — a census that
       // retains what it measures is a leak, not an instrument.
       const _geoReg = [];
+      // Membership for _regGeo: createMesh calls _regGeo(buildGeometry(...), kind)
+      // and buildGeometry already registered as "mesh". Without this, every
+      // ordinary mesh adds two WeakRefs and memState/geoCensus double-count
+      // (issue #2928). WeakSet keys die with the geometry; kind is always
+      // stamped first so the later call still upgrades mesh → carSh.
+      const _geoSeen = (typeof WeakSet !== "undefined") ? new WeakSet() : null;
       let _geoPruneAt = -Infinity;
       function pruneGeoRegistry(now) {
         if (now - _geoPruneAt < 2000) return;
@@ -3729,7 +3735,17 @@ const TLX = (function () {
         }
       }
 
-      function _regGeo(g, kind) { try { g.__tlxKind = kind; _geoReg.push(new WeakRef(g)); } catch (_) { /* no WeakRef: census degrades, nothing leaks */ } return g; }
+      function _regGeo(g, kind) {
+        try {
+          g.__tlxKind = kind;   // always: createMesh upgrades after buildGeometry
+          if (_geoSeen) {
+            if (_geoSeen.has(g)) return g;
+            _geoSeen.add(g);
+          }
+          _geoReg.push(new WeakRef(g));
+        } catch (_) { /* no WeakRef: census degrades, nothing leaks */ }
+        return g;
+      }
       // Attributes go through TLXShaders.packAttr: it range-scans each source
       // and quantises ONLY what provably fits (colour 8-bit, unit normal 16,
       // MAT id 0..16), keeping Float32 otherwise, and backs an absent source

@@ -5,6 +5,8 @@ below say what to read and in what order, and the index at the bottom exists so
 nothing goes unfindable.
 
 Player-facing change notes live in [changelog.d/](changelog.d/).
+Selectable agent tool output and saved evidence are documented in
+[agent-output/](agent-output/README.md).
 
 ## Read in this order
 
@@ -221,6 +223,10 @@ read here — follow the link.
 
 For day-to-day workflows, see the **skills** in `.claude/skills/`
 (`.claude/skills/README.md`) and the **tools** in `tools/` (`tools/README.md`).
+
+## Deferred repository maintenance
+
+- [History cleanup while development continues](plans/2026-10-19-deferred-history-cleanup.md): saved future preparation and separate approval gates; no development freeze, history rewrite or recovery-ref deletion is authorized.
 
 ## Mechanics survey and implementation
 

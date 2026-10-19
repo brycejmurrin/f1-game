@@ -1,4 +1,5 @@
 // No browser: protocol/transport fixtures preserve CDP event and response ordering.
+import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
@@ -507,8 +508,9 @@ test("real stdio subprocess discovery and malformed JSON recovery, no browser la
 });
 test("project catalogs launch the separate debugger wrapper and discover its tools", async () => {
   const read = path => JSON.parse(readFileSync(new URL("../../" + path, import.meta.url), "utf8"));
-  const server = read(".mcp.json").mcpServers["js-debugger"];
-  assert.deepEqual(server, read(".cursor/mcp.json").mcpServers["js-debugger"]);
+  const cfg = read(".mcp.json");
+  assert.deepEqual(cfg, read(".cursor/mcp.json"));
+  const server = nativeMcpConfig(cfg).mcpServers["js-debugger"];
   assert.deepEqual(server, read("tools/mcp/js-debugger-mcp.json").mcpServers["js-debugger"]);
   const child = spawn(server.command, server.args, { cwd: new URL("../..", import.meta.url), stdio: ["pipe", "pipe", "pipe"] });
   let out = "", err = ""; child.stdout.on("data", b => { out += b; }); child.stderr.on("data", b => { err += b; });
