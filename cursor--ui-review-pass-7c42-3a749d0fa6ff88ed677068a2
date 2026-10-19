@@ -1,1 +1,0 @@
-1792448698	Bryce Murrin	User ordered push and merge of reviewed UI commit c9beaf931. OWNED css/settings.css css/settings-controls.css (#pm-drill) css/tuner.css css/data.css and changelog only. Known local baseline tool failures documented; running remote required CI, no unrelated tool edits.  [cursor/ui-review-pass-7c42; session 3a749d0fa6ff88ed677068a2]
