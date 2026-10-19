@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { refsIn, closesIn, holders, labelPlan, renderBoard, readLabels, BOARD_MARKER } from "../../tools/ci/fleet-board.mjs";
+import { refsIn, closesIn, holders, labelPlan, renderBoard, readLabels, coverageOf, readCoverage, BOARD_MARKER } from "../../tools/ci/fleet-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const issue = (number, labels, title = `issue ${number}`) => ({ number, title, labels: labels.map((name) => ({ name })) });
@@ -96,3 +96,61 @@ for (const [field, max] of [["name", 50], ["description", 100]]) {
     });
   });
 }
+
+
+const link = (number, state = "OPEN", closing = false, isDraft = false) => ({ number, state, closing, isDraft });
+const event = (number, state = "OPEN", closing = false, repo = "owner/repo") => ({
+  willCloseTarget: closing, source: { number, state, isDraft: false, repository: { nameWithOwner: repo } }
+});
+const timeline = (number, nodes, truncated = false) => ({ number, timelineItems: { nodes, pageInfo: { hasNextPage: truncated } } });
+
+test("current ownership expires at the claim tool's two-hour boundary, preserving separate open partial PR protection", () => {
+  const coverage = new Map([[2, [link(20)]], [3, [link(30, "MERGED")]], [4, [link(40, "CLOSED")]]]);
+  const held = holders([claim("#1 current", 120), claim("#2 stale", 121), claim("#3 stale", 800)], [], undefined, coverage);
+  assert.equal(held.get(1).kind, "claim");
+  assert.equal(held.get(2).pr, 20);
+  assert.equal(held.get(2).referenceOnly, true);
+  assert.equal(held.has(3), false, "merged progress must not retain ownership");
+  assert.equal(held.has(4), false, "abandoned PR must not hold work");
+  const plan = labelPlan([issue(2, ["claimed"]), issue(3, ["claimed", "blocked"])], held);
+  assert.deepEqual(plan.map((p) => [p.number, p.add, p.remove]), [[3, [], ["claimed"]]]);
+});
+
+test("coverage ignores other-repo and non-PR references, deduplicates, preserves closing intent, and refuses truncated evidence", () => {
+  const result = coverageOf([timeline(1, [event(11, "MERGED"), event(12), event(12, "OPEN", true), event(12), event(13, "OPEN", true, "elsewhere/repo"), { source: {} }])], "owner/repo");
+  assert.deepEqual(result.get(1), [link(12, "OPEN", true), link(11, "MERGED")]);
+  assert.throws(() => coverageOf([timeline(1, [], true)], "owner/repo"), /incomplete.*refusing writes/);
+});
+
+test("board keeps ownership, stale evidence and merged progress separate, escaping table cells", () => {
+  const issues = [issue(1, ["claimed"], "partial | work"), issue(2, ["ready"]), issue(3, ["blocked"])];
+  const coverage = new Map([[1, [link(10, "OPEN", false, true)]], [2, [link(20, "MERGED")]]]);
+  const claims = [claim("#1 stale", 800, "old|owner"), claim("#3 current", 5, "new")];
+  const body = renderBoard({ issues, prs: [], claims, coverage, held: holders(claims, [], undefined, coverage) });
+  assert.match(body, /\| #1 partial   work \| none \| #10 open draft \(reference; scope unverified\) \| old owner 13 h \|/);
+  assert.match(body, /\| #2 issue 2 \| none \| #20 merged/);
+  assert.match(body, /\| #3 issue 3 \| new \| none found/);
+  assert.match(body, /Close only against the issue acceptance evidence/);
+});
+
+test("reader paginates issues and PRs and merges canonical closing links (including URL/manual links)", () => {
+  const cursors = [];
+  const response = (nodes, next = null) => ({ nodes, pageInfo: { hasNextPage: !!next, endCursor: next } });
+  const request = (query, vars) => {
+    cursors.push(vars.cursor || null);
+    if (query.includes("issues(first")) return { repository: { issues: vars.cursor ? response([timeline(2, [])]) : response([timeline(1, [event(11)])], "issue-page2") } };
+    const pr = { number: 11, isDraft: true, closingIssuesReferences: response([{ number: 1, repository: { nameWithOwner: "owner/repo" } }, { number: 2, repository: { nameWithOwner: "other/repo" } }]) };
+    return { repository: { pullRequests: vars.cursor ? response([]) : response([pr], "pr-page2") } };
+  };
+  const result = readCoverage("owner/repo", request);
+  assert.deepEqual(cursors, [null, "issue-page2", null, "pr-page2"]);
+  assert.deepEqual(result.get(1), [link(11, "OPEN", true, true)]);
+  assert.deepEqual(result.get(2), []);
+});
+
+test("reader refuses missing pages or truncated closing-reference lists", () => {
+  assert.throws(() => readCoverage("owner/repo", () => ({ repository: { issues: { nodes: [], pageInfo: { hasNextPage: true } } } })), /incomplete issue pagination/);
+  assert.throws(() => readCoverage("owner/repo", (query) => query.includes("issues(first")
+    ? { repository: { issues: { nodes: [], pageInfo: { hasNextPage: false } } } }
+    : { repository: { pullRequests: { nodes: [{ number: 5, closingIssuesReferences: { pageInfo: { hasNextPage: true } } }], pageInfo: { hasNextPage: false } } } }), /incomplete closing links/);
+});

@@ -11,6 +11,22 @@ For this repo, the answer is to **add GitHub Issues with sub-issues as the backl
 
 No tool on the list gives you an atomic cross-container claim. Your existing git-push race on `claude/claims-board` is already the right primitive. Adoption is mostly conventions: labels, an issue template, a ready query, and one rule linking each PR's Goal to an issue. You don't need a new service.
 
+## Current issue / PR reconciliation
+
+The pinned Fleet board shows current claims (at most two hours old, matching
+`who-is-on-it.mjs`), stale claim evidence, and open/merged/closed PR associations
+in separate columns. The existing `claimed` label remains a duplicate-work guard:
+a current claim or an associated open PR retains it. It is not a completion flag.
+Stale records are displayed for review rather than deleted; unread API/claim data
+must not release ownership. The board refuses to apply incomplete link snapshots.
+
+Use `Closes #n` only when the PR completes the issue acceptance criteria. A slice
+uses `Refs #n`, states what landed, and names the remaining acceptance work on the
+issue. Merged PR references establish progress, not completion. Before closing an
+issue, compare its acceptance criteria against the merged behavior and verification;
+keep partial issues open and preserve active owners. Do not infer readiness from
+an epic having no linked PR, or from a stale claim alone.
+
 ## Your three hard constraints eliminate most of the field
 
 Three requirements are binary for this repo: an agent in a throwaway container must authenticate without a human, the developer must be able to read status on a phone, and work status must connect to PRs and CI. Most options fail at least one.
@@ -126,7 +142,7 @@ Two vendors folding within about three months is the clearest lock-in lesson in 
 |---|---|---|---|
 | Backlog and dependencies | GitHub Issues + sub-issues (MCP `issues` toolset) | Not-yet-started work; epics as parents; `ready` / `blocked` / `claimed` labels; area labels | GitHub Mobile issues list, or a pinned "Fleet board" issue |
 | Claims | `who-is-on-it.mjs --claim "#<n> <text>"` on `claude/claims-board` | The atomic lock; mirrored onto the issue as a `claimed` label plus a comment with the session link and branch | Issue label and comment |
-| In-flight status | Draft PR body (Goal / Plan / Status / Next step), gated by `ready-gate.mjs` | One session's live plan; Goal line cites `Closes #<n>` | PR checklist + checks |
+| In-flight status | Draft PR body (Goal / Plan / Status / Next step), gated by `ready-gate.mjs` | One session's live plan; Goal line cites `Closes #<n>` for complete work or `Refs #<n>` for a partial slice | PR checklist + checks |
 | Memory | `.claude/memory/` (preferences), `docs/notes/` (measured lessons), hooks/tests (rules) | Durable facts, never task status | Rendered markdown |
 
 This matches the separation that Beads and Claude Code both prescribe: durable facts and preferences in memory, current work in the tracker ([beads](https://github.com/steveyegge/beads); [best practices](https://code.claude.com/docs/en/best-practices)).
@@ -135,9 +151,9 @@ This matches the separation that Beads and Claude Code both prescribe: durable f
 
 **Step 1: create labels and an issue template.** Create the labels `ready`, `blocked`, `claimed` and the area labels. Add an issue template whose body is self-contained for a cold agent (objective, files in scope, verify command, "Blocked by #n"). Anthropic found that vague task specs caused duplicate work across parallel agents ([Anthropic](https://www.anthropic.com/engineering/multi-agent-research-system)).
 
-**Step 2: add a short AGENTS.md rule for picking up work.** At session start, the agent runs the ready query `is:open label:ready -label:claimed -label:blocked` through `list_issues` (`labels: ["ready"]`; the MCP `search_issues` is semantic, not GitHub search syntax). Before branching, it claims through `who-is-on-it.mjs`, then labels and comments on the issue. Its draft PR's Goal cites `Closes #n`. When it discovers new work, it files a sub-issue rather than adding scope to the current PR.
+**Step 2: add a short AGENTS.md rule for picking up work.** At session start, the agent runs the ready query `is:open label:ready -label:claimed -label:blocked` through `list_issues` (`labels: ["ready"]`; the MCP `search_issues` is semantic, not GitHub search syntax). Before branching, it claims through `who-is-on-it.mjs`, then labels and comments on the issue. Its draft PR's Goal cites `Closes #n` for full acceptance coverage, or `Refs #n` with explicit remaining work for a slice. When it discovers new work, it files a sub-issue rather than adding scope to the current PR.
 
-**Step 3: let the merge close it.** Checked while landing this note: the deploy branch `claude/f1-game-project-26h3ng` IS the repository's default branch (`git ls-remote --symref origin HEAD`), so a `Closes #n` line in the PR closes the issue on merge ([closing keywords](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)). The research pass assumed a non-default branch and proposed `Refs #n` plus a Merge Desk close; neither is needed.
+**Step 3: let the merge close it.** Checked while landing this note: the deploy branch `claude/f1-game-project-26h3ng` IS the repository's default branch (`git ls-remote --symref origin HEAD`), so a `Closes #n` line in the PR closes the issue on merge ([closing keywords](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)). The research pass assumed a non-default branch and proposed `Refs #n` plus a Merge Desk close; manual closure is not needed for complete work. Partial work must use `Refs #n` and keep the remaining acceptance criteria on the issue.
 
 **Step 4: record dependencies.** Express dependencies with sub-issues, which the MCP supports. Use the `blocked` label for "blocked by". GitHub's native blocked-by relations went GA with `is:blocked` search ([changelog](https://github.blog/changelog/2025-08-21-dependencies-on-issues/)), but the MCP has no dependency-write tools ([awesome-copilot reference](https://git.cynarski.dev/Awesome/awesome-copilot/src/branch/main/skills/github-issues/references/dependencies.md)). Native relations would need REST calls, which may not pass your proxy. Test one `gh api` dependency write before standardizing on it.
 
