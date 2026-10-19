@@ -186,7 +186,9 @@
   },
   "env": {
     "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0",
-    "APEX_MERGE_DESK": "1"
+    "APEX_MERGE_DESK": "1",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "150000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80"
   },
   "enabledMcpjsonServers": [
     "apex-tools",
