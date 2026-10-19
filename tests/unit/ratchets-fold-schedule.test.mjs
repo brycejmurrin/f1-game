@@ -35,6 +35,20 @@ test("--fold --min-fragments=N does nothing below N and folds at N, ceilings unc
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
 });
 
+test("--fold rewrites CEILING-HISTORY paths to folded fragments so docs-integrity stays green", () => {
+  const s = scratch();
+  const note = path.join(s.dir, "docs/notes/CEILING-HISTORY.md");
+  const frag = ["tests", "data", "ratchets.d", "x.json"].join("/"); // built: no repo path for the scan
+  try {
+    fs.mkdirSync(path.dirname(note), { recursive: true });
+    fs.writeFileSync(note, `Fragment delta: \`${frag}\`.\n`);
+    s.tool("--fold");
+    const text = fs.readFileSync(note, "utf8");
+    assert.ok(!text.includes(frag), "the deleted fragment's repo path is gone");
+    assert.match(text, /`ratchets\.d\/x\.json \(folded\)`/, "the fragment's name stays, marked folded");
+  } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
+});
+
 test("the workflow is weekly + dispatch, pushes a bot branch to a PR, never the deploy branch", () => {
   const w = fs.readFileSync(path.join(ROOT, ".github/workflows/ratchets-fold.yml"), "utf8");
   assert.match(w, /schedule:\s*\n\s*- cron: "[^"]+"/);
