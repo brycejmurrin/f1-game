@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw ORCH12 LIVE session_015sP1rL5Zhbk8uUishsEqQw orchestrator (took over from ORCH11 12:47Z); sweep reports + lines go here
+LEASE to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw acquire ttl=60m until=2026-10-19T13:48Z ORCH12 session_015sP1rL5Zhbk8uUishsEqQw orchestrator, Level 3
