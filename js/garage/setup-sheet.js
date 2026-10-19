@@ -103,7 +103,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           coverBind: "independent", finHandoff: "match", bodySplit: "off", bodyStyle: "team",
                           patternPlacement: "crown", patternSide: "both", patternWidth: "70", patternRepeat: "6",
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
-                          patternRotation: "0", patternStretch: "100", patternWeight: "100",
+                          patternRotation: "0", patternStretch: "100", patternWeight: "100", patternKey: "auto",
                           coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit",
                           podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team",
                           floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit" };
@@ -154,7 +154,8 @@ const LIV_ROW_HINT = {
   patternOpacity: "OPACITY — transparency of the new spine artwork over its base paint.",
   patternRotation: "ROTATION — turn the artwork within its painted area. Wrap sides remain aligned with the crown.",
   patternStretch: "LENGTH STRETCH — compress or extend the artwork along the engine cover.",
-  patternWeight: "LINE WEIGHT — thickness of contour, honeycomb, wave, herringbone, circuit and speed-line strokes.",
+  patternWeight: "LINE WEIGHT — thickness of contour, honeycomb, wave, herringbone, circuit and speed-line strokes, and of the keylines on the tartan, bordered-stripe, spearhead, deck-split and keyline-split layouts.",
+  patternKey: "KEYLINE — which colour paints the keylines of the tartan, bordered-stripe, spearhead, deck-split and keyline-split layouts, and the tricolour's middle band. AUTO keeps each layout's own pick.",
   patternTint: "DESIGN COLOUR — adjustable artwork on the crown and selected cover flanks. Unset = ACCENT.",
   patternSecond: "SECOND DESIGN COLOUR — two-colour patterns, including gradients, waves, sunbursts, scallops, herringbone, circuits, shards and pixel fade. Unset = PRIMARY.",
   coverFinish: "COVER FINISH — painted engine cover and airbox; INHERIT uses FINISH. Carbon and intake surfaces stay unchanged.",
@@ -1340,7 +1341,7 @@ let _livPrevDraft = null;
 // These never land in Car3D.build. A drag still invalidates the decal atlas;
 // it must not also throw away the preview mesh (a full car rebuild on a phone).
 const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1, patternTint: 1, patternSecond: 1, patternPlacement: 1, patternSide: 1,
-  patternWidth: 1, patternRepeat: 1, patternOffset: 1, patternTaper: 1, patternOpacity: 1, patternRotation: 1, patternStretch: 1, patternWeight: 1 };
+  patternWidth: 1, patternRepeat: 1, patternOffset: 1, patternTaper: 1, patternOpacity: 1, patternRotation: 1, patternStretch: 1, patternWeight: 1, patternKey: 1 };
 function draftSkipsMesh(prev, next) {
   if (!prev) return false;
   const seen = Object.create(null);

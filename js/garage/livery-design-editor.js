@@ -6,7 +6,9 @@ const GarageLiveryDesignEditor = (function () {
     honeycomb: "Honeycomb", segments: "Segmented panels", gradient: "Gradient", twoTone: "Two-tone sweep",
     checker: "Checkered flag", diamonds: "Diamond tiles", slashes: "Diagonal slashes",
     pinstripes: "Pinstripes", dots: "Rivet dots", lightning: "Lightning bolts", waves: "Wave bands", sunburst: "Sunburst rays", scallops: "Scallop scales",
-    herringbone: "Herringbone weave", circuit: "Circuit traces", shards: "Angular shards", pixelFade: "Pixel fade", speedlines: "Speed lines" };
+    herringbone: "Herringbone weave", circuit: "Circuit traces", shards: "Angular shards", pixelFade: "Pixel fade", speedlines: "Speed lines",
+    // KEYLINE colour slots (LiveryDesign.KEY_SLOTS); "second" stays SECOND.
+    design: "Design", body: "Body" };
   function attach(root, draft, api) {
     let h = sessions.get(draft);
     if (!h) { h = LiveryDesign.history(draft); sessions.set(draft, h); }
@@ -59,9 +61,11 @@ const GarageLiveryDesignEditor = (function () {
     for (const [label, key, values, fallback] of [
       ["DESIGN AREA", "patternPlacement", ["crown", "wrap"], "crown"],
       ["WRAP SIDES", "patternSide", ["both", "left", "right"], "both"],
+      ["KEYLINE", "patternKey", LiveryDesign.KEY_SLOTS, "auto"],
     ]) {
       const r = insert(api.pillRow(label, key, values, fallback));
-      patternRows.push({ row: r, when: () => key !== "patternSide" || draft.patternPlacement === "wrap" });
+      const when = { patternSide: () => draft.patternPlacement === "wrap", patternKey: () => LiveryDesign.KEY_PATTERNS.includes(draft.spineLogo) }[key];
+      patternRows.push({ row: r, when: when || (() => true) });
     }
     const rangeLabels = { patternWidth: "DESIGN WIDTH", patternRepeat: "REPEATS", patternOffset: "SIDE OFFSET", patternTaper: "TAIL TAPER", patternOpacity: "OPACITY", patternRotation: "ROTATION", patternStretch: "LENGTH STRETCH", patternWeight: "LINE WEIGHT" };
     for (const [key, limits] of Object.entries(LiveryDesign.RANGES)) {
@@ -74,7 +78,7 @@ const GarageLiveryDesignEditor = (function () {
       input.oninput = () => { draft[key] = input.value; api.changed(true); };
       input.onchange = () => { api.changed(); api.flush(); };
       r.append(label, input); insert(r);
-      patternRows.push({ row: r, when: () => key === "patternWeight" ? LiveryDesign.LINE_PATTERNS.includes(draft.spineLogo) : key !== "patternRepeat" || !["ribbon", "gradient", "twoTone"].includes(draft.spineLogo) });
+      patternRows.push({ row: r, when: () => key === "patternWeight" ? LiveryDesign.LINE_PATTERNS.includes(draft.spineLogo) : key !== "patternRepeat" || !LiveryDesign.NO_REPEAT.includes(draft.spineLogo) });
       bindings.push(() => { input.value = LiveryDesign.value(draft, key); output.textContent = input.value + (key === "patternRepeat" ? "" : key === "patternRotation" ? "°" : "%"); });
     }
     bindings.push(() => {
@@ -143,7 +147,7 @@ const GarageLiveryDesignEditor = (function () {
     section("ENGINE COVER — SHAPE & PAINT", "The raised cover behind the cockpit. Shape, vents, base colour and finish.",
       ["cover", "coverFinish", "spineHeight", "coverVents"]);
     section("SPINE TOP — ARTWORK & COLOURS", "Artwork along the top of the engine cover. Select one design; only the colour controls it uses are enabled.",
-      ["spineLogo", "patternTint", "patternSecond", "spineTint", "saddleTint", "sunTint", "bandTint2"]);
+      ["spineLogo", "patternTint", "patternSecond", "patternKey", "spineTint", "saddleTint", "sunTint", "bandTint2"]);
     section("SPINE PATTERN — SIZE & PLACEMENT", "Rotate or stretch adjustable artwork and tune its coverage. LINE WEIGHT applies to stroked designs. CROWN paints the top and tail; WRAP extends onto the selected cover sides.",
       ["patternPlacement", "patternSide", ...Object.keys(LiveryDesign.RANGES)], [actionRow]);
     section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
