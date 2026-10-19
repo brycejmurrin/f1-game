@@ -4,7 +4,7 @@ Generated from `findings.jsonl`, `reports/` and the status table below; issue #2
 
 ## Status
 
-- Reports in: **8/22** batches (6 final, 2 partial). Updated 2026-10-19 ~05:50Z (22:50 Pacific, 10-18).
+- Reports in: **8/22** batches (6 final, 2 partial). Updated 2026-10-19 05:34Z (22:34 Pacific, 10-18); product-bug issues #2974-#2978 filed 05:40Z.
 - Findings: 160 rows, 158 after de-duplication; 122 reviewer-verified, 38 subagent-unverified; 43 re-checked by the synthesis on the tree.
 - Not yet in: audio-1, race-1, tracks-1, tracks-2, car-2, modes-1, ui-2, tooling-1, tooling-2, tooling-3, tooling-4, tooling-5, net, platform.
 

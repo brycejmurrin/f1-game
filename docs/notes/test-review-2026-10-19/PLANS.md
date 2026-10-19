@@ -12,7 +12,7 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 2. **L2 canary split before L3 and L5.** The canary holds TLX/WGX and perf pins that L3/L5 would otherwise both edit; L2 moves them into per-backend files that L3/L5 then own.
 3. **L11 test lints last**: the lint for fixed `slice(x, x+N)` windows and asserts after `//` lands only after L2 and L5 have removed today's hits, so it lands green.
 4. Independent, any order: L1 camera, L4 lighting, L6 XR, L7 flyby, L8 UI/CSS, L9 tooling misc, L10 physics and agent contracts.
-5. **Product bugs found by tests go to their own issue**, not into a test lane's scope creep: R1-01 (`tuner-panel.js` scope buttons never get `aria-pressed`) is a shipped a11y bug; L1 carries it because the test and the fix must land together. Open a sub-issue of #2952 for it at L1 launch.
+5. **Product bugs found by tests go to their own issue**, not into a test lane's scope creep. The lane carries the test and the fix together, and each has a sub-issue of #2952: #2974 R1-01 (tuner scope buttons never set `aria-pressed`, L1), #2975 P2-13 (squeal double-gated, lock-up pitch never plays, L21), #2976 P2-15 (`carOrbit` reports the requested index after falling back, L1), #2977 U1-02 (two HUD defects pinned as `todo`; fix on cursor/hud-band-allocator-5e2c, so not `ready`; L20), #2978 U1-06 (gap chip at 9.95 s, L20).
 
 ## Lanes
 

@@ -1,4 +1,4 @@
-UPDATED = "2026-10-19 ~05:50Z (22:50 Pacific, 10-18)"
+UPDATED = "2026-10-19 05:34Z (22:34 Pacific, 10-18); product-bug issues #2974-#2978 filed 05:40Z"
 FINAL = {"render-1", "render-2", "physics-1", "physics-2", "car-1", "ui-1"}
 PARTIAL = {"render-3": "1/2", "race-2": "1/n"}
 ALL = ["audio-1","physics-1","physics-2","race-1","race-2","render-1","render-2","render-3","tracks-1","tracks-2","car-1","car-2","modes-1","ui-1","ui-2","tooling-1","tooling-2","tooling-3","tooling-4","tooling-5","net","platform"]
