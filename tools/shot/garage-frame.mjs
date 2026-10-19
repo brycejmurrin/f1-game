@@ -61,10 +61,12 @@ async function captureGatedFrame(page, backend, pngPath) {
   }, null, { polling: 100, timeout: 120000 });
   await settleGarage(page, { frames: 120 });
   if (backend === "webgpu") {
-    await page.waitForFunction(async () => {
-      if (typeof GLX?.awaitSoftPresent !== "function") return true;
-      try { await GLX.awaitSoftPresent(20000); return true; } catch (_) { return false; }
-    }, null, { polling: 200, timeout: 45000 });
+    // awaitSoftPresent is async — do not put it inside waitForFunction (#2825:
+    // an async predicate returns a Promise and the wait passes on the first poll).
+    await page.evaluate(async () => {
+      if (typeof GLX?.awaitSoftPresent !== "function") return;
+      try { await GLX.awaitSoftPresent(20000); } catch (_) { /* soft present optional */ }
+    });
   }
   // Reject flat team-tint wall frames (the Mercedes teal defect) and black ones.
   let gate = null, diag = null, shot = null;
