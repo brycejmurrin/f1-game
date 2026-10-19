@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01H8VtkpzfE5KwDeid2n46At OrchB 7 LIVE session_01H8VtkpzfE5KwDeid2n46At succeeds OrchB 6 session_0162RfQfE67JM18KnjzEaM24 for Fleet B
+HANDOFF to:codex:01a1558a-88d6-73d2-8904-13327d29f012 from:claude:session_01Tnt7zHG8AVBduVKT3Xdzoc A·W5·L17 releases js/render/webgpu/wgx-chunked.js createChunkedMesh (~27, ~47, ~126-147) and js/render/shared/chunk-bins.js to Codex Refactor-all (ORCH17 ownership call). #3126 hunks unchanged; the rest of js/render/webgpu/** and js/render/glx/** stays held until #3126 merges.
