@@ -6812,6 +6812,9 @@
       "layout": [
         "tests/unit/garage-crew.test.mjs"
       ],
+      "noseTip": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
       "setLook": [
         "tests/unit/garage-crew.test.mjs"
       ]

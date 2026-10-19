@@ -113,3 +113,29 @@ test("design-preview crew looks: each builds valid, distinct geometry; classic s
   assert.equal(new Set(Object.values(sizes)).size, Crew.LOOKS.length, "every look is different geometry: " + JSON.stringify(sizes));
   assert.equal(Crew.setLook("nope"), "welcome", "an unknown id keeps the look");
 });
+
+test("pit-stop front jack: saddle seated on each chassis' nose underside, clear of the front wing", () => {
+  const meshes = [];
+  const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
+  const STYLES = { base: {}, droop: { noseDroop: -0.03, noseSlim: 0.84 }, long: { noseTipZ: 0.55 }, short: { noseTipZ: -0.32, noseDroop: 0.04 } };
+  const Car3D = { CHASSIS: { nose: [{ z: 2.60, y: 0.245, h: 0.072 }, { z: 2.00, y: 0.315, h: 0.235 }] }, teamStyleOf: (id) => STYLES[id] || {}, bodyStyleKey: (t, b) => b || t };
+  const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Car3D, Log: { info() {}, warn() {} } });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
+  Crew.init(gfx); Crew.setLook("pitstop");
+  for (const id of Object.keys(STYLES)) {
+    meshes.length = 0;
+    Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(2.5, Arrival.settings({}), true), null, id);
+    const nose = Crew.noseTip(id, LIV), d = meshes.find((m) => m.pos.length > 30000);
+    const seat = Math.min(nose.at(nose.z - 0.10), nose.at(nose.z - 0.015));   // the cone's lowest point over the saddle
+    let top = -Infinity, inWing = 0;
+    for (let i = 0; i < d.pos.length; i += 3) {
+      const x = d.pos[i], y = d.pos[i + 1], z = d.pos[i + 2];
+      if (Math.abs(x) < 0.06 && z > nose.z - 0.14 && z < nose.z && y > 0.12 && y < seat + 0.05) top = Math.max(top, y);
+      if (Math.abs(x) < 0.9 && z > 2.40 && z < 2.72 && y < 0.10) inWing++;              // the main plane's box
+    }
+    assert.ok(Math.abs(top - seat) < 1e-6, `${id}: saddle top ${top.toFixed(3)} meets the nose underside ${seat.toFixed(3)}`);
+    assert.equal(inWing, 0, id + ": nothing of the jack (or crew) inside the front wing's main plane");
+  }
+});
