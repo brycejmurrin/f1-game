@@ -54,6 +54,7 @@ export const ROTATION = Object.keys(GROUPS)
 // tooling-fast.mjs, and fails on a group that appears in none of them and is
 // not listed below — a NEW orphan can no longer be added silently.
 export const UNSCHEDULED = {
+  "test:agent-output": "alias: all shared output tests run in tooling-fast on every PR; local focused entrypoint",
   // Compatibility alias retained for local callers; CI uses the two measured page partitions.
   "test:vm-page": "alias: local full adapted-spec runner; CI runs test:vm-page-a and test:vm-page-b separately",
   // An ALIAS, not coverage: every file in it is in tooling-fast, which ci.yml's

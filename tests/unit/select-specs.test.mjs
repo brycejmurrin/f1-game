@@ -18,7 +18,7 @@ import { cssSpecs, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, racingCircuitIds, foundationSpec, CIRCUIT_FILTERED_TESTS, CIRCUIT_DEF,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, MANUAL_OPT_IN_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
-  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf } from "../../tools/ci/select-specs.mjs";
+  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf, select } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
@@ -632,6 +632,66 @@ test("the selected-gate settings match select-budget's recommendation", () => {
     "the selected settings must fit MORE tests than smoke's settings, or they buy nothing");
 });
 
+// select()'s real entry, on a real diff. select() diffs <ref> against the
+// working tree of THIS repo, so a synthetic base commit (the working tree's
+// tracked files, with `edits` swapped in) makes the diff exactly those paths:
+// tracked-file dirt in the caller's tree cancels out through `git stash create`
+// and untracked files never appear in `git diff <ref>`.
+function selectFor(edits, budgetMin) {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "select-ref-"));
+  const env = { ...process.env, GIT_INDEX_FILE: path.join(dir, "index"),
+    GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+  const git = (args, input) => execFileSync("git", args, { cwd: ROOT, env, encoding: "utf8", input }).trim();
+  try {
+    const base = git(["stash", "create"]) || git(["rev-parse", "HEAD"]);
+    git(["read-tree", base]);
+    for (const [file, text] of Object.entries(edits)) {
+      const blob = git(["hash-object", "-w", "--stdin"], text);
+      git(["update-index", "--add", "--cacheinfo", `100644,${blob},${file}`]);
+    }
+    const ref = git(["commit-tree", git(["write-tree"]), "-p", base, "-m", "select fixture"]);
+    return select(ref, budgetMin);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+const filesOf = (r) => r.selected.map((x) => x.file ?? x);
+
+test("select(): a source edit routes to groups, selects real specs, and plans jobs for them", () => {
+  const r = selectFor({ "js/ui/hud.js": "// fixture edit\n" });
+  assert.equal(r.changed, 1);
+  assert.equal(r.reason, "matched");
+  assert.ok(r.groups.length > 0 && r.groups.includes("test:tiny"));
+  assert.ok(r.selected.length > 0, "a source edit selects at least the boot spec");
+  for (const f of filesOf(r)) assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist`);
+  assert.ok(r.secSelected <= r.secFit + 1, `selection ${r.secSelected}s overruns the budget ${r.secFit}s`);
+  assert.ok(Array.isArray(r.shards) && r.shards.length > 0, "the selection becomes a job plan");
+});
+
+test("select(): a docs-only diff selects nothing and says docs", () => {
+  const r = selectFor({ "docs/README.md": "fixture edit\n" });
+  assert.equal(r.reason, "docs");
+  assert.deepEqual(r.selected, []);
+});
+
+test("select(): an edited spec runs first, alone in rank 0", () => {
+  const spec = "tests/specs/boot-guard.spec.js";
+  const r = selectFor({ [spec]: "// fixture edit\n" });
+  assert.deepEqual(r.changedSpecs, [spec]);
+  assert.equal(filesOf(r)[0], spec, "the edited spec leads the selection");
+});
+
+test("select(): a css edit selects the small CSS set, not a whole group", () => {
+  const r = selectFor({ "css/menus.css": "/* fixture edit */\n" });
+  assert.equal(r.reason, "matched");
+  const allowed = new Set(cssSpecs(["css/menus.css"]));
+  assert.ok(r.selected.length > 0 && filesOf(r).every((f) => allowed.has(f)), `got ${filesOf(r)}`);
+});
+
+test("select(): editing the selector itself is infra — narrower than the change, and says so", () => {
+  const r = selectFor({ "tools/ci/select-specs.mjs": "// fixture edit\n" });
+  assert.equal(r.reason, "infra");
+  assert.ok(r.tracked.includes("tools/ci/select-specs.mjs"));
+});
+
 test("a blanket source edit keeps the boot group in the REQUIRED selected gate — Smoke is not a required check (8-F2)", () => {
   // 2026-09-02 select() dropped `tiny` when only the blanket rules named it and
   // left "does the page still boot" to the Smoke job. Smoke is not in the branch
@@ -640,9 +700,9 @@ test("a blanket source edit keeps the boot group in the REQUIRED selected gate �
   const g = pick(["js/ui/hud.js", "index.html"]);
   assert.ok(g.has("tiny"), "the blanket rules route a source edit to the boot group");
   for (const why of g.get("tiny")) assert.ok(BOOT_FALLBACK_REASONS.has(why), `unexpected boot reason: ${why}`);
-  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  const body = src.slice(src.indexOf("export function select("), src.indexOf("r.shards = shards(r)"));
-  assert.ok(body.length > 0 && !/dropBootFallback\(/.test(body), "select() must not drop the boot group");
+  // The real entry point, not its source text: a diff naming one source file.
+  const real = selectFor({ "js/ui/hud.js": "// fixture edit\n" });
+  assert.ok(real.groups.includes("test:tiny"), `select() must keep the boot group for a source edit: ${real.groups}`);
   // …and the group still yields a boot spec the selected gate RUNS: not a
   // fixed-gate (Smoke-owned) spec, not a VM twin, not manual.
   const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
