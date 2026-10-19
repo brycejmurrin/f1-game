@@ -49,15 +49,15 @@ function boot(opts = {}) {
   };
   if (opts.globals) Object.assign(sb, opts.globals);
   sb.window = sb;
+  const fixtureTeams = sb.Teams;
+  delete sb.Teams;
   const ctx = vm.createContext(sb);
-  // In the page js/data/teams.js loads long before this file; opt in where a
-  // test is about what Teams.sanitizeCustom does to an imported team.
-  if (opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
-  // Career collect/apply run migrateCareer. Teams is a HARD_EDGES dep of
-  // SaveMigrate.remapPoints — load both only when a test exercises the career
-  // file, so garage round-trips keep their pre-Teams verbatim customTeam shape.
+  vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
+  if (fixtureTeams && fixtureTeams.LIST) {
+    const teams = vm.runInContext("Teams.LIST", ctx);
+    teams.splice(0, teams.length, ...fixtureTeams.LIST);
+  }
   if (opts.career) {
-    if (!opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
     vm.runInContext(read("js/career/save-migrate.js"), ctx, { filename: absSrc("js/career/save-migrate.js") });
     vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
     vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
@@ -71,7 +71,7 @@ function boot(opts = {}) {
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  return { SettingsExport, G, disk,
+  return { SettingsExport, G, disk, ctx,
     careerVersion: opts.career ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
@@ -738,7 +738,16 @@ test("a file round-trips: save it, load it into a fresh store, get the same valu
   assert.deepEqual(JSON.parse(b2.disk.get("apex26.camTuneCar")), { mclaren: { comfort: { bob: 0.2 } } });
   assert.equal(b2.disk.get("apex26.motionBlur"), "7");
   assert.equal(b2.disk.get("apex26.speedLines"), "4");
-  const g1 = boot({ disk: GARAGE }).garage();
+  // Fixed-point inputs carry the complete page-shaped team. Minimal teams
+  // are independently tested above/below as repairs, not identity transforms.
+  const garageSeed = { ...GARAGE, "apex26.customTeam": JSON.stringify({
+    id: "custom", custom: true, name: "X", short: "YOU", engine: "Custom", tier: 2,
+    color: [0.13, 0.79, 0.85], color2: [0.96, 0.86, 0],
+    stats: { speed: 84, accel: 82, cornering: 83, braking: 81 },
+    livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "number", spineSide: "number" },
+    drivers: [{ name: "You", code: "YOU", num: 99 }],
+  }) };
+  const g1 = boot({ disk: garageSeed }).garage();
   const b3 = boot();
   assert.equal(b3.loadGarage(g1).applied, 7);
   assert.deepEqual(b3.garage().garage, g1.garage, "the garage file is its own fixed point");
@@ -939,7 +948,13 @@ test("a sound garage file still loads whole", () => {
   assert.equal(r.skipped, 0, "nothing sound is skipped");
   assert.equal(r.applied, 4);
   assert.deepEqual(JSON.parse(b.disk.get("apex26.livery.custom.mclaren")), [liv], "kept verbatim");
-  assert.deepEqual(JSON.parse(b.disk.get("apex26.customTeam")), team, "a real team is kept verbatim");
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.customTeam")), {
+    id: "custom", custom: true, name: "X", short: "YOU", engine: "Custom", tier: 2,
+    color: [0.13, 0.79, 0.85], color2: [0.96, 0.86, 0],
+    stats: { speed: 84, accel: 82, cornering: 83, braking: 81 },
+    livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "number", spineSide: "number" },
+    drivers: [{ name: "You", code: "YOU", num: 99 }],
+  }, "the real Teams dependency repairs the same complete team as page boot");
 });
 
 // THE FOUR SINGLES WERE THE ONE FAMILY THAT KEPT WHATEVER SHAPE IT ARRIVED IN.
@@ -1557,4 +1572,32 @@ test("a livery carrying every Liveries.FIELDS key survives import, with room for
   const kept = garageLiveries(b, [sound("custom_1", every)]);
   assert.equal(kept.length, 1);
   for (const f of Object.keys(every)) assert.equal(kept[0][f], "x", f + " survives cleanLivery");
+});
+
+test("share, garage and career identity use the same full-boot livery shape policy", () => {
+  const b = boot({ globals: {
+    Car3D: { FIN_SHAPE_IDS: ["none", "shark"], FINISH_SURFACE: { matte: 1, satin: 2 } },
+    LiveryTex: { NUM_FONT_IDS: ["block"] },
+    TextEncoder, TextDecoder, Uint8Array, btoa, atob,
+  } });
+  for (const file of ["js/car/liveries.js", "js/career/team-identity.js", "js/ui/share-code.js"])
+    vm.runInContext(read(file), b.ctx, { filename: absSrc(file) });
+  const identity = vm.runInContext("CareerTeamIdentity", b.ctx);
+  const share = vm.runInContext("ShareCode", b.ctx);
+  const row = JSON.parse('{"id":"mine","name":"Paint","c1":[2,-1,0.5,7],"c2":[0,1,0],"finShape":"shark","finish":"matte","numFont":"missing","haloFinish":"inherit","futureField":"additive","spineLogo":"constructor","__proto__":[0,0,0],"bad":[1,"x",0]}');
+  const expected = { id: "mine", name: "Paint", c1: [1, 0, 0.5], c2: [0, 1, 0], finShape: "shark", finish: "matte", haloFinish: "inherit", futureField: "additive" };
+  const before = JSON.stringify(row);
+  const encoded = share.encode("livery", { team: "ferrari", id: "mine", livery: row });
+  assert.equal(encoded.ok, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(encoded.envelope.livery)), expected);
+  assert.deepEqual(JSON.parse(JSON.stringify(share.decode(encoded.code).livery)), expected);
+  assert.deepEqual(JSON.parse(JSON.stringify(b.SettingsExport.garageValue("livery.custom.custom", [row]))), [expected]);
+  assert.deepEqual(JSON.parse(JSON.stringify(identity.value("livery.custom.custom", [row]))), [expected]);
+  assert.equal(JSON.stringify(row), before);
+  assert.equal(Object.prototype.polluted, undefined);
+  for (const invalid of [null, [], { id: "x", c1: [0, 0], c2: [1, 1, 1] }, { ...row, id: "x".repeat(65) }]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(b.SettingsExport.garageValue("livery.custom.custom", [invalid]))), []);
+    assert.deepEqual(JSON.parse(JSON.stringify(identity.value("livery.custom.custom", [invalid]))), []);
+    if (invalid) assert.equal(share.encode("livery", { team: "ferrari", id: "mine", livery: invalid }).ok, false);
+  }
 });

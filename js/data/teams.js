@@ -357,6 +357,47 @@ const Teams = (function () {
       : null;
     return !ids || ids.indexOf(v) >= 0;
   }
+  // Imported paint rows share one policy across links, garage files and career
+  // identities. Transport byte/list limits and collision repair stay at each door.
+  const LIVERY_STR_MAX = 64;
+  const rgb3 = (a) => Array.isArray(a) && a.length >= 3 &&
+    a.slice(0, 3).every((n) => typeof n === "number" && isFinite(n));
+  // A COLOUR IS 0..1: imported [1e9, -5, 3] must not be stored as sent.
+  const clamp01 = (a) => a.slice(0, 3).map((n) => Math.min(1, Math.max(0, n)));
+  // Read the published schema at call time: Teams loads before Liveries. Keep
+  // the garage policy's pre-catalog 64-field base plus extension margin; never
+  // snapshot it at eval or add a copy of the current field count.
+  const liveryKeysMax = () => (typeof Liveries !== "undefined" && Liveries.FIELDS ? Liveries.FIELDS.length : 64) + 32;
+  // A livery must carry the two things every consumer reads unconditionally: an
+  // id to key caches on and the two base colours. Those are what the crash was
+  // about, so they are required; every other field is optional and additive, so
+  // a value of neither shape is dropped rather than failing the whole row.
+  //
+  // THE BOUNDARY, stated because it is a judgement and not an oversight: a field
+  // is kept when it is an rgb triple (a colour) or a string (a pill), which is
+  // decided by the value's shape and not by a list of names. Putting a STRING in
+  // a colour slot therefore survives — `_ckAcc` passes non-arrays straight
+  // through, so it paints a wrong colour rather than throwing. Catching that
+  // would need a fourth copy of the colour/pill field table, which is exactly
+  // what the last two commits removed from this codebase; a wrong colour from a
+  // hand-corrupted file is the cheaper failure.
+  function cleanLivery(l) {
+    if (!l || typeof l !== "object" || Array.isArray(l)) return null;
+    if (typeof l.id !== "string" || l.id.length > LIVERY_STR_MAX || !rgb3(l.c1) || !rgb3(l.c2)) return null;
+    const out = { id: l.id, c1: clamp01(l.c1), c2: clamp01(l.c2) };
+    if (typeof l.name === "string") out.name = l.name.slice(0, LIVERY_STR_MAX);
+    let n = 0;
+    const max = liveryKeysMax();
+    for (const k of Object.keys(l)) {
+      if (k === "id" || k === "c1" || k === "c2" || k === "name" || k === "__proto__") continue;
+      if (n >= max) break;
+      if (rgb3(l[k])) out[k] = clamp01(l[k]);
+      else if (typeof l[k] === "string" && l[k].length <= LIVERY_STR_MAX && liveryEnumOk(k, l[k])) out[k] = l[k];
+      else continue;
+      n++;
+    }
+    return out;
+  }
   function sanitizeCustom(t) {
     const D = DEFAULT_CUSTOM;
     const src = isObj(t) ? t : {};
@@ -386,6 +427,6 @@ const Teams = (function () {
     };
   }
 
-  return { LIST, POINTS, TIER_V, DEFAULT_CUSTOM, isReal, sanitizeCustom, liveryEnumOk };
+  return { LIST, POINTS, TIER_V, DEFAULT_CUSTOM, isReal, sanitizeCustom, liveryEnumOk, cleanLivery };
 })();
 Object.freeze(Teams);

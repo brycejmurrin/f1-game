@@ -565,10 +565,6 @@ function applySettings(file, G) {
 //
 // Shape only, per key family — this is not schema validation and must not
 // start rejecting liveries the game itself would happily paint.
-const rgb3 = (a) => Array.isArray(a) && a.length >= 3 &&
-  a.slice(0, 3).every((n) => typeof n === "number" && isFinite(n));
-// A COLOUR IS 0..1: [1e9, -5, 3] used to be stored as sent.
-const clamp01 = (a) => a.slice(0, 3).map((n) => Math.min(1, Math.max(0, n)));
 // BOUNDS. A shared garage file is the advertised way to hand a friend a livery, and nothing
 // else limited it: thousands of rows or megabyte strings fill the 5 MB localStorage quota
 // (later career saves then fail) and the LIVERY tab paints one canvas swatch per row.
@@ -581,48 +577,6 @@ const GARAGE_LIVERIES_MAX = Math.floor(GARAGE_MAX_BYTES / 48);
 const SETTINGS_MAX_BYTES = 1024 * 1024; // LOAD SETTINGS: a real file is tens of KB; refused before f.text()
 const CAREER_BAG_KEYS_MAX = 16;         // 6 slots + the live pointer are all a real file holds
 const GARAGE_KEYS_MAX = 64;             // entries per parts sheet
-// FIELDS PER LIVERY follow the schema: Liveries.FIELDS had 62 rows against a literal 64, so the next slices' fields
-// would have been dropped silently on import. The margin keeps a hostile file bounded without a cap to maintain.
-const liveryKeysMax = () => (typeof Liveries !== "undefined" && Liveries.FIELDS ? Liveries.FIELDS.length : GARAGE_KEYS_MAX) + 32;
-// ENUM-TYPED FIELDS INDEX PLAIN OBJECTS (Car3D finOf / FINISH_SURFACE, LiveryTex NUM_FONTS), so a
-// kept "constructor" resolves to an inherited function and throws in every build of that team.
-// The three the garage offers as pills are checked against the tables that drive those pills
-// (an unknown id is dropped, and the livery falls back to its default); any other string is only
-// refused when it names an Object.prototype member. Teams.liveryEnumOk is the same rule for MY TEAM.
-function liveryEnumOk(k, v) {
-  if (typeof Teams !== "undefined" && Teams.liveryEnumOk) return Teams.liveryEnumOk(k, v);
-  return typeof v === "string" && !(v in Object.prototype);
-}
-// A livery must carry the two things every consumer reads unconditionally: an
-// id to key caches on and the two base colours. Those are what the crash was
-// about, so they are required; every other field is optional and additive, so
-// a value of neither shape is dropped rather than failing the whole row.
-//
-// THE BOUNDARY, stated because it is a judgement and not an oversight: a field
-// is kept when it is an rgb triple (a colour) or a string (a pill), which is
-// decided by the value's shape and not by a list of names. Putting a STRING in
-// a colour slot therefore survives — `_ckAcc` passes non-arrays straight
-// through, so it paints a wrong colour rather than throwing. Catching that
-// would need a fourth copy of the colour/pill field table, which is exactly
-// what the last two commits removed from this codebase; a wrong colour from a
-// hand-corrupted file is the cheaper failure.
-function cleanLivery(l) {
-  if (!l || typeof l !== "object" || Array.isArray(l)) return null;
-  if (typeof l.id !== "string" || l.id.length > GARAGE_STR_MAX || !rgb3(l.c1) || !rgb3(l.c2)) return null;
-  const out = { id: l.id, c1: clamp01(l.c1), c2: clamp01(l.c2) };
-  if (typeof l.name === "string") out.name = l.name.slice(0, GARAGE_STR_MAX);
-  let n = 0;
-  const max = liveryKeysMax();
-  for (const k of Object.keys(l)) {
-    if (k === "id" || k === "c1" || k === "c2" || k === "name" || k === "__proto__") continue;
-    if (n >= max) break;
-    if (rgb3(l[k])) out[k] = clamp01(l[k]);
-    else if (typeof l[k] === "string" && l[k].length <= GARAGE_STR_MAX && liveryEnumOk(k, l[k])) out[k] = l[k];
-    else continue;
-    n++;
-  }
-  return out;
-}
 // Returns the value to WRITE, or undefined to skip the key. A partly-corrupt
 // custom-livery array keeps the paint jobs that are sound instead of losing
 // the lot: the player's other work is not the file's fault.
@@ -649,7 +603,7 @@ function garageValue(k, v) {
   }
   if (k.indexOf("livery.custom.") === 0) {
     if (!Array.isArray(v)) return undefined;
-    return v.slice(0, GARAGE_LIVERIES_MAX).map(cleanLivery).filter(Boolean);
+    return v.slice(0, GARAGE_LIVERIES_MAX).map((l) => Teams.cleanLivery(l)).filter(Boolean);
   }
   if (k.indexOf("livery.") === 0) return typeof v === "string" && v.length <= GARAGE_STR_MAX ? v : undefined;
   if (k.indexOf("parts.") === 0) {

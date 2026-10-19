@@ -56,25 +56,6 @@ const ShareCode = (function () {
       Tracks.LIST.some((t) => t && t.id === id);
   }
 
-  function rgb3(a) {
-    return Array.isArray(a) && a.length >= 3 &&
-      a.slice(0, 3).every((n) => typeof n === "number" && isFinite(n));
-  }
-  function clamp01(a) { return a.slice(0, 3).map((n) => Math.min(1, Math.max(0, n))); }
-  function cleanLivery(l) {
-    if (!l || typeof l !== "object" || Array.isArray(l)) return null;
-    if (typeof l.id !== "string" || l.id.length > 64 || !rgb3(l.c1) || !rgb3(l.c2)) return null;
-    const out = { id: l.id.slice(0, 64), c1: clamp01(l.c1), c2: clamp01(l.c2) };
-    if (typeof l.name === "string") out.name = l.name.slice(0, 64);
-    let n = 0;
-    for (const k of Object.keys(l)) {
-      if (k === "id" || k === "c1" || k === "c2" || k === "name" || k === "__proto__") continue;
-      if (n >= 64) break;
-      if (rgb3(l[k])) { out[k] = clamp01(l[k]); n++; }
-      else if (typeof l[k] === "string" && l[k].length <= 64 && !(l[k] in Object.prototype)) { out[k] = l[k]; n++; }
-    }
-    return out;
-  }
   function cleanSetup(tune) {
     if (!tune || typeof tune !== "object" || Array.isArray(tune)) return null;
     const fields = ["arbF", "arbR", "rideF", "rideR", "brakeBias"];
@@ -101,7 +82,7 @@ const ShareCode = (function () {
       if (!id) return null;
       const body = { v: 1, kind: "livery", team: payload.team, id };
       if (payload.livery) {
-        const liv = cleanLivery(payload.livery);
+        const liv = Teams.cleanLivery(payload.livery);
         if (!liv) return null;
         body.livery = liv;
       }

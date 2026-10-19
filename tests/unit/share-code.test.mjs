@@ -12,6 +12,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = "js/ui/share-code.js";
 const j = (v) => JSON.parse(JSON.stringify(v));
+const LIVERY_FIELDS = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/car/liveries.js"), "utf8") + "; Liveries.FIELDS");
 
 function harness(opts = {}) {
   const bag = new Map();
@@ -45,7 +46,7 @@ function harness(opts = {}) {
     location,
     history,
     Teams: { LIST: (opts.teams || ["mercedes", "ferrari"]).map((id) => ({ id })) },
-    Liveries: { forTeam: () => (opts.catalog || ["default"]).map((id) => ({ id })) },
+    Liveries: { FIELDS: LIVERY_FIELDS, forTeam: () => (opts.catalog || ["default"]).map((id) => ({ id })) },
     Tracks: {
       LIST: (opts.tracks || ["monza", "spa"]).map((id) => ({ id, name: id.toUpperCase() })),
       SEASON: (opts.tracks || ["monza", "spa"]).map((id) => ({ id, name: id.toUpperCase() })),
@@ -64,11 +65,16 @@ function harness(opts = {}) {
       plan: (day) => ({ day, trackId: "monza", trackName: "Monza" }),
     },
   };
+  const fixtureTeams = sandbox.Teams.LIST;
+  delete sandbox.Teams;
   const ctx = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: absSrc("js/data/teams.js") });
+  const Teams = vm.runInContext("Teams", ctx);
+  Teams.LIST.splice(0, Teams.LIST.length, ...fixtureTeams);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8"), ctx, { filename: absSrc(SRC) });
   const ShareCode = sandbox.module.exports || vm.runInContext("ShareCode", ctx);
-  return { ShareCode, store, bag, location, writes, sandbox };
+  return { ShareCode, store, bag, location, writes, sandbox, ctx, Teams };
 }
 
 test("setup encode/decode round-trip", () => {
@@ -544,4 +550,21 @@ test("UNDO of a setup code on an empty store leaves the key absent, not pinned t
   assert.equal(store.getStored("setup.mercedes").arbF, 11);
   assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
   assert.equal(store.getStored("setup.mercedes"), undefined, "absent again, so the shipped default keeps following releases");
+});
+
+test("livery public encode/decode preserves every published field beyond the old 64-field cutoff", () => {
+  const { ShareCode } = harness();
+  const liv = { id: "mine", name: "Complete", c1: [1, 0, 0], c2: [0, 0, 1] };
+  // Extension data comes first, as it can in an older/newer shared garage file.
+  for (let i = 0; i < 32; i++) liv["futureField" + i] = "x";
+  for (const field of LIVERY_FIELDS) liv[field] = [0.25, 0.5, 0.75];
+  const before = JSON.stringify(liv);
+  const encoded = ShareCode.encode("livery", { team: "ferrari", id: "mine", livery: liv });
+  assert.equal(encoded.ok, true);
+  assert.ok(encoded.code.length < 32 * 1024, "the complete accepted row fits the existing code byte limit");
+  assert.deepEqual(j(encoded.envelope.livery), liv, "encoding itself must retain the full row");
+  const decoded = ShareCode.decode(encoded.code);
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(j(decoded.livery), liv, "public decoding must retain the same accepted data");
+  assert.equal(JSON.stringify(liv), before, "sharing does not rewrite the authored row");
 });

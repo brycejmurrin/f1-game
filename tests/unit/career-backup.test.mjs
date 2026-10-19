@@ -87,11 +87,6 @@ function loadHarness(options = {}) {
       addEventListener() {},
     },
     Log: { warn() {}, info() {}, debug() {}, error() {}, enabled: () => false },
-    Teams: {
-      POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
-      LIST: [team],
-      isReal: realIsReal,
-    },
     // SEASON needs enough rounds that a restored season.round (SEC2-1 / C8 use
     // 3–4) is still in range — SeasonCal.load() resume()s then save()s, and a
     // single-circuit calendar restarts any round > 1 back to 0.
@@ -104,13 +99,16 @@ function loadHarness(options = {}) {
     NativeDownload: { viable: () => false, saveBlob: async () => ({ ok: true }) },
     Hash32: { fnv1a: (s) => String(s).length },
   });
+  vm.runInContext(src("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
+  const teams = vm.runInContext("Teams.LIST", ctx);
+  teams.splice(0, teams.length, team);
   vm.runInContext(src("js/core/hash32.js"), ctx, { filename: absSrc("js/core/hash32.js") });
   vm.runInContext(src("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(src("js/data/driver-ratings.js"), ctx, { filename: absSrc("js/data/driver-ratings.js") });
   vm.runInContext(src("js/career/save-migrate.js"), ctx, { filename: absSrc("js/career/save-migrate.js") });
   vm.runInContext(src("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
   vm.runInContext(src("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
-  // The MY TEAM identity is shape-gated by the GARAGE file's garageValue.
+  // Legacy backup identity uses the garage door; career identity uses Teams directly.
   if (options.settingsExport !== false) vm.runInContext(src("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
   vm.runInContext(src("js/career/team-identity.js"), ctx, { filename: absSrc("js/career/team-identity.js") });
   vm.runInContext(src("js/career/career.js"), ctx, { filename: absSrc("js/career/career.js") });
@@ -1991,4 +1989,28 @@ test("a {toString:1} version marker does not throw out of validate/apply", () =>
     data: Object.assign(save({}), { v: JSON.parse('{"toString":1}'), tally: { pts: JSON.parse('{"toString":1}') } }) }] };
   assert.doesNotThrow(() => h.CareerBackup.validate(payload));
   assert.doesNotThrow(() => h.CareerBackup.apply(payload, { otherFlavourConfirmed: true }));
+});
+
+test("real store reads preserve full identity before the catalog; boot Career.load persists it after", () => {
+  const fields = vm.runInNewContext(src("js/car/liveries.js") + "; Liveries.FIELDS");
+  const row = { id: "boot-paint", c1: [0, 0, 0], c2: [1, 1, 1] };
+  for (let i = 0; i < 32; i++) row["future" + i] = "x";
+  for (const key of fields) row[key] = [0.2, 0.4, 0.6];
+  const career = save({ flavour: "myteam", team: "custom" });
+  career.myTeamIdentity = { customTeam: MY_TEAM, "livery.custom.custom": [row], "livery.custom": "boot-paint" };
+  const raw = JSON.stringify(career);
+  const disk = new Map([
+    ["apex26.career.myteam.0", raw],
+    ["apex26.careerSlot", JSON.stringify("myteam:0")],
+  ]);
+  const h = loadHarness({ disk, settingsExport: false });
+  assert.equal(vm.runInContext("typeof Liveries", h.ctx), "undefined");
+  assert.equal(h.Career.data(), null, "Career module evaluation never adopts the early fallback");
+  const earlyRead = h.store.get("career.myteam.0", null);
+  assert.deepEqual(JSON.parse(JSON.stringify(earlyRead.myTeamIdentity["livery.custom.custom"])), [row]);
+  assert.equal(disk.get("apex26.career.myteam.0"), raw, "a pre-catalog store get cannot persist a clipped identity");
+  vm.runInContext(src("js/car/liveries.js"), h.ctx, { filename: absSrc("js/car/liveries.js") });
+  h.Career.load(); h.Career.engage(true);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.Career.identityValue("livery.custom.custom", []))), [row]);
+  assert.deepEqual(JSON.parse(disk.get("apex26.career.myteam.0")).myTeamIdentity["livery.custom.custom"], [row], "the boot load reads the canonical catalog budget before persisting");
 });

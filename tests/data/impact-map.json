@@ -2839,10 +2839,13 @@
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/share-code.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
     },
@@ -3525,6 +3528,7 @@
       ],
       "replace": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/damage.test.mjs",
@@ -4025,9 +4029,12 @@
       ]
     },
     "js/career/team-identity.js": {
+      "value": [
+        "tests/unit/career-data-audio-improvements.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
       "*": [
-        "tests/unit/career-backup.test.mjs",
-        "tests/unit/career-data-audio-improvements.test.mjs"
+        "tests/unit/career-backup.test.mjs"
       ]
     },
     "js/circuits/abudhabi.js": {
@@ -5104,6 +5111,9 @@
       ]
     },
     "js/data/teams.js": {
+      "cleanLivery": [
+        "tests/unit/career-data-audio-improvements.test.mjs"
+      ],
       "liveryEnumOk": [
         "tests/unit/car-materials.test.mjs"
       ],
@@ -5159,6 +5169,7 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/setup-tune.test.mjs",
+        "tests/unit/share-code.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/tyre-model.test.mjs",
@@ -6521,6 +6532,7 @@
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
+        "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/ci-pr-base.test.mjs",
@@ -15433,7 +15445,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "value": [
-        "tests/specs/career-season.spec.js"
+        "tests/specs/career-season.spec.js",
+        "tests/unit/settings-export.test.mjs"
       ],
       "wire": [
         "tests/unit/async-lifecycle.test.mjs",
@@ -15446,8 +15459,7 @@
         "tests/specs/menu-survey.spec.js",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
-        "tests/unit/hud-metrics-layout.test.mjs",
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/hud-metrics-layout.test.mjs"
       ]
     },
     "js/ui/settings-export.js": {
@@ -15499,6 +15511,9 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "garageRow": [
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "garageValue": [
         "tests/unit/settings-export.test.mjs"
       ],
       "isGarageKey": [
@@ -15582,6 +15597,7 @@
     },
     "js/ui/share-code.js": {
       "apply": [
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "consumeHash": [
@@ -15593,15 +15609,20 @@
       ],
       "decode": [
         "tests/unit/ghost-share.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "encode": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/ghost-share.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs"
       ],
       "lastSession": [
         "tests/unit/share-code.test.mjs"
+      ],
+      "messageFor": [
+        "tests/unit/settings-export.test.mjs"
       ],
       "recordSession": [
         "tests/unit/share-code.test.mjs"

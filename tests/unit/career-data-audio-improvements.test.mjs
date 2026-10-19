@@ -83,3 +83,59 @@ test('contract preview preserves authored works research across era bans without
   ctx.preview = p; const rawEngine = vm.runInContext('Parts.FACTORY_PRESETS.mclaren.engine', ctx); assert.equal(p.fitted.engine, rawEngine, 'banned works engine is retained as researched ownership');
   C.acceptOffer(0, p); ctx.fitted = C.data().fitted; assert.deepEqual(copy(p.resolvedFitted), copy(vm.runInContext("Parts.resolveSetup(fitted, Teams.LIST.find(t=>t.id==='mclaren')).setup", ctx))); assert.equal(C.data().fitted.engine, rawEngine); assert.equal(vm.runInContext('Parts.legality()', ctx), legal);
 });
+test('early identity uses the existing pre-catalog budget and never depends on optional UI globals', () => {
+  const ctx = vm.createContext({});
+  for (const f of ['js/data/teams.js', 'js/career/team-identity.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const T = vm.runInContext('Teams', ctx), I = vm.runInContext('CareerTeamIdentity', ctx);
+  const row = { id: 'mine', c1: [2, -1, 0.5, 99], c2: [0, 1, 0], finShape: 'future-fin' };
+  for (let i = 0; i < 120; i++) row['future' + i] = 'x';
+  const early = T.cleanLivery(row);
+  assert.deepEqual(copy(early.c1), [1, 0, 0.5]);
+  assert.equal(early.finShape, 'future-fin', 'without tables, bounded safe strings remain extension data');
+  assert.equal(early.future94, 'x');
+  assert.equal(early.future95, undefined, 'the existing fallback is 64 + 32 accepted optional entries');
+  const many = Array.from({ length: 24 }, (_, i) => ({ id: 'paint' + i, c1: [0, 0, 0], c2: [1, 1, 1], finish: 'satin' }));
+  const beforeUI = copy(I.value('livery.custom.custom', many));
+  assert.equal(beforeUI.length, 24, 'the former 20-row fallback no longer clips early identities');
+  assert.equal(beforeUI[23].finish, 'satin', 'string pills survive before UI loading');
+  ctx.SettingsExport = { garageValue() { throw new Error('identity must not call the UI'); } };
+  assert.deepEqual(copy(I.value('livery.custom.custom', many)), beforeUI);
+  assert.equal(I.value('customLogo', null), null);
+  assert.equal(I.value('livery.custom', 'x'.repeat(65)), undefined);
+  // Node22/24 vm caches an earlier unresolved lexical global after warming.
+  // Publish this late catalog as var, as the real-store fixture already does,
+  // so the same-context early→late regression tests policy rather than that VM
+  // artifact. The next startup test also covers untransformed const scripts.
+  vm.runInContext(read('js/car/liveries.js').replace(/^const\b/gm, 'var'), ctx, { filename: absSrc('js/car/liveries.js') });
+  const fields = vm.runInContext('Liveries.FIELDS', ctx);
+  const late = T.cleanLivery(row);
+  assert.equal(Object.keys(late).length, 3 + fields.length + 32, 'budget is read at call time, never frozen during early evaluation');
+  ctx.Car3D = { FIN_SHAPE_IDS: ['none'] };
+  assert.equal(T.cleanLivery(row).finShape, undefined, 'table availability deliberately validates known enum fields');
+  assert.equal(I.value('customTeam', null), null);
+  assert.equal(I.value('not-an-identity-key', null), undefined);
+});
+
+test('page startup evaluates career before the catalog but loads and persists identity after it', () => {
+  const { C, ctx, store, disk } = careerHarness();
+  assert.equal(C.data(), null, 'evaluating Career does not load/adopt an identity');
+  assert.equal(disk.size, 0, 'early module evaluation cannot persist a clipped representation');
+  // The page calls Career.load from game.js, after the earlier catalog script.
+  const manifest = read('tools/manifest.cjs');
+  assert.ok(manifest.indexOf('"js/car/liveries.js"') < manifest.indexOf('"js/game.js"'));
+  assert.match(read('js/game.js'), /Career\.load\(\);\s*\/\/ resolve \+ migrate the career save once at boot/);
+  vm.runInContext(read('js/car/liveries.js'), ctx, { filename: absSrc('js/car/liveries.js') });
+  const fields = vm.runInContext('Liveries.FIELDS', ctx);
+  const row = { id: 'mine', c1: [0, 0, 0], c2: [1, 1, 1] };
+  for (let i = 0; i < 32; i++) row['future' + i] = 'x';
+  for (const field of fields) row[field] = [0.2, 0.4, 0.6];
+  store.set('livery.custom.custom', [row]);
+  C.start({ flavour: 'myteam', slot: 0, seed: 7 }); C.engage(true);
+  C.load(); C.engage(true);
+  assert.deepEqual(copy(C.identityValue('livery.custom.custom', [])), [row]);
+  assert.deepEqual(disk.get('career.myteam.0').myTeamIdentity['livery.custom.custom'], [row], 'the first adoption and persisted reload both use the full catalog budget');
+  const identity = vm.runInContext('CareerTeamIdentity', ctx);
+  const cleaned = identity.value('livery.custom.custom', [row]);
+  cleaned[0].c1[0] = 1;
+  assert.equal(row.c1[0], 0, 'identity rebuilds arrays instead of aliasing import data');
+});
