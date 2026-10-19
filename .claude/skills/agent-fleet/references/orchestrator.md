@@ -10,6 +10,7 @@ level recorded in role-merge-holder.md.
 - Before launching
 - Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 - Never
+- Bounded workflow experiments
 
 Elsewhere: grants, auto mode and measuring permissions → `authority.md`;
 spawn / message / status / stop per host → `adapters.md`; roles, reading the
