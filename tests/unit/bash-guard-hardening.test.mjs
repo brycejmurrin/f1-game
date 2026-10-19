@@ -555,11 +555,12 @@ test("agent-run: wrapped pushes and gh merges receive the direct command's polic
       assert.equal(compact.status, direct.status, `${command}: ${compact.stderr}`);
       assert.match(compact.stderr, /BLOCKED/);
     }
-    for (const [command, expected] of [["gh pr merge 123 --squash", "deny"], ["gh pr merge 123 --merge", "ask"]]) {
+    // Both deny: squash by method, a merge-commit merge by the missing merge-gate receipt (2026-10-19), desk or not.
+    for (const [command, expected] of [["gh pr merge 123 --squash", "deny"], ["gh pr merge 123 --merge", "deny"]]) {
       const env = { APEX_MERGE_DESK: "" };
       assert.equal(decisionOf(run(command, env)), expected);
       assert.equal(decisionOf(run(wrapped(command, "--output-level=diagnostic"), env)), expected);
-      assert.equal(decisionOf(run(wrapped(command), { APEX_MERGE_DESK: "1" })), expected === "deny" ? "deny" : null);
+      assert.equal(decisionOf(run(wrapped(command), { APEX_MERGE_DESK: "1" })), expected);
     }
     // cd and git -C must resolve against the same repository as direct argv.
     repo.g("checkout", "-qb", DEPLOY);
@@ -694,32 +695,52 @@ test("round 2 commit detection: wrapped commits and aliases still run the guards
   } finally { repo.rm(); }
 });
 
-test("round 2 gh: squash/rebase denied, other merges / ready flips ask, Merge Desk skips the ask", () => {
-  const run = (command, env = { APEX_MERGE_DESK: "" }) => hook("bash-guard.sh", bashCall(command), { env });
+test("round 2 gh: squash/rebase denied, merges / ready flips need the gate receipt, API-by-id calls still ask", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-gh-gate-"));
+  const run = (command, env = { APEX_MERGE_DESK: "" }) => hook("bash-guard.sh", bashCall(command), { env, cwd: dir });
   const deny = ["gh pr merge 12 --squash", "gh pr merge 12 -s", "gh pr merge 12 --rebase", "gh pr merge 12 -r --auto",
     "bash -c 'gh pr merge 1 --squash'", "gh api -X PUT repos/o/r/pulls/12/merge -f merge_method=squash",
     "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input:{pullRequestId:\"x\", mergeMethod: SQUASH}) { clientMutationId } }'"];
-  const ask = ["gh pr merge 12", "gh pr merge 12 --merge", "gh pr merge 12 --merge --auto", "gh pr merge 12 --squash=false --merge",
-    "gh pr ready 12", "gh api -X PUT repos/o/r/pulls/12/merge", "gh api --method=PUT repos/o/r/pulls/12/merge",
+  // The receipt-gated door: without artifacts/<kind>-gate/<n>.json these are DENIED, desk or not.
+  const gated = ["gh pr merge 12", "gh pr merge 12 --merge", "gh pr merge 12 --merge --auto", "gh pr merge 12 --squash=false --merge", "gh pr ready 12"];
+  // API calls by id or outside a PR carry no PR number for a receipt: they keep the old ask-unless-desk rule.
+  const ask = ["gh api -X PUT repos/o/r/pulls/12/merge", "gh api --method=PUT repos/o/r/pulls/12/merge",
     "gh api graphql -f query='mutation { markPullRequestReadyForReview(input:{pullRequestId:\"x\"}) { clientMutationId } }'",
     "gh api -X POST repos/o/r/merges -f base=x -f head=y"];
   const pass = ["gh pr view 12", "gh pr list", "gh pr ready 12 --undo", "gh pr edit 12 --body 'never gh pr merge --squash'",
     "gh api repos/o/r/pulls/12/merge", "gh api repos/o/r/pulls/12", "gh pr create --draft --title t --body-file - <<'EOF'\ngh pr merge 1 --squash\nEOF",
     "git commit --dry-run -m 'gh pr merge 12 --squash'", "echo gh pr merge 12 --squash"];
-  for (const c of deny) {
-    for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
-      const r = run(c, env);
-      assert.equal(decisionOf(r), "deny", `${c} ${JSON.stringify(env)}: ${r.stdout}`);
-      assert.match(r.stdout, /MERGE-COMMIT-ONLY/);
+  try {
+    for (const c of deny) {
+      for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
+        const r = run(c, env);
+        assert.equal(decisionOf(r), "deny", `${c} ${JSON.stringify(env)}: ${r.stdout}`);
+        assert.match(r.stdout, /MERGE-COMMIT-ONLY/);
+      }
     }
-  }
-  for (const c of ask) {
-    const r = run(c);
-    assert.equal(decisionOf(r), "ask", `${c}: ${r.stdout}`);
-    assert.equal(decisionOf(run(c, { APEX_MERGE_DESK: "1" })), null, `Merge Desk passes ${c}`);
-  }
-  assert.match(run("gh pr merge 12").stdout, /ready-gate\.mjs/, "the reason is github-mcp-guard's");
-  for (const c of pass) assert.equal(decisionOf(run(c)), null, `silent pass: ${c}`);
+    for (const c of gated) {
+      for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
+        const r = run(c, env);
+        assert.equal(decisionOf(r), "deny", `${c} ${JSON.stringify(env)}: ${r.stdout}`);
+        assert.match(r.stdout, /(merge|ready)-gate\.mjs --pr 12/, `the reason names the gate: ${c}`);
+      }
+    }
+    for (const c of ask) {
+      const r = run(c);
+      assert.equal(decisionOf(r), "ask", `${c}: ${r.stdout}`);
+      assert.equal(decisionOf(run(c, { APEX_MERGE_DESK: "1" })), null, `desk passes ${c}`);
+    }
+    assert.match(run("gh pr merge 12").stdout, /merge-gate\.mjs/, "the reason is merge_policy's");
+    for (const c of pass) assert.equal(decisionOf(run(c)), null, `silent pass: ${c}`);
+    // With receipts the gated calls pass; a merge pinned to another head does not.
+    const head = "a".repeat(40);
+    writeGateReceipt(dir, "merge", 12, head);
+    writeGateReceipt(dir, "ready", 12, head);
+    for (const c of gated) assert.equal(decisionOf(run(c)), null, `gated pass: ${c}`);
+    assert.equal(decisionOf(run(`gh pr merge 12 --merge --match-head-commit ${"b".repeat(40)}`)), "deny", "a pin to another head");
+    assert.equal(decisionOf(run(`gh pr merge 12 --merge --match-head-commit ${head}`)), null, "a pin to the gated head");
+    assert.equal(decisionOf(run("gh pr merge --merge")), "deny", "no PR number: no receipt can match");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("round 2 subagent ban: decided on the parsed argv, every runner spelling, node-only checks stay open", () => {
@@ -832,9 +853,14 @@ test("a PASSING commit tells the model which guard path ran: additionalContext +
     repo.g("add", "a.js");
     j = out(commit());
     assert.match(j.hookSpecificOutput.additionalContext, /code commit — ratchets --auto-raise \(0 raised\/lowered\) then npm run test:guards \(green, \d+ s/);
-    // a commit plus a gh ask: still ONE object, carrying both
+    // a commit plus a gh ready without its receipt: the deny wins and the guards never run (no context to carry)
     j = out(commit("git commit -m x && gh pr ready 12"));
-    assert.equal(j.hookSpecificOutput.permissionDecision, "ask");
+    assert.equal(j.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(j.hookSpecificOutput.additionalContext, undefined, "a denied command runs no commit guards");
+    // with the ready receipt the gh part passes silently and the commit context is still reported
+    writeGateReceipt(repo.dir, "ready", 12, "a".repeat(40));
+    j = out(commit("git commit -m x && gh pr ready 12"));
+    assert.equal(j.hookSpecificOutput.permissionDecision, undefined);
     assert.match(j.hookSpecificOutput.additionalContext, /code commit/);
     // no commit, no gh: stdout stays empty
     assert.equal(hook("bash-guard.sh", bashCall("git status", { cwd: repo.dir }), { cwd: repo.dir }).stdout, "");
