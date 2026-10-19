@@ -54,18 +54,18 @@ test("open circuit: steps eye toward the road until clear, then clearEye lifts",
   assert.equal(FlybySeq.insideProp(track, eye, 2), null, "eye is clear of the box");
 });
 
-test("street circuit: skips lateral step-in (corr already owns width)", () => {
-  let insides = 0;
+test("street circuit: skips lateral step-in (corr already owns width), keeps the lift net", () => {
+  let clears = 0;
+  const box = { x: 25, y: 5, z: 0, w: 10, d: 10, h: 12 };
   const FlybySeq = {
-    insideProp() { insides++; return null; },
-    clearEye(track, eye) { return eye; },
+    insideProp() { return box; },   // the eye is always inside a prop
+    clearEye(track, eye) { clears++; return eye; },
   };
   const CamAvoid = load(FlybySeq);
   const eye = [25, 4, 0];
-  const before = eye[0];
   CamAvoid.freeEye({ def: { street: true } }, eye, { p: [0, 0, 0], r: [1, 0, 0], hw: 7 });
-  assert.equal(eye[0], before, "street path does not shove laterally");
-  assert.ok(insides >= 0);
+  assert.equal(eye[0], 25, "street path does not shove laterally");
+  assert.equal(clears, 1, "clearEye still ran as the lift safety net");
 });
 
 // A straight road along +z through the origin (hw 8, right = +x, road at y=0)

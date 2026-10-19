@@ -533,31 +533,29 @@
       broadcastCompound(K(0.98), -1, 75, { vans: 3, dishes: 2, mastH: 9 });
 
       {
+        // Paddock Racing Kit modules (#1617 Slice C) — pits / tents / radar /
+        // banner towers replace the retired synthetic industrial yard.
         const yards = [
-          ["kenney_ind_building-a", 0.935, -1, 62],
-          ["kenney_ind_building-l", 0.958, -1, 64],
-          ["kenney_ind_building-d", 0.012, -1, 60],
-          ["kenney_com_building-a", 0.988, -1, 68],
+          ["k_pitsgarage", 0.935, -1, 62, 2.6],
+          ["k_pitsgarageclosed", 0.958, -1, 64, 2.6],
+          ["k_pitsoffice", 0.012, -1, 60, 2.6],
+          ["k_tentlong", 0.988, -1, 68, 2.4],
         ];
-        for (const [id, s, side, dist] of yards) {
-          if (!bakedModel(id, K(s), side, dist))
+        for (const [id, s, side, dist, sc] of yards) {
+          if (!bakedModel(id, K(s), side, dist, { scale: sc }))
             building(K(s), side, dist, 18, 12, 14,
               { kind: "hall", wall: [0.72, 0.72, 0.74], window: [0.28, 0.32, 0.38], floor: 4 });
         }
-        bakedModel("kenney_ind_detail-tank", K(0.972), -1, 72, { scale: 0.5 });
-        bakedModel("kenney_ind_chimney-medium", K(0.942), -1, 70, { scale: 0.65 });
+        bakedModel("k_radarequipment", K(0.972), -1, 72, { scale: 2.5 });
+        bakedModel("k_bannertowerred", K(0.942), -1, 70, { scale: 1.8 });
       }
 
-      // Kenney Racing Kit (CC0) barriers and pylons where the synthetic
-      // construction props stood; the synthetic recipe stays the fallback for a
-      // build the pack has not reached (assets/pack, docs/plans/2026-10-01-models-life.md).
+      // Kenney Racing Kit (CC0) barriers and pylons on the Rettifilo runoff.
       along(0.028, 0.052, 5.0, (k) => {
-        if (!bakedModel("k_barrierwhite", k, 1, 6.4, { scale: 1.5 }))
-          bakedModel("kenney_construction-barrier", k, 1, 6.4, { scale: 1.2 });
+        bakedModel("k_barrierwhite", k, 1, 6.4, { scale: 1.5 });
       });
       along(0.030, 0.050, 7.0, (k) => {
-        if (!bakedModel("k_pylon", k, 1, 5.0, { scale: 1.3 }))
-          bakedModel("kenney_construction-cone", k, 1, 5.0, { tint: [1.0, 0.42, 0.10] });
+        bakedModel("k_pylon", k, 1, 5.0, { scale: 1.3 });
       });
 
       waterSurface(K(0.40), 1, 95, [180, 0.18, 230], [0.30, 0.50, 0.70],

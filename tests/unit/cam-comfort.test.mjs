@@ -212,3 +212,22 @@ test("JSON and APXC1 camera packs round-trip track and car overrides", () => {
   assert.equal(restored.importPack(decoded.pack).ok, true);
   assert.deepEqual(plain(restored.exportPack()), pack);
 });
+
+test("fxSet clamps to the knob range, rounds to a notch, and rejects non-numbers", () => {
+  const CC = load();
+  const d = CC.FX_DEFS.find((x) => x.id === "motionBlur");
+  const s = rawStore();
+  assert.equal(CC.fxSet(s, "motionBlur", d.max + 50), true);
+  assert.equal(s.get("motionBlur"), d.max, "above range clamps to max");
+  CC.fxSet(s, "motionBlur", d.min - 50);
+  assert.equal(s.get("motionBlur"), d.min, "below range clamps to min");
+  CC.fxSet(s, "motionBlur", d.min + 1.4);
+  assert.equal(s.get("motionBlur"), d.min + 1, "fractions round to the nearest notch");
+  assert.equal(CC.fxGet(s, "motionBlur"), d.min + 1);
+  for (const bad of [NaN, Infinity, "5", null, undefined]) {
+    assert.equal(CC.fxSet(s, "motionBlur", bad), false, `rejects ${String(bad)}`);
+  }
+  assert.equal(s.get("motionBlur"), d.min + 1, "rejected writes leave the stored notch alone");
+  assert.equal(CC.fxSet(s, "nope", 3), false, "unknown id is refused");
+  assert.equal(s._disk.has("nope"), false);
+});

@@ -130,7 +130,8 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.match(hud, /if \(els\.minimap\) void els\.minimap\.offsetHeight/);
   // Painted announce collapse must be terminal in the fit: a trailing
   // radioTopSlot re-lit hud-radio-top and cleared data-lane-collapsed.
-  const fitBody = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("\nfunction ", hud.indexOf("function fitHud") + 1));
+  // fitHud runs its cap pass and its paint pass through fitPass: the fit is both.
+  const fitBody = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("\nfunction ", hud.indexOf("function fitPass") + 1));
   const paintCollapse = fitBody.indexOf("radioPaintedCollapse(root)");
   assert.ok(paintCollapse > 0, "fitHud runs the painted announce collapse");
   assert.equal(fitBody.indexOf("radioTopSlot(", paintCollapse), -1,

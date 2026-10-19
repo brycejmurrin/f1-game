@@ -5,6 +5,8 @@ below say what to read and in what order, and the index at the bottom exists so
 nothing goes unfindable.
 
 Player-facing change notes live in [changelog.d/](changelog.d/).
+Selectable agent tool output and saved evidence are documented in
+[agent-output/](agent-output/README.md).
 
 ## Read in this order
 

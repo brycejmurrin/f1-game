@@ -273,9 +273,17 @@ test("one pitch sign end to end: game.js dives the body for +pitch, the conventi
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const rot = game.match(/if \(_baPitch\) \{[\s\S]*?\n    \}/);
   assert.ok(rot, "body pitch rotation in game.js is present");
-  // +p tilts forward toward −up: the nose (car-local +z) goes DOWN.
-  assert.match(rot[0], /tmpF\[i\] = f \* cp - u \* sp;/);
-  assert.match(rot[0], /tmpU\[i\] = u \* cp \+ f \* sp;/);
+  // Run the real block instead of pinning its text: +p must send the nose (forward axis
+  // +z in the body basis) DOWN and leave the basis orthonormal.
+  const run = new Function("_baPitch", "tmpF", "tmpU", rot[0]);
+  const tmpF = [0, 0, 1], tmpU = [0, 1, 0];
+  run(0.2, tmpF, tmpU);
+  assert.ok(tmpF[1] < 0, `+pitch must dive the nose (forward y ${tmpF[1]})`);
+  assert.ok(tmpU[2] > 0, "...and tip the roof toward the tail's opposite: up gains +forward");
+  assert.ok(Math.abs(Math.hypot(...tmpF) - 1) < 1e-9 && Math.abs(Math.hypot(...tmpU) - 1) < 1e-9, "rotation keeps unit length");
+  const rigid = [[0, 0, 1], [0, 1, 0]];
+  run(0, rigid[0], rigid[1]);
+  assert.deepEqual(rigid, [[0, 0, 1], [0, 1, 0]], "zero pitch leaves the basis untouched");
   const cam = fs.readFileSync(path.join(ROOT, "js/camera/vantage.js"), "utf8");
   assert.match(cam, /baPitch > 0 = nose-down = braking/, "the chase g-response's documented sign");
 });

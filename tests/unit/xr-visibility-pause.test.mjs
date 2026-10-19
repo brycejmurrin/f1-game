@@ -84,3 +84,12 @@ test('reference origin reset pauses and releases input once, with listener clean
   h.session.fire('end');
   assert.equal(base.reset, undefined);
 });
+
+test("visibility contracts differ on purpose: visible-blurred pauses (XrBoot: state !== visible) but XrSession.isVisible stays true until hidden", async () => {
+  const h = await boot();
+  h.session.visibilityState = "visible-blurred"; h.session.fire("visibilitychange");
+  assert.equal(h.pauses.length, 1, "XrBoot pauses on any non-visible state");
+  assert.equal(h.ctx.XrSession.isVisible(), true, "XrSession only clears isVisible for 'hidden'");
+  h.session.visibilityState = "hidden"; h.session.fire("visibilitychange");
+  assert.equal(h.ctx.XrSession.isVisible(), false);
+});

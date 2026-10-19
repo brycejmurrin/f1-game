@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 // menu-fit — audit every menu screen for cramped / clipped layout at a given
 // @doc DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport.
 // @skill survey-ui-matrix
@@ -295,7 +296,7 @@ async function shot(page, file) {
         report[tag] = {};
         for (const [name, setup, sel, opts = {}] of SCREENS) {
           if (ONLY && !ONLY.some((f) => name.includes(f))) continue;
-          const page = await browser.newPage({ viewport, hasTouch: true, deviceScaleFactor: 1 });
+          const page = await browser.newPage(resolveUIProfile({ touch: true, viewport, deviceScaleFactor: 1 }).contextOptions);
           // One broken route must cost ONE SCREEN, not the sweep: report.json
           // is only written after the loop, and an uncaught setup rejection
           // (a dead id, a route that moved) used to abort every screen after
