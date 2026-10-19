@@ -471,3 +471,23 @@ test('reload blocks subsequent replay actions until the game boot boundary', asy
   releaseBoot(); await work;
   assert.deepEqual(seen, ['document', 'boot-pending', 'pause-menu-rendering']);
 });
+
+
+test("MCP UI summary retains bounded console and request evidence without claiming a pass", async () => {
+  const { summarizeUIInspection } = await import("../../tools/mcp/ui-tools.mjs");
+  const empty = summarizeUIInspection({ controls: [], issues: [] });
+  assert.equal(empty.diagnostics.consoleErrors, null, "missing logs remain unknown");
+  const errors = Array.from({ length: 12 }, (_, n) => ({ kind: "console", level: n ? "warning" : "error", message: "x".repeat(5000) }));
+  errors.push({ kind: "pageerror", message: "failed callback" });
+  const result = summarizeUIInspection({ controls: [], issues: [], errors, requests: [{ url: "http://127.0.0.1/missing.glb", error: "net::ERR_FAILED" }] });
+  assert.equal(result.diagnostics.pageErrors, 1);
+  assert.equal(result.diagnostics.consoleErrors, 1);
+  assert.equal(result.diagnostics.consoleWarnings, 11);
+  assert.equal(result.diagnostics.failedRequests, 1);
+  assert.equal(result.diagnostics.errorSamples.length, 10);
+  assert.ok(result.diagnostics.errorSamples[0].message.length < 600);
+  assert.equal(result.diagnostics.requestSamples[0].error, "net::ERR_FAILED");
+  assert.equal(result.diagnostics.truncated, true);
+  assert.match(result.limitation, /not a UI pass/);
+  assert.equal(summarizeUIInspection({ controls: [], errors: [], requests: [] }).diagnostics.consoleErrors, 0);
+});

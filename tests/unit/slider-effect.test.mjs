@@ -282,8 +282,9 @@ test("--shots 5 --dry-run linspaces TUNE_DEFS min→max", async () => {
   assert.equal(plan.levels.length, 5);
   assert.equal(plan.levels[0], 0);
   const { loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
-  const lampMax = loadTuneDefs(ROOT).find((d) => d.id === "lampLevel").max;
-  assert.equal(plan.levels[4], lampMax, "five shots span TUNE_DEFS min..max");
+  const def = loadTuneDefs(ROOT).find((d) => d.id === "lampLevel");
+  assert.equal(plan.levels[0], def.min);
+  assert.equal(plan.levels[4], def.max, "the last of five shots is the knob's own max");
   assert.equal(plan.from, plan.levels[0]);
   assert.equal(plan.to, plan.levels[4]);
   assert.ok(plan.levels[2] > plan.levels[1]);

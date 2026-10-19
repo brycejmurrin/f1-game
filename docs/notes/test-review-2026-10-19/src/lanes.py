@@ -70,7 +70,7 @@ LANES = [
   effort="M", model=SON, deps="none"),
  dict(id="L9", name="Tooling tests on fixtures", batches=["render-1","render-2","render-3"],
   goal="tooling tests run on fixtures instead of live repo state, misplaced smokes move home, local shader validation is honest",
-  owned=["tests/unit/apex-memory.test.mjs","tests/unit/census-verdict.test.mjs","tests/unit/shader-validate.test.mjs","tests/unit/skill-render-ui-surface.test.mjs","tests/unit/game-tools-help.test.mjs","tests/unit/assets-pack.test.mjs","tests/unit/vertex-pack.test.mjs","tests/unit/elev-presets.test.mjs","tests/unit/change-driver-tools.test.mjs","tests/unit/vstd-invariant.test.mjs","tools/env/apex-memory.mjs"],
+  owned=["tests/unit/apex-memory.test.mjs","tests/unit/census-verdict.test.mjs","tests/unit/shader-validate.test.mjs","tests/unit/game-tools-help.test.mjs","tests/unit/assets-pack.test.mjs","tests/unit/vertex-pack.test.mjs","tests/unit/elev-presets.test.mjs","tests/unit/change-driver-tools.test.mjs","tests/unit/vstd-invariant.test.mjs","tools/env/apex-memory.mjs"],
   ids=["R1-02","R1-09","R1-13","R1-15","R2-10","R2-18","R3-16","P1-09","P1-23","P2-19"],
   verify="node --test tests/unit/apex-memory.test.mjs tests/unit/census-verdict.test.mjs tests/unit/shader-validate.test.mjs tests/unit/game-tools-help.test.mjs tests/unit/assets-pack.test.mjs tests/unit/elev-presets.test.mjs && npm run test:tooling-fast",
   effort="S–M", model=SON, deps="R2-10 touches lighting-tuner-sweep.test.mjs, which L4 owns: L9 adds the CASES to game-tools-help, L4 deletes them from lighting-tuner-sweep"),

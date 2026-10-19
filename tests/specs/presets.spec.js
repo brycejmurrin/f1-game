@@ -74,14 +74,25 @@ test.describe("Apex 26 — presets", () => {
     await clickPreset(page, "relax");    const relax = await tuning(page);
     await clickPreset(page, "standard"); const std   = await tuning(page);
     await clickPreset(page, "pro");      const pro   = await tuning(page);
-    // Driving help: RELAX ≥ STANDARD ≥ PRO
-    expect(std.roadFollow).toBeLessThanOrEqual(relax.roadFollow);
+    // Driving help: RELAX > STANDARD >= PRO (STANDARD and PRO both ship
+    // drivingHelp 1, so only the RELAX side can be strict). A collapsed RELAX
+    // that equals STANDARD must fail.
+    expect(std.roadFollow).toBeLessThan(relax.roadFollow);
     expect(std.roadFollow).toBeGreaterThanOrEqual(pro.roadFollow);
-    // Turn-in laziness (wheelbase): RELAX ≥ STANDARD ≥ PRO
+    // Turn-in laziness (wheelbase = f(steerRate)): RELAX and STANDARD share
+    // steerRate 2 by design (RELAX is STEER_LEVELS.easy), so only <= holds there.
     expect(std.wheelbase).toBeLessThanOrEqual(relax.wheelbase);
     expect(std.wheelbase).toBeGreaterThanOrEqual(pro.wheelbase);
     // STANDARD ships no racing-line pull (only RELAX does).
     expect(std.raceLineAssist).toBe(0);
+  });
+
+  test("ROOKIE helps at least as much as RELAX and also pulls to the racing line", async ({ page }) => {
+    await load(page);
+    await clickPreset(page, "relax");  const relax = await tuning(page);
+    await clickPreset(page, "rookie"); const rookie = await tuning(page);
+    expect(rookie.roadFollow).toBeGreaterThan(relax.roadFollow);   // drivingHelp 9 vs 8
+    expect(rookie.raceLineAssist).toBeGreaterThan(relax.raceLineAssist);   // raceLine 4 vs 2
   });
 
   test("a manual slider edit drops the preset back to custom", async ({ page }) => {

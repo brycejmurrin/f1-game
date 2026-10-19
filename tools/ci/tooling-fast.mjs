@@ -90,6 +90,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-fleet.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
+  "tests/unit/agent-output-config.test.mjs",
+  "tests/unit/agent-output.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
@@ -760,6 +762,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/onboard.test.mjs",
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
+  "tests/unit/output-level-mcp.test.mjs",
+  "tests/unit/output-surface.test.mjs",
   "tests/unit/over-road-scan.test.mjs",
   // Stream overlay v1 schema/diffs, transform painter, TV pass/battle/fastest cards, and staged root page.
   "tests/unit/overlay-feed.test.mjs",
@@ -1007,7 +1011,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/skill-gameplay-surface.test.mjs",
   "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
-  "tests/unit/skill-render-ui-surface.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",
