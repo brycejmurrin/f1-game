@@ -66,6 +66,7 @@
     {
       "path": "tools/car/car-fit-audit.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--format",
@@ -122,11 +123,13 @@
     },
     {
       "path": "tools/car/lib/fit-checks.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/car/lib/fit-geom.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/car/livery-contrast.mjs",
