@@ -1270,6 +1270,8 @@
     "tests/unit/ui-sheets-audit.test.mjs",
     "tests/unit/uilayers-modal-order.test.mjs",
     "tests/unit/validation-cli.test.mjs",
+    "// Vendored licence files: every vendor/ package has one and a declared SPDX licence matches its text (#3092). < 0.1 s.",
+    "tests/unit/vendor-licences.test.mjs",
     "tests/unit/verify-live.test.mjs",
     "tests/unit/vertex-pack.test.mjs",
     "// tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.",
@@ -1513,7 +1515,8 @@
         "tests/unit/skill-smoke.test.mjs",
         "tests/unit/subagent-contract-hook.test.mjs",
         "tests/unit/test-groups.test.mjs",
-        "tests/unit/ui-improve-pass.test.mjs"
+        "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/vendor-licences.test.mjs"
       ],
       "kind": "node"
     },
@@ -2069,7 +2072,6 @@
         "tests/specs/offtrack.spec.js",
         "tests/specs/physics-*.spec.js",
         "tests/specs/pit-lane.spec.js",
-        "tests/specs/projection.spec.js",
         "tests/specs/race-control.spec.js",
         "tests/specs/world-physics.spec.js"
       ],
@@ -2298,7 +2300,6 @@
         "tests/specs/albert-park-foundation.spec.js",
         "tests/specs/autopilot.spec.js",
         "tests/specs/logging.spec.js",
-        "tests/specs/projection.spec.js",
         "tests/unit/adapted-specs.test.mjs"
       ],
       "kind": "command"
