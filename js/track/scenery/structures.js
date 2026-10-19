@@ -664,7 +664,9 @@ const SceneryStructures = (function () {
       const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 + κ * lat));
       const c = Math.min(cMin, curveCap);
       if (!(c > 1.0)) return { seg: 0, b: [a.r, a.u, a.t] };
-      const l = (c - halfW * swing) * factor;
+      // The (1 − factor) pad is capped at 4 cm: a full 2 % of a ~4 m chord left
+      // 7 cm between bays, and a legless bay's rows then hang free (ground-audit).
+      const l = (c - halfW * swing) - (1 - factor) * Math.min(c, 2);
       let t = a.t;
       if (nbr.length >= 2 && Math.abs(κ * spacing) < 0.55) {
         let tx = nbr[0][0] - nbr[1][0], ty = nbr[0][1] - nbr[1][1], tz = nbr[0][2] - nbr[1][2];
@@ -793,7 +795,9 @@ const SceneryStructures = (function () {
           // from ~240 m, and are flush outright at rise 1.0.
           addBox(out, vadd(vadd(rc, a.r, -side * (setback * 0.525 - 0.08 - TrackGeom.MIN_SEP)), a.u, -rise * 0.5),
                  [0.16, rise, rs], riserCol, rb);                                        // foot board
-          crowdBand(vadd(rc, a.u, 0.68), rb, side, 0.58, 0.78, rs - 0.6,
+          // 0.60: the band's foot 13 cm over the plank (< ground-audit's 15 cm
+          // GAP), so a curve-shortened bay's crowd still reads as seated (#2204).
+          crowdBand(vadd(rc, a.u, 0.60), rb, side, 0.58, 0.78, rs - 0.6,
                     opts.crowd, dens, k * 13.1 + r * 97.3 + side * 5.7);
         }
         if (opts.rail !== false) {
