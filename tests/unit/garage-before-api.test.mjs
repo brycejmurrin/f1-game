@@ -4,10 +4,9 @@
  *
  * Run: node --test tests/unit/garage-before-api.test.mjs
  */
-import { test, beforeEach, afterEach } from "node:test";
+import { test, beforeEach, afterEach, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   ARTIFACT_PREFIX,
@@ -21,6 +20,18 @@ import {
   setGithubApiTestHooks,
   skipPlanApi5xx,
 } from "../../tools/shot/garage-before.mjs";
+
+
+// Temp dirs under scratch/ (repo rule: never /tmp), removed in after() even on a red test.
+const SCRATCH = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../scratch");
+const _scratch = [];
+const scratchDir = (prefix) => {
+  fs.mkdirSync(SCRATCH, { recursive: true });
+  const d = fs.mkdtempSync(path.join(SCRATCH, prefix));
+  _scratch.push(d);
+  return d;
+};
+after(() => { for (const d of _scratch) fs.rmSync(d, { recursive: true, force: true }); });
 
 const TOKEN = "test-token-not-real";
 const logs = [];
@@ -229,7 +240,7 @@ test("listAncestorShas falls back to commits API when git only has the tip", asy
 
 test("planMain: exhausted artifact 5xx exits 0 as plan: skipped (API 5xx)", async () => {
   const tip = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "garage-plan-"));
+  const dir = scratchDir("garage-plan-");
   const outFile = path.join(dir, "github-output");
   const summary = path.join(dir, "summary.md");
   fs.writeFileSync(outFile, "");
@@ -259,7 +270,7 @@ test("planMain: exhausted artifact 5xx exits 0 as plan: skipped (API 5xx)", asyn
 });
 
 test("skipPlanApi5xx writes capture=false without needing a live API", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "garage-skip-"));
+  const dir = scratchDir("garage-skip-");
   const outFile = path.join(dir, "github-output");
   fs.writeFileSync(outFile, "");
   stashEnv(["GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY"]);

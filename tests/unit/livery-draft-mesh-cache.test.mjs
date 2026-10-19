@@ -31,9 +31,39 @@ test("invalidateCustomMeshCaches(teamId) rebuilds that team's bodies and keeps e
 test("no argument keeps the MY TEAM meaning: only custom: entries go", () => {
   const v = carDrawVm();
   const t = v.teams[0], car = { team: t, num: t.drivers[0].num, isPlayer: true };
+  // MY TEAM itself (Teams.DEFAULT_CUSTOM, id "custom"): the entries that MUST go.
+  const custom = Object.assign({}, v.ctx.Teams.DEFAULT_CUSTOM, { drivers: [{ name: "You", code: "YOU", num: 99 }] });
+  v.teams.push(custom);
+  const cCar = { team: custom, num: 99, isPlayer: false };
   const m0 = v.carDraw.playerBodyMesh(t, car);
+  const c0 = [v.carDraw.teamMesh(custom, cCar, false), v.carDraw.teamBodyMesh(custom, cCar)];
+  const n0 = v.rec.builds.length;
   v.carDraw.invalidateCustomMeshCaches();
-  assert.equal(v.carDraw.playerBodyMesh(t, car), m0);
+  assert.equal(v.carDraw.playerBodyMesh(t, car), m0, "a factory team's body is kept");
+  const c1 = [v.carDraw.teamMesh(custom, cCar, false), v.carDraw.teamBodyMesh(custom, cCar)];
+  c1.forEach((m, i) => assert.notEqual(m, c0[i], `MY TEAM mesh ${i} is rebuilt`));
+  assert.deepEqual(v.rec.builds.slice(n0).map((x) => x.kind + ":" + x.team), ["whole:custom", "body:custom"],
+    "exactly MY TEAM's two entries rebuilt");
+});
+
+// The cache itself: a repeat is a HIT, a new livery id is a MISS (its own key), and
+// going back to the first livery hits the first mesh again — no stale-paint reuse.
+test("a livery change misses; the saved livery's mesh is still a hit after it", () => {
+  const v = carDrawVm();
+  const t = v.teams[1], car = { team: t, num: t.drivers[0].num };
+  let liv = "default";
+  v.G.getLiveryId = () => liv;
+  const m0 = v.carDraw.teamBodyMesh(t, car);
+  const n0 = v.rec.builds.length;
+  assert.equal(v.carDraw.teamBodyMesh(t, car), m0, "hit");
+  assert.equal(v.rec.builds.length, n0);
+  liv = "alt"; v.G.store.rev++;
+  const m1 = v.carDraw.teamBodyMesh(t, car);
+  assert.notEqual(m1, m0, "a new livery id is a miss");
+  assert.equal(v.rec.builds.length, n0 + 1);
+  liv = "default"; v.G.store.rev++;
+  assert.equal(v.carDraw.teamBodyMesh(t, car), m0, "back on the saved livery: the first mesh, a hit");
+  assert.equal(v.rec.builds.length, n0 + 1);
 });
 
 test("the livery editor drops the team's body caches when its draft ends", () => {

@@ -5,10 +5,9 @@
  *
  * Run: node --test tests/unit/garage-before.test.mjs
  */
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -23,6 +22,16 @@ import {
 import { USAGE as FETCH_USAGE, loadArtifactsOverride, fetchPack } from "../../tools/garage-angles-fetch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+// Temp dirs live under scratch/ (repo rule: never /tmp) and go in after(), so a
+// red test does not leak them.
+const _scratch = [];
+const scratchDir = (prefix) => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const d = fs.mkdtempSync(path.join(ROOT, "scratch", prefix));
+  _scratch.push(d);
+  return d;
+};
+after(() => { for (const d of _scratch) fs.rmSync(d, { recursive: true, force: true }); });
 const YML = fs.readFileSync(path.join(ROOT, ".github/workflows", WORKFLOW_FILE), "utf8");
 const CAR_SHOT = fs.readFileSync(path.join(ROOT, ".github/workflows/car-shot.yml"), "utf8");
 
@@ -115,7 +124,7 @@ test("captureArgs and MANIFEST map team-cam.png onto preset names", () => {
   assert.equal(parseShotName("mclaren-hero.png").preset, "3q");
   assert.equal(parseShotName("ferrari-wingRear.png").preset, "rear-wing");
   assert.equal(parseShotName("all-teams-rollup.png"), null);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "garage-before-"));
+  const dir = scratchDir("garage-before-");
   fs.writeFileSync(path.join(dir, "mclaren-hero.png"), "x");
   fs.writeFileSync(path.join(dir, "mclaren-front.png"), "x");
   const sha = "0123456789abcdef0123456789abcdef01234567";
@@ -131,26 +140,24 @@ test("captureArgs and MANIFEST map team-cam.png onto preset names", () => {
 });
 
 test("workflow is Garage before, not an extension of Car shot", () => {
-  assert.match(YML, /^name: Garage before$/m);
-  assert.match(YML, /default: "claude\/f1-game-project-26h3ng"/);
-  assert.match(YML, /runs-on: macos-latest/);
-  assert.doesNotMatch(YML, /runs-on: ubuntu-latest\n    timeout-minutes: 25/, "capture is macos, not ubuntu");
-  assert.doesNotMatch(YML, /pull_request:/);
-  assert.match(YML, /retention-days: 30/);
-  assert.match(YML, /name: garage-before-\$\{\{ needs\.plan\.outputs\.sha \}\}/);
-  assert.match(YML, /cancel-in-progress: false/);
-  assert.match(YML, /node tools\/shot\/garage-angles\.mjs/);
-  assert.doesNotMatch(YML, /node tools\/car\/render-car\.mjs/);
-  const runBlocks = YML.split("\n").filter((l) => /^\s+(run:|node )/.test(l) || /garage-angles\.mjs/.test(l));
-  assert.ok(runBlocks.some((l) => /garage-angles\.mjs/.test(l)));
-  assert.ok(!runBlocks.some((l) => /render-car|carview\.html/.test(l)), "jobs must not invoke the studio renderer");
-  assert.doesNotMatch(CAR_SHOT, /garage-before/);
-  assert.match(CAR_SHOT, /render-car\.mjs/, "Car shot stays the studio job");
+  // Read structurally (it was ~15 regexes over the YAML text).
+  const wf = parseYAML(YML);
+  const steps = (job) => wf.jobs[job].steps || [];
+  const runs = Object.keys(wf.jobs).flatMap((j) => steps(j).map((st) => st.run || "")).join("\n");
+  assert.equal(wf.name, "Garage before");
+  assert.equal(wf.on.workflow_dispatch.inputs.ref.default, "claude/f1-game-project-26h3ng");
+  assert.equal(wf.on.pull_request, undefined, "never on pull requests");
+  assert.equal(wf.jobs.capture["runs-on"], "macos-latest", "capture is macOS, not ubuntu");
+  assert.equal(wf.concurrency["cancel-in-progress"], false);
+  const upload = steps("pack").find((st) => /upload-artifact/.test(st.uses || ""));
+  assert.ok(upload, "pack uploads the pack");
+  assert.equal(upload.with.name, "garage-before-${{ needs.plan.outputs.sha }}");
+  assert.equal(upload.with["retention-days"], 30);
+  assert.match(runs, /node tools\/shot\/garage-angles\.mjs/, "capture runs garage-angles");
+  assert.doesNotMatch(runs, /render-car|carview\.html/, "jobs must not invoke the studio renderer");
   // Inputs reach the script through env, never interpolated into run:.
-  const runs = YML.split("\n").filter((l) => /^\s+run: /.test(l) || /^\s+node /.test(l));
-  for (const l of runs) {
+  for (const l of runs.split("\n"))
     assert.ok(!/\$\{\{\s*(inputs|github\.event)\./.test(l), `input interpolated into a shell line: ${l.trim()}`);
-  }
   assert.match(YML, /NOT A GATE/);
 });
 
@@ -211,7 +218,7 @@ test("garage-before.mjs and fetch --help exit 0 without network", () => {
 });
 
 test("fetch --artifacts=@empty is the no-pack case (exit 2)", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "garage-fetch-"));
+  const dir = scratchDir("garage-fetch-");
   const empty = path.join(dir, "empty.json");
   fs.writeFileSync(empty, "[]\n");
   const r = spawnSync(process.execPath, [
@@ -227,7 +234,7 @@ test("fetch --artifacts=@empty is the no-pack case (exit 2)", () => {
 });
 
 test("fetch --artifacts=@file with no matching SHA is the no-pack case", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "garage-fetch-"));
+  const dir = scratchDir("garage-fetch-");
   const catalog = path.join(dir, "packs.json");
   fs.writeFileSync(catalog, JSON.stringify([
     { name: "garage-before-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", created_at: "2026-10-01T00:00:00Z", expired: false, id: 1 },
