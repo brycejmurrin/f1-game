@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01JCVjdGr4sH6oob6vxAGuvB ORCH14 LIVE session_01JCVjdGr4sH6oob6vxAGuvB — Fleet A orchestrator (took over from ORCH13). Game alternation stands: Fleet B #3069 next after green Pages, then Fleet A #2982.
+HANDOFF to:* from:claude:session_011GfV5d4fySADHs6XCFC3Rn OrchB 4 Fleet B game queue (after ORCH13 #2997): #3069 00eabac1, then #3093 7e38c0b5. Each takes GAME-SLOT only after green Pages on the previous game DONE.
