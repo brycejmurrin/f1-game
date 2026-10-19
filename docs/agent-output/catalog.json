@@ -30,16 +30,16 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 438,
+    "files": 439,
     "classifications": {
-      "entrypoint-candidate": 294,
+      "entrypoint-candidate": 295,
       "ambiguous": 59,
       "protocol-entrypoint": 30,
       "asset": 2,
       "data": 11,
       "library": 42
     },
-    "npmScripts": 73,
+    "npmScripts": 74,
     "configuredMcpServers": 5
   },
   "tools": [
@@ -1100,6 +1100,7 @@
         "test:smoke",
         "test:tiny",
         "test:ui",
+        "test:webkit",
         "test:xr"
       ]
     },
@@ -1278,6 +1279,12 @@
     },
     {
       "path": "tools/ci/wait-for.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/webkit-leg-summary.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
@@ -3522,6 +3529,10 @@
     {
       "name": "test:vm-page-b",
       "command": "APEX_VM_PAGE_GROUP=b node --test tests/unit/adapted-specs.test.mjs"
+    },
+    {
+      "name": "test:webkit",
+      "command": "node tools/ci/run-playwright.mjs --project=webkit tests/specs/webkit-boot.spec.js"
     },
     {
       "name": "test:xr",

@@ -466,9 +466,28 @@ test("2026-motif designs: named, registered in their colour/line lists, and each
   }
   assert.equal(sigs.size, motifs.length, "no two motifs paint the same art");
   // the fades really fade: art toward the rear (larger z) is smaller than at the front
-  for (const id of ["halftone", "lineFade"]) {
-    const a = drawing(); D.drawAtlas(a.ctx, { spineLogo: id }, a.regions, a.flank, a.each);
-    const rects = a.ops.filter((p) => p.length === 4 && id === "lineFade");
-    if (rects.length) assert.ok(rects[0][3] > rects.at(-1)[3], "lineFade bars thin toward the rear");
+  // (Was filtered on id === "lineFade" behind `if (rects.length)`: halftone asserted nothing.)
+  const monotone = (pairs, what) => {
+    assert.ok(pairs.length > 3, what + ": painted something (" + pairs.length + ")");
+    const byZ = pairs.slice().sort((p, q) => p[0] - q[0]);
+    for (let i = 1; i < byZ.length; i++) assert.ok(byZ[i][1] <= byZ[i - 1][1] + 1e-9, what + ` grows toward the rear at z ${byZ[i][0]}`);
+    assert.ok(byZ[0][1] > byZ.at(-1)[1], what + " ends smaller than it starts");
+  };
+  {
+    const a = drawing(); D.drawAtlas(a.ctx, { spineLogo: "lineFade" }, a.regions, a.flank, a.each);
+    monotone(a.ops.filter((p) => p.length === 4 && p[0] === -1.2 && p[2] === 2.4).map((p) => [p[1], p[3]]), "lineFade bar thickness");
+  }
+  {
+    // A halftone dot is moveTo(x + r, z), seven lineTo round the octagon, then fill.
+    const a = drawing(); D.drawAtlas(a.ctx, { spineLogo: "halftone" }, a.regions, a.flank, a.each);
+    const dots = [];
+    for (let i = 0; i + 8 < a.ops.length; i++) {
+      const run = a.ops.slice(i, i + 9);
+      if (run.slice(0, 8).every((p) => p.length === 2) && run[8].length === 1) {
+        dots.push([run[0][1], (run[0][0] - run[4][0]) / 2]);
+        i += 8;
+      }
+    }
+    monotone(dots, "halftone dot radius");
   }
 });
