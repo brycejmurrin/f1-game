@@ -975,9 +975,9 @@ void main() {
   // Car3D surface ids occupy 20..40, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   // DESIGN PREVIEW finishes 60-64 (cursor/design-preview-finishes-*, NOT shipped): each rides an existing branch and
-  // adds one tint after the metal block. 60 oilslick->39, 61 frozen->28, 62 fluoro->20, 63 burnt->27, 64 holo->34.
+  // adds one tint after the metal block. 60 oilslick->39, 61 frozen->29, 62 fluoro->20, 63 burnt->27, 64 holo->34.
   int previewId = int(vMat + 0.5);
-  int surfaceId = previewId == 60 ? 39 : previewId == 61 ? 28 : previewId == 62 ? 20
+  int surfaceId = previewId == 60 ? 39 : previewId == 61 ? 29 : previewId == 62 ? 20
     : previewId == 63 ? 27 : previewId == 64 ? 34 : previewId;
   bool classifiedCar = surfaceId >= 20 && surfaceId <= 40;
   // 34 = METALLIC FLAKE and 35 = CANDY (FINISH_SURFACE.flake / .candy): both are PAINT responses (gloss
@@ -1215,8 +1215,9 @@ void main() {
       float fkS = smoothstep(0.82, 1.0, fkH);
       albedo *= 1.0 + ((fkH - 0.5) * 0.30 + (fkS - 0.09) * 0.90) * fkF;
       // PREVIEW 64 holo: each spark takes a prismatic hue keyed to its cell and the view angle.
-      if (previewId == 64) albedo = mix(albedo, (0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fkH * 5.0
-        + (1.0 - NoV) * 2.0))) * 1.8, fkS * fkF);
+      // (Lunaflair reference: sparse glitter, mostly silver-white, rainbow only in direct light.)
+      if (previewId == 64) albedo = mix(albedo, mix(vec3(1.0), 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fkH * 5.0
+        + (1.0 - NoV) * 2.0)), 0.55) * 2.2, smoothstep(0.93, 1.0, fkH) * fkF);
       specular = min(1.0, specular + fkS * 0.40 * fkF);
     }
   }
@@ -1932,29 +1933,36 @@ void main() {
   if (tintedSurface) color *= albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
   if (goldSurface) color *= vec3(1.0, 0.78, 0.27);   // GOLD PLATE: the white lit terms take the fixed gold hue
   if (chamSurface) color *= mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip * 0.90);
-  // DESIGN PREVIEW finish tints (60-64): see the remap at surfaceId.
+  // DESIGN PREVIEW finish tints (60-64): see the remap at surfaceId. Tuned against the reference photos
+  // (artifacts/finish-designs/refs/finishes): oil film = ordered bands over a dark base, frozen = rich colour with a
+  // soft satin sheen, fluoro = glows even in shade, burnt = the real oxide order, holo = sparse silver glitter.
   if (previewId >= 60 && previewId <= 64) {
     vec3 pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
     float pvG = 1.0 - NoV;
-    if (previewId == 60) {   // oilslick: thin-film interference, the full spectrum sweeps with view angle + height
-      vec3 film = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + pvG * 1.8 + vObjPos.y * 0.9 + vObjPos.z * 0.12));
-      color *= 0.25 + film * 2.6;
-    } else if (previewId == 61) {   // frozen: flat face, a soft silver lift toward the silhouette
+    float pvL = dot(color, vec3(0.299, 0.587, 0.114));
+    if (previewId == 60) {   // oilslick: thin-film bands on the dark metal's reflections, stronger toward grazing
+      vec3 film = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + pvG * 2.4 + vObjPos.y * 0.6 + vObjPos.z * 0.10));
+      film = mix(vec3(dot(film, vec3(0.3333))), film, 0.75);
+      color = mix(color, color * film * 2.4, 0.35 + 0.65 * smoothstep(0.05, 0.6, pvG));
+    } else if (previewId == 61) {   // frozen: satin metal (29) keeps the colour; a faint grain and a soft edge sheen
       vec3 frC = floor(vObjPos * 140.0);
       float frH = hash21(frC.xy + frC.z * 19.7), frF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
-      float frL = dot(color, vec3(0.299, 0.587, 0.114));
-      color = mix(color, vec3(frL) * vec3(0.92, 0.96, 1.04), 0.50) * 1.25 * (0.70 + 1.70 * pvG * pvG) * (1.0 + (frH - 0.5) * 0.45 * frF);
-      color += (uAmbSky + uSunColor * 0.25) * pvG * pvG * 0.22;
-    } else if (previewId == 62) {   // fluoro: re-emits absorbed short wavelengths -> brighter than white in its hue
-      vec3 sat = pow(pvHue, vec3(1.8));
-      color += sat * albedo * (uAmbSky * 2.4 + uSunColor * 0.80 * max(dot(N, uSunDir), 0.0) + vec3(0.12));
-    } else if (previewId == 63) {   // burnt titanium: oxide colours along the car, gold nose -> purple -> blue tail
-      float t = clamp(0.5 + vObjPos.z * 0.30 + pvG * 0.20, 0.0, 1.0);
-      vec3 ox = mix(mix(vec3(1.0, 0.74, 0.32), vec3(0.62, 0.30, 0.86), smoothstep(0.15, 0.55, t)),
-        vec3(0.25, 0.52, 1.0), smoothstep(0.50, 0.90, t));
-      color = vec3(dot(color, vec3(0.299, 0.587, 0.114))) * ox * 1.7;   // the livery is ignored, like GOLD PLATE
-    } else {   // holo: a faint prismatic sheen on the lit panels so it still reads past the 26 m spark fade
-      color *= mix(vec3(1.0), 0.75 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + (vObjPos.x + vObjPos.z) * 4.0 + pvG * 3.0)), 0.65);
+      color = mix(color, vec3(pvL), 0.12) * (1.0 + (frH - 0.5) * 0.08 * frF);
+      color += (uAmbSky + uSunColor * 0.20) * pvG * pvG * 0.06;
+    } else if (previewId == 62) {   // fluoro: re-emits absorbed light -> glows in its hue, in shade too
+      vec3 sat = pow(pvHue, vec3(2.2));
+      color += sat * albedo * (uAmbSky * 3.0 + uSunColor * 0.80 * max(dot(N, uSunDir), 0.0) + vec3(0.18));
+    } else if (previewId == 63) {   // burnt titanium: silver nose -> straw -> gold -> bronze -> purple -> blue at the hot tail
+      float t = clamp(0.5 - vObjPos.z * 0.30 + pvG * 0.12, 0.0, 1.0);
+      vec3 ox = vec3(0.85, 0.86, 0.88);
+      ox = mix(ox, vec3(0.95, 0.82, 0.52), smoothstep(0.10, 0.25, t));
+      ox = mix(ox, vec3(0.92, 0.66, 0.30), smoothstep(0.25, 0.40, t));
+      ox = mix(ox, vec3(0.72, 0.42, 0.40), smoothstep(0.40, 0.55, t));
+      ox = mix(ox, vec3(0.50, 0.30, 0.75), smoothstep(0.55, 0.70, t));
+      ox = mix(ox, vec3(0.25, 0.45, 0.95), smoothstep(0.70, 0.88, t));
+      color = vec3(pvL) * ox * 1.6;   // the livery is ignored, like GOLD PLATE
+    } else {   // holo: a faint prism only, so the far car reads as dark metal with sparkle (Lunaflair)
+      color *= mix(vec3(1.0), 0.75 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + (vObjPos.x + vObjPos.z) * 4.0 + pvG * 3.0)), 0.18);
     }
   }
 
