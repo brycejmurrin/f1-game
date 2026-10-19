@@ -74,10 +74,12 @@ function loadCamTune(disk = new Map()) {
   const ctx = {
     GameStore: {
       store: {
+        rev: 0,
         get(k, d) { return disk.has(k) ? disk.get(k) : d; },
-        set(k, v) { disk.set(k, v); return true; },
+        set(k, v) { disk.set(k, v); this.rev++; return true; },
       },
     },
+    Teams: { LIST: [{ id: "mclaren" }, { id: "ferrari" }] },
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
     Log: { info() {}, debug() {}, enabled() { return false; } },
   };
@@ -508,4 +510,52 @@ test("explicit camera defaults override global values through export/load until 
   C.reset("chase");
   assert.equal(C.values("chase").fov, 8);
   assert.equal(C.cornerLead("chase"), 1);
+});
+
+// Moved from cam-comfort.test.mjs (R1-16): CamTune override resolution and pack round-trip.
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+test("camera overrides resolve track over car over the existing global baseline", () => {
+  const CamTune = loadCamTune();
+  assert.equal(CamTune.importPack({
+    v: 2,
+    global: { dist: 1 },
+    comfort: { bob: 0.8 },
+    cars: {
+      mclaren: { modes: { chase: { dist: 2 } }, comfort: { bob: 0.5 } },
+    },
+    tracks: {
+      monza: { modes: { chase: { dist: 3 } }, comfort: { bob: 0.2 } },
+    },
+  }).ok, true);
+
+  CamTune.setContext("monza", "mclaren");
+  assert.equal(CamTune.get("chase", "dist"), 3);
+  assert.equal(CamTune.comfortGet("bob"), 0.2);
+
+  CamTune.setContext("spa", "mclaren");
+  assert.equal(CamTune.get("chase", "dist"), 2);
+  assert.equal(CamTune.comfortGet("bob"), 0.5);
+
+  CamTune.setContext("spa", "ferrari");
+  assert.equal(CamTune.get("chase", "dist"), 1);
+  assert.equal(CamTune.comfortGet("bob"), 0.8);
+});
+
+test("JSON and APXC1 camera packs round-trip track and car overrides", () => {
+  const source = loadCamTune();
+  source.importPack({
+    v: 2,
+    cars: { mclaren: { modes: { cockpit: { height: 0.25 } }, comfort: { rollLean: 0.4 } } },
+    tracks: { spa: { modes: { chase: { fov: 5 } }, comfort: { speedFov: 0.3 } } },
+  });
+  const pack = plain(source.exportPack());
+  assert.deepEqual(pack.cars.mclaren.modes.cockpit, { height: 0.25 });
+  assert.deepEqual(pack.tracks.spa.comfort, { speedFov: 0.3 });
+
+  const restored = loadCamTune();
+  const decoded = restored.decodeShare(source.encodeShare(pack));
+  assert.equal(decoded.ok, true);
+  assert.equal(restored.importPack(decoded.pack).ok, true);
+  assert.deepEqual(plain(restored.exportPack()), pack);
 });

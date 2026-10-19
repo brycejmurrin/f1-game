@@ -694,7 +694,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // files below sat in test:garage-unit / test:steering-unit, which ran in NO
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
-  // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
+  // livery-contrast (9.7 s) stays CI-only; cover-legibility is in test:node-slow (159 s measured).
   "tests/unit/live-run-check.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
@@ -938,11 +938,16 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WATCH recording-gap cache (#2465): explicit refresh replaces a stale interior hole and keeps a pit stop and a red flag. VM, under a second.
   "tests/unit/real-race-tab-gap-refresh.test.mjs",
   "tests/unit/real-race.test.mjs",
-  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
-  "tests/unit/real-replay-captions.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
   // centreline, the highlights list, the field as puppets (follow, speed, a car
-  // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
+  // whose data ends, the flag) and the exact JUMP IN. Split by concern (frame-fit,
+  // broadcast, transport, audio-focus; shared fixtures tests/helpers/real-replay-fixtures.mjs).
+  "tests/unit/real-replay-audio-focus.test.mjs",
+  "tests/unit/real-replay-broadcast.test.mjs",
+  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
+  "tests/unit/real-replay-captions.test.mjs",
+  "tests/unit/real-replay-frame-fit.test.mjs",
+  "tests/unit/real-replay-transport.test.mjs",
   "tests/unit/real-replay-vm.test.mjs",
   "tests/unit/red-flag-fuel-vm.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
@@ -1230,6 +1235,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-maps-corners.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   "tests/unit/track-preview-plan.test.mjs",
+  // Tracks.project() hints over six circuits (perturbed, seam, wrong-lap), real track build in a VM, ~13 s.
+  "tests/unit/track-project-hints.test.mjs",
   // RANDOMISE builds clockwise (Σk < 0 through the engine) with the grid side
   // of the start straight ≥ the exit side, over 30 seeds; ~3 s.
   "tests/unit/track-randomise.test.mjs",
