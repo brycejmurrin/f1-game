@@ -1,4 +1,4 @@
-// queue-depth — the push hold counts JOBS by OS against the account's slots,
+// queue-depth — the informational gauge (the push hold it fed was retired 2026-10-16) counts JOBS by OS against the account's slots,
 // never runs (docs/notes/ACTIONS-AUDIT-2026-10-14.md finding 6: run-level queue
 // wait is 0 for 95 % of runs; the backlog is jobs). Fixture-only, no network.
 //

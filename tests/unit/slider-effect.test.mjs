@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,12 +46,13 @@ test("--help exits 0 and documents --live visual filter plus the failure-mode ta
   assert.match(r.stdout, /LIGHTING-TUNER-SLIDERS/);
 });
 
-test("--json lists ~189 knobs with id/group", () => {
+test("--json lists every TUNE_DEFS knob with id/group", async () => {
   const data = json(["--json"]);
   const knobs = data.knobs;
   assert.ok(Array.isArray(knobs), "expected { knobs: [...] }");
-  assert.ok(knobs.length >= 184 && knobs.length <= 192,   // actual 189 (beamCore, 2026-10-05); move the band with the registry
-    `expected ~189 knobs, got ${knobs.length}`);
+  const { loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
+  assert.equal(knobs.length, loadTuneDefs(ROOT).length, "--json must list exactly the TUNE_DEFS registry");
+  assert.ok(knobs.length > 100, `only ${knobs.length} knobs — the registry parse broke`);
   for (const k of knobs) {
     assert.equal(typeof k.id, "string");
     assert.ok(k.id.length, "empty id");
@@ -92,8 +93,13 @@ test("--gate night returns a non-empty subset smaller than all knobs", () => {
   assert.ok(night.knobs.every((k) => k.gates.includes("night")));
 });
 
-test("--risk reapply flags apply-only knobs missing from APPLY_RACE_IDS (empty ok)", () => {
+test("--risk reapply flags apply-only knobs missing from APPLY_RACE_IDS (non-empty: floodEmitMul is one today)", () => {
   const { knobs } = json(["--risk", "reapply", "--json"]);
+  // Not "empty ok": an empty list makes the loop below pass for any classifier.
+  // floodEmitMul is consumed outside applyRaceSettings, so it must classify as
+  // apply-only+reapply; if the registry ever fixes it the lane must name a new one.
+  assert.ok(knobs.length > 0, "--risk reapply matched nothing, so the classification is unguarded");
+  assert.ok(knobs.some((k) => k.id === "floodEmitMul"), "floodEmitMul is the known apply-only/reapply knob");
   for (const k of knobs) {
     assert.ok(k.risks.includes("reapply"), k.id);
     assert.equal(k.applyRace, false, `${k.id} is in APPLY_RACE_IDS but flagged reapply`);
@@ -215,12 +221,13 @@ test("documented live recipes: weather / far-clip / traffic / stars", async () =
   assert.equal(plan("cloudDef").camera, "horizon");
 });
 
-test("--live --all --dry-run prints a plan for every knob, batched by condition", () => {
+test("--live --all --dry-run prints a plan for every knob, batched by condition", async () => {
   const r = run(["--live", "--all", "--dry-run"]);
   assert.equal(r.status, 0, r.stderr);
   assert.doesNotMatch(r.stderr, /PAGEERR|playwright|launchChromium/i);
   const data = JSON.parse(r.stdout);
-  assert.ok(data.count >= 184 && data.count <= 192, `count=${data.count}`);
+  const { loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
+  assert.equal(data.count, loadTuneDefs(ROOT).length, "a plan per TUNE_DEFS knob");
   assert.equal(data.plans.length, data.count);
   assert.ok(data.bucketCount >= 4, `bucketCount=${data.bucketCount} (one recipe is not enough)`);
   assert.ok(data.bucketCount < data.count, "should park once per condition, not per knob");
@@ -266,7 +273,7 @@ test("inventory tags: chunk-lamps / saturate / sparse-pixels / wet-drizzle", () 
   assert.deepEqual(glx.knobs.map((k) => k.id).sort(), ["perChunkLights", "roadChunkLamps"]);
 });
 
-test("--shots 5 --dry-run linspaces TUNE_DEFS min→max", () => {
+test("--shots 5 --dry-run linspaces TUNE_DEFS min→max", async () => {
   const r = run(["--live", "lampLevel", "--shots", "5", "--dry-run"]);
   assert.equal(r.status, 0, r.stderr);
   const plan = JSON.parse(r.stdout);
@@ -274,7 +281,10 @@ test("--shots 5 --dry-run linspaces TUNE_DEFS min→max", () => {
   assert.equal(plan.shots, 5);
   assert.equal(plan.levels.length, 5);
   assert.equal(plan.levels[0], 0);
-  assert.equal(plan.levels[4], 0.687);
+  const { loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
+  const def = loadTuneDefs(ROOT).find((d) => d.id === "lampLevel");
+  assert.equal(plan.levels[0], def.min);
+  assert.equal(plan.levels[4], def.max, "the last of five shots is the knob's own max");
   assert.equal(plan.from, plan.levels[0]);
   assert.equal(plan.to, plan.levels[4]);
   assert.ok(plan.levels[2] > plan.levels[1]);
@@ -320,58 +330,71 @@ test("glareStr recipe uses night + full 0→max range", async () => {
   assert.equal(plan.to, glareMax, `glareStr to should be max (${glareMax})`);
 });
 
-test("slider-effect-view.py --batch-summary produces summary.png", (t) => {
-  const VIEW = path.join(ROOT, "tools/lighting/slider-effect-view.py");
-  const batchJson = path.join(ROOT, "artifacts/lighting/slider-effect/batch.json");
-  if (!existsSync(batchJson)) {
-    // t.skip, not a bare return: a return REPORTS PASS, so in CI (artifacts/
-    // is gitignored and absent) the whole image pipeline read as covered
-    // while never running — a round-6 audit flagged the silent green.
-    t.skip("artifacts/lighting/slider-effect/batch.json not present (gitignored input)");
-    return;
+/* The view pipeline tests build their OWN image pair, so they depend on neither the
+   gitignored artifacts/ tree nor a prior live batch run. Pillow/numpy are the only
+   requirement (absent on GitHub-hosted CI runners, where these skip loudly). */
+const VIEW = path.join(ROOT, "tools/lighting/slider-effect-view.py");
+const NO_VIEW_DEPS = hasViewDeps() ? false : "Pillow/numpy not installed (GitHub-hosted CI)";
+function synthPair(dir, name = "") {
+  const mk = spawnSync("python3", ["-c", `
+from pathlib import Path
+from PIL import Image
+d = Path(${JSON.stringify(dir)}); n = ${JSON.stringify(name)}
+a = Image.new("RGB", (64, 32), (10, 10, 10)); b = Image.new("RGB", (64, 32), (10, 10, 10))
+for x in range(16, 32):
+    for y in range(12, 24):
+        b.putpixel((x, y), (230, 200, 120))      # B brighter here, nowhere else
+a.save(d / (n + "a.png")); b.save(d / (n + "b.png"))
+`], { encoding: "utf8" });
+  assert.equal(mk.status, 0, mk.stderr);
+}
+
+test("slider-effect-view.py --batch-summary produces summary.png from a synthetic batch", { skip: NO_VIEW_DEPS }, () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "se-batch-"));
+  try {
+    synthPair(dir);
+    const files = { a: path.join(dir, "a.png"), b: path.join(dir, "b.png") };
+    const batchJson = path.join(dir, "batch.json");
+    writeFileSync(batchJson, JSON.stringify({ results: [
+      { id: "lampLevel", tod: "night", weather: "dry", from: 0, to: 0.5, files, pixels: { mad: 4.2 } },
+      { id: "glareStr", tod: "night", weather: "dry", from: 0, to: 1, files, pixels: { mad: 1.1 } },
+    ] }));
+    const r = spawnSync("python3", [VIEW, "--batch-summary", batchJson], { encoding: "utf8", cwd: ROOT, timeout: 30000 });
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+    assert.match(r.stdout, /summary\.png/);
+    const summary = path.join(dir, "summary.png");
+    assert.ok(existsSync(summary), "summary.png not written beside batch.json");
+    const dims = spawnSync("python3", ["-c", `from PIL import Image; im = Image.open(${JSON.stringify(summary)}); print(im.width, im.height)`], { encoding: "utf8" });
+    const [w, h] = dims.stdout.trim().split(" ").map(Number);
+    assert.ok(h >= 2 * 180 && h < 2 * 180 + 40, `two 180 px rows plus a thin header, got ${h}`);
+    assert.ok(w > 3 * 100, `summary width ${w}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  console.log("[slider-effect] running --batch-summary on", batchJson);
-  const r = spawnSync("python3", [VIEW, "--batch-summary", batchJson], {
-    encoding: "utf8", cwd: ROOT, timeout: 30000,
-  });
-  console.log("[slider-effect] batch-summary exit:", r.status, "stdout:", r.stdout.trim().slice(0, 200));
-  if (r.stderr) console.log("[slider-effect] batch-summary stderr:", r.stderr.trim().slice(0, 200));
-  assert.equal(r.status, 0, r.stderr || r.stdout);
-  assert.match(r.stdout, /summary\.png/);
-  const summaryPath = path.join(path.dirname(batchJson), "summary.png");
-  console.log("[slider-effect] checking summary.png at", summaryPath, "exists:", existsSync(summaryPath));
-  assert.ok(existsSync(summaryPath), `summary.png not written to ${summaryPath}`);
 });
 
-test("slider-effect-view.py produces diff.png alongside filter/heat/sheet", (t) => {
-  const VIEW = path.join(ROOT, "tools/lighting/slider-effect-view.py");
-  const sampleDir = path.join(ROOT, "artifacts/lighting/slider-effect/bahrain-night-dry-lampLevel");
-  if (!existsSync(path.join(sampleDir, "a.png"))) {
-    t.skip("no live slider-effect artifacts (gitignored input) — the view pipeline needs a prior batch run");
-    return;
-  }
+test("slider-effect-view.py writes filter/heat/diff/sheet/view.json and signs the diff", { skip: NO_VIEW_DEPS }, () => {
   const tmp = mkdtempSync(path.join(tmpdir(), "se-view-"));
-  console.log("[slider-effect] running slider-effect-view.py on", sampleDir, "→", tmp);
   try {
-    const r = spawnSync("python3", [
-      VIEW,
-      path.join(sampleDir, "a.png"),
-      path.join(sampleDir, "b.png"),
-      "--out", tmp,
-    ], { encoding: "utf8", cwd: ROOT, timeout: 20000 });
-    console.log("[slider-effect] view.py exit:", r.status, "stdout:", r.stdout.trim().slice(0, 200));
-    if (r.stderr) console.log("[slider-effect] view.py stderr:", r.stderr.trim().slice(0, 200));
+    synthPair(tmp);
+    const out = path.join(tmp, "out");
+    const r = spawnSync("python3", [VIEW, path.join(tmp, "a.png"), path.join(tmp, "b.png"), "--out", out, "--hud-crop", "0"],
+      { encoding: "utf8", cwd: ROOT, timeout: 20000 });
     assert.equal(r.status, 0, r.stderr || r.stdout);
     for (const f of ["filter.png", "heat.png", "diff.png", "sheet.png", "view.json"]) {
-      const exists = existsSync(path.join(tmp, f));
-      console.log(`[slider-effect]   ${f}:`, exists ? "ok" : "MISSING");
-      assert.ok(exists, `${f} not written`);
+      assert.ok(existsSync(path.join(out, f)), `${f} not written`);
     }
-    // diff.png must exist and be a non-empty PNG
-    const diffPng = path.join(tmp, "diff.png");
-    const { size } = statSync(diffPng);
-    console.log("[slider-effect] diff.png size:", size, "bytes");
-    assert.ok(size > 1000, `diff.png suspiciously small: ${size} bytes`);
+    const view = JSON.parse(readFileSync(path.join(out, "view.json"), "utf8"));
+    // 16 x 12 of 64 x 32 pixels changed = 9.375 %.
+    assert.ok(Math.abs(view.changedPct - 9.375) < 0.5, `changedPct=${view.changedPct}`);
+    // diff.png: red = B brighter. The changed block must read red, the rest must not.
+    const px = spawnSync("python3", ["-c", `
+from PIL import Image
+im = Image.open(${JSON.stringify(path.join(out, "diff.png"))}).convert("RGB")
+print(*im.getpixel((24, 18)), *im.getpixel((2, 2)))`], { encoding: "utf8" });
+    const [r1, , b1, r2, , b2] = px.stdout.trim().split(" ").map(Number);
+    assert.ok(r1 > b1, `brighter-in-B region should be red-leaning (r=${r1} b=${b1})`);
+    assert.ok(Math.abs(r2 - b2) < 30, `an unchanged pixel should be neutral (r=${r2} b=${b2})`);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

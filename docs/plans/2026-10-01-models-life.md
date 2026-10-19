@@ -205,6 +205,10 @@ the broadcast and flyby cameras
 ([`2026-09-30-broadcast-feel.md`](2026-09-30-broadcast-feel.md)). Budget it
 in `apex_frame_report` before design.
 
+**Plan (2026-10-19):** [`2026-10-19-crowd-vat.md`](2026-10-19-crowd-vat.md)
+— measured Monza/Spa props + frame-report baseline, per-tier triangle/draw
+caps, VAT + flipbook slices (#1621).
+
 ## Item 17 — glTF delivery, recorded, no code
 
 If the pack ever moves from AX26 to glTF: three r186's loader supports draco,

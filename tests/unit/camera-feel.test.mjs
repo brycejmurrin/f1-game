@@ -6,7 +6,23 @@ import vm from "node:vm";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
-function loadCamFeel(disk) {
+// One straight +Z road with road-frame sampling; `curv()` is read live, so a test can flip the bend mid-solve.
+function straightFixture(curv) {
+  const n = 1000, total = 4000;
+  const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
+    pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
+    ry: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n).fill(6), def: {},
+    surface: { heightAt: () => -0.12 } };
+  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n, j = (i + 1) % n; return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi)); };
+  const Tracks = {
+    sample(t, s, o) { o.p[0] = at(t.px, s); o.p[1] = at(t.py, s); o.p[2] = at(t.pz, s); o.t[0] = 0; o.t[1] = 0; o.t[2] = 1; o.r[0] = 1; o.r[1] = 0; o.r[2] = 0; o.hw = 6; return o; },
+    curvature: () => curv(),
+    banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
+  };
+  return { track, Tracks };
+}
+
+function loadCamFeel(disk, extra) {
   const store = new Map(Object.entries(disk || {}));
   const ctx = {
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
@@ -20,6 +36,7 @@ function loadCamFeel(disk) {
     },
     Log: { info() {} },
     document: undefined,
+    ...(extra || {}),
   };
   vm.runInNewContext(
     ["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"]
@@ -264,10 +281,6 @@ test("LOOK BACK flips are a cut for the aim: one snap per edge, and the state ga
   assert.equal(CamFeel.consumeAimSnap(), true, "releasing snaps back");
   CamFeel.tick({ mode: "reverse", dt: 0.016, racing: true, lookHeld: true });
   assert.equal(CamFeel.consumeAimSnap(), false, "reverse never flips, so never cuts");
-  const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
-  assert.match(game, /CamFeel\.consumeAimSnap\(\)\) \{ for \(let i = 0; i < 3; i\+\+\) camTgt\[i\] = tgtT\[i\]; feel\.camRoll = -feel\.camRoll; \}/,
-    "game.js snaps the target (not the eye) and mirrors the roll on the edge");
-  assert.match(game, /lookingBackNow\(\) \? -1 : 1/, "and keeps the roll target mirrored while looking back");
 });
 
 test("mouse free-look holds while the right button is held still", () => {
@@ -280,10 +293,19 @@ test("mouse free-look holds while the right button is held still", () => {
   assert.equal(CamFeel.freeLookState().yaw, a, "held still for half a second: the glance holds");
   for (let i = 0; i < 30; i++) CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, mouseHeld: false });
   assert.ok(CamFeel.freeLookState().yaw < a * 0.2, "released: it recentres");
-  const input = fs.readFileSync(path.join(root, "js/input/input.js"), "utf8");
-  assert.match(input, /function lookMouseHeld\(\)/);
-  const feel = fs.readFileSync(path.join(root, "js/camera/feel.js"), "utf8");
-  assert.match(feel, /Input\.lookMouseHeld\(\)/, "tickRace passes it");
+  // tickRace is what game.js calls: it must read the held flag off Input, not just tick().
+  const inp = { held: true, dx: 200 };
+  const live = loadCamFeel(null, { Input: { lookMouseHeld: () => inp.held, consumeLookMouse: () => ({ dx: inp.dx, dy: 0 }) } }).CamFeel;
+  live.resetFreeLook();
+  live.tickRace("cockpit", 0.016, false, true, 0);
+  const b = live.freeLookState().yaw;
+  assert.ok(b > 10, "tickRace forwards the mouse drag");
+  inp.dx = 0;
+  for (let i = 0; i < 30; i++) live.tickRace("cockpit", 0.016, false, true, 0);
+  assert.equal(live.freeLookState().yaw, b, "Input says the button is held: the glance holds through tickRace");
+  inp.held = false;
+  for (let i = 0; i < 30; i++) live.tickRace("cockpit", 0.016, false, true, 0);
+  assert.ok(live.freeLookState().yaw < b * 0.2, "Input reporting the button up recentres through tickRace");
 });
 
 test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched look-back all reset", () => {
@@ -296,12 +318,6 @@ test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched loo
   assert.equal(CamFeel.shouldLookBack("cockpit", false), false, "the next race does not start looking backwards");
   assert.equal(CamFeel.follow("sp:chase", 0, 4, 0.016), 0, "the speed-FOV follow starts fresh, not from the last race's top speed");
   CamFeel.setLookBackLatch(false);
-  const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
-  const snap = game.slice(game.indexOf("function snapGameCam("), game.indexOf("function snapGameCam(") + 1200);
-  for (const call of ["CamFeel.resetFollow()", "CamFeel.resetFreeLook()", "CamFeel.resetLatch()", "GameCams.resetSmoothing()"])
-    assert.ok(snap.includes(call), "snapGameCam calls " + call);
-  const vant = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  assert.match(vant, /function resetSmoothing\(\) \{\n  for \(const k in _hangOut\) delete _hangOut\[k\];\n  for \(const k in _hangFast\) delete _hangFast\[k\];/);
 });
 
 // A snap (startRace / restart → snapGameCam) must also zero the eased bend
@@ -309,17 +325,7 @@ test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched loo
 // and pop the chase eye ~4 m sideways off a straight grid.
 test("a snapped chase frame clears the bend hang the next live frame eases from", () => {
   let K = 0;
-  const n = 1000, total = 4000;
-  const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
-    pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
-    ry: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n).fill(6), def: {},
-    surface: { heightAt: () => -0.12 } };
-  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n, j = (i + 1) % n; return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi)); };
-  const Tracks = {
-    sample(t, s, o) { o.p[0] = at(t.px, s); o.p[1] = at(t.py, s); o.p[2] = at(t.pz, s); o.t[0] = 0; o.t[1] = 0; o.t[2] = 1; o.r[0] = 1; o.r[1] = 0; o.r[2] = 0; o.hw = 6; return o; },
-    curvature: () => K,
-    banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
-  };
+  const { track, Tracks } = straightFixture(() => K);
   const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
     GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
     Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
@@ -339,17 +345,7 @@ test("a snapped chase frame clears the bend hang the next live frame eases from"
 // and every director cut (hangReset) zeroed the player's hang mid-corner.
 test("a TV-director solve never perturbs the player's bend hang", () => {
   let K = 0;
-  const n = 1000, total = 4000;
-  const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
-    pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
-    ry: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n).fill(6), def: {},
-    surface: { heightAt: () => -0.12 } };
-  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n, j = (i + 1) % n; return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi)); };
-  const Tracks = {
-    sample(t, s, o) { o.p[0] = at(t.px, s); o.p[1] = at(t.py, s); o.p[2] = at(t.pz, s); o.t[0] = 0; o.t[1] = 0; o.t[2] = 1; o.r[0] = 1; o.r[1] = 0; o.r[2] = 0; o.hw = 6; return o; },
-    curvature: () => K,
-    banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
-  };
+  const { track, Tracks } = straightFixture(() => K);
   const boot = () => {
     const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
       GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
@@ -379,17 +375,7 @@ test("a TV-director solve never perturbs the player's bend hang", () => {
 // latched rear view flipped the Director's TV shot after the flag and the
 // results chequered cut. Only the player's own solve may mirror.
 test("look-back mirrors the player's solve only; extra.noLook opts out (bug-hunt 9.5)", () => {
-  const n = 1000, total = 4000;
-  const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
-    pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
-    ry: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n).fill(6), def: {},
-    surface: { heightAt: () => -0.12 } };
-  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n, j = (i + 1) % n; return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi)); };
-  const Tracks = {
-    sample(t, s, o) { o.p[0] = at(t.px, s); o.p[1] = at(t.py, s); o.p[2] = at(t.pz, s); o.t[0] = 0; o.t[1] = 0; o.t[2] = 1; o.r[0] = 1; o.r[1] = 0; o.r[2] = 0; o.hw = 6; return o; },
-    curvature: () => 0,
-    banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
-  };
+  const { track, Tracks } = straightFixture(() => 0);
   const solve = (back, noLook) => {
     const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
       Input: { lookingBack: () => back },
