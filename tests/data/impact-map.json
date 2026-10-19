@@ -2652,6 +2652,7 @@
         "tests/unit/team-livery.test.mjs"
       ],
       "*": [
+        "tests/unit/body-styles.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -2849,6 +2850,7 @@
         "tests/unit/fin-design.test.mjs"
       ],
       "*": [
+        "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
@@ -6609,6 +6611,7 @@
         "tests/unit/survey-hud.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/terrain-normals.test.mjs",
+        "tests/unit/test-bg-waste.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tolerance-diff.test.mjs",
@@ -6999,6 +7002,7 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "*": [
+        "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
@@ -9219,9 +9223,6 @@
       "readThreePath": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
-      ],
-      "rendererSlot": [
-        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "saveScreenshot": [
         "tests/unit/gfx-backend-canary.test.mjs",
