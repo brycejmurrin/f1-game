@@ -265,3 +265,52 @@ LANES[-1:-1] = [
   verify="node --test on the owned units; track-designer.spec.js alone via test-bg.mjs",
   effort="S", model=SON, deps="TK2-06 may be an environment timeout: re-run track-designer.spec.js alone at loadavg < 3 before changing it"),
 ]
+
+# ---- pass 6b: tooling-1, tooling-3, net (final); physics-2 part 3a, render-3 part 2/2 (continuations)
+_FOLD4 = {
+ "L0": (["tooling-3"], ["T3-15"]),
+ "L1": (["render-3"], ["R3-22"]),
+ "L2": (["tooling-1", "render-3"], ["T1-17", "R3-23", "R3-27", "R3-28"]),
+ "L3": (["render-3"], ["R3-19", "R3-20"]),
+ "L4": (["tooling-1", "render-3"], ["T1-22", "R3-25"]),
+ "L5": (["render-3"], ["R3-26"]),
+ "L8": (["tooling-1"], ["T1-13"]),
+ "L13": (["tooling-3"], ["T3-14", "T3-19"]),
+ "L14": (["physics-2"], ["P2-24"]),
+ "L15": (["tooling-3"], ["T3-06"]),
+ "L17": (["render-3"], ["R3-21"]),
+ "L19": (["render-3"], ["R3-24"]),
+ "L20": (["tooling-1", "tooling-3"], ["T1-09", "T3-05"]),
+ "L21": (["tooling-1", "tooling-3", "net"], ["T1-04", "T3-08", "N1-04", "N1-11", "N1-15"]),
+ "L22": (["tooling-1"], ["T1-03", "T1-10", "T1-14", "T1-16", "T1-19"]),
+ "L23": (["tooling-3"], ["T3-07"]),
+ "L24": (["tooling-1", "tooling-3", "net", "physics-2"], ["T1-15", "T3-04", "T3-17", "N1-20", "P2-23"]),
+ "L25": (["tooling-1", "tooling-3"], ["T1-01", "T1-02", "T1-06", "T1-07", "T1-08", "T1-18", "T1-20", "T1-23", "T3-01", "T3-10", "T3-13", "T3-03", "T3-16", "T3-18", "T3-20"]),
+ "L26": (["net"], ["N1-03", "N1-05", "N1-12", "N1-13", "N1-14", "N1-17", "N1-22", "N1-23", "N1-25", "N1-26"]),
+ "L27": (["tooling-1"], ["T1-21"]),
+ "L28": (["tooling-3"], ["T3-09"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD4:
+        _b, _i = _FOLD4[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i
+for _L in LANES:
+    if _L["id"] == "L26":
+        _L["name"] = "Netcode, rendezvous worker and transport"
+        _L["deps"] = "none (net batch final); lobby and phone-controller rows live in L31"
+_NET_LOBBY = ["N1-01", "N1-02", "N1-06", "N1-07", "N1-08", "N1-09", "N1-10", "N1-16", "N1-18", "N1-19", "N1-21", "N1-24"]
+LANES[-1:-1] = [
+ dict(id="L30", name="Agent API tests assert the hook, not its copy", batches=["tooling-1", "tooling-3"],
+  goal="__apex hook tests (agent-view, anchors, obs/act edges, headless, the apex-tools MCP) call the live hook in the game VM and assert its documented shape and effect, not a hand-built object or a doc string",
+  owned=_files(["T1-05", "T1-11", "T1-12", "T3-02", "T3-11", "T3-12"]),
+  ids=["T1-05", "T1-11", "T1-12", "T3-02", "T3-11", "T3-12"],
+  verify="node --test on the owned files", effort="M", model=SON, deps="L0's absolute-filename helper helps the vm-loaded hooks; not blocking"),
+ dict(id="L31", name="Multiplayer lobby and phone controller run the real flow", batches=["net"],
+  goal="lobby, seed sync, seat/role and phone-controller tests drive both peers through the shipped lobby code (no hand-set guest seed, no indexOf-order scans), and the camera-scan cancel test can see a live track",
+  owned=_files(_NET_LOBBY),
+  ids=_NET_LOBBY,
+  verify="node --test on the owned units; the multiplayer specs alone via test-bg.mjs (one at a time)",
+  effort="M", model=SON, deps="N1-01 needs a liveTracks() probe taken before scan.js clears video.srcObject; coordinate shared helpers with L26"),
+]
