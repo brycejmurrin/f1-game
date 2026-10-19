@@ -89,6 +89,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
 | **lib/ui-device-profile.mjs** | Consistent device identities for UI probes; CSS viewports are never inferred from screenshot pixels. | — |
 | **lib/ui-mock-core.mjs** | Core of hud-mock/menu-mock: held rAF loop, labelled boxes, CDP capture (png\|jpeg, clip), contact sheet, cell cache. | — |
+| **lib/vm-debug-preload.cjs** | Opt-in NODE_OPTIONS=--require preload: rewrite vm filenames to absolute file:// URLs for debug/coverage. | check-changes |
 | **lib/vm-script-cache.cjs** | Persist vm.Script cachedData for game-vm manifest eval (content-hash keyed). | — |
 | **lib/webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | mcp-probe |
 | **lib/work-tree-id.mjs** | Content id of the WORKING TREE (tracked + untracked, ignore rules honoured) as a git tree hash, and of a commit's tree. | — |
@@ -103,6 +104,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
+| **ci/cursor-agents.mjs** | Read-only Cursor agents client: list, status, dump run transcripts to artifacts/, digest token-proxy metrics. | agent-fleet |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/fleet-board.mjs** | Fleet board: pinned issue of ready/claimed/blocked issues, PRs, live claims; mirrors the `claimed` label; syncs labels. | ci-watch |
 | **ci/fleet-flags.mjs** | Flags model drift, cost over cap, context over 300k and stalled "working" sessions from get_session JSON. | agent-fleet |
@@ -153,6 +155,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
 | **check/defend-duel.mjs** | Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`). | ai-racecraft |
 | **check/destructure-usage.mjs** | Fails when a file destructures a name its script-global provider does not export (a dropped name after a rebase). | slim-bloat |
+| **check/determinism-bisect.mjs** | First-divergent-step finder: compare two per-step game-vm state traces (seeds or builds). | agent-view |
 | **check/doctor.mjs** | Read-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network. | check-changes |
 | **check/dup-keys.mjs** | Scans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins. | check-changes |
 | **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |
@@ -549,8 +552,10 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/ci-select-specs-step.sh** | The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`. |
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
+| **ci/debug-unit.mjs** | Wrapper: npm run debug:unit -- <file> loads vm-debug-preload so vm-loaded js/ is file://-debuggable. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
+| **ci/fleet-bus.mjs** | Merge lease (one holder, expiry, refusal) and typed fleet bus on the claude/fleet-bus branch, any host. |
 | **ci/fleet-tick.mjs** | One fleet-watch fast tick: board + sync + ship/Pages CI, diffed against the saved state; prints only what changed. |
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
@@ -593,7 +598,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 |---|---|
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
-| **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs` |
+| **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-mcp.test.mjs` |
 | **shot/scenery-locations.json** | `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/track-shot-survey.test.mjs` |

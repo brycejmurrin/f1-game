@@ -1333,6 +1333,7 @@ Focused browser-free diagnostics contracts also run in `tooling-fast`:
 
 | Unit file | Coverage |
 |---|---|
+| `tests/unit/fleet-bus.test.mjs` | `fleet-bus.mjs`: merge-lease rules (acquire, renew, release, break, expiry, TTL clamp), bus line grammar and addressing, and a real-git race on a local bare origin (one holder; cursor reads return only new lines). |
 | `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
 | `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
 | `tests/unit/fleet-tick.test.mjs` | `fleet-tick.mjs`: board-row compaction, state diff (changed fields, new/gone PRs, ship/Pages, new session flags) and the 40-row cap, fixtures only. |
