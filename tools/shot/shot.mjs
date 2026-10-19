@@ -232,6 +232,18 @@ try {
       sessionKey = group.sessionKey; currentTrack = null;
       await installProbeInit(page, { backend: first.backend, tlxForceGL: plan.capture.gpu === "llvmpipe" });
       await pinTeam(page, first.team);
+      if (process.env.APEX_SHOT_FINISH) {   // DESIGN PREVIEW: save the team's default livery + one finish as the chosen paint job
+        await page.addInitScript(([teamId, fin]) => {
+          addEventListener("DOMContentLoaded", () => {
+            try {
+              const t = Teams.LIST.find((x) => x.id === teamId) || Teams.LIST[0];
+              const liv = Object.assign({}, Liveries.forTeam(t)[0], { id: "fdpreview", name: "FD " + fin, finish: fin });
+              localStorage.setItem("apex26.livery.custom." + t.id, JSON.stringify([liv]));
+              localStorage.setItem("apex26.livery." + t.id, JSON.stringify("fdpreview"));
+            } catch (e) { console.warn("finish preview", e); }
+          }, { once: true });
+        }, [first.team || "ferrari", process.env.APEX_SHOT_FINISH]);
+      }
       const url = new URL(srv.snapshotUrl || srv.url);
       if (first.capture.seed != null) url.searchParams.set("seed", first.capture.seed);
       await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: plan.waitMs });
@@ -242,12 +254,6 @@ try {
         try { const n = await Assets.loadModels(); return { n, ids: Assets.models() }; }
         catch (e) { return { n: 0, err: String(e) }; }
       });
-    }
-    if (process.env.APEX_SHOT_FINISH) {   // DESIGN PREVIEW: paint the pinned team's livery with one finish before the race builds
-      await page.evaluate(([teamId, fin]) => {
-        const t = Teams.LIST.find((x) => x.id === teamId) || Teams.LIST[0];
-        t.livery = Object.assign({}, t.livery || {}, { finish: fin });
-      }, [first.team || "ferrari", process.env.APEX_SHOT_FINISH]);
     }
     if (currentTrack !== group.trackId) {
       await raceTrack(page, group.trackId, plan.waitMs);
