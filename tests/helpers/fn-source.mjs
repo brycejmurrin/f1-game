@@ -10,14 +10,10 @@
  * same failure.
  *
  * A magic window is a test that silently stops reading what it claims to read.
- * Bound the extraction by the CODE's structure instead: a function's closing
- * brace sits at exactly the column its declaration starts on, which is also
- * immune to braces inside strings and comments (a depth counter is not). Both
- * methods were checked against js/game.js on two branches and agree exactly.
- *
- * Indentation-aware since 2026-09-02, so it also reads functions nested inside
- * an IIFE (js/render/**), where the closing brace is indented and a column-0
- * search would run to the end of the module.
+ * Bound extraction by parsed syntax ranges instead: indentation and inline
+ * closing braces are layout, while strings/comments/templates/regexes can all
+ * contain braces that do not delimit the function. Espree is already a test
+ * dependency; its ranges preserve the original source bytes.
  *
  * For js/game.js use tests/helpers/game-source.mjs `symbolSource(decl)`: the
  * same extraction over game.js AND the modules carved out of it, so a pin
@@ -25,21 +21,48 @@
  * negative pin, silently vacuous).
  */
 
-/** fnSource(src, decl) -> the full text of a top-level function, decl included.
- *  Throws rather than returning a truncated or whole-file slice: a guard that
- *  quietly reads the wrong span is the failure this module exists to prevent. */
+import { parse } from "espree";
+
+// Keep only ranges, not whole ASTs. A test process repeatedly reads the same
+// renderer/game sources; parsing each once also keeps source pins inexpensive.
+const rangesBySource = new Map();
+function functionRanges(src) {
+  if (rangesBySource.has(src)) return rangesBySource.get(src);
+  const ast = parse(src, { ecmaVersion: "latest", sourceType: "script", range: true });
+  const ranges = [];
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "FunctionDeclaration"
+        || node.type === "MethodDefinition"
+        || node.type === "Property" && node.method
+        || node.type === "VariableDeclaration" && node.declarations.length === 1
+          && ["ArrowFunctionExpression", "FunctionExpression"].includes(node.declarations[0].init?.type)) {
+      ranges.push(node.range);
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === "object") visit(value);
+    }
+  }
+  visit(ast);
+  rangesBySource.set(src, ranges);
+  return ranges;
+}
+
+/** Full original text of one syntactic function declaration, method or
+ * function-valued variable declaration. `decl` is its exact source prefix
+ * (optional leading indentation included). Missing and ambiguous matches throw;
+ * text in comments/strings and neighboring declarations never count as hits. */
 export function fnSource(src, decl) {
-  const i = src.indexOf(decl);
-  if (i < 0) throw new Error(`fnSource: declaration not found: ${decl}`);
-  // The declaration's own indentation. The closing brace of a correctly
-  // formatted function sits at the same column, and nothing shallower can
-  // appear inside it — so the first such line ends the function.
-  const ls = src.lastIndexOf("\n", i) + 1;
-  const indent = src.slice(ls, i);
-  if (/[^ \t]/.test(indent))
-    throw new Error(`fnSource: ${decl} is not at the start of its line — cannot infer the closing column`);
-  const rest = src.slice(i);
-  const m = new RegExp("\\n" + indent + "\\}").exec(rest);
-  if (!m) throw new Error(`fnSource: no closing brace at column ${indent.length} after ${decl}`);
-  return rest.slice(0, m.index + indent.length + 2);
+  if (typeof decl !== "string" || !decl.trim()) throw new Error("fnSource: declaration must be non-empty");
+  const prefix = decl.trimStart(), indent = decl.length - prefix.length;
+  const hits = functionRanges(src).filter(([start, end]) => {
+    const at = start - indent;
+    return at >= 0 && src.slice(at, at + decl.length) === decl
+      && start + prefix.length <= end
+      && !(/[\w$]$/.test(prefix) && /[\w$]/.test(src[start + prefix.length] || ""));
+  });
+  if (hits.length !== 1) throw new Error(`fnSource: declaration ${hits.length ? "is ambiguous" : "not found"}: ${decl}`);
+  const [start, end] = hits[0];
+  return src.slice(start - indent, end);
 }

@@ -53,9 +53,7 @@ test("the metrics overlay clock rounds before it splits", () => {
 });
 
 test("the replay's lap clock rounds before it splits", () => {
-  const line = read("js/race/real-replay.js").match(/^ *(function fmtLap\(t\) \{.*?\})(?: *\/\/.*)?$/m);   // a one-liner: fnSource would run past it
-  assert.ok(line, "real-replay.js still declares fmtLap on one line");
-  const fmtLap = evalFn(line[1]);
+  const fmtLap = evalFn(fnSource(read("js/race/real-replay.js"), "function fmtLap(t)"));
   assert.equal(fmtLap(119.9996), "2:00.000");
   assert.equal(fmtLap(112.263), "1:52.263");
   assert.equal(fmtLap(0), "—");

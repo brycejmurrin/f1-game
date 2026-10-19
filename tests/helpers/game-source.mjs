@@ -68,15 +68,16 @@ export function gameSource() {
   return _union;
 }
 
-/** fnSource over the union: the one file whose text holds `decl` at a line start. */
+/** Exact syntax lookup over the union; fnSource rejects duplicates within or
+ * across files as well as text-only matches in comments and strings. */
 export function symbolSource(decl) {
-  const hits = [GAME, ...carvedFromGame()].filter((f) => {
-    const src = read(f), i = src.indexOf(decl);
-    return i >= 0 && /^[ \t]*$/.test(src.slice(src.lastIndexOf("\n", i) + 1, i));
-  });
-  if (hits.length !== 1) {
-    throw new Error(`symbolSource: ${JSON.stringify(decl)} is declared in ${hits.length ? hits.join(", ") : "no file"} — `
-      + (hits.length ? "pass a longer declaration (its parameter list)" : "it moved out of game.js's union, or was renamed"));
+  try {
+    return fnSource(gameSource(), decl);
+  } catch (error) {
+    if (!error.message.startsWith("fnSource: declaration ")) throw error;
+    throw new Error(`symbolSource: ${JSON.stringify(decl)} is declared in `
+      + (error.message.includes("ambiguous")
+        ? "multiple functions, pass a longer declaration (its parameter list)"
+        : "no file — it moved out of game.js's union, or was renamed"));
   }
-  return fnSource(read(hits[0]), decl);
 }

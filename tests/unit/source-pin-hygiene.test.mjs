@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { carvedFromGame, gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // The count of quoted `game.js` path literals under tests/ (the hunter's metric:
@@ -88,4 +89,71 @@ test("symbolSource reads from the one declaring file, and throws on none or many
   assert.match(symbolSource("async function consumeGhostHash()"), /GhostShare/, "title-flow.js, carved from game.js");
   assert.throws(() => symbolSource("function definitelyNotDeclaredAnywhere()"), /no file/);
   assert.throws(() => symbolSource("function create("), /declared in .*, .*longer declaration/, "every carved module declares create(");
+});
+
+// Exact-span regressions share the registered source-reader contract suite.
+// Expected strings are independent fixture boundaries, never computed by the
+// extraction algorithm. Each sibling contains a marker that must stay outside.
+test("inline declarations stop at their own close, preserving source bytes", () => {
+  const expected = 'function identityGet(k) { return { value: k }; }';
+  const src = `(() => { ${expected} function identitySet() { return "SIBLING"; } })();`;
+  assert.equal(fnSource(src, "function identityGet("), expected);
+  assert.equal(fnSource('  ' + expected, "  function identityGet("), '  ' + expected);
+});
+
+test("strings, comments, templates and regex braces never end a function", () => {
+  const expected = [
+    'function target(v = { a: "}" }) {',
+    '/* a misleading closing line:',
+    '}',
+    'function target(fake) {',
+    '*/',
+    'const text = "function target(fake) { }";',
+    '// } function target(fake) {',
+    'const re = /[{}]/g;',
+    'const template = `} ${(() => ({ nested: "{" }))()} {`;',
+    'return { v, text, re, template };',
+    '}',
+  ].join('\n');
+  assert.equal(fnSource(expected + '\nfunction sibling() { return "OUTSIDE"; }', "function target("), expected);
+});
+
+test("nested declarations are exact and duplicate declarations are ambiguous", () => {
+  const nested = 'function inner() { return "nested"; }';
+  assert.equal(fnSource(`function outer() { ${nested} return inner(); }`, "function inner("), nested);
+  const src = 'function a() { function same() {} } function b() { function same() {} }';
+  assert.throws(() => fnSource(src, "function same("), /ambiguous/);
+  assert.throws(() => fnSource('function same(a) {} function same(b) {}', 'function same('), /ambiguous/);
+  assert.equal(fnSource('function same(a) {} function same(b) {}', 'function same(b)'), 'function same(b) {}');
+});
+
+test("text-only declarations and identifier prefixes are rejected", () => {
+  const src = '// function absent() {}\nconst text = "function absent() {}"; function longer() {}';
+  assert.throws(() => fnSource(src, "function absent("), /not found/);
+  assert.throws(() => fnSource(src, "function long"), /not found/);
+  assert.throws(() => fnSource(src, ""), /non-empty/);
+  assert.throws(() => fnSource('function broken() {', "function broken("), SyntaxError);
+});
+
+test("async functions, generators and method-shaped callers retain exact syntax", () => {
+  const asyncFn = 'async function readGlCapture() { return await Promise.resolve("}"); }';
+  const generator = 'function* values() { yield { a: 1 }; }';
+  const method = 'capturePixels() { return { pixels: "}" }; }';
+  const src = `${asyncFn}\n${generator}\nconst gfx = { ${method}, sibling() {} };`;
+  assert.equal(fnSource(src, "async function readGlCapture("), asyncFn);
+  assert.equal(fnSource(src, "function* values("), generator);
+  assert.equal(fnSource(src, "capturePixels() {"), method);
+});
+
+test("function-valued variable callers stop at their own declaration", () => {
+  const block = 'const refuseTab = () => { return "}"; };';
+  const expression = 'const menuKey = (idx) => [idx, "|"].join("|");';
+  assert.equal(fnSource(block + '\n' + expression, "const refuseTab = "), block);
+  assert.equal(fnSource(block + '\n' + expression, "const menuKey = "), expression);
+});
+
+test("symbolSource retains the game/module union and failure contract", () => {
+  assert.match(symbolSource("async function consumeGhostHash()"), /GhostShare/);
+  assert.throws(() => symbolSource("function definitelyAbsent()"), /no file/);
+  assert.throws(() => symbolSource("function create("), /multiple functions.*longer declaration/);
 });

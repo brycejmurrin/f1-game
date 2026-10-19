@@ -12,6 +12,7 @@
 // garage singles are shape-checked like the liveries"), at the door the file
 // comes in through; these three are the readers behind it.
 import { test } from "node:test";
+import { fnSource } from "../helpers/fn-source.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -21,19 +22,6 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
-
-// Balanced-brace extraction, same technique as debris-step-skip.test.mjs: a
-// test that re-implements the function it is checking proves nothing.
-function extractFn(src, name, file) {
-  const i = src.indexOf(`function ${name}(`);
-  assert.ok(i >= 0, `${name}() not found in ${file} — was it renamed?`);
-  let depth = 0;
-  for (let k = src.indexOf("{", i); k < src.length; k++) {
-    if (src[k] === "{") depth++;
-    else if (src[k] === "}" && --depth === 0) return src.slice(i, k + 1);
-  }
-  throw new Error(`unbalanced braces reading ${name}() in ${file}`);
-}
 
 // `apex26.team`, `driver` and `track` are three of the values a GARAGE FILE can
 // set, and each indexes a LIST. game.js tested them with `x >= 0 && x < len` —
@@ -48,7 +36,7 @@ function extractFn(src, name, file) {
 // helper and one guard over it, rather than a regex per call site.
 test("idxOr rejects every non-index, not just out-of-range numbers", () => {
   const src = read("js/game.js");
-  const fn = extractFn(src, "idxOr", "js/game.js");
+  const fn = fnSource(src, "function idxOr(");
   const idxOr = new Function(`${fn}\nreturn idxOr;`)();
   for (const bad of ["abc", "", " ", null, undefined, true, false, NaN, Infinity,
                      2.5, -1, -0.0001, 21, 99, [], {}, [4], "4"]) {
@@ -72,7 +60,7 @@ test("idxOr rejects every non-index, not just out-of-range numbers", () => {
 // the previous custom entry matches on "custom", so a renamed team would have
 // every sync push ANOTHER car onto the grid.
 test("a corrupt custom team is repaired, not pushed into Teams.LIST as it lies", () => {
-  const src = ["identityGet", "loadCustomTeam"].map((name) => extractFn(read("js/career/custom-team.js"), name, "js/career/custom-team.js")).join("\n");
+  const src = ["identityGet", "loadCustomTeam"].map((name) => fnSource(read("js/career/custom-team.js"), `function ${name}(`)).join("\n");
   // The repair itself is Teams.sanitizeCustom (js/data/teams.js) — run the
   // shipped one, not a copy.
   const ctx = vm.createContext({});
@@ -112,7 +100,7 @@ test("a corrupt custom team is repaired, not pushed into Teams.LIST as it lies",
 // and aria-state.js paintOnOff once wrote one back through innerHTML
 // (2026-09-24). The load is the second wall: rebuilt to the dialog's limits.
 test("a loaded custom team is capped to the dialog's limits (malicious store)", () => {
-  const src = ["identityGet", "loadCustomTeam"].map((name) => extractFn(read("js/career/custom-team.js"), name, "js/career/custom-team.js")).join("\n");
+  const src = ["identityGet", "loadCustomTeam"].map((name) => fnSource(read("js/career/custom-team.js"), `function ${name}(`)).join("\n");
   const ctx = vm.createContext({});
   vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
   const Teams = vm.runInContext("Teams", ctx);
@@ -141,7 +129,7 @@ test("a loaded custom team is capped to the dialog's limits (malicious store)", 
 // stop exactly this kind of carry-over) never touched the latch.
 test("DebrisWorld.reset() re-arms the latch a trapped step lowered", () => {
   const src = read("js/physics/debris-world.js");
-  const reset = extractFn(src, "reset", "js/physics/debris-world.js");
+  const reset = fnSource(src, "function reset(");
   assert.match(src, /_active = false;\s*\n\s*try \{ destroyWorld\(\)/,
     "step()'s trap no longer lowers _active — this guard is measuring nothing");
   const run = (state) => new Function("destroyWorld", "status", "s", `
