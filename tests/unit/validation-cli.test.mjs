@@ -271,7 +271,14 @@ test("lighting check mode reports actual snapshot/delta changes without writing 
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(result.stdout);
     assert.equal(report.mode, "check");
-    assert.ok(report.changes);
+    if (tool === "merge-proposals") {
+      assert.deepEqual(report.changes, { added: [], deleted: [], changed: ["monza|night|wet"] });
+    } else {
+      // bake is a FULL replace: the one-profile snapshot changes "*" and deletes the rest
+      assert.deepEqual([report.changes.added, report.changes.changed], [[], ["*"]]);
+      assert.ok(report.changes.deleted.includes("monza|night|wet"), "bake reports shipped profiles it would delete");
+      assert.equal(report.profiles, 1);
+    }
   }
   assert.deepEqual(fs.readFileSync(path.join(ROOT, "js/lighting/presets.js")), before);
   fs.writeFileSync(edits, 'window.LightEdits = {"monza|night|wet":{"typo":1}};');

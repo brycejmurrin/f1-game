@@ -106,17 +106,12 @@ test("trackside snap selects the seek destination without inheriting hysteresis"
   assert.equal(TS.pose(track, 1105, 0, { snap: true }).index, 0, "seek also wraps the lap");
 });
 
-test("CAM_MODES appends trackside after visor (save-index contract)", () => {
-  const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
-  const ids = [...ms.matchAll(/\{ id: "([^"]+)"/g)].map((m) => m[1]);
-  // TRACKSIDE owns index 14 on ship; later PRs may append after it (rival/pitwall/drone/tv).
-  assert.ok(ids.includes("trackside"), "trackside is in CAM_MODES");
-  assert.ok(ids.includes("visor"), "visor stays before the append");
-  assert.ok(ids.indexOf("visor") < ids.indexOf("trackside"));
-  // Live TV director may append after trackside; never reorder earlier ids.
-  if (ids.includes("tv")) {
-    assert.ok(ids.indexOf("trackside") < ids.indexOf("tv"), "tv appends after trackside");
-  } else {
-    assert.equal(ids[ids.length - 1], "trackside");
-  }
+test("CAM_MODES keeps trackside at its saved index 14 (apex26.camMode is the index)", () => {
+  // Run the real mode table, not a regex over its source: the index IS the persisted camMode.
+  const win = {};
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), vm.createContext({ window: win }),
+    { filename: "js/camera/mode-switch.js" });
+  const ids = win.CamModes.CAM_MODES.map((m) => m.id);
+  assert.equal(ids.indexOf("trackside"), 14, "saved camMode 14 must stay trackside; append, never reorder");
+  assert.equal(ids[13], "visor", "visor stays directly before it");
 });

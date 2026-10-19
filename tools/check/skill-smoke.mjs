@@ -9,10 +9,11 @@ import { parseDocument } from 'yaml';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const execute = promisify(execFile);
 export function parseArgs(argv) {
-  const out = {mode:null,skill:null,all:false,help:false};
+  const out = {mode:null,skill:null,all:false,help:false,progress:false};
   for (let i=0;i<argv.length;i++) {
     const arg=argv[i];
     if (arg==='--help') out.help=true;
+    else if (arg==='--progress') out.progress=true;
     else if (arg==='--all') out.all=true;
     else if (arg==='--skill') { const value=argv[++i]; if (!value || value.startsWith('-')) throw new Error('--skill requires a canonical name'); out.skill=value; }
     else if (arg==='--plan'||arg==='--check') { if(out.mode) throw new Error('Choose exactly one of --plan and --check'); out.mode=arg.slice(2); }
@@ -51,12 +52,25 @@ export async function checkRecipe(r,root=ROOT,runner=execute) {
   const ok=!failure&&pass>=r.expected.minPass&&fail===0;
   return {...planned,status:ok?'offline_pass':'failed',performed:true,counts:{pass,fail},failure:failure||(!ok?'No passing selected contract or test failures':null),evidence:{stdout,stderr},followups:r.followups};
 }
+// Progress is opt-in JSONL on stderr; stdout remains one complete final JSON.
+export async function runRecipes(recipes,mode,{progress=()=>{},check=checkRecipe,now=Date.now}={}) {
+  const results=[],started=now();let failed=0;
+  const emit=(phase,skill=null)=>progress({phase,skill,completed:results.length,total:recipes.length,failed,elapsedMs:Math.max(0,now()-started)});
+  emit('started');
+  for(const r of recipes) {
+    emit(mode==='plan'?'planning':'checking',r.skill);
+    const result=mode==='plan'?planRecipe(r):await check(r);
+    results.push(result);if(result.status==='failed') failed++;
+    emit('recipe_completed',r.skill);
+  }
+  emit(failed?'failed':'completed');return results;
+}
 export async function main(argv=process.argv.slice(2)) {
   const opts=parseArgs(argv);
-  if(opts.help) { console.log('Usage: node tools/check/skill-smoke.mjs (--skill NAME | --all) (--plan | --check)\n--plan validates metadata/fixture catalog without execution, outputs or browser boot.\n--check serially runs selected bounded Node unit fixtures; browser/hardware remain unverified.');return 0; }
+  if(opts.help) { console.log('Usage: node tools/check/skill-smoke.mjs (--skill NAME | --all) (--plan | --check) [--progress]\n--progress emits phase/count/elapsed JSONL to stderr; stdout stays one JSON.\n--plan validates metadata/fixture catalog without execution, outputs or browser boot.\n--check serially runs selected bounded Node unit fixtures; browser/hardware remain unverified.');return 0; }
   const all=loadRecipes();const recipes=opts.all?all:all.filter(r=>r.skill===opts.skill);
   if(!recipes.length) throw new Error('Unknown canonical skill: '+opts.skill);
-  const results=[];for(const r of recipes) results.push(opts.mode==='plan'?planRecipe(r):await checkRecipe(r));
+  const results=await runRecipes(recipes,opts.mode,{progress:opts.progress?event=>process.stderr.write(JSON.stringify(event)+'\n'):undefined});
   const ok=results.every(r=>r.status==='planned'||r.status==='offline_pass');
   console.log(JSON.stringify({schemaVersion:1,mode:opts.mode,scope:'bounded offline skill recipes',domainVerified:false,results},null,2));return ok?0:1;
 }

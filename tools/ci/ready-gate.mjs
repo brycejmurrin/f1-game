@@ -187,6 +187,7 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
     // File list for the memory-leak gate (paginate; a big PR can exceed 100).
     // A failed fetch must NOT look like an empty diff (#2901 review): fail closed.
     const files = [];
+    let fileRows = 0;
     let filesError = null;
     let page = 1;
     for (;;) {
@@ -194,9 +195,20 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
       if (batch.error) { filesError = batch.error; break; }
       const rows = Array.isArray(batch.json) ? batch.json : (batch.json?.length != null ? batch.json : null);
       if (!Array.isArray(rows)) { filesError = "bad files payload"; break; }
-      for (const row of rows) if (row?.filename) files.push(row.filename);
+      fileRows += rows.length;
+      for (const row of rows) {
+        if (row?.filename) files.push(row.filename);
+        // A rename out of the store still removes memory; inspect both paths.
+        if (row?.previous_filename) files.push(row.previous_filename);
+      }
       if (rows.length < 100) break;
       page++;
+    }
+    // GitHub caps this endpoint at 3000 files; an incomplete diff cannot clear
+    // the memory gate. Count rows, not paths (a rename contributes two paths).
+    const expectedFiles = one.json?.changed_files;
+    if (!filesError && Number.isInteger(expectedFiles) && fileRows !== expectedFiles) {
+      filesError = `incomplete files list: received ${fileRows} of ${expectedFiles} changed files`;
     }
     const labels = (one.json?.labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
     return {
@@ -259,31 +271,36 @@ export function verdictLine(v) {
   return `= ready-gate ${v.state} — ${v.evidence} sha=${v.sha || ""} source=${v.source || "—"}`;
 }
 
-export function planVerdict(body) {
-  // Strip HTML comments (PR-template examples). Cursor cloud agents wrap their
-  // live Plan in one-line CURSOR_AGENT_PR_BODY_* markers; content BETWEEN those
-  // markers stays. A Bryce-opened PR can keep an older ## Plan above the agent
-  // block — when several ## Plan sections remain, use the LAST with items so
-  // the agent checklist (appended) is the gate, not a stale human draft.
-  const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
-  const heads = [...text.matchAll(/^##[ \t]+Plan\b.*$/gm)];
-  if (!heads.length) return { state: "none", items: 0, open: [] };
-  let chosen = null;
-  for (let i = heads.length - 1; i >= 0; i--) {
-    const head = heads[i];
-    const rest = text.slice(head.index + head[0].length);
-    const next = /^##[ \t]/m.exec(rest);
-    const section = next ? rest.slice(0, next.index) : rest;
-    const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX~])\][ \t]*(.*)$/gm)];
-    if (!items.length) continue;
-    chosen = items;
-    break;
+/**
+ * Plan checklist text for ready-gate. Cursor Cloud's ManagePullRequest writes
+ * only inside `<!-- CURSOR_AGENT_PR_BODY_* -->`; stripping every HTML comment
+ * left owners unable to close Plan items on a human-opened PR (outer Plan stayed
+ * open; agent ticks lived in the stripped slice). Prefer the agent slice's Plan
+ * when it has checklist items; otherwise use the body with comments removed.
+ */
+export function planBodySource(body) {
+  const raw = String(body || "");
+  const agent = /<!--\s*CURSOR_AGENT_PR_BODY_BEGIN\s*-->([\s\S]*?)<!--\s*CURSOR_AGENT_PR_BODY_END\s*-->/i.exec(raw);
+  if (agent) {
+    const slice = agent[1];
+    if (/^##[ \t]+Plan\b/m.test(slice) && /^[ \t]*[-*][ \t]+\[[ xX~]\]/m.test(slice)) return slice;
   }
-  if (!chosen) return { state: "none", items: 0, open: [] };
-  const open = chosen
+  return raw.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+export function planVerdict(body) {
+  const text = planBodySource(body);
+  const head = /^##[ \t]+Plan\b.*$/m.exec(text);
+  if (!head) return { state: "none", items: 0, open: [] };
+  const rest = text.slice(head.index + head[0].length);
+  const next = /^##[ \t]/m.exec(rest);
+  const section = next ? rest.slice(0, next.index) : rest;
+  const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX~])\][ \t]*(.*)$/gm)];
+  if (!items.length) return { state: "none", items: 0, open: [] };
+  const open = items
     .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()) && !/^(\*\*)?Deferred:/i.test(t.trim()))
     .map(([, , t]) => t.trim() || "(empty item)");
-  return { state: open.length ? "open" : "done", items: chosen.length, open };
+  return { state: open.length ? "open" : "done", items: items.length, open };
 }
 
 /** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan
@@ -312,7 +329,7 @@ export function memoryVerdict(files, { title = "", body = "", labels = [] } = {}
   const list = (files || []).map((f) => String(f || "").replace(/^\.\//, ""));
   const mem = list.filter((f) => f === ".claude/memory" || f.startsWith(".claude/memory/"));
   if (!mem.length) return { state: "ok", files: [], evidence: "no .claude/memory/ edits", code: 0 };
-  const marker = /^memory-change:\s*\S+/mi.test(String(body || ""));
+  const marker = /^memory-change:[\t ]*\S+/mi.test(String(body || ""));
   const labelled = (labels || []).some((l) => String(l).toLowerCase() === "memory-change");
   if (marker || labelled) {
     return { state: "ok", files: mem, evidence: marker ? "memory-change: body marker" : "memory-change label", code: 0 };

@@ -14,12 +14,12 @@ import { symbolSource } from "../helpers/game-source.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
-function boot(globals = {}) {
+function boot(globals = {}, perfTier = 0) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Float32Array, Float64Array, Uint8Array,
     isFinite, parseFloat, parseInt,
     Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
-    PerfGov: { tier: () => 0 },
+    PerfGov: { tier: () => perfTier },
     ...globals,
   };
   sb.window = sb;
@@ -77,6 +77,24 @@ test("create: chequered → orbit; disabled on mobile / high PerfGov tier", () =
   api.reset();
   assert.equal(api.onFlag(), false);
   assert.equal(api.live(), false);
+});
+
+test("PerfGov tier >= 2 turns the results camera off; tier 1 keeps it", () => {
+  const car = { s: 0, x: 0, px: 1, py: 1, pz: 2, head: 0, speed: 40, finPos: 1 };
+  const mk = (tier) => {
+    const G = { player: car, cars: [car], dbgCam: null, netPlay: { active: () => false }, gfx: { isMobile: false },
+      camVantage: () => ({ eye: [0, 4, -10], target: [0, 1, 0], fov: 58 }) };
+    return { G, api: boot({}, tier).create(G) };
+  };
+  for (const tier of [2, 3]) {
+    const { G, api } = mk(tier);
+    assert.equal(api.onFlag(), false, `tier ${tier} refuses the finish cut`);
+    assert.equal(api.live(), false);
+    assert.equal(G.dbgCam, null, "no camera installed under load");
+  }
+  const { G, api } = mk(1);
+  assert.equal(api.onFlag(), true, "tier 1 still runs the finish cut");
+  assert.ok(G.dbgCam && G.dbgCam._resultsCam);
 });
 
 test("highlight windows fit end tags, short recordings and the actual budget", () => {
@@ -139,6 +157,11 @@ test("chequered and orbit cameras produce finite renderer projection matrices", 
     const m = new Float32Array(16);
     R.M4.perspectiveTo(m, G.dbgCam.fov * Math.PI / 180, 1.6, .1, G.dbgCam.far);
     assert.ok(m.every(Number.isFinite), "results camera must produce a usable projection");
+    for (const k of ["eye", "target"]) {
+      assert.equal(G.dbgCam[k].length, 3, `${k} is a 3-vector`);
+      assert.ok(G.dbgCam[k].every(Number.isFinite), `${orbit ? "orbit" : "chequered"} ${k} is finite`);
+    }
+    assert.ok(Number.isFinite(G.dbgCam.fov) && G.dbgCam.fov > 0);
   }
 });
 
@@ -528,4 +551,91 @@ test("dense same-subject highlights coalesce without losing event metadata or an
   const capped = R.highlightsReel([{ t: 2, car: 0 }, { t: 12, car: 0 }, { t: 12.2, car: 0 }], 0, 20, 5);
   assert.ok(capped.reduce((sum, c) => sum + c.t1 - c.t0, 0) <= 5 + 1e-9);
   assert.ok(capped.every((c) => c.t0 >= 0 && c.t1 <= 20 && c.t1 > c.t0));
+});
+
+// ---- tick()/lifecycle behaviours (R2-28): each one pins a mutant that used to survive ----
+function liveCam(cars, extra = {}) {
+  const R = boot();
+  const seen = [];
+  const G = { player: cars[0], cars, dbgCam: null, gfx: {}, netPlay: { active: () => false },
+    camVantage: (_k, _s, _x, _v, _a, ex) => { seen.push(ex); return { eye: [0, 4, -10], target: [0, 1, 0], fov: 58 }; },
+    ...extra };
+  return { R, G, seen, api: R.create(G) };
+}
+
+test("orbit keeps turning: the eye circles the subject once per ORBIT_PERIOD_S", () => {
+  const car = { s: 0, x: 0, px: 10, py: 1, pz: -5, head: 0, speed: 0, finPos: 1 };
+  const { R, G, api } = liveCam([car]);
+  api.onFlag(); api.startOrbit();
+  const ang = () => Math.atan2(G.dbgCam.eye[0] - car.px, G.dbgCam.eye[2] - car.pz);
+  const a0 = ang();
+  for (let i = 0; i < 30 * R.ORBIT_PERIOD_S / 4; i++) api.tick(1 / 30);   // a quarter period
+  let d = ang() - a0; while (d < -Math.PI) d += 2 * Math.PI; while (d > Math.PI) d -= 2 * Math.PI;
+  assert.ok(Math.abs(d - Math.PI / 2) < 0.1, `quarter period turns ~90°, got ${(d * 180 / Math.PI).toFixed(1)}°`);
+});
+
+test("the chequered cut holds its finish-line shot for CHEQ_S before the orbit starts", () => {
+  const car = { s: 0, x: 0, px: 1, py: 1, pz: 2, head: 0, speed: 0, finPos: 1 };
+  const { R, seen, api } = liveCam([car]);
+  api.onFlag();
+  assert.equal(api.status().phase, "chequered");
+  assert.equal(seen[0].frameSubject, true, "the cut is the finish-line side shot of the subject");
+  for (let i = 0; i < 30 * (R.CHEQ_S - 0.4); i++) api.tick(1 / 30);
+  assert.equal(api.status().phase, "chequered", "still on the finish cut before CHEQ_S");
+  for (let i = 0; i < 30; i++) api.tick(1 / 30);
+  assert.equal(api.status().phase, "orbit", "orbit after CHEQ_S");
+});
+
+test("orbit redraws are capped at 30 per second even with a 120 Hz tick", () => {
+  const car = { s: 0, x: 0, px: 1, py: 1, pz: 2, head: 0, speed: 0, finPos: 1 };
+  const { G, api } = liveCam([car]);
+  api.onFlag(); api.startOrbit();
+  const poses = new Set();
+  for (let i = 0; i < 120; i++) { api.tick(1 / 120); poses.add(G.dbgCam); }   // one simulated second
+  assert.ok(poses.size <= 31, `published ${poses.size} poses in one second`);
+  assert.ok(poses.size >= 28, "…and still ~30, not starved");
+});
+
+test("reset uninstalls the results camera and ends the session", () => {
+  const car = { s: 0, x: 0, px: 1, py: 1, pz: 2, head: 0, speed: 0, finPos: 1 };
+  const { G, api } = liveCam([car]);
+  api.onFlag();
+  assert.ok(G.dbgCam && G.dbgCam._resultsCam);
+  api.reset();
+  assert.equal(G.dbgCam, null, "the installed camera is removed");
+  assert.equal(api.live(), false);
+  assert.equal(api.status().phase, "idle");
+  assert.equal(api.tick(1 / 30), false, "a stale tick after reset does nothing");
+});
+
+test("a retired car is never the subject of the finish cut", () => {
+  const player = { s: 0, x: 0, px: 50, py: 1, pz: 50, head: 0, speed: 0, finPos: 3 };
+  const dnf = { s: 0, x: 0, px: 100, py: 1, pz: 100, head: 0, speed: 0, finPos: 1, retired: true };
+  const winner = { s: 0, x: 0, px: 7, py: 1, pz: 9, head: 0, speed: 0, finPos: 2 };
+  const { seen, api } = liveCam([player, dnf, winner]);
+  api.onFlag();
+  assert.deepEqual(Array.from(seen[0].carPos), [7, 9], "the framed car is the classified one");
+});
+
+test("highlight reel drops tags outside the recorded window", () => {
+  const R = boot();
+  const reel = R.highlightsReel([{ t: -5, car: 0 }, { t: 3, car: 1 }, { t: 99, car: 2 }, { t: NaN, car: 3 }], 0, 20, 12);
+  assert.deepEqual(Array.from(reel, (c) => c.car), [1], "only the in-window, finite tag survives");
+});
+
+test("a second highlights() while one is playing is refused and does not rewind it", () => {
+  const car = { s: 0, x: 0, px: 1, py: 1, pz: 2, head: 0, speed: 0, finPos: 1 };
+  const { api } = liveCam([car]);
+  let begins = 0;
+  // beginScrub always succeeds here, so only the re-entry guard can stop a second start.
+  api.attachReplay({ window: () => ({ t0: 0, t1: 20, frames: 600 }), tags: () => [{ t: 5, car: 0 }, { t: 15, car: 0 }],
+    beginScrub: () => { begins++; return true; }, apply() {}, endScrub() {} });
+  api.onFlag();
+  assert.equal(api.startHighlights(), true);
+  for (let i = 0; i < 45; i++) api.tick(1 / 30);   // into the next clip
+  const clip = api.status().clip, begin = begins;
+  assert.equal(api.startHighlights(), false, "re-entry refused");
+  assert.equal(begins, begin, "the replay buffer was not asked to begin a second scrub");
+  assert.equal(api.status().phase, "highlights");
+  assert.equal(api.status().clip, clip, "playback was not rewound to clip 0");
 });

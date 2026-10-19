@@ -17,8 +17,13 @@ test.describe("Hungaroring track foundation", () => {
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((track) => track.id === "hungaroring");
       const profile = window.__apex.trackProfile(100);
+      // lat +-10/+-18 m: outside the carved road, where groundY samples terrain.
+      // The old -6..6 ladder sat inside the carve, where gap is null.
       const probes = [0.10, 0.12, 0.14, 0.163, 0.18].flatMap((frac) =>
-        [-6, -3, 0, 3, 6].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).gap }))
+        [-18, -10, 10, 18].map((lat) => {
+          const g = window.__apex.groundY(frac, lat);
+          return { frac, lat, gap: g.gap, overRoad: g.overRoad };
+        })
       );
       return {
         coordinates: def.sceneryCoordinates,
@@ -61,9 +66,12 @@ test.describe("Hungaroring track foundation", () => {
     expect(high.frac).toBeLessThan(0.96);
     expect(high.y - low.y).toBeGreaterThan(28);
     expect(high.y - low.y).toBeLessThan(34);
-    for (const probe of result.probes)
-      expect(probe.gap === null || probe.gap <= 0.18,
-        `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);
+    expect(result.probes.length).toBe(20);
+    for (const probe of result.probes) {
+      const label = `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${JSON.stringify(probe)}`;
+      expect(Number.isFinite(probe.gap), `${label} sampled no terrain`).toBe(true);
+      expect(probe.gap, label).toBeLessThanOrEqual(0.18);
+    }
 
     expect(result.walls.anyNaN).toBe(false);
     // Shared tyre stacks intentionally guard tight-corner exits at 2.2 m from

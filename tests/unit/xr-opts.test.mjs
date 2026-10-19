@@ -109,14 +109,7 @@ test("ApexXR.plan records webgpu→webgl2 when XRGPUBinding missing", () => {
   const p = ctx.ApexXR.plan(true);
   assert.equal(p.xrMode, "armed");
   assert.equal(p.path, "webgl2");
-  assert.ok(p.fallbacks.some((f) => f.reason.includes("XRGPUBinding") || f.reason.includes("xrgpu") || f.from === "webgpu"));
-});
-
-test("js/xr/xr-opts.js and apex-xr.js exist for zeroRefModules", () => {
-  assert.ok(fs.existsSync(path.join(ROOT, "js/xr/xr-opts.js")));
-  assert.ok(fs.existsSync(path.join(ROOT, "js/xr/apex-xr.js")));
-  assert.match(read("js/xr/apex-xr.js"), /ApexXR/);
-  assert.match(read("js/xr/xr-opts.js"), /XROpts/);
+  assert.deepEqual(JSON.parse(JSON.stringify(p.fallbacks)), [{ from: "webgpu", to: "webgl2", reason: "no XRGPUBinding" }]);
 });
 
 test("VR driving input applies live and releases only XR-owned samples", () => {

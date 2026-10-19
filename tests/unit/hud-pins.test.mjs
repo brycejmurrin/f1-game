@@ -159,6 +159,10 @@ function boot({ W = 844, H = 390, scale = 1, cssZoom = true, camInRow = true } =
     const v = root.style.getPropertyValue("--hud-z-top");
     return v === "" ? scale : +v;
   };
+  // A real DOM re-lays out when the band zoom is written (the fit's zoom-1 cap pass reads it).
+  const st = root.style, setP = st.setProperty, rmP = st.removeProperty;
+  st.setProperty = (k, v) => { setP(k, v); if (k === "--hud-z-top") paintAt(pub()); };
+  st.removeProperty = (k) => { rmP(k); if (k === "--hud-z-top") paintAt(pub()); };
   paintAt(scale);
   for (let i = 0; i < 3; i++) hud.updateHud(true);
 

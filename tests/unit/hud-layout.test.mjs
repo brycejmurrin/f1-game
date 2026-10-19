@@ -21,7 +21,8 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   assert.ok(helper); const timeline=[];
   let camera="chase", broadcast=false, published="0px", frozen=false, headless=false;
   const elements=new Map();
-  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
+  // settlePaint / forceHudFit are sibling helpers (#2825 / #2941); stub so race() resolves.
+  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},settlePaint:async()=>{},forceHudFit:async()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
     document:{
       body:{classList:{contains:()=>broadcast}},
       getElementById:(id)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},
@@ -42,16 +43,25 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
     waitForFunction:async(fn,arg)=>assert.equal(await invoke(fn,arg),true,"no background HUD tick runs during the warm-up"),
     waitForTimeout:async()=>{throw new Error("broadcast helper must use readiness, not a sleep");}};
   await run(page,"buttons",false,{sal:59,sar:59,sat:0,sab:21},{profile:"broadcast",cam:"heli"});
-  assert.deepEqual(timeline,["hold physics","hold renderer","camera:heli","refresh:heli"]);
+  // Initial jump after camera, then the readiness wait forces another fit while
+  // frozen so --hud-top-h can catch CSS zoom (#2941).
+  assert.deepEqual(timeline,["hold physics","hold renderer","camera:heli","refresh:heli","refresh:heli"]);
 });
 
 test("broadcast layout probe waits for paint, camera and published tower height, not collision results", async () => {
   const spec=fs.readFileSync(path.join(ROOT,"tests/specs/hud-layout.spec.js"),"utf8");
-  const predicate=spec.match(/await page\.waitForFunction\((async \(broadcastCamera\) => \{[\s\S]*?\n    \}), o\.cam/);
-  assert.ok(predicate,"the broadcast helper carries its bounded input-readiness predicate");
+  // #2825: double-rAF is settlePaint() before the wait; the predicate stays synchronous.
+  assert.match(spec, /await settlePaint\(page\);\s*\n\s*await page\.waitForFunction\(\(broadcastCamera\) => \{/,
+    "paint settles outside waitForFunction so the predicate can be sync");
+  assert.doesNotMatch(spec, /waitForFunction\(async \(broadcastCamera\)/,
+    "broadcast waitForFunction predicate must not be async");
+  const start = spec.indexOf("await page.waitForFunction((broadcastCamera) => {");
+  assert.ok(start >= 0, "the broadcast helper carries its bounded input-readiness predicate");
+  const end = spec.indexOf("}, o.cam === \"heli\"", start);
+  assert.ok(end > start, "broadcast predicate ends before o.cam");
+  const predSrc = spec.slice(start + "await page.waitForFunction(".length, end + 1);
   let broadcast=false, published="", height=132.04, zoom=2, queries=0;
-  const frames=[];
-  const ctx=vm.createContext({requestAnimationFrame:(fn)=>frames.push(fn),document:{
+  const ctx=vm.createContext({document:{
     body:{classList:{contains:()=>broadcast}},
     querySelector:(selector)=>{
       queries++;
@@ -60,23 +70,13 @@ test("broadcast layout probe waits for paint, camera and published tower height,
     },
     documentElement:{style:{getPropertyValue:()=>published}},
   }});
-  const ready=vm.runInContext("("+predicate[1]+")",ctx);
-  const afterPaint=async()=>{
-    const before=queries; let settled=false;
-    const result=ready(true); result.then(()=>{settled=true;});
-    assert.equal(frames.length,1,"first frame scheduled");
-    assert.equal(queries,before,"no layout read before paint");
-    frames.shift()(); await Promise.resolve();
-    assert.equal(settled,false,"one frame cannot complete paint readiness");
-    assert.equal(queries,before,"no layout read between frames");
-    assert.equal(frames.length,1,"second frame scheduled");
-    frames.shift()(); return await result;
-  };
-  assert.equal(await afterPaint(),false,"camera class has not caught up");
-  broadcast=true; assert.equal(await afterPaint(),false,"height is not published yet");
-  published="0px"; assert.equal(await afterPaint(),false,"initial zero height is stale");
-  published="40px"; assert.equal(await afterPaint(),false,"old tower height is stale");
-  published="66.0px"; assert.equal(await afterPaint(),true,"own units honor zoom and toFixed(1) rounding");
+  const ready=vm.runInContext("("+predSrc+")",ctx);
+  assert.equal(ready(true),false,"camera class has not caught up");
+  broadcast=true; assert.equal(ready(true),false,"height is not published yet");
+  published="0px"; assert.equal(ready(true),false,"initial zero height is stale");
+  published="40px"; assert.equal(ready(true),false,"old tower height is stale");
+  published="66.0px"; assert.equal(ready(true),true,"own units honor zoom and toFixed(1) rounding");
+  assert.ok(queries > 0, "sync predicate reads layout");
   // fitHud re-publishes --hud-top-h AFTER writing --hud-z-top so a zoom cap
   // in the same pass cannot leave the wait 0.1px behind.
   const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
@@ -84,15 +84,15 @@ test("broadcast layout probe waits for paint, camera and published tower height,
   const zTop = fit.indexOf('set("--hud-z-top"');
   const republish = fit.indexOf('hStyle(root, "--hud-top-h"', zTop);
   assert.ok(zTop >= 0 && republish > zTop, "--hud-top-h must be published after the top zoom cap");
-  height=0; published="0px"; assert.equal(await afterPaint(),false,"hidden tower is not ready");
-  height=132; zoom=1; published="132px"; assert.equal(await afterPaint(),true);
+  height=0; published="0px"; assert.equal(ready(true),false,"hidden tower is not ready");
+  height=132; zoom=1; published="132px"; assert.equal(ready(true),true);
 });
 
 function fakeEl() {
   const props = {}, attrs = {};
   return {
     props, attrs,
-    style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
+    style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
     setAttribute(k, v) { attrs[k] = v; },
     removeAttribute(k) { delete attrs[k]; },
     hasAttribute(k) { return k in attrs; },
@@ -129,7 +129,7 @@ test("set writes only moved elements and paints --hl-* on that element", () => {
   const { H, written, els } = load();
   const e = H.set("map", { x: 5, s: 150 }, "other");
   assert.deepEqual({ ...e }, { x: 5, y: 0, s: 150 });
-  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 3, standard: { cockpit: {}, helmet: {}, other: { map: { x: 5, y: 0, s: 150 } } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 4, standard: { cockpit: {}, helmet: {}, other: { map: { x: 5, y: 0, s: 150 } } } });
   const m = els["#minimap"];
   assert.equal(m.attrs["data-hl"], "");
   assert.equal(m.props["--hl-x"], "5");
@@ -138,9 +138,9 @@ test("set writes only moved elements and paints --hl-* on that element", () => {
   assert.equal("data-hl" in els[".hud-top"].attrs, false);
 });
 
-test("values clamp; back to shipped clears the element and the store", () => {
+test("unbounded values survive; explicit reset clears the element and the store", () => {
   const { H, written, els } = load();
-  assert.deepEqual({ ...H.set("tower", { x: 999, y: -999, s: 10 }, "other") }, { x: 50, y: -50, s: 50 });
+  assert.deepEqual({ ...H.set("tower", { x: 999, y: -999, s: 10 }, "other") }, { x: 999, y: -999, s: 10 });
   H.resetEl("tower", "other");
   assert.equal(written.hudLayout, null);
   assert.equal("data-hl" in els[".hud-top"].attrs, false);
@@ -148,7 +148,7 @@ test("values clamp; back to shipped clears the element and the store", () => {
 });
 
 test("cockpit and other cameras keep separate layouts; setCam swaps them", () => {
-  const { H, els } = load({ hudLayout: { v: 1, cockpit: { tyre: { x: -30, y: 0, s: 100 } }, other: {} } });
+  const { H, els } = load({ hudLayout: { v: 4, standard: { cockpit: { tyre: { x: -30, y: 0, s: 100 } }, other: {} } } });
   assert.equal(H.camSet("cockpit"), "cockpit");
   assert.equal(H.camSet("helmet"), "helmet", "HELMET is the visor: its own set (js/camera/cam-groups.js)");
   assert.equal(H.camSet("visor"), "other", "VISOR draws no wheel (js/camera/cam-groups.js)");
@@ -252,18 +252,89 @@ test("stored offsets override the cockpit default; reset returns to the default,
   assert.equal(written.hudLayout, null);
   assert.deepEqual(plain(H.get("aero", "cockpit")), plain(H.SHIPPED.standard.cockpit.aero));
   H.set("tyre", plain(H.SHIPPED.standard.cockpit.tyre), "cockpit");
-  assert.equal(written.hudLayout, null, "writing the default stores nothing");
+  assert.deepEqual(plain(written.hudLayout.standard.cockpit.tyre), plain(H.SHIPPED.standard.cockpit.tyre),
+    "an explicit default owns placement until reset");
+  H.resetEl("tyre", "cockpit");
+  assert.equal(written.hudLayout, null);
 });
 
-test("v1 store migrates: its values kept as STANDARD's, missing cockpit elements take the default, saves as v3", () => {
-  const { H, written } = load({ hudLayout: { v: 1, cockpit: { tyre: { x: -10, y: 0, s: 120 } }, other: { map: { x: 2, y: 0, s: 100 } } } });
-  assert.deepEqual(plain(H.get("tyre", "cockpit")), { x: -10, y: 0, s: 120 });
-  assert.deepEqual(plain(H.get("ot", "cockpit")), plain(H.SHIPPED.standard.cockpit.ot));
-  assert.deepEqual(plain(H.get("map", "other")), { x: 2, y: 0, s: 100 });
-  H.set("map", { s: 110 }, "other");
-  assert.equal(written.hudLayout.v, 3);
-  assert.deepEqual(plain(written.hudLayout.standard.cockpit), { tyre: { x: -10, y: 0, s: 120 } });
-  assert.equal(written.hudLayout.broadcast, undefined, "the other styles start shipped");
+test("every element retains unbounded fractional values in every camera and style", () => {
+  const { H, written } = load();
+  const value = { x: 1250.25, y: -975.125, s: .125 };
+  for (const profile of H.PROFILES) for (const camera of H.SETS) for (const [id] of H.ELEMENTS) {
+    assert.deepEqual(plain(H.set(id, value, camera, profile)), value, `${profile}/${camera}/${id}`);
+  }
+  const restored = load(JSON.parse(JSON.stringify(written))).H;
+  for (const profile of H.PROFILES) for (const camera of H.SETS) for (const [id] of H.ELEMENTS) {
+    assert.deepEqual(plain(restored.get(id, camera, profile)), value, `${profile}/${camera}/${id} round trip`);
+    assert.equal(restored.set(id, { s: 12500.5 }, camera, profile).s, 12500.5);
+  }
+});
+
+test("invalid numeric edits retain prior values and explicit defaults remain owned until reset", () => {
+  const { H, written, els } = load();
+  const value = { x: 110.25, y: -245.5, s: .25 };
+  H.set("map", value, "other");
+  for (const bad of [NaN, Infinity, -Infinity, "", " ", null, undefined, {}, []]) {
+    assert.deepEqual(plain(H.set("map", { x: bad, y: bad, s: bad }, "other")), value);
+  }
+  for (const bad of [0, -1, -100]) assert.equal(H.set("map", { s: bad }, "other").s, value.s);
+  H.set("map", { x: 0, y: 0, s: 100 }, "other");
+  assert.deepEqual(plain(written.hudLayout.standard.other.map), { x: 0, y: 0, s: 100 });
+  assert.equal("data-hl-user" in els["#minimap"].attrs, true);
+  H.resetEl("map", "other");
+  assert.equal(written.hudLayout, null);
+  assert.equal("data-hl-user" in els["#minimap"].attrs, false);
+});
+
+test("invalid first edits leave automatic ownership intact while valid defaults and mixed edits claim it", () => {
+  const { H, written, els } = load();
+  for (const [id, selector] of [["map", "#minimap"], ["energy", "#hud-energy"]]) {
+    const before = plain(H.get(id, "other"));
+    for (const value of [{ s: "" }, { s: 0 }, { s: -1 }, { x: NaN }, { y: Infinity },
+      { x: null, y: undefined, s: " " }, {}, null, 0, false, "", []]) {
+      assert.deepEqual(plain(H.set(id, value, "other")), before);
+      assert.equal(written.hudLayout, undefined, "invalid input does not create or rewrite storage");
+      assert.equal("data-hl-user" in els[selector].attrs, false, `${id} remains automatically placed`);
+      assert.equal("data-hl-v4" in els[selector].attrs, false, `${id} does not acquire a manual anchor`);
+    }
+  }
+  H.set("map", { x: 0, y: 0, s: 100 }, "other");
+  assert.equal("data-hl-user" in els["#minimap"].attrs, true, "valid explicit defaults claim manual ownership");
+  assert.deepEqual(plain(H.set("energy", { x: 150.25, s: 0 }, "other")), { x: 150.25, y: 0, s: 100 },
+    "a valid field is saved while invalid fields retain their previous values");
+  assert.equal("data-hl-user" in els["#hud-energy"].attrs, true);
+});
+
+test("old layout formats are ignored and fresh edits/reset use the current schema", () => {
+  for (const version of [undefined, 1, 2, 3, 999]) {
+    const old = { v: version, cockpit: { tyre: { x: -40, s: 150 } },
+      other: { map: { x: -30, s: 125 } }, standard: { other: { map: { x: -30, s: 125 } } } };
+    const { H, written } = load({ hudLayout: old });
+    assert.equal(H.isShipped(undefined, "all"), true, "unsupported schemas start with automatic defaults");
+    assert.deepEqual(plain(H.get("map", "other")), { x: 0, y: 0, s: 100 });
+    H.set("map", { x: 150.25, s: .125 }, "other");
+    assert.deepEqual(plain(written.hudLayout), { v: 4, standard: {
+      cockpit: {}, helmet: {}, other: { map: { x: 150.25, y: 0, s: .125 } },
+    } });
+    H.resetEl("map", "other");
+    assert.equal(written.hudLayout, null);
+  }
+});
+
+test("current layout imports and round trips contain plain position and size values only", () => {
+  const value = { x: -1500.5, y: 800.25, s: .125 };
+  const raw = { v: 4, standard: { other: {
+    map: { ...value, legacy: true, box: { w: 88, h: 14 }, ignored: "extra" }, gaps: { s: -1 },
+  } } };
+  const { H, written } = load({ hudLayout: raw });
+  assert.deepEqual(plain(H.migrate(raw).standard.other.map), value);
+  assert.deepEqual(plain(H.get("map", "other")), value);
+  assert.equal(H.get("gaps", "other").s, 100, "invalid size falls back to a positive default");
+  H.set("map", { s: 25000.5 }, "other");
+  assert.deepEqual(plain(written.hudLayout.standard.other.map), { ...value, s: 25000.5 });
+  const restored = load(JSON.parse(JSON.stringify(written)));
+  assert.deepEqual(plain(restored.H.get("map", "other")), { ...value, s: 25000.5 });
 });
 
 test("presets are pure data laid over the set's shipped layout", () => {
@@ -344,6 +415,10 @@ test("apply a preset to the edited set, tweak it, CUSTOM detection", () => {
   assert.equal(H.get("ot", "cockpit").x, H.SHIPPED.standard.cockpit.ot.x);
   H.applyPreset("shipped", "cockpit");
   H.applyPreset("shipped", "other");
+  for (const camera of ["cockpit", "other"]) {
+    assert.equal(H.presetOf(camera), "shipped");
+    assert.equal(H.isShipped(camera), true, "SHIPPED preset restores automatic placement ownership");
+  }
   assert.equal(written.hudLayout, null);
 });
 
@@ -353,6 +428,10 @@ test("CORNERS on a touch cockpit does not pull ENERGY or TYRES onto the steer co
   assert.deepEqual(plain(lay.energy), plain(T.H.get("energy", "cockpit")));
   assert.deepEqual(plain(lay.tyre), plain(T.H.get("tyre", "cockpit")));
   assert.equal(lay.energy.x, T.H.SHIPPED.standard.cockpit.energy.x);
+  T.H.applyPreset("corners", "cockpit");
+  const stored = T.written.hudLayout?.standard?.cockpit || {};
+  assert.equal(stored.energy, undefined, "unchanged preset instruments retain automatic fitting");
+  assert.equal(stored.tyre, undefined, "unchanged preset tyres retain automatic fitting");
   const helm = T.H.presetLayout("corners", "helmet");
   assert.deepEqual(plain(helm.energy), plain(T.H.TOUCH_SHIPPED.helmet.energy));
   assert.deepEqual(plain(helm.gearbox), { x: 0, y: 0, s: 100 });
@@ -421,7 +500,7 @@ test("module has no Tracks / curvature reads", () => {
   assert.doesNotMatch(SRC, /\bTracks\b|\bcurvature\b/);
 });
 
-test("fit pulls a moved piece back on screen without touching the stored offset", () => {
+test("fit retains a moved piece beyond the screen at its stored offset", () => {
   const src = SRC;
   const props = {}, attrs = { "data-hl": "" };
   const el = {
@@ -430,7 +509,7 @@ test("fit pulls a moved piece back on screen without touching the stored offset"
     // 100px wide map at x=5 vw on a 1000px screen, pushed 60 px past the right edge.
     getBoundingClientRect() { const x = parseFloat(props["--hl-x"] || 0) * 10; return { left: 900 + x - 50, right: 1000 + x - 50 + 60, top: 10, bottom: 110, width: 160, height: 100 }; },
   };
-  const written = { hudLayout: { v: 2, cockpit: {}, other: { map: { x: 5, y: 0, s: 100 } } } };
+  const written = { hudLayout: { v: 4, standard: { cockpit: {}, other: { map: { x: 5, y: 0, s: 100 } } } } };
   const ctx = {
     console, window: { innerWidth: 1000, innerHeight: 600 },
     document: { readyState: "complete", getElementById: () => null, addEventListener() {},
@@ -441,11 +520,11 @@ test("fit pulls a moved piece back on screen without touching the stored offset"
   vm.runInContext(src + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = el.getBoundingClientRect();
-  assert.ok(r.right <= 1000 - 4 + 1e-6, "right edge inside the screen: " + r.right);
+  assert.equal(r.right, 1060, "the player can leave the right edge outside the screen");
   assert.equal(ctx.HudLayout.get("map", "other").x, 5, "stored offset unchanged");
 });
 
-test("fit follows safe areas and a changing visible viewport without rewriting the saved layout", () => {
+test("fit preserves manual geometry across safe-area and visual-viewport changes", () => {
   const props = {}, root = {}, attrs = { 'data-hl': '' };
   const viewport = { innerWidth: 1000, innerHeight: 600,
     visualViewport: { width: 500, height: 300, offsetLeft: 200, offsetTop: 100 } };
@@ -455,28 +534,29 @@ test("fit follows safe areas and a changing visible viewport without rewriting t
       const left = 900 + (parseFloat(props['--hl-x']) || 0) * 10, top = 10 + (parseFloat(props['--hl-y']) || 0) * 6;
       return { left, top, right: left+160, bottom: top+100, width: 160, height: 100 };
     } };
-  const saved = { v:3, standard:{other:{map:{x:5,y:0,s:110}}} }, original = JSON.stringify(saved);
+  const saved = { v:4, standard:{other:{map:{x:5,y:0,s:110}}} }, original = JSON.stringify(saved);
   const ctx = { window: viewport, console,
     getComputedStyle: el => el === root ? { getPropertyValue: k => ({'--sal':'30px','--sar':'20px','--sat':'15px','--sab':'10px'}[k] || '') } : {display:'block',visibility:'visible'},
     document: {readyState:'loading',documentElement:root,addEventListener(){},getElementById:()=>null,
       querySelector: sel => sel === '#minimap' ? map : null, querySelectorAll:()=>[]},
     GameStore:{store:{get:(k,d)=>k==='hudLayout'?saved:d,set(){throw new Error('fit must not persist');}}} };
   vm.createContext(ctx);vm.runInContext(SRC+';this.HudLayout=HudLayout;',ctx);
+  ctx.HudLayout.apply();
+  const initial = map.getBoundingClientRect();
   for (const vv of [viewport.visualViewport, {width:250,height:200,offsetLeft:50,offsetTop:40}, null]) {
     viewport.visualViewport = vv;
     ctx.HudLayout.fit();
-    const r = map.getBoundingClientRect(), b = ctx.HudLayout.screenBounds();
-    assert.ok(r.left >= b.left-.1 && r.right <= b.right+.1 && r.top >= b.top-.1 && r.bottom <= b.bottom+.1, JSON.stringify({r,b}));
+    assert.deepEqual(map.getBoundingClientRect(), initial, "safe bounds do not clamp an edited widget");
     const before = { ...props };ctx.HudLayout.fit();assert.deepEqual(props,before,'repeated fits do not drift');
     assert.equal(JSON.stringify(saved),original);
   }
 });
 
-test("fit clamps pieces that share an offset as ONE block, so neighbours keep their spacing", () => {
+test("fit preserves independently edited pieces sharing an offset", () => {
   // OT and AERO both ship +30vw in the cockpit; at 1000 wide only AERO overruns
   // the right edge. Clamped one by one, AERO landed on top of OT.
   const mk = (left, w) => {
-    const props = {}, attrs = { "data-hl": "" };
+    const props = {}, attrs = {};
     return {
       props,
       style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
@@ -485,61 +565,64 @@ test("fit clamps pieces that share an offset as ONE block, so neighbours keep th
     };
   };
   const ot = mk(880, 70), aero = mk(960, 100);   // at +30vw: OT 880-950, AERO 960-1060 (past 1000)
-  const written = { hudLayout: { v: 2, cockpit: { ot: { x: 30, y: -14, s: 100 }, aero: { x: 30, y: -14, s: 100 } }, other: {} } };
+  const written = { hudLayout: { v: 4, standard: { cockpit: { ot: { x: 30, y: -14, s: 100 }, aero: { x: 30, y: -14, s: 100 } }, other: {} } } };
   const blank = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
   const ctx = {
     console, window: { innerWidth: 1000, innerHeight: 600 },
-    document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => true } },
+    document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: (c) => c === "desktop" } },
       querySelector: (sel) => (sel === "#hud-ot" ? ot : sel === "#hud-aero" ? aero : blank) },
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
   };
   vm.createContext(ctx);
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.setCam("cockpit");
+  assert.ok(ot.hasAttribute("data-hl-user") && aero.hasAttribute("data-hl-user"), "stored STANDARD cockpit edits own both widgets");
   ctx.HudLayout.fit();
   const o = ot.getBoundingClientRect(), r = aero.getBoundingClientRect();
-  assert.ok(r.right <= 1000 - 4 + 1e-6, "the block ends on screen: " + r.right);
+  assert.equal(r.right, 1060, "AERO keeps the requested offscreen edge");
   assert.ok(o.right <= r.left, `OT (${o.left}-${o.right}) still left of AERO (${r.left}-${r.right})`);
-  assert.equal(ot.props["--hl-x"], aero.props["--hl-x"], "one correction for the whole block");
+  assert.equal(ot.props["--hl-x"], "30");
+  assert.equal(aero.props["--hl-x"], "30");
 });
 
-test("fit: a block the edge clamp brings back pushes the neighbour it lands on, and only then", () => {
+test("fit never brings an edited block on screen or pushes its edited neighbour", () => {
   // Desktop cockpit, HUD 150 % at 1440x900 (hud-mock 2026-10-14): ENERGY + TYRES ship at -30,-4 and TYRES runs
   // off the left edge; the clamp brought it back onto BRAKE BIAS (-18,0, its own block). At 100 % the clamp
   // leaves TYRES short of BRAKE BIAS, so BRAKE BIAS must keep its own offset.
   const run = (tyreW) => {
     const mk = (left, w, top, h, ship) => {
-      const props = {}, attrs = { "data-hl": "" };
+      const props = {}, attrs = {};
       return { props,
         style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
         setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
         getBoundingClientRect() { const x = left + (parseFloat(props["--hl-x"] || ship) - ship) * 14.4; return { left: x, right: x + w, top, bottom: top + h, width: w, height: h }; } };
     };
     const tyre = mk(4 - tyreW - 6, tyreW, 582, 75, -30), energy = mk(80, 285, 582, 27, -30), bb = mk(129, 92, 639, 40, -18);
-    const written = { hudLayout: { v: 2, cockpit: { tyre: { x: -30, y: -4, s: 150 }, energy: { x: -30, y: -4, s: 150 }, bb: { x: -18, y: 0, s: 150 } }, other: {} } };
+    const written = { hudLayout: { v: 4, standard: { cockpit: { tyre: { x: -30, y: -4, s: 150 }, energy: { x: -30, y: -4, s: 150 }, bb: { x: -18, y: 0, s: 150 } }, other: {} } } };
     const blank = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
     const by = { "#hud-tyre": tyre, "#hud-energy": energy, "#hud-bb": bb };
     const ctx = {
       console, window: { innerWidth: 1440, innerHeight: 900 },
-      document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => true } },
+      document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: (c) => c === "desktop" } },
         querySelector: (sel) => by[sel] || blank },
       GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
     };
     vm.createContext(ctx);
     vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
     ctx.HudLayout.setCam("cockpit");
+    assert.ok([tyre, energy, bb].every((el) => el.hasAttribute("data-hl-user")), "stored STANDARD cockpit edits own all three widgets");
     ctx.HudLayout.fit();
     return { tyre: tyre.getBoundingClientRect(), bb: bb.getBoundingClientRect(), bbX: bb.props["--hl-x"] };
   };
   const at150 = run(195);
-  assert.ok(at150.tyre.left >= 4 - 1e-6, "TYRES back on screen: " + at150.tyre.left);
-  assert.ok(at150.bb.left >= at150.tyre.right, `BRAKE BIAS (${at150.bb.left}) clear of TYRES (..${at150.tyre.right})`);
+  assert.equal(at150.tyre.left, -197, "TYRES keeps the chosen offscreen position");
+  assert.equal(at150.bbX, "-18", "BRAKE BIAS receives no neighbour correction");
   const at100 = run(120);
   assert.ok(at100.tyre.right < 129, "at 100 % the clamped TYRES stops short of BRAKE BIAS: " + at100.tyre.right);
   assert.equal(at100.bbX, "-18", "BRAKE BIAS keeps its own offset when nothing lands on it");
 });
 
-test("fit clamps a size-only piece on its own, not as one block with every other size-only piece", () => {
+test("fit leaves size-only edited pieces at their requested positions", () => {
   // BIG + TOWER SIZE 200 at 844 wide: the tower (centred, grown to 640) and the
   // map (top-left, grown) both carry offset 0,0. Grouped as one "0,0" block their
   // union outgrew the screen and was pinned to the map's left edge, leaving the
@@ -559,7 +642,7 @@ test("fit clamps a size-only piece on its own, not as one block with every other
   };
   const tower = mk(W / 2 - 160 + 170, 8, 640, 100);   // grown about its left: 432..1072, 228 px past 840
   const map = mk(10, 8, 160, 160);                    // 10..170: on screen
-  const written = { hudLayout: { v: 3, standard: { cockpit: {}, other: { tower: { x: 0, y: 0, s: 200 }, map: { x: 0, y: 0, s: 125 } } } } };
+  const written = { hudLayout: { v: 4, standard: { cockpit: {}, other: { tower: { x: 0, y: 0, s: 200 }, map: { x: 0, y: 0, s: 125 } } } } };
   const blank = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
   const ctx = {
     console, window: { innerWidth: W, innerHeight: H },
@@ -571,7 +654,8 @@ test("fit clamps a size-only piece on its own, not as one block with every other
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const t = tower.getBoundingClientRect(), m = map.getBoundingClientRect();
-  assert.ok(t.right <= W - 4 + 1e-6 && t.left >= 4 - 1e-6, `the tower ends on screen: ${t.left}..${t.right}`);
+  assert.equal(t.left, 432);
+  assert.equal(t.right, 1072, "the enlarged tower may extend beyond the screen");
   assert.equal(m.left, 10, "the map, already on screen, is not dragged with the tower");
   assert.equal(map.props["--hl-x"], "0");
   assert.equal(ctx.HudLayout.get("tower", "other").s, 200, "stored size unchanged");
@@ -580,7 +664,7 @@ test("fit clamps a size-only piece on its own, not as one block with every other
 // Bug hunt 2 H17: clearControls rewrote --hl-x/--hl-y from the STORED offset plus only its
 // own nudge, so the edge-clamp fit() had just applied was thrown away the moment a touch
 // button forced a nudge, and the chip landed back off screen.
-test("clearControls keeps fit()'s edge-clamp correction when it nudges off a touch button", () => {
+test("clearControls preserves manual placement and discards stale automatic clearance", () => {
   const W = 1000, H = 600;
   const props = {}, attrs = { "data-hl": "" };
   const rel = {
@@ -592,7 +676,7 @@ test("clearControls keeps fit()'s edge-clamp correction when it nudges off a tou
   const btn = { hidden: false, classList: { contains: () => false },
     getBoundingClientRect: () => ({ left: 900, right: 1000, top: 400, bottom: 540, width: 100, height: 140 }) };
   const blank = { style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
-  const written = { hudLayout: { v: 3, standard: { cockpit: {}, other: { rel: { x: 30, y: 0, s: 100 } } } } };
+  const written = { hudLayout: { v: 4, standard: { cockpit: {}, other: { rel: { x: 30, y: 0, s: 100 } } } } };
   const ctx = {
     console, window: { innerWidth: W, innerHeight: H },
     document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => false } },
@@ -604,8 +688,8 @@ test("clearControls keeps fit()'s edge-clamp correction when it nudges off a tou
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = rel.getBoundingClientRect();
-  assert.ok(r.right <= W - 4 + 1e-6, "still on screen after the nudge: " + r.right);
-  assert.ok(r.right <= btn.getBoundingClientRect().left + 1e-6, "and clear of the button");
+  assert.equal(r.right, 1200, "an edited widget is not brought back on screen");
+  assert.equal(props["--hl-x"], "30", "control clearance cannot change the saved geometry");
   assert.equal(ctx.HudLayout.get("rel", "other").x, 30, "stored offset unchanged");
   // A prior terminal placement must not bias the next edge clamp. Simulate a
   // correction from a denser viewport before re-fitting the same saved move.
@@ -694,22 +778,20 @@ test("queued style visibility preserves arrange ghosts and resumes after exit", 
   assert.equal(applies, before + 2, "ordinary profile changes still reapply visibility");
 });
 
-test("migrate: v2 {cockpit, other} becomes STANDARD's; MINIMAL and BROADCAST start shipped", () => {
+test("current schema keeps style and camera entries independent, including explicit defaults", () => {
   const { H } = load3();
-  const m = plain(H.migrate({ v: 2, cockpit: { ot: { x: 10, y: 0, s: 100 } }, other: { tower: { x: -30, y: 0, s: 100 } } }));
-  assert.deepEqual(m.standard, { cockpit: { ot: { x: 10, y: 0, s: 100 } }, helmet: {}, other: { tower: { x: -30, y: 0, s: 100 } } });
-  assert.deepEqual(m.minimal, { cockpit: {}, helmet: {}, other: {} });
-  assert.deepEqual(m.broadcast, { cockpit: {}, helmet: {}, other: {} });
-  // v3 reads per style, and a value equal to that style's shipped one is dropped.
-  const v3 = plain(H.migrate({ v: 3, broadcast: { other: { map: { x: 1 } } }, minimal: { cockpit: { tyre: H.SHIPPED.minimal.cockpit.tyre } } }));
-  assert.deepEqual(v3.broadcast.other, { map: { x: 1, y: 0, s: 100 } });
-  assert.deepEqual(v3.minimal.cockpit, {});
-  assert.deepEqual(plain(H.migrate(null)), { standard: { cockpit: {}, helmet: {}, other: {} }, minimal: { cockpit: {}, helmet: {}, other: {} }, broadcast: { cockpit: {}, helmet: {}, other: {} } });
-  for (const p of H.PROFILES) for (const id of ["energy", "tyre", "ot", "aero"]) assert.ok(Math.abs(H.SHIPPED[p].cockpit[id].x) >= 25, p + " " + id);
+  const raw = { v: 4, broadcast: { other: { map: { x: 1 } } },
+    minimal: { cockpit: { tyre: H.SHIPPED.minimal.cockpit.tyre } } };
+  const normalized = plain(H.migrate(raw));
+  assert.deepEqual(normalized.broadcast.other, { map: { x: 1, y: 0, s: 100 } });
+  assert.deepEqual(normalized.minimal.cockpit, { tyre: plain(H.SHIPPED.minimal.cockpit.tyre) });
+  assert.deepEqual(normalized.standard, { cockpit: {}, helmet: {}, other: {} });
+  assert.deepEqual(plain(H.migrate(null)), { standard: { cockpit: {}, helmet: {}, other: {} },
+    minimal: { cockpit: {}, helmet: {}, other: {} }, broadcast: { cockpit: {}, helmet: {}, other: {} } });
 });
 
 test("layouts are keyed by style: a STANDARD tower move does not paint in BROADCAST", () => {
-  const { H, written, els, cls } = load3({ stored: { hudLayout: { v: 2, cockpit: {}, other: { tower: { x: -30, y: 0, s: 100 } } } } });
+  const { H, written, els, cls } = load3({ stored: { hudLayout: { v: 4, standard: { cockpit: {}, other: { tower: { x: -30, y: 0, s: 100 } } } } } });
   assert.equal(H.profile(), "standard");
   assert.equal(els[".hud-top"].props["--hl-x"], "-30");
   cls.add("hud-prof-broadcast");
@@ -717,7 +799,7 @@ test("layouts are keyed by style: a STANDARD tower move does not paint in BROADC
   assert.equal(H.profile(), "broadcast");
   assert.equal("data-hl" in els[".hud-top"].attrs, false, "broadcast shows its own (shipped) tower");
   H.set("tower", { y: 5 }, "other");
-  assert.deepEqual(plain(written.hudLayout), { v: 3,
+  assert.deepEqual(plain(written.hudLayout), { v: 4,
     standard: { cockpit: {}, helmet: {}, other: { tower: { x: -30, y: 0, s: 100 } } },
     broadcast: { cockpit: {}, helmet: {}, other: { tower: { x: 0, y: 5, s: 100 } } } });
   assert.equal(H.get("tower", "other", "standard").x, -30);
@@ -822,8 +904,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "phone sectors clear BOOST via measured --dock-r-w only (#1191 anchor max overshot into #announce)");
   // OVERTAKE / CORNER MODE: cockpit --hl-x must not shove the chips under the
   // right dock when taps/shifts are lit (hud-survey aero×shift-up + Bryce OT/BOOST).
-  assert.match(css, /body:has\(\.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
-    "lit docks cancel horizontal --hl-x on OVERTAKE / CORNER MODE so AERO×shift-up stays clear");
+  assert.match(css, /body:has\(\.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]:not\(\[data-hl-v4\]\)\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
+    "lit docks adjust shipped OVERTAKE / CORNER MODE while preserving explicitly placed chips");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
   for (const id of ["damage", "rel", "strat", "inputs"]) {
     assert.match(h({ hide: id, live: false, classes: ["desktop"] }).hiddenReason(id).reason, /HUD element list/, id + " off");
@@ -913,15 +995,18 @@ test("empty #hud-sectors plate collapses — no junk gap before buildSecRows", (
     "empty sector plate hides fully (padding must not reserve a gap)");
 });
 
-test("TRACK LIMITS origin follows its live anchor (:root[data-limits-left])", () => {
-  const L = load3({ stored: { hudLayout: { v: 3, standard: { other: { limits: { x: 0, y: 0, s: 150 } } } } } });
+test("edited TRACK LIMITS retains its origin when the automatic anchor changes", () => {
+  const L = load3({ stored: { hudLayout: { v: 4, standard: { other: { limits: { x: 0, y: 0, s: 150 } } } } } });
   assert.equal(L.els["#hud-limits"].props["--hl-o"], "top right");
   assert.equal(L.H.originOf("limits"), "top right");
   L.rootAttrs["data-limits-left"] = "1";
-  assert.equal(L.H.originOf("limits"), "top left");
+  assert.equal(L.H.originOf("limits"), "top right");
   L.H.apply();
-  assert.equal(L.els["#hud-limits"].props["--hl-o"], "top left");
-  assert.equal(L.H.originOf("sectors"), "top right", "only the chip that crosses changes");
+  assert.equal(L.els["#hud-limits"].props["--hl-o"], "top right");
+  assert.equal(L.H.originOf("sectors"), "top right");
+  const automatic = load3();
+  automatic.rootAttrs["data-limits-left"] = "1";
+  assert.equal(automatic.H.originOf("limits"), "top left", "untouched chip follows its live anchor");
 });
 
 test("apply() asks GameHud to re-fit at once (typeof-guarded)", () => {
@@ -959,7 +1044,10 @@ test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a de
   T.H.set("energy", { y: -40 }, "helmet");
   assert.equal(T.H.isShipped("helmet"), false);
   T.H.set("energy", plain(T.H.TOUCH_SHIPPED.helmet.energy), "helmet");
-  assert.equal(T.written.hudLayout, null, "writing the touch default stores nothing");
+  assert.deepEqual(plain(T.written.hudLayout.standard.helmet.energy), plain(T.H.TOUCH_SHIPPED.helmet.energy),
+    "writing the touch default retains explicit placement ownership");
+  T.H.resetEl("energy", "helmet");
+  assert.equal(T.written.hudLayout, null, "explicit reset restores automatic placement");
 });
 
 test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY and TYRES show (CSS and hiddenReason agree)", () => {
@@ -979,7 +1067,7 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
   assert.ok(spd && spd.soft && /wheel LCD/.test(spd.reason), "touch helmet + LCD soft-hides SPEED: " + JSON.stringify(spd));
   assert.equal(lcd.H.hiddenReason("gearbox"), null, "GEAR stays on the visor pill with an LCD");
   const placed = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "", "data-wheel-lcd": "" },
-    stored: { hudLayout: { v: 3, standard: { helmet: { speed: { x: 5, y: 0, s: 100 } } } } } });
+    stored: { hudLayout: { v: 4, standard: { helmet: { speed: { x: 5, y: 0, s: 100 } } } } } });
   placed.H.setCam("helmet");
   assert.equal(placed.H.hiddenReason("speed"), null, "a placed SPEED (data-hl-user) shows beside the LCD");
   const rule = TD.match(/body\[data-hl-set="helmet"\]:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
@@ -996,6 +1084,53 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
   const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   assert.match(ms, /"cockpit-cam", camId === "cockpit"\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/);
   assert.match(ms, /toggleAttribute\("data-helmet-cam", camId === "helmet"\)/, "the visor frame stays");
+});
+
+test("every edited widget retains geometry through clearance and high-scale packing", () => {
+  const W = 844, H = 390, elements = {}, body = fakeEl(), root = fakeEl();
+  body.classList = { contains: () => false };
+  body.toggleAttribute = (k, on) => on ? body.setAttribute(k, "") : body.removeAttribute(k);
+  const control = { hidden: false, classList: { contains: () => false },
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: W, bottom: H, width: W, height: H }) };
+  const saved = { v: 4, standard: { other: {} } };
+  const ctx = { window: { innerWidth: W, innerHeight: H },
+    getComputedStyle: () => ({ display: "block", visibility: "visible", getPropertyValue: k => k === "--hud-scale" ? "2" : "" }),
+    document: { readyState: "loading", documentElement: root, body, addEventListener() {}, getElementById: () => null,
+      querySelector: sel => elements[sel] || null,
+      querySelectorAll: sel => sel === "[data-hl-pack]"
+        ? Object.values(elements).filter(el => el.hasAttribute("data-hl-pack")) : [control] },
+    GameStore: { store: { get: (k, d) => k === "hudLayout" ? saved : k === "hudScale" ? 200 : d,
+      set() { throw new Error("automatic passes must not persist"); } } } };
+  vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  for (const [i, [id, , sel]] of Array.from(ctx.HudLayout.ELEMENTS).entries()) {
+    const el = fakeEl(); el.id = sel.replace(/^#/, "");
+    el.style.getPropertyValue = k => el.props[k] || "";
+    el.getBoundingClientRect = () => {
+      const left = Number(el.props["--hl-x"] || 0) * W / 100;
+      const top = Number(el.props["--hl-y"] || 0) * H / 100;
+      const width = 100 * Number(el.props["--hl-s"] || 1), height = 40 * Number(el.props["--hl-s"] || 1);
+      return { left, top, right: left + width, bottom: top + height, width, height };
+    };
+    elements[sel] = el;
+    // Cover intentional overlap, both offscreen axes, and size-only ownership.
+    saved.standard.other[id] = { x: i % 2 ? 150 : 0, y: i % 2 ? -150 : 0, s: i ? 300 : 100 };
+    for (const a of ["data-hl-pack", "data-col-compact", "data-col-drop", "data-lane-collapsed"]) el.setAttribute(a, "");
+    for (const p of ["translate", "margin-left", "margin-top", "--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) el.style.setProperty(p, "24px");
+  }
+  ctx.HudLayout.apply();
+  const before = Object.fromEntries(Object.entries(elements).map(([sel, el]) => [sel, el.getBoundingClientRect()]));
+  const storedBefore = JSON.stringify(saved);
+  for (let pass = 0; pass < 3; pass++) { ctx.HudLayout.fit(); ctx.HudLayout.clearReadouts(); }
+  for (const [id, , sel] of ctx.HudLayout.ELEMENTS) {
+    const el = elements[sel], wanted = saved.standard.other[id];
+    assert.equal(el.props["--hl-x"], String(wanted.x), id);
+    assert.equal(el.props["--hl-y"], String(wanted.y), id);
+    assert.equal(el.props["--hl-s"], String(wanted.s / 100), id);
+    assert.deepEqual(el.getBoundingClientRect(), before[sel], id + " stays where the player put it");
+    for (const a of ["data-hl-pack", "data-col-compact", "data-col-drop", "data-lane-collapsed"]) assert.equal(el.hasAttribute(a), false, id + " " + a);
+    for (const p of ["translate", "margin-left", "margin-top", "--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) assert.equal(el.props[p], undefined, id + " " + p);
+  }
+  assert.equal(JSON.stringify(saved), storedBefore);
 });
 
 test("measured clearance protects instruments and controls without changing saved layouts", () => {
@@ -1017,7 +1152,7 @@ test("measured clearance protects instruments and controls without changing save
   const cam = make("#btn-cam", 735, 80, 75, 44), radio = make("#announce", 585, 31, 175, 74);
   const limits = make("#hud-limits", 590, 202, 125, 24);
   const ot = make("#hud-ot", 250, 330, 140, 30), aero = make("#hud-aero", 400, 330, 140, 30);
-  const stored = { v: 3, standard: { other: { rel: { x: 1, y: 0, s: 100 } } } };
+  const stored = { v: 4, standard: { other: { rel: { x: 1, y: 0, s: 100 } } } };
   const before = JSON.stringify(stored);
   let placedRadio = false;
   const ctx = { console, window: { innerWidth: W, innerHeight: H },
@@ -1034,9 +1169,11 @@ test("measured clearance protects instruments and controls without changing save
     GameStore: { store: { get: (k,d) => k === "hudLayout" ? stored : d, set() {} } } };
   vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   const overlap = (a,b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  assert.ok(rel.hasAttribute("data-hl-user"), "saved Relative offset owns its placement");
+  const manualRelative = rel.getBoundingClientRect();
   ctx.HudLayout.clearReadouts();
-  const readouts = [limits, radio, damage, rel, strat];
-  const protectedBoxes = [gear, speed, tyre, cam, ot, aero].map((e) => e.getBoundingClientRect());
+  const readouts = [limits, radio, damage, strat];
+  const protectedBoxes = [gear, speed, tyre, cam, ot, aero, rel].map((e) => e.getBoundingClientRect());
   for (const el of readouts) {
     const r = el.getBoundingClientRect();
     assert.ok(protectedBoxes.every((b) => !overlap(r,b)), el.id + " clears controls and instruments");
@@ -1046,6 +1183,7 @@ test("measured clearance protects instruments and controls without changing save
   const first = readouts.map((e) => e.getBoundingClientRect());
   ctx.HudLayout.clearReadouts();
   assert.deepEqual(readouts.map((e) => e.getBoundingClientRect()), first, "repeat fit is stable");
+  assert.deepEqual(rel.getBoundingClientRect(), manualRelative, "manual Relative may overlap instruments without being moved");
   assert.equal(JSON.stringify(stored), before, "saved user offset remains intact");
   placedRadio = true;
   radio.style.setProperty("--hud-clear-x", "-240px");
@@ -1250,6 +1388,88 @@ function visibilityEditor() {
   return { H: ctx.HudLayout, E: ctx.HudElements, document, choose, owners, stored, changes, ctx, dom,
     flush() { while (timers.length) timers.shift()(); } };
 }
+
+test('numeric HUD drafts stay readable and commit once when moving between fields', () => {
+  const e = visibilityEditor(), previews = [];
+  e.ctx.ScreenLooks = { peek: (...args) => previews.push(args), endPeek: () => previews.push('end') };
+  const fold = e.document.getElementById('pm-hudlayout');
+  fold.open = true;
+  e.choose('pm-hl-el-sel', 'map');
+  const x = e.document.getElementById('pm-hl-x'), y = e.document.getElementById('pm-hl-y');
+  const fire = (el, type) => e.dom.dispatch(el, { type });
+  const writes = () => e.changes.filter(key => key === 'hudLayout').length;
+  previews.length = 0;
+  x.focus(); fire(x, 'focus');
+  fire(x, 'pointerdown'); fire(x, 'pointerup');
+  for (const draft of ['', '-', '-17', '-1750.125']) {
+    x.value = draft; fire(x, 'input');
+    assert.equal(writes(), 0, 'intermediate drafts never persist');
+    assert.equal(x.value, draft, 'typing keeps the native draft');
+    assert.equal(e.document.activeElement, x);
+    assert.equal(previews.every(call => call === 'end'), true, 'focus and typing only end previews');
+  }
+  fire(x, 'change');
+  assert.equal(writes(), 1);
+  assert.equal(e.H.get('map').x, -1750.125, 'exact unrestricted fraction is committed');
+  assert.equal(previews.every(call => call === 'end'), true, 'change while focused keeps the form readable');
+  x.blur(); fire(x, 'blur'); y.focus(); fire(y, 'focus'); e.flush();
+  assert.equal(writes(), 1, 'change followed by blur commits once');
+  assert.equal(previews.every(call => call === 'end'), true, 'Tab to another numeric field never fades it');
+  y.value = '2300.0625'; fire(y, 'input');
+  y.blur(); fire(y, 'blur'); e.flush();
+  assert.equal(writes(), 2, 'blur commits even without a preceding change event');
+  assert.equal(e.H.get('map').y, 2300.0625);
+  assert.deepEqual(previews.at(-1), ['hud', 900], 'leaving the numeric fields previews the committed HUD');
+});
+
+test('numeric HUD defers one committed preview across unchanged and invalid fields', () => {
+  const e = visibilityEditor(), previews = [];
+  e.ctx.ScreenLooks = { peek: (...args) => previews.push(args), endPeek() {} };
+  const fold = e.document.getElementById('pm-hudlayout'); fold.open = true;
+  const [x, y, s] = ['x', 'y', 's'].map(k => e.document.getElementById('pm-hl-' + k));
+  const fire = (el, type) => e.dom.dispatch(el, { type });
+  const focus = el => { el.focus(); fire(el, 'focus'); };
+  const tab = (from, to) => { from.blur(); fire(from, 'blur'); if (to) focus(to); e.flush(); };
+  focus(x); x.value = '425.125'; fire(x, 'input'); fire(x, 'change');
+  tab(x, y); tab(y, s);
+  assert.equal(previews.length, 0, 'unchanged fields retain the pending preview without fading');
+  tab(s, null);
+  assert.deepEqual(previews, [['hud', 900]], 'leaving the whole group previews exactly once');
+
+  previews.length = 0;
+  focus(x); x.value = '-625.25'; fire(x, 'input'); fire(x, 'change'); tab(x, s);
+  s.value = '0'; fire(s, 'input'); fire(s, 'change'); tab(s, null);
+  assert.equal(s.value, '100');
+  assert.deepEqual(previews, [['hud', 900]], 'an invalid field does not cancel another committed value');
+
+  previews.length = 0;
+  focus(x); x.value = '750'; fire(x, 'input'); fire(x, 'change'); tab(x, y);
+  fold.open = false; fire(fold, 'toggle'); fold.open = true; fire(fold, 'toggle');
+  tab(y, null);
+  assert.equal(previews.length, 0, 'closing the fold cancels a deferred preview');
+});
+
+test('numeric HUD commits reject invalid drafts and retain explicit default ownership', () => {
+  const e = visibilityEditor();
+  e.choose('pm-hl-el-sel', 'map');
+  const x = e.document.getElementById('pm-hl-x'), s = e.document.getElementById('pm-hl-s');
+  const fire = (el, type) => e.dom.dispatch(el, { type });
+  const writes = () => e.changes.filter(key => key === 'hudLayout').length;
+  for (const invalid of ['', '0', '-1', '1e999', 'NaN']) {
+    s.focus(); fire(s, 'focus'); s.value = invalid; fire(s, 'input');
+    fire(s, 'change'); s.blur(); fire(s, 'blur'); e.flush();
+    assert.equal(writes(), 0, 'invalid size never acquires manual ownership');
+    assert.equal(s.value, '100', 'invalid draft returns to the prior value');
+    assert.equal(e.H.get('map').s, 100);
+  }
+  x.focus(); fire(x, 'focus'); x.value = '0'; fire(x, 'input'); fire(x, 'change');
+  assert.equal(writes(), 1);
+  assert.equal(e.stored.hudLayout.v, 4);
+  assert.deepEqual(plain(e.stored.hudLayout.standard.other.map), { x: 0, y: 0, s: 100 }, 'valid shipped values still explicitly own the widget');
+  s.focus(); fire(s, 'focus'); s.value = '0.000125'; fire(s, 'input');
+  fire(s, 'change'); s.blur(); fire(s, 'blur'); e.flush();
+  assert.equal(e.H.get('map').s, 0.000125, 'small positive sizes retain their exact value');
+});
 
 test('MOVE & SIZE visibility invokes original map/gaps/mirror owners and preserves AUTO', () => {
   const e = visibilityEditor();
