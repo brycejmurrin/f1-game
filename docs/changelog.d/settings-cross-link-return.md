@@ -1,1 +1,1 @@
-Fixed: Settings cross-links now return to the page, button and scroll position you came from, including links opened after a settings search.
+Fixed: Settings cross-links now return to their source page and button, including links opened after a settings search. Back keeps the returning button visible after rotating your phone and when returning to the Settings index.

@@ -14,6 +14,23 @@ async function waitReady(page) {
 
 test.describe("Accessible settings discovery", () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
+  test("settings Back reveals its launcher after rotating the phone", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
+    await waitReady(page); await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").tap(); await page.locator("#pm-open-appearance").tap();
+    const jump = page.locator('#appearance-studio [data-settings-jump="a11y"]');
+    for (const viewport of [{ width: 390, height: 844 }, { width: 734, height: 343 }]) {
+      await jump.tap(); await page.setViewportSize(viewport); await page.keyboard.press("Escape");
+      await expect(jump).toBeFocused(); await expect(jump).toBeInViewport({ ratio: 1 });
+      expect(await jump.evaluate(e => {
+        const r = e.getBoundingClientRect();
+        return e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      })).toBe(true);
+    }
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#pm-open-appearance")).toBeFocused();
+    await expect(page.locator("#pm-open-appearance")).toBeInViewport({ ratio: 1 });
+  });
   test("settings cross-links restore their page, scroll and focus before returning to search", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
     await waitReady(page); await page.evaluate(() => window.__apex.headless(true));
@@ -29,6 +46,7 @@ test.describe("Accessible settings discovery", () => {
       await expect(motion).toHaveValue(value);
     }
     await page.keyboard.press("Escape"); await expect(page.locator("#pm-open-appearance")).toBeFocused();
+    await expect(page.locator("#pm-open-appearance")).toBeInViewport({ ratio: 1 });
     const search = page.getByRole("searchbox", { name: "Find a setting" }); await search.fill("caption size");
     const result = page.locator("[data-setting-result]").first(); await result.tap();
     await jump.tap(); await expect(motion).toBeFocused();

@@ -94,6 +94,32 @@ const SettingsNav = (function () {
       try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (_) { return false; } }
       return true;
     };
+    let stopRestore = () => {};
+    const restoreFocus = (el) => {
+      stopRestore();
+      const placed = (typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(el)) || quietFocus(el);
+      if (placed && typeof ResizeObserver === "function") {
+        const request = generation;
+        // SheetShape and rotation can reflow this page after focus returns.
+        // Follow those size changes only until the player's next interaction.
+        const observer = new ResizeObserver(() => {
+          if (request !== generation || document.activeElement !== el || !visible(el)) { stopRestore(); return; }
+          el.scrollIntoView({ block: "nearest" });
+        });
+        const events = ["pointerdown", "keydown", "wheel", "touchstart"];
+        const stop = () => {
+          observer.disconnect();
+          for (const type of events) window.removeEventListener(type, stop, true);
+          if (stopRestore === stop) stopRestore = () => {};
+        };
+        stopRestore = stop;
+        for (const type of events) window.addEventListener(type, stop, { capture: true, passive: true });
+        observer.observe(panel(current) || document.getElementById("pm-settings-index"));
+        const body = document.getElementById("pm-settings-body");
+        if (body) observer.observe(body);
+      }
+      return placed;
+    };
     function firstIn(page) {
       if (!page) return null;
       const candidates = page.querySelectorAll
@@ -113,6 +139,7 @@ const SettingsNav = (function () {
     // the stub resident, so re-gating would retry forever. (Ship #1320 used a
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
     function show(want, focus, after, audioTried) {
+      stopRestore();
       const request = ++generation;
       const id = Object.hasOwn(routes, want) ? want : "home";
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
@@ -197,6 +224,7 @@ const SettingsNav = (function () {
     }
 
     function back() {
+      stopRestore();
       if (current === "home" || direct) { generation++; if (current !== "home") fireLeave(current); direct = false; current = "home"; return true; }
       if (stack.length) {
         const parent = stack.pop();
@@ -204,13 +232,15 @@ const SettingsNav = (function () {
         originDoor = parent.origin;
         const body = document.getElementById("pm-settings-body");
         if (body) body.scrollTop = parent.scroll;
-        quietFocus(parent.door) || focusPage(parent.page);
+        // A rotation or scale change can move the launcher beyond its saved
+        // offset. Keep the returning control visible in the current layout.
+        restoreFocus(parent.door) || focusPage(parent.page);
         return false;
       }
       show("home", false);
       const door = originDoor;
       originDoor = null;
-      if (!(search && search.restore())) quietFocus(door) || focusPage("home");
+      if (!(search && search.restore())) restoreFocus(door) || focusPage("home");
       return false;
     }
 
@@ -257,7 +287,7 @@ const SettingsNav = (function () {
       returnToSearch: () => { direct = false; stack.length = 0; show("home", false); return !!search && search.restore(); },
       showDirect: (id, focus) => { direct = true; stack.length = 0; show(id, focus); },
       current: () => current,
-      show, enter, back, invalidate: () => { generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
+      show, enter, back, invalidate: () => { stopRestore(); generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
     };
     return live;
   }

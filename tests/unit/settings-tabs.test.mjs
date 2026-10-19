@@ -190,3 +190,27 @@ test("a runtime-mounted cross-link keeps its origin even when its child is click
   h.nav.back(); assert.equal(h.nav.current(), "appearance"); assert.equal(h.dom.document.activeElement, jump); assert.equal(body.scrollTop, 300);
   h.nav.back(); assert.equal(h.nav.current(), "home"); assert.equal(h.dom.document.activeElement, origin);
 });
+
+
+test("Back reveal follows reflow until interaction, navigation, focus change or close", () => {
+  for (const action of ["stay", "interact", "navigate", "focus", "close"]) {
+    const h = boot({ ensure: () => Promise.resolve(true), stub: false });
+    let resize, disconnected = false; const listeners = new Map();
+    h.ctx.ResizeObserver = class { constructor(fn) { resize = fn; } observe() {} disconnect() { disconnected = true; } };
+    h.ctx.window.addEventListener = (type, fn) => listeners.set(type, fn);
+    h.ctx.window.removeEventListener = type => listeners.delete(type);
+    const door = h.dom.byId("pm-advanced"); let scrolls = 0;
+    door.scrollIntoView = () => scrolls++;
+    h.dom.byId("pm-open-controls").onclick(); door.onclick(); h.nav.back();
+    assert.equal(h.dom.document.activeElement, door);
+    resize(); assert.equal(scrolls, 1, "initial reflow reveals the launcher");
+    if (action === "interact") listeners.get("pointerdown")();
+    if (action === "navigate") h.nav.show("display", true);
+    if (action === "focus") h.dom.byId("pm-open-driving").focus();
+    if (action === "close") h.nav.invalidate();
+    if (!disconnected) resize();
+    assert.equal(scrolls, action === "stay" ? 2 : 1, action);
+    assert.equal(disconnected, action !== "stay", action);
+    assert.equal(listeners.size, action === "stay" ? 4 : 0, action);
+  }
+});
