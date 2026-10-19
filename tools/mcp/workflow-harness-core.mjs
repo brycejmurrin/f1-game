@@ -125,7 +125,7 @@ export function validatePlan(plan) {
 }
 
 export class WorkflowHarness {
-  constructor({ repo, runDir, plan, sha = "HEAD", lspCommand, requestTimeoutMs = 30_000, probeTimeoutMs = 1_000, createLsp, invokeLsp = callTool }) {
+  constructor({ repo, runDir, plan, sha = "HEAD", lspCommand, requestTimeoutMs = 30_000, probeTimeoutMs = 1_000, createLsp, invokeLsp = callTool, runRipgrep = (args, options) => execFileSync("rg", args, options) }) {
     validatePlan(plan);
     const planJson = JSON.stringify(plan, null, 2) + "\n";
     plan = JSON.parse(planJson);
@@ -135,6 +135,7 @@ export class WorkflowHarness {
     this.lspCommand = lspCommand || path.join(repo, "node_modules/.bin/tsc");
     this.createLsp = createLsp || (() => new Lsp({ root: this.snapshot, cmd: this.lspCommand, idleMs: 60_000, timeout: this.requestTimeoutMs }));
     this.invokeLsp = invokeLsp;
+    this.runRipgrep = runRipgrep;
     this.workers = new Map(); this.compilerTail = Promise.resolve(); this.stopped = false;
     try {
       for (const w of plan.workers) {
@@ -217,8 +218,12 @@ export class WorkflowHarness {
     if (tool === "rg") {
       if (typeof args.pattern !== "string" || !args.pattern) throw fail("rg.pattern must be a non-empty string");
       const scope = args.path ?? "js"; const target = resolveAllowed(this.snapshot, this.tracked, scope, { directory: fs.existsSync(path.join(this.snapshot, scope)) && fs.statSync(path.join(this.snapshot, scope)).isDirectory() });
-      try { return execFileSync("rg", ["-n", "--max-count", "25", "--", args.pattern, target.rel], { cwd: this.snapshot, encoding: "utf8", timeout: this.requestTimeoutMs, maxBuffer: 1_000_000 }) + "[rg bounded to 25 matching lines per file and 24000 returned characters; more matches may exist]"; }
-      catch (e) { if (e.status === 1) return "(no matches)\n[rg bounded to 25 matching lines per file]"; throw e; }
+      try { return this.runRipgrep(["-n", "--max-count", "25", "--", args.pattern, target.rel], { cwd: this.snapshot, encoding: "utf8", timeout: this.requestTimeoutMs, maxBuffer: 1_000_000 }) + "[rg bounded to 25 matching lines per file and 24000 returned characters; more matches may exist]"; }
+      catch (e) {
+        if (e.status === 1) return "(no matches)\n[rg bounded to 25 matching lines per file]";
+        if (e.code === "ENOENT") throw new Error("The rg tool requires ripgrep (rg) on PATH. Install ripgrep before running search experiments.");
+        throw e;
+      }
     }
     if (tool === "files") {
       const { rel: scope } = resolveAllowed(this.snapshot, this.tracked, args.path ?? "js", { directory: true });

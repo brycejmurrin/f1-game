@@ -12,6 +12,8 @@ The probe uses Node's `vm.runInContext` with explicit timeouts and an intentiona
 
 ## Starting a run
 
+Use a host with Node, Git and ripgrep (`rg`) on PATH, plus the project's installed TypeScript compiler for LSP tools. Search uses real ripgrep; a missing executable returns an explicit execution error and does not substitute another search engine. Unit tests inject the command runner to verify arguments and error handling independently of the CI image; real search is covered by the live harness smoke.
+
 Create a plan outside the new run directory:
 
 ```json

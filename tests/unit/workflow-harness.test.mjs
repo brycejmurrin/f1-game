@@ -11,6 +11,7 @@ import { runClient } from "../../tools/mcp/workflow-harness-client.mjs";
 
 // Synthetic paths live only inside temporary fixture repositories.
 const VALUE_FILE = ["js", "value.js"].join("/"), GENERATED_FILE = ["js", "generated.js"].join("/"), ESCAPE_FILE = ["js", "escape.js"].join("/");
+const STYLE_FILE = ["css", "site.css"].join("/");
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8" });
 function fixture() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-harness-")), repo = path.join(base, "repo"); fs.mkdirSync(repo);
@@ -25,17 +26,32 @@ function fixture() {
 const plan = (maxCalls=20) => ({ workers:[{ id:"rg_worker", condition:"baseline", maxCalls, tools:["read","rg","files","probe"] }] });
 
 test("bounded tools report schemas, exact paths, bounds, and semantic errors", async t => {
-  const f=fixture(), h=new WorkflowHarness({repo:f.repo,runDir:f.run,plan:plan()}); t.after(()=>h.close());
+  const f=fixture(), h=new WorkflowHarness({repo:f.repo,runDir:f.run,plan:plan(),runRipgrep:(args,options)=>{
+    assert.deepEqual(args,["-n","--max-count","25","--","color","css"]);
+    assert.equal(options.cwd,h.snapshot); assert.equal(options.timeout,30_000); assert.equal(options.maxBuffer,1_000_000);
+    return `${STYLE_FILE}:1:body { color: red; }\n`;
+  }}); t.after(()=>h.close());
   let r=await h.call({id:"rg_worker",tool:"read",args:{path:VALUE_FILE}}); assert.equal(r.error,true); assert.match(r.output,/missing required.*file/);
   r=await h.call({id:"rg_worker",tool:"read",args:{file:"secret.txt"}}); assert.equal(r.error,true); assert.match(r.output,/outside allowed/);
   r=await h.call({id:"rg_worker",tool:"read",args:{file:"controller.html",lines:2}}); assert.equal(r.error,false); assert.match(r.output,/maximum window 120/);
-  r=await h.call({id:"rg_worker",tool:"rg",args:{pattern:"color",path:"css"}}); assert.equal(r.error,false); assert.match(r.output,/bounded to 25/);
+  r=await h.call({id:"rg_worker",tool:"rg",args:{pattern:"color",path:"css"}}); assert.equal(r.error,false,r.output); assert.match(r.output,/css\/site\.css:1:body/); assert.match(r.output,/bounded to 25/);
   r=await h.call({id:"rg_worker",tool:"files",args:{path:"missing"}}); assert.equal(r.error,true); assert.match(r.output,/outside allowed|does not exist/);
   const plain=await h.call({id:"rg_worker",tool:"files",args:{path:"js"}});
   const slash=await h.call({id:"rg_worker",tool:"files",args:{path:"js/"}});
   assert.equal(slash.output,plain.output); assert.match(slash.output,/js\/value\.js/);
   r=await h.call({id:"rg_worker",tool:"probe",args:{files:[VALUE_FILE],test:"return Value.number"}}); assert.equal(r.error,true); assert.match(r.output,/top-level return|Illegal return/); assert.match(r.output,/IIFE/);
   r=await h.call({id:"rg_worker",tool:"probe",args:{files:[VALUE_FILE],test:"(() => Value.number)()"}}); assert.equal(r.error,false); assert.deepEqual(JSON.parse(r.output).result,7);
+});
+
+test("ripgrep no-match, missing dependency and backend failures retain distinct outcomes", async t => {
+  const f=fixture(); let failure={status:1};
+  const h=new WorkflowHarness({repo:f.repo,runDir:f.run,plan:plan(),runRipgrep:()=>{throw Object.assign(new Error("fixture backend failure"),failure);}}); t.after(()=>h.close());
+  const call=()=>h.call({id:"rg_worker",tool:"rg",args:{pattern:"absent",path:"css"}});
+  let r=await call(); assert.equal(r.error,false); assert.match(r.output,/no matches/);
+  failure={code:"ENOENT"}; r=await call(); assert.equal(r.errorCode,"execution_error"); assert.match(r.output,/requires ripgrep.*PATH/);
+  failure={status:2}; r=await call(); assert.equal(r.errorCode,"execution_error"); assert.match(r.output,/fixture backend failure/);
+  const rows=fs.readFileSync(path.join(f.run,"workers","rg_worker","transcript.jsonl"),"utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(rows.map(row=>row.error),[false,true,true]);
 });
 
 test("snapshot is pinned, mutation is rejected, baseline excludes LSP, and cap is id-safe", async t => {
