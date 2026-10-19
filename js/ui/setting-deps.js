@@ -124,8 +124,8 @@ const SettingDeps = (function () {
     { key: "turnchase-cam", ids: ["pm-turnchase"], runtime: true, reason: "Cockpit views only",
       when: () => {
         if (typeof GameStore === "undefined" || !GameStore.store || typeof CamModes === "undefined") return null;
-        const idx = GameStore.store.get("camMode", null);
-        if (idx === null || idx === undefined) return null;
+        // Default 19 matches game.js's shipped camMode read (store-registry).
+        const idx = GameStore.store.get("camMode", 19);
         const id = CamModes.CAM_MODES && CamModes.CAM_MODES[idx | 0] && CamModes.CAM_MODES[idx | 0].id;
         return id ? (id === "cockpit" || id === "visor" || id === "helmet") : null;
       } },
