@@ -4572,7 +4572,6 @@
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/telemetry-trace.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
@@ -5134,8 +5133,7 @@
     "js/data/tab-utils.js": {
       "*": [
         "tests/unit/data-hub-picker.test.mjs",
-        "tests/unit/telemetry-trace.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs"
+        "tests/unit/telemetry-trace.test.mjs"
       ]
     },
     "js/data/teams.js": {
@@ -5210,8 +5208,7 @@
       ],
       "create": [
         "tests/unit/data-hub-picker.test.mjs",
-        "tests/unit/telemetry-trace.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs"
+        "tests/unit/telemetry-trace.test.mjs"
       ],
       "cumDist": [
         "tests/unit/telemetry-trace.test.mjs"
@@ -5247,8 +5244,7 @@
     "js/data/telemetry-player.js": {
       "create": [
         "tests/unit/data-lazy-loader.test.mjs",
-        "tests/unit/telemetry-trace.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs"
+        "tests/unit/telemetry-trace.test.mjs"
       ],
       "paintFrame": [
         "tests/unit/telemetry-trace.test.mjs"
@@ -5259,8 +5255,7 @@
     },
     "js/data/telemetry-render.js": {
       "create": [
-        "tests/unit/telemetry-trace.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs"
+        "tests/unit/telemetry-trace.test.mjs"
       ],
       "paintFrame": [
         "tests/unit/telemetry-trace.test.mjs"
@@ -5268,8 +5263,7 @@
     },
     "js/data/telemetry-view.js": {
       "create": [
-        "tests/unit/telemetry-trace.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs"
+        "tests/unit/telemetry-trace.test.mjs"
       ]
     },
     "js/data/telemetry.js": {
@@ -5280,12 +5274,7 @@
       "create": [
         "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
-        "tests/unit/telemetry-trace.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs"
-      ],
-      "loadTelemetry": [
-        "tests/unit/telemetry-trace.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs"
+        "tests/unit/telemetry-trace.test.mjs"
       ],
       "*": [
         "tests/unit/css-has-scope.test.mjs",
