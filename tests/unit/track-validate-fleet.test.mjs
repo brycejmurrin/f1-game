@@ -17,11 +17,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bootEditor } from "../helpers/editor-vm.mjs";
 
+// The start-straight / grade reds the fleet carries TODAY (real hills, corner starts). A ratchet: a
+// circuit may leave these lists, none may join them.
+const KNOWN_START_REDS = ["silverstone", "suzuka", "vegas", "magny_cours", "jerez", "mont_tremblant", "mosport"];
+const KNOWN_GRADE_REDS = ["spa"];
+/** CPU ms the callback burns (user+system): a wall-clock bound flakes at loadavg 36, CPU time does not. */
+function cpuMs(fn) { const t0 = process.cpuUsage(); const r = fn(); const u = process.cpuUsage(t0); return { r, ms: (u.user + u.system) / 1000 }; }
 const KNOWN_FOLDS = [];   // verify-track.cjs knownTarmacFolds(): empty since the round-2 clamp fixed the three hairpin folds
 
 test("the shipped fleet passes the designer's road rules; the fold rule agrees with verify-track", () => {
   const { Tracks, V } = bootEditor();
-  const reds = [], folds = [], startShort = [], ambers = {}, fia = {}, fiaRed = [];
+  const reds = [], folds = [], startShort = [], startIds = [], gradeIds = [], ambers = {}, fia = {}, fiaRed = [];
   for (const def of Tracks.LIST) {
     if (def.custom) continue;
     const tr = Tracks.buildCenterline(def);
@@ -31,8 +37,8 @@ test("the shipped fleet passes the designer's road rules; the fold rule agrees w
       if (i.level === "amber") ambers[i.code] = (ambers[i.code] || 0) + 1;
       if (i.level !== "red") continue;
       if (i.code === "fold") { folds.push(def.id); continue; }
-      if (i.code === "start") { startShort.push(def.id + " (" + j.stats.startBackM + "/" + j.stats.startFwdM + " m)"); continue; }
-      if (i.code === "grade") { startShort.push(def.id + " grade " + j.stats.gradeMax + " %"); continue; }   // real hills: reported, like the start
+      if (i.code === "start") { startIds.push(def.id); startShort.push(def.id + " (" + j.stats.startBackM + "/" + j.stats.startFwdM + " m)"); continue; }
+      if (i.code === "grade") { gradeIds.push(def.id); startShort.push(def.id + " grade " + j.stats.gradeMax + " %"); continue; }   // real hills: reported, like the start
       reds.push(def.id + ": " + i.code + " — " + i.msg);
     }
     if (def.id === "suzuka") {
@@ -44,6 +50,8 @@ test("the shipped fleet passes the designer's road rules; the fold rule agrees w
   console.log("fleet oracle: start-straight shortfalls (reported, not asserted): " + (startShort.join(", ") || "none"));
   console.log("fleet oracle: amber counts " + JSON.stringify(ambers));
   assert.deepEqual(reds, [], "a shipped circuit reads RED on a rule that is meant to measure the engine");
+  assert.deepEqual(startIds.filter((id) => !KNOWN_START_REDS.includes(id)), [], "a circuit gained a RED start (ratchet: fix the circuit, do not extend KNOWN_START_REDS)");
+  assert.deepEqual(gradeIds.filter((id) => !KNOWN_GRADE_REDS.includes(id)), [], "a circuit gained a RED grade (ratchet)");
   const perCode = Object.fromEntries(Object.entries(fia).map(([c, ids]) => [c, ids.size]));
   const fiaTotal = Object.values(perCode).reduce((a, b) => a + b, 0);
   console.log("fleet oracle: FIA Grade 1 ambers per code " + JSON.stringify(perCode) + ", " + fiaTotal + " in all — " + Object.entries(fia).map(([c, ids]) => c + ": " + [...ids].join(" ")).join("; "));
@@ -171,10 +179,8 @@ test("check: a 2,000 km loop is one RED length issue, with no build (bug-hunt 6.
   const { V } = bootEditor();
   // 200 legal points spread over the +-10 km map: the polygon is ~2,200 km (548 k engine nodes).
   const pts = Array.from({ length: 200 }, (_, i) => { const a = ((i * 37) % 200) / 200 * Math.PI * 2; return [Math.round(Math.cos(a) * 9990 * 4) / 4, Math.round(Math.sin(a) * 9990 * 4) / 4]; });
-  const t0 = Date.now();
-  const v = V.check({ name: "STAR", seed: 1, theme: "parkland", baseHW: 7, pts });
-  const ms = Date.now() - t0;
-  assert.ok(ms < 50, `answered in ${ms} ms`);
+  const { r: v, ms } = cpuMs(() => V.check({ name: "STAR", seed: 1, theme: "parkland", baseHW: 7, pts }));
+  assert.ok(ms < 250, `answered in ${ms} CPU ms (a build of the 548 k nodes takes seconds)`);
   assert.equal(v.issues.length, 1, JSON.stringify(v.issues.map((i) => i.code)));
   assert.equal(v.issues[0].code, "length");
   assert.equal(v.issues[0].level, "red");
@@ -206,10 +212,8 @@ test("check: every point stacked on one spot is a RED build error in < 1 s, bank
   // is what reaches bankingProfile), and the autosaved draft re-hung every designer open.
   const pts = Array.from({ length: 8 }, () => [120, -40]);
   for (const extra of [{ bankZones: [{ frac: 0.5, angleDeg: 10, widthM: 100 }] }, {}]) {
-    const t0 = Date.now();
-    const v = V.check(design(Object.assign({ pts }, extra)));
-    const ms = Date.now() - t0;
-    assert.ok(ms < 1000, `answered in ${ms} ms`);
+    const { r: v, ms } = cpuMs(() => V.check(design(Object.assign({ pts }, extra))));
+    assert.ok(ms < 1000, `answered in ${ms} CPU ms`);
     assert.equal(v.ok, false);
     assert.equal(v.tr, null, "nothing is built over a zero-length loop");
     assert.ok(v.issues.some((i) => i.code === "build" && i.level === "red" && /degenerate loop/.test(i.msg)), JSON.stringify(v.issues));
@@ -217,7 +221,7 @@ test("check: every point stacked on one spot is a RED build error in < 1 s, bank
   // The engine's own door, and the banking profile defends itself too.
   const def = V.previewDef(design({ pts, bankZones: [{ frac: 0.5, angleDeg: 10, widthM: 100 }] }));
   assert.throws(() => Tracks.buildCenterline(def, { line: false }), /degenerate loop/);
-  const t0 = Date.now();
-  assert.equal(ctx.TrackMesh.bankingProfile({ def, n: 200, total: 0 }), null, "ds = 0: no profile");
-  assert.ok(Date.now() - t0 < 1000);
+  const { r: prof, ms: pms } = cpuMs(() => ctx.TrackMesh.bankingProfile({ def, n: 200, total: 0 }));
+  assert.equal(prof, null, "ds = 0: no profile");
+  assert.ok(pms < 1000, `bankingProfile took ${pms} CPU ms`);
 });

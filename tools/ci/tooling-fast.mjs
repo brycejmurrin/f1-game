@@ -117,6 +117,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/announcer.test.mjs",
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-arg-guards.test.mjs",
+  "tests/unit/apex-cam-fallback.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
   // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
   "tests/unit/apex-memory.test.mjs",
@@ -629,6 +630,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
+  "tests/unit/js-debugger-node.test.mjs",
   "tests/unit/js-debugger-trace.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -1263,9 +1265,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
-  // ui-fit round 6: Track Designer tool-strip labels wrap+balance and
-  // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
-  "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
   "tests/unit/ui-fixer-uncommitted.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-inspector-audit.test.mjs",

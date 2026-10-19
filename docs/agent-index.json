@@ -1137,6 +1137,7 @@
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/js-debugger-node.test.mjs",
         "tests/unit/js-debugger-trace.test.mjs",
         "tests/unit/lsp-caller-fixes.test.mjs",
         "tests/unit/lsp-config-freshness.test.mjs",

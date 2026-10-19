@@ -199,8 +199,10 @@ test("the folded per-circuit data reaches the built def", () => {
     assert.equal(ctx.TrackSceneryData[k], undefined, `TrackSceneryData.${k} must not exist any more`);
   // The SHIPPED roster. A `custom` entry is one the track designer registered
   // from the player's own storage (js/editor/custom-tracks.js); it is appended
-  // after the 52 and never counts here.
-  assert.equal(Tracks.LIST.filter((t) => !t.custom).length, 52);
+  // after the shipped roster and never counts here. The roster is the manifest's
+  // CIRCUITS list, not a typed number.
+  const shipped = require(path.join(ROOT, "tools/manifest.cjs")).CIRCUITS;
+  assert.deepEqual(Array.from(Tracks.LIST.filter((t) => !t.custom), (t) => t.id).sort(), [...shipped].sort());
   for (const t of Tracks.LIST) {
     assert.ok(t.path && Array.isArray(t.path.pts) && t.path.pts.length > 50, `${t.id} must carry path.pts`);
     assert.ok(Number.isFinite(t.path.len) && t.path.len > 3000, `${t.id} must carry path.len`);

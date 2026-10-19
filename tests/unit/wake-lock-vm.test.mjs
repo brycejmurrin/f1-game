@@ -217,6 +217,11 @@ test("a missing Wake Lock API (older iOS) degrades silently", async () => {
   finishRace();
   await tick();
   assert.deepEqual(errorsSince(m), []);
+  // The absent API must not stop the game feature from working once it appears:
+  // a later race on a platform that has it still asks for the lock.
+  mockWakeLock();
+  await race();
+  await waitFor(() => log().includes("request:screen"), "request:screen after the API appears");
 });
 
 test("a rejecting request() (permission denied) degrades silently", async () => {
@@ -225,12 +230,15 @@ test("a rejecting request() (permission denied) degrades silently", async () => 
   // exists. An unhandled rejection here would land in the VM's rejection
   // record, exactly like a Playwright pageerror.
   await fresh();
-  win().navigator.wakeLock = { request: () => Promise.reject(new Error("denied")) };
+  let asked = 0;
+  win().navigator.wakeLock = { request: () => { asked++; return Promise.reject(new Error("denied")); } };
   const m = mark();
   await race();
+  await waitFor(() => asked >= 1, "the game to ask for the lock at all");
   finishRace();
   await tick();
   assert.deepEqual(errorsSince(m), []);
+  assert.ok(asked >= 1, "the rejection was actually exercised: request() was called");
 });
 
 test("a lock granted after the race ended is released immediately", async () => {

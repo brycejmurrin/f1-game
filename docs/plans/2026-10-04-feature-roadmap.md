@@ -58,7 +58,7 @@ other large UI work.
 | Manual pit-stop mini-game; cooldown lap, parc fermé and podium flow | Repeatedly requested in the EA F1 25 forum wishlist (seen as a search snippet only) |
 | Spectate a friend's race | Send only car state over the existing friend connection and render locally |
 | Online play on track-designer circuits | Documented as unsupported in `docs/TRACK-DESIGNER.md` ("Limits", may be stale) |
-| Fair-play online: reduced collisions and a clean-racing score | F1 25's online collisions are a top complaint (secondary source) |
+| Fair-play online: reduced collisions and a clean-racing score | F1 25's online collisions are a top complaint (secondary source). Plan: [fair-play online](2026-10-19-fair-play-online.md) (#1588) |
 | 2026 rules explainer ("why did I slow on the straight?") | Super-clipping and Overtake Mode already exist, so this is UI and onboarding |
 
 ## Tier 3: bigger bets and risks
