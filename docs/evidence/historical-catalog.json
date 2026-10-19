@@ -1,0 +1,353 @@
+{
+  "schemaVersion": 1,
+  "repository": "brycejmurrin/f1-game",
+  "inventoryDate": "2026-10-19",
+  "policy": "Retain selected snapshots and currently linked images; no recovery refs or historical commits may be purged on the strength of this catalog. Capture revision remains unverified unless producer metadata establishes it.",
+  "entries": [
+    {
+      "label": "legacy-buddh-survey-a1",
+      "sourceCommit": "031beb824665b4f219467b0bba41f28547f03a17",
+      "sourcePaths": [
+        "artifacts/track-survey/buddh-report"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/buddh-survey-a1",
+        "refs/archive/cursor/survey-buddh-a1"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 1,
+      "sourceBytes": 1982508,
+      "entryPoints": [
+        "artifacts/track-survey/buddh-report/index.html"
+      ],
+      "publication": null
+    },
+    {
+      "label": "legacy-buddh-survey-b1",
+      "sourceCommit": "b940f15526da559ba831f59ab1a21cbc201f5d30",
+      "sourcePaths": [
+        "artifacts/track-survey/buddh-report",
+        "artifacts/shots/tracks/buddh"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/buddh-survey-b1"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 80,
+      "sourceBytes": 4102998,
+      "entryPoints": [
+        "artifacts/track-survey/buddh-report/index.html"
+      ],
+      "publication": null
+    },
+    {
+      "label": "legacy-survey-albert-park-a1",
+      "sourceCommit": "24090b73d4aec4939b935dd9128beec9b1d47d4d",
+      "sourcePaths": [
+        "artifacts/track-survey/albert_park-report",
+        "artifacts/shots/tracks/albert_park"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/survey-albert_park-a1"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 63,
+      "sourceBytes": 3983075,
+      "entryPoints": [
+        "artifacts/track-survey/albert_park-report/index.html"
+      ],
+      "publication": null
+    },
+    {
+      "label": "legacy-survey-brands-hatch-a1",
+      "sourceCommit": "afcad6000ec71a584b88ce26102bb58f3a6d3802",
+      "sourcePaths": [
+        "artifacts/track-survey/brands_hatch-report",
+        "artifacts/shots/tracks/brands_hatch"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/survey-brands_hatch-a1"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 79,
+      "sourceBytes": 5875612,
+      "entryPoints": [
+        "artifacts/track-survey/brands_hatch-report/index.html"
+      ],
+      "publication": null
+    },
+    {
+      "label": "legacy-survey-gallery-fix-a1",
+      "sourceCommit": "78c61cf70793df1d8d213e9448612004fdf13e91",
+      "sourcePaths": [
+        "gallery/tracks"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/survey-gallery-fix-a1"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 7024,
+      "sourceBytes": 148364721,
+      "entryPoints": [
+        "gallery/tracks/index.html",
+        "gallery/tracks/manifest.json"
+      ],
+      "publication": null
+    },
+    {
+      "label": "legacy-track-gallery-a-8090",
+      "sourceCommit": "cf193d6c11e31ae62498842d84b1f0a40adf1018",
+      "sourcePaths": [
+        "artifacts/shots/gallery"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/track-gallery-a-8090"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 104,
+      "sourceBytes": 5917720,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-track-gallery-b-8f0c",
+      "sourceCommit": "2e8398a47c4023183821164829af6bdde8f823b0",
+      "sourcePaths": [
+        "artifacts/shots/gallery"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/track-gallery-b-8f0c"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 91,
+      "sourceBytes": 7626564,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-track-gallery-c-900c",
+      "sourceCommit": "73528604bb00bc50ec00a59bec7a38e5a52064da",
+      "sourcePaths": [
+        "artifacts/shots/gallery"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/track-gallery-c-900c"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 91,
+      "sourceBytes": 7604174,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-track-gallery-d-08f2",
+      "sourceCommit": "4d62571340034e6cdf2f0f1f6f5ad44ca7c832f8",
+      "sourcePaths": [
+        "artifacts/shots/gallery"
+      ],
+      "sourceRefs": [
+        "refs/archive/cursor/track-gallery-d-08f2"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 91,
+      "sourceBytes": 5949755,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-1354",
+      "sourceCommit": "1c910d787b84852e691136d8d795928adaf41521",
+      "sourcePaths": [
+        "shots/1354"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/1354"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 6,
+      "sourceBytes": 641377,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-1356",
+      "sourceCommit": "7e2417d9ab111d8181877a85120f65a9aaa93eb8",
+      "sourcePaths": [
+        "shots/1356"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/1356"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 22,
+      "sourceBytes": 4620377,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-1360",
+      "sourceCommit": "dd49b2aca9df90c1f82cf6f805b3445541d5f727",
+      "sourcePaths": [
+        "shots/1360"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/1360"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 7,
+      "sourceBytes": 1827445,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-1361",
+      "sourceCommit": "9bd46b735df42c558fa613ba8da142cac0b3d1e3",
+      "sourcePaths": [
+        "shots/1361"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/1361"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 9,
+      "sourceBytes": 942293,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-1978",
+      "sourceCommit": "c1b87d65619bdceb0b32e01915ed0fbd4dddeb9e",
+      "sourcePaths": [
+        "qa/replay"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/1978"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 3,
+      "sourceBytes": 787545,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-a11y-mcp",
+      "sourceCommit": "80d2f7e1f7cd1fff4e90746a4134d615c07a5fc1",
+      "sourcePaths": [
+        "shots/a11y-mcp"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/a11y-mcp"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 6,
+      "sourceBytes": 723199,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-hud-1346-1351",
+      "sourceCommit": "6407549a57d9ed2bbb36b11f28c9a653f0025e28",
+      "sourcePaths": [
+        "shots/1346"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/hud-1346-1351"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 4,
+      "sourceBytes": 1152085,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-hud-survey",
+      "sourceCommit": "0d4bdd8fd9a65393232cf356fcbec3d1e159777a",
+      "sourcePaths": [
+        "shots/hud-survey"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/hud-survey"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 13,
+      "sourceBytes": 2121722,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-shots-scenery",
+      "sourceCommit": "ecc67a06245dccf87d50eb7fa4fa2d9f8a63e1da",
+      "sourcePaths": [
+        "shots/scenery"
+      ],
+      "sourceRefs": [
+        "refs/archive/shots/scenery"
+      ],
+      "directImages": false,
+      "retentionReason": "Retain the branch\u2019s dedicated capture/report; exclude inherited game files and unrelated captures.",
+      "fileCount": 17,
+      "sourceBytes": 2989862,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-look-survey",
+      "sourceCommit": "cb0cb2c386dbda6f45d4984cfb4c297a520556b0",
+      "sourcePaths": [
+        "docs/look-survey"
+      ],
+      "sourceRefs": [],
+      "directImages": true,
+      "retentionReason": "Preserve all 25 contact sheets, including ten currently linked from documentation.",
+      "fileCount": 26,
+      "sourceBytes": 48301054,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-track-designer",
+      "sourceCommit": "cb0cb2c386dbda6f45d4984cfb4c297a520556b0",
+      "sourcePaths": [
+        "artifacts/shots/tracks-ui/16-designer-edit-randomise.png"
+      ],
+      "sourceRefs": [],
+      "directImages": true,
+      "retentionReason": "Preserve the screenshot linked by the track-designer overhaul document.",
+      "fileCount": 1,
+      "sourceBytes": 179986,
+      "entryPoints": [],
+      "publication": null
+    },
+    {
+      "label": "legacy-garage-finishes",
+      "sourceCommit": "014ff2d6c2268e6c3f7840074c37788ce905204b",
+      "sourcePaths": [
+        "gallery/garage-finishes/garage-finishes-current.jpg"
+      ],
+      "sourceRefs": [],
+      "directImages": true,
+      "retentionReason": "Preserve the current garage finish image linked by the review note.",
+      "fileCount": 1,
+      "sourceBytes": 62505,
+      "entryPoints": [],
+      "publication": null
+    }
+  ]
+}

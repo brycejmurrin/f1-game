@@ -34,6 +34,44 @@ managed development environments provide API proxy credentials that cannot uploa
 binary release assets; an upload-host HTTP 401 there is not evidence that a bundle
 was stored. Use this workflow or an authenticated local GitHub CLI instead.
 
+## Preserve selected historical Git evidence
+
+The same manual workflow can archive an old committed capture without running any
+code from that checkout. Leave `run_id` and `artifact_name` blank; supply a full
+`source_commit`, a JSON array of exact evidence paths in `source_paths`, and a
+label. Set `direct_images` only when documentation needs standalone image assets.
+
+```sh
+gh workflow run archive-evidence.yml --repo brycejmurrin/f1-game \
+  -f source_commit=1c910d787b84852e691136d8d795928adaf41521 \
+  -f 'source_paths=["shots/1354"]' -f label=legacy-shots-1354
+```
+
+The publisher reads committed regular files with Git, checks their blob identities,
+and preserves their relative paths beneath `files/`. Symlinks, submodules, missing
+selections and paths outside evidence directories are rejected. It does not run
+old capture scripts or install dependencies. `_historical-origin.json` records
+selected paths, archived commit, Git blob IDs, byte counts and SHA-256 hashes.
+The archived commit proves where those bytes were stored; it does **not** prove
+which game revision was rendered. Preserve producer metadata where available.
+
+For documentation images, the release also contains hash-named standalone assets.
+The manifest's `directAssets` maps each original path to its asset name and digest;
+the checksum file covers these assets too. At most 997 images can accompany the
+three standard assets. Use their `releases/download/…` URLs for image links.
+For galleries, download and extract the complete archive so relative links work.
+
+[Historical catalog](evidence/historical-catalog.json) lists reviewed selections,
+retention reasons and publication/verification receipts. It excludes unrelated
+captures inherited by old branches and combines duplicate snapshots. Publication
+alone is insufficient: download, check the checksum, compare the manifest and
+extracted bytes to Git, then inspect the gallery before replacing links. A verified
+snapshot does not authorize deleting other revisions, recovery refs or PR history.
+
+A workflow already present on the default branch can be tested from a topic branch
+with `gh workflow run archive-evidence.yml --ref <branch> …`; the publisher then
+comes from that selected workflow revision. Review that revision before dispatch.
+
 ## Capture, inspect, publish
 
 Run the uploader from the checkout that produced the capture, before changing
@@ -121,7 +159,8 @@ No automatic release deletion is configured. Before retiring a bundle, check PR
 and documentation references and preserve any evidence still needed. GitHub release
 assets are durable until explicitly removed; they are not an independent backup.
 Each asset must be **under 2 GiB**; split larger surveys by circuit or capture set.
-The uploader creates three assets, below GitHub's 1,000-assets-per-release limit.
+Ordinary captures use three assets; historical captures may add direct images,
+within GitHub's 1,000-assets-per-release limit.
 
 This prevents future Git growth. It does not remove already committed images or
 change existing PR history. Continue existing survey PRs against their existing
@@ -139,3 +178,5 @@ maintenance tool; use the release uploader for new evidence.
 - [Actions artifact expiry and access](https://docs.github.com/en/actions/managing-workflow-runs/downloading-workflow-artifacts)
 - [Downloading a named artifact](https://cli.github.com/manual/gh_run_download)
 - [Workflow run metadata](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run)
+
+- [Run an existing manual workflow from another branch](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
