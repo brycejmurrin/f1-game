@@ -84,9 +84,7 @@ function hardenWebContents(contents) {
     return { action: "deny" };
   });
   contents.on("will-navigate", (event, url) => {
-    const ok = typeof url === "string"
-      && (url === ORIGIN || url === `${ORIGIN}/` || url.startsWith(`${ORIGIN}/`));
-    if (!ok) event.preventDefault();
+    if (!permissions.isAppOrigin(url, ORIGIN)) event.preventDefault();
   });
   contents.session.setPermissionRequestHandler(permissions.requestHandler(ORIGIN));
   contents.session.setPermissionCheckHandler(permissions.checkHandler(ORIGIN));
@@ -140,7 +138,6 @@ function createWindow() {
   }
 
   win.setMenuBarVisibility(false);
-  hardenWebContents(win.webContents);
 
   win.webContents.on("before-input-event", (event, input) => {
     if (input.type === "keyDown" && input.key === "F11") {
@@ -203,6 +200,8 @@ if (ownsInstance) app.whenReady().then(() => {
   });
 });
 
+// Sole installation owner, covering every window and other WebContents.
+// https://www.electronjs.org/docs/latest/api/app#event-web-contents-created
 app.on("web-contents-created", (_event, contents) => {
   hardenWebContents(contents);
 });

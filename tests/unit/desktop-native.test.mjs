@@ -9,6 +9,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { EventEmitter } from "node:events";
+import { setImmediate } from "node:timers";
 import { seedStore } from "../helpers/seed-store.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -63,6 +65,95 @@ test("desktop main uses privileged app:// via app-protocol (Range handler)", () 
   assert.match(MAIN, /setPermissionRequestHandler\(permissions\.requestHandler\(ORIGIN\)\)/);
   assert.match(MAIN, /setPermissionCheckHandler\(permissions\.checkHandler\(ORIGIN\)\)/);
   assert.doesNotMatch(MAIN, /callback\(false\)/, "no blanket deny left behind the allow-list");
+});
+
+test("desktop hardens each WebContents once before loading, across window lifecycle paths", async () => {
+  const app = new EventEmitter();
+  let ready;
+  app.whenReady = () => new Promise((resolve) => { ready = resolve; });
+  app.requestSingleInstanceLock = () => true;
+  app.isReady = () => true;
+  app.commandLine = { appendSwitch() {} };
+  app.quit = () => {};
+  const windows = [];
+  const external = [];
+  function makeContents() {
+    const contents = new EventEmitter();
+    contents.installs = { open: 0, request: 0, check: 0 };
+    contents.setWindowOpenHandler = (fn) => { contents.installs.open++; contents.open = fn; };
+    contents.session = {
+      setPermissionRequestHandler(fn) { contents.installs.request++; contents.request = fn; },
+      setPermissionCheckHandler(fn) { contents.installs.check++; contents.check = fn; },
+    };
+    app.emit("web-contents-created", {}, contents);
+    return contents;
+  }
+  function assertHardened(contents) {
+    assert.deepEqual(contents.installs, { open: 1, request: 1, check: 1 });
+    assert.equal(contents.listenerCount("will-navigate"), 1);
+  }
+  class BrowserWindow extends EventEmitter {
+    static getAllWindows() { return windows.filter((win) => !win.destroyed); }
+    constructor() {
+      super();
+      this.webContents = makeContents();
+      windows.push(this);
+    }
+    isDestroyed() { return !!this.destroyed; }
+    destroy() { this.destroyed = true; this.emit("closed"); }
+    setMenuBarVisibility() {}
+    loadURL(url) { assert.equal(url, "app://apex/"); assertHardened(this.webContents); }
+  }
+  vm.runInNewContext(MAIN, {
+    require(name) {
+      if (name === "electron") return {
+        app, BrowserWindow, globalShortcut: { unregisterAll() {} },
+        shell: { openExternal(url) { external.push(url); return Promise.resolve(); } },
+        dialog: { showMessageBox: async () => ({ response: 0 }) },
+      };
+      if (name === "./app-protocol") return { SCHEME: "app", HOST: "apex", registerScheme() {}, handleScheme() {} };
+      if (name === "node:fs") return { existsSync: () => true };
+      if (name === "./lib/permissions.cjs") return require("../../desktop/lib/permissions.cjs");
+      return require(name);
+    },
+    process: { argv: [], env: {}, platform: "linux" },
+    __dirname: join(ROOT, "desktop"), URL,
+  }, { filename: absSrc("desktop/main.js") });
+  assert.equal(app.listenerCount("web-contents-created"), 1);
+  ready();
+  await Promise.resolve();
+  assert.equal(windows.length, 1, "initial window");
+  windows[0].destroy();
+  app.emit("second-instance");
+  assert.equal(windows.length, 2, "second-instance replacement");
+  windows[1].destroy();
+  app.emit("activate");
+  assert.equal(windows.length, 3, "macOS activation replacement");
+  windows[2].webContents.emit("unresponsive");
+  await new Promise(setImmediate);
+  assert.equal(windows.length, 4, "explicit recovery replacement");
+  assert.equal(windows[2].isDestroyed(), true);
+  const standalone = makeContents();
+  for (const contents of [...windows.map((win) => win.webContents), standalone]) {
+    assertHardened(contents);
+    for (const [url, allowed] of [
+      ["app://apex", true], ["app://apex/", true], ["app://apex/index.html?x=1", true],
+      ["app://apexevil/", false], ["app://apex.evil/", false],
+      ["https://evil.example/", false], ["file:///etc/passwd", false], [null, false],
+    ]) {
+      let prevented = false;
+      contents.emit("will-navigate", { preventDefault() { prevented = true; } }, url);
+      assert.equal(prevented, !allowed, String(url));
+    }
+    for (const url of ["https://example.com/", "http://example.com/", "app://apex/", "file:///etc/passwd", "javascript:alert(1)", "bad URL"]) {
+      assert.equal(contents.open({ url }).action, "deny", url);
+    }
+    let granted;
+    contents.request(null, "fullscreen", (value) => { granted = value; }, { requestingUrl: "app://apex/" });
+    assert.equal(granted, true);
+    assert.equal(contents.check(null, "fullscreen", "https://evil.example/", {}), false);
+  }
+  assert.deepEqual(external, Array(5).fill(["https://example.com/", "http://example.com/"]).flat());
 });
 
 // L8-b: the game's own permissions, for app://apex/ only. Electron routes the
