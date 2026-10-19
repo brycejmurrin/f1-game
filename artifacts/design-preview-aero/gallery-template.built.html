@@ -41,13 +41,24 @@ figcaption{font-size:12px;color:var(--muted);margin-top:3px}
 details.round{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 18px}
 details.round summary{font-family:var(--display);font-size:20px;text-transform:uppercase;cursor:pointer}
 .short ol{margin:6px 0 0;padding-left:22px}
+.fit{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:18px;display:grid;gap:22px}
+.fit h3{font-family:var(--display);font-size:22px;text-transform:uppercase;margin:0}
+.fitrow{display:grid;gap:8px;min-width:0}
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media (max-width:640px){.pair{grid-template-columns:1fr}}
+.fit dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0;font-size:13px}
+.fit dt{font-family:var(--display);text-transform:uppercase;color:var(--accent)}
+.fit dd{margin:0;max-width:80ch}
 </style>
 <div class="wrap">
 <header><p class="meta">Fleet B · lane D3 · cursor/design-preview-aero-a3e7 @ 26595602 · design preview, not shipped</p>
 <h1>Aero parts: six real-car candidates</h1>
 <p class="lede">Each candidate is a new opt-in visual field on a PREVIEW catalog row that copies a shipped row's cost and stats. Every framing shows the candidate, the row it copies, and the changed pixels in magenta. The 11 factory cars build bit-identical meshes to the base commit.</p></header>
 <div class="short"><h2>Ranked shortlist</h2><ol><li><b>X-Wings</b> <code>x_wings</code> — new silhouette, changes all four framings (side 0.92 %)</li><li><b>Bridge Wing</b> <code>bridge_wing</code> — largest 3/4 change (2.14 %); reads through the nose gap</li><li><b>Double Diffuser</b> <code>double_diffuser</code> — clear from the low rear 3/4 (1.51 %); faint from the side</li><li><b>Twin Beam Wing</b> <code>beam_twin</code> — reads under the main plane at 3/4 (0.85 %); thin from the side</li><li><b>Spoon Wing</b> <code>spoon_wing</code> — shape partly hidden under the flat active-aero flap (0.57 %)</li><li><b>Monkey Seat</b> <code>monkey_seat</code> — hidden by the main wing and endplates (side 0.00 %); needs a bigger winglet in round 2</li></ol><p class="lic">To ask for a change, name the id: “iterate x_wings”.</p></div>
-<details class="round" open><summary>Round 1 — what changed and why</summary><p>First pass: six opt-in visual fields, each on a PREVIEW row that copies a shipped row's cost and stats, shot with the car viewer aimed at the part (McLaren livery, studio light). Reference photos are from Wikimedia Commons. Upload.wikimedia.org rate-limited this container, so the Brawn, McLaren MP4-23 and Tyrrell references are links for now, and Commons has no real-car photo of the Tyrrell X-wings. The diff column shows only the new part, because each candidate's base row shares every other field.</p></details>
+<details class="round" open><summary>Round 2 — fit first</summary><p>Every suspect join from round 1 was measured with a mesh probe (each part's triangles split from its field-off build, then axis rays and edge-through-face tests against the rest of the car, on all 11 chassis) and fixed where it failed: the X-wing pylons floated 10 cm above the sidepods, the bridge-wing struts hung 3.6 cm above the front wing, the lower beam-wing tips poked out under the endplates, the monkey-seat top element stopped short of its plates, and the double-diffuser feed slots z-fought the ceiling. After the fixes no part group is left unattached on any chassis, and the 11 factory cars still build bit-identical meshes. Look changes from the round-1 asks: the monkey seat is 21 % wider and 4–6 cm higher, and the bridge wing sits 5 cm higher and further forward over the main plane. Frames marked “round 1” were not reshot (the capture budget went to the changed parts); the base frames are unchanged.</p></details>
+<details class="round"><summary>Round 1 — what changed and why</summary><p>First pass: six opt-in visual fields, each on a PREVIEW row that copies a shipped row's cost and stats, shot with the car viewer aimed at the part (McLaren livery, studio light). Reference photos are from Wikimedia Commons. Upload.wikimedia.org rate-limited this container, so the Brawn, McLaren MP4-23 and Tyrrell references are links for now, and Commons has no real-car photo of the Tyrrell X-wings. The diff column shows only the new part, because each candidate's base row shares every other field.</p></details>
+<section class="fit" id="fit"><h2>Fit check</h2><p class="lic">Same close-up framing before and after, McLaren livery. Numbers are from the mesh probe (artifacts/design-preview-aero/fit-joints.mjs) on all 11 chassis.</p>
+%%FIT%%</section>
 <nav>%%TOC%%</nav>
 %%CARDS%%
 </div>

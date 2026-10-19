@@ -1,0 +1,38 @@
+{
+ "x_wings": {
+  "q34": 1.28,
+  "side": 0.92,
+  "top": 1.11,
+  "phone": 0.31
+ },
+ "bridge_wing": {
+  "q34": 2.14,
+  "side": 0.35,
+  "top": 0.55,
+  "phone": 0.36
+ },
+ "double_diffuser": {
+  "q34": 1.51,
+  "side": 0.29,
+  "top": 0.72,
+  "phone": 0.19
+ },
+ "beam_twin": {
+  "q34": 0.85,
+  "side": 0.09,
+  "top": 0.23,
+  "phone": 0.09
+ },
+ "spoon_wing": {
+  "q34": 0.57,
+  "side": 0.29,
+  "top": 0.46,
+  "phone": 0.09
+ },
+ "monkey_seat": {
+  "q34": 0.47,
+  "side": 0.0,
+  "top": 1.09,
+  "phone": 0.05
+ }
+}

@@ -1755,24 +1755,32 @@ const Car3D = (function () {
 
     // fwBridge (opt-in): the 2008 BRIDGE WING (McLaren MP4-23, Renault R28):
     // a raised element spanning over the nose on two struts off the main plane.
+    // The struts stand on the main plane's top (y 0.076 at z 2.56, 0.092 at
+    // 2.46 at x 0.34, every team) and end inside the foil, so neither end floats.
     if (!ckpt && aeroStyle && aeroStyle.fwBridge) {
-      addWingFoil(out, { zLead: 2.40, yLead: 0.455, zTrail: 2.18, yTrail: 0.490,
-        half: 0.34, thick: 0.020, taper: 0.96, sweep: 0.03, rise: -0.020 }, wingCol, wingSurf);
+      addWingFoil(out, { zLead: 2.56, yLead: 0.505, zTrail: 2.34, yTrail: 0.540,
+        half: 0.35, thick: 0.020, taper: 0.96, sweep: 0.03, rise: 0 }, wingCol, wingSurf);
       for (const s of [-1, 1]) addBeveledSpan(out,
-        { z: 2.42, x: s * 0.34, y: 0.300, w: 0.016, h: 0.32, t: 0.62 },
-        { z: 2.16, x: s * 0.34, y: 0.330, w: 0.016, h: 0.30, t: 0.70 },
+        { z: 2.555, x: s * 0.34, y: (0.068 + 0.512) / 2, w: 0.016, h: 0.512 - 0.068, t: 0.62 },
+        { z: 2.46,  x: s * 0.34, y: (0.084 + 0.527) / 2, w: 0.016, h: 0.527 - 0.084, t: 0.70 },
         0.005, endplateC || c2);
     }
     // xwing (opt-in): 1997-98 X-WINGS (Tyrrell 025): a winglet on a tall
     // pylon at each sidepod's leading shoulder, beside the cockpit.
     if (!ckpt && aeroStyle && aeroStyle.xwing) {
       for (const s of [-1, 1]) {
+        // Winglet tips end mid-fence; the pylon foot follows the sidepod top's
+        // slope (y 0.467-0.471 at z 0.03, 0.461-0.464 at z -0.07, every team)
+        // and sinks 3-7 mm into it.
         addBeveledSpan(out,
           { z: 0.10, x: s * 0.62, y: 0.865, w: 0.30, h: 0.016, t: 0.55 },
-          { z: -0.16, x: s * 0.64, y: 0.890, w: 0.26, h: 0.012, t: 0.70 },
+          { z: -0.16, x: s * 0.62, y: 0.890, w: 0.30, h: 0.012, t: 0.70 },
           0.005, wingCol, null, wingSurf);
-        addBox(out, s * 0.62, 0.72, -0.02, 0.020, 0.30, 0.10, DARK);
-        for (const e of [-1, 1]) addBox(out, s * (0.62 + e * 0.15), 0.88, -0.03, 0.010, 0.07, 0.24, endplateC || c2);
+        addBeveledSpan(out,
+          { z: 0.03,  x: s * 0.62, y: (0.464 + 0.875) / 2, w: 0.020, h: 0.875 - 0.464 },
+          { z: -0.07, x: s * 0.62, y: (0.457 + 0.875) / 2, w: 0.020, h: 0.875 - 0.457 },
+          0.003, DARK);
+        for (const e of [-1, 1]) addBox(out, s * (0.62 + e * 0.15), 0.88, -0.03, 0.012, 0.075, 0.275, endplateC || c2);
       }
     }
     const aVane = aeroStyle && aeroStyle.vane != null ? aeroStyle.vane
@@ -1914,19 +1922,25 @@ const Car3D = (function () {
       // two stacked planes slung between the diffuser and the main plane,
       // clear of the rain light (y 0.465-0.625 at z -2.47..-2.60).
       if (aeroStyle && aeroStyle.beam2) {
-        rearWing(-2.28, 0.455, -2.44, 0.480, 0.44, 0.020, c1, 0.6);
+        // The rear endplate stops near y 0.50, above the lower beam, so the
+        // lower beam ends in a small plate hung flush off the endplate's inner
+        // face (x 0.481); the upper beam runs into the endplate itself.
+        addWingFoil(out, { zLead: -2.28, yLead: 0.455, zTrail: -2.44, yTrail: 0.480, half: 0.44,
+          thick: 0.020, taper: rearTaper, sweep: rearSweep * 0.6, rise: 0, attachHalf: 0.47 }, c1, wingSurf);
         rearWing(-2.42, 0.655, -2.60, 0.690, 0.42, 0.018, CARBON, 0.6);
-        for (const s of [-1, 1]) addBox(out, s * 0.445, 0.570, -2.44, 0.020, 0.26, 0.20, endplateC || DARK);
+        for (const s of [-1, 1]) addBox(out, s * 0.4715, (0.43 + 0.60) / 2, -2.38, 0.022, 0.17, 0.22, endplateC || DARK);
       }
       // monkey (opt-in): the 2014-16 MONKEY SEAT (Mercedes W07): a small
       // twin-plane winglet over the crash structure on a single pylon.
       if (aeroStyle && aeroStyle.monkey) {
-        addWingFoil(out, { zLead: -2.06, yLead: 0.735, zTrail: -2.20, yTrail: 0.775,
-          half: 0.21, thick: 0.016, taper: 0.92, sweep: 0.02, rise: 0.012 }, rearC, wingSurf);
-        addWingFoil(out, { zLead: -2.18, yLead: 0.790, zTrail: -2.28, yTrail: 0.830,
-          half: 0.19, thick: 0.012, taper: 0.92, sweep: 0.02, rise: 0.012 }, c1, wingSurf);
-        addBox(out, 0, 0.64, -2.12, 0.030, 0.20, 0.08, DARK);
-        for (const s of [-1, 1]) addBox(out, s * 0.215, 0.775, -2.17, 0.012, 0.11, 0.24, endplateC || DARK);
+        // Both planes end mid-endplate (half 0.255); the pylon rises out of
+        // the crash structure (top y 0.58-0.62 at z -2.08..-2.16).
+        addWingFoil(out, { zLead: -2.00, yLead: 0.775, zTrail: -2.17, yTrail: 0.820,
+          half: 0.255, thick: 0.018, taper: 0.92, sweep: 0, rise: 0 }, rearC, wingSurf);
+        addWingFoil(out, { zLead: -2.15, yLead: 0.845, zTrail: -2.28, yTrail: 0.895,
+          half: 0.255, thick: 0.014, taper: 0.92, sweep: 0, rise: 0 }, c1, wingSurf);
+        addBox(out, 0, (0.56 + 0.79) / 2, -2.10, 0.030, 0.23, 0.10, DARK);
+        for (const s of [-1, 1]) addBox(out, s * 0.255, 0.835, -2.14, 0.014, 0.16, 0.31, endplateC || DARK);
       }
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
@@ -2001,7 +2015,7 @@ const Car3D = (function () {
           addLoft(out, -2.56, s * dHalf * 0.82, (yU0 + yU1) / 2, 0.026, yU1 - yU0,
                        -1.98, s * dThr * 0.80, yU0 + 0.01, 0.024, 0.03,
                   CARBON, SURFACES.carbon);                               // upper outer wall
-          addBox(out, s * (dKeel + dThr * 0.80) / 2, yCT + 0.012, -1.96, dThr * 0.80 - dKeel, 0.010, 0.06,
+          addBox(out, s * (dKeel + dThr * 0.80) / 2, yCT + 0.022, -1.98, dThr * 0.80 - dKeel, 0.014, 0.05,
                  INTAKE, SURFACES.carbon);                                // feed slot
         }
         addBox(out, 0, yU1 + 0.022, -2.565, 2 * dHalf * 0.82, 0.024, 0.018, rearC, wingSurf);

@@ -1,0 +1,32 @@
+{
+ "x_wings": {
+  "joint": "pylon foot → sidepod top; winglet tips → end fences",
+  "before": "pylon foot at y 0.570 over a sidepod top at y 0.458–0.469: 10.2–10.6 cm air gap, so the whole wing floated. Winglet tapered to x 0.51 at the rear, 4 cm short of the inner fence.",
+  "after": "pylon runs to y 0.448: seated, 1.0–2.1 cm into the sidepod on all 11 chassis. Winglet is constant-span x 0.47–0.77 and ends inside both fences (12 mm thick, 27.5 cm long, covering the chord)."
+ },
+ "bridge_wing": {
+  "joint": "strut feet → front-wing main plane; bridge → nose",
+  "before": "strut feet at y 0.14 (z 2.16–2.42) where the main plane at x 0.34 only starts at z 2.43: 3.6 cm air gap, struts hung from the bridge.",
+  "after": "struts moved onto the main plane (z 2.46–2.555) and run from 8 mm inside its top (y 0.068/0.084) to inside the bridge: seated on all 11 chassis. Bridge raised to y 0.505–0.540 and moved forward over the main plane: at least 15.3 cm over the nose top on every team (closest: McLaren at z 2.44)."
+ },
+ "beam_twin": {
+  "joint": "beam tips → rear endplates; side mounts",
+  "before": "side mounts at x 0.435–0.455 stood free, 2.6 cm inboard of the endplate (inner face x 0.481); the lower beam ran to x 0.50 below the endplate's bottom edge (~y 0.50), so its tips poked out into air.",
+  "after": "lower beam ends at x 0.47 inside a beam-wing plate (x 0.460–0.482, y 0.43–0.60) hung flush off the endplate's inner face; the upper beam still runs into the endplate. Both beams join the car on all 11 chassis."
+ },
+ "monkey_seat": {
+  "joint": "upper element tips → endplates; pylon → crash structure",
+  "before": "upper element half-span 0.19 against endplates at 0.215: tips 1.7 cm short of the plates. Planes at y 0.735–0.83 hidden by the main wing and endplates (side Δ 0.00 %).",
+  "after": "both elements span to the plate centres (half 0.255), plates 16 cm tall × 31 cm long; pylon rises from inside the crash structure (y 0.56) into the lower element. Raised to y 0.775–0.895 and widened by 21 % (round-2 look ask)."
+ },
+ "double_diffuser": {
+  "joint": "feed slots → main diffuser ceiling",
+  "before": "slot top 0.5 mm under the ceiling top: coplanar faces, z-fight at the throat; front 2 cm past the throat end in air.",
+  "after": "slot sits 4 mm into the ceiling and stands 9 mm proud, inside the throat (z −2.005..−1.955). Upper deck, walls and exit lip were already seated (joins the crash structure and the main exit gurney)."
+ },
+ "spoon_wing": {
+  "joint": "spoon main plane → endplates",
+  "before": "joins the endplates on all 11 chassis (attachHalf 0.50).",
+  "after": "unchanged in round 2: the uneven slot to the flat active-aero flap above is the flap's (owned by #3116), not this part's."
+ }
+}
