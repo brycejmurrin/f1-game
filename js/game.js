@@ -4581,7 +4581,7 @@ function update(dt) {
   // LAST physics step of a frame only: each call is a setTargetAtTime insertion
   // on the audio thread, and a 2-5 step frame on a slow device paid them 2-5x
   // for values only the last step's survive. carSfx keeps every step (edges).
-  if (soundOn && player && _audioParamStep) {
+  PerfSpans.begin("audio"); if (soundOn && player && _audioParamStep) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0; _engArg.axStd = aStd(_engArg.ax);   // braking stays absolute; the pull rides driveTune.PACE
     _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad(); _engArg.tow = player.towing || 0;
@@ -4608,7 +4608,7 @@ function update(dt) {
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
     if (rivalAudio.emitFieldSfx) rivalAudio.emitFieldSfx(player);   // Radio r9: AI lock-up / slide squeal
-  }
+  } PerfSpans.end("audio");
   if (soundOn && player) carSfx.update(player);
 }
 
