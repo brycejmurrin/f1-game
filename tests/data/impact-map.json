@@ -15697,12 +15697,9 @@
     "js/ui/sheet-shape.js": {
       "classify": [
         "tests/specs/ui-resize.spec.js",
-        "tests/unit/sheetshape-density-scale.test.mjs",
-        "tests/unit/sheetshape-registry.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "classifyBody": [
-        "tests/unit/sheetshape-density-scale.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "classifyFit": [
@@ -15712,19 +15709,11 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "observe": [
-        "tests/unit/sheetshape-density-scale.test.mjs",
-        "tests/unit/sheetshape-keyboard.test.mjs",
-        "tests/unit/sheetshape-registry.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "reclassify": [
         "tests/specs/ui-resize.spec.js",
-        "tests/unit/sheetshape-density-scale.test.mjs",
-        "tests/unit/sheetshape-registry.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
-      ],
-      "watchKeyboard": [
-        "tests/unit/sheetshape-keyboard.test.mjs"
       ],
       "*": [
         "tests/specs/ui-scale.spec.js",

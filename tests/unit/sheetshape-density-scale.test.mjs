@@ -15,19 +15,12 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
-import { makeDom } from "../helpers/mini-dom.mjs";
+import { bootSheetShape } from "../helpers/sheetshape-boot.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function boot({ queuedFrames = false } = {}) {
-  const dom = makeDom();
   const props = new Map(); // el -> { compactAt, sheetScale, uiScale, padTop, padBottom }
 
-  class RO { observe() {} unobserve() {} disconnect() {} }
   const observers = [], frames = new Map(); let frameId = 0;
   class MO {
     constructor(fn) { this.fn = fn; observers.push(this); }
@@ -35,12 +28,8 @@ function boot({ queuedFrames = false } = {}) {
     disconnect() {}
   }
 
-  const sb = {
-    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet,
-    RegExp, Date, parseFloat, parseInt, isFinite, Infinity, NaN,
-    ResizeObserver: RO,
+  const { dom, sb } = bootSheetShape((dom) => ({
     MutationObserver: MO,
-    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
     getComputedStyle: (el) => {
       const p = props.get(el) || {};
       return {
@@ -51,8 +40,6 @@ function boot({ queuedFrames = false } = {}) {
           if (k === "--sheet-scale") return p.sheetScale || el.style.getPropertyValue(k);
           if (k === "--ui-scale") return el.style.getPropertyValue(k) || p.uiScale || "";
           if (k === "--fit-at") return p.fitAt || "";
-          if (k === "--pair-at" || k === "--rail-at" ||
-              k === "--pair-compact" || k === "--wide-at" || k === "--tall-at") return "";
           return "";
         },
         get zoom() { return p.uiScale || "1"; },
@@ -63,23 +50,13 @@ function boot({ queuedFrames = false } = {}) {
       const id = ++frameId; frames.set(id, fn); return id;
     },
     cancelAnimationFrame: (id) => frames.delete(id),
-    setTimeout: () => 1, clearTimeout: () => {},
-    addEventListener: () => {}, removeEventListener: () => {},
-    visualViewport: null,
-    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     // Host room 490; at UI SIZE 50% that is 980 own units (above 480+40).
-    innerWidth: 1000, innerHeight: 490, devicePixelRatio: 1,
-    document: dom.document,
+    innerWidth: 1000, innerHeight: 490,
     CssZoom: {
       of: (el) => (el && el.currentCSSZoom) || 1,
       localBox: (el) => ({ w: el.clientWidth || 0, h: el.clientHeight || 0 }),
     },
-  };
-  sb.window = sb;
-  sb.self = sb;
-  vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/sheet-shape.js"), "utf8"),
-    sb, { filename: path.join(ROOT, "js/ui/sheet-shape.js") });
+  }));
 
   const styleMutation = () => {
     for (const observer of observers)
