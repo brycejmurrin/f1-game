@@ -69,7 +69,12 @@ relayed this, measured by reviewer physics-1 in #2952 (64/68 files). I reproduce
 | `brake-cue` | 3 | 2 | 64 |
 | `cam-avoid` | 7 | 6 | 7 |
 
-The cost is one pause per script parse (a few ms each). The binding lasts one process only. It gives no help to
+The cost is one pause per script execution. That is small for a test that loads a handful of files, but large for
+vm-heavy suites: DEBUGGER-A measured `cam-avoid-vm` at 121 s with binding armed against 38 s without. #2967 therefore
+stops pause-binding after a budget of 300 executions (`vmPauseBudget`) and reports `vmPauses`.
+
+The instrumentation breakpoint must be armed at the "Break on start" pause. Arming it before
+`runIfWaitingForDebugger` hung Node (DEBUGGER-A, measured). Counts are per vm context. The binding lasts one process only. It gives no help to
 coverage, editors or `url` breakpoints, which is why the filename fix (R1/R2) is still worth doing. It is the right
 fallback for the MCP (R3).
 
