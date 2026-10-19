@@ -1051,7 +1051,7 @@
       "available": [
         "tests/specs/music-library.spec.js",
         "tests/unit/desktop-native.test.mjs",
-        "tests/unit/mobile-native-download.test.mjs"
+        "tests/unit/spotify-native.test.mjs"
       ],
       "bind": [
         "tests/unit/spotify-refresh.test.mjs"
@@ -1131,7 +1131,7 @@
       "status": [
         "tests/specs/music-library.spec.js",
         "tests/unit/desktop-native.test.mjs",
-        "tests/unit/mobile-native-download.test.mjs",
+        "tests/unit/spotify-native.test.mjs",
         "tests/unit/spotify-refresh.test.mjs"
       ],
       "toggle": [
@@ -2148,8 +2148,7 @@
         "tests/unit/body-attitude.test.mjs",
         "tests/unit/cam-avoid.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/flyby-shots.test.mjs",
-        "tests/unit/mirror-pass.test.mjs"
+        "tests/unit/flyby-shots.test.mjs"
       ]
     },
     "js/car/car-body-geom.js": {
@@ -4437,7 +4436,6 @@
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/duel.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
       "lookAtTo": [
@@ -4519,7 +4517,6 @@
         "tests/unit/helmets.test.mjs",
         "tests/unit/incident-gate.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -4533,8 +4530,8 @@
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs",
-        "tests/unit/mirror-pass.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -6112,9 +6109,6 @@
       "closePitWork": [
         "tests/unit/voice-pack.test.mjs"
       ],
-      "closeSettings": [
-        "tests/unit/key-binds.test.mjs"
-      ],
       "coast": [
         "tests/unit/car-fields-vm.test.mjs"
       ],
@@ -6352,10 +6346,9 @@
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/mirror-pass.test.mjs",
+        "tests/unit/mirror-pass-carbuild.test.mjs",
         "tests/unit/render-lighting-prep.test.mjs",
         "tests/unit/repo-size.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -6477,7 +6470,6 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -6590,6 +6582,8 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/incident-rpm.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/js-debugger-tracks.test.mjs",
+        "tests/unit/key-binds.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
@@ -7201,49 +7195,34 @@
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "getKeyMap": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "getPadMap": [
         "tests/unit/controller-profiles.test.mjs",
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
-      ],
-      "keyBindings": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "keyLabel": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "keysAreDefault": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
-      ],
-      "padBindings": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "padLabel": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "padsAreDefault": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "resetKeys": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "resetPad": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "rows": [
         "tests/unit/phone-pad.test.mjs",
@@ -7252,25 +7231,20 @@
       "setKeyBinding": [
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
       "setKeyMap": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "setPadBinding": [
         "tests/unit/controller-profiles.test.mjs",
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "setPadLabelMode": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "setPadMap": [
-        "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/input-bindings.test.mjs"
       ],
       "*": [
         "tests/unit/pad-haptics.test.mjs",
@@ -7290,7 +7264,6 @@
       ],
       "create": [
         "tests/unit/controller-profiles.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "replace": [
@@ -7306,7 +7279,6 @@
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -7315,7 +7287,6 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "flush": [
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "hapticsSupported": [
@@ -7352,26 +7323,26 @@
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "holdReleaseAll": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs"
       ],
       "holdReleasePointer": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs"
       ],
       "release": [
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "wireHold": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs"
       ],
       "wireTap": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs"
       ],
       "*": [
         "tests/unit/digital-steer.test.mjs",
@@ -7390,7 +7361,7 @@
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "beginAxisCapture": [
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
       "brakeLevel": [
@@ -7403,7 +7374,7 @@
       "braking": [
         "tests/specs/gamepad.spec.js",
         "tests/specs/touch-pedals.spec.js",
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
@@ -7413,8 +7384,7 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "calibratePad": [
-        "tests/unit/controller-profiles.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/controller-profiles.test.mjs"
       ],
       "clearDriveEdges": [
         "tests/unit/throttle-latch.test.mjs"
@@ -7467,6 +7437,7 @@
         "tests/specs/touch-steer.spec.js",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
@@ -7478,7 +7449,7 @@
       ],
       "getPadAxisMap": [
         "tests/unit/controller-profiles.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds-pad-menu.test.mjs"
       ],
       "init": [
         "tests/specs/gamepad.spec.js",
@@ -7512,7 +7483,7 @@
       "lookStick": [
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"
       ],
       "moveToward": [
@@ -7525,29 +7496,17 @@
         "tests/unit/throttle-latch.test.mjs"
       ],
       "padAxesAreDefault": [
-        "tests/unit/a11y-pwa-pass.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "padCapture": [
         "tests/unit/key-binds.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
-      "padPresent": [
-        "tests/unit/key-binds.test.mjs"
-      ],
-      "padRest": [
-        "tests/unit/key-binds.test.mjs"
-      ],
       "padRestStore": [
-        "tests/unit/controller-profiles.test.mjs",
-        "tests/unit/key-binds.test.mjs"
-      ],
-      "parkedPadPreview": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/controller-profiles.test.mjs"
       ],
       "pickPad": [
-        "tests/unit/a11y-pwa-pass.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "poll": [
         "tests/specs/gamepad.spec.js",
@@ -7556,6 +7515,7 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-pad.test.mjs",
@@ -7574,18 +7534,15 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "remoteEvent": [
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "remoteLost": [
         "tests/unit/controller-profiles.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "remoteSample": [
         "tests/specs/gamepad.spec.js",
         "tests/unit/controller-profiles.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"
       ],
@@ -7642,18 +7599,17 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "setPadDeadzone": [
         "tests/unit/digital-steer.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "setPadRest": [
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds-pad-menu.test.mjs"
       ],
       "setPadSaturation": [
         "tests/unit/digital-steer.test.mjs",
@@ -7667,9 +7623,6 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
-      ],
-      "setSteerExpo": [
-        "tests/unit/key-binds.test.mjs"
       ],
       "setSteerMode": [
         "tests/specs/gamepad.spec.js",
@@ -7718,7 +7671,6 @@
         "tests/specs/touch-steer.spec.js",
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/digital-steer.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
@@ -7732,6 +7684,7 @@
         "tests/specs/touch-buttons.spec.js",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/input-bindings.test.mjs",
+        "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
@@ -7740,6 +7693,7 @@
         "tests/specs/gamepad.spec.js",
         "tests/specs/touch-pedals.spec.js",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
@@ -7781,7 +7735,6 @@
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -9672,6 +9625,7 @@
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
@@ -9865,7 +9819,7 @@
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
         "tests/unit/wall-clamp.test.mjs"
@@ -9969,12 +9923,12 @@
     "js/physics/incident-sim.js": {
       "active": [
         "tests/unit/debris-step-skip.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs"
+        "tests/unit/mechanics-race-vm.test.mjs"
       ],
       "create": [
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
       ],
       "forceLaunch": [
@@ -9982,7 +9936,7 @@
       ],
       "notifyCar": [
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
       ],
       "notifyWall": [
@@ -9991,38 +9945,37 @@
       "owns": [
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs"
+        "tests/unit/mechanics-race-vm.test.mjs"
       ],
       "postStep": [
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
       ],
       "preStep": [
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
       ],
       "release": [
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs"
+        "tests/unit/mechanics-race-vm.test.mjs"
       ],
       "reset": [
         "tests/unit/debris-step-skip.test.mjs",
-        "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs"
+        "tests/unit/incident-gate.test.mjs"
       ],
       "setFlags": [
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
       ],
       "status": [
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
       ]
     },
@@ -10303,7 +10256,6 @@
       ],
       "create": [
         "tests/unit/director.test.mjs",
-        "tests/unit/mirror-pass.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
@@ -10359,7 +10311,8 @@
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "*": [
-        "tests/specs/hud-mirror.spec.js"
+        "tests/specs/hud-mirror.spec.js",
+        "tests/unit/mirror-pass.test.mjs"
       ]
     },
     "js/race/car-fields.js": {
@@ -10771,7 +10724,6 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "create": [
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -10800,7 +10752,6 @@
       ],
       "info": [
         "tests/specs/pit-lane.spec.js",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -11055,7 +11006,7 @@
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
@@ -11128,7 +11079,6 @@
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/incident-gate.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/race-control.test.mjs",
@@ -11162,7 +11112,7 @@
       ],
       "update": [
         "tests/unit/driving-coach.test.mjs",
-        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/race-control.test.mjs",
         "tests/unit/race-radio.test.mjs",
@@ -11250,7 +11200,6 @@
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
         "tests/unit/event-journal.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
@@ -11298,6 +11247,9 @@
         "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
+      ],
+      "*": [
+        "tests/unit/key-binds.test.mjs"
       ]
     },
     "js/race/race-settings.js": {
@@ -12560,50 +12512,29 @@
       ]
     },
     "js/render/shared/mirror-pass.js": {
-      "cancelPreparation": [
-        "tests/unit/mirror-pass.test.mjs"
-      ],
-      "chip": [
-        "tests/unit/key-binds.test.mjs"
-      ],
       "create": [
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/key-binds.test.mjs",
-        "tests/unit/mirror-pass.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "pose": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "prepareRace": [
-        "tests/unit/mirror-pass.test.mjs"
-      ],
       "render": [
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/key-binds.test.mjs",
         "tests/unit/mirror-pass.test.mjs"
       ],
       "setMode": [
         "tests/unit/mirror-pass.test.mjs"
       ],
-      "setSubject": [
-        "tests/unit/mirror-pass.test.mjs"
-      ],
-      "side": [
-        "tests/unit/mirror-pass.test.mjs"
-      ],
       "softGpu": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "standDown": [
-        "tests/unit/mirror-pass.test.mjs"
-      ],
       "toggle": [
-        "tests/unit/field-lod.test.mjs",
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/field-lod.test.mjs"
       ],
       "*": [
+        "tests/unit/key-binds.test.mjs",
         "tests/unit/mirror-lights.test.mjs"
       ]
     },
@@ -14933,15 +14864,6 @@
       ]
     },
     "js/ui/key-binds.js": {
-      "create": [
-        "tests/unit/key-binds.test.mjs"
-      ],
-      "disarmAll": [
-        "tests/unit/key-binds.test.mjs"
-      ],
-      "render": [
-        "tests/unit/key-binds.test.mjs"
-      ],
       "section": [
         "tests/unit/store-registry.test.mjs"
       ],
@@ -15171,11 +15093,11 @@
     },
     "js/ui/onboard.js": {
       "create": [
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/onboard.test.mjs"
       ],
       "fire": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs"
       ],
       "load": [
         "tests/unit/onboard.test.mjs"
@@ -15184,11 +15106,11 @@
         "tests/unit/onboard.test.mjs"
       ],
       "state": [
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/onboard.test.mjs"
       ],
       "tick": [
-        "tests/unit/key-binds.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/onboard.test.mjs"
       ]
     },
