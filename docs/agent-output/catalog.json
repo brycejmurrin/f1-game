@@ -589,6 +589,7 @@
     {
       "path": "tools/check/vm-filename-lint.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node"
     },
     {
