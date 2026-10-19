@@ -1,0 +1,1 @@
+1792437559	Bryce Murrin	TOOLS: report collector robustness; owned tools/mcp/report-server.mjs and existing report-server tests only; no MCP adapter, gateway, census, browser integration or CI source edits  [cursor/tool-evidence-7c91; session eeacfbf3e4c14d54192a4f14]
