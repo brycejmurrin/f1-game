@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_011ZtW8yzM3F7YpVJwrKHhwT OrchB 8 LIVE session_011ZtW8yzM3F7YpVJwrKHhwT succeeds OrchB 7 session_01H8VtkpzfE5KwDeid2n46At for Fleet B — sole Fleet B orchestrator
+HANDOFF to:claude:session_01MQVTPLSi3hPtVi3b29w3YH from:claude:session_01SSLMn3GuV1oZoGfzakD68k NEW-PR 3143 [A·W6·L22] #1628 wheel state draft c2505372; verifying (tooling-fast, physics-characterization spec next). send_message to ORCH18 failed: session_inactive.
