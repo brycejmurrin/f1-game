@@ -1510,3 +1510,33 @@ test("factory savings uses rounded quotes, owned-all zero and cash forecast owne
   data.owned = ["one", "two"]; assert.equal(p.factory().savings, 0);
   data.flavour = "driver"; assert.equal(p.cash(50).wages, 0);
 });
+
+test("sponsor quotes preserve finale windows and selected settlement terms", () => {
+  const seen = new Set();
+  for (const seed of [1, 3, 7, 12]) for (const length of [1, 2, 3, 5, 8, 24]) {
+    const Career = load(length); Career.start({ flavour: "myteam", seed }); Career.engage(true);
+    const data = Career.data(), planning = Career.planning();
+    for (let round = 0; round < length; round++) {
+      data.season.round = round;
+      for (const pick of [0, 1]) {
+        const window = Career.sponsorAt(round);
+        data.sponsorPicks = { [data.year + ":" + window.idx]: pick };
+        const before = JSON.stringify(data);
+        const offers = planning.sponsorOffers(), sp = Career.sponsorAt(round);
+        const selected = offers[pick]; seen.add(sp.type);
+        assert.equal(offers.length, 2);
+        assert.equal(selected.chosen, true);
+        assert.equal(selected.type, sp.type);
+        assert.equal(selected.window, sp.window);
+        assert.equal(selected.pay, sp.pay);
+        assert.equal(selected.value, sp.need);
+        assert.equal(selected.label, sp.label);
+        assert.ok(sp.end < length);
+        assert.equal(JSON.stringify(data), before, "quoting never mutates picks or the save");
+      }
+    }
+    data.season.round = length;
+    assert.deepEqual(JSON.parse(JSON.stringify(planning.sponsorOffers())), []);
+  }
+  assert.deepEqual([...seen].sort(), ["clean", "double", "finishes", "points"]);
+});

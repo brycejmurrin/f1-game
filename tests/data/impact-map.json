@@ -3631,6 +3631,9 @@
       "sponsorAt": [
         "tests/unit/career-settle.test.mjs"
       ],
+      "sponsorOffers": [
+        "tests/unit/career-settle.test.mjs"
+      ],
       "start": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",

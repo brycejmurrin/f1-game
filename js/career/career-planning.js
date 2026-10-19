@@ -100,26 +100,7 @@ const CareerPlanning = (function () {
       }
       return { name: next.name, seasons: Regulations.seasonsLeft(elapsed), changes };
     }
-    function sponsorOffers() {
-      const sp = api().sponsor();
-      if (!sp || !c()) return [];
-      // Derive both from original seed selection. Never temporarily mutate a live pick.
-      const picks = c().sponsorPicks || {};
-      const chosen = picks[key(sp.idx)] === 1 ? 1 : 0;
-      let start = 0, idx = 0, kind;
-      while (start <= c().season.round) {
-        kind = api().SPONSOR_KINDS[Math.min(api().SPONSOR_KINDS.length - 1,
-          Math.floor(api().rnd(c().year, "spon", idx) * api().SPONSOR_KINDS.length))];
-        if (start + kind.window > c().season.round) break;
-        start += kind.window; idx++;
-      }
-      const team = Teams.LIST.find((t) => t.id === c().team) || { tier: 2 };
-      return [kind, api().SPONSOR_KINDS[(api().SPONSOR_KINDS.indexOf(kind) + 1) % api().SPONSOR_KINDS.length]].map((k, i) => {
-        const value = k.type === "clean" ? sp.window : Math.max(1, Math.ceil(k.value(team) * sp.window / k.window));
-        return { i, chosen: i === chosen, type: k.type, value, window: sp.window,
-          pay: Math.round(k.pay * sp.window / k.window), label: api().sponsorLabel({ type: k.type, value, window: sp.window }) };
-      });
-    }
+    function sponsorOffers() { return ctx.sponsorOffers(); }
     function chooseSponsor(i) {
       const sp = api().sponsor();
       if (!c() || ctx.blocked() || !sp || c().season.round !== sp.start || api().objectiveLocked() || (i !== 0 && i !== 1)) return false;

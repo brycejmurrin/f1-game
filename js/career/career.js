@@ -999,7 +999,13 @@ function sponsorLabel(sp) {
   return f ? f(sp.value, sp.window) : "";
 }
 
-function sponsorAt(round) {
+// Offer terms use the base window even when an alternate kind has a different
+// nominal length. The seeded settlement retains its historic clean value.
+function sponsorTerms(kind, window, target) {
+  return { value: kind.type === "clean" ? window : Math.max(1, Math.ceil(target * window / kind.window)),
+    pay: Math.round(kind.pay * window / kind.window) };
+}
+function sponsorWindow(round) {
   if (!career || career.flavour !== "myteam") return null;
   const team = teamOf(career.team) || { tier: 2 };
   // Which window that round falls in. Windows tile the season from round 0.
@@ -1023,11 +1029,33 @@ function sponsorAt(round) {
   const full = kind.value(team);
   const value = part < 1 && kind.type !== "clean" ? Math.max(1, Math.ceil(full * part)) : full;
   const pay = part < 1 ? Math.round(kind.pay * part) : kind.pay;
+  const base = kind;
   const selected = career.sponsorPicks && career.sponsorPicks[career.year + ":" + idx];
   if (selected === 1) kind = SPONSOR_KINDS[(SPONSOR_KINDS.indexOf(kind) + 1) % SPONSOR_KINDS.length];
   const target = kind.value(team);
-  const selectedValue = selected === 1 ? (kind.type === "clean" ? window : Math.max(1, Math.ceil(target * window / kind.window))) : value;
-  const selectedPay = selected === 1 ? Math.round(kind.pay * window / kind.window) : pay;
+  const terms = selected === 1 ? sponsorTerms(kind, window, target) : { value, pay };
+  const selectedValue = terms.value, selectedPay = terms.pay;
+  return { kind, base, window, start, idx, value: selectedValue, pay: selectedPay };
+}
+function sponsorOffers() {
+  // Keep the active-window gate (including the finale) shared with sponsor().
+  const sp = sponsor();
+  if (!sp || !career) return [];
+  const quote = sponsorWindow(career.season.round);
+  const chosen = career.sponsorPicks && career.sponsorPicks[career.year + ":" + sp.idx] === 1 ? 1 : 0;
+  // The window belongs to the seeded base kind, even for the alternate offer.
+  const base = quote.base;
+  const team = teamOf(career.team) || { tier: 2 };
+  return [base, SPONSOR_KINDS[(SPONSOR_KINDS.indexOf(base) + 1) % SPONSOR_KINDS.length]].map((k, i) => {
+    const { value, pay } = sponsorTerms(k, sp.window, k.type === "clean" ? sp.window : k.value(team));
+    return { i, chosen: i === chosen, type: k.type, value, window: sp.window,
+      pay, label: sponsorLabel({ type: k.type, value, window: sp.window }) };
+  });
+}
+function sponsorAt(round) {
+  const quote = sponsorWindow(round);
+  if (!quote) return null;
+  const { kind, window, start, idx, value: selectedValue, pay: selectedPay } = quote;
   const rows = (career.results || []).filter((r) => r.r >= start && r.r < start + window);
   let done = 0;
   for (const r of rows) {
@@ -1916,7 +1944,7 @@ function adoptCalendar(c, explicit) {
 function planning() {
   if (typeof CareerPlanning === "undefined") return null;
   return CareerPlanning.create({
-    data: () => career, blocked, save, api: () => Career,
+    data: () => career, blocked, save, api: () => Career, sponsorOffers,
     raw: () => store.raw ? store.raw(liveSlotKey()) : null,
     protection: () => calendarProtection, revision: currentRevision, armed: () => careerRevision,
     adopt: () => {
