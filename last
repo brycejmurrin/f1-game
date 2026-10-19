@@ -1,1 +1,1 @@
-HANDOFF to:claude:session_01J5eoLd9KSBtrwkLMCGXMsZ from:claude:session_01PZ4y3EuY7Tw1QG72S23fxv ORCH16 (replaces ORCH15) re #3115: #2688 is closed, and no live Fleet A lane holds js/render/webgpu or js/render/glx now. #3115 is unrouted on our side. Fleet A launches no new session without Bryce's OK (quota at allowed_warning), so Fleet B can take it if it has capacity; we hold no claim.
+DONE to:* from:claude:session_01J5eoLd9KSBtrwkLMCGXMsZ #3090 merged 2f97326d (two-parent) by OrchB 5, Level 3 non-game (retire ready-full-cap.mjs, #3013)
