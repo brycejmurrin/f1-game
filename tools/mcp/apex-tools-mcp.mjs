@@ -2861,7 +2861,8 @@ function compactSchema(spec, depth = 0, dense = false, required = false) {
   if (!spec || typeof spec !== "object") return spec;
   const out = {};
   for (const [k, v] of Object.entries(spec)) {
-    if (k === "description" && typeof v === "string") out[k] = cutAt(v, PROP_KEEP);
+    if (k === "description" && dense) continue;   // apex_help retains property prose
+    else if (k === "description" && typeof v === "string") out[k] = cutAt(v, PROP_KEEP);
     else if (k === "properties" && depth >= 1 && v && typeof v === "object") continue;   // nested object body: apex_help
     else if (k === "properties" && v && typeof v === "object") out[k] = Object.fromEntries(Object.entries(v).map(([n, p]) => [n, compactSchema(p, depth + 1, dense, (spec.required || []).includes(n))]));
     else if (k === "items") out[k] = compactSchema(v, depth, dense);
@@ -2883,24 +2884,15 @@ function compactOutput(schema) {
   const properties = Object.fromEntries(Object.entries(schema.properties || {}).filter(([k]) => !ENVELOPE_KEYS.includes(k)));
   return { ...schema, properties };
 }
-/** A tool whose compact schema still tops 1.5 KB also drops numeric/array/string bounds from the published copy. */
+/** Schemas over 1.5 KB omit property prose and bounds; apex_help retains both. */
 function denseSchema(t) {
   const plain = compactSchema(t.inputSchema);
   return JSON.stringify(plain).length > 1500 ? compactSchema(t.inputSchema, 0, true) : plain;
 }
-// Tools that landed after the 55 KB tools/list ceiling. Full parameters stay in apex_help
-// and in validateArgs; the published copy keeps only required fields so a session start stays under the cap.
-const HELP_ONLY_PUBLISHED = new Set([
-  "apex_diagnostics", "apex_ui_inspect", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan",
-  "apex_viewer",
-]);
+// Every accepted top-level input must remain discoverable: with additionalProperties:false,
+// omitting an optional property prevents schema-aware clients from sending it at all.
 function publishedInputSchema(t) {
-  const schema = denseSchema(t);
-  if (!HELP_ONLY_PUBLISHED.has(t.name)) return schema;
-  const req = schema.required || [];
-  const properties = {};
-  for (const k of req) if (schema.properties?.[k]) properties[k] = schema.properties[k];
-  return { type: "object", additionalProperties: false, ...(req.length ? { required: req } : {}), properties };
+  return denseSchema(t);
 }
 function listTools(compact = true) {
   return CATALOG.map((t) => compact ? ({

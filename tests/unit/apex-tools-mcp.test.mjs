@@ -2287,6 +2287,86 @@ test("tools/list stays compact and apex_help returns the full text it shortens",
   assert.equal(miss.isError, true);
 });
 
+test("tools/list preserves every accepted top-level input for compact discovery tools", () => {
+  const names = ["apex_diagnostics", "apex_ui_inspect", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan", "apex_viewer"];
+  const out = rpc([
+    { jsonrpc: "2.0", id: "list", method: "tools/list" },
+    ...names.flatMap((tool) => [
+      { jsonrpc: "2.0", id: tool, method: "tools/call", params: { name: "apex_help", arguments: { tool } } },
+      { jsonrpc: "2.0", id: `${tool}:unknown`, method: "tools/call", params: { name: tool, arguments: { unsupportedDiscoveryInput: true } } },
+    ]),
+  ]);
+  const listed = out.find((m) => m.id === "list").result;
+  assert.ok(Buffer.byteLength(JSON.stringify(listed)) < 55000, "retain the discovery byte budget");
+  // A small schema-aware client: exercise the published constraints, without invoking
+  // browser tools or confusing a handler's business rules with JSON-schema admission.
+  function accepts(value, spec) {
+    if (spec.anyOf && !spec.anyOf.some((part) => accepts(value, part))) return false;
+    if (Object.hasOwn(spec, "const") && value !== spec.const) return false;
+    if (spec.enum && !spec.enum.includes(value)) return false;
+    const type = Array.isArray(value) ? "array" : value === null ? "null" : typeof value;
+    if (spec.type && !(Array.isArray(spec.type) ? spec.type : [spec.type]).some((t) => t === type || t === "integer" && Number.isInteger(value))) return false;
+    if (typeof value === "number" && (spec.minimum != null && value < spec.minimum || spec.maximum != null && value > spec.maximum || spec.exclusiveMinimum != null && value <= spec.exclusiveMinimum || spec.exclusiveMaximum != null && value >= spec.exclusiveMaximum)) return false;
+    if (typeof value === "string" && (spec.minLength != null && value.length < spec.minLength || spec.maxLength != null && value.length > spec.maxLength || spec.pattern && !new RegExp(spec.pattern).test(value))) return false;
+    if (Array.isArray(value)) {
+      if (spec.minItems != null && value.length < spec.minItems || spec.maxItems != null && value.length > spec.maxItems) return false;
+      if (spec.uniqueItems && new Set(value.map((v) => JSON.stringify(v))).size !== value.length) return false;
+      if (spec.items && !value.every((v) => accepts(v, spec.items))) return false;
+    } else if (value && typeof value === "object") {
+      if ((spec.required || []).some((key) => !Object.hasOwn(value, key))) return false;
+      for (const [key, v] of Object.entries(value)) {
+        if (!Object.hasOwn(spec.properties || {}, key)) {
+          if (spec.additionalProperties === false) return false;
+        } else if (!accepts(v, spec.properties[key])) return false;
+      }
+    }
+    return true;
+  }
+  function sample(spec) {
+    if (spec.enum) return spec.enum[0];
+    if (spec.type === "boolean") return false;
+    if (spec.type === "integer" || spec.type === "number") return spec.minimum ?? (spec.exclusiveMinimum != null ? spec.exclusiveMinimum + 1 : 0);
+    if (spec.type === "array") return Array.from({ length: spec.minItems || 0 }, () => sample(spec.items || {}));
+    if (spec.type === "object") return Object.fromEntries((spec.required || []).map((key) => [key, sample(spec.properties[key])]));
+    return "x".repeat(spec.minLength || 1);
+  }
+  for (const name of names) {
+    const published = listed.tools.find((tool) => tool.name === name).inputSchema;
+    const full = out.find((m) => m.id === name).result.structuredContent.inputSchema;
+    assert.deepEqual(Object.keys(published.properties).sort(), Object.keys(full.properties).sort(), `${name}: optional inputs remain discoverable`);
+    assert.deepEqual(published.required || [], full.required || [], `${name}: required inputs retained`);
+    assert.equal(published.additionalProperties, false, name);
+    const base = sample(full);
+    for (const [key, spec] of Object.entries(full.properties)) {
+      const values = spec.enum ? [...spec.enum] : [sample(spec)];
+      if (spec.minimum != null) values.push(spec.minimum);
+      if (spec.maximum != null) values.push(spec.maximum);
+      for (const value of values) {
+        const args = { ...base, [key]: value };
+        assert.ok(accepts(args, full), `${name}.${key}: fixture is valid against the full schema`);
+        assert.ok(accepts(args, published), `${name}.${key}: valid full-schema value ${JSON.stringify(value)} survives discovery`);
+      }
+      const advertised = published.properties[key];
+      if (advertised.enum) {
+        assert.deepEqual(advertised.enum, spec.enum, `${name}.${key}: advertised enum stays accurate`);
+        assert.equal(accepts({ ...base, [key]: "unsupported-enum-value" }, published), false, `${name}.${key}: advertised enum rejects invalid values`);
+      }
+      if (advertised.minimum != null) assert.equal(accepts({ ...base, [key]: advertised.minimum - 1 }, published), false, `${name}.${key}: advertised minimum rejects values below it`);
+      if (advertised.maximum != null) assert.equal(accepts({ ...base, [key]: advertised.maximum + 1 }, published), false, `${name}.${key}: advertised maximum rejects values above it`);
+      for (const bound of ["minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems"]) {
+        if (advertised[bound] != null) assert.equal(advertised[bound], spec[bound], `${name}.${key}.${bound}`);
+      }
+    }
+    for (const key of published.required || []) {
+      const missing = { ...base };
+      delete missing[key];
+      assert.equal(accepts(missing, published), false, `${name}: missing ${key} rejected`);
+    }
+    assert.equal(accepts({ ...base, unsupportedDiscoveryInput: true }, published), false, `${name}: client rejects unknown keys`);
+    assert.equal(out.find((m) => m.id === `${name}:unknown`).result.isError, true, `${name}: server still rejects unknown keys`);
+  }
+});
+
 test("tool descriptions state the host ceiling and the per-call boot (#2673)", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
   assert.match(src, /name: "apex_job_status"[\s\S]{0,400}~120 s/);

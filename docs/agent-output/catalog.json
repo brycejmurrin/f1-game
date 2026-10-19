@@ -5594,7 +5594,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 170221,
+      "sourceBytes": 169771,
       "outputPolicy": "targeted-summary",
       "outputContract": "isError, structuredContent/text agreement, images/resources, classified exit 2/124",
       "doc": "Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock).",

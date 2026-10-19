@@ -78,6 +78,34 @@ test("a synchronous scenery preparation failure releases the pending latch", asy
   assert.equal(await p2, true);
 });
 
+test("same-turn cancellation skips preparation and its side effects", async () => {
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  const calls = [];
+  const pending = entry.begin("quali", "old", () => calls.push("prepare"),
+    () => calls.push("commit"), () => true, () => calls.push("recover"));
+  entry.cancel();
+  const outcome = await pending.outcome;
+  assert.equal(outcome.kind, "canceled");
+  assert.equal(outcome.reason, "superseded");
+  assert.deepEqual(calls, []);
+  const fresh = entry.begin("race", "new", () => calls.push("fresh prepare"), () => "fresh", () => true);
+  assert.equal(await fresh, "fresh");
+  assert.deepEqual(calls, ["fresh prepare"]);
+});
+
+test("same-turn replacement prepares and commits only the newest session", async () => {
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  const calls = [];
+  const stale = entry.begin("quali", "old", () => calls.push("stale prepare"),
+    () => calls.push("stale commit"), () => true, () => calls.push("stale recover"));
+  const fresh = entry.begin("quali", "new", () => calls.push("fresh prepare"),
+    () => { calls.push("fresh commit"); return "fresh"; }, () => true);
+  assert.strictEqual(entry.begin("quali", "new", () => calls.push("duplicate prepare"), () => "duplicate", () => true), fresh);
+  assert.equal((await stale.outcome).reason, "superseded");
+  assert.equal(await fresh, "fresh");
+  assert.deepEqual(calls, ["fresh prepare", "fresh commit"]);
+});
+
 test("recover runs for changed settings and for a throw, never for a superseded request", async () => {
   const entry = vm.runInContext("SessionEntry", g.ctx).create();
   const seen = [];
