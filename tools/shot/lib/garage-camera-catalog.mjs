@@ -16,7 +16,31 @@ export const CAM_ALIAS = {
   bayFront: "front:0.32pi,0.28,9.4",   // opposite diagonal, same left flank
 };
 
+// Room inspection uses the same orbit contract as car close-ups. Author an
+// eye/look pair once, then expose ordinary az/el/dist/target so CLI axes and
+// persistent garage sessions can override each component without a new rig.
+function roomStation(eye, target, subject, purpose) {
+  const [dx, dy, dz] = eye.map((n, i) => n - target[i]);
+  const dist = Math.hypot(dx, dy, dz);
+  return { view: "hero", az: Math.atan2(dx, dz), el: Math.asin(dy / dist),
+    dist, target, lamp: "off", clamp: false, subject, purpose };
+}
+
 export const STATIONS = {
+  // Equipment targets live against the walls; car-centred hero/front/rear
+  // cannot show their mounting, floor contact and storage clearances clearly.
+  toolWall: roomStation([2.5, 1.6, -0.5], [4.9, 0.9, -1.7],
+    "Tool cabinets and wall-mounted wheel guns", "Check drawers, handles and tool mounting above the cabinet tops."),
+  serviceCorner: roomStation([2, 1.8, 3.3], [4.4, 0.8, 4.5],
+    "Fluid service rig, inspection dolly and spare tyres", "Check floor contact and parking clearances in the door corner."),
+  safetyStation: roomStation([-2.5, 1.4, -2.2], [-4.65, 0.4, -3.7],
+    "Extinguishers, cooling fan, starter cart and tyre trolleys", "Check safety equipment, castors and aisle-facing details."),
+  engineerDesk: roomStation([-2.1, 1.8, 2.2], [-5.0, 1.5, 0.6],
+    "Engineer desk and monitor bank", "Check desk legs, work surface and monitor arrangement."),
+  roomBack: roomStation([-3.9, 2.5, 4.5], [0, 1.25, -1.2],
+    "Whole bay toward the back wall", "Review back-wall signage, ceiling and both equipment aisles."),
+  roomDoor: roomStation([3.9, 2.5, -4.5], [0, 1.25, 1.2],
+    "Whole bay toward the garage door", "Review the opposite side, entrance and storage in context."),
   // crown / SPINE TOP, read top-down nose-up the way the chase camera does
   spineTop:  { view: "rear",      az: 0.92 * Math.PI, el: 0.72, dist: 3.2, target: [0, 0.9, -0.85], lamp: "off", clamp: false },
   // flank / SPINE SIDE at shoulder height, the sidepod line in frame
