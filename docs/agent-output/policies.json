@@ -546,6 +546,11 @@
       "presentation": "native",
       "preserve": "No SWEEP when pending/red/open Plan; trigger IDs; gate/CI exits"
     },
+    "tools/ci/inputs-hash.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Hash/key output consumed by ci.yml cache lookups; exit status and the printed key must stay byte-stable"
+    },
     "tools/ci/junit-failed.mjs": {
       "action": "protocol-only",
       "presentation": "native",
@@ -1665,6 +1670,21 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Unknown bindings, setup-versus-navigation limitation, truncation totals"
+    },
+    "tools/mcp/workflow-harness-client.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Exact call envelope, semantic exit status, quiet-mode failures, source/path limits and endpoint authentication."
+    },
+    "tools/mcp/workflow-harness-core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/mcp/workflow-harness.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Authenticated HTTP request/response envelopes, endpoint identity, budgets, transcript records and shutdown cleanup."
     },
     "tools/net/nostr-local.cjs": {
       "action": "keep-native",

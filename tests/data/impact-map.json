@@ -168,6 +168,7 @@
       ],
       "*": [
         "tests/specs/camera-driving-hooks.spec.js",
+        "tests/specs/car-effects.spec.js",
         "tests/specs/collisions-deep.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/scenery-kits.spec.js",
@@ -2627,7 +2628,9 @@
     },
     "js/car/custom-liveries.js": {
       "create": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "pickLivery": [
@@ -2637,9 +2640,11 @@
         "tests/unit/team-livery.test.mjs"
       ],
       "saveLiveryId": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setCustomLiveries": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setIdentityValue": [
@@ -2652,7 +2657,8 @@
         "tests/unit/body-styles.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/share-code.test.mjs"
       ]
     },
     "js/car/field-lod.js": {
@@ -2849,6 +2855,7 @@
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -4391,6 +4398,7 @@
         "tests/unit/reliability.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
+        "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
         "tests/unit/track-foundation.test.mjs",
         "tests/unit/track-line.test.mjs",
@@ -4573,6 +4581,7 @@
         "tests/unit/weather-blend.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs",
+        "tests/unit/wheel-state.test.mjs",
         "tests/unit/wind-speed.test.mjs",
         "tests/unit/wind.test.mjs",
         "tests/unit/xr-cull-union.test.mjs",
@@ -5092,6 +5101,7 @@
     "js/data/settings-defaults.js": {
       "*": [
         "tests/specs/debris.spec.js",
+        "tests/unit/debris-opts.test.mjs",
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/i18n.test.mjs",
@@ -6611,6 +6621,7 @@
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tolerance-diff.test.mjs",
+        "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/track-foundation.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs"
@@ -7552,6 +7563,7 @@
         "tests/specs/gamepad.spec.js"
       ],
       "remoteActive": [
+        "tests/specs/gamepad.spec.js",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -7566,12 +7578,14 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "remoteSample": [
+        "tests/specs/gamepad.spec.js",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"
       ],
       "remoteSteers": [
+        "tests/specs/gamepad.spec.js",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
@@ -9823,6 +9837,7 @@
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs",
+        "tests/unit/wheel-state.test.mjs",
         "tests/unit/wind.test.mjs",
         "tests/unit/yaw-damp-speed.test.mjs",
         "tests/unit/yaw-low-speed-substep.test.mjs"
@@ -10211,7 +10226,8 @@
       ],
       "*": [
         "tests/unit/pick-tests.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
       ]
     },
     "js/physics/wall-clamp.js": {
@@ -10226,6 +10242,20 @@
     "js/physics/wall-end-face.js": {
       "apply": [
         "tests/unit/wall-clamp.test.mjs"
+      ]
+    },
+    "js/physics/wheel-state.js": {
+      "axleStep": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "enabled": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "stepPlayer": [
+        "tests/unit/wheel-state.test.mjs"
       ]
     },
     "js/race/announce-banner.js": {
@@ -11369,6 +11399,7 @@
       "*": [
         "tests/unit/engineer.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs"
       ]
     },
@@ -11784,6 +11815,7 @@
       ],
       "endSession": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/storm-weather.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "planFor": [
@@ -11827,7 +11859,8 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "viewWetness": [
-        "tests/unit/rain-cells.test.mjs"
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "weather": [
         "tests/unit/weather-blend.test.mjs"
@@ -11842,7 +11875,8 @@
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "wetnessAt": [
-        "tests/unit/rain-cells.test.mjs"
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ]
     },
     "js/race/wind.js": {

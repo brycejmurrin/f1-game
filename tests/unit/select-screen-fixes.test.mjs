@@ -70,6 +70,8 @@ function boot(disk = {}, o = {}) {
   let built = 0;
   const G = {
     $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {},
+    getLiveryId: (id) => store.get("livery." + id, "default"),
+    getLiveries: (team) => [{ id: "default", c1: team.color, c2: team.color2 }].concat(store.get("livery.custom." + team.id, [])),
     els: { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
       selCircuitLabel: $("sel-circuit-label"), selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
       selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"), selPreviewRec: $("sel-preview-rec"), selTeams },
