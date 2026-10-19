@@ -112,9 +112,9 @@
     "46"
    ],
    [
-    "Rear-wing band and endplates (number)",
-    "68.5",
-    "47"
+    "Rear-wing upper flap (sponsor band) and endplates (number)",
+    "67",
+    "43"
    ]
   ],
   "proposed": [
@@ -126,7 +126,8 @@
     "what": "Driver name or three-letter code with a small flag, on the chassis side between the halo and the sidepod.",
     "precedent": "Every current car carries the driver's name or code here, next to the cockpit.",
     "effort": "Low: one flat decal quad like the existing sidepod panel decal, plus a new atlas region.",
-    "view": "Side, garage, broadcast"
+    "view": "Side, garage, broadcast",
+    "status": "built"
    },
    {
     "id": "haloTop",
@@ -136,7 +137,19 @@
     "what": "A sponsor wordmark or colour band along the top of the halo.",
     "precedent": "McLaren sold its halo to Gandys at the 2018 Australian GP; Force India then ran Havaianas there.",
     "effort": "Medium: the halo is a tube, so the decal needs its own UV strip along it.",
-    "view": "Chase camera (always in view), front"
+    "view": "Chase camera (always in view), front",
+    "status": "built"
+   },
+   {
+    "id": "podTop",
+    "label": "Sidepod top",
+    "x": "45",
+    "y": "50",
+    "what": "The main sponsor along the sidepod's upper face, read from the chase camera and from above.",
+    "precedent": "McLaren and Ferrari put their biggest sponsor here.",
+    "effort": "Low: a strip on the pod's upper face, from the same pod stations as the side panel.",
+    "view": "Chase camera, above",
+    "status": "built"
    },
    {
     "id": "floorEdge",
@@ -146,7 +159,8 @@
     "what": "A long thin wordmark or accent line along the visible floor edge under the sidepod.",
     "precedent": "Common secondary-sponsor spot on 2022\u20132026 cars.",
     "effort": "Low: a strip quad on the floor edge.",
-    "view": "Side, broadcast"
+    "view": "Side, broadcast",
+    "status": "not built: ride height moves the floor, so a decal would float or sink"
    },
    {
     "id": "noseTip",
@@ -156,48 +170,66 @@
     "what": "Paint the nose tip a contrast colour, or carry a small mark there.",
     "precedent": "2026 cars paint the tip deliberately (Alpine dark blue, Red Bull red), per the 2026 livery reference note.",
     "effort": "Low: a colour zone on the existing nose mesh; no new atlas region.",
-    "view": "Front, chase (far)"
-   },
-   {
-    "id": "airbox",
-    "label": "Airbox surround",
-    "x": "41.5",
-    "y": "35",
-    "what": "A ring of colour or a small mark around the roll-hoop intake above the driver.",
-    "precedent": "Teams often colour the intake lip or put a mark on the roll hoop.",
-    "effort": "Low\u2013medium: a colour zone, or a decal on the hoop's front face.",
-    "view": "Front, chase, onboard"
-   },
-   {
-    "id": "mirrors",
-    "label": "Mirror housings",
-    "x": "31",
-    "y": "46",
-    "what": "Mirror housings in the accent colour, or a tiny mark on the back of each.",
-    "precedent": "Teams may mount mirrors on the halo (FIA technical directive, 2018); housings are often painted as accents.",
-    "effort": "Low: a colour zone; marks would be too small to read on a phone.",
-    "view": "Onboard, close-ups"
-   },
-   {
-    "id": "drsFlap",
-    "label": "Rear-wing flap top",
-    "x": "66",
-    "y": "40.5",
-    "what": "A wordmark on the top flap, read from the chase camera.",
-    "precedent": "A common spot for the team name or main sponsor.",
-    "effort": "Low\u2013medium: the flap moves (active aero), so the decal must follow it.",
-    "view": "Chase camera (always in view)"
-   },
-   {
-    "id": "wheelCovers",
-    "label": "Wheel covers",
-    "x": "13",
-    "y": "55.5",
-    "what": "A ring or accent on the wheel cover face.",
-    "precedent": "Teams colour wheel-cover rims in team colours.",
-    "effort": "Medium, and it's the wheels lane (D4); would need to be coordinated with them.",
-    "view": "Side, garage"
+    "view": "Front, chase (far)",
+    "status": "built"
    }
+  ],
+  "backlog": [
+   [
+    "fwFlapTop",
+    "Front-wing flap tops",
+    "Sponsor text spanning the flaps (Petronas, Aramco). Must ride the moving active-aero flaps."
+   ],
+   [
+    "rwEndplateInner",
+    "Rear endplate inner face",
+    "Team or sponsor name facing the chase and onboard cameras."
+   ],
+   [
+    "tyreSidewall",
+    "Tyre sidewall",
+    "Tyre-supplier wordmark on the tyre wall (the compound ring exists)."
+   ],
+   [
+    "wakeboardFace",
+    "Bargeboard / floor board",
+    "Team or sponsor logo low ahead of the sidepod."
+   ],
+   [
+    "headrestPad",
+    "Headrest pads",
+    "Small sponsor or driver flag, seen from the chase and onboard views."
+   ],
+   [
+    "tcamCode",
+    "T-camera pod",
+    "A stripe or number on the highest point of the car (its colour is already a livery pick)."
+   ],
+   [
+    "brakeDuctFace",
+    "Brake duct",
+    "Small brake-supplier logo; garage close-ups only."
+   ],
+   [
+    "steeringWheel",
+    "Steering wheel hub",
+    "Team logo, onboard view only."
+   ],
+   [
+    "airbox",
+    "Airbox surround",
+    "Colour ring around the roll-hoop intake."
+   ],
+   [
+    "mirrors",
+    "Mirror housings",
+    "Accent colour. Conflicts with D4's halomirror, which moves the mirrors onto the halo."
+   ],
+   [
+    "wheelCovers",
+    "Wheel covers",
+    "Ring or accent. The wheels lane (D4) owns these."
+   ]
   ]
  }
 }
