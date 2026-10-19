@@ -4113,6 +4113,7 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/profile-lib.test.mjs",
         "tests/unit/prop-clipping.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
@@ -4189,6 +4190,7 @@
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/profile-lib.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
@@ -6601,6 +6603,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/profile-lib.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
@@ -12128,7 +12131,6 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
-        "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/service-worker.test.mjs",
@@ -12271,6 +12273,7 @@
       "push": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
+        "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "softBlit": [
