@@ -1,6 +1,6 @@
 ---
 name: sessions-run-sonnet
-description: "Bryce 2026-10-16 — spawned sessions, lanes, workers and scheduled fresh-session tasks run Sonnet (claude-sonnet-5-5), never Fable"
+description: "Historical Claude preference for economical workers; current host policy selects model identifiers"
 metadata:
   node_type: memory
   type: feedback
@@ -8,8 +8,8 @@ metadata:
   modified: 2026-10-16T07:11:43.226Z
 ---
 
-Bryce, 2026-10-16 ~07:15Z: "sessions should run sonnet not fable" and "archive all and respawn running sonnet" (scoped by his answer to the two Opus lanes).
+On 2026-10-16 Bryce said "sessions should run sonnet not fable" and "archive all and respawn running sonnet" during a Claude fleet campaign.
 
-**Why:** cost and throughput across a fleet of 10–20 lane sessions; Fable/Opus lanes were swapped out.
+**Why:** cost and throughput; this is a preference against silently upgrading workers to expensive models.
 
-**How to apply:** every `create_session` for a lane/worker/steward passes `model: "claude-sonnet-5-5"`; a fresh-session scheduled task (`create_new_session_on_fire` / persist_session false) gets `model: claude-sonnet-5-5`. Orchestrator sessions Bryce opens himself keep whatever model he chose. See [[orchestrator-may-spawn-sessions]] and [[standing-merge-desk]].
+**How to apply:** preserve that cost intent while using model identifiers supported by the current host. The current [launch policy](../skills/agent-fleet/references/launch-policy.md) requires `default` for Claude cloud launches; do not hardcode the historical `claude-sonnet-5-5` identifier into those calls or apply Claude model names to Codex. User-selected orchestrator models remain the user's choice. Related: [fleet spawning preference](orchestrator-may-spawn-sessions.md).

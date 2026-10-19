@@ -12,4 +12,4 @@ UI fixer and survey sessions may take screenshots freely, including screenshot l
 
 **Why:** Bans on screenshots or loops made sessions spend 30+ minutes on DOM probes for what a picture settles; Bryce values visual iteration on UI over the cost of captures.
 
-**How to apply:** Don't put a screenshot cap or a no-loop rule in UI launch prompts. Keep the time cap (around 15 min per defect or red, then push with a named known-red or report), and take over the last mile in the orchestrator if a session keeps slipping. Related: [[parallel-survey-and-review]], [[user-plays-on-phone]].
+**How to apply:** Do not invent blanket screenshot bans. Apply the current repository and host capture budgets; an increased cap needs the user's applicable grant. Keep the time cap (around 15 min per defect or red, then push with a named known-red or report), and take over the last mile in the orchestrator if a session keeps slipping. Related: [parallel survey and review](parallel-survey-and-review.md), [user plays on phone](user-plays-on-phone.md).

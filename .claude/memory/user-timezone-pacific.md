@@ -14,4 +14,4 @@ scheduling the monthly knowledge-audit Routine.
 
 **How to apply:** schedule Routines and reminders with
 `CRON_TZ=America/Los_Angeles …` and quote times to him in Pacific. Related:
-[[user-plays-on-phone]].
+[user plays on phone](user-plays-on-phone.md).

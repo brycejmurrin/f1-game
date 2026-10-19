@@ -12,4 +12,4 @@ When sending Bryce a sheet of new designs (parts, bodies, finishes), each varian
 
 **Why:** 2026-10-18 he stopped a commit with "Wait review those screenshots they all look the same". Whole-car stills of the 24 STYLE parts and 17 body styles changed only ~1–7% of pixels against each other, though every one passed the sweep.
 
-**How to apply:** before sending a sheet, pixel-diff the shots against the baseline (PIL, % of pixels changed). Frame each variant on the part that changes (close-up per category), and make the design itself bolder when even the close-up barely differs. Say plainly when a batch is subtle. Related: [[rejected-design-hold-immediately]].
+**How to apply:** before sending a sheet, pixel-diff the shots against the baseline (PIL, % of pixels changed). Frame each variant on the part that changes (close-up per category), and make the design itself bolder when even the close-up barely differs. Say plainly when a batch is subtle. Related: [rejected design hold immediately](../rules/fleet-core.md).

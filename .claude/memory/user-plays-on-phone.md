@@ -11,4 +11,4 @@ metadata:
 
 When the owner reports a HUD or UI problem, the device is a phone (answered "Phone" on 2026-10-05 for the "HUD isn't really showing in the helmet camera" report). A desktop 1280x720 reproduction showed nothing wrong; the phone cell (hud-survey `--device phone-landscape-844x390`, Playwright `hasTouch`, no `body.desktop`) showed the real state.
 
-**How to apply:** reproduce UI/HUD reports first at phone landscape with touch (the `.desktop` class off), then desktop; quote both in the PR body. `node tools/shot/hud-survey.mjs --cam <cam> --device phone-landscape-844x390` is the one-cell instrument (~2 min). Related: [[one-subagent-per-skill]].
+**How to apply:** reproduce UI/HUD reports first at phone landscape with touch (the `.desktop` class off), then desktop; quote both in the PR body. `node tools/shot/hud-survey.mjs --cam <cam> --device phone-landscape-844x390` is the one-cell instrument (~2 min). Related: [one subagent per skill](one-subagent-per-skill.md).
