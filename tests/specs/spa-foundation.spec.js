@@ -14,8 +14,8 @@ test.describe("Spa track-owned foundation migration", () => {
   test("preserves Spa's 102 m relief and Raidillon climb", async ({ page }) => {
     await loadSpa(page);
     const elevation = await page.evaluate(() => {
-      // Script-tag application global, read inside the browser context.
-      const tracks = /** @type {any} */ (window).Tracks;
+      // @ts-expect-error Tracks is a lexical script global, not a window property.
+      const tracks = Tracks;
       const profile = window.__apex.trackProfile(720);
       const ys = profile.map((p) => p.y);
       return {
@@ -85,7 +85,8 @@ test.describe("Spa track-owned foundation migration", () => {
     test.setTimeout(180000);
     await loadSpa(page);
     const overlaps = await page.evaluate(() => {
-      const appTracks = /** @type {any} */ (window).Tracks;
+      // @ts-expect-error Tracks is a lexical script global, not a window property.
+      const appTracks = Tracks;
       const caps = window.__apex.trackGeometry();
       const count = 900;
       const profile = window.__apex.trackProfile(count);

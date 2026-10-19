@@ -14,7 +14,8 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   await page.waitForFunction(() => window.__apex.info().track === "montreal", null, { polling: 100, timeout: BOOT_MS });
 
   const result = await page.evaluate(async () => {
-    const appTracks = /** @type {any} */ (window).Tracks;
+    // @ts-expect-error Tracks is a lexical script global, not a window property.
+    const appTracks = Tracks;
     const def = appTracks.LIST.find((track) => track.id === "montreal");
     const profile = window.__apex.trackProfile(240);
     const probes = [0, 0.55].flatMap((frac) =>
