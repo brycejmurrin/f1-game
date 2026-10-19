@@ -33,6 +33,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -190,20 +191,42 @@ test("the mobile tier keeps a smaller pool, a shorter plume and fewer flares", (
   assert.equal(ok, 24);
 });
 
-test("source guards: the arc reaches AI wheels only; the emitters run before the cockpit continue", () => {
-  const cd = read("js/car/car-draw.js");
-  // car-draw: the Ackermann term (c.kCur) sits in the !c.human arm; the human
-  // arm tapers by speed with no curvature in sight.
-  const ai = cd.match(/if \(!c\.human\) steerA = ([^\n]*)/);
-  assert.ok(ai, "the AI front-wheel arm is present");
-  assert.match(ai[1], /Math\.atan\(VIS_WHEELBASE \* \(c\.kCur \|\| 0\)\)/);
-  const human = cd.match(/\n\s*else if \(G\.STEER_SPEED_REF > 0\) steerA \/= ([^\n]*)/);
-  assert.ok(human, "the human arm is the speed taper");
-  assert.doesNotMatch(human[1], /kCur|curvature/, "no curvature may reach a human car's wheels");
-  assert.equal(cd.split("c.kCur").length - 1, 1, "car-draw reads c.kCur at exactly one (AI-only) site");
-  // The far brake flare is for rivals past the 40 m ring gate only, and never
-  // from the mirror's BARE wheels (a second camera would emit it twice).
-  assert.match(cd, /const flareA = !bare && !c\.isPlayer && heatF > 0\.15 && camD2 >= 40 \* 40/);
+test("the arc reaches AI front wheels only; a rival's far brake flare fires 40-240 m out, never from a mirror or the player (car-draw VM)", () => {
+  const v = carDrawVm();
+  const flares = [];
+  v.ctx.Particles = { flare: (...a) => flares.push(a) };
+  v.field(() => 100);
+  const proto = v.G.cars[1];
+  const base = (z) => { const b = new Float32Array(16); b[0] = b[5] = b[10] = b[15] = 1; b[14] = z; return b; };
+  // The rendered yaw of each wheel (draw order: FL FR RL RR, rotating then fixed layers).
+  const yaws = (c, z = 0, bare = false) => {
+    v.rec.draws.length = 0; v.rec.mats.length = 0; flares.length = 0;
+    v.carDraw.drawPlayerWheels(c, base(z), 0, {}, false, 0, 1, bare);
+    return v.rec.mats.map((m) => (m ? Math.atan2(-m[2], m[0]) : null));
+  };
+  const car = (over) => Object.assign({}, proto, { human: false, isPlayer: false, kCur: 0, steerVis: 0, speed: 60, brakeHeat: 0 }, over);
+  const L = 3.3;   // the DRAWN wheelbase (WHEELS front z - rear z)
+  const ai = yaws(car({ kCur: 0.01 }));
+  const fronts = ai.slice(0, 2), rears = ai.slice(2, 4);
+  for (const y of fronts) assert.ok(Math.abs(y + Math.atan(L * 0.01)) < 1e-6, `AI front wheel carries the Ackermann angle: ${y}`);
+  for (const y of rears) assert.ok(Math.abs(y) < 1e-9, "rear wheels never steer");
+  // +k is a LEFT turn (measured), +steer right: the left turn draws the opposite yaw sign to a right steer.
+  assert.ok(Math.sign(yaws(car({ kCur: 0.01 }))[0]) === -Math.sign(yaws(car({ steerVis: 0.5, kCur: 0 }))[0]), "left-turn arc and right steer have opposite signs");
+  // The human arm: the same bend, the same wheels — curvature changes NOTHING.
+  const straight = yaws(car({ human: true, kCur: 0, steerVis: 0.4 }));
+  for (const k of [-0.02, 0.005, 0.03]) assert.deepEqual(yaws(car({ human: true, kCur: k, steerVis: 0.4 })), straight, `no curvature may reach a human car's wheels (k=${k})`);
+  assert.ok(Math.abs(straight[0]) > 0.01, "a human still shows their own steering");
+  // Far brake flare: rivals past the 40 m ring only, 240 m cut, never the player, never the mirror's bare wheels.
+  const hot = car({ brakeHeat: 0.8 });
+  yaws(hot, 60); assert.equal(flares.length, 2, "one flare per front wheel at 60 m");
+  yaws(hot, 20); assert.equal(flares.length, 0, "inside 40 m the real brake glow owns it");
+  yaws(hot, 300); assert.equal(flares.length, 0, "past 240 m a flare is under a pixel");
+  yaws(hot, 60, true); assert.equal(flares.length, 0, "the mirror's bare wheels emit no flare (a second camera would emit it twice)");
+  yaws(car({ brakeHeat: 0.8, human: true, isPlayer: true }), 60); assert.equal(flares.length, 0, "never for the player");
+  yaws(car({ brakeHeat: 0.1 }), 60); assert.equal(flares.length, 0, "a cool brake does not glow");
+});
+
+test("source guards: game.js emits carFx beside the other emitters, before the cockpit continue", () => {
   // game.js: carFx.emit beside the other emitters, before the cockpit branch.
   const game = read("js/game.js");
   const emit = game.indexOf("carFx.emit(c, _groundMat, dt, state);");

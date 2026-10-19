@@ -2,10 +2,12 @@
  *
  * GLX / WGX / TLX draw the SAME mesh. Soft wings were tessellation (four chord
  * stations, three span boards, unbeveled endplates), not a three.js-only model.
- * Locks the knife-TE sample, the outboard split, plate bevels, and the 2400
- * default-body ceiling.
+ * Locks the knife-TE sample, the outboard split, knife-thin elements, and the
+ * measured triangle budget in tests/data/car-wing-foil-tris.json.
  *
  * Run: node --test tests/unit/car-wing-foil.test.mjs
+ * Re-measure the budget after a deliberate geometry change (review the diff):
+ *      node tests/unit/car-wing-foil.test.mjs --update
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +15,9 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { writeFileSync } from "node:fs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -37,19 +41,79 @@ const { Car3D, Parts, Teams } = load();
 const C1 = [0.7, 0.05, 0.05], C2 = [0.95, 0.8, 0.1];
 const tris = (m) => m.idx.length / 3;
 
+// MEASURED triangle budget (tests/data/car-wing-foil-tris.json). The old
+// ceilings were typed constants raised eight-fold with prose; the file is the
+// measurement itself, so a geometry change shows up as a reviewable diff.
+const BASELINE_PATH = join(ROOT, "tests/data/car-wing-foil-tris.json");
+const OPTION_LIMIT = 1.6;
+const teamFor = (opt) => ({ id: opt.teams?.[0] || opt.team || "mclaren", engine: opt.suppliers?.[0] || opt.supplier || "Mercedes" });
+const optionTris = (cat, opt) => tris(Car3D.build(C1, C2, { parts: Parts.getVisualTiers({ [cat.id]: opt.id }, teamFor(opt)) }));
+const defaultTris = () => tris(Car3D.build(C1, C2, { parts: Parts.getVisualTiers({}, { id: "mclaren", engine: "Mercedes" }) }));
+function measureFixed() {
+  let worst = { num: null, tris: 0 };
+  for (const t of Teams.LIST) for (const d of t.drivers) {
+    const n = tris(Car3D.build(C1, C2, { noWheels: true, num: d.num }));
+    if (n > worst.tris) worst = { num: d.num, tris: n };
+  }
+  return {
+    body: tris(Car3D.build(C1, C2, { noWheels: true })),
+    cockpit: tris(Car3D.build(C1, C2, { noWheels: true, noDriver: true, cockpit: true })),
+    worstDriver: worst,
+    frontWheel: tris(Car3D.buildWheel(0.32)),
+    rearWheel: tris(Car3D.buildWheel(0.38)),
+    optionBase: defaultTris(),
+  };
+}
+const optionKeys = () => Parts.CATALOG.flatMap((cat) => cat.options.map((opt) => [`${cat.id}:${opt.id}`, cat, opt]));
+if (process.argv.includes("--update")) {
+  const fixed = measureFixed(), options = {};
+  for (const [k, cat, opt] of optionKeys()) options[k] = optionTris(cat, opt);
+  const over = Object.entries(options).filter(([, n]) => n > fixed.optionBase * OPTION_LIMIT).map(([k, n]) => `${k}:${n}`);
+  if (over.length) { console.error(`refusing to write: over ${OPTION_LIMIT}x the default ${fixed.optionBase}: ${over.join(", ")}`); process.exit(1); }
+  writeFileSync(BASELINE_PATH, JSON.stringify({ _note: "measured triangle counts; regenerate with: node tests/unit/car-wing-foil.test.mjs --update", ...fixed, options }, null, 2) + "\n");
+  console.log(`wrote ${BASELINE_PATH}`);
+  process.exit(0);
+}
+const BASE = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+const REMEASURE = "re-measure with: node tests/unit/car-wing-foil.test.mjs --update (review the diff)";
+
 test("foil samples a knife trailing edge and splits the outboard span", () => {
-  assert.match(GEOMETRY_SRC, /const FOIL_T = \[0, 0\.08, 0\.28, 0\.60, 0\.84, 1\]/);
-  assert.match(GEOMETRY_SRC, /mid = half \* 0\.67/);
-  assert.match(GEOMETRY_SRC, /\[-half, -mid\], \[-mid, -inner\], \[-inner, inner\], \[inner, mid\], \[mid, half\]/);
-  assert.match(GEOMETRY_SRC, /function addBeveledSpan\(/);
-  assert.match(CAR_SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: 2\.66/);
-  assert.match(CAR_SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: _ep\.front\.z/);
+  const half = 0.92, attachHalf = 0.95;
+  const flap = Car3D.buildFlapGeom({
+    le: [2.50, 0.092], te: [2.24, 0.146], half, thick: 0.028,
+    taper: 0.98, sweep: 0.04, rise: 0.04, attachHalf, y: 0, z: 0,
+  }, C1);
+  const p = flap.pos, near = (a, b) => Math.abs(a - b) < 1e-3;
+  // Leading-edge row (the stations are not tapered there): the span is cut at
+  // +-34 % and +-67 % of the half-span, the tip pinned to the attach width.
+  const leX = new Set();
+  for (let i = 0; i < p.length; i += 3) leX.add(+Math.abs(p[i]).toFixed(3));
+  for (const want of [half * 0.34, half * 0.67, attachHalf]) assert.ok([...leX].some((x) => near(x, want)), `no span station at ${want.toFixed(3)} (${[...leX]})`);
+  // Chordwise: six stations (le, 0.08, 0.28, 0.60, 0.84, te) on the centre column.
+  const centre = new Map();
+  for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i]) < 0.32 && Math.abs(p[i]) > 0.30) centre.set(+p[i + 2].toFixed(4), 1);
+  assert.equal(centre.size, 6, `inboard column carries ${centre.size} chord stations, not six`);
+  // Knife edges: upper and lower skin meet at the trailing edge (section h = 0)
+  // and at the nose, while mid-chord has real thickness.
+  const spread = new Map();
+  for (let i = 0; i < p.length; i += 3) if (Math.abs(p[i]) > 0.30 && Math.abs(p[i]) < 0.32) {
+    const k = +p[i + 2].toFixed(4), a = spread.get(k) || [Infinity, -Infinity];
+    spread.set(k, [Math.min(a[0], p[i + 1]), Math.max(a[1], p[i + 1])]);
+  }
+  const rows = [...spread.entries()].sort((a, b) => a[0] - b[0]).map(([, a]) => a[1] - a[0]);
+  assert.ok(rows[0] < 1e-6, `trailing edge is not a knife: ${rows[0]}`);
+  assert.ok(rows[rows.length - 1] < 1e-6, `leading edge is not closed: ${rows[rows.length - 1]}`);
+  assert.ok(Math.max(...rows) > 0.005, "mid-chord has no thickness");
 });
 
 test("wing elements stay knife-thin (not 32 mm planks)", () => {
-  assert.match(CAR_SRC, /\[2\.72, 0\.048, 2\.40, 0\.086, 1\.00, 0\.024\]/);
-  assert.match(CAR_SRC, /elemRecord\(\[-2\.30, upperTrailY - 0\.270\], \[-2\.52, upperTrailY - 0\.225\], 0\.024, 0\)/);
-  assert.match(CAR_SRC, /0\.51, 0\.024, c1, 0\.8/);
+  for (let lvl = 0; lvl <= 4; lvl++) {
+    const els = Car3D.aeroFlaps(lvl, null);
+    assert.ok(els.length >= 2, `aero level ${lvl} has a wing`);
+    for (const e of els) assert.ok(e.thick > 0 && e.thick <= 0.026, `${e.id} at level ${lvl} is ${e.thick * 1000} mm thick`);
+    const front = els.filter((e) => /^front/.test(e.id)).map((e) => e.thick);
+    for (let i = 1; i < front.length; i++) assert.ok(front[i] <= front[i - 1], `front cascade thins toward the top at level ${lvl}: ${front}`);
+  }
 });
 
 test("one flap is a closed foil, not a 48-triangle plank", () => {
@@ -97,169 +161,31 @@ test("TEAM_STYLE carries a per-team wingStyle", () => {
   assert.ok(twists.size >= 4, "flap twist should differ across the grid");
 });
 
-test("default body and cockpit stay under the absolute triangle ceilings", () => {
-  const body = tris(Car3D.build(C1, C2, { noWheels: true }));
-  const cockpit = tris(Car3D.build(C1, C2, { noWheels: true, noDriver: true, cockpit: true }));
-  // 2400 -> 2505: the round-halo tube (15 rings x 6 sides = 168 tris, the two
-  // extra rings buying the rounded shoulders) replaced the 64-tri
-  // beveled-span chevron. Measured 2496 on the raise.
-  // 2505 -> 2545: regulation mirrors — the C14.2.2 inboard-toe housing cant,
-  // top winglet, and C3.7.5 outer stay (+48 tris). Measured 2532.
-  // 2545 -> 2690: the DIFFUSER. It was one closed loft, so from directly behind
-  // — the view a chase camera holds for most of a lap — the back of the car was
-  // a featureless grey slab with the brake light floating on it
-  // (scratch/renders/car/rb4-diffuser.png). Two tunnels either side of the
-  // crash structure, each with a ramped ceiling, an outer wall and two strakes,
-  // plus a trailing gurney: +131 tris on the single largest unmodelled surface
-  // the car had. Measured 2676.
-  // 2690 -> 2830: the RADIATOR INLET. It was one flat dark slab pinned on the
-  // pod face — two triangles — so at the audit camera's ~6 mm per pixel the
-  // biggest opening on the car had no relief at all and every engine tier
-  // photographed the same rectangle at a different size. Now a duct: four
-  // throat walls raking to 70% of the mouth over 55 mm, a two-bar proud lip
-  // (the lower and inboard bars are cut — they face the undercut and the
-  // chassis), and a dark core face at the back. +130 tris for both pods.
-  // Measured 2820.
-  // 2830 -> 2960: the DETAIL PASS. Most of it was free — a box, a tapered/raked
-  // `addSpan` and a 2-station `addStationLoft` are all 6 quads, so the DRS pod,
-  // the four rear-endplate louvres, all four uprights, the hub carriers and the
-  // crash-structure tail cap changed SHAPE at zero triangles, and the square
-  // single tailpipe became an 8-sided `addTube` for +4. The +120 is the front
-  // brake ducts: they were plain prisms with no mouth, the same flat-dark-face
-  // defect the radiator inlet had, and `addInletMouth` (written for that, never
-  // applied here) costs 4 throat walls a side with the lip suppressed. The
-  // COCKPIT build skips those mouths — from the seat they are behind the wheels
-  // — which is why the cockpit figure did not move at all. Measured 2948.
-  // 2960 -> 3120: the second detail pass, all of it shared geometry so every car
-  // on the grid gets it. T-camera pod on the roll hoop (+36) — the highest point
-  // of the silhouette and bare until now. Rear DRIVESHAFTS (+72), because
-  // nothing spanned gearbox to upright and from dead astern the rear wheels
-  // floated in clear air. The SPLITTER/tea-tray (+24): the floor's leading edge
-  // is z 1.30 and there was nothing ahead of it at all. FOOTPLATES under the
-  // primary turning vane (+28) — a default car runs vane 1, which was one blade
-  // standing alone on each side. Measured 3112 on the raise.
-  // 3120 -> 3148: the nose running lights, measured. Two flank markers and a
-  // crown bar, twelve triangles each as addBox lofts them; they are !ckpt, so
-  // the cockpit ceiling below is untouched.
-  // 3148 -> 3172: the rounded engine-cover crown. The cover loft is three
-  // stacked blocks over Car3D.coverProfile (flank, lower facet, upper facet +
-  // crown) instead of one trapezoid — two more addBlock lofts, twelve triangles
-  // each. Measured 3172 exactly; !ckpt, so the cockpit ceiling is untouched.
-  // 3172 -> 3472: the driver's head. It was a five-stack hemisphere in the
-  // team's own paint — 120 triangles of beach ball, the same for both cars in
-  // a team and invisible against the bodywork it matched. It is a full-face
-  // helmet now (js/car/helmets.js): an ovoid swept from a real profile, with a
-  // chin bar, a lens-shaped visor aperture on the glass surface, and a painted
-  // design per race number. 432 triangles at 12 rings x 18 slices, the rings
-  // bunched into the top 60% where the cockpit rim lets you see them — evenly
-  // spread at the same resolution it came to 792. Measured 3472; the helmet is
-  // built in BOTH passes, so the cockpit ceiling below moves with it.
-  // 3472 -> 4136: the helmet at 20 rings x 28 slices, 1120 triangles against
-  // 432. NOT a nicer curve — the shape was already right, traced off
-  // photographs, and 12 x 18 draws it perfectly well. It is the DESIGNS. Per-
-  // vertex colour can only paint what a vertex lands on, and at 12 rings the
-  // gaps in t were 0.09: a keyline 0.024 wide fell between two rings and did
-  // not exist in a frame, while an 18-slice shell puts 20 degrees between
-  // vertices, so a 12-degree flash smeared across its neighbours instead of
-  // reading as a stripe. Every driver's livery was therefore as coarse as a
-  // dipped shell in the only place it matters, and looked correct only in the
-  // per-pixel contact sheet. 20 x 28 puts the gaps at 0.05 and 12.9 degrees.
-  // The car is drawn at most twenty times a frame; this is 664 triangles on
-  // the one part of it that tells you WHO you are looking at, and the mesh is
-  // cached per team, not rebuilt. Measured 4136.
-  // 4136 -> 4232: THE COCKPIT APERTURE. The tub over the driver was one
-  // closed loft, so a ray down the centreline crossed the deck and the old
-  // surround slab and never found an opening — the helmet pierced a solid
-  // car. The span is now a tub capped at the seat floor, a rail either side
-  // with a dark liner and a coaming, a floor and a rear bulkhead; the slab it
-  // replaces gave 12 back. +96 net, on the one hole every photo of the car
-  // is taken through. Measured 4232.
-  // 4232 -> 4400: THE OCCUPANT, and the opening reaching the wheel. The
-  // aperture alone did not read as a cockpit — a hole with a floating
-  // helmet in it is a hole — so the well now carries a torso, two arms,
-  // gloves and a yoke (+84), and the opening runs forward from z 0.05 to
-  // z 0.28 so the wheel is not roofed by solid monocoque (+84). Measured
-  // 4400. This is the part of the car every photo is taken through.
-  // 4400 -> 6800: the helmet PAINT. Flat paint made every colour edge a mesh
-  // edge, so at 20x28 (12.9 degrees of azimuth per cell) every diagonal
-  // boundary came out as a staircase — on the macos-latest GPU render of
-  // 2026-09-09 (car-shot.yml run 34293766619) the busy designs read as static
-  // rather than as designs. helmets.js now splits a quad only while its own
-  // corners disagree about the paint, so triangles land on the boundary LINES
-  // and nowhere else; the base grid is untouched, so the NORMALS and the shape
-  // are bit-identical and this is a paint change only. MAX_SPLIT 1 is measured
-  // at the size the helmet is actually seen (~110 px, the cockpit view): it is
-  // a clear gain on no split, and depth 2 is barely separable from it while
-  // costing 9,292 triangles against 3,292. Default body measured 5360; the
-  // busiest of the 22 designs measured 6572, and the ceiling has to clear the
-  // WHOLE FIELD, not the default livery. The cockpit ceiling below does NOT
-  // move: the helmet is not built in that pass (measured 1428, unchanged).
-  // 6800 -> 7100: 2026 aero defaults (board:1 + drs:1) on the recipe-less
-  // body — in-wash bargeboard and active-flap hinges that factory signatures
-  // already carried (#1198). Default measured 5848; busiest helmet #1 at 6886.
-  assert.ok(body <= 7100, `default body ${body} > 7100`);
-  // ...AND FOR EVERY DRIVER, not just the default livery. The helmet paint is
-  // per-design, so the busiest of the 22 costs more triangles than the
-  // generated default this test builds: #1 at 6886 against a default of 5848.
-  // (The 6572 in the raise note above was measured before the doodle replaced
-  // the cell speckle, which shortened the paint boundary; this assertion is
-  // now the live number and that one is history.) That gap lived only in a
-  // COMMENT, which is the same "documented
-  // but not asserted" hole the parts-physics duplicate above was deleted for —
-  // a design could have grown past 7100 with every test green.
-  let worst = { num: null, tris: 0 };
-  for (const t of Teams.LIST)
-    for (const d of t.drivers) {
-      const n = tris(Car3D.build(C1, C2, { noWheels: true, num: d.num }));
-      if (n > worst.tris) worst = { num: d.num, tris: n };
-    }
-  assert.ok(worst.tris <= 7100, `#${worst.num} body ${worst.tris} over the ceiling — the busiest helmet design, which the default build does not reach`);
-  // 1500 -> 1580: arched two-loft plate + always-on crown rail + foot fence.
-  // First-person still carries the exterior cascade. Measured 1552.
-  assert.ok(cockpit <= 1580, `cockpit ${cockpit} > 1580`);
-  // THE WHEELS LIVE HERE NOW. tests/specs/parts-physics.spec.js carried a second
-  // copy of the body/cockpit/wheel ceilings, drifted from these by two raises,
-  // and was red without anyone seeing it — a ratchet with two owners has none.
-  // That copy is gone; this file is the sole owner, so the wheel numbers had to
-  // come with it or they would have had no owner at all. 500 -> 750: the 500 was
-  // written for SEG 18 tyres and never followed the SEG 18 -> 24 raise that made
-  // 18-gon tyres stop reading polygonal in a close shot. Measured 692.
-  const frontWheel = tris(Car3D.buildWheel(0.32));
-  const rearWheel = tris(Car3D.buildWheel(0.38));
-  // 750 -> 800: the brake disc gained its OUTER EDGE. It was two flat annuli
-  // 16 mm apart with nothing joining them, so `rotorScale` moved rotorOuter by
-  // 13.1 mm and measured 12.66 mm WEAK — a flat annulus has no silhouette, so
-  // the radius grew and no camera could tell. One SEG-segment cylindrical band
-  // per wheel, +48. Measured 740.
-  // 800 -> 840: the TYRE SHOULDER. The default profile was [[0,1],[1,1]] — a
-  // perfectly cylindrical tread meeting the sidewall at a hard 90 deg corner,
-  // i.e. a can, on the object closest to both the chase and the cockpit camera.
-  // A real slick rounds off over roughly the outer 30 mm of a 355 mm tread and
-  // gives up ~12 mm of its 360 mm radius doing it; TYRE_CROWN/CROWN_W are that
-  // measurement at this model's scale. Two extra profile rings = two extra
-  // tread bands = +2 x SEG x 2 = +96. The `shoulder` recipe keeps its
-  // exaggerated 0.945 / 0.90 balloons above the new default. Measured 836.
-  assert.ok(frontWheel <= 840, `front wheel ${frontWheel} > 840`);
-  assert.ok(rearWheel <= 840, `rear wheel ${rearWheel} > 840`);
+test("default body, cockpit, busiest helmet and wheels match the measured budget", () => {
+  const m = measureFixed();
+  // Exact: a count that moved either way is a geometry change someone must
+  // see in the baseline diff; the cockpit pass skips the helmet, the busiest of
+  // the 22 helmet designs (not the default livery) sets the field's ceiling.
+  for (const k of ["body", "cockpit", "frontWheel", "rearWheel", "optionBase"]) assert.equal(m[k], BASE[k], `${k}: ${m[k]} vs baseline ${BASE[k]} — ${REMEASURE}`);
+  assert.deepEqual(m.worstDriver, BASE.worstDriver, `busiest helmet moved — ${REMEASURE}`);
+  assert.ok(m.worstDriver.tris >= m.body, "the busiest helmet is never lighter than the default build");
 });
 
-test("single-option recipes stay within 1.6x the default triangle budget", () => {
-  const teamFor = (opt) => ({
-    id: opt.teams?.[0] || opt.team || "mclaren",
-    engine: opt.suppliers?.[0] || opt.supplier || "Mercedes",
+test("every recipe option has a measured count, none beyond 1.6x the default (sampled live)", () => {
+  const entries = optionKeys();
+  assert.deepEqual(Object.keys(BASE.options).sort(), [...new Set(entries.map(([k]) => k))].sort(), `catalog options and baseline differ — ${REMEASURE}`);
+  const over = Object.entries(BASE.options).filter(([, n]) => n > BASE.optionBase * OPTION_LIMIT);
+  assert.deepEqual(over, [], `baseline holds options over ${OPTION_LIMIT}x ${BASE.optionBase}`);
+  // The sweep costs ~70 ms per option (21 s for all): re-build the eight heaviest
+  // plus every 12th, exactly; --update re-measures all of them.
+  const heavy = new Set(Object.entries(BASE.options).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k));
+  const drift = [];
+  entries.forEach(([k, cat, opt], i) => {
+    if (!heavy.has(k) && i % 12) return;
+    const n = optionTris(cat, opt);
+    if (n !== BASE.options[k]) drift.push(`${k}: ${n} vs ${BASE.options[k]}`);
   });
-  const baseParts = Parts.getVisualTiers({}, { id: "mclaren", engine: "Mercedes" });
-  const base = tris(Car3D.build(C1, C2, { parts: baseParts }));
-  const over = [];
-  for (const cat of Parts.CATALOG) {
-    for (const opt of cat.options) {
-      const team = teamFor(opt);
-      const parts = Parts.getVisualTiers({ [cat.id]: opt.id }, team);
-      const n = tris(Car3D.build(C1, C2, { parts }));
-      if (n > base * 1.6) over.push(`${cat.id}:${opt.id}:${n}`);
-    }
-  }
-  assert.deepEqual(over, [], `over 1.6x default ${base}: ${over.join(", ")}`);
+  assert.deepEqual(drift, [], `option triangle counts moved — ${REMEASURE}`);
 });
 
 test("a shadow silhouette keeps the helmet shape without paint-split cost", () => {
@@ -277,13 +203,15 @@ test("a shadow silhouette keeps the helmet shape without paint-split cost", () =
   const splitBody = tris(Car3D.build(C1, C2, { noWheels: true, num: 1 }));
   assert.ok(field < splitBody, `field ${field} should drop paint-split vs ${splitBody}`);
   assert.ok(field > sil, `field ${field} still carries the in-tub torso :sh drops (${sil})`);
-  assert.match(CAR_SRC, /sil \|\| field/);
-  const GAME = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");   // teamMesh lives in the car-draw seam
-  // Shadow casters share one ":sh" per team(+parts); a custom setup stamps its
-  // own ":sh" so two shelves do not share a caster (see car-presentation-vm).
-  assert.match(GAME, /teamMeshKeyFor\(team, sil \? shadow : painted\)/);
-  assert.match(GAME, /\|\| "sh"/);
-  assert.match(GAME, /silhouette: true/);
+  // Shadow casters share one ":sh" mesh per team and it is not the painted car.
+  const d = carDrawVm({ casters: true });
+  d.field((c, i) => 100 + i * 10);
+  const team = d.teams[0];
+  const shadow = d.carDraw.teamMesh(team, null, true);
+  assert.equal(d.carDraw.teamMesh(team, null, true), shadow, "the caster silhouette is cached per team");
+  assert.equal(shadow.kind, "sh", "casters ask Car3D for the silhouette build");
+  assert.notEqual(d.carDraw.teamMesh(team, d.G.cars[0], false), shadow, "the painted car is a different mesh");
+  assert.equal(d.rec.builds.filter((b) => b.kind === "sh" && b.team === team.id).length, 1, "one caster build per team, not per seat");
 });
 
 test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () => {

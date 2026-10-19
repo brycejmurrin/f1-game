@@ -2202,9 +2202,7 @@
       ],
       "create": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-fx.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -2628,7 +2626,9 @@
     },
     "js/car/custom-liveries.js": {
       "create": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "pickLivery": [
@@ -2638,9 +2638,11 @@
         "tests/unit/team-livery.test.mjs"
       ],
       "saveLiveryId": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setCustomLiveries": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setIdentityValue": [
@@ -2653,7 +2655,8 @@
         "tests/unit/body-styles.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/share-code.test.mjs"
       ]
     },
     "js/car/field-lod.js": {
@@ -2850,6 +2853,7 @@
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -7558,6 +7562,7 @@
         "tests/specs/gamepad.spec.js"
       ],
       "remoteActive": [
+        "tests/specs/gamepad.spec.js",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -7572,12 +7577,14 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "remoteSample": [
+        "tests/specs/gamepad.spec.js",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"
       ],
       "remoteSteers": [
+        "tests/specs/gamepad.spec.js",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
@@ -9093,6 +9100,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "afterPresent": [
+        "tests/unit/loading-card.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "begin": [
@@ -9118,6 +9126,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "raiseHandoff": [
+        "tests/unit/loading-card.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "requestWarm": [
@@ -9144,8 +9153,7 @@
       ],
       "*": [
         "tests/unit/flyby-intro.test.mjs",
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/loading-card.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/perf/render-rate.js": {

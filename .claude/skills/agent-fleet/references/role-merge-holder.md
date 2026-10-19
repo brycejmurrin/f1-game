@@ -1,10 +1,11 @@
-# Role: merge holder (no live merge desk)
+# Role: merging (every orchestrator; Merge Desk dormant unless designated)
 
-When no `[Merge Desk]` session is live (`list_sessions`; the designated id in
-memory may be gone), **every orchestrator** holds the merge queue for its own
-PRs, in parallel. It may run on any host: Claude, Cursor, Codex or Grok.
-Every launch prompt then says: "No Merge Desk is live; the orchestrator holds
-the queue. Do not send SWEEP." On 2026-10-16 four ready workers stalled asking
+Merging is a duty of each orchestrator, not a separate role. **Merge Desk is
+dormant unless Bryce designates a session or Routine** (ci-watch skill). When
+none is designated (`list_sessions`; an id in memory may be gone), **every
+orchestrator** merges its own fleet's PRs, in parallel. It may run on any host:
+Claude, Cursor, Codex or Grok. Every launch prompt then says: "No Merge Desk is
+live; the PR's own orchestrator merges. Do not send SWEEP." On 2026-10-16 four ready workers stalled asking
 where to send SWEEP because their prompts named a desk that did not exist.
 
 ## Parallel orchestrators (any host; the lease no longer gates merges)
