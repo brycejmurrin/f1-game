@@ -839,6 +839,12 @@
       ]
     },
     {
+      "path": "tools/ci/inputs-hash.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/junit-failed.mjs",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"

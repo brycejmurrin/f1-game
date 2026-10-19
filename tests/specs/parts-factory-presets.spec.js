@@ -108,7 +108,8 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
       savedAero: JSON.parse(localStorage.getItem("apex26.parts.mclaren")).aero,
       factoryAero: Parts.getFactorySetup(Teams.LIST.find((team) => team.id === "mclaren")).aero,
       renderedAero: window.__factoryMeshCaptures[
-        Parts.factoryKey(Teams.LIST.find((team) => team.id === "mclaren"))
+        // literal, not Parts.factoryKey(): tests/unit/parts-factory-key.test.mjs pins the key
+        "sig_mclaren_pu|sig_mclaren_flex|sig_mclaren_active|sig_mclaren_brakes|sig_mclaren_tyre|sig_mclaren_ers|sig_mclaren_gbox|sig_mclaren_fuel|sig_mclaren_exh|sig_mclaren_floor|sig_mclaren_cpit|sig_mclaren_rim"
       ].aero,
     };
   });

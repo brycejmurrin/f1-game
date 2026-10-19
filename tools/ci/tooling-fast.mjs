@@ -641,6 +641,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
+  // #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.
+  "tests/unit/inputs-hash.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",
@@ -809,6 +811,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
   "tests/unit/parts-distinct-mesh.test.mjs",
+  "tests/unit/parts-factory-key.test.mjs",
   // Both node-only and both under half a second: the catalog LADDER (no paid
   // option dominated by a cheaper one, no row that is never optimal) and the
   // garage's per-vertex MATERIAL column. Neither was in the edit loop, which
@@ -1071,6 +1074,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/spline-fold-diagnostics.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
+  // #2204: terrace / spectatorHill / vaultStand curve follow — outside-of-bend
+  // gap ≤ 0.5 m on moderate bends, no severe terrace self-pairs on jerez.
+  "tests/unit/stand-curve-gap.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
   // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
   "tests/unit/start-lights.test.mjs",
@@ -1332,6 +1338,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // guard the two tools a session reaches for at push time.
   // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
   "tests/unit/wgx-free-retire.test.mjs",
+  // Opt-in torque-balanced wheel state (#1628): lockup / wheelspin VM pins; default OFF.
+  "tests/unit/wheel-state.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
   // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
   // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.
@@ -1821,19 +1829,188 @@ function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
   }
 }
 
+/**
+ * #2890 — TRACKED / RUN_ALL paths that may stay narrow when their DIFF content
+ * is benign (script-tag-only index.html, scripts/version-only package.json,
+ * cache-version-only sw.js). select-specs TRACKED is unchanged: CI browser
+ * selection still fail-safes on the path alone.
+ */
+export const NARROWABLE_INFRA = Object.freeze(["index.html", "package.json", "sw.js"]);
+
+/** Unit tests seeded when a narrowable infra path is benign (#2890). */
+export const NARROW_INFRA_TESTS = Object.freeze({
+  "index.html": Object.freeze([
+    "tests/unit/load-order.test.mjs",
+    "tests/unit/shell-ids.test.mjs",
+    "tests/unit/circuit-count-shell.test.mjs",
+  ]),
+  "package.json": Object.freeze([
+    "tests/unit/change-driver-tools.test.mjs",
+    "tests/unit/docs-integrity.test.mjs",
+    "tests/unit/generated-docs.test.mjs",
+  ]),
+  "sw.js": Object.freeze([
+    "tests/unit/service-worker.test.mjs",
+    "tests/unit/a11y-pwa-pass.test.mjs",
+    "tests/unit/load-order.test.mjs",
+  ]),
+});
+
+/** Wall-time estimate above which --changed prints the background-with-log hint. */
+export const LONG_RUN_MS = 120_000;
+export const LONG_RUN_HINT =
+  "Long run: run in the background with a log, e.g. nohup npm run test:tooling-fast -- --changed > artifacts/logs/tooling-fast.log 2>&1 & (tool cap is 600 s)";
+
+/** Content lines of a unified diff (added/removed only; ignores ---/+++ headers). */
+export function unifiedDiffContentLines(diffText) {
+  const out = [];
+  for (const line of String(diffText || "").split(/\r?\n/)) {
+    if (!line.length) continue;
+    if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff ") ||
+        line.startsWith("index ") || line.startsWith("@@") || line.startsWith("\\")) continue;
+    if (line[0] === "+" || line[0] === "-") out.push(line.slice(1));
+  }
+  return out;
+}
+
+/** True when every changed line is a single-line `<script …></script>` (or blank / gen-shell scripts marker). */
+export function isScriptTagOnlyIndexHtmlDiff(diffText) {
+  const lines = unifiedDiffContentLines(diffText);
+  if (!lines.length) return false;
+  return lines.every((raw) => {
+    const t = raw.trim();
+    if (!t) return true;
+    if (/^<!--\s*\/?@gen-shell:scripts\s*-->$/.test(t)) return true;
+    if (/^<!--\s*@gen-shell:\/scripts\s*-->$/.test(t)) return true;
+    if (/^<script\b[^>]*>\s*<\/script>$/i.test(t)) return true;
+    if (/^<script\b[^>]*\/>$/i.test(t)) return true;
+    return false;
+  });
+}
+
+/** True when only top-level `scripts` and/or `version` differ between two package.json texts. */
+export function isScriptsOnlyPackageJsonDiff(beforeText, afterText) {
+  let before, after;
+  try {
+    before = JSON.parse(beforeText);
+    after = JSON.parse(afterText);
+  } catch (_) {
+    return false;
+  }
+  if (!before || !after || typeof before !== "object" || typeof after !== "object") return false;
+  const keysB = Object.keys(before).sort();
+  const keysA = Object.keys(after).sort();
+  if (keysB.join("\0") !== keysA.join("\0")) return false;
+  for (const k of keysB) {
+    if (k === "scripts" || k === "version") continue;
+    if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) return false;
+  }
+  return true;
+}
+
+/** True when every changed sw.js line is a cache/version constant assignment or a comment. */
+export function isVersionOnlySwJsDiff(diffText) {
+  const lines = unifiedDiffContentLines(diffText);
+  if (!lines.length) return false;
+  return lines.every((raw) => {
+    const t = raw.trim();
+    if (!t) return true;
+    if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t.startsWith("*/")) return true;
+    return /^(?:const|let|var)\s+\w*(?:VERSION|CACHE|BUILD|PREFIX|STAMP)\w*\s*=/.test(t);
+  });
+}
+
+/** Human reason fragment for a WIDENED line when a narrowable path is NOT benign. */
+function narrowWidenReason(file) {
+  if (file === "index.html") return "index.html non-script change";
+  if (file === "package.json") return "package.json non-scripts change";
+  if (file === "sw.js") return "sw.js non-version change";
+  return `${file} infra change`;
+}
+
+/** Read a file's unified diff vs opts.diffBase (or origin/DEPLOY); opts.fileDiffs overrides. */
+function readNarrowDiff(file, opts = {}) {
+  if (opts.fileDiffs && Object.prototype.hasOwnProperty.call(opts.fileDiffs, file)) {
+    return opts.fileDiffs[file];
+  }
+  const root = opts.root || ROOT;
+  const ref = opts.diffBase || `origin/${DEPLOY_BRANCH}`;
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
+    return execFileSync("git", ["diff", "-U0", base, "--", file], {
+      cwd: root, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
+/** before/after text for package.json; opts.filePairs overrides. */
+function readPackagePair(opts = {}) {
+  if (opts.filePairs && opts.filePairs["package.json"]) return opts.filePairs["package.json"];
+  const root = opts.root || ROOT;
+  const ref = opts.diffBase || `origin/${DEPLOY_BRANCH}`;
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
+    const before = execFileSync("git", ["show", `${base}:package.json`], { cwd: root, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
+    const after = fs.readFileSync(path.join(root, "package.json"), "utf8");
+    return { before, after };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Classify a narrowable infra path. Returns { benign, widenReason } — benign
+ * false (and widenReason set) when the diff cannot be proven narrow (fail-safe).
+ */
+export function classifyNarrowableInfra(file, opts = {}) {
+  const norm = String(file || "").replace(/\\/g, "/");
+  if (norm === "index.html") {
+    const diff = readNarrowDiff(norm, opts);
+    if (diff == null) return { benign: false, widenReason: narrowWidenReason(norm) };
+    return isScriptTagOnlyIndexHtmlDiff(diff)
+      ? { benign: true, widenReason: null }
+      : { benign: false, widenReason: narrowWidenReason(norm) };
+  }
+  if (norm === "package.json") {
+    const pair = readPackagePair(opts);
+    if (!pair) return { benign: false, widenReason: narrowWidenReason(norm) };
+    return isScriptsOnlyPackageJsonDiff(pair.before, pair.after)
+      ? { benign: true, widenReason: null }
+      : { benign: false, widenReason: narrowWidenReason(norm) };
+  }
+  if (norm === "sw.js") {
+    const diff = readNarrowDiff(norm, opts);
+    if (diff == null) return { benign: false, widenReason: narrowWidenReason(norm) };
+    return isVersionOnlySwJsDiff(diff)
+      ? { benign: true, widenReason: null }
+      : { benign: false, widenReason: narrowWidenReason(norm) };
+  }
+  return { benign: false, widenReason: `${norm} infra change` };
+}
+
 /** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
 export function selectToolingFastChanged(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
   const tfSet = new Set(allFiles);
   // `changed` is the real diff size on EVERY path (it used to exist only on `empty`/`matched`, so a whole-floor
   // fallback printed `changed=0`); `because` names the first path that forced the fallback (#2663 follow-up).
-  const full = (reason, extra = {}) => ({
-    files: [...allFiles],
-    reason,
-    shards: shardsCoveringFiles(allFiles, allFiles),
-    changed: changed.length,
-    ...extra,
-  });
+  // `widened` is the human fragment for the first-line `WIDENED:` notice (#2890).
+  const full = (reason, extra = {}) => {
+    const because = extra.because;
+    const widened = extra.widened || (because ? (
+      NARROWABLE_INFRA.includes(because) ? narrowWidenReason(because) : `${because} forces full suite`
+    ) : reason);
+    return {
+      files: [...allFiles],
+      reason,
+      shards: shardsCoveringFiles(allFiles, allFiles),
+      changed: changed.length,
+      widened,
+      ...extra,
+    };
+  };
 
   if (!changed.length) return { files: [], reason: "empty", shards: [], changed: 0 };
 
@@ -1844,11 +2021,41 @@ export function selectToolingFastChanged(changed, opts = {}) {
   }
 
   const circ = circuitsTouched(changed, opts.ref || "");
-  const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
+  const narrowSeeds = new Set();
+  const benignNarrow = new Set();
+  const classifyOnce = (norm) => {
+    const r = classifyNarrowableInfra(norm, opts);
+    if (r.benign) {
+      benignNarrow.add(norm);
+      for (const t of (NARROW_INFRA_TESTS[norm] || [])) narrowSeeds.add(t);
+    }
+    return r;
+  };
+
+  const trackedRaw = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
+  const tracked = [];
+  for (const f of trackedRaw) {
+    const norm = f.replace(/\\/g, "/");
+    if (NARROWABLE_INFRA.includes(norm)) {
+      const { benign, widenReason } = classifyOnce(norm);
+      if (benign) continue;
+      return full("tracked", { tracked: trackedRaw, because: norm, widened: widenReason });
+    }
+    tracked.push(f);
+  }
   if (tracked.length) return full("tracked", { tracked, because: tracked[0] });
 
-  const runAll = changed.find((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)));
-  if (runAll) return full("run-all-path", { because: runAll });
+  const runAllCand = changed.filter((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)));
+  for (const f of runAllCand) {
+    const norm = f.replace(/\\/g, "/");
+    if (NARROWABLE_INFRA.includes(norm)) {
+      if (benignNarrow.has(norm)) continue;
+      const { benign, widenReason } = classifyOnce(norm);
+      if (benign) continue;
+      return full("run-all-path", { because: norm, widened: widenReason });
+    }
+    return full("run-all-path", { because: norm });
+  }
 
   let scripts = opts.scripts;
   if (!scripts) {
@@ -1858,14 +2065,19 @@ export function selectToolingFastChanged(changed, opts = {}) {
       return full("no-package-json");
     }
   }
-  const receipt = selectionReceipt(changed, scripts);
-  if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed, because: (receipt.unclaimed || [])[0] });
+  // Benign narrowable infra must not count as "unmatched" against pick-tests RULES.
+  const receiptChanged = changed.filter((f) => !benignNarrow.has(f.replace(/\\/g, "/")));
+  if (receiptChanged.length) {
+    const receipt = selectionReceipt(receiptChanged, scripts);
+    if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed, because: (receipt.unclaimed || [])[0] });
+  }
 
-  const selected = new Set();
+  const selected = new Set(narrowSeeds);
   const index = opts.pinIndex || pinIndex();
 
   for (const f of changed) {
     const norm = f.replace(/\\/g, "/");
+    if (benignNarrow.has(norm)) continue;
     if (tfSet.has(norm)) selected.add(norm);
     // A file edit has a precise dependency key and may also inherit its
     // nearest directory pins. Do not fall through to the bare top-level
@@ -1890,7 +2102,15 @@ export function selectToolingFastChanged(changed, opts = {}) {
 
   const files = allFiles.filter((f) => selected.has(f));
   if (!files.length) return full("no-listed-match");
-  return { files, reason: "matched", shards: shardsCoveringFiles(files, allFiles), changed: changed.length };
+  return { files, reason: narrowSeeds.size && files.every((f) => narrowSeeds.has(f)) ? "narrow-infra" : "matched",
+    shards: shardsCoveringFiles(files, allFiles), changed: changed.length,
+    ...(narrowSeeds.size ? { narrow: [...narrowSeeds].filter((t) => tfSet.has(t)) } : {}) };
+}
+
+/** First output line when --changed falls back to the full suite (#2890). */
+export function widenedLine(meta, fileCount) {
+  if (!meta || !meta.widened) return null;
+  return `WIDENED: ${meta.widened} (${fileCount} files)`;
 }
 
 /** The `--changed` header line: reason, the REAL diff size, the files chosen, and the path that forced a fallback. */
@@ -1983,6 +2203,8 @@ if (isMain) {
   if (parsed.changed) {
     changedMeta = selectToolingFastChanged(changedVsDeploy());
     files0 = changedMeta.files;
+    const wide = widenedLine(changedMeta, files0.length);
+    if (wide) console.log(wide);
     console.log(changedHeader(changedMeta, files0.length));
     if (changedMeta.reason === "empty") {
       // An empty diff selects zero files and the runner printed `= run passed (0 passed, 0 failed)` with exit 0: a
@@ -1990,6 +2212,11 @@ if (isMain) {
       console.error(EMPTY_DIFF_MESSAGE);
       process.exit(3);
     }
+    // #2890: selections estimated over ~2 min print the background-with-log hint (edit-loop jobs=3).
+    try {
+      const est = estimateToolingFast(files0, loadTimings(), Math.max(parsed.jobs || DEFAULT_JOBS, 3));
+      if ((est.criticalPathMs || 0) >= LONG_RUN_MS) console.log(LONG_RUN_HINT);
+    } catch (_) { /* timings absent: no hint */ }
   } else if (!files0) {
     files0 = [...TOOLING_FAST_FILES];
   }

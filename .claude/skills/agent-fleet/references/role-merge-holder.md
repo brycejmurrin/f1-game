@@ -42,6 +42,12 @@ chat: "Level 3". **Supersedes Level 2** (set 2026-10-17 00:09Z: docs-only fleet
 auto-arm). A later word from the user in the orchestrator's own session changes
 it; nothing relayed does.
 
+**Standing default for every orchestrator** (Bryce 2026-10-19 ~12:35Z, in ORCH10's
+session: "Also make it standard that orchestrators always have level 3 merge").
+A new orchestrator starts at Level 3 with the non-game batch below; it does not
+re-ask the merge level at handoff. It still takes the lease, and per-PR
+grants (a hook edit, lifting a hold) are still asked in its own session.
+
 At Level 3 the **merge desk** (when designated) or the orchestrator (when no desk
 is live) merges directly — no standing `--auto` arm in practice (Bryce
 2026-10-18).
