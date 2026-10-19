@@ -24,6 +24,27 @@ function boot({ lazy = false } = {}) {
   return { dom, el, ctx, nav, index, body, search, result, complete: () => complete(true) };
 }
 const tick = () => new Promise((r) => setTimeout(r, 0));
+test("accessibility searches reach the existing controls and BACK restores the query without preference writes", () => {
+  const h = boot();
+  for (const [query, id, page] of [
+    ["subtitles hearing", "pm-captions-sel", "appearance"], ["captions size", "pm-caption-size-sel", "appearance"],
+    ["caption position", "pm-caption-pos-sel", "appearance"], ["caption background", "pm-caption-bg-sel", "appearance"],
+    ["caption speaker", "pm-caption-speaker-sel", "appearance"], ["protanopia", "pm-cvd-sel", "appearance"],
+    ["gas toggle", "pm-hold-throttle-sel", "a11y"], ["look back toggle", "pm-hold-lookback-sel", "a11y"],
+  ]) {
+    const control = h.el("select", id, h.dom.document.querySelector("#pm-panel-" + page)); control.value = "original";
+    const result = h.result(query); assert.ok(result, query);
+    assert.ok(result.textContent.endsWith(" · " + h.ctx.Nav.routes[page].title));
+    result.onclick(); assert.equal(h.dom.document.activeElement, control); assert.equal(control.value, "original");
+    h.nav.back(); assert.equal(h.dom.document.activeElement, result); assert.equal(h.search.value, query);
+  }
+});
+test("search destinations use navigation titles instead of internal page ids", () => {
+  const h = boot();
+  for (const [query, title] of [["motion", "ACCESSIBILITY"], ["HUD size", "HUD & CAMERA"], ["braking beep", "DRIVING AIDS"], ["music volume", "MUSIC & SOUND"], ["deadzone", "ADVANCED INPUT & HANDLING"]]) {
+    assert.ok(h.result(query).textContent.endsWith(" · " + title));
+  }
+});
 test("BACK reveals a below-fold result after the home scroller reset, without changing preference", () => {
   const h = boot(), page = h.dom.document.querySelector("#advanced"), target = h.el("input", "pm-line", page); target.value = "4";
   h.search.value = "a"; h.search.oninput();
