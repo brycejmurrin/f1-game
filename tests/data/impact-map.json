@@ -2202,9 +2202,7 @@
       ],
       "create": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-fx.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -9084,6 +9082,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "afterPresent": [
+        "tests/unit/loading-card.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "begin": [
@@ -9109,6 +9108,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "raiseHandoff": [
+        "tests/unit/loading-card.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "requestWarm": [
@@ -9135,8 +9135,7 @@
       ],
       "*": [
         "tests/unit/flyby-intro.test.mjs",
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/loading-card.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/perf/render-rate.js": {

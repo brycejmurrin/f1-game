@@ -18,6 +18,7 @@
  * Run: node --test tests/unit/loading-card.test.mjs   (npm run test:tooling-fast)
  */
 import { readCssSource } from "../helpers/css-source.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -28,6 +29,13 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+/** Declarations of every rule whose selector LIST holds `sel` exactly (reformat- and reorder-proof). */
+const ruleDecls = (css, sel) => {
+  const out = new Map();
+  for (const r of cssRules(css)) if (r.selector.split(",").map((x) => x.trim()).includes(sel)) for (const [k, v] of r.decls) out.set(k, v);
+  return out;
+};
+const phaseCard = (phase) => ruleDecls(readCssSource("css/overlays.css"), `#loading[data-phase="${phase}"] #ld-card`);
 
 /** LoadingScreen's module surface, evaluated on its own — the same `const` ->
  *  `var` rewrite tests/unit/flyby-panel.test.mjs uses for the other UI modules. */
@@ -151,9 +159,10 @@ function mediaBody(css, re) {
 
 test("letterbox bars run over the flyby only, in landscape, and never under reduced motion", () => {
   const css = readCssSource("css/overlays.css");
-  assert.match(css, /#loading::before,\s*#loading::after\s*\{[^}]*content:\s*none/,
-    "the bars must be OFF by default — only the run phase turns them on");
-  assert.match(css, /#loading::before,\s*#loading::after\s*\{[^}]*height:[^;]*2\.35/, "a 2.35:1 frame");
+  const bars = ruleDecls(css, "#loading::before");
+  assert.equal(bars.get("content"), "none", "the bars must be OFF by default — only the run phase turns them on");
+  assert.match(bars.get("height"), /2\.35/, "a 2.35:1 frame");
+  assert.equal(ruleDecls(css, "#loading::after").get("content"), "none");
   const gated = mediaBody(css, /@media[^{]*orientation:\s*landscape[^{]*prefers-reduced-motion:\s*no-preference/);
   assert.ok(gated, "the bars are gated on landscape AND prefers-reduced-motion: no-preference");
   assert.match(gated, /#loading\[data-phase="run"\]::before/);
@@ -176,12 +185,10 @@ test("letterbox bars run over the flyby only, in landscape, and never under redu
 
 test("the card paints ABOVE the letterbox, so the bottom bar never covers it", () => {
   const css = readCssSource("css/overlays.css");
-  const card = css.match(/\n#ld-card\s*\{([\s\S]*?)\n\}/);
-  assert.ok(card, "#ld-card rule not found");
-  assert.match(card[1], /position:\s*relative/);
-  const cz = +(card[1].match(/z-index:\s*(\d+)/) || [])[1];
-  const bars = css.match(/#loading::before,\s*#loading::after\s*\{([^}]*)\}/);
-  const bz = +(bars[1].match(/z-index:\s*(\d+)/) || [])[1];
+  const card = ruleDecls(css, "#ld-card");
+  assert.equal(card.get("position"), "relative");
+  const cz = Number(card.get("z-index"));
+  const bz = Number(ruleDecls(css, "#loading::before").get("z-index") ?? ruleDecls(css, "#loading::after").get("z-index"));
   assert.ok(Number.isFinite(cz) && Number.isFinite(bz) && cz > bz, `card z ${cz} must exceed bar z ${bz}`);
   // The shipped placement is bottom-centre with no offset: the lower third
   // overlaps the bottom bar, which is why the stacking order matters at all.
@@ -344,7 +351,7 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
   h.screen.lowerWaitPlate();
   assert.equal(h.screen.phase(), "run", "a live flyby is not a wait plate");
   h.screen.stop();
-  assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="busy"\] #ld-card/, "the busy phase shows the card");
+  assert.equal(phaseCard("busy").get("opacity"), "1", "the busy phase shows the card");
   const game = gameSource();
   assert.match(game, /if \(!loadingScreen\.phase\(\)\) \{ loadingScreen\.building\(loadingInfo\(\)\) \|\| loadingScreen\.busy\("Starting race"\); \}/,
     "startRace raises the card before ensureScenery / stopHome");
@@ -375,7 +382,7 @@ test("building(): the card over the scrim, no timer, no skip, not active — the
   assert.equal(h.els.loading.dataset.phase, "run");
   h.tick(LS.FLY_MS);
   assert.equal(h.races.length, 1);
-  assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="build"\] #ld-card/, "the build phase shows the card");
+  assert.equal(phaseCard("build").get("opacity"), "1", "the build phase shows the card");
 });
 
 test("prep(): scrim up, race card hidden, skip arms studioSkip — garage-out owns the leave", () => {
@@ -385,8 +392,8 @@ test("prep(): scrim up, race card hidden, skip arms studioSkip — garage-out ow
   assert.equal(h.els.loading.dataset.phase, "prep");
   assert.equal(h.els.loading.hidden, false, "prep owns the screen over a cold compile");
   assert.equal(h.screen.active(), false);
-  assert.match(read("css/loading.css"), /#loading\[data-phase="prep"\] #ld-card \{ visibility: hidden; \}/,
-    "prep keeps #ld-card out of sight until garage-out ends");
+  assert.equal(phaseCard("prep").get("visibility"), "hidden", "prep keeps #ld-card out of sight until garage-out ends");
+  assert.equal(phaseCard("prep").get("opacity"), undefined, "…and prep is not one of the phases that fades the card IN");
   h.tick(LS.SKIP_GRACE_MS + 1);
   h.skip();
   assert.equal(skips, 1, "prep skip reaches studioSkip like build");
@@ -431,11 +438,30 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
     "__apex.park() drops the plate for hud-audit");
   assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx, mirrorPass\.preparing\(\)\);/,
     "render() lowers it via afterPresent after a present that painted");
-  assert.match(read("js/perf/race-entry-profile.js"), /function raiseHandoff\(screen\) \{[\s\S]*?screen\.handoff\(\);/,
-    "raiseHandoff still calls loadingScreen.handoff()");
-  assert.match(read("js/perf/race-entry-profile.js"), /function afterPresent\(screen, gfx, preparing = false\) \{[\s\S]*?screen\.phase\(\) === "handoff"[\s\S]*?if \(handoff && !warming\)[\s\S]*?screen\.stop\(\)/,
-    "afterPresent still stops the card only when not warming");
-  assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
+  // The two RaceEntryProfile halves, RUN against a recording screen: raiseHandoff
+  // calls handoff(); afterPresent stops the card only on a painted present.
+  const rep = { Math, Object, Array, Number, String, JSON, Map, Set, console, performance: { now: () => 0 } };
+  rep.window = rep;
+  vm.runInNewContext(read("js/perf/race-entry-profile.js").replace(/^const\b/gm, "var"), rep, { filename: "js/perf/race-entry-profile.js" });
+  const REP = rep.RaceEntryProfile;
+  const recScreen = (phase) => { const log = []; return { log, phase: () => phase, handoff: () => log.push("handoff"), stop: () => { log.push("stop"); phase = ""; } }; };
+  let sc = recScreen("run");
+  REP.raiseHandoff(sc);
+  assert.deepEqual(sc.log, ["handoff"], "raiseHandoff raises the card");
+  sc = recScreen("handoff");
+  REP.afterPresent(sc, { warming: () => true });
+  assert.deepEqual(sc.log, [], "a present while the backend is still warming paints nothing: the card stays");
+  REP.afterPresent(sc, { warming: () => false }, true);
+  assert.deepEqual(sc.log, [], "a pending mirror-pass preparation holds the card too");
+  REP.afterPresent(sc, { warming: () => false });
+  assert.deepEqual(sc.log, ["stop"], "the first painted present lowers it");
+  sc = recScreen("handoff");
+  REP.afterPresent(sc, { warming: () => true, backendState: () => ({ ctxLost: true }) });
+  assert.deepEqual(sc.log, ["stop"], "a lost context never presents: fail fast, drop the card");
+  sc = recScreen("run");
+  REP.afterPresent(sc, { warming: () => false });
+  assert.deepEqual(sc.log, [], "only a handoff card is lowered");
+  assert.equal(phaseCard("handoff").get("opacity"), "1", "the handoff phase shows the card");
 });
 
 test("a skip inside SKIP_GRACE_MS is ignored (a double-click on RACE!), and a real skip stops the event", () => {
@@ -994,10 +1020,10 @@ test("the card over the scene: black bars and a light hint in every theme, an un
   assert.match(bars, /background:\s*#000/, "cinema bars — the LIGHT theme's --bg made them white");
   assert.match(css, /#loading\[data-phase="run"\] #ld-card::after[\s\S]*?color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
   assert.match(read("css/a11y-loading.css"), /background:\s*rgba\(0,\s*0,\s*0/, "a dark plate holds contrast over bright flyby sky");
-  assert.match(css.match(/\n#ld-map\s*\{([^}]*)\}/)[1], /object-fit:\s*contain/, "fitCanvas pins px width AND height; the 45% cap squashed the outline");
+  assert.equal(ruleDecls(css, "#ld-map").get("object-fit"), "contain", "fitCanvas pins px width AND height; the 45% cap squashed the outline");
   assert.match(css, /@starting-style\s*\{\s*#loading\[data-phase\] #ld-card\s*\{[^}]*opacity:\s*0/, "a transition cannot start from display: none");
-  assert.match(css, /:root\[data-motion="reduce"\] #loading::before,\s*:root\[data-motion="reduce"\] #loading::after\s*\{\s*content:\s*none;/);
-  assert.match(css.match(/#ld-wordmark\s*\{([^}]*)\}/)[1], /font-size:\s*clamp\([^;]*\b3\.4vw\b/, "#loading is not zoomed: --vwz shrank the wordmark as UI SIZE grew");
+  for (const part of ["before", "after"]) assert.equal(ruleDecls(css, `:root[data-motion="reduce"] #loading::${part}`).get("content"), "none", `MENU ANIMATION: REDUCE drops the ${part} bar`);
+  assert.match(ruleDecls(css, "#ld-wordmark").get("font-size"), /^clamp\(.*\b3\.4vw\b/, "#loading is not zoomed: --vwz shrank the wordmark as UI SIZE grew");
 });
 
 test("the garage phase (the drive-out before the flyby): no card, no timer, and a tap skips to the card + flyby, not counted as a flyby skip", () => {
@@ -1035,8 +1061,8 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   h.screen.stop();
   assert.equal((h.listeners.keydown || new Set()).size, 0, "cancellation removes preparation skip listeners");
   const css = readCssSource("css/overlays.css");
-  assert.match(css, /#loading\[data-phase="garage"\] \{ background: none; \}/, "no scrim over the car");
-  assert.match(css, /#loading\[data-phase="garage"\] #ld-card \{ visibility: hidden; \}/, "the card is out of the accessibility tree, not just transparent");
+  assert.equal(ruleDecls(css, '#loading[data-phase="garage"]').get("background"), "none", "no scrim over the car");
+  assert.equal(phaseCard("garage").get("visibility"), "hidden", "the card is out of the accessibility tree, not just transparent");
 });
 
 test("a HIDDEN tab at run() gets the card, not the flyby: no announcer read starts unseen (bug-hunt 3, 2026-10-10)", () => {
