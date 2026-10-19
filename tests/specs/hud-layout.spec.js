@@ -196,7 +196,9 @@ async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
     } catch (_) { /* */ }
     const boost = document.getElementById("btn-boost");
     const sectors = document.getElementById("hud-sectors");
-    if (!boost || boost.hidden || !sectors) return false;
+    // MINIMAL (and HUD ELEMENTS off) drop the sector plate — nothing to clear.
+    if (!sectors || sectors.hidden) return true;
+    if (!boost || boost.hidden) return false;
     const sec = sectors.getBoundingClientRect();
     const br = boost.getBoundingClientRect();
     if (!(sec.width > 0 && br.width > 0)) return false;
@@ -329,9 +331,19 @@ async function race(page, steer, manual, ins, opts) {
       const boost = document.getElementById("btn-boost");
       if (phoneSteer && (!boost || boost.hidden)) return false;
       const sec = document.getElementById("hud-sectors");
-      if (!sec || sec.hidden || !sec.childElementCount) return false;
+      const sectorsLive = !!(sec && !sec.hidden && sec.childElementCount
+        && sec.getBoundingClientRect().width > 0);
+      // MINIMAL drops #hud-sectors — sector clearance / notch checks never apply
+      // (async predicates used to skip this whole wait — #2825 / #2941).
+      if (!sectorsLive) {
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+        if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+        const stampMin = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+        if (!stampMin || !/^\d+$/.test(stampMin)) return false;
+        try { window.__apex.freeze(true); } catch (_) { /* */ }
+        return true;
+      }
       const s = sec.getBoundingClientRect();
-      if (!(s.width > 0)) return false;
       // BOOST clearance only when BOOST sits on the RIGHT (buttons/touch).
       // Tilt parks BOOST on the left — using that edge as the dock target
       // blew --dock-r-w to midCap (CI: dockRW 907, sectors under --sal).
