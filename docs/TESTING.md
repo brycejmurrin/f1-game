@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 850+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 854+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -454,6 +454,7 @@ tools directly.)
 | `perf-race-entry` | `perf-race-entry.spec.js` — race vs practice PREPARING stage spans (`RaceEntryProfile` / `__apex.raceEntryStages`), writes `artifacts/perf-race-entry/*.json` for regression diffs (issue #1881) |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
 | `xr` | Immersive Web Emulation Runtime (IWER) emulated-VR suite — Playwright project `xr-emulated`, pinned `tests/vendor/iwer-2.5.0.min.js`, `forceInstall` metaQuest3. Spec-level only (not Quest GPU). Run `npm run test:xr`. Path-gated CI job (`xr-filter` → `xr`) when the diff touches `js/xr/`, IWER, or `vr-emulated.spec.js`. On-device checklist: `docs/notes/XR-QUEST-ON-DEVICE.md` |
+| `webkit` | WebKit iPhone-path proxy — Playwright project `webkit` (`Desktop Safari`), `tests/specs/webkit-boot.spec.js` only. Opt-in via `APEX_WEBKIT=1` or `--project=webkit` (so bare `npm test` never needs a WebKit binary). Pins `apex26.gfxBackend=three` + `apex26.tlxForceGL=1`. Run `npm run test:webkit` or dispatch `.github/workflows/webkit-leg.yml`. See §WebKit leg below |
 
 ### Node groups (`node --test`, no browser)
 
@@ -803,6 +804,42 @@ they are in `tooling-fast`, where they skip loudly because the shards install no
 Suppressions live in `.github/actionlint.yaml`, `.github/zizmor.yml` and inline `# zizmor: ignore[audit] reason` comments; the test
 rejects a blanket ignore or a reasonless one. TLX is not checked (TSL node graphs have no static shader stage), and WGSL
 authority stays `tools/gfx/wgx-validate.mjs`. Evidence: `docs/notes/SKILL-MCP-SCOUT-2026-10-18.md` §Adopted.
+
+### WebKit leg (iPhone-path proxy) — #2705
+
+Every ordinary browser job and `npm test` project runs Chromium. The phone's
+shipped path is three.js WebGL2 on WebKit (JavaScriptCore + ANGLE-Metal), so a
+change that only looks green under Chromium/SwiftShader can still break on
+Bryce's iPhone. `.github/workflows/webkit-leg.yml` is the nearest CI proxy:
+
+| piece | what |
+|---|---|
+| trigger | `workflow_dispatch` only — not on every PR (macOS minutes; opt-in) |
+| runner | `macos-latest` by default (ANGLE-Metal like iOS, no extra packages). `ubuntu-latest` needs `npx playwright install --with-deps webkit` |
+| project | Playwright `webkit` (`devices["Desktop Safari"]`), gated by `APEX_WEBKIT=1`; `WEBKIT_SPECS` are ignored by `headless` / `render` / `xr-emulated` |
+| pins | `apex26.gfxBackend=three`, `apex26.tlxForceGL=1` |
+| report | `artifacts/webkit-leg/report.json` + job summary: `browser.version()`, boot (`__apex.info().track` + backend), first race frame, short rAF frame-time sample, heap after two race cycles |
+
+**It is a proxy, not the phone.** The repo pins `playwright-core` 1.63.0, whose
+`browsers.json` names WebKit revision 2359 / browserVersion **26.6**. That is
+Safari 26-era WebKit, not whatever Safari ships on the phone, and it does not
+reproduce iOS thermal or jetsam behaviour. The job log prints
+`browser.version()` so nobody reads a green tick as "the phone is fine".
+
+**Local install.** On this agent container, `npx playwright install webkit`
+downloads but host-library validation fails. Prove Chromium projects are
+unchanged locally (`npx playwright test --list` still shows only headless /
+render / xr-emulated collecting ordinary specs). Dispatching the workflow is
+Dad's call:
+
+```sh
+gh workflow run webkit-leg.yml --ref <branch> -f image=macos-latest
+```
+
+**pass-census under WebKit.** `tools/gfx/pass-census.mjs` launches Chromium via
+`tools/lib/harness.mjs` (`launchChromium`) and is not WebKit-capable. The
+Playwright WebKit boot above is the proxy leg; extending the harness is out of
+scope for #2705.
 
 ### Renderer specs on a real GPU (`macos-latest`) — first run 2026-09-03 (see §Field notes 2026-09-03, `image-grade-visual`)
 
@@ -1328,19 +1365,6 @@ and the generated surface catalog. It runs without browsers and is included in
 the structural floor; its files are listed in `tests/groups.json`.
 
 The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`.
-
-Focused browser-free diagnostics contracts also run in `tooling-fast`:
-
-| Unit file | Coverage |
-|---|---|
-| `tests/unit/fleet-bus.test.mjs` | `fleet-bus.mjs`: merge-lease rules (acquire, renew, release, break, expiry, TTL clamp), bus line grammar and addressing, and a real-git race on a local bare origin (one holder; cursor reads return only new lines). |
-| `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
-| `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
-| `tests/unit/fleet-tick.test.mjs` | `fleet-tick.mjs`: board-row compaction, state diff (changed fields, new/gone PRs, ship/Pages, new session flags) and the 40-row cap, fixtures only. |
-| `tests/unit/i18n-lint.test.mjs` | Locale contribution lint (`tools/check/i18n-lint.mjs`): fixture locales (valid / missing-key / bad-placeholder / wrong-plural), ship `locales/` clean, `--guard` on `tests/data/i18n-migrated.json`. |
-| `tests/unit/session-ledger.test.mjs` | Transcript → minutes by tool/family (`tools/ci/session-ledger.mjs --from-transcript`); redaction fixture (no tokens, emails, or paths outside the repo). |
-| `tests/unit/live-run-check.test.mjs` | Advisory WARN when a push would cancel live ci.yml runs (`tools/ci/live-run-check.mjs`); bash-guard wiring is a Refs follow-up. |
-| `tests/unit/test-bg-waste.test.mjs` | `test-bg.mjs` prints `WASTE:` when a browser group starts on a docs-only diff. |
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 

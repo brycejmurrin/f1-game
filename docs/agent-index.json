@@ -1563,6 +1563,15 @@
       "twinned": true
     },
     {
+      "id": "webkit",
+      "script": "test:webkit",
+      "kind": "browser",
+      "files": [
+        "tests/specs/webkit-boot.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "xr",
       "script": "test:xr",
       "kind": "browser",

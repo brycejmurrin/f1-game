@@ -44,7 +44,7 @@ const Car3D = (function () {
   const W = (o) => Object.freeze(Object.assign({}, DEFAULT_WING, o));
   const DEFAULT_STYLE = Object.freeze({ noseTipZ: 0, noseSlim: 1, noseDroop: 0,
     airbox: 1, fin: 0, mirror: 0, inlet: 0, wingStyle: DEFAULT_WING,
-    inletH: 0, inletW: 0, undercutD: 0, waist: 0, floorStep: 0, coverCrown: 0 });
+    inletH: 0, inletW: 0, undercutD: 0, waist: 0, floorStep: 0, coverCrown: 0, coverLift: 0 });
   // Chassis relief on the STOCK garage recipe. inletH/inletW/undercutD/waist/
   // floorStep/coverCrown are metres (or metre-scale offsets) so a 4 cm pair
   // gap is a real silhouette change, not a paint swap. Showcase: Mercedes
@@ -64,8 +64,48 @@ const Car3D = (function () {
     astonmartin: Object.freeze({ noseTipZ:  0.05, noseSlim: 0.96, noseDroop: -0.030,  airbox: 0.96, fin: 0, mirror: 1, inlet: -0.030, inletH: -0.010, inletW: -0.040, undercutD:  0.035, waist: -0.030, floorStep:  0.025, coverCrown:  0.020, wingStyle: W({ arch: 0.50, twist: 0.27, teCurve: 0.115, chordTaper: 0.34, tipRise: 0.030 }) }),
     cadillac:    Object.freeze({ noseTipZ: -0.02, noseSlim: 1.02, noseDroop:  0,      airbox: 1.00, fin: 1, mirror: 2, inlet:  0.010, inletH:  0.010, inletW: -0.020, undercutD: -0.010, waist:  0.015, floorStep: -0.005, coverCrown: -0.020, wingStyle: W({ arch: 0.70, twist: 0.20, teCurve: 0.086, canard: 2, foot: 1.16, tipRise: 0.024 }) }),
   });
+  // BODY STYLES (2026-10-18, geometry pass 2026-10-19): chassis looks a livery
+  // can wear on any team via `bodyStyle`. Same fields as TEAM_STYLE, plus
+  // optional coverLift (metres on the engine-cover crown top — silhouette only;
+  // TEAM_STYLE leaves it 0 so grid cars are unchanged). noseDroop stays at or
+  // above the shipped team worst so CarBodyGeom's NOSE_DROOP_FLOOR is unchanged.
+  // Values are silhouette-first (DAD #2924 side sheet): nose length/height,
+  // sidepod width/height, airbox and cover crown must read at a glance.
+  // DAD #2924 @2ff4f76: side/3-4 must clear SUBTLE_PCT (8%). Brick/barge already
+  // read; needle/anteater/arched/wedge need brick-level outline moves in Y/Z
+  // (width alone is invisible in pure side).
+  const BODY_STYLES = Object.freeze({
+    // Needle: spike nose past the wing, pencil tip+waist, tower inlet, sunken flat cover.
+    needle:  Object.freeze({ noseTipZ:  0.55, noseSlim: 0.16, noseDroop: -0.028, airbox: 0.22, fin: 0, mirror: 0, inlet: -0.100, inletH:  0.280, inletW: -0.240, undercutD:  0.200, waist: -0.260, floorStep:  0.100, coverCrown: -0.080, coverLift: -0.140, wingStyle: W({ arch: 0.22, twist: 0.06, teCurve: 0.020, chordTaper: 0.12, foot: 0.70, tipRise: 0.004 }) }),
+    // Brick (reads): blunt fat nose, slab pods, tall airbox, raised box cover.
+    brick:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.40, noseDroop:  0,     airbox: 2.00, fin: 1, mirror: 1, inlet:  0.120, inletH:  0.220, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep:  0.100, coverCrown: -0.080, coverLift:  0.100, wingStyle: W({ flaps: 2, arch: 0.28, twist: 0.06, teCurve: 0.025, chordTaper: 0.12, foot: 0.75, canard: 0, tipRise: 0.006 }) }),
+    // Anteater: long low snout (mid cone drops), flat low pods, humped cover.
+    anteater: Object.freeze({ noseTipZ: 0.52, noseSlim: 0.48, noseDroop: -0.028, airbox: 0.70, fin: 0, mirror: 2, inlet: -0.050, inletH: -0.240, inletW:  0.180, undercutD:  0.060, waist:  0.050, floorStep: -0.100, coverCrown:  0.260, coverLift:  0.180, wingStyle: W({ arch: 0.95, twist: 0.42, teCurve: 0.190, chordTaper: 0.48, canard: 2, tipRise: 0.065 }) }),
+    // Arched: short stock nose, tower airbox + high cover crown, tall pods.
+    arched:  Object.freeze({ noseTipZ:  0.02, noseSlim: 0.90, noseDroop: -0.022, airbox: 2.40, fin: 1, mirror: 0, inlet:  0.040, inletH:  0.280, inletW: -0.040, undercutD:  0.180, waist: -0.100, floorStep:  0.040, coverCrown:  0.280, coverLift:  0.200, wingStyle: W({ arch: 1.15, twist: 0.36, teCurve: 0.170, foot: 1.55, tipRise: 0.065 }) }),
+    // Wedge: long low tip, scooped low inlet, rising high cover, tiny airbox.
+    wedge:   Object.freeze({ noseTipZ:  0.52, noseSlim: 1.45, noseDroop: -0.028, airbox: 0.28, fin: 0, mirror: 1, inlet: -0.110, inletH: -0.260, inletW:  0.100, undercutD:  0.220, waist: -0.220, floorStep:  0.120, coverCrown:  0.200, coverLift:  0.200, wingStyle: W({ flaps: 2, arch: 0.55, twist: 0.20, teCurve: 0.090, chordTaper: 0.30, tipRise: 0.024 }) }),
+    // Barge (reads): short fat blunt hull, wide low pods, heavy waist, low flat cover.
+    barge:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.10, noseDroop: -0.006, airbox: 1.55, fin: 1, mirror: 2, inlet:  0.100, inletH: -0.060, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep: -0.120, coverCrown: -0.080, coverLift: -0.100, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
+  });
+  // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
+  // for saved liveries, but the BODY picker / viewer list only offer them when
+  // this flag is true — DAD's review found team swaps at 2–5% pixel diff, not
+  // silhouette-readable. Flip to true after a dedicated team-body geometry pass.
+  const ALLOW_TEAM_BODY_SWAP = false;
+  const BODY_STYLE_IDS = Object.freeze([
+    ...Object.keys(BODY_STYLES),
+    ...(ALLOW_TEAM_BODY_SWAP ? Object.keys(TEAM_STYLE) : []),
+  ]);
   function teamStyleOf(teamId) {
-    return (teamId && TEAM_STYLE[teamId]) || DEFAULT_STYLE;
+    return (teamId && (TEAM_STYLE[teamId] || BODY_STYLES[teamId])) || DEFAULT_STYLE;
+  }
+  // The style key a car's GEOMETRY is built from: the livery's bodyStyle when it
+  // names a known body, else the team's own. Every geometry caller (Car3D.build,
+  // decal anchors, mirror lights) resolves through this so they cannot disagree.
+  // Team ids still resolve even when ALLOW_TEAM_BODY_SWAP is false (saved liveries).
+  function bodyStyleKey(teamId, bodyStyle) {
+    return bodyStyle && (TEAM_STYLE[bodyStyle] || BODY_STYLES[bodyStyle]) ? bodyStyle : teamId;
   }
 
   /* WHO WEARS THE LID, for a team whose number is not a 2026 seat. A legend or a
@@ -106,7 +146,7 @@ const Car3D = (function () {
   const body = CarBodyGeom.create({
     SURFACES, CARBON, DARK, INTAKE, PANEL,
     TYRE_BAND, BRAKE_CALIPER,
-    AXLES, CHASSIS, DEFAULT_STYLE, DEFAULT_WING, TEAM_STYLE, teamStyleOf,
+    AXLES, CHASSIS, DEFAULT_STYLE, DEFAULT_WING, TEAM_STYLE, BODY_STYLES, teamStyleOf,
     geometry, shadeFlags,
   });
   const {
@@ -211,7 +251,8 @@ const Car3D = (function () {
     const floorStyle = design.floor;
     const cockpitStyle = design.cockpit;
     const wheelStyle = design.wheels;
-    const teamStyle = teamStyleOf(opts && opts.teamId);
+    const styleKey = bodyStyleKey(opts && opts.teamId, liv.bodyStyle);
+    const teamStyle = teamStyleOf(styleKey);
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
     // ownHalo (exterior builds only): the cockpit build's halo (opts.halo, the
     // player's COCKPIT halo choice; 0 = none) replaces the factory hoop and its
@@ -220,7 +261,7 @@ const Car3D = (function () {
     // around the seat, but nothing over the cockpit the player cannot see.
     const exHalo = !ckpt && !(opts && opts.ownHalo);
     const shade = !ckpt && typeof CarShade !== "undefined" && (opts && opts.smooth != null ? !!opts.smooth : CarShade.on(teamId));
-    const anchors = bodyAnchors(T, opts && opts.teamId, liv.spineHeight, shade);   // rounded: coke foot + downwash ramp
+    const anchors = bodyAnchors(T, styleKey, liv.spineHeight, shade);   // rounded: coke foot + downwash ramp
     const floorEdge = Math.max(0.72, Math.min(1.35, aeroStyle.floorEdge));
     const floorCut = Math.max(0, Math.min(0.24, aeroStyle.floorCut));
     // Same envelope the front wing now respects: at the catalog's widest floor
@@ -2277,7 +2318,7 @@ const Car3D = (function () {
   return { build, buildComplete, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
-           TEAM_STYLE, teamStyleOf,
+           TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,
            endplate: endplateGeom, numberBoard, frontPlate: frontPlateGeom,
            wingBand: wingBandGeom,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
