@@ -3,6 +3,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { runInNewContext } from "node:vm";
+import { initCensusPage } from "../../tools/lib/census-init.mjs";
 import {
   distanceBand, classifySource, classifyPass, aggregateRows, tableRows,
   formatBandTable, recommend, parseSummaryLine, perFrame,
@@ -108,3 +110,67 @@ test("parseSummaryLine reads = mesh-census JSON", () => {
   assert.deepEqual(parseSummaryLine(log), { tracks: ["monaco"], errors: 0 });
   assert.equal(parseSummaryLine("nope"), null);
 });
+
+// The initializer is serialized into the page by all three census CLIs.
+// Execute that serialized body in a fresh realm, without module bindings.
+function censusPage({ constructors = ["WebGL2RenderingContext", "WebGLRenderingContext"], blocked = false } = {}) {
+  const writes = [], calls = [], originals = new Map();
+  const window = {};
+  for (const name of constructors) {
+    class GL {}
+    Object.assign(GL.prototype, { LINK_STATUS: 1, VALIDATE_STATUS: 2, COMPLETION_STATUS_KHR: 3, COMPILE_STATUS: 4 });
+    for (const method of ["linkProgram", "compileShader", "validateProgram", "getProgramParameter", "getShaderParameter", "getProgramInfoLog", "getShaderInfoLog"]) {
+      GL.prototype[method] = function (...args) { calls.push({ method, receiver: this, args }); return "native:" + method; };
+    }
+    originals.set(GL, { ...GL.prototype });
+    window[name] = GL;
+  }
+  const storage = (kind) => ({ setItem(key, value) { writes.push([kind, key, value]); if (blocked) throw new Error("blocked storage"); } });
+  const context = { window, localStorage: storage("local"), sessionStorage: storage("session") };
+  return { context, writes, calls, originals, window };
+}
+
+for (const backend of ["tlx", "glx"]) for (const stub of [false, true]) for (const mobile of [false, true]) {
+  test(`census page initialization: ${backend}, stub=${stub}, mobile=${mobile}`, () => {
+    const f = censusPage();
+    runInNewContext(`(${initCensusPage.toString()})(options)`, { ...f.context, options: { backend, stub, mobile } });
+    assert.equal(f.window.__TEST_MODE, true);
+    assert.deepEqual(f.writes, [
+      ...(mobile ? [["local", "apex26.forceMobileTier", "1"]] : []),
+      ["local", "apex26.gfxBackend", backend === "tlx" ? "three" : "glx"],
+      ...(backend === "tlx" ? [["local", "apex26.tlxForceGL", "1"]] : []),
+      ["local", "apex26.gfxBootStepMs", "45000"],
+      ["session", "apex26.wgxCapture", "0"],
+    ]);
+    for (const [GL, original] of f.originals) {
+      const gl = new GL(), program = {}, shader = {};
+      if (!(backend === "tlx" && stub)) {
+        for (const [name, method] of Object.entries(original)) assert.equal(GL.prototype[name], method, name);
+        continue;
+      }
+      for (const name of ["linkProgram", "compileShader", "validateProgram"]) assert.equal(gl[name](program), undefined);
+      for (const status of [gl.LINK_STATUS, gl.VALIDATE_STATUS, gl.COMPLETION_STATUS_KHR]) assert.equal(gl.getProgramParameter(program, status), true);
+      assert.equal(gl.getShaderParameter(shader, gl.COMPILE_STATUS), true);
+      assert.equal(gl.getProgramInfoLog(program), "");
+      assert.equal(gl.getShaderInfoLog(shader), "");
+      const before = f.calls.length;
+      assert.equal(gl.getProgramParameter(program, 99), "native:getProgramParameter");
+      assert.equal(gl.getShaderParameter(shader, 98), "native:getShaderParameter");
+      assert.deepEqual(f.calls.slice(before), [
+        { method: "getProgramParameter", receiver: gl, args: [program, 99] },
+        { method: "getShaderParameter", receiver: gl, args: [shader, 98] },
+      ]);
+    }
+    assert.equal(f.calls.length, backend === "tlx" && stub ? 4 : 0);
+  });
+}
+
+for (const constructors of [[], ["WebGL2RenderingContext"], ["WebGLRenderingContext"]]) {
+  test(`census page initialization tolerates blocked storage and ${constructors.length} GL constructor(s)`, () => {
+    const f = censusPage({ constructors, blocked: true });
+    runInNewContext(`(${initCensusPage.toString()})(options)`, { ...f.context, options: { backend: "tlx", stub: true, mobile: true } });
+    assert.deepEqual(f.writes, [["local", "apex26.forceMobileTier", "1"]], "one blocked write aborts the storage block");
+    assert.equal(f.window.__TEST_MODE, true, "storage failure does not skip test mode or shader setup");
+    for (const [GL] of f.originals) assert.equal(new GL().getProgramParameter({}, 1), true);
+  });
+}

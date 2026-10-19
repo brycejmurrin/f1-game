@@ -16,14 +16,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { makeDom } from "../helpers/mini-dom.mjs";
-import { absSrc } from "../helpers/abs-src.mjs";
+import { bootHud } from "../helpers/hud-harness.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
-const src = (p) => read(p).replace(/^const\b/gm, "var");
 
 const TOKENS = (() => {
   const t = {};
@@ -47,66 +44,26 @@ const R = (left, top, w, h) => ({ left, top, right: left + w, bottom: top + h, w
  *  CSS zoom into getBoundingClientRect. */
 function boot({ W = 844, H = 390, scale = 1, cssZoom = true, camInRow = true } = {}) {
   const INTRINSIC = { map: 110, top: 300, sectors: 140, gaps: 84 };
-  const dom = makeDom();
-  const rawCreate = dom.document.createElement;
-  dom.document.createElement = (tag) => {
-    const el = rawCreate(tag);
-    if (String(tag).toLowerCase() === "canvas") el.getContext = () => ctx2d();
-    return el;
-  };
-  const sb = {
-    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date,
-    parseFloat, parseInt, isFinite, Infinity,
-    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
-    document: dom.document, innerWidth: W, innerHeight: H, devicePixelRatio: 1,
-    M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
-    PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
-    Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
-    GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
-    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
-    setTimeout: () => 1, clearTimeout: () => {},
-    performance: { now: () => 1000 },
-    matchMedia: () => ({ matches: false, addListener() {}, removeListener() {} }),
-    getComputedStyle: () => ({
-      getPropertyValue: (k) => TOKENS[k] || "",
-      columnGap: "0px", rowGap: "0px", transform: "none",
-    }),
-  };
-  sb.window = sb;
-  // Old Safari is a real DOM whose Element.prototype lacks currentCSSZoom; the
-  // other harnesses here (and mini-dom suites) define no Element at all.
-  if (!cssZoom) sb.Element = function Element() {};
-  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
-  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
-  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
-  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
-
-  const $ = (id) => dom.byId(id);
-  const minimap = $("minimap");
-  minimap.getContext = () => ctx2d();
-  const els = {
-    pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
-    speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
-    btnOT: $("btn-ot"), btnAero: $("btn-aero"),
-    gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
-    flag: $("hud-flag"), minimap, gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
-    announceLive: $("announce-live"), pausebtn: $("pausebtn"), btnCam: $("btn-cam"),
-  };
-  dom.document.body.classList.add("in-race");   // no `desktop` class: a touch body
-  const player = {
-    team: { id: "t1", color: [1, 0, 0] }, code: "YOU", rank: 1, lap: 1, lapTime: 12, best: Infinity,
-    speed: 50, energy: 0.5, gear: 3, rpm: 5000, boostOn: false,
-    otT: 0, otArmed: false, otE: 0, otEarned: false, aeroX: 0, xArmed: false, s: 10, prog: 10, retired: false,
-  };
-  const G = {
-    els, player, cars: [player], ranked: [player], timeTrial: false, state: "race",
-    lapsTarget: 5, track: { map: [[0, 0], [1, 1]], total: 100, def: {} },
-    sectorLast: [null, null, null], sectorBests: [Infinity, Infinity, Infinity],
-    fieldSectorBests: [Infinity, Infinity, Infinity], aeroZones: [{}], ttRecord: Infinity,
-    fmtTime: (t) => String(t), dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true,
-    cssCol: () => "#f00",
-  };
-  const hud = sb.GameHud.create(G);
+  const { dom, sb, $, els, hud } = bootHud({
+    W, H, canvasContext: ctx2d,
+    prepareDom(dom) {
+      dom.byId("minimap");
+      dom.body.classList.add("in-race");   // no `desktop` class: a touch body
+    },
+    sandbox: {
+      matchMedia: () => ({ matches: false, addListener() {}, removeListener() {} }),
+      getComputedStyle: () => ({
+        getPropertyValue: (k) => TOKENS[k] || "",
+        columnGap: "0px", rowGap: "0px", transform: "none",
+      }),
+      // Old Safari is a real DOM whose Element.prototype lacks currentCSSZoom;
+      // the other harnesses here (and mini-dom suites) define no Element at all.
+      ...(!cssZoom ? { Element: function Element() {} } : {}),
+    },
+    elementIds: { pausebtn: "pausebtn", btnCam: "btn-cam" },
+    player: { code: "YOU", rank: 1, boostOn: false, otArmed: false, otEarned: false, xArmed: false },
+  });
+  const minimap = els.minimap;
   const root = dom.documentElement;
   root.style.setProperty("--hud-scale", String(scale));
 

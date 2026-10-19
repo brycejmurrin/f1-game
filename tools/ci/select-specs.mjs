@@ -970,7 +970,7 @@ export const TRACKED = [
   // A path inside a regex literal is invisible to a rename; the lint in
   // tests/unit/select-specs.test.mjs now fails on any member that matches no
   // tracked file, which is what pick-tests.mjs's RULES have had all along.
-  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
+  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|docs-only-policy\.mjs|select-budget\.mjs|run-playwright\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
   /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key

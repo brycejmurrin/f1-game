@@ -8,33 +8,15 @@ answer the question the way protect-files.sh does: scoped by /proc/<pid>/cwd,
 never a bare `ps | grep` that fires on another worktree's run or on a shell
 whose -c text merely mentions the runner (the self-match trap).
 """
-import json, os, re, sys
+import json, os, sys
+from live_process import playwright_pids
 
 if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
     print("usage: live-run.py <root>", file=sys.stderr)
     sys.exit(0 if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help") else 2)
 
 root = os.path.realpath(sys.argv[1])
-pat = re.compile(r"playwright(\.js)?\s+test\b|run-playwright\.mjs")
-pid = ""
-for d in os.listdir("/proc"):
-    if not d.isdigit():
-        continue
-    try:
-        argv = open(f"/proc/{d}/cmdline", "rb").read().split(b"\0")
-        args = b" ".join(argv).decode("utf8", "replace")
-        # A shell whose -c text merely MENTIONS the runner (the agent's own
-        # Bash wrapper, a waiter loop) is not a run: the self-match trap.
-        if os.path.basename(argv[0].decode("utf8", "replace")) in ("bash", "sh", "dash", "zsh"):
-            continue
-        if not pat.search(args) or "--list" in args:
-            continue
-        cwd = os.path.realpath(os.readlink(f"/proc/{d}/cwd"))
-    except OSError:
-        continue
-    if cwd == root or cwd.startswith(root + os.sep):
-        pid = d
-        break
+pid = next(playwright_pids(root, advisory=True), "")
 if not pid:
     sys.exit(0)
 log = ""
@@ -51,5 +33,9 @@ try:
         log = r.get("log", "")
 except Exception:
     pass
-start = open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[19]
+try:
+    start = open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[19]
+except OSError:
+    # The selected process can exit between the shared scan and its identity read.
+    sys.exit(0)
 print(f"{pid}:{start}", log or "-")

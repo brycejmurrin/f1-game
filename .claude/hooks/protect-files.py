@@ -9,6 +9,7 @@
 # -e), git apply/patch and targets built from variables are NOT seen —
 # shellparse.py's docstring lists the gap.
 import json, os, re, subprocess, sys
+from live_process import playwright_pids
 
 try:
     d = json.load(sys.stdin)
@@ -115,37 +116,12 @@ def test_scripts(text):
 
 # --- no source edits during a live browser run --------------------------------
 def live_playwright_in(root):
-    """A `playwright test` / run-playwright.mjs process whose cwd is under THIS
-    checkout. Scoped (2026-09-22): a substring match on the whole process table
-    also fired on another worktree's run, on an editor grepping for the word,
-    and on this hook's own shell when the command line quoted it. argv is
-    split on NULs and matched token-wise; cwd comes from /proc."""
+    """Conservatively freeze source for any recognized runner in this checkout."""
     try:
-        pids = [p for p in os.listdir("/proc") if p.isdigit()]
+        return next(playwright_pids(root), None) is not None
     except Exception:
+        # Preserve the edit guard's existing fail-open /proc failure policy.
         return False
-    for pid in pids:
-        try:
-            with open(f"/proc/{pid}/cmdline", "rb") as fh:
-                argv = fh.read().split(b"\0")
-        except Exception:
-            continue
-        argv = [a.decode("utf8", "replace") for a in argv if a]
-        if not argv:
-            continue
-        basenames = [os.path.basename(a) for a in argv]
-        is_pw = ("run-playwright.mjs" in basenames
-                 or any(b in ("playwright", "playwright.js", "cli.js") and "test" in argv[i + 1:i + 3]
-                        for i, b in enumerate(basenames)))
-        if not is_pw:
-            continue
-        try:
-            cwd = os.readlink(f"/proc/{pid}/cwd")
-        except Exception:
-            continue
-        if cwd == root or cwd.startswith(root + os.sep):
-            return True
-    return False
 
 
 def check(file, tool, ti, proposed=None, how=""):

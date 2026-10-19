@@ -687,9 +687,13 @@ test("select(): a css edit selects the small CSS set, not a whole group", () => 
 });
 
 test("select(): editing the selector itself is infra — narrower than the change, and says so", () => {
-  const r = selectFor({ "tools/ci/select-specs.mjs": "// fixture edit\n" });
-  assert.equal(r.reason, "infra");
-  assert.ok(r.tracked.includes("tools/ci/select-specs.mjs"));
+  for (const file of ["tools/ci/select-specs.mjs", "tools/ci/docs-only-policy.mjs"]) {
+    const r = selectFor({ [file]: "// fixture edit\n" });
+    assert.equal(r.reason, "infra");
+    assert.deepEqual(r.tracked, [file]);
+    assert.deepEqual(r.groups, [], "selector policy edits add no browser groups");
+    assert.deepEqual(r.shards, [], "selector policy edits add no browser jobs");
+  }
 });
 
 test("a blanket source edit keeps the boot group in the REQUIRED selected gate — Smoke is not a required check (8-F2)", () => {
@@ -1049,7 +1053,7 @@ test("the TRACKED infra list names where the selector tools ACTUALLY live", () =
   // Selection machinery must be tracked so a change to the selector itself
   // cannot silently narrow the gate using unreviewed routing logic.
   const hit = (p) => TRACKED.some((r) => r.test(p));
-  for (const f of ["tools/ci/select-specs.mjs", "tools/ci/pick-tests.mjs",
+  for (const f of ["tools/ci/select-specs.mjs", "tools/ci/docs-only-policy.mjs", "tools/ci/pick-tests.mjs",
                    "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs",
                    "tools/ci/pick-unit-slices.mjs", "tools/ci/node-plan.mjs",
                    "tools/ci/geometry-paths.mjs", "tools/ci/twinned-specs.mjs",
