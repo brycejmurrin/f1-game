@@ -274,7 +274,7 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 
-test("controller disconnect and visibility-blurred cause no pageerror", async ({ page }) => {
+test("controller disconnect and visibility-blurred drop the remote sample, mark the session hidden and restore on visible", async ({ page }) => {
   test.setTimeout(180_000);
   await bootAndProbe(page);
   expect((await startVr(page)).ok).toBe(true);
@@ -287,23 +287,36 @@ test("controller disconnect and visibility-blurred cause no pageerror", async ({
   });
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
+  // XrBoot answers a non-visible state by dropping the XR-owned remote sample
+  // (Input.remoteLost("xr")) before it asks the game to pause. Spy on that call.
   await page.evaluate(() => {
+    globalThis.__xrLost = [];
+    globalThis.__xrLostPrev = Input.remoteLost;
+    Input.remoteLost = (src) => { __xrLost.push(src); return __xrLostPrev.call(Input, src); };
     globalThis.__iwerDevice.updateVisibilityState("visible-blurred");
   });
-  // Brief settle — visibilitychange is sync on the next XR frame input path.
-  await new Promise((r) => setTimeout(r, 100));
+  await page.waitForFunction(() => __xrLost.length > 0, null, { polling: 100, timeout: 15_000 });
   const vis = await page.evaluate(() => ({
     state: XrSession.getSession() && XrSession.getSession().visibilityState,
     visible: XrSession.isVisible(),
+    lost: __xrLost.slice(),
+    diagVisible: XrBoot.diag().visible,
   }));
   test.info().annotations.push({ type: "xr-visibility", description: JSON.stringify(vis) });
+  expect(vis.state).toBe("visible-blurred");
+  // visible-blurred is still "visible" to XrSession (only "hidden" clears it);
+  // the pause/remote-drop path keys off state !== "visible" instead.
+  expect(vis.lost).toContain("xr");
 
   await page.evaluate(() => {
+    Input.remoteLost = __xrLostPrev;
     const d = globalThis.__iwerDevice;
     d.updateVisibilityState("visible");
     if (d.controllers.left) d.controllers.left.connected = true;
     if (d.controllers.right) d.controllers.right.connected = true;
   });
+  await page.waitForFunction(() => XrSession.getSession().visibilityState === "visible" && XrSession.isVisible(),
+    null, { polling: 100, timeout: 15_000 });
 
   await endVr(page);
   expect(page.__xrPageErrors || []).toEqual([]);
@@ -381,29 +394,35 @@ test("EXIT VR resumes the game tick and restores the live camera without changin
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 
-test("ENTER VR without attachable backend pins TLX+forceGL (or flashes a message)", async ({ page }) => {
+test("ENTER VR without an attachable backend pins TLX+forceGL, stashes the prior pick and reloads", async ({ page }) => {
   test.setTimeout(180_000);
-  // Boot with GL path blocked: clear forceGL so TLX may be WebGPU/soft — then
-  // stub xrCapable false to force the ensureXrBackend switch path without a
-  // full backend rewrite in this soft box.
   await bootAndProbe(page);
+  // Unconditional: pretend the live backend cannot attach (the IWER suite
+  // normally forces tlxForceGL, which can), and stub the reload we would trigger.
   const result = await page.evaluate(() => {
-    const prev = XrBoot.canAttach();
-    // Monkey-patch: pretend we cannot attach, then click-path ensure.
-    const gfx = XrBoot.diag && null;
+    const gfx = { attachXrSession() {}, xrCapable: () => false };
+    XrBoot.bind({ gfx, tickBody() {}, windowTick() {}, getCamMode: () => 0, setCamMode() {} });
+    localStorage.removeItem("apex26.xrPrevBackend");
+    const canAttach = XrBoot.canAttach();
     const out = XrBoot.ensureXrBackend();
-    // If we actually can attach (IWER suite forces tlxForceGL), ensure is ok.
-    return { prevCan: prev, out, pin: localStorage.getItem("apex26.tlxForceGL"), pending: localStorage.getItem("apex26.xrEnterPending") };
-  });
+    return { canAttach, out, gfxBackend: localStorage.getItem("apex26.gfxBackend"),
+      pin: localStorage.getItem("apex26.tlxForceGL"), pending: localStorage.getItem("apex26.xrEnterPending") };
+  }).catch((e) => ({ navigated: String(e && e.message || e) }));
   test.info().annotations.push({ type: "xr-backend-gate", description: JSON.stringify(result) });
-  if (result.prevCan) {
-    expect(result.out.ok).toBe(true);
-  } else {
-    expect(result.out.reloading || result.out.message).toBeTruthy();
-  }
+  // ensureXrBackend() ends in location.reload(); that destroys the evaluate context.
+  // Read the persisted pin from the reloaded page instead.
+  await page.waitForLoadState("domcontentloaded");
+  const pins = await page.evaluate(() => ({
+    gfxBackend: localStorage.getItem("apex26.gfxBackend"),
+    pin: localStorage.getItem("apex26.tlxForceGL"),
+    pending: localStorage.getItem("apex26.xrEnterPending"),
+  }));
+  expect(pins.gfxBackend).toBe("three");
+  expect(pins.pin).toBe("1");
+  expect(pins.pending).toBe("1");
 });
 
-test("stereo viewports: left width > 0; canvas toDataURL capture; flat mode after exit", async ({ page }) => {
+test("stereo viewports: left width > 0; non-blank canvas capture; flat mode after exit", async ({ page }) => {
   test.setTimeout(180_000);
   await bootAndProbe(page);
   expect((await startVr(page)).ok).toBe(true);
@@ -426,6 +445,10 @@ test("stereo viewports: left width > 0; canvas toDataURL capture; flat mode afte
   // Soft: under some soft-present paths #game may be empty; prefer #game-soft.
   const url = dataUrl || await captureCanvasDataUrl(page, "#game-soft");
   expect(url && url.startsWith("data:image/png")).toBeTruthy();
+  // A blank canvas also encodes to a valid PNG; a PNG of drawn content is far
+  // larger than the ~100 B an empty one costs.
+  const png = Buffer.from(url.split(",")[1], "base64");
+  expect(png.length, "captured canvas must carry content, not an empty PNG").toBeGreaterThan(2000);
 
   await endVr(page);
 

@@ -55,12 +55,14 @@ const ROWS = [
     input: { caps: CAPS_NO_GPU, prefs: { xr: "1", xrBackend: "webgpu" } },
     want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
     fallbackFrom: "webgpu",
+    fallbackReason: "no navigator.gpu",
   },
   {
     name: "armed + webgpu missing XRGPUBinding → fallback webgl2",
     input: { caps: CAPS_NO_XRGPU, prefs: { xr: "1", xrBackend: "webgpu" } },
     want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
     fallbackFrom: "webgpu",
+    fallbackReason: "no XRGPUBinding",
   },
   {
     name: "fallback latch forces webgl2 even when webgpu caps ok",
@@ -71,6 +73,7 @@ const ROWS = [
     },
     want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
     fallbackFrom: "webgpu",
+    fallbackReason: "xrFallback latch",
   },
   {
     name: "xr off ignores webgpu preference",
@@ -132,7 +135,7 @@ test("XRPlan.resolve table (≥15 rows)", () => {
     assert.ok(Array.isArray(got.reasons), row.name + " reasons array");
     assert.ok(Array.isArray(got.fallbacks), row.name + " fallbacks array");
     if (row.fallbackFrom) {
-      assert.ok(got.fallbacks.some((f) => f.from === row.fallbackFrom),
+      assert.ok(got.fallbacks.some((f) => f.from === row.fallbackFrom && f.reason === row.fallbackReason),
         row.name + " expected fallback from " + row.fallbackFrom);
     }
     if (row.reasonIncludes) {
@@ -148,11 +151,6 @@ test("XRPlan never invents a gfxBackend write — resolve is pure", () => {
   const before = JSON.stringify(prefs);
   XRPlan.resolve({ caps: CAPS_NO_GPU, prefs });
   assert.equal(JSON.stringify(prefs), before, "prefs bag must not be mutated");
-});
-
-test("js/xr/xr-plan.js is referenced (zeroRefModules)", () => {
-  assert.ok(fs.existsSync(path.join(ROOT, "js/xr/xr-plan.js")));
-  assert.match(read("js/xr/xr-plan.js"), /XRPlan/);
 });
 
 test("GLX getContext requests xrCompatible only when navigator.xr exists", () => {
