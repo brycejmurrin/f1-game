@@ -453,6 +453,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // runs only in ci.yml's non-blocking flicker-gate job.
   "tests/unit/flicker-metric.test.mjs",
   "tests/unit/floodmast-lamp-register.test.mjs",
+  // The flyby audit's RULES, shown to fail: a stub sequencer fed through auditTrack
+  // and fleetFindings must yield a finding per rule (negative control), no VM.
+  "tests/unit/flyby-audit-rules.test.mjs",
+  // The intro/menu planning lifecycle split out of flyby-shots (game.js source +
+  // small vm harnesses, ~0.4 s): runs beside the real-VM file, not behind it.
+  "tests/unit/flyby-intro.test.mjs",
   // The ORDERING that lights the flyby: raceIntro() applies the race settings
   // before the loading screen starts, so a dawn race stops showing a day sky.
   "tests/unit/flyby-lighting.test.mjs",
