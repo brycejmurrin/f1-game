@@ -20,7 +20,7 @@ def main():
     p.add_argument('--worktree', required=True)
     p.add_argument('--expected-head')
     p.add_argument('--tag', default='command')
-    p.add_argument('--mode', choices=['native', 'compact', 'diagnostic', 'full'], default='native')
+    p.add_argument('--mode', choices=['native', 'compact', 'diagnostic', 'full'])
     p.add_argument('--records', default='artifacts/agent-experiments/records.jsonl')
     p.add_argument('--stdout')
     p.add_argument('--stderr')
@@ -193,7 +193,7 @@ def main():
                  started_at=started, ended_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
                  command_wall_seconds=wall, reaped_child_cpu_seconds=cpu, lock_wait_seconds=lock_wait,
                  actual_route_output_level=actual, declared_output_level=a.mode,
-                 declared_mode_mismatch=actual != a.mode, requested_byte_limit=a.limit,
+                 declared_mode_mismatch=a.mode is not None and actual != a.mode, requested_byte_limit=a.limit,
                  large_output_reason=a.large_output_reason, captured_stdout_bytes=len(out),
                  captured_stderr_bytes=len(err), stdout_path=str(outpath), stderr_path=str(errpath),
                  exit_code=code, signal=-code if code is not None and code < 0 else None,
@@ -205,7 +205,7 @@ def main():
                  limitations='Budgets checked between commands; CPU is Python reaped-child usage, not a process-tree quota. Cleanup covers owned process group, not detached descendants.')
     receipt = dict(record_id=ident, records_path=str(records), exit_code=code, timed_out=timed_out,
                    actual_route_output_level=actual, declared_output_level=a.mode,
-                   mode_mismatch=actual != a.mode, truncated=entry['display_truncated'])
+                   mode_mismatch=a.mode is not None and actual != a.mode, truncated=entry['display_truncated'])
     display = shown + b'\n' + json.dumps(receipt).encode() + b'\n'
     entry['terminal_emitted_bytes'] = len(display)
     ledger.seek(0, 2)

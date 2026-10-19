@@ -42,7 +42,7 @@ USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do
       scoped to the lane (OWNED globs / issue list, follow-up PRs included), not to PR numbers
 MODE/SEED: permission_mode "auto"; source_revision <deploy branch | NAMED integration branch>; model <id>.
 OUTPUT: <native bounded answer | shared compact entrypoint; diagnostic/full and saved-range escalation>.
-CAPABILITIES: <matching parent receipt, exact workdir, available LSP/CLI routes; query permissions vs daemon ownership>.
+CAPABILITIES: <matching parent receipt, exact workdir, available LSP/CLI routes and verified entry symbols; query permissions vs daemon ownership>.
 MEASUREMENT: <automatic recorder + exact FIRST command, or not measured; host bytes/tokens unknown unless captured>.
 PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
 DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>

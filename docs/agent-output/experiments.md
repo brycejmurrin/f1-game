@@ -8,7 +8,8 @@ The parent supplies an exact workdir, expected HEAD, recorder invocation and
 capability receipt before the first worker command. Include the required AGENTS.md
 read in that first recorded action; do not ask a worker to discover its recorder
 through an unrecorded bootstrap. Read relevant skill sections and bounded source
-windows. Reuse matching readiness receipts; recheck drift or failures. LSP queries
+windows. Supply verified entry symbols or a bounded file-outline route; do not
+seed guessed module names in a launch prompt. Reuse matching readiness receipts; recheck drift or failures. LSP queries
 are allowed against a shared daemon, whose lifecycle remains parent-owned.
 
 Workers own only their private artifact scope, including `artifacts/agent-output/`
@@ -31,7 +32,9 @@ python3 tests/helpers/agent-experiment.py \
 
 Use this wrapper for each measured command, including source reads, saved-output
 retrievals, retries and report generation. `--mode` declares the intended output
-level; it does not select a producer mode. The recorder infers direct native vs
+level; it does not select a producer mode. Omit it to leave the declaration null
+and infer the actual route automatically, including saved-output reads. The
+recorder infers direct native vs
 `agent-run.mjs` routes and reports mismatches. Select shared output with the actual
 runner flags. Prefer small native answers; retrieve retained ranges instead of
 repeating a completed action just to change its formatting.

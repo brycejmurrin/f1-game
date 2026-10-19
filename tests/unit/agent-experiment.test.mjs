@@ -98,3 +98,19 @@ test('launch errors retain an error and do not fabricate a child exit', t => {
   assert.equal(f.rows()[0].exit_code, null);
   assert.match(f.rows()[0].launch_error, /No such file/);
 });
+
+
+test('omitted declaration infers saved-read route without fabricating a mismatch', t => {
+  const f = fixture(t);
+  const runner = fileURLToPath(new URL('../../tools/agent-run.mjs', import.meta.url));
+  const captured = spawnSync('python3', [recorder, '--worktree', f.root, '--', process.execPath, runner, '--', 'python3', '-c', "print('saved receipt')"], { cwd: f.root });
+  assert.equal(captured.status, 0);
+  const produced = JSON.parse(captured.stdout.toString().trim().split('\n')[0]);
+  const saved = spawnSync('python3', [recorder, '--worktree', f.root, '--', process.execPath, runner, '--read', produced.stdout.artifact.path, '--limit', '100'], { cwd: f.root });
+  assert.equal(saved.status, 0);
+  for (const row of f.rows()) {
+    assert.equal(row.actual_route_output_level, 'compact');
+    assert.equal(row.declared_output_level, null);
+    assert.equal(row.declared_mode_mismatch, false);
+  }
+});
