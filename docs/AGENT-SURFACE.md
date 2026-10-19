@@ -30,8 +30,8 @@ surface without hand-wiring:
 | Personas / subagents | `.claude/agents/*.md` | Claude and Cursor load these directly. Codex hosts may expose collaboration agents; when they do not, use the same persona contracts through launch prompts and `AGENTS.md`. Never create a second Codex persona tree. |
 | MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
 | Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
-| Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the four catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
-| Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the four catalog commands. |
+| Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the five catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
+| Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the five catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
 
 **Codex collaboration adapter.** When the Codex host exposes collaboration
@@ -70,7 +70,7 @@ does not discover, install or validate hosted tools.
 3. **MCP (required for `apex_*` / `browser_*` / `chrome_*` / `debugger_*` in Cloud):** the host
    does **not** attach project `.mcp.json` by itself ([capabilities](https://cursor.com/docs/cloud-agent/capabilities)).
    In [Cloud Agents → Integrations & MCP](https://cursor.com/agents) (team-shared:
-   Dashboard → Plugins & MCPs) register these four **stdio** servers — same names /
+   Dashboard → Plugins & MCPs) register these five **stdio** servers — same names /
    `bash` wrappers as root `.mcp.json`. Pasteable catalog (keep `command: bash`;
    do **not** use bare `npx @playwright/mcp`):
 
@@ -96,6 +96,11 @@ does not discover, install or validate hosted tools.
     "type": "stdio",
     "command": "bash",
     "args": ["tools/mcp/js-debugger-mcp.sh", "serve"]
+  },
+  "apex-lsp": {
+    "type": "stdio",
+    "command": "bash",
+    "args": ["tools/mcp/lsp-mcp.sh", "serve"]
   }
 }
 ```
@@ -107,7 +112,7 @@ does not discover, install or validate hosted tools.
    ([enterprise MCP allowlist](https://cursor.com/docs/enterprise/model-and-integration-management);
    `tests/unit/environment-json.test.mjs`). A stale save shows three nameless
    `{ "command": "bash" }` rows in `environment-info` (or bare `npx` for
-   playwright) and host attach fails. **Enable all four** in the launch MCP
+   playwright) and host attach fails. **Enable all five** in the launch MCP
    dropdown (catalog often ships only two until toggled — measured 2026-09-03;
    re-checked 2026-10-06).
 4. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
@@ -118,8 +123,8 @@ does not discover, install or validate hosted tools.
 | Signal | Good | Broken (this session 2026-10-06) |
 |---|---|---|
 | `environment-info` → `source` / `build.resolution` | `Repository` / `resolved` | (VM OK even when MCP empty) |
-| `environment-info` → `mcpServerAllowlist` | four named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
-| Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official`, `js-debugger` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
+| `environment-info` → `mcpServerAllowlist` | five named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
+| Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official`, `js-debugger`, `apex-lsp` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
 | VM wrappers | `bash tools/env/ensure-mcp-ready.sh` / `mcp-smoke` OK | n/a (VM ≠ host attach) |
 
 **MCP empty in this session?** CLI fallbacks work without attachment:
@@ -138,7 +143,7 @@ in `.mcp.json`; removed aliases stay absent.
 ## MCP servers
 
 **Repo catalog** (root `.mcp.json` for Claude Code, `.cursor/mcp.json` for
-Cursor, `.codex/config.toml` for Codex — the same four servers, lockstepped by
+Cursor, `.codex/config.toml` for Codex — the same five servers, lockstepped by
 `tests/unit/agent-config.test.mjs`; the debugger joins the three retained after the 2026-09 trim). Stdio wrappers use `command: bash` +
 `args: ["tools/…", …]` because Cursor looks up `command` on `PATH`. The
 `playwright-official` row launches the shell wrapper's `run`, which pins
