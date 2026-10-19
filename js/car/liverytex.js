@@ -353,11 +353,16 @@ const LiveryTex = (function () {
     if (recipe.style === "outline") {
       // Hollow: a wide accent stroke with an ink core line and NO fill — the
       // base paint shows through the counters.
+      // The wide stroke is the glyph the eye reads, so it takes whichever of
+      // accent / ink stands further off the board, accent unless ink clears it by
+      // a quarter. Red Bull's yellow accent outline on its blue board was the
+      // weakest number in the B·D8 round 3 gallery.
+      const swap = bg && accent && ink && contrast(ink, bg) > contrast(accent, bg) * 1.25;
       ctx.lineWidth = Math.max(8, size * 0.11);
-      ctx.strokeStyle = css(accent);
+      ctx.strokeStyle = css(swap ? ink : accent);
       ctx.strokeText(text, cx, cy);
       ctx.lineWidth = Math.max(3, size * 0.035);
-      ctx.strokeStyle = css(ink);
+      ctx.strokeStyle = css(swap ? accent : ink);
       ctx.strokeText(text, cx, cy);
       ctx.restore();
       return;
