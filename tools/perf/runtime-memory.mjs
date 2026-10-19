@@ -34,13 +34,24 @@ export async function runtimeMemory(cdp, { timeoutMs = 3000, enablePerformance =
   if (enablePerformance) performanceEnable = await request('Performance.enable');
   const perf = performanceEnable?.status === 'unavailable' ? performanceEnable : await request('Performance.getMetrics');
   const fields = (result, names) => Object.fromEntries(names.map((k) => [k, metric(result.value?.[k])]));
+  const domain = (result, names, key) => {
+    const values = fields(result, names);
+    const available = Object.values(values).some((v) => v.status === 'available');
+    return { status: available ? 'available' : 'unavailable',
+      ...(!available ? { reason: result.reason || 'CDP response has no usable counters' } : {}), [key]: values };
+  };
+  const metrics = Array.isArray(perf.value?.metrics) ? perf.value.metrics.slice(0, 100)
+    .filter((m) => m && typeof m.name === 'string' && m.name.length > 0)
+    .map((m) => ({ name: m.name.slice(0, 100), ...metric(m.value) })) : [];
+  const perfAvailable = metrics.some((m) => m.status === 'available');
   return {
     schemaVersion: 1, scope: 'current CDP target/isolate; not process RSS, GPU residency or a leak verdict',
     collection: 'no forced GC or intrusive leak preparation',
-    heap: { status: heap.status, ...(heap.reason ? { reason: heap.reason } : {}), bytes: fields(heap, HEAP_FIELDS) },
-    dom: { status: dom.status, ...(dom.reason ? { reason: dom.reason } : {}), counters: fields(dom, DOM_FIELDS) },
-    performance: { status: perf.status === 'available' && !perf.value?.metrics?.length ? 'unavailable' : perf.status, ...(perf.reason ? { reason: perf.reason } : {}), enabledByHelper: enablePerformance && performanceEnable?.status === 'available',
-      metrics: Array.isArray(perf.value?.metrics) ? perf.value.metrics.slice(0, 100).filter((m) => typeof m.name === 'string').map((m) => ({ name: m.name.slice(0, 100), ...metric(m.value) })) : [],
+    heap: domain(heap, HEAP_FIELDS, 'bytes'),
+    dom: domain(dom, DOM_FIELDS, 'counters'),
+    performance: { status: perfAvailable ? 'available' : 'unavailable',
+      ...(!perfAvailable ? { reason: perf.reason || 'CDP response has no usable metrics; domain may be unenabled' } : {}),
+      enabledByHelper: enablePerformance && performanceEnable?.status === 'available', metrics,
       interpretation: 'Metric names/units are protocol-version dependent. Empty metrics are unavailable or unenabled, not zero workload.' },
   };
 }

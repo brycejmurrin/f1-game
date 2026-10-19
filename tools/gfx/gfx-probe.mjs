@@ -31,6 +31,8 @@ import {
   WEBGPU_CHROMIUM_ARGS, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV,
 } from "../lib/harness.mjs";
 
+import { presentationDeadline, presentationDiagnostics, acquirePresentationResource } from "../lib/presentation.mjs";
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const IPHONE_UA =
@@ -87,7 +89,7 @@ function parseArgs(argv) {
   --tlx-webgpu  with --backend three, unpin tlxForceGL (three's WebGPU path)
   --lavapipe    Dawn via Mesa Lavapipe ICD (pair with --tlx-webgpu on Cloud)
   --ls k=v      set a localStorage key before boot (repeatable)
-  --present-timeout MS   awaitSoftPresent budget (default 60000)
+  --present-timeout MS   total attempt page-operation wall budget (default 60000)
   --no-stale-check       skip the second capture (a soft-present frame that does not
                          change across a camera move is STALE and fails the run —
                          on llvmpipe a phone-resolution three-WebGPU lit frame reads
@@ -130,7 +132,7 @@ mkdirSync(opts.outDir, { recursive: true });
 const logPath = join(opts.outDir, "probe.log");
 writeFileSync(logPath, "", "utf8");
 
-const ATTEMPT_ARTIFACTS = ["canvas.png", "frame.png", "page-hud.png", "state.json", "console.txt"];
+const ATTEMPT_ARTIFACTS = ["canvas.png", "frame.png", "page-hud.png", "state.json", "console.txt", "presentation.json", "canvas-2.png"];
 
 function clearAttemptArtifacts() {
   // The default output directory is stable across runs. Remove only files this
@@ -158,7 +160,7 @@ function isRetryable(err) {
   return /timeout|timed out|Target closed|Execution context|ECONNRESET|detached|crashed|interrupted/i.test(m);
 }
 
-async function retryStep(label, fn, { attempts = 3, delayMs = 1500 } = {}) {
+async function retryProbeStep(label, fn, { attempts = 3, delayMs = 1500, wait = sleep } = {}) {
   let last;
   for (let n = 1; n <= attempts; n++) {
     try {
@@ -170,7 +172,7 @@ async function retryStep(label, fn, { attempts = 3, delayMs = 1500 } = {}) {
       last = e;
       log(label, `fail (${n}/${attempts})`, { error: String(e.message || e).slice(0, 240) });
       if (n < attempts && isRetryable(e)) {
-        await sleep(delayMs * n);
+        await wait(delayMs * n);
         continue;
       }
       throw e;
@@ -183,41 +185,60 @@ async function runProbeAttempt(attemptNum) {
   // Brightness of the presented frame, filled in by whichever soft-present
   // branch runs; null when the backend never took one.
   let frameStats = null;
-  const srv = await startStaticServer(ROOT);
-  log("attempt", `${attemptNum}/${opts.retries} — server ${srv.url}`);
-
-  let launchArgs;
-  let launchEnv;
-  if (opts.lavapipe) {
-    launchArgs = [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"];
-    launchEnv = { ...process.env, ...WEBGPU_LAVAPE_ENV };
-  } else if (opts.backend === "webgpu" || opts.tlxWebgpu) {
-    launchArgs = [...WEBGPU_CHROMIUM_ARGS];
-  } else {
-    launchArgs = ["--headless=new", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
-  }
-  log("browser", "launch", {
-    args: launchArgs.length,
-    lavapipe: opts.lavapipe,
-    tlxWebgpu: opts.tlxWebgpu,
+  let latestDiagnostics = null;
+  let phase = "launch";
+  const bounded = presentationDeadline(opts.presentMs);
+  const retryStep = (label, fn, settings) => retryProbeStep(label, () => bounded(label, fn), {
+    ...settings, wait: (ms) => bounded("retry delay", () => sleep(ms)),
   });
-
-  const browser = await launchChromium({
-    args: launchArgs,
-    ...(launchEnv ? { env: launchEnv } : {}),
-  });
+  let browser = null;
   const consoleLines = [];
   try {
+    const srv = await acquirePresentationResource(bounded, "static server", () => startStaticServer(ROOT),
+      (lateServer) => lateServer.close());
+    log("attempt", `${attemptNum}/${opts.retries} — server ${srv.url}`);
+
+    let launchArgs;
+    let launchEnv;
+    if (opts.lavapipe) {
+      launchArgs = [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"];
+      launchEnv = { ...process.env, ...WEBGPU_LAVAPE_ENV };
+    } else if (opts.backend === "webgpu" || opts.tlxWebgpu) {
+      launchArgs = [...WEBGPU_CHROMIUM_ARGS];
+    } else {
+      launchArgs = ["--headless=new", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
+    }
+    log("browser", "launch", {
+      args: launchArgs.length,
+      lavapipe: opts.lavapipe,
+      tlxWebgpu: opts.tlxWebgpu,
+    });
+
+    browser = await acquirePresentationResource(bounded, "browser launch", () => launchChromium({
+      args: launchArgs,
+      ...(launchEnv ? { env: launchEnv } : {}),
+    }), (lateBrowser) => lateBrowser.close());
     const viewport = opts.iphone
       ? { width: 844, height: 390 }
       : { width: 1280, height: 720 };
-    const page = await browser.newPage({
+    const rawPage = await bounded("new page", () => browser.newPage({
       viewport,
       userAgent: opts.iphone ? IPHONE_UA : undefined,
       isMobile: opts.iphone,
       hasTouch: opts.iphone,
       deviceScaleFactor: opts.iphone ? 3 : 1,
-    });
+    }));
+    // Every page operation shares one Node wall deadline, including evaluate/rAF.
+    const page = new Proxy(rawPage, { get(target, key) {
+      const value = target[key];
+      if (typeof value !== "function") return value;
+      if (["on", "setDefaultTimeout"].includes(key)) return value.bind(target);
+      return (...args) => { phase = String(key); return bounded(phase, () => value.apply(target, args)); };
+    } });
+    const snapshot = async () => {
+      latestDiagnostics = await page.evaluate(presentationDiagnostics);
+      writeFileSync(join(opts.outDir, "presentation.json"), JSON.stringify({ ok: false, phase, diagnostics: latestDiagnostics }, null, 2));
+    };
     page.on("console", (m) => {
       const t = m.type();
       const text = m.text();
@@ -292,7 +313,7 @@ async function runProbeAttempt(attemptNum) {
       null, { polling: 100, timeout: 180000 },
     ), { attempts: 2, delayMs: 4000 });
 
-    await sleep(2000);
+    await bounded("scene settle", () => sleep(2000));
 
     await page.evaluate(({ camMode }) => {
       __apex.park(0.12);
@@ -307,6 +328,7 @@ async function runProbeAttempt(attemptNum) {
     // Live rAF renders — step() is physics-only and headless() skips render(),
     // which left soft-present showing a stale / blown-out frame (orbit into
     // Montreal floodlights read as solid white). wgx-capture.mjs uses this path.
+    await snapshot();
     log("frames", "rAF 45");
     await page.evaluate((n) => new Promise((res) => {
       let i = 0;
@@ -589,9 +611,23 @@ async function runProbeAttempt(attemptNum) {
       log("console", `${consoleLines.length} lines → console.txt`);
     }
 
-    return { ...payload, frame: frameStats };
+    await snapshot();
+    const presentation = { ok: true, diagnostics: latestDiagnostics,
+      boundary: "renderer display completion; not physical scanout" };
+    writeFileSync(join(opts.outDir, "presentation.json"), JSON.stringify(presentation, null, 2));
+    return { ...payload, frame: frameStats, presentation };
+  } catch (error) {
+    // A blocked page cannot supply a timeout snapshot; retain the last milestone.
+    try { latestDiagnostics = await presentationDeadline(1000)("failure diagnostics", () => browser?.contexts()[0]?.pages()[0]?.evaluate(presentationDiagnostics)); } catch (_) { /* retain milestone */ }
+    error.presentation = { ok: false, phase, diagnostics: latestDiagnostics, error: String(error.message || error) };
+    writeFileSync(join(opts.outDir, "presentation.json"), JSON.stringify(error.presentation, null, 2));
+    writeFileSync(join(opts.outDir, "console.txt"), consoleLines.join("\n"));
+    throw error;
   } finally {
-    await browser.close();
+    // Harness shutdown force-reaps owned BrowserServer processes after its
+    // bounded graceful close, drains servers, and invalidates pending launches.
+    // Keep ownership until that path finishes rather than swallowing close timeouts.
+    await shutdown();
   }
 }
 
@@ -608,7 +644,7 @@ log("start", JSON.stringify({
 for (let attempt = 1; attempt <= opts.retries; attempt++) {
   clearAttemptArtifacts();
   try {
-    const payload = await runProbeAttempt(attempt);
+    const payload = await presentationDeadline(opts.presentMs + 7000)("whole attempt", () => runProbeAttempt(attempt));
     result = {
       ok: true,
       attempt,
@@ -650,6 +686,7 @@ for (let attempt = 1; attempt <= opts.retries; attempt++) {
       cam: opts.cam,
       logPath,
       error: String(e.message || e),
+      presentation: e.presentation || { ok: false, diagnostics: null },
       files: artifactFiles(),
     };
     writeFileSync(join(opts.outDir, "state.json"), JSON.stringify(result, null, 2));

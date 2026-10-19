@@ -415,9 +415,9 @@ const api = {
   // the rAF render, and a headless page composites no frames at all, so the
   // whole garage animation was unobservable from a test — which is exactly how
   // "the wings do not move" reached a player instead of a spec. No argument
-  // reads the state; garageStep(dt) advances the ease by dt seconds.
+  // reads the state; garageStep(dt) advances the ease by dt seconds. Shut: garage_closed.
   garageAero(on, opts) {
-    if (!G.setupPreviewOn) return null;
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (on !== undefined) G.setSetupAero(!!on, opts);
     return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
              mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
@@ -433,7 +433,7 @@ const api = {
     try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
   },
   garageStep(dt, n) {
-    if (!G.setupPreviewOn) return null;
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     const [step, count] = stepArgs(dt, n);
     for (let i = 0; i < count; i++) G.stepSetupAero(step);
     return this.garageAero();
@@ -2258,7 +2258,7 @@ const api = {
     const s = GameStore.store;
     // `foreign` = cross-tab invalidations applied (store.js onForeignWrite): non-zero means a second tab is in play.
     const m = s.mirror || {};
-    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0, mirror: { supported: !!m.supported, restored: m.restored | 0, flushed: m.flushed | 0, failed: m.failed | 0, pending: m.pending | 0 } };
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0, mirror: { supported: !!m.supported, restored: m.restored | 0, flushed: m.flushed | 0, failed: m.failed | 0, pending: m.pending | 0, inFlight: m.inFlight | 0 } };
   },
 
   // settingsFile(mode) — the SETTINGS FILE object (js/ui/settings-export.js):

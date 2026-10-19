@@ -230,6 +230,19 @@ function staticArrayLen(node, bindings) {
     }
     return base;
   }
+  // allCircuitIds() / shardIds(ids, index, of) — tests/helpers/tracks-walls-roster.js,
+  // the roster the tracks-walls fleet shards slice contiguously.
+  if (node.type === "CallExpression" && node.callee?.type === "Identifier") {
+    if (node.callee.name === "allCircuitIds") return circuitDefCount();
+    if (node.callee.name === "shardIds") {
+      const base = staticArrayLen(node.arguments[0], bindings);
+      const index = staticNumber(node.arguments[1], bindings);
+      const of = staticNumber(node.arguments[2], bindings);
+      if (base == null || index == null || of == null || of < 1) return null;
+      const size = Math.ceil(base / of);
+      return Math.max(0, Math.min(base, (index + 1) * size) - index * size);
+    }
+  }
   // auditTracks() — the shared all-circuit AUDIT roster (terrain-over-road).
   // Unresolved, it billed `for (const trk of TRACKS)` once: terrain-over-road
   // read as 5 tests / ~69 s while Playwright ran 56 (~10-13 min on llvmpipe),

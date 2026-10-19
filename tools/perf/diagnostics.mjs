@@ -60,6 +60,7 @@ export function diagnosticPlan(kind, a = {}, { root = ROOT, knownCircuits = () =
   let args, script, timeoutMs, evidence;
   if (kind === 'memory_census') {
     const ids = tracks(a.tracks, ['monza', 'monaco'], 'tracks');
+    if (new Set(ids).size !== ids.length) throw new Error('tracks must be unique for per-cycle growth');
     const cycles = integer(a.cycles, 3, 3, 5, 'cycles'), settle = integer(a.settle, 2, 0, 10, 'settle');
     script = 'gfx/mem-census.mjs'; timeoutMs = 900000;
     args = ['--backend', choice(a.backend, 'three', ['three', 'webgl2'], 'backend'), '--mode', choice(a.mode, 'picker', ['picker', 'race'], 'mode'), '--tracks', ids.join(','), '--cycles', String(cycles), '--settle', String(settle), '--json', resultFile, '--quiet'];
@@ -91,11 +92,11 @@ export function summariseDiagnostic(kind, doc, limit = 12) {
   integer(limit, 12, 1, 50, 'limit');
   if (kind === 'memory_census') {
     if (!Array.isArray(doc.rows) || !doc.summary || doc.rows.length > 200) throw new Error('not a bounded memory census report');
-    return { summary: { backend: doc.summary.backend, mode: doc.summary.mode, cycles: doc.summary.cycles, growthMbLastCycle: doc.summary.growthMbLastCycle, pageErrors: doc.summary.pageErrors, verdict: doc.summary.verdict }, observations: doc.rows.slice(-limit).map((r) => ({ step: r.step, cycle: r.cycle, track: r.track, heapMB: number(r.heapMB), aliveTrackCount: Array.isArray(r.aliveTracks) ? r.aliveTracks.length : null, audioMB: number(r.audioMB), three: r.three, runtimeMemory: r.runtimeMemory ? { heap: r.runtimeMemory.heap, dom: r.runtimeMemory.dom } : { status: 'unavailable', reason: 'older report without CDP runtime counters' } })), interpretation: 'A growth threshold is a diagnostic budget, not a leak verdict. Compare warmed identical tracks and inspect retaining paths.' };
+    return { summary: { ...doc.summary }, observations: doc.rows.slice(-limit).map((r) => ({ step: r.step, cycle: r.cycle, track: r.track, heapMB: number(r.heapMB), heapBytes: number(r.heapBytes), backend: r.backend, instrumentation: r.instrumentation, aliveTrackCount: Array.isArray(r.aliveTracks) ? r.aliveTracks.length : null, audioMB: number(r.audioMB), three: r.three, runtimeMemory: r.runtimeMemory ?? { status: 'unavailable', reason: 'older report without CDP runtime counters' } })), interpretation: 'Query success is not measurement success: inspect completeness, correctness and budget; older reports lack these checks. MiB heap values are separate samples from CDP runtime fields; do not sum memory domains. Growth is a diagnostic budget, not a leak verdict. Animation callbacks and menu warm completion do not prove visible presentation; compare warmed identical tracks and inspect retaining paths.' };
   }
   if (kind === 'gpu_memory_census') {
     if (!Array.isArray(doc.cat) || !Array.isArray(doc.visits)) throw new Error('not a GPU allocation census');
-    return { texMB: number(doc.texMB), rbMB: number(doc.rbMB), bufMB: number(doc.bufMB), categories: doc.cat.slice(0, limit), visits: doc.visits.slice(-limit), interpretation: 'Requested WebGL2 allocations; not resident GPU memory or hardware performance. Read run.json for shader-link mode.' };
+    return { texMB: number(doc.texMB), rbMB: number(doc.rbMB), bufMB: number(doc.bufMB), categories: doc.cat.slice(0, limit), visits: doc.visits.slice(-limit), track: doc.track, initialTrack: doc.initialTrack, backend: doc.backend, shaderLinkMode: doc.shaderLinkMode || 'unknown (older report)', ok: doc.ok, measurement: doc.measurement, correctness: doc.correctness, errors: doc.errors?.slice(0, limit), failed: doc.failed?.slice(0, limit), unknown: doc.unknown?.slice(0, limit), interpretation: 'Final-visit requested allocation estimates; not driver residency or hardware performance. Initial/final snapshots, shader-link mode and errors are in the report.' };
   }
   if (kind === 'vm_lifecycle') {
     if (doc.mode !== 'vm-no-renderer') throw new Error('not a VM lifecycle census');
@@ -107,14 +108,72 @@ export function summariseDiagnostic(kind, doc, limit = 12) {
   }
   throw new Error('unknown diagnostic kind');
 }
+// A readable saved report is not proof its producer completed or wrote this file.
+// Keep legacy reports readable, with unknown provenance rather than an invented pass.
+function queryEvidence(root, file, kind, summary) {
+  const report = diagnosticPath(root, file);
+  const manifestPath = diagnosticPath(root, resolve(dirname(report), 'run.json'));
+  const memory = summary.summary;
+  const verdict = memory?.verdict;
+  const reportFailed = summary.ok === false || memory?.ok === false || ['failed', 'fail'].includes(verdict)
+    || (typeof verdict === 'string' && /^(?:leak:|heap grew\b)/.test(verdict)) || memory?.pageErrors > 0
+    || ['completeness', 'correctness', 'budget'].some((key) => ['fail', 'failed'].includes(memory?.[key]?.status));
+  const reportStatus = reportFailed ? 'failed'
+    : summary.ok === true || memory?.ok === true || verdict === 'ok' || verdict === 'passed' ? 'passed' : 'unknown';
+  const unknown = (reason) => ({ provenance: { status: 'unverified', manifest: relative(root, manifestPath), reason },
+    measurement: { status: reportStatus === 'failed' ? 'failed' : 'unverified', reportStatus } });
+  if (!existsSync(manifestPath)) return unknown('adjacent run.json is missing');
+  const stat = statSync(manifestPath);
+  if (!stat.isFile() || stat.size > 64 * 1024) return unknown('run.json must be a file at most 64 KiB');
+  let run;
+  try { run = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { return unknown('run.json is malformed'); }
+  if (!run || typeof run !== 'object' || Array.isArray(run)) return unknown('run.json is malformed');
+  const argv = Array.isArray(run.argv) ? run.argv : [];
+  const jsonIndex = argv.indexOf('--json'), outIndex = argv.indexOf('--out');
+  const output = jsonIndex >= 0 ? argv[jsonIndex + 1] : outIndex >= 0 && typeof argv[outIndex + 1] === 'string'
+    ? resolve(root, argv[outIndex + 1], kind === 'renderer_probe' ? 'state.json' : 'census.json') : null;
+  const intended = typeof run.resultFile === 'string' ? run.resultFile : output;
+  // Guard manifest-supplied paths too, even though these reads never execute argv.
+  const intendedPath = typeof intended === 'string' ? diagnosticPath(root, intended) : null;
+  const started = typeof run.started === 'string' ? Date.parse(run.started) : NaN;
+  const ended = typeof run.ended === 'string' ? Date.parse(run.ended) : NaN;
+  // One-second tolerance accommodates second-resolution filesystem timestamps.
+  // Also reject a report replaced after its recorded producer finished.
+  const timeline = Number.isFinite(started) && Number.isFinite(ended) && ended >= started && ended <= Date.now() + 1000;
+  const modified = statSync(report).mtimeMs;
+  const freshness = !timeline ? 'unknown' : modified + 1000 < started ? 'stale'
+    : modified > ended + 1000 ? 'modified-after-run' : 'fresh';
+  const matches = intendedPath === null ? 'unknown' : intendedPath === report ? 'matching' : 'mismatched';
+  const survivors = Array.isArray(run.cleanup?.survivors) ? run.cleanup.survivors : null;
+  const stopped = run.stopReason != null && run.stopReason !== '';
+  const failed = (typeof run.exit === 'number' && run.exit !== 0) || !!run.signal || stopped || (survivors && survivors.length > 0)
+    || ['stale', 'modified-after-run'].includes(freshness) || matches === 'mismatched' || (typeof run.kind === 'string' && run.kind !== kind);
+  const complete = run.kind === kind && run.exit === 0 && Object.hasOwn(run, 'stopReason') && !stopped && !run.signal
+    && survivors !== null && survivors.length === 0 && Number.isFinite(started) && Number.isFinite(ended) && ended >= started
+    && freshness === 'fresh' && matches === 'matching' && typeof run.sourceSha === 'string' && run.sourceSha.length > 0
+    && typeof run.sourceDirty === 'boolean';
+  const status = failed ? 'failed' : complete ? 'verified' : 'unverified';
+  return { provenance: { status, manifest: relative(root, manifestPath), freshness, resultFile: matches,
+    sourceSha: typeof run.sourceSha === 'string' ? run.sourceSha.slice(0, 100) : null,
+    sourceDirty: typeof run.sourceDirty === 'boolean' ? run.sourceDirty : null,
+    started: Number.isFinite(started) ? run.started.slice(0, 100) : null,
+    ended: Number.isFinite(ended) ? run.ended.slice(0, 100) : null,
+    producer: { exit: Number.isInteger(run.exit) ? run.exit : null, signal: typeof run.signal === 'string' ? run.signal.slice(0, 100) : null,
+      stopReason: typeof run.stopReason === 'string' ? run.stopReason.slice(0, 300) : null,
+      cleanup: survivors === null ? 'unknown' : survivors.length ? 'survivors' : 'complete', survivorCount: survivors?.length ?? null } },
+    measurement: { status: failed || reportStatus === 'failed' ? 'failed' : complete && reportStatus === 'passed' ? 'passed' : 'unverified', reportStatus } };
+}
 export function diagnosticQuery(a, { root = ROOT } = {}) {
   const bounded = (value) => { if (Buffer.byteLength(JSON.stringify(value)) > 48 * 1024) throw new Error('diagnostic summary exceeds 48 KiB; reduce limit'); return value; };
   const load = (file) => { const p = diagnosticPath(root, file); const st = statSync(p); if (!st.isFile() || st.size > MAX_REPORT_BYTES) throw new Error('report must be a file at most 5 MiB'); return JSON.parse(readFileSync(p, 'utf8')); };
   const limit = integer(a.limit, 12, 1, 50, 'limit');
   const summary = summariseDiagnostic(a.kind, load(a.file), limit);
-  if (!a.compare) return bounded({ ok: true, kind: a.kind, file: a.file, summary });
+  const evidence = queryEvidence(root, a.file, a.kind, summary);
+  if (!a.compare) return bounded({ ok: true, kind: a.kind, file: a.file, summary, ...evidence });
   const comparison = summariseDiagnostic(a.kind, load(a.compare), limit);
-  return bounded({ ok: true, kind: a.kind, file: a.file, compare: a.compare, baseline: summary, candidate: comparison, comparability: 'unproven: verify source, backend, track order, warmup and link mode in the adjacent run.json manifests; no automatic improvement or leak verdict' });
+  return bounded({ ok: true, kind: a.kind, file: a.file, compare: a.compare, baseline: summary, candidate: comparison,
+    baselineEvidence: evidence, candidateEvidence: queryEvidence(root, a.compare, a.kind, comparison),
+    comparability: 'unproven: verify source, backend, track order, warmup and link mode in the adjacent run.json manifests; no automatic improvement or leak verdict' });
 }
 /** Atomically reserve an empty output directory. The persistent claim prevents stale evidence reuse. */
 export function reserveDiagnosticOutput(outDir, { root = ROOT } = {}) {
