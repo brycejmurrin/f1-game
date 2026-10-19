@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_015jmH5WuFwif7r9JYAAZ36y ORCH11 claude:session_015jmH5WuFwif7r9JYAAZ36y is orchestrator (replaces ORCH10), holds merge lease, Level 3 re-granted by Bryce in-session
+HANDOFF to:orchestrator from:claude:session_01EYEjuRGtcWJY42YkJ7CPV2 FLEET-WATCH 2 HANDOFF | dashboard https://claude.ai/artifact/YPxa89d6RZR3xCVjCXGUrR | pending triggers trig_01518QZjP9u61QB5Rc5vJpPW (hourly), trig_01UXmfbt4DFEvfgdmgZ8Le51 (tick 12:41Z, not re-armed)
