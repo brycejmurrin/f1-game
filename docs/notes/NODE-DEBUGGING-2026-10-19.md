@@ -30,6 +30,7 @@ URL and leaves anything else alone.
 | no `filename` | `brake-cue.test.mjs:18`, `cam-avoid.test.mjs:14` | `evalmachine.<anonymous>` (shared by every unnamed script) | 0 hits | only `^evalmachine`, which matches *every* unnamed script | no |
 | `//# sourceURL=/abs/path` appended | prototype | `/home/…/brake-cue.js` (raw, no `file://`) | 0 hits | hits | no |
 | absolute path given as `url` without `file://` | game-vm | — | 0 hits | — | — |
+| any form, including none: `Debugger.setInstrumentationBreakpoint("beforeScriptExecution")`, then on each pause match `Debugger.getScriptSource` against the repo file (raw or after the `^const`→`var` rewrite; 400-character prefix) and `Debugger.setBreakpoint` by scriptId | brake-cue, cam-avoid | (no URL needed) | — | — | no (coverage still unmapped) |
 
 Measured:
 - `game-vm.test.mjs`, breakpoint at `js/game.js:4342`, resolved to `4344` inside `update()`, with
@@ -59,6 +60,18 @@ How the tree loads source today:
 About 700 source-loading calls pass no `filename` at all, and 178 files call vm without ever passing one. These
 are grep heuristics; the recipe is in §Reproduce. **Only the game-vm family is debuggable or coverable by file
 path today.**
+
+A client that knows the repo can still break inside unnamed vm code without any test change. The orchestrator
+relayed this, measured by reviewer physics-1 in #2952 (64/68 files). I reproduced it:
+
+| test | instrumentation pauses | bound by scriptId | hits |
+|---|---|---|---|
+| `brake-cue` | 3 | 2 | 64 |
+| `cam-avoid` | 7 | 6 | 7 |
+
+The cost is one pause per script parse (a few ms each). The binding lasts one process only. It gives no help to
+coverage, editors or `url` breakpoints, which is why the filename fix (R1/R2) is still worth doing. It is the right
+fallback for the MCP (R3).
 
 Two more facts:
 - **Columns are off by 2** on top-level `const` lines, because every harness rewrites `^const` to `var`. Line
