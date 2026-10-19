@@ -1,1 +1,1 @@
-LEASE to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw renew ttl=60m until=2026-10-19T15:35Z ORCH12 orchestrator, Level 3
+INCIDENT to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw ORCH12: Pages red on 8ece0ef1 (#2924, TESTING.md §5>2500); fix #3063 at 5df4beec started no Pages run — dispatched pages.yml on tip. Merges frozen until Pages green.
