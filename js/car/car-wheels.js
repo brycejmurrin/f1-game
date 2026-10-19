@@ -7,7 +7,14 @@ const CarWheels = (function () {
   // Unset = NO_TINTS = today's catalog colour. `key` joins every wheel mesh cache key so a livery
   // change rebuilds the wheels; "" when nothing is set (keys stay byte-identical).
   const _tintMemo = new WeakMap();
-  const NO_TINTS = Object.freeze({ rim: null, cal: null, ink: null, key: "" });
+  const NO_TINTS = Object.freeze({ rim: null, cal: null, ink: null, surf: null, key: "" });
+  // RIM FINISH (livery rimFinish): the rim lip, spokes and hub boss take that finish's surface id
+  // instead of bare metal ("gloss" = paint). Unset / "inherit" = null = metal, today's wheel.
+  function rimSurfOf(v) {
+    const M = typeof CarMaterials !== "undefined" ? CarMaterials : null;
+    if (!M || typeof v !== "string") return null;
+    return v === "gloss" ? M.SURFACES.paint : Object.hasOwn(M.FINISH_SURFACE, v) ? M.FINISH_SURFACE[v] : null;
+  }
   function tintColour(v) {
     if (!v) return null;
     if (Array.isArray(v)) return v.length >= 3 && v.slice(0, 3).every(Number.isFinite) ? [v[0], v[1], v[2]] : null;
@@ -21,8 +28,9 @@ const CarWheels = (function () {
     if (!liv || typeof liv !== "object") return NO_TINTS;
     let t = _tintMemo.get(liv);
     if (t) return t;
-    const rim = tintColour(liv.rimTint), cal = tintColour(liv.caliperTint), ink = tintColour(liv.sidewallInk);
-    t = !rim && !cal && !ink ? NO_TINTS : Object.freeze({ rim, cal, ink, key: "|w" + q255(rim) + ";" + q255(cal) + (ink ? ";" + q255(ink) : "") });
+    const rim = tintColour(liv.rimTint), cal = tintColour(liv.caliperTint), ink = tintColour(liv.sidewallInk), surf = rimSurfOf(liv.rimFinish);
+    t = !rim && !cal && !ink && !surf ? NO_TINTS : Object.freeze({ rim, cal, ink, surf,
+      key: "|w" + q255(rim) + ";" + q255(cal) + (ink ? ";" + q255(ink) : "") + (surf ? ";f" + surf : "") });
     _tintMemo.set(liv, t);
     return t;
   }
@@ -49,7 +57,7 @@ const CarWheels = (function () {
     const OPEN_SPOKES = 3;
 
     function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
-                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor) {
+                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor, rimSurf) {
       // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
       // DIED here: RC was computed and never read once, so the nine catalog
       // options that set a rim colour painted nothing. The clamp scan
@@ -58,7 +66,7 @@ const CarWheels = (function () {
       // like. The rim faces below take RC now. RIM_DEF reproduces the hardcoded
       // value those faces used before, so a car with no `rim` set is byte-identical.
       const RIM_DEF = [0.31, 0.31, 0.34];
-      const RC = rimColor || RIM_DEF;
+      const RC = rimColor || RIM_DEF, RS = rimSurf || SURFACES.metal;   // RS: livery RIM FINISH (tints().surf); unset = metal
       const RC_DEEP = [RC[0] * 0.39, RC[1] * 0.39, RC[2] * 0.41];   // dish floor, in shadow
       // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
       // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
@@ -161,7 +169,10 @@ const CarWheels = (function () {
         // no-op when there is no cover to open.
         const aMid = (i + 0.5) / SEG * Math.PI * 2;
         const calClock = brakeStyle && brakeStyle.caliperPos || 0;
-        const peekCal = Math.abs(Math.atan2(Math.sin(aMid - calClock), Math.cos(aMid - calClock))) < 0.28;
+        // Peek holes only when the cover is intentionally open (coverOpen>0). A
+        // closed STYLE Full Disc (cover + coverOpen 0) must stay sealed.
+        const peekCal = useCover && coverOpen > 0
+          && Math.abs(Math.atan2(Math.sin(aMid - calClock), Math.cos(aMid - calClock))) < 0.28;
         const coverSeg = useCover && (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal;
         if (coverSeg || !useCover) {
           for (const sd of [[x1, 1], [x0, -1]]) {
@@ -170,24 +181,32 @@ const CarWheels = (function () {
               cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
             // 1. rim lip: bright annulus at the wall plane (both paths).
             addQuad(out, P(rimR, a0, 0), P(rimR, a1, 0),
-                         P(rimR * LIP_R, a1, 0), P(rimR * LIP_R, a0, 0), LIP, SURFACES.metal);
+                         P(rimR * LIP_R, a1, 0), P(rimR * LIP_R, a0, 0), LIP, RS);
             if (!useCover) continue;
+            // Deep dish (Full Disc): flatter closed face so it reads as a sealed
+            // cover, not a ribbed bowl with caliper gaps.
+            const deep = Math.round((wheelStyle && wheelStyle.dish) || 0) >= 2;
+            const dishD = deep ? DISH_D * 0.35 : DISH_D;
+            const faceCol = deep ? RC : COVER;
+            const floorCol = deep ? RC_DEEP : COVER_IN;
             // 2. dish: falls INBOARD as it goes in, so the light gradient across it
             //    reads as a bowl rather than a disc.
             addQuad(out, P(rimR * LIP_R, a0, 0), P(rimR * LIP_R, a1, 0),
-                         P(rimR * DISH_R, a1, DISH_D), P(rimR * DISH_R, a0, DISH_D),
-                         COVER, SURFACES.carbon);
+                         P(rimR * DISH_R, a1, dishD), P(rimR * DISH_R, a0, dishD),
+                         faceCol, SURFACES.carbon);
             // 3. floor of the dish, out to the hubcap that already sits on it.
-            addTri(out, [xw + dir * DISH_D, cy, cz],
-                         P(rimR * DISH_R, a0, DISH_D), P(rimR * DISH_R, a1, DISH_D),
-                         COVER_IN, SURFACES.carbon);
+            addTri(out, [xw + dir * dishD, cy, cz],
+                         P(rimR * DISH_R, a0, dishD), P(rimR * DISH_R, a1, dishD),
+                         floorCol, SURFACES.carbon);
           }
         }
       }
       // Cover-only: five raised spoke ribs across each dish. Proud of the floor
       // by a third of the dish depth so they catch the key. Open rims use real
-      // extruded spokes instead (below).
-      if (useCover) for (const sd of [[x1, 1], [x0, -1]]) {
+      // extruded spokes instead (below). Deep-dish closed covers (Full Disc)
+      // skip the ribs — they read as floating winglets / open spokes.
+      const coverRibs = useCover && Math.round((wheelStyle && wheelStyle.dish) || 0) < 2;
+      if (coverRibs) for (const sd of [[x1, 1], [x0, -1]]) {
         const xw = sd[0], dir = sd[1];
         for (let k = 0; k < 5; k++) {
           const a = (k / 5) * Math.PI * 2 + 0.31, hw = 0.13;
@@ -195,10 +214,12 @@ const CarWheels = (function () {
             cy + rad * Math.cos(aa), cz + rad * Math.sin(aa)];
           addQuad(out, P(rimR * DISH_R, a - hw, DISH_D * 0.22), P(rimR * DISH_R, a + hw, DISH_D * 0.22),
                        P(rimR * 0.28, a + hw * 1.8, DISH_D * 0.22), P(rimR * 0.28, a - hw * 1.8, DISH_D * 0.22),
-                       LIP, SURFACES.metal);
+                       LIP, RS);
         }
       }
-      const rotorOuter = r * Math.min(0.40, 0.32 * rotorScale);
+      // Cap at 0.52 so STYLE Big Disc (rotorScale ~1.7) can grow past carbon's
+      // ~0.38 — the old 0.40 ceiling collapsed every rotorScale ≥ 1.25 onto one size.
+      const rotorOuter = r * Math.min(0.52, 0.32 * rotorScale);
       const rotorInner = r * 0.17;
       const rotorDetail = brakeStyle && brakeStyle.rotor || 0;
       const discFaceRotor = Math.max(0, Math.min(2, Math.round((brakeStyle && brakeStyle.discFace) || 0)));
@@ -290,9 +311,14 @@ const CarWheels = (function () {
       // Cover vanes dress a covered face only. On an open rim they densify into
       // a fake dish (factory tyre recipes still set coverVanes:4–12); coverVanes
       // alone never opts the three-ring COVER back in — useCover does.
+      // Wheel recipe wins (STYLE Full Disc sets 0). Deep-dish covers default to
+      // 0 so a closed disc is not dressed with floating vane ribs.
       const VANE = [0.26, 0.26, 0.30];
+      const deepCover = useCover && Math.round((wheelStyle && wheelStyle.dish) || 0) >= 2;
       const coverVanes = useCover
-        ? (tyreStyle && tyreStyle.coverVanes != null ? tyreStyle.coverVanes : 6)
+        ? (wheelStyle && wheelStyle.coverVanes != null ? wheelStyle.coverVanes
+          : tyreStyle && tyreStyle.coverVanes != null ? tyreStyle.coverVanes
+          : (deepCover ? 0 : 6))
         : 0;
       for (const ss of [[x0, -1], [x1, 1]]) {
         const xs = ss[0] + ss[1] * 0.014;
@@ -326,7 +352,7 @@ const CarWheels = (function () {
         for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
           addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
-                           [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, SURFACES.metal);   // single face (cull-off → opaque both sides)
+                           [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, RS);   // single face (cull-off → opaque both sides)
         }
         // Tyre recipes may own open-rim identity (spokes / dish / nut / gunNut)
         // when the wheel part leaves them unset — coverVanes alone never builds
@@ -375,10 +401,10 @@ const CarWheels = (function () {
           const ri = hcR * 1.08, ro = rimR * 0.90;
           const xsF = ss[0] + dir * 0.026, xsB = ss[0] + dir * 0.026 - dir * thick;
           const P = (xs, rad, sgn) => [xs, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
-          addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsF, ro, -1), P(xsF, ri, -1), HUBCAP, SURFACES.metal);
-          addQuad(out, P(xsB, ri, -1), P(xsB, ro, -1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, SURFACES.metal);
-          addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, SURFACES.metal);
-          addQuad(out, P(xsF, ri, -1), P(xsB, ri, -1), P(xsB, ro, -1), P(xsF, ro, -1), HUBCAP, SURFACES.metal);
+          addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsF, ro, -1), P(xsF, ri, -1), HUBCAP, RS);
+          addQuad(out, P(xsB, ri, -1), P(xsB, ro, -1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, RS);
+          addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, RS);
+          addQuad(out, P(xsF, ri, -1), P(xsB, ri, -1), P(xsB, ro, -1), P(xsF, ro, -1), HUBCAP, RS);
         }
         // Rim TAPE: face band + short OD bead so the set marks read from a ¾ view.
         if (wheelStyle && wheelStyle.tape) {
@@ -400,7 +426,9 @@ const CarWheels = (function () {
         const dishWheel = Math.round((wheelStyle && wheelStyle.dish) || 0);
         const dishTyre = Math.round((tyreStyle && tyreStyle.dish) || 0);
         const dish = Math.max(0, Math.min(2, dishWheel || dishTyre));
-        if (dish > 0) {
+        // Deep covered dish already filled the face above — a second dish pass
+        // stacks HUBCAP quads that read as floating winglets on Full Disc.
+        if (dish > 0 && !(useCover && dish >= 2)) {
           const dr = rimR * (dish === 2 ? 0.80 : 0.88);
           const dxOut = ss[0] + dir * 0.014;
           // Cover path keeps the old shallow bowl (cover already fills the face).
@@ -419,13 +447,13 @@ const CarWheels = (function () {
             if (useCover) {
               addQuad(out,
                 [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, iy1, iz1], [dxOut, iy0, iz0],
-                HUBCAP, SURFACES.metal);
+                HUBCAP, RS);
               addQuad(out,
                 [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
-                RC_DEEP, SURFACES.metal);
+                RC_DEEP, RS);
               addTri(out, [dxIn, cy, cz],
                      [dxIn, iy0, iz0],
-                     [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
+                     [dxIn, iy1, iz1], HUBCAP, RS);
             } else {
               // Open: narrow rim lip + recess wall only (inner radius stays near
               // the lip — not the old hub-reaching floor). Spokes / rotor show.
@@ -434,10 +462,10 @@ const CarWheels = (function () {
               const ly1 = cy + lipInner * Math.cos(a1), lz1 = cz + lipInner * Math.sin(a1);
               addQuad(out,
                 [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, ly1, lz1], [dxOut, ly0, lz0],
-                HUBCAP, SURFACES.metal);
+                HUBCAP, RS);
               addQuad(out,
                 [dxOut, ly0, lz0], [dxOut, ly1, lz1], [dxIn, ly1, lz1], [dxIn, ly0, lz0],
-                RC_DEEP, SURFACES.metal);
+                RC_DEEP, RS);
             }
           }
         }
@@ -494,18 +522,18 @@ const CarWheels = (function () {
       }
     }
 
-    function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor) {
+    function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
       const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
-        grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor);
+        grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor, rimSurf);
       return out;
     }
-    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor) {
+    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
       const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const width = w || 0.34;
       addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
-        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor);
+        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor, rimSurf);
       // Upright and hub carrier give the wishbones/caliper a visible termination.
       // The hub carrier the wishbones and caliper terminate in. It was a cube
       // sitting inside the rim, visible through the spokes from every angle.

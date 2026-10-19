@@ -26,7 +26,9 @@ Read your role's reference before acting:
   [`references/role-pr-owner.md`](references/role-pr-owner.md) (one PR to
   merged: subscribe, CI watch, check-in, fix reds and conflicts unasked); merge
   holder → [`references/role-merge-holder.md`](references/role-merge-holder.md)
-  (no live Merge Desk: the orchestrator holds the queue at the user's level).
+  (no live Merge Desk: the orchestrator holds the queue at the user's level);
+  fleet watch → [`references/role-fleet-watch.md`](references/role-fleet-watch.md)
+  (one session: PR events + 3-min ticks, routine fixes, no merges, dashboard).
 - **Worker** → [`references/worker.md`](references/worker.md): the loop with
   the command for each step, the escalation rule, the hand-back, the traps that
   cost real sessions.

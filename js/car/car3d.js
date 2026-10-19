@@ -345,7 +345,7 @@ const Car3D = (function () {
       }
     }
 
-    for (const side of [-1, 1]) {
+    zone("floor", () => { for (const side of [-1, 1]) {
       addSpan(out,
         { z: 0.78, x: side * floorX(0.69), y: 0.108 + rideDY + floorStepY, w: 0.062, h: 0.048 + Math.max(0, floorStepY) * 0.35 },
         { z: -0.42 - floorCut, x: side * floorX(0.72), y: 0.114 + rideDY + floorStepY * 0.55, w: 0.052, h: 0.054 + Math.abs(floorStepY) * 0.25 },
@@ -357,7 +357,7 @@ const Car3D = (function () {
         CARBON, null, SURFACES.carbon);
       addBox(out, side * floorX(0.71), 0.128 + rideDY + floorStepY * 0.5, -0.45,
              0.038, 0.016 + Math.abs(floorStepY) * 0.4, 0.058, CARBON, SURFACES.carbon);
-    }
+    } });
     // 2026 floor leading-edge devices — up to five vortex teeth across the
     // width (motorsport.tech Issue-12). Chase only: they sit under the nose
     // and never enter the onboard frame.
@@ -680,6 +680,8 @@ const Car3D = (function () {
           ersGlow, SURFACES.metal);
       }
     }
+    // LED STRIP (STYLE): a full-length lit strip down each pod shoulder in the pack's LED colour.
+    if (!ckpt && ersStyle && ersStyle.ledStrip) addPodFlankSpan(0.45, -0.95, 0.99, 0.085, ersGlow, SURFACES.metal, 0.055);
     const ersBlister = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.blister) || 0)));
     if (ersBlister > 0 && !ckpt) {
       const bS = 0.92 + 0.18 * Math.max(0, ersPack - 1);
@@ -789,16 +791,17 @@ const Car3D = (function () {
                       inlet.y + inlet.height * 0.08, inlet.z,
                       inlet.width * 0.48, inlet.height * 0.88, c1, 0.055, 0.012);
       }
-      const fenceN = Math.max(0, Math.min(6, Math.round(floorStyle.fences)));
-      const fenceH = Math.max(0.6, Math.min(1.6, floorStyle.fenceH));
+      const fenceN = Math.max(0, Math.min(10, Math.round(floorStyle.fences)));
+      const fenceH = Math.max(0.6, Math.min(2.25, floorStyle.fenceH));
       const fenceStep = fenceN > 1 ? 1.08 / (fenceN - 1) : 0;
-      // Floor fences sit outboard of the pod. Keep their tops under the
+      // Floor fences sit outboard of the pod. Stock heights stay under the
       // sponsor board (yFrac 0.32..0.80) so a side ray hits the board first
-      // (body-split). TEAM_STYLE inlet/undercut can drop that band onto a
-      // stock-height fence.
+      // (body-split). Tall STYLE fences (fenceH≫1) are allowed to climb toward
+      // the shoulder so the height knob still reads in a garage 3/4 shot.
       const fenceCap = (z) => {
         const pod = anchors.podAt(z);
-        return pod.bottom + 0.28 * (pod.top - pod.bottom);
+        const frac = 0.28 + 0.30 * Math.max(0, Math.min(1, (fenceH - 1.0) / 1.25));
+        return pod.bottom + frac * (pod.top - pod.bottom);
       };
       const fenceFit = (y, h, cap) => {
         const top = y + h * 0.5;
@@ -806,7 +809,7 @@ const Car3D = (function () {
         const room = Math.max(0.018, cap - (y - h * 0.5));
         return { y: cap - room * 0.5, h: room };
       };
-      for (let i = 0; i < fenceN; i++) {
+      zone("floor", () => { for (let i = 0; i < fenceN; i++) {
         const fz = 0.42 - i * fenceStep;
         const ex = floorEdgeAt(fz);
         const cap = fenceCap(fz);
@@ -816,21 +819,21 @@ const Car3D = (function () {
           { z: fz + 0.095, x: s * (ex + 0.014), y: a.y, w: 0.028, h: a.h },
           { z: fz - 0.095, x: s * (ex + 0.038), y: b.y, w: 0.022, h: b.h },
           CARBON);
-      }
-      const edgeLip = Math.max(0, Math.min(1, floorStyle.edgeLip || 0));
+      } });
+      const edgeLip = Math.max(0, Math.min(2, floorStyle.edgeLip || 0));
       if (edgeLip > 0) {
         const ef = floorEdgeAt(0.50), er = floorEdgeAt(-1.10);
         addSpan(out,
           { z: 0.50, x: s * (ef + 0.006), y: 0.080 + rideDY,
-            w: 0.014, h: 0.038 + 0.022 * edgeLip },
+            w: 0.014, h: 0.038 + 0.028 * edgeLip },
           { z: -1.10, x: s * (er + 0.006), y: 0.094 + rideDY,
-            w: 0.012, h: 0.034 + 0.020 * edgeLip },
+            w: 0.012, h: 0.034 + 0.026 * edgeLip },
           CARBON, null, SURFACES.carbon);
         addBeveledSpan(out,
-          { z: 0.50, x: s * (ef + 0.030 + 0.048 * edgeLip), y: 0.118 + rideDY,
-            w: 0.038 + 0.055 * edgeLip, h: 0.012 },
-          { z: -1.10, x: s * (er + 0.028 + 0.042 * edgeLip), y: 0.138 + rideDY,
-            w: 0.032 + 0.048 * edgeLip, h: 0.010 },
+          { z: 0.50, x: s * (ef + 0.030 + 0.055 * edgeLip), y: 0.118 + rideDY,
+            w: 0.038 + 0.065 * edgeLip, h: 0.012 + 0.006 * Math.max(0, edgeLip - 1) },
+          { z: -1.10, x: s * (er + 0.028 + 0.050 * edgeLip), y: 0.138 + rideDY,
+            w: 0.032 + 0.058 * edgeLip, h: 0.010 + 0.005 * Math.max(0, edgeLip - 1) },
           0.004, accentC, null, SURFACES.paint);
       }
       if (Math.round(floorStyle.gurney || 0) > 0) {
@@ -896,6 +899,22 @@ const Car3D = (function () {
           addBox(out, x, p.top + 0.052, 0.36, 0.068, 0.020, 0.075, INTAKE);
         }
       }
+    }
+
+    // BIG CAP (STYLE): a wide painted filler plate on the cover crown, so a fuel option reads from above.
+    if (!ckpt && fuelStyle && fuelStyle.capBig) {
+      const cz = -0.52, cyb = coverSurfaceY(anchors.coverAt(cz), 0);
+      const capC = (fuelStyle.cap || [0.9, 0.5, 0.1]).map((v) => Math.min(v, 1));
+      addBox(out, 0, cyb + 0.022, cz, 0.36, 0.050, 0.70, capC, SURFACES.metal);
+      addBox(out, 0, cyb + 0.048, cz, 0.20, 0.028, 0.36, capC, SURFACES.metal);
+      addBox(out, 0.14, cyb + 0.030, cz + 0.10, 0.10, 0.035, 0.18, capC, SURFACES.metal);
+    }
+    // SKIRT (STYLE): a painted strip down each floor edge. skirt≥2 widens it.
+    if (!ckpt && floorStyle && floorStyle.skirt) {
+      const sk = Math.max(1, Math.min(2, Math.round(floorStyle.skirt)));
+      for (const s of [-1, 1])
+        addBox(out, s * 0.76, Math.max(CHASSIS.floor.cy + rideDY, 0.052) + 0.03, -0.30,
+               0.035 + 0.030 * (sk - 1), 0.07 + 0.04 * (sk - 1), 2.4, sk >= 2 ? accentC : c2);
     }
 
     part("livery");
@@ -1014,7 +1033,7 @@ const Car3D = (function () {
 
     part("cockpit");
     // Exterior head surround stays out of the dedicated driver-eye mesh.
-    if (!ckpt) {
+    if (!ckpt) zone("headrest", () => {
       // Recipe-gated HEADREST behind the helmet: 0 flat rim (shipped) / 1 raised
       // horseshoe pad / 2 winged pad. Front face stays behind the helmet dome
       // (centre z -0.075, r 0.145 -> rear extent -0.220); pad tops stay under
@@ -1039,7 +1058,7 @@ const Car3D = (function () {
           }
         }
       }
-    }
+    });
     if (!exHalo && opts && opts.halo) {
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
@@ -1130,6 +1149,16 @@ const Car3D = (function () {
                    0.62, 0, 0.720, 0.20, 0.022, DARK);
       addLoft(out, 0.495, 0, 0.668, 0.34, 0.018,
                    0.605, 0, 0.710, 0.16, 0.014, VISOR, SURFACES.glass);
+      // screen 2 (STYLE): a tall wrap-around aeroscreen over the halo's front —
+      // taller glass + a painted brow so it reads against screen:1's short visor.
+      if (cockpitStyle.screen >= 2) {
+        addLoft(out, 0.45, 0, 0.690, 0.52, 0.028, 0.58, 0, 0.940, 0.42, 0.022, VISOR, SURFACES.glass);
+        addLoft(out, 0.58, 0, 0.940, 0.44, 0.036, 0.64, 0, 0.975, 0.40, 0.032, c1);
+        for (const s of [-1, 1]) {
+          addLoft(out, 0.48, s * 0.20, 0.710, 0.12, 0.024,
+                       0.60, s * 0.10, 0.900, 0.08, 0.018, VISOR, SURFACES.glass);
+        }
+      }
       for (const s of [-1, 1]) {
         addLoft(out, 0.50, s * 0.16, 0.690, 0.10, 0.020,
                      0.58, s * 0.06, 0.730, 0.06, 0.016, DARK);
@@ -1304,13 +1333,18 @@ const Car3D = (function () {
         addBeamBetween(out, [0, 0.775, 0.468], [s * 0.105, crownY - hr * 0.4, 0.474],
                        0.015, haloC, haloS);
       if (haloSty === 2) {
-        // Fenced hoop: three small crest vanes riding the crown bar (hoop
-        // indices 5/7/9 = mid-left, apex, mid-right of the 7-point bar).
-        for (const hi of [5, 7, 9]) {
+        // Fenced hoop: five tall crest vanes along the crown so Fenced Halo
+        // reads against open_cell's bare hoop in a garage 3/4 shot.
+        for (const hi of [4, 5, 7, 9, 10]) {
           const p = hoop[hi];
-          addBox(out, p[0], p[1] + hr + 0.012, p[2], 0.012, 0.026, 0.055,
+          if (!p) continue;
+          addBox(out, p[0], p[1] + hr + 0.045, p[2], 0.030, 0.090, 0.120,
                  haloC, haloS);
+          addBox(out, p[0], p[1] + hr + 0.095, p[2], 0.020, 0.028, 0.070,
+                 accentC, SURFACES.paint);
         }
+        // Painted brow bar across the crown — open_cell has none.
+        addBox(out, 0, crownY + hr + 0.055, 0.10, 0.42, 0.022, 0.10, accentC, SURFACES.paint);
       }
     }
 
@@ -1329,7 +1363,7 @@ const Car3D = (function () {
     const exhBase = engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
     const exhR = (exhTwin ? Math.max(exhBase, 0.076) : exhBase) * exhBore;
-    const fuelFlame = fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];
+    const fuelFlame = _ckAcc(CarMaterials.zoneColour(liv.exhaustTint)) || fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];   // EXHAUST HEAT (liv.exhaustTint) beats the fuel part's flame
     const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     const exhMetal = [0.16, 0.16, 0.17], exhFlareC = [0.18, 0.18, 0.19];
     const glazeOf = (rgb) => rgb.map((value) => Math.min(value * 0.45, 0.65));
@@ -1446,6 +1480,14 @@ const Car3D = (function () {
       }
     }
     exhTipRForLamp = tipRShow * (exhFlare > 0 && !exhTwin ? (1 + 1.15 * exhFlare) : 1);
+    // STACK (STYLE parts, 2026-10-18): an upswept tail-pipe stack over the crash
+    // structure, 1 single / 2 twin, so an exhaust option reads from behind.
+    const exhStack = Math.max(0, Math.min(2, Math.round(exhStyle.stack || 0)));
+    for (let i = 0; i < exhStack; i++) {
+      const sx = exhStack === 2 ? (i ? 0.16 : -0.16) : 0;
+      addTube(out, [[sx, 0.46, -2.28], [sx, 0.78, -2.48], [sx, 1.08, -2.60]], 0.085 * exhBore, 8, [0.62, 0.60, 0.58], SURFACES.metal);
+      addBox(out, sx, 1.12, -2.61, 0.20 * exhBore, 0.08, 0.18 * exhBore, fuelFlame.map((v) => Math.min(v, 1)), SURFACES.metal);
+    }
     }
 
     part("sharkFin");
@@ -1672,7 +1714,7 @@ const Car3D = (function () {
 
     const aVane = aeroStyle && aeroStyle.vane != null ? aeroStyle.vane
                 : (aLvl >= 4 ? 3 : aLvl >= 3 ? 2 : aLvl >= 1 ? 1 : 0);
-    if (!ckpt && aVane > 0) {
+    if (!ckpt && aVane > 0) zone("floor", () => {
       for (const s of [-1, 1]) {
         // Primary vane — always present.
         addBeveledSpan(out,
@@ -1702,12 +1744,12 @@ const Car3D = (function () {
           addBox(out, s*0.60, 0.19, 0.86, 0.16, 0.014, 0.36, CARBON);   // horizontal turning vane
         }
       }
-    }
+    });
     // 2026 in-wash WAKEBOARD (`board`) — the regulated floor-board / bargeboard
     // return, inboard of the turning-vane cluster so the two never occupy the
     // same volume. 0 none · 1 vertical fence · 2 fence + horizontal foot.
     const aBoard = Math.max(0, Math.min(2, Math.round((aeroStyle && aeroStyle.board) || 0)));
-    if (aBoard > 0 && !ckpt) {
+    if (aBoard > 0 && !ckpt) zone("floor", () => {
       for (const s of [-1, 1]) {
         addBeveledSpan(out,
           { z: 1.38, x: s * 0.48, y: 0.20, w: 0.014, h: aBoard === 2 ? 0.20 : 0.14, t: 0.45 },
@@ -1718,7 +1760,7 @@ const Car3D = (function () {
           { z: 0.86, x: s * 0.56, y: 0.165, w: 0.12, h: 0.014, t: 0.80 },
           0.005, CARBON);
       }
-    }
+    });
 
     part("rearAssembly");
     if (!ckpt) {
@@ -1870,22 +1912,28 @@ const Car3D = (function () {
       const gbFinSZ   = gbStyle && gbStyle.finSZ ? gbStyle.finSZ : 0.28;
       const gbHeatFins = gbStyle ? Math.max(0, Math.min(5, Math.round(gbStyle.heatFins || 0))) : 0;
       const gbRibs     = gbStyle ? Math.max(0, Math.min(3, Math.round(gbStyle.ribs || 0))) : 0;
-      const gbCaseWmul = Math.max(0.75, Math.min(1.35, (gbStyle && gbStyle.caseWidth) || 1));
+      const gbCaseWmul = Math.max(0.55, Math.min(1.45, (gbStyle && gbStyle.caseWidth) || 1));
+      // STYLE cases: paint strakes / casing so they leave the under-wing shadow.
+      const gbPaint = !!(gbStyle && (gbStyle.rearFins || gbStyle.heatFins || (gbStyle.caseWidth && gbStyle.caseWidth < 0.85)));
+      const gbStrakeC = gbPaint ? accentC : CARBON;
       if (gbStrakes > 0) {
         const half = (gbStrakes - 1) / 2;
         for (let i = 0; i < gbStrakes; i++) {
-          addBox(out, (i - half) * 0.24, 0.13 + gbStrakeH / 2, -2.20, 0.015, gbStrakeH, 0.42, CARBON);
+          addBox(out, (i - half) * 0.24, 0.18 + gbStrakeH / 2, -2.28, 0.022, gbStrakeH, 0.55, gbStrakeC,
+                 gbPaint ? SURFACES.paint : SURFACES.carbon);
         }
       }
       let gbCw = 0, gbCh = 0;
       if (gbCasing > 0) {
         gbCw = (0.15 + gbCasing * 0.05) * gbCaseWmul;
         gbCh = 0.13 + gbCasing * 0.03;
-        addBox(out, 0, 0.44, -1.92, gbCw * 1.08, gbCh * 1.12, 0.04, CARBON, SURFACES.carbon);
+        const caseC = gbPaint && gbCaseWmul < 0.85 ? c2 : CARBON;
+        const caseS = gbPaint && gbCaseWmul < 0.85 ? SURFACES.paint : SURFACES.carbon;
+        addBox(out, 0, 0.44, -1.92, gbCw * 1.08, gbCh * 1.12, 0.04, caseC, caseS);
         addSpan(out,
           { z: -1.94, y: 0.44, w: gbCw * 1.02, h: gbCh, t: 0.90 },
           { z: -2.12, y: 0.435, w: gbCw, h: gbCh * 0.96, t: 0.88 },
-          CARBON, null, SURFACES.carbon);
+          caseC, null, caseS);
         if (gbCasing >= 2) {
           addSpan(out,
             { z: -2.12, y: 0.42, w: gbCw * 0.92, h: gbCh * 0.82, t: 0.88 },
@@ -1898,6 +1946,13 @@ const Car3D = (function () {
                    [0.09, 0.09, 0.10], SURFACES.carbon);
             addBox(out, s * (gbCw * 0.42), 0.32, -2.00, 0.04, 0.05, 0.10, DARK);
           }
+        }
+        // Smooth Case tell: a wide painted belly plate under the crash structure
+        // that long_ratio never gets — readable from the rear camera.
+        if (gbPaint && gbCaseWmul < 0.85 && gbStrakes === 0) {
+          addBox(out, 0, 0.26, -2.32, 0.72, 0.12, 0.55, c2, SURFACES.paint);
+          addBox(out, 0, 0.34, -2.55, 0.58, 0.08, 0.18, accentC, SURFACES.paint);
+          addBox(out, 0, 0.48, -2.40, 0.50, 0.06, 0.30, c2, SURFACES.paint);
         }
       }
       if (gbRibs > 0) {
@@ -1930,6 +1985,12 @@ const Car3D = (function () {
         }
       }
       if (gbFin) addBox(out, 0, 0.27 + gbFinSY / 2, -2.30, 0.02, gbFinSY, gbFinSZ, CARBON);
+    }
+    // REAR FINS (STYLE): tall painted fins either side of the gearbox crash structure.
+    if (!ckpt && gbStyle && gbStyle.rearFins) for (const s of [-1, 1]) {
+      addBox(out, s * 0.28, 0.50, -2.28, 0.030, 0.42, 0.52, c1);
+      addBox(out, s * 0.28, 0.72, -2.28, 0.08, 0.028, 0.52, CARBON);
+      addBox(out, s * 0.28, 0.58, -2.50, 0.018, 0.22, 0.10, accentC, SURFACES.paint);
     }
 
     part("brakeDucts");
@@ -1969,11 +2030,21 @@ const Car3D = (function () {
       }
     }
 
+    // BIG SCOOP (STYLE): an oversized brake-duct mouth proud of each FRONT tyre's leading edge.
+    if (!ckpt && brakeStyle && brakeStyle.bigScoop) {
+      const sc = (brakeStyle.cal || [0.85, 0.12, 0.10]).map((v) => Math.min(v, 1));
+      const sm = Math.max(1, Math.min(1.45, (brakeStyle.rotorScale || 1) / 1.18));
+      for (const s of [-1, 1]) {
+        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.40, 0.20 * sm, 0.26 * sm, 0.20 * sm, DARK);
+        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.52, 0.24 * sm, 0.28 * sm, 0.04, sc, SURFACES.metal);
+      }
+    }
+
     part("suspension");
     const wbMul = suspStyle ? suspStyle.arm : (suspT === 0 ? 0.85 : suspT === 2 ? 1.3 : 1.0);
     const wbPush = suspStyle ? suspStyle.push : (suspT === 2 ? 1 : 0);
     const wbPull = suspStyle && suspStyle.pull ? 1 : 0;
-    const armTh = 0.026 * wbMul, suspC = [0.11, 0.11, 0.13];
+    const armTh = 0.026 * wbMul, suspC = (suspStyle && suspStyle.armTint) || [0.11, 0.11, 0.13];   // armTint: a painted STYLE kit
     const rockerLvl = Math.max(0, Math.min(2, Math.round(suspStyle.rocker || 0)));
     const heaveOn = Math.max(0, Math.min(1, Math.round(suspStyle.heave || 0)));
     const fairArms = !!(wbPush || wbPull || rockerLvl || heaveOn);
@@ -2124,19 +2195,19 @@ const Car3D = (function () {
       // Per-option caliper accent peeking through the rim spokes, else tier.
       const wt = CarWheels.tints(liv);   // livery rimTint / caliperTint override the brakes catalog (unset = null)
       const caliperColor = wt.cal || (brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT]);
-      const rimColor = wt.rim || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
+      const rimColor = wt.rim || (wheelStyle && wheelStyle.rim) || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
-          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink, wt.surf);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
-          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink, wt.surf);
       }
     }
     // Fixed deflectors belong to the chassis, including the split race body.
     // 2026 over-wheel deflector above each FRONT wheel (tyre crown y 0.68):
     // 0 none / 1 single plane on a stalk / 2 biplane + outboard endplate.
     const wDefl = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.deflector) || 0)));
-    if (wDefl > 0) {
+    if (wDefl > 0) zone("deflector", () => {
       for (const s of [-1, 1]) {
         addBeveledSpan(out,
           { z: AXLES.frontZ + 0.20, x: s * 0.79, y: 0.745, w: 0.30, h: 0.012, t: 0.70 },
@@ -2154,9 +2225,9 @@ const Car3D = (function () {
                  CARBON, SURFACES.carbon);
         }
       }
-    }
+    });
 
-    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
+    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3; CarMaterials.applyZones(out, zoneRanges, sections, liv, _ckAcc);   // PAINT ZONES (unset = no-op)
     CarMaterials.applyFinish(out, liv.finish, sections, liv, zoneRanges);
 
     shadeFlags.round = false;
