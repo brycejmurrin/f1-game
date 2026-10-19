@@ -17,8 +17,10 @@ async function fixture() {
   const root = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-server-fixes-"));
   fs.mkdirSync(path.join(root, "tools/shot"), { recursive: true });
   fs.mkdirSync(path.join(root, "tools/track"), { recursive: true });
+  // Outlives the test: the jobs are cancelled, never awaited. A short sleep let a
+  // loaded shard finish job two ("done") before its cancel landed.
   fs.writeFileSync(path.join(root, "tools/shot/frame-report.mjs"),
-    'await new Promise(r=>setTimeout(r,500)); console.log(JSON.stringify({ok:true,pid:process.pid}));\n');
+    'await new Promise(r=>setTimeout(r,60000)); console.log(JSON.stringify({ok:true,pid:process.pid}));\n');
   fs.writeFileSync(path.join(root, "tools/shot/track-session.mjs"), `
     process.stdin.resume();
     setTimeout(()=>console.log(JSON.stringify({ready:true,track:"monza"})),400);
