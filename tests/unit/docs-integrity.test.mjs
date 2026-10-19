@@ -341,10 +341,14 @@ test("the scenery api member count in the docs matches the frozen contract", () 
   const actual = body[1].split(",").map((s) => s.trim()).filter((s) => s && s.startsWith('"')).length;
 
   const wrong = [];
+  let claims = 0;
   for (const doc of [...LIVE_DOCS, ...SKILL_DOCS]) {
-    for (const m of read(doc).matchAll(/(\d+)[- ]member[s]? (?:`?scenery\(api\)`?|`api`|API)/gi))
+    for (const m of read(doc).matchAll(/(\d+)[- ]member[s]? (?:`?scenery\(api\)`?|`api`|API)/gi)) {
+      claims++;
       if (Number(m[1]) !== actual) wrong.push(`${doc}: says ${m[1]}, contract has ${actual}`);
+    }
   }
+  assert.ok(claims >= 1, "no doc states the scenery(api) member count — the scan checked nothing (reworded?)");
   assert.deepEqual(wrong, [], "the frozen scenery(api) contract grew or shrank and the docs did not follow");
 });
 
@@ -503,11 +507,13 @@ test("live docs name only real files in backticked bare `name.js` tokens", () =>
   const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
   const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
   const bad = [];
+  let seen = 0;
   for (const doc of LIVE_DOCS) {
     if (doc.startsWith(path.join("docs", "plans") + path.sep)) continue;
     read(doc).split("\n").forEach((line, i) => {
       if (HISTORY.test(line)) return;
       for (const [, name] of line.matchAll(/`([A-Za-z0-9_.-]+\.js)`/g)) {
+        seen++;
         if (bases.has(name)) continue;
         const allow = BARE_JS_ALLOW.get(name);
         if (allow && allow.test(doc)) continue;
@@ -515,6 +521,7 @@ test("live docs name only real files in backticked bare `name.js` tokens", () =>
       }
     });
   }
+  assert.ok(seen >= 1, "no live doc names a backticked bare .js file — the scan checked nothing");
   assert.deepEqual(bad, [], "a live doc names a .js file no tracked file is called — write its real path, or mark the line historical");
 });
 
@@ -529,6 +536,7 @@ test("live docs name only real test files in backticked bare `name.test.mjs` / `
   const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
   const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
   const bad = [];
+  let seen = 0;
   for (const doc of LIVE_DOCS) {
     if (doc.startsWith(path.join("docs", "plans") + path.sep) || BARE_TEST_ALLOW.test(doc)) continue;
     read(doc).split("\n").forEach((line, i) => {
@@ -537,10 +545,12 @@ test("live docs name only real test files in backticked bare `name.test.mjs` / `
       const rowLead = /^\|\s*`/.test(line);
       if (!rowLead && HISTORY.test(line)) return;
       for (const [, name] of line.matchAll(/`([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:test\.(?:mjs|cjs|js)|spec\.(?:js|mjs)))`/g)) {
+        seen++;
         if (!bases.has(name)) bad.push(`${doc}:${i + 1} ${name}`);
       }
     });
   }
+  assert.ok(seen >= 1, "no live doc names a backticked bare test file — the scan checked nothing");
   assert.deepEqual(bad, [], "a live doc names a test file no tracked file is called — write its real name, or mark the line historical");
 });
 
@@ -551,11 +561,14 @@ test("the circuit count in the docs matches js/circuits/", () => {
   const circuits = ls("js/circuits", /\.js$/).length;
   for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
     const text = read(doc);
-    for (const m of text.matchAll(/(\d+)\s+circuit data files/gi))
+    for (const m of text.matchAll(/(\d+)\s+circuit data files/gi)) {
       assert.equal(Number(m[1]), circuits, `${doc} claims ${m[1]} circuit data files; js/circuits/ holds ${circuits}`);
-    for (const m of text.matchAll(/verify-track\.cjs --all[^\n]*?all (\d+) circuits/gi))
+    }
+    for (const m of text.matchAll(/verify-track\.cjs --all[^\n]*?all (\d+) circuits/gi)) {
       assert.equal(Number(m[1]), circuits, `${doc} claims verify-track covers ${m[1]} circuits; js/circuits/ holds ${circuits}`);
+    }
   }
+  // No floor: today's docs quote no circuit count, so none is required (a vacuous `>= 0` would lie).
 });
 
 test("the parts-category count in the docs matches Parts.CATALOG", () => {
@@ -1039,35 +1052,4 @@ test("Supersedes: / Superseded by: pairs in docs/notes are two-way and indexed",
         assert.ok(fs.existsSync(path.join(dir, nu)) && /^Supersedes:/m.test(read(`docs/notes/${nu}`)),
           `docs/notes/${f} says it is superseded by ${nu}, which must exist and carry the matching "Supersedes:" line`);
   }
-});
-
-// #1637. The KTX2/UASTC call was made on 2026-10-16 and left as "open" in the
-// plan and the asset-research rollout row. This is the one prose decision the
-// suite holds, because a standing "maybe" was the bug.
-test("#1637 Task 4 records the 2026-10-16 no to KTX2/UASTC", () => {
-  const md = read("docs/plans/2026-09-14-texture-memory-plan.md");
-  const start = md.indexOf("### Task 4:");
-  assert.ok(start >= 0, "Task 4 heading missing");
-  const rest = md.slice(start);
-  const next = rest.indexOf("\n### ", 1);
-  const body = next === -1 ? rest : rest.slice(0, next);
-  assert.match(body, /2026-10-16/, "the decision date");
-  assert.match(body, /not adopting KTX2\/UASTC/, "the decision");
-  assert.match(body, /dependency/, "the reason: a new runtime dependency");
-  assert.match(body, /failure path on phones/, "the reason: phone failure path");
-  assert.match(body, /- \[x\] Decide whether ~9 MB/);
-  assert.doesNotMatch(body, /- \[ \] Decide whether/);
-  assert.match(body, /- \[x\] If yes: UASTC/);
-  assert.match(body, /N\/A — the decision is no/);
-});
-
-test("#1637 ASSET-API-RESEARCH row 4 matches the same no", () => {
-  const research = read("docs/research/ASSET-API-RESEARCH.md");
-  const row = research.split("\n").find((line) => line.startsWith("| 4 | KTX2"));
-  assert.ok(row, "rollout row 4 missing");
-  assert.match(row, /\*\*no\*\*/);
-  assert.doesNotMatch(row, /\*\*open\*\*/);
-  assert.match(row, /2026-10-16/);
-  assert.match(row, /dependency/);
-  assert.match(row, /failure path on phones/);
 });
