@@ -51,8 +51,9 @@ const TRACKS = [
    lexical scope rather than on the global object — read it back by name. */
 function loadStore({ presets = {}, saved = null, track = "bahrain", tod = "dusk", weather = "wet" } = {}) {
   const stored = { lightTune: saved };
+  const liveTracks = {};
   const state = {
-    tod, weather,
+    tod, weather, mode: "race", wetRoad: true, liveTracks,
     applied: 0, rainInits: 0,          // liveEffects call counts, asserted below
     get profilesInStore() { return stored.lightTune; },
   };
@@ -62,12 +63,16 @@ function loadStore({ presets = {}, saved = null, track = "bahrain", tod = "dusk"
       set: (k, v) => { stored[k] = JSON.parse(JSON.stringify(v)); },
     },
     clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
-    get track() { return { def: TRACKS.find((t) => t.id === track) }; },
+    // One object per track, so a test can read back the `_lights` caches set() drops.
+    get track() {
+      const def = TRACKS.find((t) => t.id === track);
+      return def ? (liveTracks[def.id] || (liveTracks[def.id] = { def })) : { def: undefined };
+    },
     get raceTimeOfDay() { return state.tod; },
     get raceWeather() { return state.weather; },
-    get state() { return "race"; },
+    get state() { return state.mode; },
     applyRaceSettings: () => { state.applied++; },
-    isWetRoad: () => true,
+    isWetRoad: () => state.wetRoad,
     initRainDrops: () => { state.rainInits++; },
   };
   const ctx = vm.createContext({
@@ -84,7 +89,7 @@ function loadStore({ presets = {}, saved = null, track = "bahrain", tod = "dusk"
   // Switch the live conditions the way applyRaceSettings does: set, then re-apply.
   state.go = (t, tod_, wx) => { track = t; state.tod = tod_; state.weather = wx; store.apply(); };
   store.apply();
-  return { store, LT, state, stored };
+  return { store, LT, state, stored, ctx };
 }
 
 /** The profile map as plain data. The store's objects are built inside the vm
@@ -259,4 +264,92 @@ test("a saved lightTune with a non-object profile is dropped, and moving a knob 
   assert.equal(p["monza|day|dry"].keyMul, 1.5, "a numeric override survives");
   assert.equal("junk" in p["monza|day|dry"], false, "a non-number value inside a profile is dropped");
   assert.equal("spa|day|dry" in p, false, "an array is not a profile");
+});
+
+/* R2-25 — base() (what put()/copy treat as "already resolved") and apply() (what the
+   player sees) each spell out the layering. Nothing compared them, so a layer one of
+   them dropped diverged silently. The public observable of agreement: writing the
+   value a condition ALREADY resolves to stores nothing. */
+test("setting a knob to its live value stores no override, whichever layer supplied it", () => {
+  const presets = {
+    "*": { ambientMul: 1.3 },                       // global shipped
+    "*|dusk|wet": { keyMul: 0.6 },                  // shared stamp
+    "bahrain|dusk|wet": { lampLevel: 0.7 },         // per-track pin
+  };
+  const h = loadStore({ presets, saved: { rainCount: 500 } });   // legacy flat save = player "*"
+  const want = { ambientMul: 1.3, keyMul: 0.6, lampLevel: 0.7, rainCount: 500 };
+  for (const [id, v] of Object.entries(want)) assert.equal(h.LT[id], v, id + " resolved from its layer");
+  for (const d of DEFS) h.store.set(d.id, h.LT[d.id]);
+  assert.deepEqual(Object.keys(h.store.profiles).filter((k) => k !== "*"), [],
+    "set(id, liveValue) must be a no-op for every layer; a key here means base() disagrees with apply()");
+});
+
+/* R2-20 — set(): clamp, refusal, per-knob live effects, tuned() and reset(). */
+test("set() clamps to the knob range and refuses non-finite or unknown input", () => {
+  const h = loadStore();
+  assert.equal(h.store.set("keyMul", 9), true);
+  assert.equal(h.LT.keyMul, 2, "live value clamped to max");
+  assert.equal(h.store.profiles["bahrain|dusk|wet"].keyMul, 2, "and the clamped value is what is stored");
+  assert.equal(h.store.set("keyMul", -5), true);
+  assert.equal(h.LT.keyMul, 0);
+  for (const bad of [NaN, Infinity, "1", null, undefined]) {
+    assert.equal(h.store.set("keyMul", bad), false, String(bad));
+    assert.equal(h.LT.keyMul, 0, "a refused set leaves LT alone");
+  }
+  assert.equal(h.store.set("noSuchKnob", 1), false);
+});
+
+test("set() back to the resolved value drops the override and the empty profile", () => {
+  const h = loadStore();
+  h.store.set("keyMul", 1.5);
+  assert.deepEqual(snap(h), { "bahrain|dusk|wet": { keyMul: 1.5 } });
+  h.store.set("keyMul", 1);          // the registry default
+  assert.deepEqual(snap(h), {}, "no empty profile left behind");
+});
+
+test("set() fires only the live effect its knob asks for, once", () => {
+  const h = loadStore();
+  const tr = h.state.liveTracks.bahrain || (h.store.set("keyMul", 1.1), h.state.liveTracks.bahrain);
+  const fresh = () => { tr._lights = ["x"]; tr._alwaysLights = ["y"]; h.state.applied = 0; h.state.rainInits = 0; };
+
+  fresh(); h.store.set("keyMul", 1.2);                 // plain knob
+  assert.deepEqual([tr._lights, h.state.applied, h.state.rainInits], [["x"], 0, 0]);
+
+  fresh(); h.store.set("ssrWetMul", 1.2);              // rebuild knob
+  assert.deepEqual([tr._lights, tr._alwaysLights], [null, null], "rebuild drops the lamp caches");
+  assert.equal(h.state.rainInits, 0);
+
+  fresh(); h.store.set("rainCount", 900);              // reinitRain knob
+  assert.deepEqual([h.state.rainInits, tr._lights], [1, ["x"]]);
+  fresh(); h.state.wetRoad = false; h.store.set("rainCount", 950);
+  assert.equal(h.state.rainInits, 0, "no rain reinit on a dry road");
+});
+
+test("a reapply knob re-runs applyRaceSettings in a race but not from the menu", () => {
+  const h = loadStore();
+  const APPLY = "sunTemp";
+  // sunTemp is in APPLY_RACE_IDS but not in the fixture registry — add it through
+  // the registry the store reads (same array object).
+  const defs = vm.runInContext("LightTune.TUNE_DEFS", h.ctx);
+  defs.push({ id: APPLY, def: 0, min: -1, max: 1 });
+  h.state.applied = 0; h.store.set(APPLY, 0.5);
+  assert.equal(h.state.applied, 1, "race: scene re-derived once");
+  for (const mode of ["menu", "select"]) {
+    h.state.mode = mode; h.state.applied = 0; h.store.set(APPLY, -0.5);
+    assert.equal(h.state.applied, 0, mode + ": no race settings to apply yet");
+  }
+});
+
+test("tuned() counts the condition's overrides and reset() clears them (and the global layer)", () => {
+  const h = loadStore({ saved: { lampLevel: 0.9 } });          // player "*" layer
+  assert.equal(h.store.tuned(), 0, "the global layer is not this condition's edit");
+  h.store.set("keyMul", 1.5); h.store.set("ssrWetMul", 1.4);
+  h.state.go("monza", "dusk", "wet"); h.store.set("keyMul", 0.4);
+  h.state.go("bahrain", "dusk", "wet");
+  assert.equal(h.store.tuned(), 2);
+  h.store.reset();
+  assert.equal(h.store.tuned(), 0);
+  assert.equal("bahrain|dusk|wet" in h.store.profiles, false);
+  assert.equal("*" in h.store.profiles, false, "reset also clears the player global layer");
+  assert.equal(h.store.profiles["monza|dusk|wet"].keyMul, 0.4, "another condition's edit survives");
 });
