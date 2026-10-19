@@ -1918,7 +1918,8 @@
     },
     {
       "path": "tools/lib/presentation.mjs",
-      "classification": "library"
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/lib/process-tree.mjs",

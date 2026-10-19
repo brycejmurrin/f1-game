@@ -1231,6 +1231,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/presentation.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/process-tree.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
