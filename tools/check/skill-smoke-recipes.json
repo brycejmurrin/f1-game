@@ -1084,8 +1084,8 @@
     {
       "skill": "code-nav",
       "task": "Resolve definitions, references, callers, outlines and new-since-HEAD diagnostics through apex-lsp on hermetic fixtures",
-      "fixture": "tests/unit/lsp-mcp.test.mjs",
-      "pattern": "argument errors come back|classify tags a row|lsp-hint.py|codeMask carries|advertised argument constraints",
+      "fixture": "tests/unit/lsp-mcp-fixture.test.mjs",
+      "pattern": "^fixture(?: workspace)?:",
       "expected": {
         "minPass": 5,
         "maxFail": 0
