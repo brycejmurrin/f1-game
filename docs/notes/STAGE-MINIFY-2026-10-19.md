@@ -61,6 +61,36 @@ MEASURED: two `node tools/desktop/stage.mjs --out <dir>` runs from the same
 checkout, `diff -r` → identical (542 files + 542 maps). The unit test pins the
 same property on a sample with different `jobs` concurrency.
 
-## Measurements
+## Measurements (MEASURED 2026-10-19, this container)
 
-FILLED BELOW.
+Whole js/ tree (542 files): 15,082,522 → 6,392,373 B raw (−58 %); per-file
+gzip -9 sum 5,115,863 → 2,307,350 B (−55 %). Stage wall: copy 0.4 s, copy +
+minify 21 s.
+
+Phone profile, both trees staged and stamped at the same commit
+(`stage.mjs --stamp --at 7000`, one with `--no-minify`), served gzip-encoded
+as GitHub Pages serves text types, Playwright Chromium: 844×390, touch,
+isMobile, DPR 2, CDP `Emulation.setCPUThrottlingRate` 4, the #3110 "Fast 4G"
+profile (`Network.emulateNetworkConditions` 150 ms RTT, 1.6 Mbps down,
+750 kbps up), cache disabled, service workers blocked, fresh context per run;
+time from `goto` commit to `window.__apex` defined; bytes are
+`Network.loadingFinished.encodedDataLength` summed to that point. Default
+backend (TLX), SwiftShader. Four runs each, interleaved raw/min/raw/min:
+
+| staged tree | cold load to `__apex` (runs) | median | wire bytes | of which JS | requests |
+|---|---|---|---|---|---|
+| unminified | 27.0 / 27.5 / 27.5 / 27.5 s | 27.5 s | 4,401,414 | 3,452,663 | 410 |
+| minified | 19.8 / 20.2 / 19.4 / 19.8 s | 19.8 s | 2,610,368 | 1,661,633 | 410 |
+| change | | **−7.7 s (−28 %)** | **−41 %** | **−52 %** | 0 |
+
+The −10–15 % gz ESTIMATE in #3110 was conservative: comments are a large
+share of this tree and gzip does not remove them. Caveat: one container,
+SwiftShader; the parse share on a real phone CPU differs, the byte share does not.
+
+## Staged boot, locally
+
+`smoke.spec.js` against the stamped minified `_site` (python http.server on
+`_site`, `APEX_PORT` + `APEX_REUSE_SERVER=1`): 8/10 passed in the first run;
+the 2 others hit the LOCAL 120 s per-test timeout with load at 4–6 (no
+assertion failed) and passed alone at CI's `--timeout=900000`
+(`= run passed (2/2 done, 0 failed)`).
