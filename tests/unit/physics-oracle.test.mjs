@@ -17,7 +17,7 @@ import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { encodeNumber, unpackGhost } from "../../tools/check/physics-oracle.mjs";
+import { encodeNumber, recipes, unpackGhost } from "../../tools/check/physics-oracle.mjs";
 
 const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -69,8 +69,10 @@ test("unpackGhost decodes every packedV3 channel form", () => {
 test("physics-oracle: two runs, byte-identical traces", async () => {
   await Promise.all([run(process.execPath, physArgs(dir("p1")), { cwd: ROOT }), run(process.execPath, physArgs(dir("p2")), { cwd: ROOT })]);
   const a = read(dir("p1")), b = read(dir("p2"));
-  assert.deepEqual(Object.keys(a), ["monza-ghost.json", "monza-off-track-recovery.json", "monza-steady-corner-load.json",
-    "monza-straight-line-accel.json", "monza-trail-brake-into-rotation.json"]);
+  // One trace per SCENARIOS recipe plus the ghost; derived so a widened SCENARIOS (#3036) cannot stale it.
+  const want = ["monza-ghost.json", ...recipes().map((r) => `monza-${r.id}.json`)].sort();
+  assert.ok(want.length >= 5 && want.includes("monza-steady-corner-load.json"), want.join());
+  assert.deepEqual(Object.keys(a).sort(), want);
   assertSame(a, b);
   const t = JSON.parse(a["monza-steady-corner-load.json"]);
   assert.equal(t.header.REVISION, REVISION);
