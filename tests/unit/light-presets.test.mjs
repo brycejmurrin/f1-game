@@ -82,7 +82,7 @@ test("the global baseline profile, if present, is a plain knob map", () => {
   // a number, and js/lighting/profiles.js's `typeof === "number"` test would skip
   // it — silently, and for every condition at once.
   const P = presets();
-  if (!P["*"]) return;
+  assert.ok(P["*"] && typeof P["*"] === "object", 'LightPresets["*"] is the shipped global baseline and must exist');
   const wrong = Object.entries(P["*"]).filter(([, v]) => typeof v !== "number").map(([k]) => k);
   assert.deepEqual(wrong, [],
     'the "*" baseline holds a non-numeric value — a profile pasted one level too deep is skipped in silence');
@@ -137,9 +137,10 @@ test("no lit condition ships the crushing stamp: ambientMul ≥ 0.15 and keyMul 
   const bad = [];
   for (const [key, o] of Object.entries(P)) {
     const parts = key.split("|");
-    const tod = parts[0] === "*" ? parts[1] : parts[1];
-    const wx = parts[0] === "*" ? parts[2] : parts[2];
-    if (!wx || tod === "night") continue;
+    const tod = parts[1];
+    // "*" alone has no time of day; the two-part conditional layers ("*|<tod>")
+    // resolve for every weather at that hour, so they are checked too.
+    if (!tod || tod === "night") continue;
     const a = o.ambientMul ?? 1, k = o.keyMul ?? 1;
     if (a < 0.15 || k < 0.1) bad.push(`${key} ambientMul ${a} keyMul ${k}`);
   }

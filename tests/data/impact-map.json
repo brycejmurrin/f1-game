@@ -8099,6 +8099,9 @@
       "persist": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
+      "reapply": [
+        "tests/unit/light-store-cond-layer.test.mjs"
+      ],
       "reset": [
         "tests/unit/light-store-copy.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
@@ -9007,8 +9010,7 @@
         "tests/unit/perf-governor.test.mjs"
       ],
       "current": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/light-store-cond-layer.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "defaultId": [
         "tests/unit/perf-governor.test.mjs"
@@ -9020,6 +9022,7 @@
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/light-store-cond-layer.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ]
