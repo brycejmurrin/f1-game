@@ -1286,6 +1286,7 @@
     {
       "path": "tools/ci/webkit-leg-summary.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node"
     },
     {
