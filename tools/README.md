@@ -106,6 +106,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/cursor-agents.mjs** | Read-only Cursor agents client: list, status, dump run transcripts to artifacts/, digest token-proxy metrics. | agent-fleet |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
+| **ci/fleet-board-snapshot.mjs** | Writes the Fleet Board dashboard's six snapshot datasets to artifacts/fleet-board/; read-only, no bus cursor. | agent-fleet |
 | **ci/fleet-board.mjs** | Fleet board: pinned issue of ready/claimed/blocked issues, PRs, live claims; mirrors the `claimed` label; syncs labels. | ci-watch |
 | **ci/fleet-flags.mjs** | Flags model drift, cost over cap, context over 300k and stalled "working" sessions from get_session JSON. | agent-fleet |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
