@@ -399,6 +399,8 @@
     "// fleet-board: the derived `claimed` label, the PR closing-keyword parse and the",
     "// pinned board body, all pure; < 1 s. It guards the backlog's phone view.",
     "tests/unit/fleet-board.test.mjs",
+    "// fleet-bus: the cross-host merge lease (acquire/renew/expiry/break) and the bus cursor read; a real-git race on a local bare origin; < 2 s.",
+    "tests/unit/fleet-bus.test.mjs",
     "tests/unit/fleet-flags.test.mjs",
     "// fleet-tick: the diff of two watcher states into changed rows, pure fixtures; < 0.1 s.",
     "tests/unit/fleet-tick.test.mjs",

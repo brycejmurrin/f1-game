@@ -486,6 +486,11 @@
       "presentation": "shared-levels",
       "preserve": "Dry-run versus applied; pin failure; exact board issue number"
     },
+    "tools/ci/fleet-bus.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha"
+    },
     "tools/ci/fleet-flags.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
