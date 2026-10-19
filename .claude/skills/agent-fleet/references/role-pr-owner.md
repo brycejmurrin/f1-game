@@ -29,7 +29,7 @@ Use the orchestrator.md launch template with:
   plus the grant that created the owner role. If the user already ordered the
   merge and the orchestrator armed it, say "auto-merge is armed (MERGE); leave
   it" — the owner still never arms or merges.
-- `STOP AT: 150k context or $<cap>` as the last line (docs-only PR: 100k). At every wake read your own `context_usage` via `get_session` (no id); at or over STOP AT: push, post the partial or FINAL, send HANDOFF, end.
+- `STOP AT: 150k context or $<cap>` as the last line (docs-only PR: 100k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop).
 - The relayed notes from the previous owner (head sha, last CI verdict, local
   sync state, files that conflicted).
 

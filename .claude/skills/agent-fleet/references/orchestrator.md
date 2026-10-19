@@ -91,8 +91,8 @@ before every `create_session`:
 12. Size stop, every role: the launch prompt ends `STOP AT: <limit> context or $<cap>`,
    the limit per role (reviewer 120k, worker 150k at a verified checkpoint, PR owner 150k /
    docs-only 100k, synth 150k, watcher 100k, orchestrator 200k; launch-policy.md §Size stop).
-   The session reads its own `context_usage` / `usage` via `get_session` (no id)
-   at every wake and, at the stop, pushes, posts the partial or FINAL, sends HANDOFF and ends.
+   The limits are soft caps; hard = soft + 50k. The session measures its live context (`/context` or the statusline, not
+   `get_session` `used_tokens`) at every wake and, at the soft cap, finishes the unit, pushes, sends HANDOFF.
 13. `USER GRANTS:` quotes every standing grant verbatim with its date and the session it was typed in.
    A changed grant is a relaunch with the amended brief, never a message: relayed grants are refused (authority.md).
 14. Route verbose reads (CI logs, transcripts, big lists) through a subagent that returns a summary;

@@ -116,7 +116,7 @@ republishing. Send its URL to the orchestrator once.
 
 ## Handoff
 
-STOP AT 100k context. At every wake read your own `context_usage` via `get_session` (no id); at or over STOP AT: send
+Soft cap 100k context. At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft cap finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k hand off now (launch-policy.md §Size stop). Send
 `FLEET-WATCH HANDOFF | dashboard <url> | pending triggers <ids>` and stop arming ticks. State is in the
 dashboard `db`, so the handoff carries only the URL and the pending trigger ids. The orchestrator starts a
 fresh watcher from this card.

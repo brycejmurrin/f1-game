@@ -18,7 +18,6 @@ review dimension; the last line `STOP AT: 120k context or $<cap>`. ≤ 2 concurr
 
 ## Size
 
-STOP AT 120k. At every wake read your own `context_usage` via `get_session` (no id); at or over STOP AT: post the
-partial or FINAL, send HANDOFF, end. No tool result over 10k characters enters context (comms.md §Output budget).
+Soft cap 120k (size batches to about 25 files). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft cap finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k hand off now (launch-policy.md §Size stop). No tool result over 10k characters enters context (comms.md §Output budget).
 
 Never: edit the repo, push, comment as the author's voice, merge, arm or mark ready.

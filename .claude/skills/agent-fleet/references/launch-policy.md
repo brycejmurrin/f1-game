@@ -53,18 +53,25 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past 200k
   context. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
   may choose a tighter cadence (Bryce chose 5 min on 2026-10-17), and then the orchestrator follows that.
-- **Size stop (per role, 2026-10-19).** Every launch prompt ends `STOP AT: <limit> context or $<cap>` (orchestrator.md hard line 12):
+- **Size stop (per role, soft and hard caps; Bryce 2026-10-19 06:14Z: "Should we do both soft and hard caps as well as test auto compact on some sessions").**
+  Every launch prompt ends `STOP AT: <soft> context or $<cap>`:
 
-| Role | STOP AT (context) |
+| Role | Soft cap (context) |
 |---|---|
-| reviewer | 120k |
+| reviewer | 120k (size batches to about 25 files so it finishes inside the cap) |
 | worker | 150k, at a verified checkpoint |
 | PR owner | 150k (docs-only PR: 100k) |
 | synth | 150k |
 | fleet watcher | 100k |
 | orchestrator | 200k |
 
-  At every wake read your own `context_usage` via `get_session` (no id); at or over STOP AT: push, post the partial or FINAL, send HANDOFF, end.
+  - **Measure** the session's own live context (`/context` or the statusline). `get_session` `used_tokens` updates only at turn end and
+    session reports disagree (race-1 said "120k (237k used)"). A fresh session starts at about 50-60k base (a fresh PR owner read ~56k per call).
+  - **Soft cap:** finish the current unit (file, step or run in flight), commit and push helper scripts and artifacts (no container-local-only
+    state: ui-2 and race-1 lost their `cdp-hit.mjs`), push a WIP note, then HANDOFF. **Hard cap = soft + 50k:** hand off immediately.
+  - Watcher and orchestrator stay low because every inbound message or timer wakes them with the full context (code.claude.com/docs/en/costs §Why usage climbs).
+  - Do not hand off a session with fewer than ~30 calls of work left; finish instead.
+  - The auto-compact trial (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) is a separate experiment (ORCH5, pending); `.claude/settings*.json` is not touched here.
 - **Cost and context (2026-10-19, `docs/notes/FLEET-COST-2026-10-19.md`, prices from platform.claude.com pricing).** Per-call cost is
   about context x cache-read price ($0.20 / MTok Opus 5.5, $0.10 Sonnet 5.5), and a session's cost is roughly quadratic in its calls.
   Cache reads were 41-69 % of every long session's bill. A handoff at 150k instead of 300k cuts cache-read dollars per unit of work by

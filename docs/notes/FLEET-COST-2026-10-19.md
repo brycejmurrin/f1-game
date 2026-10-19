@@ -54,6 +54,22 @@ A handoff at 150k instead of 300k cuts cache-read dollars per unit of work by `1
 The new session re-reads its `B` plus the handoff, which the table already counts. Opus to Sonnet halves the
 cache-read price ($0.20 to $0.10) and the base input price, so it halves the bill again for the same shape of work.
 
+## Context engineering sources
+
+- <https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents>: context rot, compaction, notes, subagents returning 1-2k tokens.
+- <https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents>: progress file plus git; "compaction isn't sufficient".
+- Pricing has no long-context surcharge on the 1M window (pricing page above).
+
+Further transcript data (ORCH4, 2026-10-19): DEBUGGER-A 401k for $18.6 with cache reads about 60 % of cost; REVIEW-SYNTH-2 227k for
+$9.2 but 618k of cache writes (about 2.7x its peak context, from rewrites); tooling-2 223k for $5.2.
+
+## Soft and hard caps
+
+Bryce, 2026-10-19 06:14Z: "Should we do both soft and hard caps as well as test auto compact on some sessions". Soft cap = the per-role limits
+in launch-policy.md §Size stop; hard cap = soft + 50k. Measure live context (`/context`, statusline), not `get_session` `used_tokens` (turn-end only;
+race-1 reported "120k (237k used)"). Fresh sessions start at about 50-60k. Do not hand off with under ~30 calls of work left.
+The auto-compact trial (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) is a separate pending experiment (ORCH5).
+
 ## Changes this drove
 
 Per-role `STOP AT` (reviewer 120k, worker 150k, PR owner 150k / docs-only 100k, synth 150k, watcher 100k,
