@@ -2203,6 +2203,7 @@
     {
       "path": "tools/mcp/js-debugger-boot.cjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
       "interpreter": "node"
     },
     {
@@ -2239,7 +2240,8 @@
     },
     {
       "path": "tools/mcp/js-debugger-node.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "page-results"
     },
     {
       "path": "tools/mcp/js-debugger-session.mjs",
@@ -2259,7 +2261,8 @@
     },
     {
       "path": "tools/mcp/js-debugger-workflow.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "page-results"
     },
     {
       "path": "tools/mcp/lsp-eval.mjs",
