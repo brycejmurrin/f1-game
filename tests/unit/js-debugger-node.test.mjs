@@ -100,6 +100,10 @@ test("R4: a probe hits vm-loaded copies under relative, absolute and no filename
   // vmTopLevel:false binds off scriptParsed: the unnamed copy is called in its load's tick, so it is missed.
   const parsed = (await nodeTest({ file: `${FX}/vm.fixture.mjs`, vmTopLevel: false, probes: [probe] })).runs[0];
   assert.equal(parsed.probes[0].hits, 4);
+  // A pause budget of 1 disarms at the first script execution and says so.
+  const capped = (await nodeTest({ file: `${FX}/vm.fixture.mjs`, vmPauseBudget: 1, probes: [probe] })).runs[0];
+  assert.equal(capped.vmPauses, 1); assert.match(capped.vmNote, /stopped after 1 script executions/);
+  assert.equal(capped.probes[0].hits, 4);
 });
 
 test("a hanging test is killed at timeoutMs and reported, not left running", async () => {

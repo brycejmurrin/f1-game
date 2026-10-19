@@ -90,7 +90,10 @@ async function instrument(cdp, conn, report, opts, file, state) {
   // so even code run in the same tick as the load hits. An auto-attached child has no Break on
   // start, so it binds off scriptParsed: best effort, a call in the load's own tick can be missed.
   const files = probeFiles(opts.probes || [], file), bound = new Set();
-  const pauseBind = conn === 0 && opts.vmTopLevel !== false && files.size > 0;
+  let pauseBind = conn === 0 && opts.vmTopLevel !== false && files.size > 0;
+  // Every script execution pauses while armed (measured on cam-avoid-vm.test.mjs: 121 s vs 38 s),
+  // so disarm after a budget and bind later scripts off scriptParsed.
+  const budget = opts.vmPauseBudget ?? 300;
   const bindAnonymous = async (scriptId, endLine) => {
     if (bound.has(scriptId)) return;
     const candidates = [...files.entries()].filter(([, f]) => endLine + 1 >= f.lines && endLine + 1 <= f.lines + 3);
@@ -125,9 +128,15 @@ async function instrument(cdp, conn, report, opts, file, state) {
     const hit = (e.hitBreakpoints || []).map(id => byBp.get(id)).filter(Boolean);
     const own = hit.find(p => p.captures.length < (p.wants ?? 0)) || hit[0];
     if (e.reason === "Break on start" && pauseBind)
-      await cdp.send("Debugger.setInstrumentationBreakpoint", { instrumentation: "beforeScriptExecution" }).catch(() => {});
+      state.instrumentationId = (await cdp.send("Debugger.setInstrumentationBreakpoint", { instrumentation: "beforeScriptExecution" }).catch(() => ({}))).breakpointId;
     if (e.reason === "instrumentation") {
       const id = e.data?.scriptId;
+      report.vmPauses = (report.vmPauses || 0) + 1;
+      if (pauseBind && report.vmPauses >= budget) {
+        pauseBind = false;
+        report.vmNote = `Pause-binding stopped after ${budget} script executions (vmPauseBudget); later unnamed vm scripts bind off scriptParsed and can miss a call in their load's tick.`;
+        if (state.instrumentationId) await cdp.send("Debugger.removeBreakpoint", { breakpointId: state.instrumentationId }).catch(() => {});
+      }
       if (id && lineCount.has(id)) await bindAnonymous(id, lineCount.get(id));
       await cdp.send("Debugger.resume").catch(() => {});
       return;
