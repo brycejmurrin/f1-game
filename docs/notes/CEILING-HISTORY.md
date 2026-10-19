@@ -1,5 +1,15 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-19 — PR #2924 (cursor/body-styles-r8n5): concept body silhouette pass
+
+`js/car/car3d.js` lines 2218 → **2259** (+41). Deliberate raise past the 40-line absorb.
+Growth is the BODY_STYLES table (`coverLift`, amplified needle/anteater/arched/wedge
+nose/pod/cover knobs so side and 3/4 clear DAD's SUBTLE_PCT), `ALLOW_TEAM_BODY_SWAP`
+gate (team chassis stay out of the picker until a dedicated pass), and the short
+comments that document the silhouette contract. Companion geometry lives in
+`js/car/car-body-geom.js` (not ratcheted). Fragment delta:
+`tests/data/ratchets.d/cursor--body-styles-r8n5.json`.
+
 ## 2026-10-18 — PR #2856 (cursor/captions-comfort-d9e8): captions wave 1 (#1597)
 
 `css/hud.css` codeLines 2193 → **2239** (+46), lines 2428 → **2475** (+47). Deliberate raise past the
