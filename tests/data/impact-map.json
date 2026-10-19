@@ -4075,6 +4075,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/fuji.js": {
+      "*": [
+        "tests/unit/verify-live.test.mjs"
+      ]
+    },
     "js/circuits/imola.js": {
       "*": [
         "tests/specs/imola-foundation.spec.js",

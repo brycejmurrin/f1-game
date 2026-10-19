@@ -32,8 +32,12 @@ test("pages.yml stamps the generation from the commit count on a full-depth chec
 test("pages.yml verifies the live site serves the stamped build", () => {
   assert.match(pages, /\n  verify-live:\n/);
   assert.match(pages, /needs: deploy/);
-  assert.match(pages, /version\.json\?_=\$\{GITHUB_RUN_ID\}/, "cache-busted poll of the live version.json");
-  assert.match(pages, /never reached build \$BUILD/);
+  // #2923: cache-bust + "never reached build" live in tools/ci/poll-live-shell.mjs;
+  // pages.yml only invokes it (and skips verify-live.mjs when superseded).
+  assert.match(pages, /node tools\/ci\/poll-live-shell\.mjs --url "\$PAGE_URL" --build "\$BUILD" --sha "\$GITHUB_SHA"/);
+  const pollSrc = fs.readFileSync(path.join(ROOT, "tools/ci/poll-live-shell.mjs"), "utf8");
+  assert.match(pollSrc, /never reached build \$\{?build\}?/, "poll script still fails closed with the live build/sha");
+  assert.match(pollSrc, /Date\.now\(\)/, "cache-bust query on each live fetch");
 });
 
 test("ci.yml no longer demands a committed generation newer than live", () => {
