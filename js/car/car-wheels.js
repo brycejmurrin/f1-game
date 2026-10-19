@@ -325,14 +325,14 @@ const CarWheels = (function () {
         }
       }
       // rimGuard (D6): a proud bead ring in the band colour where the tyre
-      // meets the rim — the protector lip a low-profile 18" tyre carries.
+      // meets the rim, just outboard of the rim lip so the two never overlap.
       if (tyreStyle && tyreStyle.rimGuard) {
         for (const bs of [[x0, -1], [x1, 1]]) {
           const xb = bs[0] + bs[1] * 0.007;
           for (let i = 0; i < SEG; i++) {
             const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
             const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-            addQuad(out, P(r * 0.705, a0), P(r * 0.705, a1), P(r * 0.675, a1), P(r * 0.675, a0), BAND, SURFACES.rubber);
+            addQuad(out, P(r * 0.735, a0), P(r * 0.735, a1), P(r * 0.705, a1), P(r * 0.705, a0), BAND, SURFACES.rubber);
           }
         }
       }
@@ -343,7 +343,7 @@ const CarWheels = (function () {
         for (let k = 0; k < N; k++) {
           const a = (k / N) * Math.PI * 2, rr = r * 1.004, hw = 0.022;
           const P = (x, t) => [x, cy + rr * Math.cos(t), cz + rr * Math.sin(t)];
-          for (const [xa, xb2] of [[x0 + 0.02, xm], [x1 - 0.02, xm]]) {
+          for (const [xa, xb2] of [[x0 + (x1 - x0) * SH2_W, xm], [x1 - (x1 - x0) * SH2_W, xm]]) {   // flat crown only: past the shoulder a sipe floats
             addQuad(out, P(xa, a), P(xb2, a + 0.12), P(xb2, a + 0.12 + hw * 3), P(xa, a + hw * 3), SIPE, SURFACES.rubber);
           }
         }

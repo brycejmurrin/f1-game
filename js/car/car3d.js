@@ -1529,8 +1529,10 @@ const Car3D = (function () {
     const exhTint = Math.max(0, Math.min(2, Math.round(exhStyle.heatTint || 0)));
     const tintBands = exhTint === 2 ? [[0.40, 0.24, 0.52], [0.22, 0.26, 0.62], [0.30, 0.22, 0.50], [0.18, 0.30, 0.66]]
       : [[0.80, 0.64, 0.30], [0.66, 0.42, 0.26], [0.44, 0.30, 0.56], [0.22, 0.34, 0.68]];
-    for (const cx of exhTint ? exits : []) tintBands.forEach((c, i) => addTube(out, [[cx, EXH_Y, tipZ + 0.02 - i * 0.05],
-      [cx, EXH_Y, tipZ - 0.03 - i * 0.05]], (exhTwin ? exhR : tipRShow * 0.85) * (1.05 + 0.05 * i), 10, c, SURFACES.metal));
+    const tintR = (exhTwin ? exhR : tipRShow * 0.85) * 1.08;   // one radius: a stepped run read as jagged rings
+    for (const cx of exhTint ? exits : []) { tintBands.forEach((c, i) => addTube(out, [[cx, EXH_Y, tipZ + 0.02 - i * 0.03],
+      [cx, EXH_Y, tipZ - 0.01 - i * 0.03]], tintR, 10, c, SURFACES.metal));
+      addBox(out, cx, EXH_Y, tipZ - 0.07, tintR * 1.2, tintR * 1.2, 0.004, [0.04, 0.04, 0.04], SURFACES.carbon); }
     if (exhStyle.hood && !exhTwin) {
       const hr = tipRShow * (1 + 1.15 * exhFlare) + 0.03;
       addBox(out, 0, EXH_Y + hr, tipZ - 0.02, hr * 2.4, 0.016, 0.30, CARBON, SURFACES.carbon);
