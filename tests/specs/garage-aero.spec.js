@@ -90,6 +90,19 @@ async function openGarage(page) {
 test.describe("garage active aero", () => {
   test.use({ viewport: LANDSCAPE });
 
+  // P2-32: a call made with the garage shut used to answer a bare null.
+  test("with the garage closed, garageAero and garageStep say so", async ({ page }) => {
+    await toMenu(page);
+    const r = await page.evaluate(() => ({
+      on: window.__apex.garageCam().on,
+      aero: window.__apex.garageAero(true),
+      step: window.__apex.garageStep(1 / 60, 2),
+    }));
+    expect(r.on, "the title has no garage preview up").toBe(false);
+    expect(r.aero).toEqual({ ok: false, error: "garage_closed" });
+    expect(r.step).toEqual({ ok: false, error: "garage_closed" });
+  });
+
   test("the demo starts shut", async ({ page }) => {
     await openGarage(page);
     const a = await page.evaluate(() => window.__apex.garageAero());
