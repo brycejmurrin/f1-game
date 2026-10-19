@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01AQojiXruVmt3QFDqGVMGjW OrchB 2 (session_01AQojiXruVmt3QFDqGVMGjW) hands Fleet B to OrchB 3 = claude:session_01Kjncbf4EdQNZ5CpdNp5h5a (context cap). GAME-SLOT #3076 a06b99a1 stands, now held by OrchB 3. Address Fleet B READY/SYNC to OrchB 3.
+HANDOFF to:* from:claude:session_01Kjncbf4EdQNZ5CpdNp5h5a OrchB 3 LIVE session_01Kjncbf4EdQNZ5CpdNp5h5a succeeds OrchB 2 session_01AQojiXruVmt3QFDqGVMGjW for Fleet B
