@@ -30,6 +30,13 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { DOM_SOURCE } from "../helpers/seed-dom.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// The REAL predicate from js/data/teams.js (not a hand copy that can drift from it).
+const realIsReal = (() => {
+  const c = vm.createContext({ console, Math, Object, Array, Number, String, JSON });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: "js/data/teams.js" });
+  return vm.runInContext("Teams.isReal", c);
+})();
 const src = (p) => readFileSync(join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
 function save(opts = {}) {
@@ -82,7 +89,7 @@ function loadHarness(options = {}) {
     Teams: {
       POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
       LIST: [team],
-      isReal: (t) => !!t && !t.custom && !t.legends,
+      isReal: realIsReal,
     },
     // SEASON needs enough rounds that a restored season.round (SEC2-1 / C8 use
     // 3–4) is still in range — SeasonCal.load() resume()s then save()s, and a
@@ -93,15 +100,12 @@ function loadHarness(options = {}) {
       seasonIndex: () => 0,
     },
     Parts: { CATALOG: [], getFactorySetup: () => ({}), getCost: () => 0, setLegality() {} },
-    DriverRatings: {
-      get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }),
-      overall: () => 50,
-    },
     NativeDownload: { viable: () => false, saveBlob: async () => ({ ok: true }) },
     Hash32: { fnv1a: (s) => String(s).length },
   });
   vm.runInContext(src("js/core/hash32.js"), ctx);
   vm.runInContext(src("js/core/mat4.js"), ctx);
+  vm.runInContext(src("js/data/driver-ratings.js"), ctx);
   vm.runInContext(src("js/career/save-migrate.js"), ctx);
   vm.runInContext(src("js/core/store.js"), ctx);
   vm.runInContext(src("js/career/career-backup.js"), ctx);

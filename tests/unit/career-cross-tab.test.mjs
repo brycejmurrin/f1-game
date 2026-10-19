@@ -8,6 +8,13 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+// The REAL predicate from js/data/teams.js (not a hand copy that can drift from it).
+const realIsReal = (() => {
+  const c = vm.createContext({ console, Math, Object, Array, Number, String, JSON });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: "js/data/teams.js" });
+  return vm.runInContext("Teams.isReal", c);
+})();
+
 function save(round, money) {
   return {
     v: 1, flavour: "driver", year: 2026, money, rep: 30, seat: 0,
@@ -85,16 +92,15 @@ function load(options = {}) {
     },
     window: { addEventListener: (name, fn) => listeners.set(name, fn) },
     Log: { warn() {}, info() {} },
-    // isReal mirrors js/data/teams.js; a beatRival goal walks the grid through it.
+    // the real isReal from js/data/teams.js; a beatRival goal walks the grid through it.
     Teams: { POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1], LIST: [team],
-             isReal: (t) => !!t && !t.custom && !t.legends },
+             isReal: realIsReal },
     Tracks: options.tracks || { LIST: [{ id: "a" }], SEASON: [{ id: "a" }], seasonIndex: () => 0 },
     Parts: { CATALOG: [], getFactorySetup: () => ({}), getCost: () => 0 },
-    DriverRatings: { get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }),
-                     overall: () => 50 },
   });
   vm.runInContext(readFileSync(join(ROOT, "js/core/hash32.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/career/save-migrate.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx);

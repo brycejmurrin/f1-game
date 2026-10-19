@@ -81,7 +81,7 @@ test("an era ban prevents fitting a banned option", () => {
   const expect = new Map([["ferrari", 8]]);
   CareerAiDev.developWinter(career, tStand, expect, () => 0);
   const fitted = CareerAiDev.fittedOf(career, team);
-  if (!fitted) return; // no step found under the ban — fine
+  assert.ok(fitted, "ferrari expected P8 and finished P1 with rnd 0: a step is fitted even under the ban");
   const banned = Regulations.bannedIds(era.id);
   // The bag is seeded with the WORKS build (a banned works part stays owned and
   // resolves to its fallback at race time); the STEP itself is never banned,
@@ -103,7 +103,8 @@ test("pickStep never exceeds the team cap", () => {
   const cap = CareerAiDev.teamCap(team, {});
   assert.ok(cap <= 800);
   const step = CareerAiDev.pickStep(team, fitted, cap);
-  if (step) assert.ok(Parts.getCost(step.trial, team) <= cap);
+  assert.ok(step, "haas at an 800 cap with a factory bag still has an affordable step");
+  assert.ok(Parts.getCost(step.trial, team) <= cap);
 });
 
 test("scrubFitted fits the best legal OWNED part over a banned one, shelves it, and restores it after the era", () => {

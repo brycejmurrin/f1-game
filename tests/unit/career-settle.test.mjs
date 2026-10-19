@@ -327,6 +327,7 @@ function loadDriver(ratings, opts = {}) {
     // RUNGS, not the cap, are what this test measures.
     Parts: {
       getFactorySetup: () => ({}), getCost: () => opts.worksCost || 600,
+      setLegality: (...a) => { if (opts.legalityCalls) opts.legalityCalls.push(a); },
       DEFAULTS: Object.fromEntries(Array.from({ length: 6 }, (_, i) => ["c" + i, "base" + i])),
       CATALOG: Array.from({ length: 6 }, (_, i) => ({
         id: "c" + i, options: [{ id: "base" + i, cost: 0 }, { id: "top" + i, cost: 500 }],
@@ -1225,18 +1226,29 @@ test("the rival is never your own garage — that is what beatMate already promi
   }
 });
 
-test("the rival rides in `value`, so a goal rebuilt as {type,value} keeps it", () => {
+test("a beatRival offer signs the rival it printed: acceptOffer keeps goal.value, not just the type", () => {
   // The defect this guards shipped once already: acceptOffer rebuilt the goal as
-  // `{ type, value }` and dropped everything else. A rival stored beside those
-  // two fields would be lost on signing, and the contract would silently become
-  // a different promise than the offer showed.
-  const Career = loadDriver();
-  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
-  Career.engage(true);
-  const id = Career.GOAL_KINDS.beatRival.value({ id: "haas", tier: 4 }, 1);
-  const rebuilt = { type: "beatRival", value: id };
-  assert.equal(rebuilt.value, id, "the rival survives a {type,value} round trip");
-  assert.ok(Career.goalLabel(rebuilt).length > 4, "and the rebuilt goal still labels");
+  // `{ type, value }` from the kind alone and dropped the named rival, so the
+  // contract silently became a different promise than the offer showed.
+  let checked = 0;
+  for (const seed of [1, 7, 13, 21, 34, 55, 89, 144, 233, 377]) {
+    const Career = loadDriver();
+    Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed });
+    Career.engage(true);
+    const c = Career.data();
+    c.rep = 50; c.deal.years = 1; c.deal.left = 1;
+    Career.rollover();
+    const i = (c.offers || []).findIndex((o) => o.goal && o.goal.type === "beatRival");
+    if (i < 0) continue;
+    const printed = "vega:1";                            // a distinctive rival the move could not re-derive by chance
+    c.offers[i].goal.value = printed;
+    const deal = Career.acceptOffer(i);
+    assert.equal(deal.goal.type, "beatRival");
+    assert.equal(deal.goal.value, printed, `seed ${seed}: signed rival ${deal.goal.value}, the button said ${printed}`);
+    assert.ok(Career.goalLabel(deal.goal).length > 4, "and the signed goal labels");
+    checked++;
+  }
+  assert.ok(checked > 0, "at least one seed draws a beatRival offer, so the assertions above ran");
 });
 
 test("a rival who finished ahead MISSES the goal, and one behind MEETS it", () => {
@@ -1273,7 +1285,11 @@ test("ambition moves WHO the rival is, in the direction it moves every other kin
   Career.engage(true);
   const team = { id: "mclaren", tier: 1 };
   const ids = Career.AMBITION.map((_, i) => Career.GOAL_KINDS.beatRival.value(team, i));
-  assert.equal(new Set(ids).size >= 1, true, "every rung names someone");
+  const own = Career.data().team;
+  for (const id of ids) {
+    assert.equal(typeof id, "string", "every rung names someone");
+    assert.notEqual(id.split(":")[0], own, `${id} must not be the player's own garage`);
+  }
   // The rungs are ordered modest -> ambitious, and delta runs +3 -> -3, so the
   // ambitious pick sits at or above the modest one in the ranked pool.
   assert.ok(Career.AMBITION[0].delta > Career.AMBITION[Career.AMBITION.length - 1].delta,
@@ -1309,8 +1325,9 @@ test("ADDING A KIND MUST NOT RE-PROMISE THE OTHER THREE", () => {
   let rivals = 0;
   for (let year = 2026; year < 2126; year++)
     if (Career.goalTypeFor(year) === "beatRival") rivals++;
-  assert.ok(rivals > 0 && rivals < 60,
-    `beatRival drawn ${rivals}/100 seasons — its own roll should be a minority share`);
+  // RIVAL_SHARE is 0.25: 100 draws land within ~4 sd (sd ≈ 4.3) of 25, and far below the three originals' combined 75.
+  assert.ok(rivals >= 8 && rivals <= 42,
+    `beatRival drawn ${rivals}/100 seasons — its own roll (RIVAL_SHARE 0.25) should be a minority share`);
 });
 
 test("the LAST sponsor window of a season ends at the finale, and asks pro rata", () => {
@@ -1358,13 +1375,28 @@ test("a move takes the player's DEVELOPMENT along (it is keyed by seat); the old
   assert.fail("no seed drew an offer from another team");
 });
 
-test("a move consumes the pure reviewed works snapshot without temporarily changing the installed era", () => {
-  const src = readFileSync(join(ROOT, "js/career/career.js"), "utf8");
-  const factory = src.slice(src.indexOf("function worksSnapshot("), src.indexOf("function offerPreview("));
-  assert.ok(factory.includes("Parts.FACTORY_PRESETS"), "snapshot reads the unrestricted authored works build");
-  assert.ok(!factory.includes("setLegality"), "preview never changes the live era while browsing");
-  const accept = src.slice(src.indexOf("function acceptOffer("), src.indexOf("\n}\n", src.indexOf("function acceptOffer(")));
-  assert.ok(accept.includes("career.fitted = Object.assign({}, preview.fitted)"), "signing consumes the same reviewed works snapshot");
+test("a move consumes the reviewed works snapshot, and browsing offers never changes the live era", () => {
+  const legalityCalls = [];
+  for (const seed of [1, 7, 13, 21, 34, 55, 89]) {
+    const Career = loadDriver(undefined, { legalityCalls });
+    Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed });
+    Career.engage(true);
+    const c = Career.data();
+    c.rep = 95; c.deal.years = 1; c.deal.left = 1;
+    Career.rollover();
+    const i = (c.offers || []).findIndex((o) => o.teamId !== "haas");
+    if (i < 0) continue;
+    const before = legalityCalls.length;
+    const preview = Career.offerPreview(i);
+    Career.offerPreview(i);
+    assert.equal(legalityCalls.length, before, "previewing an offer must not touch Parts.setLegality (the installed era)");
+    assert.ok(preview.moving);
+    Career.acceptOffer(i);
+    assert.deepEqual(JSON.parse(JSON.stringify(c.fitted)), JSON.parse(JSON.stringify(preview.fitted)), "signing consumes the same reviewed works snapshot");
+    assert.deepEqual(JSON.parse(JSON.stringify(c.owned)), JSON.parse(JSON.stringify(preview.owned)));
+    return;
+  }
+  assert.fail("no seed drew an offer from another team");
 });
 
 // ── a hostile offer / tdev that slipped past the importer ───────────────────

@@ -203,6 +203,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // flare / spray-plume discipline, in a VM with seeded Math.random; ~0.2 s.
   // Round-2: decal LRU trims by bytes, the hi-res grave is reaped on the garage path, failed hi-res builds stop retrying.
   "tests/unit/car-draw-decal-budget.test.mjs",
+  "tests/unit/car-front-wing-width.test.mjs",
   "tests/unit/car-fx.test.mjs",
   "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
@@ -213,6 +214,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
+  // Slot protection, rollback and cross-tab writes: the pre-push floor must catch them (L18 C1-11).
+  "tests/unit/career-cross-tab.test.mjs",
   "tests/unit/career-data-audio-improvements.test.mjs",
   // js/career/*.js never consumes simRnd and uses Math.random only at two allowlisted non-draw sites; source scan, < 50 ms.
   "tests/unit/career-determinism.test.mjs",
