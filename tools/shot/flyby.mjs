@@ -133,12 +133,19 @@ async function shootTrack(page, track) {
   await page.evaluate(() => window.__apex.freeze(true));
 
   // Authored --shots are the saved-list tier and therefore win unchanged.
-  // Otherwise layer this circuit's signature over DEFAULT, then apply the
-  // requested deterministic vary() seed.
-  const trackShots = SHOTS || await page.evaluate(([id, seed]) => {
-    const base = window.FlybyOverrides.resolve(id, FlybySeq.DEFAULT, null);
-    return seed == null ? base : FlybySeq.vary(base, seed);
-  }, [track, SEED]);
+  // Otherwise layer this circuit's signature over DEFAULT, select() night/wet
+  // variants for --tod/--weather, then apply the deterministic vary() seed.
+  const trackShots = SHOTS || await page.evaluate(([id, seed, tod, weather]) => {
+    const def = (typeof Tracks !== "undefined" && Tracks.LIST)
+      ? Tracks.LIST.find((t) => t && t.id === id) : null;
+    const info = { tod, weather, track: def || null };
+    FlybySeq.setSession(info);
+    const base = window.FlybyOverrides.catalog
+      ? window.FlybyOverrides.catalog(id, FlybySeq.DEFAULT, null)
+      : window.FlybyOverrides.resolve(id, FlybySeq.DEFAULT, null);
+    const picked = FlybySeq.select(base, info);
+    return seed == null ? picked : FlybySeq.vary(picked, seed);
+  }, [track, SEED, TOD, WEATHER]);
   const rows = [];
   for (const u of points) {
     const r = await page.evaluate(([uu, shots]) => window.__apex.flybyCam(uu, shots), [u, trackShots]);

@@ -144,7 +144,7 @@ test("MCP client: pipeline isolation and freeze/assign exports", { timeout: 6000
   assert.match(queued[2].content[0].text, /function forTeam/);
   const frozenExport = await c.call("lsp_definition", { symbol: "FlybyOverrides.resolve", body: true });
   assert.equal(frozenExport.isError, false, frozenExport.content[0].text);
-  assert.match(frozenExport.content[0].text, /js\/data\/flyby-overrides\.js:38:.*function resolve/);
+  assert.match(frozenExport.content[0].text, /js\/data\/flyby-overrides\.js:127:.*function resolve/);
   // Pipeline the three assigned-export lookups (independent heads).
   const assigned = await Promise.all(["SHADOW_VS", "LIT_VS", "SKY_VS"].map(member =>
     c.call("lsp_definition", { symbol: `GLXShaders.${member}` })));

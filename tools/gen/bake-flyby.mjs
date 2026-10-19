@@ -65,6 +65,17 @@ export function shotErrors(list) {
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||
         !s.fov.every((n) => typeof n === "number" && isFinite(n))) bad.push(`${at} fov must be [from, to] numbers`);
     else if (!s.fov.every((n) => n >= FOV.min && n <= FOV.max)) bad.push(`${at} fov must be from ${FOV.min} to ${FOV.max}, not ${JSON.stringify(s.fov)}`);
+    // Session gate (Phase 3.1): when:{night,wet} is optional; unknown keys and
+    // non-booleans are refused so a typo cannot silently disable a variant.
+    if (s.when != null) {
+      if (typeof s.when !== "object" || Array.isArray(s.when)) bad.push(`${at} when must be an object`);
+      else {
+        for (const k of Object.keys(s.when)) {
+          if (k !== "night" && k !== "wet") bad.push(`${at} when.${k} is unknown (use night or wet)`);
+          else if (typeof s.when[k] !== "boolean") bad.push(`${at} when.${k} must be a boolean`);
+        }
+      }
+    }
   });
   return bad;
 }
