@@ -629,6 +629,18 @@ const Parts = (function () {
     // so Full Disc does not inherit dished's floating over-wheel winglets.
     ["wheels", "dished", "style_wheels_fulldisc", "Full Disc", "closed disc cover with a deep dish and a bright rim",
       { cover: 1, coverVanes: 0, spokes: 0, dish: 2, tape: 1, deflector: 0, gunNut: 1, nut: [0.85, 0.12, 0.10], rim: [0.92, 0.92, 0.94] }],
+    // PREVIEW candidates (B·D4 design preview, 2026-10-19; throwaway branch):
+    // each turns on one opt-in field the shipped grid never sets.
+    ["wheels", "mag_forged", "style_wheels_ysplit", "Y-Split Mag", "five Y-split spokes, ten tips at the lip (BBS 18-inch mag, 2022+)",
+      { spokes: 5, spokeSplit: 1, dish: 1, tape: 0, deflector: 0, gunNut: 1, nut: [0.85, 0.72, 0.10] }],
+    ["wheels", "open_spoke", "style_wheels_blownaxle", "Blown Axle", "hollow axle bore instead of a nut (Mercedes W11, 2020)",
+      { spokes: 6, blownAxle: 1, dish: 1, tape: 0, deflector: 0, gunNut: 0, nut: [0.95, 0.42, 0.05] }],
+    ["brakes", "carbon", "style_brakes_drum", "Cake-Tin Drum", "vented carbon drum round the disc (2017–21 front corners)",
+      { drum: 1, coverOpen: 1, scoop: 1 }],
+    ["cockpit", "faired_halo", "style_cockpit_halomirror", "Halo Mirrors", "mirrors hung off the halo crown (Ferrari SF71H, 2018)",
+      { mirrorMount: 1, mirror: 1 }],
+    ["cockpit", "deflector", "style_cockpit_mirrorframe", "Framed Mirrors", "boxed aero frame round each mirror (Ferrari SF90 / Red Bull RB16)",
+      { mirrorFrame: 1, mirror: 1.1 }],
   ];
   for (const [catId, eqId, id, label, look, visual] of STYLES) {
     const cat = CATALOG.find((c) => c.id === catId);
@@ -657,7 +669,7 @@ const Parts = (function () {
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave"]),
-      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop"]),
+      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),
       // cover + coverVanes: opt-in covered face only (open rim is the default).
       // spokes / dish / gunNut: open-rim identity consumed by car-wheels when the
       // wheel part leaves them unset (wheel recipe still wins when set).
@@ -670,10 +682,10 @@ const Parts = (function () {
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap",
         "lip", "shield", "stack"]),
       floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt"]),
-      cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror"]),
+      cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror", "mirrorMount", "mirrorFrame"]),
       // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.
       // coverVanes: wheel-owned vane count on a covered face (0 = sealed Full Disc).
-      wheels: Object.freeze(["spokes", "tape", "dish", "gunNut", "deflector", "cover", "coverVanes"]),
+      wheels: Object.freeze(["spokes", "tape", "dish", "gunNut", "deflector", "cover", "coverVanes", "spokeSplit", "blownAxle"]),
     }),
     material: Object.freeze({
       wheels: Object.freeze(["nut", "rim"]),
