@@ -501,6 +501,11 @@
       "presentation": "shared-levels",
       "preserve": "Running versus terminal; gate-only/plan/PR receipts; exact SHA; child exits"
     },
+    "tools/ci/docs-only-policy.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1161,12 +1166,27 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/agent-help-source.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/ai-ratings-math.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/author-png.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/browser-workers.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/car-source-vm.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1510,6 +1530,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Measurement limitations and final outcome"
+    },
+    "tools/mcp/cdmcp_transport.py": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/mcp/chrome-devtools-mcp.sh": {
       "action": "protocol-only",
