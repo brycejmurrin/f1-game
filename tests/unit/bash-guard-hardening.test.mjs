@@ -109,18 +109,35 @@ test("the pkill guard blocks -f however the flags are spelled (M36)", () => {
     assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
 
-test("settings.json turns the merge prompts off for every session, and squash/rebase stay denied (Bryce 2026-10-15)", () => {
+test("settings.json keeps the merge prompts off, and the gate receipts decide merges and ready flips (2026-10-19)", () => {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
-  assert.equal(settings.env.APEX_MERGE_DESK, "1", "merging, arming and draft→ready run without a tap");
+  assert.equal(settings.env.APEX_MERGE_DESK, "1", "re-runs run without a tap; merges and ready flips are gated by receipts, not prompts");
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-receipt-"));
   const run = (tool_name, tool_input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/github-mcp-guard.sh")], {
     input: JSON.stringify({ tool_name, tool_input }), encoding: "utf8",
-    env: { ...process.env, APEX_MERGE_DESK: settings.env.APEX_MERGE_DESK },
+    env: { ...process.env, APEX_MERGE_DESK: settings.env.APEX_MERGE_DESK, CLAUDE_PROJECT_DIR: dir },
   }).stdout.trim();
-  assert.equal(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge" }), "", "a merge-commit merge passes silently");
-  assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "", "draft→ready passes silently");
-  for (const m of ["squash", "rebase"])
-    assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), /"deny"/, `${m} stays denied`);
+  try {
+    const head = "c".repeat(40);
+    assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), /"deny".*merge-gate\.mjs --pr 1/, "no receipt, no merge, desk or not");
+    assert.match(run("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), /"deny".*ready-gate\.mjs --pr 1/, "no receipt, no ready flip");
+    writeGateReceipt(dir, "merge", 1, head);
+    writeGateReceipt(dir, "ready", 1, head);
+    assert.equal(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), "", "a gated merge-commit merge passes silently");
+    assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge" }), /"deny".*pin expectedHeadSha/, "the merge must pin the gated head");
+    assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: "d".repeat(40) }), /"deny".*not the gated head/);
+    assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "", "a gated draft→ready passes silently");
+    for (const m of ["squash", "rebase"])
+      assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m, expectedHeadSha: head }), /"deny".*MERGE-COMMIT-ONLY/, `${m} stays denied`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+/** A fresh gate receipt (tools/lib/gate-receipt.mjs shape) under <root>/artifacts/<kind>-gate/<pr>.json. */
+function writeGateReceipt(root, kind, pr, head, extra = {}) {
+  const dir = path.join(root, "artifacts", `${kind}-gate`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${pr}.json`), JSON.stringify({ kind, pr, head, ok: true, at: new Date().toISOString(), ...extra }));
+}
 
 test("settings.json registers bash-guard once, without unsupported per-step filters", () => {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
@@ -464,32 +481,50 @@ test("guards that fail open say so on stderr; the MCP browser guard fails CLOSED
     "a shellparse crash must warn before failing open");
 });
 
-test("github-mcp-guard: merge commits only, asks before merge/arm and the draft→ready flip, passes other PR edits", () => {
-  const run = (tool_name, tool_input = {}, env = { APEX_MERGE_DESK: "" }) => hook("github-mcp-guard.sh", { tool_name, tool_input }, { env });
+test("github-mcp-guard: merge commits only, a receipt before merge/arm and the draft→ready flip, passes other PR edits", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-gate-"));
+  const run = (tool_name, tool_input = {}, env = { APEX_MERGE_DESK: "" }) => hook("github-mcp-guard.sh", { tool_name, tool_input }, { env, cwd: dir });
   const decision = (r) => { assert.equal(r.status, 0, r.stderr); return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput : null; };
-  for (const [name, input] of [["mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "SQUASH" }],
-    ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "squash" }], ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "rebase" }]]) {
-    for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
-      const d = decision(run(name, input, env));
-      assert.equal(d?.permissionDecision, "deny", `${name} ${JSON.stringify(input)} ${JSON.stringify(env)}`);
-      assert.match(d.permissionDecisionReason, /MERGE-COMMIT-ONLY/);
+  const head = "e".repeat(40);
+  try {
+    for (const [name, input] of [["mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "SQUASH" }],
+      ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "squash" }], ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "rebase" }]]) {
+      for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
+        const d = decision(run(name, input, env));
+        assert.equal(d?.permissionDecision, "deny", `${name} ${JSON.stringify(input)} ${JSON.stringify(env)}`);
+        assert.match(d.permissionDecisionReason, /MERGE-COMMIT-ONLY/);
+      }
     }
-  }
-  for (const [name, input] of [["mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "MERGE" }],
-    ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge" }], ["mcp__github__merge_pull_request", { pullNumber: 1 }],
-    ["mcp__github__update_pull_request", { pullNumber: 1, draft: false }], ["mcp__github__update_pull_request", { pullNumber: 1, draft: "false" }]]) {
-    const d = decision(run(name, input));
-    assert.equal(d?.hookEventName, "PreToolUse");
-    assert.equal(d?.permissionDecision, "ask", `${name} ${JSON.stringify(input)}`);
-    assert.match(d.permissionDecisionReason, /ready-gate\.mjs/);
-    assert.doesNotMatch(d.permissionDecisionReason, /ready-full-cap/, "the ready cap was retired 2026-10-16");
-    assert.equal(decision(run(name, input, { APEX_MERGE_DESK: "1" })), null, `Merge Desk passes ${name}`);
-  }
-  for (const input of [{ pullNumber: 1, body: "x" }, { pullNumber: 1, title: "t" }, { pullNumber: 1, draft: true }])
-    assert.equal(decision(run("mcp__github__update_pull_request", input)), null, `silent pass: ${JSON.stringify(input)}`);
+    // Without a receipt every merge, arm and ready flip is DENIED, with the gate command in the reason — desk or not.
+    for (const [name, input, gate] of [["mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "MERGE" }, "merge-gate"],
+      ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }, "merge-gate"],
+      ["mcp__github__merge_pull_request", { pullNumber: 1, expectedHeadSha: head }, "merge-gate"],
+      ["mcp__github__update_pull_request", { pullNumber: 1, draft: false }, "ready-gate"], ["mcp__github__update_pull_request", { pullNumber: 1, draft: "false" }, "ready-gate"]]) {
+      for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
+        const d = decision(run(name, input, env));
+        assert.equal(d?.hookEventName, "PreToolUse");
+        assert.equal(d?.permissionDecision, "deny", `${name} ${JSON.stringify(input)} ${JSON.stringify(env)}`);
+        assert.match(d.permissionDecisionReason, new RegExp(`${gate}\\.mjs --pr 1`));
+        assert.doesNotMatch(d.permissionDecisionReason, /ready-full-cap/, "the ready cap was retired 2026-10-16");
+      }
+    }
+    // With fresh receipts the same calls pass silently; a stale or refused receipt denies again.
+    writeGateReceipt(dir, "merge", 1, head);
+    writeGateReceipt(dir, "ready", 1, head);
+    for (const [name, input] of [["mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "MERGE", expectedHeadSha: head }],
+      ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }],
+      ["mcp__github__update_pull_request", { pullNumber: 1, draft: false }]])
+      assert.equal(decision(run(name, input)), null, `gated ${name} passes`);
+    writeGateReceipt(dir, "merge", 1, head, { at: new Date(Date.now() - 31 * 60000).toISOString() });
+    assert.match(decision(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head })).permissionDecisionReason, /31 min old/);
+    writeGateReceipt(dir, "ready", 1, head, { ok: false, evidence: "plan-open: 1 of 3 Plan item(s) open" });
+    assert.match(decision(run("mcp__github__update_pull_request", { pullNumber: 1, draft: false })).permissionDecisionReason, /refused \(plan-open/);
+    for (const input of [{ pullNumber: 1, body: "x" }, { pullNumber: 1, title: "t" }, { pullNumber: 1, draft: true }])
+      assert.equal(decision(run("mcp__github__update_pull_request", input)), null, `silent pass: ${JSON.stringify(input)}`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   assert.equal(decision(hook("github-mcp-guard.sh", "not json")).permissionDecision, "ask", "an unreadable payload asks");
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
-  assert.ok(!settings.permissions.deny.includes("mcp__github__merge_pull_request"), "merges are gated by the hook, not denied (Grok Bot may merge)");
+  assert.ok(!settings.permissions.deny.includes("mcp__github__merge_pull_request"), "merges are gated by the hook's receipt check, not denied outright");
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
   const re = new RegExp(g.matcher);
   for (const n of ["mcp__github__enable_pr_auto_merge", "mcp__github__update_pull_request", "mcp__github__merge_pull_request"]) assert.ok(re.test(n), n);
@@ -753,15 +788,22 @@ test("round 2 protect-files: a symlink resolves before the rules; surveyor remov
   } finally { repo.rm(); fs.rmSync(out, { recursive: true, force: true }); }
 });
 
-test("round 2 github-mcp-guard: falsy draft spellings ask; Merge Desk must name MERGE to arm", () => {
-  const run = (tool_name, tool_input, env = { APEX_MERGE_DESK: "" }) => decisionOf(hook("github-mcp-guard.sh", { tool_name, tool_input }, { env }));
-  for (const draft of [false, 0, "0", "no", "NO", "False", "off"])
-    assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft }), "ask", `draft ${JSON.stringify(draft)}`);
-  for (const draft of [true, 1, "true", null]) assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft }), null);
-  const desk = { APEX_MERGE_DESK: "1" };
-  assert.equal(run("mcp__github__enable_pr_auto_merge", { pullNumber: 1 }, desk), "ask", "an omitted method is the repo default");
-  assert.equal(run("mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "MERGE" }, desk), null);
-  for (const m of ["Squash-merge", ["squash"], "REBASE "]) assert.equal(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), "deny", JSON.stringify(m));
+test("round 2 github-mcp-guard: falsy draft spellings need the ready receipt; an arm must name MERGE", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-round2-"));
+  const run = (tool_name, tool_input, env = { APEX_MERGE_DESK: "" }) => decisionOf(hook("github-mcp-guard.sh", { tool_name, tool_input }, { env, cwd: dir }));
+  try {
+    for (const draft of [false, 0, "0", "no", "NO", "False", "off"])
+      assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft }), "deny", `draft ${JSON.stringify(draft)} without a receipt`);
+    for (const draft of [true, 1, "true", null]) assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft }), null);
+    const desk = { APEX_MERGE_DESK: "1" };
+    assert.equal(run("mcp__github__enable_pr_auto_merge", { pullNumber: 1 }, desk), "ask", "an omitted method is the repo default");
+    assert.equal(run("mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "MERGE" }, desk), "deny", "MERGE named, but no receipt");
+    writeGateReceipt(dir, "merge", 1, "f".repeat(40));
+    writeGateReceipt(dir, "ready", 1, "f".repeat(40));
+    assert.equal(run("mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "MERGE", expectedHeadSha: "f".repeat(40) }, desk), null);
+    for (const draft of [false, "0", "off"]) assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft }), null, `draft ${JSON.stringify(draft)} with a receipt`);
+    for (const m of ["Squash-merge", ["squash"], "REBASE "]) assert.equal(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), "deny", JSON.stringify(m));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a PASSING commit tells the model which guard path ran: additionalContext + systemMessage JSON, exit 0", () => {

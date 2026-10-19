@@ -775,6 +775,16 @@ def _gh_truthy(a, name):
     return None
 
 
+def _gh_pr_number(words):
+    """The PR a `gh pr merge|ready` names: `12`, `#12` or a …/pull/12 URL; None when it relies on the
+    current branch (merge_policy.receipt_check then refuses: the receipt is per PR number)."""
+    for w in words:
+        m = re.match(r"^#?(\d+)$", w) or re.search(r"/pull/(\d+)(?:/|$)", w)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def gh_issues(text, cwd=None):
     """[{cmd, decision: deny|ask, why}] for every `gh` call that merges a PR,
     arms auto-merge, flips a draft ready or moves a branch outside a PR
@@ -802,11 +812,11 @@ def gh_issues(text, cwd=None):
                             break
                         if ch in "sr":
                             method = "squash" if ch == "s" else "rebase"
-            out.append({"cmd": cmd, "decision": "deny" if method else "ask",
+            out.append({"cmd": cmd, "decision": "deny" if method else "ask", "kind": "merge", "pr": _gh_pr_number(words[2:]),
                         "why": f"gh pr merge --{method}" if method else "gh pr merge"})
         elif words[:2] == ["pr", "ready"]:
             if "--undo" not in argv:
-                out.append({"cmd": cmd, "decision": "ask", "why": "gh pr ready"})
+                out.append({"cmd": cmd, "decision": "ask", "kind": "ready", "pr": _gh_pr_number(words[2:]), "why": "gh pr ready"})
         elif words[:1] == ["api"]:
             k, method, fields, endpoint = 1, None, [], None
             while k < len(argv):

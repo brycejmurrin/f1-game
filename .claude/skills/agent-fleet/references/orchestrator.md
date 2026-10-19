@@ -3,8 +3,9 @@
 You plan the batch, launch workers, read their state off GitHub, answer
 escalations and stop workers that stall. You are one peer orchestrator of N
 (one per fleet, any host); fleets meet only on GitHub (bus, claims, PR
-bodies). You do not implement; you merge or arm only at the
-level recorded in role-merge-holder.md.
+bodies). You do not implement; you merge your own fleet's PRs through
+`merge-gate.mjs` (role-merge-holder.md) under the standing authority in
+AGENTS.md §Concurrent PRs — a successor never re-asks it at a hand-off.
 
 ## Contents
 
@@ -42,8 +43,8 @@ DONE WHEN: <exact verify command or measured check, green on the PR head>
 CAPS: ≤ <n> screenshots/captures (default 25); ≤ 2 nested subagents; abort at
       ~400 messages or ~90 min with no OWNED push and say so.
 ORCHESTRATOR: <host>:<your session id>
-USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md,
-      scoped to the lane (OWNED globs / issue list, follow-up PRs included), not to PR numbers
+USER GRANTS: "<the user's exact words>" (<UTC time>) — lane EXTRAS beyond the standing rules in AGENTS.md
+      (OWNED globs / issue list, follow-up PRs included, a ratchet row), not to PR numbers; never the standing rules
 MODE/SEED: permission_mode "auto"; source_revision <deploy branch | NAMED integration branch>; model <id>.
 PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
 DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>
@@ -97,8 +98,10 @@ before every `create_session`:
    docs-only 100k, synth 150k, watcher 100k, orchestrator 200k; launch-policy.md §Size stop).
    The limits are soft caps; hard = soft + 50k. The session measures its live context (`/context` or the statusline, not
    `get_session` `used_tokens`) at every wake and, at the soft cap, finishes the unit, pushes, sends HANDOFF.
-13. `USER GRANTS:` quotes every standing grant verbatim with its date and the session it was typed in.
-   A changed grant is a relaunch with the amended brief, never a message: relayed grants are refused (authority.md).
+13. `USER GRANTS:` quotes the lane's extra grants verbatim with their dates; the standing rules (merge by gate,
+   archive by rule, launch, Plan edits, Pages dispatch) are AGENTS.md and are NOT re-quoted or re-asked — a successor
+   orchestrator's brief says "standing authority: AGENTS.md §Concurrent PRs", nothing more (authority.md).
+   A changed lane grant is a relaunch with the amended brief, never a message.
 14. Route verbose reads (CI logs, transcripts, big lists) through a subagent that returns a summary;
    no tool result over 10k characters enters your context (comms.md §Output budget).
 

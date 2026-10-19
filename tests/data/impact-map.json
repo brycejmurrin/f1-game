@@ -6587,6 +6587,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/merge-gate.test.mjs",
         "tests/unit/metrics.test.mjs",
         "tests/unit/mobile-sync-web.test.mjs",
         "tests/unit/node-plan.test.mjs",

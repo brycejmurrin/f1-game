@@ -773,6 +773,15 @@
       ]
     },
     {
+      "path": "tools/ci/fleet-archive.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-board.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -874,6 +883,17 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/merge-gate.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json",
+        "--quiet"
       ]
     },
     {
@@ -1938,6 +1958,11 @@
       "nativeOutputFlagMentions": [
         "--verbose"
       ]
+    },
+    {
+      "path": "tools/lib/gate-receipt.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/lib/harness.mjs",

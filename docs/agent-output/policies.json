@@ -506,6 +506,11 @@
       "presentation": "shared-levels",
       "preserve": "Download/parse notes; issue errors even in JSON; no failures inferred from absence"
     },
+    "tools/ci/fleet-archive.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "ARCHIVE versus KEEP per session with the reason; pr-unknown under --offline; never archives by itself"
+    },
     "tools/ci/fleet-board.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -570,6 +575,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Observation window/max-runs and API errors; no cancellation mutation"
+    },
+    "tools/ci/merge-gate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every row's verdict and evidence; the gated head and tip; passed/refused/unknown exit distinct; the receipt path"
     },
     "tools/ci/needs-sync.mjs": {
       "action": "keep-native",
@@ -1245,6 +1255,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
+    },
+    "tools/lib/gate-receipt.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/lib/harness.mjs": {
       "action": "no-direct-output",
