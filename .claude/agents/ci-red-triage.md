@@ -36,7 +36,8 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    different specs). A green PR run proves nothing about Pages.
 3. Read FAILED jobs and CANCELLED jobs with timing/timeout evidence. Prefer the GitHub MCP read tools when the session
    has them (`mcp__github__actions_list` for the runs on a SHA,
-   `mcp__github__actions_get`, `mcp__github__get_job_logs` with `failed_only`,
+   `mcp__github__actions_get`, `mcp__github__get_job_logs` with `run_id` and
+   `failed_only` (pass `run_id` with `failed_only` — omitting it errors),
    `mcp__github__get_check_run`, `mcp__github__pull_request_read` for a PR's head);
    otherwise (tools absent) the fallback is `curl` + `jq` on the public API, never python3: `curl -sS https://api.github.com/repos/brycejmurrin/f1-game/actions/runs/<id>/jobs`
    and the job log URLs it returns. Grep the log for `Expected`, `Received`,

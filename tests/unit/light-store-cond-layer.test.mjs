@@ -1,10 +1,11 @@
 /* light-store-cond-layer.test.mjs — the conditional shipped layer ("*|<tod>"
  * in window.LightPresets) is the quality-ladder rung for condition-scoped
  * defaults (the ULTRA-night per-chunk lamps flip ships through it). Its
- * predicate is the ONLY thing separating ULTRA from HIGH (both are PerfGov
- * tier 0), so this suite pins exactly when the layer resolves:
- *   ULTRA preset  AND  gfx.hasPerChunkLights  AND  not mobile  AND
- *   the "*|<tod>" key matches the resolved time-of-day.
+ * resolver reads NO preset id and no mobile flag (profiles.js condLayer), so
+ * this suite pins exactly when the layer resolves:
+ *   gfx.hasPerChunkLights  AND  the "*|<tod>" key matches the resolved
+ *   time-of-day — at every quality preset and on mobile — and that a preset flip
+ *   (GfxQuality.set, the real module) re-applies it live.
  * And, just as load-bearing: player layers come LATER, so a player edit —
  * including an explicit 0 — always wins, while dragging TO the layer's own
  * value stores nothing (put() dedups against base(), which includes the
@@ -32,7 +33,7 @@ const TRACKS = [
 ];
 
 function loadStore({ presets = {}, tod = "night", track = "vegas",
-                     preset = "ultra", gfx = { hasPerChunkLights: true, isMobile: false } } = {}) {
+                     gfx = { hasPerChunkLights: true, isMobile: false } } = {}) {
   const stored = {};
   const G = {
     store: {
@@ -52,14 +53,6 @@ function loadStore({ presets = {}, tod = "night", track = "vegas",
   const ctx = vm.createContext({
     window: { LightPresets: presets },
     LightTune: { TUNE_DEFS: DEFS, LT: {} },
-    // MIRROR THE REAL EXPORT: js/perf/quality-preset.js ends with
-    // `current: () => current().id`, so current() IS the id STRING, not a
-    // preset object. This stub used to return { id } — the same mistake
-    // light-store.js made at its call site, so the two cancelled out and this
-    // test passed green while the *|night rung was dead in production for
-    // everyone. A stub that invents an API the module does not have proves
-    // nothing about the code it stands in for.
-    GfxQuality: { current: () => preset },
     Math, JSON, Object, Array, Number, isFinite, console,
   });
   seedLog(ctx);
@@ -68,7 +61,11 @@ function loadStore({ presets = {}, tod = "night", track = "vegas",
   const store = vm.runInContext("LightStore", ctx).create(G);
   const LT = vm.runInContext("LightTune.LT", ctx);
   store.apply();
-  return { store, LT, stored };
+  // The REAL preset module (not a stub): its set() calls LightStore.reapply().
+  vm.runInContext(readFileSync(join(ROOT, "js/perf/quality-preset.js"), "utf8"), ctx,
+    { filename: "js/perf/quality-preset.js" });
+  const GfxQuality = vm.runInContext("GfxQuality", ctx);
+  return { store, LT, stored, GfxQuality, gfx };
 }
 
 const NIGHT_LAYER = { "*|night": { perChunkLights: 0.3 } };
@@ -86,15 +83,24 @@ test("'default' time-of-day resolves through track.def.night before matching the
   assert.equal(day.LT.perChunkLights, 0, "default on a day circuit is day — no layer");
 });
 
-test("EVERY preset gets the layer — the ULTRA-only predicate is gone", () => {
+test("EVERY preset gets the layer — flipped live through the real GfxQuality.set -> LightStore.reapply", () => {
   // It used to be ULTRA-only, which shipped the rung to almost nobody: HIGH is
   // the same PerfGov tier 0 AND the desktop default preset, and nothing
   // measured ever separated the two. What bounds the cost now is the resolved
   // gate in game.js, which sheds on the governor's MEASURED tier instead of on
-  // which preset the player picked.
+  // which preset the player picked. The resolver reads no preset at all, so the
+  // flip itself is the observable: capability changes under a preset flip must
+  // be picked up by the reapply GfxQuality.set() triggers, with no manual apply().
+  const h = loadStore({ presets: NIGHT_LAYER, gfx: { hasPerChunkLights: false, isMobile: false } });
+  assert.equal(h.LT.perChunkLights, 0, "capability off: no layer");
+  h.gfx.hasPerChunkLights = true;
+  assert.equal(h.LT.perChunkLights, 0, "the capability change alone re-derives nothing");
   for (const preset of ["low", "medium", "high", "ultra"]) {
-    const st = loadStore({ presets: NIGHT_LAYER, preset });
-    assert.equal(st.LT.perChunkLights, 0.3, preset + " must resolve the layer");
+    h.gfx.hasPerChunkLights = false; h.store.apply();
+    assert.equal(h.LT.perChunkLights, 0);
+    h.gfx.hasPerChunkLights = true;
+    assert.equal(h.GfxQuality.set(preset, { noReload: true }), true);
+    assert.equal(h.LT.perChunkLights, 0.3, preset + " must resolve the layer via the live reapply");
   }
 });
 

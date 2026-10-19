@@ -14,6 +14,13 @@ function call(name, args) {
   return { status: r.status, out: r.stdout, err: r.stderr };
 }
 const argvOf = (r) => JSON.parse(r.out).argv;
+// A refusal is a parsed ok:false with the named error — a crash or empty stdout is not a refusal.
+const refused = (r, error, message) => {
+  const j = JSON.parse(r.out);
+  assert.equal(j.ok, false, r.out);
+  assert.equal(j.error, error, r.out);
+  assert.match(j.message, message, r.out);
+};
 
 test("apex_profile is a direct browser tool next to apex_profile_query; the job kind is still listed", () => {
   const names = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).map((t) => t.name);
@@ -29,14 +36,14 @@ test("apex_job_start kind profile dryRun: profile.mjs argv with mode, repeat and
 });
 
 test("profile job refuses a base that looks like a flag and an unknown mode", () => {
-  assert.match(call("apex_job_start", { kind: "profile", dryRun: true, base: "--upload-pack=x" }).out, /base may not start|base must be a git ref/);
-  assert.match(call("apex_job_start", { kind: "profile", dryRun: true, mode: "bogus" }).out + "", /mode|enum|bad_args/);
+  refused(call("apex_job_start", { kind: "profile", dryRun: true, base: "--upload-pack=x" }), "bad_args", /base may not start|base must be a git ref/);
+  refused(call("apex_job_start", { kind: "profile", dryRun: true, mode: "bogus" }), "bad_args", /mode must be one of/);
 });
 
 test("apex_profile_query dryRun: query.mjs, artifacts-only path", () => {
   const argv = argvOf(call("apex_profile_query", { dryRun: true, file: "artifacts/profiles/vegas-spans.json", top: 5 }));
   assert.ok(argv.some((a) => a.endsWith("perf/query.mjs"))); assert.ok(argv.includes("--top"));
-  assert.doesNotMatch(call("apex_profile_query", { dryRun: true, file: "package.json" }).out, /"ok":\s*true/);
+  refused(call("apex_profile_query", { dryRun: true, file: "package.json" }), "path_escaped", /artifacts\/ or scratch\//);
 });
 
 test("apex_profile dryRun: the same profile.mjs argv as the job kind; bad base and mode refused", () => {
@@ -44,7 +51,7 @@ test("apex_profile dryRun: the same profile.mjs argv as the job kind; bad base a
   const direct = argvOf(call("apex_profile", args));
   assert.deepEqual(direct, argvOf(call("apex_job_start", { ...args, kind: "profile" })));
   assert.ok(direct.some((a) => a.endsWith("perf/profile.mjs")));
-  assert.doesNotMatch(call("apex_profile", { dryRun: true, base: "--upload-pack=x" }).out, /"ok":\s*true/);
-  assert.doesNotMatch(call("apex_profile", { dryRun: true, mode: "bogus" }).out, /"ok":\s*true/);
-  assert.doesNotMatch(call("apex_profile", { dryRun: true, kind: "ui_matrix" }).out, /"ok":\s*true/, "the kind is not caller-chosen");
+  refused(call("apex_profile", { dryRun: true, base: "--upload-pack=x" }), "bad_args", /base may not start/);
+  refused(call("apex_profile", { dryRun: true, mode: "bogus" }), "bad_args", /mode must be one of/);
+  refused(call("apex_profile", { dryRun: true, kind: "ui_matrix" }), "bad_args", /unknown argument kind/); // the kind is not caller-chosen
 });

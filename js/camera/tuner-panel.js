@@ -374,15 +374,10 @@ function updateCtProfileLabel() {
   }
   const sm = $("ct-rows") && $("ct-rows")._ctScopeBtns;
   if (sm) {
-    if (sm.mode) {
-      const on = _scope === "mode";
-      sm.mode.classList.toggle("on", on);
-      sm.mode.setAttribute("aria-pressed", on ? "true" : "false");
-    }
-    if (sm.global) {
-      const on = _scope === "global";
-      sm.global.classList.toggle("on", on);
-      sm.global.setAttribute("aria-pressed", on ? "true" : "false");
+    for (const id of Object.keys(sm)) {
+      const on = _scope === id;
+      sm[id].classList.toggle("on", on);
+      sm[id].setAttribute("aria-pressed", on ? "true" : "false");
     }
   }
 }

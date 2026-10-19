@@ -90,6 +90,8 @@ test("step-steer lock 0.5: ≤50 m/s unchanged; 61.1 ≤12%; 83.3 ≤14%", () =>
     `61.1 m/s overshoot ${o61.overshoot_pct}% ≤ 12 (was 14.0)`);
   assert.ok(o83.overshoot_pct <= 14,
     `83.3 m/s overshoot ${o83.overshoot_pct}% ≤ 14 (was 19.4)`);
+  for (const [o, v] of [[o50, 50], [o61, 61.1], [o83, 83.3]])
+    assert.ok(Number.isFinite(o.rise_ms), `${v} m/s never reached the yaw band (rise_ms ${o.rise_ms})`);
   // No lazier turn-in: rise not more than ~1 tick slower than tip's 100 ms.
   assert.ok(o50.rise_ms <= 220, `50 m/s rise ${o50.rise_ms} ms`);
   assert.ok(o61.rise_ms <= 250, `61.1 m/s rise ${o61.rise_ms} ms`);

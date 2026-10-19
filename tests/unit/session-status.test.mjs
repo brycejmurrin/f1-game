@@ -12,7 +12,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { parseVerdict, toMarkdown, collect, ciSummary, livePrLines, fetchLivePr } from "../../tools/ci/session-status.mjs";
+import { spawnSync } from "node:child_process";
+import { parseVerdict, toMarkdown, toSummary, collect, ciSummary, livePrLines, fetchLivePr } from "../../tools/ci/session-status.mjs";
 
 // ── live PR state (--pr): pure formatting over mocked API answers ────────────
 const SHA = "a".repeat(40), OTHER = "b".repeat(40), AT = "2026-10-10T08:00:00Z";
@@ -136,4 +137,76 @@ test("#2184: ciSummary ignores a label-noise run", () => {
   const real = { id: 1, name: "CI", created_at: "2026-10-15T00:00:00Z", status: "completed", conclusion: "failure", display_title: "Fix" };
   const noise = { id: 2, name: "CI", created_at: "2026-10-15T00:05:00Z", status: "completed", conclusion: "success", display_title: "CI ignored: label bug" };
   assert.equal(ciSummary([real, noise]), "failure");
+});
+
+const summaryFixture = (overrides = {}) => ({
+  at: AT, branch: "cursor/example", base: "origin/ship", ahead: 2, behind: 1,
+  unpushed: 1, upstream: "origin/cursor/example", dirty: [" M source.js"], live: null,
+  commits: [{ sha: "1234567", subject: "private inventory subject" }], sessions: ["session-inventory"], logs: [],
+  ...overrides,
+});
+
+test("summary bounds large inventories while preserving failures, uncertainty and retrieval", () => {
+  const s = summaryFixture({
+    commits: Array.from({ length: 500 }, (_, i) => ({ sha: String(i), subject: "inventory" })),
+    sessions: Array.from({ length: 100 }, (_, i) => `session-${i}`),
+    dirty: Array.from({ length: 100 }, (_, i) => ` M path-${i}`),
+    logs: Array.from({ length: 1000 }, (_, i) => ({ log: `artifacts/logs/run-${i}.log`, ageMin: i,
+      verdict: i < 990 ? "passed (1 passed)" : i < 995 ? "failed " + "x".repeat(1000) : "no verdict yet (running, or died before its summary)" })),
+    live: "123:456 artifacts/logs/live.log",
+  });
+  const md = toSummary(s);
+  assert.match(md, /500 commits; 100 sessions/);
+  assert.match(md, /100 uncommitted \(paths omitted\)/);
+  assert.match(md, /1000: 990 passed; 5 failed\/timedout\/interrupted; 5 unresolved/);
+  assert.equal((md.match(/^  - /gm) || []).length, 3);
+  assert.match(md, /truncated/);
+  assert.match(md, /Log details omitted\*\* 997/);
+  assert.match(md, /session-status\.mjs --json/);
+  assert.match(md, /1 commit\(s\) NOT pushed/);
+  assert.match(md, /verdict is NOT read yet/);
+  assert.match(md, /not current-tip verification/);
+  assert.match(md, /Live PR \/ CI\*\* not queried/);
+  assert.ok(md.length < 2300, `summary unexpectedly large: ${md.length}`);
+});
+
+test("summary distinguishes unresolved exits, interrupted and timedout from passed", () => {
+  const verdicts = ["passed (1 passed)", "failed (exit 137; last summary: passed)", "timedout", "interrupted", "exited 0 (no reporter summary)", "no verdict yet"];
+  const s = summaryFixture({ upstream: null, unpushed: null, base: null,
+    logs: verdicts.map((verdict, i) => ({ log: `artifacts/logs/${i}.log`, verdict, ageMin: 1 })) });
+  const md = toSummary(s);
+  assert.match(md, /1 passed; 3 failed\/timedout\/interrupted; 2 unresolved/);
+  assert.match(md, /ahead\/behind unknown/);
+  assert.match(md, /Pushed\*\* unknown \(no resolvable upstream\)/);
+  assert.match(md, /failed \(exit 137/);
+  assert.match(md, /Ready gate\*\* not evaluated/);
+  assert.match(toSummary(summaryFixture({ branch: "HEAD", upstream: null })), /detached HEAD/);
+});
+
+test("default Markdown keeps inventories; summary preserves live PR warnings via existing formatter", () => {
+  const s = summaryFixture({ livePr: { at: AT, error: "HTTP 401" } });
+  const full = toMarkdown(s);
+  assert.match(full, /`1234567` private inventory subject/);
+  assert.match(full, /session-inventory/);
+  assert.doesNotMatch(full, /Inventories omitted/);
+  const md = toSummary(s) + "\n\n" + livePrLines(s.livePr).join("\n");
+  assert.doesNotMatch(md, /not queried/);
+  assert.match(md, /unavailable: HTTP 401/);
+});
+
+test("CLI --summary --json keeps the full JSON contract; default Markdown remains the full formatter", () => {
+  const cli = (args) => spawnSync(process.execPath, ["tools/ci/session-status.mjs", ...args], { encoding: "utf8" });
+  const result = cli(["--summary", "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  const data = JSON.parse(result.stdout);
+  for (const key of ["commits", "sessions", "dirty", "logs"]) assert.ok(Array.isArray(data[key]), key);
+  assert.equal(data.summary, undefined);
+  const normal = cli([]);
+  assert.equal(normal.status, 0, normal.stderr);
+  assert.match(normal.stdout, /\*\*Commits\*\*/);
+  assert.match(normal.stdout, /\*\*Test logs\*\*/);
+  const brief = cli(["--summary"]);
+  assert.equal(brief.status, 0, brief.stderr);
+  assert.match(brief.stdout, /Status summary/);
+  assert.doesNotMatch(brief.stdout, /\*\*Commits\*\*/);
 });

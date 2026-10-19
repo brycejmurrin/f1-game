@@ -190,7 +190,9 @@ test("two PRs raising the same TREE metric as fragments merge clean in either or
     const lines = fs.readFileSync(path.join(r.dir, file), "utf8").split("\n");
     lines.splice(at, 0, ...Array.from({ length: n }, (_, i) => `try { x(); } catch (e) {} // ${name}${i}`.replace("catch (e) {} //", "catch (e) {}\n//")));
     fs.writeFileSync(path.join(r.dir, file), lines.join("\n"));
-    assert.throws(() => r.tool("--auto-raise"), /./, "the auto path never raises a tree metric");
+    assert.throws(() => r.tool("--auto-raise"),
+      (e) => /OVER\s+\(tree\) bareCatches/.test(String(e.stdout)) && /tree-wide metric is shrink-only/.test(String(e.stdout)),
+      "the auto path never raises a tree metric, and names why");
     assert.throws(() => r.tool("--update", "--fragment"), /reason/, "a deliberate raise names its reason");
     r.tool("--update", "--fragment", "--reason=fixture: adds bare catches");
     r.git("add", "-A"); r.git("commit", "-qm", name);

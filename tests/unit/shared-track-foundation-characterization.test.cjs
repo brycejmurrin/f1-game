@@ -167,7 +167,8 @@ test("startFrac and reverse transform source control points and authored fractio
       ? (fraction) => wrap(phiAuthor - fraction)
       : (fraction) => wrap(fraction - phiAuthor);
     for (const key of ["bridges", "elevations"]) {
-      if (!raw[key] || !built[key]) continue;
+      if (!raw[key]) continue;
+      assert.ok(built[key], `${raw.id}: built def lost ${key}`);
       raw[key].forEach((entry, i) => {
         assert.ok(Math.abs(built[key][i].s - mapDressing(entry.s)) <= 1e-12, `${raw.id} ${key}[${i}]`);
       });
@@ -242,7 +243,7 @@ test("open and street grounding follow their current terrain profiles", () => {
   // below: ~0.04 m. Bounded generously (well past the sink) so this still catches
   // a genuine regression (wrong branch, NaN, an order-of-magnitude-wrong height)
   // without going stale the next time banking data anywhere shifts by centimetres.
-  const BANK_BOUND = 3;
+  const BANK_BOUND = 0.1;   // bank term beyond the 0.3 m sink, measured ~0.04 m; was 3 m (75x slack hid metre-sized banking regressions)
 
   const open = sample("redbull", 0.22, [0, 2.2, 7, 14, 48, 120, 140]);
   const street = sample("monaco", 0.35, [0, 5, 14, 28, 38, 48]);
@@ -255,7 +256,7 @@ test("open and street grounding follow their current terrain profiles", () => {
   assert.notEqual(openEdge.rendered, null);
   assert.ok(Math.abs((openEdge.anchored + SINK) - openEdge.rendered) <= 1e-6);
   assert.equal(openBeyond.rendered, null);
-  assert.ok(Math.abs(openBeyond.anchored - openBeyond.estimate) <= BANK_BOUND);
+  assert.ok(Math.abs(openBeyond.anchored - openBeyond.estimate + SINK) <= BANK_BOUND, `open beyond Δ-sink ${openBeyond.anchored - openBeyond.estimate + SINK}`);
 
   assert.equal(street.outer, 28);
   assert.ok(street.rows[0].estimate < street.py);
@@ -265,7 +266,7 @@ test("open and street grounding follow their current terrain profiles", () => {
   }
   for (const row of street.rows.filter(({ dist }) => dist > street.outer)) {
     assert.equal(row.rendered, null);
-    assert.ok(Math.abs(row.anchored - row.estimate) <= BANK_BOUND);
+    assert.ok(Math.abs(row.anchored - row.estimate + SINK) <= BANK_BOUND, `street ${row.dist} Δ-sink ${row.anchored - row.estimate + SINK}`);
   }
 });
 
@@ -406,8 +407,10 @@ test("all current track mesh buffers are finite and structurally indexable", () 
   // bacinger/f1-circuits file having run out of features (tools/track/osm-circuits.json).
   // `custom` entries are the track designer's runtime circuits (never shipped,
   // never in SEASON) — the pin counts the shipped roster only.
-  assert.equal(Tracks.LIST.filter((t) => !t.custom).length, 52);
-  assert.equal(Tracks.SEASON.length, 24);
+  // Roster counts are pinned once, in circuit-count-shell.test.mjs; here only the structure.
+  const ids = Tracks.LIST.map((t) => t.id);
+  assert.equal(new Set(ids).size, ids.length, "LIST ids are unique");
+  assert.ok(Tracks.SEASON.length > 0 && Tracks.SEASON.every((t) => ids.includes(t.id)), "SEASON is a non-empty subset of LIST");
   assert.ok(Tracks.SEASON.every((t) => !t.classic));
   assert.deepEqual(issues, []);
 });

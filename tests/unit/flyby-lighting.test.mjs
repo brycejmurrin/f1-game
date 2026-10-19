@@ -72,11 +72,16 @@ test("startRace still re-applies after its rebuild", () => {
   // startRace() itself is now a thin re-entrancy-latch wrapper (see
   // start-race-latch.test.mjs) around startRaceBody(), which carries this flow.
   const body = bodyOf("async function startRaceBody(");
-  const load = body.indexOf("loadTrack(trackIdx)");
+  // Players run the loadTrackStepped( branch; loadTrack(trackIdx) is only the
+  // game-vm's (vmNoFramePump) branch. Anchor on the one players run, and on
+  // both, so the ordering holds on either side of that `if`.
+  const loadSync = body.indexOf("loadTrack(trackIdx)");
+  const loadStepped = body.indexOf("loadTrackStepped(trackIdx");
   const apply = body.indexOf("applyRaceSettings()");
-  assert.ok(load > 0 && apply > 0, "startRace must still loadTrack and applyRaceSettings");
-  assert.ok(apply > load,
-    "startRace must apply the race settings AFTER loadTrack rebuilds the world, or the rebuild ships unlit");
+  assert.ok(loadSync > 0 && loadStepped > 0 && apply > 0,
+    "startRace must still loadTrackStepped (the player's rebuild), loadTrack (the vm's) and applyRaceSettings");
+  assert.ok(apply > loadStepped && apply > loadSync,
+    "startRace must apply the race settings AFTER loadTrackStepped (and the vm's loadTrack) rebuild the world, or the rebuild ships unlit");
 });
 
 /* ── THE LENS, NOT THE LIGHT ──────────────────────────────────────────────────

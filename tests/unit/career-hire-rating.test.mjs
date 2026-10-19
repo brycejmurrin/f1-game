@@ -21,12 +21,19 @@ import { DOM_SOURCE } from "../helpers/seed-dom.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+// The REAL predicate from js/data/teams.js (not a hand copy that can drift from it).
+const realIsReal = (() => {
+  const c = vm.createContext({ console, Math, Object, Array, Number, String, JSON });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: "js/data/teams.js" });
+  return vm.runInContext("Teams.isReal", c);
+})();
+
 function load() {
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
     GameStore: { CAREER_V: 1, store: { get: (k, d) => d, set() {} },
       seasonDriverId: (t, i) => t + ":" + i, migrateCareer: (c) => c },
-    Teams: { POINTS: [25], isReal: (t) => !!t && !t.custom, LIST: [] },
+    Teams: { POINTS: [25], isReal: realIsReal, LIST: [] },
     Parts: { getFactorySetup: () => ({}) },
     Tracks: { LIST: [], SEASON: [] },
   });

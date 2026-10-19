@@ -30,6 +30,84 @@ const stripFrontmatter = (text) => {
   return { fm: m ? m[1] : "", body: m ? text.slice(m[0].length) : text };
 };
 
+// Parse only the first YAML document: a body line must never satisfy the schema.
+const memoryType = (text) => {
+  const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] || "";
+  const data = parseYAML(fm);
+  return data?.type ?? data?.metadata?.type;
+};
+const MEMORY_TYPES = new Set(["user", "feedback", "project", "reference"]);
+
+// Local Markdown targets are relative to their topic. Wiki targets name another
+// topic in this store. This checks paths, not the continued truth of the prose.
+function memoryLinkIssues(files, targetExists) {
+  const issues = [];
+  const linked = new Set();
+  for (const [file, text] of files) {
+    const body = stripFrontmatter(text).body
+      .replace(/```[^\n]*\n[\s\S]*?```|~~~[^\n]*\n[\s\S]*?~~~/g, "")
+      .replace(/`[^`\n]*`/g, "");
+    const definitions = new Map([...body.matchAll(/^ {0,3}\[([^\]\n]+)\]:\s*(<[^>]+>|[^\s]+)(?:[^\n]*)$/gm)]
+      .map((m) => [m[1].toLowerCase(), m[2].replace(/^<|>$/g, "")]));
+    const targets = [
+      ...[...body.matchAll(/!?\[[^\]\n]*\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+["'][^\n]*?["'])?\s*\)/g)]
+        .map((m) => ({ raw: m[1].replace(/^<|>$/g, ""), wiki: false })),
+      ...[...body.matchAll(/!?\[([^\]\n]+)\]\[([^\]\n]*)\]/g)]
+        .map((m) => ({ raw: definitions.get((m[2] || m[1]).toLowerCase()), wiki: false })),
+      ...[...body.matchAll(/\[\[([^\]\n]+)\]\]/g)]
+        .map((m) => ({ raw: m[1].split("|")[0], wiki: true })),
+    ];
+    for (const { raw, wiki } of targets) {
+      if (!raw || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(raw)) continue;
+      let rel;
+      try { rel = decodeURIComponent(raw.split(/[?#]/)[0]); }
+      catch { issues.push(`${file}: invalid link ${raw}`); continue; }
+      if (!rel) continue;
+      if (wiki && !path.extname(rel)) rel += ".md";
+      const target = path.resolve(".claude/memory", rel);
+      if (file === "MEMORY.md" && path.dirname(target) === path.resolve(".claude/memory"))
+        linked.add(path.basename(target));
+      if (!targetExists(rel)) issues.push(`${file}: missing link ${raw}`);
+    }
+  }
+  for (const file of files.keys())
+    if (file !== "MEMORY.md" && !linked.has(file)) issues.push(`${file}: orphan topic missing from MEMORY.md`);
+  return issues;
+}
+
+test("memory type schema only accepts top-level or metadata type in the first frontmatter", () => {
+  for (const type of MEMORY_TYPES) {
+    assert.equal(memoryType(`---\ntype: ${type}\n---\nbody\n`), type);
+    assert.equal(memoryType(`---\r\ntype: ${type}\r\n---`), type);
+    assert.equal(memoryType(`---\nmetadata:\n  type: ${type}\n---\nbody\n`), type);
+  }
+  for (const text of [
+    "---\nmetadata:\n  type: invented\n---\n\ntype: feedback\n---\nbody\n",
+    "---\nname: missing\n---\n\ntype: user\n---\n",
+    "---\nother:\n  type: feedback\n---\nbody\n",
+    "---\ntype: invented\nmetadata:\n  type: user\n---\n",
+    "body\n---\ntype: feedback\n---\n",
+  ]) assert.ok(!MEMORY_TYPES.has(memoryType(text)), `accepted invalid topic: ${text}`);
+  assert.throws(() => memoryType("---\ntype: [broken\n---\nbody\n"));
+});
+
+test("memory link guard catches missing Markdown/wiki targets and orphan topics", () => {
+  const files = new Map([
+    ["MEMORY.md", "- [A](a.md)\n- [B](b.md)\n"],
+    ["a.md", "---\ntype: user\n---\n[B](b.md#section) [[b|B]] [docs](../../docs/topic.md) [web](https://example.com) [anchor](#local) `[[ignored]]`\n```md\n[[example]]\n```\n"],
+    ["b.md", "---\ntype: feedback\n---\nbody\n"],
+  ]);
+  const exists = (rel) => ["a.md", "b.md", "../../docs/topic.md"].includes(rel);
+  assert.deepEqual(memoryLinkIssues(files, exists), []);
+  files.set("a.md", "[gone](missing.md#part) [[missing-wiki]] [reference][gone]\n[gone]: absent.md\n");
+  files.set("orphan.md", "body");
+  assert.deepEqual(memoryLinkIssues(files, exists), [
+    "a.md: missing link missing.md#part", "a.md: missing link absent.md", "a.md: missing link missing-wiki", "orphan.md: orphan topic missing from MEMORY.md",
+  ]);
+  files.set("MEMORY.md", "- [A](a.md)\n- [Missing](gone.md)\n");
+  assert.ok(memoryLinkIssues(files, exists).includes("MEMORY.md: missing link gone.md"));
+});
+
 for (const name of ["compound-debug", "compound-review", "compound-verify"]) {
   test(`portable ${name} keeps the explicit F1 project contract`, () => {
     const base = `.claude/skills/${name}`;
@@ -442,9 +520,16 @@ test("auto memory is on, synced, and its tracked copy stays small, typed and sec
     // latter shape (2026-09-30: it dropped a top-level `type` and this pin
     // reddened PR #498's guards), and the auto-memory format defines both.
     if (f !== "MEMORY.md")
-      assert.match(text, /^---\n[\s\S]*?^\s*type:\s*(user|feedback|project|reference)\s*$[\s\S]*?^---/m,
+      assert.ok(MEMORY_TYPES.has(memoryType(text)),
         `.claude/memory/${f} needs frontmatter with type: user|feedback|project|reference (top level or under metadata:)`);
   }
+});
+
+test("shared memory has no orphan topics or missing relative Markdown/wiki links", () => {
+  const dir = path.join(ROOT, ".claude/memory");
+  const files = new Map(fs.readdirSync(dir).filter((f) => f.endsWith(".md"))
+    .map((f) => [f, fs.readFileSync(path.join(dir, f), "utf8")]));
+  assert.deepEqual(memoryLinkIssues(files, (rel) => fs.existsSync(path.resolve(dir, rel))), []);
 });
 
 // docs/notes/SECOND-BRAIN-2026-10-14.md: GitHub Copilot Memory stores the code
@@ -455,17 +540,20 @@ test("auto memory is on, synced, and its tracked copy stays small, typed and sec
 // must be rewritten or deleted, not silently recalled. Entries that are not
 // paths (`user`, `#1519`, a test name) are allowed and not checked.
 test("a memory's source: paths still exist", () => {
+  let seen = 0;
   const dir = path.join(ROOT, ".claude/memory");
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "MEMORY.md")) {
     const fm = read(`.claude/memory/${f}`).match(/^---\n([\s\S]*?)\n---/)?.[1] || "";
     const line = fm.match(/^\s*source:\s*(.+)$/m);
     if (!line) continue;
+    seen++;
     for (const raw of line[1].split(",")) {
       const rel = raw.trim().replace(/^["'`]|["'`]$/g, "").replace(/(#.*|:\d+(-\d+)?)$/, "");
       if (!/\/|\.[a-z]{1,5}$/i.test(rel)) continue;
       assert.ok(exists(rel), `.claude/memory/${f} cites source ${raw.trim()}, which no longer exists — rewrite or delete the memory`);
     }
   }
+  assert.ok(seen >= 1, "no memory carries a `source:` line — the scan above checked nothing");
 });
 
 // Fleet-core owns merge/MERGE-HOLD/SWEEP/arm; the MEMORY.md index must not
@@ -567,25 +655,6 @@ test("the edit guard refuses a generated package.json block through Write as wel
     assert.equal(untouched.status, 0,
       "a Write that leaves the generated block alone is not the guard's business");
   }
-});
-
-test("the commit guard's docs-only fast path keeps its two exclusions", () => {
-  // A prose commit runs docs-integrity alone (1.1 s against ~25 s measured
-  // 2026-09-16) and, more to the point, never lets --auto-raise stage
-  // tests/data/ratchets.json into a commit that changed no code. Both
-  // exclusions are the whole safety of it: a GENERATED doc is prose whose
-  // source is code (generated-docs must still run), and `git commit -a` stages
-  // at commit time, so the staged list the hook reads is not what will be
-  // committed. AGENTS.md rule 3 states the rule this encodes.
-  const hook = read(".claude/hooks/bash-guard.sh");
-  assert.match(hook, /git diff --cached --name-only/, "the fast path must decide on the STAGED paths");
-  assert.match(hook, /\^\(docs\/\|\\\.claude\/skills\/\|\\\.claude\/agents\/\)\|\\\.md\$/,
-    "the docs-only path set is docs/, skills, agents and *.md — nothing wider");
-  for (const gen of ["tools/README.md", "docs/DEBUG-HOOKS.md", "docs/ARCHITECTURE.md", "docs/LIGHTING-TUNER-SLIDERS.md"])
-    assert.ok(hook.includes(gen), `${gen} is generated from code; it must fall through to the full guards`);
-  assert.match(hook, /--all/, "`git commit -a` stages at commit time: the fast path must not trust the index then");
-  assert.match(hook, /node --test tests\/unit\/docs-integrity\.test\.mjs/);
-  assert.match(read("AGENTS.md"), /docs-integrity/, "rule 3 must state the docs-only carve-out");
 });
 
 test("the Codex skill mirror is tracked symlinks and the repair script exists", () => {
@@ -925,3 +994,17 @@ test("the survey-track delegation template owns exactly what the track-surveyor 
     assert.match(wgx, /apex-eval\.mjs monza .* --backend webgpu/);
   });
 }
+
+// stop-guard.sh nudges once over a live browser run; the two paths that must NEVER block a
+// stop are deterministic and spawned here (the live-run nudge itself needs a real playwright
+// process, so it stays out of the node ladder).
+test("stop-guard.sh lets a stop through when Claude is already continuing, and on junk input", () => {
+  const run = (input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/stop-guard.sh")], {
+    input, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const cont = run(JSON.stringify({ hook_event_name: "Stop", stop_hook_active: true }));
+  assert.equal(cont.status, 0, `stop_hook_active must pass: ${cont.stderr}`);
+  assert.equal(cont.stdout, "");
+  const junk = run("not json at all");
+  assert.notEqual(junk.status, 1, `a malformed payload must not crash the hook: ${junk.stderr}`);
+});

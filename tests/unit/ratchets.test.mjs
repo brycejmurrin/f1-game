@@ -136,15 +136,20 @@ test("the commit hook's auto-raise absorbs small growth and blocks big growth", 
   assert.equal(quiet.ok, true);
   assert.deepEqual(quiet.blocked, []);
   if (worst === 0) assert.deepEqual(quiet.raised, [], "a green tree is not raised");
-  // A ceiling that is over by more than the bound is refused, never written:
-  // simulate by asking for a bound below any real growth on a tree that has some,
-  // or, on a green tree, by checking the classification directly.
-  const over = rows.filter((r) => r.over > 0);
-  if (over.length) {
-    const tight = await autoRaise({ maxRaise: Math.max(0, Math.min(...over.map((r) => r.over)) - 1), dryRun: true });
-    assert.equal(tight.ok, false);
-    assert.ok(tight.blocked.length >= 1);
-  }
+  // A ceiling that is over by more than the bound is refused, never written.
+  // Synthetic data, so this runs on a green tree too: a real file whose line
+  // ceiling sits 1 below its measured count.
+  const file = "tools/check/ratchets.mjs";
+  const lines = (await measure({ files: { [file]: { lines: 1 } }, tree: {} }))[0].value;
+  const data = { files: { [file]: { lines: lines - 1 } }, tree: {} };
+  const tight = await autoRaise({ maxRaise: 0, dryRun: true, data });
+  assert.equal(tight.ok, false, "1 line over a 0-line bound is refused");
+  assert.deepEqual(tight.blocked.map((r) => r.metric), ["lines"]);
+  assert.match(tight.blocked[0].reason, /past the 0-line/);
+  assert.deepEqual(tight.raised, [], "a refusal raises nothing");
+  const roomy = await autoRaise({ maxRaise: 1, dryRun: true, data });
+  assert.equal(roomy.ok, true, "the same growth inside the bound is absorbed");
+  assert.deepEqual(roomy.raised.map((r) => r.metric), ["lines"]);
 });
 
 test("auto-raise absorbs only a per-file LINE count; a tree metric, slack 0 or another metric blocks with its reason", async () => {

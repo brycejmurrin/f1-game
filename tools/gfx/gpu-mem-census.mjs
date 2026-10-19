@@ -79,12 +79,13 @@ function installWrap() {
   const names = {}; const gl0 = WebGL2RenderingContext;
   for (const k of Object.keys(gl0)) if (BPP[k] !== undefined && typeof gl0[k] === "number") names[gl0[k]] = k;
   const st = { tex: new Map(), rb: new Map(), buf: new Map(), bound: new Map(), peak: 0, log: [] };
-  const sz = (fmt, w, h, d, lv) => { const b = BPP[names[fmt]]; if (!b) return 0; let t = 0; for (let i = 0; i < lv; i++) { t += Math.max(1, w >> i) * Math.max(1, h >> i) * Math.max(1, d >> i) * b; } return t; };
+  // Array layers stay fixed at every mip; only TEXTURE_3D shrinks depth.
+  const sz = (fmt, w, h, d, lv, array = false) => { const b = BPP[names[fmt]]; if (!b) return 0; let t = 0; for (let i = 0; i < lv; i++) { t += Math.max(1, w >> i) * Math.max(1, h >> i) * Math.max(1, array ? d : d >> i) * b; } return t; };
   const lvAll = (w, h) => 1 + Math.floor(Math.log2(Math.max(w, h)));
   const wrap = (n, f) => { const o = P[n]; P[n] = function () { try { f.apply(this, arguments); } catch (_) {} return o.apply(this, arguments); }; };
   wrap("bindTexture", function (t, o) { st.bound.set(t, o); });
   wrap("texStorage2D", function (t, lv, fmt, w, h) { const o = st.bound.get(t); if (o) st.tex.set(o, { b: sz(fmt, w, h, 1, lv), fmt: names[fmt], w, h, d: 1 }); });
-  wrap("texStorage3D", function (t, lv, fmt, w, h, d) { const o = st.bound.get(t); if (o) st.tex.set(o, { b: sz(fmt, w, h, d, lv), fmt: names[fmt], w, h, d }); });
+  wrap("texStorage3D", function (t, lv, fmt, w, h, d) { const o = st.bound.get(t); if (o) st.tex.set(o, { b: sz(fmt, w, h, d, lv, t === this.TEXTURE_2D_ARRAY), fmt: names[fmt], w, h, d }); });
   wrap("texImage2D", function (t, lv, ifmt, w, h) {
     const o = st.bound.get(t); if (!o || lv !== 0) return;
     if (arguments.length <= 6) { const src = arguments[arguments.length - 1]; w = (src && (src.videoWidth || src.naturalWidth || src.width)) | 0; h = (src && (src.videoHeight || src.naturalHeight || src.height)) | 0; }   // (t, lv, ifmt, fmt, type, source)
