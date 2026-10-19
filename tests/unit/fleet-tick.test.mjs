@@ -1,7 +1,7 @@
 /* fleet-tick.test.mjs — tools/ci/fleet-tick.mjs: row compaction, state diff and rendering, no network. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rowOf, diffState, render, verdictOf, MAX_ROWS } from "../../tools/ci/fleet-tick.mjs";
+import { rowOf, diffState, render, verdictOf, summaryMd, MAX_ROWS } from "../../tools/ci/fleet-tick.mjs";
 
 const board = (o = {}) => ({ number: 7, draft: true, sha: "abc1234def5678", ci: "success", mergeableState: "clean", suggest: "WAIT", hold: false, gate: "passed", plan: { state: "open", items: 4, open: ["x"] }, fleet: { state: "working", reason: "tests" }, ...o });
 const st = (prs = {}, extra = {}) => ({ prs, ship: { sha: "d1", line: "= ci passed" }, pages: { line: "= pages passed" }, sessions: {}, ...extra });
@@ -45,4 +45,23 @@ test("verdictOf takes the last `= ` line without prefix or sha/run tail", () => 
   const out = "[ci-watch] CI › Smoke → success\n[ci-watch] = ci running (35 jobs, 0 failed) sha=217b834 run=#1 push\n";
   assert.equal(verdictOf(out), "= ci running (35 jobs, 0 failed)");
   assert.equal(verdictOf("nothing"), "");
+});
+
+test("summaryMd: the tick line, ship/Pages, changed rows in a fence, and an escaped board table", () => {
+  const cur = { ...st({ 9: rowOf(board({ number: 9, hold: true, fleet: { state: "blocked", reason: "a|b <x>" } })), 7: rowOf(board()) }), tick: 3 };
+  const lines = render(diffState(st({ 7: rowOf(board()) }), cur), 3);
+  const md = summaryMd(lines, cur);
+  assert.match(md, /^### Fleet tick 3\n\n`= tick 3 1 changed`\n/);
+  assert.match(md, /- ship `d1`: = ci passed\n- pages: = pages passed/);
+  assert.match(md, /```\n\{"k":"pr","pr":9,"ev":"new"/);
+  assert.ok(md.indexOf("| #7 |") < md.indexOf("| #9 |"), "board sorted by PR number");
+  assert.ok(md.includes("| #9 | draft | abc1234 | success | WAIT | - | 3/4 | HOLD | blocked: a\\|b &lt;x> |"), md);
+  assert.match(md, /Board: 2 open PRs/);
+});
+
+test("summaryMd: no change has no fence", () => {
+  const cur = { ...st(), tick: 4 };
+  const md = summaryMd(render(diffState(cur, cur), 4), cur);
+  assert.doesNotMatch(md, /```/);
+  assert.match(md, /`= tick 4 no change`/);
 });
