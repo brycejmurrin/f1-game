@@ -49,6 +49,14 @@ test("js/game.js keeps vm-b shards, page-a, page-b, slow and driving-model", () 
   assert.ok(sel.has("driving-model"));
 });
 
+test("a physics-baseline-only diff selects the characterization job (#3037)", () => {
+  const sel = new Set(pick(["tests/data/physics-baseline.json"]).slices.keys());
+  assert.ok(sel.has("driving-model"), "the browser characterization must run on the head that moves its baseline");
+  assert.ok(sel.has("guards"));
+  assert.ok(!new Set(pick(["tests/data/ratchets.json"]).slices.keys()).has("driving-model"),
+    "other tests/data files stay guards-only");
+});
+
 test("an unknown path fail-safes to every slice", () => {
   const r = pick(["totally/unknown/path.xyz"]);
   assert.equal(r.reason, "fail-safe");
