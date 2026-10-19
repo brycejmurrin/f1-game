@@ -1,4 +1,18 @@
-# B·D3 aero design preview — handoff (round 1, 2026-10-19)
+# B·D3 aero design preview — handoff (round 2, 2026-10-19)
+
+## Round 2 (B·W6·D3b, branch @ bd6b3506) — fit pass done
+- Every suspect join below was measured and fixed (js/car/car3d.js preview builders only); numbers per part in
+  fit/fit.json and the gallery's Fit check section. Probe: `node fit-joints.mjs <id> all` (per-component contact /
+  gap / buried, all 11 chassis; 0 floating groups now), `node fit-teams.mjs` (seat surfaces per team).
+- L22 audit: `scratch/l22/` holds tools/car/car-fit-audit.mjs + lib (from cursor/fit-audit-420b); copy into
+  tools/car/ to run, then MOVE OUT before committing (tools/README guard). `--base` with explicit preview
+  --styles throws in plan() on the base tree; compare instead with fit-audit-compare.py (preview vs its clone row,
+  failures within 4 cm of the part): 0 NEW except x_wings pylon foot PENETRATION 28-50 mm, which direct rays put
+  at 3-7 mm — reported to L22 as a calibration case.
+- Round-1 frames are recovered from the artifact into r1/ (bases unchanged); run-studio-r2.sh reshoots changed ids.
+- Round 3 ideas: monkey_seat still 0.01 % from the side (endplates hide it): try plates outboard/taller or move it
+  aft-and-down under the main plane like W05; spoon_wing still under the flat flap (#3116 owns it).
+
 
 - Gallery (living, republish to the SAME url): https://claude.ai/artifact/14NZUdiTMpNKRTu4u9ZP3m
   From a new session: Artifact publish with `url` set to that link (read it first).
