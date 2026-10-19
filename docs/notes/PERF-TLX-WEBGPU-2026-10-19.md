@@ -36,6 +36,22 @@ census on macos-latest is the only hardware evidence here.
 | F6 | three r186 renderer | every `renderer.render()` into a target is its own command encoder + `queue.submit` (~9/frame; post chain, mirror, shadows, main) | needs upstream (render bundles / one encoder per frame); not reachable without a vendor change | census `gpu.submit` per frame | recommendation (vendor is out of scope) |
 | F7 | `js/render/shared/mirror-pass.js:79` | full mirror rung culls at 400 m for a 230x66 target: 55–67k tris, ~25% of the frame's triangles | GPU vertex work; a design call (look) | pass-census mirror row | open: structural, needs visual sign-off (TLX-WEBGPU-PERF-2026-10-18 §mirror density) |
 
+## After (hardware census on 88081e2e, run 39319594552, macos-latest)
+
+| measurement, TLX WebGPU leg | before (39262990733) | after (39319594552) |
+|---|---|---|
+| rAF callbacks / drawn frame | 2.05 | **1.05** (WebGL2 leg: 1.04 → 1.05) |
+| gpuErrors / path | 0 / webgpu direct present | 0 / webgpu direct present |
+| `castShadow` self time | 290 ms (top-14) | below the top-14 (< 94 ms) |
+| hitch spikes over threshold | 192 / 934 f | 37 / 470 f |
+| interval p50 / p95 | 40.6 / 82.3 ms | 36.3 / 82.2 ms |
+| governor | tier 2, scale 1 | tier 0, scale 0.8 |
+
+Only the rAF row is attributable: the governor settled on a different tier
+and scale, so frame times, hitch counts and caster counts (and with them the
+`castShadow` row) are not an A/B. F1's claim is the rAF count; F2 and R2-1
+rest on their unit tests.
+
 ### Round 2 (js/render/shared/, js/lighting/)
 
 | # | file:line | mechanism | expected win | measure | status |
