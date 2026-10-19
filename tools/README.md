@@ -510,6 +510,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **check/cross-file-paths.mjs** | Every relative reference between files resolves to a file that exists (espree extraction; built for the tests/ split). |
 | **check/evaluate-scope-lint.mjs** | A `page.evaluate()` callback may not close over Node — flags module-scope reads inside serialised callbacks. |
 | **check/html-sink-lint.mjs** | Flags non-constant `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` sinks in js/ outside the audited allowlist. |
+| **check/i18n-lint.mjs** | Locale lint: unknown keys, placeholders, CLDR plurals; --guard bans new literals in migrated files. |
 | **check/offline-precache-check.cjs** | Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache. |
 | **check/reject-lint.mjs** | An unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs. |
 | **check/tolerance-diff.mjs** | Fails a PR that loosens a test tolerance (toBeCloseTo digits, a bound, tol/eps) beside production edits. |
