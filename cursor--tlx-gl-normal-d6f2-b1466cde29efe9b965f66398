@@ -1,1 +1,0 @@
-1792443548	Bryce Murrin	RENDER allocation follow-up: OWNED js/render/three/tlx-chunked.js generic unit-normal allocation branch only, tests/unit/tlx-hunt4b.test.mjs allocation regression after A-W2 stride test, docs/changelog.d/tlx-gl-normal-d6f2.md. Independent of #3102 WebGPU path. Edits complete, verification next.  [cursor/tlx-gl-normal-d6f2; session b1466cde29efe9b965f66398]
