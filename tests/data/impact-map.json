@@ -6573,6 +6573,7 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/incident-rpm.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/js-debugger-tracks.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/light-grid.test.mjs",

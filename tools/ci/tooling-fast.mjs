@@ -647,6 +647,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",
   "tests/unit/js-debugger-trace.test.mjs",
+  "tests/unit/js-debugger-tracks.test.mjs",
+  "tests/unit/js-debugger-transport.test.mjs",
   "tests/unit/key-binds-calibration.test.mjs",
   "tests/unit/key-binds-hunt.test.mjs",
   "tests/unit/key-binds-pad-menu.test.mjs",

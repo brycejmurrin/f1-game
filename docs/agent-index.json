@@ -1147,6 +1147,8 @@
         "tests/unit/js-debugger-mcp.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
         "tests/unit/js-debugger-trace.test.mjs",
+        "tests/unit/js-debugger-tracks.test.mjs",
+        "tests/unit/js-debugger-transport.test.mjs",
         "tests/unit/lsp-caller-fixes.test.mjs",
         "tests/unit/lsp-config-freshness.test.mjs",
         "tests/unit/lsp-mcp-fixture.test.mjs",
