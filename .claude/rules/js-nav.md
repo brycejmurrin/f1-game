@@ -21,4 +21,4 @@ paths:
   HTML consumers: follow the returned binding or use a bounded text cross-check.
 - For bug hunts, trace a supported input through validation/state and its actual
   consumer, and leave probe retry budget. Examples and evidence rules:
-  [investigations](../skills/code-nav/references/investigations.md).
+  [investigations](../../docs/research/AGENT-CODE-INVESTIGATIONS.md).

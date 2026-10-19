@@ -62,7 +62,7 @@ evidence separately. For a no-finding, retain the strongest rejected hypotheses
 and remaining runtime limits.
 
 For recorded LSP-versus-search experiments, use the reusable
-[workflow harness](../../../../docs/research/AGENT-WORKFLOW-HARNESS.md). Its schemas,
+[workflow harness](AGENT-WORKFLOW-HARNESS.md). Its schemas,
 script/IIFE examples and file-based arguments address the experiment-specific
 errors; they are not additional production LSP arguments.
 
