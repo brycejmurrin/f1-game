@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { createHash } from "node:crypto";
+import { createBuildRecorder, physics } from "../helpers/track-build-oracle.mjs";
 const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/track/verify-track.cjs");
 
@@ -16,30 +16,44 @@ Tracks._vmContext.setTimeout = setTimeout;
 
 // A gfx that records every upload in order, hashing its buffers.
 function recorder() {
-  const log = [];
-  const h = (a) => {
-    const hash = createHash("sha1");
-    if (a && a.length) hash.update(Buffer.from(Float64Array.from(a).buffer));
-    return hash.digest("hex").slice(0, 16);
-  };
-  const geo = (kind, g, extra) => {
-    log.push([kind, g && g.pos ? g.pos.length : 0, h(g && g.pos), h(g && g.nrm), h(g && g.col), h(g && g.idx), h(g && g.mat), extra || ""].join(" "));
-    return { kind };
-  };
-  return {
-    log,
-    gfx: {
-      createMesh: (g) => geo("mesh", g),
-      createChunkedMesh: (g, cell) => geo("chunked", g, "cell=" + cell),
-      createInstancedBatch: (g, m, c) => geo("inst", g, h(m) + "/" + h(c)),
-    },
-  };
+  return createBuildRecorder({
+    channels: ["pos", "nrm", "col", "idx", "mat"],
+    releaseChunkPositions: false,
+    chunkedHandle: "plain",
+  });
 }
 
-const PHYS = ["px", "py", "pz", "hw", "barL", "barR", "lineX", "lineK"];
-function physics(track) {
-  return PHYS.filter((k) => track[k]).map((k) => k + ":" + createHash("sha1").update(Buffer.from(Float64Array.from(track[k]).buffer)).digest("hex").slice(0, 16));
-}
+// Fixed synthetic fingerprints keep the shared comparison oracle from making
+// two equally broken build paths look equivalent. Expected hashes predate it.
+test("track-build oracle preserves channel fingerprints, modes and ownership", () => {
+  const channels = ["pos", "nrm", "col", "idx", "mat", "trk"];
+  const worker = () => createBuildRecorder({ channels, releaseChunkPositions: true, chunkedHandle: "chunks" });
+  const geometry = () => Object.fromEntries(channels.map((key, i) => [key, [i + 1]]));
+  const row = "1 3eafb06982d26cb8 8f688ce4f0389109 c35a2a47490059fc 7e3647e6e4dffb0e f86f0aa72b960ca2 105d24a1ea5b0186";
+  const a = worker(), g = geometry();
+  assert.deepEqual(a.gfx.createMesh(g), { kind: "mesh" });
+  assert.equal(a.log[0], "mesh " + row + " ");
+  assert.deepEqual(a.gfx.createChunkedMesh(g, 24), { kind: "chunked", chunks: [1] });
+  assert.equal(a.log[1], "chunked " + row + " cell=24", "hash before releasing CPU channels");
+  assert.equal(g.pos, null); assert.equal(g.idx, null);
+  const retained = geometry(); retained._keepPositions = true;
+  a.gfx.createChunkedMesh(retained, 24);
+  assert.deepEqual(retained.pos, [1]); assert.deepEqual(retained.idx, [4]);
+  a.gfx.createInstancedBatch(geometry(), [7], [8]);
+  assert.equal(a.log[3], "inst " + row + " 739c1dd4df44b519/ed41573109274eca");
+  for (const key of channels) {
+    const changed = geometry(); changed[key] = [99];
+    const b = worker(); b.gfx.createMesh(changed);
+    assert.notEqual(b.log[0], a.log[0], key + " contributes to the fingerprint");
+  }
+  const stepped = recorder(), kept = geometry();
+  assert.deepEqual(stepped.gfx.createChunkedMesh(kept, 24), { kind: "chunked" });
+  assert.deepEqual(kept.pos, [1]); assert.deepEqual(kept.idx, [4]);
+  assert.equal(stepped.log[0], "chunked " + row.slice(0, row.lastIndexOf(" ")) + " cell=24");
+  assert.deepEqual(worker().log, [], "each recorder owns its log");
+  assert.deepEqual(physics({ px: [1], py: [], lineK: [8], ignored: [2] }),
+    ["px:3eafb06982d26cb8", "py:da39a3ee5e6b4b0d", "lineK:ed41573109274eca"]);
+});
 
 for (const id of ["monza", "spa", "vegas"]) {
   test(`${id}: a stepped build uploads exactly what build() uploads`, () => {

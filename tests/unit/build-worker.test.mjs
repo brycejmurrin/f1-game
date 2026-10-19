@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { createHash } from "node:crypto";
+import { createBuildRecorder, physics } from "../helpers/track-build-oracle.mjs";
 import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
@@ -50,27 +50,12 @@ const vmFiles = MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.C
 // A gfx that records every upload, hashing its buffers, and frees a chunked
 // upload's source channels the way glx/chunked.js and wgx-chunked.js do.
 function recorder() {
-  const log = [];
-  const h = (a) => createHash("sha1").update(a && a.length ? Buffer.from(Float64Array.from(a).buffer) : Buffer.alloc(0)).digest("hex").slice(0, 16);
-  const geo = (kind, g, extra) => {
-    log.push([kind, g && g.pos ? g.pos.length : 0, h(g && g.pos), h(g && g.nrm), h(g && g.col), h(g && g.idx), h(g && g.mat), h(g && g.trk), extra || ""].join(" "));
-    return { kind };
-  };
-  return {
-    log,
-    gfx: {
-      createMesh: (g) => geo("mesh", g),
-      createChunkedMesh: (g, cell) => {
-        const r = geo("chunked", g, "cell=" + cell);
-        if (!g._keepPositions) { g.pos = null; g.idx = null; }
-        return { kind: "chunked", chunks: [1] };
-      },
-      createInstancedBatch: (g, m, c) => geo("inst", g, h(m) + "/" + h(c)),
-    },
-  };
+  return createBuildRecorder({
+    channels: ["pos", "nrm", "col", "idx", "mat", "trk"],
+    releaseChunkPositions: true,
+    chunkedHandle: "chunks",
+  });
 }
-const PHYS = ["px", "py", "pz", "hw", "barL", "barR", "lineX", "lineK"];
-const physics = (t) => PHYS.filter((k) => t[k]).map((k) => k + ":" + createHash("sha1").update(Buffer.from(Float64Array.from(t[k]).buffer)).digest("hex").slice(0, 16));
 
 vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/track/build-client.js") });
 const worker = spawnWorker();
