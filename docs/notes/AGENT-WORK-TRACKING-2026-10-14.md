@@ -16,7 +16,12 @@ No tool on the list gives you an atomic cross-container claim. Your existing git
 The pinned Fleet board shows current claims (at most two hours old, matching
 `who-is-on-it.mjs`), stale claim evidence, and open/merged/closed PR associations
 in separate columns. The existing `claimed` label remains a duplicate-work guard:
-a current claim or an associated open PR retains it. It is not a completion flag.
+a current claim, open closing-linked PR, or open PR naming the issue number
+in its title retains it. This preserves existing partial-slice work without
+letting context-only references claim the backlog. Actual current ownership is
+shown separately; partial-PR owners keep their claim current.
+Releasing a claim preserves existing readiness/dependency labels rather than
+automatically declaring the issue ready. It is not a completion flag.
 Stale records are displayed for review rather than deleted; unread API/claim data
 must not release ownership. The board refuses to apply incomplete link snapshots.
 

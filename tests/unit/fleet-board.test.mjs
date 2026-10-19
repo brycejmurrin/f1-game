@@ -36,13 +36,13 @@ test("an issue is held by a live claim or an open PR; expired and released claim
   assert.equal(held.get(4).draft, true);
 });
 
-test("label writes: claim adds `claimed`; release removes it and restores `ready` unless blocked", () => {
+test("label writes: claim adds `claimed`; release removes it without inventing readiness", () => {
   const held = holders([claim("#1 mine")], []);
   const plan = labelPlan([issue(1, ["ready"]), issue(2, ["claimed"]), issue(3, ["claimed", "blocked"]), issue(4, ["claimed", "ready"]), issue(5, ["ready"])], held);
   const by = Object.fromEntries(plan.map((p) => [p.number, p]));
   assert.deepEqual(by[1].add, ["claimed"]);
   assert.match(by[1].comment, /Claimed — Claude: #1 mine/);
-  assert.deepEqual([by[2].add, by[2].remove], [["ready"], ["claimed"]]);
+  assert.deepEqual([by[2].add, by[2].remove], [[], ["claimed"]]);
   assert.deepEqual([by[3].add, by[3].remove], [[], ["claimed"]], "a blocked issue does not become ready");
   assert.deepEqual(by[4].add, [], "ready is not added twice");
   assert.equal(by[5], undefined, "an unclaimed ready issue needs no write");
@@ -98,22 +98,24 @@ for (const [field, max] of [["name", 50], ["description", 100]]) {
 }
 
 
-const link = (number, state = "OPEN", closing = false, isDraft = false) => ({ number, state, closing, isDraft });
+const link = (number, state = "OPEN", closing = false, isDraft = false, scoped = false) => ({ number, state, closing, isDraft, scoped });
 const event = (number, state = "OPEN", closing = false, repo = "owner/repo") => ({
   willCloseTarget: closing, source: { number, state, isDraft: false, repository: { nameWithOwner: repo } }
 });
 const timeline = (number, nodes, truncated = false) => ({ number, timelineItems: { nodes, pageInfo: { hasNextPage: truncated } } });
 
-test("current ownership expires at the claim tool's two-hour boundary, preserving separate open partial PR protection", () => {
-  const coverage = new Map([[2, [link(20)]], [3, [link(30, "MERGED")]], [4, [link(40, "CLOSED")]]]);
+test("current ownership expires at two hours; mere PR references never claim work", () => {
+  const coverage = new Map([[2, [link(20)]], [3, [link(30, "MERGED")]], [4, [link(40, "CLOSED")]], [5, [link(50, "OPEN", true)]], [6, [link(60, "OPEN", false, true, true)]]]);
   const held = holders([claim("#1 current", 120), claim("#2 stale", 121), claim("#3 stale", 800)], [], undefined, coverage);
   assert.equal(held.get(1).kind, "claim");
-  assert.equal(held.get(2).pr, 20);
-  assert.equal(held.get(2).referenceOnly, true);
+  assert.equal(held.has(2), false, "a cleanup/context/partial reference is not ownership");
+  assert.equal(held.get(5).pr, 50, "an explicit closing link retains the compatibility guard");
   assert.equal(held.has(3), false, "merged progress must not retain ownership");
   assert.equal(held.has(4), false, "abandoned PR must not hold work");
+  assert.equal(held.get(6).pr, 60, "an explicitly titled partial slice retains duplicate-work protection");
+  assert.equal(held.get(6).referenceOnly, true);
   const plan = labelPlan([issue(2, ["claimed"]), issue(3, ["claimed", "blocked"])], held);
-  assert.deepEqual(plan.map((p) => [p.number, p.add, p.remove]), [[3, [], ["claimed"]]]);
+  assert.deepEqual(plan.map((p) => [p.number, p.add, p.remove]), [[2, [], ["claimed"]], [3, [], ["claimed"]]]);
 });
 
 test("coverage ignores other-repo and non-PR references, deduplicates, preserves closing intent, and refuses truncated evidence", () => {
@@ -153,4 +155,15 @@ test("reader refuses missing pages or truncated closing-reference lists", () => 
   assert.throws(() => readCoverage("owner/repo", (query) => query.includes("issues(first")
     ? { repository: { issues: { nodes: [], pageInfo: { hasNextPage: false } } } }
     : { repository: { pullRequests: { nodes: [{ number: 5, closingIssuesReferences: { pageInfo: { hasNextPage: true } } }], pageInfo: { hasNextPage: false } } } }), /incomplete closing links/);
+});
+
+
+test("a cleanup PR mentioning an issue does not claim it, but an explicitly issue-titled partial PR remains guarded", () => {
+  const cleanup = event(90); cleanup.source.title = "docs: reconcile issue/PR references";
+  const partial = event(91); partial.source.title = "fix(ai): faster attack (#2356 partial)";
+  const coverage = coverageOf([timeline(2889, [cleanup]), timeline(2356, [partial])], "owner/repo");
+  const held = holders([], [], undefined, coverage);
+  assert.equal(held.has(2889), false);
+  assert.equal(held.get(2356).pr, 91);
+  assert.equal(coverage.get(2889)[0].number, 90, "context link remains visible without asserting ownership");
 });

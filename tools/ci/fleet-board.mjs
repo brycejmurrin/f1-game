@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // fleet-board.mjs — the backlog's phone view and the claim mirror, run hourly by .github/workflows/fleet.yml.
 // @doc Fleet board: current/stale claims, PR associations and backlog labels on one pinned issue.
-// Full description: Reads open issues/PRs, GitHub issue cross-references and closing links, and the claims board. Shows ownership separately from PR association (including merged partial work); derives claimed from current claims or associated open PRs. Syncs labels and the existing pinned board only with --apply. Incomplete API/claim evidence aborts before writes.
+// Full description: Reads open issues/PRs, GitHub issue cross-references and closing links, and the claims board. Shows ownership separately from PR association (including merged partial work); derives claimed from current claims or open PRs with closing intent or an issue number explicitly in their title. Other references are displayed without claiming ownership. Syncs labels and the existing pinned board only with --apply. Incomplete API/claim evidence aborts before writes.
 // @skill ci-watch
 //
 // docs/notes/AGENT-WORK-TRACKING-2026-10-14.md: the backlog is GitHub issues
@@ -10,7 +10,7 @@
 // state on one pinned issue. It also closes the two gaps the convention left
 // to discipline: an agent that claims `#<n>` through who-is-on-it.mjs but
 // forgets the label, and a PR closed unmerged that leaves its issue `claimed`
-// for ever. The label is DERIVED here from current claims and associated open PRs. Stale claims remain visible
+// for ever. The label is DERIVED here from current claims and explicitly issue-scoped open PRs. Stale claims remain visible
 // without asserting ownership; merged references never prove completion.
 //
 // Runs in Actions, not in agent containers: the containers' proxy refuses
@@ -50,7 +50,7 @@ export function holders(claims, prs, maxAgeMin = STALE_MIN, coverage = new Map()
   }
   for (const p of prs) for (const n of closesIn(p.body)) by.set(n, { kind: "pr", pr: p.number, draft: !!p.draft });
   for (const [n, links] of coverage) {
-    const open = links.find((p) => p.state === "OPEN");
+    const open = links.find((p) => p.state === "OPEN" && (p.closing || p.scoped));
     if (open && !by.has(n)) by.set(n, { kind: "pr", pr: open.number, draft: open.isDraft, referenceOnly: !open.closing });
   }
   return by;
@@ -67,8 +67,8 @@ export function labelPlan(issues, held) {
       const by = h.kind === "pr" ? `PR #${h.pr}${h.referenceOnly ? " (association; scope unverified)" : ""}` : `${h.who || "a session"}: ${h.text}`;
       plan.push({ number: i.number, add: ["claimed"], remove: [], comment: `Claimed — ${by}` });
     } else if (!h && has.has("claimed")) {
-      plan.push({ number: i.number, add: has.has("blocked") || has.has("ready") ? [] : ["ready"], remove: ["claimed"],
-        comment: "Released — no current claim or associated open PR was found. Stale claims do not prove an active owner; review remaining acceptance criteria before pickup." });
+      plan.push({ number: i.number, add: [], remove: ["claimed"],
+        comment: "Released — no current claim or explicitly issue-scoped open PR was found. Context references and stale claims do not establish ownership, readiness or completion; review PR scope and remaining acceptance criteria before pickup." });
     }
   }
   return plan;
@@ -123,7 +123,7 @@ export function coverageOf(nodes, repo) {
       const p = event.source;
       if (!p?.number || p.repository?.nameWithOwner !== repo) continue;
       const prior = links.get(p.number);
-      links.set(p.number, { number: p.number, state: p.state, isDraft: p.isDraft, closing: !!event.willCloseTarget || !!prior?.closing });
+      links.set(p.number, { number: p.number, state: p.state, isDraft: p.isDraft, closing: !!event.willCloseTarget || !!prior?.closing, scoped: refsIn(p.title).includes(issue.number) });
     }
     by.set(issue.number, [...links.values()].sort((a, b) => b.number - a.number));
   }
@@ -133,7 +133,7 @@ export function coverageOf(nodes, repo) {
 /** Paginated GraphQL issue timelines and canonical open-PR closing links. Fail closed on incomplete data. */
 export function readCoverage(repo, request = (query, variables) => JSON.parse(gh(["api", "graphql", "-f", `query=${query}`, ...Object.entries(variables).flatMap(([k, v]) => ["-f", `${k}=${v}`])])).data) {
   const [owner, name] = repo.split("/");
-  const query = `query($owner:String!,$name:String!,$cursor:String){repository(owner:$owner,name:$name){issues(first:50,after:$cursor,states:OPEN){nodes{number timelineItems(first:100,itemTypes:[CROSS_REFERENCED_EVENT]){nodes{... on CrossReferencedEvent{willCloseTarget source{... on PullRequest{number state isDraft repository{nameWithOwner}}}}}pageInfo{hasNextPage}}}pageInfo{hasNextPage endCursor}}}}`;
+  const query = `query($owner:String!,$name:String!,$cursor:String){repository(owner:$owner,name:$name){issues(first:50,after:$cursor,states:OPEN){nodes{number timelineItems(first:100,itemTypes:[CROSS_REFERENCED_EVENT]){nodes{... on CrossReferencedEvent{willCloseTarget source{... on PullRequest{number title state isDraft repository{nameWithOwner}}}}}pageInfo{hasNextPage}}}pageInfo{hasNextPage endCursor}}}}`;
   const nodes = [];
   let cursor;
   do {
@@ -144,7 +144,7 @@ export function readCoverage(repo, request = (query, variables) => JSON.parse(gh
     if (page.pageInfo.hasNextPage && !cursor) throw new Error("incomplete issue pagination");
   } while (cursor);
   const coverage = coverageOf(nodes, repo);
-  const prQuery = `query($owner:String!,$name:String!,$cursor:String){repository(owner:$owner,name:$name){pullRequests(first:100,after:$cursor,states:OPEN){nodes{number isDraft closingIssuesReferences(first:100){nodes{number repository{nameWithOwner}}pageInfo{hasNextPage}}}pageInfo{hasNextPage endCursor}}}}`;
+  const prQuery = `query($owner:String!,$name:String!,$cursor:String){repository(owner:$owner,name:$name){pullRequests(first:100,after:$cursor,states:OPEN){nodes{number title isDraft closingIssuesReferences(first:100){nodes{number repository{nameWithOwner}}pageInfo{hasNextPage}}}pageInfo{hasNextPage endCursor}}}}`;
   do {
     const page = request(prQuery, { owner, name, ...(cursor ? { cursor } : {}) }).repository.pullRequests;
     for (const p of page.nodes) {
@@ -153,8 +153,8 @@ export function readCoverage(repo, request = (query, variables) => JSON.parse(gh
         if (i.repository.nameWithOwner !== repo || !coverage.has(i.number)) continue;
         const links = coverage.get(i.number);
         const prior = links.find((x) => x.number === p.number);
-        if (prior) Object.assign(prior, { state: "OPEN", isDraft: p.isDraft, closing: true });
-        else links.unshift({ number: p.number, state: "OPEN", isDraft: p.isDraft, closing: true });
+        if (prior) Object.assign(prior, { state: "OPEN", isDraft: p.isDraft, closing: true, scoped: refsIn(p.title).includes(i.number) });
+        else links.unshift({ number: p.number, state: "OPEN", isDraft: p.isDraft, closing: true, scoped: refsIn(p.title).includes(i.number) });
       }
     }
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
