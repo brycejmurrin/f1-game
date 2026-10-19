@@ -666,6 +666,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-draft-mesh-cache.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
   "tests/unit/livery-helmet-style.test.mjs",
+  // PAINT ZONES (floor/susp/duct/deflector/cockpit/board/exhaust tints, floor/susp/nose/rim finishes): unset = byte-identical. VM, ~3 s.
+  "tests/unit/livery-paint-zones.test.mjs",
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",

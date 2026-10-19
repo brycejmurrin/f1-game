@@ -346,7 +346,7 @@ test("game.js feeds feedReplayScrub from the results tick, off the race/count fr
   const line = TICK.slice(TICK.lastIndexOf("\n", at) + 1, TICK.indexOf("\n", at));
   assert.match(line, /^\s*if \(state !== "race" && state !== "count"\) GameAudio\.feedReplayScrub\(/,
     "never on race/count frames: a RACE AGAIN that inherits the montage engine is not cut on the grid");
-  assert.ok(TICK.indexOf("resultsCam.tick(") < at && at < TICK.indexOf("render(Math.min(dt, 1 / 20)); PerfSpans.end(\"render\");"),
+  assert.ok(TICK.indexOf("resultsCam.tick(") < at && at < TICK.indexOf('PerfSpans.begin("render"); render('),
     "after resultsCam.tick (the clip's pose is applied), before render");
   assert.ok(TICK.indexOf("replayBuf.onTick(raceT, cars, state);") < at, "outside the paused branch");
   assert.match(TICK, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop\); return;/,
