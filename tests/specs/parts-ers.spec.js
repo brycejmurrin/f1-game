@@ -82,6 +82,18 @@ test.describe("ERS deploy — BOOST costs energy wherever it pushes", () => {
     expect(on.spent, "BOOST at 252 km/h must consume ERS").toBeGreaterThan(0.05);
   });
 
+  test("holding BOOST at high speed PUSHES — more ground than the same run without it", async ({ page }) => {
+    await load(page);
+    // The header's other half. The old taper made BOOST inert above TAPER_HI on
+    // thrust as well as on drain; a fix to the drain alone would leave this red.
+    const on = await boostRun(page, 70, { boost: true });
+    const off = await boostRun(page, 70, { boost: false });
+    expect(off.gained, "the reference run moved").toBeGreaterThan(50);
+    expect(on.gained - off.gained,
+      `BOOST at 252 km/h must add ground: on ${on.gained.toFixed(2)} m vs off ${off.gained.toFixed(2)} m`)
+      .toBeGreaterThan(0.5);
+  });
+
   test("BOOST still drains at low speed, where the taper is strongest", async ({ page }) => {
     await load(page);
     const on = await boostRun(page, 25, { boost: true });

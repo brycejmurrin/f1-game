@@ -15,9 +15,9 @@
  * lines in this repo do move; that is what the corresponding spec defect in
  * docs/notes/DEFECT-LEDGER.md is about.
  *
- * NODE-SIDE ON PURPOSE. verify-track.cjs already builds a real centreline in
- * ~2 s without a browser, so all 21 tables are checked on the fast gate rather
- * than behind a VM game boot per circuit.
+ * NODE-SIDE ON PURPOSE. verify-track.cjs builds a real centreline without a
+ * browser, so all 21 tables are checked on the fast gate rather than behind a
+ * VM game boot per circuit — and on the centreline alone, not a full mesh build.
  *
  * Run: node --test tests/unit/aero-zone-tables.test.mjs   (npm run test:tooling-fast)
  */
@@ -31,63 +31,68 @@ const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/track/verify-track.cjs");
 
 const Tracks = buildContext();
+// Log.warn is CAPTURED, not stubbed: the module's own "turn table unusable"
+// warning is the runtime signal that a table was discarded, and a no-op stub
+// meant no test ever saw it fire (#2952 P1-01).
+const warns = [];
 const ctx = vm.createContext({
   Math, JSON, Object, Array, Number, String, console, Tracks,
-  Log: { info() {}, warn() {}, error() {} },
+  Log: { info() {}, warn(tag, msg) { warns.push(String(msg)); }, error() {} },
 });
 vm.runInContext(fs.readFileSync(new URL("../../js/physics/aero-zones.js", import.meta.url), "utf8"),
   ctx, { filename: "js/physics/aero-zones.js" });
 const AeroZones = vm.runInContext("AeroZones", ctx);
 
-/** The straight runs zonesFor() derives, rebuilt here so runForTurnPair can be
- *  asked the same question the module asks it. Kept in step by the assertion
- *  below that zonesFor() itself still agrees. */
-function runsOf(tr) {
-  const total = tr.total, n = Math.max(8, Math.round(total / 25));
-  const straight = new Array(n);
-  for (let i = 0; i < n; i++) {
-    straight[i] = Math.abs(Tracks.curvature(tr, (i + 0.5) * total / n)) <= AeroZones.X_ZONE_K;
-  }
-  let i0 = 0;
-  while (i0 < n && straight[i0]) i0++;
-  const runs = [];
-  let cur = null;
-  for (let k = 0; k < n; k++) {
-    const i = (i0 + k) % n;
-    if (straight[i]) {
-      if (!cur) cur = { start: i * total / n, len: 0 };
-      cur.len += total / n;
-    } else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
-  }
-  if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
-  return runs;
-}
+/** The circuit's centreline only — zonesFor() reads curvature, total and
+ *  def.turns, none of which needs the meshes Tracks.build() adds. That build
+ *  was the whole cost of this file on the fast gate (#2952 P1-22); the case
+ *  below pins the two to the same answer so the shortcut cannot drift. */
+const centreline = (def) => Tracks.buildCenterline(def, { line: false });
+
+test("the centreline gives zonesFor() the same zones a full build does", () => {
+  const def = Tracks.LIST.find((t) => t.id === "monza");
+  assert.deepEqual(AeroZones.zonesFor(centreline(def)), AeroZones.zonesFor(Tracks.build(def)));
+});
 
 test("every circuit's authored turn table resolves — an unread table is a silent fallback", () => {
+  // Ask the MODULE, not a copy of its scan: zonesFor() with the real
+  // X_ZONE_STEP sampling, watched through the warning it raises when it
+  // throws a table away. A rebuilt scan at another step answered a different
+  // question (25 m here against the module's 8 m).
   const unresolved = [];
   for (const id of Object.keys(AeroZones.AERO_ZONE_TURNS)) {
     const def = Tracks.LIST.find((t) => t.id === id);
     if (!def) { unresolved.push(`${id}: AERO_ZONE_TURNS names a circuit that does not exist`); continue; }
-    const tr = Tracks.build(def);
-    const turns = def.turns || [];
-    const pairs = AeroZones.AERO_ZONE_TURNS[id];
-    if (!turns.length) { unresolved.push(`${id}: has a turn table but the def declares no turns`); continue; }
-    const runs = runsOf(tr);
-    const ok = pairs.filter((p) => AeroZones.runForTurnPair(runs, turns, tr.total, p));
-    if (ok.length !== pairs.length) {
-      const bad = pairs.filter((p) => !AeroZones.runForTurnPair(runs, turns, tr.total, p));
-      unresolved.push(`${id}: ${ok.length}/${pairs.length} pairs bound a straight — ` +
-        `${JSON.stringify(bad)} bound none, so the WHOLE table is discarded`);
+    if (!(def.turns || []).length) { unresolved.push(`${id}: has a turn table but the def declares no turns`); continue; }
+    warns.length = 0;
+    const zones = AeroZones.zonesFor(centreline(def));
+    const discarded = warns.filter((w) => /turn table unusable/.test(w));
+    if (discarded.length) unresolved.push(...discarded);
+    else if (zones.length !== AeroZones.AERO_ZONE_TURNS[id].length) {
+      unresolved.push(`${id}: ${zones.length} zones from a ${AeroZones.AERO_ZONE_TURNS[id].length}-pair table`);
     }
   }
   assert.deepEqual(unresolved, [],
-    "a circuit's authored turn table is being thrown away whole and nobody is told — " +
+    "a circuit's authored turn table is being thrown away whole — " +
     "fix the pair against the built centreline, or drop the entry and let ZONE_COUNT own it");
+});
+
+test("the discard warning is observable here (mutation: one pair that bounds nothing)", () => {
+  const def = Tracks.LIST.find((t) => t.id === "monza");
+  const saved = AeroZones.AERO_ZONE_TURNS.monza;
+  assert.ok(Array.isArray(saved) && saved.length, "monza carries a turn table");
+  const tr = centreline(def);
+  warns.length = 0;
+  // AERO_ZONE_TURNS is a plain object inside the frozen module record, so a
+  // test may swap one row and must put it back.
+  AeroZones.AERO_ZONE_TURNS.monza = [[1, 1]];
+  try { AeroZones.zonesFor(tr); } finally { AeroZones.AERO_ZONE_TURNS.monza = saved; }
+  assert.ok(warns.some((w) => /monza turn table unusable/.test(w)), `no discard warning: ${JSON.stringify(warns)}`);
 });
 
 test("Imola corner renumbering retains its authored Alta approach aero window", () => {
   const def = Tracks.LIST.find((t) => t.id === "imola");
-  const tr = Tracks.buildCenterline(def, { line: false });
+  const tr = centreline(def);
   const zones = AeroZones.zonesFor(tr);
   assert.equal(zones.length, 1);
   const zone = zones[0];
@@ -104,7 +109,7 @@ test("a resolved table is the one zonesFor() actually returns", () => {
   // on a circuit whose table resolves: the zone count must be the table's
   // length, not ZONE_COUNT's number, which is what "the table was used" means.
   const def = Tracks.LIST.find((t) => t.id === "monza");
-  const tr = Tracks.build(def);
+  const tr = centreline(def);
   const pairs = AeroZones.AERO_ZONE_TURNS.monza;
   assert.equal(AeroZones.zonesFor(tr).length, pairs.length,
     "monza's table resolves, so zonesFor must return exactly its pairs");
@@ -115,7 +120,7 @@ test("Monaco has no activation zones, and no curvature scan can know that", () =
   // and js/ui/track-maps.js used to draw 6 there from its own curvature scan.
   assert.equal(AeroZones.ZONE_COUNT.monaco, 0);
   const def = Tracks.LIST.find((t) => t.id === "monaco");
-  assert.equal(AeroZones.zonesFor(Tracks.build(def)).length, 0);
+  assert.equal(AeroZones.zonesFor(centreline(def)).length, 0);
 });
 
 test("the MAP asks AeroZones where the zones are — it does not scan curvature itself", () => {

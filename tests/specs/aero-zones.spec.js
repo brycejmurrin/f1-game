@@ -110,16 +110,23 @@ test.describe("active aero — activation zones", () => {
     // They are measured against a fixed reference speed on purpose: PACE scales
     // the car's real m/s, so measuring against the car would let the difficulty
     // setting silently redraw the track's zones.
+    //
+    // Each pace REBUILDS the race: __apex.aeroZones() maps G.aeroZones, which
+    // AeroZones.build() fills once per track build (game.js aeroZ.build()), so
+    // changing PACE on a built race and re-reading would compare one cached
+    // list with itself and pass even if zonesFor() started reading the pace.
     await loadTrack(page, "monza");
-    const slow = await page.evaluate(() => {
-      window.__apex.setPhysics({ pace: 0.5 });
-      return window.__apex.aeroZones();
-    });
-    const fast = await page.evaluate(() => {
-      window.__apex.setPhysics({ pace: 1.5 });
-      return window.__apex.aeroZones();
-    });
-    expect(fast).toEqual(slow);
+    const zonesAt = (pace) => page.evaluate(async (p) => {
+      window.__apex.setPhysics({ pace: p });
+      await window.__apex.race("monza");
+      return { pace: window.__apex.tuning().pace, zones: window.__apex.aeroZones() };
+    }, pace);
+    const slow = await zonesAt(0.5);
+    const fast = await zonesAt(1.5);
+    expect(slow.pace, "the rebuild kept the slow pace").toBe(0.5);
+    expect(fast.pace, "the rebuild kept the fast pace").toBe(1.5);
+    expect(slow.zones.length, "monza has zones to compare").toBeGreaterThan(0);
+    expect(fast.zones).toEqual(slow.zones);
   });
 
   test("inZone and zoneAhead agree with the zone list, wrap included", async ({ page }) => {
@@ -127,39 +134,58 @@ test.describe("active aero — activation zones", () => {
     const r = await page.evaluate(() => {
       window.__apex.headless(true); window.__apex.go();
       const zones = window.__apex.aeroZones();
-      // A zone that crosses the start line reports endFrac < startFrac; aiming at
-      // its midFrac is the only wrap-safe way to stand inside it.
-      const z = zones.slice().sort((a, b) => b.len - a.len)[0];
-      window.__apex.jump(z.midFrac, 60, 0);
-      window.__apex.step(1 / 60, 2);
-      const inside = window.__apex.aero();
-      return { inside, wrapped: z.endFrac < z.startFrac };
+      // Monza's main-straight zone crosses the start line: it reports
+      // endFrac < startFrac. Stand in it on BOTH sides of the line — the far
+      // side is only found by AeroZones' wrapped branch (s + L <= z.end).
+      const z = zones.find((q) => q.endFrac < q.startFrac);
+      if (!z) return { wrapped: null, zones };
+      const at = (frac) => {
+        window.__apex.jump(frac, 60, 0);
+        window.__apex.step(1 / 60, 2);
+        const a = window.__apex.aero();
+        return { frac, s: window.__apex.probe().s, inZone: a.inZone, ahead: a.zoneAhead, armed: a.xArmed };
+      };
+      return {
+        wrapped: z,
+        before: at((z.startFrac + 1) / 2),   // between the zone start and the line
+        after: at(z.endFrac / 2),            // past the line, still in the zone
+      };
     });
-    expect(r.inside.inZone).toBe(true);
-    expect(r.inside.zoneAhead, "zero distance while standing in one").toBe(0);
-    expect(r.inside.xArmed).toBe(true);
+    expect(r.wrapped, `monza has a zone across the line: ${JSON.stringify(r.zones)}`).not.toBeNull();
+    for (const side of [r.before, r.after]) {
+      expect(side.inZone, `in the wrapped zone at frac ${side.frac}`).toBe(true);
+      expect(side.ahead, `zero distance while standing in it at frac ${side.frac}`).toBe(0);
+      expect(side.armed, `armed at frac ${side.frac}`).toBe(true);
+    }
   });
 
-  test("outside a zone, zoneAhead counts down a real distance", async ({ page }) => {
+  test("outside a zone, zoneAhead is the distance to the next zone start", async ({ page }) => {
     await loadTrack(page, "monza");
     const r = await page.evaluate(() => {
       window.__apex.headless(true); window.__apex.go();
+      const zones = window.__apex.aeroZones();
+      const L = window.__apex.info().total;
       const seen = [];
       for (let i = 0; i < 40; i++) {
         window.__apex.jump(i / 40, 60, 0);
         window.__apex.step(1 / 60, 1);
         const a = window.__apex.aero();
-        seen.push({ inZone: a.inZone, ahead: a.zoneAhead });
+        seen.push({ i, s: window.__apex.probe().s, inZone: a.inZone, ahead: a.zoneAhead });
       }
-      return seen;
+      return { zones, L, seen };
     });
-    // every sample is either inside a zone (0 m) or a finite distance from one
-    for (const p of r) {
-      if (p.inZone) expect(p.ahead).toBe(0);
-      else { expect(p.ahead).toBeGreaterThan(0); expect(Number.isFinite(p.ahead)).toBe(true); }
+    expect(Number.isFinite(r.L) && r.L > 0, `info().total is the lap: ${r.L}`).toBe(true);
+    // The nearest zone START at or after s, wrapping the line. aeroZones()
+    // rounds start to the metre and zoneAhead is rounded, so allow 1.5 m.
+    const expected = (s) => Math.min(...r.zones.map((z) => (((z.start - s) % r.L) + r.L) % r.L));
+    for (const p of r.seen) {
+      if (p.inZone) { expect(p.ahead, `sample ${p.i}`).toBe(0); continue; }
+      expect(Math.abs(p.ahead - expected(p.s)),
+        `sample ${p.i} at s=${p.s.toFixed(1)}: zoneAhead ${p.ahead} vs next start ${expected(p.s).toFixed(1)}`)
+        .toBeLessThanOrEqual(1.5);
     }
-    expect(r.some((p) => p.inZone), "some of the lap is inside a zone").toBe(true);
-    expect(r.some((p) => !p.inZone), "and some of it is not").toBe(true);
+    expect(r.seen.some((p) => p.inZone), "some of the lap is inside a zone").toBe(true);
+    expect(r.seen.some((p) => !p.inZone), "and some of it is not").toBe(true);
   });
 });
 

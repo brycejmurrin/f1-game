@@ -9234,21 +9234,19 @@
     },
     "js/physics/aero-zones.js": {
       "build": [
+        "tests/specs/aero-zones.spec.js",
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/aero-zones-turns.test.mjs"
       ],
       "create": [
         "tests/unit/aero-zones-turns.test.mjs"
       ],
-      "runForTurnPair": [
-        "tests/unit/aero-zone-tables.test.mjs"
-      ],
       "zonesFor": [
+        "tests/specs/aero-zones.spec.js",
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/track-maps-corners.test.mjs"
       ],
       "*": [
-        "tests/specs/aero-zones.spec.js",
         "tests/unit/aero-zones-vm.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/test-groups.test.mjs"
