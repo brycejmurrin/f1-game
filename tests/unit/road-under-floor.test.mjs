@@ -50,10 +50,13 @@ function lowestVisibleRoadY(track) {
 test("the world floor slab never covers the road surface", () => {
   const env = buildContext();
   const covered = [];
+  let checked = 0, expected = 0;
   // APEX_CIRCUITS (ci.yml's circuit lane, a circuit-only PR) narrows the loop;
   // unset = every circuit (tools/lib/circuit-scope.cjs).
   const SCOPE = (process.env.APEX_CIRCUITS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  for (const def of env.Tracks.LIST.filter((d) => !SCOPE.length || SCOPE.includes(d.id))) {
+  const roster = env.Tracks.LIST.filter((d) => !SCOPE.length || SCOPE.includes(d.id));
+  expected = roster.length;
+  for (const def of roster) {
     const from = env.mark();
     const track = env.Tracks.build(def);
     // See the comment on trim() in track-build-vm.cjs. This suite never reads
@@ -63,14 +66,17 @@ test("the world floor slab never covers the road surface", () => {
     // 97 MB measured with this call in place).
     env.trim(from);
     const surface = track.surface;
-    if (!surface) continue;
+    if (!surface) { covered.push(`${def.id}: no track.surface — nothing to check`); continue; }
     const lo = lowestVisibleRoadY(track);
+    if (!Number.isFinite(lo)) { covered.push(`${def.id}: no upward road triangle found`); continue; }
+    checked++;
     // A slab exactly level with the road would z-fight, so require real daylight.
     const gap = surface.floorY - lo;
     if (gap > -0.05)
       covered.push(`${def.id}: floorY ${surface.floorY.toFixed(2)} vs lowest road ` +
         `surface ${lo.toFixed(2)} — slab is ${gap.toFixed(2)} m above the road`);
   }
+  assert.equal(checked, expected, "every scoped circuit was actually checked");
   assert.deepEqual(covered, [],
     `the flat floor slab renders over the track:\n  ${covered.join("\n  ")}`);
 });

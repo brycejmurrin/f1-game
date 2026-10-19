@@ -17,6 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -26,6 +27,18 @@ const { buildContext, verifyDef, customContext, customDef } = require(path.join(
 
 const SEEDS = [7, 23];
 const PROP_VERT_CAP = 1100000;   // verify-track's fleet cap
+
+/** SHA-1 over the road + terrain position/index arrays: equal digests = byte-identical geometry. */
+function geoDigest(track) {
+  const h = createHash("sha1");
+  for (const g of [track.roadGeo, track.terrainGeo]) {
+    for (const k of ["pos", "idx"]) {
+      const a = g[k]._data || g[k];
+      h.update(Buffer.from(Float64Array.from(a).buffer));
+    }
+  }
+  return h.digest("hex");
+}
 
 function boot() {
   // quiet: false CAPTURES the VM's console.warn lines (Tracks._vmConsole; the
@@ -54,7 +67,9 @@ test("every preset's generated scenery builds under the fleet guard, determinist
       assert.equal(typeof def.scenery, "function", theme + ": the def carries its generated closure");
       const r = verifyDef(Tracks, def, { quiet: true });
       assert.ok(r.props > 0 && r.props < PROP_VERT_CAP, `${theme}/${seed}: props ${r.props} within the fleet cap`);
-      assert.ok(!r.folds || !/fold/.test(r.folds) || /known/.test(r.folds), `${theme}/${seed}: no tarmac fold`);
+      // KNOWN_TARMAC_FOLDS is empty (verify-track.cjs knownTarmacFolds), so any fold throws in
+      // verifyDef; a non-empty warning string here is therefore always a real fold.
+      assert.ok(!r.folds, `${theme}/${seed}: no tarmac fold (${r.folds})`);
       // The dresser ran (a thrown dresser logs a warning and leaves the generic
       // dressing). On a permanent circuit the themed build has strictly more
       // props than the bare one; on a STREET preset the generic city pass fills
@@ -70,11 +85,13 @@ test("every preset's generated scenery builds under the fleet guard, determinist
       // Lamp caps: the mast register never exceeds the engine's own cap.
       const lamps = r.track.lampPosts ? r.track.lampPosts.length : 0;
       assert.ok(lamps <= 512, `${theme}/${seed}: ${lamps} lamps ≤ 512`);
-      rows.push({ theme, seed, props: r.props, inst: r.inst, bare: bareProps, lamps });
+      rows.push({ digest: geoDigest(r.track), theme, seed, props: r.props, inst: r.inst, bare: bareProps, lamps });
     }
     // Same seed, same bytes.
     const again = verifyDef(Tracks, customDef(Tracks, designFor(ctx, SEEDS[0], theme)), { quiet: true });
-    assert.equal(again.props, rows.find((x) => x.theme === theme && x.seed === SEEDS[0]).props, theme + ": deterministic");
+    const first = rows.find((x) => x.theme === theme && x.seed === SEEDS[0]);
+    assert.equal(again.props, first.props, theme + ": deterministic (props)");
+    assert.equal(geoDigest(again.track), first.digest, theme + ": deterministic (road + terrain byte digest)");
   }
   for (const r of rows) console.log(`themes: ${r.theme.padEnd(12)} seed ${String(r.seed).padStart(2)}  props ${String(r.props).padStart(7)}  (bare ${r.bare})  inst ${r.inst}  lamps ${r.lamps}`);
 });

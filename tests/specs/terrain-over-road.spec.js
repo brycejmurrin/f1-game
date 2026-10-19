@@ -160,40 +160,8 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   }
 });
 
-test("Madrid terrain drops away from the road instead of forming a raised floor", async ({ page }) => {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  const terrain = await page.evaluate(async () => {
-    // LAZY_CIRCUIT meta stub has no path — hydrate before buildCenterline.
-    const idx = Tracks.LIST.findIndex((entry) => entry.id === "madrid");
-    const ensure = window.__apex && window.__apex.ensureCircuit;
-    if (!ensure) throw new Error("ensureCircuit not on __apex");
-    await ensure(idx);
-    const def = Tracks.LIST[idx];
-    const track = Tracks.buildCenterline(def);
-    const surface = TrackSurface.profile(def, track);
-    const k = Math.round(0.75 * track.n) % track.n;
-    const drop = (lat) => track.py[k] - surface.heightAt(k, lat);
-    return { flatTerrain: def.flatTerrain, drop8: drop(8), drop12: drop(12), drop20: drop(20), drop30: drop(30), drop40: drop(40) };
-  });
-
-  // THE RUN-OFF SHELF MOVED WHERE THE FALL-OFF STARTS, not whether it happens.
-  // b3acbb088 (2026-09-24) made the ground meet the verge just under its edge,
-  // hold flat to 12 m, and smoothstep back into the old fall-off by 30 m, so a
-  // car off the tarmac is not left hanging over the gravel. That put the old
-  // 20 m probe mid-blend: 2.828 -> 1.267 m (nightly 36702685304 went red on
-  // `> 2`). Measured before/after in the track-build VM: 30 m 4.856 = 4.856 and
-  // 40 m 6.692 = 6.692, unchanged. So the contract is pinned where it holds:
-  // never a raised floor anywhere (every drop positive), a near-flat shelf, and
-  // the full fall-off back by 30 m.
-  expect(terrain.flatTerrain).toBe(false);
-  for (const k of ["drop8", "drop12", "drop20", "drop30", "drop40"]) {
-    expect(terrain[k], `${k}: terrain below the road, not a raised floor`).toBeGreaterThan(0);
-  }
-  expect(terrain.drop12, "the run-off shelf stays near-flat").toBeLessThan(0.5);
-  expect(terrain.drop30, "the old fall-off is back by 30 m (measured 4.856)").toBeGreaterThan(4);
-  expect(terrain.drop40).toBeGreaterThan(5);
-});
+// Madrid's run-off-shelf profile check moved to tests/unit/terrain-falloff.test.mjs (RC2-21):
+// it calls TrackSurface.profile directly and needs no browser.
 
 for (const trk of TRACKS) {
   test(`${trk}: no terrain/road faces over the racing line`, async ({ page }) => {
@@ -205,8 +173,9 @@ for (const trk of TRACKS) {
 
     const offenders = [];
     await page.evaluate((t) => __apex.race(t, "day", "dry"), trk);
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.waitForFunction(() => !!window.__apex.trackGeometry(), null, { polling: 100, timeout: BOOT_MS });
+    // ONE readiness wait (was two back-to-back BOOT_MS budgets inside a 180 s test): the
+    // meshes exist only once the track is loaded, so the second implies the first.
+    await page.waitForFunction(() => window.__apex.info().track != null && !!window.__apex.trackGeometry(), null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate((knownCrossover) => {
       const caps = window.__apex.trackGeometry();
       if (!caps) return { err: "no meshes" };
@@ -241,11 +210,18 @@ for (const trk of TRACKS) {
       // The scan itself is tools/lib/over-road-scan.cjs (injected below); unit-tested in node.
       const scan = (name) => window.__overRoadScan(caps[name],
         { name, tps, px, pz, M, ladder: LADDER.length, trackNodeCount, knownCrossover });
-      return { road: scan("road"), terr: scan("terrain") };
+      // NEGATIVE CONTROL: a face 1 m over the line at lap node M/3 must be reported by the very
+      // same in-page scan (same tps, same injected function). If the page wiring broke (wrong
+      // road set, wrong units, scan not injected) every circuit would otherwise pass vacuously.
+      const mid = Math.floor(M / 3) * LADDER.length + 2, tp0 = tps[mid];
+      const planted = { pos: [tp0.x - 2, tp0.y + 1, tp0.z - 2, tp0.x + 2, tp0.y + 1, tp0.z - 2, tp0.x, tp0.y + 1, tp0.z + 3], idx: [0, 1, 2] };
+      const control = window.__overRoadScan(planted, { name: "terrain", tps, px, pz, M, ladder: LADDER.length, trackNodeCount, knownCrossover: false });
+      return { road: scan("road"), terr: scan("terrain"), control: control.max };
     }, CROSSOVER_TRACKS.has(trk));
     console.log(`over-road ${trk}: road=${r.road?.max ?? "?"} terr=${r.terr?.max ?? "?"}${r.err ? " ERR:" + r.err : ""}`);
     if (r.err) offenders.push(`${trk}: ${r.err}`);
     else {
+      expect(r.control, `${trk}: the scan must see a planted face 1 m over the line (wiring check)`).toBeGreaterThan(0.9);
       if (r.terr.max > TOL) offenders.push(
         `${trk} TERRAIN ${r.terr.max}m over road @${JSON.stringify(r.terr.fr)} worst=${JSON.stringify(r.terr.worst)}`
       );
@@ -254,8 +230,5 @@ for (const trk of TRACKS) {
       );
     }
     expect(offenders, `circuits with geometry over the racing line:\n${offenders.join("\n")}`).toEqual([]);
-    await page.evaluate(() => {
-      try { window.__apex.headless(true); } catch (_) {}
-    });
   });
 }

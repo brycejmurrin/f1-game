@@ -73,3 +73,20 @@ test("the opt-in keeps actual banked near-road terrain positions unchanged", () 
       assert.equal(after.pos[i * 3 + c], before.pos[i * 3 + c]);
   }
 });
+
+// Moved from tests/specs/terrain-over-road.spec.js (RC2-21): real TrackSurface.profile, no browser.
+// THE RUN-OFF SHELF MOVED WHERE THE FALL-OFF STARTS, not whether it happens (b3acbb088): the
+// ground meets the verge, holds flat to 12 m, and is back on the old fall-off by 30 m.
+// Contract: never a raised floor (every drop positive), a near-flat shelf, full fall-off by 30 m.
+test("Madrid terrain drops away from the road instead of forming a raised floor", () => {
+  const def = Tracks.LIST.find((entry) => entry.id === "madrid");
+  const track = Tracks.buildCenterline(def);
+  const surface = Tracks._vmContext.TrackSurface.profile(def, track);
+  const k = Math.round(0.75 * track.n) % track.n;
+  const drop = (lat) => track.py[k] - surface.heightAt(k, lat);
+  assert.equal(def.flatTerrain, false);
+  for (const lat of [8, 12, 20, 30, 40]) assert.ok(drop(lat) > 0, `drop(${lat}) = ${drop(lat)}: terrain below the road, not a raised floor`);
+  assert.ok(drop(12) < 0.5, "the run-off shelf stays near-flat");
+  assert.ok(drop(30) > 4, "the old fall-off is back by 30 m (measured 4.856)");
+  assert.ok(drop(40) > 5);
+});
