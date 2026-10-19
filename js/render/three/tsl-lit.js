@@ -1841,12 +1841,20 @@
           const cz = floor(wp.z.div(U.lgCell)).add(1024.0).sub(U.lgOrigin.y);
           const inside = on.and(cx.greaterThanEqual(0.0)).and(cx.lessThan(U.lgSize.x))
                            .and(cz.greaterThanEqual(0.0)).and(cz.lessThan(U.lgSize.y));
-          // One fetch to enter. Clamped so the out-of-extent case reads texel 0
-          // rather than sampling out of bounds; `inside` discards the result.
-          const g = textureLoad(LG_TEX.grid,
-            ivec2(select(inside, cx, float(0.0)), select(inside, cz, float(0.0)))).toVar();
-          const cnt = select(inside, g.y, float(0.0)).toVar();
-          return { base: g.x.toVar(), n: cnt, use: cnt.greaterThan(0.5) };
+          // base/count stay 0 unless the fragment is on the baked grid — so a
+          // disabled grid, a non-road ordinary material, or a position outside
+          // the extent never pays textureLoad(LG_TEX.grid). Integer textureLoad
+          // has no implicit derivatives, so the fetch may sit in the If.
+          // Empty cells (count 0) keep `use` false → pcN falls back to the
+          // global lamp set (same picture as before).
+          const base = float(0.0).toVar();
+          const cnt = float(0.0).toVar();
+          If(inside, () => {
+            const g = textureLoad(LG_TEX.grid, ivec2(cx, cz));
+            base.assign(g.x);
+            cnt.assign(g.y);
+          });
+          return { base, n: cnt, use: cnt.greaterThan(0.5) };
         })() : null;
 
         // Resolve slot `i` to a lamp record. On the per-chunk path `i` indexes
