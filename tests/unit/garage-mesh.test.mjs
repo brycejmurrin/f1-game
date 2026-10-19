@@ -283,7 +283,7 @@ test("preview hulls are dropped when their mesh LRU slot is evicted", () => {
 // latch 31 years out, log nothing, and keep the freed handle — so one throw from
 // createTexture froze the traces for the page load and stayed invisible to Log.
 // Keep the old handle while trying the replacement so a later tick can retry.
-function liveAtlasHarness() {
+function liveAtlasHarness(isMobile = true) {
   let now = 10000, tracePaints = 0, failTrace = false;
   const uploads = [], warns = [];
   const c2d = new Proxy(function () {}, {
@@ -292,7 +292,7 @@ function liveAtlasHarness() {
     set: () => true, apply: () => c2d,
   });
   const gfx = {
-    isMobile: true, createMesh: () => ({}), createTexMesh: () => ({}),
+    isMobile, createMesh: () => ({}), createTexMesh: () => ({}),
     freeMesh() {}, freeTexture() {}, draw() {}, drawGlow() {}, drawDecal() {},
     createTexture(src) { uploads.push({ width: src.width, tracePaints }); return {}; },
   };
@@ -310,23 +310,25 @@ function liveAtlasHarness() {
   scene.init(gfx);
   return { scene, uploads, warns, gfx, wall(t) { now = t; }, failTrace(on) { failTrace = on; },
     draw(sceneNow, extra = {}, liv = LIV) { scene.draw(TEAM, liv, [0, 1.6, 0], null, 0, { sceneNow, ambient: true, ...extra }); },
-    liveUploads() { return uploads.filter((u) => u.width === 512); } };
+    liveUploads() { return uploads.filter((u) => u.width === 512); }, tracePaints: () => tracePaints };
 }
 
-test("garage combines the initial trace with one live upload and keeps the phone scene-clock cadence", () => {
-  const h = liveAtlasHarness();
-  h.draw(100);
-  assert.deepEqual(h.liveUploads(), [{ width: 512, tracePaints: 1 }], "the first upload must already contain its trace");
-  h.wall(90000); h.draw(100);
-  h.draw(4100);
-  assert.equal(h.liveUploads().length, 1, "wall time or the exact 4 s boundary must not trigger a second upload");
-  h.draw(4101);
-  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2]);
-  h.draw(8202, {}, { ...LIV, c1: [0.8, 0.4, 0.1] });
-  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2, 3], "a repaint on an expired trace tick must still upload once");
-  h.scene.release(); h.draw(8300);
-  assert.equal(h.liveUploads().length, 4, "a new garage session must also combine its first upload");
-  assert.deepEqual(h.warns, []);
+test("garage combines the initial trace with one live upload and keeps phone and desktop scene-clock cadence", () => {
+  for (const [mobile, cadence] of [[true, 4000], [false, 1500]]) {
+    const h = liveAtlasHarness(mobile);
+    h.draw(100);
+    assert.deepEqual(h.liveUploads(), [{ width: 512, tracePaints: 1 }], "the first upload must already contain its trace");
+    h.wall(90000); h.draw(100);
+    h.draw(100 + cadence);
+    assert.equal(h.liveUploads().length, 1, `wall time or the exact ${cadence} ms boundary must not trigger a second upload`);
+    h.draw(101 + cadence);
+    assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2]);
+    h.draw(102 + 2 * cadence, {}, { ...LIV, c1: [0.8, 0.4, 0.1] });
+    assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2, 3], "a repaint on an expired trace tick must still upload once");
+    h.scene.release(); h.draw(200 + 2 * cadence);
+    assert.equal(h.liveUploads().length, 4, "a new garage session must also combine its first upload");
+    assert.deepEqual(h.warns, []);
+  }
 });
 
 test("still and studio garages keep traces inactive until ambient room rendering resumes", () => {
@@ -342,15 +344,35 @@ test("still and studio garages keep traces inactive until ambient room rendering
 });
 
 test("a prebuilt trace refreshes once when the visible garage scene clock rewinds", () => {
-  const h = liveAtlasHarness();
-  h.scene.prepare(TEAM, LIV, null, 0, { sceneNow: 9000, ambient: true });
-  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1]);
-  h.draw(1000);
-  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2], "a held earlier clock must replace the future trace");
-  h.draw(1000); h.draw(5000);
-  assert.equal(h.liveUploads().length, 2, "the rewind refresh restarts the ordinary phone cadence");
-  h.draw(5001);
-  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2, 3]);
+  for (const [mobile, cadence] of [[true, 4000], [false, 1500]]) {
+    const h = liveAtlasHarness(mobile);
+    h.scene.prepare(TEAM, LIV, null, 0, { sceneNow: 9000, ambient: true });
+    assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1]);
+    h.draw(1000);
+    assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2], "a held earlier clock must replace the future trace");
+    h.draw(1000); h.draw(1000 + cadence);
+    assert.equal(h.liveUploads().length, 2, "the rewind refresh restarts the ordinary device cadence");
+    h.draw(1001 + cadence);
+    assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2, 3]);
+  }
+});
+
+test("three failed trace paints stop retries until a released garage is rebuilt", () => {
+  for (const [mobile, cadence] of [[true, 4000], [false, 1500]]) {
+    const h = liveAtlasHarness(mobile);
+    h.failTrace(true);
+    for (let i = 0; i < 3; i++) h.draw(100 + i * (cadence + 1));
+    assert.equal(h.tracePaints(), 3, "the initial trace failure counts toward the three-strike cutoff");
+    assert.equal(h.warns.length, 3);
+    assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1], "failed trace repaints keep the original atlas");
+    h.failTrace(false);
+    h.draw(100 + 3 * (cadence + 1)); h.draw(100 + 4 * (cadence + 1));
+    assert.equal(h.tracePaints(), 3, "the cutoff holds even when painting could recover");
+    assert.equal(h.warns.length, 3);
+    h.scene.release(); h.draw(100 + 5 * (cadence + 1));
+    assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 4], "a rebuilt garage rearms trace painting and combines its first upload");
+    assert.equal(h.warns.length, 3);
+  }
 });
 
 test("a first trace paint failure preserves the live atlas and retries on its next tick", () => {

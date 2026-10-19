@@ -536,17 +536,26 @@ test("paint and context changes retain the invariant truss and dress meshes unti
 });
 
 test("renderer replacement releases garage resources through their original owner", () => {
-  const h = sceneHarness(true), garage = h.GarageScene;
+  const h = sceneHarness(true, { crew: true }), garage = h.GarageScene;
   garage.prepare(TEAM, LIV, null, 0, {});
   const prepared = h.live.size;
   garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {});
   assert.equal(h.live.size, prepared + 1, "drawing a car creates its floor-reflection fade mesh");
+  const beforeArrival = h.handles.length;
+  garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {}, { door: 0.5, x: 0, z: 0 });
+  const crew = h.handles.slice(beforeArrival);
+  assert.equal(crew.length, 3, "the arrival creates its two figure meshes and pole");
+  for (const mesh of crew) assert.equal(h.live.has(mesh), true);
   const held = h.live.size;
+  const freed = h.freed.length;
   garage.init(h.gfx);
   assert.equal(h.live.size, held, "reinitializing the same renderer retains its caches");
+  assert.equal(h.freed.length, freed, "same-renderer reinit frees neither room nor crew");
   const newCalls = [];
   garage.init({ freeMesh: (h) => newCalls.push(h), freeTexture: (h) => newCalls.push(h) });
   assert.equal(h.live.size, 0, "the old renderer freed every owned resource before replacement");
+  for (const mesh of crew) assert.equal(h.freed.filter((m) => m === mesh).length, 1,
+    "room release and crew reinit free each crew handle exactly once through its original renderer");
   assert.deepEqual(newCalls, [], "old handles never reach the new renderer");
   assert.equal(garage.prepared(TEAM, LIV, null, 0, {}), false);
 });
