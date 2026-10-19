@@ -567,8 +567,11 @@ const Car3D = (function () {
       for (let i = 0, n = louvre * 3 + 1; louvre && i < n; i++) {
         const z = -0.86 - i * 0.042, p = anchors.coverAt(z);
         for (const s of [-1, 1]) {
-          const x = s * p.x * 0.58, y = coverSurfaceY(p, x);
-          addBox(out, x, y + 0.004, z, Math.max(0.05, p.x * 0.42), 0.014, 0.016, DARK);
+          // A slat runs ACROSS the shoulder between two skin samples, so it
+          // follows the camber instead of bridging it (no gap, no buried end).
+          const xa = s * p.x * 0.40, xb = s * p.x * 0.76;
+          addBeamBetween(out, [xa, coverSurfaceY(p, xa) + 0.005, z], [xb, coverSurfaceY(p, xb) + 0.005, z],
+                         0.012, DARK, SURFACES.carbon);
         }
       }
       // Team-style DORSAL FIN along the engine-cover ridge: 1 = low blade,
@@ -2241,10 +2244,14 @@ const Car3D = (function () {
         // upright height, with a CV boot at each end; six sides because it is
         // small and half-hidden behind the tyre from every angle but dead
         // astern, which is the one angle that matters here.
-        addTube(out, [[s * 0.155, 0.36 + rideDY, AXLES.rearZ],
-                      [s * 0.605, 0.36 + rideDY, AXLES.rearZ]],
+        // Ends ARE the joints: inboard at the cover skin, outboard 3 mm into
+        // the upright casting (x 0.67 - w/2). 0.155 / 0.605 left a 37 mm air
+        // gap at the hub on every chassis (scratch/d7/fit.mjs, B·D7 fit pass).
+        const dsIn = inTail(AXLES.rearZ) - 0.01, dsOut = 0.67 - 0.0245;
+        addTube(out, [[s * dsIn, 0.36 + rideDY, AXLES.rearZ],
+                      [s * dsOut, 0.36 + rideDY, AXLES.rearZ]],
                 0.032, 6, [0.22, 0.22, 0.25], SURFACES.metal);
-        for (const bx of [0.185, 0.575])
+        for (const bx of [dsIn + 0.03, dsOut - 0.03])
           addBox(out, s * bx, 0.36 + rideDY, AXLES.rearZ, 0.052, 0.062, 0.062,
                  [0.10, 0.10, 0.12], SURFACES.carbon);   // CV boot
       }
