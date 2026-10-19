@@ -15782,6 +15782,7 @@
     },
     "js/ui/track-maps.js": {
       "aspect": [
+        "tests/unit/circuit-axis.test.mjs",
         "tests/unit/track-maps-corners.test.mjs"
       ],
       "corners": [
