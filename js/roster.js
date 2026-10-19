@@ -26,6 +26,7 @@
       "js/render/webgpu/wgx-chunked.js",
       "js/render/webgpu/wgx-post.js",
       "js/render/webgpu/wgx-roadlut.js",
+      "js/render/webgpu/wgx-debug-labels.js",
       "js/render/webgpu/wgx.js"
     ],
     "three": [
@@ -123,6 +124,10 @@
       "js/render/webgpu/wgx.js"
     ],
     [
+      "js/render/webgpu/wgx-debug-labels.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
       "js/render/three/tsl-chunks.js",
       "js/render/three/tsl-lit.js"
     ],
@@ -163,6 +168,7 @@
     "js/agent/apex-cam.js",
     "js/agent/apex-track.js",
     "js/agent/apex-lobby.js",
+    "js/agent/apex-gpu-capture.js",
     "js/agent/apex.js"
   ],
     LAZY_EDGES: [
@@ -184,6 +190,10 @@
     ],
     [
       "js/agent/apex-lobby.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-gpu-capture.js",
       "js/agent/apex.js"
     ],
     [
