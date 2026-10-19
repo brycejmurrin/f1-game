@@ -350,7 +350,7 @@ function gapDecimals(sec) {
   // Shared with REL / tower via HudReadouts: two decimals under ~10 s on every
   // profile (Overtake unlock ~1.0 s); see HudReadouts.gapDecimals.
   if (_ro && typeof _ro.gapDecimals === "function") return _ro.gapDecimals(G.hudProfile, sec);
-  return (G.hudProfile || "standard") === "broadcast" ? 2 : (Number.isFinite(sec) && Math.abs(sec) < 9.95 ? 2 : 1);
+  return (G.hudProfile || "standard") === "broadcast" ? 2 : (Number.isFinite(sec) && Math.abs(sec) < 9.995 ? 2 : 1);
 }
 function gapSec(slot, who, raw) {
   if (who !== _gapWho[slot] || !isFinite(_gapSm[slot])) { _gapWho[slot] = who; _gapSm[slot] = raw; }
