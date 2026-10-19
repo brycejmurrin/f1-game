@@ -108,19 +108,31 @@ test("desktop permission module ships with the app (lib/** in the builder files)
   assert.ok(cfg.files.includes("lib/**"));
 });
 
-test("app-protocol keeps allowServiceWorkers false (cache.addAll fails on app:)", () => {
-  const PROTO = readFileSync(join(ROOT, "desktop/app-protocol.js"), "utf8");
-  assert.match(PROTO, /allowServiceWorkers:\s*false/);
-  assert.match(PROTO, /parseByteRange/);
-  assert.match(PROTO, /status:\s*206/);
-  assert.match(PROTO, /status:\s*416/);
-  assert.match(PROTO, /realpathSync/);
-  // Comments may mention net.fetch (why we avoid it); the handler body must not call it.
-  const body = PROTO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  assert.doesNotMatch(body, /\bnet\.fetch\b/);
+test("app-protocol registers app:// privileged with allowServiceWorkers false (cache.addAll fails on app:)", () => {
+  // Run registerScheme against a fake electron instead of regex-scanning the source (T2-22).
+  // The 206/416/traversal handler itself is executed in desktop-app-protocol.test.mjs.
+  const Module = require("node:module");
+  const realLoad = Module._load;
+  let registered = null;
+  Module._load = function (request, ...rest) {
+    if (request === "electron") return { protocol: { registerSchemesAsPrivileged: (list) => { registered = list; } } };
+    return realLoad.call(this, request, ...rest);
+  };
+  try {
+    require("../../desktop/app-protocol.js").registerScheme();
+  } finally {
+    Module._load = realLoad;
+  }
+  assert.equal(registered.length, 1);
+  assert.equal(registered[0].scheme, "app");
+  const priv = registered[0].privileges;
+  assert.equal(priv.allowServiceWorkers, false);
+  assert.equal(priv.standard, true);
+  assert.equal(priv.secure, true);
+  assert.equal(priv.stream, true, "range streaming needs the stream privilege");
 });
 
-test("desktop package.json release fuses keep inspect and file-protocol extras off", () => {
+test("desktop release fuses: the test pack turns the inspect fuse on, the release config keeps it off", () => {
   const cfg = require("../../desktop/electron-builder.config.cjs");
   const pkg = JSON.parse(readFileSync(join(ROOT, "desktop/package.json"), "utf8"));
   assert.equal(cfg.electronFuses.enableNodeCliInspectArguments, false);

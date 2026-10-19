@@ -454,7 +454,12 @@ def run_measure(profile: str, url: str) -> int:
         summary["elapsed_s"] = elapsed
         summary["finished"] = datetime.now(timezone.utc).isoformat()
         try:
-            JSON_PATH.write_text(json.dumps(summary, indent=2)[:500_000])
+            # The saved diagnostic is the complete result, never a JSON prefix.
+            fd = os.open(JSON_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as retained:
+                os.fchmod(retained.fileno(), 0o600)
+                json.dump(summary, retained, indent=2)
+                retained.write("\n")
             log.line(f"→ wrote {JSON_PATH.relative_to(ROOT)}")
         except Exception as e:
             log.line(f"! json write: {e}")

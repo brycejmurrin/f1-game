@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import vm from "node:vm";
-import { execFileSync } from "node:child_process";
 import { discoverCatalog, carFilterArgv, validateCarFilters } from "../../tools/mcp/catalog-discovery.mjs";
 import { loadParts, catalogRows, sweep, sweepParallel } from "../../tools/car/parts-sweep.mjs";
 import { TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS } from "../../tools/shot/lib/garage-camera-catalog.mjs";
@@ -38,16 +36,24 @@ test("liveries expose per-team ids and canonical editable fields without reading
   assert.equal(finish.values.filter((value) => value === "gloss").length, 1);
   assert.ok(result.readOnly && !result.browser);
 });
-test("camera metadata remains byte-for-byte equivalent to the previous CLI source constants", () => {
-  const old = execFileSync("git", ["show", "HEAD:tools/shot/garage-angles.mjs"], { encoding: "utf8" });
-  for (const [name, current] of Object.entries({ TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS })) {
-    const source = old.match(new RegExp(`const ${name} = \\{[\\s\\S]*?\\n\\};`));
-    // After the extraction is committed, the CLI imports the same canonical module.
-    if (source) assert.deepEqual(JSON.parse(JSON.stringify(vm.runInNewContext(source[0] + `\n${name}`))), current);
-    else assert.match(old, /import \{ TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS \} from "\.\/lib\/garage-camera-catalog\.mjs"/);
+test("camera metadata has the shape consumers rely on, and the CLI reads the one canonical module", () => {
+  // (Used to diff against `git show HEAD:...`, an oracle that moves on every commit and throws without history.)
+  assert.ok(Object.keys(TARGETS).length >= 4 && "car" in TARGETS);
+  for (const [alias, spec] of Object.entries(CAM_ALIAS)) assert.equal(typeof spec, "string", `${alias} aliases a camera spec string`);
+  assert.ok(Object.keys(STATIONS).length >= 10);
+  for (const [id, st] of Object.entries(STATIONS)) {
+    assert.ok(Number.isFinite(st.az) && Number.isFinite(st.el) && Number.isFinite(st.dist) && st.dist > 0, `${id}: finite az/el and positive dist`);
+    const named = typeof st.target === "string";
+    assert.ok(named ? st.target in TARGETS : Array.isArray(st.target) && st.target.length === 3 && st.target.every(Number.isFinite),
+      `${id}: target is a finite [x,y,z] or a TARGETS key`);
+  }
+  for (const [field, stations] of Object.entries(FIELD_STATIONS)) {
+    assert.ok(Array.isArray(stations) && stations.length > 0, `${field} names at least one station`);
+    for (const id of stations) assert.ok(id in STATIONS, `${field} → unknown station ${id}`);
   }
   const cli = fs.readFileSync(new URL("../../tools/shot/garage-angles.mjs", import.meta.url), "utf8");
   assert.match(cli, /garage-camera-catalog\.mjs/);
+  assert.doesNotMatch(cli, /^const (TARGETS|STATIONS|FIELD_STATIONS|CAM_ALIAS) = \{/m, "the CLI must not re-declare the catalog");
   const result = discoverCatalog({ section: "garage", filter: "spineTop", limit: 100 });
   assert.deepEqual(result.rows.find((r) => r.id === "spineTop").target, STATIONS.spineTop.target);
   assert.ok(result.rows.find((r) => r.id === "spineTop").fields.includes("spineLogo"));

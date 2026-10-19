@@ -4,23 +4,23 @@
   "mcpServerAllowlist": [
     {
       "name": "apex-tools",
-      "command": "*bash tools/mcp/apex-tools-mcp.sh serve"
+      "command": "*bash tools/mcp/output-level-mcp.sh --server apex-tools -- bash tools/mcp/apex-tools-mcp.sh serve"
     },
     {
       "name": "chrome-devtools",
-      "command": "*bash tools/mcp/chrome-devtools-mcp.sh run"
+      "command": "*bash tools/mcp/output-level-mcp.sh --server chrome-devtools -- bash tools/mcp/chrome-devtools-mcp.sh run"
     },
     {
       "name": "playwright-official",
-      "command": "*bash tools/mcp/playwright-mcp.sh run"
+      "command": "*bash tools/mcp/output-level-mcp.sh --server playwright-official -- bash tools/mcp/playwright-mcp.sh run"
     },
     {
       "name": "js-debugger",
-      "command": "*bash tools/mcp/js-debugger-mcp.sh serve"
+      "command": "*bash tools/mcp/output-level-mcp.sh --server js-debugger -- bash tools/mcp/js-debugger-mcp.sh serve"
     },
     {
       "name": "apex-lsp",
-      "command": "*bash tools/mcp/lsp-mcp.sh serve"
+      "command": "*bash tools/mcp/output-level-mcp.sh --server apex-lsp -- bash tools/mcp/lsp-mcp.sh serve"
     }
   ]
 }

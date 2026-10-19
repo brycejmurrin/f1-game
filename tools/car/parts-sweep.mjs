@@ -177,7 +177,8 @@ export function catalogRows(Parts, Teams, fallback = "mclaren", teamId = null) {
       if (team && !Parts.isOptionAvailable(opt, team)) continue;
       const resolvedTeam = team ? team.id : eligibleTeam(Parts, Teams, opt, fallback);
       if (!resolvedTeam) throw new Error(`no eligible team for ${cat.id}/${opt.id}`);
-      const sig = opt.tag === "SIGNATURE" && opt.equivalent;
+      // A SIGNATURE or a STYLE reskin is measured against the twin it copies.
+      const sig = (opt.tag === "SIGNATURE" || opt.tag === "STYLE") && opt.equivalent;
       rows.push({
         cat: cat.id, optionId: opt.id, label: opt.label, teamId: resolvedTeam,
         signature: !!sig, equivalent: sig || null,

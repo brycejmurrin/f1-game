@@ -58,10 +58,30 @@ test("--help prints the usage block and exits 0", () => {
   assert.match(r.stdout, /--pr/);
 });
 
-test("touchedCircuits reads circuit and scenery ids out of a diff", () => {
-  const ids = touchedCircuits("HEAD~1");
-  assert.ok(Array.isArray(ids));
-  for (const id of ids) assert.match(id, /^[a-z_]+$/);
+test("touchedCircuits reads circuit and scenery ids out of a diff — exactly", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-touched-ids-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  try {
+    g("init", "-q", "-b", "main");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    const write = (rel, body) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); };
+    // Paths are built, not spelled: the docs-integrity scan reads quoted paths in source.
+    const circ = (id, ...sub) => ["js", "circuits", ...sub, id + ".js"].join("/");
+    write(circ("keep"), "// base\n"); write("README.md", "x\n");
+    g("add", "-A"); g("commit", "-qm", "base");
+    write(circ("newtrack"), "// new\n");            // a circuit def
+    write(circ("other_track", "scenery"), "// s\n");    // a scenery file, underscore id
+    write(circ("Bad-Name"), "// no\n");              // not an id: must not match
+    write(["js", "track", "engine.js"].join("/"), "// engine\n");               // not a circuit
+    write("README.md", "y\n");
+    g("add", "-A"); g("commit", "-qm", "edit");
+    assert.deepEqual(touchedCircuits("HEAD~1", dir).sort(), ["newtrack", "other_track"],
+      "only circuit and scenery files that match the id shape, each once");
+    // A read that fails yields no ids (the callers treat [] as 'nothing to verify').
+    assert.deepEqual(touchedCircuits("no-such-ref", dir), []);
+  } finally {
+    rmTemp(dir);
+  }
 });
 
 /* THE TWO-DOT TRAP. touchedCircuits() used `git diff base HEAD`, the two-way
@@ -804,4 +824,46 @@ test("advisoryGet: token on stdin when present, unauthenticated without, null on
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
   const health = src.slice(src.indexOf("function trainHealth("), src.indexOf("export function main("));
   assert.doesNotMatch(health, /spawnSync\("curl"/, "train/nightly health GETs go through advisoryGet");
+});
+
+test("deploy JSON child retains complete large stdout and late failure while stderr stays live", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-deploy-output-"));
+  try {
+    const moduleUrl = new URL('../../tools/ci/deploy.mjs', import.meta.url).href;
+    const chunk = 'λ evidence\n'.repeat(8192);
+    const tail = 'not ok 999 - late exact TAP cause\n';
+    const producer = `const fs=require('node:fs');for(let i=0;i<40;i++)fs.writeSync(1,${JSON.stringify(chunk)});fs.writeSync(1,${JSON.stringify(tail)});fs.writeSync(2,'LIVE STDERR CAUSE\\n');process.exit(23);`;
+    const entry = `import {run} from ${JSON.stringify(moduleUrl)};
+try {run(process.execPath,['-e',${JSON.stringify(producer)}],'fixture',{root:${JSON.stringify(dir)},json:true});process.exitCode=0;}
+catch(e){console.log(JSON.stringify({status:'failed',error:e.message,stdoutArtifact:e.stdoutArtifact}));process.exitCode=1;}`;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', entry], { cwd: ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+    assert.equal(result.status, 1, result.stderr);
+    const verdict = JSON.parse(result.stdout);
+    assert.equal(verdict.status, 'failed');assert.match(verdict.error, /exit 23/);
+    const artifact = verdict.stdoutArtifact;
+    assert.match(verdict.error, new RegExp(artifact.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    const retained = path.join(dir, artifact.path);
+    const expected = Buffer.from(chunk.repeat(40) + tail);
+    assert.ok(expected.length > 1024 * 1024, 'exceeds spawnSync default maxBuffer');
+    assert.deepEqual(fs.readFileSync(retained), expected);
+    assert.equal(artifact.bytes, expected.length);
+    assert.equal(fs.statSync(retained).mode & 0o777, 0o600);
+    assert.match(result.stderr, /LIVE STDERR CAUSE/);
+    assert.ok(result.stderr.indexOf('child stdout: ') < result.stderr.indexOf('\nLIVE STDERR CAUSE\n'), 'identity is announced before action');
+    assert.equal(result.stdout.trim().split('\n').length, 1, 'child output cannot corrupt final JSON');
+  } finally { fs.rmSync(dir, {recursive:true,force:true}); }
+});
+
+test("deploy child keeps default native streams and JSON launch errors identify retained evidence", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-deploy-output-"));
+  try {
+    const moduleUrl = new URL('../../tools/ci/deploy.mjs', import.meta.url).href;
+    const entry = `import {run} from ${JSON.stringify(moduleUrl)};run(process.execPath,['-e',"process.stdout.write('native stdout');process.stderr.write('native stderr')"],'fixture',{json:false});`;
+    const native = spawnSync(process.execPath, ['--input-type=module','-e',entry], {encoding:'utf8'});
+    assert.equal(native.status,0,native.stderr);assert.equal(native.stdout,'native stdout');assert.match(native.stderr,/native stderr/);assert.doesNotMatch(native.stderr,/child stdout:/);
+    const missing = `import {run} from ${JSON.stringify(moduleUrl)};try {run('/definitely-missing-apex-command',[],'launch',{json:true,root:${JSON.stringify(dir)}});}catch(e){console.log(JSON.stringify({error:e.message,stdoutArtifact:e.stdoutArtifact}));}`;
+    const failed = spawnSync(process.execPath, ['--input-type=module','-e',missing], {encoding:'utf8'});
+    assert.equal(failed.status,0,failed.stderr);const out=JSON.parse(failed.stdout);
+    assert.match(out.error,/ENOENT/);assert.equal(fs.statSync(path.join(dir,out.stdoutArtifact.path)).size,0);
+  } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });

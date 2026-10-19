@@ -47,7 +47,7 @@ export function parseSheet(spec) {
 // change the whole car and keep the hero framing (null).
 export const CAT_FRAME = Object.freeze({
   engine: "sidepod", aero: "rear", suspension: "front_susp", brakes: "front_wheel", tyres: "front_wheel",
-  wheels: "front_wheel", ers: "airbox", gearbox: "diffuser", fuel: "diffuser", exhaust: "diffuser",
+  wheels: "front_wheel", ers: "sidepod", gearbox: "rear", fuel: "airbox", exhaust: "rear",
   floor: "floor", cockpit: "cockpit", bodies: "nose",
 });
 // A pair whose two stills differ in fewer than this share of pixels reads as

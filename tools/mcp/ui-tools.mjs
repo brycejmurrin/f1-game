@@ -57,7 +57,18 @@ function inspections(report) {
 
 export function summarizeUIInspection(report) {
   const records = inspections(report);
-  return { provenance: bounded(report.provenance || null), records: records.map(r => {
+  const errors = Array.isArray(report.errors) ? report.errors : null;
+  const requests = Array.isArray(report.requests) ? report.requests : null;
+  const diagnostics = {
+    errorsAvailable: errors !== null, requestsAvailable: requests !== null,
+    pageErrors: errors?.filter(e => e?.kind === 'pageerror').length ?? null,
+    consoleErrors: errors?.filter(e => e?.kind === 'console' && e.level === 'error').length ?? null,
+    consoleWarnings: errors?.filter(e => e?.kind === 'console' && e.level === 'warning').length ?? null,
+    failedRequests: requests?.length ?? null,
+    errorSamples: bounded(errors?.slice(0, 10) ?? null), requestSamples: bounded(requests?.slice(0, 10) ?? null),
+    truncated: (errors?.length || 0) > 10 || (requests?.length || 0) > 10,
+  };
+  return { provenance: bounded(report.provenance || null), diagnostics, records: records.map(r => {
     const i = r.inspection, counts = {};
     for (const c of i.controls) { const s = c.binding?.status || 'unmapped'; counts[s] = (counts[s] || 0) + 1; }
     return { viewport: bounded(r.requestedViewport || i.viewport || null), phase: bounded(r.phase || null),
@@ -72,6 +83,7 @@ export function createUITools(ctx) {
   const compactResult = body => {
     if (Buffer.byteLength(JSON.stringify(body)) <= 512 * 1024) return toolResult(body);
     return toolResult({ ok: true, browser: body.browser, truncated: true, report: body.report, beforeFile: body.beforeFile, afterFile: body.afterFile,
+      diagnostics: body.diagnostics, beforeDiagnostics: body.before?.diagnostics, afterDiagnostics: body.after?.diagnostics,
       limitation: 'Inspection details exceed the 512 KiB MCP budget. Read the saved inspection artifacts; this is not a correctness verdict.' });
   };
   const read = raw => {

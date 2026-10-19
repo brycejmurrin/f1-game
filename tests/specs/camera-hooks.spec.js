@@ -139,8 +139,16 @@ test("orbit() never sinks the eye underground at low/negative elevation", async 
   for (const el of [-20, -10, 0, 5]) {
     const r = await page.evaluate(el => __apex.orbit(0.2, 90, el, 30), el);
     expect(r, `orbit el=${el}`).toBeTruthy();
-    // road surface at that point
-    const roadY = await page.evaluate(() => __apex.groundY(0.2, 0).roadY);
-    expect(r.eye[1], `el=${el} eye above road`).toBeGreaterThan(roadY);
+    // The orbit puts the eye ~30 m to the SIDE of the car, so the road under
+    // it is the surface at the eye's own lateral offset (banking included),
+    // not the centreline.
+    const road = await page.evaluate((eye) => {
+      const g0 = __apex.groundY(0.2, 0), g10 = __apex.groundY(0.2, 10);
+      const rx = (g10.x - g0.x) / 10, rz = (g10.z - g0.z) / 10;   // unit "right" of the track at the car
+      const lat = (eye[0] - g0.x) * rx + (eye[2] - g0.z) * rz;
+      return { lat, roadSurfaceY: __apex.groundY(0.2, lat).roadSurfaceY };
+    }, r.eye);
+    expect(Math.abs(road.lat), `el=${el} the eye really is off the centreline`).toBeGreaterThan(5);
+    expect(r.eye[1], `el=${el} eye above the road surface at lateral ${road.lat.toFixed(1)}`).toBeGreaterThan(road.roadSurfaceY);
   }
 });
