@@ -42,6 +42,8 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 - Pin long Chromium/visual smoke to `apex-sha` or the PR's Pages preview; never bind a loop to the moving production github.io (tip-vs-Pages is Monitor-only).
 - Sync agents: sync with `sync-pr.mjs` only when GitHub reports CONFLICTING/DIRTY or a required tip check is red; a Finish/Update run syncs only if CONFLICTING; one Sync agent per PR (refuse duplicates); ONE conflict-only resync lane serves the queue: it takes only PRs `needs-sync.mjs` rates `conflict` or `stale-red`, never a clean-behind one;
   never Sync and merge in one run (`behind-ship.mjs` warns over 10 behind, never fails). No auto-update-branch bots.
+  `sync-pr.mjs --force-clean-behind` is for the orchestrator or merge desk only;
+  owners and hunters never pass it.
   Abort or stop and report a Finish/Update run past ~120 messages or > 2 tip moves with no progress while clean-behind.
   Normalize a messy merge with `node tools/check/merge-hygiene.mjs --fix`, then `gen-test-groups.mjs`.
 - **Paced push: retired 2026-10-16** (CI/CD review #2333 finding 7). The `PUSH SLOT` rule existed
