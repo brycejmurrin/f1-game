@@ -393,18 +393,24 @@
       cameraTower(K(sl(0.002)), -1, 34, { h: 20, boom: 1.4 });
 
       {
+        // Strip-side Racing Kit modules (#1617 Slice C). The kit has no
+        // skyscraper, so that slot stays a procedural lit tower; the rest
+        // place pits / tents where the synthetic commercial boxes stood.
         const pads = [
-          ["kenney_com_building-f", 0.08, 1, 62],
-          ["kenney_com_building-b", 0.11, -1, 58],
-          ["kenney_com_building-skyscraper-b", 0.16, 1, 64],
-          ["kenney_ind_building-q", 0.20, -1, 60],
+          ["k_pitsoffice", 0.08, 1, 62, 2.8],
+          ["k_pitsgarageclosed", 0.11, -1, 58, 2.8],
+          ["k_tentlong", 0.20, -1, 60, 2.6],
         ];
-        for (const [id, s, side, dist] of pads) {
-          const sc = id.includes("skyscraper") ? 4.2 : 1.2;
+        for (const [id, s, side, dist, sc] of pads) {
           const ks = K(sl(s));
           if (!bakedModel(id, ks, side, dist, { scale: sc }))
-            building(ks, side, dist, 20, 40 * sc * 0.4, 18,
+            building(ks, side, dist, 20, 16, 18,
               { kind: "tiered", wall: [0.16, 0.17, 0.20], window: [0.30, 0.38, 0.48], floor: 8, lit: true });
+        }
+        {
+          const ks = K(sl(0.16));
+          building(ks, 1, 64, 20, 67, 18,
+            { kind: "tiered", wall: [0.16, 0.17, 0.20], window: [0.30, 0.38, 0.48], floor: 8, lit: true });
         }
       }
 
