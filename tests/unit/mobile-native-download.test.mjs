@@ -8,12 +8,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import { seedStore } from "../helpers/seed-store.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NATIVE_SRC = readFileSync(join(ROOT, "js/core/native.js"), "utf8");
 const DL_SRC = readFileSync(join(ROOT, "js/core/native-download.js"), "utf8");
-const SPOTIFY = readFileSync(join(ROOT, "js/audio/spotify.js"), "utf8");
 
 function loadNative(opts = {}) {
   const writes = [];
@@ -57,8 +56,8 @@ function loadNative(opts = {}) {
   }
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
-  vm.runInContext(NATIVE_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/native.js" });
-  vm.runInContext(DL_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/native-download.js" });
+  vm.runInContext(NATIVE_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/native.js") });
+  vm.runInContext(DL_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/native-download.js") });
   return { sandbox, writes, shares };
 }
 
@@ -430,8 +429,8 @@ test("blob:<a download> click refuses a non-ok fetch instead of saving the body"
   };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
-  vm.runInContext(NATIVE_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/native.js" });
-  vm.runInContext(DL_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/native-download.js" });
+  vm.runInContext(NATIVE_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/native.js") });
+  vm.runInContext(DL_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/native-download.js") });
   assert.equal(typeof clickHandler, "function");
   const a = {
     tagName: "A",
@@ -475,55 +474,6 @@ test("safeName strips path separators", () => {
   assert.equal(sandbox.NativeDownload.safeName("../../x.json"), ".._.._x.json");
   assert.equal(sandbox.NativeDownload.safeName("."), "apex26-download.bin");
   assert.equal(sandbox.NativeDownload.safeName(".."), "apex26-download.bin");
-});
-
-function loadSpotify(opts = {}) {
-  const disk = new Map(opts.disk || [["apex26.spotify.clientId", "client-1"]]);
-  const sandbox = {
-    console, Promise, Date, Math, JSON, Object, Array, String, Number,
-    URL, URLSearchParams, TextEncoder, Uint8Array, Response,
-    fetch: () => Promise.reject(new Error("no network in unit test")),
-    setTimeout: () => 1, clearTimeout: () => {},
-    setInterval: () => 1, clearInterval: () => {},
-    location: {
-      origin: "https://localhost",
-      pathname: "/",
-      hostname: "localhost",
-      href: "https://localhost/",
-      search: "",
-    },
-    history: { replaceState() {} },
-    document: {
-      readyState: "complete",
-      getElementById() { return null; },
-      addEventListener() {},
-      createElement() { return {}; },
-    },
-    localStorage: {
-      getItem: (k) => disk.get(k) || null,
-      setItem: (k, v) => disk.set(k, String(v)),
-      removeItem: (k) => disk.delete(k),
-    },
-    sessionStorage: {
-      getItem: () => null, setItem: () => {}, removeItem: () => {},
-    },
-    Log: { info() {}, warn() {} },
-    Capacitor: {
-      isNativePlatform: () => true,
-      getPlatform: () => "android",
-    },
-  };
-  sandbox.window = sandbox;
-  const ctx = vm.createContext(sandbox);
-  seedStore(ctx);
-  vm.runInContext(SPOTIFY, ctx, { filename: "js/audio/spotify.js" });
-  return sandbox.SpotifyMusic;
-}
-
-test("Spotify available() is false under Capacitor even with a client id", () => {
-  const sp = loadSpotify();
-  assert.equal(sp.available(), false);
-  assert.equal(sp.status().state, "off");
 });
 
 

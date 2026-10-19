@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bootEditor, design, read, plain } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const W = 640, H = 72;
 
@@ -22,7 +23,7 @@ function boot(heights, hooks = {}) {
   ctx.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { fn, ms }); return id; };
   ctx.clearTimeout = (id) => { timers.delete(id); };
   for (const f of ["js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js"]) {
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   }
   const DP = ctx.DesignerProfile;
   const canvas = dom.document.createElement("canvas");

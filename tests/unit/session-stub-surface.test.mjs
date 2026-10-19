@@ -31,6 +31,7 @@ import { join, dirname } from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -44,7 +45,7 @@ const LAZY = new Set([...M.LAZY_RACE_SESSION, ...M.LAZY_AUDIO, ...M.LAZY_AGENT])
 const box = { window: {} };
 box.window = box;
 vm.createContext(box);
-for (const f of STUBS) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), box, { filename: f });
+for (const f of STUBS) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), box, { filename: absSrc(f) });
 const stubGlobal = (n) => vm.runInContext(n, box);
 
 const GLOBALS = [

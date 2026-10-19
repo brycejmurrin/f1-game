@@ -23,6 +23,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -37,18 +38,18 @@ function load({ realTyres = false } = {}) {
   const sb = { Math, Array, Object, Number, String, Boolean, Date, isFinite, isNaN, console, JSON, Set, Map, RegExp, Infinity };
   const ctx = vm.createContext(sb);
   seedLog(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });   // M4.clamp, bound at eval
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: "teams.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });   // M4.clamp, bound at eval
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: absSrc("js/data/teams.js") });
   // Tracks: the list, plus the two geometry reads a mid-race drop-in makes (a straight 6 km ring, 7 m half-width).
   if (!realTyres) vm.runInContext("var TyreModel = { AI_CLASS: { soft: { code: 'S', life: 0.48 }, medium: { code: 'M', life: 0.74 }, hard: { code: 'H', life: 1.05 }, inter: { code: 'I', life: 1 }, wet: { code: 'W', life: 1 } } };", ctx);   // the compound lives place() reads
   vm.runInContext("var Tracks = " + JSON.stringify({ LIST: TRACKS }) + "; Tracks.sample = function (t, s, o) { o.p[0] = s; o.p[1] = 0; o.p[2] = 0; o.t[0] = 1; o.t[1] = 0; o.t[2] = 0; o.r[0] = 0; o.r[1] = 0; o.r[2] = 1; o.hw = 7; }; Tracks.wallAt = function () { return 9; }; Tracks.curvature = function (t, s) { return Tracks.kAt ? Tracks.kAt(s) : 0; };", ctx);
   // The drop-in speed is the AI's read of the road: the real corner model and the real constants.
   vm.runInContext("var window = globalThis;", ctx);   // consts.js publishes on window
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: "consts.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx, { filename: "ai-drive.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: "real-race-tab.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: "real-race.js" });
-  if (realTyres) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/tyre-model.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-drive.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
+  if (realTyres) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/tyre-model.js"), "utf8"), ctx, { filename: absSrc("js/physics/tyre-model.js") });
   const Teams = vm.runInContext("Teams", ctx);
   const KEYS = [["racing bulls", "RB"], ["red bull", "RBR"], ["mercedes", "MER"], ["ferrari", "FER"], ["mclaren", "MCL"], ["alpine", "ALP"],
     ["haas", "HAA"], ["williams", "WIL"], ["audi", "AUD"], ["aston", "AMR"], ["cadillac", "CAD"]];
@@ -390,11 +391,15 @@ test("fieldAt(): the race as it stood at the start of a lap — who was where, o
     if (a.retired) continue;
     assert.ok(a.lap >= 1 && a.lap <= 31, d.code + " lap " + a.lap);
     assert.ok(a.frac >= 0 && a.frac <= 0.98, d.code + " frac " + a.frac);
-    assert.ok(Math.abs(a.into - a.frac * d.laps[a.lap - 1]) < 1e-6 || a.frac === 0.98, d.code + " time into the lap");
+    if (a.frac < 0.98) assert.ok(Math.abs(a.into - a.frac * d.laps[a.lap - 1]) < 1e-6, d.code + " time into the lap");
+    else assert.ok(a.into >= 0.98 * d.laps[a.lap - 1], d.code + " is clamped at 0.98 only when it is at least that far in");
   }
   // A lapped car is a lap down at t0.
-  const lapsDown = script.drivers.filter((d) => !at.by[d.num].retired && at.by[d.num].lap < 31);
-  assert.ok(lapsDown.length >= 0);
+  // (the leader starts lap 31; everyone else is still finishing 30, which is not lapped)
+  const lapsDown = script.drivers.filter((d) => !at.by[d.num].retired && at.by[d.num].lap < 30).map((d) => d.code);
+  assert.deepEqual(lapsDown, ["BOT"], "Bottas is the one car a lap down when the leader starts lap 31");
+  assert.equal(at.by[77].lap, 29);
+  assert.ok(script.drivers.every((d) => at.by[d.num].retired || at.by[d.num].lap <= 31), "nobody is ahead of the leader");
   // A set that came into the race used carries its quali age.
   const aged = { ...script, drivers: [{ ...script.drivers[0], stints: [{ c: "SOFT", from: 1, to: 51, age: 3 }] }] };
   assert.equal(R.fieldAt(aged, 5).by[63].age, 7, "4 laps run plus 3 laps old at the start");

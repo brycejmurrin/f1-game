@@ -8,7 +8,7 @@ nose/pod/cover knobs so side and 3/4 clear DAD's SUBTLE_PCT), `ALLOW_TEAM_BODY_S
 gate (team chassis stay out of the picker until a dedicated pass), and the short
 comments that document the silhouette contract. Companion geometry lives in
 `js/car/car-body-geom.js` (not ratcheted). Fragment delta:
-`tests/data/ratchets.d/cursor--body-styles-r8n5.json`.
+`ratchets.d/cursor--body-styles-r8n5.json (folded)`.
 ## 2026-10-19 — PR #2839 (cursor/parts-style-m7q3): STYLE reskins readable after DAD review
 
 `js/car/car3d.js` lines 2218 → **2289** (+71). Deliberate raise past the 40-line absorb.
@@ -17,7 +17,7 @@ floor fences (fenceCap scales with fenceH; edgeLip to 2), sealed Full Disc path
 helpers live in `car-wheels.js`, painted gearbox strakes / Smooth Case belly plate,
 larger fuel `capBig`, Fenced Halo crest vanes + brow, thicker ERS LED strip, taller
 exhaust stacks, and skirt tiering. Fragment delta:
-`tests/data/ratchets.d/cursor--parts-style-m7q3.json` (+71 lines). No wholesale
+`ratchets.d/cursor--parts-style-m7q3.json (folded)` (+71 lines). No wholesale
 replacement — each block is gated on an existing STYLE recipe key.
 
 ## 2026-10-18 — PR #2856 (cursor/captions-comfort-d9e8): captions wave 1 (#1597)
@@ -26,7 +26,7 @@ replacement — each block is gated on an existing STYLE recipe key.
 40-line absorb. The growth is the `#captions` strip (position/size/background tokens, speaker tint,
 spotter line, reduced-motion), plus `index.html` shell nodes for the HUD caption root. Tree metrics
 `cssClasses` (+7), `dynamicIdReads` (+1), `rawColor` (+2), `shellNodes` (+7) move with the new markup
-and loading-card caption line. Fragment delta: `tests/data/ratchets.d/cursor--captions-comfort-d9e8.json`.
+and loading-card caption line. Fragment delta: `ratchets.d/cursor--captions-comfort-d9e8.json (folded)`.
 
 ## 2026-10-15 — PR #1922 (cursor/host-remove-guest-7951): host removes a guest from VS Friend
 

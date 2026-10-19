@@ -169,6 +169,9 @@ export const RULES = [
   [/^js\/physics\/incident-sim\.js/, ["collisions", "sweeps"], "the Rapier takeover is a CONTACT model"],
   [/^js\/physics\/debris-world\.js/, ["physics-core", "sweeps"], "debris.spec.js rides in test:physics-core"],
   [/^js\/physics\/tyre-model\.js/, ["physics-core"], "the wear model feeds the grip seam — pit-lane.spec.js and the characterization ride in test:physics-core"],
+  [/^js\/physics\/wheel-state\.js/, ["physics-core"], "opt-in torque-balanced κ — characterization OFF must stay baseline; ON is documented"],
+  [/^js\/physics\/player-forces\.js/, ["physics-core"], "human combined-slip / Fy / yaw; wheel-state hook when enabled"],
+  [/^js\/physics\/drive-tune\.js/, ["physics-core", "steering-unit"], "live driving-feel bag including WHEEL_STATE opt-in default"],
   [/^js\/race\/pit-lane\.js/, ["physics-core", "game-vm"], "pit-lane.spec.js rides in test:physics-core; the commitment's VM twin (pit-lane-vm) in test:game-vm"],
   [/^js\/physics\/(active-aero|aero)/, ["aero"], "the aero model — active-aero + aero-zones specs"],
   // CONTACT AND AI (test audit T10, 2026-10-05): these routed to physics-core
@@ -290,7 +293,9 @@ export const RULES = [
   [/^js\/ui\/settings-export\.js/, ["steering-unit"], "settings-export.test.mjs"],
 
   // ── core and the agent surface ──────────────────────────────────────────
+  [/^js\/agent\/apex-gpu-capture/, ["hooks", "agent-contract"], "Spector/webgl-lint GPU capture toggle (#2964); gpu-capture.spec.js"],
   [/^js\/agent\//, ["hooks", "agent-contract"], "the __apex contract and the agent view"],
+  [/^js\/render\/webgpu\/wgx-debug-labels\.js$/, ["gfx", "tooling-fast"], "WGX GPU object labels + pass debug groups; wgx-labels.test.mjs"],
   [/^js\/core\/store\.js/, ["hooks", "modes", "state-unit"], ""],
   [/^js\/core\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
   [/^js\/core\/native/, ["mobile-unit", "hooks"], "Native detect + NativeDownload; test:mobile-unit"],

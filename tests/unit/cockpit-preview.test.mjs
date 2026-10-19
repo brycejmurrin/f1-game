@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (file) => fs.readFileSync(new URL("../../" + file, import.meta.url), "utf8");
 function setup() {
@@ -19,7 +20,7 @@ function setup() {
     ] },
     Liveries: {forTeam: (team) => [{c1:team.color,c2:team.color2}]}, AppearanceOpts: {units:()=>"mph"},
     MutationObserver: class { constructor(fn){mutations.push(fn);} observe(){} }, race });
-  vm.runInContext(read("js/camera/cockpit-opts.js") + ";this.opts=CockpitOpts",ctx);
+  vm.runInContext(read("js/camera/cockpit-opts.js") + ";this.opts=CockpitOpts",ctx, { filename: absSrc("js/camera/cockpit-opts.js") });
   ctx.document = dom.document; ctx.window = ctx;
   const create = dom.document.createElement;
   dom.document.createElement = (tag) => {
@@ -27,7 +28,7 @@ function setup() {
     if (tag === "iframe") el.contentWindow = {CockpitPreviewFrame:{set:(state)=>delivered.push(state),dispose:()=>disposed.push(el)}};
     return el;
   };
-  vm.runInContext(read("js/camera/cockpit-preview.js") + ";this.preview=CockpitPreview",ctx);
+  vm.runInContext(read("js/camera/cockpit-preview.js") + ";this.preview=CockpitPreview",ctx, { filename: absSrc("js/camera/cockpit-preview.js") });
   const fold = create("details"); fold.open=true; dom.body.appendChild(fold);
   const host = create("div"); host.ownerDocument=dom.document; fold.appendChild(host);
   const api = ctx.preview.mount(host);

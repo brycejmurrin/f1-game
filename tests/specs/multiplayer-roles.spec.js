@@ -19,7 +19,6 @@
 // ONE BOOT PER WORKER (sharedTest): five boots became none. load() walks the
 // shared page back to the title (quitting any race or NetPlay session the last
 // test left running), pins the default car a fresh boot gave, and races.
-// UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 

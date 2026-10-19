@@ -8,6 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
@@ -46,7 +47,7 @@ function boot(opts = {}) {
   sb.window = sb;
   if (opts.clock) sb.Date = { now: opts.clock };
   const v = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(SRC, v);
   const blipFires = () => vm.runInContext("GameAudioSignal.blipFireTotal()", v);
   const deviceListeners = {};
@@ -595,7 +596,7 @@ function auditionOn(h) {
     setTimeout(fn, ms) { timers.set(++id, { fn, ms }); return id; },
     clearTimeout(key) { timers.delete(key); },
   });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/race-mix-audition.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/race-mix-audition.js"), "utf8"), ctx, { filename: absSrc("js/audio/race-mix-audition.js") });
   const audition = vm.runInContext("RaceMixAudition", ctx);
   const start = () => audition.start({ audio: h.A, soundOn: () => true,
     store: { get: (key, fallback) => key === "radioVoice" ? false : fallback } });
@@ -670,7 +671,7 @@ function pendingSoundtrack({ abort = true } = {}) {
   const sandbox = vm.createContext({ document: { hidden: false }, Log: { warn() {} },
     ...(abort ? { AbortController } : {}),
     fetch: (url, options) => new Promise((resolve) => { requests.push({ url, signal: options && options.signal, resolve }); }) });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/soundtrack.js"), "utf8"), sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/soundtrack.js"), "utf8"), sandbox, { filename: absSrc("js/audio/soundtrack.js") });
   const music = sandbox.GameAudioSoundtrack.create({ context: () => context, master: () => ({}), enabled: () => true,
     engineRunning: () => false, sfxOk: () => true, now: () => 0, clamp01: (v) => Math.max(0, Math.min(1, v)) });
   const deliver = (request, bytes) => request.resolve({ ok: true, arrayBuffer: () => Promise.resolve(bytes) });

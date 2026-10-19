@@ -22,6 +22,7 @@ import { fuzz, mutate, findBadLiveValues, makeRng, HOSTILE_ROW_VALUES } from "..
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -87,7 +88,7 @@ function bootGhostShare() {
     get() { throw new Error("guest sharing must not touch localStorage"); },
   });
   const ctx = vm.createContext(sandbox);
-  vm.runInContext(read("js/car/ghost-share.js"), ctx, { filename: "js/car/ghost-share.js" });
+  vm.runInContext(read("js/car/ghost-share.js"), ctx, { filename: absSrc("js/car/ghost-share.js") });
   return sandbox.module.exports || vm.runInContext("GhostShare", ctx);
 }
 
@@ -136,7 +137,7 @@ function bootLobbyAndHandshake() {
   };
   const ctx = vm.createContext(sb);
   seedLog(ctx);
-  vm.runInContext(read("js/net/handshake.js").replace(/^const\b/gm, "var"), ctx, { filename: "handshake.js" });
+  vm.runInContext(read("js/net/handshake.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/net/handshake.js") });
   const NetHandshake = vm.runInContext("NetHandshake", ctx);
 
   const lobbySb = {
@@ -149,8 +150,8 @@ function bootLobbyAndHandshake() {
   };
   const lobbyCtx = vm.createContext(lobbySb);
   seedClipboard(lobbyCtx);
-  vm.runInContext(read("js/net/lobby-codes.js").replace(/^const\b/gm, "var"), lobbyCtx, { filename: "lobby-codes.js" });
-  vm.runInContext(read("js/net/lobby-roster.js").replace(/^const\b/gm, "var"), lobbyCtx, { filename: "lobby-roster.js" });
+  vm.runInContext(read("js/net/lobby-codes.js").replace(/^const\b/gm, "var"), lobbyCtx, { filename: absSrc("js/net/lobby-codes.js") });
+  vm.runInContext(read("js/net/lobby-roster.js").replace(/^const\b/gm, "var"), lobbyCtx, { filename: absSrc("js/net/lobby-roster.js") });
   const LobbyCodes = vm.runInContext("LobbyCodes", lobbyCtx);
   return { LobbyCodes, NetHandshake, NetSdp, NetBytes };
 }
@@ -319,8 +320,8 @@ function bootSettingsExport() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/data/teams.js"), ctx, { filename: "teams.js" });
-  vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: "settings-export.js" });
+  vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
+  vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: false }, soundOn: false };
   return { SettingsExport, G, store, disk };
@@ -430,7 +431,7 @@ test("GameStore.get never throws on corrupt disk and never returns NaN default p
   });
   seedLog(ctx);
   seedSaveMigrate(ctx);
-  vm.runInContext(read("js/core/store.js").replace(/^const\b/gm, "var"), ctx, { filename: "store.js" });
+  vm.runInContext(read("js/core/store.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/store.js") });
   const GameStore = vm.runInContext("GameStore", ctx);
   const store = GameStore.store;
 
@@ -501,7 +502,7 @@ test("TrackCodec.decode and CustomTracks.sanitize never throw or leak NaN (N=200
 function bootRealRace() {
   const ctx = vm.createContext({ console, Log: { debug() {}, info() {}, warn() {}, error() {} },
     localStorage: { getItem() { return null; }, setItem() {}, removeItem() {}, key() { return null; }, length: 0 } });
-  vm.runInContext(read("js/data/real-race-tab.js") + "\nthis.R = DataRealRace;", ctx, { filename: "real-race-tab.js" });
+  vm.runInContext(read("js/data/real-race-tab.js") + "\nthis.R = DataRealRace;", ctx, { filename: absSrc("js/data/real-race-tab.js") });
   return ctx.R;
 }
 function assertSaneLaps(label, script) {
@@ -573,7 +574,7 @@ test("LiveryTex.setTeamLogo refuses a decompression-bomb emblem before any draw"
   vm.createContext(ctx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
                    "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const LT = vm.runInContext("LiveryTex", ctx);
   let marks = 0;
   LT.onMarkChange(() => { marks++; });

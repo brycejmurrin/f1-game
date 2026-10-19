@@ -5,6 +5,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MANIFEST = createRequire(import.meta.url)("../../tools/manifest.cjs");
@@ -28,7 +29,7 @@ function loadBaku() {
   const context = vm.createContext(sandbox);
   const run = (file) => {
     const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
-    vm.runInContext(source, context, { filename: file });
+    vm.runInContext(source, context, { filename: absSrc(file) });
   };
   // TRACK_VM from tools/manifest.cjs, with "@circuits" narrowed to Baku only.
   for (const entry of MANIFEST.TRACK_VM) {

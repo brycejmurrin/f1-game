@@ -7,9 +7,11 @@ Launching is `orchestrator.md`; this is every wake after it.
 Launch by role (SKILL.md §roles): a hunter finds and fixes, then sends
 `NEW-PR <#> <branch> <sha> <summary>` and drops the PR; you start one PR owner
 per PR (role-pr-owner.md) within minutes, quoting the user's grants; the owner
-replies `ARMED`, drives the PR, and sends `DONE <PR> <merge sha>`; you verify
-two parents and archive the owner, never the hunter. With no live Merge Desk
-you are the merge holder (role-merge-holder.md). Spawning stays here by
+replies `ARMED`, drives the PR, and sends `READY <PR> <head sha>`; you gate and
+merge it (`merge-gate.mjs`, role-merge-holder.md), verify two parents, send
+`DONE`, and archive the owner by the archive rule (`node tools/ci/fleet-archive.mjs
+<saved list_sessions page>`: agent-created, role-tagged, idle an hour, PR merged
+or closed; never a session Bryce opened), never the hunter. Spawning stays here by
 default: a grandchild acting on a quote of a quote is relayed authority, and
 the auto-mode classifier refused relayed `.claude` edits, CI re-runs and merges
 on 2026-10-16. `.claude/**` edits are done by you or approved by the user in

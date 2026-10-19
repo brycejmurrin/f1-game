@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const SOURCE = await readFile(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
 const LOBBY_CODES = await readFile(new URL("../../js/net/lobby-codes.js", import.meta.url), "utf8");
@@ -149,10 +150,10 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   });
   seedLog(context);
   seedClipboard(context);
-  vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: "lobby-codes.js" });
-  vm.runInContext(LOBBY_ROSTER.replace(/^const\b/gm, "var"), context, { filename: "lobby-roster.js" });
-  context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: "netplay.js" });
-  const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: "lobby.js" });
+  vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-codes.js") });
+  vm.runInContext(LOBBY_ROSTER.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-roster.js") });
+  context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: absSrc("js/net/netplay.js") });
+  const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: absSrc("js/net/lobby.js") });
   const G = {
     teamIdx: 0, driverIdx: 0, trackIdx: 0, raceLaps: 3,
     raceWeather: "dry", raceTimeOfDay: "day", raceQuali: false, difficulty: "normal",
@@ -265,11 +266,6 @@ test("a link tapped while the host has an offer out is deferred, and close() kee
     h.click("vs-close");
     assert.equal(consumed, 1);
   } finally { h.lobby.cancel(); }
-});
-
-test("host-leave copy is honest about the AI takeover", () => {
-  assert.doesNotMatch(SOURCE, /host left[^"\n]*race is over/i);
-  assert.match(SOURCE, /host left[^"\n]*rivals (?:are )?now AI/i);
 });
 
 test("a newer join operation prevents a late host continuation", async () => {
@@ -588,26 +584,36 @@ test("the reopen, watch and clash timers are all owned and cancellable", () => {
     "no caller bypasses clashClear()");
 });
 
-test("a seat-clash move is in-memory only — the lobby never writes the saved team", () => {
+test("a seat-clash move is in-memory only — the lobby never writes the saved team", async () => {
   // resolveSeatClash() used to persist the imposed move (G.store.set("team"…/
   // "driver"…)), silently rewriting the saved solo/career team for every
   // session after the friend race. The move the race needs is G.teamIdx/
   // driverIdx; the store is the player's, not the room's.
-  assert.ok(!/G\.store\.set\("team"/.test(SOURCE), "no store.set(\"team\") in the lobby");
-  assert.ok(!/G\.store\.set\("driver"/.test(SOURCE), "no store.set(\"driver\") in the lobby");
-  assert.match(SOURCE, /IN-MEMORY only, deliberately/);
+  const { h, s } = await connectedGuest();
+  try {
+    const sets = [];
+    h.G.store = { get: (_k, d) => d, set: (k, v) => { sets.push([k, v]); } };
+    s.deliver("hello", { team: "beta", driver: 0, rank: 2 });     // we are guest #2
+    s.deliver("hello", { from: "g1", rank: 1, team: "alpha", driver: 0 });   // an EARLIER guest holds our car
+    assert.equal(h.G.driverIdx, 1, "the clash moved us to the team's other seat");
+    assert.deepEqual(sets.filter(([k]) => k === "team" || k === "driver"), [], "…without touching the saved team");
+  } finally { h.lobby.cancel(); }
 });
 
-test("a MY TEAM (custom) car is moved off in the room, whatever the player's rank", () => {
+test("a MY TEAM (custom) car is moved off in the room, whatever the player's rank", async () => {
   // makeCars() builds the custom car only for the local player who picked it,
   // so a peer's grid holds no slot (and no wireId) for it: every snapshot from
   // a custom-team player was dropped and the rival sat frozen on the grid.
-  assert.match(SOURCE, /const onCustom = !!mineTeam && !Teams\.isReal\(mineTeam\);/);
-  assert.match(SOURCE, /const blocked = onCustom \? peerSeats\(\) : blockingSeats\(\);/,
-    "a custom host must move too — blockingSeats() is empty for rank 0");
-  assert.match(SOURCE, /firstFreeSeat\(onCustom \? null : mine\.team, blocked\)/,
-    "never prefer the custom team itself when choosing where to move");
-  assert.match(SOURCE, /\(mineTeam\.legends \? "LEGENDS" : "MY TEAM"\) \+ " cars only exist on your own screen/);
+  const MINE = { id: "mine", custom: true, short: "MY", name: "My Team", color: [1, 1, 1],
+    drivers: [{ name: "M1" }, { name: "M2" }] };
+  const { h, s, hellos } = await connectedGuest({ teams: [...TWO_TEAMS, MINE], teamIdx: 2 });
+  try {
+    s.deliver("hello", { team: "beta", driver: 0, rank: 1 });     // the host, on another car
+    assert.notEqual(h.G.teamIdx, 2, "moved off the custom car");
+    assert.equal(h.G.teamIdx, 0, "…onto the first free REAL seat, never the custom team itself");
+    assert.equal(hellos().at(-1).d.team, "alpha", "…and announced it");
+    assert.match(h.status.textContent, /^MY TEAM cars only exist on your own screen/);
+  } finally { h.lobby.cancel(); }
 });
 
 // ── round 2 (bug hunt 2026-09-02): two guests on one seat must SETTLE ───────
@@ -1285,7 +1291,8 @@ test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)
     assert.equal(closers.length, 1);
     closers[0]("transport");
     assert.equal(h.lobby.qualifying(), true, "still in the quali phase");
-    assert.match(h.status.textContent, /rivals are now AI/i);
+    assert.match(h.status.textContent, /rivals are now AI/i, "host-leave copy is honest about the AI takeover");
+    assert.doesNotMatch(h.status.textContent, /race is over/i);
     assert.equal(h.lobby.roomState().peers.length, 0,
       "relayed guest must die with the host — otherwise QualiNet.waiting() stays locked");
   } finally { h.lobby.cancel(); }

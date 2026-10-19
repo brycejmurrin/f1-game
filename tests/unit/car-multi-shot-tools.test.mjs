@@ -12,8 +12,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS } from "../../tools/shot/lib/garage-camera-catalog.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -63,14 +65,10 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
 
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
   assert.match(src, /if \(preset && preset\.views != null && !argvHas\("--views"\)\) return preset\.views/,
     "preset views win over multi-team rollup default");
   assert.match(src, /if \(rollupOnly && !argvHas\("--views"\)\) return rollupViewFlag \|\| "side"/,
     "multi-team rollup defaults to one view unless --full-views or a preset");
-  assert.match(src, /return "spine"/,
-    "single-team default views=spine unless a preset overrides");
-  assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
   assert.match(src, /await awaitCaptureReady\(page, \{ timeoutMs: 60000, pauseRender: true \}\);\s*const shot = await screenshotGameCanvas\(page, png, \{\s*skipAwait: true/,
     "one strict present barrier precedes capture, then the duplicate wait is skipped");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
@@ -261,9 +259,6 @@ test("a preset is a bundle of plain flags, and a named camera is parameters", ()
     "the CLI consumes the canonical named-camera parameter bundles");
   assert.ok(Math.abs(aliases.cams[0].az - 0.68 * Math.PI) < 1e-9);
   assert.ok(Math.abs(aliases.cams[1].az - 0.32 * Math.PI) < 1e-9);
-  assert.match(src, /saddleWall: \{ views: "bayFront"/, "saddleWall is a flag bundle over that camera");
-  assert.match(src, /presetRaw === "list"/, "--preset=list prints and exits");
-  assert.match(src, /presetRaw !== "none"/, "--preset=none is a first-class 'no preset'");
   assert.match(src, /function aliasKey/, "a modified named camera gets its own file name");
   for (const f of ["--az-nudge", "--el-nudge", "--logos", "--site"]) {
     assert.ok(src.includes(`"${f}"`), `${f} must be one of the tool's OWN flags`);
@@ -324,9 +319,6 @@ test("every garage camera preset is one a PLAYER can reach", () => {
 
 test("garage-angles multi-team rollup uses __apex fast path from PR #96 port", () => {
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /all\+custom/, "--team=all+custom includes My Team");
-  assert.match(src, /function parseTeams/, "team list parsing supports all/all+custom");
-  assert.match(src, /rollupOnly/, "multi-team runs default to rollup-only");
   assert.match(src, /buildTeamRollup/, "writes all-teams rollup contact sheet");
   assert.match(src, /garageTeam/, "fast path switches teams via store hook");
   assert.match(src, /garageFrame/, "fast path frames via store hook");
@@ -345,7 +337,6 @@ test("garage-angles walks CAMERAS as lists — views × az × el × dist × zoom
   for (const f of ["--az", "--el", "--dist", "--cam", "--viewport", "--crop", "--name", "--design", "--zip", "--base"]) {
     assert.ok(src.includes(`"${f}"`), `${f} must be one of the tool's OWN flags`);
   }
-  assert.match(src, /function camKey/, "a camera's key names only what was set (old file names survive)");
   assert.match(src, /part\.<category>|startsWith\("part\."\)/, "--part.<category> axes fit catalog parts in-page");
   const hook = read("js/agent/apex.js");
   assert.match(hook, /garageFrame\(view, opts\)[\s\S]*?view !== "free"/, "garageFrame's `free` view keeps the current camera");
@@ -383,14 +374,11 @@ test("garage-angles: ranges, targets, lamps, seats, DPR, `all`, base lists and a
   for (const f of ["--target", "--lamp", "--dpr", "--budget", "--baseline", "--oracle"]) {
     assert.ok(src.includes(`"${f}"`) || src.includes(`argvHas("${f}")`), `${f} must be a flag the tool owns`);
   }
-  assert.match(src, /function expandRange/, "a..b:n ranges on every numeric list");
   assert.match(cameraCatalogCode(), /export const TARGETS = \{/, "named look-at points are a canonical TOOL table");
   assert.deepEqual(TARGETS.crown, [0, 0.95, -0.55]);
-  assert.match(src, /if \(t in TARGETS\) return \{ name: t, at: TARGETS\[t\] \}/, "the CLI resolves imported target points");
   assert.match(src, /function pixelDiff/, "an A/B is a changed-pixel fraction, not only a pair sheet");
   assert.match(src, /function writeMatrixSheet/, "rows × cameras contact sheet");
   assert.match(src, /oracleHiddenPct\(teamId,/, "occlusion is recorded per SHOT, not only on rollups");
-  assert.match(src, /deviceScaleFactor: dpr/, "a DPR is its own browser context");
   const hook = read("js/agent/apex.js");
   assert.match(hook, /G\.setSetupAim\(o\.target\.map\(Number\)\)/, "garageFrame aims the orbit at a car-space point");
   assert.match(hook, /GarageScene\.spot\(o\.lamp \|\| null\)/, "garageFrame aims the lamp");
@@ -428,8 +416,6 @@ test("garage-angles: stations, field→station picking, pairs, flat art, a free 
   assert.match(cameras, /export const FIELD_STATIONS = \{/, "canonical fields know which station shows them");
   assert.deepEqual(FIELD_STATIONS.spineLogo, ["spineTop"]);
   assert.deepEqual(STATIONS.spineTop.target, [0, 0.9, -0.85]);
-  assert.match(src, /const st = STATIONS\[raw\]/, "the CLI consumes imported camera stations");
-  assert.match(src, /FIELD_STATIONS\[f\]/, "the CLI derives stations from the imported field mapping");
   for (const f of ["--station", "--pair", "--flat", "--eye", "--look", "--path", "--clamp", "--serve", "--watch"]) {
     assert.ok(src.includes(`"${f}"`) || src.includes(`argvHas("${f}")`), `${f} must be a flag the tool owns`);
   }
@@ -469,4 +455,82 @@ test("garage-angles: stations, field→station picking, pairs, flat art, a free 
   assert.equal(pathPlan.cams[1].view, "free", "interpolated frames keep the camera and move it");
   assert.ok(Math.abs(pathPlan.cams[2].az - (60 + 60) * Math.PI / 180) < 1e-9, "azimuth interpolates linearly");
   assert.equal(pathPlan.cams[3].clamp, false, "a dolly may leave the player's range");
+});
+
+// ---- the CLI surface, EXECUTED (--plan --json boots no browser) ------------------------------------------------
+// Replaces the regex pins on tools/shot/garage-angles.mjs that only proved a
+// function name or flag spelling was still in the file.
+const plan = (...args) => {
+  const r = spawnSync(process.execPath, ["tools/shot/garage-angles.mjs", "--plan", "--json", ...args], { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  return { status: r.status, out: r.stdout, err: r.stderr, json: r.status === 0 ? JSON.parse(r.stdout) : null };
+};
+const rosterIds = () => {
+  const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: absSrc("js/data/teams.js") });
+  return JSON.parse(vm.runInContext("JSON.stringify(Teams.LIST.filter((t) => Teams.isReal(t)).map((t) => t.id))", cx));
+};
+
+test("garage-angles plan: no flags is the spine group for one team; --team accepts = and a space", () => {
+  const d = plan().json;
+  assert.deepEqual(d.views, ["hero", "top", "rear", "side"], "single-team default is the spine group");
+  assert.equal(d.multiTeam, false);
+  assert.equal(d.rollupOnly, false);
+  assert.deepEqual(plan("--team=ferrari").json.teams, ["ferrari"]);
+  assert.deepEqual(plan("--team", "ferrari").json.teams, ["ferrari"], "--team value (space) parses like --team=value");
+});
+
+test("garage-angles plan: --team=all[+custom] walks the real roster, rolled up, and a junk id is refused", () => {
+  const ids = rosterIds();
+  const all = plan("--team=all", "--views=side").json;
+  assert.deepEqual(all.teams, ids, "all = js/data/teams.js's roster, in order");
+  assert.equal(all.multiTeam, true);
+  assert.equal(all.rollupOnly, true, "multi-team runs default to the rollup sheet");
+  const withCustom = plan("--team=all+custom", "--views=side").json;
+  assert.deepEqual(withCustom.teams, [...ids, "custom"], "+custom appends My Team");
+  const bad = plan("--team=../x");
+  assert.notEqual(bad.status, 0, "a path-traversal team id exits non-zero");
+  assert.match(bad.err + bad.out, /no team "\.\.\/x"/);
+});
+
+test("garage-angles plan: numeric lists expand, a camera key names only what was set, DPR/target/lamp/station are axes", () => {
+  assert.deepEqual(plan("--az=0deg..90deg:4", "--views=side").json.cams.map((c) => c.key), ["side_az0", "side_az30", "side_az60", "side_az90"], "a..b:n expands to n samples");
+  const one = plan("--az=50deg", "--el=10deg", "--dist=6", "--views=side").json.cams[0];
+  assert.equal(one.key, "side_az50_el10_d6");
+  assert.ok(Math.abs(one.az - (50 * Math.PI) / 180) < 1e-9 && Math.abs(one.el - (10 * Math.PI) / 180) < 1e-9 && one.dist === 6);
+  assert.equal(plan("--views=side").json.cams[0].key, "side", "an old file name survives when nothing extra is set");
+  assert.deepEqual(plan("--dpr=1,2", "--views=side").json.dprs, [1, 2]);
+  const t = plan("--target=nose", "--views=side").json;
+  assert.deepEqual(t.targets, ["nose"]);
+  assert.ok("nose" in TARGETS, "the CLI resolves the imported target table");
+  assert.equal(t.cams[0].key, "side_atNose");
+  assert.deepEqual(plan("--lamp=front", "--views=side").json.lamps, ["front"]);
+  const st = plan("--station=fwLow,mirror").json;
+  assert.deepEqual(st.stations, ["fwLow", "mirror"]);
+  assert.deepEqual(st.cams.map((c) => c.key), ["fwLow", "mirror"]);
+  for (const k of ["fwLow", "mirror"]) assert.ok(STATIONS[k], `${k} is in the canonical station table`);
+  assert.ok(Object.keys(FIELD_STATIONS).length > 0, "fields know which station shows them");
+});
+
+test("garage-angles plan: presets are bundles of plain flags; none and list are first-class", () => {
+  const sw = plan("--preset=saddleWall").json;
+  assert.equal(sw.preset, "saddleWall");
+  assert.deepEqual(sw.views, ["front"]);
+  assert.deepEqual(sw.cams.map((c) => c.key), ["bayFront"], "saddleWall is a flag bundle over the bayFront camera");
+  assert.deepEqual(sw.axes.map((a) => a.field), ["spineLogo", "spineSide"]);
+  assert.equal(plan("--preset=quick").json.fast, true);
+  const none = plan("--preset=none", "--views=hero").json;
+  assert.equal(none.preset, "none", "--preset=none is a first-class 'no preset'");
+  assert.equal(none.fast, false);
+  assert.deepEqual(none.axes, []);
+  const list = spawnSync(process.execPath, ["tools/shot/garage-angles.mjs", "--preset=list"], { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  assert.equal(list.status, 0, list.stderr);
+  for (const name of ["wall", "fin", "flank", "mark", "quick", "sweep", "saddleWall", "closeup"]) assert.match(list.stdout, new RegExp(`^  ${name}: `, "m"), `${name} listed`);
+  assert.doesNotMatch(list.stdout, /wrote \d+ angle/i, "listing boots no browser");
+});
+
+test("garage camera catalog: bay is a base view plus an absolute orbit, bayFront the opposite diagonal", () => {
+  assert.match(CAM_ALIAS.bay, /^hero:0\.68pi/);
+  assert.match(CAM_ALIAS.bayFront, /^front:0\.32pi/);
+  assert.equal(typeof TARGETS, "object");
+  assert.ok(Object.keys(STATIONS).length >= 10 && Object.keys(FIELD_STATIONS).length >= 5);
 });

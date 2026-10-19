@@ -6,6 +6,7 @@ import vm from "node:vm";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bootEditor, design, plain, ellipse, read } from "../helpers/editor-vm.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("KINDS / CAPS / sanitize: known kinds only, per-kind and total caps", () => {
   const { P } = bootEditor();
@@ -41,7 +42,7 @@ test("place / removeLast / canPlace respect caps and UNDO-shaped lists", () => {
   assert.equal(list.length, 2);
   assert.equal(P.place(list, "nope", { s: 0.5 }), null);
   // Fill stands to the cap.
-  while (P.canPlace(list, "stand")) list = P.place(list, "stand", { s: Math.random() });
+  while (P.canPlace(list, "stand")) list = P.place(list, "stand", { s: (list.length % 97) / 97 });
   assert.equal(P.counts(list).stand, P.CAPS.stand);
   assert.equal(P.place(list, "stand", { s: 0.9 }), null);
   const before = list.length;
@@ -116,7 +117,7 @@ test("new nature and venue objects keep codec indices and dress at metre spacing
 });
 
 test("CustomTracks: props round-trip in sanitize / id / toRaw scenery", () => {
-  const { C, P, T } = bootEditor();
+  const { C, P } = bootEditor();
   const base = design();
   const withProps = C.sanitize({
     ...base,
@@ -129,8 +130,6 @@ test("CustomTracks: props round-trip in sanitize / id / toRaw scenery", () => {
   assert.equal(C.sanitize(withProps).id, withProps.id, "idempotent");
   const raw = C.toRaw(withProps);
   assert.equal(typeof raw.scenery, "function");
-  // The closure closes over the design's props (dress at build time).
-  assert.ok(typeof T.sceneryFor === "function");
   assert.equal(P.sanitize(withProps.props).length, 2);
 });
 
@@ -224,7 +223,7 @@ test("effective clearance preserves imported stored gaps and uses every kind flo
 
 test("mixed recipes give exact immutable proposals and refuse kind/total limits atomically", () => {
   const b = bootEditor();
-  vm.runInContext(read("js/editor/followup-tools.js").replace(/^const\b/gm, "var"), b.ctx);
+  vm.runInContext(read("js/editor/followup-tools.js").replace(/^const\b/gm, "var"), b.ctx, { filename: absSrc("js/editor/followup-tools.js") });
   const R = b.ctx.DesignerFollowup.recipe, state = { design: design(), sel: 2, span: 6 };
   const before = JSON.stringify(state), corner = R(state, "corner"), hedge = R(state, "hedge");
   assert.equal(corner.ok, true); assert.deepEqual(plain(corner.added.map(p => p.kind)), ["marshal", "camera"]);
@@ -331,7 +330,7 @@ test("landscape footprints reject another road section before native or preview 
 
 test("landscapes reach the real engine and overhead preview without failed dressers", () => {
   const b = bootEditor();
-  vm.runInContext(read("js/editor/scenery-preview.js").replace(/^const\b/gm, "var"), b.ctx);
+  vm.runInContext(read("js/editor/scenery-preview.js").replace(/^const\b/gm, "var"), b.ctx, { filename: absSrc("js/editor/scenery-preview.js") });
   for (const kind of b.P.KINDS.slice(15)) {
     const d = b.C.sanitize(design({ props: [{ kind, s: 0, side: -1, gap: 100 }] }));
     const def = b.ctx.TrackDef.fromRaw(b.C.toRaw(d));

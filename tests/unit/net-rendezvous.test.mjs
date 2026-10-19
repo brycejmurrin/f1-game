@@ -21,6 +21,7 @@ import http from "node:http";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -609,7 +610,7 @@ test("private room traffic never reveals the high-entropy token or a usable encr
 
 test("private tokens fail closed without cryptographic randomness", () => {
   const sandbox = vm.createContext({ TextEncoder, URL, crypto: {}, localStorage: { getItem: () => "https://private.test" } });
-  const rv = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8") + ";NetRendezvous", sandbox);
+  const rv = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8") + ";NetRendezvous", sandbox, { filename: absSrc("js/net/rendezvous.js") });
   assert.equal(rv.makeCode(), null, "Math.random is never a private-token fallback");
 });
 
