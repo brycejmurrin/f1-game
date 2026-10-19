@@ -50,6 +50,27 @@ const HW = { anyHardware: true, runs: [] }, SW = { anyHardware: false, runs: [] 
 const healthy = (over = {}) => ({ webgpu: tlx(), webgl2: tlx({ backendState: { ...tlx().gfx.backendState, api: "webgl2", forceWebGL: true } }), glx: glx(), wgx: wgx(), ...over });
 const run = (o) => verdict({ image: "macos-latest", census: HW, legs: healthy(), ...o });
 
+// The fixtures above are hand copies of what the legs write; this pins them to
+// the producers so a renamed field fails here instead of leaving the gate green.
+test("healthy() fixture keys exist in the producers (tlx.js envState/backendState, gpu-game-check)", () => {
+  const tlxSrc = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  const from = tlxSrc.lastIndexOf("backendState() {");
+  assert.ok(from >= 0 && tlxSrc.indexOf("envState() {") >= 0, "tlx.js producers missing");
+  const e = tlxSrc.indexOf("envState() {");
+  const producers = {
+    envState: tlxSrc.slice(e, tlxSrc.indexOf("envFailStack", e)),
+    backendState: tlxSrc.slice(from, from + 6000),
+  };
+  const fx = tlx().gfx;
+  for (const k of Object.keys(fx.envState)) assert.match(producers.envState, new RegExp(`\\b${k}\\b`), `envState().${k}`);
+  for (const k of Object.keys(fx.backendState)) assert.match(producers.backendState, new RegExp(`\\b${k}\\b`), `backendState().${k}`);
+  const check = fs.readFileSync(path.join(ROOT, "tools/gfx/gpu-game-check.mjs"), "utf8");
+  for (const k of ["gpuErrors", "gpuFirstError", "wgxSoftPresent", "headlessUa", "backendState", "envState", "glErrDrain"]) {
+    assert.match(check, new RegExp(`\\b${k}\\b`), `gpu-game-check no longer writes ${k}`);
+  }
+  for (const k of Object.keys(glx().gfx).filter((x) => x !== "glx" && x !== "wgx")) assert.match(check, new RegExp(`\\b${k}\\b`), k);
+});
+
 test("capOverride: only a NON-zero apex26.wgxCapture in the dispatch ls overrides the pin, last one wins", () => {
   assert.equal(capOverride(""), null);
   assert.equal(capOverride(undefined), null);
