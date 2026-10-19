@@ -42,8 +42,7 @@
         "tests/unit/agent-view-vm.test.mjs"
       ],
       "create": [
-        "tests/unit/agentview-api-contract.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/agentview-api-contract.test.mjs"
       ],
       "describe": [
         "tests/specs/agent-drive-bench.spec.js",
@@ -54,8 +53,7 @@
       ],
       "field": [
         "tests/specs/agent-view.spec.js",
-        "tests/unit/agent-view-vm.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/agent-view-vm.test.mjs"
       ],
       "objective": [
         "tests/specs/agent-view.spec.js",
@@ -117,6 +115,7 @@
       ],
       "*": [
         "tests/specs/camera-driving-hooks.spec.js",
+        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/three-inspector.test.mjs"
@@ -152,7 +151,6 @@
       "create": [
         "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -178,6 +176,7 @@
         "tests/specs/tlx-probes.spec.js",
         "tests/unit/capture-tools-regressions.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
+        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/cdmcp-measure.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -2097,7 +2096,7 @@
       ],
       "cockpitViewmodelAxes": [
         "tests/unit/camera-ride.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "eyeInsideCar": [
         "tests/unit/camera-ride.test.mjs"
@@ -2122,11 +2121,11 @@
         "tests/unit/director.test.mjs"
       ],
       "seatFwd": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "seatUp": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "vantage": [
@@ -2161,7 +2160,7 @@
         "tests/unit/car-shade.test.mjs"
       ],
       "create": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs"
       ],
       "mirrorLightAnchors": [
@@ -2180,32 +2179,29 @@
       "beginDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
-      "buildPendingTeamMesh": [
-        "tests/unit/car-presentation-canary.test.mjs"
-      ],
       "carDecalNum": [
         "tests/unit/livery-tier.test.mjs"
       ],
       "carVisual": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "cockpitBodyMesh": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "cockpitCaster": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "cockpitShadowMesh": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "coOpt": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "create": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-fx.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -2220,11 +2216,14 @@
         "tests/unit/livery-tier.test.mjs"
       ],
       "drawCockpitRig": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "drawMirrorCar": [
+        "tests/unit/car-presentation-canary.test.mjs"
+      ],
       "drawMirrorLens": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs"
       ],
       "drawPlayerWheels": [
@@ -2241,7 +2240,7 @@
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
       "glassState": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "invalidateDecalTextures": [
         "tests/unit/car-draw-decal-budget.test.mjs",
@@ -2258,13 +2257,15 @@
       ],
       "playerBodyMesh": [
         "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "prepareMenuCarAssets": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "putBoundedMesh": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "queueCarDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs"
@@ -2275,34 +2276,25 @@
       "setPlayerParts": [
         "tests/unit/livery-tier.test.mjs"
       ],
-      "shadowCastersWanted": [
-        "tests/unit/car-presentation-canary.test.mjs"
-      ],
       "teamBodyMesh": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "teamDecalState": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "teamMesh": [
         "tests/specs/parts-mesh-cache.spec.js",
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs"
-      ],
-      "teamMeshKey": [
-        "tests/unit/car-presentation-canary.test.mjs"
-      ],
-      "teamMeshKeyFor": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "warmCarAssets": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "warmCarAssetsAsync": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "*": [
         "tests/specs/quali.spec.js",
@@ -2317,7 +2309,7 @@
         "tests/unit/car-wing-foil.test.mjs"
       ],
       "create": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs"
       ],
       "frame": [
@@ -2332,7 +2324,7 @@
     "js/car/car-material-shade.js": {
       "*": [
         "tests/unit/car-materials.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/livery-design.test.mjs",
@@ -2353,7 +2345,7 @@
       ],
       "*": [
         "tests/unit/aero-defaults-2026.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
@@ -2504,7 +2496,7 @@
         "tests/unit/car-shade.test.mjs"
       ],
       "floor": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs"
       ],
       "headrest": [
@@ -2523,7 +2515,7 @@
         "tests/unit/car-shade.test.mjs"
       ],
       "ring": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs"
       ],
       "sink": [
@@ -2533,7 +2525,7 @@
         "tests/unit/car-shade.test.mjs"
       ],
       "split": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs"
       ],
       "strut": [
@@ -2561,7 +2553,7 @@
         "tests/unit/livery-wheels.test.mjs"
       ],
       "create": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs"
       ],
       "tints": [
@@ -2580,7 +2572,7 @@
         "tests/specs/parts-physics.spec.js",
         "tests/unit/aero-defaults-2026.test.mjs",
         "tests/unit/car-mesh-anchors.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/cockpit-pale-surfaces.test.mjs",
@@ -2801,7 +2793,7 @@
     "js/car/helmets.js": {
       "build": [
         "tests/unit/aero-defaults-2026.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/helmets.test.mjs",
@@ -2851,7 +2843,7 @@
       ],
       "*": [
         "tests/unit/car-multi-shot-tools.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -3074,7 +3066,7 @@
       "*": [
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
@@ -3691,7 +3683,6 @@
     },
     "js/career/custom-team.js": {
       "create": [
-        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs"
       ],
       "init": [
@@ -3714,6 +3705,7 @@
         "tests/unit/legend-parts-seed.test.mjs"
       ],
       "*": [
+        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/pit-complex.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs"
@@ -4365,7 +4357,7 @@
         "tests/unit/agent-config.test.mjs",
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -4465,7 +4457,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
         "tests/unit/body-attitude.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-backup.test.mjs",
@@ -4882,7 +4874,7 @@
       ],
       "parts": [
         "tests/specs/parts-physics.spec.js",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
@@ -4901,7 +4893,6 @@
       ],
       "team": [
         "tests/specs/parts-physics.spec.js",
-        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/legends-team.test.mjs"
@@ -5131,7 +5122,7 @@
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/boot-input-shape.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
@@ -6106,7 +6097,6 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "drawAeroFlaps": [
-        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/field-lod.test.mjs"
       ],
       "dropTrackWorld": [
@@ -6906,7 +6896,6 @@
     },
     "js/garage/setup-camera.js": {
       "create": [
-        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-personality.test.mjs",
@@ -12495,7 +12484,6 @@
         "tests/unit/key-binds.test.mjs"
       ],
       "create": [
-        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/key-binds.test.mjs",
@@ -12517,7 +12505,6 @@
         "tests/unit/mirror-pass.test.mjs"
       ],
       "setSubject": [
-        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/mirror-pass.test.mjs"
       ],
       "side": [
@@ -12573,7 +12560,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "create": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
@@ -12584,7 +12571,7 @@
         "tests/unit/field-lod.test.mjs"
       ],
       "lampPass": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
@@ -12592,19 +12579,20 @@
         "tests/unit/field-lod.test.mjs"
       ],
       "reset": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "resolvePlayer": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "sunPass": [
-        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "*": [
+        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs"
       ]
     },
