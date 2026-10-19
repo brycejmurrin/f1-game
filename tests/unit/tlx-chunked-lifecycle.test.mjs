@@ -4,8 +4,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = new URL("../../js/render/three/tlx-chunked.js", import.meta.url);
 const CHUNK_BINS = fs.readFileSync(new URL("../../js/render/shared/chunk-bins.js", import.meta.url), "utf8").replace(/^const\b/gm, "var");
 
@@ -37,8 +41,8 @@ function factory(released) {
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
-  vm.runInContext(CHUNK_BINS, sandbox, { filename: "chunk-bins.js" });   // build() bins through ChunkBins at call time
-  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: absSrc("js/render/shared/chunk-bins.js") });   // build() bins through ChunkBins at call time
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: absSrc("js/render/three/tlx-chunked.js") });
   return sandbox.window.TLXShaders.chunked(THREE, {
     isWebGPU: () => false,
     releaseGeometry: geo => released.push(geo),
@@ -97,8 +101,8 @@ function mergeFactory(value, constructors = {}) {
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
-  vm.runInContext(CHUNK_BINS, sandbox, { filename: "chunk-bins.js" });   // build() bins through ChunkBins at call time
-  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: absSrc("js/render/shared/chunk-bins.js") });   // build() bins through ChunkBins at call time
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: absSrc("js/render/three/tlx-chunked.js") });
   return sandbox.window.TLXShaders.chunked(THREE, { isWebGPU: () => false, releaseGeometry() {} });
 }
 function gridMesh() {
@@ -247,4 +251,29 @@ test("a dust draw's box is the union of its parts, so the cull never drops a mem
   for (const c of on.chunks) for (const v of tris(c)) for (const a of [0, 2]) {
     assert.ok(v[a] >= c.min[a] - 1e-6 && v[a] <= c.max[a] + 1e-6, "every vertex of every merged triangle sits inside the chunk box");
   }
+});
+
+// Moved from track-foundation.test.mjs (TK1-11): a source scan of the game / shadow-pass / TLX
+// wiring around the chunked ribbons, not a track-engine property.
+test("game keeps the sole prebuilt ribbon usable across envCull and tier changes", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(source, /chunkRibbons:\s*PerfGov\.tier\(\) < 3/);
+  assert.match(source, /track\.meshes\.terrain \|\| track\.meshes\.terrainChunked/);
+  assert.match(source, /track\.meshes\.road \|\| track\.meshes\.roadChunked/);
+  assert.match(source, /_wantRoadChunk = gfx\.chunkedTrackCoords !== false/);
+  // The lazy shadow-ribbon build is TIER-GATED. Above tier 3 Tracks.build()
+  // writes a FUSED ribbon for perf and leaves roadChunked/terrainChunked
+  // undefined — and this lazy build then made a second GPU copy anyway
+  // (+2.78 MiB median, +3.81 on spa), charged to precisely the devices already
+  // told to spend less: the crash-strike floor, GRAPHICS: LOW, or the
+  // governor's own shed all raise tier(). Without the gate the fused/chunked
+  // split above buys nothing on the tier that needs it most.
+  // The lazy build itself lives in the shadow-pass seam (js/render/shared/shadow-pass.js,
+  // _castRibbonSh) — it is what casts the ribbons into the sun map.
+  const shadow = fs.readFileSync(path.join(ROOT, "js/render/shared/shadow-pass.js"), "utf8");
+  assert.match(shadow, /const tierOk = typeof PerfGov === "undefined" \|\| PerfGov\.tier\(\) < 3;/);
+  assert.match(shadow, /if \(allow && tierOk && geo && G\.gfx\.createChunkedMesh\)/);
+  assert.match(shadow, /"roadChunked", G\.track\.meshes\.road, G\.gfx\.chunkedTrackCoords !== false/);
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  assert.match(tlx, /chunkedTrackCoords:\s*false/);
 });

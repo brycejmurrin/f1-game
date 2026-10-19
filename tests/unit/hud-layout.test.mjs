@@ -7,6 +7,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -1375,13 +1376,13 @@ function visibilityEditor() {
     Event: class { constructor(type, init) { this.type = type; Object.assign(this, init); } } };
   ctx.window = ctx;
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/setting-row.js'), 'utf8'), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/setting-row.js'), 'utf8'), ctx, { filename: absSrc("js/ui/setting-row.js") });
   for (const [id, key, initial] of [['map', 'hudMapVis', 'on'], ['gaps', 'hudGapsVis', 'on'], ['mirror', 'hudMirror', 'auto']]) {
     const built = ctx.SettingRow.build('pm-hud' + id, id, [['auto', 'AUTO'], ['on', 'ON'], ['off', 'OFF']]);
     ctx.SettingRow.wire(built.row, { read: () => store.get(key, initial), write(value) { owners.push([id, value]); store.set(key, value); } });
     host.appendChild(built.row);
   }
-  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/hud-elements.js'), 'utf8') + '; this.HudElements = HudElements;', ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/hud-elements.js'), 'utf8') + '; this.HudElements = HudElements;', ctx, { filename: absSrc("js/ui/hud-elements.js") });
   vm.runInContext(SRC + '; this.HudLayout = HudLayout;', ctx);
   ctx.HudLayout.build();
   const choose = (id, value) => { const el = document.getElementById(id); assert.ok(el, id); el.value = value; dom.dispatch(el, { type: 'change', bubbles: true }); };

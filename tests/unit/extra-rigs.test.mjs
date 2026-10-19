@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { CAM_MODE_IDS, camModeStubs } from "../helpers/camera-modes.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -42,7 +43,7 @@ function loadExtraRigs() {
   vm.runInNewContext(
     fs.readFileSync(path.join(root, "js/camera/extra-rigs.js"), "utf8") +
       "\nthis.exported = ExtraRigs;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/extra-rigs.js") });
   return { ExtraRigs: ctx.exported, disk, ctx };
 }
 
@@ -86,7 +87,7 @@ test("ExtraRigs.pickRival: RIVAL LOCK picks the same rival at OVERALL SPEED 0.46
     const { ExtraRigs, ctx } = loadExtraRigs();
     ctx.PhysicsConsts = { VMAX: 72 };
     if (broadcast) {
-      vm.runInContext(fs.readFileSync(path.join(root, "js/race/broadcast.js"), "utf8").replace(/^const\b/gm, "var"), ctx);
+      vm.runInContext(fs.readFileSync(path.join(root, "js/race/broadcast.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/race/broadcast.js") });
     }
     const car = (code, prog) => ({ code, prog: prog * k, s: prog * k, x: 0, speed: 12 * k, replayRate: watch ? 1 : undefined });
     const X = car("X", 1022), P = car("P", 1000), Y = car("Y", 980);

@@ -18,6 +18,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -67,10 +68,10 @@ function bootInput() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   const src = (f) => read(f).replace(/^const\b/gm, "var");
-  vm.runInContext(src("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(src("js/input/tilt-roll.js"), ctx, { filename: "js/input/tilt-roll.js" });
+  vm.runInContext(src("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(src("js/input/tilt-roll.js"), ctx, { filename: absSrc("js/input/tilt-roll.js") });
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
-    vm.runInContext(src(f), ctx, { filename: f });
+    vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   let paused = 0;
   Input.init(el(), { onPause: () => { paused++; } });
@@ -544,14 +545,55 @@ test("closing the link drops the pedals and the source at once and unhooks the h
   assert.equal(phone.buzz.length, 0, "no haptic is forwarded to a phone that is gone");
 });
 
-test("Input.reset() (blur / everything-off) clears the phone's pedals until it re-sends", () => {
-  const { Input, phone, frame } = pair();
-  phone.thr = 1; frame();
+test("Input.reset() clears the remote command without disconnecting its next fresh sample", () => {
+  const { Input, clock } = bootInput();
+  clock.t = 1000;
+  Input.remoteSample({ source: "xr", steer: 0.8, thr: 1, brk: 0, held: 1 });
+  assert.equal(Input.steer(), 0.8);
   assert.equal(Input.throttle(), true);
+
   Input.reset();
+  assert.equal(Input.remoteActive(), false, "reset invalidates the sample's freshness");
+  assert.equal(Input.remoteSteers(), false);
+  assert.equal(Input.steer(), 0, "reset releases a remote stick like every other steering source");
   assert.equal(Input.throttle(), false, "reset drops the held pedal like every other source");
+  assert.equal(Input.lookingBack(), false, "reset drops remote held controls too");
+  assert.equal(Input.debugState().remote.owner, "xr", "reset does not impersonate a transport disconnect");
+
+  clock.t += 16;
+  Input.remoteSample({ source: "xr", steer: -0.6, thr: 1, brk: 0, held: 0 });
+  assert.equal(Input.steer(), -0.6, "the next fresh sample restores the still-connected remote");
+  assert.equal(Input.throttle(), true);
+  assert.equal(Input.remoteLost("phone"), false, "source-filtered remoteLost remains intact after reset");
+  assert.equal(Input.steer(), -0.6);
+  Input.remoteLost("xr");
+  assert.equal(Input.steer(), 0, "the matching remoteLost path still drops steering");
+});
+
+test("the registered blur reset releases phone tilt until a fresh axis sample arrives", () => {
+  const { Input, phone, frame, sb, hostEnd, link } = pair();
+  phone.roll = 30; phone.thr = 1;
+  for (let i = 0; i < 30; i++) frame();
+  assert.ok(Input.steer() > 0.1, "the pre-blur roll has entered the tilt slew");
+
+  sb.dispatchEvent({ type: "blur" });
+  assert.equal(Input.remoteActive(), false);
+  assert.equal(Input.steer(), 0, "the event callback cannot retain the pre-blur roll");
+  assert.equal(Input.throttle(), false);
+
+  const seq = link.stats().lastSeq;
+  hostEnd._emit("message", NetTransport.STATE, PhonePad.encodeSample({ seq, roll: -30, thr: 1, brk: 0, held: 0 }));
+  hostEnd._emit("message", NetTransport.STATE, PhonePad.encodeSample({ seq: seq - 1, roll: -30, thr: 1, brk: 0, held: 0 }));
+  assert.equal(Input.remoteActive(), false, "duplicate and older packets stay rejected after reset");
+  assert.equal(Input.steer(), 0);
+  assert.equal(Input.throttle(), false);
+  assert.equal(link.stats().stale, 2);
+
+  phone.roll = 0; phone.thr = 0;
   frame();
-  assert.equal(Input.throttle(), true, "the next sample restores it — the phone is still pressing");
+  assert.equal(Input.remoteActive(), true, "the paired phone can resume on a fresh sample");
+  assert.equal(Input.remoteSteers(), true, "zero is a present axis, not a missing sensor");
+  assert.equal(Input.steer(), 0, "the fresh zero axis cannot inherit the pre-blur tilt");
 });
 
 test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, activate, back)", () => {
@@ -1334,7 +1376,7 @@ test("phone samples bunched into one millisecond still reach the filter", () => 
 // `steer` and NO `roll`, and the first frame's steer/pedals are finite.
 test("XR from a cold start: the first injected stick sample is finite all the way through Input", () => {
   const { Input, sb, clock, key } = bootInput();
-  for (const f of ["js/xr/xr-rig.js", "js/xr/xr-input.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
+  for (const f of ["js/xr/xr-rig.js", "js/xr/xr-input.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   const XrInput = vm.runInContext("XrInput", sb);
   const pad = (axes, buttons) => ({ axes, buttons: buttons.map((v) => ({ value: v, pressed: v > 0.5 })) });
   const sources = [
@@ -1380,7 +1422,7 @@ test("wheel pedal axes never feed onboard free-look; an ordinary right stick sti
     buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
   sb.navigator.getGamepads = () => [pad];
   const cam = vm.createContext({ Input, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } });
-  vm.runInContext(read("js/camera/feel.js"), cam);
+  vm.runInContext(read("js/camera/feel.js"), cam, { filename: absSrc("js/camera/feel.js") });
   const feel = vm.runInContext("CamFeel", cam);
   Input.setPadAxisMap({ throttle: 2, brake: 3 });
   for (const pedal of [-1, 0, 1]) {
@@ -1413,7 +1455,7 @@ test("PlatformSession: STOP cancels a pending phone load and a fresh attempt own
       const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h;
     } },
   });
-  vm.runInContext(read("js/ui/platform-session.js"), context);
+  vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext("PlatformSession.create(G, { ensureNet }).wirePhone();", context);
   const btn = G.$("pm-phonepad"), box = G.$("pm-phonepad-box");
   btn.onclick(); assert.equal(btn.textContent, "STOP PAIRING");
@@ -1526,7 +1568,7 @@ function wakePad(over = {}) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/input/phone-pad.js"), ctx);
+  vm.runInContext(read("js/input/phone-pad.js"), ctx, { filename: absSrc("js/input/phone-pad.js") });
   const P = vm.runInContext("PhonePad", ctx);
   const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl() };
   const ctl = P.pad(dom, { deps: {
@@ -1660,7 +1702,7 @@ test('PlatformSession MAKE NEW CODE cancels the current owner before replacement
     $(id) { if (!nodes.has(id)) nodes.set(id, fakeEl()); return nodes.get(id); } };
   const context = vm.createContext({ G, Date, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: 'visor' }] },
     PhonePad: { padUrl: () => 'https://apex.test/controller.html', host(options) { const id = hosts.length; order.push('host' + id); const h = { options, cancel() { order.push('cancel' + id); options.recovery({ phase: 'cancelled', publicRelay: true }); } }; hosts.push(h); return h; } } });
-  vm.runInContext(read('js/ui/platform-session.js'), context);
+  vm.runInContext(read('js/ui/platform-session.js'), context, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext('PlatformSession.create(G, { ensureNet: async () => true }).wirePhone()', context);
   G.$('pm-phonepad').onclick(); await settle();
   const [note, button] = G.$('pm-phonepad-box').children;

@@ -42,19 +42,26 @@ test("the adapter blocks what bash-guard blocks, from Cursor's and Codex's paylo
 
 // 2026-10-15: run cancels under the owner's account kept landing after both
 // Claude doors refused them; Cursor's MCP door had no guard at all.
-test("Cursor's MCP door: a run cancel is denied (exit 2), a merge asks, a read passes", () => {
+test("Cursor's MCP door: a run cancel is denied (exit 2), a merge needs the gate receipt, a read passes", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "cursor-mcp-"));
   const mcp = (tool_name, input, env = {}) => {
     const r = spawnSync("bash", [path.join(ROOT, ".cursor/hooks/mcp-guard.sh")],
       { input: JSON.stringify({ tool_name, tool_input: JSON.stringify(input), mcp_server_name: "github" }), encoding: "utf8",
-        env: { ...process.env, APEX_RUN_CANCEL_OK: "", APEX_MERGE_DESK: "", ...env } });
+        env: { ...process.env, APEX_RUN_CANCEL_OK: "", APEX_MERGE_DESK: "", CLAUDE_PROJECT_DIR: dir, ...env } });
     return { status: r.status, permission: JSON.parse(r.stdout).permission };
   };
-  for (const method of ["cancel_workflow_run", "force_cancel_workflow_run"])
-    assert.deepEqual(mcp("actions_run_trigger", { method, run_id: 1 }), { status: 2, permission: "deny" }, method);
-  assert.equal(mcp("actions_run_trigger", { method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }).permission, "allow");
-  assert.equal(mcp("merge_pull_request", { pullNumber: 1, merge_method: "squash" }).permission, "deny");
-  assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge" }), { status: 0, permission: "ask" });
-  assert.deepEqual(mcp("pull_request_read", { method: "get", pullNumber: 1 }), { status: 0, permission: "allow" });
+  try {
+    for (const method of ["cancel_workflow_run", "force_cancel_workflow_run"])
+      assert.deepEqual(mcp("actions_run_trigger", { method, run_id: 1 }), { status: 2, permission: "deny" }, method);
+    assert.equal(mcp("actions_run_trigger", { method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }).permission, "allow");
+    assert.equal(mcp("merge_pull_request", { pullNumber: 1, merge_method: "squash" }).permission, "deny");
+    const head = "a".repeat(40);
+    assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), { status: 2, permission: "deny" }, "no merge-gate receipt");
+    fs.mkdirSync(path.join(dir, "artifacts/merge-gate"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString() }));
+    assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), { status: 0, permission: "allow" }, "gated merge passes");
+    assert.deepEqual(mcp("pull_request_read", { method: "get", pullNumber: 1 }), { status: 0, permission: "allow" });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-forward and a new branch", () => {

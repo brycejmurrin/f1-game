@@ -20,6 +20,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/data/standings.js"), "utf8").replace(/^const\b/m, "var");
@@ -38,7 +39,7 @@ function boot(drivers, cons, api = null) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedDom(ctx);
-  vm.runInContext(SRC, ctx, { filename: "js/data/standings.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/data/standings.js") });
   const el = vm.runInContext("Dom.el", ctx);
   const findTeam = (name) => {
     if (!name) return null;

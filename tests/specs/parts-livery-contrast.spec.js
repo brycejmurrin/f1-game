@@ -12,7 +12,6 @@
 // ONE BOOT PER WORKER (sharedTest): seven boots became none. Every test here is
 // pure — it reads Liveries/Teams/Car3D/LiveryTex off the loaded page and never
 // touches a screen or a race — so a live page is all load() has to guarantee.
-// UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { ensureLive } from "../helpers/shared-page.js";
 

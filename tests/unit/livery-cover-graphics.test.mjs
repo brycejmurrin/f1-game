@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/car/livery-graphics.js"), "utf8");
@@ -23,7 +24,7 @@ function loadGraphics() {
   const sb = { console, Math, Object, Array, String, Number, JSON, isNaN, isFinite };
   sb.globalThis = sb;
   vm.createContext(sb);
-  vm.runInContext(SRC, sb, { filename: "js/car/livery-graphics.js" });
+  vm.runInContext(SRC, sb, { filename: absSrc("js/car/livery-graphics.js") });
   return vm.runInContext("LiveryGraphics", sb);
 }
 
@@ -219,7 +220,7 @@ test("inspection probes do not mutate the draft, survive scratch canvas reuse, a
   const doc = { createElement: () => { const cv = {width:0,height:0}; cv.getContext = () => ({
     getImageData: () => ({data:new Uint8ClampedArray(cv.width*cv.height*4)}), putImageData(image) { cv.pixels=Uint8ClampedArray.from(image.data); },
   }); return cv; } };
-  const outline = vm.runInNewContext(fs.readFileSync(path.join(ROOT,"js/car/surface-outline.js"),"utf8")+";GarageSurfaceOutline",{LiveryTex:atlas,document:doc});
+  const outline = vm.runInNewContext(fs.readFileSync(path.join(ROOT,"js/car/surface-outline.js"),"utf8")+";GarageSurfaceOutline",{LiveryTex:atlas,document:doc}, { filename: absSrc("js/car/surface-outline.js") });
   const api = outline.create({ createTexture(cv) { const tex={pixels:cv.pixels};textures.push(tex);return tex; },freeTexture:(t)=>freed.push(t),drawDecal:(...args)=>draws.push(args) });
   const liv=Object.freeze({spineLogo:"stripe",spineTint:Object.freeze([1,0,0])}), before=JSON.stringify(liv), team={id:"test"};
   assert.equal(api.set("spineTint",team,liv,7),true);

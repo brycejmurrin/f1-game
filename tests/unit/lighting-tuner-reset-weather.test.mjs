@@ -25,6 +25,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -52,7 +53,7 @@ function loadStore(weather, saved = null, defs = DEFS) {
     Tracks: { LIST: [G.track.def] }, Math, JSON, Object, Array, Number, isFinite, console,
   });
   seedLog(ctx);
-  vm.runInContext(read("js/lighting/profiles.js"), ctx, { filename: "js/lighting/profiles.js" });
+  vm.runInContext(read("js/lighting/profiles.js"), ctx, { filename: absSrc("js/lighting/profiles.js") });
   const LS = vm.runInContext("LightStore", ctx);
   const store = LS.create(G);
   store.apply();
@@ -76,13 +77,13 @@ function bootTuner(weather = "wet", saved = null) {
   h.ctx.ApexClipboard = { write: () => Promise.resolve(true) };
   h.ctx.ltStore = h.store; h.ctx.LT = h.LT; h.ctx.gfx = { hasPerChunkLights: true }; h.ctx._perChunkOff = false;
   // Exercise the real game setter's rising-edge latch clearing with the real store.
-  vm.runInContext(read("js/race/light-tune-edit.js"), h.ctx, { filename: "js/race/light-tune-edit.js" });
+  vm.runInContext(read("js/race/light-tune-edit.js"), h.ctx, { filename: absSrc("js/race/light-tune-edit.js") });
   vm.runInContext(symbolSource("function setLightTune(id, v)"), h.ctx);
   Object.assign(h.G, { $, els: {}, ltKey: h.store.key, setLightTune: h.ctx.setLightTune,
     persistLightTune: h.store.persist, applyLightTune: h.store.apply,
     setTimeOfDay: () => "dusk", weather: () => h.st.weather, gfx: h.ctx.gfx });
   h.G._ltStore = h.store.profiles;
-  vm.runInContext(read("js/lighting/tuner-panel.js"), h.ctx);
+  vm.runInContext(read("js/lighting/tuner-panel.js"), h.ctx, { filename: absSrc("js/lighting/tuner-panel.js") });
   h.panel = vm.runInContext("TunerPanel", h.ctx).create(h.G);
   h.panel.buildLightTunePanel();
   h.$ = $; h.storage = storage;
@@ -227,7 +228,7 @@ function bootArc({ headless = false } = {}) {
   const rain = [];
   ctx.Particles = { rainShow: (v) => rain.push(v) };
   ctx.GameAudio = { startRain() {}, stopRain() {} };
-  vm.runInContext(read("js/race/weather-arc.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/race/weather-arc.js" });
+  vm.runInContext(read("js/race/weather-arc.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/race/weather-arc.js") });
   const applied = [];
   const G = {
     raceWeather: "dry", soundOn: false, track: {}, headlessMode: headless, frame: { wetness: 0 },
@@ -289,9 +290,9 @@ function bootAtmo() {
   vm.createContext(sandbox);
   vm.runInContext("Math.random = () => 0.5;", sandbox);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/lighting/knobs.js", "js/lighting/presets.js", "js/lighting/atmosphere.js"])
-    vm.runInContext(read(f), sandbox, { filename: f });
+    vm.runInContext(read(f), sandbox, { filename: absSrc(f) });
   vm.runInContext("LightTune = { LT: LightKnobs.LT, TUNE_DEFS: LightKnobs.TUNE_DEFS, buildTrackLights: () => [] };", sandbox);
-  vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: "js/lighting/profiles.js" });
+  vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: absSrc("js/lighting/profiles.js") });
   const saved = {};
   const G = {
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),

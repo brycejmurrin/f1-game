@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// fleet-bus.mjs — the host-neutral merge lease and message bus: one git branch every host can push.
+// fleet-bus.mjs — the host-neutral message bus (and a generic lease mutex, no longer a merge gate since 2026-10-19 17:50Z): one git branch every host can push.
 // @doc Merge lease (one holder, expiry, refusal) and typed fleet bus on the claude/fleet-bus branch, any host.
 // Full description: The cross-host fleet channel. The claude/fleet-bus branch's TREE holds the merge lease (lease.json) and its COMMIT LOG is the message bus (one typed line per commit subject). Every write is a fast-forward push, so a lease acquire is compare-and-swap: two hosts racing for it cannot both win. `lease acquire|renew|release|break|check` and `send`/`read` (cursor reads, only new lines).
 // @section runner
@@ -25,6 +25,7 @@
 //   node tools/ci/fleet-bus.mjs lease check                            # exit 0 only if YOU hold a live lease
 //   node tools/ci/fleet-bus.mjs lease break --grant "<the user's words>"   # take a live lease on a user grant
 //   node tools/ci/fleet-bus.mjs send READY --to orchestrator "#2990 abc1234 ready-gate 0"
+//   node tools/ci/fleet-bus.mjs send GAME-SLOT --to '*' "#2990 <head sha>"   # before a game merge (merge-gate.mjs reads it)
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json]
 //
 // Identity: --as <host>:<id>, else APEX_FLEET_AS, else claude:session_<id> (cloud), claude:<CLAUDE_CODE_SESSION_ID>
@@ -36,7 +37,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const BUS_BRANCH = "claude/fleet-bus";
-export const TYPES = ["READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE"];
+/** GAME-SLOT (2026-10-19): the claim a session pushes before a game merge — `#<PR> <head sha>`; the earlier line wins the
+ *  push race, and merge-gate.mjs requires the newest live one to name the PR and come from the merging session. */
+export const TYPES = ["READY", "GREEN", "BLOCKED", "HANDOFF", "DONE", "INCIDENT", "LEASE", "GAME-SLOT"];
 export const DEFAULT_TTL_MIN = 60;
 /** A lease longer than this outlives the Pages p90 (73 min) three times over: a dead holder would block for hours. */
 export const MAX_TTL_MIN = 240;
@@ -64,7 +67,7 @@ export function formatLine(type, to, from, text = "") {
 
 /** A commit subject -> { type, to, from, text }, or null when it is not a bus line. Pure. */
 export function parseLine(subject) {
-  const m = /^([A-Z]+) to:(\S+) from:(\S+)(?: (.*))?$/.exec(String(subject).trim());
+  const m = /^([A-Z][A-Z-]*) to:(\S+) from:(\S+)(?: (.*))?$/.exec(String(subject).trim());
   if (!m || !TYPES.includes(m[1])) return null;
   return { type: m[1], to: m[2], from: m[3], text: m[4] || "" };
 }

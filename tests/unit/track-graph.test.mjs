@@ -15,6 +15,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -27,7 +28,7 @@ function load() {
   seedLog(ctx);
   for (const rel of ["js/track/core/geom.js", "js/track/scenery/graph.js"]) {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
-    vm.runInContext(src, ctx, { filename: rel });
+    vm.runInContext(src, ctx, { filename: absSrc(rel) });
   }
   return ctx;
 }

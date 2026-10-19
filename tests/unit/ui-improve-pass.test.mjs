@@ -31,6 +31,7 @@ import { cssRules, decl, declares, ruleFor, rulesFor } from "../helpers/css-rule
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -92,7 +93,7 @@ test("CssZoom helper ships before sheetshape and menunav", () => {
 
 test("CssZoom exports its API surface", () => {
   const sb = uiSandbox(makeDom());
-  vm.runInNewContext(src("js/ui/css-zoom.js"), sb, { filename: "js/ui/css-zoom.js" });
+  vm.runInNewContext(src("js/ui/css-zoom.js"), sb, { filename: absSrc("js/ui/css-zoom.js") });
   const Z = sb.CssZoom;
   assert.ok(Z, "window.CssZoom is assigned");
   for (const name of ["of", "viewportRect", "localRect", "localBox", "toLocalDelta", "rectsAreVisual"]) {
@@ -166,7 +167,7 @@ function bootMenus(disk = {}, o = {}) {
     SeasonCal: { canRace: () => true, rounds: () => 0 },
     TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
   });
-  vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
+  vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   if (o.practicePick || o.practicePickApi) {
     const api = o.practicePickApi || {};
     sb.UiExperience = {
@@ -181,6 +182,8 @@ function bootMenus(disk = {}, o = {}) {
   const announced = [];
   const G = {
     $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {},
+    getLiveryId: (id) => store.get("livery." + id, "default"),
+    getLiveries: (team) => [{ id: "default", c1: team.color, c2: team.color2 }].concat(store.get("livery.custom." + team.id, [])),
     els: { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
       selCircuitLabel: $("sel-circuit-label"), selPreviewMap: null, selTeams: $("sel-teams") },
     trackIdx: 1, teamIdx: 0, timeTrial: false, seasonMode: false, netRoom: false, daily: null, soundOn: false,
@@ -463,7 +466,7 @@ function bootSheetShape(opts = {}) {
   vars.set(dom.body, { "--tall-at": "1.05", "--wide-at": "620px", ...(opts.body || {}) });
   vars.set(dom.documentElement, { "--ui-scale": String(opts.uiScale || 1) });
   const sb = uiSandbox(dom, { getComputedStyle: style, innerWidth: opts.innerWidth || 1000, innerHeight: opts.innerHeight || 600 });
-  vm.runInNewContext(src("js/ui/sheet-shape.js"), sb, { filename: "js/ui/sheet-shape.js" });
+  vm.runInNewContext(src("js/ui/sheet-shape.js"), sb, { filename: absSrc("js/ui/sheet-shape.js") });
   const sheet = (id, o = {}) => {
     const host = dom.makeElement("div"); host._client = o.hostHeight || 0;
     const el = dom.makeElement("div"); el.id = id; host.appendChild(el);
@@ -703,7 +706,7 @@ function bootMenuNav(layerId = "overlay") {
   const layer = dom.byId(layerId);
   layer._rect = { left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600 };
   const sb = uiSandbox(dom, { UiLayers: { shown: () => true, top: () => layer } });
-  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: absSrc("js/ui/menu-nav.js") });
   const button = (id, y, attrs = {}) => {
     const b = dom.makeElement("button"); b.id = id;
     b._rect = { left: 10, top: y, right: 210, bottom: y + 30, width: 200, height: 30 };
@@ -962,7 +965,7 @@ test("an active career locks team and seat selection in the garage", () => {
 function bootCamModes(camMode = 2, extra = {}) {
   const dom = makeDom();
   const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} }, ...extra });
-  vm.runInNewContext(src("js/camera/mode-switch.js"), sb, { filename: "js/camera/mode-switch.js" });
+  vm.runInNewContext(src("js/camera/mode-switch.js"), sb, { filename: absSrc("js/camera/mode-switch.js") });
   const store = {};
   const G = { $: (id) => dom.byId(id), camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
   const api = sb.CamModes.create(G);
@@ -1213,7 +1216,7 @@ function bootInput() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   const pad = (ax, buttons = [], ax2 = 0) => ({
     connected: true, axes: [ax, 0, ax2, 0],
@@ -1360,7 +1363,7 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
 
   // The seams the pad path relies on, as behaviour where a module loads alone.
   const sbU = uiSandbox(makeDom());
-  vm.runInNewContext(src("js/ui/layers.js"), sbU, { filename: "js/ui/layers.js" });
+  vm.runInNewContext(src("js/ui/layers.js"), sbU, { filename: absSrc("js/ui/layers.js") });
   assert.equal(typeof sbU.UiLayers.navOpen, "function", "title #overlay is pad-navigable through UiLayers.navOpen()");
   assert.equal(sbU.UiLayers.navOpen(), false, "nothing open on a bare DOM");
   // Text fields joined range/number here (menu-a11y-audit.test.mjs pins the
@@ -1374,7 +1377,7 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.match(code("js/ui/aria-state.js"), /hashchange/,
     "term-rail aria-current follows location.hash");
   const wrapSb = uiSandbox(makeDom({ readyState: "loading" }));
-  vm.runInNewContext(src("js/ui/aria-state.js"), wrapSb);
+  vm.runInNewContext(src("js/ui/aria-state.js"), wrapSb, { filename: absSrc("js/ui/aria-state.js") });
   const wrap = wrapSb.AriaState.wrapOnOff;
   assert.equal(wrap("HUD: ON"), "HUD:\u00a0<span data-fold=\"on\">ON</span>");
   assert.equal(wrap("HALO: OFF"), "HALO:\u00a0<span data-fold=\"off\">OFF</span>");
@@ -1416,7 +1419,7 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   nav.appendChild(a2);
   hashDom.byId("howtoplay").appendChild(nav);
   const hashSb = uiSandbox(hashDom, { location: loc });
-  vm.runInNewContext(src("js/ui/aria-state.js"), hashSb);
+  vm.runInNewContext(src("js/ui/aria-state.js"), hashSb, { filename: absSrc("js/ui/aria-state.js") });
   hashSb.AriaState.sync();
   assert.equal(a2.getAttribute("aria-current"), "true", "matching term-rail hash is current");
   assert.equal(a1.getAttribute("aria-current"), null, "other term-rail links are not current");
@@ -1429,7 +1432,7 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   const one = toggleDom.document.createElement("button"), two = toggleDom.document.createElement("button");
   one.classList.add("active"); group.append(one, two); toggleDom.byId("overlay").appendChild(group);
   const toggleSb = uiSandbox(toggleDom);
-  vm.runInNewContext(src("js/ui/aria-state.js"), toggleSb);
+  vm.runInNewContext(src("js/ui/aria-state.js"), toggleSb, { filename: absSrc("js/ui/aria-state.js") });
   toggleSb.AriaState.sync();
   assert.equal(one.getAttribute("aria-pressed"), "true");
   assert.equal(two.getAttribute("aria-pressed"), "false");
@@ -1458,7 +1461,7 @@ test("AriaState re-syncs only the root a mutation landed in", () => {
   const observers = [];
   const sb = uiSandbox(dom, { MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(root) { this.root = root; } } });
   const flush = () => { while (sb.__timers.length) sb.__timers.shift()(); };
-  vm.runInNewContext(src("js/ui/aria-state.js"), sb);
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb, { filename: absSrc("js/ui/aria-state.js") });
   assert.ok(observers.length >= 2, "one observer per observed root");
   assert.equal(c1.getAttribute("aria-pressed"), "true");
   o1.classList.remove("active"); o2.classList.add("active");
@@ -1553,7 +1556,7 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
 function bootSettingsNav() {
   const dom = makeDom();
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
-  vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
+  vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: absSrc("js/ui/settings-tabs.js") });
   const index = dom.byId("pm-settings-index");
   for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress"])
     index.appendChild(dom.byId(id));
@@ -1607,7 +1610,7 @@ test("Settings index Driving aids keeps its own subtitle without progress badges
     ScrollFade: { refresh() {} },
     Badges: { summary: () => ({ held: 2, total: 8 }) },
   });
-  vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
+  vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: absSrc("js/ui/settings-tabs.js") });
   const index = dom.byId("pm-settings-index");
   for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress"])
     index.appendChild(dom.byId(id));
@@ -2268,7 +2271,7 @@ function bootCopyValues(opts = {}) {
   sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
   const ctx = vm.createContext(sb);
   seedClipboard(ctx);
-  vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: "js/lighting/tuner-panel.js" });
+  vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: absSrc("js/lighting/tuner-panel.js") });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },
     ltKey: () => here, setLightTune() {}, persistLightTune() {}, applyLightTune() {},

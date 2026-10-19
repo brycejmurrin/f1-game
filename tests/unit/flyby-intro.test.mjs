@@ -13,6 +13,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -410,7 +411,7 @@ test("prepared night lamps make the actual synchronous flyby bake a cache hit", 
     LT: { lampBake: 1, tailLightEmit: 0, lampNearClamp: 4, floodDay: 0 },
     applyLightTune() {}, isFloodActiveSession: () => true, buildTrackLights: () => lights,
   });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/lighting/lamp-bake.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/lighting/lamp-bake.js"), "utf8"), context, { filename: absSrc("js/lighting/lamp-bake.js") });
   const atmo = fs.readFileSync(path.join(ROOT, "js/lighting/atmosphere.js"), "utf8");
   const start = atmo.indexOf("function prebakeLamps()");
   vm.runInContext(atmo.slice(start, atmo.indexOf("\n}\n", start) + 2), context);

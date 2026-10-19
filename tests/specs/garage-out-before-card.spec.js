@@ -64,17 +64,14 @@ function assertGarageThenCard(tl, label) {
   expect(garageSamples.length, `${label}: garage-out never ran — ${summary}`).toBeGreaterThan(0);
   const firstGarageT = garageSamples[0].t;
   const lastGarageT = garageSamples[garageSamples.length - 1].t;
-  // Card raised, or race already took over after garage (handoff can be brief on SwiftShader).
+  // The card is REQUIRED on every path (C2-10): "the race took over" or "the
+  // phase left garage" used to pass a card that never appeared. The timeline
+  // snaps on every data-phase / hidden mutation, so a brief card is still seen.
   const cardSamples = tl.filter((s) => s.cardShown);
-  const leftGarage = garagePhase.length > 0 && tl.some((s) => s.t > lastGarageT && s.phase !== "garage");
-  const raced = tl.some((s) => s.t > firstGarageT && s.state && s.state !== "menu");
-  expect(cardSamples.length || leftGarage || raced,
-    `${label}: neither card nor post-garage race — ${summary}`).toBeTruthy();
-  if (cardSamples.length) {
-    const firstCardT = cardSamples[0].t;
-    expect(firstCardT, `${label}: card before garage start`).toBeGreaterThanOrEqual(firstGarageT);
-    expect(firstCardT, `${label}: card before garage-out finished`).toBeGreaterThanOrEqual(lastGarageT - 120);
-  }
+  expect(cardSamples.length, `${label}: the card never showed — ${summary}`).toBeGreaterThan(0);
+  const firstCardT = cardSamples[0].t;
+  expect(firstCardT, `${label}: card before garage start`).toBeGreaterThanOrEqual(firstGarageT);
+  expect(firstCardT, `${label}: card before garage-out finished`).toBeGreaterThanOrEqual(lastGarageT - 120);
   const overlap = tl.filter((s) => s.phase === "garage" && s.cardShown);
   expect(overlap, `${label}: card overlapped garage-out`).toEqual([]);
   return { firstGarageT, lastGarageT, garageMs: Math.max(0, lastGarageT - firstGarageT), hadGaragePhase: garagePhase.length > 0 };
@@ -124,10 +121,9 @@ async function awaitGarageThenCard(page) {
       const tl = window.__garageOutTL || [];
       const hadGarage = tl.some((s) => s.phase === "garage" || s.garageOn);
       if (!hadGarage) return false;
-      const lastGar = [...tl].reverse().find((s) => s.phase === "garage" || s.garageOn);
-      const after = tl.some((s) => s.t > lastGar.t && (s.cardShown || (s.phase && s.phase !== "garage") || (s.state && s.state !== "menu")));
-      // Still in garage: allow studioDone's 3× duration cap to fire (ms up to ~8s × 3).
-      return after || tl.some((s) => s.cardShown);
+      // Wait for the card itself — assertGarageThenCard requires it. Still in
+      // garage: the timeout allows studioDone's 3× duration cap to fire (~8 s × 3).
+      return tl.some((s) => s.cardShown);
     }, null, { polling: 100, timeout: 180_000 });
   } catch (e) {
     const tl = await stopTimeline(page);
@@ -214,7 +210,8 @@ test.describe("garage-out before race/session card", () => {
     expect(m.garageMs, "reduce must not speed the garage-out up (full OUT_DURATION at speed 1)").toBeGreaterThan(6000);
     // …and the flyby (card up, phase run — or card with no world) follows it, never a 700 ms flash to the race.
     const after = tl.find((s) => s.t > m.lastGarageT && s.phase && s.phase !== "garage" && s.phase !== "build");
-    if (after) expect(["run", "card", "handoff"], "reduce: the card + flyby follow the garage").toContain(after.phase);
+    expect(after, "reduce: a phase follows the garage-out").toBeTruthy();
+    expect(["run", "card", "handoff"], "reduce: the card + flyby follow the garage").toContain(after && after.phase);
   });
 
   test("view-transition / Home vt race: garage-out before flyby card", async ({ page }) => {
@@ -292,11 +289,14 @@ test.describe("garage-out before race/session card", () => {
       try { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); } catch (_) { /* sealed */ }
     });
     await clickId(page, "rs-go");   // qualifying is off for this season: straight to the pre-race screen
-    // Win round 1 outright and land on #results (park() answers falsy until the player has a world pose).
+    // Win round 1 outright and land on #results. The poll only READS (C2-10: park()
+    // mutates the race, so it ran once per poll); info().track is set once the
+    // race has a track, which is what park() needs before it can place the car.
     await page.waitForFunction(() => {
-      const a = window.__apex, s = a && a.info().state;
-      return (s === "count" || s === "race") && !!a.park(0.9);
+      const a = window.__apex, i = a && a.info();
+      return !!(i && (i.state === "count" || i.state === "race") && i.track);
     }, null, { polling: 100, timeout: 240_000 });
+    expect(await page.evaluate(() => !!window.__apex.park(0.9)), "park() placed the player").toBe(true);
     await page.evaluate(() => window.__apex.finishRace());
     await page.waitForFunction(() => {
       const r = document.getElementById("results");

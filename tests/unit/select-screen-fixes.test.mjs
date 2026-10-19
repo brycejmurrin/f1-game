@@ -19,6 +19,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -61,7 +62,7 @@ function boot(disk = {}, o = {}) {
     },
   };
   sb.window = sb;
-  vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
+  vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   const $ = (id) => dom.byId(id);
   const selTracks = $("sel-tracks");
   Object.defineProperty(selTracks, "textContent", { get: () => "", set() { selTracks.children.length = 0; } });
@@ -70,6 +71,8 @@ function boot(disk = {}, o = {}) {
   let built = 0;
   const G = {
     $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {},
+    getLiveryId: (id) => store.get("livery." + id, "default"),
+    getLiveries: (team) => [{ id: "default", c1: team.color, c2: team.color2 }].concat(store.get("livery.custom." + team.id, [])),
     els: { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
       selCircuitLabel: $("sel-circuit-label"), selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
       selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"), selPreviewRec: $("sel-preview-rec"), selTeams },

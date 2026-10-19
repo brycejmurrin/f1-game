@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = "js/ui/share-code.js";
 const j = (v) => JSON.parse(JSON.stringify(v));
@@ -44,6 +45,7 @@ function harness(opts = {}) {
     location,
     history,
     Teams: { LIST: (opts.teams || ["mercedes", "ferrari"]).map((id) => ({ id })) },
+    Liveries: { forTeam: () => (opts.catalog || ["default"]).map((id) => ({ id })) },
     Tracks: {
       LIST: (opts.tracks || ["monza", "spa"]).map((id) => ({ id, name: id.toUpperCase() })),
       SEASON: (opts.tracks || ["monza", "spa"]).map((id) => ({ id, name: id.toUpperCase() })),
@@ -63,7 +65,8 @@ function harness(opts = {}) {
     },
   };
   const ctx = vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8"), ctx, { filename: SRC });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8"), ctx, { filename: absSrc(SRC) });
   const ShareCode = sandbox.module.exports || vm.runInContext("ShareCode", ctx);
   return { ShareCode, store, bag, location, writes, sandbox };
 }
@@ -291,6 +294,44 @@ test("a livery code never trims the player's customs; at the cap it refuses hone
   assert.equal(store.get("livery.custom.ferrari").length, 11);
 });
 
+test("a shared custom livery that collides with the catalog is renamed and selected", () => {
+  const { ShareCode, store } = harness({ catalog: ["default", "special"] });
+  const imported = { id: "default", c1: [1, 0, 1], c2: [0, 1, 1] };
+  const decoded = ShareCode.decode(ShareCode.encode("livery", {
+    team: "ferrari", id: imported.id, livery: imported,
+  }).code);
+  assert.equal(ShareCode.apply(decoded, { store }).ok, true);
+  const kept = store.get("livery.custom.ferrari");
+  assert.equal(kept[0].id, "default_imported");
+  assert.deepEqual(j(kept[0].c1), [1, 0, 1]);
+  assert.equal(store.get("livery.ferrari"), "default_imported");
+});
+
+test("catalog-collision import preserves an unrelated custom using the synthesized suffix", () => {
+  const { ShareCode, store } = harness({ catalog: ["default"] });
+  const own = { id: "default_imported", name: "Mine", c1: [0, 1, 0], c2: [0, 0, 1] };
+  store.set("livery.custom.ferrari", [own]);
+  const shared = { id: "default", name: "Friend", c1: [1, 0, 1], c2: [1, 1, 0] };
+  const decoded = ShareCode.decode(ShareCode.encode("livery", { team: "ferrari", id: "default", livery: shared }).code);
+  assert.equal(ShareCode.apply(decoded, { store }).ok, true);
+  const after = store.get("livery.custom.ferrari");
+  assert.deepEqual(after.map((l) => l.id), ["default_imported", "default_imported_2"]);
+  assert.deepEqual(j(after[0]), own, "the suffix alone cannot authorize replacement");
+  assert.equal(store.get("livery.ferrari"), "default_imported_2");
+  assert.equal(ShareCode.apply(decoded, { store }).ok, true, "identical re-import replaces its repaired copy");
+  assert.equal(store.get("livery.custom.ferrari").length, 2);
+  assert.equal(store.get("livery.ferrari"), "default_imported_2", "re-import keeps the repaired paint selected");
+});
+
+test("selected-only livery share falls back when its id is absent", () => {
+  const { ShareCode, store } = harness({ catalog: ["default"] });
+  store.set("livery.custom.ferrari", [{ id: "own", c1: [1, 0, 0], c2: [0, 0, 1] }]);
+  const decoded = ShareCode.decode(ShareCode.encode("livery", { team: "ferrari", id: "stale_v3" }).code);
+  assert.equal(ShareCode.apply(decoded, { store }).ok, true);
+  assert.equal(store.get("livery.ferrari"), "default");
+  assert.equal(store.get("livery.custom.ferrari").length, 1, "unrelated paint is untouched");
+});
+
 // Round-3 hunt 6-F2: opening a #share= setup/livery link replaced the team's stored
 // sheet / livery pick with no way back. apply() now keeps the previous values, the
 // toast says so, and pasting UNDO (SETTINGS › FILES) restores them. A link cannot undo.
@@ -353,7 +394,7 @@ function quotaHarness() {
     sandbox.Log = { warn() {}, info() {} };
     sandbox.SaveMigrate = { migrateCareer() {}, CAREER_V: 1 };
     const ctx = vm.createContext(sandbox);
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/store.js"), "utf8"), ctx);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/store.js"), "utf8"), ctx, { filename: absSrc("js/core/store.js") });
     return { ShareCode, store: vm.runInContext("GameStore.store", ctx) };
   }
   return { reload, fail(fn) { refuse = fn; }, disk };
@@ -493,7 +534,7 @@ test("UNDO of a setup code on an empty store leaves the key absent, not pinned t
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   for (const f of ["js/data/garage-defaults.js", "js/core/hash32.js", "js/core/mat4.js", "js/career/save-migrate.js", "js/core/store.js"]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   }
   const store = vm.runInContext("GameStore.store", ctx);
   assert.ok(store.get("setup.mercedes", null), "the shipped default is visible through get()");

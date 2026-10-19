@@ -5,8 +5,11 @@ description: "Use when seeing or driving Apex 26 without screenshots: world()/fi
 
 # Agent view — perceive and drive the game as text
 
-Prefer `node tools/shot/agent.mjs <track> help` / `__apex.agentHelp()` when you
-only need one tool. MCP wrap: `./tools/mcp/apex-tools-mcp.sh call apex_agent
+Use `node tools/shot/agent.mjs help <hook>` for static hook help, or
+`node tools/shot/agent.mjs <track> help --vm` for the VM manifest without Chromium.
+Numeric one-offs can use `node tools/shot/agent.mjs monza world --vm --detail brief`;
+the VM has no last-drawn frame, so raster/camera evidence still needs a browser.
+MCP wrap: `./tools/mcp/apex-tools-mcp.sh call apex_agent
 '{"track":"monza","command":"world"}'`. Full surface catalog, staging, and
 driving policy → [references/surface.md](references/surface.md). Design notes:
 `docs/DEBUG-HOOKS.md`.
@@ -19,7 +22,7 @@ then `world({detail:"drive"})` → decide → `act`/`rollout` → `terminal()`. 
 quiet exceptions: empty `scene()` while props build; stale `render({what:"view"})`
 under headless — stage first).
 
-**Three ways in** (cost differs — details in surface.md): CLI one-shot boot,
+**Entry routes** (cost differs — details in surface.md): CLI VM or browser boot,
 `apex-eval.mjs` multi-call one boot, or live `page.evaluate` after staging
 (`race` → `go` → `jump` + frames). Serialize browser CLI boots; use the Node VM for numeric batches.
 

@@ -185,39 +185,50 @@ const HudInputs = (function () {
     const quit = doc.getElementById("pm-quit"); host.insertBefore(review,quit && quit.parentElement === host ? quit : null);
     paintReview(); return true;
   }
-  function reset() {
+  let reviewResetPending = false;
+  function flushReviewReset() {
+    if (!reviewResetPending || doc && (doc.hidden || doc.visibilityState === "hidden")) return;
+    reviewResetPending = false;
+    if (review) { review.open = false; paintReview(); }
+  }
+  // REVIEW INPUTS belongs to the pause sheet, independently of HUD visibility.
+  // A background document defers its repaint until visible, even when paused.
+  if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", flushReviewReset);
+  function reset(paint = true) {
     const changed = trace.count || acc || drawT || labelT || sampledPlayer !== null
       || sampledGear !== null || sampledLap !== null || lastGear !== null || review && review.open;
-    if (root && !root.hidden) root.hidden = true;
+    if (paint && root && !root.hidden) root.hidden = true;
     if (!changed) return;
     trace.clear(); acc = drawT = labelT = 0;
     sampledPlayer = null; sampledGear = sampledLap = lastGear = null;
-    if (review) { review.open = false; paintReview(); }
+    if (review) { reviewResetPending = true; flushReviewReset(); }
   }
 
-  /** js/ui/hud.js, every frame (above the HUD throttle). Reads only. */
-  function frame(G, player, dtMs) {
+  /** Every frame: sample independently of paint; hidden callers supply live mode suppression without DOM classes. */
+  function frame(G, player, dtMs, paint = true, suppressed = null) {
     if (!doc) return;
     if (!root && !bind()) return;
+    flushReviewReset();
     // A resumed race closes the fold; the next explicit review gets a fresh
     // snapshot, while an open pause menu keeps its still chart unchanged.
-    if (review && review.open) {
+    if (review && review.open && !doc.hidden && doc.visibilityState !== "hidden") {
       const pause = doc.getElementById("pausemenu");
       if (pause && pause.hidden) review.open = false;
     }
-    if (!player) { reset(); return; }
+    if (!player) { reset(paint); return; }
     const b = doc.body;
-    if (!isOn() || b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) {
-      reset(); return;
+    if (!isOn() || (suppressed !== null ? suppressed : b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on")))) {
+      reset(paint); return;
     }
-    if (sampledPlayer !== player) { reset(); sampledPlayer = player; }
-    if (root.hidden) root.hidden = false;
+    if (sampledPlayer !== player) { reset(paint); sampledPlayer = player; }
     const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs / 1000 : 1 / 60;
     acc += dt;
     if (acc > WINDOW_S) { trace.clear(); acc = STEP_S; }   // a pause or a hitch: start a fresh window
     const thr = clamp01(player.throttleDemand || 0), brk = clamp01(player.brakeDemand || 0), str = player.steerCommand || 0;
     sampledGear = player.gear || 0; sampledLap = player.lap || 1;
     while (acc >= STEP_S) { trace.push(thr, brk, str); acc -= STEP_S; }
+    if (!paint) { drawT = labelT = 0; mKey.fill(0); return; }
+    if (root.hidden) root.hidden = false;
     drawT -= dtMs > 0 ? dtMs : 16.7;
     if (drawT > 0) return;
     drawT = DRAW_MS;

@@ -9,13 +9,14 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "./abs-src.mjs";
 
 const HASH32_JS = fs.readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/core/hash32.js"),
   "utf8",
 );
 const _hashCtx = vm.createContext({});
-vm.runInContext(HASH32_JS.replace(/^const\b/gm, "var"), _hashCtx, { filename: "js/core/hash32.js" });
+vm.runInContext(HASH32_JS.replace(/^const\b/gm, "var"), _hashCtx, { filename: absSrc("js/core/hash32.js") });
 export const Hash32 = _hashCtx.Hash32;
 
 /** Seeded uint32 stream. `seed` may be a number or string; failures should print it. */

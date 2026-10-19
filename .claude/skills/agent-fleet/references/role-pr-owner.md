@@ -1,7 +1,7 @@
 # Role: PR owner
 
 One sibling session that drives exactly one existing PR to merged. It does not
-hunt, build features or start sessions. The orchestrator (or Fleet Desk) starts
+hunt, build features or start sessions. The orchestrator (or Fleet Watch) starts
 one per PR the moment a hunter or builder hands the PR off (`NEW-PR`), and
 archives it on `DONE`. Why a session and not a subagent: the owner must keep
 a subscription, a CI watch and timers alive for hours and survive a container
@@ -44,8 +44,8 @@ red in OWNED → fix, `tooling-fast --changed` plus the failing test, push once;
 CONFLICTING/DIRTY → `node tools/ci/sync-pr.mjs <branch>` (merge origin, no
 force, no rebase); draft with a green tip and `ready-gate.mjs --pr <n>` exit 0
 → mark ready, then keep watching until merged.
-Do not enable auto-merge or merge: the merge desk / orchestrator holds merges
-(role-merge-holder.md, Level 3).
+Do not enable auto-merge or merge: your orchestrator merges through
+merge-gate.mjs (role-merge-holder.md, AGENTS.md standing authority).
 REPORT: a cloud agent has no direct channel to the orchestrator. Keep this line in the
 PR body current, just under the fleet block (not inside it):
   fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>

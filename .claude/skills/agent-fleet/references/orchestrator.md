@@ -1,9 +1,11 @@
 # Orchestrator
 
 You plan the batch, launch workers, read their state off GitHub, answer
-escalations and stop workers that stall. Grok Bot is the orchestrator (sole
-coordinator, 2026-10-17). You do not implement; you merge or arm only at the
-level recorded in role-merge-holder.md.
+escalations and stop workers that stall. You are one peer orchestrator of N
+(one per fleet, any host); fleets meet only on GitHub (bus, claims, PR
+bodies). You do not implement; you merge your own fleet's PRs through
+`merge-gate.mjs` (role-merge-holder.md) under the standing authority in
+AGENTS.md §Concurrent PRs — a successor never re-asks it at a hand-off.
 
 ## Contents
 
@@ -31,6 +33,9 @@ fleet each wake, answering an escalation → `running.md`.
 ## Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 
 ```text
+TITLE: [<Role>] <Fleet>·<Slot> · <scope> · <Model> — <task ≤ 60 chars>   e.g. [Worker] B·W1·L3 · tests · Sonnet — L25 agent-config budgets
+TAGS: fleet:<a|b> role:<role> orchestrator:<your session id> wave:<n> lane:<Lnn> scope:<scope> [pr:<n>] [variant:<medic|survey|synth>]
+      (scheme and one example per role: launch-policy.md §Session titles and tags)
 GOAL: <one sentence, the user's terms>
       (existing PR: add "CONTINUE PR #<n> on <branch>", references/existing-pr.md)
 OWNED: <globs>          FORBIDDEN: <globs>
@@ -38,8 +43,8 @@ DONE WHEN: <exact verify command or measured check, green on the PR head>
 CAPS: ≤ <n> screenshots/captures (default 25); ≤ 2 nested subagents; abort at
       ~400 messages or ~90 min with no OWNED push and say so.
 ORCHESTRATOR: <host>:<your session id>
-USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md,
-      scoped to the lane (OWNED globs / issue list, follow-up PRs included), not to PR numbers
+USER GRANTS: "<the user's exact words>" (<UTC time>) — lane EXTRAS beyond the standing rules in AGENTS.md
+      (OWNED globs / issue list, follow-up PRs included, a ratchet row), not to PR numbers; never the standing rules
 MODE/SEED: permission_mode "auto"; source_revision <deploy branch | NAMED integration branch>; model <id>.
 PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
 DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>
@@ -93,10 +98,33 @@ before every `create_session`:
    docs-only 100k, synth 150k, watcher 100k, orchestrator 200k; launch-policy.md §Size stop).
    The limits are soft caps; hard = soft + 50k. The session measures its live context (`/context` or the statusline, not
    `get_session` `used_tokens`) at every wake and, at the soft cap, finishes the unit, pushes, sends HANDOFF.
-13. `USER GRANTS:` quotes every standing grant verbatim with its date and the session it was typed in.
-   A changed grant is a relaunch with the amended brief, never a message: relayed grants are refused (authority.md).
+13. `USER GRANTS:` quotes the lane's extra grants verbatim with their dates; the standing rules (merge by gate,
+   archive by rule, launch, Plan edits, Pages dispatch) are AGENTS.md and are NOT re-quoted or re-asked — a successor
+   orchestrator's brief says "standing authority: AGENTS.md §Concurrent PRs", nothing more (authority.md) — no
+   "re-grant in your session", no "ask Bryce to archive the predecessor" (the archive rule covers it; ORCH14's
+   2026-10-19 20:11Z brief still carried both).
+   A changed lane grant is a relaunch with the amended brief, never a message.
 14. Route verbose reads (CI logs, transcripts, big lists) through a subagent that returns a summary;
    no tool result over 10k characters enters your context (comms.md §Output budget).
+
+### Orchestrator succession past the lineage cap (Bryce 2026-10-19)
+
+`create_session` chains count toward a platform limit (`get_session` `lineage`: depth/limit 8), and a session at
+depth 8 cannot launch its successor. A session fired by a scheduled task with `create_new_session_on_fire: true` is a
+ROOT instead: no `parent_session_id`, tag `config:routine-lineage-none` (measured 2026-10-19 19:42Z, probe
+session_01MPvWMa3ctnK79nmCzwK3SP). So an orchestrator hands off through a one-shot task, never `create_session`:
+
+1. `create_trigger` with `create_new_session_on_fire: true`, `run_once_at` ~1 min out, `initiation: human_request`,
+   `notifications: {}`, and the full handoff brief as `prompt`.
+2. `update_trigger` `model: claude-opus-5-5` before it fires (the fired session otherwise runs the account default;
+   the probe ran Sonnet). Bryce asked for this path in ORCH14, 2026-10-19 ("want sessions to be able to handoff more than 8").
+3. The fired session has NO repo checkout (`config:no-git-repo`) and no connectors, so the brief opens with:
+   `add_repo brycejmurrin/f1-game` (access push), clone it as the tool says, `register_repo_root`, check out the
+   deploy branch; GitHub reads go through `gh` (proxy-configured) when the GitHub MCP is absent.
+4. After it fires, `get_trigger` gives `last_run.session_id`; confirm with `get_session` (status, model, no
+   `parent_session_id`) and post the bus HANDOFF naming the new id. NEVER `delete_trigger` it: deleting a scheduled
+   task deletes every session it started (ORCH14 lost its first ORCH15 that way, 2026-10-19 20:12Z). A fired one-shot
+   is already disabled; leave it.
 
 ### Pre-launch quota check (#2380)
 
