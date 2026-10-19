@@ -1071,18 +1071,20 @@
       // the slope and clipped the re-seated landmarks. Harbour already has
       // pastelStreetRow(0.595, 0.655); no replacement row.
       {
+        // Harbour-side Racing Kit at the old kenney_ footprint/scale (#1617).
+        // ×1.15 matches the synthetic suburban boxes so clip stays at baseline 8.
         const houses = [
-          ["kenney_sub_building-type-a", 0.605, 1, 28],
-          ["kenney_sub_building-type-c", 0.635, 1, 30],
-          ["kenney_sub_building-type-h", 0.665, 1, 29],
-          ["kenney_sub_building-type-k", 0.620, -1, 22],
+          ["k_pitsoffice", 0.605, 1, 28, 1.15],
+          ["k_pitsgarage", 0.635, 1, 30, 1.15],
+          ["k_tentclosed", 0.665, 1, 29, 1.15],
+          ["k_pitsofficecorner", 0.620, -1, 22, 1.15],
         ];
-        for (const [id, s, side, dist] of houses) {
-          if (!bakedModel(id, K(s), side, dist, { scale: 1.15 }))
+        for (const [id, s, side, dist, sc] of houses) {
+          if (!bakedModel(id, K(s), side, dist, { scale: sc }))
             building(K(s), side, dist, 12, 10, 10,
               { kind: "slab", wall: CREAM, window: WIN, floor: 3 });
         }
-        bakedModel("kenney_sub_planter", K(0.90), 1, 7, { scale: 1.2 });
+        bakedModel("k_billboardlow", K(0.90), 1, 7, { scale: 1.2 });
       }
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
 
