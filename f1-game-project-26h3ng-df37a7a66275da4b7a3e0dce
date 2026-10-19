@@ -1,0 +1,1 @@
+1792389778	Cursor Agent	#1714 session ledger + waste detectors; OWNED tools/ci/session-ledger.mjs tools/ci/live-run-check.mjs tools/ci/test-bg.mjs(WASTE) tests/fixtures/session-ledger/** tests/unit/session-ledger* tests/unit/test-bg* tests/unit/live-run-check* REGISTRATION  [claude/f1-game-project-26h3ng; session df37a7a66275da4b7a3e0dce]
