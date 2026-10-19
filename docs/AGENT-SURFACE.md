@@ -18,6 +18,13 @@ need → skill (when / don'ts)
 
 ## Bootstrap (auto-setup)
 
+All configured stdio servers use the shared output gateway: `outputLevel`
+defaults to `compact`, with `diagnostic` and `full` selectable. `output_read`
+retrieves saved original results without repeating actions. Terminal commands
+use `node tools/agent-run.mjs -- <command>` for the same default and levels.
+Native launchers and command contracts remain available. See the
+[output contract and generated catalog](agent-output/README.md).
+
 So every new Cursor / Claude Code / Codex / Cloud session gets the same
 surface without hand-wiring:
 
