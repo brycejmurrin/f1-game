@@ -12,7 +12,7 @@
 // One test stays on the per-test fixture (`freshTest`): "imported bodies keep
 // legacy decal anchors" swaps GLTF.toMesh, wraps Car3D.bodyAnchors and loads a
 // car model into the live game — state no later test on the page should
-// inherit. UNVERIFIED IN A BROWSER at conversion time.
+// inherit..
 import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { ensureLive, toMenu, pinFreePlay } from "../helpers/shared-page.js";
 

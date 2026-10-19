@@ -87,6 +87,9 @@ const edgeCases = [
   { name: "all ties keep a permutation", ds: [2, 2, 2, 2, 2], k: 2, want: [2, 2], n: 2 },
   { name: "k of one picks the minimum", ds: [7, 3, 8, 3.5], k: 1, want: [3], n: 1 },
   { name: "empty total", ds: [], k: 3, want: [], n: 0 },
+  { name: "k of zero keeps nothing (no sel[-1] read, #3053)", ds: [5, 1, 3], k: 0, want: [], n: 0 },
+  { name: "k of zero over an empty pool", ds: [], k: 0, want: [], n: 0 },
+  { name: "negative k keeps nothing", ds: [5, 1], k: -2, want: [], n: 0 },
 ];
 for (const c of edgeCases) {
   test(`keepNearest edge: ${c.name}`, () => {

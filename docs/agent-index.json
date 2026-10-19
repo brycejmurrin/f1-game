@@ -978,7 +978,6 @@
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/helmets.test.mjs",
-        "tests/unit/livery-contrast.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
@@ -1241,6 +1240,7 @@
         "tests/unit/flyby-fleet.test.mjs",
         "tests/unit/flyby-frame-report.test.mjs",
         "tests/unit/foundation-core-vm.test.mjs",
+        "tests/unit/livery-contrast.test.mjs",
         "tests/unit/slider-effect.test.mjs"
       ],
       "twinned": false

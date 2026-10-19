@@ -76,6 +76,7 @@ const PostCommon = (function () {
   // itself is the whole contract (tests/unit/godray-keep-nearest.test.mjs).
   function keepNearest(sel, total, k) {
     const n = Math.min(k, total);
+    if (!(n > 0)) return 0; // k <= 0 / empty pool: nothing to keep (sel[n - 1] would be sel[-1])
     for (let i = 1; i < n; i++) {
       const cur = sel[i];
       let j = i - 1;

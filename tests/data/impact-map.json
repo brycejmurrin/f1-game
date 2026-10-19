@@ -2202,9 +2202,7 @@
       ],
       "create": [
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-fx.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -9093,6 +9091,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "afterPresent": [
+        "tests/unit/loading-card.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "begin": [
@@ -9118,6 +9117,7 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "raiseHandoff": [
+        "tests/unit/loading-card.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "requestWarm": [
@@ -9144,8 +9144,7 @@
       ],
       "*": [
         "tests/unit/flyby-intro.test.mjs",
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/loading-card.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/perf/render-rate.js": {
@@ -15689,12 +15688,9 @@
     "js/ui/sheet-shape.js": {
       "classify": [
         "tests/specs/ui-resize.spec.js",
-        "tests/unit/sheetshape-density-scale.test.mjs",
-        "tests/unit/sheetshape-registry.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "classifyBody": [
-        "tests/unit/sheetshape-density-scale.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "classifyFit": [
@@ -15704,19 +15700,11 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "observe": [
-        "tests/unit/sheetshape-density-scale.test.mjs",
-        "tests/unit/sheetshape-keyboard.test.mjs",
-        "tests/unit/sheetshape-registry.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "reclassify": [
         "tests/specs/ui-resize.spec.js",
-        "tests/unit/sheetshape-density-scale.test.mjs",
-        "tests/unit/sheetshape-registry.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
-      ],
-      "watchKeyboard": [
-        "tests/unit/sheetshape-keyboard.test.mjs"
       ],
       "*": [
         "tests/specs/ui-scale.spec.js",
