@@ -41,18 +41,7 @@
   "rank": 4,
   "name": "Twin Beam Wing",
   "source": "Red Bull RB19, 2023 (2022-25 ground-effect grid)",
-  "what": "Two stacked beam-wing planes between the diffuser and the main plane, with side mounts, clear of the rain light."
- },
- {
-  "id": "spoon_wing",
-  "base": "low",
-  "cat": "aero",
-  "field": "rwSpoon",
-  "ref": "spoon",
-  "rank": 5,
-  "name": "Spoon Wing",
-  "source": "Ferrari F1-75, 2022 (Red Bull RB18 low-drag)",
-  "what": "The rear main plane gets a deep centre chord and narrow, dropped tips. The upper flap is the active-aero flap owned by another lane, so it stays flat and hides part of the shape."
+  "what": "Two stacked beam-wing planes between the diffuser and the main plane; the lower one ends in a small plate hung off each rear endplate, clear of the rain light."
  },
  {
   "id": "monkey_seat",
@@ -60,9 +49,20 @@
   "cat": "aero",
   "field": "monkey",
   "ref": "monkey",
-  "rank": 6,
+  "rank": 5,
   "name": "Monkey Seat",
   "source": "Mercedes F1 W07, 2016 (2014-17 grid)",
-  "what": "A small twin-plane winglet on a single pylon over the crash structure, under the main rear wing."
+  "what": "A twin-plane winglet with its own end plates over the crash structure on a single pylon, ahead of the main plane."
+ },
+ {
+  "id": "spoon_wing",
+  "base": "low",
+  "cat": "aero",
+  "field": "rwSpoon",
+  "ref": "spoon",
+  "rank": 6,
+  "name": "Spoon Wing",
+  "source": "Ferrari F1-75, 2022 (Red Bull RB18 low-drag)",
+  "what": "The rear main plane gets a deep centre chord and narrow, dropped tips. The upper flap is the active-aero flap owned by another lane, so it stays flat and hides part of the shape."
  }
 ]

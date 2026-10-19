@@ -2,7 +2,7 @@
  "x_wings": {
   "joint": "pylon foot → sidepod top; winglet tips → end fences",
   "before": "pylon foot at y 0.570 over a sidepod top at y 0.458–0.469: 10.2–10.6 cm air gap, so the whole wing floated. Winglet tapered to x 0.51 at the rear, 4 cm short of the inner fence.",
-  "after": "pylon runs to y 0.448: seated, 1.0–2.1 cm into the sidepod on all 11 chassis. Winglet is constant-span x 0.47–0.77 and ends inside both fences (12 mm thick, 27.5 cm long, covering the chord)."
+  "after": "pylon foot follows the sidepod top's slope and sits 3–7 mm into it on all 11 chassis (the round-2 frames were shot with a flat foot 1–2 cm deeper; the change is inside the sidepod and not visible). Winglet is constant-span x 0.47–0.77 and ends inside both fences (12 mm thick, 27.5 cm long, covering the chord). L22's car-fit-audit still reports a 28–50 mm PENETRATION for this foot; direct rays put the true depth at 3–7 mm, so the number is reported back to L22 as a calibration case."
  },
  "bridge_wing": {
   "joint": "strut feet → front-wing main plane; bridge → nose",
