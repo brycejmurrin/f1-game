@@ -2685,6 +2685,7 @@
     },
     "js/car/custom-liveries.js": {
       "create": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/team-livery.test.mjs"
@@ -2696,9 +2697,11 @@
         "tests/unit/team-livery.test.mjs"
       ],
       "saveLiveryId": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setCustomLiveries": [
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "setIdentityValue": [
@@ -2903,6 +2906,7 @@
       "*": [
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",

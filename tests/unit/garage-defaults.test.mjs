@@ -54,9 +54,12 @@ function load(diskSeed) {
     + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx);
   vm.runInContext(fs.readFileSync(STORE_SRC, "utf8")
     + "\n;globalThis.GameStore = GameStore;", ctx);
-  // SettingsExport needs Log + Teams.sanitizeCustom stubs for applyGarage.
+  // Garage imports share the real team/catalog/custom-paint normalization.
   ctx.Log = { info() {}, warn() {}, error() {} };
-  ctx.Teams = { sanitizeCustom: (v) => v };
+  for (const [file, name] of [["js/data/teams.js", "Teams"], ["js/car/liveries.js", "Liveries"], ["js/car/custom-liveries.js", "CustomLiveries"]]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8")
+      + "\n;globalThis." + name + " = " + name + ";", ctx);
+  }
   vm.runInContext(fs.readFileSync(EXPORT_SRC, "utf8")
     + "\n;globalThis.SettingsExport = SettingsExport;", ctx);
   return ctx;
