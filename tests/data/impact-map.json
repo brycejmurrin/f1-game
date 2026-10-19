@@ -5617,6 +5617,9 @@
       "isFlat": [
         "tests/unit/elev-presets.test.mjs"
       ],
+      "plan": [
+        "tests/unit/elev-presets.test.mjs"
+      ],
       "sample": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
@@ -13113,6 +13116,7 @@
         "tests/specs/material-shimmer.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/unit/backend-surface-parity.test.mjs",
+        "tests/unit/census-verdict.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
@@ -15957,6 +15961,9 @@
       "saveAndForceCockpit": [
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "setFoveation": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "*": [
         "tests/unit/load-order.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs"
@@ -16017,6 +16024,9 @@
       "stickToSteer": [
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "worldFromAnchorTo": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "*": [
         "tests/unit/phone-pad.test.mjs"
       ]
@@ -16048,6 +16058,9 @@
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
+      "isVisible": [
+        "tests/unit/xr-visibility-pause.test.mjs"
+      ],
       "lastError": [
         "tests/unit/xr-phase0.test.mjs"
       ],
@@ -16077,7 +16090,8 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "onClick": [
-        "tests/unit/xr-backend-pin.test.mjs"
+        "tests/unit/xr-backend-pin.test.mjs",
+        "tests/unit/xr-phase0.test.mjs"
       ],
       "show": [
         "tests/unit/xr-phase0.test.mjs"

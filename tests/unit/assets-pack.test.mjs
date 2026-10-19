@@ -32,6 +32,8 @@ const ALLOWED = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
 const STRAIGHT_BITMAP = { premultiplyAlpha: "none", colorSpaceConversion: "none" };
 
 const TOOL_SRC = fs.readFileSync(path.join(ROOT, "tools", "gen", "assets.mjs"), "utf8");
+// One source of truth for the MAT layer count: the runtime constant itself (R1-09).
+const MAT_N = +/const MAT_LAYERS = (\d+);/.exec(fs.readFileSync(path.join(ROOT, "js", "render", "shared", "assets.js"), "utf8"))[1];
 const hasPack = fs.existsSync(MANIFEST);
 const manifest = hasPack ? JSON.parse(fs.readFileSync(MANIFEST, "utf8")) : null;
 
@@ -144,8 +146,8 @@ test("material strips download together, then preserve sequential decode and upl
       const kind = images[1].kind;
       events.push(`upload:${kind}`);
       assert.equal(size, 4);
-      assert.equal(layers, 17);
-      assert.equal(images.length, 17);
+      assert.equal(layers, MAT_N);
+      assert.equal(images.length, MAT_N);
       assert.deepEqual(Object.keys(images), ["1", "3"]);
       for (const id of [1, 3]) {
         assert.equal(images[id].closed, 0, "upload must precede bitmap release");
@@ -589,7 +591,7 @@ const layerImage = (id, size, refused) => ({ id, refused,
   pixels(w, h) { const p = new Uint8Array(w * h * 4); for (let i = 0; i < p.length; i++) p[i] = (id * 61 + i * 7 + 3) & 255; return p; } });
 
 test("P4: readLayerBytesAsync returns byte-identical layers to readLayerBytes through a PIXEL_PACK_BUFFER + fenceSync", async () => {
-  const size = 4, page = size * size * 4, n = 17;
+  const size = 4, page = size * size * 4, n = MAT_N;
   const images = [];
   images[1] = layerImage(1, size); images[2] = new Uint8Array(page).fill(77);   // bytes: copied, never uploaded (both paths)
   images[5] = layerImage(5, size); images[9] = layerImage(9, size); images[16] = layerImage(16, size);
@@ -636,7 +638,7 @@ test("P4: the clean 14-layer pack batches GL error checks before publishing call
   const assets = assetLoader({ setTimeout, OffscreenCanvas: class { getContext() { return mock.gl; } } });
   const images = [], complete = [];
   for (const i of [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16]) images[i] = layerImage(i, 2);
-  const done = await assets.readLayerBytesAsync(2, images, 17, new Uint8Array(17 * 16), (i, bytes) => {
+  const done = await assets.readLayerBytesAsync(2, images, MAT_N, new Uint8Array(MAT_N * 16), (i, bytes) => {
     assert.ok(bytes);
     assert.equal(queries, 4, "publish only after the whole copied batch passed its error check");
     complete.push(i);
@@ -850,7 +852,7 @@ const tlxImages = (size, refusedAt = -1) => {
 };
 
 test("P4 (TLX #2149): createTextureArray returns a pending token, uploads only once every layer landed, bytes = the sync path", async () => {
-  const size = 4, n = 17;
+  const size = 4, n = MAT_N;
   const sync = await tlxPackRig(makeAsyncGl(), { nullAsync: true });
   const st = sync.gfx.createTextureArray(size, tlxImages(size), n);
   assert.equal(st.pending, undefined, "the sync path returns a plain texture"); assert.equal(st.ready, undefined);
@@ -869,7 +871,7 @@ test("P4 (TLX #2149): createTextureArray returns a pending token, uploads only o
 });
 
 test("P4 (TLX #2149): setMaterialMaps holds a pending token back, binds it when ready, and a newer call supersedes it", async () => {
-  const size = 2, n = 17;
+  const size = 2, n = MAT_N;
   {
     const r = await tlxPackRig(makeAsyncGl({ busyPolls: 2 }));
     const al = r.gfx.createTextureArray(size, tlxImages(size), n), nm = r.gfx.createTextureArray(size, tlxImages(size), n);
@@ -901,7 +903,7 @@ test("P4 (TLX #2149): setMaterialMaps holds a pending token back, binds it when 
 test("TLX repeated pending material adoption keeps shared tokens alive for the latest request", async () => {
   for (const replacement of ["same", "partial", "different", "unload"]) {
     const r = await tlxPackRig(makeAsyncGl({ busyPolls: 2 }));
-    const make = () => r.gfx.createTextureArray(2, tlxImages(2), 17);
+    const make = () => r.gfx.createTextureArray(2, tlxImages(2), MAT_N);
     const a = make(), n = make(), other = make();
     const disposed = new Map();
     for (const t of [a, n, other]) t.addEventListener("dispose", () => disposed.set(t, (disposed.get(t) || 0) + 1));
@@ -923,7 +925,7 @@ test("TLX repeated pending material adoption keeps shared tokens alive for the l
 });
 
 test("P4 (TLX #2149): the fallbacks — async null and apex26.tlxPackAsync=0 take the sync path; a refused layer takes the 2d copy", async () => {
-  const size = 2, n = 17, page = size * size * 4;
+  const size = 2, n = MAT_N, page = size * size * 4;
   for (const [label, opts] of [["readLayerBytesAsync → null", { nullAsync: true }], ["apex26.tlxPackAsync=0", { ls: { "apex26.tlxPackAsync": "0" } }]]) {
     const r = await tlxPackRig(makeAsyncGl(), opts);
     const t = r.gfx.createTextureArray(size, tlxImages(size), n);
@@ -1069,17 +1071,15 @@ test("GLASS and FLAG are never given a baked layer", () => {
 
 test("the shader's layer count matches the MAT table size", () => {
   const lit = fs.readFileSync(path.join(ROOT, "js", "render", "glx", "shaders", "glsl-lit.js"), "utf8");
-  assert.match(lit, /uniform float uMatTexScale\[17\];/,
-    "lit.js uMatTexScale must be sized for all 17 MAT ids (FLAT..ASPHALT)");
+  assert.match(lit, new RegExp(`uniform float uMatTexScale\\[${MAT_N}\\];`),
+    "lit.js uMatTexScale must be sized for all MAT ids (FLAT..ASPHALT)");
   const glx = fs.readFileSync(path.join(ROOT, "js", "render", "glx", "glx.js"), "utf8");
-  assert.match(glx, /MAT_TEX_LAYERS = 17/, "glx.js MAT_TEX_LAYERS must be 17");
-  const assets = fs.readFileSync(path.join(ROOT, "js", "render", "shared", "assets.js"), "utf8");
-  assert.match(assets, /MAT_LAYERS = 17/, "assets.js MAT_LAYERS must be 17");
+  assert.match(glx, new RegExp(`MAT_TEX_LAYERS = ${MAT_N}\\b`), "glx.js MAT_TEX_LAYERS must equal MAT_LAYERS");
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
-  assert.match(tlx, /U\.matTexScale = uniformArray\(Array\(17\)\.fill\(0\)\)/, "TLX material uniforms must cover all MAT ids");
-  assert.match(tlx, /for \(let i = 0; i < 17; i\+\+\)/, "TLX must upload all material scales");
+  assert.match(tlx, new RegExp(`U\\.matTexScale = uniformArray\\(Array\\(${MAT_N}\\)\\.fill\\(0\\)\\)`), "TLX material uniforms must cover all MAT ids");
+  assert.match(tlx, new RegExp(`for \\(let i = 0; i < ${MAT_N}; i\\+\\+\\)`), "TLX must upload all material scales");
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
-  assert.match(wgx, /MAT_TEX_LAYERS = 17/, "WGX material resources must cover all MAT ids");
+  assert.match(wgx, new RegExp(`MAT_TEX_LAYERS = ${MAT_N}\\b`), "WGX material resources must cover all MAT ids");
   assert.match(wgx, /size: \[1, 1, MAT_TEX_LAYERS\]/, "WGX fallback arrays must have the full material depth");
 });
 
@@ -1207,8 +1207,8 @@ test("every referenced file exists and the strip is the right height",
     // exactly 17 layers tall whichever tier it belongs to.
     const expect = (mats.low && (f === mats.low.albedo || f === mats.low.normal)) ? mats.low.size : mats.size;
     assert.equal(w, expect, `${f} width ${w} != declared size ${expect}`);
-    assert.equal(h, expect * 17,
-      `${f} height ${h} != size*17 (${expect * 17}) — the filmstrip must have one slot per MAT id`);
+    assert.equal(h, expect * MAT_N,
+      `${f} height ${h} != size*${MAT_N} (${expect * MAT_N}) — the filmstrip must have one slot per MAT id`);
   }
   for (const [id, rec] of Object.entries(manifest.models || {}))
     assert.ok(fs.existsSync(path.join(PACK, rec.file)), `model ${id}: missing ${rec.file}`);
@@ -1406,7 +1406,7 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", () => {
     assert.deepEqual([...png.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
     const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
     assert.equal(w, 8);
-    assert.equal(h, 8 * 17);
+    assert.equal(h, 8 * MAT_N);
     const man = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
     const brick = man.materials.layers.find((L) => L.id === "brick");
     assert.ok(brick, "BRICK layer missing from manifest");
@@ -1867,7 +1867,7 @@ test("readback destination ownership is local across sync, overlapping async, fa
     // Inspect module roots without exporting a production diagnostic surface.
     const src = fs.readFileSync(path.join(ROOT,"js/render/shared/assets.js"),"utf8");
     vm.runInContext(src.replace("return { init, supported,", "return { scratchForTest: () => _scratchGl, init, supported,"),sandbox);
-    const a = sandbox.Assets, n = 17, size = 2, data = new Uint8Array(size*size*4*n);
+    const a = sandbox.Assets, n = MAT_N, size = 2, data = new Uint8Array(size*size*4*n);
     const images = []; images[1] = layerImage(1,size);
     assert.deepEqual([...a.readLayerBytes(size,images,n,data)],[1]);
     const owns = (buffer) => Object.values(a.scratchForTest()).some((v) => ArrayBuffer.isView(v) && v.buffer === buffer);
