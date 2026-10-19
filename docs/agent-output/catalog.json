@@ -1,6 +1,6 @@
 {
   "generatedBy": "tools/gen/gen-output-surface.mjs",
-  "version": 2,
+  "version": 3,
   "runner": [
     "node",
     "tools/agent-run.mjs",
@@ -28,19 +28,6 @@
     },
     "coverage": "Wrapper presentation, not native verbosity flags. Reconstruct candidate argv as catalog.runner + interpreter + path (or npm run <name>). Protocol entrypoints keep exact native stdout and are never recommended through the terminal wrapper. Libraries, ambiguous modules and assets are not asserted to be executable commands. Preservation contracts live in docs/agent-output/policies.json (including @contract refs).",
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
-  },
-  "counts": {
-    "files": 440,
-    "classifications": {
-      "entrypoint-candidate": 298,
-      "ambiguous": 59,
-      "protocol-entrypoint": 28,
-      "asset": 2,
-      "data": 11,
-      "library": 42
-    },
-    "npmScripts": 74,
-    "configuredMcpServers": 5
   },
   "tools": [
     {
