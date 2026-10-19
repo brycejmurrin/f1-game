@@ -274,10 +274,18 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 
-test("controller disconnect and visibility-blurred drop the remote sample, mark the session hidden and restore on visible", async ({ page }) => {
+test("controller disconnect and visibility-blurred pause the race and restore on visible", async ({ page }) => {
   test.setTimeout(180_000);
   await bootAndProbe(page);
+  // Pause only applies in a race/countdown (setPaused), so be in one.
+  await page.evaluate(() => { window.__apex.race("monza"); });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 120_000 });
+  await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 30, 0); });
+  const pauseHidden = () => page.evaluate(() => document.getElementById("pausemenu").hidden);
+  expect(await pauseHidden(), "racing, not paused").toBe(true);
+  expect(await page.evaluate(() => window.__apex.info().state), "in a race before VR").toMatch(/^(race|count)$/);
   expect((await startVr(page)).ok).toBe(true);
+  expect(await page.evaluate(() => window.__apex.info().state), "still in the race after entering VR").toMatch(/^(race|count)$/);
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
   await page.evaluate(() => {
@@ -287,29 +295,25 @@ test("controller disconnect and visibility-blurred drop the remote sample, mark 
   });
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
-  // XrBoot answers a non-visible state by dropping the XR-owned remote sample
-  // (Input.remoteLost("xr")) before it asks the game to pause. Spy on that call.
-  await page.evaluate(() => {
-    globalThis.__xrLost = [];
-    globalThis.__xrLostPrev = Input.remoteLost;
-    Input.remoteLost = (src) => { __xrLost.push(src); return __xrLostPrev.call(Input, src); };
-    globalThis.__iwerDevice.updateVisibilityState("visible-blurred");
-  });
-  await page.waitForFunction(() => __xrLost.length > 0, null, { polling: 100, timeout: 15_000 });
+  await page.evaluate(() => { globalThis.__iwerDevice.updateVisibilityState("visible-blurred"); });
+  await page.waitForFunction(() => XrSession.getSession().visibilityState === "visible-blurred",
+    null, { polling: 100, timeout: 15_000 });
   const vis = await page.evaluate(() => ({
-    state: XrSession.getSession() && XrSession.getSession().visibilityState,
-    visible: XrSession.isVisible(),
-    lost: __xrLost.slice(),
-    diagVisible: XrBoot.diag().visible,
-  }));
+    state: XrSession.getSession().visibilityState, visible: XrSession.isVisible() }));
   test.info().annotations.push({ type: "xr-visibility", description: JSON.stringify(vis) });
-  expect(vis.state).toBe("visible-blurred");
   // visible-blurred is still "visible" to XrSession (only "hidden" clears it);
-  // the pause/remote-drop path keys off state !== "visible" instead.
-  expect(vis.lost).toContain("xr");
+  // XrBoot's pause keys off state !== "visible" instead (pinned in
+  // tests/unit/xr-visibility-pause.test.mjs, which is where the XrBoot -> api.pause
+  // call is isolated: this spec shows the game pauses, not which path did it).
+  // The headset system menu pauses the race (R3-STATES-2).
+  await page.waitForFunction(() => !document.getElementById("pausemenu").hidden,
+    null, { polling: 100, timeout: 15_000 })
+    .catch(async (e) => {
+      const d = await page.evaluate(() => ({ state: window.__apex.info().state, vis: XrSession.getSession().visibilityState }));
+      throw new Error("game did not pause: " + JSON.stringify(d) + " / " + e.message);
+    });
 
   await page.evaluate(() => {
-    Input.remoteLost = __xrLostPrev;
     const d = globalThis.__iwerDevice;
     d.updateVisibilityState("visible");
     if (d.controllers.left) d.controllers.left.connected = true;
@@ -396,30 +400,31 @@ test("EXIT VR resumes the game tick and restores the live camera without changin
 
 test("ENTER VR without an attachable backend pins TLX+forceGL, stashes the prior pick and reloads", async ({ page }) => {
   test.setTimeout(180_000);
+  // Unconditional: boot the GLX backend, which cannot attach an XRWebGLLayer
+  // (the IWER suite otherwise forces TLX+WebGL2, which can).
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("apex26.gfxBackend", "webgl2");
+      localStorage.setItem("apex26.tlxForceGL", "0");
+    } catch (_) { /* */ }
+  });
   await bootAndProbe(page);
-  // Unconditional: pretend the live backend cannot attach (the IWER suite
-  // normally forces tlxForceGL, which can), and stub the reload we would trigger.
   const result = await page.evaluate(() => {
-    const gfx = { attachXrSession() {}, xrCapable: () => false };
-    XrBoot.bind({ gfx, tickBody() {}, windowTick() {}, getCamMode: () => 0, setCamMode() {} });
     localStorage.removeItem("apex26.xrPrevBackend");
     const canAttach = XrBoot.canAttach();
     const out = XrBoot.ensureXrBackend();
     return { canAttach, out, gfxBackend: localStorage.getItem("apex26.gfxBackend"),
-      pin: localStorage.getItem("apex26.tlxForceGL"), pending: localStorage.getItem("apex26.xrEnterPending") };
-  }).catch((e) => ({ navigated: String(e && e.message || e) }));
+      pin: localStorage.getItem("apex26.tlxForceGL"), pending: localStorage.getItem("apex26.xrEnterPending"), stash: localStorage.getItem("apex26.xrPrevBackend") };
+  });
   test.info().annotations.push({ type: "xr-backend-gate", description: JSON.stringify(result) });
-  // ensureXrBackend() ends in location.reload(); that destroys the evaluate context.
-  // Read the persisted pin from the reloaded page instead.
-  await page.waitForLoadState("domcontentloaded");
-  const pins = await page.evaluate(() => ({
-    gfxBackend: localStorage.getItem("apex26.gfxBackend"),
-    pin: localStorage.getItem("apex26.tlxForceGL"),
-    pending: localStorage.getItem("apex26.xrEnterPending"),
-  }));
-  expect(pins.gfxBackend).toBe("three");
-  expect(pins.pin).toBe("1");
-  expect(pins.pending).toBe("1");
+  // Read synchronously inside ensureXrBackend's page turn, before the reload
+  // lets the pinned boot restore the player's own pick.
+  expect(result.canAttach).toBe(false);
+  expect(result.out).toEqual({ ok: false, reloading: true });
+  expect(result.gfxBackend).toBe("three");
+  expect(result.pin).toBe("1");
+  expect(result.pending).toBe("1");
+  expect(result.stash, "the prior 2D pick is stashed for restore").not.toBeNull();
 });
 
 test("stereo viewports: left width > 0; non-blank canvas capture; flat mode after exit", async ({ page }) => {
