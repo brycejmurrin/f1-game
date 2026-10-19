@@ -90,8 +90,8 @@ function buildShell(out, liv, L) {
       if (y1 <= y0Lo || y0 >= y1Hi) continue;
       const a = Math.max(y0, y0Lo), b = Math.min(y1, y1Hi);
       panelGrid(out, [o0[0], o0[1] + a, o0[2]], uVec, [0, b - a, 0], nu, nv, nrm,
-        LW ? () => fixed || LW.wallAt(a, nrm[2] > 0.5)
-          : (u, v) => seamed(wallAt(a + (b - a) * v), u, nu), MAT.CONCRETE);
+        LW ? () => fixed || LW.wallAt((a + b) / 2, nrm[2] > 0.5)
+          : (u, v) => seamed(wallAt(a + (b - a) * v), u, nu), LW ? LW.mat : MAT.CONCRETE);
     }
   };
   for (let i = 0; i < walls.length; i++) {

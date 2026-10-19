@@ -513,7 +513,10 @@ function lookWall(L, liv) {
   const wallAt = (y, isBack) => (isBack && back ? (y < 0.12 ? W.skirt : back) : y < 1.4995 ? dado : y < 1.6205 ? stripe : panel);
   // Stock battens only on the stock room; a look draws its own joints.
   const seamed = (col) => col;
-  return { bands, wallAt, seamed, ceil: L.ceil };
+  // FLAT, not CONCRETE: the pack's concrete layer multiplies albedo by a dark
+  // texel (albedo * tex * 2), which pinned every look's walls to the same
+  // ~7% grey whatever colour they were given (round 1 captures, all ~18/255).
+  return { bands, wallAt, seamed, ceil: L.ceil, mat: L.wall.mat != null ? L.wall.mat : MAT.FLAT };
 }
 // Floor colour overrides for buildBayFloor: { SLAB, IN, PAINT, WALK, band, key }.
 function lookFloorCols(L, liv) {

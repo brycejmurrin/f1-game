@@ -93,3 +93,15 @@ test("trackside bays (buildStatic) ignore the look", () => {
   if (!sa) return;   // buildStatic not exported in this tree
   assert.deepEqual(Array.from(sb.col), Array.from(sa.col), "pit rows keep the shipped room");
 });
+
+test("a look's upper wall takes its panel colour, not the accent stripe", () => {
+  const { plain } = build("flood");
+  const shell = plain[0];
+  // flood's panel is the team c1 (papaya here): find a vertex high on the back wall.
+  let hit = null;
+  for (let i = 0; i < shell.pos.length; i += 3)
+    if (shell.pos[i + 1] > 3 && shell.pos[i + 1] < 4.9 && shell.pos[i + 2] < -6.3) { hit = i; break; }
+  assert.ok(hit != null, "a back-wall vertex above 3 m");
+  const c = shell.col.slice(hit, hit + 3);
+  assert.ok(c[0] > 0.6 && c[2] < 0.2, `upper wall is team colour, got ${Array.from(c).map((v) => v.toFixed(2))}`);
+});
