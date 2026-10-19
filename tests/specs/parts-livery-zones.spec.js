@@ -6,34 +6,10 @@
 // sections. Entry path as parts-liveries.spec.js: McLaren (team 2), empty customs,
 // START, CAR, LIVERY, create.
 import { test, expect } from "../helpers/fixtures.js";
-import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
+import { ensureLive } from "../helpers/shared-page.js";
+import { revealLiveryControl as reveal, openEmptyCustomLivery } from "../helpers/livery-editor.js";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
-
-// One car area at a time: open the area that holds a control before acting on it.
-async function reveal(page, sel) {
-  await page.evaluate((s) => {
-    const pane = document.querySelector(s)?.closest('[role="tabpanel"]');
-    if (pane && pane.hidden) document.getElementById(pane.getAttribute("aria-labelledby")).click();
-  }, sel);
-  return page.locator(sel);
-}
-
-async function openLiveryEditor(page) {
-  const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
-  await forgetStored(page, [key]);
-  await page.evaluate((k) => GameStore.store.set(k, []), key);
-  await toMenu(page);
-  await pinFreePlay(page, { team: 2, click: false });
-  await page.locator("#mb-race").click();
-  await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-car").click();
-  await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-  await page.locator(".cs-liv-create").click();
-  await expect(page.locator(".cs-liv-editor")).toBeVisible();
-  return key;
-}
 
 const lastLogId = (page) => page.evaluate(() => (Log.records().at(-1) || { id: 0 }).id);
 // The garage repaints through a fresh Car3D build ("[car] build <team>"): a deterministic signal.
@@ -42,7 +18,8 @@ const rebuiltSince = (page, since) => expect.poll(() => page.evaluate((s) => Log
 
 test("zone finishes and ENDPLATES: tappable on a phone, and the saved car carries them", async ({ page }) => {
   await ensureLive(page);
-  const key = await openLiveryEditor(page);
+  const key = await openEmptyCustomLivery(page);
+  await expect(page.locator(".cs-liv-editor")).toBeVisible();
 
   for (const sel of ['[data-cs-pill="haloFinish:matte"]', '[data-cs-pill="podFinish:chrome"]']) {
     const pill = await reveal(page, sel);
@@ -87,7 +64,8 @@ test("zone finishes and ENDPLATES: tappable on a phone, and the saved car carrie
 
 test("RUNNING GEAR: floor / suspension / duct tints are on that tab and land on the mesh", async ({ page }) => {
   await ensureLive(page);
-  const key = await openLiveryEditor(page);
+  const key = await openEmptyCustomLivery(page);
+  await expect(page.locator(".cs-liv-editor")).toBeVisible();
 
   // The area tab exists and is the only way to reach these rows on a phone.
   const gearTab = page.locator('#cs-liv-tab-running');

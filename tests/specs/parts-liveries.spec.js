@@ -14,7 +14,8 @@
 // re-read of the team..
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
-import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
+import { ensureLive, toMenu, pinFreePlay } from "../helpers/shared-page.js";
+import { revealLiveryControl as reveal, pinEmptyCustomLiveries as pinEmptyCustoms } from "../helpers/livery-editor.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -32,24 +33,6 @@ async function openSetup(page) {
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
-}
-
-// Creator tests need an empty custom list. forgetStored alone is a miss, so
-// GarageDefaults refills the shipped McLaren custom (CI selected-6: length 2).
-// The paint editor shows one car area at a time (car-area tabs): open the area that holds a
-// control before acting on it. A no-op for anything outside a hidden area.
-async function reveal(page, sel) {
-  await page.evaluate((s) => {
-    const pane = document.querySelector(s)?.closest('[role="tabpanel"]');
-    if (pane && pane.hidden) document.getElementById(pane.getAttribute("aria-labelledby")).click();
-  }, sel);
-  return page.locator(sel);
-}
-
-async function pinEmptyCustoms(page) {
-  const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
-  await forgetStored(page, [key]);
-  await page.evaluate((k) => GameStore.store.set(k, []), key);
 }
 
 test.describe("Liveries — catalog", () => {

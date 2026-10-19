@@ -99,7 +99,9 @@ test("an empty written custom-livery list is a HIT, not a GarageDefaults miss", 
   assert.notDeepEqual(GameStore.store.get("livery.custom.mclaren", []),
     GarageDefaults.get("livery.custom.mclaren"));
   const spec = fs.readFileSync(path.join(ROOT, "tests/specs/parts-liveries.spec.js"), "utf8");
-  assert.match(spec, /function pinEmptyCustoms/,
+  const helper = fs.readFileSync(path.join(ROOT, "tests/helpers/livery-editor.js"), "utf8");
+  assert.match(spec, /pinEmptyCustomLiveries as pinEmptyCustoms/);
+  assert.match(helper, /GameStore\.store\.set\(k, \[\]\)/,
     "creator tests must write [] after forget so GarageDefaults cannot refill");
 });
 
