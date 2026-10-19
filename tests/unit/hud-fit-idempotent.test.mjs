@@ -34,6 +34,19 @@ function ctx2d() {
   });
 }
 
+/** Re-run `paint` whenever `prop` is written on `root.style` (synchronous reflow).
+ *  A box a test placed by hand (a rect `paint` did not produce) is the test's: it stays. */
+function reflowOn(root, prop, paint, els) {
+  const st = root.style, set = st.setProperty, rm = st.removeProperty;
+  const reflow = () => {
+    const own = new Map(els.filter((el) => el._rect && !el._rect._painted).map((el) => [el, el._rect]));
+    paint();
+    for (const [el, r] of own) el._rect = r;
+  };
+  st.setProperty = (k, v) => { set(k, v); if (k === prop) reflow(); };
+  st.removeProperty = (k) => { rm(k); if (k === prop) reflow(); };
+}
+
 /** Compact short-landscape @ HUD SIZE 200 % — the ui-redesign flake shape. */
 function bootFlipHarness(o = {}) {
   const INTRINSIC = o.intrinsic || { map: 110, top: 300, sectors: 140, gaps: 84 };
@@ -136,10 +149,13 @@ function bootFlipHarness(o = {}) {
   function paintAt(z, liveOverride) {
     const L = liveOverride == null ? z : liveOverride;
     const bz = Math.min(SCALE, 1);
-    top._rect = R((W - INTRINSIC.top * z) / 2, 8 * z, INTRINSIC.top * z, TOWER_H * z);
+    // o.quant / o.quantH: the sub-pixel width/height a real font adds at zoom z (metrics quantize with zoom).
+    const tw = INTRINSIC.top * z + (o.quant ? o.quant(z) : 0), th = TOWER_H * z + (o.quantH ? o.quantH(z) : 0);
+    top._rect = R((W - tw) / 2, 8 * z, tw, th);
     minimap._rect = R(10 * z + SAL, 8 * z, INTRINSIC.map * z, INTRINSIC.map * z);
     gaps._rect = R(10 * z + SAL + INTRINSIC.map * z + 8 * z, 8 * z, INTRINSIC.gaps * z, 40 * z);
     els.hudSectors._rect = R(W - 10 * z - SAL - PLATE_IN - INTRINSIC.sectors * z, PLATE_TOP, INTRINSIC.sectors * z, 72 * z);
+    for (const el of [top, minimap, gaps, els.hudSectors]) el._rect._painted = true;
     gear._rect = R(100, 300, 250 * bz, 50 * bz);
     energy._rect = R(400, 300, 250 * bz, 50 * bz);
     bar._rect = R(0, 200, W, H - 200);
@@ -160,13 +176,15 @@ function bootFlipHarness(o = {}) {
     }
   }
 
-  paintAt(SCALE);
-  for (let i = 0; i < 3; i++) hud.updateHud(true);
-
   const pub = () => {
     const v = root.style.getPropertyValue("--hud-z-top");
     return v === "" ? SCALE : +v;
   };
+  // A real DOM re-lays out when the band zoom is written (the fit's zoom-1 cap
+  // pass reads that layout); static rects would hand it the old paint.
+  reflowOn(root, "--hud-z-top", () => paintAt(pub()), [top, minimap, gaps, els.hudSectors]);
+  paintAt(SCALE);
+  for (let i = 0; i < 3; i++) hud.updateHud(true);
   const snap = () => ({
     zTop: root.style.getPropertyValue("--hud-z-top"),
     zBot: root.style.getPropertyValue("--hud-z-bot"),
@@ -252,12 +270,30 @@ test("fitHud: on touch the tower clears the sector plate's row without shrinking
   settle(6);
   const z = h.pub();
   // The tower's bottom at the published zoom sits above the plate's top (56) by ROW_AIR.
+  // +0.25px: --hud-z-top ceils onto a 0.01 grid (#2882), so a raw 0.928 publishes 0.93.
   const bottom = z * (8 + PHONE.towerH);
-  assert.ok(bottom <= 56 - 2 + 0.01, "tower bottom " + bottom.toFixed(2) + " clears the plate's top at y 56");
+  assert.ok(bottom <= 56 - 2 + 0.25, "tower bottom " + bottom.toFixed(2) + " clears the plate's top at y 56");
   assert.ok(z > 0.85 && z < 1, "and the band is only as small as that row needs (" + z.toFixed(3) + "), not the old 0.575 read off the dock stand-off");
   // Stable: more ticks do not move it.
   settle(4);
   assert.equal(h.pub(), z, "the cap does not hunt");
+});
+
+test("fitHud: larger HUD SIZE never paints a smaller top band on the same phone viewport (#2882)", () => {
+  // Live 844×390 pin-look: HUD 100 published 0.947 and HUD 200 published 0.945
+  // (sub-pixel intrinsic noise). Ceil-to-0.01 makes both 0.95 so gearW is monotonic.
+  const painted = [];
+  for (const scale of [0.7, 1, 1.5, 2]) {
+    const h = bootFlipHarness({ ...PHONE, scale });
+    for (let i = 0; i < 8; i++) { h.paintAt(h.pub()); h.invalidate(); h.tick(); }
+    painted.push({ scale, z: h.pub(), w: PHONE.intrinsic.top * h.pub() });
+  }
+  for (let i = 1; i < painted.length; i++) {
+    assert.ok(painted[i].w + 1e-6 >= painted[i - 1].w,
+      "HUD SIZE " + painted[i - 1].scale + " -> " + painted[i].scale + " shrank the tower: " + JSON.stringify(painted));
+  }
+  assert.match(read("js/ui/hud.js"), /Math\.ceil\(cap \* 100/,
+    "top/bot caps ceil onto a 0.01 grid so cross-scale noise cannot undercut");
 });
 
 test("fitHud: hiding the sector plate frees the row (touch), and a plate level with the tower is not a row to clear", () => {
@@ -342,16 +378,45 @@ test("fitHud: a small plate right of Boost does not trigger same-key collision r
   assert.equal(fits, initial, "a non-overlapping saved plate does not reopen the full fitter");
 });
 
-test("fitHud keeps the smaller cap when zoomed font metrics offer subpixel growth", () => {
-  const h = bootFlipHarness();
-  const before = h.pub();
-  h.paintAt(before);
-  const sec = h.$("hud-sectors");
-  // Same content, with the small intrinsic-width change caused by font rounding at another zoom.
-  sec._rect.left += .2 * before;
-  sec._rect.width -= .2 * before;
-  h.invalidate(); h.tick();
-  assert.equal(h.pub(), before, "a fraction of a screen pixel must not restart scale hunting");
+// Font metrics quantize with zoom: the tower measured at zoom z is not INTRINSIC * z.
+// Deterministic sub-pixel noise in z, the shape that let 844x390 settle at 0.95 from
+// HUD 100 and 0.94 from HUD 200 when caps were measured at whatever zoom was painted.
+const QUANT = (z) => 0.9 * Math.sin(z * 211) + 0.5 * Math.cos(z * 97);
+const QUANT_H = (z) => 1.6 * Math.sin(z * 173);
+
+test("fitHud: the top cap is measured at one canonical zoom, so HUD SIZE and the prior paint cannot move it (#2882)", () => {
+  const settle = (h, n) => { for (let i = 0; i < n; i++) { h.paintAt(h.pub()); h.invalidate(); h.tick(); } };
+  const painted = [];
+  for (const scale of [0.7, 1, 1.25, 1.5, 2]) {
+    const h = bootFlipHarness({ ...PHONE, scale, quant: QUANT, quantH: QUANT_H });   // the row cap binds: height noise
+    settle(h, 8);
+    const z = h.pub();
+    painted.push({ scale, z, w: PHONE.intrinsic.top * z + QUANT(z) });
+    // Re-fits from the settled paint publish the same number (no hunting between grid steps).
+    for (let i = 0; i < 6; i++) { settle(h, 1); assert.equal(h.pub(), z, "re-fit moved the cap at HUD SIZE " + scale); }
+    // A different prior paint (another zoom on screen, e.g. a resize) lands on the same cap.
+    if (z < scale) { h.root.style.setProperty("--hud-z-top", String(Math.max(0.5, z - 0.07))); settle(h, 4); assert.equal(h.pub(), z, "path-dependent cap at HUD SIZE " + scale); }
+  }
+  const capped = painted.filter((p) => p.z < p.scale);
+  assert.ok(capped.length >= 2, "precondition: the cap binds at two or more sizes " + JSON.stringify(painted));
+  assert.equal(new Set(capped.map((p) => p.z)).size, 1, "one viewport, one cap at every size it binds: " + JSON.stringify(painted));
+  for (let i = 1; i < painted.length; i++) {
+    assert.ok(painted[i].z >= painted[i - 1].z && painted[i].w >= painted[i - 1].w,
+      "HUD SIZE " + painted[i - 1].scale + " -> " + painted[i].scale + " shrank the tower: " + JSON.stringify(painted));
+  }
+});
+
+test("fitHud: --hud-top-h is the PAINTED tower's height after the cap moves the zoom (#2941)", () => {
+  // 667x375: the tower painted 48 px against a --hud-top-h measured under the previous zoom.
+  const quantH = QUANT_H;
+  for (const scale of [1, 2]) {
+    const h = bootFlipHarness({ ...PHONE, scale, quant: QUANT, quantH });
+    h.invalidate(); h.tick();   // one fit, straight from the boot paint (no settle loop)
+    const z = h.pub(), want = (PHONE.towerH * z + quantH(z)) / z;
+    assert.ok(z < scale, "precondition: the cap binds at HUD SIZE " + scale);
+    const got = parseFloat(h.snap().topH);
+    assert.ok(Math.abs(got - want) <= 0.06, "--hud-top-h " + got + " vs painted " + want.toFixed(2) + " at zoom " + z + " (HUD SIZE " + scale + ")");
+  }
 });
 
 test("fitHud still grows a map-only band when timing tiles are hidden", () => {
@@ -688,4 +753,30 @@ test("fitHud leaves a manually sized sector plate to HudLayout and releases stal
     h.invalidate(); h.tick();
     assert.equal(sec.style.getPropertyValue("max-width"), "", "saved plate keeps its intrinsic width on every fit");
   }
+});
+
+
+test("fitHud: intentional manual overlaps neither squeeze sectors nor reopen the fitter", () => {
+  const h = bootFlipHarness();
+  const { sectors } = forceUnresolvableClash(h);
+  sectors.setAttribute("data-hl-user", "");
+  // An explicit 0,0 / 100% entry is still manual, even without data-hl.
+  let fits = 0;
+  h.sb.HudLayout = { fit() { fits++; } };
+  h.invalidate(); h.tick();
+  const initial = fits;
+  for (let i = 0; i < 10; i++) h.tick();
+  assert.equal(fits, initial, "intentional overlap is not an automatic-fit failure");
+  assert.equal(sectors.style.getPropertyValue("max-width"), "");
+  assert.ok(h.root.style.getPropertyValue("--hud-fit-stamp"), "manual overlap does not void the settled stamp");
+});
+
+test("fitHud: a manually placed huge plate does not reduce the automatic top band's budget", () => {
+  const small = bootFlipHarness(), huge = bootFlipHarness();
+  for (const h of [small, huge]) {
+    h.$("hud-sectors").setAttribute("data-hl-user", ""); h.$("hud-sectors").setAttribute("data-hl-v4", "");
+  }
+  huge.$("hud-sectors")._rect = huge.R(-10000, -10000, 20000, 20000);
+  for (const h of [small, huge]) { h.invalidate(); h.tick(); }
+  assert.equal(huge.pub(), small.pub(), "manual plate dimensions do not constrain other readouts");
 });

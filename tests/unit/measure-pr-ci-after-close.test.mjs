@@ -38,3 +38,49 @@ test("analyzePrCi peak-hour median wall minutes", () => {
   assert.equal(v.peakHourUtc, 15);
   assert.ok(v.peakHourMedianWallMin > 15 && v.peakHourMedianWallMin < 25);
 });
+
+// One fixture per filter branch in analyzePrCi (measure-pr-ci-after-close.mjs): each case is a lone run that the
+// filter must drop from the peak-hour sample, so a missing/inverted filter flips peakHourUtc from null.
+const wallRun = (over) => ({
+  id: 1, path: CI_PATH, event: "pull_request", status: "completed", conclusion: "success",
+  created_at: "2026-10-18T15:00:00Z", updated_at: "2026-10-18T15:12:00Z", pull_requests: [{ number: 1 }], ...over,
+});
+const deployPr = new Map([[1, { base: { ref: DEPLOY }, closed_at: "2026-10-18T20:00:00Z" }]]);
+const peakOf = (runs, prByNum = deployPr) => analyzePrCi({ runs, prByNum, jobsByRun: new Map() });
+
+test("analyzePrCi: a lone qualifying run is the peak (control for the filter cases)", () => {
+  const v = peakOf([wallRun({})]);
+  assert.equal(v.peakHourUtc, 15);
+  assert.ok(Math.abs(v.peakHourMedianWallMin - 12) < 0.01);
+});
+
+for (const conclusion of ["cancelled", "skipped", "stale"]) {
+  test(`analyzePrCi: a ${conclusion} run adds no wall sample`, () => {
+    const v = peakOf([wallRun({ conclusion })]);
+    assert.equal(v.peakHourUtc, null);
+    assert.equal(v.peakHourMedianWallMin, null);
+  });
+}
+
+test("analyzePrCi: an unfinished run (no conclusion) adds no wall sample", () => {
+  assert.equal(peakOf([wallRun({ status: "in_progress", conclusion: null })]).peakHourUtc, null);
+});
+
+test("analyzePrCi: a run under 3 minutes of wall time is excluded; exactly 3 counts", () => {
+  assert.equal(peakOf([wallRun({ updated_at: "2026-10-18T15:02:59Z" })]).peakHourUtc, null);
+  assert.equal(peakOf([wallRun({ updated_at: "2026-10-18T15:03:00Z" })]).peakHourUtc, 15);
+});
+
+test("analyzePrCi: a PR whose base is not the deploy branch is skipped, jobs included", () => {
+  const other = new Map([[1, { base: { ref: "feature/x" }, closed_at: "2026-10-18T10:00:00Z" }]]);
+  const jobs = new Map([[1, [{ started_at: "2026-10-18T15:00:00Z", completed_at: "2026-10-18T15:10:00Z", status: "completed" }]]]);
+  const v = analyzePrCi({ runs: [wallRun({})], prByNum: other, jobsByRun: jobs });
+  assert.equal(v.totalJobs, 0);
+  assert.equal(v.peakHourUtc, null);
+  assert.equal(analyzePrCi({ runs: [wallRun({})], prByNum: new Map(), jobsByRun: jobs }).totalJobs, 0, "unknown PR is skipped too");
+});
+
+test("analyzePrCi: non-CI workflows and non-pull_request events are skipped", () => {
+  assert.equal(peakOf([wallRun({ path: ".github/workflows/pages.yml" })]).peakHourUtc, null);
+  assert.equal(peakOf([wallRun({ event: "push" })]).peakHourUtc, null);
+});

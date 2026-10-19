@@ -27,6 +27,8 @@ Read your role's reference before acting:
   merged: subscribe, CI watch, check-in, fix reds and conflicts unasked); merge
   holder → [`references/role-merge-holder.md`](references/role-merge-holder.md)
   (no live Merge Desk: the orchestrator holds the queue at the user's level);
+  reviewer → [`references/role-reviewer.md`](references/role-reviewer.md)
+  (one pass, findings only, STOP AT 120k);
   fleet watch → [`references/role-fleet-watch.md`](references/role-fleet-watch.md)
   (one session: PR events + 3-min ticks, routine fixes, no merges, dashboard).
 - **Worker** → [`references/worker.md`](references/worker.md): the loop with

@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import vm from "node:vm";
+import { readFileSync, rmSync, statSync } from "node:fs";
+import { readOutputArtifact } from "../../tools/agent/output.mjs";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 
 const target = { type: "page", id: "t", url: "about:blank", title: "fixture",
@@ -151,4 +153,41 @@ test("detach drops the previous target's operations (B10)", async () => {
   await session.detach();
   assert.equal(session.state().operations.length, 0, "stale operations survived detach");
   assert.deepEqual(session.operations.size, 0);
+});
+
+test("large operation values and exceptions remain retrievable after newer runs and bounded state eviction", async () => {
+  const { session, client } = await attachedPage();
+  const original = { result: { type: "string", value: "é\"".repeat(10000) },
+    exceptionDetails: { text: "fixture exception", exception: { description: "stack".repeat(3000), objectId: "remote-error" } } };
+  const artifacts = [];
+  const send = client.send.bind(client);
+  client.send = async (method, params = {}) => {
+    if (method === "Runtime.evaluate" && params.expression === "once()") {
+      client.calls.push({ method, params }); return original;
+    }
+    return send(method, params);
+  };
+  try {
+    const { operationId } = session.run("once()"); await turn();
+    const row = session.state(true).operations.at(-1);
+    assert.equal(row.id, operationId); assert.equal(row.status, "exception");
+    assert.equal(row.result.truncated, true);
+    const artifact = row.result.artifact.path; artifacts.push(artifact);
+    assert.deepEqual(JSON.parse(readFileSync(artifact, "utf8")), original);
+    assert.equal(statSync(artifact).mode & 0o777, 0o600);
+    const page = readOutputArtifact({ artifact, limit: 80 });
+    assert.ok(JSON.stringify(page).length < 2000);
+    assert.equal(client.calls.filter(c => c.method === "Runtime.evaluate" && c.params.expression === "once()").length, 1);
+    assert.equal(client.calls.filter(c => c.method === "Runtime.releaseObjectGroup" && c.params.objectGroup.endsWith(`:run:${operationId}`)).length, 1);
+    session.run("1"); await turn();
+    assert.equal(session.state(true).operations[0].artifact.path, artifact);
+    for (let i = 0; i < 11; i++) { session.run("1"); await turn(); }
+    assert.equal(session.operations.size, 10);
+    assert.ok(JSON.stringify(session.state(true)).length < 6000);
+    assert.deepEqual(JSON.parse(readFileSync(artifact, "utf8")), original, "eviction does not destroy the retained original");
+    assert.equal(client.calls.filter(c => c.method === "Runtime.evaluate" && c.params.expression === "once()").length, 1);
+  } finally {
+    await session.detach();
+    for (const artifact of artifacts) rmSync(artifact, { force: true });
+  }
 });

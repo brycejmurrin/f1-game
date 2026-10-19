@@ -7,12 +7,14 @@
 // waitReady died at BOOT_MS with the title screen still up (CI run 36967469812).
 import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
+// DPR 1 is an intentional low-raster geometry profile, not native-device pixel evidence.
 const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
 test.describe("Garage categories — touch scrolling", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true, isMobile: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   async function garage(page, scale) {
     await page.addInitScript((pct) => localStorage.setItem("apex26.uiScale", String(pct)), scale);
@@ -300,7 +302,7 @@ async function expectNormalRaceControls(page) {
 }
 
 test.describe("Lighting tuner — pause lifecycle", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   // ESCAPE IS ONE STEP BACK, not the emergency exit it used to be. It called
   // setPaused(false), which threw away the fly-cam, the tuner panel AND the
@@ -436,7 +438,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
    drag, what happens when one is taken away mid-hold — and that needs pointerId
    control the high-level helper does not offer. */
 test.describe("Lighting tuner — free camera touch controls", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   // Press a stick `dy` px above its centre and report what the handler stored.
   const pressStick = (page, id, dy) => page.evaluate(({ id, dy }) => {
@@ -560,7 +562,7 @@ test.describe("Lighting tuner — free camera touch controls", () => {
 
 // hasTouch prevents game from adding body.desktop class (which hides steer/calib btns)
 test.describe("Pause menu — tilt mode", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("calibrate button enabled in tilt mode", async ({ page }) => {
     await page.goto("/");
@@ -576,7 +578,7 @@ test.describe("Pause menu — tilt mode", () => {
 });
 
 test.describe("Pause menu — button mode", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("calibrate button disabled (still visible) in button mode", async ({ page }) => {
     await page.goto("/");
@@ -594,7 +596,7 @@ test.describe("Pause menu — button mode", () => {
 });
 
 test.describe("Pause menu — touch mode", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("calibrate button disabled (still visible) in touch mode", async ({ page }) => {
     await page.goto("/");
@@ -614,7 +616,7 @@ test.describe("Pause menu — touch mode", () => {
 // another (worst case HIDE HUD, which closed the whole menu). Every settings
 // button must keep its exact position across a steer-mode change.
 test.describe("Pause settings — stable layout", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("buttons keep their positions when steer mode changes", async ({ page }) => {
     await page.goto("/");
@@ -653,7 +655,7 @@ test.describe("Pause settings — stable layout", () => {
 });
 
 test.describe("Pause — HOW TO PLAY", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("opens the help sheet over the pause menu and BACK returns to it", async ({ page }) => {
     await page.goto("/");
@@ -696,7 +698,7 @@ test.describe("Pause — HOW TO PLAY", () => {
 });
 
 test.describe("Auto-throttle in button/touch mode", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("throttle button visible in button mode", async ({ page }) => {
     await page.goto("/");
@@ -753,7 +755,8 @@ test.describe("Race settings — portrait layout", () => {
    owns its own scroll region and keeps a flick inside it, so panning the
    circuits never scrolls the page behind them. Only the axis changed. */
 test.describe("Selection screen — iOS tablet portrait layout", () => {
-  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+  // tablet-768x1024-low-raster: tablet identity with intentional DPR 1 geometry stress.
+  test.use({ ...uiTestOptions({ device: "iPad Mini", touch: true, viewport: { width: 768, height: 1024 }, deviceScaleFactor: 1 }) });
 
   test("the track strip owns an independent horizontal scroll area", async ({ page }) => {
     await page.goto("/");
@@ -812,7 +815,7 @@ test.describe("Selection screen — iOS tablet portrait layout", () => {
 });
 
 test.describe("Selection screen — iOS phone portrait touch scrolling", () => {
-  test.use({ viewport: PORTRAIT, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: PORTRAIT, deviceScaleFactor: 1 }) });
 
   test("the track strip contains horizontal scroll gestures", async ({ page }) => {
     await page.goto("/");
@@ -960,8 +963,14 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
     expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout")), "responsive fitting never rewrites saved positions").toBe(saved);
     await page.screenshot({ path: testInfo.outputPath("hud-adaptive-" + viewport.width + "x" + viewport.height + ".png") });
   }
+  const sizeBefore = await page.evaluate(() => HudLayout.get("map").s);
   await page.locator("#hud-arrange-larger").click();
-  await expect(page.locator("#hud-arrange-name")).toHaveText("110%");
+  const sizeAfter = await page.evaluate(() => HudLayout.get("map").s);
+  expect(sizeAfter, "Larger adds ten points to the adopted painted size").toBeCloseTo(sizeBefore + 10, 8);
+  const sizeLabel = await page.locator("#hud-arrange-name").textContent();
+  expect(sizeLabel).toMatch(/^\d+(?:\.\d+)?%$/);
+  expect(sizeLabel.length, "the toolbar reports a readable percentage").toBeLessThanOrEqual(8);
+  expect(Math.abs(parseFloat(sizeLabel) - sizeAfter), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(sizeAfter * .0005);
   await page.locator("#hud-arrange-done").click();
   await expect(page.locator("#pmsettings")).toBeVisible();
   await testInfo.attach("console-health", { body: JSON.stringify({ errors }), contentType: "application/json" });
@@ -972,7 +981,7 @@ for (const shape of [
   { name: "desktop", viewport: { width: 1280, height: 720 }, hasTouch: false },
   { name: "touch", viewport: LANDSCAPE, hasTouch: true },
 ]) test.describe("Title HUD editor — " + shape.name, () => {
-  test.use({ viewport: shape.viewport, hasTouch: shape.hasTouch });
+  test.use({ ...uiTestOptions({ touch: shape.hasTouch, viewport: shape.viewport, deviceScaleFactor: 1 }) });
   test("previews race readouts, owns keyboard focus and restores the title on exit", async ({ page }, testInfo) => {
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
@@ -1020,7 +1029,7 @@ for (const shape of [
 test.describe("HUD — ARRANGE HUD on-screen editor", () => {
   // The on-screen editor for MOVE & SIZE (js/ui/hud-arrange.js). Landscape touch:
   // the player this exists for, and the shape where pieces meet the docks.
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("visibility stays consistent between the slider and on-screen editors on touch", async ({ page }, testInfo) => {
     await checkHudVisibilityEditors(page, testInfo);
@@ -1031,7 +1040,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
   });
 
   test.describe("desktop toolbar placement", () => {
-    test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+    test.use({ ...uiTestOptions({ touch: false, viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 }) });
 
     test("visibility stays consistent between the slider and on-screen editors on desktop", async ({ page }, testInfo) => {
       await checkHudVisibilityEditors(page, testInfo);
@@ -1103,10 +1112,11 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
 
     // − / + act on the piece last touched; RESET returns it to the shipped layout.
     await page.locator("#hud-arrange-larger").click();
-    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBe(110);
+    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s + 10, 8);
     await page.locator("#hud-arrange-smaller").click();
+    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s, 8);
     await page.locator("#hud-arrange-smaller").click();
-    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBe(90);
+    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s - 10, 8);
     await page.locator("#hud-arrange-reset").click();
     expect(await page.evaluate(() => HudLayout.get("map"))).toEqual({ x: 0, y: 0, s: 100 });
 
@@ -1247,8 +1257,12 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
       GameHud.invalidateFit();
       HudLayout.clearReadouts();
     });
-    // The fit still detects a lack of room, but cannot remove editor handles.
-    expect(await page.locator("[data-hl-arr][data-col-drop]").count()).toBeGreaterThan(0);
+    // Crowding cannot auto-drop a panel whose geometry the user owns.
+    for (const id of ["rel", "strat", "inputs"]) {
+      expect(await page.locator("#hud-" + id).evaluate(el => ({
+        manual: el.hasAttribute("data-hl-user"), editable: el.hasAttribute("data-hl-arr"), dropped: el.hasAttribute("data-col-drop"),
+      }))).toEqual({ manual: true, editable: true, dropped: false });
+    }
     const toolbar = await page.locator("#hud-arrange-bar").boundingBox();
     expect(toolbar).not.toBeNull();
     expect(toolbar.x).toBeGreaterThanOrEqual(59);
@@ -1259,23 +1273,39 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     for (const id of ["rel", "strat", "inputs"]) {
       await picker.selectOption(id);
       await expect(page.locator("#hud-" + id)).toBeVisible();
+      await page.locator("#hud-arrange-smaller").click();
+      expect(await page.evaluate(id => HudLayout.get(id).s, id)).toBe(190);
+      await expect(page.locator("#hud-" + id)).toBeVisible();
     }
-    await page.locator("#hud-arrange-smaller").click();
-    await expect(page.locator("#hud-inputs")).toBeVisible();
     await page.locator("#hud-arrange-done").click();
     await expect(page.locator("#hud-arrange-bar")).toBeHidden();
-    // The normal race drop rule is active again even for a visible producer.
-    expect(await page.evaluate(() => {
-      const el = document.getElementById("hud-inputs");
-      const hidden = el.hidden, drop = el.getAttribute("data-col-drop");
+    // Isolate the CSS drop rule from producer visibility and restore every
+    // temporary DOM change synchronously: manual geometry ignores auto-drop,
+    // while the same visible panel under automatic layout still obeys it.
+    const dropDisplays = await page.evaluate(() => {
+      const el = document.getElementById("hud-inputs"), body = document.body;
+      const attrs = ["hidden", "style", "data-col-drop", "data-hl-user"].map(name => [name, el.getAttribute(name)]);
+      const hudHide = body.getAttribute("data-hud-hide");
       try {
-        el.hidden = false; el.setAttribute("data-col-drop", "");
-        return getComputedStyle(el).display;
+        el.hidden = false;
+        el.style.removeProperty("display");
+        body.setAttribute("data-hud-hide", (hudHide || "").split(/\s+/).filter(id => id && id !== "inputs").join(" "));
+        el.removeAttribute("data-col-drop");
+        const baseline = getComputedStyle(el).display;
+        el.setAttribute("data-col-drop", "");
+        const manual = getComputedStyle(el).display;
+        el.removeAttribute("data-hl-user");
+        return { baseline, manual, automatic: getComputedStyle(el).display };
       } finally {
-        el.hidden = hidden;
-        if (drop === null) el.removeAttribute("data-col-drop"); else el.setAttribute("data-col-drop", drop);
+        for (const [name, value] of attrs) {
+          if (value === null) el.removeAttribute(name); else el.setAttribute(name, value);
+        }
+        if (hudHide === null) body.removeAttribute("data-hud-hide"); else body.setAttribute("data-hud-hide", hudHide);
       }
-    })).toBe("none");
+    });
+    expect(dropDisplays.baseline).not.toBe("none");
+    expect(dropDisplays.manual).toBe(dropDisplays.baseline);
+    expect(dropDisplays.automatic).toBe("none");
   });
 
   test("a dragged radio card leaves auto-placement and stays where it was dropped; RESET hands it back", async ({ page }) => {
@@ -1383,7 +1413,7 @@ test.describe("Touch dock — REPOSITION per scheme", () => {
   // Landscape: portrait arms #rotate-device over the pause button (see
   // hud-layout.spec.js). Dock offsets are pad-fraction so orientation is
   // irrelevant to the persistence / per-scheme assertions here.
-  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   const SEED = {
     tilt: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
@@ -1499,7 +1529,7 @@ test("HOW TO PLAY names every way to play", async ({ page }) => {
 });
 
 test.describe("Arrange map clearance handoff", () => {
-  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
   test("first keyboard move and resize keep an automatically cleared map at its painted origin", async ({ page }) => {
     await page.addInitScript(() => {
       for (const [key,value] of Object.entries({hudProfile:"broadcast",steerMode:"tilt",hudScale:70,hudBtnScale:300})) localStorage.setItem("apex26."+key,JSON.stringify(value));
@@ -1520,22 +1550,28 @@ test.describe("Arrange map clearance handoff", () => {
     const before=await snap(); expect(before.user).toBe(false); expect(Math.abs(before.clearX)+Math.abs(before.clearY)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
     const moved=await snap();
-    const expectedX=Math.round(before.value.x+before.clearX/844*100+1),expectedY=Math.round(before.value.y+before.clearY/390*100);
-    expect(moved.value.x).toBe(expectedX); expect(moved.value.y).toBe(expectedY);
-    expect(Math.abs((moved.x-before.x)-((expectedX-before.value.x)*8.44-before.clearX))).toBeLessThan(2);
-    expect(Math.abs((moved.y-before.y)-((expectedY-before.value.y)*3.9-before.clearY))).toBeLessThan(2);
+    // First edit adopts the painted box; ArrowRight then moves exactly 1% of the viewport.
+    expect(moved.user).toBe(true);
+    expect(Math.abs(moved.x-before.x-8.44)).toBeLessThanOrEqual(1);
+    expect(Math.abs(moved.y-before.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(moved.w-before.w)).toBeLessThanOrEqual(1);
+    expect(Math.abs(moved.h-before.h)).toBeLessThanOrEqual(1);
     await page.locator("#hud-arrange-reset").click();
     const reset=await snap(); expect(reset.user).toBe(false); expect(Math.abs(reset.clearX)+Math.abs(reset.clearY)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-larger").click(); const resized=await snap();
-    expect(resized.value.s).toBe(110); expect(resized.user).toBe(true);
-    expect(Math.abs(resized.x-reset.x)).toBeLessThanOrEqual(4.22+1); expect(Math.abs(resized.y-reset.y)).toBeLessThanOrEqual(1.95+1);
-    expect(Math.abs(resized.w/reset.w-1.1)).toBeLessThan(.02);
+    expect(resized.value.s).toBeCloseTo(moved.value.s+10, 8); expect(resized.user).toBe(true);
+    expect(Math.abs(resized.x-reset.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(resized.y-reset.y)).toBeLessThanOrEqual(1);
+    const sizeRatio=resized.value.s/moved.value.s;
+    // Allow at most one painted pixel of rounding in either scaled dimension.
+    expect(Math.abs(resized.w/reset.w-sizeRatio)).toBeLessThanOrEqual(1/reset.w);
+    expect(Math.abs(resized.h/reset.h-sizeRatio)).toBeLessThanOrEqual(1/reset.h);
     await page.locator("#hud-arrange-done").click();
   });
 });
 
 test.describe("Settings Appearance — touch targets", () => {
-  test.use({ viewport: LANDSCAPE, hasTouch: true, isMobile: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("ADVANCED disclosure summary is at least --tap tall", async ({ page }) => {
     await page.goto("/");
@@ -1554,7 +1590,7 @@ test.describe("Settings Appearance — touch targets", () => {
 test.describe("Settings Appearance — preset names at phone landscape", () => {
   // 932x430 is the iPhone Pro Max landscape: wider than the old 900px phone guard, so five 67px tiles clipped
   // BROADCAST to "BROADCAS" at UI SIZE 150 (menu-fit, 2026-10-17). The phone sheet lays presets out three-up.
-  test.use({ viewport: { width: 932, height: 430 }, hasTouch: true, isMobile: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 932, height: 430 }, deviceScaleFactor: 1 }) });
 
   test("preset tiles are three-up at 932x430, UI SIZE 150", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("apex26.uiScale", "150"));
@@ -1568,5 +1604,30 @@ test.describe("Settings Appearance — preset names at phone landscape", () => {
     await expect(page.locator("#pmsettings-inner")).toHaveAttribute("data-density", "compact");
     const cols = await list.evaluate((e) => getComputedStyle(e).gridTemplateColumns.split(" ").length);
     expect(cols).toBe(3);
+  });
+});
+
+for (const shape of [
+  { name: 'phone portrait', touch: true, viewport: PORTRAIT },
+  { name: 'phone landscape', touch: true, viewport: LANDSCAPE },
+  { name: 'tablet', device: 'iPad Mini', touch: true, viewport: { width: 768, height: 1024 } },
+  { name: 'desktop', touch: false, viewport: { width: 1280, height: 720 } },
+]) test.describe(`UI probe identity — ${shape.name}`, () => {
+  const profile = uiTestOptions({ ...shape, deviceScaleFactor: 1 });
+  test.use(profile);
+  test('uses the requested CSS viewport, screen and input identity', async ({ page }) => {
+    await page.setContent('<meta name="viewport" content="width=device-width,initial-scale=1"><button>Tap target</button>');
+    const actual = await page.evaluate(() => ({ width: innerWidth, height: innerHeight,
+      screen: { width: screen.width, height: screen.height }, dpr: devicePixelRatio,
+      touch: navigator.maxTouchPoints > 0, coarse: matchMedia('(pointer:coarse)').matches,
+      ua: navigator.userAgent, scale: visualViewport.scale }));
+    expect({ width: actual.width, height: actual.height }).toEqual(shape.viewport);
+    expect(actual.screen).toEqual(profile.contextOptions.screen);
+    expect(actual.touch).toBe(shape.touch);
+    expect(actual.coarse).toBe(shape.touch);
+    expect(actual.dpr).toBe(1);
+    expect(actual.scale).toBe(1);
+    if (shape.touch) expect(actual.ua).toMatch(shape.device ? /iPad/ : /iPhone/);
+    else expect(actual.ua).not.toMatch(/iPhone|iPad|Android/);
   });
 });

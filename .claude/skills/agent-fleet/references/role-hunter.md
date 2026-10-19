@@ -19,6 +19,8 @@ Monitoring and reporting block from role-pr-owner.md, `NEW-PR` becomes a
 `fleet-status: working` comment, and the next round starts only after
 `fleet-status: done` or STOP AT.
 
+Size stop: STOP AT 150k context. At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop).
+
 ## The loop
 
 1. Branch `cursor/live-debug-<lane>-<n>-<hash>` from the deploy tip; `--claim`.

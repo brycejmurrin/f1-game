@@ -5,7 +5,8 @@
 //
 // The numbers live behind MCP (`get_session`, `list_events` result totals), which a node CLI cannot call, so the
 // orchestrator pipes them in: a JSON array or one object per session, each the `get_session` reply (the `ccr` wrapper
-// is optional) plus an optional `cost_usd` (cumulative, from the session's `result` events).
+// is optional) plus an optional `cost_usd` (cumulative, from the session's `result` events);
+// `external_metadata.usage.cost_usd` is read when no explicit `cost_usd` is given.
 //
 //   node tools/ci/fleet-flags.mjs sessions.json [--cost-cap 15] [--context-cap 300000] [--stale-min 30] [--json]
 //   cat sessions.json | node tools/ci/fleet-flags.mjs
@@ -24,7 +25,8 @@ export function assess(raw, now = Date.now(), cfg = {}) {
   const configured = s.configured_model || (s.session_context && s.session_context.model) || null;
   const served = ext.last_served_model || null;
   const ctx = ext.context_usage && Number.isFinite(ext.context_usage.used_tokens) ? ext.context_usage.used_tokens : null;
-  const cost = Number.isFinite(raw && raw.cost_usd) ? raw.cost_usd : Number.isFinite(s.cost_usd) ? s.cost_usd : null;
+  const usd = ext.usage && ext.usage.cost_usd;   // list_sessions / get_session carry it here
+  const cost = Number.isFinite(raw && raw.cost_usd) ? raw.cost_usd : Number.isFinite(s.cost_usd) ? s.cost_usd : Number.isFinite(usd) ? usd : null;
   const updated = Date.parse(s.updated_at || "");
   const ageMin = Number.isFinite(updated) ? Math.round((now - updated) / 60000) : null;
   const connection = s.connection_status || null;

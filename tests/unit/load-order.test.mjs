@@ -225,10 +225,6 @@ test("shell leaves menu pinch-zoom to the user and cancels iOS double-tap / driv
   assert.doesNotMatch(m[1], /maximum-scale/,
     "viewport must not cap zoom at all (W3C ACT b4f0c3 / WCAG 1.4.4) — see the " +
     "rationale comment at the top of index.html");
-  const hasGesture = /addEventListener\("gesturestart"/.test(indexHtml);
-  const hasTouchEnd = /addEventListener\("touchend"/.test(indexHtml);
-  console.log("[load-order] gesturestart listener present:", hasGesture);
-  console.log("[load-order] touchend listener present:", hasTouchEnd);
   assert.match(indexHtml, /function killDriveGesture[\s\S]*closest\("#game,#hud"\)/,
     "iOS GestureEvents are cancelled only on the driving surface");
   assert.match(indexHtml, /addEventListener\("gesturestart", killDriveGesture/);
@@ -379,7 +375,7 @@ test("LAZY_AGENT files have no <script> tag", () => {
 });
 
 test("LAZY_EDGES are ordered within LAZY_AGENT", () => {
-  const group = lazyFiles();
+  const group = MANIFEST.LAZY_AGENT;   // not lazyFiles(): the all-rosters union hides a mis-ordered agent surface
   for (const [before, after] of MANIFEST.LAZY_EDGES) {
     assert.ok(group.includes(before) && group.includes(after),
       `LAZY_EDGES pair ${before} -> ${after} spans no LAZY_AGENT file`);

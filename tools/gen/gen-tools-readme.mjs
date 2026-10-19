@@ -180,6 +180,7 @@ export function collect({
  *  happened the first time. Root holds only what every consumer hardcodes. */
 export const GROUPS = [
   ["", "Root — the load-order truth and the car studio page; every consumer hardcodes these paths."],
+  ["agent", "Bounded agent-output helpers: private artifact retention, subprocess ownership, and the wrappers that present compact/diagnostic/full results (kept out of tools/lib so they do not false-trigger fleet geometry sweeps)."],
   ["lib", "Shared harnesses and helpers other tools load: the browser+server harness, the two Node-VM harnesses, the output-path contract, the WebGPU flag set."],
   ["ci", "The test runner and the release pipeline: what to run, how to run it in the background, what CI selected, and the deploy."],
   ["check", "Static guards over the source — a red exit here is a defect, not a report."],
@@ -213,6 +214,11 @@ output never goes to \`/tmp\`: use \`artifacts/tmp/\` for batch logs/probes and
 **Layers:** skill = when; this folder = the CLI; \`apex_*\` MCP = a **pinned**
 subset (safe flags only). Which rows are wrapped, and which must stay CLI-only:
 [\`docs/AGENT-SURFACE.md\`](../docs/AGENT-SURFACE.md).
+
+**Agent output:** terminal commands use \`node tools/agent-run.mjs -- <command>\`;
+configured MCP tools expose \`outputLevel\`. Both default to \`compact\`, with
+\`diagnostic\` and \`full\` selectable. Saved results can be read without rerunning
+actions. [Levels, examples and coverage](../docs/agent-output/README.md).
 
 **This file is generated** by \`node tools/gen/gen-tools-readme.mjs\` from the
 \`@doc\` / \`@skill\` / \`@section\` tags in each tool's header comment (first 15
