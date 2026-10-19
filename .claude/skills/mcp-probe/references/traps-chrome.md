@@ -37,7 +37,7 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   every `test-bg.mjs` invocation, `navigate_page(about:blank)` unconditionally**
   — even (especially) when you're confident you already parked. It's one call;
   the cost of skipping it once is a full contaminated test run.
-- **Parking is NECESSARY BUT NOT SUFFICIENT — verify by CPU, then kill by age.**
+- **Parking can leave a busy GPU process — close the owned browser before tests.**
   The bullet above reads as though `about:blank` ends the problem. It does not.
   MEASURED 2026-08-14: after a mobile-emulation session, `navigate_page` to
   `about:blank` returned success and the page WAS blank, yet the MCP browser's
@@ -45,22 +45,25 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   launched on top of it inherited that load. (A plausible contributor: CPU
   throttling / device-metrics overrides set via `emulate` survive the
   navigation — the emulation banner is re-printed on every subsequent call —
-  so the compositor keeps working even with nothing to draw.) So park, then
-  CHECK, then kill:
+  so the compositor keeps working even with nothing to draw.) Preserve this
+  diagnostic, but do not infer ownership from process age. Before starting a
+  test run, park, shut down through the controller that launched the browser,
+  then inspect:
 
   ```sh
-  # Ages separate the two trees far more reliably than args do: the run you
-  # just started is seconds old, an MCP browser is minutes old.
-  ps -eo pid,etimes,pcpu,comm | awk '$4 ~ /chrome/ {print $1, $2"s", $3"%"}'
-  for p in $(ps -eo pid,etimes,comm | awk '$2>120 && $3 ~ /chrome/ {print $1}'); do
-    kill -9 $p 2>/dev/null            # >120s = pre-dates the run; MCP's, not Playwright's
-  done
+  ps -eo pid,ppid,pcpu,args --sort=-pcpu | head
   ```
 
-  Do this AFTER `test-bg.mjs` has started (so its own processes are the young
-  ones) and confirm every survivor shares the run's age. A parked-but-spinning
-  MCP browser is indistinguishable from a healthy box by load average alone,
-  which is why the check has to be per-process.
+  Use `chrome-stop` for a daemon launched with `chrome-start`; for an owned
+  foreground daemon, use its terminal's Ctrl-C and confirm DOWN (see
+  [offline preflight](offline.md)). With attached host tools, close the owned
+  page/browser through that host. Escalate surviving processes only after
+  matching recorded launch identity and parent/profile details; age alone
+  never establishes ownership. If identity is uncertain, report the blocker.
+  Never start a test group to distinguish young and old processes, kill every
+  Chrome matching a name/age, or PID-kill a test-bg run. `AGENTS.md` rules 6–7
+  govern stopping and reaping. Per-process CPU is useful evidence even when
+  load average looks healthy; cleanup must finish before the next test run.
 - A screenshot returned with the left ~400 px solid black = the WebGL canvas, not
   the MCP. HeadlessChrome GLX hides `#game` (opacity 0) and blits onto
   `#game-soft` — a `#game` locator shot is that black gap. Await

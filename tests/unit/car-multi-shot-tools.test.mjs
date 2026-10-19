@@ -15,6 +15,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS } from "../../tools/shot/lib/garage-camera-catalog.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -465,7 +466,7 @@ const plan = (...args) => {
 };
 const rosterIds = () => {
   const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
-  vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: absSrc("js/data/teams.js") });
   return JSON.parse(vm.runInContext("JSON.stringify(Teams.LIST.filter((t) => Teams.isReal(t)).map((t) => t.id))", cx));
 };
 

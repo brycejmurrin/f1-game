@@ -20,6 +20,7 @@ import { createHash, webcrypto } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { binaryIntegrity, stampIntegrity, fullPhrases, phrases, recordClips } from "../../tools/gen/voicepack.mjs";
 import { SAMPLES, requestFor } from "../../tools/gen/voice-audition.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -31,7 +32,7 @@ function sandbox(files, extra) {
     crypto: webcrypto, setTimeout: unrefTimeout, clearTimeout, Log: { info() {}, warn() {}, debug() {} } }, extra || {});
   sb.window = sb.window || sb;
   vm.createContext(sb);
-  for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
+  for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   return sb;
 }
 const J = (x) => JSON.parse(JSON.stringify(x));   // across the VM realm boundary

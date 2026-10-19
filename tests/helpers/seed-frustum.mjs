@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "./abs-src.mjs";
 
 const SHARED = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/render/shared");
 const FRUSTUM_JS = fs.readFileSync(path.join(SHARED, "frustum.js"), "utf8");
@@ -17,7 +18,7 @@ const CHUNK_BINS_JS = fs.readFileSync(path.join(SHARED, "chunk-bins.js"), "utf8"
 
 /** Evaluate js/render/shared/frustum.js and chunk-bins.js into an existing VM context. */
 export function seedFrustum(ctx) {
-  vm.runInContext(FRUSTUM_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/render/shared/frustum.js" });
-  vm.runInContext(CHUNK_BINS_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/render/shared/chunk-bins.js" });
+  vm.runInContext(FRUSTUM_JS.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/frustum.js") });
+  vm.runInContext(CHUNK_BINS_JS.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/chunk-bins.js") });
   return ctx;
 }

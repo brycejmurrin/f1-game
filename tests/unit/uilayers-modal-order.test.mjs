@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -43,7 +44,7 @@ function fakeDom(els, modalOrder) {
   };
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(read("js/ui/layers.js"), context);
+  vm.runInContext(read("js/ui/layers.js"), context, { filename: absSrc("js/ui/layers.js") });
   const U = context.window.UiLayers;
   nodes.forEach((n) => U.trackDialog(n));
   modalOrder.forEach((id) => byId.get(id).showModal());
@@ -187,7 +188,7 @@ function escHarness(modalIds) {
   };
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(read("js/ui/modal.js"), context);
+  vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
   const ev = (extra = {}) => {
     const e = { key: "Escape", defaultPrevented: false, stopped: false,
       preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...extra };
@@ -235,7 +236,7 @@ test("Escape with a disabled data-esc-close door still consumes the key", () => 
   };
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(read("js/ui/modal.js"), context);
+  vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
   const e = { key: "Escape", defaultPrevented: false, stopped: false,
     preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
   context.window.TopModal.onEscape(e);
@@ -267,7 +268,7 @@ test("a close event arriving after the screen reopened does not press its door",
   };
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(read("js/ui/modal.js"), context);
+  vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
   context.window.TopModal.wire(dlg);
   assert.ok(listeners.close, "the close listener is wired");
   // Reopened: visible and open when the old close event finally arrives.
@@ -365,7 +366,7 @@ function isolationHarness(layerIsDialog) {
   };
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(read("js/ui/modal.js"), context);
+  vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
   return { doc, overlay, opener, inner, layer, TopModal: context.window.TopModal, fire: () => mo() };
 }
 

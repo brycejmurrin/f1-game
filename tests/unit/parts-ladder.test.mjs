@@ -109,8 +109,13 @@ test("the career budget cap clears the dearest works car and stays under the top
     `must always be able to rebuild the car it fields`);
   assert.ok(cap < all, `budget cap ${cap} reaches the whole top shelf (${all})`);
   // And the cap has to actually BIND: if every team's top rung already fits
-  // under it, the cap is decoration.
-  const topRung = Math.max(...works.map((w) => Math.round(w.cost * 1.6)));
+  // under it, the cap is decoration. The rungs are career.js's own BUDGET_MULT
+  // (budgetAt rounds works × multiplier), read from source, not copied here.
+  const multSrc = src.match(/const BUDGET_MULT = (\[[^\]]*\]);/);
+  assert.ok(multSrc, "BUDGET_MULT moved; check this test, not the code");
+  const mult = JSON.parse(multSrc[1]);
+  assert.ok(mult.length > 1 && mult.every((m) => m >= 1), `BUDGET_MULT ${multSrc[1]} is not a rising ladder`);
+  const topRung = Math.max(...works.map((w) => Math.round(w.cost * Math.max(...mult))));
   assert.ok(topRung > cap, `no team's budget ladder (max ${topRung}) ever reaches the cap ${cap}`);
 });
 

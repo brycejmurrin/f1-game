@@ -26,6 +26,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/core/store.js"), "utf8");
@@ -55,7 +56,7 @@ function load(writeError = null) {
   sandbox.addEventListener = (type, fn) => { listeners.set(type, fn); };
   const ctx = vm.createContext(sandbox);
   seedSaveMigrate(ctx);
-  vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/core/store.js") });
   const GameStore = vm.runInContext("GameStore", ctx);
   return { store: GameStore.store, GameStore, disk, sandbox, fail: (name) => { failWith = name; },
     onStorage: listeners.get("storage") || null };
@@ -275,7 +276,7 @@ function loadMirrored({ seed = [], disk = new Map(), writeError = null, quota = 
   };
   const ctx = vm.createContext(sandbox);
   seedSaveMigrate(ctx);
-  vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/core/store.js") });
   return { store: vm.runInContext("GameStore", ctx).store, disk, idb, ctx };
 }
 
@@ -535,7 +536,7 @@ test("BLOCKED storage: a read that throws is remembered, not retried (and re-log
   };
   vm.createContext(ctx);
   seedSaveMigrate(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8") + ";this.GS=GameStore;", ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8") + ";this.GS=GameStore;", ctx, { filename: absSrc("js/core/store.js") });
   const s = ctx.GS.store; logs = 0; touches = 0;
   for (let i = 0; i < 600; i++) assert.equal(s.get("hudProfile", "standard"), "standard");
   assert.equal(touches, 1, "one storage access, then memory");
@@ -670,7 +671,7 @@ function bootLogged(fail = { name: null }) {
   });
   ctx.window = ctx; ctx.addEventListener = () => {};
   seedSaveMigrate(ctx);
-  vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/core/store.js") });
   return { store: vm.runInContext("GameStore", ctx).store, disk, warns };
 }
 
@@ -703,7 +704,7 @@ function loadCareerMirrored(options = {}) {
   h.ctx.Parts = { getFactorySetup: () => ({}), setLegality() {} };
   for (const file of ["js/core/hash32.js", "js/core/mat4.js", "js/data/driver-ratings.js",
     "js/career/career.js", "js/career/season-cal.js", "js/career/career-backup.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, file), "utf8"), h.ctx, { filename: file });
+    vm.runInContext(readFileSync(join(ROOT, file), "utf8"), h.ctx, { filename: absSrc(file) });
   }
   for (const name of ["Career", "SeasonCal", "CareerBackup"]) h[name] = vm.runInContext(name, h.ctx);
   return h;
@@ -990,7 +991,7 @@ test("failed raw deletion replaces an older set and retries the deletion", () =>
 
 test("raw failures retain touch comfort and foreign writes supersede pending session values", () => {
   const { store, sandbox, disk, onStorage } = load("QuotaExceededError");
-  vm.runInContext(readFileSync(join(ROOT, "js/camera/cam-comfort.js"), "utf8"), sandbox);
+  vm.runInContext(readFileSync(join(ROOT, "js/camera/cam-comfort.js"), "utf8"), sandbox, { filename: absSrc("js/camera/cam-comfort.js") });
   const comfort = vm.runInContext("CamComfort", sandbox);
   assert.equal(comfort.boot(store, { maxTouchPoints: 1 }, {}), "on");
   assert.equal(comfort.active(store), true);

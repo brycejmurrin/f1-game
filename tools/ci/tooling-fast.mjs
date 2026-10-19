@@ -85,9 +85,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
   // gen-cursor-rules, the hooks — asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
-  // The orchestrator/worker contract (skill agent-fleet): host-correct PR
-  // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
-  "tests/unit/agent-fleet.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
   "tests/unit/agent-output-config.test.mjs",
@@ -96,8 +93,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
-  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras. Permanent
-  // only; streets stay at the prior baselines. No VM. < 0.1 s.
+  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras, plus the
+  // #2356 attack-zone soft pull. Permanent only; streets stay prior baselines. No VM.
   "tests/unit/ai-pass-complete.test.mjs",
   // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
   // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
@@ -466,9 +463,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flaky-quarantine.test.mjs",
   // fleet-archive: the archive rule over a saved list_sessions page (role tag, agent-created, idle, PR merged or
   // closed, no human turn in the last hour); pure fixtures; < 0.5 s.
+  "tests/unit/fleet-archive.test.mjs",
+  // Fleet Board snapshot (tools/ci/fleet-board-snapshot.mjs): dashboard datasets from fixtures, no network. < 1 s.
+  "tests/unit/fleet-board-snapshot.test.mjs",
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
-  "tests/unit/fleet-archive.test.mjs",
   "tests/unit/fleet-board.test.mjs",
   // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break) and the bus cursor read; a real-git race on a local bare origin; < 2 s.
   "tests/unit/fleet-bus.test.mjs",
@@ -581,6 +580,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
   // repo stays untouched; every fixture-repo test imports the scrub first). ~2.5 s.
   "tests/unit/git-fixture-env.test.mjs",
+  // Shared GET-only GitHub REST helper (#3013).
+  "tests/unit/github-api.test.mjs",
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
@@ -652,6 +653,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",
   "tests/unit/js-debugger-trace.test.mjs",
+  "tests/unit/js-debugger-tracks.test.mjs",
+  "tests/unit/js-debugger-transport.test.mjs",
+  "tests/unit/key-binds-calibration.test.mjs",
+  "tests/unit/key-binds-hunt.test.mjs",
+  "tests/unit/key-binds-pad-menu.test.mjs",
+  "tests/unit/key-binds-ui.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
   // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
@@ -696,7 +703,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // files below sat in test:garage-unit / test:steering-unit, which ran in NO
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
-  // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
+  // livery-contrast (9.7 s) stays CI-only; cover-legibility is in test:node-slow (159 s measured).
   "tests/unit/live-run-check.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
@@ -738,6 +745,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lsp-caller-fixes.test.mjs",
   "tests/unit/lsp-config-freshness.test.mjs",
   // apex-lsp as an MCP client: shared warmed child for definition / references / callers / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). Pipelined alias fan-out; test:mcp runs --test-concurrency=1 (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md).
+  "tests/unit/lsp-mcp-fixture.test.mjs",
   "tests/unit/lsp-mcp.test.mjs",
   "tests/unit/lsp-navigation-efficiency.test.mjs",
   "tests/unit/lsp-reference-fixes.test.mjs",
@@ -776,6 +784,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.
   "tests/unit/mirror-glass-night.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
+  "tests/unit/mirror-pass-carbuild.test.mjs",
+  "tests/unit/mirror-pass-prepare.test.mjs",
+  "tests/unit/mirror-pass-watch.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",
@@ -872,7 +883,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
   "tests/unit/poll-live-shell.test.mjs",
-  // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
+  // CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.
   "tests/unit/pr-board.test.mjs",
   // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.
   "tests/unit/pr-body.test.mjs",
@@ -928,8 +939,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ratchet-reason.test.mjs",
   "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
-  // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
-  "tests/unit/ready-full-cap.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
   // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
   // director lays it over a stub field — grid, plans, the pace loop, the
@@ -939,11 +948,16 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WATCH recording-gap cache (#2465): explicit refresh replaces a stale interior hole and keeps a pit stop and a red flag. VM, under a second.
   "tests/unit/real-race-tab-gap-refresh.test.mjs",
   "tests/unit/real-race.test.mjs",
-  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
-  "tests/unit/real-replay-captions.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
   // centreline, the highlights list, the field as puppets (follow, speed, a car
-  // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
+  // whose data ends, the flag) and the exact JUMP IN. Split by concern (frame-fit,
+  // broadcast, transport, audio-focus; shared fixtures tests/helpers/real-replay-fixtures.mjs).
+  "tests/unit/real-replay-audio-focus.test.mjs",
+  "tests/unit/real-replay-broadcast.test.mjs",
+  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
+  "tests/unit/real-replay-captions.test.mjs",
+  "tests/unit/real-replay-frame-fit.test.mjs",
+  "tests/unit/real-replay-transport.test.mjs",
   "tests/unit/real-replay-vm.test.mjs",
   "tests/unit/red-flag-fuel-vm.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
@@ -1079,6 +1093,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 track engine: surfaceFolds / centreline diagnostics, running-surface fold clamp, opt-in splineAlpha (unset = byte-identical path).
   "tests/unit/spline-fold-diagnostics.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
+  "tests/unit/spotify-native.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
   // #2204: terrace / spectatorHill / vaultStand curve follow — outside-of-bend
   // gap ≤ 0.5 m on moderate bends, no severe terrace self-pairs on jerez.
@@ -1230,6 +1245,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-maps-corners.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   "tests/unit/track-preview-plan.test.mjs",
+  // Tracks.project() hints over six circuits (perturbed, seam, wrong-lap), real track build in a VM, ~13 s.
+  "tests/unit/track-project-hints.test.mjs",
   // RANDOMISE builds clockwise (Σk < 0 through the engine) with the grid side
   // of the start straight ≥ the exit side, over 30 seeds; ~3 s.
   "tests/unit/track-randomise.test.mjs",
@@ -1318,6 +1335,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/visual-oracle.test.mjs",
   // #2960: opt-in vm-debug-preload turns a no-filename brake-cue load into a file:// URL.
   "tests/unit/vm-debug-preload.test.mjs",
+  // #2961: vm source loads in tests/unit and tests/helpers name absolute filenames (vm-filename-lint).
+  "tests/unit/vm-filename-lint.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
@@ -1344,6 +1363,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // guard the two tools a session reaches for at push time.
   // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
   "tests/unit/wgx-free-retire.test.mjs",
+  // WGX debug labels + pass debug groups; validation-shaped messages name the label; Spector/webgl-lint vendor pin (#2964). VM, < 0.2 s.
+  "tests/unit/wgx-labels.test.mjs",
   // Opt-in torque-balanced wheel state (#1628): lockup / wheelspin VM pins; default OFF.
   "tests/unit/wheel-state.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
@@ -1354,6 +1375,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
   "tests/unit/wind.test.mjs",
   "tests/unit/workflow-harness.test.mjs",
+  // ci.yml structure read from the PARSED YAML (job → step by name): base-green plan, geometry filter, behind-ship step. ~0.3 s.
+  "tests/unit/workflow-lint-ci-plan.test.mjs",
   // tools/check/workflow-lint.mjs: actionlint + zizmor (offline) over .github/workflows; fails a planted bad workflow, passes the tree.
   // Skips loudly when a binary is absent; the CI `lints` job fails a SKIP. ~3 s.
   "tests/unit/workflow-lint.test.mjs",

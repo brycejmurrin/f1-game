@@ -33,7 +33,8 @@
 //         within a line of the others.
 //
 // THE RULE, in one sentence: a `.speed` read compared with < <= > >= against a
-// numeric literal or an UPPER_SNAKE constant is a violation unless the speed is wrapped in `vStd(...)`.
+// numeric literal, an UPPER_SNAKE constant or a file-local `const name = <number>`
+// (#3009) is a violation unless the speed is wrapped in `vStd(...)`.
 //
 // Not every hit is a bug — a force, a divide-by-zero floor, a sign test and the
 // reverse crawl are all legitimately absolute. Those live in ALLOWED in
@@ -128,9 +129,43 @@ const DEFAULTED = /^\s*\|\|\s*0/;
 // unseen while only digits were matched. A constant that is a SCALE-aware
 // quantity (`REVERSE_MAX`, a flat -5 m/s) is approved in ALLOWED like a literal.
 const THRESHOLD = String.raw`(-?\d+(?:\.\d+)?(?![\w.])|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?![\w$.]))`;
-const CMP_NUM = new RegExp(String.raw`^(>=|<=|>|<)\s*` + THRESHOLD);
+const CMP_TAIL = String.raw`\s*(>=|<=|>|<)\s*(?:Math\.(?:abs|max|min)\(\s*)?[A-Za-z_$][\w$.]*$`;
 // Literal-first order: `15 < c.speed`.
-const NUM_CMP = new RegExp(THRESHOLD + String.raw`\s*(>=|<=|>|<)\s*(?:Math\.(?:abs|max|min)\(\s*)?[A-Za-z_$][\w$.]*$`);
+const matchers = (threshold) => ({
+  fwd: new RegExp(String.raw`^(>=|<=|>|<)\s*` + threshold),
+  back: new RegExp(threshold + CMP_TAIL),
+});
+const BASE = matchers(THRESHOLD);
+
+// #3009 — the same number behind a LOCAL name: `const lim = 30; … c.speed > lim`.
+// Dataflow-lite and deliberately narrow: a name counts as a threshold only when
+// the file declares it exactly once, with `const`, initialised from a bare
+// numeric literal. A `let`, a computed initialiser (`const lim = vTop() * 0.3`)
+// or a second declaration of the name anywhere in the file (a shadowing local,
+// a parameter's twin) leaves it unflagged, so a scale-aware local never reads
+// as a raw m/s number. UPPER_SNAKE names already match THRESHOLD.
+const NUM_CONST = /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*-?\d+(?:\.\d+)?\s*(?=[;,\n])/g;
+const UPPER_SNAKE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
+export function numericConsts(src) {
+  const names = new Set();
+  let m;
+  NUM_CONST.lastIndex = 0;
+  while ((m = NUM_CONST.exec(src))) {
+    const n = m[1];
+    if (UPPER_SNAKE.test(n)) continue;
+    const esc = n.replace(/\$/g, "\\$");
+    const decls = src.match(new RegExp(String.raw`(?<![\w$.])(?:const|let|var|function)\s+` + esc + String.raw`(?![\w$])`, "g")) || [];
+    const params = new RegExp(String.raw`\([^()]*(?<![\w$.])` + esc + String.raw`(?![\w$])[^()]*\)\s*(?:=>|\{)`).test(src);
+    if (decls.length === 1 && !params) names.add(n);
+  }
+  return [...names].sort();
+}
+function fileMatchers(src) {
+  const names = numericConsts(src);
+  if (!names.length) return BASE;
+  const alt = names.map((n) => n.replace(/\$/g, "\\$")).join("|");
+  return matchers(THRESHOLD.slice(0, -1) + String.raw`|(?<![\w$.])(?:` + alt + String.raw`)(?![\w$.(]))`);
+}
 // Already normalised: `vStd(c.speed)` / `vStd(Math.abs(c.speed))`.
 const VSTD_WRAP = /vStd\(\s*(?:Math\.(?:abs|max|min)\(\s*)?[A-Za-z_$][\w$.]*$/;
 // The property chain the `.speed` hangs off, walking back from it.
@@ -163,6 +198,7 @@ export function speedLiteralViolations(files) {
   const hits = [];
   for (const [file, raw] of files) {
     const src = stripNonCode(raw);
+    const { fwd: CMP_NUM, back: NUM_CMP } = fileMatchers(src);
     const lines = raw.split("\n");
     const starts = [0];
     for (let i = 0; i < src.length; i++) if (src[i] === "\n") starts.push(i + 1);

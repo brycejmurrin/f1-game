@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -23,7 +24,7 @@ function loadModule(extra = {}) {
     setTimeout: () => 0, clearTimeout() {},
     ...extra,
   });
-  vm.runInContext(read("js/garage/prebuild.js"), ctx, { filename: "js/garage/prebuild.js" });
+  vm.runInContext(read("js/garage/prebuild.js"), ctx, { filename: absSrc("js/garage/prebuild.js") });
   return { GP: vm.runInContext("GaragePrebuild", ctx), ctx, logs };
 }
 
@@ -357,7 +358,7 @@ function sceneHarness(textures = false, { crew = false } = {}) {
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js",
                    ...(crew ? ["js/garage/scene-crew.js"] : []), "js/garage/scene.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
   return { GarageScene, made, live, handles, freed, gfx };

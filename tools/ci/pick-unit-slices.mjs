@@ -165,6 +165,7 @@ export const RULES = [
   [/^tests\/helpers\//, ["guards", ...VM_A, ...VM_B, ...PAGE_SLOW], "helpers feed many twins"],
   [/^tests\/specs\/physics-characterization\.spec\.js$/, ["driving-model"], "the characterization job"],
   [/^tests\/specs\//, ["guards"], "browser specs: selected job covers them; guards for taxonomy"],
+  [/^tests\/data\/physics-baseline\.json$/, ["guards", "driving-model"], "the baseline is a Chromium measurement: its spec must run on the head that changes it (#3037)"],
   [/^tests\/data\//, ["guards"], "ratchets / timings / baselines"],
   [/^tests\/groups\.json$/, ["guards"], "group membership is a structural contract"],
   [/^tests\/unit\//, [], "handled in pick()"],

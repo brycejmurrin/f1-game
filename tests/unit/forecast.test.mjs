@@ -24,6 +24,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => readFileSync(join(ROOT, f), "utf8");
@@ -36,7 +37,7 @@ function load() {
   ctx.GameAudio = { startRain() {}, stopRain() {} };
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js",
                    "js/physics/tyre-model.js", "js/race/weather-arc.js", "js/race/forecast.js", "js/race/engineer.js"])
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   return ctx;
 }
 const ctx = load();

@@ -32,6 +32,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -48,7 +49,7 @@ const walk = (dir, ext, out = []) => {
 // top-level await must fail here. `node --check` would read them as ESM
 // (package.json type:module) and miss exactly that class.
 const classicParseError = (src, filename) => {
-  try { new vm.Script(src, { filename }); return null; }
+  try { new vm.Script(src, { filename: absSrc(filename) }); return null; }
   catch (e) { return String(e && e.message || e); }
 };
 

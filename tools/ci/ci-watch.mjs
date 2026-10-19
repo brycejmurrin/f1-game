@@ -118,7 +118,7 @@ function apiOnce(pathQs, { run = spawnSync, env = process.env, gh, etags = ETAGS
     ...(prior ? ["-H", `If-None-Match: ${prior.etag}`] : []),
     url],
   // maxBuffer: a 100-job page or a 50-run page can pass spawnSync's 1 MB
-  // default; ready-full-cap died of exactly that (ENOBUFS, #1733).
+  // default; the old ready-cap helper died of exactly that (ENOBUFS, #1733).
   { encoding: "utf8", maxBuffer: 64 << 20, input: `header = "Authorization: Bearer ${token}"\n` });
   if (r.status !== 0) return { error: (r.stderr || r.error?.code || "curl failed").trim() };
   const out = (r.stdout || "").split("\n");
@@ -152,7 +152,7 @@ export function latestPerWorkflow(runs) {
   const by = new Map();
   for (const r of runs) {
     const cur = by.get(r.name), t = Date.parse(r.created_at), ct = cur ? Date.parse(cur.created_at) : -Infinity;
-    if (!cur || t > ct || (t === ct && r.id > cur.id)) by.set(r.name, r);
+    if (!cur || t > ct || (t === ct && (r.conclusion === "cancelled") === (cur.conclusion === "cancelled") && r.id > cur.id) || (t === ct && cur.conclusion === "cancelled" && r.conclusion !== "cancelled")) by.set(r.name, r);
   }
   return [...by.values()];
 }

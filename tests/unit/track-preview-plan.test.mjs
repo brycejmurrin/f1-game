@@ -24,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -35,7 +36,7 @@ function loadPlanPreview() {
   const ctx = vm.createContext(sandbox);
   const src = fs.readFileSync(path.join(ROOT, "js/ui/track-maps.js"), "utf8")
     .replace(/^const\b/gm, "var");
-  vm.runInContext(src, ctx, { filename: "js/ui/track-maps.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/ui/track-maps.js") });
   vm.runInContext("this.TrackMaps = TrackMaps;", ctx);
   return ctx.TrackMaps.planPreview;
 }

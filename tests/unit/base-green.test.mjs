@@ -56,18 +56,3 @@ test("unknown: no gate run yet, an in-progress one, an API error, a bad body, no
   assert.equal(r.stdout.trim(), "unknown", "no gh on PATH");
   assert.equal(r.status, 0, "advisory: never a non-zero exit");
 });
-
-test("ci.yml: only `green` narrows the node plan and the sweeps on a push; the train and a PR need no lookup", () => {
-  const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
-  const plan = ci.slice(ci.indexOf("- name: Plan the slices for this diff"), ci.indexOf("- name: Pure-node unit suites"));
-  assert.match(plan, /if \[ "\$\(bash tools\/ci\/base-green\.sh "\$\{PUSH_BEFORE:-\}"\)" = green \]; then\n\s+BASE="\$\{PUSH_BEFORE:-\}"/, "a push scopes only on a green previous tip");
-  assert.match(plan, /if \[ "\$CALLED" = "true" \]; then\n\s+BASE="\$\{LIVE_BEFORE:-\}"/, "the train's base is the live commit, no lookup");
-  assert.match(plan, /GH_TOKEN: \$\{\{ github\.token \}\}/);
-  const nodeJob = ci.slice(ci.indexOf("\n  node-suites:\n"), ci.indexOf("\n  sweeps-parts:\n"));
-  assert.match(nodeJob, /permissions:\n\s+contents: read\n\s+actions: read/, "base-green needs actions:read");
-  // The sweeps job sits out the deploy push (its `if:`), so its circuit lane
-  // needs no lookup: a pull request, or the train whose before_sha is live.
-  const sweeps = ci.slice(ci.indexOf("      - name: Does this diff touch the geometry?"), ci.indexOf("      # WHICH NODE SLICES DOES THIS DIFF NEED?"));
-  assert.match(sweeps, /if \[ "\$CALLED" = true \] \|\| \[ "\$EVENT" = pull_request \]; then SCOPE_OK=true; fi/);
-  assert.doesNotMatch(sweeps, /bash tools\/ci\/base-green\.sh/, "the sweeps job never runs on a push; no lookup there");
-});

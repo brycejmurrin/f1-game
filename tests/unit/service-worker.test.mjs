@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { MessageChannel } from "node:worker_threads";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const SW_SOURCE = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
 const ORIGIN = "https://apex.test";
@@ -116,7 +117,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
     ...(navigator ? { navigator } : {}),
     ...(globals || {}),
   });
-  vm.runInContext(SW_SOURCE, context, { filename: "sw.js" });
+  vm.runInContext(SW_SOURCE, context, { filename: absSrc("sw.js") });
 
   function lifecycleEvent(type) {
     const lifetimes = [];

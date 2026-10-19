@@ -36,6 +36,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -114,7 +115,7 @@ function bootMenuNav() {
   const { els, UiLayers } = layerStack(dom, ["overlay"]);
   const layer = els[0];
   const sb = sandbox(dom, { UiLayers });
-  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: absSrc("js/ui/menu-nav.js") });
   const key = (k, isTrusted = true) => {
     const e = { key: k, isTrusted, altKey: false, ctrlKey: false, metaKey: false, defaultPrevented: false, stopped: false };
     e.preventDefault = () => { e.defaultPrevented = true; };
@@ -130,8 +131,8 @@ function bootTopModal(ids) {
   const { els, UiLayers } = layerStack(dom, ids);
   const mo = moShim();
   const sb = sandbox(dom, { UiLayers, MutationObserver: mo.MutationObserver });
-  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
-  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: absSrc("js/ui/menu-nav.js") });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: absSrc("js/ui/modal.js") });
   const byId = Object.fromEntries(els.map((el) => [el.id, el]));
   return { dom, sb, TopModal: sb.TopModal, layer: (id) => byId[id], flip: mo.flip, flipAll: mo.flipAll,
     add: (parent, id, o) => control(dom, parent, id, o), focused: () => dom.document.activeElement && dom.document.activeElement.id };
@@ -322,7 +323,7 @@ test("repeated keyboard Escape advances one dialog page at a time", () => {
   const dom = makeDom({ readyState: "loading", tagFor: id => id === "pmsettings" ? "dialog" : "div" });
   const { els, UiLayers } = layerStack(dom, ["pmsettings"]);
   const sb = sandbox(dom, { UiLayers, MutationObserver: moShim().MutationObserver });
-  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: absSrc("js/ui/modal.js") });
   const dlg = els[0];
   dlg.hidden = false;
   dlg.setAttribute("data-esc-close", "pm-settings-close");
@@ -379,8 +380,8 @@ test("TopModal.onFocusIn pulls focus back when Tab parks on <body> outside an op
   const { els, UiLayers } = layerStack(dom, ["overlay", "pmsettings"]);
   const mo = moShim();
   const sb = sandbox(dom, { UiLayers, MutationObserver: mo.MutationObserver });
-  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
-  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: absSrc("js/ui/menu-nav.js") });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: absSrc("js/ui/modal.js") });
   const dlg = els[1];
   assert.equal(dlg.tagName, "DIALOG");
   dlg.hidden = false;
@@ -532,7 +533,7 @@ test("TopModal isolates the title menu behind dialog and non-dialog sheets", () 
 
 function loadLayerIds() {
   const sb = sandbox(makeDom());
-  vm.runInNewContext(src("js/ui/layers.js"), sb, { filename: "js/ui/layers.js" });
+  vm.runInNewContext(src("js/ui/layers.js"), sb, { filename: absSrc("js/ui/layers.js") });
   return sb.UiLayers.LAYER_IDS;
 }
 
@@ -626,7 +627,7 @@ test("setting-row chevrons step from a disabled CUSTOM to its real neighbours", 
     addEventListener() {} });
   const ctx = { window: {}, document: { createElement: mk, getElementById: () => null } };
   vm.createContext(ctx);
-  vm.runInContext(read("js/ui/setting-row.js"), ctx);
+  vm.runInContext(read("js/ui/setting-row.js"), ctx, { filename: absSrc("js/ui/setting-row.js") });
   const SR = ctx.window.SettingRow;
   const row = mk("div"), wrap = mk("div"), prev = mk("button"), sel = mk("select"), next = mk("button");
   prev.attrs["data-step"] = "-1"; next.attrs["data-step"] = "1";
@@ -703,7 +704,7 @@ test("circuit tiles announce the chosen one: .track-row buttons get aria-pressed
     return b;
   });
   const sb = sandbox(dom, { MutationObserver: moShim().MutationObserver });
-  vm.runInNewContext(src("js/ui/aria-state.js"), sb, { filename: "js/ui/aria-state.js" });
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb, { filename: absSrc("js/ui/aria-state.js") });
   assert.deepEqual(tiles.map((b) => b.getAttribute("aria-pressed")), ["false", "true", "false"]);
   tiles[1].classList.remove("active"); tiles[2].classList.add("active");
   sb.AriaState.sync();

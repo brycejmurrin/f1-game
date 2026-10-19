@@ -9,13 +9,14 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { pearson, maxCraftClusterR, correlationMatrix, columnStats, styleZeroMean } from "../../tools/lib/ai-ratings-math.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function loadDR() {
   const ctx = vm.createContext({ console, Object, Math, window: {} });
   for (const f of ["js/core/mat4.js", "js/core/hash32.js", "js/data/driver-ratings.js"]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return vm.runInContext("DriverRatings", ctx);
 }
