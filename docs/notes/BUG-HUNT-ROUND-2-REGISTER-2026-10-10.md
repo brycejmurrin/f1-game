@@ -15,7 +15,7 @@ Totals: 79 findings, 23 already fixed in the sibling draft #1289 (not re-done), 
 3. Lane-scoped Sonnet fix agents in isolated worktrees, disjoint OWNED/FORBIDDEN globs, a unit test that
    fails on the base, commit + push per item, draft PR. Waves of 4-5 (one agent died on a session rate limit).
 4. Main session: ready-gate, ONE remote browser group per PR (`tools/ci/remote-group.mjs`), cap check
-   (`tools/ci/ready-full-cap.mjs`), then ready + squash auto-merge.
+   (`ready-full-cap (deleted, #3013)`), then ready + squash auto-merge.
 
 ## Lessons that cost time
 

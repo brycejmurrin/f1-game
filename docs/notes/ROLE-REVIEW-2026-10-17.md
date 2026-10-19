@@ -68,7 +68,7 @@ Edit `references/orchestrator.md` (Hard lines, after item 10): add
 ```
 
 ### 2. `ready-full-cap.mjs` contradicts the policy it enforces (CONFIRMED, ~5 min and one timer per owner)
-AGENTS.md says "No desk cap on ready full-tier runs (retired 2026-10-16)"; `tools/ci/ready-full-cap.mjs:35` still has `MAX_LIVE = 3`.
+AGENTS.md says "No desk cap on ready full-tier runs (retired 2026-10-16)"; `ready-full-cap (deleted, #3013):35` still has `MAX_LIVE = 3`.
 013cfQWJ held #2711 on "REFUSE mark-ready — 3/3" (result `0bbe4864-06e6-4ffc-bb44-9cefbfccd2e3`, "a timer will re-check at 12:15Z"),
 then marked it ready only when the orchestrator said "the cap is 8" (assistant `e19d1189-d785-4de7-85eb-527ce4c8e621`, 12:05:20).
 PR #2724 (raise MAX_LIVE) is the tools-lane fix; #2727 notes it open. Until it lands, `references/role-pr-owner.md`, "On every wake" step 4:

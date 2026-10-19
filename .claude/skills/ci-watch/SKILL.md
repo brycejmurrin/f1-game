@@ -54,7 +54,7 @@ either version, before any READY or ARM run `ready-gate.mjs --pr <n>` and read
 the body for a `MERGE-HOLD:` line: the gate is the backstop.
 
 No ready cap since 2026-10-16: ci.yml's `queue: max` lanes bound the browser
-legs inside GitHub; `ready-full-cap.mjs` prints the count for information only.
+legs inside GitHub; no tool counts ready PRs.
 A draft whose tip is green and whose ready-gate exits 0 is marked ready by its
 owner; Merge Desk flips it otherwise. After a merge, if a Pages train is
 pending and none running, batch further merges until it starts (each merge

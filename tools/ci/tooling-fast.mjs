@@ -93,8 +93,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
-  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras. Permanent
-  // only; streets stay at the prior baselines. No VM. < 0.1 s.
+  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras, plus the
+  // #2356 attack-zone soft pull. Permanent only; streets stay prior baselines. No VM.
   "tests/unit/ai-pass-complete.test.mjs",
   // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
   // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
@@ -461,6 +461,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
   // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
   "tests/unit/flaky-quarantine.test.mjs",
+  // fleet-archive: the archive rule over a saved list_sessions page (role tag, agent-created, idle, PR merged or
+  // closed, no human turn in the last hour); pure fixtures; < 0.5 s.
+  "tests/unit/fleet-archive.test.mjs",
+  // Fleet Board snapshot (tools/ci/fleet-board-snapshot.mjs): dashboard datasets from fixtures, no network. < 1 s.
+  "tests/unit/fleet-board-snapshot.test.mjs",
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
@@ -573,6 +578,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
   // repo stays untouched; every fixture-repo test imports the scrub first). ~2.5 s.
   "tests/unit/git-fixture-env.test.mjs",
+  // Shared GET-only GitHub REST helper (#3013).
+  "tests/unit/github-api.test.mjs",
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
@@ -584,6 +591,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-resize-hysteresis.test.mjs",
   "tests/unit/glx-resource-balance.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
+  "tests/unit/gpu-allocation-estimator.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
   "tests/unit/harness-display.test.mjs",
@@ -694,7 +702,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // files below sat in test:garage-unit / test:steering-unit, which ran in NO
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
-  // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
+  // livery-contrast (9.7 s) stays CI-only; cover-legibility is in test:node-slow (159 s measured).
   "tests/unit/live-run-check.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
@@ -766,6 +774,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
   "tests/unit/menu-sentinel-resize.test.mjs",
+  // merge-gate: the merge gate's pure rows (open, required CI check, game paths, bus GAME-SLOT pacing), the receipt
+  // github-mcp-guard.sh reads, and merge_policy.py agreeing with gate-receipt.mjs on every receipt case; < 2 s.
+  "tests/unit/merge-gate.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   // tools/perf/mesh-census-lib.mjs: pass/source/distance banding + #2657/#2631 recommend (no browser). ~0.1 s.
   "tests/unit/mesh-census.test.mjs",
@@ -873,7 +884,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
   "tests/unit/poll-live-shell.test.mjs",
-  // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
+  // CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.
   "tests/unit/pr-board.test.mjs",
   // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.
   "tests/unit/pr-body.test.mjs",
@@ -929,8 +940,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ratchet-reason.test.mjs",
   "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
-  // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
-  "tests/unit/ready-full-cap.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
   // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
   // director lays it over a stub field — grid, plans, the pace loop, the
@@ -940,11 +949,16 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WATCH recording-gap cache (#2465): explicit refresh replaces a stale interior hole and keeps a pit stop and a red flag. VM, under a second.
   "tests/unit/real-race-tab-gap-refresh.test.mjs",
   "tests/unit/real-race.test.mjs",
-  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
-  "tests/unit/real-replay-captions.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
   // centreline, the highlights list, the field as puppets (follow, speed, a car
-  // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
+  // whose data ends, the flag) and the exact JUMP IN. Split by concern (frame-fit,
+  // broadcast, transport, audio-focus; shared fixtures tests/helpers/real-replay-fixtures.mjs).
+  "tests/unit/real-replay-audio-focus.test.mjs",
+  "tests/unit/real-replay-broadcast.test.mjs",
+  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
+  "tests/unit/real-replay-captions.test.mjs",
+  "tests/unit/real-replay-frame-fit.test.mjs",
+  "tests/unit/real-replay-transport.test.mjs",
   "tests/unit/real-replay-vm.test.mjs",
   "tests/unit/red-flag-fuel-vm.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
@@ -1232,6 +1246,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-maps-corners.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   "tests/unit/track-preview-plan.test.mjs",
+  // Tracks.project() hints over six circuits (perturbed, seam, wrong-lap), real track build in a VM, ~13 s.
+  "tests/unit/track-project-hints.test.mjs",
   // RANDOMISE builds clockwise (Σk < 0 through the engine) with the grid side
   // of the start straight ≥ the exit side, over 30 seeds; ~3 s.
   "tests/unit/track-randomise.test.mjs",
