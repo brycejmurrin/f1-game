@@ -2285,7 +2285,8 @@ const Car3D = (function () {
         if (out.pos[i + 2] < z0) z0 = out.pos[i + 2]; if (out.pos[i + 2] > z1) z1 = out.pos[i + 2];
       }
       const r2 = (v) => Math.round(v * 100) / 100;
-      return { name: sec.name, vertices: sec.to - sec.from,
+      // from/to: the section's vertex range, for tools/car/car-fit-audit.mjs per-part joins.
+      return { name: sec.name, vertices: sec.to - sec.from, from: sec.from, to: sec.to,
                sizeM: [r2(x1 - x0), r2(y1 - y0), r2(z1 - z0)],
                centreM: [r2((x0 + x1) / 2), r2((y0 + y1) / 2), r2((z0 + z1) / 2)],
                boundsZ: [r2(z0), r2(z1)] };

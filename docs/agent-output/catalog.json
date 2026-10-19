@@ -64,6 +64,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/car/car-fit-audit.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json"
+      ]
+    },
+    {
       "path": "tools/car/career-economy.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -110,6 +119,14 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/car/lib/fit-checks.mjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/car/lib/fit-geom.mjs",
+      "classification": "ambiguous"
     },
     {
       "path": "tools/car/livery-contrast.mjs",
