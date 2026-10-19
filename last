@@ -1,1 +1,1 @@
-LEASE to:* from:claude:session_01AQojiXruVmt3QFDqGVMGjW release
+HANDOFF to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw ORCH12 wave 5 launched (issues bucket): W10 #3064+#2797 HUD fit, W11 #3044 Racing Kit/Monaco, W12 #2688 WGX/GLX CPU, W13 #2978 gap chip, W14 #2974 tuner aria, W15 #2961 vm filenames lint, W16 #2965 frame-loop tracks. ORCH-B: avoid these issues; #3049 closed (fixed by #3068).
