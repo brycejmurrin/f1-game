@@ -1,0 +1,635 @@
+<title>Apex Finish Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a paint-booth contact book — dark bay, the shortlist, then compact cards per finish grouped by round, pairs, backends, then the reference library. Single dark theme by choice (the stills are dark garage renders). */
+:root {
+  --bay: #0f1013;        /* page */
+  --panel: #17181d;      /* cards */
+  --rule: #2a2c33;
+  --ink: #e9e7e2;
+  --mute: #9a9ca5;
+  --tape: #ffcc33;       /* garage floor tape: the one accent */
+  --new: #7fe0b0;        /* semantic: new finish */
+  --warn: #ff9a6b;       /* semantic: needs work */
+  --display: "Saira Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bay); color: var(--ink); font: 15px/1.55 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 44px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(40px, 7vw, 72px); font-weight: 800; line-height: .95; text-transform: uppercase; }
+h2 { font-size: 30px; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; gap: 12px; }
+h2 small { font: 500 12px var(--mono); color: var(--mute); text-transform: none; letter-spacing: 0; }
+h3 { font-size: 26px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--tape); }
+.tape { height: 10px; background: repeating-linear-gradient(135deg, var(--tape) 0 14px, #111 14px 28px); border-radius: 2px; }
+header { display: grid; gap: 14px; }
+.lede { color: var(--mute); font-size: 16px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 500 12px var(--mono); padding: 4px 9px; border: 1px solid var(--rule); border-radius: 999px; color: var(--mute); }
+.chip.ok { color: var(--new); border-color: color-mix(in srgb, var(--new) 45%, transparent); }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+section { display: grid; gap: 16px; }
+figure { margin: 0; display: grid; gap: 6px; min-width: 0; }
+figcaption { font: 12px var(--mono); color: var(--mute); }
+img { display: block; width: 100%; height: auto; border-radius: 4px; background: #000; cursor: zoom-in; }
+button.shot { all: unset; display: block; cursor: zoom-in; border-radius: 4px; }
+button.shot:focus-visible { outline: 2px solid var(--tape); outline-offset: 3px; }
+.finishes { display: grid; gap: 22px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 18px; display: grid; gap: 14px; }
+.card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; }
+.id { font: 500 13px var(--mono); color: var(--bay); background: var(--tape); padding: 2px 8px; border-radius: 3px; }
+.pitch { font-size: 16px; }
+.stills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 22px; }
+.spec { display: grid; gap: 3px; min-width: 0; }
+.spec dt { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+.spec dd { margin: 0; font-size: 14px; }
+code { font: 13px var(--mono); color: var(--ink); background: #0b0c0f; padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.refs { display: grid; gap: 22px; }
+.ref { display: grid; gap: 8px; }
+.ref-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.ref-head h3 { font-size: 22px; }
+.count { font: 500 13px var(--mono); color: var(--tape); font-variant-numeric: tabular-nums; }
+.note { color: var(--mute); font-size: 14px; max-width: 90ch; }
+.callout { border-left: 3px solid var(--warn); padding: 8px 14px; background: color-mix(in srgb, var(--warn) 7%, transparent); color: var(--ink); font-size: 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+td.n { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+.scroll { overflow-x: auto; }
+dialog { border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 94vh; }
+dialog::backdrop { background: rgba(0,0,0,.86); }
+dialog img { max-width: 96vw; max-height: 88vh; width: auto; cursor: zoom-out; }
+dialog p { color: #ddd; font: 12px var(--mono); padding-top: 6px; }
+@media (max-width: 720px) {
+  .stills { grid-template-columns: 1fr; }
+  .pair { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: no-preference) { img { transition: opacity .2s; } }
+.round { display: grid; gap: 14px; }
+.round + .round { padding-top: 10px; border-top: 1px solid var(--rule); }
+.round-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.round-head h3 { font-size: 24px; }
+.finishes { grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 1fr)); gap: 16px; }
+.card { padding: 14px; gap: 10px; min-width: 0; }
+.card-head h3 { font-size: 22px; }
+.card-head .chip { margin-left: auto; }
+.chip[data-status="pick"] { color: var(--tape); border-color: color-mix(in srgb, var(--tape) 50%, transparent); }
+.pitch { font-size: 15px; }
+.card .specs { grid-template-columns: 1fr; gap: 6px; }
+.card .stills { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ref-slot { padding-left: 8px; border-left: 2px solid var(--tape); }
+.ref-slot figcaption { overflow-wrap: anywhere; }
+.changelog { margin: 0; padding-left: 22px; display: grid; gap: 6px; max-width: 90ch; }
+.changelog li::marker { font: 500 13px var(--mono); color: var(--tape); }
+details { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; }
+details[open] { display: grid; gap: 12px; }
+summary { cursor: pointer; font: 600 20px var(--display); text-transform: uppercase; }
+summary:focus-visible { outline: 2px solid var(--tape); outline-offset: 3px; }
+.earlier { display: grid; gap: 14px; }
+.earlier-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.card figcaption { font-size: 11px; }
+.placeholder { border: 1px dashed var(--rule); border-radius: 8px; padding: 14px; min-height: 48px; }
+.placeholder:empty::before { content: "Filled in after review."; color: var(--mute); font: 12px var(--mono); }
+@media (max-width: 720px) {
+  .finishes { grid-template-columns: 1fr; }
+  .card-head .chip { margin-left: 0; }
+  .card .stills { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ref-slot { padding-left: 0; border-left: 0; border-top: 2px solid var(--tape); padding-top: 6px; }
+}
+.shortlist { margin: 0; padding-left: 1.4em; display: grid; gap: 10px; max-width: 90ch; }
+.shortlist a { color: var(--ink); text-decoration: none; }
+.shortlist a:hover strong { color: var(--tape); }
+.px { display: block; font: 12px var(--mono); color: var(--mute); }
+</style>
+
+
+<div class="wrap">
+  <header>
+    <div class="tape" aria-hidden="true"></div>
+    <h1>Apex Finish Lab</h1>
+    <p class="lede">31 prototype livery finishes, each shot on the same Ferrari in the garage at hero distance on TLX, the default renderer. The round-1 survivors also have close-up and race-day stills; close-ups, race stills and team-livery pairs for #65–#90 come next round. Every one rides an existing paint surface and changes nothing that ships. Below them is the library of real-car reference photos used to design them. Pick the finishes you want; the picks go to whoever lands them.</p>
+    <div class="facts">
+      <span class="chip">branch cursor/design-preview-finishes-d2f5</span>
+      <span class="chip">round 2 · 31 preview finishes</span>
+      <span class="chip">preview surface ids 60–90</span>
+      <span class="chip warn">software render, no GPU</span>
+      <span class="chip">refs: 162 photos</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Round 2 — what changed and why</h2>
+    <ol class="changelog" id="changelog">
+      <!-- CHANGELOG -->
+      <li><strong>Round 1</strong> (first publish). Five prototypes: oil slick, frozen, fluoro, burnt titanium, holo flake.</li>
+      <li><strong>Round 2</strong> (this page). Re-tuned those five against real photos: oil-film bands over dark metal, a satin sun sheen on frozen, the real titanium oxide order on burnt, sparse Lunaflair-style glitter.</li>
+      <li>Added 26 finishes: 11 copied off the reference library (#65–#75: W196 aluminium, KNC bare carbon, flow-vis, FW47 carbon fade, W17 silver fade, AMR25 metallic flop and more) and 15 from three parallel design lanes (#76–#90: metals, paint effects, race condition).</li>
+      <li>Fixed a TLX bug that rendered nine finishes black or white while GLX was right (TLX read stale shader values in later branches). All 31 now render on TLX.</li>
+      <li>Renamed #64 holo to <strong>starlight</strong>: Codex shipped a holographic finish (#41), and #64 is now Lunaflair-style silver glitter anyway.</li>
+      <li>Measured every finish against shipped gloss (share of car pixels that change) and ranked a shortlist.</li>
+      <li>Not done this round: close-ups, race stills and team-livery pairs for #65–#90; WGX pixels (static and Dawn validation pass, 0 GPU errors).</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Shortlist <small>the strongest picks so far</small></h2>
+    <div id="shortlist" class="placeholder"><!-- SHORTLIST --><ol class="shortlist"><li><a href="#f-silverfade"><strong>#69 silverfade</strong></a> · Mercedes W17 silver nose breaking into halftone dots, then black. A real 2026 F1 look that reads at phone size. <span class="px">6.9% of car pixels differ from gloss</span></li><li><a href="#f-flovis"><strong>#67 flovis</strong></a> · F1 flow-vis aero paint: glowing yellow-green streaks down the sidepods (MCL40 and Toro Rosso photos). Unmistakable on track. <span class="px">2.3% of car pixels differ from gloss</span></li><li><a href="#f-burnt"><strong>#63 burnt</strong></a> · Heat-tinted titanium in the real oxide order: silver nose, straw and gold, purple, blue tail. Reads in race day and dusk stills. <span class="px">7.4% of car pixels differ from gloss</span></li><li><a href="#f-oilslick"><strong>#60 oilslick</strong></a> · Thin-film rainbow bands over dark anodised metal. The strongest read of all in the race stills. <span class="px">7.6% of car pixels differ from gloss</span></li><li><a href="#f-goldfoil"><strong>#76 goldfoil</strong></a> · Crinkled gold heat-shield foil from F1 engine bays: faceted glints that move with the camera. <span class="px">7.7% of car pixels differ from gloss</span></li><li><a href="#f-mystichrome"><strong>#83 mystichrome</strong></a> · Three-colour shift, green to cobalt to purple across one car (Ford Mystichrome). Not the same as chameleon’s two hues. <span class="px">7.1% of car pixels differ from gloss</span></li></ol><p class="note">Runners-up: #77 anodblue, #72 pearlwhite, #79 engineturn, #75 testcamo, #84 midnightpurple, #80 magchrom. Too subtle at hero distance (under 3.7% of pixels; needs tuning or a closer camera): #61 frozen, #64 starlight, #68 carbonfade, #70 metalflop, #71 truematte, #73 raceworn, #81 ghostpearl, #82 xirallic, #87 stealth, #89 heatrear. Only #60 and #63 have race stills so far.</p></div>
+  </section>
+
+  <section>
+    <h2>Current designs <small>31 · hero, close-up, race day, real reference</small></h2>
+    <p class="note">Ask for a change by the card's id, e.g. "iterate #64 starlight". Each card: what it looks like, the real thing it copies, and the shipped surface it is built on. "Built on" is the paint surface the preview borrows for lighting before its tint runs. The chip on each card is its review status.</p>
+    <div class="round" id="round-r1">
+      <div class="round-head"><h3>Round 1</h3><span class="count">ids 60–64</span><span class="note">First five: colour-shift and special-effect finishes.</span></div>
+      <div class="finishes">
+      <article class="card" id="f-oilslick">
+        <div class="card-head"><span class="id">#60 oilslick</span><h3>Oil Slick</h3><span class="chip ok" data-status="oilslick">shortlist · 7.6%</span></div>
+        <p class="pitch">A thin-film rainbow over dark anodised metal; every panel shows a different colour.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gunmetal (39)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="oilslick · hero 3/4"><img src="/_blob/6da7559abfb1600b61df7b9133c3fb54" alt="Oil Slick finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure><button class="shot" data-cap="oilslick · close-up"><img src="/_blob/cdf0cdcc425f9ca00a9bf2dcb5cd7c18" alt="Oil Slick finish, close-up" loading="lazy"></button><figcaption>close-up</figcaption></figure>
+          <figure><button class="shot" data-cap="oilslick · race day"><img src="/_blob/42cb47a5430f0583ce17c1a8a59170e0" alt="Oil Slick finish, race day" loading="lazy"></button><figcaption>race day</figcaption></figure>
+          <figure class="ref-slot" data-ref="oilslick"><button class="shot" data-cap="oilslick · real reference"><img src="/_blob/1b3dee9701ab6feef4bf7cfbefc9f0da" alt="Real reference photo for Oil Slick" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Thin-film interference: soap bubbles, oil on wet tarmac. <a href="https://en.wikipedia.org/wiki/Iridescence" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-frozen">
+        <div class="card-head"><span class="id">#61 frozen</span><h3>Frozen</h3><span class="chip warn" data-status="frozen">subtle · 3.1%</span></div>
+        <p class="pitch">Matte metallic: a dusty, desaturated face with a fine grain, a soft silver rim and a broad satin sun sheen.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Matte (28)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="frozen · hero 3/4"><img src="/_blob/113c249ac1c5db6aab6b97144e3bd59e" alt="Frozen finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="frozen"><button class="shot" data-cap="frozen · real reference"><img src="/_blob/fc420eb17ce39d850bcf917c47e526dc" alt="Real reference photo for Frozen" loading="lazy"></button><figcaption><strong>Real reference</strong><br>BMW Individual Frozen paints; Bugatti satin finishes for the sheen. <a href="https://www.bmwusa.com/innovations/bmw-individual.html" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-fluoro">
+        <div class="card-head"><span class="id">#62 fluoro</span><h3>Fluoro</h3><span class="chip" data-status="fluoro">reads · 4.2%</span></div>
+        <p class="pitch">Day-glo paint that looks brighter than the light hitting it, now keeping more of its shading.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="fluoro · hero 3/4"><img src="/_blob/459beb176509d139401a08594e82333f" alt="Fluoro finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="fluoro"><button class="shot" data-cap="fluoro · real reference"><img src="/_blob/66c0c9c82c188476cfe317aef5ad7363" alt="Real reference photo for Fluoro" loading="lazy"></button><figcaption><strong>Real reference</strong><br>F1 flo-vis aero paint and fluoro liveries. <a href="https://www.crash.net/f1/news/1020792/1/what-fluorescent-paint-f1-cars-bahrain-testing" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-burnt">
+        <div class="card-head"><span class="id">#63 burnt</span><h3>Burnt Titanium</h3><span class="chip ok" data-status="burnt">shortlist · 7.4%</span></div>
+        <p class="pitch">Heat-tinted titanium: blue nose, purple middle, straw-gold tail.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Chrome (27)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="burnt · hero 3/4"><img src="/_blob/99318500e89db79e10f65ebc71d5b0ad" alt="Burnt Titanium finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure><button class="shot" data-cap="burnt · close-up"><img src="/_blob/8c939706900bea610338eeb5fd2def32" alt="Burnt Titanium finish, close-up" loading="lazy"></button><figcaption>close-up</figcaption></figure>
+          <figure><button class="shot" data-cap="burnt · race day"><img src="/_blob/527e09f6fa057daf1284cce3477f4dfd" alt="Burnt Titanium finish, race day" loading="lazy"></button><figcaption>race day</figcaption></figure>
+          <figure class="ref-slot" data-ref="burnt"><figcaption><strong>Real reference</strong><br>Titanium oxide colours: gold, purple, blue with thickness. <a href="https://www.scienceabc.com/pure-sciences/what-are-the-various-colours-of-titanium" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-holo">
+        <div class="card-head"><span class="id">#64 starlight</span><h3>Starlight (was holo)</h3><span class="chip warn" data-status="holo">renamed starlight · subtle</span></div>
+        <p class="pitch">Prismatic flake: sparse coloured sparks over dark metal, rainbow streaks on lit panels.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Metallic flake (34)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="holo · hero 3/4"><img src="/_blob/1691990d74261e3f29989ffe93412d3d" alt="Holo Flake finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="holo"><button class="shot" data-cap="holo · real reference"><img src="/_blob/ddd38ac36eb6a3d58d0dd756c39233bc" alt="Real reference photo for Holo Flake" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Rolls-Royce Spectre Lunaflair. <a href="https://elitetraveler.com/motion/rolls-royce-spectre-lunaflair" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      </div>
+    </div>
+    <div class="round" id="round-ref">
+      <div class="round-head"><h3>Reference round</h3><span class="count">ids 65–67</span><span class="note">Finishes copied off one reference photo each.</span></div>
+      <div class="finishes">
+      <article class="card" id="f-alubare">
+        <div class="card-head"><span class="id">#65 alubare</span><h3>Bare Aluminium</h3><span class="chip" data-status="alubare">reads · 6.3%</span></div>
+        <p class="pitch">Polished bare aluminium: warm grey metal, livery colour ignored.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Brushed metal (29)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="alubare · hero 3/4"><img src="/_blob/c2cd1fbe382136c2c35c24970699da2b" alt="Bare Aluminium finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="alubare"><button class="shot" data-cap="alubare · real reference"><img src="/_blob/8b65bd221879faef752bc01774e23d8e" alt="Real reference photo for Bare Aluminium" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Mercedes-Benz W196 silver arrow. <a href="https://en.wikipedia.org/wiki/Mercedes-Benz_W196" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-rawcarbon">
+        <div class="card-head"><span class="id">#66 rawcarbon</span><h3>Raw Carbon</h3><span class="chip" data-status="rawcarbon">reads · 6.9%</span></div>
+        <p class="pitch">Unlacquered carbon weave: cool graphite satin over the livery.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Carbon (31)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="rawcarbon · hero 3/4"><img src="/_blob/d948e60833da2f216dd8edf7c9a800c7" alt="Raw Carbon finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="rawcarbon"><button class="shot" data-cap="rawcarbon · real reference"><img src="/_blob/c7eaabeac7c5e844e5341daacfc375c5" alt="Real reference photo for Raw Carbon" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Koenigsegg Regera Naked Carbon (KNC). <a href="https://www.motoringresearch.com/car-news/naked-carbon-fibre-koenigsegg/" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-flovis">
+        <div class="card-head"><span class="id">#67 flovis</span><h3>Flo-Vis</h3><span class="chip ok" data-status="flovis">shortlist · 2.3%</span></div>
+        <p class="pitch">Glowing yellow-green aero-paint streaks running back along the body, gone at the nose.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="flovis · hero 3/4"><img src="/_blob/c6426985aabc9814f93b2d56446d1dbc" alt="Flo-Vis finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="flovis"><button class="shot" data-cap="flovis · real reference"><img src="/_blob/4396f6e64924988e0d0138be4bd9e08c" alt="Real reference photo for Flo-Vis" loading="lazy"></button><figcaption><strong>Real reference</strong><br>F1 flow-vis paint in testing. <a href="https://www.formula1.com/en/latest/article/testing-explained-rob-smedley-on-flow-vis.7nU2VePGlVrhIGa8wgCoLE" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      </div>
+    </div>
+    <div class="round" id="round-real1">
+      <div class="round-head"><h3>Real-car round</h3><span class="count">ids 68–70</span><span class="note">Read off 2024–26 F1 car photos.</span></div>
+      <div class="finishes">
+      <article class="card" id="f-carbonfade">
+        <div class="card-head"><span class="id">#68 carbonfade</span><h3>Carbon Fade</h3><span class="chip warn" data-status="carbonfade">subtle · 3.0%</span></div>
+        <p class="pitch">Livery above the sidepod line, bare weave below, with a ragged edge between.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="carbonfade · hero 3/4"><img src="/_blob/2e8fdf6fba4be877a4a10426bf6c0b89" alt="Carbon Fade finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="carbonfade"><button class="shot" data-cap="carbonfade · real reference"><img src="/_blob/393a87e8f333a3781f6167f2af6f8ac4" alt="Real reference photo for Carbon Fade" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Williams FW47; also RB22 and AMR25. <a href="https://www.formula1.com/en/latest/article/gallery-check-out-more-angles-of-williams-new-fw47-challenger.wMNlyxxnbdZNfmSRhzCAB" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-silverfade">
+        <div class="card-head"><span class="id">#69 silverfade</span><h3>Silver Fade</h3><span class="chip ok" data-status="silverfade">shortlist · 6.9%</span></div>
+        <p class="pitch">Silver nose dissolving through a halftone of dots into a black tail.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="silverfade · hero 3/4"><img src="/_blob/b46972f1eead55c5a8b5cec9ccdb9715" alt="Silver Fade finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="silverfade"><button class="shot" data-cap="silverfade · real reference"><img src="/_blob/7da7c9cecdf75dc0cdafa2c4e1a0f1e9" alt="Real reference photo for Silver Fade" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Mercedes W17. <a href="https://www.formula1.com/en/latest/article/first-look-mercedes-reveal-first-images-of-the-w17-with-new-livery-design.3PiP6vnYUBcKolJt2v2CNI" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-metalflop">
+        <div class="card-head"><span class="id">#70 metalflop</span><h3>Metal Flop</h3><span class="chip warn" data-status="metalflop">subtle · 3.6%</span></div>
+        <p class="pitch">Metallic paint with a bright face and dark flop at the edges.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Metallic flake (34)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="metalflop · hero 3/4"><img src="/_blob/85bdaffae4976aba900b59e777a77853" alt="Metal Flop finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="metalflop"><button class="shot" data-cap="metalflop · real reference"><img src="/_blob/43f57f8011ae09399b16bfd048983dbc" alt="Real reference photo for Metal Flop" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Aston Martin AMR25 green; Williams FW48 blue. <a href="https://www.formula1.com/en/latest/article/gallery-check-out-all-the-angles-of-aston-martins-new-amr25-car.3BqW12L2GynV0ajssfp91z" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      </div>
+    </div>
+    <div class="round" id="round-real2">
+      <div class="round-head"><h3>Real-car round 2</h3><span class="count">ids 71–75</span><span class="note">More from real cars, plus fluoro and frozen re-tunes.</span></div>
+      <div class="finishes">
+      <article class="card" id="f-truematte">
+        <div class="card-head"><span class="id">#71 truematte</span><h3>True Matte</h3><span class="chip warn" data-status="truematte">subtle · 0.7%</span></div>
+        <p class="pitch">Chalky matte that goes lighter and greyer toward the edges, like a rough surface.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Matte (28)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="truematte · hero 3/4"><img src="/_blob/f49f62dce0c2818a88e7ea49541a31e2" alt="True Matte finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="truematte"><button class="shot" data-cap="truematte · real reference"><img src="/_blob/8adcbc106c090cf045fd02bc8de35123" alt="Real reference photo for True Matte" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Red Bull matte navy, 2016 onward. <a href="https://www.formula1.com/en/latest/article/red-bull-reveal-2016-f1-livery-.7dUgfQNFBW0YcFEsvtsDrv" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-pearlwhite">
+        <div class="card-head"><span class="id">#72 pearlwhite</span><h3>Pearl White</h3><span class="chip" data-status="pearlwhite">reads · 7.6%</span></div>
+        <p class="pitch">Tri-coat white: warm on the face, cool at the edge; livery colour ignored.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Metallic flake (34)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="pearlwhite · hero 3/4"><img src="/_blob/e75044473e5e927be322a8fc623a3f31" alt="Pearl White finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="pearlwhite"><button class="shot" data-cap="pearlwhite · real reference"><img src="/_blob/3dff47179f4a86ded2484e52ed9439d4" alt="Real reference photo for Pearl White" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Rolls-Royce Phantom Syntopia pearlescent. <a href="https://gtspirit.com/2023/03/13/rolls-royce-phantom-syntopia-latest-bespoke-phantom/" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-raceworn">
+        <div class="card-head"><span class="id">#73 raceworn</span><h3>Race Worn</h3><span class="chip warn" data-status="raceworn">subtle · 1.2%</span></div>
+        <p class="pitch">Brake dust and rubber streaked back along the low bodywork.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="raceworn · hero 3/4"><img src="/_blob/75abe9697eb8c5d928507cff6690074e" alt="Race Worn finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="raceworn"><button class="shot" data-cap="raceworn · real reference"><img src="/_blob/b339e7cbef0e3085ad0fa4cf0823cf89" alt="Real reference photo for Race Worn" loading="lazy"></button><figcaption><strong>Real reference</strong><br>End-of-race dirt on the lower body. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-jpsgold">
+        <div class="card-head"><span class="id">#74 jpsgold</span><h3>JPS Gold</h3><span class="chip" data-status="jpsgold">reads · 6.7%</span></div>
+        <p class="pitch">Gloss black with sparse gold flake.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Metallic flake (34)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="jpsgold · hero 3/4"><img src="/_blob/a97883124ef9a837a198ab8b6c07f037" alt="JPS Gold finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="jpsgold"><button class="shot" data-cap="jpsgold · real reference"><img src="/_blob/1cc6b7f9ae9f2a4973d40bbb5a9dc153" alt="Real reference photo for JPS Gold" loading="lazy"></button><figcaption><strong>Real reference</strong><br>John Player Special black and gold (Radford Type 62-2 JPS). <a href="https://www.hagerty.co.uk/articles/news-articles/black-and-gold-back-in-fashion-as-radford-reveals-new-type-62-2-john-player-special-road-racer/" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-testcamo">
+        <div class="card-head"><span class="id">#75 testcamo</span><h3>Test Camo</h3><span class="chip" data-status="testcamo">reads · 6.9%</span></div>
+        <p class="pitch">Black and white dazzle camouflage; livery colour ignored.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="testcamo · hero 3/4"><img src="/_blob/3174683525ff1fcd50d6964cf3548543" alt="Test Camo finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="testcamo"><figcaption><strong>Real reference</strong><br>Dazzle wraps on pre-launch test cars. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      </div>
+    </div>
+    <div class="round" id="round-laneA">
+      <div class="round-head"><h3>Lane A · metals</h3><span class="count">ids 76–80</span><span class="note">Motorsport hardware: foils, anodising, coatings, castings.</span></div>
+      <div class="finishes">
+      <article class="card" id="f-goldfoil">
+        <div class="card-head"><span class="id">#76 goldfoil</span><h3>Gold Foil</h3><span class="chip ok" data-status="goldfoil">shortlist · 7.7%</span></div>
+        <p class="pitch">Crinkled gold heat-shield foil; the glints move as the view moves.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Chrome (27)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="goldfoil · hero 3/4"><img src="/_blob/e963bb28589e09de02e42556ae7a313e" alt="Gold Foil finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="goldfoil"><figcaption><strong>Real reference</strong><br>McLaren F1 engine bay; F1 exhaust and floor heat shielding. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-anodblue">
+        <div class="card-head"><span class="id">#77 anodblue</span><h3>Anodised Blue</h3><span class="chip" data-status="anodblue">reads · 7.8%</span></div>
+        <p class="pitch">Dyed electric-blue anodised aluminium; highlights stay blue, with a pale grazing sheen.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Brushed metal (29)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="anodblue · hero 3/4"><img src="/_blob/a9d0baf6f81470c0ac7a4d78362253eb" alt="Anodised Blue finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="anodblue"><figcaption><strong>Real reference</strong><br>Dyed anodised aluminium parts. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-cerabronze">
+        <div class="card-head"><span class="id">#78 cerabronze</span><h3>Ceramic Bronze</h3><span class="chip" data-status="cerabronze">reads · 6.8%</span></div>
+        <p class="pitch">Warm satin brown with a fine ceramic speckle and a broad soft sheen.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Satin (26)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="cerabronze · hero 3/4"><img src="/_blob/4f8eb266f40b5597b62aad79c0d011c1" alt="Ceramic Bronze finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="cerabronze"><figcaption><strong>Real reference</strong><br>Cerakote H-148 Burnt Bronze coating. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-engineturn">
+        <div class="card-head"><span class="id">#79 engineturn</span><h3>Engine-Turned</h3><span class="chip" data-status="engineturn">reads · 7.6%</span></div>
+        <p class="pitch">Jewelled aluminium: offset rows of polished discs, each with a bright bow-tie.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Chrome (27)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="engineturn · hero 3/4"><img src="/_blob/acd3dc2dd8621ac664d532245c169bd2" alt="Engine-Turned finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="engineturn"><figcaption><strong>Real reference</strong><br>Pre-war GP dash panels; the Spirit of St. Louis cowl. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-magchrom">
+        <div class="card-head"><span class="id">#80 magchrom</span><h3>Chromated Magnesium</h3><span class="chip" data-status="magchrom">reads · 6.9%</span></div>
+        <p class="pitch">Blotchy brown, olive-gold and green-grey cast metal with grain.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Brushed metal (29)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="magchrom · hero 3/4"><img src="/_blob/069b4661ce64817b46af4e44847841c0" alt="Chromated Magnesium finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="magchrom"><figcaption><strong>Real reference</strong><br>Dow 7 chromated magnesium castings. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      </div>
+    </div>
+    <div class="round" id="round-laneB">
+      <div class="round-head"><h3>Lane B · paint FX</h3><span class="count">ids 81–85</span><span class="note">Exotic paints from real paint makers.</span></div>
+      <div class="finishes">
+      <article class="card" id="f-ghostpearl">
+        <div class="card-head"><span class="id">#81 ghostpearl</span><h3>Ghost Pearl</h3><span class="chip warn" data-status="ghostpearl">subtle · 1.8%</span></div>
+        <p class="pitch">Livery colour on the face; a complementary pearl tint shows only at sunlit edges.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="ghostpearl · hero 3/4"><img src="/_blob/e6b9ff1970045b15e1db4c51ba86659e" alt="Ghost Pearl finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="ghostpearl"><figcaption><strong>Real reference</strong><br>House of Kolor ice / ghost pearls. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-xirallic">
+        <div class="card-head"><span class="id">#82 xirallic</span><h3>Xirallic</h3><span class="chip warn" data-status="xirallic">subtle · 2.2%</span></div>
+        <p class="pitch">Dense, sharp white crystal glints that twinkle as the view moves.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Metallic flake (34)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="xirallic · hero 3/4"><img src="/_blob/7d406b4582dc54bb38c2b301ccc6007a" alt="Xirallic finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="xirallic"><figcaption><strong>Real reference</strong><br>Merck Xirallic aluminium-oxide platelets. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-mystichrome">
+        <div class="card-head"><span class="id">#83 mystichrome</span><h3>Mystichrome</h3><span class="chip ok" data-status="mystichrome">shortlist · 7.1%</span></div>
+        <p class="pitch">Green to cobalt to purple to black across viewing angles; livery colour ignored.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="mystichrome · hero 3/4"><img src="/_blob/a7480c3cc2789e8614dc762aa91c1ab7" alt="Mystichrome finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="mystichrome"><button class="shot" data-cap="mystichrome · real reference"><img src="/_blob/2554dd4cff5a03f16c624342278bdcfc" alt="Real reference photo for Mystichrome" loading="lazy"></button><figcaption><strong>Real reference</strong><br>2004 Ford SVT Cobra Mystichrome; ChromaFlair pigment. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-midnightpurple">
+        <div class="card-head"><span class="id">#84 midnightpurple</span><h3>Midnight Purple</h3><span class="chip" data-status="midnightpurple">reads · 7.0%</span></div>
+        <p class="pitch">Near-black purple with a violet sun bloom that turns bronze at the edges.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="midnightpurple · hero 3/4"><img src="/_blob/3e690e424297cf48c5378bb44c174866" alt="Midnight Purple finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="midnightpurple"><figcaption><strong>Real reference</strong><br>Nissan R34 GT-R Midnight Purple III. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-ultrablack">
+        <div class="card-head"><span class="id">#85 ultrablack</span><h3>Ultra Black</h3><span class="chip" data-status="ultrablack">reads · 7.0%</span></div>
+        <p class="pitch">About 1% reflectance: the car reads as a silhouette; livery colour ignored.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Matte (28)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="ultrablack · hero 3/4"><img src="/_blob/b695f3c90d875f9a51a57e748915a670" alt="Ultra Black finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="ultrablack"><button class="shot" data-cap="ultrablack · real reference"><img src="/_blob/2989ae1f6e27e94a05256a03ddc0b73e" alt="Real reference photo for Ultra Black" loading="lazy"></button><figcaption><strong>Real reference</strong><br>BMW VBX6 in Vantablack VBx2 (Surrey NanoSystems). No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      </div>
+    </div>
+    <div class="round" id="round-laneC">
+      <div class="round-head"><h3>Lane C · race condition</h3><span class="count">ids 86–90</span><span class="note">What a car looks like after weather, heat, testing and sun.</span></div>
+      <div class="finishes">
+      <article class="card" id="f-rainsoak">
+        <div class="card-head"><span class="id">#86 rainsoak</span><h3>Rain Soaked</h3><span class="chip" data-status="rainsoak">reads · 4.8%</span></div>
+        <p class="pitch">Wet paint goes deep and dark, a water sheet mirrors the sky on top, beads glint.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="rainsoak · hero 3/4"><img src="/_blob/bb65eeabe5586500dd2fdf5eb2d2d524" alt="Rain Soaked finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="rainsoak"><figcaption><strong>Real reference</strong><br>Wet-race paint. No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-stealth">
+        <div class="card-head"><span class="id">#87 stealth</span><h3>Stealth Stripes</h3><span class="chip warn" data-status="stealth">subtle · 2.0%</span></div>
+        <p class="pitch">Matte body with gloss twin stripes and a gloss flank band.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Matte (28)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="stealth · hero 3/4"><img src="/_blob/7cbdfbcdb1c5be895027f71d91da7350" alt="Stealth Stripes finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="stealth"><button class="shot" data-cap="stealth · real reference"><img src="/_blob/e838f205cb071e8df972e99e7ee95051" alt="Real reference photo for Stealth Stripes" loading="lazy"></button><figcaption><strong>Real reference</strong><br>Red Bull matte years against its gloss RB22. <a href="https://www.planetf1.com/news/red-bull-rb22-f1-2026-livery-revealed" target="_blank" rel="noopener">Source</a></figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-primer">
+        <div class="card-head"><span class="id">#88 primer</span><h3>Test Primer</h3><span class="chip" data-status="primer">reads · 4.6%</span></div>
+        <p class="pitch">New engine cover, sidepods and front wing in flat test-part grey.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="primer · hero 3/4"><img src="/_blob/b4572213b1922825d05ae46c5d274e9e" alt="Test Primer finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="primer"><figcaption><strong>Real reference</strong><br>Unpainted new parts on test cars (Aston Martin AMR26, Barcelona shakedown, January 2026). No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-heatrear">
+        <div class="card-head"><span class="id">#89 heatrear</span><h3>Heat-Stained Rear</h3><span class="chip warn" data-status="heatrear">subtle · 1.7%</span></div>
+        <p class="pitch">Paint scorched to straw, purple and blue around the exhaust exit only.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="heatrear · hero 3/4"><img src="/_blob/5a76d0c5d9b5f3e2d6a7e361ef3490a3" alt="Heat-Stained Rear finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="heatrear"><figcaption><strong>Real reference</strong><br>Engine-cover heat staining on McLaren MCL33 and Sauber C32 (f1technical.net threads). No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="f-sunfaded">
+        <div class="card-head"><span class="id">#90 sunfaded</span><h3>Sun Faded</h3><span class="chip" data-status="sunfaded">reads · 5.3%</span></div>
+        <p class="pitch">Oxidised single-stage paint: pastel and chalky, the sun-facing top faded most.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Built on</dt><dd>Satin (26)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="sunfaded · hero 3/4"><img src="/_blob/2fd2d5378bc6bf028f90f28892ae59a7" alt="Sun Faded finish, hero 3/4" loading="lazy"></button><figcaption>hero 3/4</figcaption></figure>
+          <figure class="ref-slot" data-ref="sunfaded"><figcaption><strong>Real reference</strong><br>Oxidised single-stage paint (Mike Phillips). No photo in the library.</figcaption></figure>
+        </div>
+      </article>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Reference pairs <small>render next to the real thing</small></h2>
+    <div id="pairs" class="placeholder"><!-- PAIRS --><p class="note">Not shot this round (session budget). Queued for next round: Mercedes livery with #69 silverfade and #65 alubare (vs W17 and W196), Williams with #68 carbonfade (vs FW47), McLaren with #67 flovis and #62 fluoro (vs MCL40), Red Bull with #87 stealth and #71 truematte (vs RB matte navy), Aston Martin with #70 metalflop (vs AMR25). The real photos already sit beside each card.</p></div>
+  </section>
+
+  <section>
+    <h2>Backends <small>parity notes</small></h2>
+    <div id="parity" class="placeholder"><!-- PARITY --><div class="pair"><figure><button class="shot" data-cap="GLX · pearlwhite"><img src="/_blob/b6329b7fc928d89b44f6ec3e92a1ec95" alt="pearlwhite on GLX" loading="lazy"></button><figcaption>GLX · #72 pearlwhite</figcaption></figure><figure><button class="shot" data-cap="TLX · pearlwhite"><img src="/_blob/e75044473e5e927be322a8fc623a3f31" alt="pearlwhite on TLX" loading="lazy"></button><figcaption>TLX · #72 pearlwhite (after the fix)</figcaption></figure><figure><button class="shot" data-cap="GLX · silverfade"><img src="/_blob/fe98a9a15c8ba2243b2a3c4aa63c46d9" alt="silverfade on GLX" loading="lazy"></button><figcaption>GLX · #69 silverfade</figcaption></figure><figure><button class="shot" data-cap="TLX · silverfade"><img src="/_blob/b46972f1eead55c5a8b5cec9ccdb9715" alt="silverfade on TLX" loading="lazy"></button><figcaption>TLX · #69 silverfade (after the fix)</figcaption></figure><figure><button class="shot" data-cap="GLX · alubare"><img src="/_blob/610e71f89167a7504d9ea8a19767f619" alt="alubare on GLX" loading="lazy"></button><figcaption>GLX · #65 alubare</figcaption></figure><figure><button class="shot" data-cap="TLX · alubare"><img src="/_blob/c2cd1fbe382136c2c35c24970699da2b" alt="alubare on TLX" loading="lazy"></button><figcaption>TLX · #65 alubare (after the fix)</figcaption></figure></div><p class="note">These three rendered black on TLX before the fix while GLX was right. The GLX shots use a slightly wider garage camera. Parity for #76–#90 on GLX is not shot yet.</p></div>
+    <p class="note">TLX is the default renderer, so every finish is judged on TLX first. GLX shots check that the WebGL2 port matches. WGX passes static validation (<code>wgx-validate --static</code>) only: a known SwiftShader issue renders the new finishes as plain gloss on WGX, so no WGX pixels are shown here.</p>
+    <div class="callout"><strong>Shader work needed for every pick.</strong> Each finish is one tint branch after the metal block, hand-ported to GLSL, TSL and WGSL, plus a surface id. The preview borrows ids 60–90 and remaps them onto existing surfaces, so nothing shipped changes. The Codex lane owns new ids 41+, and landing a pick means taking a real id there.</div>
+  </section>
+
+  <section>
+    <h2>Earlier rounds <small>kept for comparison</small></h2>
+    <details id="earlier-r1">
+      <summary>Round 1 · the first five</summary>
+      <p class="note">The original tunes, before they were matched to reference photos.</p>
+      <div class="earlier">
+        <div class="ref"><div class="ref-head"><h3>#60 oilslick</h3><span class="note">Oil Slick</span></div><div class="earlier-row">
+          <figure><button class="shot" data-cap="round 1 · oilslick · hero"><img src="/_blob/6677431ec85d8903535939ed86dd35b2" alt="Round 1 Oil Slick finish, hero view" loading="lazy"></button><figcaption>round 1 · hero 3/4</figcaption></figure>
+          <figure><button class="shot" data-cap="round 1 · oilslick · close-up"><img src="/_blob/d8aeae7f79dbc87cd086875e40488d50" alt="Round 1 Oil Slick finish, close-up" loading="lazy"></button><figcaption>round 1 · close-up</figcaption></figure>
+        </div></div>
+        <div class="ref"><div class="ref-head"><h3>#61 frozen</h3><span class="note">Frozen</span></div><div class="earlier-row">
+          <figure><button class="shot" data-cap="round 1 · frozen · hero"><img src="/_blob/cc50746dddbcea99e7c624e298556988" alt="Round 1 Frozen finish, hero view" loading="lazy"></button><figcaption>round 1 · hero 3/4</figcaption></figure>
+          <figure><button class="shot" data-cap="round 1 · frozen · close-up"><img src="/_blob/558e61f5f648a92347eaaf3d13ee24a1" alt="Round 1 Frozen finish, close-up" loading="lazy"></button><figcaption>round 1 · close-up</figcaption></figure>
+        </div></div>
+        <div class="ref"><div class="ref-head"><h3>#62 fluoro</h3><span class="note">Fluoro</span></div><div class="earlier-row">
+          <figure><button class="shot" data-cap="round 1 · fluoro · hero"><img src="/_blob/22e81108c7c91fe185a1ce8ce3d97f42" alt="Round 1 Fluoro finish, hero view" loading="lazy"></button><figcaption>round 1 · hero 3/4</figcaption></figure>
+          <figure><button class="shot" data-cap="round 1 · fluoro · close-up"><img src="/_blob/83dae4d6b3cacd95c944ed2cd960d35a" alt="Round 1 Fluoro finish, close-up" loading="lazy"></button><figcaption>round 1 · close-up</figcaption></figure>
+        </div></div>
+        <div class="ref"><div class="ref-head"><h3>#63 burnt</h3><span class="note">Burnt Titanium</span></div><div class="earlier-row">
+          <figure><button class="shot" data-cap="round 1 · burnt · hero"><img src="/_blob/86c32dde863a1fba6e86f268b19a2766" alt="Round 1 Burnt Titanium finish, hero view" loading="lazy"></button><figcaption>round 1 · hero 3/4</figcaption></figure>
+          <figure><button class="shot" data-cap="round 1 · burnt · close-up"><img src="/_blob/de84cdbc0bf2640a3c7063e2c19ac0c3" alt="Round 1 Burnt Titanium finish, close-up" loading="lazy"></button><figcaption>round 1 · close-up</figcaption></figure>
+        </div></div>
+        <div class="ref"><div class="ref-head"><h3>#64 holo</h3><span class="note">Holo Flake</span></div><div class="earlier-row">
+          <figure><button class="shot" data-cap="round 1 · holo · hero"><img src="/_blob/80aa7838b665ab48473da0f66947b7bc" alt="Round 1 Holo Flake finish, hero view" loading="lazy"></button><figcaption>round 1 · hero 3/4</figcaption></figure>
+          <figure><button class="shot" data-cap="round 1 · holo · close-up"><img src="/_blob/6dd549d33c36b96580bf8d30ed894f9a" alt="Round 1 Holo Flake finish, close-up" loading="lazy"></button><figcaption>round 1 · close-up</figcaption></figure>
+        </div></div>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Reference library <small>real cars · whole-web search · private reference</small></h2>
+    <p class="note">Gathered by research agents from formula1.com "every angle" galleries, team launch pages, The Race, PlanetF1, Motor Sport, Wikipedia/Commons and manufacturer press sites. Most of these photos are copyrighted press images: use them as design reference only, and don't ship or republish them. Every file's source URL and credit is in <code>artifacts/finish-designs/refs/&lt;team&gt;/manifest.jsonl</code>. Tap a sheet to zoom.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Set</th><th>Photos</th><th>What's in it</th></tr></thead>
+        <tbody>
+          <tr><td>Finishes</td><td class="n">31</td><td>Chrome, matte navy/black, satin, bare and forged carbon, fluoro and flo-vis, gold/JPS, pearl, oil-slick, holo flake, silver arrows, brushed</td></tr>
+          <tr><td>Williams</td><td class="n">18</td><td>FW46, FW47, FW48; three close-ups</td></tr>
+          <tr><td>McLaren</td><td class="n">16</td><td>MCL40 launch, livery and Baku upgrade close-ups; MP4-4, MP4-20</td></tr>
+          <tr><td>Aston Martin</td><td class="n">15</td><td>AMR24, AMR25 studio, AMR26</td></tr>
+          <tr><td>Red Bull Racing</td><td class="n">15</td><td>RB22 launch and Spa; RB20, RB7</td></tr>
+          <tr><td>Alpine</td><td class="n">13</td><td>A524, A525, A526, Renault R25</td></tr>
+          <tr><td>Racing Bulls</td><td class="n">12</td><td>VCARB 01, VCARB 02, 2026 livery</td></tr>
+          <tr><td>Mercedes</td><td class="n">11</td><td>W17 launch, overhead and Suzuka; W16</td></tr>
+          <tr><td>Ferrari</td><td class="n">10</td><td>SF-26 launch and close-ups</td></tr>
+          <tr><td>Cadillac</td><td class="n">8</td><td>2026 livery launch</td></tr>
+          <tr><td>Haas</td><td class="n">8</td><td>VF-26 launch and trackside</td></tr>
+          <tr><td>Audi</td><td class="n">5</td><td>R26 launch</td></tr>
+          <tr><td>Kick Sauber</td><td class="n">0</td><td>None found yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">Review notes. <strong>gold-black-3</strong> is the red/gold Gold Leaf Lotus, not JPS black-and-gold. <strong>holographic-flake-3</strong> duplicates #1. <strong>titanium-heat-tint-2</strong> shows plain titanium with no tint; no usable burnt-titanium photo was found, so that finish leans on the oxide colour table. Most lane A, B and C finishes have no photo in the library; their references are named in the cards.</div>
+    <div class="refs">
+      <div class="ref"><div class="ref-head"><h3>Finishes</h3><span class="count">31</span></div><button class="shot" data-cap="Finishes · 31"><img src="/_blob/b010b2ea4acf994d0a9879458c0daac8" alt="Contact sheet of Finishes reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Williams</h3><span class="count">18</span></div><button class="shot" data-cap="Williams · 18"><img src="/_blob/2882378e34fad5493bdb4c633f3bcec0" alt="Contact sheet of Williams reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>McLaren</h3><span class="count">16</span></div><button class="shot" data-cap="McLaren · 16"><img src="/_blob/54d3482214371af27eb33b9bddd1703f" alt="Contact sheet of McLaren reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Aston Martin</h3><span class="count">15</span></div><button class="shot" data-cap="Aston Martin · 15"><img src="/_blob/0aca6e606ce34f6e945f9761d9c22111" alt="Contact sheet of Aston Martin reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Red Bull Racing</h3><span class="count">15</span></div><button class="shot" data-cap="Red Bull Racing · 15"><img src="/_blob/034cfc9c460a8bddfce501ae8b3d1cf4" alt="Contact sheet of Red Bull Racing reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Alpine</h3><span class="count">13</span></div><button class="shot" data-cap="Alpine · 13"><img src="/_blob/fa8c6267a4010e63a63d92b285cffd62" alt="Contact sheet of Alpine reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Racing Bulls</h3><span class="count">12</span></div><button class="shot" data-cap="Racing Bulls · 12"><img src="/_blob/c1dae5f72a770f64d78bb0099c1ed948" alt="Contact sheet of Racing Bulls reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Mercedes</h3><span class="count">11</span></div><button class="shot" data-cap="Mercedes · 11"><img src="/_blob/0c0a0ccef8384e8011c88089f264697f" alt="Contact sheet of Mercedes reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Ferrari</h3><span class="count">10</span></div><button class="shot" data-cap="Ferrari · 10"><img src="/_blob/5ea4f4f90ce61866138e1bf5b18294eb" alt="Contact sheet of Ferrari reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Cadillac</h3><span class="count">8</span></div><button class="shot" data-cap="Cadillac · 8"><img src="/_blob/e5ae3ea71841f65a0c0dc67757b988f2" alt="Contact sheet of Cadillac reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Haas</h3><span class="count">8</span></div><button class="shot" data-cap="Haas · 8"><img src="/_blob/b7a723972fdf527f5fd6e9c6d76c768a" alt="Contact sheet of Haas reference photos" loading="lazy"></button></div>
+      <div class="ref"><div class="ref-head"><h3>Audi</h3><span class="count">5</span></div><button class="shot" data-cap="Audi · 5"><img src="/_blob/33167a37d6d604605714101f98e36d61" alt="Contact sheet of Audi reference photos" loading="lazy"></button></div>
+    </div>
+  </section>
+</div>
+
+<dialog id="zoom" aria-label="Enlarged image"><img id="zoom-img" alt=""><p id="zoom-cap"></p></dialog>
+<script>
+(function () {
+  var dlg = document.getElementById("zoom"), zi = document.getElementById("zoom-img"), zc = document.getElementById("zoom-cap");
+  document.querySelectorAll("button.shot").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var im = b.querySelector("img");
+      zi.src = im.src; zi.alt = im.alt; zc.textContent = b.dataset.cap || im.alt;
+      if (dlg.showModal) dlg.showModal(); else window.open(im.src);
+    });
+  });
+  dlg.addEventListener("click", function () { dlg.close(); });
+})();
+</script>

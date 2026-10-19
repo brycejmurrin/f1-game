@@ -1,0 +1,312 @@
+[
+ {
+  "id": 60,
+  "key": "oilslick",
+  "name": "Oil Slick",
+  "round": "Round 1",
+  "pitch": "A thin-film rainbow over dark anodised metal; every panel shows a different colour.",
+  "reference": "Thin-film interference: soap bubbles, oil on wet tarmac.",
+  "reference_url": "https://en.wikipedia.org/wiki/Iridescence",
+  "base": "Gunmetal (39)"
+ },
+ {
+  "id": 61,
+  "key": "frozen",
+  "name": "Frozen",
+  "round": "Round 1",
+  "pitch": "Matte metallic: a dusty, desaturated face with a fine grain, a soft silver rim and a broad satin sun sheen.",
+  "reference": "BMW Individual Frozen paints; Bugatti satin finishes for the sheen.",
+  "reference_url": "https://www.bmwusa.com/innovations/bmw-individual.html",
+  "base": "Matte (28)"
+ },
+ {
+  "id": 62,
+  "key": "fluoro",
+  "name": "Fluoro",
+  "round": "Round 1",
+  "pitch": "Day-glo paint that looks brighter than the light hitting it, now keeping more of its shading.",
+  "reference": "F1 flo-vis aero paint and fluoro liveries.",
+  "reference_url": "https://www.crash.net/f1/news/1020792/1/what-fluorescent-paint-f1-cars-bahrain-testing",
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 63,
+  "key": "burnt",
+  "name": "Burnt Titanium",
+  "round": "Round 1",
+  "pitch": "Heat-tinted titanium: blue nose, purple middle, straw-gold tail.",
+  "reference": "Titanium oxide colours: gold, purple, blue with thickness.",
+  "reference_url": "https://www.scienceabc.com/pure-sciences/what-are-the-various-colours-of-titanium",
+  "base": "Chrome (27)"
+ },
+ {
+  "id": 64,
+  "key": "holo",
+  "name": "Holo Flake",
+  "round": "Round 1",
+  "pitch": "Prismatic flake: sparse coloured sparks over dark metal, rainbow streaks on lit panels.",
+  "reference": "Rolls-Royce Spectre Lunaflair.",
+  "reference_url": "https://elitetraveler.com/motion/rolls-royce-spectre-lunaflair",
+  "base": "Metallic flake (34)"
+ },
+ {
+  "id": 65,
+  "key": "alubare",
+  "name": "Bare Aluminium",
+  "round": "Reference round",
+  "pitch": "Polished bare aluminium: warm grey metal, livery colour ignored.",
+  "reference": "Mercedes-Benz W196 silver arrow.",
+  "reference_url": "https://en.wikipedia.org/wiki/Mercedes-Benz_W196",
+  "base": "Brushed metal (29)"
+ },
+ {
+  "id": 66,
+  "key": "rawcarbon",
+  "name": "Raw Carbon",
+  "round": "Reference round",
+  "pitch": "Unlacquered carbon weave: cool graphite satin over the livery.",
+  "reference": "Koenigsegg Regera Naked Carbon (KNC).",
+  "reference_url": "https://www.motoringresearch.com/car-news/naked-carbon-fibre-koenigsegg/",
+  "base": "Carbon (31)"
+ },
+ {
+  "id": 67,
+  "key": "flovis",
+  "name": "Flo-Vis",
+  "round": "Reference round",
+  "pitch": "Glowing yellow-green aero-paint streaks running back along the body, gone at the nose.",
+  "reference": "F1 flow-vis paint in testing.",
+  "reference_url": "https://www.formula1.com/en/latest/article/testing-explained-rob-smedley-on-flow-vis.7nU2VePGlVrhIGa8wgCoLE",
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 68,
+  "key": "carbonfade",
+  "name": "Carbon Fade",
+  "round": "Real-car round",
+  "pitch": "Livery above the sidepod line, bare weave below, with a ragged edge between.",
+  "reference": "Williams FW47; also RB22 and AMR25.",
+  "reference_url": "https://www.formula1.com/en/latest/article/gallery-check-out-more-angles-of-williams-new-fw47-challenger.wMNlyxxnbdZNfmSRhzCAB",
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 69,
+  "key": "silverfade",
+  "name": "Silver Fade",
+  "round": "Real-car round",
+  "pitch": "Silver nose dissolving through a halftone of dots into a black tail.",
+  "reference": "Mercedes W17.",
+  "reference_url": "https://www.formula1.com/en/latest/article/first-look-mercedes-reveal-first-images-of-the-w17-with-new-livery-design.3PiP6vnYUBcKolJt2v2CNI",
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 70,
+  "key": "metalflop",
+  "name": "Metal Flop",
+  "round": "Real-car round",
+  "pitch": "Metallic paint with a bright face and dark flop at the edges.",
+  "reference": "Aston Martin AMR25 green; Williams FW48 blue.",
+  "reference_url": "https://www.formula1.com/en/latest/article/gallery-check-out-all-the-angles-of-aston-martins-new-amr25-car.3BqW12L2GynV0ajssfp91z",
+  "base": "Metallic flake (34)"
+ },
+ {
+  "id": 71,
+  "key": "truematte",
+  "name": "True Matte",
+  "round": "Real-car round 2",
+  "pitch": "Chalky matte that goes lighter and greyer toward the edges, like a rough surface.",
+  "reference": "Red Bull matte navy, 2016 onward.",
+  "reference_url": "https://www.formula1.com/en/latest/article/red-bull-reveal-2016-f1-livery-.7dUgfQNFBW0YcFEsvtsDrv",
+  "base": "Matte (28)"
+ },
+ {
+  "id": 72,
+  "key": "pearlwhite",
+  "name": "Pearl White",
+  "round": "Real-car round 2",
+  "pitch": "Tri-coat white: warm on the face, cool at the edge; livery colour ignored.",
+  "reference": "Rolls-Royce Phantom Syntopia pearlescent.",
+  "reference_url": "https://gtspirit.com/2023/03/13/rolls-royce-phantom-syntopia-latest-bespoke-phantom/",
+  "base": "Metallic flake (34)"
+ },
+ {
+  "id": 73,
+  "key": "raceworn",
+  "name": "Race Worn",
+  "round": "Real-car round 2",
+  "pitch": "Brake dust and rubber streaked back along the low bodywork.",
+  "reference": "End-of-race dirt on the lower body. No photo in the library.",
+  "reference_url": null,
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 74,
+  "key": "jpsgold",
+  "name": "JPS Gold",
+  "round": "Real-car round 2",
+  "pitch": "Gloss black with sparse gold flake.",
+  "reference": "John Player Special black and gold (Radford Type 62-2 JPS).",
+  "reference_url": "https://www.hagerty.co.uk/articles/news-articles/black-and-gold-back-in-fashion-as-radford-reveals-new-type-62-2-john-player-special-road-racer/",
+  "base": "Metallic flake (34)"
+ },
+ {
+  "id": 75,
+  "key": "testcamo",
+  "name": "Test Camo",
+  "round": "Real-car round 2",
+  "pitch": "Black and white dazzle camouflage; livery colour ignored.",
+  "reference": "Dazzle wraps on pre-launch test cars. No photo in the library.",
+  "reference_url": null,
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 76,
+  "key": "goldfoil",
+  "name": "Gold Foil",
+  "round": "Lane A · metals",
+  "pitch": "Crinkled gold heat-shield foil; the glints move as the view moves.",
+  "reference": "McLaren F1 engine bay; F1 exhaust and floor heat shielding. No photo in the library.",
+  "reference_url": null,
+  "base": "Chrome (27)"
+ },
+ {
+  "id": 77,
+  "key": "anodblue",
+  "name": "Anodised Blue",
+  "round": "Lane A · metals",
+  "pitch": "Dyed electric-blue anodised aluminium; highlights stay blue, with a pale grazing sheen.",
+  "reference": "Dyed anodised aluminium parts. No photo in the library.",
+  "reference_url": null,
+  "base": "Brushed metal (29)"
+ },
+ {
+  "id": 78,
+  "key": "cerabronze",
+  "name": "Ceramic Bronze",
+  "round": "Lane A · metals",
+  "pitch": "Warm satin brown with a fine ceramic speckle and a broad soft sheen.",
+  "reference": "Cerakote H-148 Burnt Bronze coating. No photo in the library.",
+  "reference_url": null,
+  "base": "Satin (26)"
+ },
+ {
+  "id": 79,
+  "key": "engineturn",
+  "name": "Engine-Turned",
+  "round": "Lane A · metals",
+  "pitch": "Jewelled aluminium: offset rows of polished discs, each with a bright bow-tie.",
+  "reference": "Pre-war GP dash panels; the Spirit of St. Louis cowl. No photo in the library.",
+  "reference_url": null,
+  "base": "Chrome (27)"
+ },
+ {
+  "id": 80,
+  "key": "magchrom",
+  "name": "Chromated Magnesium",
+  "round": "Lane A · metals",
+  "pitch": "Blotchy brown, olive-gold and green-grey cast metal with grain.",
+  "reference": "Dow 7 chromated magnesium castings. No photo in the library.",
+  "reference_url": null,
+  "base": "Brushed metal (29)"
+ },
+ {
+  "id": 81,
+  "key": "ghostpearl",
+  "name": "Ghost Pearl",
+  "round": "Lane B · paint FX",
+  "pitch": "Livery colour on the face; a complementary pearl tint shows only at sunlit edges.",
+  "reference": "House of Kolor ice / ghost pearls. No photo in the library.",
+  "reference_url": null,
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 82,
+  "key": "xirallic",
+  "name": "Xirallic",
+  "round": "Lane B · paint FX",
+  "pitch": "Dense, sharp white crystal glints that twinkle as the view moves.",
+  "reference": "Merck Xirallic aluminium-oxide platelets. No photo in the library.",
+  "reference_url": null,
+  "base": "Metallic flake (34)"
+ },
+ {
+  "id": 83,
+  "key": "mystichrome",
+  "name": "Mystichrome",
+  "round": "Lane B · paint FX",
+  "pitch": "Green to cobalt to purple to black across viewing angles; livery colour ignored.",
+  "reference": "2004 Ford SVT Cobra Mystichrome; ChromaFlair pigment. No photo in the library.",
+  "reference_url": null,
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 84,
+  "key": "midnightpurple",
+  "name": "Midnight Purple",
+  "round": "Lane B · paint FX",
+  "pitch": "Near-black purple with a violet sun bloom that turns bronze at the edges.",
+  "reference": "Nissan R34 GT-R Midnight Purple III. No photo in the library.",
+  "reference_url": null,
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 85,
+  "key": "ultrablack",
+  "name": "Ultra Black",
+  "round": "Lane B · paint FX",
+  "pitch": "About 1% reflectance: the car reads as a silhouette; livery colour ignored.",
+  "reference": "BMW VBX6 in Vantablack VBx2 (Surrey NanoSystems). No photo in the library.",
+  "reference_url": null,
+  "base": "Matte (28)"
+ },
+ {
+  "id": 86,
+  "key": "rainsoak",
+  "name": "Rain Soaked",
+  "round": "Lane C · race condition",
+  "pitch": "Wet paint goes deep and dark, a water sheet mirrors the sky on top, beads glint.",
+  "reference": "Wet-race paint. No photo in the library.",
+  "reference_url": null,
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 87,
+  "key": "stealth",
+  "name": "Stealth Stripes",
+  "round": "Lane C · race condition",
+  "pitch": "Matte body with gloss twin stripes and a gloss flank band.",
+  "reference": "Red Bull matte years against its gloss RB22.",
+  "reference_url": "https://www.planetf1.com/news/red-bull-rb22-f1-2026-livery-revealed",
+  "base": "Matte (28)"
+ },
+ {
+  "id": 88,
+  "key": "primer",
+  "name": "Test Primer",
+  "round": "Lane C · race condition",
+  "pitch": "New engine cover, sidepods and front wing in flat test-part grey.",
+  "reference": "Unpainted new parts on test cars (Aston Martin AMR26, Barcelona shakedown, January 2026). No photo in the library.",
+  "reference_url": null,
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 89,
+  "key": "heatrear",
+  "name": "Heat-Stained Rear",
+  "round": "Lane C · race condition",
+  "pitch": "Paint scorched to straw, purple and blue around the exhaust exit only.",
+  "reference": "Engine-cover heat staining on McLaren MCL33 and Sauber C32 (f1technical.net threads). No photo in the library.",
+  "reference_url": null,
+  "base": "Gloss (20)"
+ },
+ {
+  "id": 90,
+  "key": "sunfaded",
+  "name": "Sun Faded",
+  "round": "Lane C · race condition",
+  "pitch": "Oxidised single-stage paint: pastel and chalky, the sun-facing top faded most.",
+  "reference": "Oxidised single-stage paint (Mike Phillips). No photo in the library.",
+  "reference_url": null,
+  "base": "Satin (26)"
+ }
+]

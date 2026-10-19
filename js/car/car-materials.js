@@ -24,7 +24,7 @@ const CarMaterials = (function () {
     flake: 34, candy: 35, tinted: 36, chameleon: 37,   // shader branches exist in GLX/TLX/WGX (surface-id-parity.test.mjs)
     forged: 38, gunmetal: 39, goldplate: 40,
     // DESIGN PREVIEW (cursor/design-preview-finishes-*, not shipped): ids 60-64 remap in-shader onto 39/28/20/27/34.
-    oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, holo: 64, alubare: 65, rawcarbon: 66, flovis: 67,
+    oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, starlight: 64,   // 64 was 'holo': renamed, Codex shipped holographic (41) alubare: 65, rawcarbon: 66, flovis: 67,
     carbonfade: 68, silverfade: 69, metalflop: 70,
     truematte: 71, pearlwhite: 72, raceworn: 73, jpsgold: 74, testcamo: 75,
     // PREVIEW-IDS-A
