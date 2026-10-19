@@ -274,7 +274,7 @@ export function createExtras(ctx) {
         tracks, plans, outRoot, resume, wantPanel, wantIndex, profile,
         seed: args.seed == null ? 2391 : Number(args.seed),
         source: sourceIdentity(ROOT), gpu: surveyGlEnv(args).APEX_GPU, estimateMs,
-      }, host);
+      }, ctx.surveyHost ? ctx.surveyHost({ outRoot, args }) : host);  // ctx.surveyHost: test seam, replaces the track-session host
       const trackResults = run.trackResults;
       const compareIndex = run.compareIndex;
       writeSurveyProgress(outRoot, {

@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = "js/ui/share-code.js";
 const j = (v) => JSON.parse(JSON.stringify(v));
@@ -64,8 +65,8 @@ function harness(opts = {}) {
     },
   };
   const ctx = vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8"), ctx, { filename: "js/car/custom-liveries.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8"), ctx, { filename: SRC });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8"), ctx, { filename: absSrc(SRC) });
   const ShareCode = sandbox.module.exports || vm.runInContext("ShareCode", ctx);
   return { ShareCode, store, bag, location, writes, sandbox };
 }
@@ -393,7 +394,7 @@ function quotaHarness() {
     sandbox.Log = { warn() {}, info() {} };
     sandbox.SaveMigrate = { migrateCareer() {}, CAREER_V: 1 };
     const ctx = vm.createContext(sandbox);
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/store.js"), "utf8"), ctx);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/store.js"), "utf8"), ctx, { filename: absSrc("js/core/store.js") });
     return { ShareCode, store: vm.runInContext("GameStore.store", ctx) };
   }
   return { reload, fail(fn) { refuse = fn; }, disk };
@@ -533,7 +534,7 @@ test("UNDO of a setup code on an empty store leaves the key absent, not pinned t
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   for (const f of ["js/data/garage-defaults.js", "js/core/hash32.js", "js/core/mat4.js", "js/career/save-migrate.js", "js/core/store.js"]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   }
   const store = vm.runInContext("GameStore.store", ctx);
   assert.ok(store.get("setup.mercedes", null), "the shipped default is visible through get()");

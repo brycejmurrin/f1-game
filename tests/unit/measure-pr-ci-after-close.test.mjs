@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { analyzePrCi, median, minutesBetween } from "../../tools/ci/measure-pr-ci-after-close.mjs";
-import { CI_PATH, DEPLOY } from "../../tools/ci/ready-full-cap.mjs";
+import { CI_PATH, DEPLOY } from "../../tools/ci/github-api.mjs";
 
 test("minutesBetween and median", () => {
   assert.ok(Math.abs(minutesBetween("2026-10-18T00:00:00Z", "2026-10-18T01:30:00Z") - 90) < 0.01);

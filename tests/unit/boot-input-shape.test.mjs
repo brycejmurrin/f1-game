@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -75,7 +76,7 @@ test("a corrupt custom team is repaired, not pushed into Teams.LIST as it lies",
   // The repair itself is Teams.sanitizeCustom (js/data/teams.js) — run the
   // shipped one, not a copy.
   const ctx = vm.createContext({});
-  vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
+  vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
   const Teams = vm.runInContext("Teams", ctx);
   const DEFAULT_CUSTOM = Teams.DEFAULT_CUSTOM;
   const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -113,7 +114,7 @@ test("a corrupt custom team is repaired, not pushed into Teams.LIST as it lies",
 test("a loaded custom team is capped to the dialog's limits (malicious store)", () => {
   const src = ["identityGet", "loadCustomTeam"].map((name) => extractFn(read("js/career/custom-team.js"), name, "js/career/custom-team.js")).join("\n");
   const ctx = vm.createContext({});
-  vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
+  vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
   const Teams = vm.runInContext("Teams", ctx);
   const t = new Function("store", "DEFAULT_CUSTOM", "Teams", `${src}\nreturn loadCustomTeam();`)(
     { get: () => ({

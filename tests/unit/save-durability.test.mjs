@@ -4,6 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const src = (file) => fs.readFileSync(new URL("../../" + file, import.meta.url), "utf8");
 
 // A transactional async fixture: readwrite transactions commit in creation
@@ -58,7 +59,7 @@ function boot({ idb = database(), initial = [] } = {}) {
     setItem(k, v) { if (blocked) throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); disk.set(k, String(v)); }, removeItem: (k) => disk.delete(k) };
   const c = vm.createContext({ console, setTimeout, clearTimeout, Promise, indexedDB: idb, localStorage: storage,
     Log: { info() {}, warn() {} }, Teams: { LIST: [] }, window: { addEventListener() {} } });
-  seedSaveMigrate(c); vm.runInContext(src("js/core/store.js") + ";globalThis.store=GameStore.store", c);
+  seedSaveMigrate(c); vm.runInContext(src("js/core/store.js") + ";globalThis.store=GameStore.store", c, { filename: absSrc("js/core/store.js") });
   return { c, store: c.store, disk, storage, idb, block: (on) => { blocked = on; } };
 }
 const tick = () => new Promise((r) => setImmediate(r));
@@ -112,7 +113,7 @@ test("authored mirror catches a foreign write even before its storage event arri
   await h.store.mirrorFlush(); assert.equal(h.idb.dbs.get("apex26-store").get("kv").has("apex26.setup.ferrari"), false);
 });
 function points(h, extra = {}) {
-  vm.runInContext(src("js/career/restore-points.js") + ";globalThis.Points=CareerRestorePoints", h.c);
+  vm.runInContext(src("js/career/restore-points.js") + ";globalThis.Points=CareerRestorePoints", h.c, { filename: absSrc("js/career/restore-points.js") });
   return h.c.Points.create({ store: h.store, indexedDB: h.idb, localStorage: h.storage, ...extra });
 }
 const save = (round = 0, flavour = "driver") => ({ v: 1, flavour, year: 2026, team: flavour === "myteam" ? "custom" : "haas", money: 100 + round, season: { round, pts: {}, teamPts: {}, results: [] } });
@@ -154,7 +155,7 @@ test("history transaction abort leaves prior points intact and reports unavailab
 });
 test("storage health reports measured categories; cleanup preserves every authored key and failed save", async () => {
   const h = boot(); await h.store.mirror.ready;
-  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c);
+  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
   h.block(true); h.store.write("unrelated", "unsaved"); h.block(false);
   for (const k of ["api.one", "realrace.two", "setup.ferrari", "career.driver.0", "ghost.monza", "customTracks", "customTeam"]) h.disk.set("apex26." + k, "xx");
   const o = { store: h.store, localStorage: h.storage, storage: { estimate: async () => ({ usage: 2000, quota: 10000 }) } };
@@ -168,7 +169,7 @@ test("storage-health UI does no measurements or prompts until opened, and remain
   const dom = makeDom(); let estimates = 0, prompts = 0;
   const h = boot(); await h.store.mirror.ready;
   h.c.document = dom.document; h.c.navigator = { storage: { estimate: async () => { estimates++; return { usage: 10, quota: 100 }; }, persist: () => { prompts++; } } };
-  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c);
+  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
   const host = dom.byId("test-health-host"), handle = h.c.Health.mount(host, { store: h.store });
   assert.equal(estimates, 0); assert.equal(prompts, 0);
   const toggle = handle.root.children[0], panel = handle.root.children[1];
@@ -244,7 +245,7 @@ test('capture health is per-slot, bounded, separate from primary durability and 
   status.state = 'corrupt'; assert.equal(p.health().find(r => r.flavour === 'driver').state, 'saved', 'status returns a detached snapshot');
   for (let i = 0; i < 20; i++) await p.capture('driver', 999 + i, save(), { reason: 'round' });
   assert.equal(p.health().length, 2, 'invalid keys cannot expand health storage');
-  vm.runInContext(src('js/ui/save-health.js') + ';globalThis.Health=SaveHealth', h.c);
+  vm.runInContext(src('js/ui/save-health.js') + ';globalThis.Health=SaveHealth', h.c, { filename: absSrc("js/ui/save-health.js") });
   const report = await h.c.Health.inspect({ store: h.store, localStorage: h.storage, restorePoints: p });
   assert.equal(report.history.length, 2); assert.equal(report.failed.length, 0);
   await h.store.mirrorFlush();
@@ -257,7 +258,7 @@ test('older capture completion cannot overwrite newer failure health, and UI lab
   await older;
   assert.equal(p.health()[0].reason, 'invalid-or-too-large');
   const dom = makeDom(); h.c.document = dom.document;
-  vm.runInContext(src('js/ui/save-health.js') + ';globalThis.Health=SaveHealth', h.c);
+  vm.runInContext(src('js/ui/save-health.js') + ';globalThis.Health=SaveHealth', h.c, { filename: absSrc("js/ui/save-health.js") });
   const handle = h.c.Health.mount(dom.byId('health-history-owner'), { store: h.store, restorePoints: p });
   handle.root.children[0].onclick(); await tick();
   const text = n => n.textContent + [...(n.children || [])].map(text).join(' ');

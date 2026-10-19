@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -37,7 +38,7 @@ function loadDockLayout() {
   ctx.document.createElement = () => ({ style: {}, getBoundingClientRect: () => ({ width: 200 }) });
   ctx.document.documentElement.appendChild = () => {};
   ctx.document.documentElement.removeChild = () => {};
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/css-zoom.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/css-zoom.js"), "utf8"), ctx, { filename: absSrc("js/ui/css-zoom.js") });
   ctx.CssZoom = ctx.window.CssZoom;
   vm.runInContext(DL_SRC.replace(/^const\b/gm, "var"), ctx);
   return ctx.DockLayout;

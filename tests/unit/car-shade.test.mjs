@@ -20,6 +20,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 function load(withShade, storage, search) {
@@ -32,7 +33,7 @@ function load(withShade, storage, search) {
   const files = ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js",
                  "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js"]
     .concat(withShade ? ["js/car/car-shade.js"] : [], ["js/car/car-body-geom.js", "js/car/car3d.js"]);
-  for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+  for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const grab = (n) => vm.runInContext(n, ctx);
   return { Car3D: grab("Car3D"), CarShade: withShade ? grab("CarShade") : null, Parts: grab("Parts"), Teams: grab("Teams") };
 }
@@ -41,7 +42,7 @@ const { Car3D, CarShade, Parts, Teams } = load(true);
 const REAR_LIGHTS = (() => {
   const ctx = { Math, Object, Array, Float32Array, Map, Set, WeakMap, Log: { info() {}, warn() {}, error() {}, debug() {} } };
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8"), ctx, { filename: "js/car/car-mesh.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   return vm.runInContext("CarMesh.REAR_LIGHTS", ctx);
 })();
 

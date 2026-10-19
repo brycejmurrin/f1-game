@@ -28,12 +28,13 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
 function loadLod(stored) {
   const ctx = vm.createContext({ Math, Object, Infinity });
-  vm.runInContext(read("js/car/field-lod.js").replace(/^const\b/gm, "var"), ctx, { filename: "field-lod.js" });
+  vm.runInContext(read("js/car/field-lod.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/car/field-lod.js") });
   if (stored !== undefined) ctx.FieldLod.init({ get: (k, d) => (k === "fieldLod" ? stored : d) });
   return ctx;
 }
@@ -113,10 +114,10 @@ test("nearest(): keeps the cap smallest, the forced index always", () => {
 function shadowRig() {
   const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
   seedLog(ctx);
-  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(`var LightTune = { LT: { shadowRange: 80, carShadow: true, moonShadow: 0, lampShadow: false } };
     var PerfGov = { tier: () => 0 };`, ctx);
-  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: "shadow-pass.js" });
+  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
   const cast = [], blobs = [];
   const noop = () => {};
   const player = { isPlayer: true, speed: 30, team: "P" };
@@ -340,10 +341,10 @@ function mirrorRig(lodOn) {
     },
   });
   seedLog(ctx);
-  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
-  vm.runInContext(read("js/car/field-lod.js").replace(/^const\b/gm, "var"), ctx, { filename: "field-lod.js" });
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/car/field-lod.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/car/field-lod.js") });
   ctx.FieldLod.setEnabled(lodOn);
-  vm.runInContext(read("js/render/shared/mirror-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: "mirror-pass.js" });
+  vm.runInContext(read("js/render/shared/mirror-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/mirror-pass.js") });
   const draws = [], posed = [];
   const gfx = { width: 1280, height: 720, softPresent: () => false, mirrorBegin: () => true, mirrorEnd: () => {}, mirrorRect: () => {},
     mirrorState: () => ({ dead: false, ready: true }), draw: (mesh) => draws.push(mesh), drawSky: () => {} };

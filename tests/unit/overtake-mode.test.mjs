@@ -20,6 +20,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -29,7 +30,7 @@ function load(extra = {}) {
   ctx.window = ctx;
   seedLog(ctx);
   for (const f of ["js/physics/consts.js", "js/track/core/space.js", "js/race/overtake-mode.js", "js/race/race-control.js"])
-    vm.runInContext(src(f), ctx, { filename: f });
+    vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   return { OM: vm.runInContext("OvertakeMode", ctx), RC: vm.runInContext("RaceControl", ctx), P: vm.runInContext("PhysicsConsts", ctx), ctx };
 }
 

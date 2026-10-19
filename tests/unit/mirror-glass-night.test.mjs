@@ -15,6 +15,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -24,9 +25,9 @@ function loadMesh() {
   const ctx = { Log: { info() {}, warn() {}, error() {} }, window: null };
   ctx.window = ctx;
   vm.createContext(ctx);
-  vm.runInContext(read("js/core/mat4.js"), ctx);
-  vm.runInContext(read("js/physics/consts.js"), ctx);
-  vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx);
+  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/physics/consts.js"), ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({
     createMesh(d) { const m = { d }; made.push(m); return m; },
     freeMesh() {},

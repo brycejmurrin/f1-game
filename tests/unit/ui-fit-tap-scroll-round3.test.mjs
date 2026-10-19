@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const rd = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -35,7 +36,7 @@ test("ScrollFade repaints when a <details> fold toggles (and only for <details>)
   };
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(rd("js/ui/scroll-fade.js"), context);
+  vm.runInContext(rd("js/ui/scroll-fade.js"), context, { filename: absSrc("js/ui/scroll-fade.js") });
   const drain = () => { while (timers.length) timers.shift()(); };
   drain();                                         // init's settle()
   const toggle = docL.find((l) => l.type === "toggle");
@@ -81,7 +82,7 @@ test("ScrollFade prunes detached panes in the coalesced paint pass and re-observ
   };
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(rd("js/ui/scroll-fade.js"), context);
+  vm.runInContext(rd("js/ui/scroll-fade.js"), context, { filename: absSrc("js/ui/scroll-fade.js") });
   const drain = () => { while (timers.length) timers.shift()(); };
   drain();
   const keep = pane("keep"), row1 = pane("row1");

@@ -6,6 +6,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -13,7 +14,7 @@ function load() {
   const ctx = {};
   vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, "js/camera/fov-fit.js"), "utf8") + "\nthis.exported = CamFovFit;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/fov-fit.js") });
   return ctx.exported;
 }
 

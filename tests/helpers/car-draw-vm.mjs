@@ -21,9 +21,10 @@
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "./seed-log.mjs";
+import { absSrc } from "./abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
-const run = (ctx, rel) => vm.runInContext(read(rel).replace(/^const\b/gm, "var"), ctx, { filename: rel });
+const run = (ctx, rel) => vm.runInContext(read(rel).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(rel) });
 
 // Parts' twelve visual categories, by id: the stamp makeCars keys a car's own build on.
 const CATALOG = ["aero", "floor", "engine", "ers", "gearbox", "suspension", "brakes", "tyres", "wheels", "cooling", "fuel", "livery"]

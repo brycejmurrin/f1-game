@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -30,9 +31,9 @@ function load() {
   const ctx = { Tracks, FlybySeq, CamAvoid, Log: { info() {} } };
   vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, "js/camera/trackside.js"), "utf8") + "\nthis.exported = TracksideCams;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/trackside.js") });
   vm.runInNewContext(
-    fs.readFileSync(path.join(ROOT, "js/camera/fov-fit.js"), "utf8") + "\nthis.fovFit = CamFovFit;", ctx);
+    fs.readFileSync(path.join(ROOT, "js/camera/fov-fit.js"), "utf8") + "\nthis.fovFit = CamFovFit;", ctx, { filename: absSrc("js/camera/fov-fit.js") });
   return { ...ctx.exported, fitFovY: ctx.fovFit.fitFovY };
 }
 
@@ -110,7 +111,7 @@ test("CAM_MODES keeps trackside at its saved index 14 (apex26.camMode is the ind
   // Run the real mode table, not a regex over its source: the index IS the persisted camMode.
   const win = {};
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), vm.createContext({ window: win }),
-    { filename: "js/camera/mode-switch.js" });
+    { filename: absSrc("js/camera/mode-switch.js") });
   const ids = win.CamModes.CAM_MODES.map((m) => m.id);
   assert.equal(ids.indexOf("trackside"), 14, "saved camMode 14 must stay trackside; append, never reorder");
   assert.equal(ids[13], "visor", "visor stays directly before it");

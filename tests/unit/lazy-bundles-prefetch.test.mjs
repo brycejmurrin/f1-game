@@ -22,6 +22,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = new URL("../../", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
@@ -61,7 +62,7 @@ function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
       injected.set(rel, (injected.get(rel) || 0) + 1);
       setTimeout(() => {
         if (fail.delete(rel)) { el.onerror(); return; }
-        try { vm.runInContext(body(rel), ctx, { filename: rel }); }
+        try { vm.runInContext(body(rel), ctx, { filename: absSrc(rel) }); }
         catch (e) { evalErrors.push(rel + ": " + e.message); }
         el.onload();
       }, 0);
@@ -99,8 +100,8 @@ test("ensureRaceSession: a partial failure is repaired by the next call, and the
     body: (rel) => read(rel),
     deps: { onRaceSessionReady() { hooks++; } },
   });
-  vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx);
-  vm.runInContext(read("js/race/session-stub.js"), w.ctx);
+  vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/race/session-stub.js"), w.ctx, { filename: absSrc("js/race/session-stub.js") });
   const stub = (g) => vm.runInContext(`${g}._stub`, w.ctx);
   assert.equal(await w.lb.ensureRaceSession(), false, "engineer.js failed once");
   assert.equal(hooks, 0, "no hook on an incomplete group");
@@ -125,7 +126,7 @@ for (const failing of ["js/net/lobby.js", "js/net/qr.js"]) {
       body: (rel) => read(rel),
       deps: { createNetwork: () => ({ wire() {} }) },
     });
-    vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx);
+    vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx, { filename: absSrc("js/core/mat4.js") });
     assert.equal(await w.lb.ensureNet(), false);
     assert.equal(await w.lb.ensureNet(), true);
     assert.deepEqual(w.evalErrors, [], "no 'Identifier has already been declared'");
@@ -387,7 +388,7 @@ test("a malformed or hostile map falls back to the build key", () => {
   for (const bad of ['{"js/core/log.js":"../../evil"}', "not json", '{"js/core/log.js":123}']) {
     const ctx = vm.createContext({ window: { __APEX_BUILD: 9 },
       document: { getElementById: () => ({ textContent: bad }) } });
-    vm.runInContext(readPath("js/core/script-loader.js"), ctx);
+    vm.runInContext(readPath("js/core/script-loader.js"), ctx, { filename: absSrc("js/core/script-loader.js") });
     assert.equal(vm.runInContext('ScriptLoader.url("js/core/log.js")', ctx), "js/core/log.js?v=9", bad);
   }
 });

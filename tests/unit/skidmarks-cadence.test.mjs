@@ -14,6 +14,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/fx/skidmarks.js"), "utf8");
@@ -66,7 +67,7 @@ test("rain re-seeds only newly visible drops when the governor sheds less", () =
     PerfGov: { autoShed: () => shed },
   });
   seedLog(ctx);
-  const rain = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx);
+  const rain = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
   rain.init({ drawParticles: (data, floats, additive) => calls.push({ data: Array.from(data.subarray(0, floats)), floats, additive }) });
   rain.rainSeed(false);
   rain.rainShow(true);

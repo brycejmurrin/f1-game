@@ -73,7 +73,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { api } from "./ready-full-cap.mjs";   // githubToken + curl -K - (token on stdin) + 64 MB maxBuffer
+import { api } from "./github-api.mjs";   // githubToken + curl -K - (token on stdin) + 64 MB maxBuffer
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");

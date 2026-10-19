@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -26,7 +27,7 @@ function sceneHarness() {
     Uint32Array, isFinite, parseFloat, parseInt, Date, Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false } });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
   return GarageScene;
@@ -65,7 +66,7 @@ function driveOutHarness({ soundOn = true } = {}) {
     G: { soundOn, teamIdx: 0, store: { get: () => ({ enabled: true, speed: 1 }) } },
     reducedMotion: () => false, endHome() {} };
   vm.createContext(c);
-  vm.runInContext(read("js/garage/arrival.js"), c);
+  vm.runInContext(read("js/garage/arrival.js"), c, { filename: absSrc("js/garage/arrival.js") });
   const cam = read("js/garage/setup-camera.js");
   const a = cam.indexOf("let driveOut = null;"), b = cam.indexOf("// THE ARRIVAL PREVIEW", a);
   vm.runInContext(cam.slice(a, b) + "\nglobalThis.__out = { startDriveOut, stepDriveOut, stop() { driveOut = null; driveOutEngine(false); } };", c);
@@ -124,7 +125,7 @@ function loadingHarness({ chat = "normal", speaking = false } = {}) {
     navigator: { getGamepads: () => [] }, matchMedia: () => ({ matches: false }), Log: { info() {}, warn() {} },
     GameAudio: { radioLeadS: () => 0.2, radioSting: (k, s) => stings.push([k, s]) } };
   sb.window = sb;
-  vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: "js/ui/loading-screen.js" });
+  vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
   const radio = { sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return 1.4; } };
   const screen = sb.LoadingScreen.create({ $, store: { get: (k, d) => (k === "radioChat" ? chat : d), set() {} },
     Tracks: { LIST: [] }, TrackMaps: { corners: () => [] }, Flags: { svg: () => "" },

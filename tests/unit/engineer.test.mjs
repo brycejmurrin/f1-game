@@ -24,6 +24,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -33,7 +34,7 @@ function load() {
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
                    "js/car/parts.js", "js/physics/tyre-model.js", "js/race/engineer.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return { E: vm.runInContext("RaceEngineer", ctx), T: vm.runInContext("TyreModel", ctx) };
 }
@@ -443,7 +444,7 @@ test("our own stop answers a rival's latched undercut: no BOX NOW on the out-lap
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
   seedLog(ctx); ctx.window = ctx;
   for (const f of ["js/core/mat4.js","js/physics/consts.js","js/data/teams.js","js/car/parts.js","js/physics/tyre-model.js","js/race/engineer.js"])
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const E = vm.runInContext("RaceEngineer", ctx), T = vm.runInContext("TyreModel", ctx);
   const said = [];
   const tyres = T.create({ lapsTarget: 25, track: { total: 5386, def: {} }, LAT_MAX: 22, aTop: () => 7, vTop: () => 60, raceWeather: "dry" });

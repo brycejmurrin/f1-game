@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -67,11 +68,11 @@ function load() {
   });
   seedLog(ctx);
   seedHash32(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
-    { filename: "js/career/career.js" });
+    { filename: absSrc("js/career/career.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx,
-    { filename: "js/career/season-cal.js" });
+    { filename: absSrc("js/career/season-cal.js") });
   return vm.runInContext("Career", ctx);
 }
 

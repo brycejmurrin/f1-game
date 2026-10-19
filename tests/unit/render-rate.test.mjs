@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/perf/render-rate.js"), "utf8");
@@ -24,7 +25,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/perf/render-rate.js"), "utf8");
 function load({ mobile, store = {} } = {}) {
   const ctx = { Math, localStorage: { getItem: (k) => (k in store ? store[k] : null) } };
   vm.createContext(ctx);
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/perf/render-rate.js" });
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/render-rate.js") });
   ctx.RenderRate.init({ isMobile: mobile });
   return ctx.RenderRate;
 }

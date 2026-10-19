@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -21,7 +22,7 @@ function page(store) {
   let reloads = 0;
   const ctx = vm.createContext({ localStorage: ls, location: { reload() { reloads++; } }, setTimeout, clearTimeout, JSON, Promise });
   seedLog(ctx);
-  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
   return { XrBoot: ctx.XrBoot, reloads: () => reloads };
 }
 const snap = (m) => Object.fromEntries([...m].filter(([k]) => k !== "apex26.xrEnterPending").sort());
@@ -69,7 +70,7 @@ test('armed retained-capability ENTER uses the reversible pin instead of a reloa
     document: { createElement: () => ({ setAttribute() {}, addEventListener() {} }) },
     setTimeout: () => 1, clearTimeout() {},
   });
-  vm.runInContext(read('js/xr/xr-ui.js').replace(/^const\b/gm, 'var'), ctx);
+  vm.runInContext(read('js/xr/xr-ui.js').replace(/^const\b/gm, 'var'), ctx, { filename: absSrc("js/xr/xr-ui.js") });
   await ctx.XrUi.onClick();
   assert.equal(h.reloads(), 1);
   assert.equal(starts, 0);
