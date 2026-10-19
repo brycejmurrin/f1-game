@@ -43,11 +43,16 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { changedPaths } from "../lib/changed-files.mjs";
-import { isDocsOnly } from "./select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Same deploy tip pick-tests uses — docs-only waste is vs that base, not main.
 const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
+// Espree-free twin of select-specs.DOCS_ONLY / isDocsOnly. test-bg is imported
+// by apex-tools-mcp at module load; a static import of select-specs.mjs pulls
+// espree into that graph and fails "servers boot with no node_modules" (#1714).
+const DOCS_ONLY = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//];
+const isDocsOnly = (changed) =>
+  changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f)));
 const LOGDIR = path.join(ROOT, "artifacts/logs");
 const STATEFILE = path.join(LOGDIR, "test-bg.json");
 // One worker on a 4-core box: two SwiftShader workers push loadavg to 6-8 and
