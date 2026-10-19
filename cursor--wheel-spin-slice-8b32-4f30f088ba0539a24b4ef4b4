@@ -1,0 +1,1 @@
+1792389709	Cursor Agent	#1628 wheel-spin-slice; OWNED js/physics/{player-forces,tyre-model,grip-steer,drive-tune,wheel-state}.js tests/unit/wheel-state*.test.mjs docs/notes/WHEEL-STATE-2026-10-19.md REGISTRATION  [cursor/wheel-spin-slice-8b32; session 4f30f088ba0539a24b4ef4b4]
