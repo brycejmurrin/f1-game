@@ -753,6 +753,15 @@
       ]
     },
     {
+      "path": "tools/ci/cursor-agents.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--limit"
+      ]
+    },
+    {
       "path": "tools/ci/debug-unit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

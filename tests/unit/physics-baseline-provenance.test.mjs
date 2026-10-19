@@ -78,6 +78,67 @@ test("the blessing sha is a commit this tree descends from (when the checkout ca
   assert.ok(ancestor, `baseline was blessed at ${b.sha}, which is not an ancestor of HEAD — it was measured on another branch`);
 });
 
+// WHICH tree the numbers were measured on (#2952 P1-13). The hash is unkeyed,
+// so it only proves the data and the stamp agree; a script that rewrites the
+// numbers and recomputes the hash, or that keeps an OLD stamp's sha, passed.
+// What a stale or copied stamp cannot fake is its relation to the commit that
+// changed the file: the writer stamps HEAD at measurement time, so the commit
+// that lands the new baseline sits directly on that sha. Checked from the
+// commit's own parent list, which a shallow clone still carries when the
+// commit is inside its depth — so CI's shallow checkout checks it too.
+const REL = "tests/data/physics-baseline.json";
+const git = (args) => cp.execSync(`git ${args}`, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+
+/** The verdict for one (stamp sha, landing commit) pair. Exported shape kept
+ *  small so the mutation case below can feed it a stale stamp directly. */
+function landedOn(sha, commit, { parents, isAncestor, shallow }) {
+  if (parents.includes(sha)) return { ok: true };
+  // Regenerated, then other edits committed before the baseline: the stamp is
+  // an ancestor of the landing commit but not its parent. Only a full history
+  // can say so.
+  if (shallow) return { skip: `stamp ${sha.slice(0, 10)} is not a parent of ${commit.slice(0, 10)} and this clone is shallow` };
+  return isAncestor(sha, commit)
+    ? { ok: true }
+    : { ok: false, why: `baseline landed in ${commit} but its stamp names ${sha}, which that commit does not descend from — the stamp was copied, not written by this regen` };
+}
+
+test("the stamp names the tree the baseline was measured on", (t) => {
+  let dirty = false, commit = "", head = "";
+  try {
+    head = git("rev-parse HEAD");
+    dirty = git(`status --porcelain -- ${REL}`) !== "";
+    commit = git(`log -1 --format=%H -- ${REL}`);
+  } catch (_) { return t.skip("no git: the landing commit cannot be found"); }
+  if (dirty) {
+    // A regen in THIS checkout, not yet committed: the writer stamped HEAD.
+    assert.equal(b.sha, head, `${REL} was regenerated here but its stamp names ${b.sha}, not HEAD ${head}`);
+    return;
+  }
+  if (!commit) return t.skip(`${REL} has no visible commit in this clone`);
+  const parents = git(`rev-list --parents -n 1 ${commit}`).split(/\s+/).slice(1);
+  if (!parents.length) return t.skip(`${commit} is this shallow clone's boundary: its parents are cut`);
+  let shallow = false;
+  try { shallow = git("rev-parse --is-shallow-repository") === "true"; } catch (_) {}
+  const v = landedOn(b.sha, commit, {
+    parents, shallow,
+    isAncestor: (a, c) => { try { git(`merge-base --is-ancestor ${a} ${c}`); return true; } catch (_) { return false; } },
+  });
+  if (v.skip) return t.skip(v.skip);
+  assert.ok(v.ok, v.why);
+});
+
+test("a stale or copied stamp fails the landing check (mutation)", () => {
+  const P = "a".repeat(40), OLD = "b".repeat(40), C = "c".repeat(40);
+  const never = () => false;
+  assert.deepEqual(landedOn(P, C, { parents: [P], shallow: true, isAncestor: never }), { ok: true });
+  assert.equal(landedOn(OLD, C, { parents: [P], shallow: false, isAncestor: never }).ok, false,
+    "a stamp kept from an older regen must not pass because the hash still matches");
+  assert.ok(landedOn(OLD, C, { parents: [P], shallow: true, isAncestor: never }).skip,
+    "a shallow clone that cannot see ancestry skips, never passes");
+  assert.equal(landedOn(OLD, C, { parents: [P], shallow: false, isAncestor: () => true }).ok, true,
+    "an older regen committed after other edits is still this tree's measurement");
+});
+
 test("blessing() is what the writer stamps: hash over data only, reason verbatim", () => {
   const data = { a: [[1, 2]], b: [[3]] };
   const s = blessing(data, "  because  ", { sha: "x".repeat(40), at: "2026-01-01T00:00:00.000Z" });
@@ -89,7 +150,7 @@ test("blessing() is what the writer stamps: hash over data only, reason verbatim
 test("neither reader of the baseline depends on the stamp: both iterate SCENARIOS by name", () => {
   const spec = fs.readFileSync(path.join(ROOT, "tests/specs/physics-characterization.spec.js"), "utf8");
   const twin = fs.readFileSync(path.join(ROOT, "tests/unit/physics-characterization-vm.test.mjs"), "utf8");
-  assert.match(spec, /for \(const sc of SCENARIOS\) \{\s*expect\(rounded\[sc\.name\]/, "the spec compares per scenario");
+  assert.match(spec, /for \(const sc of SCENARIOS\) \{[\s\S]*?expect\.soft\(rounded\[sc\.name\]/, "the spec compares per scenario, softly");
   assert.match(twin, /for \(const s of SCENARIOS\) \{[\s\S]*want\[s\.name\]/, "the twin reads per scenario");
   assert.ok(!/Object\.keys\(want\)/.test(spec) && !/Object\.keys\(want\)/.test(twin),
     "a reader that walks every key of the file would trip over _blessed");
