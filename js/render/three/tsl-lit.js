@@ -1389,7 +1389,18 @@
           .ElseIf(previewId.equal(61.0), () => { surfaceId.assign(29.0); })
           .ElseIf(previewId.equal(62.0), () => { surfaceId.assign(20.0); })
           .ElseIf(previewId.equal(63.0), () => { surfaceId.assign(27.0); })
-          .ElseIf(previewId.equal(64.0), () => { surfaceId.assign(34.0); });
+          .ElseIf(previewId.equal(64.0), () => { surfaceId.assign(34.0); })
+          .ElseIf(previewId.equal(65.0), () => { surfaceId.assign(29.0); })
+          .ElseIf(previewId.equal(66.0), () => { surfaceId.assign(31.0); })
+          .ElseIf(previewId.equal(67.0), () => { surfaceId.assign(20.0); })
+          .ElseIf(previewId.equal(68.0), () => { surfaceId.assign(20.0); })
+          .ElseIf(previewId.equal(69.0), () => { surfaceId.assign(20.0); })
+          .ElseIf(previewId.equal(70.0), () => { surfaceId.assign(34.0); })
+          .ElseIf(previewId.equal(71.0), () => { surfaceId.assign(28.0); })
+          .ElseIf(previewId.equal(72.0), () => { surfaceId.assign(34.0); })
+          .ElseIf(previewId.equal(73.0), () => { surfaceId.assign(20.0); })
+          .ElseIf(previewId.equal(74.0), () => { surfaceId.assign(34.0); })
+          .ElseIf(previewId.equal(75.0), () => { surfaceId.assign(20.0); });
         const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(40.0)).toVar();
         // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (js/render/glx/shaders/glsl-lit.js); grain / saturation / rim below.
         const flakeSurface = surfaceId.equal(34.0).toVar();
@@ -1602,8 +1613,8 @@
             albedo.assign(albedo.mul(fkH.sub(0.5).mul(0.30).add(fkS.sub(0.09).mul(0.90)).mul(fkF).add(1.0)));
             If(previewId.equal(64.0), () => {   // PREVIEW holo: prismatic sparks
               const hoC = mix(vec3(1.0), cos(vec3(0.0, 0.33, 0.67).add(fkH.mul(5.0)).add(NoV.oneMinus().mul(2.0)).mul(6.2831853))
-                .mul(0.5).add(0.5), 0.55).mul(2.2);
-              albedo.assign(mix(albedo, hoC, smoothstep(0.93, 1.0, fkH).mul(fkF)));
+                .mul(0.5).add(0.5), 0.55).mul(1.6);
+              albedo.assign(mix(albedo, hoC, smoothstep(0.975, 1.0, fkH).mul(fkF)));
             });
             specular.assign(min(specular.add(fkS.mul(0.40).mul(fkF)), 1.0));
           });
@@ -2186,7 +2197,7 @@
           color.mulAssign(mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip.mul(0.90)));
         });
         // DESIGN PREVIEW finish tints 60-64 (mirrors glsl-lit.js; tuned against the reference photos).
-        If(previewId.greaterThanEqual(60.0).and(previewId.lessThanEqual(64.0)), () => {
+        If(previewId.greaterThanEqual(60.0).and(previewId.lessThanEqual(75.0)), () => {
           const pvHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04));
           const pvG = NoV.oneMinus();
           const pvG2 = pvG.mul(pvG);
@@ -2201,10 +2212,11 @@
             const frF = clamp(vd.sub(10.0).div(16.0).oneMinus(), 0.0, 1.0);
             color.assign(mix(color, vec3(pvL), 0.12).mul(frH.sub(0.5).mul(0.08).mul(frF).add(1.0)));
             color.addAssign(vec3(U.ambSky).add(vec3(U.sunColor).mul(0.20)).mul(pvG2.mul(0.06)));
+            color.addAssign(vec3(U.sunColor).mul(pvHue).mul(pow(max(dot(N, normalize(U.sunDir.add(V))), 0.0), 6.0).mul(0.22)));
           }).ElseIf(previewId.equal(62.0), () => {
             const sat = pow(pvHue, vec3(2.2));
-            color.addAssign(sat.mul(albedo).mul(vec3(U.ambSky).mul(3.0)
-              .add(vec3(U.sunColor).mul(max(dot(N, U.sunDir), 0.0).mul(0.80))).add(0.18)));
+            color.addAssign(sat.mul(albedo).mul(vec3(U.ambSky).mul(2.0)
+              .add(vec3(U.sunColor).mul(max(dot(N, U.sunDir), 0.0).mul(0.90))).add(0.10)));
           }).ElseIf(previewId.equal(63.0), () => {
             const t = clamp(float(0.5).sub(objP.z.mul(0.30)).add(pvG.mul(0.12)), 0.0, 1.0);
             const ox = vec3(0.85, 0.86, 0.88).toVar();
@@ -2214,6 +2226,52 @@
             ox.assign(mix(ox, vec3(0.50, 0.30, 0.75), smoothstep(0.55, 0.70, t)));
             ox.assign(mix(ox, vec3(0.25, 0.45, 0.95), smoothstep(0.70, 0.88, t)));
             color.assign(vec3(pvL).mul(ox).mul(1.6));
+          }).ElseIf(previewId.equal(65.0), () => {
+            color.assign(vec3(pvL).mul(vec3(1.0, 0.98, 0.94)).mul(1.55));
+          }).ElseIf(previewId.equal(66.0), () => {
+            color.assign(mix(color, vec3(pvL).mul(vec3(0.62, 0.64, 0.70)), 0.75).mul(0.90));
+          }).ElseIf(previewId.equal(67.0), () => {
+            const fvS = sin(objP.y.mul(38.0).add(objP.x.mul(22.0)).add(sin(objP.z.mul(2.3)).mul(3.0))).mul(0.5).add(0.5);
+            const fv = smoothstep(0.72, 0.90, fvS).mul(smoothstep(1.4, 0.2, objP.z));
+            const fvGlow = vec3(0.70, 1.0, 0.15).mul(vec3(U.ambSky).mul(2.5)
+              .add(vec3(U.sunColor).mul(max(dot(N, U.sunDir), 0.0).mul(0.6))).add(0.15));
+            color.assign(mix(color, fvGlow, fv.mul(0.9)));
+          }).ElseIf(previewId.equal(68.0), () => {
+            const cfW = objP.xz.mul(190.0).add(objP.y.mul(190.0));
+            const cfWv = sin(cfW.x).mul(sin(cfW.y)).mul(clamp(vd.sub(10.0).div(10.0).oneMinus(), 0.0, 1.0)).mul(0.5).add(0.5);
+            const cfC = floor(objP.mul(90.0));
+            const cfM = smoothstep(0.30, 0.40, objP.y.add(hash21(cfC.xy.add(cfC.z.mul(7.1))).sub(0.5).mul(0.10)));
+            const cfL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
+            color.assign(mix(color.mul(float(0.06).div(cfL)).mul(cfWv.mul(0.32).add(0.84)).mul(vec3(0.95, 0.97, 1.05)), color, cfM));
+          }).ElseIf(previewId.equal(69.0), () => {
+            const sfT = clamp(float(0.5).sub(objP.z.mul(0.28)), 0.0, 1.0);
+            const sfCell = fract(vec2(objP.z, objP.y).mul(26.0)).sub(0.5);
+            const sfS = max(step(length(sfCell), smoothstep(0.25, 0.75, sfT).oneMinus().mul(0.62)), smoothstep(0.15, 0.30, sfT).oneMinus());
+            const sfL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
+            color.assign(mix(color.mul(0.10), vec3(pvL.div(sfL)).mul(vec3(0.70, 0.72, 0.76)), sfS));
+          }).ElseIf(previewId.equal(70.0), () => {
+            color.mulAssign(mix(float(1.30), float(0.40), smoothstep(0.10, 0.75, pvG)));
+          }).ElseIf(previewId.greaterThanEqual(71.0), () => {
+            const aL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
+            const lit = pvL.div(aL);
+            If(previewId.equal(71.0), () => {
+              color.assign(mix(color, vec3(pvL).mul(1.25), pvG2.mul(0.35)).mul(1.04));
+            }).ElseIf(previewId.equal(72.0), () => {
+              color.assign(vec3(lit).mul(0.92).mul(mix(vec3(1.0, 0.97, 0.92), vec3(0.86, 0.92, 1.0), smoothstep(0.2, 0.8, pvG))));
+            }).ElseIf(previewId.equal(73.0), () => {
+              const rw = clamp(float(0.45).sub(objP.y).div(0.35), 0.0, 1.0)
+                .mul(hash21(floor(vec2(objP.z.mul(8.0), objP.y.mul(60.0)))).mul(0.45).add(0.55));
+              color.assign(mix(color, vec3(0.07, 0.06, 0.05).mul(lit).mul(1.2), rw.mul(0.75)));
+            }).ElseIf(previewId.equal(74.0), () => {
+              const jgC = floor(objP.mul(140.0));
+              const jg = smoothstep(0.96, 1.0, hash21(jgC.xy.add(jgC.z.mul(19.7)))).mul(clamp(vd.sub(10.0).div(16.0).oneMinus(), 0.0, 1.0));
+              color.assign(color.mul(float(0.06).div(aL)).add(vec3(0.95, 0.72, 0.28).mul(jg.mul(1.4).add(0.08))
+                .mul(vec3(U.sunColor).mul(max(dot(N, U.sunDir), 0.0)).add(vec3(U.ambSky)))));
+            }).Else(() => {
+              const tc = sin(objP.z.mul(9.0).add(sin(objP.y.mul(7.0)).mul(2.5)))
+                .mul(sin(objP.y.mul(11.0).add(objP.x.mul(6.0)).add(sin(objP.z.mul(5.0)).mul(2.0))));
+              color.assign(vec3(lit).mul(mix(float(0.06), float(0.85), step(0.0, tc))));
+            });
           }).Else(() => {
             const pr = cos(vec3(0.0, 0.33, 0.67).add(objP.x.add(objP.z).mul(4.0)).add(pvG.mul(3.0)).mul(6.2831853)).mul(0.5).add(0.75);
             color.mulAssign(mix(vec3(1.0), pr, 0.18));

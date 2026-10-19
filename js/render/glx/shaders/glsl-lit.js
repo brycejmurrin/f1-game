@@ -978,7 +978,9 @@ void main() {
   // adds one tint after the metal block. 60 oilslick->39, 61 frozen->29, 62 fluoro->20, 63 burnt->27, 64 holo->34.
   int previewId = int(vMat + 0.5);
   int surfaceId = previewId == 60 ? 39 : previewId == 61 ? 29 : previewId == 62 ? 20
-    : previewId == 63 ? 27 : previewId == 64 ? 34 : previewId;
+    : previewId == 63 ? 27 : previewId == 64 ? 34 : previewId == 65 ? 29 : previewId == 66 ? 31 : previewId == 67 ? 20
+    : previewId == 68 ? 20 : previewId == 69 ? 20 : previewId == 70 ? 34
+    : previewId == 71 ? 28 : previewId == 72 ? 34 : previewId == 73 ? 20 : previewId == 74 ? 34 : previewId == 75 ? 20 : previewId;
   bool classifiedCar = surfaceId >= 20 && surfaceId <= 40;
   // 34 = METALLIC FLAKE and 35 = CANDY (FINISH_SURFACE.flake / .candy): both are PAINT responses (gloss
   // clearcoat, env mirror, sparkle), so paintSurface includes them; the flake grain and the candy
@@ -1217,7 +1219,7 @@ void main() {
       // PREVIEW 64 holo: each spark takes a prismatic hue keyed to its cell and the view angle.
       // (Lunaflair reference: sparse glitter, mostly silver-white, rainbow only in direct light.)
       if (previewId == 64) albedo = mix(albedo, mix(vec3(1.0), 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fkH * 5.0
-        + (1.0 - NoV) * 2.0)), 0.55) * 2.2, smoothstep(0.93, 1.0, fkH) * fkF);
+        + (1.0 - NoV) * 2.0)), 0.55) * 1.6, smoothstep(0.975, 1.0, fkH) * fkF);
       specular = min(1.0, specular + fkS * 0.40 * fkF);
     }
   }
@@ -1936,7 +1938,7 @@ void main() {
   // DESIGN PREVIEW finish tints (60-64): see the remap at surfaceId. Tuned against the reference photos
   // (artifacts/finish-designs/refs/finishes): oil film = ordered bands over a dark base, frozen = rich colour with a
   // soft satin sheen, fluoro = glows even in shade, burnt = the real oxide order, holo = sparse silver glitter.
-  if (previewId >= 60 && previewId <= 64) {
+  if (previewId >= 60 && previewId <= 75) {
     vec3 pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
     float pvG = 1.0 - NoV;
     float pvL = dot(color, vec3(0.299, 0.587, 0.114));
@@ -1949,9 +1951,10 @@ void main() {
       float frH = hash21(frC.xy + frC.z * 19.7), frF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
       color = mix(color, vec3(pvL), 0.12) * (1.0 + (frH - 0.5) * 0.08 * frF);
       color += (uAmbSky + uSunColor * 0.20) * pvG * pvG * 0.06;
+      color += uSunColor * pvHue * 0.22 * pow(max(dot(N, normalize(uSunDir + V)), 0.0), 6.0);   // broad satin sheen
     } else if (previewId == 62) {   // fluoro: re-emits absorbed light -> glows in its hue, in shade too
       vec3 sat = pow(pvHue, vec3(2.2));
-      color += sat * albedo * (uAmbSky * 3.0 + uSunColor * 0.80 * max(dot(N, uSunDir), 0.0) + vec3(0.18));
+      color += sat * albedo * (uAmbSky * 2.0 + uSunColor * 0.90 * max(dot(N, uSunDir), 0.0) + vec3(0.10));
     } else if (previewId == 63) {   // burnt titanium: silver nose -> straw -> gold -> bronze -> purple -> blue at the hot tail
       float t = clamp(0.5 - vObjPos.z * 0.30 + pvG * 0.12, 0.0, 1.0);
       vec3 ox = vec3(0.85, 0.86, 0.88);
@@ -1961,6 +1964,48 @@ void main() {
       ox = mix(ox, vec3(0.50, 0.30, 0.75), smoothstep(0.55, 0.70, t));
       ox = mix(ox, vec3(0.25, 0.45, 0.95), smoothstep(0.70, 0.88, t));
       color = vec3(pvL) * ox * 1.6;   // the livery is ignored, like GOLD PLATE
+    } else if (previewId == 65) {   // alubare: polished bare aluminium (W196) -- warm grey, livery ignored
+      color = vec3(pvL) * vec3(1.0, 0.98, 0.94) * 1.55;
+    } else if (previewId == 66) {   // rawcarbon: unlacquered weave (Koenigsegg KNC) -- cool graphite satin
+      color = mix(color, vec3(pvL) * vec3(0.62, 0.64, 0.70), 0.75) * 0.90;
+    } else if (previewId == 67) {   // flovis: glowing aero-paint streaks running back along the body, gone at the nose
+      float fv = smoothstep(0.72, 0.90, 0.5 + 0.5 * sin(vObjPos.y * 38.0 + vObjPos.x * 22.0 + sin(vObjPos.z * 2.3) * 3.0));
+      fv *= smoothstep(1.4, 0.2, vObjPos.z);
+      vec3 fvGlow = vec3(0.70, 1.0, 0.15) * (uAmbSky * 2.5 + uSunColor * 0.6 * max(dot(N, uSunDir), 0.0) + vec3(0.15));
+      color = mix(color, fvGlow, fv * 0.9);
+    } else if (previewId == 68) {   // carbonfade: bare weave below the sidepod line, a ragged edge between
+      vec2 cfW = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
+      float cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * clamp(1.0 - (vDist - 10.0) / 10.0, 0.0, 1.0);
+      vec3 cfC = floor(vObjPos * 90.0);
+      float cfM = smoothstep(0.30, 0.40, vObjPos.y + (hash21(cfC.xy + cfC.z * 7.1) - 0.5) * 0.10);
+      float cfL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
+      color = mix(color * (0.06 / cfL) * (0.84 + 0.32 * cfWv) * vec3(0.95, 0.97, 1.05), color, cfM);
+    } else if (previewId == 69) {   // silverfade: silver nose -> halftone dots -> black tail
+      float sfT = clamp(0.5 - vObjPos.z * 0.28, 0.0, 1.0);
+      vec2 sfCell = fract(vec2(vObjPos.z, vObjPos.y) * 26.0) - 0.5;
+      float sfS = max(step(length(sfCell), 0.62 * (1.0 - smoothstep(0.25, 0.75, sfT))), 1.0 - smoothstep(0.15, 0.30, sfT));
+      float sfL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
+      color = mix(color * 0.10, vec3(pvL / sfL) * vec3(0.70, 0.72, 0.76), sfS);
+    } else if (previewId == 70) {   // metalflop: metallic face/flop lightness split
+      color *= mix(1.30, 0.40, smoothstep(0.10, 0.75, pvG));
+    } else if (previewId >= 71) {
+      float aL = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
+      float lit = pvL / aL;   // the lighting with the livery divided out
+      if (previewId == 71) {   // truematte: chalky, lighter and greyer toward the edges (rough-surface back-scatter)
+        color = mix(color, vec3(pvL) * 1.25, 0.35 * pvG * pvG) * 1.04;
+      } else if (previewId == 72) {   // pearlwhite: tri-coat white, warm face, cool edge; livery ignored
+        color = vec3(lit) * 0.92 * mix(vec3(1.0, 0.97, 0.92), vec3(0.86, 0.92, 1.0), smoothstep(0.2, 0.8, pvG));
+      } else if (previewId == 73) {   // raceworn: brake dust and rubber streaked back along the low bodywork
+        float rw = clamp((0.45 - vObjPos.y) / 0.35, 0.0, 1.0) * (0.55 + 0.45 * hash21(floor(vec2(vObjPos.z * 8.0, vObjPos.y * 60.0))));
+        color = mix(color, vec3(0.07, 0.06, 0.05) * lit * 1.2, rw * 0.75);
+      } else if (previewId == 74) {   // jpsgold: gloss black with gold flake
+        vec3 jgC = floor(vObjPos * 140.0);
+        float jg = smoothstep(0.96, 1.0, hash21(jgC.xy + jgC.z * 19.7)) * clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
+        color = color * (0.06 / aL) + vec3(0.95, 0.72, 0.28) * (jg * 1.4 + 0.08) * (uSunColor * max(dot(N, uSunDir), 0.0) + uAmbSky);
+      } else {   // testcamo: black/white dazzle; livery ignored
+        float tc = sin(vObjPos.z * 9.0 + sin(vObjPos.y * 7.0) * 2.5) * sin(vObjPos.y * 11.0 + vObjPos.x * 6.0 + sin(vObjPos.z * 5.0) * 2.0);
+        color = vec3(lit) * mix(0.06, 0.85, step(0.0, tc));
+      }
     } else {   // holo: a faint prism only, so the far car reads as dark metal with sparkle (Lunaflair)
       color *= mix(vec3(1.0), 0.75 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + (vObjPos.x + vObjPos.z) * 4.0 + pvG * 3.0)), 0.18);
     }
