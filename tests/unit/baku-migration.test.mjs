@@ -45,7 +45,7 @@ function loadBaku() {
 }
 
 test("Baku owns its coordinate space and protected scenery sectors", () => {
-  const { raw, def } = loadBaku();
+  const { def } = loadBaku();
   assert.equal(def.sceneryCoordinates, "racing");
   assert.deepEqual(
     Array.from(def.dressingExclusions, (rule) => ({
@@ -61,10 +61,8 @@ test("Baku owns its coordinate space and protected scenery sectors", () => {
       { kinds: ["city", "foliage", "lighting"], s0: 0.58, s1: 0.97, side: -1 },
     ],
   );
-  assert.deepEqual(
-    Array.from(raw.elevations, ({ s, halfM, rise }) => ({ s, halfM, rise })),
-    [{ s: 0.46, halfM: 500, rise: 14 }],
-  );
+  // The 14 m castle rise is asserted by what it BUILDS (crest height and
+  // fraction in the build test below), not by echoing def.elevations back.
 });
 
 test("Baku builds finite grounded landmarks, water, and full street boundaries", () => {

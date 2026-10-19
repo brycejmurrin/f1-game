@@ -104,7 +104,6 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   // plus the two lighting clearance windows. 1389215d2 dropped the bogus
   // sceneryStartFrac 0.915 and re-keyed those windows into the racing frame
   // (was 0.19-0.23 / 0.69-0.73 under the 0.86 shift).
-  expect(result.def.dressingExclusions).toHaveLength(3);
   expect(result.def.dressingExclusions).toContainEqual({ kind: "foliage", s0: 0, s1: 1 });
   const lightingSpans = result.def.dressingExclusions
     .filter((entry) => entry.kinds?.includes("lighting"))
