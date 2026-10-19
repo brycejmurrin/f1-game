@@ -40,6 +40,10 @@ function readsCurvature(src) {
   // driving line's `cue()` is audible to the PLAYER (game.js `GameAudio.brakeCue`),
   // which is exactly the kind of consumer this table exists to classify.
   if (/\b[A-Za-z_$][\w$]*\.curvature\s*\(/.test(src)) return true;
+  // T2-25: forms the alias regex missed — bracket access and a RENAMING destructure
+  // (`{ curvature: c } = Tracks`, whose alias `c(` the bare-identifier test cannot see).
+  if (/\[\s*["'`]curvature["'`]\s*\]\s*\(/.test(src)) return true;
+  if (/(?:const|let|var)\s*\{[^}]*\bcurvature\s*:\s*[A-Za-z_$][\w$]*[^}]*\}\s*=\s*[A-Za-z_$][\w$.]*/.test(codeOnly(src))) return true;
   const destructured = /(?:const|let|var)\s*\{[^}]*\bcurvature\b[^}]*\}\s*=/.test(src);
   return destructured && /(?<![.\w])curvature\s*\(/.test(src);
 }

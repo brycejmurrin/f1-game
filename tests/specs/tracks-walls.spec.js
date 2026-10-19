@@ -82,6 +82,8 @@ test.describe("Apex 26 — track boundaries", () => {
         window.__apex.go();
         window.__apex.setPhysics({ drift: 0.3 });
         let finite = true, maxAbsX = 0;
+        const prof = window.__apex.trackProfile(400);
+        const stuck = [];
         for (const frac of [0.1, 0.35, 0.6, 0.85]) {
           for (const dir of [1, -1]) {
             window.__apex.jump(frac, 45, 0);
@@ -92,15 +94,27 @@ test.describe("Apex 26 — track boundaries", () => {
               if (!Number.isFinite(p.x) || !Number.isFinite(p.s)) finite = false;
               maxAbsX = Math.max(maxAbsX, Math.abs(p.x));
             }
+            // RECOVERY (TK2-02): release, then steer back toward the centre under a closed
+            // loop; the car must be back inside the tarmac within 10 s or a wall trapped it.
+            const hw = prof[Math.floor(frac * prof.length)].hw;
+            let back = false, x = 0;
+            for (let i = 0; i < 600 && !back; i++) {
+              x = window.__apex.probe().x;
+              window.__apex.setInput({ steer: x > 0 ? -0.6 : 0.6, throttle: true });
+              window.__apex.step(1 / 60, 1);
+              back = Math.abs(window.__apex.probe().x) < hw;
+            }
+            if (!back) stuck.push({ frac, dir, x, hw });
           }
         }
         window.__apex.clearInput();
-        return { finite, maxAbsX };
+        return { finite, maxAbsX, stuck };
       }, circuitId);
       expect(r.skip, `${circuitId}: ${r.reason || "race() failed"} — the edge-ram sweep never ran`)
         .toBeFalsy();
       expect(r.finite, `${circuitId} finite`).toBe(true);
       expect(r.maxAbsX, `${circuitId} bounded`).toBeLessThan(60);
+      expect(r.stuck, `${circuitId}: car never re-entered the tarmac after the edge ram: ${JSON.stringify(r.stuck)}`).toEqual([]);
     });
   }
 });
