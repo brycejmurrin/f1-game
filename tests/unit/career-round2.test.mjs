@@ -43,9 +43,10 @@ function load(n = 24, realParts = false) {
   ctx.Tracks = { LIST: list, SEASON: list.slice(), seasonIndex(i) { return this.LIST.indexOf(this.SEASON[i]); } };
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/hash32.js", "js/data/teams.js", "js/data/driver-ratings.js",
     ...(realParts ? ["js/physics/consts.js", "js/car/parts.js"] : []),
-    "js/career/save-migrate.js", "js/career/regulations.js", "js/career/career.js", "js/career/season-cal.js"]) {
+    "js/career/save-migrate.js", "js/career/regulations.js", "js/career/career-planning.js", "js/career/career.js", "js/career/season-cal.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
+  ctx.GameStore.CAREER_V = vm.runInContext("SaveMigrate.CAREER_V", ctx);   // the real schema version, not a hand copy
   vm.runInContext('Teams.LIST.push({ id:"custom", name:"MY TEAM", short:"MY", tier:2, custom:true, color:[1,0,0], drivers:[{name:"You",code:"YOU",num:99}], stats:{speed:50,accel:50,cornering:50,braking:50} })', ctx);
   const run = (s) => vm.runInContext(s, ctx);
   return { ctx, run, stored, Career: run("Career"), SeasonCal: run("SeasonCal"), Teams: run("Teams"), DriverRatings: run("DriverRatings") };
@@ -55,6 +56,17 @@ const started = (opts = {}) => {
   h.Career.start(Object.assign({ flavour: "driver", teamId: "haas", seed: 9 }, opts.start));
   h.Career.engage(true);
   return h;
+};
+// Production loads career-planning.js: a save whose stamped circuit is gone is PROTECTED on load (read-only,
+// saves refused with "calendar-unavailable") and only an explicit adopt drops and remaps it.
+const adoptAfterLoad = (h) => {
+  assert.ok(h.Career.planning().protection(), "a load with a missing stamped circuit is calendar-protected");
+  h.Career.save();
+  assert.equal(h.Career.saveStatus().reason, "calendar-unavailable", "a protected save refuses writes");
+  assert.equal(h.Career.inCareer(), false, "a protected save is not an engaged career");
+  const ok = h.Career.planning().adopt();
+  assert.equal(ok, true, "explicit adoption succeeds: " + JSON.stringify(h.Career.saveStatus()));
+  assert.equal(h.Career.planning().protection(), null);
 };
 const raced = (h) => h.run("Tracks.LIST")[h.Career.trackIndex()].id;
 
@@ -199,6 +211,7 @@ test("C1: a stamped circuit this build no longer knows is dropped and the round 
   h.Career.save();
   h.run("Tracks.LIST.splice(5,1); Tracks.SEASON.splice(5,1)");   // Monaco is gone entirely
   h.Career.load();
+  adoptAfterLoad(h);
   const s = h.Career.data().season;
   assert.equal(s.calIds.length, 23);
   assert.equal(s.calIds.includes("monaco"), false);
@@ -218,6 +231,7 @@ test("removed raced circuits retain achievements through migration, reload and r
   h.Career.save();
   h.run("Tracks.LIST.splice(5,1); Tracks.SEASON.splice(5,1)");
   h.Career.load();
+  adoptAfterLoad(h);
   assert.equal(h.Career.slots("driver")[0].wins, 1);
   assert.equal(h.Career.data().season.pts[me], 40);
   const rows = h.Career.data().results;
@@ -235,6 +249,7 @@ test("removed raced circuits retain achievements through migration, reload and r
     "archived win must never appear as round zero's result");
   h.run("Tracks.LIST.splice(6,1); Tracks.SEASON.splice(6,1)");
   h.Career.save(); h.Career.load();
+  adoptAfterLoad(h);
   assert.deepEqual(Array.from(h.Career.data().results, (r) => r.archivedCircuit), ["monaco", "redbull"],
     "a second calendar contraction preserves both historical races");
   h.Career.data().season.round = h.Career.roundsTotal();
@@ -393,4 +408,24 @@ test("a slot whose team is null still describes itself with strings (the CAREER 
   const row = h.Career.slots("driver").find((s) => s.i === 1);
   assert.equal(row.used, true);
   assert.equal(row.teamName, "", "a null team describes itself as an empty name, not \"null\"");
+});
+
+test("calendar protection: a save naming a retired circuit loads read-only, refuses engage and writes, and keeps its stamped calendar", () => {
+  const h = started();
+  const c = h.Career.data();
+  c.season.round = 8;
+  h.Career.save();
+  const before = JSON.stringify(h.stored.get("career.driver.1") || [...h.stored.values()][0]);
+  h.run("Tracks.LIST.splice(5,1); Tracks.SEASON.splice(5,1)");
+  h.Career.load();
+  const prot = h.Career.planning().protection();
+  assert.ok(prot, "protected on default load");
+  assert.deepEqual(Array.from(prot.missing), ["monaco"]);
+  h.Career.engage(true);
+  assert.equal(h.Career.inCareer(), false, "engage is refused under calendar protection");
+  h.Career.save();
+  assert.equal(h.Career.saveStatus().reason, "calendar-unavailable");
+  assert.equal(h.Career.data().season.calIds.length, 24, "the stamped calendar is untouched until explicit adoption");
+  assert.equal(h.Career.data().season.round, 8);
+  assert.equal(JSON.stringify(h.stored.get("career.driver.1") || [...h.stored.values()][0]), before, "the stored save is not rewritten");
 });
