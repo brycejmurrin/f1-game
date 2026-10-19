@@ -198,7 +198,9 @@ const CarWheels = (function () {
                        LIP, SURFACES.metal);
         }
       }
-      const rotorOuter = r * Math.min(0.40, 0.32 * rotorScale);
+      // Cap at 0.52 so STYLE Big Disc (rotorScale ~1.7) can grow past carbon's
+      // ~0.38 — the old 0.40 ceiling collapsed every rotorScale ≥ 1.25 onto one size.
+      const rotorOuter = r * Math.min(0.52, 0.32 * rotorScale);
       const rotorInner = r * 0.17;
       const rotorDetail = brakeStyle && brakeStyle.rotor || 0;
       const discFaceRotor = Math.max(0, Math.min(2, Math.round((brakeStyle && brakeStyle.discFace) || 0)));

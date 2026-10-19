@@ -681,7 +681,7 @@ const Car3D = (function () {
       }
     }
     // LED STRIP (STYLE): a full-length lit strip down each pod shoulder in the pack's LED colour.
-    if (!ckpt && ersStyle && ersStyle.ledStrip) addPodFlankSpan(0.45, -0.95, 0.99, 0.045, ersGlow, SURFACES.metal, 0.03);
+    if (!ckpt && ersStyle && ersStyle.ledStrip) addPodFlankSpan(0.45, -0.95, 0.99, 0.085, ersGlow, SURFACES.metal, 0.055);
     const ersBlister = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.blister) || 0)));
     if (ersBlister > 0 && !ckpt) {
       const bS = 0.92 + 0.18 * Math.max(0, ersPack - 1);
@@ -794,13 +794,14 @@ const Car3D = (function () {
       const fenceN = Math.max(0, Math.min(10, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(2.25, floorStyle.fenceH));
       const fenceStep = fenceN > 1 ? 1.08 / (fenceN - 1) : 0;
-      // Floor fences sit outboard of the pod. Keep their tops under the
+      // Floor fences sit outboard of the pod. Stock heights stay under the
       // sponsor board (yFrac 0.32..0.80) so a side ray hits the board first
-      // (body-split). TEAM_STYLE inlet/undercut can drop that band onto a
-      // stock-height fence.
+      // (body-split). Tall STYLE fences (fenceH≫1) are allowed to climb toward
+      // the shoulder so the height knob still reads in a garage 3/4 shot.
       const fenceCap = (z) => {
         const pod = anchors.podAt(z);
-        return pod.bottom + 0.28 * (pod.top - pod.bottom);
+        const frac = 0.28 + 0.30 * Math.max(0, Math.min(1, (fenceH - 1.0) / 1.25));
+        return pod.bottom + frac * (pod.top - pod.bottom);
       };
       const fenceFit = (y, h, cap) => {
         const top = y + h * 0.5;
@@ -819,20 +820,20 @@ const Car3D = (function () {
           { z: fz - 0.095, x: s * (ex + 0.038), y: b.y, w: 0.022, h: b.h },
           CARBON);
       }
-      const edgeLip = Math.max(0, Math.min(1, floorStyle.edgeLip || 0));
+      const edgeLip = Math.max(0, Math.min(2, floorStyle.edgeLip || 0));
       if (edgeLip > 0) {
         const ef = floorEdgeAt(0.50), er = floorEdgeAt(-1.10);
         addSpan(out,
           { z: 0.50, x: s * (ef + 0.006), y: 0.080 + rideDY,
-            w: 0.014, h: 0.038 + 0.022 * edgeLip },
+            w: 0.014, h: 0.038 + 0.028 * edgeLip },
           { z: -1.10, x: s * (er + 0.006), y: 0.094 + rideDY,
-            w: 0.012, h: 0.034 + 0.020 * edgeLip },
+            w: 0.012, h: 0.034 + 0.026 * edgeLip },
           CARBON, null, SURFACES.carbon);
         addBeveledSpan(out,
-          { z: 0.50, x: s * (ef + 0.030 + 0.048 * edgeLip), y: 0.118 + rideDY,
-            w: 0.038 + 0.055 * edgeLip, h: 0.012 },
-          { z: -1.10, x: s * (er + 0.028 + 0.042 * edgeLip), y: 0.138 + rideDY,
-            w: 0.032 + 0.048 * edgeLip, h: 0.010 },
+          { z: 0.50, x: s * (ef + 0.030 + 0.055 * edgeLip), y: 0.118 + rideDY,
+            w: 0.038 + 0.065 * edgeLip, h: 0.012 + 0.006 * Math.max(0, edgeLip - 1) },
+          { z: -1.10, x: s * (er + 0.028 + 0.050 * edgeLip), y: 0.138 + rideDY,
+            w: 0.032 + 0.058 * edgeLip, h: 0.010 + 0.005 * Math.max(0, edgeLip - 1) },
           0.004, accentC, null, SURFACES.paint);
       }
       if (Math.round(floorStyle.gurney || 0) > 0) {
@@ -903,11 +904,17 @@ const Car3D = (function () {
     // BIG CAP (STYLE): a wide painted filler plate on the cover crown, so a fuel option reads from above.
     if (!ckpt && fuelStyle && fuelStyle.capBig) {
       const cz = -0.52, cyb = coverSurfaceY(anchors.coverAt(cz), 0);
-      addBox(out, 0, cyb + 0.012, cz, 0.16, 0.024, 0.80, (fuelStyle.cap || [0.9, 0.5, 0.1]).map((v) => Math.min(v, 1)), SURFACES.metal);
+      const capC = (fuelStyle.cap || [0.9, 0.5, 0.1]).map((v) => Math.min(v, 1));
+      addBox(out, 0, cyb + 0.018, cz, 0.28, 0.040, 0.55, capC, SURFACES.metal);
+      addBox(out, 0, cyb + 0.040, cz, 0.14, 0.022, 0.28, capC, SURFACES.metal);
     }
-    // SKIRT (STYLE): a painted strip down each floor edge.
-    if (!ckpt && floorStyle && floorStyle.skirt) for (const s of [-1, 1])
-      addBox(out, s * 0.76, Math.max(CHASSIS.floor.cy + rideDY, 0.052) + 0.03, -0.30, 0.035, 0.07, 2.4, c2);
+    // SKIRT (STYLE): a painted strip down each floor edge. skirt≥2 widens it.
+    if (!ckpt && floorStyle && floorStyle.skirt) {
+      const sk = Math.max(1, Math.min(2, Math.round(floorStyle.skirt)));
+      for (const s of [-1, 1])
+        addBox(out, s * 0.76, Math.max(CHASSIS.floor.cy + rideDY, 0.052) + 0.03, -0.30,
+               0.035 + 0.030 * (sk - 1), 0.07 + 0.04 * (sk - 1), 2.4, sk >= 2 ? accentC : c2);
+    }
 
     part("livery");
     // Nose TIP z moves per team (TEAM_STYLE.noseTipZ, ±0.10): the cap and both
@@ -1141,9 +1148,16 @@ const Car3D = (function () {
                    0.62, 0, 0.720, 0.20, 0.022, DARK);
       addLoft(out, 0.495, 0, 0.668, 0.34, 0.018,
                    0.605, 0, 0.710, 0.16, 0.014, VISOR, SURFACES.glass);
-      // screen 2 (STYLE): a tall wrap-around aeroscreen over the halo's front.
-      if (cockpitStyle.screen >= 2) { addLoft(out, 0.47, 0, 0.700, 0.46, 0.02, 0.60, 0, 0.880, 0.36, 0.016, VISOR, SURFACES.glass);
-        addLoft(out, 0.60, 0, 0.880, 0.40, 0.03, 0.62, 0, 0.900, 0.38, 0.03, c1); }   // painted top frame so it reads
+      // screen 2 (STYLE): a tall wrap-around aeroscreen over the halo's front —
+      // taller glass + a painted brow so it reads against screen:1's short visor.
+      if (cockpitStyle.screen >= 2) {
+        addLoft(out, 0.45, 0, 0.690, 0.52, 0.028, 0.58, 0, 0.940, 0.42, 0.022, VISOR, SURFACES.glass);
+        addLoft(out, 0.58, 0, 0.940, 0.44, 0.036, 0.64, 0, 0.975, 0.40, 0.032, c1);
+        for (const s of [-1, 1]) {
+          addLoft(out, 0.48, s * 0.20, 0.710, 0.12, 0.024,
+                       0.60, s * 0.10, 0.900, 0.08, 0.018, VISOR, SURFACES.glass);
+        }
+      }
       for (const s of [-1, 1]) {
         addLoft(out, 0.50, s * 0.16, 0.690, 0.10, 0.020,
                      0.58, s * 0.06, 0.730, 0.06, 0.016, DARK);
@@ -1318,12 +1332,15 @@ const Car3D = (function () {
         addBeamBetween(out, [0, 0.775, 0.468], [s * 0.105, crownY - hr * 0.4, 0.474],
                        0.015, haloC, haloS);
       if (haloSty === 2) {
-        // Fenced hoop: three small crest vanes riding the crown bar (hoop
-        // indices 5/7/9 = mid-left, apex, mid-right of the 7-point bar).
-        for (const hi of [5, 7, 9]) {
+        // Fenced hoop: five tall crest vanes along the crown so Fenced Halo
+        // reads against open_cell's bare hoop in a garage 3/4 shot.
+        for (const hi of [4, 5, 7, 9, 10]) {
           const p = hoop[hi];
-          addBox(out, p[0], p[1] + hr + 0.012, p[2], 0.012, 0.026, 0.055,
+          if (!p) continue;
+          addBox(out, p[0], p[1] + hr + 0.030, p[2], 0.022, 0.060, 0.095,
                  haloC, haloS);
+          addBox(out, p[0], p[1] + hr + 0.062, p[2], 0.014, 0.018, 0.055,
+                 accentC, SURFACES.paint);
         }
       }
     }
@@ -1464,9 +1481,9 @@ const Car3D = (function () {
     // structure, 1 single / 2 twin, so an exhaust option reads from behind.
     const exhStack = Math.max(0, Math.min(2, Math.round(exhStyle.stack || 0)));
     for (let i = 0; i < exhStack; i++) {
-      const sx = exhStack === 2 ? (i ? 0.13 : -0.13) : 0;
-      addTube(out, [[sx, 0.46, -2.30], [sx, 0.70, -2.50], [sx, 0.98, -2.62]], 0.06 * exhBore, 8, [0.62, 0.60, 0.58], SURFACES.metal);
-      addBox(out, sx, 1.01, -2.63, 0.15 * exhBore, 0.06, 0.15 * exhBore, fuelFlame.map((v) => Math.min(v, 1)), SURFACES.metal);
+      const sx = exhStack === 2 ? (i ? 0.16 : -0.16) : 0;
+      addTube(out, [[sx, 0.46, -2.28], [sx, 0.78, -2.48], [sx, 1.08, -2.60]], 0.085 * exhBore, 8, [0.62, 0.60, 0.58], SURFACES.metal);
+      addBox(out, sx, 1.12, -2.61, 0.20 * exhBore, 0.08, 0.18 * exhBore, fuelFlame.map((v) => Math.min(v, 1)), SURFACES.metal);
     }
     }
 
@@ -1955,8 +1972,9 @@ const Car3D = (function () {
     }
     // REAR FINS (STYLE): tall painted fins either side of the gearbox crash structure.
     if (!ckpt && gbStyle && gbStyle.rearFins) for (const s of [-1, 1]) {
-      addBox(out, s * 0.25, 0.46, -2.30, 0.022, 0.34, 0.46, c1);
-      addBox(out, s * 0.25, 0.64, -2.30, 0.06, 0.02, 0.46, CARBON);
+      addBox(out, s * 0.28, 0.50, -2.28, 0.030, 0.42, 0.52, c1);
+      addBox(out, s * 0.28, 0.72, -2.28, 0.08, 0.028, 0.52, CARBON);
+      addBox(out, s * 0.28, 0.58, -2.50, 0.018, 0.22, 0.10, accentC, SURFACES.paint);
     }
 
     part("brakeDucts");
