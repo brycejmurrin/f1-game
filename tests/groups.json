@@ -2183,6 +2183,15 @@
       ],
       "kind": "command"
     },
+    "test:webkit": {
+      "files": [
+        "tests/specs/webkit-boot.spec.js"
+      ],
+      "flags": [
+        "--project=webkit"
+      ],
+      "kind": "browser"
+    },
     "test:xr": {
       "files": [
         "tests/specs/vr-emulated.spec.js",

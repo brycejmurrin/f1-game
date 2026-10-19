@@ -1,0 +1,125 @@
+name: WebKit leg
+
+# iPhone-path proxy: boot the game under Playwright WebKit (JavaScriptCore +
+# WebKit WebGL) with apex26.gfxBackend=three and apex26.tlxForceGL=1.
+#
+# DISPATCH ONLY — not on every PR. Prefer macos-latest (ANGLE-Metal like iOS,
+# no extra packages). A Linux runner needs
+# `npx playwright install --with-deps webkit`.
+#
+# playwright-core 1.63.0 pins WebKit 26.6 — a proxy, not the phone's Safari.
+# See docs/TESTING.md §WebKit leg (iPhone-path proxy).
+#
+# Agents' GH App tokens cannot workflow_dispatch (403). Bryce / Dad dispatches:
+#   gh workflow run webkit-leg.yml --ref <branch> -f image=macos-latest
+#
+# Refs: https://github.com/brycejmurrin/f1-game/issues/2705
+#       https://playwright.dev/docs/browsers#webkit
+#       https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#workflow_dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Runner image — macos-latest is ANGLE-Metal (iOS-like); ubuntu-latest needs --with-deps"
+        required: false
+        default: "macos-latest"
+        type: choice
+        options: ["macos-latest", "ubuntu-latest"]
+      track:
+        description: "Circuit id for the boot race (passed through; the spec currently pins montreal)"
+        required: false
+        default: "montreal"
+        type: string
+
+run-name: "WebKit leg on ${{ inputs.image || 'macos-latest' }} (${{ github.ref_name }})"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: webkit-leg-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  webkit-boot:
+    name: WebKit boot (${{ inputs.image || 'macos-latest' }})
+    runs-on: ${{ inputs.image || 'macos-latest' }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+
+      - name: Install WebKit (macOS)
+        if: runner.os == 'macOS'
+        run: npx playwright install webkit
+
+      - name: Install WebKit + OS deps (Linux)
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps webkit
+
+      - name: Runner identity
+        continue-on-error: true
+        shell: bash
+        run: |
+          uname -a || true
+          if [ "$RUNNER_OS" = "macOS" ]; then system_profiler SPDisplaysDataType 2>&1 | head -30 || true; fi
+          if [ "$RUNNER_OS" = "Linux" ]; then ls -la /dev/dri 2>&1 || echo "no /dev/dri"; fi
+          node -e 'const p=require("playwright-core/package.json"); console.log("playwright-core", p.version)'
+
+      - name: WebKit boot (three + tlxForceGL)
+        env:
+          # npm run test:webkit sets APEX_WEBKIT=1; repeat here so a hand-edited
+          # script cannot silently drop the opt-in project.
+          APEX_WEBKIT: "1"
+          APEX_WEBKIT_TRACK: ${{ inputs.track || 'montreal' }}
+          CI: "true"
+          APEX_WORKERS: "1"
+        run: npm run test:webkit
+
+      - name: Job summary from report
+        if: always()
+        shell: bash
+        run: |
+          set -eu
+          REPORT=artifacts/webkit-leg/report.json
+          {
+            echo "## WebKit leg (iPhone-path proxy)"
+            echo
+            echo "Playwright WebKit is a **proxy** (JavaScriptCore + WebKit WebGL; ANGLE-Metal on macOS), not the phone's Safari. playwright-core 1.63.0 pins WebKit 26.6."
+            echo
+            if [ -f "$REPORT" ]; then
+              node -e '
+                const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+                const lines = [
+                  `| field | value |`,
+                  `|---|---|`,
+                  `| browser.version() | \`${r.browserVersion}\` |`,
+                  `| track | \`${r.track}\` |`,
+                  `| backend / bound | \`${r.boot && r.boot.backend}\` / \`${r.boot && r.boot.bound}\` |`,
+                  `| first frame | \`${r.firstFrame && r.firstFrame.presented}\` (${r.firstFrame && r.firstFrame.canvas && r.firstFrame.canvas.id} ${r.firstFrame && r.firstFrame.canvas && r.firstFrame.canvas.w}x${r.firstFrame && r.firstFrame.canvas && r.firstFrame.canvas.h}) |`,
+                  `| frame-time p50 / n | \`${r.frameTimes && r.frameTimes.p50}\` ms / \`${r.frameTimes && r.frameTimes.n}\` |`,
+                  `| heap after 2 race cycles | \`${r.heapAfterTwoRaceCycles && r.heapAfterTwoRaceCycles.usedJSHeapSize}\` (null = WebKit has no performance.memory) |`,
+                  `| pass-census | blocked: harness is Chromium-only |`,
+                ];
+                console.log(lines.join("\n"));
+              ' "$REPORT"
+            else
+              echo "_No report.json — the boot step failed before writing artifacts/webkit-leg/report.json._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload WebKit leg artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webkit-leg-${{ inputs.image || 'macos-latest' }}
+          path: |
+            artifacts/webkit-leg/**
+            artifacts/test-results-*/**
+            artifacts/report-*/**
+          if-no-files-found: warn
+          retention-days: 14

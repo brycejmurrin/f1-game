@@ -222,6 +222,11 @@ export const RULES = [
   // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
   // the optional iwer Playwright smoke is test:xr (not selected by path alone).
   [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
+  // WebKit iPhone-path proxy (#2705): dispatch-only webkit-leg.yml + project
+  // `webkit`. Local Linux cannot install WebKit host libs here; structural
+  // guards still cover the config + group registration.
+  [/^\.github\/workflows\/webkit-leg\.yml$/, ["tooling-fast", "webkit"], "WebKit dispatch leg — structural guards + the boot group it runs"],
+  [/^tests\/specs\/webkit-boot\.spec\.js$/, ["webkit", "tooling-fast"], "WebKit boot probe (project=webkit only)"],
   [/^js\/share\//, ["state-unit"], "share-card data/layout/painter and Daily Challenge delivery hook"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
   [/^js\/ui\/dock-layout\.js/, ["steering-unit", "ui"], "dock-layout.test.mjs + ui-button-touch reposition"],
