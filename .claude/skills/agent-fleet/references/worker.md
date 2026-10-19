@@ -118,6 +118,8 @@ First usage-limit `api_error` (read the reset time from it or `rate_limit_info`)
 
 - The commit hook judges the index BEFORE a `git add` in the same Bash
   command: run `git add` in its own call, then `git commit`.
+- Serve locally with `npx serve -l <port> .` in the background and stop it by
+  the printed PID; never `pkill -f` (`bash-guard.sh` blocks it).
 - `physics-baseline-provenance` fails in a shallow clone even when the blessing
   commit is fetched: `git fetch --unshallow` before blaming the change.
 - `apex-tools` can fail to connect when it starts before `npm install` ends;

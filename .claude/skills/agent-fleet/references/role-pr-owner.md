@@ -28,7 +28,8 @@ Use the orchestrator.md launch template with:
 - `USER GRANTS:` the user's words that cover this PR, each with its UTC time,
   plus the grant that created the owner role. If the user already ordered the
   merge and the orchestrator armed it, say "auto-merge is armed (MERGE); leave
-  it" — the owner still never arms or merges.
+  it" — the owner still never arms or merges. `.claude/**` edits: `<quote> | NONE
+  — push is expected to need a typed Approved: from Bryce in this session`.
 - `STOP AT: 300k context or $<cap>` as the last line (docs-only PR: 100k); the owner checks it at every wake and hands off.
 - The relayed notes from the previous owner (head sha, last CI verdict, local
   sync state, files that conflicted).
