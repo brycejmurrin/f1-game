@@ -19,9 +19,9 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 - **Session titles and tags** (FLEET-ROLES-2026-10-19.md §4-5; Bryce 2026-10-19 ~18:00Z, "Land it as proposed"). Every
   `create_session` sets `title` and `tags`; the same ids go in the fleet block (`fleet:`, `slot:`), claims (`[<Fleet>·<Slot>]`
   prefix, real `--session` id) and bus lines (text starts `<Fleet>·<Slot>`).
-  - Title: `[<Role>] <Fleet>·<Slot> · <scope> · <Model> — <task, ≤ 60 chars>`. Role ∈ Orchestrator | Watch | Worker | Hunter | Owner |
+  - Title: `[<Role>] <Fleet>·<Slot> · <scope> · <Model> — <task, ≤ 60 chars>`. Role ∈ Orchestrator | Seed | Watch | Worker | Hunter | Owner |
     Sync | Review | Coordinator | Merge Desk. Fleet = one capital letter per orchestrator fleet (survives rotation). Slot: Orchestrator
-    `O<gen>`, Watch `FW<n>`, Worker `W<wave>·L<lane>`, Hunter `H<n>·<lane>`, Owner/Sync `#<PR>`, Review `R<n>·#<PR>`, Coordinator `<host>`.
+    `O<gen>`, Seed `S0`, Watch `FW<n>`, Worker `W<wave>·L<lane>`, Hunter `H<n>·<lane>`, Owner/Sync `#<PR>`, Review `R<n>·#<PR>`, Coordinator `<host>`.
     Scope ∈ game | tests | tools | docs | track | ui | ci | fleet (game = js/, css/, assets/, index.html, sw.js: paced). Model = Opus | Sonnet.
   - Tags: `fleet:<a|b>`, `role:<orchestrator|watch|worker|hunter|owner|sync|review|merge-desk>`, `orchestrator:<session id>`,
     `wave:<n>`, `lane:<Lnn|sync|…>`, `scope:<…>`, `pr:<n>` (owner, sync, review), `variant:<medic|survey|synth>`; plus the flag `f1-game-fleet`.
