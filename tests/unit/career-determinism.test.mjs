@@ -49,6 +49,7 @@ test("js/career/ calls Math.random only at the allowlisted non-draw sites", () =
 // js/career) and cannot see a call that is only reached at run time. Here the real Career runs three
 // seasons twice with Math.random and simRnd poisoned; the saves must come out identical.
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 function simulate(seed) {
   const stored = new Map();
@@ -68,7 +69,7 @@ function simulate(seed) {
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/hash32.js", "js/data/teams.js", "js/data/driver-ratings.js",
     "js/physics/consts.js", "js/car/parts.js", "js/career/save-migrate.js", "js/career/regulations.js",
     "js/career/career-planning.js", "js/career/career.js"]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   const Career = vm.runInContext("Career", ctx);
   Career.start({ flavour: "driver", teamId: "haas", seed });

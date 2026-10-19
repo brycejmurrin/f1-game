@@ -100,7 +100,8 @@ failures are lost. A deliberate ratchet raise is part of a fix: AGENTS.md §Crit
 - A green PR does not prove Pages. Poll by `head_sha`: `node tools/ci/ci-watch.mjs --sha <sha> [--pages]`
   under a `Monitor` (AGENTS.md rule 12); `pages.yml` gates the tip once and publishes exactly that commit.
 - **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask `deploy-research` for it; never
-  curl github.io from the main context. PR CI, ship-push CI and Pages (`pages.yml`, workflow id `295002043`) are separate verdicts.
+  curl github.io from the main context. PR CI and Pages (`pages.yml`, workflow id `295002043`) are separate verdicts;
+  the deploy push starts Pages' reusable CI gate, not a separate ship-push CI run.
 - After every push list all check runs on the head (ready-state jobs included) and read every failed log;
   on red name the exact test, assertion and lane. `deploy.mjs --train` prints the last ci/pages conclusions
   and the nightly rota BY JOB (a `cancelled` run can hide a FAILED one; the rota covers the specs `select-specs` never picks).
@@ -117,6 +118,11 @@ the **current** tip — not the notification commit (two commands):
   notif SHA ≠ tip).
 - `= ci running` → do **not** claim stale or fixed; stay subscribed or re-arm a
   ≤15m once-timer. **"0 failed" while running is not green.**
+- `= ci hollow` → only the draft skip skeleton ran, not verification; report
+  it and use the authorized draft CI route when actual CI is needed.
+- `= ci none` / `unknown` → no run observed / API evidence unavailable,
+  respectively; neither proves a pass. `superseded` → follow the named current
+  head or replacement run before concluding anything about that tree.
 - Only "stale / no action" when `= ci passed` on that same `headRefOid`, or a
   proven draft→ready cancel with a live sibling still 0-failed on the same SHA.
 

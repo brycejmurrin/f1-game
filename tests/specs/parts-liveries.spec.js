@@ -11,7 +11,7 @@
 // none. The catalog and finish tests only read modules off a live page; the
 // creator tests used to seed storage and reload so the boot would read it —
 // the same keys now go through the store (cache and disk) and #mb-race's own
-// re-read of the team. UNVERIFIED IN A BROWSER at conversion time.
+// re-read of the team..
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
@@ -170,15 +170,16 @@ test.describe("Liveries — paint finish", () => {
     }
   });
 
-  test("a fitted satin livery repaints the in-race player car", async ({ page }) => {
+  // Builds the body the player path builds (Car3D.build with the livery), not a
+  // raced car: the title used to say "in-race" and the body wrote team /
+  // livery.<id> into the shared page's store with no restore. Nothing here
+  // needs the store, so nothing is written (C2-07).
+  test("a satin livery builds a body with no gloss paint left", async ({ page }) => {
     await load(page);
-    // Fitted through the store, so the cache agrees with the disk — the reload
-    // this replaced was how the old seed reached the game.
-    const surfaces = await page.evaluate(async () => {
+    const surfaces = await page.evaluate(() => {
       const team = Teams.LIST[2];
       const satin = Liveries.forTeam(team).find((l) => l.finish === "satin");
-      GameStore.store.set("team", 2);
-      GameStore.store.set("livery." + team.id, satin.id);
+      if (!satin) throw new Error("parts-liveries: " + team.id + " has no satin livery");
       return { livery: satin.id, teamId: team.id };
     });
     const result = await page.evaluate((ctx) => {

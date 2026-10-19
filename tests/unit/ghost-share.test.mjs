@@ -11,7 +11,8 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
-import { fnSource } from "../helpers/fn-source.mjs";   // title-flow.js is not a game.js carve-out
+import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";   // title-flow.js is not a game.js carve-out
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
@@ -63,7 +64,7 @@ function harness(opts = {}) {
   });
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/ghost-share.js"), "utf8"), ctx, {
-    filename: "js/car/ghost-share.js",
+    filename: absSrc("js/car/ghost-share.js"),
   });
   const GhostShare = sandbox.module.exports || vm.runInContext("GhostShare", ctx);
   return { GhostShare, location, history, writes, notices, notify: (message) => notices.push(message) };
@@ -385,7 +386,7 @@ function titleLinkHarness() {
     Teams: { LIST: [{ id: "ferrari" }] },
     vt(fn) { fn(); top = { id: "select" }; },
   });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/share-code.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/share-code.js"), "utf8"), ctx, { filename: absSrc("js/ui/share-code.js") });
   const ShareCode = vm.runInContext("ShareCode", ctx);
   const consume = titleConsume(ctx);
   return {
@@ -564,7 +565,7 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
   const source = fs.readFileSync(path.join(ROOT, "js/ui/results-sheet.js"), "utf8").replace(/^const\b/gm, "var");
-  vm.runInContext(source, ctx, { filename: "js/ui/results-sheet.js" });
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/results-sheet.js") });
   const G = {
     els: {
       resultsTable: dom.byId("results-table"),
@@ -649,7 +650,7 @@ test("starting TT compares the built car once per rival and session configuratio
     difficulty: "normal", raceTimeOfDay: "day", announce: message => notices.push(message) };
   const ctx = vm.createContext({ G, GhostShare, PhysicsConsts: { REVISION: 7 },
     Ghost: { contextKey: JSON.stringify, setTrack() {}, bestTime: () => Infinity }, GameStore: { ttBoard: () => [] } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx, { filename: absSrc("js/race/session-records.js") });
   const records = ctx.SessionRecords.create(G);
   const recorded = records.config(); recorded.car[0] = "mclaren";
   GhostShare.installGuest({ ghost: fixture, track: "monza", context: JSON.stringify(recorded) });
@@ -800,7 +801,7 @@ test("TT records find historical wear classes without crossing other settings", 
     Quali: { medalFor: () => null },
     GameStore: { ttBoard: (id, key) => board.get(key) || [],
       ttBoardAdd(id, entry) { board.set(entry.context, [entry]); } } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx, { filename: absSrc("js/race/session-records.js") });
   const records = ctx.SessionRecords.create(G), normalized = records.current();
   for (const wear of ["real", "light", "off"]) {
     saved.clear(); board.clear();

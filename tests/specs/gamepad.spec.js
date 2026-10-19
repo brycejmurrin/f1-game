@@ -312,6 +312,34 @@ test("window blur releases held keyboard, pointer, and touch input", async ({ pa
   expect(released).toEqual({ brake: false, throttle: false, steer: 0 });
 });
 
+test("blur and hidden release remote steering until a fresh sample", async ({ page }) => {
+  await startRaceForPad(page);
+  const states = await page.evaluate(() => {
+    const sample = (steer) => Input.remoteSample({ source: "phone", steer, thr: 1, brk: 1 });
+    const state = () => ({ active: Input.remoteActive(), steers: Input.remoteSteers(),
+      steer: Input.steer(), throttle: Input.throttle(), brake: Input.braking() });
+    sample(0.8);
+    const held = state();
+    window.dispatchEvent(new Event("blur"));
+    const blurred = state();
+    sample(0);
+    const resumed = state();
+    sample(0.8);
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    return { held, blurred, resumed, hidden: state() };
+  });
+  expect(states.held.active).toBe(true);
+  expect(states.held.steer).toBeGreaterThan(0);
+  expect(states.held.throttle).toBe(true);
+  const released = { active: false, steers: false, steer: 0, throttle: false, brake: false };
+  expect(states.blurred).toEqual(released);
+  expect(states.hidden).toEqual(released);
+  expect(states.resumed.active).toBe(true);
+  expect(states.resumed.steers).toBe(true);
+  expect(states.resumed.steer).toBe(0);
+});
+
 test("document becoming hidden releases held keyboard, pointer, and touch input", async ({ page }) => {
   const held = await holdKeyboardPointerAndTouch(page);
   expect(held).toEqual({ brake: true, throttle: true, steer: 1 });

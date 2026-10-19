@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/audio/ers-layer.js"), "utf8");
@@ -56,7 +57,7 @@ function boot() {
   const sb = { Math, console, Object, Array, Number, isFinite };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(SRC, vctx, { filename: "js/audio/ers-layer.js" });
+  vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/ers-layer.js") });
   const ErsLayer = vm.runInContext("ErsLayer", vctx);
   return { ErsLayer, ctx, dest, live, created: () => created, resetCreated: () => { created = 0; } };
 }
@@ -211,7 +212,7 @@ test("GameAudio.setEngine drives the layer through the init/update hook", async 
     "js/audio/radio-fx.js", "js/audio/ers-layer.js", "js/audio/engine.js",
   ];
   for (const f of files) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc(f) });
   }
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const ErsLayer = vm.runInContext("ErsLayer", vctx);

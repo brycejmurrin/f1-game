@@ -33,24 +33,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import * as espree from "espree";
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+import { ROOT, jsFiles } from "../helpers/store-key-scan.mjs";
 
 const STORE_RX = /\b(store|G\.store|GameStore\.store|s|st|S|this\._store|_store)\.(get|set|write|raw|rawSet|rawDel)\(\s*(["'`])([A-Za-z0-9_.\-]+)\3\s*(?:,\s*([^)]{0,80}))?/g;
 const LS_RX = /localStorage\.(getItem|setItem|removeItem)\(\s*(["'`])(apex26\.[A-Za-z0-9_.\-]+)\2\s*(?:,\s*([^)]{0,60}))?/g;
 const CONST_RX = /\b(?:const|let|var)\s+([A-Z_][A-Z0-9_]*)\s*=\s*(["'])(apex26\.[A-Za-z0-9_.\-]+)\2/g;
 const READ = new Set(["get", "raw", "getItem"]), WRITE = new Set(["set", "write", "rawSet", "setItem"]);
-
-function jsFiles(dir, out = []) {
-  for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
-    const p = `${dir}/${e.name}`;
-    if (e.isDirectory()) { if (!/^js\/circuits$|vendor|three\/lib/.test(p)) jsFiles(p, out); }
-    else if (e.name.endsWith(".js") && !e.name.endsWith("presets.js")) out.push(p);
-  }
-  return out;
-}
 
 // Resolve only evidenced storage writes: lexical const aliases, parameters
 // forwarded by local functions, and literal configuration properties. A helper
@@ -156,7 +145,7 @@ function indirectWriters(src, file) {
   return records;
 }
 
-function inventory(files = jsFiles("js")) {
+function inventory(files = jsFiles()) {
   const recs = [];
   for (const f of files) {
     const src = fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -328,4 +317,11 @@ test("local forwarding chains resolve writers without treating a read-only wrapp
   assert.ok(got.some((r) => r.key === "configured" && r.op === "rawSet"));
   assert.ok(got.some((r) => r.key === "forwarded" && r.op === "rawSet"));
   assert.equal(got.some((r) => r.key === "not-written"), false);
+});
+
+// T4-15: both key tripwires walk js/ through tests/helpers/store-key-scan.mjs; pin what it includes.
+test("the shared js/ walk includes the engine and skips circuit data, vendored code and presets tables", () => {
+  const files = jsFiles();
+  assert.ok(files.includes("js/game.js") && files.includes("js/core/save-schema-registry.js"));
+  assert.ok(!files.some((f) => f.startsWith("js/circuits/") || f.endsWith("presets.js") || /vendor|three\/lib/.test(f)));
 });

@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const LAP = 1000;
@@ -23,9 +24,9 @@ function load() {
   const sb = { Math, Array, Object, Number, console };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: "consts.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"), ctx, { filename: "rivals.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"), ctx, { filename: absSrc("js/audio/rivals.js") });
   return vm.runInContext("RivalAudio", ctx);
 }
 
@@ -44,7 +45,7 @@ function replayAudio() {
   const sb = { console, Log: { info() {} } }; sb.window = sb;
   const ctx = vm.createContext(sb);
   for (const file of ["js/core/mat4.js", "js/physics/consts.js", "js/audio/rivals.js", "js/camera/replay-buf.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: file });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
   const { ReplayBuf, RivalAudio } = vm.runInContext("({ ReplayBuf, RivalAudio })", ctx);
   const me = car({ s: 100 }), rival = car({ s: 110, finished: false, dnf: "mechanical", finishT: 17 });
   const G = { cars: [me, rival], player: me, track: { total: LAP }, raceT: 2 };
@@ -344,8 +345,8 @@ function bootRivalPanEngine(basisRef) {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx);
-  vm.runInContext(ENGINE_SRC, vctx, { filename: "engine.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(ENGINE_SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   GameAudio.init();
   GameAudio.startEngine();
@@ -409,8 +410,8 @@ function loadGameCams() {
   const globals = { Math, JSON, Object, Array, Number, console, Tracks: null };
   globals.CamTune = { get: () => 0, cornerLead: () => 0, apply: (_, __, ___, fov) => fov };
   const ctx = vm.createContext(globals);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/vantage.js"), "utf8"), ctx, { filename: "vantage.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/vantage.js"), "utf8"), ctx, { filename: absSrc("js/camera/vantage.js") });
   return vm.runInContext("GameCams", ctx);
 }
 

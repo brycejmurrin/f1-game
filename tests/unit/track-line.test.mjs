@@ -7,12 +7,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const root = new URL("../../", import.meta.url);
 const ctx = { console };
 vm.createContext(ctx);
 for (const f of ["js/core/log.js", "js/core/mat4.js", "js/track/core/line.js"])
-  vm.runInContext(readFileSync(new URL(f, root), "utf8").replace(/^const /mg, "var "), ctx, { filename: f });
+  vm.runInContext(readFileSync(new URL(f, root), "utf8").replace(/^const /mg, "var "), ctx, { filename: absSrc(f) });
 const TL = ctx.TrackLine;
 
 // A synthetic track: n nodes, `hw` half-width, curvature from a function of s.

@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -34,9 +35,9 @@ function boot(trackId = "t") {
   vm.createContext(sandbox);
   vm.runInContext("Math.random = () => 0.5;", sandbox);   // the realm's own Math: a host Math is a cross-realm read per call
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/lighting/knobs.js", "js/lighting/presets.js", "js/lighting/atmosphere.js"])
-    vm.runInContext(read(f), sandbox, { filename: f });
+    vm.runInContext(read(f), sandbox, { filename: absSrc(f) });
   vm.runInContext("LightTune = { LT: LightKnobs.LT, TUNE_DEFS: LightKnobs.TUNE_DEFS, buildTrackLights: () => [] };", sandbox);
-  vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: "js/lighting/profiles.js" });
+  vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: absSrc("js/lighting/profiles.js") });
   const saved = {};
   const G = {
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),

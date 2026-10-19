@@ -6,7 +6,7 @@
 // keeps the six-slot preview LRU bounded, and that the next GARAGE visit is
 // reported as prebuilt with its tap-to-first-frame time
 // (__apex.garagePrebuild().firstFrame). The gate's logic is VM-tested in
-// tests/unit/garage-prebuild.test.mjs. UNVERIFIED IN A BROWSER when written.
+// tests/unit/garage-prebuild.test.mjs..
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { toMenu } from "../helpers/shared-page.js";
 

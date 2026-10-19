@@ -98,6 +98,31 @@ test("future schemas are rejected before any normalization, including large vers
   }
 });
 
+test("digit-only string versions use their actual rung and malformed explicit versions are refused", () => {
+  const SM = load();
+  const current = {
+    v: String(SM.CAREER_V), flavour: "driver", team: "haas", money: 100,
+    briefStake: { year: 2026, round: 3, committed: true, escrow: 50 },
+    sponsorPicks: { "2026:3": 1 },
+  };
+  const migrated = SM.migrateCareer(current);
+  assert.equal(migrated.v, SM.CAREER_V);
+  assert.deepEqual(JSON.parse(JSON.stringify(migrated.briefStake)),
+    { year: 2026, round: 3, committed: true, escrow: 50 });
+  assert.deepEqual(JSON.parse(JSON.stringify(migrated.sponsorPicks)), { "2026:3": 1 });
+
+  assert.equal(SM.migrateCareer({ v: "01", flavour: "driver" }).v, SM.CAREER_V,
+    "digit-only legacy strings remain compatible");
+  for (const v of ["", " 2", "2 ", "+2", "2.0", "2e0", "-1", -1, 1.5,
+    Number.MAX_SAFE_INTEGER + 1, String(Number.MAX_SAFE_INTEGER + 1), null, true,
+    [], { toString: 1 }]) {
+    const save = { v, flavour: "driver", briefStake: { year: 2026, round: 3 } };
+    const before = JSON.stringify(save);
+    assert.equal(SM.migrateCareer(save), null, `${JSON.stringify(v)} should be refused`);
+    assert.equal(JSON.stringify(save), before, `${JSON.stringify(v)} mutated before rejection`);
+  }
+});
+
 test("junk in, null out: a non-object save is refused rather than repaired", () => {
   const SM = load();
   for (const bad of [null, undefined, 7, "save", []]) {
@@ -363,10 +388,12 @@ test("roundMap and finishMap skip a __proto__ key like the sibling maps", () => 
   }
 });
 
-test("migrateCareer coerces a {toString:1} field instead of throwing (live fuzz 2026-10-16)", () => {
+test("migrateCareer coerces hostile numeric leaves when the version marker is valid (live fuzz 2026-10-16)", () => {
   const SM = load();
   const hostile = () => JSON.parse('{"toString":1}');
-  const out = SM.migrateCareer({ v: hostile(), flavour: "driver", team: "haas", money: hostile(), rep: hostile(),
+  // Version-marker rejection is pinned separately above; this fixture reaches
+  // the independent numeric-leaf recovery path with an explicit current v.
+  const out = SM.migrateCareer({ v: SM.CAREER_V, flavour: "driver", team: "haas", money: hostile(), rep: hostile(),
     tally: { pts: hostile(), wins: hostile() }, seat: hostile(), year: hostile(), seed: hostile(), budgetLvl: hostile(), facility: hostile(), deal: { salary: hostile(), years: hostile() } });
   assert.equal(out.money, 0);
   assert.equal(out.rep, 0);

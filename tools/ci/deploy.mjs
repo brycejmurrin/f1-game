@@ -109,9 +109,9 @@ export function run(cmd, args, what, options) {
   if (r.status !== 0) throw childFailure(r, `${what} failed`);
 }
 
-export function preflight() {
+export function preflight(cwd = ROOT) {
   const problems = [];
-  if (git(["status", "--porcelain"]).out) problems.push("working tree is dirty — commit first");
+  if (git(["status", "--porcelain"], { cwd }).out) problems.push("working tree is dirty — commit first");
   const load = os.loadavg()[0];
   if (load >= 3) problems.push(`loadavg ${load.toFixed(2)} >= 3 — a verification now measures the box`);
   const ps = spawnSync("pgrep", ["-f", "run-playwrigh[t]|playwright tes[t]"], { encoding: "utf8" });

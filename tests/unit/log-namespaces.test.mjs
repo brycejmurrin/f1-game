@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 // js/core/log.js declares Log.NAMESPACES, and nothing enforced it: "race" and
 // "xr" were in use for months without being declared, so a `?log=race:debug`
@@ -20,7 +21,7 @@ function namespaceList() {
   // exactly what the page's Log.NAMESPACES will hold.
   const src = fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8");
   const ctx = vm.createContext({ console, Date, performance: { now: () => 0 } });
-  vm.runInContext(src + "\n;globalThis.__ns = Log.NAMESPACES;", ctx, { filename: "log.js" });
+  vm.runInContext(src + "\n;globalThis.__ns = Log.NAMESPACES;", ctx, { filename: absSrc("js/core/log.js") });
   return Array.from(ctx.__ns);
 }
 

@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -24,7 +25,7 @@ function openBanner({ profile = "standard", camId = "chase", now = () => 0 } = {
     RadioVoice: { SPEAKERS: { info: "radio", warning: "control", coach: "coach", comm: "announcer", box: "radio", race: "radio", "penalty-warn": "control", "penalty-hit": "control", practice: "coach" } },
     GameAudio: { radioLeadS: () => 0, radioSting() {} },
   });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/announce-banner.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/announce-banner.js"), "utf8"), ctx, { filename: absSrc("js/race/announce-banner.js") });
   const banner = vm.runInContext("AnnounceBanner", ctx).create({
     els: () => els, player: () => ({ name: "A Driver", num: 1 }), state: () => "race",
     hudProfile: () => hudProfile, camMode: () => 0, camModes: () => [{ id: camId }],

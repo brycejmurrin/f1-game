@@ -4,9 +4,12 @@
   two parents (a "merge" call once landed as a squash, #1743). Who merges/arms:
   `.claude/skills/agent-fleet/references/role-merge-holder.md`. Agents never
   merge or arm auto-merge; only on an in-session user grant for that merge.
-- One merger at a time, on any host: the holder of the merge lease. Before
-  every merge `node tools/ci/fleet-bus.mjs lease check` exits 0; exit 2 names
-  the holder: do not merge. Lines another host needs (READY/GREEN/BLOCKED/
+- Orchestrators merge in parallel, each its own PRs (Bryce 2026-10-19 picked "Drop
+  the lease entirely"); no lease gates a merge. Before each merge re-fetch,
+  run `npm run gen:check` on a local merge onto the CURRENT tip and pin
+  `expectedHeadSha`; after it post `DONE` on the bus. A game merge waits until
+  the last bus `DONE` game merge has green Pages and it holds the bus
+  `GAME-SLOT` (role-merge-holder.md). Lines another host needs (READY/GREEN/BLOCKED/
   HANDOFF/DONE/INCIDENT) go on the bus (`fleet-bus.mjs send`); read it once
   per tick (`fleet-bus.mjs read`), never in a loop.
 - `SWEEP <PR#>` only to a desk session id named in the launch prompt; none →

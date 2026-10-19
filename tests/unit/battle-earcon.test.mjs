@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 function load() {
   const c = vm.createContext({ ArrayBuffer, DataView, Math, Object, Number, Promise, Set });
-  vm.runInContext(fs.readFileSync(root + "js/audio/battle-earcon.js", "utf8"), c);
+  vm.runInContext(fs.readFileSync(root + "js/audio/battle-earcon.js", "utf8"), c, { filename: absSrc("js/audio/battle-earcon.js") });
   return c.BattleEarcon;
 }
 function audio() {

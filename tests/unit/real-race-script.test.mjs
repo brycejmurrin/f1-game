@@ -22,6 +22,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -52,8 +53,8 @@ function load(extra = {}) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: "teams.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: "real-race-tab.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: absSrc("js/data/teams.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: absSrc("js/data/real-race-tab.js") });
   const Teams = vm.runInContext("Teams", ctx);
   // js/data/hub.js's team matcher, reduced to what the fixture's names need.
   const KEYS = [["racing bulls", "RB"], ["red bull", "RBR"], ["mercedes", "MER"], ["ferrari", "FER"], ["mclaren", "MCL"], ["alpine", "ALP"],
@@ -95,8 +96,8 @@ test("WATCH downloads cannot launch a replaced view and keep the seat selected w
 
 test("WATCH can start after the followed driver's retirement while JUMP IN still protects its seat", () => {
   const { ctx, Teams } = load({ Tracks: { LIST: TRACKS }, RealReplay: { create: () => ({ stop() {} }) } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const R = vm.runInContext("RealRace", ctx);
   const seated = Teams.LIST.find((t) => !t.custom && !t.legends && t.drivers && t.drivers.length);
   const driver = { num: 1, code: seated.drivers[0].code, teamId: seated.id, dnf: true, lapsDone: 5 };
@@ -207,8 +208,8 @@ test("the circuit resolves by name before country, and the weather and hour read
 // (R2-04); only a retirement stops. fmtLap rounds before it splits (R2-05).
 test("a lapped finisher stays on the final lap board as '+N LAP'; a retirement stays OUT; fmtLap never prints :60", () => {
   const { D, ctx } = load();
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: "real-race.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const lap = (n, t) => Array.from({ length: n }, () => t);
   const script = { laps: 5, drivers: [
     { num: 1, code: "WIN", laps: lap(5, 90), pits: [], stints: [], dnf: false },
@@ -581,8 +582,8 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   const Tracks = { LIST: TRACKS };
   const { D, findTeam, ctx } = load({ localStorage, F1API, RealRace, Teams, Tracks });
   // The lap board needs the director's cumulative table: the real module, in the same realm.
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8").replace("const RealRace = (function", "const RealRaceReal = (function").replace("Object.freeze(RealRace);", "RealRace.cumTable = RealRaceReal.cumTable;"), ctx, { filename: "real-race.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8").replace("const RealRace = (function", "const RealRaceReal = (function").replace("Object.freeze(RealRace);", "RealRace.cumTable = RealRaceReal.cumTable;"), ctx, { filename: absSrc("js/race/real-race.js") });
   const dom = makeDom();
   let closed = 0;
   const deps = {
@@ -695,8 +696,8 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
 
 test("the passes, the lap board and the race book read straight off the real timing", () => {
   const { D, findTeam, ctx } = load();
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: "real-race.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const s = D.build(rawBaku(), findTeam, TRACKS);
   assert.equal(s.passes.length, 128, "OpenF1's 160 overtakes dated onto laps, minus the 32 on either side of a car retiring that lap");
   assert.ok(!s.passes.some((p) => p.lap === 36 && (p.over === 4 || p.over === 10)), "the field streaming past Norris and Gasly as they stopped is not passing them");
