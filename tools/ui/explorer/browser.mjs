@@ -60,7 +60,13 @@ export async function performAction(session, a) {
         document.documentElement.dataset.explorerTextScale = String(pct);
       }, a.percent); break;
     case "offline": await context.setOffline(a.value); break;
-    case "reload": await page.reload({ waitUntil: "domcontentloaded" }); break;
+    case "reload":
+      await page.reload({ waitUntil: "domcontentloaded" });
+      // The title DOM exists before lazy game boot attaches its click handlers.
+      // Use the same readiness boundary as openSession/gotoGame before replay resumes.
+      await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 200, timeout: 90000 });
+      if (!session.background) await page.evaluate(() => window.__apex.headless(true));
+      break;
     case "wait": await page.locator(a.selector).waitFor({ state: a.state || "visible" }); break;
     case "checkpoint": break;
     case "assert": {
@@ -97,8 +103,11 @@ export async function checkBinding({ page }, oracle) {
   const report = await page.evaluate(inspectUI, { root: oracle.selector });
   const c = report.controls.length === 1 ? report.controls[0] : null;
   const b = c?.binding;
-  return { matches: !!b && b.status === "matches" && Object.is(b.runtime, oracle.runtime) &&
-      (!Object.hasOwn(oracle, "saved") || b.saved?.status === "read" && Object.is(b.saved.value, oracle.saved)),
+  const equal = (a, expected) => typeof a === 'number' && typeof expected === 'number'
+    ? Number.isFinite(a) && Number.isFinite(expected) && Math.abs(a - expected) < 0.000001
+    : Object.is(a, expected);
+  return { matches: !!b && b.status === "matches" && equal(b.runtime, oracle.runtime) &&
+      (!Object.hasOwn(oracle, "saved") || b.saved?.status === "read" && equal(b.saved.value, oracle.saved)),
     actual: c ? { value: c.value, pressed: c.pressed, binding: b } : { controls: report.controls.length } };
 }
 
@@ -129,9 +138,13 @@ export async function captureRecord(session, outDir, id, label, budget, extra = 
   let readinessError;
   if (!["transitions", "scene"].includes(extra.mode)) try {
     await page.waitForFunction(() => {
-      const roots = [...document.querySelectorAll('.screen,dialog[open],#overlay,#hud,#pausemenu,#photo-studio')];
-      return roots.some((e) => {
-        if (e.hidden || !e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+      const painted = e => !e.closest('[hidden],[inert]') && e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
+        e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().height > 0;
+      const roots = [...document.querySelectorAll('.screen,dialog[open],[role="region"][data-esc-close],#overlay,#hud,#pausemenu,#photo-studio')]
+        .filter(e => !e.closest('[hidden],[inert]') && (painted(e) || [...e.querySelectorAll('.sheet,button,input,select')].some(painted)));
+      const focused = document.activeElement?.closest('dialog[open],[role="region"][data-esc-close]');
+      const active = focused && roots.includes(focused) ? [focused] : roots;
+      return active.length > 0 && active.every((e) => {
         return !e.getAnimations({ subtree: true }).some((a) => {
           const t = a.effect?.getComputedTiming();
           return ["running", "pending"].includes(a.playState) && t && t.iterations !== Infinity && t.endTime !== Infinity;

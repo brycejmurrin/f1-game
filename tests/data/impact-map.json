@@ -5052,6 +5052,9 @@
       "dateLabel": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
+      "dispose": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "isUpcoming": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
@@ -12524,7 +12527,8 @@
       ],
       "lampPass": [
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/lamp-shadow-pick.test.mjs"
+        "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "pushCaster": [
         "tests/unit/field-lod.test.mjs"
@@ -12808,6 +12812,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "_writeInstanceMatrices": [
+        "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "acquireMesh": [
@@ -13016,6 +13021,9 @@
       "retireTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
       ],
+      "setInstanceRange": [
+        "tests/unit/tlx-hunt4.test.mjs"
+      ],
       "setRange0": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
@@ -13108,6 +13116,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "setLampBake": [
+        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "setMaterialMaps": [
         "tests/unit/assets-pack.test.mjs",

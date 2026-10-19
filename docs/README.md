@@ -57,6 +57,7 @@ Local screenshot galleries: [builder and viewer workflow](notes/LOCAL-SURVEY-GAL
 | Doc | Covers |
 |---|---|
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs vs wrap — which `apex_*` exists, which stay CLI-only, and why the ones that left, left. |
+| [EVIDENCE-STORAGE.md](EVIDENCE-STORAGE.md) | Publish generated screenshots and galleries as checksum-verified release assets, with source provenance, durable links and retention guidance. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
 | [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 191 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |

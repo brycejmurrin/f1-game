@@ -245,6 +245,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/pit-shots.mjs** | Pit-lane shot set, one boot per circuit: entry, exit, lane overview and each team's box, from the resolved geometry. | playwright-probe |
 | **shot/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, soft/#game CDP shot. | — |
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
+| **shot/publish-evidence.mjs** | Packages generated evidence with provenance and publishes checksum-verified GitHub Release assets outside Git history. | — |
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | f1-animation-cameras |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
 | **shot/scenery-source-hash.cjs** | Fingerprint all scenery geometry/build inputs used by the named screenshot catalog. | — |
@@ -275,6 +276,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/census-verdict.mjs** | Reads one image's census + four game-check JSONs, prints the Verdict rows and fails on what the game reported. | renderer-debug |
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
+| **gfx/decal-bake-probe.mjs** | Compare production decal bake pixels on WebGL2: five cases, baseline ref and JSON artifact. | — |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
 | **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`. | renderer-debug / mcp-probe |
 | **gfx/gl-object-census.mjs** | GL object census: WebGL2 create/delete counts (VAO, program, shader, buffer, texture, FBO, RBO) per circuit visit. | renderer-debug / mcp-probe |
@@ -433,6 +435,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/lsp-eval.mjs** | apex-lsp vs grep on fixed code questions with known answers: correctness, output chars, time; `--json`. | — |
 | **mcp/lsp-mcp.mjs** | Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics. | — |
 | **mcp/lsp-mcp.sh** | apex-lsp MCP wrapper: serve (stdio), or def\|refs\|sym\|hover\|diag from a shell over TypeScript 7 `tsc --lsp`. | — |
+| **mcp/lsp-navigation-bench.mjs** | Measure real-tree LSP navigation latency and output size, with cold/first queries separated from warm queries. | — |
 | **mcp/mcp-cli.mjs** | chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`. | mcp-probe |
 | **mcp/mcp-preflight.sh** | Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only. | mcp-probe |
 | **mcp/mcp-smoke.mjs** | Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium. | check-changes |
@@ -534,7 +537,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
 | **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
-| **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
+| **ci/publish-shots.mjs** | Legacy screenshot branch publisher; use tools/shot/publish-evidence.mjs for new evidence outside Git history. |
 | **ci/queue-depth.mjs** | Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok\|hold`. |
 | **ci/ready-full-cap.mjs** | Count ready PRs with live full-tier CI (informational since 2026-10-16; no gate reads it). |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |

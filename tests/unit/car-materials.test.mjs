@@ -185,11 +185,11 @@ test("tinted chrome: mirror response + livery-hue reflection, same numbers in GL
   const T = CarMaterialShade.TINTED;
   const src = shaderSources();
   const pins = {
-    GLX: [/bool tintedSurface = surfaceId == 36;/, /bool mirrorSurface = surfaceId == 27 \|\| tintedSurface;/,
+    GLX: [/bool tintedSurface = surfaceId == 36;/, /bool mirrorSurface = surfaceId == 27 \|\| tintedSurface \|\| goldSurface;/,
       new RegExp(`if \\(tintedSurface\\) addCC \\*= mix\\(vec3\\(1\\.0\\), albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\), ${T.envTint}\\);`)],
-    WGX: [/let tintedSurface = surfaceId == 36;/, /let mirrorSurface = surfaceId == 27 \|\| tintedSurface;/,
+    WGX: [/let tintedSurface = surfaceId == 36;/, /let mirrorSurface = surfaceId == 27 \|\| tintedSurface \|\| goldSurface;/,
       new RegExp(`if \\(tintedSurface\\) \\{ addCC = addCC \\* mix\\(vec3<f32>\\(1\\.0\\), albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\), vec3<f32>\\(${T.envTint}\\)\\); \\}`)],
-    TLX: [/const tintedSurface = surfaceId\.equal\(36\.0\)\.toVar\(\);/, /const mirrorSurface = surfaceId\.equal\(27\.0\)\.or\(tintedSurface\)\.toVar\(\);/,
+    TLX: [/const tintedSurface = surfaceId\.equal\(36\.0\)\.toVar\(\);/, /const mirrorSurface = surfaceId\.equal\(27\.0\)\.or\(tintedSurface\)\.or\(goldSurface\)\.toVar\(\);/,
       new RegExp(`addCC\\.mulAssign\\(mix\\(vec3\\(1\\.0\\), albedo\\.div\\(max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)\\), ${T.envTint}\\)\\);`)],
   };
   for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: tinted chrome drifted: ${re}`);
@@ -239,7 +239,7 @@ test("FINISH_SURFACE rows flake 34 and candy 35 exist, are accepted by Teams.liv
   assert.equal(CarMaterials.FINISH_SURFACE.flake, 34);
   assert.equal(CarMaterials.FINISH_SURFACE.candy, 35);
   const chips = ["gloss", ...Object.keys(CarMaterials.FINISH_SURFACE)];
-  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon"]);
+  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon", "forged", "gunmetal", "goldplate"]);
   const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
   cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
   vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
@@ -324,5 +324,108 @@ test("flake and candy add no uniform, define, texture fetch or shader variant (s
     const m = (s.match(/(?:flakeSurface|candySurface|fkF|cdL)[^\n]*/g) || []).join("\n");
     assert.ok(m.length > 0, `${name}: no flake/candy code found`);
     assert.doesNotMatch(m, /\buniform\b|#define|texture\w*\(|textureSample|cubeTexture|\buCand|\buFlak/i, `${name}: flake/candy must stay ALU-only`);
+  }
+});
+
+// ---- Garage finishes S5: forged carbon (38), gunmetal (39), gold plate (40) ----------------------------------
+
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const f1 = (v) => v.toFixed(1), f2 = (v) => v.toFixed(2);
+const lit3 = (a) => a.map((v) => (Number.isInteger(v) ? v.toFixed(1) : String(v))).join(", ");
+
+test("FINISH_SURFACE rows forged 38, gunmetal 39, goldplate 40 exist in the reserved ids and remap paint only", () => {
+  const { CarMaterials } = loadMaterials();
+  for (const [name, id] of [["forged", 38], ["gunmetal", 39], ["goldplate", 40]]) {
+    assert.equal(CarMaterials.FINISH_SURFACE[name], id);
+    assert.equal(CarMaterials.FINISH_RESERVED[name], id);
+    const out = { mat: [CarMaterials.SURFACES.paint, CarMaterials.SURFACES.carbon, CarMaterials.SURFACES.glass, CarMaterials.SURFACES.paint] };
+    CarMaterials.applyFinish(out, name);
+    assert.deepEqual(out.mat, [id, CarMaterials.SURFACES.carbon, CarMaterials.SURFACES.glass, id]);
+  }
+  const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
+  cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
+  const Teams = vm.runInContext("Teams", cx);
+  for (const f of ["forged", "gunmetal", "goldplate"]) assert.equal(Teams.liveryEnumOk("finish", f), true, f);
+  assert.match(read("js/garage/setup-sheet.js"), /\n  finish: "[^"]*forged[^"]*gunmetal[^"]*goldplate[^"]*",/, "LIV_ROW_HINT names the new finishes");
+});
+
+test("forged carbon: chip cells, fade, resin, roughness and lacquer — same numbers in GLX / TLX / WGX", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const F = CarMaterialShade.FORGED;
+  const src = shaderSources();
+  assert.ok(Math.abs(F.chipMean - 2 / 3) < 1e-3, "chipMean is the mean of the max of two uniform hashes");
+  assert.ok(F.fadeStartM + F.fadeSpanM <= 26, "near field only: flat resin by 26 m at the latest");
+  const fade = `${f1(F.fadeStartM)}) / ${f1(F.fadeSpanM)}, 0.0, 1.0)`;
+  const pins = {
+    GLX: [/bool forgedSurface = surfaceId == 38;/, `vDist - ${fade}`, `floor(vObjPos * ${f1(F.cellsPerM)})`, `* ${f1(F.cellsPerM2)});`,
+      `fgM = mix(${F.chipMean}, max(hash21(`, `vec3(${lit3(F.resin)}), albedo * ${f2(F.tintKeep)}, ${f2(F.tintMix)}) * (1.0 + (fgM - ${F.chipMean}) * ${f2(F.chipGain)})`,
+      `albedo * ${f2(F.resinKeep)} +`, `rough = clamp(rough, ${f2(F.roughLo)}, ${f2(F.roughHi)}) + (fgM - ${F.chipMean}) * ${f2(F.roughGain)}`,
+      `forgedSurface ? clamp(uClearcoat, ${f2(F.clearcoatLo)}, ${f2(F.clearcoatHi)})`, `forgedSurface ? ${f2(F.metalness)}`, `forgedSurface ? ${f2(F.specular)}`],
+    WGX: [/let forgedSurface = surfaceId == 38;/, `vDist - ${fade}`, `floor(in.objPos * ${f1(F.cellsPerM)})`, `* ${f1(F.cellsPerM2)});`,
+      `fgM = mix(${F.chipMean}, max(hash21(`, `vec3<f32>(${lit3(F.resin)}), albedo * ${f2(F.tintKeep)}, vec3<f32>(${f2(F.tintMix)})) * (1.0 + (fgM - ${F.chipMean}) * ${f2(F.chipGain)})`,
+      `albedo * ${f2(F.resinKeep)} +`, `rough = clamp(rough, ${f2(F.roughLo)}, ${f2(F.roughHi)}) + (fgM - ${F.chipMean}) * ${f2(F.roughGain)}`,
+      `clearcoat = clamp(D.mat1.z, ${f2(F.clearcoatLo)}, ${f2(F.clearcoatHi)})`, `metalness = ${f2(F.metalness)}; specular = ${f2(F.specular)};`],
+    TLX: [/const forgedSurface = surfaceId\.equal\(38\.0\)\.toVar\(\);/, `vd.sub(${f1(F.fadeStartM)}).div(${f1(F.fadeSpanM)}).oneMinus()`, `floor(objP.mul(${f1(F.cellsPerM)}))`, `.mul(${f1(F.cellsPerM2)}))`,
+      `fgM.assign(mix(float(${F.chipMean}), max(hash21(`, `vec3(${lit3(F.resin)})), albedo.mul(${f2(F.tintKeep)}), ${f2(F.tintMix)}).mul(fgM.sub(${F.chipMean}).mul(${f2(F.chipGain)}).add(1.0))`,
+      `albedo.mul(${f2(F.resinKeep)}).add(`, `rough.assign(clamp(rough, ${f2(F.roughLo)}, ${f2(F.roughHi)}).add(fgM.sub(${F.chipMean}).mul(${f2(F.roughGain)})))`,
+      `clearcoat.assign(clamp(matU.clearcoat, ${f2(F.clearcoatLo)}, ${f2(F.clearcoatHi)})); metalness.assign(${f2(F.metalness)}); specular.assign(${f2(F.specular)});`],
+  };
+  for (const [name, list] of Object.entries(pins))
+    for (const p of list) assert.match(src[name], p instanceof RegExp ? p : new RegExp(esc(p)), `${name}: forged drifted: ${p}`);
+  // the chips are NOT the twill: no sin() weave in the forged block
+  for (const [name, s] of Object.entries(src)) assert.doesNotMatch((s.match(/fg[ABMF][^\n]*/g) || []).join("\n"), /sin\(|\.sin\(\)/, `${name}: forged must not reuse the woven pattern`);
+});
+
+test("gunmetal: metal lobe with a dark livery-hue tint and the dark-metal env boost — same numbers in GLX / TLX / WGX", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const G = CarMaterialShade.GUNMETAL;
+  const src = shaderSources();
+  const hue = `albedo / max(max(albedo.r, max(albedo.g, albedo.b)), ${G.chromaFloor}) * ${f2(G.hueGain)}`;
+  const pins = {
+    GLX: [/bool gunSurface = surfaceId == 39;/, `albedo = mix(vec3(${lit3(G.base)}), ${hue}, ${f2(G.hueMix)});`,
+      `gunSurface ? max(uMetalness, ${f2(G.metalness)})`, `gunSurface ? ${f2(G.specular)}`, `gunSurface ? min(uClearcoat, ${f2(G.clearcoatMax)})`,
+      `if (gunSurface) rough = clamp(rough, ${f2(G.roughLo)}, ${f2(G.roughHi)});`,
+      "if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface) {", "if (metalSurface || gunSurface) {"],
+    WGX: [/let gunSurface = surfaceId == 39;/, `albedo = mix(vec3<f32>(${lit3(G.base)}), ${hue}, vec3<f32>(${f2(G.hueMix)}));`,
+      `metalness = max(D.mat0.w, ${f2(G.metalness)}); specular = ${f2(G.specular)};`, `if (gunSurface) { clearcoat = min(D.mat1.z, ${f2(G.clearcoatMax)}); }`,
+      `if (gunSurface) { rough = clamp(rough, ${f2(G.roughLo)}, ${f2(G.roughHi)}); }`,
+      "if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface) {", "if (metalSurface || gunSurface) {"],
+    TLX: [/const gunSurface = surfaceId\.equal\(39\.0\)\.toVar\(\);/,
+      `albedo.assign(mix(vec3(${lit3(G.base)}), albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), ${G.chromaFloor})).mul(${f2(G.hueGain)}), ${f2(G.hueMix)}));`,
+      `clearcoat.assign(min(matU.clearcoat, ${f2(G.clearcoatMax)})); metalness.assign(max(matU.metalness, ${f2(G.metalness)})); specular.assign(${f2(G.specular)});`,
+      `If(gunSurface, () => { rough.assign(clamp(rough, ${f2(G.roughLo)}, ${f2(G.roughHi)})); });`,
+      "If(metalSurface.or(satinMetalSurface).or(mirrorSurface).or(gunSurface), () => {", "If(metalSurface.or(gunSurface), () => {"],
+  };
+  for (const [name, list] of Object.entries(pins))
+    for (const p of list) assert.match(src[name], p instanceof RegExp ? p : new RegExp(esc(p)), `${name}: gunmetal drifted: ${p}`);
+  // between chrome 27 (rough <= 0.09) and brushed 29 (0.24-0.40), darker than either
+  assert.ok(G.roughLo > 0.09 && G.roughLo < 0.24 && G.roughHi <= 0.40 && G.base.every((v) => v < 0.25));
+});
+
+test("gold plate: chrome mirror response with a fixed gold that ignores the livery — same numbers in GLX / TLX / WGX", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const A = CarMaterialShade.GOLDPLATE;
+  const src = shaderSources();
+  const mx = Math.max(...A.gold);
+  A.gold.forEach((v, i) => assert.ok(Math.abs(v / mx - A.hue[i]) < 0.01, "hue = gold / its brightest channel"));
+  const pins = {
+    GLX: [/bool goldSurface = surfaceId == 40;/, `albedo = vec3(${lit3(A.gold)});`,
+      `if (goldSurface) addCC *= mix(vec3(1.0), vec3(${lit3(A.hue)}), ${A.envTint});`, `if (goldSurface) color *= vec3(${lit3(A.hue)});`],
+    WGX: [/let goldSurface = surfaceId == 40;/, `albedo = vec3<f32>(${lit3(A.gold)});`,
+      `if (goldSurface) { addCC = addCC * mix(vec3<f32>(1.0), vec3<f32>(${lit3(A.hue)}), vec3<f32>(${A.envTint})); }`, `if (goldSurface) { color = color * vec3<f32>(${lit3(A.hue)}); }`],
+    TLX: [/const goldSurface = surfaceId\.equal\(40\.0\)\.toVar\(\);/, `albedo.assign(vec3(${lit3(A.gold)}));`,
+      `If(goldSurface, () => { addCC.mulAssign(mix(vec3(1.0), vec3(${lit3(A.hue)}), ${A.envTint})); });`, `If(goldSurface, () => { color.mulAssign(vec3(${lit3(A.hue)})); });`],
+  };
+  for (const [name, list] of Object.entries(pins))
+    for (const p of list) assert.match(src[name], p instanceof RegExp ? p : new RegExp(esc(p)), `${name}: gold plate drifted: ${p}`);
+});
+
+test("forged, gunmetal and gold plate add no uniform, define, texture fetch or shader variant (surfaceId branches only)", () => {
+  const src = shaderSources();
+  for (const [name, s] of Object.entries(src)) {
+    const m = (s.match(/(?:forgedSurface|gunSurface|goldSurface|fg[ABMF]\b)[^\n]*/g) || []).join("\n");
+    assert.ok(m.length > 0, `${name}: no forged/gunmetal/gold code found`);
+    assert.doesNotMatch(m, /\buniform\b|#define|texture\w*\(|textureSample|cubeTexture|\buForg|\buGun|\buGold/i, `${name}: the new finishes must stay ALU-only`);
   }
 });

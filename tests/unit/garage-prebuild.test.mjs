@@ -337,16 +337,20 @@ test("GaragePrebuild.instance() is the page's one instance (for __apex.garagePre
 });
 
 // ── the real room: GarageScene.prepare() is the rebuild draw() runs first ──
-function sceneHarness() {
-  const made = [], live = new Set();
-  const mk = (kind, extra) => { made.push(kind); const h = { id: made.length, ...extra }; live.add(h); return h; };
+function sceneHarness(textures = false) {
+  const made = [], live = new Set(), handles = [], freed = [];
+  const mk = (kind, extra) => { made.push(kind); const h = { id: made.length, ...extra }; live.add(h); handles.push(h); return h; };
   const gfx = {
     createMesh() { return mk("mesh"); },
     createTexMesh() { return mk("tex", { tex: true }); },
-    freeMesh(h) { live.delete(h); }, freeTexture(h) { live.delete(h); }, createTexture() { return mk("texture"); },
+    freeMesh(h) { freed.push(h); live.delete(h); }, freeTexture(h) { freed.push(h); live.delete(h); }, createTexture() { return mk("texture"); },
     draw() {}, drawDecal() {}, drawGlow() {},
   };
+  const c2d = new Proxy(function () {}, {
+    get: (_, k) => k === Symbol.toPrimitive ? () => 0 : c2d, set: () => true, apply: () => c2d,
+  });
   const ctx = vm.createContext({
+    ...(textures ? { LiveryTex: {}, document: { createElement: () => ({ getContext: () => c2d }) } } : {}),
     console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array, Uint32Array, isFinite, parseFloat, parseInt, Date,
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
@@ -355,7 +359,7 @@ function sceneHarness() {
     vm.runInContext(read(f), ctx, { filename: f });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
-  return { GarageScene, made, live };
+  return { GarageScene, made, live, handles, freed, gfx };
 }
 const TEAM = { id: "mclaren", name: "McLaren", short: "MCL",
                drivers: [{ name: "A", code: "AAA", num: 4 }, { name: "B", code: "BBB", num: 81 }] };
@@ -463,4 +467,49 @@ test("GarageScene.release frees every garage handle; the next draw rebuilds the 
   assert.ok(rebuilt > 0);
   assert.equal(GarageScene.release(), rebuilt, "…and it can be released again");
   assert.equal(live.size, 0);
+});
+
+
+test("paint and context changes retain the invariant truss and dress meshes until release", () => {
+  const h = sceneHarness(true), garage = h.GarageScene;
+  const context = { track: { id: "monza" }, weather: "dry", night: false };
+  garage.prepare(TEAM, LIV, null, 0, context);
+  // rebuild creates the shell then the truss; every tex-mesh is fixed wall UV geometry.
+  const truss = h.handles[1], tex = h.handles.filter((m) => m.tex);
+  assert.ok(tex.length > 4, "both live and dress quad meshes must have uploaded");
+  const initialMeshCount = h.made.filter((k) => k === "mesh").length;
+  for (let i = 0; i < 20; i++) {
+    const team = { ...TEAM, id: i % 2 ? "ferrari" : TEAM.id };
+    garage.prepare(team, { ...LIV, c1: [i / 20, 0.5, 0.7] }, null, 0,
+      { ...context, night: !!(i % 2), weather: i % 2 ? "rain" : "dry" });
+  }
+  assert.ok(h.made.filter((k) => k === "mesh").length > initialMeshCount, "paint-dependent geometry must repaint");
+  assert.equal(h.made.filter((k) => k === "tex").length, tex.length, "colour, team and context edits allocate no new wall quad meshes");
+  for (const handle of [truss, ...tex]) {
+    assert.equal(h.live.has(handle), true);
+    assert.equal(h.freed.includes(handle), false, "invariant geometry stays with its renderer");
+  }
+  garage.release();
+  assert.equal(h.live.size, 0);
+  for (const handle of [truss, ...tex]) assert.equal(h.freed.filter((h) => h === handle).length, 1);
+  garage.prepare(TEAM, LIV, null, 0, context);
+  assert.equal(garage.prepared(TEAM, LIV, null, 0, context), true);
+  assert.equal(h.made.filter((k) => k === "tex").length, tex.length * 2, "release makes the next prepare rebuild the UV meshes");
+  garage.release(); assert.equal(h.live.size, 0);
+});
+
+test("renderer replacement releases garage resources through their original owner", () => {
+  const h = sceneHarness(true), garage = h.GarageScene;
+  garage.prepare(TEAM, LIV, null, 0, {});
+  const prepared = h.live.size;
+  garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {});
+  assert.equal(h.live.size, prepared + 1, "drawing a car creates its floor-reflection fade mesh");
+  const held = h.live.size;
+  garage.init(h.gfx);
+  assert.equal(h.live.size, held, "reinitializing the same renderer retains its caches");
+  const newCalls = [];
+  garage.init({ freeMesh: (h) => newCalls.push(h), freeTexture: (h) => newCalls.push(h) });
+  assert.equal(h.live.size, 0, "the old renderer freed every owned resource before replacement");
+  assert.deepEqual(newCalls, [], "old handles never reach the new renderer");
+  assert.equal(garage.prepared(TEAM, LIV, null, 0, {}), false);
 });
