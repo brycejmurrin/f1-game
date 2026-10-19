@@ -1093,9 +1093,6 @@ const WGX = (function () {
     // so the group stays valid and the knob simply no-ops.
     let _dirtView = null;
 
-    // TAA Halton Jitter state.
-    let _taaFrameIndex = 0;
-
     // Scene targets (allocated on resize / size change).
     let sceneTex = null, depthTex = null, sceneView = null, depthView = null,
         depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0,
@@ -3125,24 +3122,6 @@ const WGX = (function () {
         _mul4(_vpGpu, _projZ01, _viewScratch);
       } else {
         _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
-      }
-
-      // TAA Halton jitter scaffolding — GATED OFF until a temporal RESOLVE pass
-      // exists. Jittering the projection each frame with nothing accumulating
-      // the history is pure sub-pixel shimmer over the whole image (the exact
-      // "flicker while driving" artifact class), so the offsets stay 0 for now.
-      // When a resolve lands: flip _TAA_ENABLED, and feed the per-frame jitter
-      // to the resolve pass so it can unjitter history lookups.
-      const _TAA_ENABLED = false;
-      if (_TAA_ENABLED) {
-        const halton = [
-          [0.5, 1/3], [0.25, 2/3], [0.75, 1/9], [0.125, 4/9],
-          [0.625, 7/9], [0.375, 2/9], [0.875, 5/9], [0.0625, 8/9],
-        ];
-        _taaFrameIndex = (_taaFrameIndex + 1) % 8;
-        const sample = halton[_taaFrameIndex];
-        _vpGpu[8] += (sample[0] - 0.5) * 2.0 / width;
-        _vpGpu[9] += (sample[1] - 0.5) * 2.0 / height;
       }
 
       d.set(_vpGpu, 0);
@@ -5904,7 +5883,8 @@ const WGX = (function () {
       // (e.g. every night frame throwing inside SHD before present()).
       // Omitting a name (or leaving a stale "absent" comment that tempts a
       // delete) re-opens that hole. Gated by backend-surface-parity.test.mjs.
-      // Honest remaining gap vs GLX: TAA scaffold (`_TAA_ENABLED`) is still off.
+      // No TAA: projection jitter without a temporal resolve is pure
+      // sub-pixel shimmer, so WGX has no jitter scaffold (#3115).
       drawParticles,
       lampShadowBegin,
       lampShadowEnd,
