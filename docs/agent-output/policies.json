@@ -238,7 +238,7 @@
     },
     "tools/check/i18n-lint.mjs": {
       "action": "targeted-summary",
-      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; unknown-key/placeholder/plural findings, --guard literal hits, allowlist and coverage warnings.",
+      "preserve": "Native exit status, locale/key and source locations, placeholder/plural failures, missing-key coverage and length warnings, guard parse errors and stale allow entries; retain exact --json evidence.",
       "presentation": "shared-levels"
     },
     "tools/check/lifecycle-census.mjs": {
@@ -1785,7 +1785,7 @@
     },
     "tools/shot/export-history-evidence.mjs": {
       "action": "no-direct-output",
-      "preserve": "API signatures, return data, thrown errors; Git blob identity verification and _historical-origin.json receipt under artifacts/promoted-evidence/.",
+      "preserve": "Library return and historical-origin manifest, selected source commit and paths, Git blob/SHA256 identities, missing/unsafe selection failures; exported stored bytes do not prove the rendered revision.",
       "presentation": "native"
     },
     "tools/shot/flicker-gate.mjs": {

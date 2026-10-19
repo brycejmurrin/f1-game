@@ -58,7 +58,8 @@ export function summarizeOutput(value, { level = 'compact' } = {}) {
     if (Array.isArray(v)) {
       const cap = diagnostic ? 8 : 3;
       const source = pointer.length <= 256 ? { sourcePointer: pointer } : { sourcePointerOmitted: true, retrieval: 'use byte pages for long collection paths' };
-      if (/^(checks|findings|errors|warnings|failures|tests|results|runs|legs|captures|scenarios)$/i.test(key) && v.some(item => item && typeof item === 'object' && ('status' in item || 'verdict' in item || 'severity' in item || 'ok' in item || 'pass' in item || 'success' in item || 'valid' in item || 'error' in item))) {
+      // Prioritize observed issue state, independently of a producer's collection name.
+      if (v.some(item => item && typeof item === 'object' && ('status' in item || 'verdict' in item || 'severity' in item || 'level' in item || 'ok' in item || 'pass' in item || 'success' in item || 'valid' in item || 'error' in item))) {
         const groups = [[], [], [], []], statusCounts = {};
         for (const [index, item] of v.entries()) {
           const status = String(item && typeof item === 'object' ? item.status ?? item.verdict ?? item.severity ?? item.level ?? (item.ok === false || item.pass === false || item.success === false ? 'failed' : item.valid === false ? 'invalid' : item.error ? 'error' : 'unspecified') : 'unspecified').slice(0, 60);
