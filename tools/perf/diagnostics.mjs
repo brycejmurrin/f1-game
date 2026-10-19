@@ -60,6 +60,7 @@ export function diagnosticPlan(kind, a = {}, { root = ROOT, knownCircuits = () =
   let args, script, timeoutMs, evidence;
   if (kind === 'memory_census') {
     const ids = tracks(a.tracks, ['monza', 'monaco'], 'tracks');
+    if (new Set(ids).size !== ids.length) throw new Error('tracks must be unique for per-cycle growth');
     const cycles = integer(a.cycles, 3, 3, 5, 'cycles'), settle = integer(a.settle, 2, 0, 10, 'settle');
     script = 'gfx/mem-census.mjs'; timeoutMs = 900000;
     args = ['--backend', choice(a.backend, 'three', ['three', 'webgl2'], 'backend'), '--mode', choice(a.mode, 'picker', ['picker', 'race'], 'mode'), '--tracks', ids.join(','), '--cycles', String(cycles), '--settle', String(settle), '--json', resultFile, '--quiet'];
@@ -91,7 +92,7 @@ export function summariseDiagnostic(kind, doc, limit = 12) {
   integer(limit, 12, 1, 50, 'limit');
   if (kind === 'memory_census') {
     if (!Array.isArray(doc.rows) || !doc.summary || doc.rows.length > 200) throw new Error('not a bounded memory census report');
-    return { summary: { backend: doc.summary.backend, mode: doc.summary.mode, cycles: doc.summary.cycles, growthMbLastCycle: doc.summary.growthMbLastCycle, pageErrors: doc.summary.pageErrors, verdict: doc.summary.verdict }, observations: doc.rows.slice(-limit).map((r) => ({ step: r.step, cycle: r.cycle, track: r.track, heapMB: number(r.heapMB), aliveTrackCount: Array.isArray(r.aliveTracks) ? r.aliveTracks.length : null, audioMB: number(r.audioMB), three: r.three, runtimeMemory: r.runtimeMemory ? { heap: r.runtimeMemory.heap, dom: r.runtimeMemory.dom } : { status: 'unavailable', reason: 'older report without CDP runtime counters' } })), interpretation: 'A growth threshold is a diagnostic budget, not a leak verdict. Compare warmed identical tracks and inspect retaining paths.' };
+    return { summary: { ...doc.summary }, observations: doc.rows.slice(-limit).map((r) => ({ step: r.step, cycle: r.cycle, track: r.track, heapMB: number(r.heapMB), heapBytes: number(r.heapBytes), backend: r.backend, instrumentation: r.instrumentation, aliveTrackCount: Array.isArray(r.aliveTracks) ? r.aliveTracks.length : null, audioMB: number(r.audioMB), three: r.three, runtimeMemory: r.runtimeMemory ?? { status: 'unavailable', reason: 'older report without CDP runtime counters' } })), interpretation: 'Query success is not measurement success: inspect completeness, correctness and budget; older reports lack these checks. MiB heap values are separate samples from CDP runtime fields; do not sum memory domains. Growth is a diagnostic budget, not a leak verdict. Animation callbacks and menu warm completion do not prove visible presentation; compare warmed identical tracks and inspect retaining paths.' };
   }
   if (kind === 'gpu_memory_census') {
     if (!Array.isArray(doc.cat) || !Array.isArray(doc.visits)) throw new Error('not a GPU allocation census');

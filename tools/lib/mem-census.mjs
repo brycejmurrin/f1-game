@@ -9,8 +9,8 @@ import { runtimeMemory } from "../perf/runtime-memory.mjs";
 //     comes from CDP (HeapProfiler.collectGarbage), so no --expose-gc launch
 //     flag is needed and the Playwright suite can use it as-is.
 //   - aliveTracks: a WeakRef to every track Tracks.build / buildPaced returned.
-//     After GC exactly one should deref — the world on screen. More than one is
-//     the #773 class of leak (the track itself pinned), exact and noise-free.
+//     Observes successful public builds only; GC timing and partial builds are
+//     outside this hook's coverage. Inspect owners when retired roots survive.
 //   - three: renderer.info.memory plus the live RenderObject count — the cache
 //     #773 found holding every freed track's geometry (TLX only; null on GLX).
 //   - audioMB: decoded AudioBuffer PCM still reachable (length × channels × 4).
@@ -21,7 +21,8 @@ import { runtimeMemory } from "../perf/runtime-memory.mjs";
  *  and decodeAudioData so the census can see what they produced. Idempotent. */
 export function censusInitScript() {
   if (window.__memCensus) return;
-  const C = window.__memCensus = { tracks: [], buffers: [], frames: 0 };
+  const C = window.__memCensus = { tracks: [], buffers: [], frames: 0, tracksReady: false };
+  const tracksSeen = new WeakSet(), buffersSeen = new WeakSet();
   // A frame counter of our own: a reading taken before the new world has
   // drawn misses its render objects and shader states, and on a loaded
   // software-GL box that can be seconds after the build finishes.
@@ -29,12 +30,17 @@ export function censusInitScript() {
   requestAnimationFrame(tick);
   const wrapTracks = () => {
     const T = typeof Tracks !== "undefined" ? Tracks : null;
-    if (!T || T.__memCensusWrapped) return !!T;
+    if (!T || typeof T.build !== "function" || typeof T.buildPaced !== "function") return false;
+    if (T.__memCensusWrapped) return C.tracksReady;
     T.__memCensusWrapped = true;
-    const note = (t) => { if (t) C.tracks.push([t.def && t.def.id, new WeakRef(t)]); return t; };
+    const note = (t) => {
+      if (t && !tracksSeen.has(t)) { tracksSeen.add(t); C.tracks.push([t.def && t.def.id, new WeakRef(t)]); }
+      return t;
+    };
     const b = T.build, p = T.buildPaced;
     T.build = function (...a) { return note(b.apply(this, a)); };
     T.buildPaced = async function (...a) { return note(await p.apply(this, a)); };
+    C.tracksReady = true;
     return true;
   };
   // Tracks is a script-tag global that loads after this runs: poll briefly.
@@ -43,7 +49,10 @@ export function censusInitScript() {
   if (AC && AC.prototype.decodeAudioData) {
     const d = AC.prototype.decodeAudioData;
     AC.prototype.decodeAudioData = function (ab, ok, err) {
-      const keep = (buf) => { if (buf) C.buffers.push(new WeakRef(buf)); return buf; };
+      const keep = (buf) => {
+        if (buf && !buffersSeen.has(buf)) { buffersSeen.add(buf); C.buffers.push(new WeakRef(buf)); }
+        return buf;
+      };
       const pr = d.call(this, ab, ok && ((buf) => ok(keep(buf))), err);
       return pr && pr.then ? pr.then(keep) : pr;
     };
@@ -53,25 +62,41 @@ export function censusInitScript() {
 /** Page function (pass to page.evaluate) — read after a forced GC. */
 export function readCensus() {
   const C = window.__memCensus || { tracks: [], buffers: [] };
-  const alive = C.tracks.map(([id, r]) => (r.deref() ? id : null)).filter(Boolean);
+  C.tracks = C.tracks.filter(([, r]) => r.deref());
+  C.buffers = C.buffers.filter((r) => r.deref());
+  const alive = C.tracks.map(([id]) => id);
   let audioBytes = 0, audioBuffers = 0;
   for (const r of C.buffers) {
     const b = r.deref();
     if (b) { audioBuffers++; audioBytes += b.length * b.numberOfChannels * 4; }
   }
   let three = null;
+  let backend = { renderer: null, api: null };
+  try {
+    if (typeof GLX !== "undefined") {
+      const api = GLX.backendState?.()?.api ?? null;
+      // Native GLX has no backend label; deferred TLX/WGX install one.
+      // Normalize only with a positive API observation, never the preference.
+      backend = { renderer: GLX.backend ?? (api === "webgl2" ? "webgl2" : null), api };
+    }
+  } catch (_) { /* unavailable identity must not be inferred from the request */ }
   try {
     const r = window.renderer;
     if (r && r.info) {
       three = {
         geometries: r.info.memory.geometries, textures: r.info.memory.textures,
         renderObjects: r._objects && r._objects._renderObjects ? r._objects._renderObjects.size : null,
+        programs: r.info.memory.programs ?? null,
+        // Numeric primitive copy: resource bookkeeping, not physical GPU residency.
+        memory: Object.fromEntries(Object.entries(r.info.memory).filter(([, v]) => typeof v === "number" && Number.isFinite(v) && v >= 0)),
       };
     }
   } catch (_) { three = null; }
   const pm = performance.memory;
   return {
-    heapMB: pm ? +(pm.usedJSHeapSize / 1048576).toFixed(1) : null,
+    heapBytes: pm && Number.isFinite(pm.usedJSHeapSize) && pm.usedJSHeapSize >= 0 ? pm.usedJSHeapSize : null,
+    heapMB: pm && Number.isFinite(pm.usedJSHeapSize) && pm.usedJSHeapSize >= 0 ? +(pm.usedJSHeapSize / 1048576).toFixed(1) : null,
+    backend, instrumentation: { tracksReady: C.tracksReady === true },
     aliveTracks: alive,
     audioMB: +(audioBytes / 1048576).toFixed(1), audioBuffers,
     three,
@@ -107,8 +132,8 @@ export function sustainedGrowthMB(heaps) {
   return { intervals, min: Math.min(...intervals) };
 }
 
-/** Wait until the page has drawn `n` more animation frames (the new world is
- *  on screen and its programs built), bounded by `timeoutMs`. */
+/** Wait for `n` animation callbacks, bounded by `timeoutMs`.
+ *  This does not establish draw submission or visible presentation. */
 export async function waitFrames(page, n = 15, timeoutMs = 120000) {
   const f0 = await page.evaluate(() => (window.__memCensus ? window.__memCensus.frames : 0));
   await page.waitForFunction(([f, k]) => window.__memCensus && window.__memCensus.frames >= f + k, [f0, n], { polling: 100, timeout: timeoutMs });
