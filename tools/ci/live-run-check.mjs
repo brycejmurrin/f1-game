@@ -26,15 +26,24 @@ const defaultGit = (args, { cwd = ROOT } = {}) => {
  * Look up in-progress Actions runs on the current branch and keep only ci.yml.
  * Best-effort, unauthenticated-capable (public repo), 3 s cap, null on any failure.
  *
- * @param {{ git?: Function, fetch?: Function, timeoutMs?: number, cwd?: string, userAgent?: string }} [opts]
- * @returns {Promise<null | { branch: string, runs: Array<{ id: number, sha: string, url: string, path?: string }> }>}
+ * `mapRun` lets callers retain their existing record format; mapping failures
+ * follow the same null-on-failure advisory policy as the lookup.
+ *
+ * @param {{ git?: Function, fetch?: Function, timeoutMs?: number, cwd?: string, userAgent?: string, mapRun?: Function }} [opts]
+ * @returns {Promise<null | { branch: string, runs: Array<{ id: number, sha: string, url?: string, path?: string }> }>}
  */
 export async function liveCiRuns({
   git = defaultGit,
-  fetch = proxyFetch,
+  fetch: fetchImpl = proxyFetch,
   timeoutMs = 3000,
   cwd = ROOT,
   userAgent = "apex26-live-run-check",
+  mapRun = (r) => ({
+    id: r.id,
+    sha: String(r.head_sha || "").slice(0, 8),
+    url: r.html_url || "",
+    path: r.path || "",
+  }),
 } = {}) {
   try {
     const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], { cwd });
@@ -42,7 +51,7 @@ export async function liveCiRuns({
     const m = String(url).match(/github\.com[:/]([^/]+\/[^/.]+)/);
     if (!m || !branch || branch === "HEAD") return null;
     const api = `https://api.github.com/repos/${m[1]}/actions/runs?branch=${encodeURIComponent(branch)}&status=in_progress&per_page=5`;
-    const res = await fetch(api, {
+    const res = await fetchImpl(api, {
       signal: AbortSignal.timeout(timeoutMs),
       timeoutMs,
       headers: { Accept: "application/vnd.github+json", "User-Agent": userAgent },
@@ -51,12 +60,7 @@ export async function liveCiRuns({
     const body = typeof res.json === "function" ? await res.json() : res;
     const runs = ((body && body.workflow_runs) || [])
       .filter((r) => /ci\.yml$/.test(r.path || ""))
-      .map((r) => ({
-        id: r.id,
-        sha: String(r.head_sha || "").slice(0, 8),
-        url: r.html_url || "",
-        path: r.path || "",
-      }));
+      .map(mapRun);
     return { branch, runs };
   } catch (_) {
     return null;

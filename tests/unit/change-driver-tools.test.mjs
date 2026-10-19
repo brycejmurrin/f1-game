@@ -215,6 +215,96 @@ test("verify-change and pick-tests publish the shared per-path selection receipt
   assert.ok(verdict.phases.every((phase) => phase.ok), "partial comes from coverage, not a failed gate");
 });
 
+// Inject fetch before loading the actual CLI. Git and child gates use bounded
+// local stubs; the trace pins one lookup after phase 1 and none for --plan.
+function advisoryFixture(t, { runs = [], failure = "" } = {}) {
+  const env = driverEnv(t, { stubFastGate: true });
+  const dir = env.PATH.split(path.delimiter)[0];
+  const trace = path.join(dir, "trace.jsonl");
+  fs.writeFileSync(path.join(dir, "git"), `#!/bin/sh
+case "$1" in
+  rev-parse) echo 'cursor/advisory-test' ;;
+  remote) echo 'https://github.com/brycejmurrin/f1-game.git' ;;
+  *) exit 1 ;;
+esac
+`, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, "node"), `#!${process.execPath}
+import fs from "node:fs";
+fs.appendFileSync(process.env.ADVISORY_TRACE, JSON.stringify({ tool: process.argv[2] }) + "\\n");
+if (process.argv[2] === "tools/ci/bump-cache.mjs") console.log('{"consistent":true}');
+else if (process.argv[2] !== "tools/ci/tooling-fast.mjs") process.exit(90);
+`, { mode: 0o755 });
+  const preload = path.join(dir, "preload.mjs");
+  fs.writeFileSync(preload, `import fs from "node:fs";
+globalThis.fetch = async (url, init) => {
+  fs.appendFileSync(process.env.ADVISORY_TRACE, JSON.stringify({ url, timeoutMs: init.timeoutMs, headers: init.headers, signal: init.signal instanceof AbortSignal }) + "\\n");
+  if (process.env.ADVISORY_FAILURE === "fetch") throw new Error("offline");
+  return { ok: process.env.ADVISORY_FAILURE !== "http", json: async () => {
+    if (process.env.ADVISORY_FAILURE === "json") throw new Error("invalid JSON");
+    return { workflow_runs: JSON.parse(process.env.ADVISORY_RUNS) };
+  } };
+};
+`);
+  return {
+    env: { ...env, NODE_USE_ENV_PROXY: "1", ADVISORY_TRACE: trace, ADVISORY_RUNS: JSON.stringify(runs), ADVISORY_FAILURE: failure },
+    args: ["--import", preload, "tools/ci/verify-change.mjs"],
+    trace: () => fs.existsSync(trace) ? fs.readFileSync(trace, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [],
+  };
+}
+
+test("verify-change delegates one advisory lookup after fast gates, preserving JSON and warning text", (t) => {
+  const fixture = advisoryFixture(t, { runs: [
+    { id: 31, head_sha: "0123456789ab", html_url: "https://example/31", path: ".github/workflows/ci.yml" },
+    { id: 32, head_sha: "not-live", path: ".github/workflows/pages.yml" },
+    { id: 33, path: ".github/workflows/ci.yml" },
+    { id: 34, head_sha: "", html_url: "", path: ".github/workflows/ci.yml" },
+  ] });
+  const r = run([...fixture.args, "--fast", "--json", "docs/TESTING.md"], { env: fixture.env });
+  assert.equal(r.status, 0, r.out);
+  const out = JSON.parse(r.out);
+  assert.equal(out.verdict, "pass");
+  assert.deepEqual(out.liveCi, { branch: "cursor/advisory-test", runs: [
+    { id: 31, sha: "01234567", url: "https://example/31" },
+    { id: 33, sha: "" },
+    { id: 34, sha: "", url: "" },
+  ] });
+  const trace = fixture.trace();
+  assert.deepEqual(trace.slice(0, 2), [{ tool: "tools/ci/tooling-fast.mjs" }, { tool: "tools/ci/bump-cache.mjs" }]);
+  assert.deepEqual(trace.slice(2), [{
+    url: "https://api.github.com/repos/brycejmurrin/f1-game/actions/runs?branch=cursor%2Fadvisory-test&status=in_progress&per_page=5",
+    timeoutMs: 3000,
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "apex26-verify-change" },
+    signal: true,
+  }]);
+  const text = run([...fixture.args, "--fast", "docs/TESTING.md"], { env: fixture.env });
+  assert.equal(text.status, 0, text.out);
+  assert.ok(text.out.includes("[verify-change] ci: 3 ci.yml run(s) LIVE on cursor/advisory-test (01234567, , ) — a push now cancels them, and a cancelled job hides its failures; wait for the verdict or batch the next push"), text.out);
+});
+
+test("verify-change --plan performs no advisory lookup or child gates", (t) => {
+  const fixture = advisoryFixture(t);
+  const r = run([...fixture.args, "--plan", "docs/TESTING.md"], { env: fixture.env });
+  assert.equal(r.status, 0, r.out);
+  assert.equal(JSON.parse(r.out).selection, "matched");
+  assert.deepEqual(fixture.trace(), []);
+});
+
+test("verify-change omits liveCi on lookup failure, malformed SHA, or no live ci.yml runs", (t) => {
+  for (const opts of [
+    { failure: "fetch" }, { failure: "http" }, { failure: "json" },
+    { runs: [{ id: 1, path: ".github/workflows/ci.yml", head_sha: 123 }] },
+    { runs: [] }, { runs: [{ id: 2, path: ".github/workflows/pages.yml" }] },
+  ]) {
+    const fixture = advisoryFixture(t, opts);
+    const r = run([...fixture.args, "--fast", "--json", "docs/TESTING.md"], { env: fixture.env });
+    assert.equal(r.status, 0, r.out);
+    const out = JSON.parse(r.out);
+    assert.equal(out.verdict, "pass");
+    assert.equal(Object.hasOwn(out, "liveCi"), false, JSON.stringify(opts));
+    assert.equal(fixture.trace().filter((entry) => entry.url).length, 1);
+  }
+});
+
 // ── bump-cache against a fixture shell (never the real one) ─────────────────
 
 test("bump-cache: --check catches drift, --apply hashes assets and keeps the generation; --advance moves it", () => {

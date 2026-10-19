@@ -227,12 +227,17 @@ test("#2188: GitHub callers default to the proxy-aware fetch; curl carries heade
   assert.equal(res.ok, true);
   assert.deepEqual(await res.json(), { ok: 1 });
   assert.match(stdin, /Authorization: Bearer T/);
-  // The three callers import it instead of a bare fetch.
-  for (const f of ["tools/ci/flake-tally.mjs", "tools/ci/verify-change.mjs", "tools/shot/garage-before.mjs"]) {
+  // The lookup owners import it instead of a bare fetch.
+  for (const f of ["tools/ci/flake-tally.mjs", "tools/ci/live-run-check.mjs", "tools/shot/garage-before.mjs"]) {
     const src = fs.readFileSync(fileURLToPath(new URL(`../../${f}`, import.meta.url)), "utf8");
     assert.match(src, /import \{ proxyFetch \} from "\.\.\/lib\/proxy-fetch\.mjs"/, f);
     assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /(^|[^.\w])fetch\(|globalThis\.fetch/m, `${f} has no bare fetch left`);
   }
+  const helper = fs.readFileSync(fileURLToPath(new URL("../../tools/ci/live-run-check.mjs", import.meta.url)), "utf8");
+  assert.match(helper, /fetch: fetchImpl = proxyFetch/);
+  const verifier = fs.readFileSync(fileURLToPath(new URL("../../tools/ci/verify-change.mjs", import.meta.url)), "utf8");
+  assert.match(verifier, /import \{ liveCiRuns \} from "\.\/live-run-check\.mjs"/);
+  assert.match(verifier, /await liveCiRuns\(/);
 });
 
 // ── daily tally (2026-10-16, CI/CD review #2333) ───────────────────────────

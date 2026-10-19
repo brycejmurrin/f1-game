@@ -41,7 +41,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pick, DEPLOY_BRANCH, validateSelectionArgs, selectionReceipt } from "./pick-tests.mjs";
 import { estimateToolingFast, loadTimings, selectToolingFastChanged, TOOLING_FAST_FILES } from "./tooling-fast.mjs";
-import { proxyFetch } from "../lib/proxy-fetch.mjs";
+import { liveCiRuns } from "./live-run-check.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -236,24 +236,16 @@ if (plan.fast.toolingFast) {
 // cap, and silent on any failure — an advisory, never a gate. Through
 // proxyFetch (#2188): a bare Node fetch ignores HTTPS_PROXY, was rate-limited
 // in cloud containers and returned null, so this warning never fired there.
-async function liveCiRuns() {
-  try {
-    const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-    const url = git(["remote", "get-url", "origin"]);
-    const m = url.match(/github\.com[:/]([^/]+\/[^/.]+)/);
-    if (!m || !branch || branch === "HEAD") return null;
-    const api = `https://api.github.com/repos/${m[1]}/actions/runs?branch=${encodeURIComponent(branch)}&status=in_progress&per_page=5`;
-    const res = await proxyFetch(api, { signal: AbortSignal.timeout(3000), timeoutMs: 3000, headers: { Accept: "application/vnd.github+json", "User-Agent": "apex26-verify-change" } });
-    if (!res.ok) return null;
-    const runs = ((await res.json()).workflow_runs || []).filter((r) => /ci\.yml$/.test(r.path || ""));
-    return { branch, runs: runs.map((r) => ({ id: r.id, sha: (r.head_sha || "").slice(0, 8), url: r.html_url })) };
-  } catch (_) { return null; }
-}
-
 // Looked up ONCE, before the verdict, so finish() stays synchronous: its call
 // sites exit the process, and an awaited fetch inside it would let the batch
 // code below run on past an "unmatched" or a red fast gate.
-const live = await liveCiRuns();
+const live = await liveCiRuns({
+  git,
+  userAgent: "apex26-verify-change",
+  // Keep the verifier's JSON shape (including an absent URL), while the
+  // standalone advisory retains its path field and empty-string defaults.
+  mapRun: (r) => ({ id: r.id, sha: (r.head_sha || "").slice(0, 8), url: r.html_url }),
+});
 
 const finish = (verdict, extra = {}) => {
   const out = { verdict, phases, batches, notRun: extra.notRun || [], ...extra };

@@ -63,3 +63,44 @@ test("checkLiveRun: packages live + warn", async () => {
   assert.equal(r.live.runs.length, 1);
   assert.match(r.warn, /WARN: 1 live ci\.yml run/);
 });
+
+test("liveCiRuns: request policy and caller formatting stay injectable", async () => {
+  const calls = [];
+  const live = await liveCiRuns({
+    cwd: "/fixture",
+    git: (args, opts) => { calls.push([args, opts]); return gitOk(args); },
+    userAgent: "caller-agent",
+    timeoutMs: 1234,
+    fetch: async (url, init) => {
+      assert.equal(url, "https://api.github.com/repos/brycejmurrin/f1-game/actions/runs?branch=cursor%2Fsession-ledger-51cc&status=in_progress&per_page=5");
+      assert.equal(init.timeoutMs, 1234);
+      assert.ok(init.signal instanceof AbortSignal);
+      assert.deepEqual(init.headers, { Accept: "application/vnd.github+json", "User-Agent": "caller-agent" });
+      return runsPayload([
+        { id: 7, path: ".github/workflows/pages.yml" },
+        { id: 8, path: ".github/workflows/ci.yml" },
+      ]);
+    },
+    mapRun: (r) => ({ id: r.id }),
+  });
+  assert.deepEqual(calls, [
+    [["rev-parse", "--abbrev-ref", "HEAD"], { cwd: "/fixture" }],
+    [["remote", "get-url", "origin"], { cwd: "/fixture" }],
+  ]);
+  assert.deepEqual(live, { branch: "cursor/session-ledger-51cc", runs: [{ id: 8 }] });
+  assert.equal(await liveCiRuns({ git: gitOk, fetch: async () => runsPayload([
+    { path: ".github/workflows/ci.yml" },
+  ]), mapRun: () => { throw new Error("format failed"); } }), null);
+});
+
+
+test("liveCiRuns: standalone default preserves path and empty-string defaults", async () => {
+  const live = await liveCiRuns({ git: gitOk, fetch: async () => runsPayload([
+    { id: 9, path: ".github/workflows/ci.yml" },
+    { id: 10, path: ".github/workflows/ci.yml", head_sha: 123, html_url: "" },
+  ]) });
+  assert.deepEqual(live.runs, [
+    { id: 9, path: ".github/workflows/ci.yml", sha: "", url: "" },
+    { id: 10, path: ".github/workflows/ci.yml", sha: "123", url: "" },
+  ]);
+});
