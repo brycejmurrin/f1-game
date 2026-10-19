@@ -1206,6 +1206,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tyre-peak-slip.test.mjs",
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
+  // #2975: race skidIntensity onset → GameAudio.skidLevel via game-vm + fake-audio.
+  "tests/unit/tyre-squeal-race-vm.test.mjs",
   // Job 4: slip-driven tyre squeal — threshold, lat/long monotonic gain+pitch,
   // setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.
   "tests/unit/tyre-squeal-slip.test.mjs",

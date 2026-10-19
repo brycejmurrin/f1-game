@@ -443,7 +443,8 @@
         "tests/unit/lazy-audio-yield.test.mjs"
       ],
       "setCarSfx": [
-        "tests/unit/audio-tune.test.mjs"
+        "tests/unit/audio-tune.test.mjs",
+        "tests/unit/tyre-squeal-slip.test.mjs"
       ],
       "setEnabled": [
         "tests/unit/async-lifecycle.test.mjs",

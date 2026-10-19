@@ -540,6 +540,7 @@
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/spotify-refresh.test.mjs",
         "tests/unit/spotter-lifecycle.test.mjs",
+        "tests/unit/tyre-squeal-race-vm.test.mjs",
         "tests/unit/tyre-squeal-slip.test.mjs",
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/wind-speed.test.mjs"
@@ -1476,6 +1477,7 @@
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/css-player-smoke.spec.js",
         "tests/specs/dev-tools.spec.js",
+        "tests/specs/engine-audio-offline.spec.js",
         "tests/specs/hud-audit.spec.js",
         "tests/specs/hud-layout.spec.js",
         "tests/specs/menu-keyboard.spec.js",
