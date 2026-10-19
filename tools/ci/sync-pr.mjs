@@ -29,7 +29,7 @@
 // fetch, a merge, a re-verify and (if it goes well) a push. deploy.mjs already
 // carries the rules for the ROUTINE case of that merge: a conflict confined to
 // files this repo GENERATES (the index.html shell, ratchets.json, package.json,
-// tools/README.md) is not a disagreement to referee, it is a stale derived
+// tools/README.md, docs/agent-output/catalog.json) is not a disagreement to referee, it is a stale derived
 // value to re-derive. This script reuses that exact logic instead of
 // duplicating it, and reuses the same verification (tooling-fast + the Pages
 // gate's node suites + touched-circuit checks) before it will push anywhere.
