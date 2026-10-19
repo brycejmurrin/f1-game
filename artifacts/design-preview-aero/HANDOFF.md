@@ -16,3 +16,19 @@
   spoon_wing hides under the flat active-aero flap (owned by B·W3·L11 #3116; do not touch
   car3d.js ~1883); bridge_wing could sit higher over the nose. Wikimedia 429'd: fetch the
   Brawn/MP4-23 refs listed in refs/manifest-front.json; no real Tyrrell 025 photo on Commons.
+
+## Suspect joins for the FIT pass (from the builder numbers in car3d.js; NOT measured — run tools/car/fit-audit.mjs)
+Frames: studio/<id>/{q34,side,top,phone}.png (regenerate with run-studio.sh).
+- x_wings: pylon box (x ±0.62, y 0.57–0.87, z −0.02) is not seated on the sidepod top surface (may float or bury); the
+  two end fences (x ±0.47/±0.77, y 0.845–0.915) only touch the winglet plate by its thickness. Frames: side, q34.
+- bridge_wing: strut bottoms end at y 0.14 at z 2.16–2.42, likely floating above or cutting the cascade elements;
+  the bridge foil (y 0.455–0.49) may clip the nose top on long-nose teams (TEAM_STYLE noseTipZ/noseDroop). Frames: q34, side.
+- beam_twin: side mounts (x ±0.445) are free-standing, not tied to the rear endplates (x 0.50); upper-beam tips
+  (half 0.42) stop ~2.5 cm short of the mount; lower beam (y 0.455–0.48, z −2.28..−2.44) may cut the diffuser
+  ceiling and the crash-structure loft. Frames: q34, side.
+- double_diffuser: upper ceiling sits 0.035 above the main ceiling and overlaps the strakes and the exit gurney bar
+  (likely z-fight / interpenetration); feed-slot boxes at z −1.96 float at the throat. Frames: q34, top.
+- monkey_seat: pylon (y 0.54–0.74, z −2.08..−2.16) runs into the crash-structure loft and rain-light housing; plates
+  are buried inside the rear-wing assembly (side Δ 0.00 %). Frames: q34, top.
+- spoon_wing: tapered, dropped main-plane tips meet the endplate over a shorter chord than the plate slot, and the
+  flat active-aero flap above leaves an uneven slot gap toward the tips. Frames: q34, top.
