@@ -12,12 +12,15 @@ function exceptionMessage(data) {
 
 // Page-side ring: the breakpoint condition pushes the value and returns false, so the
 // page never pauses. Condition source runs in the paused-frame scope, so locals resolve.
+// The user expression is evaluated FIRST, in an arrow (keeps `this`/`arguments`), and every
+// helper name is __apexDbg-prefixed: a `var G` here once shadowed the game's own `G` façade,
+// so `G.state` recorded "undefined".
 export function logpointCondition(id, expression, maxHits, maxChars) {
-  return `(function(){try{var G=globalThis,R=G.${RING}||(Object.defineProperty(G,"${RING}",{value:{},configurable:true}),G.${RING}),`
-    + `L=R[${JSON.stringify(id)}]||(R[${JSON.stringify(id)}]={n:0,items:[]}),v,s;`
-    + `try{v=(${expression}\n);s=typeof v==="number"?(isFinite(v)?v:String(v)):typeof v==="string"?v:(typeof v==="object"&&v!==null?JSON.stringify(v):String(v));`
-    + `if(typeof s==="string"&&s.length>${maxChars})s=s.slice(0,${maxChars});}catch(e){s="!err: "+String(e&&e.message||e).slice(0,${maxChars})}`
-    + `L.n++;if(L.items.length>=${maxHits})L.items.shift();L.items.push({i:L.n,t:Math.round(performance.now()),v:s});}catch(e){}return false})()`;
+  return `(()=>{var __apexDbgV,__apexDbgS;try{__apexDbgV=(${expression}\n);__apexDbgS=typeof __apexDbgV==="number"?(isFinite(__apexDbgV)?__apexDbgV:String(__apexDbgV)):typeof __apexDbgV==="string"?__apexDbgV:(typeof __apexDbgV==="object"&&__apexDbgV!==null?JSON.stringify(__apexDbgV):String(__apexDbgV));`
+    + `if(typeof __apexDbgS==="string"&&__apexDbgS.length>${maxChars})__apexDbgS=__apexDbgS.slice(0,${maxChars});}catch(__apexDbgE){__apexDbgS="!err: "+String(__apexDbgE&&__apexDbgE.message||__apexDbgE).slice(0,${maxChars})}`
+    + `try{var __apexDbgG=globalThis,__apexDbgR=__apexDbgG.${RING}||(Object.defineProperty(__apexDbgG,"${RING}",{value:{},configurable:true}),__apexDbgG.${RING}),`
+    + `__apexDbgL=__apexDbgR[${JSON.stringify(id)}]||(__apexDbgR[${JSON.stringify(id)}]={n:0,items:[]});`
+    + `__apexDbgL.n++;if(__apexDbgL.items.length>=${maxHits})__apexDbgL.items.shift();__apexDbgL.items.push({i:__apexDbgL.n,t:Math.round(performance.now()),v:__apexDbgS});}catch(__apexDbgE){}return false})()`;
 }
 
 // Called first in Debugger.paused. True = handled (recorded + auto-resumed), no pause surfaced.

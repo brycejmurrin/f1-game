@@ -39,8 +39,11 @@ test("every shipped preset value is inside its knob [min, max]", () => {
   const bad = [];
   for (const [profile, map] of Object.entries(P)) {
     for (const [id, value] of Object.entries(map)) {
-      if (typeof value !== "number") continue;
       if (KNOBLESS_ALLOW.has(id)) continue;
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        bad.push(`${profile}: ${id}=${String(value)} is not a finite number`);
+        continue;
+      }
       const d = byId[id];
       if (!d) {
         bad.push(`${profile}: unknown knob ${id}=${value}`);

@@ -15,6 +15,7 @@
 //
 //   node tools/ci/session-status.mjs            # Markdown block for the PR body
 //   node tools/ci/session-status.mjs --json     # the same, as data
+//   node tools/ci/session-status.mjs --summary  # bounded routine Markdown; --json still returns full data
 //
 // Reads only: local git (no fetch — run `git fetch origin <deploy>` first for a
 // fresh ahead/behind), artifacts/logs/*.log, and .claude/hooks/live-run.py.
@@ -116,6 +117,39 @@ export function toMarkdown(s) {
   return out.join("\n");
 }
 
+/** Routine status without the commit/session/log inventories. Logs are local
+ * historical evidence, not a green verdict for the current tip or ready gate. */
+export function toSummary(s) {
+  const out = [
+    `### Status summary (generated at ${s.at})`,
+    `- **Branch** \`${s.branch}\`` + (s.base ? ` — ${s.ahead} ahead / ${s.behind} behind \`${s.base}\`` : " — deploy branch not fetched; ahead/behind unknown"),
+  ];
+  const push = s.upstream == null
+    ? (s.branch === "HEAD" ? "detached HEAD — name a branch before pushing" : "unknown (no resolvable upstream)")
+    : s.unpushed == null ? "unknown (unpushed count unavailable)"
+      : s.unpushed ? `${s.unpushed} commit(s) NOT pushed` : "yes";
+  out.push(`- **Pushed** ${push}`);
+  out.push(`- **Working tree** ${s.dirty.length ? `${s.dirty.length} uncommitted (paths omitted)` : "clean"}`);
+  out.push(`- **Live browser run** ${s.live ? "`" + s.live + "` — its verdict is NOT read yet" : "none"}`);
+  out.push(`- **Inventories omitted** ${s.commits.length} commits; ${s.sessions.length} sessions`);
+  const passed = [], failed = [], unresolved = [];
+  for (const log of s.logs) {
+    if (/^passed\b/.test(log.verdict)) passed.push(log);
+    else if (/^(?:failed|timedout|interrupted)\b/.test(log.verdict)) failed.push(log);
+    else unresolved.push(log);
+  }
+  out.push(`- **Local test logs** ${s.logs.length}: ${passed.length} passed; ${failed.length} failed/timedout/interrupted; ${unresolved.length} unresolved (historical logs, not current-tip verification)`);
+  const selected = [...failed, ...unresolved].slice(0, 3);
+  for (const l of selected) {
+    const verdict = l.verdict.length > 240 ? l.verdict.slice(0, 240) + "… (truncated)" : l.verdict;
+    out.push(`  - \`${l.log}\` — ${verdict} (${l.ageMin} min ago)`);
+  }
+  out.push(`- **Log details omitted** ${s.logs.length - selected.length}; full inventories/verdicts: \`node tools/ci/session-status.mjs --json\`; raw logs: \`artifacts/logs/\``);
+  out.push("- **Ready gate** not evaluated here; run `node tools/ci/ready-gate.mjs` before draft→ready");
+  if (!s.livePr) out.push("- **Live PR / CI** not queried; add `--pr [N]` for a snapshot");
+  return out.join("\n");
+}
+
 /** One verdict over a head sha's workflow runs: only the NEWEST run per workflow counts. */
 export function ciSummary(runs) {
   const by = new Map();
@@ -163,7 +197,7 @@ export function livePrLines({ at, pr, ci, localHead, error }) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
-    console.log("usage: node tools/ci/session-status.mjs [--json] [--pr [N]]   # the branch's handoff block for the draft PR body (Markdown, or data)");
+    console.log("usage: node tools/ci/session-status.mjs [--summary] [--json] [--pr [N]]   # default: full handoff Markdown; --summary: bounded routine Markdown; --json: full data (takes precedence over --summary)");
     process.exit(0);
   }
   const s = collect();
@@ -179,5 +213,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     s.livePr = { at, ...live, localHead: git("rev-parse", "HEAD") };
   }
   console.log(process.argv.includes("--json") ? JSON.stringify(s, null, 2)
-    : toMarkdown(s) + (s.livePr ? "\n\n" + livePrLines(s.livePr).join("\n") : ""));
+    : (process.argv.includes("--summary") ? toSummary(s) : toMarkdown(s)) + (s.livePr ? "\n\n" + livePrLines(s.livePr).join("\n") : ""));
 }

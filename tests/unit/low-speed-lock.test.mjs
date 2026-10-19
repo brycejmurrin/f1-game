@@ -1,8 +1,7 @@
 /* low-speed-lock.test.mjs — pin the 1.06× hairpin plateau and unchanged ≥30 taper.
  *
- * Companion to steer-lock-taper.test.mjs: asserts the Loews-facing numbers
- * (plateau → ≈0.371 rad at notch-7 lock 0.35) and that high-speed lock is
- * Object.is-identical to the pre-boost hyperbolic raw taper.
+ * Companion to steer-lock-taper.test.mjs: the production steerAngle in the VM
+ * shows the 1.06× plateau, the 15–30 m/s blend and the raw taper above 30.
  *
  * Run: node --test tests/unit/low-speed-lock.test.mjs
  */
@@ -18,12 +17,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const require = createRequire(import.meta.url);
 
 const LOW_PLATEAU = 1.06;
-const NOTCH7_LOCK = 0.35; // lockFromSlider(7) — steer-tuning-lock pins the map
 
 function rawTaper(vs, ref) {
   return 1 / (1 + vs / ref);
 }
-function lockTaper(vs, ref) {
+// Blend between the plateau (<=15 m/s) and the raw taper (>=30 m/s), evaluated at the VM's measured speed.
+function blendTaper(vs, ref) {
   const raw = rawTaper(vs, ref);
   return vs <= 15 ? LOW_PLATEAU : (vs >= 30 ? raw : LOW_PLATEAU + (raw - LOW_PLATEAU) * (vs - 15) / 15);
 }
@@ -36,19 +35,7 @@ test("source: game.js plateau is 1.06 and steer-tuning documents the hairpin boo
   assert.match(tuning, /function lockFromSlider\(v\)\s*\{\s*return 0\.18 \+ \(0\.435 - 0\.18\) \* \(v - 1\) \/ 9; \}/);
 });
 
-test("notch-7 low-speed applied lock is ≈0.371 rad; ≥30 matches pre-boost product", () => {
-  const ref = 55;
-  const low = NOTCH7_LOCK * lockTaper(10, ref);
-  assert.ok(Math.abs(low - 0.371) < 1e-9, `10 m/s applied ${low}`);
-  assert.ok(Math.abs(low - 0.35 * 1.06) < 1e-12, `≈0.371 rad, got ${low}`);
-  for (const vs of [30, 45, 60, 80, 100]) {
-    const boost = NOTCH7_LOCK * lockTaper(vs, ref);
-    const old = NOTCH7_LOCK * rawTaper(vs, ref);
-    assert.ok(Object.is(boost, old), `vs=${vs}: boosted product ${boost} vs old ${old}`);
-  }
-});
-
-test("VM: full-lock wheel angle rises ~6% at 10 m/s and is unchanged at 60 m/s", async () => {
+test("VM: full-lock wheel angle rises ~6% at 10 m/s, blends at 22 m/s, unchanged at 60 m/s", async () => {
   const { createGame } = require("../../tools/lib/game-vm.cjs");
   const DT = 1 / 60;
   const g = await createGame({ track: "monaco", storage: { difficulty: "normal", autoThrottle: false } });
@@ -78,6 +65,13 @@ test("VM: full-lock wheel angle rises ~6% at 10 m/s and is unchanged at 60 m/s",
   assert.ok(Math.abs(d10 - lock * LOW_PLATEAU) < 0.01,
     `10 m/s: got ${d10}, want ${lock * LOW_PLATEAU}`);
   assert.ok(d10 > lock * 1.05, `10 m/s must clear the old plateau of ${lock}`);
+
+  // Mid-blend point: neither the plateau nor the raw taper.
+  const d22 = measure(22);
+  const expect22 = lock * blendTaper(vStd(Math.abs(P.speed)), ref);
+  assert.ok(Math.abs(d22 - expect22) < 0.008, `22 m/s blend: got ${d22}, want ${expect22}`);
+  assert.ok(d22 < lock * LOW_PLATEAU - 0.01 && d22 > lock * rawTaper(vStd(22), ref) + 0.01,
+    `22 m/s must sit strictly between plateau and raw (${d22})`);
 
   const d60 = measure(60);
   const expect60 = lock * rawTaper(vStd(Math.abs(P.speed)), ref);

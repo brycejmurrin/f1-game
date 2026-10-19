@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { diff, formatDiff, formatTable } from "./lib.mjs";
+import { diff, formatDiff, formatTable, profileComparability } from "./lib.mjs";
 import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -52,7 +52,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
   const asJson = argv.includes("--json");
   try {
     if (files.length === 2) {
-      const a = load(files[0]), b = load(files[1]), rows = diff(a.head || a.spans || {}, b.head || b.spans || {});
+      const a = load(files[0]), b = load(files[1]), compatibility = profileComparability(a, b);
+      const rows = diff(a.head || a.spans || {}, b.head || b.spans || {}, { incomparable: !compatibility.comparable });
+      if (!compatibility.comparable) console.error(`Profile comparison incomparable: ${compatibility.reason}`);
       console.log(asJson ? JSON.stringify(rows) : formatDiff(rows, files[0], files[1]));
     } else if (files.length === 1) {
       const doc = load(files[0]);

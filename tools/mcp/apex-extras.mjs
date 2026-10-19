@@ -50,6 +50,7 @@ export async function thumbBlock(png, width = 640) {
 export function createExtras(ctx) {
   const { ROOT, toolResult, refuse, acquireLock, releaseLock, occupancyRefuse, assertSafeOut,
     knownCircuits, runSpawn, log, mockMode, spawnJob = spawn } = ctx;
+  const killJobTree = ctx.killJobTree || killTreeAndWait;
   const spawnChild = ctx.spawnChild || spawn;   // tests inject a fake track-session child
   /** verify-change --fast exits 2 for a "partial" verdict (the browser groups are not run by design): a result, not a failure — the sync tool allowed 0 and 2 too. */
   const jobExitOk = (kind, code) => code === 0 || (kind === "verify_change_fast" && code === 2);
@@ -503,6 +504,57 @@ export function createExtras(ctx) {
   const readCancellation = (id) => {
     try { return JSON.parse(fs.readFileSync(jobCancelPath(id), "utf8")); } catch { return null; }
   };
+  // A marker is authoritative across one-shot and persistent owners. Terminal
+  // cancellation does not mean its descendants have finished shutting down.
+  const cleanupPending = (j) => {
+    const marker = readCancellation(j.id);
+    return Boolean(marker?.cleanup && !marker.cleanup.complete);
+  };
+  const processBirth = (pid) => {
+    try {
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+      const start = stat.slice(stat.lastIndexOf(")") + 2).split(/\s+/)[19];
+      const boot = fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
+      if (start && boot) return `proc:${boot}:${start}`;
+    } catch { /* portable fallback below */ }
+    try {
+      const start = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
+        encoding: "utf8", timeout: 5000, env: { ...process.env, TZ: "UTC0", LC_ALL: "C", LANG: "C" },
+      }).trim();
+      // Version the canonical format: old ps records inherited TZ/locale, so a
+      // mismatch with them cannot prove that the original process has exited.
+      return start ? `ps-utc-v1:${start}` : null;
+    } catch { return null; }
+  };
+  const ownedCleanup = (cleanup) => {
+    const owned = [], unknown = [];
+    for (const pid of cleanup.pids || []) {
+      if (!alive(pid)) continue;
+      const recorded = cleanup.identities?.find((identity) => identity.pid === pid)?.birth;
+      const current = processBirth(pid);
+      if (!recorded || !current || recorded.split(":", 1)[0] !== current.split(":", 1)[0]) unknown.push(pid);
+      // Missing or incompatible schemes cannot establish ownership or death.
+      else if (recorded === current) owned.push(pid); // same-scheme mismatch: original is gone
+    }
+    return { owned, unknown };
+  };
+  const jobActive = (j) => j.state === "running" || cleanupPending(j);
+  const releaseJobLock = (j) => {
+    if (!j.browser || j.lockReleased) return;
+    if (!cleanupPending(j)) {
+      if (j.cleanupWatcher) { clearInterval(j.cleanupWatcher); j.cleanupWatcher = null; }
+      j.lockReleased = true; releaseLock(); return;
+    }
+    // The cancelling process cannot unlink another live owner's lock. The
+    // original owner observes durable completion even after its root exited.
+    if (!j.cleanupWatcher) {
+      j.cleanupWatcher = setInterval(() => {
+        if (cleanupPending(j)) return;
+        releaseJobLock(j);
+      }, 150);
+      j.cleanupWatcher.unref();
+    }
+  };
   const reconcileCancellation = (j) => {
     if (!j) return j;
     const cancelled = readCancellation(j.id);
@@ -551,7 +603,7 @@ export function createExtras(ctx) {
       try {
         const mf = path.join(JOB_DIR, f);
         const m = JSON.parse(fs.readFileSync(mf, "utf8"));
-        if (!["done", "failed", "cancelled"].includes(m.state)) continue;
+        if (!["done", "failed", "cancelled"].includes(m.state) || cleanupPending(m)) continue;
         const logAbs = m.log ? path.join(ROOT, m.log) : "";
         const exitAbs = logAbs ? exitFileFor(logAbs) : "";
         if (m.ended && Date.now() - m.ended > JOB_TTL_MS) {
@@ -607,7 +659,7 @@ export function createExtras(ctx) {
     const logRel = j.log.startsWith(ROOT) ? path.relative(ROOT, j.log) : j.log;
     const errRel = j.err ? (j.err.startsWith(ROOT) ? path.relative(ROOT, j.err) : j.err) : (j.stderr || "");
     const v = { jobId: j.id, kind: j.kind, state: j.state, exit: j.exit, elapsedMs: (j.ended || Date.now()) - j.started,
-      log: logRel, stderr: errRel, argv: j.argv, durable: true };
+      log: logRel, stderr: errRel, argv: j.argv, durable: true, ...(cleanupPending(j) ? { cleanupPending: true } : {}) };
     if (full) {
       const logAbs = path.join(ROOT, logRel);
       const errAbs = errRel ? path.join(ROOT, errRel) : "";
@@ -656,8 +708,8 @@ export function createExtras(ctx) {
       return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, env: plan.env, browser: plan.browser, ...(est || {}) });
     }
     if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv, env: plan.env, ...(est || {}) });
-    const memRunning = [...jobs.values()].map(reconcileCancellation).filter((j) => j.state === "running");
-    const diskRunning = listDiskJobs().filter((j) => j.state === "running" && !jobs.has(j.id));
+    const memRunning = [...jobs.values()].map(reconcileCancellation).filter(jobActive);
+    const diskRunning = listDiskJobs().filter((j) => jobActive(j) && !jobs.has(j.id));
     if (memRunning.length + diskRunning.length >= 2) {
       // Name them: "2 jobs already running" sent the caller to a second tool call just to learn which, and for how long.
       const who = [...memRunning, ...diskRunning].map((j) => `${j.id} (${j.kind}, ${Math.round((Date.now() - (j.started || Date.now())) / 1000)}s)`).join(", ");
@@ -709,14 +761,14 @@ export function createExtras(ctx) {
       reconcileCancellation(j);
       if (j.state === "running") j.state = jobExitOk(j.kind, code) ? "done" : "failed";
       writeJobManifest(j);
-      // A cancelled browser job frees the lock from jobCancel, after its tree is gone.
-      if (j.browser && !j.cancelTree) releaseLock();
+      // Cross-owner cancellation releases only after durable cleanup completes.
+      releaseJobLock(j);
     });
     child.on("error", (e) => {
       j.state = "failed"; j.exit = String(e.message); j.ended = Date.now();
       reconcileCancellation(j);
       writeJobManifest(j);
-      if (j.browser) releaseLock();
+      releaseJobLock(j);
     });
     return toolResult({
       ok: true, ...jobView(j),
@@ -749,14 +801,14 @@ export function createExtras(ctx) {
   }
   async function waitForJob(args, wait) {
     const t0 = Date.now();
-    const state = () => { const j = reconcileCancellation(jobs.get(String(args.jobId))) || loadDiskJob(String(args.jobId)); return j ? j.state : null; };
-    while (state() === "running" && Date.now() - t0 < wait * 1000) await new Promise((r) => setTimeout(r, 1000));
+    const active = () => { const j = reconcileCancellation(jobs.get(String(args.jobId))) || loadDiskJob(String(args.jobId)); return j ? jobActive(j) : false; };
+    while (active() && Date.now() - t0 < wait * 1000) await new Promise((r) => setTimeout(r, 1000));
     const { wait: _w, ...rest } = args;
     const r = jobStatus(rest);
     try {
       const b = JSON.parse(r.content[0].text);
       b.waitedS = Math.round((Date.now() - t0) / 1000);
-      if (b.state === "running") b.stillRunning = true;
+      if (b.state === "running" || b.cleanupPending) b.stillRunning = true;
       r.content[0].text = JSON.stringify(b);
     } catch { /* leave the reply as it is */ }
     return r;
@@ -770,23 +822,44 @@ export function createExtras(ctx) {
       j = { ...disk, child: { pid: disk.pid }, log: path.join(ROOT, disk.log), err: path.join(ROOT, disk.stderr || disk.log.replace(/\.log$/, ".err")) };
     }
     let survivors;
-    if (j.state === "running") {
-      j.state = "cancelled";
-      const marker = { state: "cancelled", ended: Date.now(), exit: j.exit ?? null };
+    reconcileCancellation(j);
+    if (jobActive(j)) {
+      // Snapshot before signalling: descendants can be reparented as soon as
+      // the root exits. Keep the snapshot durable if this canceller dies.
+      const tree = [...new Set([...(readCancellation(j.id)?.cleanup?.pids || []), ...processTree(j.child?.pid || j.pid)])];
+      const marker = { state: "cancelled", ended: Date.now(), exit: j.exit ?? null, cleanup: { pids: tree, identities: tree.map((pid) => ({ pid, birth: processBirth(pid) })), complete: false } };
       try { fs.writeFileSync(jobCancelPath(j.id), JSON.stringify(marker) + "\n", { flag: "wx" }); }
       catch (e) { if (e.code !== "EEXIST") throw e; }
-      j.cancelTree = processTree(j.child?.pid || j.pid);
-      survivors = (await killTreeAndWait(j.cancelTree)).survivors.length;
+      j.cancelTree = readCancellation(j.id)?.cleanup?.pids || tree;
+      reconcileCancellation(j);
+      const cancellation = readCancellation(j.id);
+      const cleanup = cancellation.cleanup || { pids: j.cancelTree };
+      const { owned, unknown } = ownedCleanup(cleanup);
+      const left = owned.length ? await killJobTree(owned) : { survivors: [] };
+      const remaining = [...new Set([...left.survivors, ...unknown])];
+      survivors = remaining.length;
+      const finished = { ...cancellation, cleanup: { ...cleanup, complete: survivors === 0, survivors: remaining } };
+      // Atomic replacement prevents other owners observing a truncated marker.
+      const temporary = `${jobCancelPath(j.id)}.${randomUUID()}.tmp`;
+      try { fs.writeFileSync(temporary, JSON.stringify(finished) + "\n", { flag: "wx" }); fs.renameSync(temporary, jobCancelPath(j.id)); }
+      finally { fs.rmSync(temporary, { force: true }); }
       j.ended = Date.now();
       writeJobManifest(j);
-      if (j.browser) releaseLock();
+      if (survivors === 0) releaseJobLock(j);
     }
-    return toolResult({ ok: true, ...jobView(j), survivors });
+    return toolResult({ ok: survivors == null || survivors === 0, ...jobView(j), survivors });
   }
   process.on("exit", () => {
     // Durable jobs outlive one-shot `call`; only the long-lived serve process reaps them.
     if (!callCli) {
-      for (const j of jobs.values()) if (j.state === "running") { try { process.kill(-j.child.pid, "SIGKILL"); } catch { /* gone */ } }
+      for (const j of jobs.values()) if (jobActive(j)) {
+        const cleanup = readCancellation(j.id)?.cleanup;
+        if (cleanup) {
+          for (const pid of ownedCleanup(cleanup).owned) { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } }
+        } else {
+          try { process.kill(-j.child.pid, "SIGKILL"); } catch { /* gone */ }
+        }
+      }
     }
     if (sess) { try { process.kill(-sess.child.pid, "SIGKILL"); } catch { /* gone */ } }
   });
@@ -927,8 +1000,8 @@ export function createExtras(ctx) {
     /** The running browser job, in memory or on disk. A one-shot `call` records its own short-lived pid as the lock
      *  owner, so the lock reads stale while the job's browser runs; occupancyRefuse asks this too. */
     runningBrowserJob() {
-      for (const j of jobs.values()) if (j.browser && j.state === "running") return { id: j.id, kind: j.kind, pid: j.pid };
-      const d = listDiskJobs().find((j) => j.browser && j.state === "running" && !jobs.has(j.id));
+      for (const j of jobs.values()) if (j.browser && jobActive(reconcileCancellation(j))) return { id: j.id, kind: j.kind, pid: j.pid };
+      const d = listDiskJobs().find((j) => j.browser && jobActive(j) && !jobs.has(j.id));
       return d ? { id: d.id, kind: d.kind, pid: d.pid } : null;
     },
     handlers: {

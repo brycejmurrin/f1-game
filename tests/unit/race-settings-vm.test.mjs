@@ -442,7 +442,9 @@ test("a MIXED race arms a weather arc at the start and walks it; the plan is the
   assert.ok(arc.dur >= 90 && arc.dur <= 420, "seeded 2–7 min then race-length cap: " + arc.dur);
   // The derived plan is a function of (seed, race counter): read twice, same answer.
   g.G.wxArcPlan = null;
-  const p1 = JSON.parse(JSON.stringify(g.G.wxArcPlan)), p2 = JSON.parse(JSON.stringify(g.G.wxArcPlan));
+  const p1 = JSON.parse(JSON.stringify(g.G.wxArcPlan));
+  g.G.wxArcPlan = null;                                  // …derived again from scratch, not read back from a cache
+  const p2 = JSON.parse(JSON.stringify(g.G.wxArcPlan));
   assert.deepEqual(p1, p2, "same seed and counter, same plan");
   assert.ok(p1 && p1.to !== "dry" && p1.dur >= 90, JSON.stringify(p1));
   // A host-supplied plan wins over the derived one.
@@ -550,17 +552,16 @@ test("the STRATEGY row follows TYRE WEAR: hidden when wear is off, a pin persist
   g.G.pits.setPinnedStops(null);
   assert.equal(g.G.pits.pinnedStops(), null, "AUTO clears it");
   // Where the complex is built the stint bar is drawn from the plan.
-  if (g.G.pits.zoneOf()) {
-    open("monza", false);
-    assert.equal(byId("rs-plan-bar").hidden, false);
-    const plan = g.G.pits.planFor(0.5, true, g.G.raceLaps);
-    assert.equal(byId("rs-plan-stints").children.length, plan.stints.length, "one segment per stint");
-    assert.match(byId("rs-plan-loss").textContent, /PIT LOSS ≈ \d+ s/);
-    g.G.pits.setPinnedStops(2);
-    open("monza", false);
-    assert.equal(byId("rs-plan-stints").children.length, 3, "a pinned 2-stop draws three stints");
-    g.G.pits.setPinnedStops(null);
-  }
+  assert.ok(g.G.pits.zoneOf(), "monza has a pit complex in the VM: the stint-bar assertions below must run");
+  open("monza", false);
+  assert.equal(byId("rs-plan-bar").hidden, false);
+  const plan = g.G.pits.planFor(0.5, true, g.G.raceLaps);
+  assert.equal(byId("rs-plan-stints").children.length, plan.stints.length, "one segment per stint");
+  assert.match(byId("rs-plan-loss").textContent, /PIT LOSS ≈ \d+ s/);
+  g.G.pits.setPinnedStops(2);
+  open("monza", false);
+  assert.equal(byId("rs-plan-stints").children.length, 3, "a pinned 2-stop draws three stints");
+  g.G.pits.setPinnedStops(null);
   g.G.raceTyreWear = "off";
 });
 
