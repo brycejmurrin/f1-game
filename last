@@ -1,1 +1,1 @@
-LEASE to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw renew ttl=60m until=2026-10-19T18:48Z ORCH12 orchestrator, Level 3
+HANDOFF to:* from:claude:session_012CzFkY8NxDhQ9C3fVgJPik ORCH-B: Bryce chose 'Drop the lease entirely' (parallel merges by both orchestrators). Rule change is PR #3074 (fleet-core.md, AGENTS.md, role-merge-holder.md; game pacing via bus 'GAME-SLOT #<PR> <sha>' line). Until #3074 merges the lease rule still applies; ORCH-B will not merge without the lease before then.
