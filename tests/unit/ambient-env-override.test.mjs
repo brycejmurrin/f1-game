@@ -27,19 +27,23 @@ const ENV_WILD = { ambientSky: [0.369, 0.374, 0.386], ambientGround: [0.071, 0.0
                    skyZenith: [0.2, 0.3, 0.6], skyHorizon: [0.6, 0.6, 0.7] };
 const ENV_EXACT = { ambientSky: [0.5, 0.2, 0.2], ambientGround: [0.2, 0.05, 0.05] };
 
-// Boot atmosphere.js in a VM with the real knob defaults and the pack stubbed.
-function run({ env, palette, tod = "default" }) {
+// Boot atmosphere.js in a VM with the real knob defaults and the REAL Assets
+// module (js/render/shared/assets.js), fed a manifest through its own loader:
+// only the network is stubbed, so the "<track>|<tod>" -> "*|<tod>" lookup the
+// rule depends on is the shipped one, not a copy of it.
+async function run({ env, palette, tod = "default", night = false }) {
   const Math2 = Object.assign(Object.create(Math), { random: () => 0.5 });
   const sandbox = {
     Math: Math2, console,
-    Assets: { env: (id, t) => env[id + "|" + t] || env["*|" + t] || null },
+    fetch: async () => ({ ok: true, json: async () => ({ env }) }),
     LampBake: { prebake: () => null, budget: () => 0, forTrack: () => null },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     window: {}, document: { getElementById: () => null },
   };
   vm.createContext(sandbox);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/lighting/knobs.js", "js/lighting/atmosphere.js"])
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/lighting/knobs.js", "js/render/shared/assets.js", "js/lighting/atmosphere.js"])
     vm.runInContext(read(f), sandbox, { filename: f });
+  await vm.runInContext("Assets", sandbox).manifest();
   vm.runInContext("LightTune = { LT: LightKnobs.LT, buildTrackLights: () => [] };", sandbox);
   const G = {
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
@@ -50,7 +54,7 @@ function run({ env, palette, tod = "default" }) {
     frameSky: { zenith: [0.1, 0.2, 0.5], horizon: [0.6, 0.7, 0.8], sunDir: [0, 1, 0], sunColor: [1, 1, 1] },
     gfx: null, state: "menu",
     raceTimeOfDay: tod, raceWeather: "dry",
-    track: { def: { id: "testtrack", night: false, palette } },
+    track: { def: { id: "testtrack", night, palette } },
   };
   const Atmosphere = vm.runInContext("Atmosphere", sandbox);
   Atmosphere.create(G).applyRaceSettings();
@@ -61,9 +65,9 @@ const PAL = { sunDir: [0.4, 0.7, 0.3], sunColor: [1, 0.95, 0.9], sun: [1, 0.95, 
               ambientSky: [0.26, 0.33, 0.50], ambientGround: [0.24, 0.19, 0.12],
               zenith: [0.1, 0.3, 0.8], horizon: [0.7, 0.8, 0.9] };
 
-test("a wildcard environment leaves an authored palette ambient alone on the default time of day", () => {
-  const bare = run({ env: {}, palette: PAL });
-  const wild = run({ env: { "*|default": ENV_WILD }, palette: PAL });
+test("a wildcard environment leaves an authored palette ambient alone on the default time of day", async () => {
+  const bare = await run({ env: {}, palette: PAL });
+  const wild = await run({ env: { "*|default": ENV_WILD }, palette: PAL });
   assert.deepEqual(wild.frame.ambientSky, bare.frame.ambientSky, "ambientSky was replaced by the pack's generic grey");
   assert.deepEqual(wild.frame.ambientGround, bare.frame.ambientGround, "ambientGround was replaced by the pack's generic grey");
   assert.deepEqual(wild.frameSky.zenith, bare.frameSky.zenith, "the authored zenith was replaced");
@@ -72,24 +76,43 @@ test("a wildcard environment leaves an authored palette ambient alone on the def
   assert.notDeepEqual(bare.frame.ambientSky, ENV_WILD.ambientSky);
 });
 
-test("a wildcard environment fills in what the palette did not author", () => {
+test("a wildcard environment fills in what the palette did not author", async () => {
   const { ambientSky, ambientGround, ...noAmbient } = PAL;
-  const bare = run({ env: {}, palette: noAmbient });
-  const wild = run({ env: { "*|default": ENV_WILD }, palette: noAmbient });
+  const bare = await run({ env: {}, palette: noAmbient });
+  const wild = await run({ env: { "*|default": ENV_WILD }, palette: noAmbient });
   assert.notDeepEqual(wild.frame.ambientSky, bare.frame.ambientSky, "the pack should supply ambientSky when the palette has none");
   assert.notDeepEqual(wild.frame.ambientGround, bare.frame.ambientGround, "the pack should supply ambientGround when the palette has none");
   assert.deepEqual(wild.frameSky.zenith, bare.frameSky.zenith, "the authored zenith must still win");
 });
 
-test("an exact <track>|<tod> key still overrides the authored palette (it is that circuit's measurement)", () => {
-  const bare = run({ env: {}, palette: PAL });
-  const exact = run({ env: { "*|default": ENV_WILD, "testtrack|default": ENV_EXACT }, palette: PAL });
+test("an exact <track>|<tod> key still overrides the authored palette (it is that circuit's measurement)", async () => {
+  const bare = await run({ env: {}, palette: PAL });
+  const exact = await run({ env: { "*|default": ENV_WILD, "testtrack|default": ENV_EXACT }, palette: PAL });
   assert.notDeepEqual(exact.frame.ambientSky, bare.frame.ambientSky, "the exact key did not override");
   assert.notDeepEqual(exact.frame.ambientGround, bare.frame.ambientGround, "the exact key did not override");
 });
 
-test("on an explicit time of day the wildcard still replaces the formula base (nothing was authored there)", () => {
-  const bare = run({ env: {}, palette: PAL, tod: "day" });
-  const wild = run({ env: { "*|day": ENV_WILD }, palette: PAL, tod: "day" });
+test("on an explicit time of day the wildcard still replaces the formula base (nothing was authored there)", async () => {
+  const bare = await run({ env: {}, palette: PAL, tod: "day" });
+  const wild = await run({ env: { "*|day": ENV_WILD }, palette: PAL, tod: "day" });
   assert.notDeepEqual(wild.frame.ambientSky, bare.frame.ambientSky, "the day base is a formula, the pack should still refine it");
+});
+
+test("an exact key's zenith/horizon also override an authored palette sky", async () => {
+  const bare = await run({ env: {}, palette: PAL });
+  const exact = await run({ env: { "testtrack|default": { ...ENV_EXACT, skyZenith: [0.9, 0.1, 0.1], skyHorizon: [0.8, 0.2, 0.2] } }, palette: PAL });
+  assert.deepEqual(exact.frameSky.zenith, [0.9, 0.1, 0.1]);
+  assert.deepEqual(exact.frameSky.horizon, [0.8, 0.2, 0.2]);
+  assert.notDeepEqual(bare.frameSky.zenith, exact.frameSky.zenith, "fixture: the key must change something");
+});
+
+test("a night session ignores the pack environment entirely (night ambient is near-black on purpose)", async () => {
+  for (const [label, opts] of [["explicit night", { tod: "night" }], ["default on a night circuit", { tod: "default", night: true }]]) {
+    const bare = await run({ env: {}, palette: PAL, ...opts });
+    const withEnv = await run({ env: { "*|night": ENV_WILD, "*|default": ENV_WILD, "testtrack|night": ENV_EXACT, "testtrack|default": ENV_EXACT }, palette: PAL, ...opts });
+    const plain = (v) => JSON.parse(JSON.stringify(v));   // arrays minted in different vm realms
+    assert.deepEqual(plain(withEnv.frame.ambientSky), plain(bare.frame.ambientSky), label + ": ambientSky");
+    assert.deepEqual(plain(withEnv.frame.ambientGround), plain(bare.frame.ambientGround), label + ": ambientGround");
+    assert.deepEqual(plain(withEnv.frameSky.zenith), plain(bare.frameSky.zenith), label + ": zenith");
+  }
 });

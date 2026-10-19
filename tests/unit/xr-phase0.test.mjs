@@ -1053,3 +1053,71 @@ test("live XR session obeys existing-controls choice and teardown preserves a ne
   await h.ctx.XrSession.end();
   assert.equal(owner, "phone", "session-end releases only its own source");
 });
+
+// R3-18: js/xr entries that had no direct case.
+test("XrRig.worldFromAnchorTo builds an orthonormal basis: -Z is the car's forward, +Y banks with up, translation is the eye", () => {
+  const { XrRig } = bootXr();
+  const m = Array.from({ length: 16 }, () => 0);
+  // Heading +X, level: right = +Z (world), up = +Y, view -Z = +X.
+  XrRig.worldFromAnchorTo(m, [3, 4, 5], [2, 0, 0], [0, 3, 0]);   // unnormalised inputs
+  const col = (i) => [m[i * 4], m[i * 4 + 1], m[i * 4 + 2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const [r, u, z] = [col(0), col(1), col(2)];
+  for (const c of [r, u, z]) assert.ok(Math.abs(Math.hypot(...c) - 1) < 1e-6, "unit column");
+  assert.ok(Math.abs(dot(r, u)) < 1e-6 && Math.abs(dot(r, z)) < 1e-6 && Math.abs(dot(u, z)) < 1e-6, "orthogonal");
+  assert.deepEqual(z.map((v) => Math.round(v * 1e6) / 1e6 + 0), [-1, 0, 0], "view +Z is behind the driver, so -Z looks along fwd");
+  assert.deepEqual(u.map((v) => Math.round(v * 1e6) / 1e6 + 0), [0, 1, 0]);
+  assert.deepEqual(r.map((v) => Math.round(v * 1e6) / 1e6 + 0), [0, 0, 1], "driver's right of a +X heading, +Y up, is +Z");
+  assert.deepEqual(Array.from(m).slice(12), [3, 4, 5, 1], "translation is the eye");
+});
+
+test("XrBoot.present forwards to gfx.presentXR only when the backend can; setFoveation delegates or reports false", () => {
+  const ctx = bootXr();
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-session.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  const calls = [];
+  const gfx = { presentXR: (e, po) => calls.push([e, po]), setFoveation: (v) => { calls.push(["fov", v]); return "ok"; },
+    attachXrSession: async () => ({}), xrCapable: () => true };
+  const eyes = [{ id: 1 }], po = { x: 1 };
+  assert.equal(ctx.XrBoot.present(gfx, eyes, po), true);
+  assert.deepEqual(calls[0], [eyes, po]);
+  assert.equal(ctx.XrBoot.present({}, eyes, po), false, "backend without presentXR");
+  assert.equal(ctx.XrBoot.present(gfx, null, po), false, "no eyes, no present");
+  assert.equal(calls.length, 1);
+  assert.equal(ctx.XrBoot.setFoveation(1), false, "unbound: no gfx to delegate to");
+  ctx.XrBoot.bind({ gfx, tickBody() {}, windowTick() {}, getCamMode: () => 0, setCamMode() {} });
+  assert.equal(ctx.XrBoot.setFoveation(0.5), "ok");
+  assert.deepEqual(calls[1], ["fov", 0.5]);
+  const bare = bootXr();
+  vm.runInContext(read("js/xr/xr-session.js").replace(/^const\b/gm, "var"), bare, { filename: "xr-session.js" });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), bare, { filename: "xr-boot.js" });
+  bare.XrBoot.bind({ gfx: { attachXrSession: async () => ({}), xrCapable: () => true }, tickBody() {}, windowTick() {}, getCamMode: () => 0, setCamMode() {} });
+  assert.equal(bare.XrBoot.setFoveation(0.5), false, "backend without setFoveation");
+});
+
+test("XrUi.flashMessage disables the button for 3.5 s then restores the label; onClick shows the gate message and never starts a session", async () => {
+  const timers = [];
+  const el = { id: "", textContent: "", disabled: false, hidden: true, setAttribute() {}, addEventListener() {} };
+  const ctx = bootXr();
+  ctx.document = { createElement: () => el };
+  ctx.setTimeout = (fn, ms) => { timers.push([fn, ms]); return timers.length; };
+  ctx.clearTimeout = () => {};
+  let starts = 0;
+  ctx.XrSession = { isPresenting: () => false, isSupported: () => true, probe: async () => true,
+    start: async () => { starts++; return {}; }, end: async () => {}, on: () => () => {} };
+  ctx.XrBoot = { ensureXrBackend: () => ({ ok: false, message: "VR needs WebGL2 (allow site storage)" }) };
+  vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-ui.js" });
+  await ctx.XrUi.onClick({ preventDefault() {}, stopPropagation() {} });
+  assert.equal(el.textContent, "VR needs WebGL2 (allow site storage)");
+  assert.equal(el.disabled, true);
+  assert.equal(timers.at(-1)[1], 3500);
+  assert.equal(starts, 0, "a refused gate must not start XR");
+  await ctx.XrUi.onClick();   // disabled button swallows the click
+  assert.equal(starts, 0);
+  timers.at(-1)[0]();
+  assert.equal(el.disabled, false, "re-enabled after the flash");
+  assert.match(el.textContent, /ENTER VR/i, "label restored");
+  ctx.XrBoot = { ensureXrBackend: () => ({ ok: false, reloading: true }) };
+  await ctx.XrUi.onClick();
+  assert.equal(el.textContent, "SWITCHING…");
+});

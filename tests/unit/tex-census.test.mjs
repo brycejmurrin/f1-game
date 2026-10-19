@@ -128,3 +128,38 @@ test("a lost context does not leave stale bytes on the books", () => {
   assert.equal(c.bytes, 0, "a lost context frees every texture");
   assert.equal(c.count, 0);
 });
+
+
+test('GPU allocation wrapper preserves array layers while mipmapping true 3D depth and 2D sizes', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { runInNewContext } = await import('node:vm');
+  // Exercise the exact page init script without Chromium; do not duplicate its byte arithmetic.
+  const source = readFileSync(new URL('../../tools/gfx/gpu-mem-census.mjs', import.meta.url), 'utf8');
+  const install = source.slice(source.indexOf('function installWrap()'), source.indexOf('\nasync function main()'));
+  class GL {}
+  Object.assign(GL, { RGBA8: 32856, TEXTURE_2D_ARRAY: 35866, TEXTURE_3D: 32879, TEXTURE_2D: 3553 });
+  Object.assign(GL.prototype, GL);
+  for (const name of ['bindTexture', 'texStorage2D', 'texStorage3D', 'texImage2D', 'texImage3D', 'generateMipmap',
+    'bindRenderbuffer', 'renderbufferStorage', 'renderbufferStorageMultisample', 'bindBuffer', 'bufferData',
+    'createTexture', 'deleteTexture', 'createBuffer', 'deleteBuffer', 'createVertexArray', 'deleteVertexArray',
+    'createProgram', 'deleteProgram', 'createShader', 'deleteShader', 'createFramebuffer', 'deleteFramebuffer',
+    'createRenderbuffer', 'deleteRenderbuffer']) GL.prototype[name] = function () {};
+  runInNewContext(install + '; installWrap();', { WebGL2RenderingContext: GL });
+  const gl = new GL();
+  for (const [target, width, height, depth, expected] of [
+    [GL.TEXTURE_2D_ARRAY, 4, 4, 8, 672], // (16 + 4 + 1) * 8 layers * 4 bytes
+    [GL.TEXTURE_3D, 4, 4, 8, 584], // 4*4*8 + 2*2*4 + 1*1*2 texels
+    [GL.TEXTURE_2D_ARRAY, 4, 2, 8, 352], // rectangular mips still retain all layers
+  ]) {
+    const texture = {};
+    gl.bindTexture(target, texture);
+    gl.texStorage3D(target, 3, gl.RGBA8, width, height, depth);
+    assert.equal(GL.prototype.__gm.tex.get(texture).b, expected, `target ${target}, ${width}x${height}x${depth}`);
+    gl.deleteTexture(texture);
+    assert.equal(GL.prototype.__gm.tex.has(texture), false);
+  }
+  const texture = {};
+  gl.bindTexture(GL.TEXTURE_2D, texture);
+  gl.texStorage2D(GL.TEXTURE_2D, 3, gl.RGBA8, 4, 4);
+  assert.equal(GL.prototype.__gm.tex.get(texture).b, 84, '2D chain unchanged');
+});

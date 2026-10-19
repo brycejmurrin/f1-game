@@ -14,12 +14,12 @@ import { symbolSource } from "../helpers/game-source.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
-function boot(globals = {}) {
+function boot(globals = {}, perfTier = 0) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Float32Array, Float64Array, Uint8Array,
     isFinite, parseFloat, parseInt,
     Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
-    PerfGov: { tier: () => 0 },
+    PerfGov: { tier: () => perfTier },
     ...globals,
   };
   sb.window = sb;
@@ -77,6 +77,24 @@ test("create: chequered → orbit; disabled on mobile / high PerfGov tier", () =
   api.reset();
   assert.equal(api.onFlag(), false);
   assert.equal(api.live(), false);
+});
+
+test("PerfGov tier >= 2 turns the results camera off; tier 1 keeps it", () => {
+  const car = { s: 0, x: 0, px: 1, py: 1, pz: 2, head: 0, speed: 40, finPos: 1 };
+  const mk = (tier) => {
+    const G = { player: car, cars: [car], dbgCam: null, netPlay: { active: () => false }, gfx: { isMobile: false },
+      camVantage: () => ({ eye: [0, 4, -10], target: [0, 1, 0], fov: 58 }) };
+    return { G, api: boot({}, tier).create(G) };
+  };
+  for (const tier of [2, 3]) {
+    const { G, api } = mk(tier);
+    assert.equal(api.onFlag(), false, `tier ${tier} refuses the finish cut`);
+    assert.equal(api.live(), false);
+    assert.equal(G.dbgCam, null, "no camera installed under load");
+  }
+  const { G, api } = mk(1);
+  assert.equal(api.onFlag(), true, "tier 1 still runs the finish cut");
+  assert.ok(G.dbgCam && G.dbgCam._resultsCam);
 });
 
 test("highlight windows fit end tags, short recordings and the actual budget", () => {
@@ -139,6 +157,11 @@ test("chequered and orbit cameras produce finite renderer projection matrices", 
     const m = new Float32Array(16);
     R.M4.perspectiveTo(m, G.dbgCam.fov * Math.PI / 180, 1.6, .1, G.dbgCam.far);
     assert.ok(m.every(Number.isFinite), "results camera must produce a usable projection");
+    for (const k of ["eye", "target"]) {
+      assert.equal(G.dbgCam[k].length, 3, `${k} is a 3-vector`);
+      assert.ok(G.dbgCam[k].every(Number.isFinite), `${orbit ? "orbit" : "chequered"} ${k} is finite`);
+    }
+    assert.ok(Number.isFinite(G.dbgCam.fov) && G.dbgCam.fov > 0);
   }
 });
 
