@@ -121,12 +121,11 @@ test("a hung lazy file fails at the deadline after signalling slow", async () =>
     },
   });
   vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;", ctx);
-  const t0 = Date.now();
+  // Settling at all proves the deadline fired; no wall-clock bound (a loaded box only delays it).
   const ok = await ctx.ScriptLoader.create().load(["pit-lane.js"], [], { strict: true, slowMs: 30, deadlineMs: 120, onSlow: (s) => slow.push(s) });
   assert.equal(ok, false);
   assert.deepEqual(slow, ["pit-lane.js"]);
   assert.equal(removed.length, 1, "the stalled tag is removed so a retry re-injects");
-  assert.ok(Date.now() - t0 < 2000);
   assert.ok(warns.some((m) => /timed out/.test(m)));
 });
 

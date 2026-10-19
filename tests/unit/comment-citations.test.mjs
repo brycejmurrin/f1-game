@@ -47,14 +47,6 @@ import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-// The citation population. LOWER it when you convert citations to symbol names.
-// 148 after the 2026-08 WebGPU/TLX port rewrite; 0 after replacing the rest
-// with file-path or symbol references (2026-08-12 full sweep).
-const CITATION_CEILING = 0;
-// A ceiling left far above the real count has stopped ratcheting — the same
-// slack rule tools/check/ratchets.mjs carries, for the same reason.
-const CITATION_SLACK = 15;
-
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
@@ -184,19 +176,8 @@ test("a cited line number exists in the file it names", () => {
     "instead of a line number, which is the only form that stays true");
 });
 
-test("cross-file line citations are not multiplying", () => {
-  assert.ok(ALL.length <= CITATION_CEILING,
-    `${ALL.length} cross-file line citations in js/ css/ types/ tests/ tools/, ceiling ${CITATION_CEILING}. ` +
+test("no cross-file line citations remain", () => {
+  assert.deepEqual(ALL.map((c) => `${c.from}:${c.line} -> ${c.target}:${c.a}`), [],
     "A line number in another file cannot be kept true — nothing edits both. Cite the SYMBOL " +
-    "(\"LIT_FS in js/render/glx/shaders/glsl-lit.js\") instead, or raise the ceiling here and say why.");
-});
-
-test("the citation ceiling has not been left far above the real count", (t) => {
-  // At ceiling 0 this subtraction is always <= slack — the assertion only has
-  // teeth once the ceiling is raised above zero, so skip instead of passing
-  // vacuously (a round-6 audit flagged the always-true form).
-  if (CITATION_CEILING === 0) { t.skip("ceiling is 0 — the anti-slack check is moot"); return; }
-  assert.ok(CITATION_CEILING - ALL.length <= CITATION_SLACK,
-    `${ALL.length} citations but the ceiling is ${CITATION_CEILING} — lower it, or the ratchet ` +
-    "silently stops ratcheting and the next batch of rot lands under the gap.");
+    "(\"LIT_FS in js/render/glx/shaders/glsl-lit.js\") instead.");
 });
