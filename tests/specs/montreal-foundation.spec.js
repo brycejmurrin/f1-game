@@ -14,7 +14,8 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   await page.waitForFunction(() => window.__apex.info().track === "montreal", null, { polling: 100, timeout: BOOT_MS });
 
   const result = await page.evaluate(async () => {
-    const def = Tracks.LIST.find((track) => track.id === "montreal");
+    const appTracks = /** @type {any} */ (window).Tracks;
+    const def = appTracks.LIST.find((track) => track.id === "montreal");
     const profile = window.__apex.trackProfile(240);
     const probes = [0, 0.55].flatMap((frac) =>
       [-70, 70].map((lat) => window.__apex.groundY(frac, lat).gap)
@@ -117,6 +118,11 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
 
     expect(session.models.invalid).toEqual([]);
     expect(session.models.unsafe).toEqual([]);
+    // The old Biosphere emitted bands above its declared sphere bounds.
+    expect(session.models.escaped.filter((entry) => entry.id === "montreal-biosphere"))
+      .toEqual([]);
+    expect(session.models.emitted.find((entry) => entry.id === "montreal-biosphere"))
+      .toMatchObject({ required: true });
     // A PIT SUPERSEDE IS BY DESIGN, AND IS STILL PINNED EXACTLY.
     // js/track/scenery/pits.js builds the garages from track.pit, so a circuit's
     // own hand-placed pit block is honoured as a no-op and reported with reason

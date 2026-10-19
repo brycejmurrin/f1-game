@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "e69b921c8e30c1edc1da299499282319c6493970f44be7f6d56640eef95ce291",
+  "sourceDigest": "cd006f28d4cc1f379a4ffc36cd4bd4f96ec8af77098cfaece704c4e899aa15a6",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -962,11 +962,11 @@
       "track": "hungaroring",
       "name": "Pit Complex",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.000001,
+      "frac": 0,
       "target": [
-        373.81,
-        3.15,
-        -341.04
+        373.8,
+        4.34,
+        -341.05
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 51,
@@ -2199,9 +2199,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.3,
       "target": [
-        145.24,
-        26.77,
-        -508.93
+        145.22,
+        30.23,
+        -508.95
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/montreal.js anchor K(0.30)",
