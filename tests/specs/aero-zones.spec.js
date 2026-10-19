@@ -111,20 +111,26 @@ test.describe("active aero — activation zones", () => {
     // the car's real m/s, so measuring against the car would let the difficulty
     // setting silently redraw the track's zones.
     //
-    // Each pace REBUILDS the race: __apex.aeroZones() maps G.aeroZones, which
-    // AeroZones.build() fills once per track build (game.js aeroZ.build()), so
-    // changing PACE on a built race and re-reading would compare one cached
-    // list with itself and pass even if zonesFor() started reading the pace.
+    // Each pace REBUILDS the zones. aeroZones() maps G.aeroZones, which
+    // AeroZones.build() fills only when the track is BUILT — and race() on the
+    // circuit already loaded skips the build (same id, session darkness and
+    // grid size). So pace was compared against one cached list (#2952 P2-03).
+    // The session flips night -> day to force each build, and the Log ring
+    // proves it ran; zones are pure geometry, so darkness cannot move them.
     await loadTrack(page, "monza");
-    const zonesAt = (pace) => page.evaluate(async (p) => {
+    const zonesAt = (pace, tod) => page.evaluate(async ({ p, t }) => {
+      const builds = () => window.__apex.logs().filter((l) => /AeroZones\.build track=monza/.test(l.msg)).length;
+      const b0 = builds();
       window.__apex.setPhysics({ pace: p });
-      await window.__apex.race("monza");
-      return { pace: window.__apex.tuning().pace, zones: window.__apex.aeroZones() };
-    }, pace);
-    const slow = await zonesAt(0.5);
-    const fast = await zonesAt(1.5);
+      await window.__apex.race("monza", t);
+      return { pace: window.__apex.tuning().pace, rebuilt: builds() - b0, zones: window.__apex.aeroZones() };
+    }, { p: pace, t: tod });
+    const slow = await zonesAt(0.5, "night");
+    const fast = await zonesAt(1.5, "day");
     expect(slow.pace, "the rebuild kept the slow pace").toBe(0.5);
     expect(fast.pace, "the rebuild kept the fast pace").toBe(1.5);
+    expect(slow.rebuilt, "the slow-pace zones were built at that pace").toBe(1);
+    expect(fast.rebuilt, "the fast-pace zones were built at that pace").toBe(1);
     expect(slow.zones.length, "monza has zones to compare").toBeGreaterThan(0);
     expect(fast.zones).toEqual(slow.zones);
   });
