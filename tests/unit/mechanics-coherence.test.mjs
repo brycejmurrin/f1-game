@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const root = new URL("../../", import.meta.url);
 function load(files, extra = {}) {
   const values = new Map();
@@ -10,7 +11,7 @@ function load(files, extra = {}) {
     Log: { info() {}, warn() {}, enabled() { return false; } },
     GameStore: { store: { get: (k,d) => values.has(k) ? values.get(k) : d, set: (k,v) => values.set(k,v) } }, ...extra });
   ctx.window = ctx;
-  for (const f of ["js/core/mat4.js", ...files]) vm.runInContext(readFileSync(new URL(f, root), "utf8"),ctx,{filename:f});
+  for (const f of ["js/core/mat4.js", ...files]) vm.runInContext(readFileSync(new URL(f, root), "utf8"),ctx,{filename:absSrc(f)});
   return { get: name => vm.runInContext(name,ctx), values, ctx };
 }
 

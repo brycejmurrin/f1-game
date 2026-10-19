@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/quali-model.js"), "utf8");
@@ -85,7 +86,7 @@ function loadQuali(opts = {}) {
   };
   vm.createContext(ctx);
   seedLog(ctx);
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/race/quali-model.js" });
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/race/quali-model.js") });
   return { q: ctx.Quali.create(G), G, saved, ctx };
 }
 
@@ -316,8 +317,8 @@ function loadSheet({ dom = false } = {}) {
   };
   vm.createContext(ctx);
   seedLog(ctx);
-  if (dom) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/dom.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/dom.js" });
-  vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/quali-sheet.js" });
+  if (dom) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/dom.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/dom.js") });
+  vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/quali-sheet.js") });
   return { sheet: ctx.QualiSheet.create(G), els, refreshed: () => refreshed };
 }
 

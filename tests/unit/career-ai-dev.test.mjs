@@ -10,6 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -22,7 +23,7 @@ function boot() {
     "js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js",
     "js/career/regulations.js", "js/career/ai-dev.js",
   ]) {
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
   // budgetCap stand-in: sum of dearest legal options minus one (mirrors Career).
   let cap = 2105;
@@ -227,7 +228,7 @@ function makeCarsBoot() {
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/core/hash32.js", "js/physics/consts.js",
     "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js"]) {
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
   vm.runInContext(`
     var career={year:2027,aiParts:{}}, active=true, tdev=1, draws=0, saved=null;

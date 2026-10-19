@@ -18,6 +18,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -31,8 +32,8 @@ const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/t
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
-  vm.runInThisContext(read(f), { filename: f });
-vm.runInThisContext(SHADOW, { filename: "js/render/three/tlx-shadow.js" });
+  vm.runInThisContext(read(f), { filename: absSrc(f) });
+vm.runInThisContext(SHADOW, { filename: absSrc("js/render/three/tlx-shadow.js") });
 
 // ── A-H4 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 // A GPU-buffer model over the fake context: what each GL buffer object holds, and every draw's instance count.

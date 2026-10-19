@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-relative.js"), "utf8");
@@ -73,7 +74,7 @@ test("select: a short field leaves empty slots; the same row objects every call"
 test("fmtGap: sign carries ahead/behind; hundredths under 10 s (the chip's spelling), tenths to 99, then 99+", () => {
   // Deliberate re-pin (hud-gap-decimals): REL used to print tenths / whole seconds, so one
   // gap read "0.94s" on the chip and "-0.9" here. Both paths -- HudReadouts present or not -- must agree.
-  const HR = (() => { const c = {}; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-readouts.js"), "utf8") + "; this.HudReadouts = HudReadouts;", c); return c.HudReadouts; })();
+  const HR = (() => { const c = {}; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-readouts.js"), "utf8") + "; this.HudReadouts = HudReadouts;", c, { filename: absSrc("js/ui/hud-readouts.js") }); return c.HudReadouts; })();
   for (const R of [load(), load({ HudReadouts: HR })]) {
     assert.equal(R.fmtGap(1.234, true), "-1.23");
     assert.equal(R.fmtGap(0.94, true), "-0.94");

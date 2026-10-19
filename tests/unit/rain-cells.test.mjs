@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -30,7 +31,7 @@ function boot() {
   ctx.Particles = { rainShow() {}, rainSeed() {}, rainIntensity() {} };
   ctx.GameAudio = { startRain() {}, stopRain() {} };
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   let wa = null;
   const G = {
     raceWeather: "dry", soundOn: false, state: "race", raceT: 0, headlessMode: false,

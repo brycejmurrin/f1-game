@@ -13,13 +13,14 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 function presets() {
   const ctx = vm.createContext({ window: {}, Math, JSON, Object, Array });
-  vm.runInContext(read("js/lighting/presets.js"), ctx, { filename: "js/lighting/presets.js" });
+  vm.runInContext(read("js/lighting/presets.js"), ctx, { filename: absSrc("js/lighting/presets.js") });
   return vm.runInContext("window.LightPresets", ctx);
 }
 

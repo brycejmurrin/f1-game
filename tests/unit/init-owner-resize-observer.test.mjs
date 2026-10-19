@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -31,8 +32,8 @@ function boot() {
   const canvas = Object.assign(new Element(), { clientWidth: 800, clientHeight: 450, getContext: () => ({}) });
   const win = { innerWidth: 1, innerHeight: 1, addEventListener() {}, removeEventListener() {} };
   const ctx = vm.createContext({ Element, ResizeObserver, window: win, Log: { info() {}, warn() {} }, localStorage: { getItem: () => null }, console });
-  vm.runInContext(read("js/render/shared/canvas-css-size.js") + ";globalThis.CanvasCssSize = CanvasCssSize;", ctx);
-  vm.runInContext(read("js/render/gfx.js") + ";globalThis.Gfx = Gfx;", ctx);
+  vm.runInContext(read("js/render/shared/canvas-css-size.js") + ";globalThis.CanvasCssSize = CanvasCssSize;", ctx, { filename: absSrc("js/render/shared/canvas-css-size.js") });
+  vm.runInContext(read("js/render/gfx.js") + ";globalThis.Gfx = Gfx;", ctx, { filename: absSrc("js/render/gfx.js") });
   return { ctx, canvas, observed };
 }
 

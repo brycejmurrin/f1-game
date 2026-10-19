@@ -25,13 +25,14 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // The REAL predicate from js/data/teams.js (not a hand copy that can drift from it).
 const realIsReal = (() => {
   const c = vm.createContext({ console, Math, Object, Array, Number, String, JSON });
-  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: "js/data/teams.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: absSrc("js/data/teams.js") });
   return vm.runInContext("Teams.isReal", c);
 })();
 
@@ -67,9 +68,9 @@ function load() {
   });
   seedLog(ctx);
   seedHash32(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx, { filename: "js/data/driver-ratings.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx, { filename: "js/career/career.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx, { filename: absSrc("js/data/driver-ratings.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx, { filename: absSrc("js/career/career.js") });
   return vm.runInContext("Career", ctx);
 }
 

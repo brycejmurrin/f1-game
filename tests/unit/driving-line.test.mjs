@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -18,7 +19,7 @@ function load() {
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/driving-line.js"), "utf8"), ctx,
-    { filename: "js/render/shared/driving-line.js" });
+    { filename: absSrc("js/render/shared/driving-line.js") });
   return vm.runInContext("DrivingLine", ctx);
 }
 

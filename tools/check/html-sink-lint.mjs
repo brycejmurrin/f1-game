@@ -14,8 +14,9 @@
 // could carry player text; every one had to be read to find out. This lint
 // makes that reading a one-time audit plus a gate on the NEXT site.
 //
-// WHAT IS A SITE. An assignment (`=` or `+=`) to `.innerHTML` / `.outerHTML`
-// (dotted or `["innerHTML"]`), or an `insertAdjacentHTML(pos, html)` call,
+// WHAT IS A SITE. An assignment (`=` or `+=`) to `.innerHTML` / `.outerHTML` /
+// `.srcdoc` (dotted or `["innerHTML"]`), or an `insertAdjacentHTML(pos, html)`,
+// `createContextualFragment(html)` or `document.write(ln)(html)` call,
 // whose HTML is not CONSTANT. Constant means: a string literal, a template
 // with no substitutions, `+` of constants, or a ternary whose two arms are
 // constants (the test may be anything — it only picks between literals).
@@ -37,7 +38,10 @@ import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const ALLOWLIST = "tests/data/html-sink-allowlist.json";
-const SINK_PROPS = new Set(["innerHTML", "outerHTML"]);
+const SINK_PROPS = new Set(["innerHTML", "outerHTML", "srcdoc"]);
+
+// Call sinks -> index of the HTML argument. write/writeln only count on `document`.
+const CALL_SINKS = new Map([["insertAdjacentHTML", 1], ["createContextualFragment", 0], ["write", 0], ["writeln", 0]]);
 
 const SKIP_KEYS = new Set(["loc", "range", "type", "parent", "start", "end"]);
 function each(node, fn) {
@@ -78,10 +82,12 @@ export function lintSource(src, file = "<src>") {
       const p = propName(n.left);
       if (!p || !SINK_PROPS.has(p) || isConstantHtml(n.right)) return;
       sites.push({ line: n.loc.start.line, sink: p, key: `${file}::${text(n.left.object)}.${p}` });
-    } else if (n.type === "CallExpression" && propName(n.callee) === "insertAdjacentHTML") {
-      if (isConstantHtml(n.arguments[1])) return;
-      sites.push({ line: n.loc.start.line, sink: "insertAdjacentHTML",
-        key: `${file}::${text(n.callee.object)}.insertAdjacentHTML` });
+    } else if (n.type === "CallExpression") {
+      const p = propName(n.callee);
+      const arg = CALL_SINKS.get(p);
+      if (arg === undefined || isConstantHtml(n.arguments[arg])) return;
+      if (arg === 0 && (p === "write" || p === "writeln") && !/^(window\.)?document$/.test(text(n.callee.object))) return;
+      sites.push({ line: n.loc.start.line, sink: p, key: `${file}::${text(n.callee.object)}.${p}` });
     }
   });
   return { file, parseError: null, sites };
@@ -103,7 +109,7 @@ export function lintAll(root = ROOT) {
   for (const file of walk(abs)) {
     const rel = path.relative(root, file).split(path.sep).join("/");
     const src = fs.readFileSync(file, "utf8");
-    if (!/innerHTML|outerHTML|insertAdjacentHTML/.test(src)) continue;   // cheap pre-filter
+    if (!/innerHTML|outerHTML|insertAdjacentHTML|srcdoc|createContextualFragment|document\s*\.\s*write/.test(src)) continue;   // cheap pre-filter
     const r = lintSource(src, rel);
     if (r.parseError || r.sites.length) out.push(r);
   }

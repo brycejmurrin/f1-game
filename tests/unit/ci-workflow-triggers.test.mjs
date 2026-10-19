@@ -13,6 +13,7 @@ import { parse as parseYAML } from "yaml";
 import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
 import { report } from "../../tools/ci/ci-coverage.mjs";
 import { ciWorkflow, pagesWorkflow, selectJob, shipFilter, PR_ACTIVE } from "../helpers/ci-workflow.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // A commit that touches only docs / markdown / agent config ships nothing;
@@ -269,7 +270,7 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
       const apos = body.split("\n").findIndex((l) => l.includes("'"));
       assert.equal(apos, -1,
         `${f}:${i + 1 + apos + 1}: an apostrophe inside a single-quoted node -e script ends the script there`);
-      assert.doesNotThrow(() => new vm.Script(body, { filename: `${f}:${i + 1}` }),
+      assert.doesNotThrow(() => new vm.Script(body, { filename: absSrc(`${f}:${i + 1}`) }),
         `${f}:${i + 1}: the inline node script does not parse`);
       blocks++;
       i = j;

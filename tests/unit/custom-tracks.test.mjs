@@ -15,6 +15,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -38,7 +39,7 @@ function boot(stored = {}, pre) {
   };
   ctx.GameStore = { store };
   if (pre) pre(ctx);   // globals the registry reads at eval (e.g. a stub TrackDesignerProps)
-  for (const f of MODULES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+  for (const f of MODULES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   return { Tracks, ctx, data, writes, C: ctx.CustomTracks, T: ctx.TrackThemes };
 }
 
@@ -531,7 +532,7 @@ test("a TRACK DESIGNER retry after a partial load failure injects only the files
       }, 0);
     } },
   };
-  vm.runInContext(read("js/core/script-loader.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/core/script-loader.js" });
+  vm.runInContext(read("js/core/script-loader.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/script-loader.js") });
   const api = C.create({ soundOn: false }, { load: ctx.ScriptLoader.create().load });
   attempt = 1; attempts[1] = [];
   assert.equal(await api.ensureEditor(), false, "the first tap fails on the dropped file");

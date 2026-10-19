@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
@@ -28,7 +29,7 @@ function load() {
     "js/physics/tyre-model.js",
     "js/physics/wheel-state.js",
   ]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return {
     WheelState: vm.runInContext("WheelState", ctx),

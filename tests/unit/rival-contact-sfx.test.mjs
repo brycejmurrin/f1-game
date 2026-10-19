@@ -15,6 +15,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js",
@@ -97,8 +98,8 @@ function boot(listener) {
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"),
-    vctx, { filename: "mat4.js" });
-  vm.runInContext(ENGINE_SRC, vctx, { filename: "engine.js" });
+    vctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(ENGINE_SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   GameAudio.init();
   GameAudio.setEnabled(true);
@@ -190,7 +191,7 @@ test("fieldContact: stopEngine (pause / results) disarms and tears the pool", ()
 
 test("RivalAudio.emitFieldSfx: lock-up triggers squeal for a rival, not the player", () => {
   const { GameAudio, vctx } = boot();
-  vm.runInContext(RIVALS_SRC.replace(/^const\b/gm, "var"), vctx, { filename: "rivals.js" });
+  vm.runInContext(RIVALS_SRC.replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/rivals.js") });
   const RivalAudio = vm.runInContext("RivalAudio", vctx);
   const me = { s: 100, x: 0, speed: 50, rpm: 8000, isPlayer: true, retired: false };
   const ai = {

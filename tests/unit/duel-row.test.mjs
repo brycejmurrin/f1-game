@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 const HTML = fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8");
 
 // Arrays built inside the vm realm have that realm's prototype, so a strict
@@ -17,7 +18,7 @@ const flat = (opts) => Array.from(opts, (o) => o.join(":"));
 
 function load(files, extra = {}) {
   const ctx = vm.createContext(Object.assign({ console, Object, Math }, extra));
-  for (const f of files) vm.runInContext(fs.readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
+  for (const f of files) vm.runInContext(fs.readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: absSrc(f) });
   return (name) => vm.runInContext(name, ctx);
 }
 const withLegends = load(["js/core/mat4.js", "js/data/legends.js", "js/race/race-settings.js"]);

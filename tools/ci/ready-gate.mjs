@@ -49,7 +49,7 @@ export function api(pathQs, { run = spawnSync, env = process.env, gh } = {}) {
     "-H", "Cache-Control: no-cache",
     `https://api.github.com/repos/${REPO}/${pathQs}`],
   // maxBuffer: 100 check-runs with their output text can pass spawnSync's 1 MB
-  // default (ENOBUFS → "curl failed"; ready-full-cap's #1733).
+  // default (ENOBUFS → "curl failed"; the old ready-cap helper's #1733).
   { encoding: "utf8", maxBuffer: 64 << 20, input: `header = "Authorization: Bearer ${token}"\n` });
   if (r.status !== 0) return { error: (r.stderr || r.error?.code || "curl failed").trim() };
   const out = (r.stdout || "").split("\n");

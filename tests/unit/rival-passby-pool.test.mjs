@@ -14,6 +14,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -69,9 +70,9 @@ function load() {
   sb.window = sb;
   const count = countingContext(sb);
   const ctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: "consts.js" });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"), ctx, { filename: "rivals.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"), ctx, { filename: absSrc("js/audio/rivals.js") });
   const RivalAudio = vm.runInContext("RivalAudio", ctx);
   return { RivalAudio, AudioContext: sb.AudioContext, created: count.created };
 }

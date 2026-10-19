@@ -6,6 +6,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/net/lobby-codes.js"), "utf8");
@@ -39,7 +40,7 @@ function boot(opts = {}) {
         .replace(/^const\b/gm, "var"), ctx);
     }
   }
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "lobby-codes.js" });
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/net/lobby-codes.js") });
   return { LobbyCodes: vm.runInContext("LobbyCodes", ctx), handshake: ctx.NetHandshake, draws };
 }
 
@@ -222,7 +223,7 @@ function bootShare({ shareError, clipboardOk }) {
     NetScan: { supported: () => false, create: () => ({ start: async () => ({ ok: false }), stop() {} }) },
   };
   const ctx = vm.createContext(sb);
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "lobby-codes.js" });
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/net/lobby-codes.js") });
   ctx.ApexClipboard = { write: async () => clipboardOk };
   const codes = vm.runInContext("LobbyCodes", ctx).create({
     els: () => ({}), $: () => null, say: (m, err) => said.push([m, !!err]),

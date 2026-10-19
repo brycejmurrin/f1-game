@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "./abs-src.mjs";
 
 const HASH32_JS = fs.readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/core/hash32.js"),
@@ -15,6 +16,6 @@ const HASH32_JS = fs.readFileSync(
 
 /** Evaluate js/core/hash32.js into an existing VM context. */
 export function seedHash32(ctx) {
-  vm.runInContext(HASH32_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/hash32.js" });
+  vm.runInContext(HASH32_JS.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/hash32.js") });
   return ctx;
 }
