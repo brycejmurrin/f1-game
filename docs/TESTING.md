@@ -327,6 +327,27 @@ Every failure automatically attaches three things (see `tests/helpers/fixtures.j
 | `apex-logs` | the `Log` ring buffer: retained diagnostics down to `info`, **including ones never printed** |
 | `page-console` | what the page actually said, in order, favicon noise stripped |
 
+### Debug a Node test
+
+Measured on Node v22 in `docs/notes/NODE-DEBUGGING-2026-10-19.md`; skill `js-debugger` drives the tools.
+
+1. **Default: one MCP call.** `debugger_node_test {files:[…], probes:[{file:"js/physics/brake-cue.js", line, expression, captureLocals}]}`
+   runs up to 8 files under the inspector, no attach, and returns hit counts, values and locals. Probe a body line,
+   not the `function` header. Add `runner:"test"` for the real `node --test`.
+2. **Interactive:** `node --inspect-brk=0 tests/unit/<f>.test.mjs` (no `--test`: one process, one ws URL, the runner
+   still reports), then `debugger_targets targetType:"node"` and attach. `--test` with several files hangs a single
+   client, because each file's child waits on its own port.
+3. **Which filename form is debuggable.** V8 reports a vm script under exactly the `filename` it was given:
+   an absolute path is a `file://` URL that url breakpoints and `--experimental-test-coverage` reach (the game-vm
+   family); a relative (`js/…`), bare or missing filename is not (coverage drops it, url breakpoints match 0). The MCP
+   still binds those by source inside an instrumentation pause, capped at `vmPauseBudget` executions, so a probe on
+   an unnamed vm script works but a vm-heavy suite pays for it (`cam-avoid-vm` 121 s uncapped). Issues #2960 (opt-in
+   preload) and #2961 (absolute filenames) track the permanent fix.
+4. **Breakpoint cost.** A logpoint is a condition that logs and returns `false`; a pause-then-resume on every hit
+   costs ~44 ms per round trip (`game-vm.test` 26 s → 84 s).
+5. **Columns shift by 2** on top-level `const` lines (the harness rewrites them to `var`); set line breakpoints.
+6. **Never leave a client attached at exit:** Node prints "Waiting for the debugger to disconnect…" and hangs.
+
 ---
 
 ## 2. Test groups

@@ -285,7 +285,7 @@ export class DebugSession {
     const detachGeneration = ++this.attachGeneration;
     this.connecting = false;
     const client = this.cdp;
-    if (!client) { this.pause = null; return { detached: true, cleanupErrors: [] }; }
+    if (!client) { this.pause = null; this.operations.clear(); return { detached: true, cleanupErrors: [] }; }
     const cleanupErrors = [], cleanupWarnings = [];
     let resumedEventObserved = false, timer;
     const observed = () => { resumedEventObserved = true; };
@@ -330,7 +330,7 @@ export class DebugSession {
       // still settling. Never let that old detach erase the replacement session.
       if (this.attachGeneration === detachGeneration) {
         this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null;
-        this.breakpoints.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.scripts.clear(); this.operationGroups.clear(); this.connecting = false;
+        this.breakpoints.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.scripts.clear(); this.operationGroups.clear(); this.operations.clear(); this.connecting = false;
       }
     }
     return { detached: true, cleanupErrors: [...cleanupErrors], cleanupWarnings, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
