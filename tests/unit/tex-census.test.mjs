@@ -156,7 +156,7 @@ test('GPU allocation wrapper preserves array layers while mipmapping true 3D dep
     gl.texStorage3D(target, 3, gl.RGBA8, width, height, depth);
     assert.equal(GL.prototype.__gm.tex.get(texture).b, expected, `target ${target}, ${width}x${height}x${depth}`);
     gl.deleteTexture(texture);
-    assert.equal(GL.prototype.__gm.tex.has(texture), false);
+    assert.equal(GL.prototype.__gm.tex.get(texture), undefined, 'deleted texture leaves the census');
   }
   const texture = {};
   gl.bindTexture(GL.TEXTURE_2D, texture);

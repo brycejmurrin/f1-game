@@ -84,7 +84,11 @@ function typedRibbon(geo) {
   }
 }
 
-async function build(m) {
+// Only opted-in callers require a page permit. Cancellation while model
+// readiness is pending avoids Tracks.build; its synchronous body cannot be
+// interrupted by later messages. Independent callers have no latest-wins rule.
+const _jobs = new Map();
+async function build(m, job) {
   const recs = [];
   const rec = (op) => (...args) => {
     const n = recs.length;
@@ -103,6 +107,13 @@ async function build(m) {
   adoptTeam(m.team);
   const src = scenerySrc(def);
   if (typeof Assets !== "undefined" && Assets.modelsReady) await Assets.modelsReady(0, src);
+  if (job.cancelled) return;
+  if (m.checkLive) {
+    const permitted = new Promise((resolve) => { job.permit = resolve; });
+    self.postMessage({ type: "buildReady", seq: m.seq });
+    if (!(await permitted) || job.cancelled) return;
+  }
+  adoptTeam(m.team); // readiness waits may have let another job change MY TEAM
   const t0 = performance.now();
   const track = Tracks.build(def, Object.assign({}, m.opts, { gfx, retainRibbonCpu: true }));
   const ms = performance.now() - t0;
@@ -128,8 +139,16 @@ self.onmessage = async (e) => {
         _loaded = true;   // no model prefetch: each build fetches its own circuit's set
       }
       self.postMessage({ type: "ready" });
+    } else if (m.type === "buildPermit") {
+      const job = _jobs.get(m.seq);
+      if (job) {
+        if (!m.live) job.cancelled = true;
+        if (job.permit) job.permit(!!m.live);
+      }
     } else if (m.type === "build") {
-      await build(m);
+      const job = { cancelled: false, permit: null };
+      _jobs.set(m.seq, job);
+      try { await build(m, job); } finally { _jobs.delete(m.seq); }
     }
   } catch (err) {
     self.postMessage({ type: "error", seq: m.seq, message: String((err && err.message) || err) });
