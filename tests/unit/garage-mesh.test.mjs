@@ -283,6 +283,86 @@ test("preview hulls are dropped when their mesh LRU slot is evicted", () => {
 // latch 31 years out, log nothing, and keep the freed handle — so one throw from
 // createTexture froze the traces for the page load and stayed invisible to Log.
 // Keep the old handle while trying the replacement so a later tick can retry.
+function liveAtlasHarness() {
+  let now = 10000, tracePaints = 0, failTrace = false;
+  const uploads = [], warns = [];
+  const c2d = new Proxy(function () {}, {
+    get: (_, k) => k === Symbol.toPrimitive ? () => 0 : k === "fillText"
+      ? (text) => { if (text === "ERS SOC") { tracePaints++; if (failTrace) throw new Error("trace paint failed"); } } : c2d,
+    set: () => true, apply: () => c2d,
+  });
+  const gfx = {
+    isMobile: true, createMesh: () => ({}), createTexMesh: () => ({}),
+    freeMesh() {}, freeTexture() {}, draw() {}, drawGlow() {}, drawDecal() {},
+    createTexture(src) { uploads.push({ width: src.width, tracePaints }); return {}; },
+  };
+  const ctx = vm.createContext({
+    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
+    Uint32Array, isFinite, parseFloat, parseInt, Date,
+    performance: { now: () => now }, LiveryTex: {},
+    document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) },
+    Log: { info() {}, warn: (_t, m) => warns.push(m), error() {}, debug() {}, enabled: () => false },
+  });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
+    vm.runInContext(read(f), ctx, { filename: f });
+  const scene = vm.runInContext("GarageScene", ctx);
+  scene.init(gfx);
+  return { scene, uploads, warns, gfx, wall(t) { now = t; }, failTrace(on) { failTrace = on; },
+    draw(sceneNow, extra = {}, liv = LIV) { scene.draw(TEAM, liv, [0, 1.6, 0], null, 0, { sceneNow, ambient: true, ...extra }); },
+    liveUploads() { return uploads.filter((u) => u.width === 512); } };
+}
+
+test("garage combines the initial trace with one live upload and keeps the phone scene-clock cadence", () => {
+  const h = liveAtlasHarness();
+  h.draw(100);
+  assert.deepEqual(h.liveUploads(), [{ width: 512, tracePaints: 1 }], "the first upload must already contain its trace");
+  h.wall(90000); h.draw(100);
+  h.draw(4100);
+  assert.equal(h.liveUploads().length, 1, "wall time or the exact 4 s boundary must not trigger a second upload");
+  h.draw(4101);
+  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2]);
+  h.draw(8202, {}, { ...LIV, c1: [0.8, 0.4, 0.1] });
+  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2, 3], "a repaint on an expired trace tick must still upload once");
+  h.scene.release(); h.draw(8300);
+  assert.equal(h.liveUploads().length, 4, "a new garage session must also combine its first upload");
+  assert.deepEqual(h.warns, []);
+});
+
+test("still and studio garages keep traces inactive until ambient room rendering resumes", () => {
+  for (const extra of [{ ambient: false }, { studio: true }]) {
+    const h = liveAtlasHarness();
+    h.draw(100, extra);
+    assert.deepEqual(h.liveUploads(), [{ width: 512, tracePaints: 0 }]);
+    h.draw(101);
+    assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [0, 1]);
+    h.draw(102);
+    assert.equal(h.liveUploads().length, 2);
+  }
+});
+
+test("a prebuilt trace refreshes once when the visible garage scene clock rewinds", () => {
+  const h = liveAtlasHarness();
+  h.scene.prepare(TEAM, LIV, null, 0, { sceneNow: 9000, ambient: true });
+  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1]);
+  h.draw(1000);
+  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2], "a held earlier clock must replace the future trace");
+  h.draw(1000); h.draw(5000);
+  assert.equal(h.liveUploads().length, 2, "the rewind refresh restarts the ordinary phone cadence");
+  h.draw(5001);
+  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2, 3]);
+});
+
+test("a first trace paint failure preserves the live atlas and retries on its next tick", () => {
+  const h = liveAtlasHarness();
+  h.failTrace(true); h.draw(100);
+  assert.equal(h.liveUploads().length, 1, "the rest of the live atlas must still upload");
+  assert.match(h.warns[0], /live trace failed: trace paint failed/);
+  assert.equal(h.warns.length, 1, "the failing trace must not be attempted twice in one frame");
+  h.failTrace(false); h.draw(4101);
+  assert.deepEqual(h.liveUploads().map((u) => u.tracePaints), [1, 2]);
+});
+
 test("a failed trace upload preserves its decal and retries after recovery", () => {
   // Any 2D-context call returns the context itself; any numeric read is 0.
   const c2d = new Proxy(function () {}, {

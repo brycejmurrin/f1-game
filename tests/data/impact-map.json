@@ -6741,11 +6741,16 @@
       ]
     },
     "js/garage/scene-crew.js": {
+      "build": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
       "draw": [
-        "tests/unit/garage-crew.test.mjs"
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "init": [
-        "tests/unit/garage-crew.test.mjs"
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "layout": [
         "tests/unit/garage-crew.test.mjs"
@@ -6839,6 +6844,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "prepare": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -6861,6 +6867,7 @@
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "release": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "spot": [

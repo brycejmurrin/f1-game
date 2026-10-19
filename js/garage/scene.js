@@ -989,6 +989,13 @@ function uploadLive(team, liv, ctx, now) {
     if (!liveCanvas) { liveCanvas = document.createElement("canvas"); liveCanvas.width = liveCanvas.height = LIVE; }
     paintLive(liveCanvas, team, liv, ctx);
     GarageExperience.paintCareer(liveCanvas, ctx);
+    // Include the first trace before uploading: draw() otherwise uploads this
+    // same 512² atlas again immediately, including synchronous phone mipmaps.
+    if ((!ctx || ctx.ambient !== false) && !(ctx && ctx.studio) && traceFail < 3) {
+      lastTrace = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : now;
+      try { paintTrace(liveCanvas, liv, lastTrace); traceFail = 0; }
+      catch (e) { traceFail++; Log.warn("game", `GarageScene live trace failed: ${e && e.message}`); }
+    }
     if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
     liveTex = null;
     liveTex = _gfx.createTexture(liveCanvas);
@@ -1177,7 +1184,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // Phone: the trace is a 256×128 scribble, but the upload replaces the whole
   // 512² atlas. Stretch the hitch; desktop keeps the 1.5 s tick.
   const traceMs = (_gfx.isMobile || _gfx.mobileTier) ? 4000 : 1500;
-  if ((!ctx || ctx.ambient !== false) && liveTex && liveCanvas && traceFail < 3 && now - lastTrace > traceMs) {
+  if ((!ctx || ctx.ambient !== false) && liveTex && liveCanvas && traceFail < 3 && (now < lastTrace || now - lastTrace > traceMs)) {
     lastTrace = now;
     try {
       paintTrace(liveCanvas, liv, now);
@@ -1394,7 +1401,7 @@ function prepared(team, liv, getParts, driverIdx, ctx) {
 // cleared keys make the next idle title pre-build it again. Returns the handles freed.
 function release() {
   if (!_gfx) return 0;
-  let n = 0;
+  let n = typeof GarageCrew !== "undefined" && GarageCrew.free ? GarageCrew.free() : 0;
   const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
   shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); trussMesh = fm(trussMesh);
