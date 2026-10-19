@@ -89,6 +89,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
 | **lib/ui-device-profile.mjs** | Consistent device identities for UI probes; CSS viewports are never inferred from screenshot pixels. | — |
 | **lib/ui-mock-core.mjs** | Core of hud-mock/menu-mock: held rAF loop, labelled boxes, CDP capture (png\|jpeg, clip), contact sheet, cell cache. | — |
+| **lib/vm-debug-preload.cjs** | Opt-in NODE_OPTIONS=--require preload: rewrite vm filenames to absolute file:// URLs for debug/coverage. | check-changes |
 | **lib/vm-script-cache.cjs** | Persist vm.Script cachedData for game-vm manifest eval (content-hash keyed). | — |
 | **lib/webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | mcp-probe |
 | **lib/work-tree-id.mjs** | Content id of the WORKING TREE (tracked + untracked, ignore rules honoured) as a git tree hash, and of a commit's tree. | — |
@@ -153,6 +154,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
 | **check/defend-duel.mjs** | Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`). | ai-racecraft |
 | **check/destructure-usage.mjs** | Fails when a file destructures a name its script-global provider does not export (a dropped name after a rebase). | slim-bloat |
+| **check/determinism-bisect.mjs** | First-divergent-step finder: compare two per-step game-vm state traces (seeds or builds). | agent-view |
 | **check/doctor.mjs** | Read-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network. | check-changes |
 | **check/dup-keys.mjs** | Scans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins. | check-changes |
 | **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |
@@ -549,6 +551,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/ci-select-specs-step.sh** | The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`. |
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
+| **ci/debug-unit.mjs** | Wrapper: npm run debug:unit -- <file> loads vm-debug-preload so vm-loaded js/ is file://-debuggable. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
 | **ci/fleet-bus.mjs** | Merge lease (one holder, expiry, refusal) and typed fleet bus on the claude/fleet-bus branch, any host. |

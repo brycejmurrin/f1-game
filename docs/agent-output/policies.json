@@ -221,6 +221,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/determinism-bisect.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exit 0 on match, 1 on unexpected divergence; first-divergent step and field names; --json machine result."
+    },
     "tools/check/doctor.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -465,6 +470,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Missing coverage failure and actual inputs; generated HTML is artifact"
+    },
+    "tools/ci/debug-unit.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Forwarded node --test output and actual exit status; NODE_OPTIONS preload is the only change."
     },
     "tools/ci/deploy.mjs": {
       "action": "job-status",
@@ -1312,6 +1322,11 @@
       "preserve": "@c3"
     },
     "tools/lib/ui-mock-core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/vm-debug-preload.cjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
