@@ -30,9 +30,9 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 423,
+    "files": 424,
     "classifications": {
-      "entrypoint-candidate": 286,
+      "entrypoint-candidate": 287,
       "ambiguous": 56,
       "protocol-entrypoint": 28,
       "asset": 2,
@@ -768,6 +768,14 @@
       "path": "tools/ci/fleet-flags.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/fleet-tick.mjs",
+      "classification": "entrypoint-candidate",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
