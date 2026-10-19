@@ -1,0 +1,1 @@
+1792446448	Bryce Murrin	UI screenshot-review pass: OWNED css/settings.css css/race-setup.css css/tuner.css css/data.css only; scoped phone/desktop overlap fixes. Parent browser verification and changelog. Separate subagent worktrees; no garage/HUD/runtime/renderer changes.  [cursor/ui-review-pass-7c42; session 3a749d0fa6ff88ed677068a2]
