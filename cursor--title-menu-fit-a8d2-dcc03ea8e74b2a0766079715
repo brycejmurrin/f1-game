@@ -1,1 +1,1 @@
-1792374440	Bryce Murrin	Title menu no-scroll full-screen landscape fix: css/menu-destinations.css and title menu regression spec  [cursor/title-menu-fit-a8d2; session dcc03ea8e74b2a0766079715]
+1792379277	Bryce Murrin	#2943 title menu fit: css/menu-destinations.css, title-menu-rotation and ui-scale regressions; 8051ad2c6 pushed, local full gate passed, watching CI  [cursor/title-menu-fit-a8d2; session dcc03ea8e74b2a0766079715]
