@@ -13,6 +13,10 @@ const SW_SOURCE = await readFile(new URL("../../sw.js", import.meta.url), "utf8"
 const ORIGIN = "https://apex.test";
 const key = (v) => (typeof v === "string" ? new URL(v, `${ORIGIN}/`).href : v.url);
 
+// Read the race length from sw.js itself so the shim cannot drift from the constant it fakes.
+const NAV_RACE_MS = Number(/const NAV_RACE_MS = (\d+);/.exec(SW_SOURCE)?.[1]);
+if (!Number.isFinite(NAV_RACE_MS)) throw new Error("sw.js no longer declares `const NAV_RACE_MS = <ms>;` — update this shim");
+
 function harness({ fetchImpl, seed = {} }) {
   const listeners = new Map();
   const stores = new Map([["apex26-321", new Map(Object.entries(seed).map(([k, v]) => [key(k), new Response(v)]))]]);
@@ -32,8 +36,8 @@ function harness({ fetchImpl, seed = {} }) {
     URL, AbortController, Request, Response, caches, fetch: fetchImpl,
     self: { location: { origin: ORIGIN, hostname: "apex.test", href: `${ORIGIN}/sw.js?v=321` }, clients: { async claim() {} },
       addEventListener(t, l) { listeners.set(t, l); }, skipWaiting() {} },
-    // the 3 s navigation race loses at once; every other timer is real
-    setTimeout: (cb, ms, ...a) => (ms === 3000 ? (queueMicrotask(() => cb(...a)), 1) : setTimeout(cb, ms, ...a)),
+    // the navigation race (sw.js NAV_RACE_MS) loses at once; every other timer is real
+    setTimeout: (cb, ms, ...a) => (ms === NAV_RACE_MS ? (queueMicrotask(() => cb(...a)), 1) : setTimeout(cb, ms, ...a)),
     clearTimeout,
     navigator: { onLine: true },
   });
