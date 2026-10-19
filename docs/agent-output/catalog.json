@@ -764,6 +764,10 @@
       ]
     },
     {
+      "path": "tools/ci/docs-only-policy.mjs",
+      "classification": "ambiguous"
+    },
+    {
       "path": "tools/ci/fixture-consumer-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

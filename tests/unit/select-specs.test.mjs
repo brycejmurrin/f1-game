@@ -1019,6 +1019,14 @@ test("a docs-only change is 'nothing to select', never 'unmatched'", () => {
   assert.equal(isDocsOnly([]), false);
 });
 
+test("docs-only policy is shared with dependency-free consumers and excludes .codex", async () => {
+  const policy = await import("../../tools/ci/docs-only-policy.mjs");
+  assert.equal(DOCS_ONLY, policy.DOCS_ONLY, "selector must preserve the existing exported array identity");
+  assert.equal(isDocsOnly, policy.isDocsOnly, "selector must re-export the canonical predicate");
+  assert.equal(isDocsOnly([".codex/config.toml"]), false);
+  assert.equal(isDocsOnly(["docs/README.md", ".codex/config.toml"]), false);
+});
+
 test("DOCS_ONLY still mirrors the deploy push's paths-ignore (pages.yml since 2026-10-16)", () => {
   // The comment on DOCS_ONLY says these two lists move together. If someone
   // adds a path to the workflow's ignore list and not here, a deploy touching

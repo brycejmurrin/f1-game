@@ -56,3 +56,12 @@ test("code diff or non-browser group → no WASTE", () => {
     groups: ["smoke"], scripts, changed: [], force: false,
   }), null);
 });
+
+test("shared docs-only policy keeps cursor rules advisory and codex config outside it", () => {
+  assert.match(docsOnlyWasteWarning({
+    groups: ["smoke"], scripts, changed: [".cursor/rules/apex-shared.mdc"], force: false,
+  }), /^WASTE:/);
+  assert.equal(docsOnlyWasteWarning({
+    groups: ["smoke"], scripts, changed: [".codex/config.toml"], force: false,
+  }), null);
+});

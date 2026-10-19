@@ -32,6 +32,8 @@ import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
 import { changeKind } from "./change-kind.mjs";
+import { DOCS_ONLY, isDocsOnly } from "./docs-only-policy.mjs";
+export { DOCS_ONLY, isDocsOnly } from "./docs-only-policy.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import { loadQuarantine } from "../../tests/helpers/flaky-policy.mjs";
 import * as espree from "espree";
@@ -1202,17 +1204,6 @@ export function racingCircuitIds(changed) {
   }
   return [...ids].sort();
 }
-
-// DOCS-ONLY IS "NOTHING TO SELECT", NOT "UNMATCHED". ci.yml's own push trigger
-// already ignores these paths, so a docs commit never reaches the selected gate
-// by push — but pages.yml CALLS the workflow, and workflow_call does not honour
-// paths-ignore. So the DEPLOY path saw a docs diff, matched no rule, and failed
-// closed: a red Pages run for a change that ships no code. Measured on an
-// AGENTS.md-only deploy. This list mirrors ci.yml's paths-ignore deliberately —
-// if one grows, so must the other, and select-specs.test.mjs pins that.
-export const DOCS_ONLY = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//];
-export const isDocsOnly = (changed) =>
-  changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f)));
 
 // SOURCE → SPEC pins that must run as AFFECTED (rank 2), not merely routed.
 // career.spec.js declares 540 s/test, so the modes-group path rule alone puts
