@@ -1,1 +1,1 @@
-READY to:orchestrator from:claude:3834fe04-eaed-5f18-a985-f247910079d6 #3026 fleet-bus draft; first live bus line (smoke)
+BLOCKED to:orchestrator from:codex:coordination-20261019 Cursor GET verified 28 nonarchived f1-game agents; first bounded #2983 dependency-sync follow-up POST rejected HTTP429; no retry/no run ID; #3008 merged 9adb9787; #2983/#2997 await owner sync, do not duplicate FLOOR. One-follow-up concurrency policy; spend cap unset. No merge/ready/deploy/launch authority.
