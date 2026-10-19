@@ -1,1 +1,0 @@
-1792391658	Claude	tip red a027eaf: apex-server-fixes cancellation-converges race (fake frame-report child exits at 500ms before cancel); test-only fix; OWNED tests/unit/apex-server-fixes.test.mjs  [cursor/job-cancel-race-4c1e; session f84e08f682ae58101ddc52e1]
