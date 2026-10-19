@@ -184,7 +184,7 @@ NEW = [
  "passes when logic is wrong, fails on harmless refactors",
  "run closeTrackDetail in a vm; split behaviour tests from a CSS-contract file; delete the duplicate","M","ui-menus",U,None,"hygiene",["source-scan"],None),
 ("U2-09","ui-2","tests/unit/title-menu-even.test.mjs","","gap","med","med",
- "17 of 18 tests are regexes over css/html/title-menu.js; TitleMenu.create (title-menu.js:60-130, aria-labels :75-101, Career/Continue/Daily wiring :129-130) has coverage 0",
+ "17 of 18 tests are regexes over the css, the html and js/ui/title-menu.js; TitleMenu.create (title-menu.js:60-130, aria-labels :75-101, Career/Continue/Daily wiring :129-130) has coverage 0",
  "a dropped aria-label or stale contSub is caught only by a regex",
  "mini-dom test of create; keep the WCAG 2.5.3 name check (:343-352)","M","ui-menus",U,None,"player",["source-scan"],None),
 ("U2-10","ui-2","tests/specs/menu-keyboard.spec.js","204, 236","condition-wrapped","med","high",

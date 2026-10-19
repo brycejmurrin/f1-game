@@ -314,3 +314,46 @@ LANES[-1:-1] = [
   verify="node --test on the owned units; the multiplayer specs alone via test-bg.mjs (one at a time)",
   effort="M", model=SON, deps="N1-01 needs a liveTracks() probe taken before scan.js clears video.srcObject; coordinate shared helpers with L26"),
 ]
+
+# ---- pass 6a: race-1, ui-2, car-2 (partial), modes-1 (final)
+def _r(p, *n): return [f"{p}-{i:02d}" for i in n]
+_C2 = _r("C2", *[i for i in range(1, 21) if i != 5])
+_FOLD5 = {
+ "L4": (["race-1"], _r("RC1", 12, 13, 15)),
+ "L3": (["ui-2"], ["U2-14"]),
+ "L5": (["race-1"], ["RC1-18"]),
+ "L8": (["ui-2", "modes-1"], ["U2-05", "M1-02"]),
+ "L13": (["modes-1"], _r("M1", 5, 16, 17, 18, 19)),
+ "L14": (["ui-2"], _r("U2", 4, 11, 12, 17, 18)),
+ "L15": (["race-1"], _r("RC1", 14, 16, 17)),
+ "L16": (["race-1", "modes-1"], _r("RC1", 7, 10) + ["M1-15"]),
+ "L18": (["race-1"], ["RC1-02"]),
+ "L19": (["race-1", "car-2"], ["RC1-20"] + _C2),
+ "L20": (["race-1", "ui-2", "modes-1"], ["RC1-09"] + _r("U2", 1, 2, 6, 7) + _r("M1", 3, 7, 10, 13, 14, 20)),
+ "L21": (["race-1"], ["RC1-08"]),
+ "L25": (["car-2"], ["C2-21"]),
+ "L28": (["modes-1"], ["M1-06"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD5:
+        _b, _i = _FOLD5[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i
+_AI = _r("RC1", 1, 3, 4, 5, 6, 11, 19)
+_MENU = _r("U2", 3, 8, 9, 10, 13, 15, 16, 19, 20, 21) + ["C2-05"]
+_MODES = _r("M1", 1, 4, 8, 9, 11, 12)
+LANES[-1:-1] = [
+ dict(id="L32", name="AI race tests drive the real module", batches=["race-1"],
+  goal="AI band, incident gate and incident rpm tests run ai-drive.js / ai-band.js in the game VM and assert car behaviour (brake point, lane, gap), not a copied formula",
+  owned=_files(_AI), ids=_AI, verify="node --test on the owned files",
+  effort="M", model=SON, deps="race-1 is partial 1/n: fold a continuation here before launch"),
+ dict(id="L33", name="Title, menu, picker and photo-studio tests behave", batches=["ui-2", "car-2"],
+  goal="menu, picker, title-rotation and photo-studio tests press keys or taps on the shipped DOM at phone landscape 844x390 with touch first, and assert focus, selection and what is visible",
+  owned=_files(_MENU), ids=_MENU, verify="node --test on the owned units; each owned spec alone via test-bg.mjs",
+  effort="M", model=SON, deps="ui-2 and car-2 are partial: fold continuations before launch; U2-02's async-predicate pattern also feeds L11's lint"),
+ dict(id="L34", name="Replay, ghost, season and time-trial tests", batches=["modes-1"],
+  goal="replay buffer, ghost, season calendar and time-trial tests run the shipped modules on recorded input and assert the replayed state, not source scans",
+  owned=_files(_MODES), ids=_MODES, verify="node --test on the owned units; time-trial.spec.js alone via test-bg.mjs",
+  effort="L (M1-04 converts the ghost/season-cal/replay-buf scans)", model=SON, deps="none (modes-1 final)"),
+]

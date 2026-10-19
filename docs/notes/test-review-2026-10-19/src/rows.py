@@ -236,7 +236,7 @@ ROWS = [
 ]
 # Later batches live in per-batch files (normalized by read-only subagents; headers carry each report's status).
 import os as _os
-for _f in ("rows_physics.py", "rows_race_car_ui.py", "rows_tooling5.py", "rows_render2_mut.py", "rows_race2p2.py", "rows_audio1.py", "rows_tooling4.py", "rows_tooling2.py", "rows_tracks.py", "rows_batch6b.py"):
+for _f in ("rows_physics.py", "rows_race_car_ui.py", "rows_tooling5.py", "rows_render2_mut.py", "rows_race2p2.py", "rows_audio1.py", "rows_tooling4.py", "rows_tooling2.py", "rows_tracks.py", "rows_batch6b.py", "rows_batch6a.py"):
     _g = {"R": R, "U": U}
     exec(open(_os.path.join(_os.path.dirname(__file__), _f)).read(), _g)
     ROWS += _g["NEW"]
