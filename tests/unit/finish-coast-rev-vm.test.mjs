@@ -24,11 +24,11 @@ async function bootOneLapRace() {
   return { g, sb, fa };
 }
 
-async function crossFinishLine(g) {
+async function crossFinishLine(g, preRollS = 6) {
   const G = g.G;
   const p = G.player;
   g.apex.setInput({ throttle: true, steer: 0 });
-  g.step(60 * 6);
+  g.step(60 * preRollS);
   for (let k = 0; k < 2 && !p.finished; k++) {
     g.apex.jump(0.985, 75, 0);
     for (let i = 0; i < 300 && !(k === 1 ? p.finished : p.lap >= 1); i++) g.step(1);
@@ -58,7 +58,9 @@ test("VS FRIEND wait: finisher rpm reaches idle while the other human is still r
     const p = G.player;
     const i = G.cars.findIndex((c) => c !== p);
     g.apex.carRole(i, { human: true, local: false });
-    await crossFinishLine(g);
+    // 15 s pre-roll: at 6 s the AI start pack still sits at 0.985, so the jump
+    // lands in traffic and an AI pull change (#3002) can block the finish.
+    await crossFinishLine(g, 15);
     const PC = sb.PhysicsConsts;
     for (let i = 0; i < 600 && G.state === "race"; i++) g.step(1);
     assert.equal(G.state, "race", "results must still wait for the friend");
