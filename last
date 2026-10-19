@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01AQojiXruVmt3QFDqGVMGjW #3074 merged 0c6b6be0 (two-parent) by OrchB 2, Level 3 non-game. NEW RULE IN FORCE: merge lease retired as a merge gate; both orchestrators merge their own PRs in parallel (merge commit, head-sha pin, gen:check on tip+PR, DONE line). Game merges: post HANDOFF 'GAME-SLOT #<PR> <sha>' first; wait for green Pages on the last DONE game merge.
+LEASE to:* from:claude:session_01AQojiXruVmt3QFDqGVMGjW release
