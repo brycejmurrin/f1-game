@@ -112,6 +112,11 @@ const Parts = (function () {
           desc: "Haas signature aero kit — Low DF performance with active flaps and an in-wash bargeboard", speed: 1.06, accel: 0.98, cornering: 0.88, visual: {lvl: 1, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.016, frontTaper: 1.018, frontRise: 0.02, rearSweep: 0.032, rearTaper: 0.996, floorEdge: 0.95, floorCut: 0.06, diffuserRise: 0.804, plate: 0, casc: 0, swan: 0, tvane: 0, duct: 0, slot: 0, fin: 0.75}, visualTier: 0 },
         { id: "sig_audi_wing", label: "Neuburg Aero Kit", cost: 90, teams: ["audi"], tag: "SIGNATURE", equivalent: "rake_setup",
           desc: "Audi signature aero kit — Rake Setup performance with active flaps, a letterbox duct and wakeboard", speed: 0.97, accel: 1.02, cornering: 1.10, braking: 1.08, visual: {lvl: 3, beam: 0, drs: 1, vane: 2, frontSweep: 0.07, frontTaper: 0.912, frontRise: 0.07, rearSweep: 0.086, rearTaper: 0.912, floorEdge: 1.092, floorCut: 0.11, diffuserRise: 1.21, plate: 2, casc: 2, swan: 0, tvane: 1, duct: 1, board: 1, slot: 0, fin: 1.31}, visualTier: 2 },
+        { id: "spoon_wing", label: "Spoon Wing", tag: "PREVIEW",         cost:  10, desc: "PREVIEW: 2022 spoon rear wing (Ferrari F1-75, RB18 low-drag) — Low DF performance",                         speed: 1.06, accel: 0.98, cornering: 0.88, visual: {rwSpoon: 1, lvl: 1, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.03, frontTaper: 0.96, frontRise: 0.02, rearSweep: 0.04, rearTaper: 0.94, floorEdge: 0.88, floorCut: 0.06, diffuserRise: 0.82, fin: 0.8}, visualTier: 0 },
+        { id: "beam_twin", label: "Twin Beam Wing", tag: "PREVIEW",        cost:  65, desc: "PREVIEW: 2022-25 two-element beam wing (RB19) — High DF performance",                          speed: 0.95, accel: 0.99, cornering: 1.15, visual: {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}, visualTier: 2 },
+        { id: "monkey_seat", label: "Monkey Seat", tag: "PREVIEW",     cost: 130, desc: "PREVIEW: 2014-16 monkey-seat winglet (Mercedes W07) — Extreme DF performance",                   speed: 0.89, accel: 0.96, cornering: 1.28, braking: 1.06, visual: {monkey: 1, lvl: 4, vane: 3, beam: 0, drs: 1, board: 1, frontSweep: 0.12, frontTaper: 0.86, frontRise: 0.14, rearSweep: 0.12, rearTaper: 0.86, floorEdge: 1.18, floorCut: 0.16, diffuserRise: 1.3, fin: 1.42}, visualTier: 2 },
+        { id: "bridge_wing", label: "Bridge Wing", tag: "PREVIEW",         cost:   0, desc: "PREVIEW: 2008 bridge wing over the nose (McLaren MP4-23) — Medium performance",                   visual: {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }, visualTier: 1 },
+        { id: "x_wings", label: "X-Wings", tag: "PREVIEW",     cost:  90, desc: "PREVIEW: 1997-98 sidepod X-wings (Tyrrell 025) — Rake Setup performance",                speed: 0.97, accel: 1.02, cornering: 1.10, braking: 1.08, visual: {xwing: 1, lvl: 3, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.06, frontTaper: 0.94, frontRise: 0.07, rearSweep: 0.08, rearTaper: 0.94, floorEdge: 1.04, floorCut: 0.11, diffuserRise: 1.12, fin: 1.2}, visualTier: 2 },
       ],
     },
     {
@@ -486,6 +491,7 @@ const Parts = (function () {
           desc: "Aston Martin signature floor — Edge Wing performance with a 6-fence floor edge on titanium skids", speed: 0.98, accel: 1.04, cornering: 1.13, braking: 1.02, visual: { fences: 6, fenceH: 1.236, skid: 1, edgeLip: 1 }, visualTier: 2 },
         { id: "sig_cadillac_floor", label: "Detroit Floor", cost: 90, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "fence_array",
           desc: "Cadillac signature floor — Fence Array performance with a 5-fence floor edge on titanium skids", speed: 0.98, accel: 1.03, cornering: 1.10, visual: { fences: 5, fenceH: 1.313, skid: 2, edgeLip: 0.3 }, visualTier: 2 },
+        { id: "double_diffuser", label: "Double Diffuser", tag: "PREVIEW",     cost:  80, desc: "PREVIEW: 2009 double-deck diffuser (Brawn BGP001) — Gurney Edge performance", speed: 0.97, accel: 1.03, cornering: 1.09, visual: {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }, visualTier: 2 },
       ],
     },
     {
@@ -655,7 +661,9 @@ const Parts = (function () {
       aero: Object.freeze(["lvl", "beam", "drs", "vane", "plate", "casc", "swan", "tvane",
         "arch", "gill", "duct", "board", "slot",
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
-        "floorEdge", "floorCut", "diffuserRise", "fin"]),
+        "floorEdge", "floorCut", "diffuserRise", "fin",
+        // Design-preview (B·D3) opt-in fields: absent = shipped mesh.
+        "rwSpoon", "beam2", "monkey", "fwBridge", "xwing"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop"]),
       // cover + coverVanes: opt-in covered face only (open rim is the default).
@@ -669,7 +677,7 @@ const Parts = (function () {
       fuel: Object.freeze(["filler", "hatch", "vent", "breather", "capBig"]),
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap",
         "lip", "shield", "stack"]),
-      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt"]),
+      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt", "ddiff"]),
       cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror"]),
       // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.
       // coverVanes: wheel-owned vane count on a covered face (0 = sealed Full Disc).

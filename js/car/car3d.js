@@ -1753,6 +1753,28 @@ const Car3D = (function () {
       else addFairedArm(out, [s*0.09, 0.275, 2.40], [s*0.09, 0.085, 2.54], 0.040, c1, SURFACES.paint);
     }
 
+    // fwBridge (opt-in): the 2008 BRIDGE WING (McLaren MP4-23, Renault R28):
+    // a raised element spanning over the nose on two struts off the main plane.
+    if (!ckpt && aeroStyle && aeroStyle.fwBridge) {
+      addWingFoil(out, { zLead: 2.40, yLead: 0.455, zTrail: 2.18, yTrail: 0.490,
+        half: 0.34, thick: 0.020, taper: 0.96, sweep: 0.03, rise: -0.020 }, wingCol, wingSurf);
+      for (const s of [-1, 1]) addBeveledSpan(out,
+        { z: 2.42, x: s * 0.34, y: 0.300, w: 0.016, h: 0.32, t: 0.62 },
+        { z: 2.16, x: s * 0.34, y: 0.330, w: 0.016, h: 0.30, t: 0.70 },
+        0.005, endplateC || c2);
+    }
+    // xwing (opt-in): 1997-98 X-WINGS (Tyrrell 025): a winglet on a tall
+    // pylon at each sidepod's leading shoulder, beside the cockpit.
+    if (!ckpt && aeroStyle && aeroStyle.xwing) {
+      for (const s of [-1, 1]) {
+        addBeveledSpan(out,
+          { z: 0.10, x: s * 0.62, y: 0.865, w: 0.30, h: 0.016, t: 0.55 },
+          { z: -0.16, x: s * 0.64, y: 0.890, w: 0.26, h: 0.012, t: 0.70 },
+          0.005, wingCol, null, wingSurf);
+        addBox(out, s * 0.62, 0.72, -0.02, 0.020, 0.30, 0.10, DARK);
+        for (const e of [-1, 1]) addBox(out, s * (0.62 + e * 0.15), 0.88, -0.03, 0.010, 0.07, 0.24, endplateC || c2);
+      }
+    }
     const aVane = aeroStyle && aeroStyle.vane != null ? aeroStyle.vane
                 : (aLvl >= 4 ? 3 : aLvl >= 3 ? 2 : aLvl >= 1 ? 1 : 0);
     if (!ckpt && aVane > 0) zone("floor", () => {
@@ -1845,7 +1867,17 @@ const Car3D = (function () {
           taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: 0,
           attachHalf: 0.50,
         }, col, wingSurf);
-      rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
+      // rwSpoon (opt-in, 0 = shipped): the 2022 SPOON main plane (Ferrari
+      // F1-75, Red Bull RB18 low-drag): deep chord at the centre, scooped-down
+      // narrow tips. Absent keeps the shipped call exactly.
+      const aSpoon = Math.max(0, Math.min(1, +(aeroStyle && aeroStyle.rwSpoon) || 0));
+      if (aSpoon) addWingFoil(out, {
+        zLead: -2.30 + 0.04 * aSpoon, yLead: upperTrailY - 0.270, zTrail: -2.52 - 0.03 * aSpoon,
+        yTrail: upperTrailY - 0.225, half: 0.51, thick: 0.026, taper: rearTaper,
+        sweep: rearSweep * 0.8, rise: -0.070 * aSpoon, chordTaper: 0.55 * aSpoon,
+        teCurve: 0.05 * aSpoon, attachHalf: 0.50,
+      }, c1, wingSurf);
+      else rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
         0.51, 0.024, c1, 0.8);
       const aSwan = aeroStyle && aeroStyle.swan ? 1 : 0;
       if (aSwan) {
@@ -1877,6 +1909,24 @@ const Car3D = (function () {
         // Prominent beam wing slung low under the main plane, spanning the crash structure.
         rearWing(-2.36, 0.64 + rwLift * 0.4, -2.58, 0.68 + rwLift * 0.4,
           0.46, 0.022, c1, 0.65);
+      }
+      // beam2 (opt-in): the 2022-25 TWIN-ELEMENT beam wing (RB19, SF-23):
+      // two stacked planes slung between the diffuser and the main plane,
+      // clear of the rain light (y 0.465-0.625 at z -2.47..-2.60).
+      if (aeroStyle && aeroStyle.beam2) {
+        rearWing(-2.28, 0.455, -2.44, 0.480, 0.44, 0.020, c1, 0.6);
+        rearWing(-2.42, 0.655, -2.60, 0.690, 0.42, 0.018, CARBON, 0.6);
+        for (const s of [-1, 1]) addBox(out, s * 0.445, 0.570, -2.44, 0.020, 0.26, 0.20, endplateC || DARK);
+      }
+      // monkey (opt-in): the 2014-16 MONKEY SEAT (Mercedes W07): a small
+      // twin-plane winglet over the crash structure on a single pylon.
+      if (aeroStyle && aeroStyle.monkey) {
+        addWingFoil(out, { zLead: -2.06, yLead: 0.735, zTrail: -2.20, yTrail: 0.775,
+          half: 0.21, thick: 0.016, taper: 0.92, sweep: 0.02, rise: 0.012 }, rearC, wingSurf);
+        addWingFoil(out, { zLead: -2.18, yLead: 0.790, zTrail: -2.28, yTrail: 0.830,
+          half: 0.19, thick: 0.012, taper: 0.92, sweep: 0.02, rise: 0.012 }, c1, wingSurf);
+        addBox(out, 0, 0.64, -2.12, 0.030, 0.20, 0.08, DARK);
+        for (const s of [-1, 1]) addBox(out, s * 0.215, 0.775, -2.17, 0.012, 0.11, 0.24, endplateC || DARK);
       }
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
@@ -1938,6 +1988,23 @@ const Car3D = (function () {
                        -2.02, s * (dKeel + wT * f), (dFloor + yCT) / 2, 0.022, (yCT - dFloor) * 0.90,
                   DIFF_IN, SURFACES.carbon);                            // strake
         }
+      }
+      // ddiff (floor, opt-in): the 2009 DOUBLE DIFFUSER (Brawn BGP001): an
+      // upper deck stacked over the legal tunnels, fed through a slot in the
+      // step, with its own outer walls and a raised exit lip.
+      if (floorStyle && floorStyle.ddiff) {
+        const yU0 = yCE + 0.035, yU1 = yU0 + 0.15;
+        for (const s of [-1, 1]) {
+          addLoft(out, -2.56, s * (dKeel + dHalf * 0.82) / 2, yU1, dHalf * 0.82 - dKeel, 0.030,
+                       -1.98, s * (dKeel + dThr * 0.80) / 2, yU0 + 0.02, dThr * 0.80 - dKeel, 0.030,
+                  CARBON, SURFACES.carbon);                               // upper ceiling
+          addLoft(out, -2.56, s * dHalf * 0.82, (yU0 + yU1) / 2, 0.026, yU1 - yU0,
+                       -1.98, s * dThr * 0.80, yU0 + 0.01, 0.024, 0.03,
+                  CARBON, SURFACES.carbon);                               // upper outer wall
+          addBox(out, s * (dKeel + dThr * 0.80) / 2, yCT + 0.012, -1.96, dThr * 0.80 - dKeel, 0.010, 0.06,
+                 INTAKE, SURFACES.carbon);                                // feed slot
+        }
+        addBox(out, 0, yU1 + 0.022, -2.565, 2 * dHalf * 0.82, 0.024, 0.018, rearC, wingSurf);
       }
       addLoft(out, -2.58, 0, 0.195, 2 * dKeel * 0.82, 0.15,
                    -1.95, 0, 0.170, 2 * dKeel * 1.10, 0.13, DARK, SURFACES.carbon);
