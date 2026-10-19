@@ -688,6 +688,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
   // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
+  "tests/unit/live-run-check.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
@@ -988,6 +989,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/selected-gate-verdict.test.mjs",
   "tests/unit/session-contracts.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
+  "tests/unit/session-ledger.test.mjs",
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/session-transcript.test.mjs",
@@ -1109,6 +1111,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/terrain-y.test.mjs",
   "tests/unit/test-bg-outcome.test.mjs",
+  "tests/unit/test-bg-waste.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
   "tests/unit/test-groups.test.mjs",
