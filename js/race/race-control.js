@@ -173,7 +173,11 @@ const RaceControl = (function () {
   // short alike (a finisher missing from `order` had finPos 0) — follow by
   // laps, then distance.
   function classify(cars, fin, run, out) {
-    const lapsAt = (c) => (c.lap || 0) + (c.finished || c.retired ? 0 : 1);
+    // A retirement keeps its pending crossing (it crossed before a lapped car
+    // flagged on the same count) but never past the flag: the leader takes it.
+    const flagLap = fin.length ? Math.max(...fin.map((c) => c.lap || 0)) : Infinity;
+    const lapsAt = (c) => (c.finished ? (c.lap || 0)
+      : Math.min((c.lap || 0) + 1, c.retired ? flagLap : Infinity));
     const done = (c) => (c.retired ? (c.lap || 0) - 1 : lapsAt(c) - 1);
     const ref = fin.length ? fin : run.length ? run : out.filter((c) => !c.dsq);
     const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
