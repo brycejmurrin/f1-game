@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const SW_SOURCE = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
 const ORIGIN = "https://apex.test";
@@ -41,7 +42,7 @@ function harness({ fetchImpl, seed = {} }) {
     clearTimeout,
     navigator: { onLine: true },
   });
-  vm.runInContext(SW_SOURCE, ctx, { filename: "sw.js" });
+  vm.runInContext(SW_SOURCE, ctx, { filename: absSrc("sw.js") });
   const nav = (path) => {
     let p;
     listeners.get("fetch")({ request: { method: "GET", mode: "navigate", url: `${ORIGIN}${path}` }, respondWith(x) { p = Promise.resolve(x); }, waitUntil() {} });

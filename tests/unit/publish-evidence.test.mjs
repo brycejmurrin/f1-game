@@ -3,7 +3,7 @@ import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -11,7 +11,7 @@ import { inspectEvidence, prepareEvidence, publishEvidence, STORAGE_ANCHOR } fro
 import { exportHistoryEvidence, validateHistorySelection } from "../../tools/shot/export-history-evidence.mjs";
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "evidence-test-"));
+  const root = mkTmpDir("evidence-test-");
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const git = (...args) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
   git("init"); git("config", "user.name", "Evidence test"); git("config", "user.email", "evidence@example.test");
@@ -34,7 +34,7 @@ test("plan reads only the requested output directory and creates no upload files
 });
 
 test("input cannot be symlinked outside the checkout or contain symlinks and dependencies", (t) => {
-  const f = fixture(t), external = fs.mkdtempSync(path.join(os.tmpdir(), "evidence-outside-"));
+  const f = fixture(t), external = mkTmpDir("evidence-outside-");
   t.after(() => fs.rmSync(external, { recursive: true, force: true }));
   fs.symlinkSync(external, path.join(f.root, "scratch"), "dir");
   fs.mkdirSync(path.join(external, "capture"));
@@ -67,7 +67,7 @@ test("bundle round-trips nested gallery files and records their hashes and sourc
 });
 
 test("a redirected upload output is rejected before it can create files elsewhere", (t) => {
-  const f = fixture(t), external = fs.mkdtempSync(path.join(os.tmpdir(), "evidence-output-"));
+  const f = fixture(t), external = mkTmpDir("evidence-output-");
   t.after(() => fs.rmSync(external, { recursive: true, force: true }));
   fs.symlinkSync(external, path.join(f.root, "artifacts", "evidence-uploads"), "dir");
   assert.throws(() => prepareEvidence(f), /must not be a symlink/);

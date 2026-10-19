@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadCrests, replay, cssOf } from "../../tools/car/crest-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { LiveryTex: LT, Teams, Liveries, RecCtx } = loadCrests();
@@ -738,7 +739,7 @@ test("a legend's car wears its marque crest; a wordmark marque is lettered with 
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/data/legends.js", "js/car/liveries.js",
                    "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: absSrc(f) });
   const L = vm.runInContext("LiveryTex", sb), Lg = vm.runInContext("Legends", sb), T = vm.runInContext("Teams", sb);
   const R = L.REGIONS.crest;
   const draw = (id, P) => { const c = new Rec(); L.drawCrest(c, id, R, { palette: P, bare: false }); return c.ops; };

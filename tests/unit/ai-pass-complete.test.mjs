@@ -1,6 +1,7 @@
 /**
  * Pass-completion: faster AI stuck behind slower AI.
- * Pins passHunger / coverConcede / tow & fire / latch / run extras.
+ * Pins passHunger / coverConcede / tow & fire / latch / run extras, plus the
+ * #2356 attack-zone soft pull (otWant trail / otPull reach / attackOK edgeDrive).
  * Streets must stay at the pre-change baselines (monaco gates untouched).
  * Run: node --test tests/unit/ai-pass-complete.test.mjs
  */
@@ -11,14 +12,15 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx,
-    { filename: "js/physics/ai-drive.js" });
+    { filename: absSrc("js/physics/ai-drive.js") });
   return vm.runInContext("AiDrive", ctx);
 }
 const A = load();
@@ -52,13 +54,12 @@ test("passHunger: streets always 1; equal pace always 1", () => {
   }), 1, "sub-0.7 % scripted edge is noise");
 });
 
-test("passHunger: sub-0.7 % edge stays 1; spacing not hunger is the aggression lever", () => {
-  // Shallow tow floors were tried and reverted (#2356 / #2783): they raised
-  // contact without cutting the longest episode. Aggression acts on followGap /
-  // contactGive, not on passHunger (tip hunger shape).
+test("passHunger: sub-0.7 % edge stays 1; soft edge does not tow", () => {
+  // Soft edges feed the attack-zone pull, not towGain. A mild soft tow raised
+  // monza longest / contact (after2); same shape as the reverted #2783 floor.
   assert.equal(A.passHunger({
     street: false, traits: mid, vTop, ourVmax: us, blockerVmax: us * 0.995, queueT: 0,
-  }), 1, "0.5 % edge is below PASS_EDGE");
+  }), 1, "0.5 % edge is below PASS_EDGE hunger");
   const real = {
     street: false, traits: mid, vTop, ourVmax: us, blockerVmax: them, queueT: 12,
   };
@@ -146,6 +147,46 @@ test("otWant: permanent pace edge lowers the margin so a ~1 % car wants the move
   assert.equal(A.otWant(ctx), true, "1.2 % edge + some queue → want");
   assert.equal(A.otWant({ ...ctx, street: true, freeSpeed: us * 0.99 }), false,
     "street keeps the higher margin (no edgeN cut)");
+});
+
+test("attack-zone pull (#2356): soft edge wants and pulls from the dirty-air band", () => {
+  // Tip diagnosis: longest stuck pairs sit 20–45 m back at +0.3–0.6 %, outside
+  // the 16 m otPull window, with queueT ≈ 0. Soft edge (PULL_EDGE 0.3 %) arms
+  // the aside move inside TOW_RANGE; streets and equal pace stay at the old gates.
+  assert.ok(A.PULL_REACH >= 34 && A.PULL_EDGE === 0.003);
+  assert.equal(A.pullReachM(72), 34, "PACE 1 reach is TOW_RANGE");
+  assert.equal(A.pullReachM(72 * 0.44), 16, "PACE 0.44 floors at the latch window");
+  assert.ok(A.pullReachM(72 * 0.7) > 16 && A.pullReachM(72 * 0.7) < 34, "mid PACE scales");
+  const softUs = vTop;
+  const softThem = vTop * (1 - 0.005); // +0.5 % → softN = 0.5 (clear of float edge)
+  const trail = {
+    street: false, traits: mid, vTop, speed: 50, blockerSpeed: 50,
+    freeSpeed: softUs, ourVmax: softUs, blockerVmax: softThem,
+    blockerGap: 28, roomL: 3.5, roomR: 3.5, blockerAccel: 1, queueT: 0,
+    kAhead: 0, toTurnIn: 200, attackQ: 0.7, roll: 0.5,
+  };
+  assert.equal(A.passHunger(trail), 1, "0.5 % stays below PASS_EDGE hunger (pull, not tow)");
+  assert.ok(A.softPairEdgeN(softUs, softThem, 0, 0, vTop) > 0, "soft edge sees 0.5 %");
+  assert.equal(A.otWant(trail), true, "soft trail wants without queueT at PACE 1");
+  assert.equal(A.otWant({ ...trail, street: true }), false, "street ignores soft trail");
+  assert.equal(A.otWant({ ...trail, ourVmax: softThem, freeSpeed: softThem }), false,
+    "equal pace still needs the old path");
+  assert.equal(A.otWant({ ...trail, vTop: 72 * 0.44 }), false,
+    "PACE 0.44 does not trail-pull (reach floors at 16)");
+  assert.notEqual(A.otPull(trail), 0, "otPull reaches 28 m on a soft edge at PACE 1");
+  assert.equal(A.otPull({ ...trail, ourVmax: softThem, freeSpeed: softThem, blockerVmax: softThem }), 0,
+    "equal pace still caps at 16 m");
+  assert.equal(A.otPull({ ...trail, street: true, blockerGap: 20, speed: 58, blockerSpeed: 52 }), 0,
+    "street keep the 14 m ceiling");
+  assert.equal(A.attackOK(trail), true, "soft edgeDrive clears attackOK on a straight");
+  assert.equal(A.passReach(trail), true, "aside-first allows 28 m with runway");
+  assert.equal(A.passReach({ ...trail, toTurnIn: 40 }), false, "no aside-first without runway");
+  // Sub-PULL_EDGE: no trail.
+  const noise = { ...trail, blockerVmax: softUs * (1 - 0.002), ourVmax: softUs, freeSpeed: softUs };
+  assert.equal(A.otWant(noise), false, "0.2 % does not trail-pull");
+  assert.equal(A.coverConcede({
+    street: false, traits: mid, vTop, ourVmax: softThem, chaserVmax: softUs,
+  }), 0, "soft edge does not cover-concede (PASS_EDGE/CONCEDE only)");
 });
 
 test("latchLate + runExtra: hunger does not latch but stretches the run; streets untouched", () => {

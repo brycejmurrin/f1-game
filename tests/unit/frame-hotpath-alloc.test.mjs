@@ -12,6 +12,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -159,7 +160,7 @@ test("CarMesh.aeroEdgeOn is memoised and tested AFTER the blend: no localStorage
   ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
   ctx.Car3D = { aeroFlaps: () => [] };
   vm.createContext(ctx);
-  vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: "js/car/car-mesh.js" });
+  vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   const CarMesh = vm.runInContext("CarMesh", ctx);
   CarMesh.init({ createMesh: () => ({}), draw() {}, freeMesh() {} });
   const mat = new Float32Array(16);
@@ -235,7 +236,7 @@ function tailGlowVm(gfxExtra) {
   const g2d = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: "" };
   ctx.document = { createElement: () => ({ width: 0, height: 0, getContext: () => g2d }) };
   vm.createContext(ctx);
-  vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: "js/car/car-mesh.js" });
+  vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   const CarMesh = vm.runInContext("CarMesh", ctx);
   const decals = [];
   CarMesh.init(Object.assign({ createMesh: () => ({}), createTexMesh: (d) => ({ geo: d }), createTexture: () => ({ tex: 1 }), draw() {},

@@ -160,6 +160,21 @@ test("preflight returns a list of refusals, never throws", () => {
   for (const p of problems) assert.equal(typeof p, "string");
 });
 
+test("preflight(cwd) judges the fixture repo's tree, not the checkout's", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-preflight-"));
+  try {
+    const g = (...a) => execFileSync("git", ["-C", dir, ...a], { stdio: "ignore" });
+    g("init", "-q");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.writeFileSync(path.join(dir, "a.txt"), "x");
+    g("add", "-A"); g("commit", "-q", "-m", "init");
+    const dirty = (cwd) => preflight(cwd).some((p) => p.startsWith("working tree is dirty"));
+    assert.equal(dirty(dir), false, "clean fixture repo is not dirty");
+    fs.writeFileSync(path.join(dir, "b.txt"), "y");
+    assert.equal(dirty(dir), true, "an untracked file in the fixture is dirty");
+  } finally { rmTemp(dir); }
+});
+
 /* THE RATCHETS AUTO-CURE. tests/data/ratchets.json is derived, so a conflict in
  * it is arithmetic and not a disagreement — deploy.mjs takes theirs and re-runs
  * `ratchets.mjs --update` on the merged tree. What makes that safe to automate

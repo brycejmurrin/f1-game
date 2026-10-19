@@ -8,7 +8,9 @@ description: "Use when gen:check fails, agent-index declaredTests drift, impact-
 Symptoms that mean **regen**, not "re-run CI":
 
 - `npm run gen:check` red on `gen-agent-index.mjs`, `gen-arch-table.mjs`, or shell groups
-- `tests/unit/agent-indexes.test.mjs` — `declaredTests` count mismatch (e.g. 587 vs 589)
+- A historical `declaredTests` count mismatch in older agent-index logs
+  (the live index no longer carries that count); inspect current `gen:check`
+  output rather than recreating a retired field
 - `tests/data/impact-map.json` missing a route key the diff touched
 - `docs/ARCHITECTURE.md` module table out of sync with `tools/manifest.cjs`
 - Merge conflict only in generated paths (`package.json` test scripts, `docs/agent-index.json`, ratchets deltas cured by `sync-pr` but still dirty)
@@ -21,7 +23,9 @@ Symptoms that mean **regen**, not "re-run CI":
    npm run gen:check
    ```
 2. Commit **only** generated outputs (never hand-edit them — `protect-files.sh`).
-3. `npm run test:tooling-fast` or `tooling-fast --changed` before push.
+3. Use `tooling-fast --changed` for the edit loop; the full
+   `npm run test:tooling-fast` is required before a code/generated-file push,
+   together with the change-aware gates in `docs/VERIFICATION.md`.
 4. If two merges in a row went red on index drift, regen on the **second** PR before merge (Level 3 merge holder runs `gen:check` on the merge result first).
 
 Generators live in `package.json` scripts `gen` and `gen:docs`; list: `npm run gen --silent` is not a thing — read `package.json` `gen` chain.

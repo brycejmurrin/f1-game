@@ -8,6 +8,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "./abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -32,9 +33,9 @@ export function bootEditor(stored = {}) {
   ctx.GameStore = { store };
   // The codec's byte/stream globals, from this Node.
   for (const g of ["TextEncoder", "TextDecoder", "CompressionStream", "DecompressionStream", "Response", "Uint8Array", "Map", "Set"]) if (typeof globalThis[g] !== "undefined") ctx[g] = globalThis[g];
-  for (const f of BOOT_FILES.concat(EDITOR_FILES)) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+  for (const f of BOOT_FILES.concat(EDITOR_FILES)) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   // TrackMaps (FULL) is what bakeTurns prefers; it needs AeroZones/Log only at call time.
-  vm.runInContext(read("js/ui/track-maps.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/track-maps.js" });
+  vm.runInContext(read("js/ui/track-maps.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/track-maps.js") });
   return { Tracks, ctx, data, S: ctx.TrackShape, ST: ctx.TrackStamps, TR: ctx.TrackRandom, V: ctx.TrackValidate, CD: ctx.TrackCodec, C: ctx.CustomTracks, T: ctx.TrackThemes, P: ctx.TrackDesignerProps };
 }
 

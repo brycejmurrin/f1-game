@@ -26,6 +26,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/track/verify-track.cjs");
@@ -40,7 +41,7 @@ const ctx = vm.createContext({
   Log: { info() {}, warn(tag, msg) { warns.push(String(msg)); }, error() {} },
 });
 vm.runInContext(fs.readFileSync(new URL("../../js/physics/aero-zones.js", import.meta.url), "utf8"),
-  ctx, { filename: "js/physics/aero-zones.js" });
+  ctx, { filename: absSrc("js/physics/aero-zones.js") });
 const AeroZones = vm.runInContext("AeroZones", ctx);
 
 /** The circuit's centreline only — zonesFor() reads curvature, total and

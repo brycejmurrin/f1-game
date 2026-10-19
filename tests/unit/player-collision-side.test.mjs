@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js",
@@ -86,8 +87,8 @@ function boot({ engine = true } = {}) {
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"),
-    vctx, { filename: "mat4.js" });
-  vm.runInContext(ENGINE_SRC, vctx, { filename: "engine.js" });
+    vctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(ENGINE_SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   GameAudio.init();
   GameAudio.setEnabled(true);

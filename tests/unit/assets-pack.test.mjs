@@ -21,6 +21,7 @@ import { createRequire } from "node:module";
 import cp from "node:child_process";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -42,7 +43,7 @@ test("GLTF accessors stay inside their declared bufferView and reject invalid st
     ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array,
     TextDecoder, Log: { enabled: () => false },
   });
-  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx);
+  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx, { filename: absSrc("js/render/shared/gltf.js") });
   const makeGlb = (viewLength, stride) => {
     const bin = Buffer.alloc(48);
     for (let i = 0; i < 9; i++) bin.writeFloatLE(i % 3 === 2 ? 0 : i, i * 4);
@@ -77,7 +78,7 @@ function assetLoader(overrides = {}) {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8"), sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8"), sandbox, { filename: absSrc("js/render/shared/assets.js") });
   return sandbox.Assets;
 }
 
@@ -1034,7 +1035,7 @@ function realMAT() {
   seedLog(sandbox);
   // Top-level `const` is block-scoped inside a VM and never lands on the
   // sandbox — the same rewrite tools/track/verify-track.cjs uses.
-  vm.runInContext(src.replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
+  vm.runInContext(src.replace(/^const\b/gm, "var"), sandbox, { filename: absSrc("js/track/core/geom.js") });
   const G = sandbox.TrackGeom;
   assert.ok(G && G.MAT, "TrackGeom.MAT not reachable from the VM sandbox");
   // Copy into a THIS-realm object: a VM object carries the sandbox's
@@ -1428,7 +1429,7 @@ test("TrackGeom.addMesh transforms a baked model correctly", () => {
   vm.createContext(sandbox);
   seedLog(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js", "track", "core", "geom.js"), "utf8")
-    .replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
+    .replace(/^const\b/gm, "var"), sandbox, { filename: absSrc("js/track/core/geom.js") });
   const G = sandbox.TrackGeom;
   assert.equal(typeof G.addMesh, "function");
 
@@ -1479,7 +1480,7 @@ test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () =>
   const vm = require("node:vm");
   const load = (rel, sandbox) => {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
-    vm.runInContext(src, sandbox, { filename: rel });
+    vm.runInContext(src, sandbox, { filename: absSrc(rel) });
   };
   const sandbox = {
     Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int16Array,
@@ -1550,7 +1551,7 @@ test("webbake writes a ZIP that real unzip accepts", () => {
     vm.createContext(sandbox);
     seedLog(sandbox);
     vm.runInContext(fs.readFileSync(path.join(ROOT, "assets", "pack", "webbake.js"), "utf8")
-      .replace(/^const\b/gm, "var"), sandbox, { filename: "webbake.js" });
+      .replace(/^const\b/gm, "var"), sandbox, { filename: absSrc("assets/pack/webbake.js") });
 
     const enc = new TextEncoder();
     const payload = '{"version":1,"materials":{"size":512}}\n';
@@ -1801,7 +1802,7 @@ test("verify refuses model files outside the pack, unhashed, or with out-of-rang
 
 test("glTF supplied normals match transformed triangle normals for rotations, nonuniform scale and parents", () => {
   const ctx = vm.createContext({ ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, Log: { enabled: () => false } });
-  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx);
+  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx, { filename: absSrc("js/render/shared/gltf.js") });
   const glb = (nodes, supplied) => {
     const bin = Buffer.from(new Float32Array([0,0,0, 1,0,0, 0,1,1, 0,-Math.SQRT1_2,Math.SQRT1_2, 0,-Math.SQRT1_2,Math.SQRT1_2, 0,-Math.SQRT1_2,Math.SQRT1_2]).buffer);
     const json = { asset: { version: "2.0" }, buffers: [{ byteLength: bin.length }],

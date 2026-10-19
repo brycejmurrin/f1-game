@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -38,9 +39,9 @@ function rig(lamps) {
     PerfGov: { tier: () => 0 } });
   seedLog(ctx);
   for (const f of ["js/core/mat4.js", "js/lighting/knobs.js", "js/render/shared/light-budget.js", "js/lighting/frame-lights.js"])
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   vm.runInContext("var LightTune = { LT: LightKnobs.LT };", ctx);
-  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: "shadow-pass.js" });
+  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
   const track = { _lights: lamps.flat(), meshes: { props: {} } };
   const frame = { sunColor: [0.12, 0.14, 0.22], sunDir: [0, 0.97, 0.24] };   // night: the moon key
   const built = [];   // the lamp (by x) every full rebuild drew

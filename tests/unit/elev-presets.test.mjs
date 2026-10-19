@@ -6,12 +6,13 @@ import vm from "node:vm";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 function load() {
   const ctx = { console, Math, Object, Array, Float64Array, Number, String };
   vm.createContext(ctx);
-  vm.runInContext(readFileSync(join(root, "js/editor/elev-presets.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: "elev-presets.js" });
+  vm.runInContext(readFileSync(join(root, "js/editor/elev-presets.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/editor/elev-presets.js") });
   return ctx.ElevPresets;
 }
 

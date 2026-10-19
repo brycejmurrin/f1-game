@@ -6,6 +6,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -408,7 +409,7 @@ test("destination grouping preserves original controls and routes shortcuts thro
   practice.onclick = () => practiced++;
   const opened = []; doc.getElementById("mb-settings").onclick = () => opened.push("settings");
   const ctx = vm.createContext({ SettingsNav: { show: (id) => opened.push(id) } });
-  vm.runInContext(read("js/ui/title-menu.js"), ctx);
+  vm.runInContext(read("js/ui/title-menu.js"), ctx, { filename: absSrc("js/ui/title-menu.js") });
   const organize = vm.runInContext("TitleMenu.organize", ctx);
   organize(doc); organize(doc);
   assert.equal(practice.parentNode.id, "menu-primary"); practice.click(); assert.equal(practiced, 1);

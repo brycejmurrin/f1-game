@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -42,7 +43,7 @@ async function boot({ withPause = true } = {}) {
   });
   seedLog(ctx);
   for (const f of ["js/core/mat4.js", "js/xr/xr-session.js", "js/xr/xr-boot.js"])
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const gfx = { xrCapable: () => true, attachXrSession: async () => ({}), detachXrSession() {} };
   ctx.XrBoot.bind({ gfx, tickBody() {}, windowTick() {}, getCamMode: () => 0, setCamMode() {},
     ...(withPause ? { pause: (why) => pauses.push(why) } : {}) });

@@ -19,7 +19,11 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
 
 ## Three ways in (same surface, different cost)
 
-- `node tools/shot/agent.mjs <track> <tool> [flags]` — stages `race`/`go`/`jump` +
+- `node tools/shot/agent.mjs <track> <tool> --vm [flags]` — numeric hooks without
+  Chromium; raster commands are refused because no frame is drawn. For custom
+  seeded batches use `createGame({search:"?seed=42",track:"monza"})` and close
+  in `finally`. The VM CLI currently does not apply its `--seed` value to boot.
+- `node tools/shot/agent.mjs <track> <tool> [flags]` — browser route; stages `race`/`go`/`jump` +
   frames. **Each call boots its own browser (~30–40 s)**; one read per boot.
   Don't chain several in one shell command. Serialize browser boots; prefer the Node VM for numeric batches.
   Renames: `trackInfo`→`track`, `carView`→`car`, `agentHelp`→`help`;
@@ -260,8 +264,9 @@ built to be driven by its own error messages.
 
 ## Lifecycle/tool receipts
 
-`agent.mjs --seed <uint32>` applies its seed before race staging and includes
-it in structured output. Keep that seed and staged state identical in serialized
+The browser route's `agent.mjs --seed <uint32>` applies its seed before race
+staging; do not infer this for `--vm` (see entry routes above).
+Keep the actual seed and staged state identical in serialized
 A/B comparisons. The VM `resourceSnapshot()` reports closed/timers/rafFrames/
 rejectionListeners; close in `finally` and compare resource ownership after
 failure as well as success. `G.resetEpisodeOwners` is the internal fresh-episode

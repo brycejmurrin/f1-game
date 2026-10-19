@@ -18,6 +18,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const IDS = ["albert_park", "shanghai", "suzuka", "miami", "montreal", "monaco", "catalunya", "redbull", "silverstone", "spa",
@@ -44,7 +45,7 @@ function load(n = 24, realParts = false) {
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/hash32.js", "js/data/teams.js", "js/data/driver-ratings.js",
     ...(realParts ? ["js/physics/consts.js", "js/car/parts.js"] : []),
     "js/career/save-migrate.js", "js/career/regulations.js", "js/career/career-planning.js", "js/career/career.js", "js/career/season-cal.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   ctx.GameStore.CAREER_V = vm.runInContext("SaveMigrate.CAREER_V", ctx);   // the real schema version, not a hand copy
   vm.runInContext('Teams.LIST.push({ id:"custom", name:"MY TEAM", short:"MY", tier:2, custom:true, color:[1,0,0], drivers:[{name:"You",code:"YOU",num:99}], stats:{speed:50,accel:50,cornering:50,braking:50} })', ctx);
@@ -290,7 +291,7 @@ test("C1: the hub's NEXT RACE card names the circuit Career.trackIndex() will lo
   h.Career.data().season.round = 12;
   h.run("Tracks.SEASON.splice(5,1)");
   h.ctx.document = makeDom().document;
-  for (const f of ["js/ui/dom.js", "js/career/experience.js"]) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), h.ctx, { filename: f });
+  for (const f of ["js/ui/dom.js", "js/career/experience.js"]) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), h.ctx, { filename: absSrc(f) });
   const card = vm.runInContext("CareerExperience", h.ctx).raceBrief({ cssCol: () => "#fff" }, h.Career.data(), { rounds: h.Career.roundsTotal(), obj: null }, null);
   const named = card.querySelector(".cr-nr-name").textContent;
   assert.equal(named, raced(h));
