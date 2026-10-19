@@ -37,7 +37,7 @@
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
-      "library": 40
+      "library": 41
     },
     "npmScripts": 72,
     "configuredMcpServers": 5
@@ -1987,6 +1987,11 @@
     },
     {
       "path": "tools/lib/tumftm.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/ui-device-profile.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
