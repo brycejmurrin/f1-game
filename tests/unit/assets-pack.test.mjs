@@ -1230,22 +1230,26 @@ test("pack stays inside the clone-time budget", { skip: !hasPack && "no pack ins
     `pack is ${(bytes / 1048576).toFixed(2)} MB, budget is ${(BUDGET_BYTES / 1048576).toFixed(0)} MB`);
 });
 
-test("bake-synthetic-models replaces Kenney bins with Apex26-Procedural AX26", () => {
+test("bake-synthetic-models drops retired procedural bins and keeps CC0 imports", () => {
   const os = require("node:os"), cp = require("node:child_process");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-mdl-"));
   try {
     fs.mkdirSync(path.join(dir, "models"), { recursive: true });
-    // Seed a fake Kenney bin that must be overwritten / removed if not in catalog.
+    // Retired procedural recipe (no longer in CATALOG) must be removed.
     fs.writeFileSync(path.join(dir, "models", "kenney_construction-cone.bin"), Buffer.from("OLD"));
-    fs.writeFileSync(path.join(dir, "models", "orphan_old.bin"), Buffer.from("ORPHAN"));
+    // Imported Racing Kit bin must survive an empty-catalog synth bake (#1617).
+    fs.writeFileSync(path.join(dir, "models", "k_pylon.bin"), Buffer.from("KIT"));
     fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({
       version: 1, materials: null,
       models: {
         "kenney_construction-cone": {
-          file: "models/kenney_construction-cone.bin", licence: "CC0",
-          author: "Kenney", source: "kenney:x",
+          file: "models/kenney_construction-cone.bin", licence: "Apex26-Procedural",
+          author: "Apex 26", source: "procedural:tools/gen/synth-models.mjs",
         },
-        orphan_old: { file: "models/orphan_old.bin", licence: "CC0", author: "x", source: "x" },
+        k_pylon: {
+          file: "models/k_pylon.bin", licence: "CC0",
+          author: "Kenney", source: "kenney:racing-kit",
+        },
       },
       env: {}, credits: [],
     }));
@@ -1254,17 +1258,12 @@ test("bake-synthetic-models replaces Kenney bins with Apex26-Procedural AX26", (
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
     assert.equal(r.status, 0, `bake-synthetic-models failed:\n${r.stdout}\n${r.stderr}`);
     const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
-    assert.ok(!m.models.orphan_old, "non-catalog models must be dropped");
-    const cone = m.models["kenney_construction-cone"];
-    assert.ok(cone, "catalog id must be present");
-    assert.equal(cone.licence, "Apex26-Procedural");
-    assert.match(cone.source, /^procedural:/);
-    assert.ok(cone.verts >= 8, "cone must have geometry");
-    const bin = fs.readFileSync(path.join(dir, cone.file));
-    assert.equal(bin.toString("ascii", 0, 4), "AX26");
-    assert.ok(!fs.existsSync(path.join(dir, "models", "orphan_old.bin")));
-    // Spot-check a building id circuits actually place.
-    assert.ok(m.models["kenney_ind_building-a"].verts > 50);
+    assert.ok(!m.models["kenney_construction-cone"], "retired procedural id must be dropped");
+    assert.ok(!fs.existsSync(path.join(dir, "models", "kenney_construction-cone.bin")));
+    assert.ok(m.models.k_pylon, "CC0 Racing Kit import must be kept");
+    assert.equal(m.models.k_pylon.licence, "CC0");
+    assert.ok(fs.existsSync(path.join(dir, "models", "k_pylon.bin")));
+    assert.equal(fs.readFileSync(path.join(dir, "models", "k_pylon.bin")).toString(), "KIT");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
