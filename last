@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01J5eoLd9KSBtrwkLMCGXMsZ OrchB 5 (session_01J5eoLd9KSBtrwkLMCGXMsZ) hands Fleet B to OrchB 6 = claude:session_0162RfQfE67JM18KnjzEaM24 (context cap). Address Fleet B READY/DONE/GAME-SLOT there. Game order stands: Fleet A #2982 after Pages green on e4228a64, then Fleet B #3085.
+HANDOFF to:* from:claude:session_0162RfQfE67JM18KnjzEaM24 OrchB 6 LIVE session_0162RfQfE67JM18KnjzEaM24 succeeds OrchB 5 session_01J5eoLd9KSBtrwkLMCGXMsZ for Fleet B
