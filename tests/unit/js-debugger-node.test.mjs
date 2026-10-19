@@ -45,7 +45,10 @@ test("query-less and bare-path breakpoint URLs match any ?v= query; Node targets
   assert.doesNotMatch("http://127.0.0.1:3456/js/agent/apex.json", re);
   assert.doesNotMatch("http://127.0.0.1:3456/js/agent/xapex.js", re);
   assert.deepEqual(breakpointTarget("http://127.0.0.1:3456/a.js?v=1", { type: "page" }), { url: "http://127.0.0.1:3456/a.js?v=1" });
-  assert.match(breakpointTarget(`${FX}/lib.fixture.cjs`, { type: "node" }).url, /^file:\/\/\/.*tests\/fixtures\/js-debugger\/lib\.fixture\.cjs$/);
+  // Node: a repo path matches the vm filename forms (absolute file://, repo-relative, bare name), not the same name in another directory.
+  const node = new RegExp(breakpointTarget(`${FX}/lib.fixture.cjs`, { type: "node" }).urlRegex);
+  for (const u of [`file:///repo/${FX}/lib.fixture.cjs`, `${FX}/lib.fixture.cjs`, "lib.fixture.cjs"]) assert.match(u, node);
+  assert.doesNotMatch(["tests", "lib.fixture.cjs"].join("/"), node);
 });
 
 test("debugger_node_test: exact hit counts, values, locals captures, TAP failures, probes in another file", async () => {
@@ -84,6 +87,19 @@ test("children:true auto-attaches a spawned Node process; runner:test debugs the
   assert.equal(kids.probes[0].hits, 1); assert.deepEqual(kids.probes[0].values, [5]);
   const viaTest = (await nodeTest({ file: `${FX}/sample.fixture.mjs`, runner: "test", probes: [{ line: 7, expression: "sum" }] })).runs[0];
   assert.equal(viaTest.runner, "test"); assert.equal(viaTest.probes[0].hits, 1501); assert.equal(viaTest.summary.fail, 1);
+});
+
+test("R4: a probe hits vm-loaded copies under relative, absolute and no filename; vmTopLevel adds top-level lines", async () => {
+  const probe = { file: `${FX}/vmlib.fixture.js`, line: 4, expression: "x" };
+  // Default: relative + absolute bind by URL, the unnamed copy by source inside its pre-run pause,
+  // so all three loads count both triple(1) at load and triple(2), plus the top-level line.
+  const run = (await nodeTest({ file: `${FX}/vm.fixture.mjs`, probes: [probe, { file: `${FX}/vmlib.fixture.js`, line: 6 }] })).runs[0];
+  assert.equal(run.exitCode, 0, run.stdoutTail);
+  assert.equal(run.probes[0].hits, 6); assert.equal(run.probes[0].contexts, 3); assert.equal(run.probes[1].hits, 3);
+  assert.equal(run.probes[0].boundBy, "source (unnamed vm script)");
+  // vmTopLevel:false binds off scriptParsed: the unnamed copy is called in its load's tick, so it is missed.
+  const parsed = (await nodeTest({ file: `${FX}/vm.fixture.mjs`, vmTopLevel: false, probes: [probe] })).runs[0];
+  assert.equal(parsed.probes[0].hits, 4);
 });
 
 test("a hanging test is killed at timeoutMs and reported, not left running", async () => {

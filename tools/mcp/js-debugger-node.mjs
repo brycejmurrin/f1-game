@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFil
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Cdp } from "./js-debugger-cdp.mjs";
-import { frameLine, frameLocals } from "./js-debugger-workflow.mjs";
+import { frameLine, frameLocals, pathSuffixRegex } from "./js-debugger-workflow.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const BINDING = "__apexDbgEmit";
@@ -38,12 +38,29 @@ export function probeCondition(id, { expression, condition, maxValues = 20, paus
   // Same collision rule as logpointCondition: every helper name is __apexDbg-prefixed, since
   // a hoisted `var G` would shadow (and blank) the frame's own `G`.
   const value = expression ? `var __apexDbgV;try{__apexDbgV=(${expression}\n);__apexDbgV=typeof __apexDbgV==="number"?(isFinite(__apexDbgV)?__apexDbgV:String(__apexDbgV)):typeof __apexDbgV==="string"?__apexDbgV.slice(0,${maxChars}):__apexDbgV===undefined?"undefined":(typeof __apexDbgV==="object"&&__apexDbgV!==null)?(function(){try{return JSON.stringify(__apexDbgV).slice(0,${maxChars})}catch(e){return String(__apexDbgV).slice(0,${maxChars})}})():String(__apexDbgV)}catch(__apexDbgE){__apexDbgV="!err: "+String(__apexDbgE&&__apexDbgE.message||__apexDbgE).slice(0,${maxChars})}` : "";
-  return `(()=>{try{${condition ? `if(!(${condition}\n))return false;` : ""}var __apexDbgN=globalThis.__apexDbgN||(Object.defineProperty(globalThis,"__apexDbgN",{value:{},configurable:true}),globalThis.__apexDbgN),__apexDbgK=__apexDbgN[${key}]=(__apexDbgN[${key}]|0)+1;`
-    + `if(__apexDbgK<=${maxValues}||__apexDbgK%1000===0){${value}globalThis.${BINDING}(JSON.stringify(${expression ? `{p:${key},n:__apexDbgK,v:__apexDbgV}` : `{p:${key},n:__apexDbgK}`}))}return __apexDbgK<=${pauses}}catch(__apexDbgE){return false}})()`;
+  return `(()=>{try{${condition ? `if(!(${condition}\n))return false;` : ""}var __apexDbgN=globalThis.__apexDbgN||(Object.defineProperty(globalThis,"__apexDbgN",{value:{$c:Math.random().toString(36).slice(2)},configurable:true}),globalThis.__apexDbgN),__apexDbgK=__apexDbgN[${key}]=(__apexDbgN[${key}]|0)+1;`
+    + `if(__apexDbgK<=${maxValues}||__apexDbgK%1000===0){${value}globalThis.${BINDING}(JSON.stringify(${expression ? `{p:${key},c:__apexDbgN.$c,n:__apexDbgK,v:__apexDbgV}` : `{p:${key},c:__apexDbgN.$c,n:__apexDbgK}`}))}return __apexDbgK<=${pauses}}catch(__apexDbgE){return false}})()`;
 }
 // Exact final counts: an exit hook flushes the counter table through the binding (Node keeps the
 // inspector open after exit until this client disconnects, so the message arrives).
+// Each vm context has its own globalThis, hence its own counter table tagged $c; only the main
+// context's table is flushed at exit, other contexts count exactly up to maxValues, then per 1000.
 const EXIT_HOOK = `typeof process==="object"&&process.once("exit",()=>{try{globalThis.${BINDING}(JSON.stringify({final:globalThis.__apexDbgN||{}}))}catch(e){}})`;
+
+// Unnamed vm scripts (url "" or evalmachine.<anonymous>) are matched to a probe file by content:
+// same line count (± a harness suffix), same first 400 chars after the harnesses' ^const→var rewrite.
+const normalise = src => src.replace(/^const\b/gm, "var").slice(0, 400);
+const anonymous = url => !url || url.startsWith("evalmachine.");
+function probeFiles(probes, file) {
+  const files = new Map();
+  for (const p of probes) {
+    const abs = repoFile(p.file || file);
+    if (files.has(abs)) continue;
+    const src = readFileSync(abs, "utf8");
+    files.set(abs, { rel: rel(abs), lines: src.split("\n").length, head: normalise(src) });
+  }
+  return files;
+}
 
 function tapSummary(out) {
   const num = k => { const m = out.match(new RegExp(`^# ${k} (\\d+)`, "m")); return m ? +m[1] : null; };
@@ -55,22 +72,66 @@ function tapSummary(out) {
 // state, probe breakpoints, exit hook, then release the waiting process.
 async function instrument(cdp, conn, report, opts, file, state) {
   const byBp = new Map(), scriptUrl = new Map(), counts = new Map();
+  // Pause handling and unnamed-script binding await CDP replies; one chain keeps them in order.
+  let chain = Promise.resolve();
   cdp.on("Runtime.bindingCalled", e => {
     if (e.name !== BINDING) return;
     let m; try { m = JSON.parse(e.payload); } catch { return; }
-    if (m.final) { for (const p of report.probes) if (Object.hasOwn(m.final, p.id)) { counts.set(p.id, m.final[p.id]); p.hitsBy[conn] = m.final[p.id]; } return; }
+    if (m.final) { for (const p of report.probes) if (Object.hasOwn(m.final, p.id)) { counts.set(p.id, m.final[p.id]); p.hitsBy[`${conn}:${m.final.$c}`] = m.final[p.id]; } return; }
     const p = report.probes.find(q => q.id === m.p); if (!p) return;
-    p.hitsBy[conn] = Math.max(p.hitsBy[conn] || 0, m.n);
+    const k = `${conn}:${m.c}`;
+    p.hitsBy[k] = Math.max(p.hitsBy[k] || 0, m.n);
     if (Object.hasOwn(m, "v") && p.values.length < (opts.maxValues ?? 20)) p.values.push(conn ? { pid: conn, v: m.v } : m.v);
   });
   cdp.on("Debugger.breakpointResolved", b => { const p = byBp.get(b.breakpointId); if (p && !p.resolved.includes(b.location.lineNumber + 1)) p.resolved.push(b.location.lineNumber + 1); });
-  cdp.on("Debugger.scriptParsed", s => { if (s.url) scriptUrl.set(s.scriptId, s.url); });
-  // The pause handler awaits CDP replies; chain pauses so they are handled in order.
-  let chain = Promise.resolve();
+  // Unnamed-script fallback: bind each probe by scriptId to every unnamed script whose source is
+  // that file. The entry process pauses each script before it runs (instrumentation breakpoint,
+  // armed at Break on start: armed earlier, Node never leaves its wait) and binds inside the pause,
+  // so even code run in the same tick as the load hits. An auto-attached child has no Break on
+  // start, so it binds off scriptParsed: best effort, a call in the load's own tick can be missed.
+  const files = probeFiles(opts.probes || [], file), bound = new Set();
+  const pauseBind = conn === 0 && opts.vmTopLevel !== false && files.size > 0;
+  const bindAnonymous = async (scriptId, endLine) => {
+    if (bound.has(scriptId)) return;
+    const candidates = [...files.entries()].filter(([, f]) => endLine + 1 >= f.lines && endLine + 1 <= f.lines + 3);
+    if (!candidates.length) return;
+    bound.add(scriptId);
+    let src; try { src = (await cdp.send("Debugger.getScriptSource", { scriptId })).scriptSource || ""; } catch { return; }
+    const head = normalise(src);
+    for (const [abs, f] of candidates) {
+      if (head !== f.head) continue;
+      for (const [i, p] of (opts.probes || []).entries()) {
+        if (repoFile(p.file || file) !== abs) continue;
+        const rp = report.probes[i];
+        const r = await cdp.send("Debugger.setBreakpoint", { location: { scriptId, lineNumber: p.line - 1, columnNumber: (p.column ?? 1) - 1 },
+          condition: probeCondition(rp.id, { expression: p.expression, condition: p.condition, maxValues: opts.maxValues ?? 20, pauses: p.captureLocals ?? 0 }) }).catch(() => null);
+        if (!r) continue;
+        byBp.set(r.breakpointId, rp);
+        rp.boundBy = "source (unnamed vm script)";
+        const line = r.actualLocation.lineNumber + 1;
+        if (!rp.resolved.includes(line)) rp.resolved.push(line);
+      }
+    }
+  };
+  const lineCount = new Map();
+  cdp.on("Debugger.scriptParsed", s => {
+    if (s.url) scriptUrl.set(s.scriptId, s.url);
+    if (!files.size || !anonymous(s.url)) return;
+    if (pauseBind) lineCount.set(s.scriptId, s.endLine);
+    else chain = chain.then(() => bindAnonymous(s.scriptId, s.endLine));
+  });
   cdp.on("Debugger.paused", e => { chain = chain.then(async () => {
     // Several probes can share one location: credit the capture to one that still wants pauses.
     const hit = (e.hitBreakpoints || []).map(id => byBp.get(id)).filter(Boolean);
     const own = hit.find(p => p.captures.length < (p.wants ?? 0)) || hit[0];
+    if (e.reason === "Break on start" && pauseBind)
+      await cdp.send("Debugger.setInstrumentationBreakpoint", { instrumentation: "beforeScriptExecution" }).catch(() => {});
+    if (e.reason === "instrumentation") {
+      const id = e.data?.scriptId;
+      if (id && lineCount.has(id)) await bindAnonymous(id, lineCount.get(id));
+      await cdp.send("Debugger.resume").catch(() => {});
+      return;
+    }
     const stack = (e.callFrames || []).slice(0, 8).map(f => frameLine(f, relUrl(f.url || scriptUrl.get(f.location.scriptId))));
     if (own && state.captures < (opts.maxCaptures ?? 10)) {
       state.captures++;
@@ -96,7 +157,7 @@ async function instrument(cdp, conn, report, opts, file, state) {
     const rp = report.probes[i];
     Object.defineProperty(rp, "wants", { value: p.captureLocals ?? 0, enumerable: false });
     // Two probes at one resolved location: V8 refuses the second; report it, run the rest.
-    const r = await cdp.send("Debugger.setBreakpointByUrl", { url: pathToFileURL(repoFile(p.file || file)).href,
+    const r = await cdp.send("Debugger.setBreakpointByUrl", { urlRegex: pathSuffixRegex(rel(repoFile(p.file || file))),
       lineNumber: p.line - 1, columnNumber: (p.column ?? 1) - 1,
       condition: probeCondition(rp.id, { expression: p.expression, condition: p.condition, maxValues: opts.maxValues ?? 20, pauses: p.captureLocals ?? 0 }) })
       .catch(e => { rp.error = `${clip(e.message, 200)} (another probe already sits at this location: give it a different line/column, or merge the expressions)`; return null; });
@@ -190,8 +251,10 @@ export async function runNodeFile(file, opts = {}, { spawnNode = spawn, open = C
   for (const p of report.probes) {
     if (single) { p.values = p.values.map(untag); p.captures = p.captures.map(({ pid, ...c }) => c); }
     p.hits = Object.values(p.hitsBy).reduce((a, b) => a + b, 0);
-    if (Object.keys(p.hitsBy).length < 2) delete p.hitsBy;
-    if (!p.resolved.length && !p.error) p.warning = "Never resolved: the file was not loaded by this run, or the line has no breakable statement (try the next line).";
+    const contexts = Object.keys(p.hitsBy).length;
+    if (contexts > 1) p.contexts = contexts;
+    delete p.hitsBy;
+    if (!p.resolved.length && !p.error) p.warning = `Never resolved: the file was not loaded by this run, it was loaded as an unnamed vm script whose source differs from the working tree, or the line has no breakable statement (try the next line).${opts.vmTopLevel === false ? " vmTopLevel:false skips the pause-binding of unnamed vm scripts." : ""}`;
   }
   stdout = stdout.replace(/^# (?:Debugger listening on \S+|For help, see: \S+|Debugger attached\.|Waiting for the debugger to disconnect\.\.\.)\n/gm, "");
   report.stdoutTail = tail(stdout.trim(), report.summary.fail === 0 && !report.error ? 600 : 3000);

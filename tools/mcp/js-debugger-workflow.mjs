@@ -40,6 +40,16 @@ export async function frameLocals(cdp, scopeChain, { max = 40, objectGroup, clos
   }
   return truncated ? { ...out, "…": `more than ${max} variables` } : out;
 }
+// R4 (debugger-B, measured): a vm script's scriptParsed url is whatever filename the harness gave
+// it: file:///abs/js/physics/brake-cue.js, js/physics/brake-cue.js, or a bare brake-cue.js. Match any trailing sub-path of the repo
+// path, with or without file://, so one probe hits every named form.
+export function pathSuffixRegex(rel) {
+  const parts = rel.replace(/^\.?\//, "").split("/").map(p => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const tails = parts.map((_, i) => parts.slice(i).join("/"));
+  // The full repo path may sit under any root (file:///abs/…); a shorter tail only as the WHOLE
+  // url, so a same-named file in another directory never matches.
+  return tails.length > 1 ? `(?:^|/)${tails[0]}$|^(?:${tails.slice(1).join("|")})$` : `(?:^|/)${tails[0]}$`;
+}
 export const frameLine = (f, url) => `${f.functionName || "(anonymous)"} ${url || f.url || f.location.scriptId}:${f.location.lineNumber + 1}:${f.location.columnNumber + 1}`;
 
 export function workflowMethods() {

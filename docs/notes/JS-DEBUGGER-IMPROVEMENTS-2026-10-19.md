@@ -21,6 +21,8 @@ software GL). Tool reference: `docs/research/AGENT-JS-DEBUGGER-MCP.md` §Node te
 | B10 | Stale ops survive detach | `debugger_state` after detach still lists the previous target's operations | Not fixed (cosmetic) |
 | B11 | Shell client deadline 35 s | A long `call` timed out client-side | Fixed for `debugger_node_test` (660 s); others unchanged |
 
+| B12 | Probes on vm-loaded game code would get 0 hits (found from debugger-B's R4) | Harnesses pass relative, absolute or no filenames; an exact `file://` URL matched none. First fallback (bind off `scriptParsed`) bound but counted 0 on `brake-cue.test.mjs`: node:test calls the function within milliseconds of the load, before getScriptSource + setBreakpoint return. An instrumentation breakpoint armed BEFORE `runIfWaitingForDebugger` hung Node in its wait | **Fixed**: path-suffix `urlRegex` (full repo path under any root, shorter tails only as the whole URL) + content match bound inside an instrumentation pause armed at Break on start. Measured: `brake-cue.test.mjs` 0 → 20 hits (values `30, 50, 50…`), whole run 535 ms; counts are per vm context |
+
 Checked and fine: conditional breakpoints, stale-token refusal after a step, `debugger_properties`
 pagination, uncaught-exception pause, daemon SIGTERM cleanup (`cleanupErrors: []`), detach/reattach.
 
@@ -93,6 +95,13 @@ keeps what was used).
 Round trips, measured on the tasks this session ran: page "stop in `info()` and show locals"
 6 → 1; Node test "count hits and values in two files" (impossible before, hand-rolled CDP) → 1;
 interactive Node child attach → targets, attach, break, detach = 4.
+
+Peer input: debugger-B (its NODE-DEBUGGING-2026-10-19 note lands in its own docs PR) sent R1–R10. R1, R2, R5, R6,
+R7 (line-only default), R9 were already met; R3 is met differently (`runner:"test"` runs `node --test`
+without inspect flags and the bootloader attaches each child, so no concurrency-1 warning and no
+port hand-off); R4 → B12; R8 (coverage) and R10 (worker_threads) are next ideas 1 and 5. The
+instrumentation-breakpoint technique came from reviewer physics-1 (#2952,
+https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260210052).
 
 ## Ranked next ideas
 

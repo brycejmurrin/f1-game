@@ -281,6 +281,15 @@ attached page session:
   `Runtime.addBinding` (exact final counts arrive from an exit hook). It never pauses unless
   `captureLocals: N`, which pauses the first N hits to read locals and the stack, then resumes.
   `probe.file` defaults to each run's test file; a probe that never resolves gets a `warning`.
+- **Game code under vm.** Repo harnesses load `js/` files with `vm.runInContext(src, ctx, {filename})`, and
+  the script URL is whatever filename they pass (`file:///abs/js/x.js`, `js/x.js`, a bare `x.js`) or
+  nothing (`evalmachine.<anonymous>`). A probe's `file` is matched against every named form, and an
+  unnamed script is matched by content (line count, first 400 chars after the harnesses' `^const`→`var`
+  rewrite) and bound by scriptId (`boundBy: "source (unnamed vm script)"`). The entry process does this
+  inside a pause before each script runs (`Debugger.setInstrumentationBreakpoint`, armed at Break on
+  start), so a call in the load's own tick still hits; `vmTopLevel:false` skips the pauses. Each vm
+  context counts separately (`contexts: N`). Prefer line-only probes: the rewrite shifts columns on
+  top-level `const` lines. A function's header line never hits on a call; probe its first body line.
 - `children:true` (implied by `runner:"test"`) auto-attaches every Node process the test spawns: a
   `NODE_OPTIONS=--require tools/mcp/js-debugger-boot.cjs` bootloader opens an inspector on a free
   port, reports it, and waits until the runner has set the probes (VS Code js-debug's design).

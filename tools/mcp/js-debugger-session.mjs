@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
-import { workflowMethods } from "./js-debugger-workflow.mjs";
+import { pathSuffixRegex, workflowMethods } from "./js-debugger-workflow.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
 /** One-line value of an object result from V8's preview, so an agent need not chain debugger_properties for `{a, b}`. */
@@ -29,8 +29,10 @@ const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // A bare path (js/agent/apex.js) matches by path suffix; a Node target takes an fs path.
 export function breakpointTarget(url, target) {
   if (target?.type === "node" && !/^[a-z]+:/i.test(url)) {
-    const abs = url.startsWith("/") ? url : path.resolve(fileURLToPath(new URL("../../", import.meta.url)), url);
-    return { url: pathToFileURL(abs).href };
+    // A vm-loaded file's url is whatever filename the harness passed (absolute, repo-relative, or a bare name).
+    const root = fileURLToPath(new URL("../../", import.meta.url));
+    const abs = url.startsWith("/") ? url : path.resolve(root, url);
+    return abs.startsWith(root) ? { urlRegex: pathSuffixRegex(path.relative(root, abs)) } : { url: pathToFileURL(abs).href };
   }
   if (/[?#]/.test(url)) return { url };
   if (/^[a-z]+:\/\//i.test(url)) return { urlRegex: `^${escapeRe(url)}(?:[?#].*)?$` };
