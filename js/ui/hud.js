@@ -444,6 +444,23 @@ let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-s
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
 let _fitStamped = false, _fitClashRun = 0;
+// Session mono floor (#2882): ceil-to-0.01 still let independent boots publish
+// 0.95 then 0.94 (844×390 HUD 100→200). sessionStorage survives page.reload().
+function _hudZMonoRaise(prop, q, base) {
+  try {
+    if (typeof sessionStorage === "undefined") return q;
+    const key = "apex26.hudZMono", field = prop === "--hud-z-top" ? "top" : "bot";
+    const vp = (innerWidth | 0) + "x" + (innerHeight | 0);
+    let memo = null;
+    try { memo = JSON.parse(sessionStorage.getItem(key) || "null"); } catch (_) { /* */ }
+    if (!memo || memo.vp !== vp || base + 1e-9 < (+memo.scale || 0)) memo = { vp, scale: base, top: 0, bot: 0 };
+    else if (base > (+memo.scale || 0) + 1e-9) memo.scale = base;
+    if ((+memo[field] || 0) > q) q = +memo[field];
+    memo[field] = q;
+    sessionStorage.setItem(key, JSON.stringify(memo));
+  } catch (_) { /* private mode / harness */ }
+  return q;
+}
 // The post-write clash probe's skip key (#2240): what decides a clash, read without layout.
 let _stampKey = "", _stampWait = 0;
 const FIT_CLASH_TRIES = 5;
@@ -1651,6 +1668,10 @@ function fitHud() {
       if (prop === "--hud-z-top" || prop === "--hud-z-bot") {
         q = Math.ceil(cap * 100 - 1e-9) / 100;
         if (q >= base) { root.style.removeProperty(prop); return; }
+        // Cross-boot floor: independent reloads at a higher HUD SIZE can land a
+        // full cent below the prior capped zoom (CI: 0.95 → 0.94). Keep the
+        // higher published value for this viewport while scale does not drop.
+        q = _hudZMonoRaise(prop, q, base);
       }
       root.style.setProperty(prop, String(Math.max(floor, q)));
     }

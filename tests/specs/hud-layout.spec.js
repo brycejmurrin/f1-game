@@ -289,7 +289,8 @@ async function race(page, steer, manual, ins, opts) {
       if (!tower || document.body.classList.contains("hud-bcam") !== broadcastCamera) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
+      // 1 px: toFixed(1) plus 0.01-ceil / mono-floor can sit ~0.5–1 px off under load (#2941).
+      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 1;
     }, o.cam === "heli", { polling: 100, timeout: 5_000 });
   } else {
     // EVERY OTHER CELL waits for the same published input, not 300 ms: on the
@@ -306,12 +307,12 @@ async function race(page, steer, manual, ins, opts) {
       // Portrait rotate gate / portrait viewport: landscape --hud-top-h match +
       // clearance/stamp waits do not apply. Must short-circuit BEFORE the
       // published-height check — on CI portrait, height vs --hud-top-h never
-      // lands within 0.1 while the rotate card owns the screen (#2941).
+      // lands within 1 px while the rotate card owns the screen (#2941).
       // Async predicates used to skip this whole wait (#2825).
       if (document.body.classList.contains("desktop")) {
         const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
         const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-        return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
+        return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 1;
       }
       const rotate = document.getElementById("rotate-device");
       let rotateUp = false;
@@ -327,7 +328,13 @@ async function race(page, steer, manual, ins, opts) {
       }
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) return false;
+      // 1 px tolerance: 0.1 never settles on tight phones when ceil/mono and
+      // currentCSSZoom disagree by a fraction of a CSS px (667×375 CI #2941).
+      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 1)) {
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+        if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+        return false;
+      }
       // Phone landscape: wait until S3 has cleared a lit BOOST and the radio
       // card (CI oversize APEX_WORKERS=2: wrap-reverse / lane settle).
       const phoneSteer = document.body.classList.contains("steer-buttons")

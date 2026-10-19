@@ -71,6 +71,15 @@ function bootFlipHarness(o = {}) {
       getPropertyValue: (k) => (o.tokens && k in o.tokens ? o.tokens[k] : (ALL_TOKENS[k] || "")),
       columnGap: "0px", rowGap: "0px", transform: "none",
     }),
+    // #2882 session mono floor — real browsers have sessionStorage; the VM harness must too.
+    sessionStorage: o.sessionStorage || (() => {
+      const m = new Map();
+      return {
+        getItem: (k) => (m.has(k) ? m.get(k) : null),
+        setItem: (k, v) => { m.set(String(k), String(v)); },
+        removeItem: (k) => { m.delete(k); },
+      };
+    })(),
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
@@ -264,9 +273,18 @@ test("fitHud: on touch the tower clears the sector plate's row without shrinking
 test("fitHud: larger HUD SIZE never paints a smaller top band on the same phone viewport (#2882)", () => {
   // Live 844×390 pin-look: HUD 100 published 0.947 and HUD 200 published 0.945
   // (sub-pixel intrinsic noise). Ceil-to-0.01 makes both 0.95 so gearW is monotonic.
+  // Shared sessionStorage: independent boots at rising scale must not undercut (#2882 CI).
+  const store = (() => {
+    const m = new Map();
+    return {
+      getItem: (k) => (m.has(k) ? m.get(k) : null),
+      setItem: (k, v) => { m.set(String(k), String(v)); },
+      removeItem: (k) => { m.delete(k); },
+    };
+  })();
   const painted = [];
   for (const scale of [0.7, 1, 1.5, 2]) {
-    const h = bootFlipHarness({ ...PHONE, scale });
+    const h = bootFlipHarness({ ...PHONE, scale, sessionStorage: store });
     for (let i = 0; i < 8; i++) { h.paintAt(h.pub()); h.invalidate(); h.tick(); }
     painted.push({ scale, z: h.pub(), w: PHONE.intrinsic.top * h.pub() });
   }
@@ -276,6 +294,36 @@ test("fitHud: larger HUD SIZE never paints a smaller top band on the same phone 
   }
   assert.match(read("js/ui/hud.js"), /Math\.ceil\(cap \* 100/,
     "top/bot caps ceil onto a 0.01 grid so cross-scale noise cannot undercut");
+  assert.match(read("js/ui/hud.js"), /apex26\.hudZMono/,
+    "sessionStorage mono floor survives reload so a later boot cannot undercut");
+});
+
+test("fitHud: session mono floor raises a later boot's lower cap to the prior published zoom (#2882)", () => {
+  // CI 39205159849: HUD 100 → 0.95, HUD 200 → 0.94 without the floor.
+  const store = (() => {
+    const m = new Map();
+    return {
+      getItem: (k) => (m.has(k) ? m.get(k) : null),
+      setItem: (k, v) => { m.set(String(k), String(v)); },
+      removeItem: (k) => { m.delete(k); },
+    };
+  })();
+  // First boot at scale 1 settles a capped zoom.
+  const first = bootFlipHarness({ ...PHONE, scale: 1, sessionStorage: store });
+  for (let i = 0; i < 8; i++) { first.paintAt(first.pub()); first.invalidate(); first.tick(); }
+  const z1 = first.pub();
+  assert.ok(z1 > 0.85 && z1 < 1, "first boot must bind a top cap (" + z1 + ")");
+  // Second boot: same viewport, larger scale, but force a LOWER raw cap by
+  // widening the tower intrinsic so ceil alone would publish below z1.
+  const second = bootFlipHarness({
+    ...PHONE, scale: 2, sessionStorage: store,
+    intrinsic: { ...PHONE.intrinsic, top: PHONE.intrinsic.top * 1.08 },
+  });
+  for (let i = 0; i < 8; i++) { second.paintAt(second.pub()); second.invalidate(); second.tick(); }
+  const z2 = second.pub();
+  assert.ok(z2 + 1e-9 >= z1,
+    "rising HUD SIZE must not undercut the session mono floor: " + z1 + " -> " + z2
+    + " memo=" + store.getItem("apex26.hudZMono"));
 });
 
 test("fitHud: hiding the sector plate frees the row (touch), and a plate level with the tower is not a row to clear", () => {
