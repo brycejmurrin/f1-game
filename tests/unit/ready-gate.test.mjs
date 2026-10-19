@@ -11,7 +11,7 @@ import path from "node:path";
 import {
   GUARDS_A, GUARDS_B, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
-  planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine,
+  planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, fleetBlock, fleetIdentity, withFleet,
 } from "../../tools/ci/ready-gate.mjs";
 
 // Scratch dirs live under the ignored artifacts/ tree, never the system tmp (AGENTS.md).
@@ -335,6 +335,53 @@ test("resolveSha --pr returns the PR body alongside its head sha", () => {
   assert.equal(r.sha, head);
   assert.equal(r.pr, 7);
   assert.equal(r.body, "## Plan\n- [x] a");
+  assert.equal(r.branch, "", "no head.ref in the fixture");
+  const withRef = (url) => (url === "pulls/7" ? { json: { head: { sha: head, ref: "cursor/x-1a2b" }, body: "" } } : request(url));
+  assert.equal(resolveSha({ pr: "7", request: withRef }).branch, "cursor/x-1a2b", "the head branch feeds withFleet");
+});
+
+const fleetBody = (lines) => "## Plan\n- [x] a — sha\n\n## Next step\n\n```fleet\n" + lines.join("\n") + "\n```\n";
+
+test("fleetBlock / fleetIdentity: letters from fleet:, a letter orchestrator: or the slot; placeholders and comments ignored", () => {
+  assert.deepEqual(fleetBlock(fleetBody(["worker: claude:s1   # who", "fleet: A", "orchestrator: A", "blocker: <one line>"])),
+    { worker: "claude:s1", fleet: "A", orchestrator: "A" });
+  assert.deepEqual(fleetBlock("<!--\n```fleet\nfleet: A\n```\n-->"), {}, "a commented-out block is no block");
+  assert.deepEqual(fleetBlock("<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\n```fleet\nfleet: D\norchestrator: D\n```\n<!-- CURSOR_AGENT_PR_BODY_END -->"),
+    { fleet: "D", orchestrator: "D" }, "Cursor's agent slice counts");
+  assert.deepEqual(fleetIdentity(fleetBody(["orchestrator: B"])), { block: true, letter: "B", orchestrator: "B", slot: "" });
+  assert.deepEqual(fleetIdentity(fleetBody(["fleet: C·W2", "orchestrator: codex:refactor-all-b71e"])),
+    { block: true, letter: "C", orchestrator: "codex:refactor-all-b71e", slot: "" }, "back-compat <host>:<id> orchestrator");
+  assert.equal(fleetIdentity(fleetBody(["orchestrator: claude:session_01X", "title: [Worker] A·W3 · tools"])).slot, "A·W3");
+  assert.equal(fleetIdentity(fleetBody(["orchestrator: claude:session_01X", "title: [Worker] A·W3 · tools"])).letter, "A", "slot letter fallback");
+  assert.deepEqual(fleetIdentity("no block"), { block: false, letter: "", orchestrator: "", slot: "" });
+});
+
+test("withFleet: a cursor/ branch without fleet letter + orchestrator: is refused (fleet-block, exit 1), naming the field", () => {
+  const none = withFleet(GREEN, "cursor/topic-1a2b", "## Plan\n- [x] a — sha");
+  assert.equal(none.state, "fleet-block");
+  assert.equal(none.code, 1);
+  assert.match(none.evidence, /missing ```fleet block/);
+  const noLetter = withFleet(GREEN, "cursor/topic-1a2b", fleetBody(["orchestrator: claude:session_01ORCHORCHORCHORCHORCH"]));
+  assert.equal(noLetter.code, 1);
+  assert.match(noLetter.evidence, /missing fleet:/);
+  assert.doesNotMatch(noLetter.evidence, /missing fleet: and/, "a <host>:<id> orchestrator: is present, only the letter is missing");
+  const noOrch = withFleet(GREEN, "cursor/topic-1a2b", fleetBody(["fleet: A", "orchestrator: <letter>"]));
+  assert.match(noOrch.evidence, /missing orchestrator:/);
+  assert.match(verdictLine(noOrch), /^= ready-gate fleet-block — /);
+});
+
+test("withFleet: a complete block passes; letter or <host>:<id> orchestrator; other branches, no PR and reds pass through", () => {
+  for (const lines of [["fleet: A", "orchestrator: A"], ["orchestrator: B"], ["fleet: C", "orchestrator: codex:refactor-all-b71e"]]) {
+    const v = withFleet(GREEN, "cursor/topic-1a2b", fleetBody(lines));
+    assert.equal(v.code, 0, lines.join(" / "));
+    assert.equal(v.state, GREEN.state);
+  }
+  assert.equal(withFleet(GREEN, "claude/legacy-topic", "no block"), GREEN, "only cursor/ branches need the block");
+  assert.equal(withFleet(GREEN, null, "no block"), GREEN, "--sha / HEAD: no PR, no fleet check");
+  const red = { ...GREEN, state: "failed", code: 1 };
+  assert.equal(withFleet(red, "cursor/x", "no block"), red, "a red verdict keeps its own reason");
+  const planOpen = withPlan(GREEN, "## Plan\n- [ ] open");
+  assert.equal(withFleet(planOpen, "cursor/x", "## Plan\n- [ ] open").state, "plan-open", "plan-open is reported first");
 });
 
 for (const state of ["in_progress", "completed"]) test(`newer ${state} attempt wins despite older late success`, () => {

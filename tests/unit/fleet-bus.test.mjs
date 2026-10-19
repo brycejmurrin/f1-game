@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   decide, leaseState, parseLease, leaseLine, formatLine, parseLine, parseLog, addressed, whoAmI,
   writeBus, readLease, readBus, fetchBus, BUS_BRANCH, MAX_TTL_MIN, DEFAULT_TTL_MIN,
-  addressProblem, ADDRESS_FORMS, ROLES, main,
+  addressProblem, ADDRESS_FORMS, ROLES, main, parseLive, whoIs, whoLine, ageOf,
 } from "../../tools/ci/fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -208,6 +208,73 @@ test("against real git: two hosts race for one lease, exactly one wins; the bus 
     assert.equal(calls, 2, "B's first push was rejected and it decided again");
     assert.equal(raced.refused, true, "the second decision saw A's lease");
     assert.equal(readLease({ cwd: HB }).holder, A, "exactly one holder: A");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- who <fleet letter> (fleet redesign §4B item 4, §8 multi-host) ----------
+const ORCH19 = "ORCH19 LIVE session_01FLdmwWhj9BAeyKz5T8VQQN (replaces ORCH18 session_01MQVTPLSi3hPtVi3b29w3YH), Fleet A orchestrator. Game slot after green Pages on 4cb1d80d: Fleet A #3082, then Fleet B";
+
+test("parseLive: the explicit `ORCH <letter> LIVE <host>:<id>` form, any host", () => {
+  assert.deepEqual(parseLive({ from: A, text: "A·O20 ORCH A LIVE claude:session_01AAAAAAAAAAAAAAAAAAAAAA" }),
+    { letter: "A", id: "claude:session_01AAAAAAAAAAAAAAAAAAAAAA" });
+  assert.deepEqual(parseLive({ from: "codex:x", text: "ORCH C LIVE codex:codex-coord-6fa2, scope tools" }),
+    { letter: "C", id: "codex:codex-coord-6fa2" });
+  assert.deepEqual(parseLive({ from: B, text: "ORCH D LIVE bc-1234abcd" }), { letter: "D", id: "cursor:bc-1234abcd" });
+  assert.deepEqual(parseLive({ from: A, text: "ORCH B LIVE cse_01BBBBBBBBBBBBBBBBBBBBBB" }),
+    { letter: "B", id: "claude:session_01BBBBBBBBBBBBBBBBBBBBBB" }, "a cse_ id is the session_ id send_message takes");
+});
+
+test("parseLive: today's free text — the id right after LIVE, not the one it replaces", () => {
+  assert.deepEqual(parseLive({ from: "claude:session_01FLdmwWhj9BAeyKz5T8VQQN", text: ORCH19 }),
+    { letter: "A", id: "claude:session_01FLdmwWhj9BAeyKz5T8VQQN" });
+  assert.deepEqual(parseLive({ from: A, text: "OrchB 7 LIVE session_01H8VtkpzfE5KwDeid2n46At succeeds OrchB 6 session_0162RfQfE67JM18KnjzEaM24 for Fleet B" }),
+    { letter: "B", id: "claude:session_01H8VtkpzfE5KwDeid2n46At" });
+});
+
+test("parseLive: SEED/FLEET LIVE lines, a LIVE line with no fleet letter and a non-LIVE line name no orchestrator", () => {
+  assert.equal(parseLive({ from: A, text: "SEED A LIVE session_01SEEDSEEDSEEDSEEDSEEDSE" }), null);
+  assert.equal(parseLive({ from: A, text: "FLEET C LIVE codex:abc-1234 scope:tools orchestrator" }), null);
+  assert.equal(parseLive({ from: A, text: "ORCH18 LIVE session_01MQVTPLSi3hPtVi3b29w3YH (replaces ORCH17)" }), null);
+  assert.equal(parseLive({ from: A, text: "B·G1 garage design preview, Fleet A orchestrator approved" }), null);
+});
+
+test("whoIs: the NEWEST announcing line for that letter wins; none is null; whoLine is `<letter> <host:id> <sha7> <age>`", () => {
+  const entries = [
+    { sha: "1111111aaaa", at: T, from: A, text: "ORCH A LIVE claude:session_01OLDOLDOLDOLDOLDOLDOLDO" },
+    { sha: "2222222bbbb", at: T + 10, from: A, text: "ORCH B LIVE claude:session_01BBBBBBBBBBBBBBBBBBBBBB" },
+    { sha: "3333333cccc", at: T + 20, from: "claude:session_01FLdmwWhj9BAeyKz5T8VQQN", text: ORCH19 },
+    { sha: "4444444dddd", at: T + 30, from: A, text: "#1 abc" },
+  ];
+  const a = whoIs(entries, "a");
+  assert.equal(a.id, "claude:session_01FLdmwWhj9BAeyKz5T8VQQN");
+  assert.equal(whoLine(a, T + 20 + 45 * 60), "A claude:session_01FLdmwWhj9BAeyKz5T8VQQN 3333333 45m");
+  assert.equal(whoIs(entries, "B").sha, "2222222bbbb");
+  assert.equal(whoIs(entries, "D"), null);
+  assert.equal(ageOf(T, T + 3 * 3600), "3h");
+  assert.equal(ageOf(T, T + 3 * 86400), "3d");
+});
+
+test("main who: prints one line for the fleet's newest LIVE line, exits 1 for a fleet with no LIVE line", () => {
+  const dir = path.join(ROOT, "artifacts", `fleet-bus-who-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    g(dir, "init", "-q", "--bare", "origin.git");
+    g(dir, "init", "-q", "h");
+    const h = path.join(dir, "h");
+    g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
+    const out = [];
+    const opts = { cwd: h, log: (l) => out.push(l), dispatch: () => "x", now: () => T + 600 };
+    assert.equal(main(["send", "HANDOFF", "--to", "*", "--as", A, "A·O1 ORCH A LIVE claude:session_01AAAAAAAAAAAAAAAAAAAAAA"], opts), 0);
+    assert.equal(main(["send", "GREEN", "--to", "A", "--as", A, "#7 green"], opts), 0);
+    assert.equal(main(["who", "A"], opts), 0);
+    assert.match(out.at(-1), /^A claude:session_01AAAAAAAAAAAAAAAAAAAAAA [0-9a-f]{7} \d+[mhd]$/);
+    assert.equal(main(["who", "C"], opts), 1);
+    assert.match(out.at(-1), /^= who C: no ORCH C LIVE line/);
+    assert.equal(main(["who", "AB"], opts), 1, "one letter only");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
