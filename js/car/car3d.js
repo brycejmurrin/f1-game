@@ -2142,6 +2142,14 @@ const Car3D = (function () {
     }
     const wishboneSpread = 0.20 * Math.max(0.72, Math.min(1.3, suspStyle.wishbone));
     const toeScale = Math.max(0.7, Math.min(1.35, suspStyle.toe));
+    // LAYOUT knobs (default 0 = the shipped geometry): `pullAt` keeps a pullrod
+    // at one axle only (1 front, 2 rear — the 2026 grid splits it that way),
+    // `antiDive` tilts the front upper wishbone nose-down (rear leg raised),
+    // `upright` extends the front upright so the upper joint sits high in the rim.
+    const pullAt = Math.max(0, Math.min(2, Math.round(suspStyle.pullAt || 0)));
+    const pullF = wbPull && pullAt !== 2, pullR = wbPull && pullAt !== 1;
+    const antiDive = Math.max(0, Math.min(1.5, suspStyle.antiDive || 0)) * 0.07;
+    const upX = Math.max(0, Math.min(1.5, suspStyle.upright || 0)) * 0.07;
     // INBOARD PICKUPS. Every arm on the car started at a hardcoded x 0.29-0.33
     // while the bodywork it bolts to is far narrower at the axle stations: the
     // nose flank measures x 0.19-0.21 at the front axle and the engine cover
@@ -2160,17 +2168,18 @@ const Car3D = (function () {
       // silhouette. 0.22/0.47 is a 250 mm spread, still 50 mm clear of the rim
       // at each end. The upright casting below grows to span it.
       const fLower = [s*0.69, 0.22 + rideDY, AXLES.frontZ];
-      const fUpper = [s*0.69, 0.47 + rideDY, AXLES.frontZ];
+      const fUpper = [s*0.69, 0.47 + upX + rideDY, AXLES.frontZ];
       const fLowZ = [AXLES.frontZ - wishboneSpread, AXLES.frontZ + wishboneSpread];
+      const fUpY = (z) => 0.42 + upX * 0.6 + (z < AXLES.frontZ ? antiDive : -antiDive * 0.4) + rideDY;
       for (const z of fLowZ) {
         drawArm(out, [s*inNose(z), 0.225 + rideDY, z], fLower, armTh, suspC, SURFACES.carbon);
-        drawArm(out, [s*inNose(z), 0.42 + rideDY, z], fUpper, armTh, suspC, SURFACES.carbon);
+        drawArm(out, [s*inNose(z), fUpY(z), z], fUpper, armTh, suspC, SURFACES.carbon);
       }
       if (fairArms) {
         addWishboneWeb(out, [s*inNose(fLowZ[0]), 0.225 + rideDY, fLowZ[0]],
           [s*inNose(fLowZ[1]), 0.225 + rideDY, fLowZ[1]], fLower, suspC, SURFACES.carbon);
-        addWishboneWeb(out, [s*inNose(fLowZ[0]), 0.42 + rideDY, fLowZ[0]],
-          [s*inNose(fLowZ[1]), 0.42 + rideDY, fLowZ[1]], fUpper, suspC, SURFACES.carbon);
+        addWishboneWeb(out, [s*inNose(fLowZ[0]), fUpY(fLowZ[0]), fLowZ[0]],
+          [s*inNose(fLowZ[1]), fUpY(fLowZ[1]), fLowZ[1]], fUpper, suspC, SURFACES.carbon);
       }
       drawArm(out, [s*inNose(AXLES.frontZ - 0.16), 0.34 + rideDY, AXLES.frontZ - 0.16],
         [s*0.69, 0.35 + rideDY, AXLES.frontZ - 0.04*toeScale],
@@ -2178,13 +2187,13 @@ const Car3D = (function () {
       // An upright is a CASTING: wide at the lower wishbone pickup, narrow at
       // the top. `addSpan` with a tapered front frame is the same 12 triangles
       // as the cube it replaces.
-      addSpan(out, { z: AXLES.frontZ + 0.05, x: s * 0.69, y: 0.345 + rideDY, w: 0.055, h: 0.29, t: 0.55 },
-                   { z: AXLES.frontZ - 0.05, x: s * 0.69, y: 0.345 + rideDY, w: 0.048, h: 0.27, t: 0.62 },
+      addSpan(out, { z: AXLES.frontZ + 0.05, x: s * 0.69, y: 0.345 + upX / 2 + rideDY, w: 0.055, h: 0.29 + upX, t: 0.55 },
+                   { z: AXLES.frontZ - 0.05, x: s * 0.69, y: 0.345 + upX / 2 + rideDY, w: 0.048, h: 0.27 + upX, t: 0.62 },
               [0.18, 0.18, 0.20], null, SURFACES.metal);
       if (wbPush) {
-        const outer = wbPull ? fUpper : fLower;
+        const outer = pullF ? fUpper : fLower;
         const iX = inNose(AXLES.frontZ - 0.05);
-        const inner = wbPull ? [s*iX,0.20+rideDY,AXLES.frontZ-0.05]
+        const inner = pullF ? [s*iX,0.20+rideDY,AXLES.frontZ-0.05]
           : [s*iX,0.455+rideDY,AXLES.frontZ-0.05];
         drawArm(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
       }
@@ -2209,9 +2218,9 @@ const Car3D = (function () {
                    { z: AXLES.rearZ - 0.05, x: s * 0.67, y: 0.36 + rideDY, w: 0.048, h: 0.27, t: 0.62 },
               [0.18, 0.18, 0.20], null, SURFACES.metal);
         if (wbPush) {
-          const outer = wbPull ? rUpper : rLower;
+          const outer = pullR ? rUpper : rLower;
           const iX = inTail(AXLES.rearZ + 0.04);
-          const inner = wbPull ? [s*iX,0.22+rideDY,AXLES.rearZ+0.04]
+          const inner = pullR ? [s*iX,0.22+rideDY,AXLES.rearZ+0.04]
             : [s*iX,0.53+rideDY,AXLES.rearZ+0.04];
           drawArm(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
         }
