@@ -776,6 +776,7 @@
     {
       "path": "tools/ci/fleet-tick.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
