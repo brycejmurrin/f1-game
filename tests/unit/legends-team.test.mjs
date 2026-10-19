@@ -11,10 +11,11 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 function load(files) {
   const ctx = vm.createContext({ console, Object, Math });
-  for (const f of files) vm.runInContext(fs.readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
+  for (const f of files) vm.runInContext(fs.readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: absSrc(f) });
   return (name) => vm.runInContext(name, ctx);
 }
 const get = load(["js/core/mat4.js", "js/data/legends.js"]);

@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/physics/grip-steer.js"), "utf8");
@@ -171,8 +172,8 @@ test("the cap aims at the FRONT curve's own peak slip (CURVE_PEAK_X_F), not the 
   // "cap at peak slip" says. A context WITH the real TyreModel pins the new cap.
   const tctx = { M4: ctx.M4, Math, Object, Log: { info() {}, debug() {}, warn() {}, error() {} } };
   tctx.window = tctx;   // consts.js assigns window.PhysicsConsts
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8").replace(/^const\b/gm, "var"), tctx);
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/physics/tyre-model.js"), "utf8").replace(/^const\b/gm, "var"), tctx);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8").replace(/^const\b/gm, "var"), tctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/physics/tyre-model.js"), "utf8").replace(/^const\b/gm, "var"), tctx, { filename: absSrc("js/physics/tyre-model.js") });
   vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), tctx);
   const TM = tctx.TyreModel, G2 = tctx.GripSteer;
   assert.ok(TM.CURVE_PEAK_X_F < TM.CURVE_PEAK_X, "premise: the front peaks earlier");

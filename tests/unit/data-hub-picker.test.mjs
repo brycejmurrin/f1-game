@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -122,7 +123,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   if (realTelemetry) files.push("js/data/telemetry-model.js", "js/data/telemetry.js");
   files.push("js/data/hub.js");
   for (const f of files)
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const DataHub = vm.runInContext("DataHub", ctx);
   const flush = () => new Promise((r) => setImmediate(r));
   async function settle(expect) {
@@ -157,7 +158,7 @@ function lateResults(h, cached) {
     localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i],
       getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) }
   });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/api-transport.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/api-transport.js"), "utf8"), ctx, { filename: absSrc("js/data/api-transport.js") });
   const transport = vm.runInContext("F1Transport", ctx).create("https://api.openf1.org/v1", 7 * 86400000);
   let finished;
   Object.assign(h.api, { sessionResult: () => (finished = transport.request(url, 60000)),
@@ -703,7 +704,7 @@ test("transport.forget(url) drops an oversize body from memory as well as localS
     fetch: async () => { fetches++; return { ok: true, status: 200, headers: { get: () => null }, json: async () => big }; },
     localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i],
       getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/api-transport.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/api-transport.js"), "utf8"), ctx, { filename: absSrc("js/data/api-transport.js") });
   const transport = vm.runInContext("F1Transport", ctx).create("https://api.openf1.org/v1", 7 * 86400000);
   await transport.request(url, 60000);
   await transport.request(url, 60000);

@@ -6,11 +6,12 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { loadCrests, paintAt } from "../../tools/car/crest-sweep.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { loadAtlas } from "../../tools/car/livery-contrast.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const source = (path) => fs.readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 function load(extra = {}) {
   const ctx = vm.createContext(extra);
-  vm.runInContext(source("js/car/livery-design.js"), ctx);
+  vm.runInContext(source("js/car/livery-design.js"), ctx, { filename: absSrc("js/car/livery-design.js") });
   return { ctx, D: vm.runInContext("LiveryDesign", ctx) };
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -164,7 +165,7 @@ test("design fields survive draft, stored livery and live resolver round-trips",
 
 function editorFixture() {
   const dom = makeDom(), { ctx, D } = load({ document: dom.document });
-  vm.runInContext(source("js/garage/livery-design-editor.js"), ctx);
+  vm.runInContext(source("js/garage/livery-design-editor.js"), ctx, { filename: absSrc("js/garage/livery-design-editor.js") });
   const E = vm.runInContext("GarageLiveryDesignEditor", ctx), root = dom.document.createElement("div");
   const draft = { name: "Mine", c1: "#000000", c2: "#ffffff", spineLogo: "stripe", patternWidth: "70", patternRepeat: "6", patternOffset: "0", patternTaper: "20", patternOpacity: "100", patternPlacement: "crown", patternSide: "both" };
   const previews = []; let editor;

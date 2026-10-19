@@ -15,6 +15,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/perf/loop-health.js"), "utf8");
@@ -36,7 +37,7 @@ function load(clock = { t: 0 }) {
     errors.push({ ns, msg, e });
     return realError(ns, msg, e);
   };
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/perf/loop-health.js" });
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/loop-health.js") });
   return { LoopHealth: ctx.LoopHealth, clock, errors };
 }
 

@@ -14,6 +14,7 @@ import fs from "node:fs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const src = readFileSync(new URL("../../js/track/build-client.js", import.meta.url), "utf8");
 
@@ -39,7 +40,7 @@ function page(globals = {}) {
     ...globals,
   });
   ctx.window = ctx;
-  vm.runInContext(src, ctx, { filename: "js/track/build-client.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/track/build-client.js") });
   const fire = () => { for (const t of timers) if (t.live) { t.live = false; t.fn(); } };
   return { client: ctx.TrackBuildClient, workers, warns, fire };
 }
@@ -144,8 +145,8 @@ function client({ answer = "never", lazyV = null } = {}) {
       }
       terminate() { this.terminated++; }
     } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/script-loader.js"), "utf8") + "\nthis.ScriptLoader = ScriptLoader;", ctx, { filename: "script-loader.js" });
-  vm.runInContext(SRC + "\nthis.TrackBuildClient = TrackBuildClient;", ctx, { filename: "build-client.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/script-loader.js"), "utf8") + "\nthis.ScriptLoader = ScriptLoader;", ctx, { filename: absSrc("js/core/script-loader.js") });
+  vm.runInContext(SRC + "\nthis.TrackBuildClient = TrackBuildClient;", ctx, { filename: absSrc("js/track/build-client.js") });
   return { C: ctx.TrackBuildClient, made, idles, mem };
 }
 const DEF = { id: "monza" }, OPTS = { night: false, gridSlots: 20 }, GFX = { mobileTier: false };

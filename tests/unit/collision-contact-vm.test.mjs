@@ -33,6 +33,7 @@ import vm from "node:vm";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT_C = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -426,7 +427,7 @@ function replayContactFixture(count = 2) {
     },
   });
   for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js", "js/race/real-replay.js"]) {
-    vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: file });
+    vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
   }
   const cars = Array.from({ length: count }, (_, i) => ({ code: "C" + i, human: false }));
   const G = {
@@ -518,7 +519,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
   pause();
   assert.equal(instantReplayButton().hidden, false, "the actual solo loop offers instant replay after three seconds");
   g.sandbox.document.getElementById("pm-resume").onclick();
-  vm.runInContext(readFileSync(join(ROOT_C, "js/data/real-race-tab.js"), "utf8"), g.ctx);
+  vm.runInContext(readFileSync(join(ROOT_C, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
   const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
   const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
   const fixture = JSON.parse(readFileSync(join(ROOT_C, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));

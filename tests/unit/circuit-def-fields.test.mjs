@@ -33,6 +33,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -165,7 +166,7 @@ test("the title's meta stubs carry the menu fields their hydrated defs do (gpLap
   vm.createContext(sb);
   for (const f of M.TRACK_VM) {
     const src = f === "@circuits" ? generate() : fs.readFileSync(path.join(ROOT, f), "utf8");
-    vm.runInContext(src, sb, { filename: f === "@circuits" ? M.CIRCUIT_META : f });
+    vm.runInContext(src, sb, { filename: absSrc(f === "@circuits" ? M.CIRCUIT_META : f) });
   }
   const stubs = vm.runInContext("Tracks", sb).LIST;
   const full = buildContext().LIST;
@@ -224,7 +225,7 @@ test("the folded per-circuit data reaches the built def", () => {
     // with the context's own; the re-built Tracks is handed out explicitly.
     const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
     const rebuilt = vm.runInContext("(function () {\n" + src + "\n; return Tracks; })()", ctx,
-      { filename: "js/track/tracks.js" });
+      { filename: absSrc("js/track/tracks.js") });
     const broken = rebuilt.LIST.find((t) => t.id === "monaco");
     assert.throws(() => broken.points, /circuit "monaco" has no `path`/);
   } finally {
@@ -248,7 +249,7 @@ test("every OSM-imported circuit is either surveyed or explicitly flat", () => {
   const osm = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/track/osm-circuits.json"), "utf8"));
   const ids = Object.keys(osm.circuits || osm);
   assert.ok(ids.length >= 12, `osm-circuits.json lists ${ids.length} circuits`);
-  const elev = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/track/circuit-elevations.js"), "utf8") + ";CircuitElevations", {});
+  const elev = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/track/circuit-elevations.js"), "utf8") + ";CircuitElevations", {}, { filename: absSrc("js/track/circuit-elevations.js") });
   const neither = ids.filter((id) => !(Array.isArray(elev[id]) && elev[id].length > 0) && at(id) && at(id).undulate !== false);
   assert.deepEqual(neither, [], "an OSM circuit with no SRTM profile must declare undulate: false (or bake one)");
   assert.equal(at("korea").undulate, false, "korea is the flat one, by measurement");

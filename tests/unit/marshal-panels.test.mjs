@@ -16,6 +16,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/marshal-panels.js"), "utf8");
@@ -154,7 +155,7 @@ function buildPosts(ks) {
   vm.createContext(sb);
   seedLog(sb);
   for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/scenery/data.js", "js/track/scenery/structures.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   const TG = sb.TrackGeom, n = 100;
   const out = { pos: [], nrm: [], col: [], idx: [], mat: [] }, notes = [];
   const hw = new Float32Array(n).fill(6), px = new Float32Array(n), py = new Float32Array(n), pz = new Float32Array(n);
@@ -218,7 +219,7 @@ test("game.js wires MarshalPanels after the gantry lamps", () => {
 function runAt(hz, seconds, { mobile = false, brakeFlares = 0 } = {}) {
   const ctx = vm.createContext({ Math, Float32Array, Uint8Array, Array, Object });
   seedLog(ctx);
-  const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx);
+  const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
   let frameB = 0, frameQ = 0;
   P.init({ mobileTier: mobile, drawParticles: (data, floats, additive) => {
     if (!additive) return;

@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -106,8 +107,8 @@ function loadFill() {
   vm.createContext(sb);
   // FrameLights destructures LightKnobs.LT at eval — the registry loads first;
   // the slot budget (LightBudget) is read at call time.
-  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb);
-  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb, { filename: absSrc("js/render/shared/light-budget.js") });
+  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb, { filename: absSrc("js/lighting/knobs.js") });
   vm.runInContext(patched, sb);
   const LT = vm.runInContext("FrameLights", sb);
   assert.equal(typeof LT._fillAllLights, "function", "_fillAllLights not exported by the patch");
@@ -235,8 +236,8 @@ test("frame.lampSetGen moves with the lamp set and its scale, never with the fli
   sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
   sb.Tracks = { sample(t, s, o) { return o; } };
   vm.createContext(sb);
-  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb);
-  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb, { filename: absSrc("js/render/shared/light-budget.js") });
+  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb, { filename: absSrc("js/lighting/knobs.js") });
   vm.runInContext(src, sb);
   const FL = vm.runInContext("FrameLights", sb), LT = vm.runInContext("LightKnobs.LT", sb);
   LT.lampFlicker = 0.1;
@@ -271,7 +272,7 @@ test("phone 24-slot budget: real setFrameLights cull + emit tails stay inside th
     } },
     PerfGov: { tier: () => 0 },
   });
-  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8") + "\n;globalThis.LightBudget = LightBudget;", ctx);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8") + "\n;globalThis.LightBudget = LightBudget;", ctx, { filename: absSrc("js/render/shared/light-budget.js") });
   vm.runInContext("LightBudget.setSlots(24);", ctx);
   vm.runInContext(src + "\n;globalThis.FrameLights = FrameLights;", ctx);
   const FL = ctx.FrameLights;

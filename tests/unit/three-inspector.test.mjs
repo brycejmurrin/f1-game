@@ -9,6 +9,7 @@ import path from "node:path";
 import vm from "node:vm";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -47,7 +48,7 @@ function load(search, { hostname = "localhost", protocol = "http:", webdriver = 
     window: {},
   };
   vm.createContext(sb);
-  vm.runInContext(read("js/perf/three-inspector.js") + "\nthis.TI = ThreeInspector;", sb);
+  vm.runInContext(read("js/perf/three-inspector.js") + "\nthis.TI = ThreeInspector;", sb, { filename: absSrc("js/perf/three-inspector.js") });
   sb.disk = disk;
   return sb;
 }

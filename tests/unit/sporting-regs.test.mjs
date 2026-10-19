@@ -18,10 +18,11 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ctx = vm.createContext({});
-vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8"), ctx);
+vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8"), ctx, { filename: absSrc("js/race/sporting-regs.js") });
 const R = vm.runInContext("SportingRegs", ctx);
 
 const log = (...codes) => codes.map((code, i) => ({ code, lap0: i * 5, lap1: null }));

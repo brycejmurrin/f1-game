@@ -8,7 +8,7 @@ import { SURVEY_LOCATIONS, CAMERA_RECIPES, listSurveyLocations, sourceIdentity, 
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { parseFlags } from "../lib/cli-args.mjs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   estimateSurveyMs,
   surveyTerminalState,
@@ -189,7 +189,7 @@ function runSession(track, outDir) {
 }
 
 let sess = null;
-const host = {
+const realHost = {
   log(line) { process.stderr.write(line.endsWith("\n") ? line : line + "\n"); },
   async sessionFor(track, outDir) {
     if (!sess) {
@@ -209,6 +209,10 @@ const host = {
     await cur.close();
   },
 };
+// Test seam (tests/unit/shot-survey-runner.test.mjs): a module whose default export builds the host replaces the child-process one.
+const host = process.env.APEX_SURVEY_HOST_MODULE
+  ? (await import(pathToFileURL(path.resolve(process.env.APEX_SURVEY_HOST_MODULE)).href)).default({ outRoot })
+  : realHost;
 const run = await runSurvey({
   tracks, plans, outRoot, resume, wantPanel, wantIndex, profile, seed, source,
   gpu: sessionEnv().APEX_GPU, coldSessions: has("--cold-sessions"), estimateMs,

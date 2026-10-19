@@ -17,9 +17,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bootEditor, design, ellipse, read, plain } from "../helpers/editor-vm.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const B = bootEditor();
-vm.runInContext(read("js/editor/fixes.js").replace(/^const\b/gm, "var"), B.ctx, { filename: "js/editor/fixes.js" });
+vm.runInContext(read("js/editor/fixes.js").replace(/^const\b/gm, "var"), B.ctx, { filename: absSrc("js/editor/fixes.js") });
 const { V, S, ST, TR, Tracks } = B, I = B.ctx.TrackInsight, F = B.ctx.TrackFixes;
 const q = (v) => Math.round(v * 4) / 4;
 const def = (id) => Tracks.LIST.find((d) => d.id === id);

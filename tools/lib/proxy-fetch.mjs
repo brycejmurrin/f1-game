@@ -7,7 +7,7 @@
 // fetch to api.github.com got `401 Bad credentials` (flake-tally) or a silent
 // rate-limited 403 (verify-change's live-CI advisory never fired). curl reads
 // HTTPS_PROXY and the proxy's CA bundle itself, as the shared `api()` in
-// ready-full-cap.mjs already relies on.
+// github-api.mjs already relies on.
 //
 // proxyFetch(url, init) answers with the subset of Response the callers use
 // (status, ok, arrayBuffer, text, json). Headers travel in a curl config on

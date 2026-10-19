@@ -21,6 +21,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { loadCar3D, buildCockpit, sweep, isPale } from "../../tools/car/cockpit-pale-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 // Pale things that are SUPPOSED to be pale, each with the reason it stays.
 const ALLOWED = [
@@ -216,7 +217,7 @@ test("the cockpit hood and nose keep the livery", () => {
 test("no shipped livery dresses the cockpit forearms in a pale slab", () => {
   const ctx = { Log: { info() {}, warn() {}, error() {} }, GaragePrims: { block() {} } };
   vm.createContext(ctx);
-  vm.runInContext(readFileSync("js/car/car-mesh.js", "utf8") + "\n;this.CarMesh = CarMesh;", ctx, { filename: "car-mesh.js" });
+  vm.runInContext(readFileSync("js/car/car-mesh.js", "utf8") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({ createMesh: (d) => ({ d }), freeMesh() {} });
   const offenders = [];
   const check = (label, liv) => {
