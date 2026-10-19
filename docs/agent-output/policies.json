@@ -1196,6 +1196,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/census-init.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/centreline-kinks.cjs": {
       "action": "no-direct-output",
       "presentation": "native",

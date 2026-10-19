@@ -1882,6 +1882,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/census-init.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/centreline-kinks.cjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"

@@ -19,6 +19,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { initCensusPage } from "../lib/census-init.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -44,32 +45,6 @@ const REAL_LINK = argv.includes("--real-link");
 const MOBILE = argv.includes("--mobile");
 const JSON_OUT = flag("--json", null);
 const WAIT_MS = Math.max(60000, +process.env.APEX_PROFILE_WAIT_MS || 60000);
-
-/** Page-side init script: force TLX onto three's WebGL2 path and (unless --real-link) stub program links. */
-function initScript({ stub, mobile }) {
-  try {
-    if (mobile) localStorage.setItem("apex26.forceMobileTier", "1");
-    localStorage.setItem("apex26.gfxBackend", "three");
-    localStorage.setItem("apex26.tlxForceGL", "1");
-    localStorage.setItem("apex26.gfxBootStepMs", "45000");
-    sessionStorage.setItem("apex26.wgxCapture", "0");
-  } catch (_) { /* blocked storage: the defaults still run TLX */ }
-  window.__TEST_MODE = true;
-  if (!stub) return;
-  for (const C of [window.WebGL2RenderingContext, window.WebGLRenderingContext]) {
-    if (!C) continue;
-    const P = C.prototype;
-    P.linkProgram = function () {};
-    P.compileShader = function () {};
-    P.validateProgram = function () {};
-    const gp = P.getProgramParameter, gs = P.getShaderParameter;
-    P.getProgramParameter = function (p, k) { return k === this.LINK_STATUS || k === this.VALIDATE_STATUS || k === this.COMPLETION_STATUS_KHR ? true : gp.call(this, p, k); };
-    P.getShaderParameter = function (s, k) { return k === this.COMPILE_STATUS ? true : gs.call(this, s, k); };
-    P.getProgramInfoLog = function () { return ""; };
-    P.getShaderInfoLog = function () { return ""; };
-  }
-}
-
 
 function installWrap() {
   const P = WebGL2RenderingContext.prototype;
@@ -118,7 +93,7 @@ async function main() {
   const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] });
   try {
     const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
-    await ctx.addInitScript(initScript, { stub: !REAL_LINK, mobile: MOBILE });
+    await ctx.addInitScript(initCensusPage, { backend: "tlx", stub: !REAL_LINK, mobile: MOBILE });
     await ctx.addInitScript(installWrap);
     const page = await ctx.newPage();
     const errors = [];

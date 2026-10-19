@@ -21,6 +21,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { initCensusPage } from "../lib/census-init.mjs";
 import {
   aggregateRows, tableRows, formatBandTable, recommend,
 } from "./mesh-census-lib.mjs";
@@ -71,40 +72,6 @@ const backends = BACKEND === "both" ? ["tlx", "glx"] : [BACKEND];
 if (!backends.every((b) => b === "tlx" || b === "glx")) {
   console.error("backend must be tlx, glx, or both");
   process.exit(2);
-}
-
-/** Init script: pick backend, stub TLX program links (SwiftShader speed). */
-function initScript({ backend, stub, mobile }) {
-  try {
-    if (mobile) localStorage.setItem("apex26.forceMobileTier", "1");
-    if (backend === "tlx") {
-      localStorage.setItem("apex26.gfxBackend", "three");
-      localStorage.setItem("apex26.tlxForceGL", "1");
-    } else {
-      localStorage.setItem("apex26.gfxBackend", "glx");
-    }
-    localStorage.setItem("apex26.gfxBootStepMs", "45000");
-    sessionStorage.setItem("apex26.wgxCapture", "0");
-  } catch (_) { /* blocked storage */ }
-  window.__TEST_MODE = true;
-  if (!(backend === "tlx" && stub)) return;
-  for (const C of [window.WebGL2RenderingContext, window.WebGLRenderingContext]) {
-    if (!C) continue;
-    const P = C.prototype;
-    P.linkProgram = function () {};
-    P.compileShader = function () {};
-    P.validateProgram = function () {};
-    const gp = P.getProgramParameter, gs = P.getShaderParameter;
-    P.getProgramParameter = function (p, k) {
-      return k === this.LINK_STATUS || k === this.VALIDATE_STATUS || k === this.COMPLETION_STATUS_KHR
-        ? true : gp.call(this, p, k);
-    };
-    P.getShaderParameter = function (s, k) {
-      return k === this.COMPILE_STATUS ? true : gs.call(this, s, k);
-    };
-    P.getProgramInfoLog = function () { return ""; };
-    P.getShaderInfoLog = function () { return ""; };
-  }
 }
 
 /** TLX: wrap renderer.render + renderObject; attribute tris by pass/source/distance. */
@@ -502,7 +469,7 @@ async function main() {
       for (const track of tracks) {
         process.stderr.write(`mesh-census ${backend} ${track}…\n`);
         const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
-        await ctx.addInitScript(initScript, { backend, stub: !REAL_LINK, mobile: MOBILE });
+        await ctx.addInitScript(initCensusPage, { backend, stub: !REAL_LINK, mobile: MOBILE });
         const page = await ctx.newPage();
         page.on("pageerror", (e) => errors.push(`${backend}/${track}: ${String(e).slice(0, 180)}`));
         const q = backend === "tlx" ? "three-devtools=1" : "gfx=glx";
