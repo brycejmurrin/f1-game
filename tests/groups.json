@@ -497,6 +497,8 @@
     "tests/unit/garage-defaults.test.mjs",
     "tests/unit/garage-followups.test.mjs",
     "tests/unit/garage-interior-gate.test.mjs",
+    "// Garage room LOOKS (design preview): every look builds a valid bay and changes the room.",
+    "tests/unit/garage-looks.test.mjs",
     "tests/unit/garage-mesh.test.mjs",
     "tests/unit/garage-panel-side.test.mjs",
     "// The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.",

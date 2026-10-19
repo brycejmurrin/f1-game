@@ -198,6 +198,84 @@ function tile(out, x0, x1, z0, z1, col, y, mid) {
   out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
 }
 
-  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, BOX_F, WALL_KEYED, sideOnly, block, cyl, tube, hose, MAT, smooth, scale, rgb, css };
+// ── room LOOKS (design preview, B·G1) ───────────────────────────────────────
+// A dev switch over the SETUP-SCREEN bay's architecture: walls, floor, ceiling,
+// back-wall branding. `stock` (null) is the shipped room; every other id is a
+// data record GarageDress.look* reads. Trackside pit rows (buildStatic) never
+// see a look. Pick one with ?garageLook=<id>, localStorage apex26.garageLook,
+// or GaragePrims.setLook(id) (the geometry key carries lookId(), so the bay
+// rebuilds on the next frame). Colours are functions of the livery (c1 body,
+// c2 accent) so every team still reads as its own garage.
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const GREY = (v) => [v, v * 1.01, v * 1.05];
+const LOOKS = {
+  stock: null,
+  // Silver studio: light aluminium panelling on shadow-gap joints, a pale
+  // epoxy floor, a white ceiling of flush LED panels, a team header band.
+  studio: {
+    label: "Silver studio",
+    wall: { dado: () => GREY(0.42), stripe: (c1, c2) => c2, panel: () => GREY(0.62), skirt: GREY(0.07),
+            seam: "joint", jointPitch: 1.35, back: null },
+    ceil: GREY(0.58), truss: "rails", ceilLed: "grid",
+    floor: { slab: GREY(0.34), inner: GREY(0.40), paint: GREY(0.92), walk: GREY(0.55), band: (c1) => c1, key: (c1) => c1,
+             outline: GREY(0.92) },
+    backWall: "header",
+  },
+  // Night carbon: graphite navy walls split by lit accent slats, a black
+  // gloss floor with white markings, linear ceiling strips, a back wall that
+  // is one framed team-colour field.
+  carbon: {
+    label: "Night carbon",
+    wall: { dado: (c1) => mix(GREY(0.03), c1, 0.10), stripe: (c1, c2) => c2, panel: (c1) => mix([0.035, 0.040, 0.060], c1, 0.12),
+            skirt: GREY(0.02), seam: "slat", back: (c1) => scale(c1, 0.55) },
+    ceil: GREY(0.018), truss: "stock", ceilLed: "strips",
+    floor: { slab: GREY(0.040), inner: GREY(0.055), paint: GREY(0.90), walk: (c1, c2) => scale(c2, 0.8), band: (c1, c2) => c2,
+             key: (c1, c2) => c2, outline: GREY(0.88) },
+    backWall: "frame",
+  },
+  // Team flood: white dado under a full-saturation team-colour upper wall,
+  // black pinstripe, a mid-grey floor with a team-tinted box.
+  flood: {
+    label: "Team flood",
+    wall: { dado: () => GREY(0.74), stripe: () => GREY(0.04), panel: (c1) => scale(c1, 0.92), skirt: GREY(0.05),
+            seam: "none", back: null },
+    ceil: GREY(0.24), truss: "stock", ceilLed: "none",
+    floor: { slab: GREY(0.20), inner: (c1) => mix(GREY(0.20), c1, 0.38), paint: GREY(0.90), walk: GREY(0.85),
+             band: (c1) => c1, key: GREY(0.90), outline: (c1, c2) => c2 },
+    backWall: "header",
+  },
+  // Bare workshop: painted block-work, a hazard dado, raw concrete floor with
+  // yellow safety lines, deep steel trusses and hanging industrial pendants.
+  workshop: {
+    label: "Bare workshop",
+    wall: { dado: () => [0.16, 0.20, 0.17], stripe: () => [0.85, 0.66, 0.06], panel: () => [0.38, 0.36, 0.33], skirt: GREY(0.06),
+            seam: "block", back: null },
+    ceil: [0.12, 0.115, 0.11], truss: "heavy", ceilLed: "pendants",
+    floor: { slab: [0.23, 0.22, 0.20], inner: [0.25, 0.24, 0.22], paint: [0.85, 0.66, 0.06], walk: [0.85, 0.66, 0.06],
+             band: () => [0.85, 0.66, 0.06], key: () => [0.08, 0.08, 0.08], outline: null },
+    backWall: "none",
+  },
+};
+const LOOK_IDS = Object.keys(LOOKS);
+let _look = "stock";
+try {
+  const q = typeof location !== "undefined" && new URLSearchParams(location.search).get("garageLook");
+  const s = typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageLook");
+  const v = q || s;
+  if (v && LOOK_IDS.indexOf(v) >= 0) _look = v;
+} catch (_) { /* no storage */ }
+function setLook(id) {
+  if (LOOK_IDS.indexOf(id) < 0) return false;
+  _look = id;
+  try { localStorage.setItem("apex26.garageLook", id); } catch (_) { /* private mode */ }
+  return true;
+}
+const lookId = () => _look;
+const look = () => LOOKS[_look] || null;
+// Resolve a look colour slot: a fixed [r,g,b] or a function of the livery.
+const lookCol = (v, c1, c2) => (typeof v === "function" ? v(c1, c2) : v);
+
+  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, BOX_F, WALL_KEYED, sideOnly, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
+    mix, LOOKS, LOOK_IDS, setLook, lookId, look, lookCol };
 })();
 if (typeof window !== "undefined") window.GaragePrims = GaragePrims;
