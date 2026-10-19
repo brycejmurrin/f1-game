@@ -119,7 +119,7 @@ const HudArrange = (() => {
       hintEl = document.createElement("span");
       hintEl.id = "hud-arrange-hint";
       hintEl.setAttribute("aria-live", "polite");
-      hintEl.style.cssText = "color:var(--dim,#bbb);white-space:nowrap;max-width:30vw;overflow:hidden;text-overflow:ellipsis;";
+      hintEl.style.cssText = "color:var(--dim,#bbb);white-space:normal;overflow-wrap:anywhere;flex:1 1 14rem;min-width:0;max-width:100%;";
       picker = document.createElement("select");
       picker.id = "hud-arrange-element";
       picker.setAttribute("aria-label", "HUD element; use arrow keys on the Move button to position");
@@ -134,6 +134,9 @@ const HudArrange = (() => {
       bar.appendChild(hintEl);
       bar.appendChild(mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"));
       bar.appendChild(mk("+", "Larger", () => size(1), "hud-arrange-larger"));
+      const recover = mk("BRING INTO VIEW", "Bring selected element into view without changing its size", bringIntoView, "hud-arrange-recover");
+      recover.setAttribute("aria-describedby", "hud-arrange-hint");
+      bar.appendChild(recover);
       bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); HudLayout.resetEl(selected, context.set, context.profile); after(); } }, "hud-arrange-reset"));
       visibilityRow = document.createElement("label");
       visibilityRow.textContent = "VISIBILITY ";
@@ -180,19 +183,19 @@ const HudArrange = (() => {
       bar.style.transform = "none";
       bar.style.left = boxes[best].l + "px"; bar.style.top = boxes[best].t + "px";
     }
-    function paintBar(clash) {
+    function paintBar(clash, message) {
       if (!bar) return;
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
-      nameEl.textContent = cur ? cur.s + "%" : "";
+      nameEl.textContent = cur ? Number(cur.s.toPrecision(4)) + "%" : "";
       nameEl.hidden = !cur;
       const visibility = selected && HudLayout.visibility(selected);
       const off = visibility && visibility.value === "off";
-      hintEl.textContent = clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
+      hintEl.textContent = message || (clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
         : off ? "hidden in the race \u00b7 SHOW brings it back"
         : visibility && visibility.value === "mixed" ? "some tower readouts are hidden"
         : selected && !visibility ? "VISIBILITY: shown automatically with race events"
-        : "";
+        : "");
       hintEl.hidden = !hintEl.textContent;
       if (visibilityRow) {
         SettingRow.paint(visibilityRow, visibility ? visibility.value : "", visibility ? visibility.choices : []);
@@ -233,9 +236,9 @@ const HudArrange = (() => {
       }
       return pairs.map((p) => p.map((id) => (id[0] === "#" ? id.slice(1).toUpperCase() : id)));
     }
-    function after() {
+    function after(message) {
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
-      paintBar(markClashes());
+      paintBar(markClashes(), message);
     }
     const current = (id) => HudLayout.get(id, context.set, context.profile);
     function dragOrig(id) {
@@ -300,6 +303,34 @@ const HudArrange = (() => {
       const orig = dragOrig(selected);
       HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile);
       after();
+    }
+
+    // Recovery is an explicit move, never an automatic placement constraint.
+    // Keep the current size; oversized axes expose their leading edge instead
+    // of shrinking a widget the player deliberately enlarged.
+    function bringIntoView() {
+      if (!selected) return;
+      flush(); drag = null; pinch = null; pointers.clear();
+      const el = elOf(selected);
+      const cs = el && typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+      if (!visible(el) || (cs && (cs.display === "none" || cs.visibility === "hidden"))) {
+        after(labelOf(selected) + " has no visible box in this mode. Change visibility or camera first.");
+        return;
+      }
+      const bounds = HudLayout.screenBounds();
+      const rect = el.getBoundingClientRect();
+      const oversized = rect.width > bounds.right - bounds.left || rect.height > bounds.bottom - bounds.top;
+      const message = oversized ? "Oversized widget: leading edge in view. Size unchanged." : "Brought into view. Size unchanged.";
+      const move = r => ({
+        x: Math.max(bounds.left, Math.min(r.left, bounds.right - r.width)) - r.left,
+        y: Math.max(bounds.top, Math.min(r.top, bounds.bottom - r.height)) - r.top,
+      });
+      let delta = move(rect);
+      if (!delta.x && !delta.y) { after(oversized ? message : "Already in view. Size unchanged."); return; }
+      const orig = dragOrig(selected);
+      delta = move(el.getBoundingClientRect());
+      HudLayout.set(selected, Object.assign({}, orig, dragTo(orig, delta.x, delta.y, window.innerWidth, window.innerHeight)), context.set, context.profile);
+      after(message);
     }
 
     /* ---- pieces the race hides until something happens: show them with sample content ---- */

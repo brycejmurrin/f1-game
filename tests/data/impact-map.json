@@ -14478,6 +14478,7 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "screenBounds": [
+        "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-dock-pack.test.mjs"
       ],
       "setCam": [

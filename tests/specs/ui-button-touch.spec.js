@@ -960,8 +960,14 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
     expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout")), "responsive fitting never rewrites saved positions").toBe(saved);
     await page.screenshot({ path: testInfo.outputPath("hud-adaptive-" + viewport.width + "x" + viewport.height + ".png") });
   }
+  const sizeBefore = await page.evaluate(() => HudLayout.get("map").s);
   await page.locator("#hud-arrange-larger").click();
-  await expect(page.locator("#hud-arrange-name")).toHaveText("110%");
+  const sizeAfter = await page.evaluate(() => HudLayout.get("map").s);
+  expect(sizeAfter, "Larger adds ten points to the adopted painted size").toBeCloseTo(sizeBefore + 10, 8);
+  const sizeLabel = await page.locator("#hud-arrange-name").textContent();
+  expect(sizeLabel).toMatch(/^\d+(?:\.\d+)?%$/);
+  expect(sizeLabel.length, "the toolbar reports a readable percentage").toBeLessThanOrEqual(8);
+  expect(Math.abs(parseFloat(sizeLabel) - sizeAfter), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(sizeAfter * .0005);
   await page.locator("#hud-arrange-done").click();
   await expect(page.locator("#pmsettings")).toBeVisible();
   await testInfo.attach("console-health", { body: JSON.stringify({ errors }), contentType: "application/json" });
@@ -1103,10 +1109,11 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
 
     // − / + act on the piece last touched; RESET returns it to the shipped layout.
     await page.locator("#hud-arrange-larger").click();
-    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBe(110);
+    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s + 10, 8);
     await page.locator("#hud-arrange-smaller").click();
+    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s, 8);
     await page.locator("#hud-arrange-smaller").click();
-    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBe(90);
+    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s - 10, 8);
     await page.locator("#hud-arrange-reset").click();
     expect(await page.evaluate(() => HudLayout.get("map"))).toEqual({ x: 0, y: 0, s: 100 });
 
@@ -1247,8 +1254,12 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
       GameHud.invalidateFit();
       HudLayout.clearReadouts();
     });
-    // The fit still detects a lack of room, but cannot remove editor handles.
-    expect(await page.locator("[data-hl-arr][data-col-drop]").count()).toBeGreaterThan(0);
+    // Crowding cannot auto-drop a panel whose geometry the user owns.
+    for (const id of ["rel", "strat", "inputs"]) {
+      expect(await page.locator("#hud-" + id).evaluate(el => ({
+        manual: el.hasAttribute("data-hl-user"), editable: el.hasAttribute("data-hl-arr"), dropped: el.hasAttribute("data-col-drop"),
+      }))).toEqual({ manual: true, editable: true, dropped: false });
+    }
     const toolbar = await page.locator("#hud-arrange-bar").boundingBox();
     expect(toolbar).not.toBeNull();
     expect(toolbar.x).toBeGreaterThanOrEqual(59);
@@ -1259,23 +1270,39 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     for (const id of ["rel", "strat", "inputs"]) {
       await picker.selectOption(id);
       await expect(page.locator("#hud-" + id)).toBeVisible();
+      await page.locator("#hud-arrange-smaller").click();
+      expect(await page.evaluate(id => HudLayout.get(id).s, id)).toBe(190);
+      await expect(page.locator("#hud-" + id)).toBeVisible();
     }
-    await page.locator("#hud-arrange-smaller").click();
-    await expect(page.locator("#hud-inputs")).toBeVisible();
     await page.locator("#hud-arrange-done").click();
     await expect(page.locator("#hud-arrange-bar")).toBeHidden();
-    // The normal race drop rule is active again even for a visible producer.
-    expect(await page.evaluate(() => {
-      const el = document.getElementById("hud-inputs");
-      const hidden = el.hidden, drop = el.getAttribute("data-col-drop");
+    // Isolate the CSS drop rule from producer visibility and restore every
+    // temporary DOM change synchronously: manual geometry ignores auto-drop,
+    // while the same visible panel under automatic layout still obeys it.
+    const dropDisplays = await page.evaluate(() => {
+      const el = document.getElementById("hud-inputs"), body = document.body;
+      const attrs = ["hidden", "style", "data-col-drop", "data-hl-user"].map(name => [name, el.getAttribute(name)]);
+      const hudHide = body.getAttribute("data-hud-hide");
       try {
-        el.hidden = false; el.setAttribute("data-col-drop", "");
-        return getComputedStyle(el).display;
+        el.hidden = false;
+        el.style.removeProperty("display");
+        body.setAttribute("data-hud-hide", (hudHide || "").split(/\s+/).filter(id => id && id !== "inputs").join(" "));
+        el.removeAttribute("data-col-drop");
+        const baseline = getComputedStyle(el).display;
+        el.setAttribute("data-col-drop", "");
+        const manual = getComputedStyle(el).display;
+        el.removeAttribute("data-hl-user");
+        return { baseline, manual, automatic: getComputedStyle(el).display };
       } finally {
-        el.hidden = hidden;
-        if (drop === null) el.removeAttribute("data-col-drop"); else el.setAttribute("data-col-drop", drop);
+        for (const [name, value] of attrs) {
+          if (value === null) el.removeAttribute(name); else el.setAttribute(name, value);
+        }
+        if (hudHide === null) body.removeAttribute("data-hud-hide"); else body.setAttribute("data-hud-hide", hudHide);
       }
-    })).toBe("none");
+    });
+    expect(dropDisplays.baseline).not.toBe("none");
+    expect(dropDisplays.manual).toBe(dropDisplays.baseline);
+    expect(dropDisplays.automatic).toBe("none");
   });
 
   test("a dragged radio card leaves auto-placement and stays where it was dropped; RESET hands it back", async ({ page }) => {
@@ -1520,16 +1547,22 @@ test.describe("Arrange map clearance handoff", () => {
     const before=await snap(); expect(before.user).toBe(false); expect(Math.abs(before.clearX)+Math.abs(before.clearY)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
     const moved=await snap();
-    const expectedX=Math.round(before.value.x+before.clearX/844*100+1),expectedY=Math.round(before.value.y+before.clearY/390*100);
-    expect(moved.value.x).toBe(expectedX); expect(moved.value.y).toBe(expectedY);
-    expect(Math.abs((moved.x-before.x)-((expectedX-before.value.x)*8.44-before.clearX))).toBeLessThan(2);
-    expect(Math.abs((moved.y-before.y)-((expectedY-before.value.y)*3.9-before.clearY))).toBeLessThan(2);
+    // First edit adopts the painted box; ArrowRight then moves exactly 1% of the viewport.
+    expect(moved.user).toBe(true);
+    expect(Math.abs(moved.x-before.x-8.44)).toBeLessThanOrEqual(1);
+    expect(Math.abs(moved.y-before.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(moved.w-before.w)).toBeLessThanOrEqual(1);
+    expect(Math.abs(moved.h-before.h)).toBeLessThanOrEqual(1);
     await page.locator("#hud-arrange-reset").click();
     const reset=await snap(); expect(reset.user).toBe(false); expect(Math.abs(reset.clearX)+Math.abs(reset.clearY)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-larger").click(); const resized=await snap();
-    expect(resized.value.s).toBe(110); expect(resized.user).toBe(true);
-    expect(Math.abs(resized.x-reset.x)).toBeLessThanOrEqual(4.22+1); expect(Math.abs(resized.y-reset.y)).toBeLessThanOrEqual(1.95+1);
-    expect(Math.abs(resized.w/reset.w-1.1)).toBeLessThan(.02);
+    expect(resized.value.s).toBeCloseTo(moved.value.s+10, 8); expect(resized.user).toBe(true);
+    expect(Math.abs(resized.x-reset.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(resized.y-reset.y)).toBeLessThanOrEqual(1);
+    const sizeRatio=resized.value.s/moved.value.s;
+    // Allow at most one painted pixel of rounding in either scaled dimension.
+    expect(Math.abs(resized.w/reset.w-sizeRatio)).toBeLessThanOrEqual(1/reset.w);
+    expect(Math.abs(resized.h/reset.h-sizeRatio)).toBeLessThanOrEqual(1/reset.h);
     await page.locator("#hud-arrange-done").click();
   });
 });

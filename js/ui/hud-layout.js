@@ -1171,7 +1171,7 @@ const HudLayout = (function () {
     const paintHelp = () => {
       help.textContent = "Choose an element to show, hide, move or resize. AUTO follows the camera and HUD style. " +
         "Editing " + editingProf.toUpperCase() + " · " + editing.toUpperCase() + ": other styles and camera layouts keep their own positions. " +
-        "Start with a preset or reset an element. In a race, edit a value to preview the HUD.";
+          "Start with a preset or reset an element. Finish editing a value to apply it; leave the value fields to preview the HUD in a race.";
     };
     // Use the settings control's native-select and disabled-option semantics.
     function stepper(id, label, options, read, write) {
@@ -1201,21 +1201,44 @@ const HudLayout = (function () {
     }
 
     const painters = [], sliders = [];
+    let previewPending = false;
     for (const k of ["x", "y", "s"]) {
       const out = el("b");
       const inp = el("input", { type: "number", step: "any",
         attrs: { "aria-label": NAMES[k].toLowerCase() } });
       inp.id = "pm-hl-" + k;
       sliders.push(inp);
-      inp.addEventListener("input", () => {
-        const e = set(sel, { [k]: inp.value }, editing, editingProf);
+      let dirty = false;
+      const commit = () => {
+        dirty = false;
+        const raw = inp.value.trim(), n = raw ? Number(raw) : NaN;
+        if (!Number.isFinite(n) || (k === "s" && n <= 0)) {
+          inp.value = String(get(sel, editing, editingProf)[k]);
+          return;
+        }
+        const e = set(sel, { [k]: n }, editing, editingProf);
+        inp.value = String(e[k]);
         out.textContent = txt(k, e[k]); paintSum(); paintPreset();
-        peek(true, 900);
+        previewPending = true;
+      };
+      // Drafts stay in the native field. In particular, a minus sign or an
+      // exponent halfway through typing must neither save nor fade the form.
+      inp.addEventListener("focus", () => peek(false));
+      inp.addEventListener("input", () => { dirty = true; peek(false); });
+      inp.addEventListener("change", commit);
+      inp.addEventListener("blur", () => {
+        if (dirty) commit();
+        if (!previewPending) return;
+        // Blur precedes the next field's focus. Wait for that focus before
+        // deciding whether the committed HUD can be previewed comfortably.
+        setTimeout(() => {
+          if (!fold.open) { previewPending = false; return; }
+          if (previewPending && !sliders.includes(doc.activeElement)) {
+            previewPending = false;
+            peek(true, 900);
+          }
+        }, 0);
       });
-      inp.addEventListener("change", () => { inp.value = String(get(sel, editing, editingProf)[k]); });
-      inp.addEventListener("pointerdown", () => peek(true));
-      inp.addEventListener("pointerup", () => peek(true, 500));
-      inp.addEventListener("pointercancel", () => peek(false));
       painters.push(() => {
         const n = get(sel, editing, editingProf)[k];
         if (doc.activeElement !== inp) inp.value = String(n);
@@ -1263,7 +1286,7 @@ const HudLayout = (function () {
     // Closed: the race shows the camera's layout again.
     fold.addEventListener("toggle", () => {
       if (fold.open) { editing = cam; editingProf = profile(); preview = editing; previewProf = editingProf; selected = sel; }
-      else { preview = null; previewProf = null; selected = null; }
+      else { preview = null; previewProf = null; selected = null; previewPending = false; }
       apply(); paintAll();
     });
     // The STYLE / LAYOUT / MAP / GAPS rows share this HUD fold: a change there

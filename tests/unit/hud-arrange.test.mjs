@@ -512,3 +512,88 @@ test('editor holds the MOVE & SIZE preview before hiding settings and releases a
   e.api.setEditing(false);
   assert.deepEqual(states, [[true, false], [false, false]]);
 });
+
+test('editor: Bring Into View moves an offscreen widget inside safe bounds without resizing', () => {
+  const e = editor('map', { on: true, width: 420, height: 180,
+    insets: { '--sal': '70px', '--sar': '10px', '--sat': '20px', '--sab': '15px' },
+    rect: { left: 900, top: -300, width: 100, height: 40 } });
+  e.api.setEditing(true);
+  assert.equal(e.writes.length, 0, 'merely opening the editor never recovers a placement');
+  const action = e.ids.get('hud-arrange-recover');
+  assert.equal(action.textContent, 'BRING INTO VIEW');
+  assert.match(action.getAttribute('aria-label'), /without changing its size/);
+  assert.equal(action.getAttribute('aria-describedby'), 'hud-arrange-hint');
+  action.onclick();
+  const r = e.ids.get('map').getBoundingClientRect();
+  assert.ok(r.left >= 74 && r.top >= 24 && r.right <= 406 && r.bottom <= 161, JSON.stringify(r));
+  assert.equal(r.width, 100); assert.equal(r.height, 40); assert.equal(e.get('map').s, 100);
+  assert.equal(e.ids.get('hud-arrange-hint').textContent, 'Brought into view. Size unchanged.');
+  const saved = e.get('map');
+  e.api.setEditing(false); e.api.setEditing(true);
+  assert.deepEqual(e.get('map'), saved, 'recovery remains in the selected camera/style');
+  const count = e.writes.length; action.onclick();
+  assert.equal(e.writes.length, count, 'an already recovered widget needs no second write');
+});
+
+test('editor: recovery pins oversized leading edges and preserves the requested size', () => {
+  const e = editor('map', { on: true, width: 420, height: 180,
+    rect: { left: -100, top: 400, width: 800, height: 300 } });
+  e.api.setEditing(true); e.ids.get('hud-arrange-larger').onclick();
+  const before = e.ids.get('map').getBoundingClientRect();
+  e.ids.get('hud-arrange-recover').onclick();
+  const r = e.ids.get('map').getBoundingClientRect();
+  assert.ok(Math.abs(r.left - 4) < 1e-9); assert.ok(Math.abs(r.top - 4) < 1e-9);
+  assert.equal(r.width, before.width); assert.equal(r.height, before.height); assert.equal(e.get('map').s, 110);
+  assert.match(e.ids.get('hud-arrange-hint').textContent, /Oversized widget: leading edge/);
+});
+
+test('editor: recovery uses the visible viewport and leaves an already visible widget alone', () => {
+  const e = editor('map', { on: true, rect: { left: 10, top: 10, width: 80, height: 30 } });
+  e.api.setEditing(true); e.ids.get('hud-arrange-recover').onclick();
+  assert.equal(e.writes.length, 0); assert.equal(e.get('map').s, 100);
+  e.viewport.visualViewport = { offsetLeft: 100, offsetTop: 50, width: 300, height: 200 };
+  e.ids.get('hud-arrange-recover').onclick();
+  const r = e.ids.get('map').getBoundingClientRect();
+  assert.ok(r.left >= 104 && r.top >= 54 && r.right <= 396 && r.bottom <= 246, JSON.stringify(r));
+  assert.equal(r.width, 80); assert.equal(r.height, 30);
+});
+
+test('editor: recovery explains a hidden widget without changing placement or visibility', () => {
+  const e = editor('map', { hidden: true, visibility: 'off' });
+  e.api.setEditing(true); e.ids.get('map').hidden = true;
+  e.ids.get('hud-arrange-recover').onclick();
+  assert.equal(e.writes.length, 0); assert.deepEqual(e.visibilityWrites, []);
+  assert.match(e.ids.get('hud-arrange-hint').textContent, /no visible box.*visibility or camera/);
+  assert.equal(e.ids.get('hud-arrange-hint').getAttribute('aria-live'), 'polite');
+  assert.equal(e.ids.get('map').hidden, true);
+});
+
+test('editor: recovery flushes a pending gesture and prevents its queued frame undoing the move', () => {
+  const e = editor('map', { on: true });
+  e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointermove', { clientX: 2400 });
+  e.ids.get('hud-arrange-recover').onclick();
+  const saved = e.get('map'), count = e.writes.length;
+  e.tick(); e.fire('pointermove', { clientX: 2500 }); e.fire('pointerup'); e.tick();
+  assert.deepEqual(e.get('map'), saved); assert.equal(e.writes.length, count);
+  const r = e.ids.get('map').getBoundingClientRect();
+  assert.ok(r.left >= 4 && r.right <= 996 && r.top >= 4 && r.bottom <= 496, JSON.stringify(r));
+});
+
+test('editor: size labels are concise without rounding stored fractional or tiny positive sizes', () => {
+  const e = editor('map', { on: true,
+    rect: { left: 10, top: 10, width: 100, height: 40 }, manualSize: { width: 150, height: 60 } });
+  e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointerup');
+  const fractional = e.get('map').s;
+  assert.ok(Math.abs(fractional - 200 / 3) < 1e-12);
+  assert.equal(e.ids.get('hud-arrange-name').textContent, '66.67%');
+  e.ids.get('hud-arrange-element').onchange();
+  assert.equal(e.get('map').s, fractional, 'painting the label never rounds the stored size');
+  for (let i = 0; i < 40; i++) e.ids.get('hud-arrange-smaller').onclick();
+  const tiny = e.get('map').s, count = e.writes.length;
+  assert.ok(tiny > 0 && tiny < 1e-6);
+  const label = e.ids.get('hud-arrange-name').textContent;
+  assert.ok(parseFloat(label) > 0, 'a tiny positive size must not display as zero');
+  assert.ok(label.length <= 12, 'scientific notation keeps a tiny-size label compact: ' + label);
+  e.ids.get('hud-arrange-element').onchange();
+  assert.equal(e.get('map').s, tiny); assert.equal(e.writes.length, count);
+});

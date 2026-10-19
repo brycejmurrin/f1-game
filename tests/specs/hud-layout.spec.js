@@ -593,6 +593,164 @@ test.describe("minimal profile", () => {
   });
 });
 
+test.describe("HUD editing drafts and explicit recovery", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+
+  const bootDefaults = async page => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+    expect(await page.evaluate(() => ({
+      coarse: matchMedia("(pointer: coarse)").matches,
+      desktop: document.body.classList.contains("desktop"),
+      layout: localStorage.getItem("apex26.hudLayout"),
+    }))).toEqual({ coarse: true, desktop: false, layout: null });
+  };
+  const openDisplay = async page => {
+    await page.locator("#pm-settings").tap();
+    await page.locator("#pm-open-display").tap();
+    if (!await page.locator("#pm-hud-details").evaluate(el => el.open)) await page.locator("#pm-hud-details > summary").tap();
+  };
+  const closeDisplayAndResume = async page => {
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-resume").tap();
+    await expect(page.locator("#pausemenu")).toBeHidden();
+  };
+
+  test("numeric HUD edits keep focused drafts visible and commit only valid completed values", async ({ page }) => {
+    await bootDefaults(page);
+    await page.evaluate(() => __apex.race("monza"));
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      __apex.go(); __apex.headless(true); __apex.freeze(true); __apex.jump(.1, 30, 0);
+    });
+    await page.locator("#pausebtn").tap();
+    await openDisplay(page);
+    // Preview is enabled only with a race HUD. A title-only test would never
+    // exercise the page-fading regression while typing into numeric fields.
+    expect(await page.evaluate(() => !document.getElementById("hud").hidden)).toBe(true);
+    await page.locator("#pm-hudlayout > summary").tap();
+    await page.locator("#pm-hl-el-sel").selectOption("sectors");
+    await expect(page.locator("html")).not.toHaveAttribute("data-appearance-peek", "hud");
+    const saved = () => page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
+    const visibleInput = async input => {
+      await expect(input).toBeFocused();
+      await expect(page.locator("html")).not.toHaveAttribute("data-appearance-peek", "hud");
+      const geometry = await input.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: innerWidth, height: innerHeight };
+      });
+      expect(geometry.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(geometry.width + 1);
+      expect(geometry.top).toBeGreaterThanOrEqual(0);
+      expect(geometry.bottom).toBeLessThanOrEqual(geometry.height + 1);
+    };
+    const typeDraft = async (selector, text) => {
+      const before = await saved(), input = page.locator(selector);
+      await input.tap();
+      await expect(input).toHaveAttribute("type", "number");
+      await input.press("Control+A"); await input.press("Backspace");
+      for (const character of text) {
+        await input.pressSequentially(character);
+        await visibleInput(input);
+        expect(await saved(), "partial numeric drafts never persist").toBe(before);
+      }
+      return input;
+    };
+    for (const [index, cell] of [
+      { width: 852, height: 393, scale: 109, x: "125.5", y: "-90.25" },
+      { width: 667, height: 320, scale: 150, x: "-175.25", y: "125.5" },
+    ].entries()) {
+      await page.setViewportSize({ width: cell.width, height: cell.height });
+      if (index) await page.evaluate(scale => __apex.uiScale(scale), cell.scale);
+      const x = await typeDraft("#pm-hl-x", cell.x);
+      await x.press("Tab");
+      await visibleInput(page.locator("#pm-hl-y"));
+      expect(await page.evaluate(() => HudLayout.get("sectors").x)).toBe(Number(cell.x));
+      // A committed X still previews after traversing unchanged Y and size fields.
+      const afterX = await saved();
+      await page.locator("#pm-hl-y").press("Tab");
+      await visibleInput(page.locator("#pm-hl-s"));
+      await page.locator("#pm-hl-s").press("Tab");
+      await expect(page.locator("html")).toHaveAttribute("data-appearance-peek", "hud");
+      expect(await saved(), "unchanged fields preserve the committed layout").toBe(afterX);
+      await page.locator("#pm-hl-y").tap();
+      await visibleInput(page.locator("#pm-hl-y"));
+      const y = await typeDraft("#pm-hl-y", cell.y);
+      await y.press("Tab");
+      await visibleInput(page.locator("#pm-hl-s"));
+      expect(await page.evaluate(() => HudLayout.get("sectors").y)).toBe(Number(cell.y));
+      const beforeInvalid = await saved();
+      const size = await typeDraft("#pm-hl-s", "0");
+      await size.press("Tab");
+      expect(await saved(), "zero size does not change the committed layout").toBe(beforeInvalid);
+      await expect(size).toHaveValue("100");
+    }
+    const size = await typeDraft("#pm-hl-s", "30.5");
+    await size.press("Tab");
+    expect(await page.evaluate(() => HudLayout.get("sectors").s)).toBe(30.5);
+    await closeDisplayAndResume(page);
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    expect(await page.evaluate(() => HudLayout.get("sectors").s)).toBe(30.5);
+  });
+
+  test("Bring Into View recovers only the selected offscreen widget and survives Done and Resume", async ({ page }) => {
+    await bootDefaults(page);
+    await page.evaluate(() => __apex.race("monza"));
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      __apex.go(); __apex.headless(true); __apex.freeze(true); __apex.jump(.1, 30, 0);
+      HudLayout.set("sectors", { x: 250, y: -250, s: 30 });
+    });
+    await page.locator("#pausebtn").tap();
+    await openDisplay(page);
+    await page.locator("#pm-hud-arrange").tap();
+    await page.locator("#hud-arrange-element").selectOption("sectors");
+    const before = await page.evaluate(() => ({
+      value: HudLayout.get("sectors"), all: HudLayout.all()[HudLayout.shown()],
+      rect: document.getElementById("hud-sectors").getBoundingClientRect().toJSON(),
+      bounds: HudLayout.screenBounds(),
+    }));
+    expect(before.rect.x > before.bounds.right || before.rect.y + before.rect.height < before.bounds.top).toBe(true);
+    await page.locator("#hud-arrange-recover").tap();
+    const recovered = await page.evaluate(() => ({
+      value: HudLayout.get("sectors"), all: HudLayout.all()[HudLayout.shown()],
+      rect: document.getElementById("hud-sectors").getBoundingClientRect().toJSON(),
+      bounds: HudLayout.screenBounds(), saved: localStorage.getItem("apex26.hudLayout"),
+    }));
+    expect(recovered.value.s).toBe(before.value.s);
+    expect(Math.abs(recovered.rect.width - before.rect.width)).toBeLessThanOrEqual(.5);
+    expect(Math.abs(recovered.rect.height - before.rect.height)).toBeLessThanOrEqual(.5);
+    expect(recovered.rect.x).toBeGreaterThanOrEqual(recovered.bounds.left - .5);
+    expect(recovered.rect.y).toBeGreaterThanOrEqual(recovered.bounds.top - .5);
+    expect(recovered.rect.x + recovered.rect.width).toBeLessThanOrEqual(recovered.bounds.right + .5);
+    expect(recovered.rect.y + recovered.rect.height).toBeLessThanOrEqual(recovered.bounds.bottom + .5);
+    for (const [id, value] of Object.entries(before.all)) {
+      if (id !== "sectors") expect(recovered.all[id], id + " was not selected for recovery").toEqual(value);
+    }
+    await page.locator("#hud-arrange-done").tap();
+    await closeDisplayAndResume(page);
+    await page.evaluate(async () => {
+      GameHud.invalidateFit(); __apex.jump(.1, 30, 0);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    expect(await page.evaluate(() => HudLayout.get("sectors"))).toEqual(recovered.value);
+    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(recovered.saved);
+    const resumed = await page.locator("#hud-sectors").boundingBox();
+    for (const key of ["x", "y", "width", "height"]) {
+      expect(Math.abs(resumed[key] - recovered.rect[key]), key + " survives Resume").toBeLessThanOrEqual(.5);
+    }
+    await page.locator("#pausebtn").tap();
+    await openDisplay(page);
+    await page.locator("#pm-hud-arrange").tap();
+    await page.locator("#hud-arrange-element").selectOption("sectors");
+    expect(await page.evaluate(() => HudLayout.get("sectors"))).toEqual(recovered.value);
+    await page.locator("#hud-arrange-done").tap();
+  });
+});
+
 // THE LAYOUT CONTROL HAS TO DO SOMETHING. It was reported twice as inert, and
 // it was: hud-met-timing / -driver / -compact were body classes with no rule
 // behind them. COMPACT is the one that drops both halves, so one boot pins both

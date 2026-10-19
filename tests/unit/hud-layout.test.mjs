@@ -1389,6 +1389,88 @@ function visibilityEditor() {
     flush() { while (timers.length) timers.shift()(); } };
 }
 
+test('numeric HUD drafts stay readable and commit once when moving between fields', () => {
+  const e = visibilityEditor(), previews = [];
+  e.ctx.ScreenLooks = { peek: (...args) => previews.push(args), endPeek: () => previews.push('end') };
+  const fold = e.document.getElementById('pm-hudlayout');
+  fold.open = true;
+  e.choose('pm-hl-el-sel', 'map');
+  const x = e.document.getElementById('pm-hl-x'), y = e.document.getElementById('pm-hl-y');
+  const fire = (el, type) => e.dom.dispatch(el, { type });
+  const writes = () => e.changes.filter(key => key === 'hudLayout').length;
+  previews.length = 0;
+  x.focus(); fire(x, 'focus');
+  fire(x, 'pointerdown'); fire(x, 'pointerup');
+  for (const draft of ['', '-', '-17', '-1750.125']) {
+    x.value = draft; fire(x, 'input');
+    assert.equal(writes(), 0, 'intermediate drafts never persist');
+    assert.equal(x.value, draft, 'typing keeps the native draft');
+    assert.equal(e.document.activeElement, x);
+    assert.equal(previews.every(call => call === 'end'), true, 'focus and typing only end previews');
+  }
+  fire(x, 'change');
+  assert.equal(writes(), 1);
+  assert.equal(e.H.get('map').x, -1750.125, 'exact unrestricted fraction is committed');
+  assert.equal(previews.every(call => call === 'end'), true, 'change while focused keeps the form readable');
+  x.blur(); fire(x, 'blur'); y.focus(); fire(y, 'focus'); e.flush();
+  assert.equal(writes(), 1, 'change followed by blur commits once');
+  assert.equal(previews.every(call => call === 'end'), true, 'Tab to another numeric field never fades it');
+  y.value = '2300.0625'; fire(y, 'input');
+  y.blur(); fire(y, 'blur'); e.flush();
+  assert.equal(writes(), 2, 'blur commits even without a preceding change event');
+  assert.equal(e.H.get('map').y, 2300.0625);
+  assert.deepEqual(previews.at(-1), ['hud', 900], 'leaving the numeric fields previews the committed HUD');
+});
+
+test('numeric HUD defers one committed preview across unchanged and invalid fields', () => {
+  const e = visibilityEditor(), previews = [];
+  e.ctx.ScreenLooks = { peek: (...args) => previews.push(args), endPeek() {} };
+  const fold = e.document.getElementById('pm-hudlayout'); fold.open = true;
+  const [x, y, s] = ['x', 'y', 's'].map(k => e.document.getElementById('pm-hl-' + k));
+  const fire = (el, type) => e.dom.dispatch(el, { type });
+  const focus = el => { el.focus(); fire(el, 'focus'); };
+  const tab = (from, to) => { from.blur(); fire(from, 'blur'); if (to) focus(to); e.flush(); };
+  focus(x); x.value = '425.125'; fire(x, 'input'); fire(x, 'change');
+  tab(x, y); tab(y, s);
+  assert.equal(previews.length, 0, 'unchanged fields retain the pending preview without fading');
+  tab(s, null);
+  assert.deepEqual(previews, [['hud', 900]], 'leaving the whole group previews exactly once');
+
+  previews.length = 0;
+  focus(x); x.value = '-625.25'; fire(x, 'input'); fire(x, 'change'); tab(x, s);
+  s.value = '0'; fire(s, 'input'); fire(s, 'change'); tab(s, null);
+  assert.equal(s.value, '100');
+  assert.deepEqual(previews, [['hud', 900]], 'an invalid field does not cancel another committed value');
+
+  previews.length = 0;
+  focus(x); x.value = '750'; fire(x, 'input'); fire(x, 'change'); tab(x, y);
+  fold.open = false; fire(fold, 'toggle'); fold.open = true; fire(fold, 'toggle');
+  tab(y, null);
+  assert.equal(previews.length, 0, 'closing the fold cancels a deferred preview');
+});
+
+test('numeric HUD commits reject invalid drafts and retain explicit default ownership', () => {
+  const e = visibilityEditor();
+  e.choose('pm-hl-el-sel', 'map');
+  const x = e.document.getElementById('pm-hl-x'), s = e.document.getElementById('pm-hl-s');
+  const fire = (el, type) => e.dom.dispatch(el, { type });
+  const writes = () => e.changes.filter(key => key === 'hudLayout').length;
+  for (const invalid of ['', '0', '-1', '1e999', 'NaN']) {
+    s.focus(); fire(s, 'focus'); s.value = invalid; fire(s, 'input');
+    fire(s, 'change'); s.blur(); fire(s, 'blur'); e.flush();
+    assert.equal(writes(), 0, 'invalid size never acquires manual ownership');
+    assert.equal(s.value, '100', 'invalid draft returns to the prior value');
+    assert.equal(e.H.get('map').s, 100);
+  }
+  x.focus(); fire(x, 'focus'); x.value = '0'; fire(x, 'input'); fire(x, 'change');
+  assert.equal(writes(), 1);
+  assert.equal(e.stored.hudLayout.v, 4);
+  assert.deepEqual(plain(e.stored.hudLayout.standard.other.map), { x: 0, y: 0, s: 100 }, 'valid shipped values still explicitly own the widget');
+  s.focus(); fire(s, 'focus'); s.value = '0.000125'; fire(s, 'input');
+  fire(s, 'change'); s.blur(); fire(s, 'blur'); e.flush();
+  assert.equal(e.H.get('map').s, 0.000125, 'small positive sizes retain their exact value');
+});
+
 test('MOVE & SIZE visibility invokes original map/gaps/mirror owners and preserves AUTO', () => {
   const e = visibilityEditor();
   for (const [id, key] of [['map', 'hudMapVis'], ['gaps', 'hudGapsVis'], ['mirror', 'hudMirror']]) {
