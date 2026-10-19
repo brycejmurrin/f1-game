@@ -21,8 +21,8 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   assert.ok(helper); const timeline=[];
   let camera="chase", broadcast=false, published="0px", frozen=false, headless=false;
   const elements=new Map();
-  // settlePaint is a sibling helper (#2825); stub it in the VM so race() resolves.
-  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},settlePaint:async()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
+  // settlePaint / forceHudFit are sibling helpers (#2825 / #2941); stub so race() resolves.
+  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},settlePaint:async()=>{},forceHudFit:async()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
     document:{
       body:{classList:{contains:()=>broadcast}},
       getElementById:(id)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},
@@ -43,7 +43,9 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
     waitForFunction:async(fn,arg)=>assert.equal(await invoke(fn,arg),true,"no background HUD tick runs during the warm-up"),
     waitForTimeout:async()=>{throw new Error("broadcast helper must use readiness, not a sleep");}};
   await run(page,"buttons",false,{sal:59,sar:59,sat:0,sab:21},{profile:"broadcast",cam:"heli"});
-  assert.deepEqual(timeline,["hold physics","hold renderer","camera:heli","refresh:heli"]);
+  // Initial jump after camera, then the readiness wait forces another fit while
+  // frozen so --hud-top-h can catch CSS zoom (#2941).
+  assert.deepEqual(timeline,["hold physics","hold renderer","camera:heli","refresh:heli","refresh:heli"]);
 });
 
 test("broadcast layout probe waits for paint, camera and published tower height, not collision results", async () => {

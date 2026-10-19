@@ -99,14 +99,44 @@ async function settlePaint(page) {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+/**
+ * Force one HUD fit while frozen. updateHud(false) returns early when G.frozen,
+ * so invalidateFit's _fitPending never clears and syncPhoneFit cannot publish
+ * --hud-fit-stamp until jump → refreshHud(true) runs fitHud (#2941 / #2825).
+ */
+async function forceHudFit(page) {
+  await page.evaluate(() => {
+    try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+  });
+}
+
 /** Touch: fitHud painted clearance + published --hud-fit-stamp before probes. */
 async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
   const o = opts || {};
   // Predicate must stay synchronous: Playwright does `if (predicate())`, so an
   // async function (a Promise) is always truthy and never waits (#2825).
   await settlePaint(page);
+  await forceHudFit(page);
   await page.waitForFunction(({ needRel, prevStamp }) => {
     if (document.body.classList.contains("desktop")) return true;
+    // Portrait rotate gate: landscape stamp/clearance waits do not apply.
+    const rotate = document.getElementById("rotate-device");
+    try {
+      if (rotate && !document.body.classList.contains("rotate-ok")
+          && getComputedStyle(rotate).display !== "none") {
+        try { window.__apex.freeze(true); } catch (_) { /* */ }
+        return true;
+      }
+    } catch (_) { /* */ }
+    if (window.innerHeight > window.innerWidth && !document.body.classList.contains("rotate-ok")) {
+      try { window.__apex.freeze(true); } catch (_) { /* */ }
+      return true;
+    }
+    // Still no stamp after invalidateFit under freeze: re-fit once per poll.
+    const stamp0 = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+    if (!stamp0 || !/^\d+$/.test(stamp0)) {
+      try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+    }
     if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
     const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
     if (!stamp || !/^\d+$/.test(stamp)) return false;
@@ -153,14 +183,26 @@ async function waitTowerClearsGaps(page, timeoutMs = 30_000) {
 
 async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
   await settlePaint(page);
+  await forceHudFit(page);
   await page.waitForFunction(() => {
     if (document.body.classList.contains("desktop")) return true;
+    const rotate = document.getElementById("rotate-device");
+    try {
+      if ((rotate && !document.body.classList.contains("rotate-ok")
+          && getComputedStyle(rotate).display !== "none")
+          || (window.innerHeight > window.innerWidth && !document.body.classList.contains("rotate-ok"))) {
+        return true;
+      }
+    } catch (_) { /* */ }
     const boost = document.getElementById("btn-boost");
     const sectors = document.getElementById("hud-sectors");
     if (!boost || boost.hidden || !sectors) return false;
     const sec = sectors.getBoundingClientRect();
     const br = boost.getBoundingClientRect();
     if (!(sec.width > 0 && br.width > 0)) return false;
+    // Tilt parks BOOST on the left; --dock-r-w is a right-dock standoff only.
+    if ((br.left + br.right) / 2 < window.innerWidth / 2) return true;
+    if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
     const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
     if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
     const hit = sec.left < br.right - 0.5 && br.left < sec.right - 0.5
@@ -232,8 +274,11 @@ async function race(page, steer, manual, ins, opts) {
     // height to 0.1px.
     // API: https://playwright.dev/docs/api/class-page#page-wait-for-function
     // Sync predicate (#2825): double-rAF once before the wait, not inside it.
+    // Broadcast holds freeze+headless before jump; without a forced re-fit each
+    // poll the published tower height never catches CSS zoom (#2941).
     await settlePaint(page);
     await page.waitForFunction((broadcastCamera) => {
+      try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
       const tower = document.querySelector(".hud-top");
       if (!tower || document.body.classList.contains("hud-bcam") !== broadcastCamera) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
@@ -258,6 +303,18 @@ async function race(page, steer, manual, ins, opts) {
       // Phone: wait until S3 has cleared a lit BOOST and the radio card (CI
       // oversize APEX_WORKERS=2: wrap-reverse / lane settle after --hud-top-h).
       if (document.body.classList.contains("desktop")) return true;
+      // Portrait rotate gate owns the screen; landscape clearance/stamp waits
+      // never apply (async predicates used to skip this whole wait — #2825).
+      const rotate = document.getElementById("rotate-device");
+      let rotateUp = false;
+      try {
+        rotateUp = !!(rotate && !document.body.classList.contains("rotate-ok")
+          && getComputedStyle(rotate).display !== "none");
+      } catch (_) { /* */ }
+      if (rotateUp || window.innerHeight > window.innerWidth) {
+        try { window.__apex.freeze(true); } catch (_) { /* */ }
+        return true;
+      }
       const phoneSteer = document.body.classList.contains("steer-buttons")
         || document.body.classList.contains("steer-touch");
       const boost = document.getElementById("btn-boost");
@@ -312,9 +369,8 @@ async function race(page, steer, manual, ins, opts) {
       // fitHud bumps --hud-fit-stamp only after painted phone clearance lands.
       const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
       if (!stamp || !/^\d+$/.test(stamp)) return false;
-      // Freeze in the same turn that saw clearance. updateHud still ticks
-      // while frozen, but fitHud's painted-clash path re-opens the same-key
-      // backoff if wrap-reverse crawls BOOST back onto S3.
+      // Freeze in the same turn that saw clearance. Non-forced updateHud returns
+      // early while frozen — later waits must jump/refreshHud(true) to re-fit.
       try { window.__apex.freeze(true); } catch (_) { /* */ }
       return true;
     }, null, { polling: 100, timeout: 30_000 });
@@ -897,9 +953,12 @@ async function enableOptIns(page) {
   await page.evaluate(() => {
     if (typeof HudElements === "undefined") throw new Error("HudElements missing");
     for (const id of ["rel", "strat", "inputs"]) HudElements.set(id, true);
+    // race() freezes on settle; HudElements → invalidateFit needs a forced fit.
+    try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.15, 60, 0); } catch (_) { /* */ }
   });
   await settlePaint(page);
   await page.waitForFunction(() => {
+    if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
     const rel = document.getElementById("hud-rel");
     const inp = document.getElementById("hud-inputs");
     if (!rel || !inp || rel.hidden || inp.hidden) return false;
@@ -913,7 +972,10 @@ async function enableOptIns(page) {
       const sr = steerR.getBoundingClientRect();
       if (!(sr.width > 0)) return false;
       const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
-      if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+      if (!(Number.isFinite(dockRW) && dockRW > 0)) {
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.15, 60, 0); } catch (_) { /* */ }
+        return false;
+      }
       if (ir.left < sr.right + 4) return false;
       if (rr.right > ir.left - 4) return false;
     }

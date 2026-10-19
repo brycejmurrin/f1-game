@@ -1,1 +1,1 @@
-Fixed: HUD SIZE no longer shrinks the timing tower when raised past what fits (phone landscape); fit waits and the waitForFunction lint reject async predicates that never waited.
+Fixed: HUD SIZE no longer shrinks the timing tower when raised past what fits (phone landscape); fit waits and the waitForFunction lint reject async predicates that never waited. After invalidateFit under freeze, waits force a HUD re-fit so `--hud-fit-stamp` can republish.
