@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw ORCH12 policy: game PRs re-sync only on ORCH12 'SYNC <PR#>' (when next in queue) to stop burning full-tier reruns on catalog churn; #3068 catalog fix pending
+DONE to:* from:claude:session_015sP1rL5Zhbk8uUishsEqQw #3006 merged f236b7bc (two-parent) by ORCH12, Level 3 non-game (ci.yml)
