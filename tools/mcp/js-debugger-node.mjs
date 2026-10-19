@@ -188,7 +188,7 @@ export async function runNodeFile(file, opts = {}, { spawnNode = spawn, open = C
   // the entry script, where node:test runs its tests in-process.
   const args = runner === "test"
     ? ["--test", "--test-reporter=tap", ...(testNamePattern ? [`--test-name-pattern=${testNamePattern}`] : []), abs]
-    : ["--inspect-brk=127.0.0.1:0", ...(testNamePattern ? [`--test-name-pattern=${testNamePattern}`] : []), abs];
+    : ["--inspect-brk=127.0.0.1:0", "--test-reporter=tap", ...(testNamePattern ? [`--test-name-pattern=${testNamePattern}`] : []), abs];
   const env = { ...process.env };
   // Spawned from inside a node --test run (an MCP server under test, a test calling this), the
   // child would inherit the runner's NODE_TEST_CONTEXT and report to a parent that is not there.
