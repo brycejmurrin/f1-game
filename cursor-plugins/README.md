@@ -33,9 +33,18 @@ plugin does not appear after reload, use the copy.
 Marketplace publish is optional later. Until then, teammates install from this
 tree.
 
-Plugin skills must stay aligned with repo `AGENTS.md` (ship rules in
-`docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`). Do not fork process
-rules here.
+Plugin skills are host adapters. Generic process policy belongs to checkout
+[AGENTS.md](../AGENTS.md), [fleet-core](../.claude/rules/fleet-core.md), and the
+[agent-fleet references](../.claude/skills/agent-fleet/references/launch-policy.md)
+(including [merge authority](../.claude/skills/agent-fleet/references/role-merge-holder.md)).
+Resolve these paths from the target checkout root, not the installed plugin.
+Do not fork mutable role, ready-cap, queue-hold or authorization rules here.
+
+Without a checkout, resolve the requested source ref to a commit SHA through
+GitHub MCP and read those canonical paths at that SHA. Cite the revision;
+until fetched, policy is **unverified**. A copied or symlinked plugin is a
+versioned adapter and grants no fallback authorization. Host-specific model
+selectors, environment setup, attachments and reporting stay in the adapter.
 
 See [Cursor plugin docs](https://cursor.com/docs/plugins) for the local
 discovery path and marketplace flow.

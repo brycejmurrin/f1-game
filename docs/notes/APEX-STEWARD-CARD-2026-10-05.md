@@ -2,11 +2,15 @@
 
 Always-on card for cloud / Grok sessions. Source: agent-efficiency audit
 2026-10-05 ranked fixes 1, 3, 6, 12. AGENTS.md holds the enforceable one-liners;
-this note is the card text + hashes. Do not re-read
+this note caches only the three sources named by HASHES. Do not re-read
 `.claude/skills/steward/SKILL.md`, `.claude/skills/check-changes/SKILL.md`, or
 `.github/pull_request_template.md` unless a HASH below changes (or you are
 editing that file). Refresh HASHES with the first 8 hex of `sha256sum` on those
-three files.
+three files. The skip promise does not cover fleet authority, merge levels,
+readiness, or queue policy: read the checkout's [AGENTS.md](../../AGENTS.md),
+[fleet-core](../../.claude/rules/fleet-core.md), and
+[merge authority](../../.claude/skills/agent-fleet/references/role-merge-holder.md)
+for those decisions. These owners apply independently of the card's HASHES.
 
 ```text
 APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless HASH changes)
@@ -62,8 +66,7 @@ tooling/doc fixes into one PR. CI red on that class: one optional sync+re-run,
 no swarm. A docs change that ships with player-facing `js/`/`css/` stays on
 the normal train once green.
 
-Only Merge Desk arms auto-merge (MERGE commit only; squash retired 2026-10-13)
-on ready PRs; agents/sessions/tools never arm or merge — mark ready at
-tip-green. Disable any SQUASH/REBASE arm and tell Merge Desk. Sync by merging
-origin/ship; never rebase or force-push. Launch prompts carry
-`Do not enable auto-merge or merge.`
+Merge, auto-merge, readiness and queue decisions use the canonical checkout
+owners linked above. This card does not cache their role assignments or grant
+permission. Worker launch constraints come from the checkout's
+[launch policy](../../.claude/skills/agent-fleet/references/launch-policy.md).
