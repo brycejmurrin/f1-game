@@ -66,3 +66,34 @@ test("VS FRIEND wait: finisher rpm reaches idle while the other human is still r
     assert.equal(p.rpm, PC.IDLE_RPM, "finisher engine idles while waiting for friend");
   } finally { g.close(); }
 });
+
+// game.js's finished-car branch (updateCar: `c.finished && !netPlay.owns(c)`) runs for
+// AI finishers too; only the player was ever checked. The friend keeps the race live
+// while one AI car crosses (finished set as the line would set it), then coasts.
+test("AI finisher: the same coast branch winds its rpm to the crawl, not the crossing revs", async () => {
+  const { g, sb } = await bootOneLapRace();
+  try {
+    const G = g.G, PC = sb.PhysicsConsts;
+    const friend = G.cars.findIndex((c) => c !== G.player);
+    g.apex.carRole(friend, { human: true, local: false });
+    g.apex.setInput({ throttle: true, steer: 0 });
+    g.step(60 * 8);
+    const ai = G.cars.find((c, i) => i !== friend && c !== G.player && !c.retired && c.speed > 20);
+    assert.ok(ai, "a rival at racing speed");
+    const rpmCross = ai.rpm;
+    assert.ok(rpmCross > PC.IDLE_RPM + 3000, "crossing revs: " + rpmCross);
+    ai.finished = true;
+    const samples = [];
+    for (let i = 0; i < 900 && G.state === "race"; i++) { g.step(1); if (i % 30 === 29) samples.push({ rpm: ai.rpm, v: ai.speed, gear: ai.gear }); }
+    assert.equal(G.state, "race", "the humans are still running");
+    assert.ok(ai.speed < 15, "the AI finisher coasts to a crawl: " + ai.speed);
+    // rpm = rpmFor(gear, coast speed): above the idle floor, rpm / speed is the
+    // gear's constant on every sample (5 %: later steps of the frame move speed
+    // after the rpm write) — it rises and falls WITH the car.
+    const live = samples.filter((x) => x.rpm > PC.IDLE_RPM + 1 && x.gear === samples[0].gear && x.v > 1);
+    assert.ok(live.length >= 3, "the coast has samples above idle: " + JSON.stringify(samples.slice(0, 4)));
+    const k = live[0].rpm / live[0].v;
+    for (const x of live) assert.ok(Math.abs(x.rpm / x.v - k) < 0.05 * k, `rpm ${x.rpm} at ${x.v} m/s left the gear line ${k}`);
+    assert.ok(ai.rpm < 0.5 * rpmCross, `AI finisher rpm ${ai.rpm} must track its crawl, not hold its crossing ${rpmCross}`);
+  } finally { g.close(); }
+});

@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["magny_cours"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, ds, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, ds, hw, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup, seat, terrainYAt,
@@ -386,49 +386,58 @@
         const step = opts.step || 8;
         along(s0, s1, step, (k, spacing) => {
           const a = anchor(k, side, gap);
-          const b = [a.r, a.u, a.t];
+          // #2204: curvature-scaled bay length (lengthen outside, shorten inside).
           const nb = Math.max(1, Math.round(step / ds));
           const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
-          const chord = (lat) => {
-            const p = vadd(a.c, a.r, lat);
-            let c = spacing;
-            for (const q of kn) {
-              const pq = vadd(q.c, q.r, lat);
-              c = Math.min(c, Math.hypot(pq[0] - p[0], pq[1] - p[1], pq[2] - p[2]));
-            }
-            return c;
-          };
-          const swing = (() => {
-            let t = 0;
-            for (const q of kn) {
-              const dx = q.c[0] - a.c[0], dy = q.c[1] - a.c[1], dz = q.c[2] - a.c[2], dl = Math.hypot(dx, dy, dz) || 1;
-              const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
-              t = Math.max(t, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
-            }
-            return t;
-          })();
-          const rowSeg = (back) => {
+          const curveRow = (lat) => {
             const half = depth / 2;
-            const c = Math.min(spacing, chord(back - half), chord(back + half), chord(back));
-            const l = (c - depth * 0.5 * swing) * 0.95;
-            return l < 1.0 ? 0 : l;
+            const at = (anc, L) => vadd(anc.c, anc.r, L);
+            const p = at(a, lat);
+            let cMin = Infinity, swing = 0;
+            for (const q of kn) {
+              const pq = at(q, lat);
+              const d = Math.hypot(pq[0] - p[0], pq[1] - p[1], pq[2] - p[2]);
+              if (d > 1e-6) cMin = Math.min(cMin, d);
+              for (const s of [-1, 1]) {
+                const p2 = at(a, lat + s * half), q2 = at(q, lat + s * half);
+                const d2 = Math.hypot(q2[0] - p2[0], q2[1] - p2[1], q2[2] - p2[2]);
+                if (d2 > 1e-6) cMin = Math.min(cMin, d2);
+              }
+              const dx = q.c[0] - a.c[0], dy = q.c[1] - a.c[1], dz = q.c[2] - a.c[2];
+              const dl = Math.hypot(dx, dy, dz) || 1;
+              const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
+              swing = Math.max(swing, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
+            }
+            if (!(cMin < Infinity)) return { seg: 0, b: [a.r, a.u, a.t] };
+            const prev = kn[1], next = kn[0];
+            const e1x = a.c[0] - prev.c[0], e1z = a.c[2] - prev.c[2];
+            const e2x = next.c[0] - a.c[0], e2z = next.c[2] - a.c[2];
+            const l1 = Math.hypot(e1x, e1z) || 1, l2 = Math.hypot(e2x, e2z) || 1;
+            const κ = Math.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) / ((l1 + l2) / 2);
+            const x = side * (hw[k] + gap) + lat;
+            const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 + κ * x));
+            const c = Math.min(cMin, curveCap);
+            const l = (c - half * swing) * 0.95;
+            return { seg: l < 1.0 ? 0 : l, b: [a.r, a.u, a.t] };
           };
-          const seg = rowSeg(side * (rows - 1) * depth / 2);
+          const mid = curveRow(side * (rows - 1) * depth / 2);
+          const seg = mid.seg, b = mid.b;
           if (seg <= 0) return;
           out._mat = MAT.CONCRETE;
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.6 + r * rise;
-            const rs = rowSeg(side * back) || seg;
+            const row = curveRow(side * back);
+            const rs = row.seg || seg, rb = row.b;
             if (rs <= 0) continue;
             addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
-              [depth, rise + 0.2, rs], r & 1 ? [0.70, 0.70, 0.68] : [0.64, 0.64, 0.62], b);
+              [depth, rise + 0.2, rs], r & 1 ? [0.70, 0.70, 0.68] : [0.64, 0.64, 0.62], rb);
             const h = hash(k * 29 + r * 7);
             if (h > 0.42) continue;
             out._mat = MAT.FABRIC;
             addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
               a.t, (h - 0.21) * rs * 0.8), a.u, up + rise * 0.5 + 0.55),
               [0.55, 1.0, 0.6],
-              h < 0.14 ? [0.24, 0.36, 0.66] : h < 0.28 ? [0.88, 0.88, 0.84] : [0.78, 0.30, 0.24], b);
+              h < 0.14 ? [0.24, 0.36, 0.66] : h < 0.28 ? [0.88, 0.88, 0.84] : [0.78, 0.30, 0.24], rb);
             out._mat = MAT.CONCRETE;
           }
           out._mat = MAT.METAL;

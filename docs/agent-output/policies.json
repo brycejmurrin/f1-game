@@ -536,10 +536,20 @@
       "presentation": "native",
       "preserve": "Never reveal token or child auth stdout"
     },
+    "tools/ci/guards-verdict.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "check exit code (0 hit / non-zero miss) and run's guard suite exit status; cache file path and format shared with bash-guard"
+    },
     "tools/ci/handback.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "No SWEEP when pending/red/open Plan; trigger IDs; gate/CI exits"
+    },
+    "tools/ci/inputs-hash.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Hash/key output consumed by ci.yml cache lookups; exit status and the printed key must stay byte-stable"
     },
     "tools/ci/junit-failed.mjs": {
       "action": "protocol-only",
@@ -795,6 +805,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Timeout versus success and condition identity; no polling spam"
+    },
+    "tools/ci/webkit-leg-summary.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Markdown job-summary text for webkit-leg.yml; the no-report.json message and exit 0 when the boot step wrote nothing"
     },
     "tools/ci/who-is-on-it.mjs": {
       "action": "page-results",
@@ -1690,6 +1705,16 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
+    },
+    "tools/perf/mesh-census-lib.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/perf/mesh-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
     },
     "tools/perf/profile.mjs": {
       "action": "artifact-first",

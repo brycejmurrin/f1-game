@@ -240,8 +240,11 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
 
   test("enable + wall hit spawns debris (lastImpact fires, live > 0)", async ({ page }) => {
     await boot(page);
-    await startRace(page, "singapore");   // street circuit: barriers at the road edge
+    // Load Rapier at the idle menu, BEFORE the 22-car race: its import + WASM compile shares the main thread
+    // with SwiftShader, and one loaded run (2026-10-19, 1 in 5) never reached `ready` inside RAPIER_MS once the
+    // Singapore race was drawing. startRace() then primes the world through the same shared load.
     await enableDebris(page);
+    await startRace(page, "singapore");   // street circuit: barriers at the road edge
     const r = await page.evaluate(() => {
       window.__apex.jump(0.10, 45, 0);
       // steer hard right into the barrier at speed; act() pumps the same
