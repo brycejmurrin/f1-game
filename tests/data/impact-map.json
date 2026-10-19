@@ -1899,7 +1899,8 @@
       ],
       "load": [
         "tests/unit/cam-comfort.test.mjs",
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/light-grid.test.mjs"
       ],
       "persist": [
         "tests/unit/camera-defaults.test.mjs"
@@ -1931,8 +1932,7 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "*": [
-        "tests/unit/camera-tuner-a11y.test.mjs",
-        "tests/unit/light-grid.test.mjs"
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ]
     },
     "js/camera/photo-cam.js": {
@@ -4370,6 +4370,7 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "emit": [
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "enabled": [
@@ -4390,10 +4391,10 @@
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
         "tests/unit/crest-marks.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/fin-design.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/legends-team.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -4498,6 +4499,7 @@
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/data-replay-improvements.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
@@ -5616,6 +5618,9 @@
       "isFlat": [
         "tests/unit/elev-presets.test.mjs"
       ],
+      "plan": [
+        "tests/unit/elev-presets.test.mjs"
+      ],
       "sample": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
@@ -6031,7 +6036,6 @@
         "tests/unit/engineer.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
@@ -6170,7 +6174,7 @@
         "tests/unit/boot-input-shape.test.mjs"
       ],
       "initRainDrops": [
-        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+        "tests/unit/light-presets.test.mjs"
       ],
       "introBuild": [
         "tests/unit/flyby-intro.test.mjs",
@@ -6251,9 +6255,6 @@
       "menuLampBake": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
-      ],
-      "menuPrep": [
-        "tests/unit/ci-coverage.test.mjs"
       ],
       "motionReduced": [
         "tests/unit/storm-vm.test.mjs"
@@ -6342,7 +6343,6 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/mirror-pass.test.mjs",
         "tests/unit/render-lighting-prep.test.mjs",
@@ -6370,9 +6370,6 @@
       ],
       "seedPlayerPose": [
         "tests/unit/car-fields-vm.test.mjs"
-      ],
-      "setLightTune": [
-        "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "setPaused": [
         "tests/specs/ui-button-touch.spec.js",
@@ -6470,7 +6467,6 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/key-binds.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -6519,7 +6515,6 @@
         "tests/unit/director.test.mjs",
         "tests/unit/engineer.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/publish-evidence.test.mjs",
@@ -6564,6 +6559,7 @@
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
+        "tests/unit/ci-coverage.test.mjs",
         "tests/unit/ci-pr-base.test.mjs",
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/css-play.test.mjs",
@@ -7920,12 +7916,16 @@
     "js/lighting/atmosphere.js": {
       "applyRaceSettings": [
         "tests/unit/ambient-env-override.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
+        "tests/unit/light-presets.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "create": [
         "tests/unit/ambient-env-override.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
+        "tests/unit/light-presets.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
@@ -7945,9 +7945,7 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "*": [
-        "tests/unit/circuit-def-fields.test.mjs",
-        "tests/unit/day-sky-palette-storm-deck.test.mjs",
-        "tests/unit/light-presets.test.mjs"
+        "tests/unit/circuit-def-fields.test.mjs"
       ]
     },
     "js/lighting/frame-lights.js": {
@@ -8001,6 +7999,7 @@
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -8064,9 +8063,8 @@
     },
     "js/lighting/lighting.js": {
       "*": [
-        "tests/specs/lighting-ab.spec.js",
         "tests/specs/lighting-tuner-grade.spec.js",
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/lamp-density.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
@@ -8095,6 +8093,7 @@
     },
     "js/lighting/profiles.js": {
       "apply": [
+        "tests/unit/light-presets.test.mjs",
         "tests/unit/light-store-cond-layer.test.mjs",
         "tests/unit/light-store-copy.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
@@ -8102,12 +8101,14 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "base": [
-        "tests/unit/light-store-cond-layer.test.mjs"
+        "tests/unit/light-store-cond-layer.test.mjs",
+        "tests/unit/light-store-copy.test.mjs"
       ],
       "copyToTracks": [
         "tests/unit/light-store-copy.test.mjs"
       ],
       "create": [
+        "tests/unit/light-presets.test.mjs",
         "tests/unit/light-store-cond-layer.test.mjs",
         "tests/unit/light-store-copy.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
@@ -8120,20 +8121,24 @@
       "persist": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
+      "reapply": [
+        "tests/unit/light-store-cond-layer.test.mjs"
+      ],
       "reset": [
+        "tests/unit/light-store-copy.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "restore": [
         "tests/unit/light-store-copy.test.mjs"
       ],
       "tuned": [
+        "tests/unit/light-store-copy.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "*": [
         "tests/specs/image-grade-visual.spec.js",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/light-presets-knob-range.test.mjs",
-        "tests/unit/light-presets.test.mjs",
         "tests/unit/lighting-reapply.test.mjs"
       ]
     },
@@ -9026,8 +9031,7 @@
         "tests/unit/perf-governor.test.mjs"
       ],
       "current": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/light-store-cond-layer.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "defaultId": [
         "tests/unit/perf-governor.test.mjs"
@@ -9039,6 +9043,7 @@
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/light-store-cond-layer.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ]
@@ -11110,7 +11115,7 @@
       ],
       "*": [
         "tests/specs/race-control.spec.js",
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
@@ -11711,13 +11716,11 @@
     "js/race/storm-flash.js": {
       "create": [
         "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/light-presets.test.mjs",
         "tests/unit/storm-weather.test.mjs"
       ],
       "step": [
         "tests/unit/carve-a-modules.test.mjs"
-      ],
-      "*": [
-        "tests/unit/light-presets.test.mjs"
       ]
     },
     "js/race/storm.js": {
@@ -12035,7 +12038,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "push": [
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
@@ -12157,6 +12160,7 @@
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
@@ -12244,7 +12248,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "*": [
-        "tests/unit/ci-coverage.test.mjs"
+        "tests/unit/ci-gate-selection.test.mjs"
       ]
     },
     "js/render/shared/assets.js": {
@@ -12271,6 +12275,7 @@
       ],
       "manifest": [
         "tests/specs/assets-api.spec.js",
+        "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
@@ -12673,9 +12678,11 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "place": [
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/image-grade-shaders.test.mjs",
+        "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
@@ -12715,8 +12722,7 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "*": [
-        "tests/unit/godray-keep-nearest.test.mjs",
-        "tests/unit/image-grade-shaders.test.mjs"
+        "tests/unit/godray-keep-nearest.test.mjs"
       ]
     },
     "js/render/three/tlx-shadow.js": {
@@ -13132,7 +13138,8 @@
         "tests/specs/material-shimmer.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/unit/backend-surface-parity.test.mjs",
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/census-verdict.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
@@ -13265,6 +13272,7 @@
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
@@ -14031,7 +14039,7 @@
         "tests/specs/new-hooks.spec.js",
         "tests/specs/season-format.spec.js",
         "tests/unit/camera-ride.test.mjs",
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/coplanar-faces.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
@@ -15974,6 +15982,9 @@
       "saveAndForceCockpit": [
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "setFoveation": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "*": [
         "tests/unit/load-order.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs"
@@ -16034,6 +16045,9 @@
       "stickToSteer": [
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "worldFromAnchorTo": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "*": [
         "tests/unit/phone-pad.test.mjs"
       ]
@@ -16065,6 +16079,9 @@
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
+      "isVisible": [
+        "tests/unit/xr-visibility-pause.test.mjs"
+      ],
       "lastError": [
         "tests/unit/xr-phase0.test.mjs"
       ],
@@ -16085,7 +16102,7 @@
         "tests/unit/xr-visibility-pause.test.mjs"
       ],
       "*": [
-        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/global-registry.test.mjs"
       ]
     },
@@ -16094,7 +16111,8 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "onClick": [
-        "tests/unit/xr-backend-pin.test.mjs"
+        "tests/unit/xr-backend-pin.test.mjs",
+        "tests/unit/xr-phase0.test.mjs"
       ],
       "show": [
         "tests/unit/xr-phase0.test.mjs"
