@@ -204,6 +204,7 @@ test("next-era impact preview preserves inventory and active legality with resol
   assert.equal(JSON.stringify(data), before); assert.equal(Parts.legality(), null);
   Parts.setLegality(Regulations.legalityFor("powertrain"), "powertrain");
   const resolved = Parts.resolveSetup(fitted, team);
+  assert.ok(preview.changes.length > 0, "banned fitted parts must produce replacement changes");
   for (const change of preview.changes) {
     const cat = Parts.CATALOG.find((x) => (x.label || x.id) === change.category);
     assert.equal(change.replacement, resolved.setup[cat.id]); assert.equal(change.cost, 0);

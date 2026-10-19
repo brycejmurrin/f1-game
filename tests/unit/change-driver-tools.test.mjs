@@ -119,7 +119,9 @@ test("tooling-fast npm script uses the sequential runner", () => {
 test("test-bg defaults to sequential (one concurrent group) unless --parallel", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/test-bg.mjs"), "utf8");
   assert.match(src, /--parallel/, "test-bg must expose --parallel for the old concurrent start");
-  assert.match(src, /sequential|maxConcurrent|parallel \? PARALLEL_MAX : 1/,
+  // Comments stripped: the @doc header says "sequential by default" and used to satisfy this match.
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.match(code, /maxConcurrent\s*=\s*force\s*\?\s*Infinity\s*:\s*\(parallel\s*\?\s*PARALLEL_MAX\s*:\s*1\)/,
     "test-bg must default concurrent cap to 1");
 });
 

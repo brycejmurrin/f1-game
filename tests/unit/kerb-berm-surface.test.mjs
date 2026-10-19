@@ -111,5 +111,10 @@ test("shipped circuit without kerbStyle/berms still builds (defaults)", () => {
   const { def, track } = buildShip("monza");
   assert.equal(def.kerbStyle, undefined);
   assert.equal(def.berms, undefined);
-  assert.ok(track.roadGeo && track.roadGeo.pos.length > 1000);
+  // Kerbs must contribute real geometry: the default build has kerb rings (palette
+  // matched) and the same vertex count as an explicit "flat" kerbStyle on the same def.
+  const stats = kerbRingStats(track, def);
+  assert.ok(stats.n > 100, `default build has kerb rings (${stats.n})`);
+  const flat = buildShip("monza", { kerbStyle: "flat" });
+  assert.equal(track.roadGeo.pos.length, flat.track.roadGeo.pos.length, "default kerb style == flat vertex count");
 });

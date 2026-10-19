@@ -51,7 +51,36 @@ test("verifyLive reports a stale lazy response with exact hashes", async () => {
   try {
     const result = await verifyLive({ baseUrl: base, root, files: ["index.html"] });
     assert.equal(result.ok, false);
-    assert.ok(result.errors.some((error) => error.includes("does not match shell")));
+    const msg = result.errors.find((error) => error.includes("does not match shell")) || "";
+    assert.ok(msg.includes(sri(stale)), `live hash named: ${msg}`);
+    assert.ok(msg.includes(sri(expected)), `shell hash named: ${msg}`);
+  } finally { server.close(); }
+});
+
+test("verifyLive flags live bytes that match the shell but differ from the checked-out commit", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const checkedOut = Buffer.from("checked-out bytes");
+  const live = Buffer.from("live bytes");
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ "lazy.js": sri(live) })}</script>`);
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, "lazy.js"), checkedOut);
+  const { server, base } = await fixtureServer(new Map([["index.html", index], ["lazy.js", live]]));
+  try {
+    const result = await verifyLive({ baseUrl: base, root, files: ["index.html"] });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.errors, ["lazy.js: live bytes differ from checked-out commit"]);
+  } finally { server.close(); }
+});
+
+test("verifyLive reports live index.html bytes that differ from the checkout", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  await fs.writeFile(path.join(root, "index.html"), "<html>checked out</html>");
+  const { server, base } = await fixtureServer(new Map([["index.html", Buffer.from("<html>live</html>")]]));
+  try {
+    const result = await verifyLive({ baseUrl: base, root, files: ["index.html"] });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((e) => e.startsWith("index.html: live bytes differ")), result.errors.join("\n"));
+    assert.ok(result.errors.includes("index.html: missing apex-lazy-integrity"), "a shell without the lazy block is an error");
   } finally { server.close(); }
 });
 

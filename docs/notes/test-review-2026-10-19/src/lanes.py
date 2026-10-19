@@ -70,7 +70,7 @@ LANES = [
   effort="M", model=SON, deps="none"),
  dict(id="L9", name="Tooling tests on fixtures", batches=["render-1","render-2","render-3"],
   goal="tooling tests run on fixtures instead of live repo state, misplaced smokes move home, local shader validation is honest",
-  owned=["tests/unit/apex-memory.test.mjs","tests/unit/census-verdict.test.mjs","tests/unit/shader-validate.test.mjs","tests/unit/skill-render-ui-surface.test.mjs","tests/unit/game-tools-help.test.mjs","tests/unit/assets-pack.test.mjs","tests/unit/vertex-pack.test.mjs","tests/unit/elev-presets.test.mjs","tests/unit/change-driver-tools.test.mjs","tests/unit/vstd-invariant.test.mjs","tools/env/apex-memory.mjs"],
+  owned=["tests/unit/apex-memory.test.mjs","tests/unit/census-verdict.test.mjs","tests/unit/shader-validate.test.mjs","tests/unit/game-tools-help.test.mjs","tests/unit/assets-pack.test.mjs","tests/unit/vertex-pack.test.mjs","tests/unit/elev-presets.test.mjs","tests/unit/change-driver-tools.test.mjs","tests/unit/vstd-invariant.test.mjs","tools/env/apex-memory.mjs"],
   ids=["R1-02","R1-09","R1-13","R1-15","R2-10","R2-18","R3-16","P1-09","P1-23","P2-19"],
   verify="node --test tests/unit/apex-memory.test.mjs tests/unit/census-verdict.test.mjs tests/unit/shader-validate.test.mjs tests/unit/game-tools-help.test.mjs tests/unit/assets-pack.test.mjs tests/unit/elev-presets.test.mjs && npm run test:tooling-fast",
   effort="S–M", model=SON, deps="R2-10 touches lighting-tuner-sweep.test.mjs, which L4 owns: L9 adds the CASES to game-tools-help, L4 deletes them from lighting-tuner-sweep"),
@@ -260,7 +260,7 @@ LANES[-1:-1] = [
   slices=["PR 1: TK1-01, TK1-02 (high)", "PR 2: TK1-05, TK1-07, TK1-08, TK1-12, TK1-25, TK2-03"]),
  dict(id="L29", name="Track designer tests on the real editor", batches=["tracks-1", "tracks-2"],
   goal="designer DOM, canvas, toolbar fit and fleet validation drive js/editor/ and assert what the player sees; the designer spec is green alone before any assert change",
-  owned=_files(["TK1-13", "TK1-24", "TK2-06", "TK2-13", "TK2-14"]),
+  owned=[f for f in _files(["TK1-13", "TK1-24", "TK2-06", "TK2-13", "TK2-14"]) if f != "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs"],  # deleted by L29 (c0599c40)
   ids=["TK1-13", "TK1-24", "TK2-06", "TK2-13", "TK2-14"],
   verify="node --test on the owned units; track-designer.spec.js alone via test-bg.mjs",
   effort="S", model=SON, deps="TK2-06 may be an environment timeout: re-run track-designer.spec.js alone at loadavg < 3 before changing it"),
@@ -384,3 +384,49 @@ LANES[-1:-1] = [
   owned=_files(_RUN), ids=_RUN, verify="each owned spec alone via test-bg.mjs at loadavg < 3; smoke.spec.js first",
   effort="M", model=SON, deps=_PLAT + "; smoke, dev-tools-dom and ui-audit were red on 120 s timeouts: re-run each alone before classifying"),
 ]
+
+# ---- late continuations: car-2 part 2/2 (final), physics-2 part 3b (partial)
+_FOLD7 = {
+ "L0": (["physics-2"], ["P2-27"]),
+ "L10": (["physics-2"], ["P2-25"]),
+ "L12": (["physics-2"], ["P2-26"]),
+ "L13": (["physics-2"], ["P2-28"]),
+ "L19": (["car-2"], ["C2-22", "C2-23", "C2-24"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD7:
+        _b, _i = _FOLD7[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"] and not f.startswith("js/")]
+        _L["ids"] = _L["ids"] + _i
+
+# ---- late continuations 2: race-2 part 3/3 (race-2b), physics-2 part 3c (physics-2c), both final
+_FOLD8 = {
+ "L10": (["physics-2"], ["P2-29", "P2-31"]),
+ "L12": (["physics-2"], ["P2-30"]),
+ "L14": (["physics-2"], ["P2-33"]),
+ "L15": (["race-2"], ["RC2-22"]),
+ "L17": (["race-2"], ["RC2-23", "RC2-24"]),
+ "L19": (["physics-2"], ["P2-32"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD8:
+        _b, _i = _FOLD8[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i
+
+# ---- late continuations 3: platform part 2/2 (final)
+_FOLD9 = {
+ "L35": (["platform"], ["PL-27", "PL-28", "PL-29"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD9:
+        _b, _i = _FOLD9[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i
+    if _L["id"] == "L35":
+        _L["deps"] = "none (platform final); ui-scale portrait @200% (PL-27) is red on a real assertion: debug it before changing ui-scale; ui-resize (PL-28) and ui-button-touch (PL-29) are red alone on this box, so take their verdict from CI shards (remote-group.mjs)"
+    if _L["id"] == "L36":
+        _L["deps"] = "none (platform final); smoke and dev-tools-dom time out alone on an idle box (SwiftShader cost, PL-01/PL-02): take their verdict from CI llvmpipe (remote-group.mjs), not a local run"

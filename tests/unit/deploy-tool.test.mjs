@@ -58,10 +58,30 @@ test("--help prints the usage block and exits 0", () => {
   assert.match(r.stdout, /--pr/);
 });
 
-test("touchedCircuits reads circuit and scenery ids out of a diff", () => {
-  const ids = touchedCircuits("HEAD~1");
-  assert.ok(Array.isArray(ids));
-  for (const id of ids) assert.match(id, /^[a-z_]+$/);
+test("touchedCircuits reads circuit and scenery ids out of a diff — exactly", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-touched-ids-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  try {
+    g("init", "-q", "-b", "main");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    const write = (rel, body) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); };
+    // Paths are built, not spelled: the docs-integrity scan reads quoted paths in source.
+    const circ = (id, ...sub) => ["js", "circuits", ...sub, id + ".js"].join("/");
+    write(circ("keep"), "// base\n"); write("README.md", "x\n");
+    g("add", "-A"); g("commit", "-qm", "base");
+    write(circ("newtrack"), "// new\n");            // a circuit def
+    write(circ("other_track", "scenery"), "// s\n");    // a scenery file, underscore id
+    write(circ("Bad-Name"), "// no\n");              // not an id: must not match
+    write(["js", "track", "engine.js"].join("/"), "// engine\n");               // not a circuit
+    write("README.md", "y\n");
+    g("add", "-A"); g("commit", "-qm", "edit");
+    assert.deepEqual(touchedCircuits("HEAD~1", dir).sort(), ["newtrack", "other_track"],
+      "only circuit and scenery files that match the id shape, each once");
+    // A read that fails yields no ids (the callers treat [] as 'nothing to verify').
+    assert.deepEqual(touchedCircuits("no-such-ref", dir), []);
+  } finally {
+    rmTemp(dir);
+  }
 });
 
 /* THE TWO-DOT TRAP. touchedCircuits() used `git diff base HEAD`, the two-way

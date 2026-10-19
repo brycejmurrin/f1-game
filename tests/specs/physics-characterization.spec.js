@@ -39,7 +39,8 @@
 // compare loop nor the VM twin reads the key: both iterate SCENARIOS by name.
 //
 // Verified non-vacuous: changing LAT_MAX from 22 to 27 fails "steady corner
-// load" by name. It runs in ~25 s because it builds ONE track and uses
+// load" by name; the wide scenarios' own mutation proofs are in PR #2952's L12
+// lane (BOOST thrust, X-mode drag, wet grip, kerb cut, AI throttle). It runs in ~25 s because it builds ONE track and uses
 // __apex.reset() between scenarios.
 import fs from "node:fs";
 import path from "node:path";
@@ -65,6 +66,18 @@ if (!UPDATING && !fs.existsSync(BASELINE)) {
 // Kept small and varied rather than long: the point is to touch several regions
 // of the model (steady state, cornering load, trail braking, off-track) so a
 // change anywhere shows up, not to simulate a whole lap.
+//
+// The first four are the original gate and keep their 6-field rows, so their
+// committed numbers never moved when the gate widened (2026-10-19, #2952 P2-11).
+// The rest are `wide`: each row also carries yawRate, gear, aeroX and energy,
+// and `ai` appends that AI car's [s, x, speed]. They reach regions the first
+// four never touched — "steady corner load" at frac 0.28 sits on a straight
+// (|k| < 3e-4), so nothing loaded a real right-hander; nothing pressed BOOST,
+// opened X-mode, wetted the road, struck a kerb or drove an AI car. Optional
+// fields: wx (weather chip, default "dry"), aero (X-mode requested), boost.
+// Monza fracs, measured on the VM: 0.83 Parabolica (k ~ -0.012, right),
+// 0.92 inside the main-straight activation zone, 0.368 Lesmo with kerb at
+// x 8-9 m. Keep "wet" LAST: a wet chip must not reach a later dry scenario.
 const SCENARIOS = [
   { name: "straight-line accel", seed: 7, frac: 0.05, speed: 20,
     steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
@@ -74,6 +87,16 @@ const SCENARIOS = [
     steps: [{ n: 45, in: { brake: true, steer: 0.5 } }, { n: 45, in: { throttle: true, steer: 0.3 } }] },
   { name: "off-track recovery", seed: 3, frac: 0.5, speed: 45, x: 11,
     steps: [{ n: 90, in: { throttle: true, steer: -0.4 } }] },
+  { name: "right-hand loaded corner", seed: 5, frac: 0.83, speed: 50, wide: true,
+    steps: [{ n: 90, in: { throttle: true, steer: 0.75 } }] },
+  { name: "boost and x-mode on the straight", seed: 9, frac: 0.92, speed: 60, wide: true, aero: true, boost: true,
+    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
+  { name: "kerb strike", seed: 13, frac: 0.368, speed: 40, x: 8.5, wide: true,
+    steps: [{ n: 90, in: { throttle: true, steer: 0.5 } }] },
+  { name: "ai car launch", seed: 7, frac: 0.05, speed: 20, wide: true, ai: 1,
+    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
+  { name: "wet right-hand corner", seed: 5, frac: 0.83, speed: 50, wide: true, wx: "wet",
+    steps: [{ n: 90, in: { throttle: true, steer: 0.75 } }] },
 ];
 
 // The fields that define "the car moved the same way". Rounded to 1e-4 so the
@@ -112,10 +135,13 @@ test("the driving model produces the same numbers it did before", async ({ page,
     const a = window.__apex;
     const out = {};
     for (const s of scenarios) {
-      a.weather("dry");
+      a.weather(s.wx || "dry");
       a.step(0, 1);
       a.seed(s.seed);
       a.reset(s.frac, s.speed, s.x || 0);
+      // After reset(), which clears xOn and boostOn on every car.
+      if (s.aero) a.aero(true);
+      if (s.boost) a.setBoost(true);
       const trace = [];
       for (const stage of s.steps) {
         a.setInput(stage.in);
@@ -123,7 +149,10 @@ test("the driving model produces the same numbers it did before", async ({ page,
           a.step(1 / 60, 1);
           if (i % 15 === 0) {
             const p = a.physState();
-            trace.push([p.s, p.x, p.speed, p.slipDeg, p.head, p.prog]);
+            const row = [p.s, p.x, p.speed, p.slipDeg, p.head, p.prog];
+            if (s.wide) { const c = a.carAt(); row.push(p.yawRate, c.gear, p.aeroX, c.energy); }
+            if (s.ai != null) { const q = a.carAt(s.ai); row.push(q.s, q.x, q.speed); }
+            trace.push(row);
           }
         }
       }
@@ -146,8 +175,13 @@ test("the driving model produces the same numbers it did before", async ({ page,
   }
 
   const want = JSON.parse(fs.readFileSync(BASELINE, "utf8"));
+  // SOFT per scenario: a hard expect stopped at the first drifted scenario, so
+  // a change that moved three regions reported one. Every drift is named; the
+  // test still fails at the end.
   for (const sc of SCENARIOS) {
-    expect(rounded[sc.name], `scenario "${sc.name}" drifted — if this change was intentional, ` +
+    expect.soft(want[sc.name], `baseline lacks scenario "${sc.name}" — regenerate with APEX_UPDATE_BASELINE=1`)
+      .toBeDefined();
+    expect.soft(rounded[sc.name], `scenario "${sc.name}" drifted — if this change was intentional, ` +
       `regenerate with APEX_UPDATE_BASELINE=1 and READ THE DIFF`).toEqual(want[sc.name]);
   }
 });

@@ -1760,6 +1760,28 @@ the renderer does, projects it back with `Tracks.project`, and reports the error
 
 ## Physics control (deterministic stepping)
 
+### Determinism bisect (Node VM)
+
+A breakpoint shows one step; a determinism red is a **difference between two
+runs**. Opt in to a per-step state-hash trace on the game-vm harness, then ask
+the finder for the first divergent step and fields:
+
+```js
+// createGame({ stepTrace: true })  — or APEX_STEP_TRACE=1
+// Each handle.step(1) appends { player, field, rng, timers } to handle.stepTrace.
+// Zero cost when off (default).
+```
+
+```sh
+node tools/check/determinism-bisect.mjs --seed-a 42 --seed-b 7 --steps 60
+node tools/check/determinism-bisect.mjs --trace-a a.json --trace-b b.json --json
+```
+
+Covers player and field pose/speed, sim RNG seed+stream (`G.simSeed`), and the
+VM timer queue. Pair with `npm run debug:unit -- <file>` (loads
+`tools/lib/vm-debug-preload.cjs`) when the failing unit test itself needs
+`file://` breakpoints on vm-loaded `js/`.
+
 ### `setInput(v) → void` · `clearInput() → void`
 Override player input. `v = { steer, throttle, brake }` — `steer` in `[−1, 1]`
 (+right), `throttle`/`brake` booleans. Held until `clearInput()` restores live

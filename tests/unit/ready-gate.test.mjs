@@ -7,13 +7,20 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   GUARDS_A, GUARDS_B, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
   planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine,
 } from "../../tools/ci/ready-gate.mjs";
+
+// Scratch dirs live under the ignored artifacts/ tree, never the system tmp (AGENTS.md).
+const TMP_BASE = (() => {
+  const d = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..", "artifacts", "tmp");
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+})();
+
 
 const run = (name, status, conclusion, id = 1) => ({
   id, name, status, conclusion,
@@ -85,7 +92,7 @@ test("newestByName keeps the latest completed check-run per name", () => {
 });
 
 test("localVerdict: stamp + passed log matching tip is green", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   const tip = "abcdef1234567890abcdef1234567890abcdef12";
@@ -97,7 +104,7 @@ test("localVerdict: stamp + passed log matching tip is green", () => {
 });
 
 test("localVerdict: stamp for another tip refuses", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   fs.writeFileSync(stamp, "1111111111111111111111111111111111111111\n");
@@ -108,7 +115,7 @@ test("localVerdict: stamp for another tip refuses", () => {
 });
 
 test("localVerdict: failed suite log refuses even with matching stamp", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   const tip = "abcdef1";
@@ -119,7 +126,7 @@ test("localVerdict: failed suite log refuses even with matching stamp", () => {
 
 test("evaluate: CI success wins; CI failure refuses even with local stamp", () => {
   const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   fs.writeFileSync(stamp, tip + "\n");
@@ -146,7 +153,7 @@ test("evaluate: CI success wins; CI failure refuses even with local stamp", () =
 
 test("evaluate: pending CI can be unblocked by a matching local stamp", () => {
   const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   fs.writeFileSync(stamp, tip + "\n");
@@ -165,8 +172,8 @@ test("evaluate: API error with no local stamp is unknown (exit 3)", () => {
     sha: "abcdef1234567890abcdef1234567890abcdef12",
     request: () => ({ error: "no token" }),
     localOpts: {
-      stampPath: path.join(os.tmpdir(), "no-such-ready-stamp"),
-      logPath: path.join(os.tmpdir(), "no-such-ready-log"),
+      stampPath: path.join(TMP_BASE, "no-such-ready-stamp"),
+      logPath: path.join(TMP_BASE, "no-such-ready-log"),
       exists: () => false,
     },
   });
@@ -175,7 +182,7 @@ test("evaluate: API error with no local stamp is unknown (exit 3)", () => {
 });
 
 test("stampReadySha writes the tip", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "nested", "tooling-fast-ready.sha");
   assert.equal(stampReadySha("abcdef1234567890", { stampPath: stamp }), true);
   assert.equal(fs.readFileSync(stamp, "utf8").trim(), "abcdef1234567890");
@@ -184,7 +191,7 @@ test("stampReadySha writes the tip", () => {
 // M36 (2026-10-09): the stamp names the tree the suite MEASURED, not HEAD read afterwards.
 const T1 = "1".repeat(40), T2 = "2".repeat(40);
 const stampFiles = (stampBody, logBody) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stampPath = path.join(dir, "tooling-fast-ready.sha"), logPath = path.join(dir, "tooling-fast-suite.log");
   fs.writeFileSync(stampPath, stampBody); fs.writeFileSync(logPath, logBody);
   return { stampPath, logPath };
@@ -215,7 +222,7 @@ test("a tree stamp needs the suite log of the SAME run", () => {
 });
 
 test("stampReadySha writes `sha tree=<hash>` and refuses a malformed tree", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "s.sha");
   assert.equal(stampReadySha("abcdef1234567890", { tree: T1, stampPath: stamp }), true);
   assert.equal(fs.readFileSync(stamp, "utf8").trim(), `abcdef1234567890 tree=${T1}`);
@@ -225,7 +232,7 @@ test("stampReadySha writes `sha tree=<hash>` and refuses a malformed tree", () =
 test("workTreeId is the committed tree once the dirty edits are committed, and moves when they change", async () => {
   const { workTreeId, commitTreeId } = await import("../../tools/lib/work-tree-id.mjs");
   const { execFileSync } = await import("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-tree-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-tree-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
@@ -250,7 +257,7 @@ test("workTreeId sees a same-size rewrite that git's stat cache would call clean
   // fresh mtime made every entry look safely older, git trusted the stat cache, and the old tree came back.
   const { workTreeId } = await import("../../tools/lib/work-tree-id.mjs");
   const { execFileSync } = await import("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-racy-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-racy-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t"); g("config", "core.trustctime", "false");

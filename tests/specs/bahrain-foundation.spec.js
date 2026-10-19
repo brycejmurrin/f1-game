@@ -84,7 +84,11 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
               if (!bc) continue;
               const surfaceY = ay + bc.u * (cy - ay) + bc.v * (by - ay);
               const overlap = surfaceY - sample.y;
-              if (overlap > 0.2 && overlap < 5) {
+              // No upper bound on the overlap (RC2-13: a prop poking >5 m through the road
+              // used to be ignored). A face is excused only as OVERHEAD clearance: every
+              // vertex at least 4.5 m above the road sample (gantry beams, bridge decks).
+              const overhead = Math.min(ay, by, cy) >= sample.y + 4.5;
+              if (overlap > 0.2 && !overhead) {
                 const fraction = Math.round(sample.frac * 200) / 2;
                 byFraction[fraction] = Math.max(byFraction[fraction] || 0, overlap);
                 if (overlap > max) {
@@ -193,7 +197,12 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
       "kit:bahrain:hospitality",
       "kit:bahrain:service-compound",
     ]);
+});
 
+test("Bahrain night rebuild keeps geometry valid and models unsuperseded", async ({ page }) => {
+  test.setTimeout(300000);
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   const night = await page.evaluate(async () => {
     await window.__apex.race("bahrain", "night", "dry");
     return {
@@ -201,6 +210,7 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
       models: window.__apex.modelDiagnostics(),
     };
   });
+  expect(night.geometry.length, "geometry diagnostics were produced").toBeGreaterThan(0);
   expect(night.geometry.every((entry) => entry.ok)).toBe(true);
   expect(night.models.invalid).toEqual([]);
   // Same on the night rebuild: nothing superseded, nothing over-claimed.
