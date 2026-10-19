@@ -845,7 +845,8 @@
       "outputPolicy": "targeted-summary",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--json"
+        "--json",
+        "--summary"
       ]
     },
     {

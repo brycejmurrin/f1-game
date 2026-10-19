@@ -549,7 +549,7 @@
     "tools/ci/fleet-tick.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
-      "preserve": "Changed-only rows versus first tick; ship/Pages red; dry-run state not saved"
+      "preserve": "Changed-only rows versus first tick; ship/Pages red; dry-run state not saved; --summary appends Markdown to a file and leaves stdout unchanged"
     },
     "tools/ci/geometry-paths.mjs": {
       "action": "protocol-only",
