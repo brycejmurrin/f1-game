@@ -411,9 +411,9 @@
           const SLAB2 = [0.84, 0.85, 0.88];
           const DOOR_N = 16, DOOR_PITCH = LEN / DOOR_N;
           stage._mat = MAT.CONCRETE;
-          // One horizontal retaining footing fills down to the sampled terrain;
-          // the floor overlaps its top, including at both ends of the long mass.
-          foundation(stage, { center: a.c, size: [11.1, LEN - 0.4], top: a.c[1] + 0.02, basis: b, col: PADDOCK });
+          // The retaining footing reaches the entire ground-storey footprint
+          // and meets its floor exactly, including both ends and side edges.
+          foundation(stage, { center: a.c, size: [11.5, LEN], top: a.c[1], basis: b, col: PADDOCK });
           addBox(stage, vadd(a.c, a.u, STOREY_H * 0.5), [11.5, STOREY_H, LEN], WHITE, b);
           for (let i = 0; i < DOOR_N; i++) {
             const off = (i - (DOOR_N - 1) / 2) * DOOR_PITCH;
@@ -426,8 +426,9 @@
             const y0 = f * STOREY_H;
             const setback = f >= 3 ? 1.0 : 0.3;
             stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(vadd(a.c, a.r, -setback * 0.5), a.u, y0 + STOREY_H * 0.5),
-                   [11.5 - setback, STOREY_H - 0.2, LEN - f * 3], f % 2 ? SLAB : SLAB2, b);
+            // Fill the old 0.2 m storey gap downward, preserving every top edge.
+            addBox(stage, vadd(vadd(a.c, a.r, -setback * 0.5), a.u, y0 + STOREY_H * 0.5 - 0.1),
+                   [11.5 - setback, STOREY_H, LEN - f * 3], f % 2 ? SLAB : SLAB2, b);
             if (f % 2 === 1) {
               addBox(stage, vadd(vadd(a.c, a.r, 7.2), a.u, y0 + 0.22),
                      [1.4, 0.2, LEN - f * 5 - 14], f === 1 ? [0.58, 0.10, 0.17] : GREY, b);
