@@ -155,6 +155,7 @@ const SaveSchemaRegistry = (function () {
     "trackId": entry("js/game.js", "json", 1, "string"),
     "turn": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "turnApi": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "wheelState": entry("js/physics/wheel-state.js (opt-in #1628; default OFF)", "raw", 1, "rawScalar"),
     "wgxCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "wgxInsetInPass": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "wgxPackAsync": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

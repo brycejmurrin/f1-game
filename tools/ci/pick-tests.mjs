@@ -166,6 +166,9 @@ export const RULES = [
   [/^js\/physics\/incident-sim\.js/, ["collisions", "sweeps"], "the Rapier takeover is a CONTACT model"],
   [/^js\/physics\/debris-world\.js/, ["physics-core", "sweeps"], "debris.spec.js rides in test:physics-core"],
   [/^js\/physics\/tyre-model\.js/, ["physics-core"], "the wear model feeds the grip seam — pit-lane.spec.js and the characterization ride in test:physics-core"],
+  [/^js\/physics\/wheel-state\.js/, ["physics-core"], "opt-in torque-balanced κ — characterization OFF must stay baseline; ON is documented"],
+  [/^js\/physics\/player-forces\.js/, ["physics-core"], "human combined-slip / Fy / yaw; wheel-state hook when enabled"],
+  [/^js\/physics\/drive-tune\.js/, ["physics-core", "steering-unit"], "live driving-feel bag including WHEEL_STATE opt-in default"],
   [/^js\/race\/pit-lane\.js/, ["physics-core", "game-vm"], "pit-lane.spec.js rides in test:physics-core; the commitment's VM twin (pit-lane-vm) in test:game-vm"],
   [/^js\/physics\/(active-aero|aero)/, ["aero"], "the aero model — active-aero + aero-zones specs"],
   // CONTACT AND AI (test audit T10, 2026-10-05): these routed to physics-core

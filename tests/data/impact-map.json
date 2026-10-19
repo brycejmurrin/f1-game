@@ -4579,6 +4579,7 @@
         "tests/unit/weather-blend.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs",
+        "tests/unit/wheel-state.test.mjs",
         "tests/unit/wind-speed.test.mjs",
         "tests/unit/wind.test.mjs",
         "tests/unit/xr-cull-union.test.mjs",
@@ -9767,6 +9768,7 @@
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/wet-grip-ladder.test.mjs",
+        "tests/unit/wheel-state.test.mjs",
         "tests/unit/wind.test.mjs",
         "tests/unit/yaw-damp-speed.test.mjs",
         "tests/unit/yaw-low-speed-substep.test.mjs"
@@ -10155,7 +10157,8 @@
       ],
       "*": [
         "tests/unit/pick-tests.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
       ]
     },
     "js/physics/wall-clamp.js": {
@@ -10170,6 +10173,20 @@
     "js/physics/wall-end-face.js": {
       "apply": [
         "tests/unit/wall-clamp.test.mjs"
+      ]
+    },
+    "js/physics/wheel-state.js": {
+      "axleStep": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "enabled": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "stepPlayer": [
+        "tests/unit/wheel-state.test.mjs"
       ]
     },
     "js/race/announce-banner.js": {
