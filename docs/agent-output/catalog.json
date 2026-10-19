@@ -1574,15 +1574,18 @@
     },
     {
       "path": "tools/gen/trees/bake-trees.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/gen/trees/caps.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/gen/trees/measure-tree-budget.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
