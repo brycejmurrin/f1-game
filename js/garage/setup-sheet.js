@@ -105,7 +105,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
                           patternRotation: "0", patternStretch: "100", patternWeight: "100",
                           coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit",
-                          podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team",
+                          podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team", crestTone: "team", crestFrame: "none",
                           floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
@@ -137,7 +137,9 @@ const LIV_ROW_HINT = {
   plateTint: "PLATE — the board SPINE SIDE's PLATE / TITLE designs paint on. The colour you pick is used as-is. Unset = SECONDARY, contrast-checked against the flank — never BODY STRIPE. Lettering auto-inks.",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
-  crestStyle: "CREST — TEAM keeps the team's own mark; the others are original emblems (shield, roundel, wings, arrow, star) worn wherever the mark sits: nose, cover, fin and flanks.",
+  crestStyle: "CREST — TEAM keeps the team's own mark; the others are original emblems (shield, roundel, wings, arrow, star, bolt, laurel, chevrons, diamond, gear, crown, flag, flame) worn wherever the mark sits: nose, cover, fin and flanks.",
+  crestTone: "CREST TONE — the emblem's two colours: TEAM as picked for this paint, SWAP trades them, MONO paints the silhouette in one.",
+  crestFrame: "CREST FRAME — a backing behind the emblem: DISC, SHIELD or BADGE plate in the second colour, or a RING keyline. NONE draws it bare.",
   endplate: "ENDPLATES — the front-wing endplates and the rear-wing endplate bodies. Unset = the secondary body colour at the front, dark at the rear.",
   fin: "TAIL FIN — the shark-fin plate. The colour you pick is used as-is (even under FIN HANDOFF CONTRAST). Unset = ACCENT, or a contrast-derived colour when HANDOFF is CONTRAST. Needs a FIN SHAPE other than NONE.",
   finArt: "TAIL GRAPHIC — fin motif / badge ink. The colour you pick is used as-is. Unset = first base colour that clears the fin plate.",
@@ -1258,6 +1260,9 @@ function buildLiveryCreator(container, team) {
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
   pillRow("SPONSORS", "sponsors", LT && LT.SPONSOR_PACK_IDS || ["default"], "default");
   pillRow("CREST", "crestStyle", LT && LT.CREST_STYLE_IDS || ["team"], "team");
+  const emblemOn = () => (d.crestStyle || "team") !== "team", NO_EMBLEM = "Needs a CREST other than TEAM";
+  deps.push({ row: pillRow("CREST TONE", "crestTone", LT && LT.CREST_TONE_IDS || ["team"], "team"), when: emblemOn, why: NO_EMBLEM });
+  deps.push({ row: pillRow("CREST FRAME", "crestFrame", LT && LT.CREST_FRAME_IDS || ["none"], "none"), when: emblemOn, why: NO_EMBLEM });
   // The tail DESIGN: what the fin is shaped like, what is painted on it, what it
   // carries, and whether the crest also repeats on the spine. Four single-choice
   // fields, so four pill rows — the same node shape as FINISH above.

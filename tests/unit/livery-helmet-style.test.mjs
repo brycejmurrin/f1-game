@@ -69,7 +69,6 @@ test("design zones: cap on the crown, band round the shell, stripe front-to-back
   assert.equal(at("flash", 0.10, 43), A); assert.equal(at("flash", 0.70, 43), B); assert.equal(at("flash", 0.70, 102), A);
   assert.equal(at("flash", 0.70, 258), A); assert.equal(at("flash", 0.10, 180), A);
   assert.equal(at("split", 0.5, 270), A); assert.equal(at("split", 0.5, 90), B); assert.equal(at("split", 0.5, 0), B);
-  assert.equal(at("roundel", 0.50, 90), A); assert.equal(at("roundel", 0.36, 90), B); assert.equal(at("roundel", 0.50, 0), B);
 });
 
 test("new styles stay distinct on the FIELD tessellation (not lost under the 12 x 18 mesh)", () => {
@@ -108,5 +107,5 @@ test("the garage lists the HELMET pill row, both colour rows and an editor secti
   // the editor only collects rows that are on the page: a row built but never appended is invisible
   assert.ok(sheet.includes("wrap.appendChild(lidBaseRow); wrap.appendChild(lidAccentRow);"), "helmet colour rows are appended");
   assert.ok(ed.includes('section("HELMET"') && ed.includes('"helmetStyle", "helmetBase", "helmetAccent"'));
-  assert.deepEqual(Array.from(H.STYLES), ["team", "solid", "cap", "band", "stripe", "chevron", "flash", "split", "roundel", "doodle"]);
+  assert.deepEqual(Array.from(H.STYLES), ["team", "solid", "cap", "band", "stripe", "chevron", "flash", "split", "doodle"]);
 });

@@ -351,18 +351,22 @@ const LiveryTex = (function () {
       ctx.strokeText(text, cx, cy);
     }
     if (recipe.style === "outline") {
-      // Hollow: a wide accent stroke with an ink core line and NO fill — the
-      // base paint shows through the counters.
+      // Hollow: one wide stroke and NO fill — the base paint shows through the
+      // counters — keylined along both edges by a thin second colour. The keyline was a
+      // core line down the middle of the stroke, which split the glyph into two
+      // hairlines: Red Bull's yellow-on-racing-blue outline read thinnest in the
+      // B·D8 gallery although yellow is the stronger colour there (4.9:1 against
+      // the board vs the dark ink's 2.8:1, so no swap below was ever going to fire).
       // The wide stroke is the glyph the eye reads, so it takes whichever of
       // accent / ink stands further off the board, accent unless ink clears it by
-      // a quarter. Red Bull's yellow accent outline on its blue board was the
-      // weakest number in the B·D8 round 3 gallery.
+      // a quarter.
       const swap = bg && accent && ink && contrast(ink, bg) > contrast(accent, bg) * 1.25;
-      ctx.lineWidth = Math.max(8, size * 0.11);
-      ctx.strokeStyle = css(swap ? ink : accent);
-      ctx.strokeText(text, cx, cy);
-      ctx.lineWidth = Math.max(3, size * 0.035);
+      const body = Math.max(8, size * 0.11), rim = Math.max(3, size * 0.03);
+      ctx.lineWidth = body + rim * 2;
       ctx.strokeStyle = css(swap ? accent : ink);
+      ctx.strokeText(text, cx, cy);
+      ctx.lineWidth = body;
+      ctx.strokeStyle = css(swap ? ink : accent);
       ctx.strokeText(text, cx, cy);
       ctx.restore();
       return;
@@ -840,7 +844,7 @@ const LiveryTex = (function () {
     };
   }
 
-  const { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS } = LiveryCrests.create({ css, fit, drawWordmark, teamShort, crestSpecFor, crestKey, legendOf,
+  const { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS, CREST_TONE_IDS, CREST_FRAME_IDS, dressEmblem } = LiveryCrests.create({ css, fit, drawWordmark, teamShort, crestSpecFor, crestKey, legendOf,
     CREST_DISC, CREST_MARGIN, STROKE_MIN, TEXT_MIN });
 
   // ── the custom team's uploaded emblem ──────────────────────────────────────
@@ -1025,7 +1029,9 @@ const LiveryTex = (function () {
     const P = o.palette || markPalette(teamId, o.liv, o.field, !!o.bare);
     // CREST STYLE (liv.crestStyle): an original emblem in place of the team's mark, at every station.
     const style = o.liv && o.liv.crestStyle;
-    const fn = (style && Object.hasOwn(EMBLEMS, style) && EMBLEMS[style]) || CRESTS[crestKey(teamId)] || crestGeneric;
+    // CREST TONE / CREST FRAME dress an emblem only; the team's own mark ignores them.
+    const emblem = style && Object.hasOwn(EMBLEMS, style) && dressEmblem(EMBLEMS[style], o.liv.crestTone, o.liv.crestFrame);
+    const fn = emblem || CRESTS[crestKey(teamId)] || crestGeneric;
     // The halo is generic on purpose: the same repeated-draw-under-shadow trick
     // drawLogoImage uses, so a mark that cannot reach INK_TARGET gets separated
     // without every crest having to grow its own outline pass.
@@ -2607,7 +2613,7 @@ const LiveryTex = (function () {
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
-           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
+           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, CREST_TONE_IDS, CREST_FRAME_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            FILL_SURFACES, fillInert,
            airboxMeshColour, resolveFinPaint,
            hasFlankBull: (teamId) => !!bullPath(teamId) };
