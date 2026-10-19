@@ -327,27 +327,35 @@
         "tests/unit/driving-cues.test.mjs"
       ],
       "create": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "debug": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "fromSlider": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "labelOf": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "setConditionAware": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "setLevel": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "tick": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "urgencyOf": [
+        "tests/unit/brake-cue.test.mjs",
         "tests/unit/driving-cues.test.mjs"
       ],
       "*": [
@@ -6420,6 +6428,7 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/start-lights.test.mjs",
         "tests/unit/start-race-latch.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs"
@@ -6497,8 +6506,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/render-rate.test.mjs",
-        "tests/unit/results-cam.test.mjs",
-        "tests/unit/start-lights.test.mjs"
+        "tests/unit/results-cam.test.mjs"
       ],
       "titleIfBare": [
         "tests/unit/flyby-intro.test.mjs",
@@ -9757,8 +9765,7 @@
       "*": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/ot-ahead-scan-gate.test.mjs",
-        "tests/unit/pick-tests.test.mjs",
-        "tests/unit/race-step-snap.test.mjs"
+        "tests/unit/pick-tests.test.mjs"
       ]
     },
     "js/physics/consts.js": {
