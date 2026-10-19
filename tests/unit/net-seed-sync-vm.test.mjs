@@ -51,6 +51,7 @@ async function hostLobby(game) {
   seedLog(context);
   vm.runInContext(src("net/lobby-codes.js").replace(/^const\b/gm, "var"), context, { filename: "lobby-codes.js" });
   vm.runInContext(src("net/lobby-roster.js").replace(/^const\b/gm, "var"), context, { filename: "lobby-roster.js" });
+  vm.runInContext(src("net/lobby-settings.js").replace(/^const\b/gm, "var"), context, { filename: "lobby-settings.js" });
   context.NetPlay = vm.runInContext(src("net/netplay.js") + ";NetPlay", context, { filename: "netplay.js" });
   const writes = [];
   const sessions = [];

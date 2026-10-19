@@ -4273,6 +4273,7 @@
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/share-code.test.mjs",
@@ -5387,6 +5388,7 @@
       ],
       "load": [
         "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
         "tests/unit/track-codec.test.mjs"
       ],
       "preflightCollection": [
@@ -5806,7 +5808,8 @@
         "tests/unit/track-themes-build.test.mjs"
       ],
       "*": [
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/lobby-settings.test.mjs"
       ]
     },
     "js/editor/validate.js": {
@@ -8269,6 +8272,24 @@
         "tests/unit/net-authority.test.mjs"
       ]
     },
+    "js/net/lobby-settings.js": {
+      "circuitPayload": [
+        "tests/unit/lobby-settings.test.mjs"
+      ],
+      "installCircuit": [
+        "tests/unit/lobby-settings.test.mjs"
+      ],
+      "normaliseSettings": [
+        "tests/unit/lobby-settings.test.mjs"
+      ],
+      "*": [
+        "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/storm-weather.test.mjs"
+      ]
+    },
     "js/net/lobby.js": {
       "abortQuali": [
         "tests/unit/net-authority.test.mjs",
@@ -8311,7 +8332,6 @@
       ],
       "create": [
         "tests/specs/wake-lock.spec.js",
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -8347,11 +8367,11 @@
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "join": [
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lobby-answer-flight.test.mjs",
         "tests/unit/lobby-codes.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -11892,10 +11912,6 @@
       ]
     },
     "js/render/glx/glx.js": {
-      "awaitSoftPresent": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
       "begin": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -11993,10 +12009,6 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
-      "invalidateSoftPresent": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
       "link": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -12008,27 +12020,6 @@
       ],
       "mirrorEnd": [
         "tests/unit/gfx-backend-canary.test.mjs"
-      ],
-      "push": [
-        "tests/unit/ci-coverage.test.mjs",
-        "tests/unit/comment-citations.test.mjs",
-        "tests/unit/deploy-staging.test.mjs",
-        "tests/unit/frame-hotpath-alloc.test.mjs",
-        "tests/unit/frustum-buckets.test.mjs",
-        "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/lamp-fixture-anchor.test.mjs",
-        "tests/unit/light-grid.test.mjs",
-        "tests/unit/lighting-reapply.test.mjs",
-        "tests/unit/pause-hud-layout.test.mjs",
-        "tests/unit/perf-governor.test.mjs",
-        "tests/unit/perf-try.test.mjs",
-        "tests/unit/puddles.test.mjs",
-        "tests/unit/render-final-contracts.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs",
-        "tests/unit/service-worker.test.mjs",
-        "tests/unit/tools-runnable.test.mjs"
       ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -12057,15 +12048,6 @@
       "setSpatialUpscale": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "softBlit": [
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
-      "softBlitNotify": [
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
-      "softPresentState": [
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
       "updateInstances": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -12075,7 +12057,20 @@
       ],
       "*": [
         "tests/unit/change-driver-tools.test.mjs",
+        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/comment-citations.test.mjs",
+        "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/frustum-buckets.test.mjs",
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/lamp-fixture-anchor.test.mjs",
+        "tests/unit/light-grid.test.mjs",
+        "tests/unit/lighting-reapply.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
+        "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/puddles.test.mjs",
+        "tests/unit/service-worker.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
+        "tests/unit/tools-runnable.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ]
     },
@@ -12194,6 +12189,34 @@
       "*": [
         "tests/unit/light-grid.test.mjs",
         "tests/unit/lighting-reapply.test.mjs"
+      ]
+    },
+    "js/render/glx/soft.js": {
+      "awaitSoftPresent": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "create": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "invalidateSoftPresent": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "push": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "softBlit": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "softBlitNotify": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "softPresentState": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
       ]
     },
     "js/render/renderer-boot.js": {

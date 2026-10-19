@@ -224,7 +224,8 @@ test("RACE SETTINGS: the ⛈ STORM chip is offered solo and in a room, matching 
   const RS = ctx.RaceSettings;
   const ids = Array.from(RS.weatherOpts(), ([id]) => id);
   assert.equal(RS.weatherOpts().find(([id]) => id === "storm")[1], "⛈ STORM");
-  const lobby = read("js/net/lobby.js").match(/const WEATHER = new Set\((\[[^\]]*\])\)/);
+  const lobby = read("js/net/lobby-settings.js").match(/const WEATHER = new Set\((\[[^\]]*\])\)/);
+  assert.ok(lobby, "LobbySettings owns the WEATHER set (#1655 peel)");
   assert.deepEqual(JSON.parse(lobby[1]).slice().sort(), ids.slice().sort(), "the sheet's list is the lobby's list");
   assert.equal(RS.roomWeather, undefined, "no room coercion left");
 });

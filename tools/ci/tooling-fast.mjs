@@ -684,6 +684,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lobby-answer-flight.test.mjs",
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
   "tests/unit/lobby-codes.test.mjs",
+  // LobbySettings.normaliseSettings + custom-circuit wire install (#1587/#1655). Pure VM.
+  "tests/unit/lobby-settings.test.mjs",
   "tests/unit/lobed-trees.test.mjs",
   // lockup-bench.mjs sweep (speed × pedal × brake bias × weather) pinned on
   // Monza; VM pins dry/rain shapes for bias- and speed-dependent wheelLock.

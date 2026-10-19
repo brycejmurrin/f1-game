@@ -819,16 +819,28 @@ const NetLobby = (function () {
         : "The host is picking the race. Choose your car.");
     }
 
-    const CUSTOM_MSG = "Custom circuits can't be raced online yet — pick a built-in circuit.";
-    const customPicked = () => !!(Tracks.LIST && Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].custom);
+    const { GRID_LABEL, RULES, own, normaliseSettings, circuitPayload, installCircuit } = LobbySettings;
+    const customPicked = () => LobbySettings.customPicked(G);
+
     function publishSettings() {
       if (!sessions.size || role !== "host") return false;
-      // A CUSTOM circuit lives only in this player's storage: the guest cannot
-      // build it from an index. Publish the first shipped circuit instead.
-      const customPick = customPicked();
-      if (customPick) say(CUSTOM_MSG);
+      // A CUSTOM circuit lives only in the host's storage: ship the sanitised
+      // design on the SETTINGS event so the guest can build the same TrackDef
+      // (#1587). track:-1 means "use circuit", not a LIST index.
+      let circuit = null;
+      if (customPicked()) {
+        const def = Tracks.LIST[G.trackIdx];
+        const design = (typeof CustomTracks !== "undefined" && CustomTracks.get && def)
+          ? CustomTracks.get(def.id) : null;
+        circuit = circuitPayload(design);
+        if (!circuit) {
+          say("This custom circuit cannot be shared online — pick another or a built-in circuit.", true);
+          return false;
+        }
+      }
       const snapshot = {
-        track: customPick ? 0 : G.trackIdx,
+        track: circuit ? -1 : G.trackIdx,
+        circuit,
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
         quali: !!G.raceQuali, grid: G.raceGrid,
         difficulty: G.difficulty,
@@ -860,89 +872,6 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.SETTINGS, Object.assign(snapshot, { revision: settingsRevision }));
     }
 
-    const WEATHER = new Set(["dry", "wet", "rain", "overcast", "fog", "storm"]);
-    const TIME_OF_DAY = new Set(["default", "dawn", "day", "dusk", "night"]);
-    const DIFFICULTY = new Set(["easy", "normal", "hard"]);
-    const GRID = new Set(["tier", "quali", "rev10", "revchamp", "random"]);   // game.js GRID_RULES
-    const GRID_LABEL = { tier: "Pace order", quali: "Qualifying lap", rev10: "Reverse top 10", revchamp: "Reverse standings", random: "Random" };
-    const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
-
-    function normaliseSettings(d) {
-      if (!d || typeof d !== "object" || Array.isArray(d)) return null;
-      const out = {};
-      if (own(d, "track")) {
-        if (!Number.isInteger(d.track) || d.track < 0 || !Tracks.LIST || d.track >= Tracks.LIST.length || Tracks.LIST[d.track].custom) return null;
-        out.track = d.track;
-      }
-      if (own(d, "laps")) {
-        // Friend races normally offer 3..the circuit's GP distance. Keep a
-        // little protocol headroom for older/custom builds, but never accept a
-        // fraction, infinity, string or session large enough to be abusive.
-        if (!Number.isInteger(d.laps) || d.laps < 1 || d.laps > 200) return null;
-        out.laps = d.laps;
-      }
-      if (own(d, "quali")) {
-        if (typeof d.quali !== "boolean") return null;
-        out.quali = d.quali;
-      }
-      if (own(d, "grid")) {
-        if (typeof d.grid !== "string" || !GRID.has(d.grid)) return null;
-        out.grid = d.grid;
-      }
-      if (own(d, "changeable")) {
-        if (typeof d.changeable !== "boolean") return null;
-        out.changeable = d.changeable;
-      }
-      if (own(d, "wxArc")) {
-        const a = d.wxArc;
-        if (a !== null) {
-          if (!a || typeof a !== "object" || Array.isArray(a)) return null;
-          if (typeof a.to !== "string" || !WEATHER.has(a.to)) return null;
-          if (!Number.isInteger(a.dur) || a.dur < 30 || a.dur > 3600) return null;
-        }
-        out.wxArc = a === null ? null : { to: a.to, dur: a.dur };
-      }
-      if (own(d, "weather")) {
-        if (typeof d.weather !== "string" || !WEATHER.has(d.weather)) return null;
-        out.weather = d.weather;
-      }
-      if (own(d, "tod")) {
-        if (typeof d.tod !== "string" || !TIME_OF_DAY.has(d.tod)) return null;
-        out.tod = d.tod;
-      }
-      if (own(d, "difficulty")) {
-        if (typeof d.difficulty !== "string" || !DIFFICULTY.has(d.difficulty)) return null;
-        out.difficulty = d.difficulty;
-      }
-      if (own(d, "tyres") && d.tyres != null) {   // absent from an older host: keep ours
-        if (typeof d.tyres !== "string" || (typeof TyreModel !== "undefined" && !TyreModel.isLevel(d.tyres))) return null;
-        out.tyres = d.tyres;
-      }
-      if (own(d, "reliab") && d.reliab != null) {
-        if (typeof d.reliab !== "string" || (typeof Reliability !== "undefined" && !Reliability.isLevel(d.reliab))) return null;
-        out.reliab = d.reliab;
-      }
-      if (own(d, "dirtyAir") && d.dirtyAir != null) {
-        if (typeof d.dirtyAir !== "string" || (typeof PhysicsConsts !== "undefined" && !PhysicsConsts.DirtyAir.isLevel(d.dirtyAir))) return null;
-        out.dirtyAir = d.dirtyAir;
-      }
-      if (own(d, "aiPace") && d.aiPace != null) {
-        if (typeof d.aiPace !== "string" || (typeof AiBand !== "undefined" && !AiBand.isMode(d.aiPace))) return null;
-        out.aiPace = d.aiPace;
-      }
-      // simSeed() stores a uint32 and treats 0 as "unset" (game.js): accept
-      // exactly the values the setter would keep.
-      if (own(d, "seed")) {
-        if (!Number.isInteger(d.seed) || d.seed < 1 || d.seed > 0xFFFFFFFF) return null;
-        out.seed = d.seed;
-      }
-      if (own(d, "round")) {
-        if (!Number.isInteger(d.round) || d.round < 0 || d.round > 1e6) return null;
-        out.round = d.round;
-      }
-      return out;
-    }
-
     // ROOM RULES ARE IN MEMORY ONLY. G.raceTyreWear / G.raceReliability are
     // the PERSISTING setters (store "tyreWear" / "reliability"), so a guest's
     // own saved choice was overwritten for good by any room it joined. The
@@ -958,12 +887,8 @@ const NetLobby = (function () {
     }
 
     // A GUEST GETS ITS OWN RULES BACK when the room or the race is over: the
-    // host's overwrote them in memory and nothing put them back. [wire key, G prop, store key]
-    // for each rule; wxArc restores to "no plan" (its getter would draw one).
-    const RULES = [["track", "trackIdx"], ["laps", "raceLaps"], ["quali", "raceQuali"], ["grid", "raceGrid"],
-      ["changeable", "raceChangeable"], ["weather", "raceWeather"], ["tod", "raceTimeOfDay"], ["difficulty", "difficulty"],
-      ["tyres", "raceTyreWear", "tyreWear"], ["reliab", "raceReliability", "reliability"],
-      ["dirtyAir", "raceDirtyAir", "dirtyAir"], ["aiPace", "aiPace", "aiPace"], ["seed", "seed"], ["round", "raceRound"]];
+    // host's overwrote them in memory and nothing put them back. RULES lives
+    // on LobbySettings; wxArc restores to "no plan" (its getter would draw one).
     let ownRules = null;
     function restoreOwnRules() {
       const snap = ownRules;
@@ -984,7 +909,11 @@ const NetLobby = (function () {
         say("The host sent invalid race settings. Your current setup was kept.", true);
         return false;
       }
-      if (!settingsAccepted && !["track", "laps", "weather", "tod", "quali", "difficulty"].every((key) => own(next, key))) { say("Waiting for the host’s complete race settings before READY.", true); return false; }
+      // A custom-circuit SETTINGS has circuit + the usual fields, not track.
+      const required = own(next, "circuit")
+        ? ["circuit", "laps", "weather", "tod", "quali", "difficulty"]
+        : ["track", "laps", "weather", "tod", "quali", "difficulty"];
+      if (!settingsAccepted && !required.every((key) => own(next, key))) { say("Waiting for the host’s complete race settings before READY.", true); return false; }
       if (d.revision != null && (!Number.isSafeInteger(d.revision) || d.revision < 0)) { settingsAccepted = false; settingsNeedsReady = true; if (selfReady) setReady(false); return false; }
       const revision = d.revision == null ? 0 : d.revision;
       const fingerprint = JSON.stringify(next);
@@ -993,7 +922,17 @@ const NetLobby = (function () {
       }
       settingsRevision = revision; settingsFingerprint = fingerprint; settingsAccepted = true;
       if (!ownRules) { ownRules = {}; for (const [, prop] of RULES) ownRules[prop] = G[prop]; }
-      if (own(next, "track")) G.trackIdx = next.track;
+      if (own(next, "circuit")) {
+        const idx = installCircuit(next.circuit);
+        if (idx < 0) {
+          settingsAccepted = false; settingsNeedsReady = true; if (selfReady) setReady(false);
+          say("The host’s custom circuit could not be built. Your current setup was kept.", true);
+          return false;
+        }
+        G.trackIdx = idx;
+      } else if (own(next, "track")) {
+        G.trackIdx = next.track;
+      }
       if (own(next, "laps")) G.raceLaps = next.laps;
       if (own(next, "quali")) G.raceQuali = next.quali;
       if (own(next, "grid")) G.raceGrid = next.grid;   // after quali: the rule is the finer statement
@@ -1266,8 +1205,8 @@ const NetLobby = (function () {
       }
       if (e.start) {
         e.start.hidden = !host;
-        e.start.disabled = !(selfReady && peersReady()) || customPicked();
-        e.start.title = customPicked() ? CUSTOM_MSG : "";
+        e.start.disabled = !(selfReady && peersReady());
+        e.start.title = "";
       }
     }
 
@@ -1329,9 +1268,10 @@ const NetLobby = (function () {
       if (role !== "host" || !session) return false;
       // "Everyone", not "both" — the sentence has to survive a third player.
       if (!(selfReady && peersReady())) { say("Everyone needs to be ready.", true); return false; }
-      // The guests were sent circuit 0 for a custom pick (publishSettings): racing it would desync.
-      if (customPicked()) { say(CUSTOM_MSG, true); return false; }
-      publishSettings();
+      // Re-publish so a custom circuit body (or any mid-room rule change) is on
+      // the wire before GO. publishSettings returns false when a custom design
+      // will not encode — do not start a race the guest cannot build.
+      if (!publishSettings()) { renderRoom(); return false; }
       if (!(selfReady && peersReady())) { renderRoom(); say("Everyone needs to review the updated race settings.", true); return false; }
       broadcast(NetPlay.EV.GO, { revision: settingsRevision });
       beginRace();

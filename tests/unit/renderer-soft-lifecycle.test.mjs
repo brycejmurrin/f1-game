@@ -306,7 +306,8 @@ test("TLX post fallback invalidates reads and disposes the retained chain", () =
 });
 
 test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
-  for (const file of ["js/render/three/tlx.js", "js/render/webgpu/wgx.js", "js/render/glx/glx.js"]) {
+  // GLX soft-present waiters live in js/render/glx/soft.js after the #1655 peel.
+  for (const file of ["js/render/three/tlx.js", "js/render/webgpu/wgx.js", "js/render/glx/soft.js"]) {
     const src = read(file);
     const at = src.indexOf("awaitSoftPresent(timeoutMs)");
     assert.ok(at >= 0, file + " exposes awaitSoftPresent");
@@ -319,33 +320,34 @@ test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
 });
 
 test("GLX/TLX re-queue waiters whose predicate has not fired", () => {
-  for (const file of ["js/render/glx/glx.js", "js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+  for (const file of ["js/render/glx/soft.js", "js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
     const src = read(file);
     assert.match(src, /const keep = \[\]/, file + " must keep waiters whose callback returns false");
     assert.match(src, /keep\.push\(ws\[i\]\)/);
   }
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /invalidateSoftPresent\(\) \{ _cancelSoftBlits\(\); \}/);
-  const glx = read("js/render/glx/glx.js");
-  const glxAwait = glx.slice(glx.indexOf("function awaitSoftPresent"), glx.indexOf("function init(canvasEl)"));
-  assert.match(glxAwait, /no display ctx/);
-  assert.match(glxAwait, /return true;/);
-  assert.match(glxAwait, /return false;/);
+  const soft = read("js/render/glx/soft.js");
+  const softAwait = soft.slice(soft.indexOf("function awaitSoftPresent"), soft.indexOf("function blitIfDue"));
+  assert.match(softAwait, /no display ctx/);
+  assert.match(softAwait, /return true;/);
+  assert.match(softAwait, /return false;/);
   const tlxAwait = tlx.slice(tlx.indexOf("awaitSoftPresent(timeoutMs)"), tlx.indexOf("invalidateSoftPresent()"));
   assert.match(tlxAwait, /no display ctx/);
 });
 
 test("GLX soft-present reads back only for an explicit capture waiter", () => {
-  const src = read("js/render/glx/glx.js");
-  const blit = src.slice(src.indexOf("function softBlit()"), src.indexOf("function softPresentState()"));
+  const soft = read("js/render/glx/soft.js");
+  const blit = soft.slice(soft.indexOf("function softBlit()"), soft.indexOf("function softPresentState()"));
   assert.match(blit, /if\s*\(\s*!_softPresentWaiters\.length\s*&&\s*!_softCaptureDue\s*\)\s*return/,
     "ordinary WebDriver presents must not synchronously read back the framebuffer");
   assert.match(blit, /_softCaptureDue = false/,
     "a successful capture blit must disarm the one-shot snapCam flag");
-  assert.doesNotMatch(src, /SOFT_BLIT_EVERY|_softBlitPace/,
+  assert.doesNotMatch(soft, /SOFT_BLIT_EVERY|_softBlitPace/,
     "periodic background readbacks must be removed");
-  const present = src.slice(src.indexOf("present: (opts) =>"), src.indexOf("softPresent: () =>"));
-  assert.match(present, /if\s*\(\s*_softPresentWaiters\.length\s*\|\|\s*_softCaptureDue\s*\)\s*softBlit\(\)/);
+  const glx = read("js/render/glx/glx.js");
+  const present = glx.slice(glx.indexOf("present: (opts) =>"), glx.indexOf("softPresent: () =>"));
+  assert.match(present, /Soft\.blitIfDue\(\)/);
 });
 
 test("GLX links SGSR only after spatial upscaling is requested", () => {

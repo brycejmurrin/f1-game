@@ -29,6 +29,7 @@ globalThis.NetQr = { draw: () => false };
 globalThis.NetScan = { supported: () => false, create: () => ({ start: async () => ({ ok: false }), stop() {} }) };
 globalThis.LobbyCodes = eval(src("js/net/lobby-codes.js") + ";LobbyCodes");
 globalThis.LobbyRoster = eval(src("js/net/lobby-roster.js") + ";LobbyRoster");
+globalThis.LobbySettings = eval(src("js/net/lobby-settings.js") + ";LobbySettings");
 const NetLobby = eval(src("js/net/lobby.js") + ";NetLobby");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

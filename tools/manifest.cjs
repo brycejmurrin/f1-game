@@ -544,6 +544,7 @@ const CARVIEW = [
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/shared/chunk-bins.js",    // ChunkBins: the ONE centroid->cell binning of chunked meshes; its key is the cross-backend chunk identity (call-time read by the chunked builders)
   "js/render/glx/chunked.js",
+  "js/render/glx/soft.js",   // GLXSoft: headless soft-present overlay (before glx.js)
   "js/render/glx/glx.js",
   "js/data/teams.js",
   "js/car/parts.js",
@@ -925,6 +926,7 @@ const DEFERRED = {
     "js/render/glx/post.js",
     "js/render/glx/shadow.js",
     "js/render/glx/chunked.js",
+    "js/render/glx/soft.js",   // GLXSoft: headless soft-present overlay (before glx.js)
     "js/render/glx/glx.js",
   ],
   webgpu: [
@@ -1246,6 +1248,7 @@ const LAZY_NET = [
   "js/net/handshake.js",
   "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
   "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
+  "js/net/lobby-settings.js", // LobbySettings: SETTINGS normalise + custom-circuit wire (#1587/#1655)
   "js/net/snapshot.js",
   "js/net/session.js",
   "js/net/spectate.js",
@@ -1312,6 +1315,7 @@ const LAZY_NET_EDGES = [
   ["js/net/handshake.js", "js/net/lobby-codes.js"],
   ["js/net/lobby-codes.js", "js/net/lobby.js"],
   ["js/net/lobby-roster.js", "js/net/lobby.js"],   // lobby destructures LobbyRoster inside create(), which game.js evals
+  ["js/net/lobby-settings.js", "js/net/lobby.js"], // lobby destructures LobbySettings inside create()
 ];
 
 const DEFERRED_EDGES = [
@@ -1321,7 +1325,7 @@ const DEFERRED_EDGES = [
     ["js/render/glx/shaders/glsl-chunks.js", `js/render/glx/shaders/${name}.js`]),
   ...["glsl-lit", "glsl-sky", "glsl-fx", "glsl-post"].map((name) =>
     [`js/render/glx/shaders/${name}.js`, "js/render/glx/glx.js"]),
-  ...["post", "shadow", "chunked"].map((name) =>
+  ...["post", "shadow", "chunked", "soft"].map((name) =>
     [`js/render/glx/${name}.js`, "js/render/glx/glx.js"]),
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
   ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],

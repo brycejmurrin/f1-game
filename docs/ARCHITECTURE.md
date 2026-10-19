@@ -605,6 +605,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `post.js` | `GLXPost` | DEFERRED:webgl2 | GLX post-processing subsystem (split out of js/render/glx/glx.js). |
 | `shadow.js` | `GLXShadow` | DEFERRED:webgl2 | GLX shadow subsystem (split out of js/render/glx/glx.js). |
 | `chunked.js` | `GLXChunked` | DEFERRED:webgl2 | GLX chunked-mesh subsystem (split out of js/render/glx/glx.js). |
+| `soft.js` | `GLXSoft` | DEFERRED:webgl2 | GLX soft-present overlay (split out of js/render/glx/glx.js). |
 | `glx.js` | `GLXBackend` | DEFERRED:webgl2 | WebGL2 renderer core: the PBR GGX lit pass (sun + 32 spot lamps, shadow maps, procedural materials, wet road, fog), the procedural sky and the FX passes — ~13… |
 
 **`js/render/webgpu/`**
@@ -674,6 +675,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `handshake.js` | `NetHandshake` | LAZY_NET | NetHandshake — getting two browsers connected with NO server of ours. |
 | `lobby-codes.js` | `LobbyCodes` | LAZY_NET | lobby invite/answer paste, copy, share, scan, and QR helpers. |
 | `lobby-roster.js` | `LobbyRoster` | LAZY_NET | LobbyRoster: the stateless leaves of the VS FRIEND room's roster DOM (team lookup, css colour, span/replace/summaryRow helpers, driver/team labels, the seat… |
+| `lobby-settings.js` | `LobbySettings` | LAZY_NET | LobbySettings: VS FRIEND race-settings normalise + custom-circuit wire payload. |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |

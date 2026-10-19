@@ -1,0 +1,10 @@
+{
+  "files": {
+    "js/net/lobby.js": {
+      "lines": -60
+    },
+    "js/render/glx/glx.js": {
+      "lines": -148
+    }
+  }
+}

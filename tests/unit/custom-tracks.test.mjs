@@ -242,7 +242,7 @@ test("the picker knows the custom tail (source contract)", () => {
   assert.match(src, /trb trb-custom/, "the CUSTOM badge");
   assert.match(read("css/race-setup.css"), /\.trb-custom \{/, "…styled");
   assert.match(read("js/career/season-ui.js"), /!t\.custom && !used\.has/, "the season shelf never offers a custom");
-  assert.match(read("js/net/lobby.js"), /Tracks\.LIST\[d\.track\]\.custom\) return null/, "the guest refuses a custom index");
+  assert.match(read("js/net/lobby-settings.js"), /Tracks\.LIST\[d\.track\]\.custom\) return null/, "the guest refuses a custom index without a circuit body");
   assert.match(read("js/core/lazy-bundles.js"), /!def\.scenery && !sceneryResident/, "ensureScenery fetches nothing for an inline closure");
 });
 

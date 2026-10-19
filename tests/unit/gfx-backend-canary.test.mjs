@@ -1197,8 +1197,9 @@ test("GLX honours SCREENSHOTS = NATIVE under automation: no preserveDrawingBuffe
   const src = code("js/render/glx/glx.js");
   assert.match(src, /sessionStorage\.getItem\("apex26\.wgxCapture"\)\s*\|\|\s*localStorage\.getItem\("apex26\.wgxCapture"\)/,
     "session wins over local, as in WGX and TLX (a SETTINGS tap for this tab beats a saved pref)");
-  assert.match(src, /_softPresent\s*=\s*headlessUa && !capNative;/, "a saved \"1\" or AUTO keeps the headless soft path");
-  assert.match(src, /getContext\("2d", \{ alpha: false, willReadFrequently: true \}\)/,
+  assert.match(src, /Soft\.setEnabled\(headlessUa && !capNative\)/, "a saved \"1\" or AUTO keeps the headless soft path");
+  const soft = code("js/render/glx/soft.js");
+  assert.match(soft, /getContext\("2d", \{ alpha: false, willReadFrequently: true \}\)/,
     "#game-soft is read back by ?gfxdebug=1 every rebuild — the 2D context must say so (I7), as TLX's does");
 });
 
@@ -6771,10 +6772,12 @@ test("SAVE SCREENSHOT on headed GLX reads only a live frame and never saves a bl
   const live = await run("frame");
   assert.equal(live.calls.dataUrl, 1);
   assert.match(live.button.textContent, /SAVED$/);
-  // GLX gives the "frame" mode meaning only while it is not soft-presenting.
+  // GLX gives the "frame" mode meaning only while it is not soft-presenting
+  // (js/render/glx/soft.js owns the waiters after the #1655 peel).
   const glx = read("js/render/glx/glx.js");
-  assert.match(glx, /if \(_frameWaiters\.length\) _frameWaiters\.splice\(0\)\.forEach/, "present() wakes frame waiters");
-  assert.match(glx, /if \(!_softPresent\) return arguments\[1\] === "frame" \? _awaitFrame\(/);
+  const soft = read("js/render/glx/soft.js");
+  assert.match(glx, /Soft\.drainFrameWaiters\(\)/, "present() wakes frame waiters");
+  assert.match(soft, /if \(!enabled\) return arguments\[1\] === "frame" \? _awaitFrame\(/);
 });
 
 // R3-RENDER-2: the M15 "frame" mode existed in glx.js only. TLX (the default

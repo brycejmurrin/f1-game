@@ -451,8 +451,9 @@ to the validation results, including when red issues block saving.
 
 - A lap of 2.5–7 km, built from 8–200 points.
 - 24 saved circuits.
-- No online play on your own circuits yet: RACE A FRIEND uses the shipped
-  circuits.
+- RACE A FRIEND can use a circuit you designed: the host ships the design in
+  the room settings so every peer builds the same layout. Oversized or invalid
+  designs stay solo-only.
 
 In MY CIRCUITS, **RECOVER PREVIOUS DRAFT** restores the unsaved design displaced by a load or import, including after a reload. Your current unsaved design remains one UNDO away. The backup holds the most recently displaced unsaved design.
 

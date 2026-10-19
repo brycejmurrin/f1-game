@@ -15,16 +15,9 @@ const GLXBackend = (function () {
 
   let gl = null;
   let canvas = null;
-  // HeadlessChrome (SwiftShader) often leaves the WebGL canvas uncomposited for
-  // CDP / Playwright screenshots even with preserveDrawingBuffer — readPixels
-  // sees the car, the capture is a black gap. Mirror WGX: 2D soft-blit overlay.
-  let _softPresent = false;
-  let _displayCanvas = null, _displayCtx = null;
-  let _softBuf = null, _softImg = null;
-  let _softBlitGen = 0;
-  let _softPresentWaiters = [];
-  let _softLastMaxPx = 0;
-  let _softCaptureDue = false;
+  // HeadlessChrome soft-present overlay lives in js/render/glx/soft.js (GLXSoft).
+  // Created once the ctxGone helper exists; deps close over gl/canvas/PST/outFBO.
+  let Soft = null;
   // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
@@ -215,6 +208,15 @@ const GLXBackend = (function () {
   // wired at init() through the GLXCore ctx built there. PST = post chain,
   // SHD = shadow maps (sun/car/lamp + PCSS blocker), CHK = chunked meshes.
   let core = null, PST = null, SHD = null, CHK = null;
+  Soft = GLXSoft.create({
+    getGl: () => gl,
+    getCanvas: () => canvas,
+    ctxGone,
+    getOutFBO: () => outFBO,
+    getPST: () => PST,
+    getWidth: () => width,
+    getHeight: () => height,
+  });
 
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
@@ -540,156 +542,6 @@ const GLXBackend = (function () {
     return u;
   }
 
-  function ensureSoftDisplay() {
-    if (_displayCanvas || !canvas || typeof document === "undefined") return;
-    _displayCanvas = document.createElement("canvas");
-    _displayCanvas.id = "game-soft";
-    _displayCanvas.setAttribute("aria-hidden", "true");
-    // Same box as #game (tokens.css: fixed inset 0). Sit above the WebGL
-    // canvas and below menu sheets (carsetup z-index 35) so CDP/page shots
-    // see the blit while the garage UI still covers the right edge.
-    // HIDDEN UNTIL IT HAS SOMETHING TO SHOW. This canvas is opaque (alpha:false)
-    // and covers the viewport at z-index 1, and the blit below only runs when a
-    // capture is waiting — so on any page that never calls awaitSoftPresent /
-    // invalidateSoftPresent it is a BLACK LID over a renderer that is working
-    // perfectly. tools/carview.html read as "draws nothing" for exactly this
-    // reason. OPACITY, not visibility or display: several capture tools call
-    // locator("#game-soft").screenshot(), and Playwright's actionability check
-    // fails a visibility:hidden element but passes an opacity:0 one — so the
-    // box stays screenshot-able while it is still see-through.
-    _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;"
-      + "display:block;opacity:0;pointer-events:none;z-index:1;touch-action:none";
-    if (canvas.parentNode) canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
-    else if (document.body) document.body.appendChild(_displayCanvas);
-    _displayCtx = _displayCanvas.getContext("2d", { alpha: false, willReadFrequently: true });   // read back by ?gfxdebug=1, as TLX's
-    // Keep #game opacity at 1 — hiding it broke element screenshots and
-    // visibility waits. The overlay sits on top with opaque putImageData.
-    try { Log.info("gfx", "GLX soft-present on"); } catch (_) { /* harness */ }
-  }
-
-  function softBlitNotify() {
-    _softBlitGen++;
-    const keep = [];
-    const ws = _softPresentWaiters.splice(0);
-    for (let i = 0; i < ws.length; i++) {
-      try { if (!ws[i](_softBlitGen)) keep.push(ws[i]); } catch (_) { /* harness waiter */ }
-    }
-    for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
-  }
-
-  function softBlit() {
-    if (outFBO || !_softPresent || !_displayCtx || !gl || ctxGone()) return;
-    // A synchronous GPU readback plus two full-frame CPU copies is capture
-    // work, not presentation work. Capture tools call awaitSoftPresent(), and
-    // snapCam()/invalidateSoftPresent() arms one explicit blit on the next
-    // present — not a periodic background readback every N frames.
-    if (!_softPresentWaiters.length && !_softCaptureDue) return;
-    // Drawing-buffer size, not render width/height: with spatial upscale the
-    // canvas (and default FB) is presentW×presentH while width/height stay at
-    // the internal render scale — readPixels of the small box only captured a
-    // corner of the SGSR present and left #game-soft letterboxed/black.
-    const w = (gl.drawingBufferWidth | 0) || (width | 0);
-    const h = (gl.drawingBufferHeight | 0) || (height | 0);
-    if (w < 1 || h < 1) return;
-    if (_displayCanvas.width !== w || _displayCanvas.height !== h) {
-      _displayCanvas.width = w;
-      _displayCanvas.height = h;
-    }
-    const n = w * h * 4;
-    if (!_softBuf || _softBuf.length !== n) _softBuf = new Uint8Array(n);
-    try {
-      if (!(PST && PST.readbackLdrPixels && PST.readbackLdrPixels(_softBuf, w, h))) return;
-    } catch (_) { return; }
-    if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
-      _softImg = _displayCtx.createImageData(w, h);
-    }
-    const dst = _softImg.data;
-    const row = w * 4;
-    // Flip Y (GL origin is bottom-left) via row copies, then force opaque alpha.
-    for (let y = 0; y < h; y++) {
-      dst.set(_softBuf.subarray((h - 1 - y) * row, (h - y) * row), y * row);
-    }
-    let maxPx = 0;
-    for (let i = 0; i < dst.length; i += 4) {
-      dst[i + 3] = 255;
-      const s = dst[i] + dst[i + 1] + dst[i + 2];
-      if (s > maxPx) maxPx = s;
-    }
-    _softLastMaxPx = maxPx;
-    // Skip near-black frames so a clear does not wipe a good garage still
-    // (same floor as TLX soft-blit).
-    if (maxPx < 8) return;
-    try {
-      _displayCtx.putImageData(_softImg, 0, 0);
-      // First real frame: reveal the overlay. Before this it held nothing but
-      // opaque black, and showing that hid the live canvas underneath.
-      if (_displayCanvas.style.opacity !== "1") _displayCanvas.style.opacity = "1";
-      _softCaptureDue = false;
-      softBlitNotify();
-    } catch (_) { /* 2D blit failed */ }
-  }
-
-  function softPresentState() {
-    return {
-      on: !!_softPresent,
-      gen: _softBlitGen,
-      maxPx: _softLastMaxPx,
-      display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
-      post: (PST && PST.postPath) ? PST.postPath() : null,   // js/render/glx/post.js _lastPath
-    };
-  }
-
-  // snapCam() / park() call gfx.invalidateSoftPresent. GLX captures only on
-  // demand, and awaitSoftPresent() already requires a newer generation.
-  function invalidateSoftPresent() {
-    _softCaptureDue = true;
-    try { if (PST && PST.invalidateUniformCache) PST.invalidateUniformCache(); } catch (_) { /* harness */ }
-  }
-
-  // awaitSoftPresent(ms, "frame"): a headed GLX drawing buffer is cleared after
-  // compositing, so SAVE SCREENSHOT must read it in the task that presented.
-  // Resolves "frame" from INSIDE present() (the caller's microtask runs before
-  // the compositor), or "stale" when none came in `ms` (paused).
-  const _frameWaiters = [];
-  function _awaitFrame(ms) {
-    return new Promise(function (resolve) {
-      const w = function () { clearTimeout(t); resolve("frame"); };
-      const t = setTimeout(function () { _frameWaiters.splice(_frameWaiters.indexOf(w), 1); resolve("stale"); }, ms);
-      _frameWaiters.push(w);
-    });
-  }
-  function awaitSoftPresent(timeoutMs) {
-    if (!_softPresent) return arguments[1] === "frame" ? _awaitFrame(timeoutMs == null ? 8000 : timeoutMs) : Promise.resolve(_softBlitGen);
-    if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
-    // Wait for a NEWER blit, not the last one already on the overlay.
-    // A wrap/indexOf(waiter) mismatch leaves timed-out waiters on the list
-    // forever, and an early return on gen>0 makes SAVE SCREENSHOT after a
-    // camera move byte-identical to the previous still (same class as
-    // TLX/WGX). Timeout must splice the same function push()
-    // stored — see renderer-soft-lifecycle. Return true/false so notify's
-    // keep[] can re-queue waiters whose predicate has not fired (a dim
-    // skip never notifies; the next good blit must still wake them).
-    const start = _softBlitGen;
-    const ms = timeoutMs == null ? 8000 : timeoutMs;
-    return new Promise(function (resolve, reject) {
-      let waiter = null;
-      const t = setTimeout(function () {
-        const i = _softPresentWaiters.indexOf(waiter);
-        if (i >= 0) _softPresentWaiters.splice(i, 1);
-        reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
-      }, ms);
-      waiter = function (gen) {
-        if (gen > start) {
-          try { clearTimeout(t); } catch (_) { /* harness */ }
-          resolve(gen);
-          return true;
-        }
-        return false;
-      };
-      _softPresentWaiters.push(waiter);
-    });
-  }
-
   function init(canvasEl) {
     canvas = canvasEl;
     LightBudget.setSlots(MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
@@ -706,7 +558,7 @@ const GLXBackend = (function () {
         || !!navigator.webdriver);
     let capNative = false;
     try { capNative = (sessionStorage.getItem("apex26.wgxCapture") || localStorage.getItem("apex26.wgxCapture")) === "0"; } catch (_) { /* AUTO */ }
-    _softPresent = headlessUa && !capNative;
+    Soft.setEnabled(headlessUa && !capNative);
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
       // (Apple GPUs round the request up to 4×) — pure waste: the post path
@@ -720,7 +572,7 @@ const GLXBackend = (function () {
       ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
     if (!gl) return false; try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
-    if (_softPresent) ensureSoftDisplay();
+    if (Soft.isEnabled()) Soft.ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
     try { _parallelExt = gl.getExtension("KHR_parallel_shader_compile"); } catch (_) { _parallelExt = null; }
@@ -2899,8 +2751,8 @@ const GLXBackend = (function () {
       let r;
       try { r = PST.present(opts); }   // the mirror inset composites inside present() (hunt 2 G12)
       catch (e) { try { gl.enable(gl.DEPTH_TEST); } catch (_) { /* context lost: nothing to restore into */ } throw e; }
-      if (_softPresentWaiters.length || _softCaptureDue) softBlit();
-      if (_frameWaiters.length) _frameWaiters.splice(0).forEach(function (w) { w(); });
+      Soft.blitIfDue();
+      Soft.drainFrameWaiters();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },
@@ -2914,10 +2766,10 @@ const GLXBackend = (function () {
     // and whose time saving only a real GPU can price.
     multiDraw: (on) => (CHK && CHK.multiDraw ? CHK.multiDraw(on) : { on: false, supported: false }),
     multiDrawStats: () => (CHK && CHK.multiDrawStats ? CHK.multiDrawStats() : { supported: false, on: false }),
-    softPresent: () => !!_softPresent,
-    softPresentState,
-    awaitSoftPresent,
-    invalidateSoftPresent,
+    softPresent: () => Soft.isEnabled(),
+    softPresentState: Soft.softPresentState,
+    awaitSoftPresent: Soft.awaitSoftPresent,
+    invalidateSoftPresent: Soft.invalidateSoftPresent,
     gpuErrors: () => _glErrors,
     drainGpuErrors: () => { drainGlErrors("drain"); return _glErrors; },   // explicit (census ~1 Hz), never per present
     gpuFirstError: () => _glFirstError || null,
@@ -2930,7 +2782,7 @@ const GLXBackend = (function () {
       api: "webgl2", isMobile: IS_MOBILE, mobileTier: MOBILE_TIER,
       gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,
       ctxLost: _ctxLost, packLive: !!matAlbedoTex,
-      softPresent: !!_softPresent, softBlitGen: _softBlitGen,
+      softPresent: Soft.isEnabled(), softBlitGen: Soft.gen(),
     }),
     envFaceBegin,
     envFaceEnd,

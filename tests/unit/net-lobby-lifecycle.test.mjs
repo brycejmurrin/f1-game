@@ -8,6 +8,7 @@ import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 const SOURCE = await readFile(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
 const LOBBY_CODES = await readFile(new URL("../../js/net/lobby-codes.js", import.meta.url), "utf8");
 const LOBBY_ROSTER = await readFile(new URL("../../js/net/lobby-roster.js", import.meta.url), "utf8");
+const LOBBY_SETTINGS = await readFile(new URL("../../js/net/lobby-settings.js", import.meta.url), "utf8");
 // The REAL NetPlay: the lobby registers its QUALI/QLIVE receivers and senders
 // through NetPlay.bindQuali / qualiReporters (one validation site for both
 // phases), and a stub of those would only pin the stub.
@@ -151,6 +152,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   seedClipboard(context);
   vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: "lobby-codes.js" });
   vm.runInContext(LOBBY_ROSTER.replace(/^const\b/gm, "var"), context, { filename: "lobby-roster.js" });
+  vm.runInContext(LOBBY_SETTINGS.replace(/^const\b/gm, "var"), context, { filename: "lobby-settings.js" });
   context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: "netplay.js" });
   const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: "lobby.js" });
   const G = {
