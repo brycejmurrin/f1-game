@@ -11,13 +11,25 @@
 // left them.
 // THE LEAKING CACHE, COUNTED DIRECTLY: CarMesh.flapState() — the base held one more set per wing colour.
 // SETTLED GEO LIVE (#2897): renderer.info.memory.geometries follows what the last frames drew and is not a
-// leak meter. Late Bahrain/model-pack builds also stepped the count mid-run (8→11/12) on unrelated PRs. Before
-// the warm baseline and the end sample we wait (sync predicates) until Tracks.building() is clear,
-// Assets.modelsReady has resolved, and memState().geoLive is unchanged for 1.5 s — then assert end.geoLive
-// ≤ warm.geoLive. That keeps a real leak check without treating async landings as churn.
+// leak meter. Late Bahrain/model-pack builds also stepped the count mid-run (8→11/12) on unrelated PRs.
+// The menu/flyby lazy build (scheduleFlybyTrack) often STARTS after a Tracks.building()-only settle: ensureScenery
+// and ensureTrackBuild run with prep.building still false, so warm can sample garage-only geoLive (~35) and then
+// Bahrain lands mid-edits (~50). Force-await the menu world on #select before opening the garage, and before each
+// geo sample wait until menuPrep.building, Tracks.building, Assets.modelsReady, and a 1.5 s stable geoLive all clear
+// — then assert end.geoLive ≤ warm.geoLive. Flap/GPU texture assertions stay strict.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import fs from "node:fs";
 
 const WARM = 3, EDITS = 6;
+// #region agent log
+const dbg = (hypothesisId, location, message, data) => {
+  try {
+    fs.appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({
+      hypothesisId, location, message, data, timestamp: Date.now(),
+    }) + "\n");
+  } catch (_) { /* debug sink optional */ }
+};
+// #endregion
 // The page's own clock, polled on a timer (wait-polling-lint): past the garage's flap idle window.
 const pause = async (page, ms) => {
   const t0 = await page.evaluate(() => performance.now());
@@ -27,8 +39,55 @@ const frames = (page, n) => page.evaluate((k) => new Promise((done) => {
   let i = 0; const f = () => (++i >= k ? done(null) : requestAnimationFrame(f)); requestAnimationFrame(f);
 }), n);
 
-/** Wait out paced track builds, model-pack fetches, and bay rebuild spikes before a geo sample. */
-const settleGeo = async (page) => {
+/** Snapshot menu prep + TLX geo for the debug log (no secrets). */
+const snapPrep = async (page) => page.evaluate(() => {
+  const p = (window.__apex && typeof window.__apex.menuPrep === "function") ? window.__apex.menuPrep() : null;
+  const tlx = (typeof GLX !== "undefined" && GLX.__tlx) ? GLX.__tlx : null;
+  const ms = tlx && tlx.memState ? tlx.memState() : null;
+  let tracksBuilding = null;
+  try { tracksBuilding = !!(typeof Tracks !== "undefined" && Tracks.building && Tracks.building()); } catch (_) { tracksBuilding = null; }
+  let trackId = null;
+  try { trackId = window.__apex && window.__apex.info && window.__apex.info().track; } catch (_) { /* */ }
+  return {
+    menu: p ? { trackId: p.trackId, world: !!p.world, building: !!p.building, done: !!p.done, warming: !!p.warming } : null,
+    tracksBuilding, trackId, geoLive: ms ? (ms.geoLive | 0) : null, geoKinds: ms ? ms.geoKinds : null,
+  };
+});
+
+/**
+ * Force the select-screen flyby prep to land WHILE #select is still up.
+ * scheduleFlybyTrack's ensureScenery / ensureTrackBuild window is invisible to Tracks.building();
+ * waiting here means Bahrain cannot step geoLive after the warm baseline.
+ */
+const awaitMenuTrackBuilt = async (page) => {
+  // #region agent log
+  dbg("A", "garage-livery-churn.spec.js:awaitMenuTrackBuilt:enter", "await menu world on select", await snapPrep(page));
+  // #endregion
+  await page.waitForFunction(() => {
+    const A = window.__apex;
+    if (!A || typeof A.menuPrep !== "function") return false;
+    const p = A.menuPrep();
+    if (!p || p.building) return false;
+    try {
+      if (typeof Tracks !== "undefined" && Tracks.building && Tracks.building()) return false;
+    } catch (_) { /* */ }
+    // menuWorld() — selection's track meshes are resident (geos already registered).
+    if (p.world) return true;
+    try {
+      const info = typeof A.info === "function" ? A.info() : null;
+      return !!(info && info.track);
+    } catch (_) { return false; }
+  }, null, { polling: 100, timeout: 120000 });
+  // #region agent log
+  dbg("A", "garage-livery-churn.spec.js:awaitMenuTrackBuilt:exit", "menu world ready", await snapPrep(page));
+  // #endregion
+};
+
+/** Wait out menu prep, paced builds, model-pack fetches, and bay rebuild spikes before a geo sample. */
+const settleGeo = async (page, label) => {
+  // #region agent log
+  dbg("B", "garage-livery-churn.spec.js:settleGeo:enter", "settle enter " + label, await snapPrep(page));
+  // #endregion
   await page.evaluate(() => {
     window.__modelsReadyOk = false;
     const p = (typeof Assets !== "undefined" && Assets.modelsReady)
@@ -39,6 +98,14 @@ const settleGeo = async (page) => {
   });
   await page.waitForFunction(() => {
     if (!window.__modelsReadyOk) return false;
+    try {
+      const p = (window.__apex && typeof window.__apex.menuPrep === "function") ? window.__apex.menuPrep() : null;
+      if (p && p.building) {
+        window.__geoSettle.last = -1;
+        window.__geoSettle.since = 0;
+        return false;
+      }
+    } catch (_) { /* */ }
     try {
       if (typeof Tracks !== "undefined" && Tracks.building && Tracks.building()) {
         window.__geoSettle.last = -1;
@@ -54,6 +121,9 @@ const settleGeo = async (page) => {
     if (live !== s.last) { s.last = live; s.since = now; return false; }
     return (now - s.since) >= 1500;
   }, null, { polling: 100, timeout: 90000 });
+  // #region agent log
+  dbg("B", "garage-livery-churn.spec.js:settleGeo:exit", "settle exit " + label, await snapPrep(page));
+  // #endregion
 };
 
 test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, textures and settled geoLive flat (TLX)", async ({ page }) => {
@@ -69,6 +139,9 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
   await page.evaluate(() => { const S = GameStore.store; S.set("team", 2); S.set("driver", 0); S.set("livery.custom." + Teams.LIST[2].id, []); });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
+  // Land the menu/flyby track (Bahrain) before the garage — otherwise ensureScenery can
+  // finish after warm and step geoLive mid-edits (#2897 flake: warm=35, end=50).
+  await awaitMenuTrackBuilt(page);
   await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
@@ -107,15 +180,21 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
   for (let i = 0; i < WARM; i++) await edit();
   await pause(page, 2500);   // past the garage's flap idle window (setup-camera.js FLAP_IDLE_MS)
   await edit();
-  await settleGeo(page);   // absorb late track/model geos before the baseline (#2897)
+  await settleGeo(page, "warm");   // absorb late model/bay geos before the baseline (#2897)
   const warm = await read();
+  // #region agent log
+  dbg("C", "garage-livery-churn.spec.js:warm", "warm baseline", { warm, prep: await snapPrep(page) });
+  // #endregion
   const rows = [warm];
   for (let i = 0; i < EDITS; i++) { await edit(); rows.push(await read()); }
   await pause(page, 2500);
   await edit();
-  await settleGeo(page);
+  await settleGeo(page, "end");
   const end = await read();
   rows.push(end);
+  // #region agent log
+  dbg("C", "garage-livery-churn.spec.js:end", "end sample", { end, prep: await snapPrep(page), series: rows.map((r) => r.geoLive) });
+  // #endregion
   test.info().annotations.push({ type: "churn", description: JSON.stringify(rows) });
   expect(end.gpuTex - warm.gpuTex, `GPU textures created by ${EDITS + 1} edits after the warm-up (each edit used to make new ones): ${JSON.stringify(rows)}`).toBe(0);
   expect(end.runs, `coalesced flap runs: ${rows.map((r) => r.runs).join(" → ")}`).toBeLessThanOrEqual(warm.runs);
