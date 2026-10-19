@@ -104,7 +104,7 @@ Sonnet and raise per task. 200 new threads/day enforced. Threads merging is subj
    `ORCH <fleet> LIVE` line, triggers and briefs address the fleet, not the id. `pr-board.mjs` prints `fleet`/`slot`.
 5. Thin orchestrator: every read over 10k chars goes through a subagent (hook-enforced on Bash output size), no owner
    work (a stopped worker's PR gets a new Worker with `CONTINUE PR`), one watch channel per PR (subscription only; timer
-   as the 50-min safety net), soft cap 300k. Rotation then happens daily, not hourly.
+   as the 50-min safety net); caps stay launch-policy's 200k soft / 250k hard (ORCH15 review: the 300k here conflicted). Rotation then happens far less often.
 6. Watch as a job, not a session: `fleet-tick.mjs` runs in `fleet.yml` beside `fleet-board.mjs` (Actions token, no proxy
    403; the 19:04 fresh-session sweep failed on 403 and a missing repo) and writes the board artifact; the hourly routine
    only reads sessions/cost (the one thing Actions cannot see) and posts flags.
@@ -130,3 +130,29 @@ semantics, memory `archive-only-after-bryce-done` (becomes the rule), `bryce-mer
 Orchestrators 30% of a $908 day (3 sessions, avg $92, max 647k); 20 sessions ≥400k = 58% of spend; 399 of 802 follow-up
 turns ≤1 tool call (peer messages 59.9M tokens, GitHub echoes 49.9M); re-grant per rotation ≈ $0.90 + 33 s of Bryce;
 rotations today: 7 (A) + 4 (B).
+
+## 7. Design review with ORCH15 (2026-10-19 ~20:30Z, Bryce: "go back and forth and discuss the design and look at session history")
+
+Evidence from ORCH14 / ORCH15 transcripts and ORCH15's own answers:
+
+- The re-ask loop ran again at 20:11Z: ORCH14's brief to ORCH15 said "Ask Bryce via AskUserQuestion to re-grant IN YOUR
+  SESSION" and "ask to archive ORCH14". PR 1 removes both from the template (orchestrator.md hard line 13).
+- Rotation failed twice: the scheduled-task successor 01KBvPEU was deleted with its trigger, the routine-minted 01VoQ9 had
+  no repository (`config:no-git-repo`) and stalled; Bryce started ORCH15 from the app by hand. ORCH14 lived ~40 min
+  (19:32→20:11Z, ~327k context).
+- PR 1 bug found and fixed: the Pages row matched the last game merge's OWN run, which the release train cancels
+  (39317156443, 39318540475); it now accepts any green pages.yml run whose head contains the sha (`pagesVerdict`).
+- Quota beats "launches sessions": at `allowed_warning` the orchestrator still asks (AGENTS.md wording fixed in PR 1).
+- Orchestrator turns spent on non-orchestrator work: relaying `to:#PR` bus lines to owners by hand, proxy Plan edits
+  ("EDIT 3021"), assembling a launch brief from three files, four manual archives, ~8 ack-only wakes.
+
+PR 2 scope, revised from the review (ordered by orchestrator lifetime saved):
+1. Successor launch as a tested path: `create_session` (source_url + deploy branch, auto, model, tags) from the LIVE
+   orchestrator, never a scheduled trigger; confirm repo attached + auto with `get_session`; then bus `ORCH <fleet> LIVE`.
+   When the platform refuses (lineage depth), print ONE paste-in prompt for Bryce instead of a routine.
+2. `to:#<PR>` bus lines reach the owner without the orchestrator: owners read `fleet-bus.mjs read --to '#<their PR>'`
+   on each wake, and the bus mirrors `to:#<PR>` lines as a PR comment (one workflow step).
+3. Owners make their own Plan edits (no EDIT relay); the orchestrator never touches a PR body it does not own.
+4. A launch-brief generator (`fleet-brief.mjs <role> --pr <n>`) so a brief is one command, not three reads.
+5. Digest-only reads (10k output budget enforced) and one watch channel per PR; echo wakes end with no tool call.
+6. Then the original items: roles by fleet letter, watch in Actions, fleet-block enforcement, Merge Desk retirement.

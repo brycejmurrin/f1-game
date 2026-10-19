@@ -100,7 +100,9 @@ before every `create_session`:
    `get_session` `used_tokens`) at every wake and, at the soft cap, finishes the unit, pushes, sends HANDOFF.
 13. `USER GRANTS:` quotes the lane's extra grants verbatim with their dates; the standing rules (merge by gate,
    archive by rule, launch, Plan edits, Pages dispatch) are AGENTS.md and are NOT re-quoted or re-asked — a successor
-   orchestrator's brief says "standing authority: AGENTS.md §Concurrent PRs", nothing more (authority.md).
+   orchestrator's brief says "standing authority: AGENTS.md §Concurrent PRs", nothing more (authority.md) — no
+   "re-grant in your session", no "ask Bryce to archive the predecessor" (the archive rule covers it; ORCH14's
+   2026-10-19 20:11Z brief still carried both).
    A changed lane grant is a relaunch with the amended brief, never a message.
 14. Route verbose reads (CI logs, transcripts, big lists) through a subagent that returns a summary;
    no tool result over 10k characters enters your context (comms.md §Output budget).

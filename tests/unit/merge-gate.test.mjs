@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ciVerdict, openVerdict, pacingVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, REQUIRED_CHECK } from "../../tools/ci/merge-gate.mjs";
+import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, REQUIRED_CHECK } from "../../tools/ci/merge-gate.mjs";
 import { receiptVerdict, writeReceipt, readReceipt, receiptPath, MAX_AGE_MIN } from "../../tools/lib/gate-receipt.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
@@ -81,6 +81,24 @@ test("pacingVerdict: freeze, slot ownership, lapse and the last game merge's Pag
   const frozen = [...entries, e("INCIDENT", "c", "Pages red on f28db2ef", T0 - 30)];
   assert.match(pacingVerdict(frozen, { pr: 10, me, pagesGreen: green, now: T0 }).evidence, /frozen by INCIDENT/);
   assert.equal(pacingVerdict([...frozen, e("INCIDENT", "c", "#1 lifted: Pages green again", T0 - 10)], { pr: 10, me, pagesGreen: green, now: T0 }).ok, true);
+});
+
+test("pagesVerdict judges by ancestry: the train cancels a merge's own run, a later green run that contains it counts", () => {
+  // The 2026-10-19 shape (ORCH15's review): f797117b's own run cancelled, f495f663's cancelled, 2a60a924 green.
+  const order = ["f797117b", "f495f663", "62026dd7", "2a60a924"];   // oldest → newest on the deploy branch
+  const contains = (sha, head) => order.indexOf(sha) >= 0 && order.indexOf(sha) <= order.indexOf(head);
+  const runs = [   // newest first, as the API lists them
+    { head_sha: "2a60a924", status: "completed", conclusion: "success" },
+    { head_sha: "62026dd7", status: "completed", conclusion: "cancelled" },
+    { head_sha: "f495f663", status: "completed", conclusion: "cancelled" },
+    { head_sha: "f797117b", status: "completed", conclusion: "cancelled" },
+  ];
+  assert.equal(pagesVerdict("f797117b", runs, contains), true, "its own run was cancelled; a later green run contains it");
+  assert.equal(pagesVerdict("f797117b", runs.slice(1), contains), null, "only cancelled runs: still pending, never red");
+  assert.equal(pagesVerdict("f797117b", [{ head_sha: "2a60a924", status: "in_progress", conclusion: null }, ...runs.slice(1)], contains), null);
+  assert.equal(pagesVerdict("f797117b", [{ head_sha: "2a60a924", status: "completed", conclusion: "failure" }, ...runs.slice(1)], contains), false, "a red run that contains it stops everyone");
+  assert.equal(pagesVerdict("2a60a924", [{ head_sha: "62026dd7", status: "completed", conclusion: "success" }], contains), null, "an older green run does not contain a newer merge");
+  assert.equal(pagesVerdict("x", [], contains), null);
 });
 
 test("receiptVerdict (JS) and merge_policy.receipt_check (Python) agree on every case", () => {

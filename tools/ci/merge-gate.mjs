@@ -115,7 +115,7 @@ export function pacingVerdict(entries, { pr, me, pagesGreen = () => null, now = 
     const m = /\bmerged\s+([0-9a-f]{7,40})\b/i.exec(lastGame.text) || /\b([0-9a-f]{7,40})\b/.exec(lastGame.text);
     const sha = m ? m[1] : "";
     const g = sha ? pagesGreen(sha) : null;
-    if (g !== true) return row(false, `last game merge ${sha ? sha.slice(0, 8) : "(sha unknown)"} (${lastGame.from}) has no green pages.yml run yet${g === null ? " (pending or unknown)" : " (red: stop, INCIDENT)"}`);
+    if (g !== true) return row(false, `last game merge ${sha ? sha.slice(0, 8) : "(sha unknown)"} (${lastGame.from}) is in no green pages.yml run yet${g === null ? " (pending or unknown)" : " (red: stop, INCIDENT)"}`);
     return row(true, `slot #${pr} by ${slot.from}; Pages green on ${sha.slice(0, 8)}`);
   }
   return row(true, `slot #${pr} by ${slot.from}; no earlier game DONE on the bus`);
@@ -137,15 +137,34 @@ function checkRunsFor(sha, request) {
   return { list };
 }
 
-/** true | false | null for the newest pages.yml run on `sha`. */
-export function pagesGreenFor(sha, request = api) {
-  const r = request(`actions/workflows/pages.yml/runs?head_sha=${sha}&per_page=5`);
+/**
+ * Has `sha` shipped? true | false | null (pending / unknown). Pure except the two callbacks.
+ * The release train CANCELS a pending Pages run when a newer push arrives (ORCH15's review, 2026-10-19:
+ * f797117b's run 39317156443 and f495f663's 39318540475 were cancelled, 62026dd7 then 2a60a924 replaced
+ * them), so a merge sha's OWN run is usually cancelled. The verdict is therefore by ANCESTRY: any
+ * successful pages.yml run whose head contains `sha` is green; a failed run that contains it, with no
+ * success after it, is red; otherwise pending.
+ * runs: newest first, `{ head_sha, status, conclusion }`; contains(sha, head) → bool.
+ */
+export function pagesVerdict(sha, runs, contains) {
+  for (const run of runs || []) {
+    if (!run || !run.head_sha || !contains(sha, run.head_sha)) continue;
+    if (run.conclusion === "success") return true;
+    if (run.status === "completed" && (run.conclusion === "failure" || run.conclusion === "timed_out")) return false;
+    // cancelled / queued / in progress: an older or newer run may still decide it — keep looking
+  }
+  return null;
+}
+
+/** git merge-base --is-ancestor in the given clone (the gate fetched the deploy branch first). */
+export const isAncestor = (cwd = ROOT) => (sha, head) =>
+  sha === head || git(["merge-base", "--is-ancestor", sha, head], cwd).status === 0;
+
+/** true | false | null for `sha`: the recent pages.yml runs on the deploy branch, judged by ancestry. */
+export function pagesGreenFor(sha, request = api, contains = isAncestor()) {
+  const r = request(`actions/workflows/pages.yml/runs?branch=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=20`);
   if (r.error || !Array.isArray(r.json?.workflow_runs)) return null;
-  const runs = r.json.workflow_runs;
-  if (!runs.length) return null;
-  if (runs.some((x) => x.conclusion === "success")) return true;
-  if (runs.some((x) => x.status !== "completed")) return null;
-  return false;
+  return pagesVerdict(sha, r.json.workflow_runs, contains);
 }
 
 const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, encoding: "utf8", timeout: 120_000, ...extra });
@@ -240,7 +259,7 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   const game = gameFiles(resolved.files || []);
   if (game.length) {
     const b = bus({ cwd: root, last: 200 });
-    rows.pacing = pacingVerdict(b.entries, { pr, me, pagesGreen: (sha) => pages(sha, request), now: Math.floor(now() / 1000) });
+    rows.pacing = pacingVerdict(b.entries, { pr, me, pagesGreen: (sha) => pages(sha, request, isAncestor(root)), now: Math.floor(now() / 1000) });
   } else rows.pacing = row(true, "non-game paths: no slot needed");
 
   const ok = Object.values(rows).every((r) => r.ok);
