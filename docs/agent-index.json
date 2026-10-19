@@ -661,6 +661,7 @@
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
+        "tests/unit/pre-commit-guards.test.mjs",
         "tests/unit/skill-hint-hook.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/skill-routing-eval.test.mjs",
@@ -1004,7 +1005,7 @@
     {
       "id": "guards",
       "script": "test:guards",
-      "kind": "node",
+      "kind": "command",
       "files": [
         "tests/unit/agent-surface.test.mjs",
         "tests/unit/behind-ship.test.mjs",

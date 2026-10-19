@@ -830,6 +830,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pr-body.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
   // answers the question that actually bites, "does the pre-push gate RUN it" —
+  // #2889 slice 1: commit-gate verdict cache (artifacts/pre-commit-guards.ok),
+  // git-config timeout through .githooks/pre-commit. Throwaway repos, ~2 s.
+  "tests/unit/pre-commit-guards.test.mjs",
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",

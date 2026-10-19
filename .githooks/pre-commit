@@ -10,6 +10,11 @@
 # Claude Code sessions (CLAUDECODE=1) already ran the same gate in bash-guard.sh
 # before git started, so it is not run twice. APEX_SKIP_GUARDS=1 bypasses, as
 # there.
+#
+# #2889 slice 1: reuse a green test:guards verdict for the same staged tree
+# (artifacts/pre-commit-guards.ok, 10 min — same file/format as bash-guard.sh)
+# via tools/ci/guards-verdict.mjs; optional apex.guardTimeout / APEX_GUARD_TIMEOUT
+# wraps the suite in `timeout -k 5` (no new default when unset).
 set -u
 [ "${APEX_SKIP_GUARDS:-}" = 1 ] && exit 0
 [ -n "${CLAUDECODE:-}" ] && exit 0
@@ -54,15 +59,40 @@ else
   grep '^OVER' artifacts/pre-commit-ratchets.log >&2
   exit 1
 fi
+# Verdict cache (#2889): a fresh green write-tree match skips the suite.
+# Printed on stdout so agents see the hit line; the suite log stays for misses.
+if without_local_git_context node tools/ci/guards-verdict.mjs check; then
+  exit 0
+fi
+# Budget: git config apex.guardTimeout, then APEX_GUARD_TIMEOUT. When neither
+# is set, keep today's behaviour (no new default timeout in this githook).
+BUDGET=$(git config --get apex.guardTimeout 2>/dev/null || true)
+[ -z "${BUDGET:-}" ] && BUDGET="${APEX_GUARD_TIMEOUT:-}"
 # test:guards builds throwaway fixture repos; git exported GIT_DIR, GIT_INDEX_FILE
 # & co. into this hook (absolute in a linked worktree, the index.lock for -a), so
 # their git would act on THIS repo (#1807). Unset them for the suite only: the
 # ratchet auto-raise above must still stage into the commit's own index.
 # The idiom is githooks(5)'s own: https://git-scm.com/docs/githooks#_description
 # shellcheck disable=SC2046
-if ! ( unset $(git rev-parse --local-env-vars); npm run --silent test:guards ) >"$LOG" 2>&1; then
-  echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
-  grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
-  exit 1
+# Capture RC outside `if ! …` — bash resets $? to 0 after a successful `if !`
+# test, which would hide timeout's 124 and report a plain "red" instead.
+if [ -n "${BUDGET:-}" ]; then
+  ( unset $(git rev-parse --local-env-vars); timeout -k 5 "$BUDGET" npm run --silent test:guards ) >"$LOG" 2>&1
+  RC=$?
+  if [ "$RC" != 0 ]; then
+    if [ "$RC" = 124 ] || [ "$RC" = 137 ]; then
+      echo "pre-commit: BLOCKED — npm run test:guards did not finish within ${BUDGET}s (apex.guardTimeout / APEX_GUARD_TIMEOUT). Retry on an idle box, raise the budget with \`git config apex.guardTimeout <sec>\`, or APEX_SKIP_GUARDS=1 only when the guards themselves are the change. Log: $LOG" >&2
+      exit 1
+    fi
+    echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
+    grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
+    exit 1
+  fi
+else
+  if ! ( unset $(git rev-parse --local-env-vars); npm run --silent test:guards ) >"$LOG" 2>&1; then
+    echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
+    grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
+    exit 1
+  fi
 fi
 exit 0
