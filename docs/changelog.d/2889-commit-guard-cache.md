@@ -1,0 +1,1 @@
+Improved: Agent commits reuse a green `test:guards` verdict for the same staged tree (and can set `git config apex.guardTimeout`) so the commit hook no longer re-runs the full suite after a foreground guards pass (#2889).
