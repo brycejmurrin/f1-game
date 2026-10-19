@@ -27,10 +27,20 @@ async function fixture() {
   const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
   const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
   let locks = 0;
-  const make = (overrides = {}) => createExtras({ ROOT: root, toolResult, refuse,
-    acquireLock: () => { locks++; return null; }, releaseLock: () => { locks--; }, occupancyRefuse: () => null,
-    assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false, ...overrides });
-  return { root, make, locks: () => locks };
+  const ownedExitListeners = new Set();
+  const make = (overrides = {}) => {
+    const before = new Set(process.listeners("exit"));
+    const extras = createExtras({ ROOT: root, toolResult, refuse,
+      acquireLock: () => { locks++; return null; }, releaseLock: () => { locks--; }, occupancyRefuse: () => null,
+      assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false, ...overrides });
+    for (const listener of process.listeners("exit")) if (!before.has(listener)) ownedExitListeners.add(listener);
+    return extras;
+  };
+  const cleanup = () => {
+    for (const listener of ownedExitListeners) process.removeListener("exit", listener);
+    fs.rmSync(root, { recursive: true, force: true });
+  };
+  return { root, make, cleanup, locks: () => locks };
 }
 
 test("runSpawn treats byte-bounded truncation as an explicit failure", async () => {
@@ -70,7 +80,7 @@ test("durable jobs have exclusive cross-owner identities and cancellation conver
     assert.ok(filtered.jobs.some((j) => j.jobId === one.jobId), "state filter reconciles before filtering");
     assert.equal(body(await a.apex_job_status({ jobId: one.jobId, wait: 1 })).state, "cancelled", "wait loop reconciles before waiting");
     assert.ok(fs.existsSync(path.join(dir, `${one.jobId}.cancelled`)), "exclusive marker survives stale manifest writes");
-  } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
+  } finally { f.cleanup(); }
 });
 
 test("job reservation failure removes owned files and releases a browser lock", async () => {
@@ -82,7 +92,7 @@ test("job reservation failure removes owned files and releases a browser lock", 
     assert.equal(f.locks(), 0);
     const dir = path.join(f.root, "artifacts/logs/apex-jobs");
     assert.deepEqual(fs.existsSync(dir) ? fs.readdirSync(dir) : [], [], "only this failed start's reservations are removed");
-  } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
+  } finally { f.cleanup(); }
 });
 
 test("abort closes a persistent track open and releases its lock", async () => {
@@ -96,7 +106,7 @@ test("abort closes a persistent track open and releases its lock", async () => {
     assert.equal(r.error, "cancelled");
     assert.equal(f.locks(), 0);
     assert.equal(body(await x.apex_track({ op: "status" })).error, "track_not_open");
-  } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
+  } finally { f.cleanup(); }
 });
 
 test("abort of an active persistent track request closes the session", async () => {
@@ -112,7 +122,7 @@ test("abort of an active persistent track request closes the session", async () 
     for (let i = 0; i < 20 && f.locks() !== 0; i++) await sleep(25);
     assert.equal(f.locks(), 0);
     assert.equal(body(await x.apex_track({ op: "status" })).error, "track_not_open");
-  } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
+  } finally { f.cleanup(); }
 });
 
 test("track survey receives the dispatch abort signal before spawning", async () => {
@@ -122,5 +132,164 @@ test("track survey receives the dispatch abort signal before spawning", async ()
     const r = body(await f.make().handlers.apex_track({ op: "survey", track: "monza" }, { signal: ctl.signal }));
     assert.equal(r.error, "cancelled");
     assert.equal(f.locks(), 0);
-  } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
+  } finally { f.cleanup(); }
+});
+
+// These are Node processes only: browser:true exercises occupancy without ever
+// importing a browser launcher or spawning the planned survey executable.
+test("cross-owner browser cancellation retains occupancy until detached descendants are gone", async () => {
+  const { spawn } = await import("node:child_process");
+  const { alive, killTreeAndWait } = await import("../../tools/lib/process-tree.mjs");
+  const f = await fixture();
+  let childPid, rootPid, pending;
+  try {
+    const ready = path.join(f.root, "descendant.json");
+    const script = `
+      const {spawn}=require('node:child_process');
+      const child=spawn(process.execPath,['-e',${JSON.stringify(`process.on('SIGTERM',()=>{}); require('node:fs').writeFileSync(${JSON.stringify(ready)},JSON.stringify({pid:process.pid})); setInterval(()=>{},1000);`)}],{detached:true,stdio:'ignore'});
+      setInterval(()=>{},1000);
+    `;
+    let held = false;
+    let observer;
+    const make = (extra = {}) => f.make({
+      acquireLock: () => held || observer.runningBrowserJob() ? refuse("occupied", "browser work active", "Wait") : (held = true, null),
+      releaseLock: () => { held = false; },
+      spawnJob: (_cmd, _argv, options) => spawn(process.execPath, ["-e", script], options),
+      ...extra,
+    });
+    const owner = make(), canceller = make(); observer = make();
+    const job = body(owner.handlers.apex_job_start({ kind: "survey_track", track: "monza" }));
+    assert.equal(job.ok, true);
+    for (let i = 0; i < 200 && !fs.existsSync(ready); i++) await sleep(25);
+    assert.ok(fs.existsSync(ready), "Node descendant installed its SIGTERM handler");
+    childPid = JSON.parse(fs.readFileSync(ready)).pid;
+    const manifest = path.join(f.root, "artifacts/logs/apex-jobs", `${job.jobId}.json`);
+    rootPid = JSON.parse(fs.readFileSync(manifest)).pid;
+    pending = canceller.handlers.apex_job_cancel({ jobId: job.jobId });
+    for (let i = 0; i < 80 && alive(rootPid); i++) await sleep(25);
+    assert.equal(alive(rootPid), false, "root exited during cancellation grace period");
+    assert.equal(alive(childPid), true, "detached descendant still needs escalation");
+    assert.equal(held, true, "original owner's exit callback must retain the lock");
+    // Also verify the persistent owner eventually unlinks its own lock.
+    // The following stale-owner simulation exercises the independent disk path.
+    held = false; // a one-shot owner's lock may be stale/reaped by the third caller
+    assert.equal(observer.runningBrowserJob()?.id, job.jobId, "disk cleanup state retains occupancy without an owner lock");
+    const refused = body(observer.handlers.apex_job_start({ kind: "survey_track", track: "monza" }));
+    assert.equal(refused.error, "occupied");
+    const cancelled = body(await pending); pending = null;
+    assert.equal(cancelled.state, "cancelled");
+    assert.equal(cancelled.survivors, 0);
+    assert.equal(alive(childPid), false);
+    assert.equal(observer.runningBrowserJob(), null);
+    assert.equal(owner.runningBrowserJob(), null, "original owner converges with durable completion");
+    assert.equal(held, false);
+  } finally {
+    if (pending) await pending;
+    if (rootPid || childPid) await killTreeAndWait([rootPid, childPid].filter(Boolean), { graceMs: 0 });
+    f.cleanup();
+  }
+});
+
+
+test("surviving cleanup remains occupied and another owner can retry it", async () => {
+  const { spawn } = await import("node:child_process");
+  const { alive, killTreeAndWait } = await import("../../tools/lib/process-tree.mjs");
+  const f = await fixture();
+  let rootPid;
+  try {
+    let held = false;
+    const release = () => { held = false; };
+    const owner = f.make({ acquireLock: () => (held = true, null), releaseLock: release,
+      spawnJob: (_cmd, _argv, options) => spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], options) });
+    const interrupted = f.make({ releaseLock: release, killJobTree: async (pids) => ({ survivors: pids.filter(alive) }) });
+    const retry = f.make({ releaseLock: () => {} }); // another process cannot release the owner's lock
+    const job = body(owner.handlers.apex_job_start({ kind: "survey_track", track: "monza" }));
+    const manifest = path.join(f.root, "artifacts/logs/apex-jobs", `${job.jobId}.json`);
+    rootPid = JSON.parse(fs.readFileSync(manifest)).pid;
+    const left = body(await interrupted.handlers.apex_job_cancel({ jobId: job.jobId }));
+    assert.equal(left.ok, false, "cleanup with survivors must not claim success");
+    assert.equal(left.survivors, 1);
+    assert.equal(held, true);
+    assert.equal(retry.runningBrowserJob()?.id, job.jobId);
+    const waiting = body(await retry.handlers.apex_job_status({ jobId: job.jobId, wait: 1 }));
+    assert.equal(waiting.cleanupPending, true);
+    assert.equal(waiting.stillRunning, true, "status wait includes unfinished cleanup");
+    assert.equal(body(await retry.handlers.apex_job_cancel({ jobId: job.jobId })).survivors, 0);
+    for (let i = 0; i < 40 && held; i++) await sleep(25);
+    assert.equal(held, false, "persistent owner releases only after durable completion");
+    assert.equal(retry.runningBrowserJob(), null);
+    assert.equal(alive(rootPid), false);
+  } finally {
+    if (rootPid) await killTreeAndWait([rootPid], { graceMs: 0 });
+    f.cleanup();
+  }
+});
+
+
+test("same-owner cancellation clears the old watcher before a new lock is acquired", async () => {
+  const { spawn } = await import("node:child_process");
+  const { killTreeAndWait } = await import("../../tools/lib/process-tree.mjs");
+  const f = await fixture();
+  let rootPid;
+  try {
+    let held = false, releases = 0;
+    const owner = f.make({ acquireLock: () => (held = true, null),
+      releaseLock: () => { held = false; releases++; },
+      spawnJob: (_cmd, _argv, options) => spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], options) });
+    const job = body(owner.handlers.apex_job_start({ kind: "survey_track", track: "monza" }));
+    rootPid = JSON.parse(fs.readFileSync(path.join(f.root, "artifacts/logs/apex-jobs", `${job.jobId}.json`))).pid;
+    assert.equal(body(await owner.handlers.apex_job_cancel({ jobId: job.jobId })).survivors, 0);
+    assert.equal(held, false);
+    const released = releases;
+    held = true; // the next operation acquired a fresh lock under the same server PID
+    await sleep(350); // more than two cleanup-watcher intervals
+    assert.equal(held, true, "old cleanup cannot unlink the next operation's lock");
+    assert.equal(releases, released, "successful cancellation releases exactly once");
+  } finally {
+    if (rootPid) await killTreeAndWait([rootPid], { graceMs: 0 });
+    f.cleanup();
+  }
+});
+
+
+test("durable cleanup excludes reused PIDs and keeps unknown live identities occupied", async () => {
+  const { spawn } = await import("node:child_process");
+  const { alive, killTreeAndWait } = await import("../../tools/lib/process-tree.mjs");
+  const f = await fixture();
+  const unrelated = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { detached: true, stdio: "ignore" });
+  try {
+    const observer = f.make();
+    const dir = path.join(f.root, "artifacts/logs/apex-jobs");
+    fs.mkdirSync(dir, { recursive: true });
+    const id = "stale_birth_fixture";
+    const markerPath = path.join(dir, `${id}.cancelled`);
+    fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, state: "cancelled", browser: true,
+      pid: unrelated.pid, kind: "survey_track", started: Date.now(), ended: Date.now(), argv: [],
+      log: "artifacts/fixture.log", stderr: "artifacts/fixture.err" }));
+    const marker = { state: "cancelled", ended: Date.now(), cleanup: { pids: [unrelated.pid], complete: false } };
+    fs.writeFileSync(markerPath, JSON.stringify(marker));
+    const unknown = body(await observer.handlers.apex_job_cancel({ jobId: id }));
+    assert.equal(unknown.ok, false);
+    assert.equal(unknown.survivors, 1);
+    assert.equal(observer.runningBrowserJob()?.id, id, "unknown identity fails closed");
+    assert.equal(alive(unrelated.pid), true);
+    const alternateScheme = fs.existsSync("/proc/sys/kernel/random/boot_id") ? "ps" : "proc";
+    marker.cleanup.identities = [{ pid: unrelated.pid, birth: `${alternateScheme}:incompatible-record` }];
+    fs.writeFileSync(markerPath, JSON.stringify(marker));
+    const incompatible = body(await observer.handlers.apex_job_cancel({ jobId: id }));
+    assert.equal(incompatible.ok, false);
+    assert.equal(incompatible.survivors, 1);
+    assert.equal(observer.runningBrowserJob()?.id, id, "incompatible birth schemes retain occupancy");
+    assert.equal(alive(unrelated.pid), true, "incompatible identity cannot authorize a signal");
+    const currentScheme = alternateScheme === "ps" ? "proc" : "ps";
+    marker.cleanup.identities = [{ pid: unrelated.pid, birth: `${currentScheme}:previous-boot:stale-start` }];
+    fs.writeFileSync(markerPath, JSON.stringify(marker));
+    const stale = body(await observer.handlers.apex_job_cancel({ jobId: id }));
+    assert.equal(stale.survivors, 0, "original identity is gone");
+    assert.equal(alive(unrelated.pid), true, "PID-reusing process must never be signalled");
+    assert.equal(observer.runningBrowserJob(), null);
+  } finally {
+    await killTreeAndWait([unrelated.pid], { graceMs: 0 });
+    f.cleanup();
+  }
 });
