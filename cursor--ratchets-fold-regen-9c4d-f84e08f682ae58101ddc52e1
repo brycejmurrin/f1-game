@@ -1,1 +1,0 @@
-1792424119	Claude	ratchets-fold run 39277641065: bot commit blocked by test:guards (docs/agent-index.json ratchetLines stale after fold); run npm run gen after the fold; OWNED .github/workflows/ratchets-fold.yml  [cursor/ratchets-fold-regen-9c4d; session f84e08f682ae58101ddc52e1]
