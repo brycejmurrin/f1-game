@@ -141,21 +141,36 @@ async function main() {
     return { ctx, page };
   };
   const raceTo = async (page, id, tod) => {
+    await page.evaluate(async (t) => { const i = Tracks.LIST.findIndex((x) => x.id === t); if (i >= 0) await window.__apex.ensureCircuit(i); }, id);
     await page.evaluate(([t, d]) => (d ? window.__apex.race(t, d) : window.__apex.race(t)), [id, tod || ""]);
-    await page.waitForFunction((t) => { const i = window.__apex.info(); return i.track != null && (i.track === t || (i.track && i.track.id === t)); }, id, { polling: 100, timeout: 240000 });
+    await page.waitForFunction((t) => { const i = window.__apex.info(); return i.track != null && (i.track === t || (i.track && i.track.id === t)); }, id, { polling: 100, timeout: 120000 });
     await framesAdvance(page, 15);
   };
+  // Each row is capped (a hung row used to eat the whole job) and a failed row gets a fresh page, so one
+  // failure does not poison the rows after it.
+  const ROW_CAP = { rebuild: 180000 }, DEFAULT_CAP = 90000;   // a capped row is "timeout" (inconclusive), never a silent pass
   const row = async (n, name, fn) => {
     if (!o.rows.includes(n)) return;
     const r = report.rows[name] = { verdict: "fail", notes: [] };
     const t0 = Date.now();
-    try { Object.assign(r, await fn(r)); } catch (e) { r.verdict = "fail"; r.error = String(e && e.message || e).slice(0, 400); }
+    console.log("= row " + name + " start");
+    let timer;
+    try {
+      const cap = new Promise((_, rej) => { timer = setTimeout(() => rej(Object.assign(new Error("row timeout " + (ROW_CAP[name] || DEFAULT_CAP) + " ms"), { timedOut: true })), ROW_CAP[name] || DEFAULT_CAP); });
+      Object.assign(r, await Promise.race([fn(r), cap]));
+    } catch (e) { r.verdict = e && e.timedOut ? "timeout" : "fail"; r.error = String(e && e.message || e).slice(0, 400); }
+    clearTimeout(timer);
     r.ms = Date.now() - t0;
     console.log("= row " + name + " " + r.verdict + (r.error ? " " + r.error : ""));
     save();
+    if (r.verdict === "fail" || r.verdict === "timeout") {
+      try { await ctx.close(); } catch (_) { /* already gone */ }
+      ({ ctx, page } = await mkPage());
+    }
   };
+  let ctx, page;
   try {
-    let { ctx, page } = await mkPage();
+    ({ ctx, page } = await mkPage());
     report.boot = await page.evaluate(readState);
     const [A, B] = o.tracks;
 

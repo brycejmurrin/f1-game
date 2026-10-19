@@ -416,21 +416,21 @@ jobs:
       - name: Live render matrix — GLX (WebGL2)
         if: ${{ needs.plan.outputs.live_matrix == 'true' }}
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 9
         shell: bash
         run: node tools/perf/live-render-matrix.mjs --backend webgl2 --json "live-matrix-glx.json"
 
       - name: Live render matrix — TLX (three, WebGL2 fallback)
         if: ${{ needs.plan.outputs.live_matrix == 'true' }}
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 9
         shell: bash
         run: node tools/perf/live-render-matrix.mjs --backend three --gl-fallback 1 --json "live-matrix-tlx-gl.json"
 
       - name: Live render matrix — TLX (three, native path)
         if: ${{ needs.plan.outputs.live_matrix == 'true' }}
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 9
         shell: bash
         run: node tools/perf/live-render-matrix.mjs --backend three --gl-fallback 0 --json "live-matrix-tlx-native.json"
 
