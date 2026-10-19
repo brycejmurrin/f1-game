@@ -32,9 +32,9 @@
   "counts": {
     "files": 426,
     "classifications": {
-      "entrypoint-candidate": 288,
+      "entrypoint-candidate": 286,
       "ambiguous": 57,
-      "protocol-entrypoint": 28,
+      "protocol-entrypoint": 30,
       "asset": 2,
       "data": 11,
       "library": 40
@@ -2361,20 +2361,21 @@
     },
     {
       "path": "tools/mcp/workflow-harness-client.mjs",
-      "classification": "entrypoint-candidate",
-      "interpreter": "node",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only",
       "nativeOutputFlagMentions": [
         "--quiet"
       ]
     },
     {
       "path": "tools/mcp/workflow-harness-core.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/mcp/workflow-harness.mjs",
-      "classification": "entrypoint-candidate",
-      "interpreter": "node"
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
     },
     {
       "path": "tools/net/nostr-local.cjs",
