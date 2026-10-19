@@ -7,6 +7,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = new URL("../..", import.meta.url);
 const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
 const P = MANIFEST.PATHS;
+const CHUNK_BINS_SOURCE = await readFile(new URL("js/render/shared/chunk-bins.js", ROOT), "utf8");
 const CSS_SIZE_SOURCE = await readFile(new URL("js/render/shared/canvas-css-size.js", ROOT), "utf8");
 const DEFERRED_WEBGPU = MANIFEST.DEFERRED.webgpu;
 const deferredWebgpuSources = await Promise.all(
@@ -328,6 +329,7 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${POST_COMMON_SOURCE.replace(/^const\b/gm, "var")}\nwindow.PostCommon = PostCommon;`, context);
   vm.runInContext(`${VERTEX_PACK_SOURCE.replace(/^const\b/gm, "var")}\nwindow.VertexPack = VertexPack;`, context);
   vm.runInContext(`${INST_CELLS_SOURCE.replace(/^const\b/gm, "var")}\nwindow.InstCells = InstCells;`, context);
+  vm.runInContext(CHUNK_BINS_SOURCE, context);
   vm.runInContext(`${CSS_SIZE_SOURCE.replace(/^const\b/gm, "var")}\nwindow.CanvasCssSize = CanvasCssSize;`, context);
   // GLX-seam modules (must precede wgx.js). Eval as separate scripts — the
   // WGX_BUNDLE used for source-text pins would redeclare WGSLChunks/Post/Fx.
@@ -494,5 +496,111 @@ test("freeChunkedMesh retires its buffers in-frame (road ribbon and prop chunks)
     assert.ok([...bufs].every((b) => !b.destroyed), (road ? "road" : "props") + ": in-frame free must retire");
     gfx.present({});
     assert.ok([...bufs].every((b) => b.destroyed), (road ? "road" : "props") + ": released after the submit");
+  }
+});
+
+// Exercise the real chunk builder with an upload recorder. Expected buckets and
+// packed words are authored below, independently of ChunkBins' implementation.
+function chunkUploadRig({ fail = false } = {}) {
+  const uploads = [], buffers = [];
+  const buffer = () => { const b = { destroyed: false, destroy() { this.destroyed = true; } }; buffers.push(b); return b; };
+  const core = {
+    VERTEX_FLOATS: 6, VERTEX_STRIDE: 24,
+    toF32: x => new Float32Array(x),
+    createMesh() { throw new Error("fixture must reach chunking"); },
+    interleave: data => ({ vert: data.packed || new Float32Array(data.pos), idx: data.idx, attr: null, indexFormat: "uint16" }),
+    expandPull: vert => ({ vert, count: vert.length / 6 }),
+    makeRoadLUT: () => ({ sbuf: buffer(), attrBG: {} }),
+    rememberRoadLut() {},
+    attrOrZero: () => ({ sbuf: null, attrBG: {} }),
+    allocFail() {},
+    mkBuffer(data) {
+      if (fail && uploads.length === 1) throw new Error("index upload failed");
+      const b = buffer(); uploads.push({ b, data: data.slice() }); return b;
+    },
+    device: {
+      createBuffer: buffer,
+      queue: { writeBuffer(b, offset, data) {
+        if (fail) throw new Error("road upload failed");
+        uploads.push({ b, offset, words: new Uint32Array(data.buffer, data.byteOffset, data.length).slice() });
+      } },
+    },
+  };
+  const ctx = vm.createContext({ GPUBufferUsage: { VERTEX: 1, INDEX: 2, COPY_DST: 4 } });
+  vm.runInContext(CHUNK_BINS_SOURCE, ctx);
+  vm.runInContext(WGX_CHUNKED_SOURCE + ";globalThis.builder = WGXChunked;", ctx);
+  return { api: ctx.builder.init(core), uploads, buffers };
+}
+
+function indexedBinsData(big = false, tail = 0) {
+  const pos = new Float32Array((big ? 65536 : 9) * 3);
+  pos.set([100, 2, 0, 110, -1, 0, 60, 0, 5, -4, 0, -4, -2, 1, -4, -3, 0, -2, 1, 0, 1, 2, 0, 1, 1, 0, 2]);
+  if (big) pos.set([1, 0, 2], 65535 * 3);
+  const idx = [];
+  for (let t = 0; t < 2001; t++) idx.push(...(t % 3 === 0 ? [0, 1, 2] : t % 3 === 1 ? [3, 4, 5] : [6, 7, big ? 65535 : 8]));
+  idx.push(...[6, 7].slice(0, tail));
+  return { pos, idx, _keepPositions: true };
+}
+
+test("WGX indexed buckets preserve first-touch order, AABBs, absolute indices and index widths", () => {
+  for (const big of [false, true]) {
+    const h = chunkUploadRig(), data = indexedBinsData(big);
+    const m = h.api.createChunkedMesh(data, 25);
+    assert.equal(m.indexFormat, big ? "uint32" : "uint16");
+    assert.deepEqual(Array.from(m.chunks, c => [c.firstIndex, c.count, Array.from(c.min), Array.from(c.max)]), [
+      [0, 2001, [60, -1, 0], [110, 2, 5]], [2001, 2001, [-4, 0, -4], [-2, 1, -2]], [4002, 2001, [1, 0, 1], [2, 0, 2]],
+    ]);
+    const expected = [];
+    for (const tri of [[0, 1, 2], [3, 4, 5], [6, 7, big ? 65535 : 8]]) for (let i = 0; i < 667; i++) expected.push(...tri);
+    assert.deepEqual(Array.from(h.uploads[1].data), expected);
+    assert.equal(m.chunks.every(c => c.ibuf === m.ibuf), true);
+  }
+});
+
+test("WGX preserves its malformed partial tail as a final NaN-cell bucket", () => {
+  for (const tail of [1, 2]) {
+    const h = chunkUploadRig(), data = indexedBinsData(false, tail);
+    const m = h.api.createChunkedMesh(data);
+    assert.equal(m.chunks.length, 4);
+    const c = m.chunks[3];
+    assert.equal(c.count, 3);
+    assert.deepEqual(Array.from(c.min), [1, 0, 1]);
+    assert.deepEqual(Array.from(c.max), tail === 1 ? [1, 0, 1] : [2, 0, 1]);
+    assert.deepEqual(Array.from(h.uploads[1].data.slice(-3)), tail === 1 ? [6, 0, 0] : [6, 7, 0]);
+  }
+});
+
+test("WGX packed roads keep uint words, stride, bucket order and shared 4095-vertex pieces", () => {
+  const h = chunkUploadRig({ road: true });
+  const data = indexedBinsData();
+  data.trk = new Float32Array(data.pos.length);
+  while (data.idx.length < 6300) data.idx.push(0, 1, 2);
+  const packed = new Float32Array(6300 * 6), words = new Uint32Array(packed.buffer);
+  for (let t = 0; t < 2100; t++) for (let v = 0; v < 3; v++) {
+    const o = (t * 3 + v) * 6;
+    packed[o] = t % 3 === 1 ? -10 : 10; packed[o + 1] = v; packed[o + 2] = 0;
+    words[o + 3] = 0x7fc00001 + t; words[o + 4] = 0xffffffff - v; words[o + 5] = t;
+  }
+  data.packed = packed;
+  const m = h.api.createChunkedMesh(data, 25);
+  assert.deepEqual(Array.from(m.chunks, c => [c.first, c.count, Array.from(c.min), Array.from(c.max)]), [
+    [0, 4095, [10, 0, 0], [10, 2, 0]], [4095, 105, [10, 0, 0], [10, 2, 0]], [4200, 2100, [-10, 0, 0], [-10, 2, 0]],
+  ]);
+  assert.equal(m.chunks.every(c => c.vbuf === m.vbuf), true);
+  assert.deepEqual(h.uploads.map(u => u.offset), [0, 4095 * 24, 4200 * 24]);
+  const expected = [];
+  for (const negative of [false, true]) for (let t = 0; t < 2100; t++) if ((t % 3 === 1) === negative) expected.push(...words.slice(t * 18, (t + 1) * 18));
+  assert.deepEqual(h.uploads.flatMap(u => Array.from(u.words)), expected);
+});
+
+test("WGX chunk upload failures destroy partial buffers and preserve fallback geometry", () => {
+  for (const road of [false, true]) {
+    const h = chunkUploadRig({ road, fail: true }), data = indexedBinsData();
+    if (road) { data.trk = new Float32Array(data.pos.length); data.packed = new Float32Array(6003 * 6); }
+    data._keepFullGeometry = false; data.nrm = [0, 1, 0]; data.col = [1, 1, 1];
+    const m = h.api.createChunkedMesh(data);
+    assert.equal(m.count, 0);
+    assert.equal(h.buffers.every(b => b.destroyed), true);
+    assert.ok(data.pos && data.idx && data.nrm && data.col, "fallback still owns all source arrays");
   }
 });

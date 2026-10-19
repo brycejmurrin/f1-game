@@ -485,8 +485,7 @@ test("TLX lamp grid: a PER-CHUNK LAMPS drag bakes once and re-grids only per cap
  * and those come from the binning loop every backend's chunked builder ran —
  * four copies (GLX, TLX, WGX ×2) of `floor(centroid / cell) + 1024`, keyed
  * `gx * 4096 + gz`. One shared helper now; these pin its key and that the
- * GLX and TLX builders bin through it. WGX still carries its two copies (the
- * WGX lane migrates them); the allow-list below may only shrink. */
+ * GLX, TLX and WGX builders bin through it; packed WGX roads use its key helpers. */
 const ChunkBins = new Function(readFileSync(join(ROOT, "js/render/shared/chunk-bins.js"), "utf8") + "; return ChunkBins;")();
 
 test("ChunkBins key: gx * 4096 + gz over 72 m cells biased by 1024, and it round-trips", () => {
@@ -521,15 +520,14 @@ test("ChunkBins.bin: centroid cells, vertex AABBs, emission order, absolute indi
   assert.deepEqual([e.mn, e.mx], [[60, -1, 0], [110, 2, 5]], "the AABB is the vertices', so it may leave its own cell");
 });
 
-test("the GLX and TLX chunked builders bin through ChunkBins (no private copy of the key)", () => {
+test("all chunked builders use ChunkBins (no private copy of the key)", () => {
   const COPY = /\*\s*4096\s*\+\s*gz|\)\s*\/\s*cell\)\s*\+\s*1024/;
-  const allowed = new Set(["js/render/webgpu/wgx-chunked.js"]);   // WGX lane: migrate, then delete this entry
   const walk = (rel) => readdirSync(join(ROOT, rel), { withFileTypes: true })
     .flatMap((e) => e.isDirectory() ? walk(rel + "/" + e.name) : e.name.endsWith(".js") ? [rel + "/" + e.name] : []);
   const copies = walk("js/render").filter((f) => f !== "js/render/shared/chunk-bins.js" && !f.includes("/vendor/"))
     .filter((f) => readFileSync(join(ROOT, f), "utf8").split("\n").some((l) => !/^\s*(\/\/|\*)/.test(l) && COPY.test(l)));
-  assert.deepEqual(copies.filter((f) => !allowed.has(f)), [], "bin through ChunkBins.bin / ChunkBins.key instead");
-  for (const f of ["js/render/glx/chunked.js", "js/render/three/tlx-chunked.js"]) {
+  assert.deepEqual(copies, [], "bin through ChunkBins.bin / ChunkBins.key instead");
+  for (const f of ["js/render/glx/chunked.js", "js/render/three/tlx-chunked.js", "js/render/webgpu/wgx-chunked.js"]) {
     assert.match(readFileSync(join(ROOT, f), "utf8"), /ChunkBins\.bin\(pos, srcIdx, cell\)/, f);
   }
 });

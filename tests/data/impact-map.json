@@ -12370,7 +12370,9 @@
         "tests/unit/lamp-chunks.test.mjs"
       ],
       "*": [
-        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-free-retire.test.mjs"
       ]
     },
     "js/render/shared/compatibility-recovery.js": {

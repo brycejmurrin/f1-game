@@ -10,8 +10,8 @@
  * this loop "verbatim"; a change to the cell size, bias or packing in one copy
  * would have desynchronised per-chunk lamps on that backend only.
  * tests/unit/lamp-chunks.test.mjs pins the key and that the backends bin here.
- * (WGX's two copies migrate with the WGX lane; js/render/three/tsl-lit.js
- * spells the same floor(x / cell) + 1024 in TSL.)
+ * WGX's packed road uses cellOf/key directly to preserve its word-copy layout;
+ * js/render/three/tsl-lit.js spells the same floor(x / cell) + 1024 in TSL.
  */
 "use strict";
 

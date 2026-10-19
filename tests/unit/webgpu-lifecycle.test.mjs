@@ -4,10 +4,12 @@ import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
 const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
 const P = MANIFEST.PATHS;
+const CHUNK_BINS_SOURCE = await readFile(new URL("js/render/shared/chunk-bins.js", ROOT), "utf8");
 const CSS_SIZE_SOURCE = await readFile(new URL("js/render/shared/canvas-css-size.js", ROOT), "utf8");
 const MAT4_SOURCE = await readFile(new URL("js/core/mat4.js", ROOT), "utf8");   // envFaceBegin's view matrices (P6)
 const DEFERRED_WEBGPU = MANIFEST.DEFERRED.webgpu;
@@ -392,6 +394,7 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${POST_COMMON_SOURCE.replace(/^const\b/gm, "var")}\nwindow.PostCommon = PostCommon;`, context);
   vm.runInContext(`${VERTEX_PACK_SOURCE.replace(/^const\b/gm, "var")}\nwindow.VertexPack = VertexPack;`, context);
   vm.runInContext(`${INST_CELLS_SOURCE.replace(/^const\b/gm, "var")}\nwindow.InstCells = InstCells;`, context);
+  vm.runInContext(CHUNK_BINS_SOURCE, context, { filename: absSrc("js/render/shared/chunk-bins.js") });
   vm.runInContext(`${CSS_SIZE_SOURCE.replace(/^const\b/gm, "var")}\nwindow.CanvasCssSize = CanvasCssSize;`, context);
   vm.runInContext(`${MAT4_SOURCE.replace(/^const\b/gm, "var")}\nwindow.M4 = M4;`, context);
   // GLX-seam modules (must precede wgx.js). Eval as separate scripts — the

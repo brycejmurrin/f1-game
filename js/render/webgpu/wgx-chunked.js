@@ -24,10 +24,10 @@ const WGXChunked = (function () {
       return 0;
     }
     function createChunkedMesh(data, cellSize) {
-      const cell = cellSize > 0 ? cellSize : 72;
+      const cell = ChunkBins.cellSize(cellSize);
       const pos = core.toF32(data.pos);
       const vCount = pos.length / 3, big = vCount > 65535;
-      const srcIdx = data.idx;
+      let srcIdx = data.idx;
       const triCount = (srcIdx.length / 3) | 0;
       if (triCount < 2000) { const m = core.createMesh(data); m.chunks = null; return m; }
       if (data.trk && data.trk.length >= vCount * 3) {
@@ -44,9 +44,9 @@ const WGXChunked = (function () {
           const ax = pv[ao], ay = pv[ao + 1], az = pv[ao + 2];
           const bx = pv[bo], by = pv[bo + 1], bz = pv[bo + 2];
           const cx = pv[co], cy = pv[co + 1], cz = pv[co + 2];
-          const gx = Math.floor(((ax + bx + cx) / 3) / cell) + 1024;
-          const gz = Math.floor(((az + bz + cz) / 3) / cell) + 1024;
-          const key = gx * 4096 + gz;
+          const gx = ChunkBins.cellOf((ax + bx + cx) / 3, cell);
+          const gz = ChunkBins.cellOf((az + bz + cz) / 3, cell);
+          const key = ChunkBins.key(gx, gz);
           let bk = buckets.get(key);
           if (!bk) { bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }; buckets.set(key, bk); }
           bk.idx.push(t, t + 1, t + 2);
@@ -123,22 +123,14 @@ const WGXChunked = (function () {
         core.allocFail("createChunkedMesh", e);
         return { _wgx: "chunked", vbuf: null, sbuf: null, attrBG: null, chunks: [], count: 0, indexFormat };
       }
-      const buckets = new Map();
-      for (let t = 0; t < srcIdx.length; t += 3) {
-        const a = srcIdx[t], bi = srcIdx[t+1], c = srcIdx[t+2];
-        const ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2], bx=pos[bi*3],by=pos[bi*3+1],bz=pos[bi*3+2],
-              cx=pos[c*3],cy=pos[c*3+1],cz=pos[c*3+2];
-        const gx = Math.floor(((ax+bx+cx)/3)/cell) + 1024;
-        const gz = Math.floor(((az+bz+cz)/3)/cell) + 1024;
-        const key = gx * 4096 + gz;
-        let bk = buckets.get(key);
-        if (!bk) { bk = { idx: [], mn: [Infinity,Infinity,Infinity], mx: [-Infinity,-Infinity,-Infinity] }; buckets.set(key, bk); }
-        bk.idx.push(a, bi, c);
-        const mn = bk.mn, mx = bk.mx;
-        if (ax<mn[0])mn[0]=ax; if (ax>mx[0])mx[0]=ax; if (ay<mn[1])mn[1]=ay; if (ay>mx[1])mx[1]=ay; if (az<mn[2])mn[2]=az; if (az>mx[2])mx[2]=az;
-        if (bx<mn[0])mn[0]=bx; if (bx>mx[0])mx[0]=bx; if (by<mn[1])mn[1]=by; if (by>mx[1])mx[1]=by; if (bz<mn[2])mn[2]=bz; if (bz>mx[2])mx[2]=bz;
-        if (cx<mn[0])mn[0]=cx; if (cx>mx[0])mx[0]=cx; if (cy<mn[1])mn[1]=cy; if (cy>mx[1])mx[1]=cy; if (cz<mn[2])mn[2]=cz; if (cz>mx[2])mx[2]=cz;
+      // Preserve WGX's legacy partial-tail bucket: missing indices contribute
+      // no AABB coordinates and become zero in the uploaded unsigned index array.
+      // ChunkBins otherwise drops partial triangles, as GLX/TLX always have.
+      if (srcIdx.length % 3) {
+        srcIdx = Array.from(srcIdx);
+        srcIdx.length += 3 - srcIdx.length % 3;
       }
+      const buckets = ChunkBins.bin(pos, srcIdx, cell);
       let total = 0;
       buckets.forEach((bk) => { total += bk.idx.length; });
       const packed = new IndexArray(total);
