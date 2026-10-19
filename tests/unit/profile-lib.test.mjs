@@ -61,3 +61,61 @@ test("incomparable: arms with different capture modes never read as noise/WIN/RE
   const r = diff(base, head, { incomparable: true })[0];
   assert.equal(r.verdict, "incomparable"); assert.equal(r.verdict95, "incomparable");
 });
+
+
+import { profileScenario, profileScenarioSignature, profileComparability } from "../../tools/perf/lib.mjs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const scenario = () => profileScenario({ track: "monaco", frames: 40,
+  viewport: { width: 320, height: 180, deviceScaleFactor: 1 }, capture: "disabled",
+  environment: { backend: "three", api: "webgl2", device: "ANGLE SwiftShader", browser: "Chromium 140" } });
+
+test("saved profiles require complete matching workload, capture and observed renderer", () => {
+  const base = { scenario: scenario() }, head = { scenario: scenario() };
+  assert.equal(profileComparability(base, head).comparable, true);
+  assert.equal(profileScenarioSignature(base.scenario), profileScenarioSignature({ ...head.scenario, environment: { ...head.scenario.environment } }));
+  for (const [key, value] of [["track", "monza"], ["frames", 600], ["capture", "enabled"], ["warmupFrames", 10], ["workload", "different-v2"], ["version", 2]]) {
+    assert.equal(profileComparability(base, { scenario: { ...scenario(), [key]: value } }).comparable, false, key);
+  }
+  for (const key of ["backend", "api", "device", "browser"]) {
+    const changed = scenario(); changed.environment[key] += " changed";
+    assert.equal(profileComparability(base, { scenario: changed }).comparable, false, key);
+    delete changed.environment[key];
+    assert.equal(profileScenarioSignature(changed), null, key + " unknown");
+  }
+  for (const key of ["width", "height", "deviceScaleFactor"]) {
+    const changed = scenario(); changed.viewport[key] *= 2;
+    assert.equal(profileComparability(base, { scenario: changed }).comparable, false, key);
+  }
+  assert.equal(profileComparability({ track: "monaco", frames: 40 }, head).comparable, false, "legacy reports cannot establish capture/renderer");
+  assert.equal(profileScenarioSignature({ ...scenario(), frames: NaN }), null);
+});
+
+test("query CLI never awards a win to incompatible or unknown saved profiles; matching captures retain noise rule", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+  const parent = join(root, "artifacts/profiles"); mkdirSync(parent, { recursive: true });
+  const dir = mkdtempSync(join(parent, "compare-unit-"));
+  const baseline = { scenario: scenario(), head: aggregate([run(10), run(10), run(10)]) };
+  const candidate = { scenario: scenario(), head: aggregate([run(1), run(1), run(1)]) };
+  const query = (a, b) => {
+    writeFileSync(join(dir, "base.json"), JSON.stringify(a)); writeFileSync(join(dir, "head.json"), JSON.stringify(b));
+    const p = spawnSync(process.execPath, [join(root, "tools/perf/query.mjs"), join(dir, "base.json"), join(dir, "head.json"), "--json"], { encoding: "utf8", timeout: 5000 });
+    assert.equal(p.status, 0, p.stderr);
+    return { rows: JSON.parse(p.stdout), warning: p.stderr };
+  };
+  try {
+    assert.equal(query(baseline, candidate).rows[0].verdict, "WIN");
+    const incompatible = { ...candidate, scenario: { ...scenario(), track: "monza", frames: 600 } };
+    let r = query(baseline, incompatible);
+    assert.equal(r.rows[0].verdict, "incomparable"); assert.equal(r.rows[0].verdict95, "incomparable");
+    assert.match(r.warning, /incompatible/); assert.equal(r.rows[0].pct50, -90, "observations stay available without a win");
+    r = query({ track: "monaco", frames: 40, head: baseline.head }, { track: "monza", frames: 600, head: candidate.head });
+    assert.equal(r.rows[0].verdict, "incomparable"); assert.match(r.warning, /unknown scenario/);
+    const slower = { ...candidate, head: aggregate([run(20), run(20), run(20)]) };
+    assert.equal(query(baseline, slower).rows[0].verdict, "REGRESS");
+    assert.equal(query(baseline, { ...slower, scenario: null }).rows[0].verdict, "incomparable");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

@@ -16,28 +16,41 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/race/reliability.js"), "utf8");
 
-// A deterministic [0,1) hash of (seed, ...parts): FNV-1a over the joined key.
-function hash(seed, ...parts) {
-  let h = 2166136261 >>> 0;
-  const s = seed + "|" + parts.join("|");
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
-  return h / 4294967296;
-}
-
+// The REAL Career (hash, TDEV_MAX/TDEV_TO_PACE, paceMult), Hash32, M4 and the Parts catalog — a hand-copied
+// hash and a CATALOG:[] stub left buildQuality, devNorm, the relief constants and the networked branch unrun.
 function load() {
+  const stored = new Map();
   const ctx = vm.createContext({
-    Object, Array, Number, String,
     Math: Object.assign(Object.create(Math), { random: () => { throw new Error("Math.random called"); } }),
-    M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
-    Career: { hash, TDEV_MAX: 1, TDEV_TO_PACE: 0.01, paceMult: () => 1 },
-    Parts: { CATALOG: [], resolveSetup: () => ({ options: {} }) },
-    Log: { info() {}, warn() {} },
+    JSON, Object, Array, Number, String, Date, Set, Map, isNaN, isFinite, console,
   });
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/race/reliability.js" });
-  return vm.runInContext("Reliability", ctx);
+  ctx.window = ctx;
+  ctx.GameStore = {
+    CAREER_V: 2,
+    store: { get: (k, d) => (stored.has(k) ? JSON.parse(JSON.stringify(stored.get(k))) : d),
+             set: (k, v) => { stored.set(k, JSON.parse(JSON.stringify(v))); return true; } },
+    seasonDriverId: (t, i) => t + ":" + i, migrateCareer: (c) => c,
+  };
+  const list = ["albert_park", "shanghai", "suzuka"].map((id) => ({ id, name: id }));
+  ctx.Tracks = { LIST: list, SEASON: list.slice(), seasonIndex(i) { return this.LIST.indexOf(this.SEASON[i]); } };
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/hash32.js", "js/data/teams.js", "js/data/driver-ratings.js",
+    "js/physics/consts.js", "js/car/parts.js", "js/career/save-migrate.js", "js/career/regulations.js",
+    "js/career/career.js", "js/race/reliability.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: f });
+  }
+  const run = (code) => vm.runInContext(code, ctx);
+  const R = Object.create(run("Reliability"));   // Reliability is frozen: the harness hangs its handles on a wrapper
+  R.ctx = ctx; R.run = run; R.Career = run("Career"); R.Parts = run("Parts"); R.Teams = run("Teams");
+  return R;
 }
+/** Start a driver career (so Career.paceMult reads `tdev`) and set a team's development. */
+function inCareer(R, tdev) {
+  R.Career.start({ flavour: "driver", teamId: "haas", seed: 9 });
+  R.Career.engage(true);
+  Object.assign(R.Career.data().tdev, tdev);
+}
+const plain = (v) => JSON.parse(JSON.stringify(v));
 
 const field = (n, tier) => Array.from({ length: n }, (_, i) => ({ driverId: "d" + i, code: "D" + i, tier, team: { id: "t" + (i % 10) } }));
 
@@ -86,4 +99,60 @@ test("anonymous cars (no driverId/code) still draw distinct DNF plans", () => {
   assert.ok(plan.length >= 5, "a real-level anon field still plans some retirements");
   assert.ok(new Set(plan.map((p) => p.at)).size > 1,
     "index fallback keeps plans from collapsing onto one at=");
+});
+
+const countPlanned = (R, cars, opts) => R.plan(R.arm(cars, Object.assign({ level: "real", seed: 5, round: 2 }, opts))).length;
+const same = (n, over) => Array.from({ length: n }, (_, i) => Object.assign({ driverId: "d" + i, code: "D" + i, tier: 4, team: { id: "haas" } }, over));
+
+test("team development buys risk back: a developed team retires less, a neglected one more, and OFF career means no relief", () => {
+  const R = load();
+  const n = 6000;
+  const outside = countPlanned(R, same(n), {});              // no career: Career.paceMult() is 1
+  inCareer(R, { haas: R.Career.TDEV_MAX });
+  const developed = countPlanned(R, same(n), {});
+  R.Career.data().tdev.haas = -R.Career.TDEV_MAX;
+  const neglected = countPlanned(R, same(n), {});
+  assert.ok(developed < outside * 0.75, `full development (${developed}) cuts about 40% off the baseline (${outside})`);
+  assert.ok(developed > outside * 0.45, `…but never to immortality (${developed} vs ${outside})`);
+  assert.ok(neglected > outside * 1.25, `a neglected team (${neglected}) retires more than baseline (${outside})`);
+});
+
+test("buildQuality scores the fitted engine and gearbox by cost: dearest = 1, cheapest below it, absent = 0", () => {
+  const R = load();
+  const team = R.Teams.LIST.find((t) => t.id === "haas");
+  const pick = (best) => {
+    const setup = {};
+    for (const cat of R.Parts.CATALOG) {
+      if (cat.id !== "engine" && cat.id !== "gearbox") continue;
+      const sorted = cat.options.slice().sort((a, b) => (a.cost || 0) - (b.cost || 0));
+      setup[cat.id] = (best ? sorted[sorted.length - 1] : sorted[0]).id;
+    }
+    return setup;
+  };
+  assert.ok(R.Parts.CATALOG.some((c) => c.id === "engine") && R.Parts.CATALOG.some((c) => c.id === "gearbox"), "the real catalog has the two scored categories");
+  assert.equal(R.buildQuality(null, team), 0);
+  const top = R.buildQuality(pick(true), team), bottom = R.buildQuality(pick(false), team);
+  assert.ok(top > 0.99, `dearest build scores ~1 (${top})`);
+  assert.ok(bottom >= 0 && bottom < top, `cheapest build (${bottom}) scores below the dearest (${top})`);
+});
+
+test("the player's developed engine and gearbox cut their DNF risk ~a third — offline only, never networked", () => {
+  const R = load();
+  const n = 6000;
+  const me = () => same(n, { isPlayer: true });
+  const none = countPlanned(R, me(), { build: 0 });
+  const built = countPlanned(R, me(), { build: 1 });
+  const net = countPlanned(R, me(), { build: 1, networked: true });
+  const ai = countPlanned(R, same(n), { build: 1 });         // AI cars never take the build relief
+  assert.ok(built < none * 0.8 && built > none * 0.55, `build 1 (${built}) is about 33% under build 0 (${none})`);
+  assert.equal(net, none, "a networked race ignores the build relief so peers agree");
+  assert.equal(ai, none, "only the player's car is relieved");
+});
+
+test("a tier outside 0..4 clamps to the nearest tier instead of indexing past TIER_RISK", () => {
+  const R = load();
+  const plans = (tier) => plain(R.plan(R.arm(same(500, { tier }), { level: "real", seed: 3, round: 1 })));
+  assert.deepEqual(plans(99), plans(R.TIER_RISK.length - 1), "tier 99 plans like the weakest tier");
+  assert.deepEqual(plans(-3), plans(0), "tier -3 plans like the strongest tier");
+  assert.ok(plans(99).length > 0);
 });

@@ -146,8 +146,13 @@ export function normalize(rawEvents) {
       const s = b.subagent_stats || {};
       const subTxt = s.spawned ? ` · subagents ${s.spawned} (${s.completed || 0} ok, ${s.failed || 0} failed)` : "";
       const denials = (b.permission_denials || []).length;
-      rows.push({ t, kind: "turn", tag: "TURN", err: !!b.is_error,
-        text: `${b.subtype} · ${b.num_turns ?? "?"} steps · ${Math.round((b.duration_ms || 0) / 1000)} s · $${(b.total_cost_usd ?? 0).toFixed(2)} cumulative${subTxt}${denials ? ` · ${denials} permission denials` : ""}${b.terminal_reason ? ` · ${b.terminal_reason}` : ""}${b.is_error && b.errors?.length ? ` · ${oneLine(b.errors.join("; "))}` : ""}` });
+      const row = { t, kind: "turn", tag: "TURN", err: !!b.is_error,
+        text: `${b.subtype} · ${b.num_turns ?? "?"} steps · ${Math.round((b.duration_ms || 0) / 1000)} s · $${(b.total_cost_usd ?? 0).toFixed(2)} cumulative${subTxt}${denials ? ` · ${denials} permission denials` : ""}${b.terminal_reason ? ` · ${b.terminal_reason}` : ""}${b.is_error && b.errors?.length ? ` · ${oneLine(b.errors.join("; "))}` : ""}` };
+      // Surface subagent_stats.by_type for --summary / --json (absent when the payload has none).
+      if (s.by_type && typeof s.by_type === "object" && !Array.isArray(s.by_type) && Object.keys(s.by_type).length) {
+        row.by_type = { ...s.by_type };
+      }
+      rows.push(row);
     } else if (k === "control_request" && b.request?.subtype === "interrupt") {
       rows.push({ t, kind: "event", tag: "STOP", text: "interrupt requested", err: true });
     }
@@ -198,8 +203,24 @@ export function quotaState(rows) {
   return { parked, reset: parked ? (q.reset || null) : null, retries: q?.n ?? 0, lastReal: last || null };
 }
 
+// Merge by_type maps from result.subagent_stats across turns (sum counts per type).
+function mergeByType(rows) {
+  const out = {};
+  let any = false;
+  for (const r of rows) {
+    if (!r.by_type || typeof r.by_type !== "object") continue;
+    for (const [k, v] of Object.entries(r.by_type)) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) continue;
+      out[k] = (out[k] || 0) + n;
+      any = true;
+    }
+  }
+  return any ? out : null;
+}
+
 // One line per session for a miner that only needs the shape: title (first typed prompt unless --title),
-// cumulative cost, time of the last real turn, quota state, failed-hook count.
+// cumulative cost, time of the last real turn, quota state, failed-hook count, optional by_type.
 export function summarize(rows, opts = {}) {
   const folded = foldQuota(rows);
   const st = quotaState(folded);
@@ -207,11 +228,20 @@ export function summarize(rows, opts = {}) {
   const lastTurn = turns[turns.length - 1];
   const cost = [...rows].reverse().map((r) => /\$([\d.]+) cumulative/.exec(r.text || "")).find(Boolean);
   const title = opts.title || folded.find((r) => r.kind === "user" && !r.sub)?.text || "(no typed prompt on these pages)";
-  return { title: clip(title, 60), cost: cost ? Number(cost[1]) : null, lastRealTurn: lastTurn?.t || null,
+  const summary = { title: clip(title, 60), cost: cost ? Number(cost[1]) : null, lastRealTurn: lastTurn?.t || null,
     quota: st.parked ? "quota-parked" : "active", resets: st.reset, retries: st.retries,
     hookErrors: rows.filter((r) => r.kind === "hook" && r.err).length };
+  // by_type from result.subagent_stats — omit the key entirely when no turn carried it (#2893 item 10).
+  const byType = mergeByType(rows.filter((r) => r.kind === "turn"));
+  if (byType) summary.by_type = byType;
+  return summary;
 }
-export const summaryLine = (s) => `${s.title} | ${s.cost == null ? "$?" : `$${s.cost.toFixed(2)}`} | last real turn ${s.lastRealTurn || "none"} | ${s.quota}${s.resets ? ` until ${s.resets}` : ""}${s.retries ? ` (×${s.retries})` : ""} | ${s.hookErrors} hook errors`;
+export const summaryLine = (s) => {
+  const base = `${s.title} | ${s.cost == null ? "$?" : `$${s.cost.toFixed(2)}`} | last real turn ${s.lastRealTurn || "none"} | ${s.quota}${s.resets ? ` until ${s.resets}` : ""}${s.retries ? ` (×${s.retries})` : ""} | ${s.hookErrors} hook errors`;
+  if (!s.by_type) return base;
+  const types = Object.entries(s.by_type).map(([k, v]) => `${k}×${v}`).join(",");
+  return `${base} | by_type ${types}`;
+};
 
 function keep(row, opts) {
   if (opts.grep && !opts.grep.test(`${row.text} ${row.result?.out || ""}`)) return false;

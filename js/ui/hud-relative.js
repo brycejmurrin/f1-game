@@ -225,6 +225,9 @@ const HudRelative = (function () {
     if (root.style && root.style.removeProperty) {
       root.style.removeProperty("left"); root.style.removeProperty("max-height");
     }
+    // An edited card keeps all occupied rows and the geometry the player chose.
+    // Restore any rows a previous automatic fit hid before handing ownership back.
+    if (root.hasAttribute && root.hasAttribute("data-hl-user")) return;
     const b = doc && doc.body;
     if (b && b.classList && b.classList.contains("desktop")) return;
     if (root.getBoundingClientRect && doc.getElementById && root.style) {

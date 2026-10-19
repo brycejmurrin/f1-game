@@ -21,7 +21,7 @@ test('garage held camera controls release only their owning pointer, or window b
   for (const end of ['pointerup', 'pointercancel', 'lostpointercapture', 'blur']) {
     const handlers = {}, win = {}, rates = { az: 1 }; let steps = 0;
     const el = { addEventListener(t, f) { (handlers[t] ||= []).push(f); }, setPointerCapture() {} };
-    const sb = { $: () => el, G: { setupPreviewOn: true }, preview: false, arrival: {}, spHeld: null,
+    const sb = { $: () => el, G: { setupPreviewOn: true }, preview: false, arrival: {}, spHeld: null, setupGestureResets: [],
       window: { addEventListener(t, f) { (win[t] ||= []).push(f); } } };
     vm.runInNewContext(fn + ';holdSetupCtl("left", rates, step);', Object.assign(sb, { rates, step: () => steps++ }));
     const fire = (list, type, id) => { for (const f of list[type] || []) f({ type, pointerId: id, preventDefault() {} }); };
@@ -33,6 +33,48 @@ test('garage held camera controls release only their owning pointer, or window b
     assert.equal(sb.spHeld, null, end + ' releases the owner');
     fire(handlers, 'pointerdown', 33); assert.equal(sb.spHeld, rates, 'control can be entered again');
     fire(win, 'pointerup', 33); assert.equal(sb.spHeld, null);
+  }
+});
+
+test('garage gesture lifecycle drops old fingers and held owners without breaking the next drag or pinch', () => {
+  const source = read('js/garage/setup-camera.js');
+  const common = source.slice(source.indexOf('const setupGestureResets ='), source.indexOf('function holdSetupCtl('));
+  const hold = source.slice(source.indexOf('function holdSetupCtl('), source.indexOf('holdSetupCtl("cs-view-in"'));
+  const orbit = source.slice(source.indexOf('{\n  const canvas = $("game");'), source.indexOf('// Preset jumps are immediate'));
+  const reset = source.slice(source.indexOf('function resetSetupCam()'), source.indexOf('// Rebuild-on-change only'));
+  const target = () => ({ listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } });
+  for (const end of ['blur', 'pagehide', 'hidden', 'garage-exit', 'photo-exit', 'reset']) {
+    const canvas = Object.assign(target(), { clientWidth: 1000 }), control = Object.assign(target(), { setPointerCapture() {} });
+    const garage = { hidden: false }, photo = { hidden: true }, win = target(), doc = Object.assign(target(), { hidden: false });
+    const observers = new Map(), zooms = [], rates = { az: 1 }; let steps = 0;
+    const c = vm.createContext({ window: win, document: doc, G: { setupPreviewOn: true, soundOn: false }, home: { active: false },
+      $: id => ({ game: canvas, left: control, carsetup: garage, 'photo-studio': photo })[id] || null,
+      preview: false, arrival: { cancel() {} }, spHeld: null, setupPreviewAz: 0, setupPreviewEl: 0,
+      SP_EL_MIN: 0, SP_EL_MAX: 1.5, SP_EL_DEF: .5, SP_DIST_DEF: 8, SP_ORBIT_DEF: [0, 0, 0], SP_TGT_DEF: [0, 0, 0], setupPreviewPan: [0, 0, 0],
+      setSetupSpin() {}, endHome() {}, setupZoom: value => zooms.push(value), clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
+      GarageExperience: { canOrbit: (on, _home, _photo, blocked) => on && !blocked },
+      MutationObserver: class { constructor(fn) { this.fn = fn; } observe(el) { observers.set(el, this.fn); } },
+      rates, step: () => steps++,
+    });
+    vm.runInContext(common + hold + orbit + reset + ';holdSetupCtl("left", rates, step);', c);
+    const fire = (el, type, id, x = 0, y = 0) => { for (const fn of el.listeners[type] || []) fn({ type, pointerId: id, clientX: x, clientY: y, preventDefault() {} }); };
+    fire(control, 'pointerdown', 30); fire(canvas, 'pointerdown', 11, 0); fire(canvas, 'pointerdown', 12, 100);
+    if (end === 'hidden') { doc.hidden = true; fire(doc, 'visibilitychange'); doc.hidden = false; }
+    else if (end === 'garage-exit' || end === 'photo-exit') { const el = end === 'garage-exit' ? garage : photo; el.hidden = true; observers.get(el)(); }
+    else if (end === 'reset') c.resetSetupCam();
+    else fire(win, end);
+    assert.equal(c.spHeld, null, end + ' clears the held rate');
+    const az = c.setupPreviewAz;
+    fire(win, 'pointermove', 11, 40); assert.equal(c.setupPreviewAz, az, end + ' ignores the old finger');
+    fire(control, 'pointerdown', 31); assert.equal(steps, 2, end + ' releases the control owner'); fire(win, 'pointerup', 31);
+    fire(canvas, 'pointerdown', 21, 0); fire(win, 'pointermove', 21, 10);
+    assert.ok(c.setupPreviewAz < az, end + ' starts a fresh one-finger orbit'); assert.equal(zooms.length, 0);
+    fire(canvas, 'pointerdown', 22, 110); fire(win, 'pointermove', 22, 210);
+    assert.deepEqual(zooms, [.5], 'genuine two-finger pinch still uses the new gap');
+    fire(win, 'pointercancel', 21); const before = c.setupPreviewAz; fire(win, 'pointermove', 22, 220);
+    assert.ok(c.setupPreviewAz < before, 'remaining pointer orbits from its last position'); assert.equal(zooms.length, 1);
+    fire(canvas, 'lostpointercapture', 22); const released = c.setupPreviewAz; fire(win, 'pointermove', 22, 300);
+    assert.equal(c.setupPreviewAz, released, 'lost capture releases its pointer');
   }
 });
 

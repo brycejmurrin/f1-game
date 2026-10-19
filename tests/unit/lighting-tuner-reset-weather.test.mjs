@@ -339,20 +339,36 @@ test("M11: with no strike the fade source is still the frame (unchanged behaviou
   assert.deepEqual(host(G.frame.ambientSky), [0.9, 0.9, 0.9]);
 });
 
-test("M37: floodEmit uses the TWILIGHT FLOOR / RAMP knobs the lamp emitter reads", () => {
+test("M37: floodEmit follows the TWILIGHT FLOOR / RAMP knobs (relational, no copy of the formula)", () => {
+  // Pins the DIRECTION and bounds of each knob's effect on atmosphere.floodEmit
+  // instead of re-deriving the production formula to 1e-12. (The lamp emitter in
+  // game.js reads the same two knobs; that coupling is not reachable from a unit
+  // test and is covered by the lighting specs.)
   const { G, atmo, LT } = bootAtmo();
-  const lamp = (sunY) => Math.max(LT.twilightFloor != null ? LT.twilightFloor : 0.30,
-    Math.min(1, Math.max(0, 1 - sunY * (LT.twilightRamp != null ? LT.twilightRamp : 6))));   // game.js nightF
-  const want = (sunY) => Math.min(1, LT.floodEmitMul * Math.min(0.70, 0.05 + 0.58 * lamp(sunY)));
-  const src = read("js/game.js");
-  assert.match(src, /LT\.twilightFloor != null \? LT\.twilightFloor : 0\.30/, "the lamp emitter this mirrors");
+  const emit = (sunY, floor, ramp) => { LT.twilightFloor = floor; LT.twilightRamp = ramp; return atmo.floodEmit(sunY); };
   for (const tod of ["dusk", "dawn"]) {
     G.raceTimeOfDay = tod;
+    // Floor: with the sun high the ramp term is 0, so the floor alone sets the glow.
+    assert.ok(emit(0.4, 0.60, 6) > emit(0.4, 0.30, 6) && emit(0.4, 0.30, 6) > emit(0.4, 0.06, 6),
+      tod + ": a higher TWILIGHT FLOOR must raise the glow once the sun is up");
+    assert.ok(Math.abs(emit(0.4, 0.30, 6) - emit(0.4, 0.30, 12)) < 1e-12, tod + ": above the ramp's reach only the floor matters");
+    // Ramp: a steeper ramp drops the glow faster as the sun rises off the horizon.
+    assert.ok(emit(0.1, 0.06, 12) < emit(0.1, 0.06, 1.2), tod + ": a steeper TWILIGHT RAMP dims a rising sun sooner");
+    // Monotone in the sun and inside [0, 1] for any knob pair the tuner can reach.
     for (const [floor, ramp] of [[0.30, 6], [0.16, 3], [0.685, 5.95], [0.06, 1.2]]) {
-      LT.twilightFloor = floor; LT.twilightRamp = ramp;
-      for (const sunY of [0.4, 0.2, 0.1, 0.02, -0.05, -0.3])
-        assert.ok(Math.abs(atmo.floodEmit(sunY) - want(sunY)) < 1e-12, `${tod} floor ${floor} ramp ${ramp} sunY ${sunY}`);
+      let prev = Infinity;
+      for (const sunY of [-0.3, -0.05, 0.02, 0.1, 0.2, 0.4]) {
+        const v = emit(sunY, floor, ramp);
+        assert.ok(Number.isFinite(v) && v >= 0 && v <= 1, `${tod} ${floor}/${ramp} sunY ${sunY}: ${v} in [0,1]`);
+        assert.ok(v <= prev + 1e-12, `${tod} ${floor}/${ramp}: the glow rose as the sun climbed (${prev} -> ${v} at ${sunY})`);
+        prev = v;
+      }
     }
+    // It scales with the FLOOD EMIT knob (below the 1.0 clamp).
+    const full = emit(0.4, 0.30, 6), mul = LT.floodEmitMul;
+    LT.floodEmitMul = mul * 0.5;
+    assert.ok(Math.abs(emit(0.4, 0.30, 6) - full * 0.5) < 1e-12, tod + ": halving FLOOD EMIT halves the glow");
+    LT.floodEmitMul = mul;
   }
 });
 

@@ -34,6 +34,48 @@ function halfToFloat(h) {
   return s * (1 + m / 1024) * 2 ** (e - 15);
 }
 
+// The oracle's maths constants are READ FROM the three lit-shader sources, not
+// retyped: window (1 - (d/r)^WIN_POW) and the 1/(distC^2 + SOFT) softener. Each
+// backend must agree with the others, so a constant retuned in one shader
+// (or the window loop edited) fails here instead of drifting the bake's look.
+const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+const SHADERS = {
+  glsl: stripComments(readFileSync(path.join(ROOT, "js/render/glx/shaders/glsl-lit.js"), "utf8")),
+  tsl: stripComments(readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8")),
+  wgsl: stripComments(readFileSync(path.join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8")),
+};
+const TERMS = {
+  // exponent = how many times `dn` is multiplied inside the window
+  glsl: { win: /float win = clamp\(1\.0 - ((?:dn \* )+dn), 0\.0, 1\.0\);/g, winN: (m) => m.split("*").length,
+          soft: /float att = \(win \* win\) \/ \(distC \* distC \+ ([\d.]+)\);/g,
+          near: /float distC = max\(dist, (\w+)\);/g },
+  tsl: { win: /clamp\((dn(?:\.mul\(dn\))+)\.oneMinus\(\), 0\.0, 1\.0\)/g, winN: (m) => m.split("dn").length - 1,
+         soft: /win\.mul\(win\)\.div\(distC\.mul\(distC\)\.add\(([\d.]+)\)\)/g,
+         near: /const distC = max\(dist, (U\.\w+)\);/g },
+  wgsl: { win: /let win = clamp\(1\.0 - ((?:dn \* )+dn), 0\.0, 1\.0\);/g, winN: (m) => m.split("*").length,
+          soft: /let att = \(win \* win\) \/ \(distC \* distC \+ ([\d.]+)\);/g,
+          near: /let distC = max\(dist, (F\.params7\.w)\);/g },
+};
+function shaderConst(which, key) {
+  const t = TERMS[which], vals = [...SHADERS[which].matchAll(t[key])].map((m) => (key === "win" ? t.winN(m[1]) : m[1]));
+  assert.ok(vals.length >= 1, `${which}: lamp-loop ${key} statement not found — the shader maths moved`);
+  assert.ok(vals.every((v) => v === vals[0]), `${which}: ${key} differs between its lamp loops: ${vals}`);
+  return vals[0];
+}
+const WIN_POW = shaderConst("glsl", "win"), SOFT = parseFloat(shaderConst("glsl", "soft"));
+
+test("the three lit shaders agree on the window power, the softener and the near clamp wiring", () => {
+  for (const w of ["tsl", "wgsl"]) {
+    assert.equal(shaderConst(w, "win"), WIN_POW, `${w} window power vs GLSL`);
+    assert.equal(parseFloat(shaderConst(w, "soft")), SOFT, `${w} softener vs GLSL`);
+  }
+  assert.equal(WIN_POW, 4, "the baked pool assumes the (1 - (d/r)^4)^2 window");
+  assert.equal(SOFT, 1, "the baked pool assumes the 1/(d^2 + 1) softener");
+  assert.equal(shaderConst("glsl", "near"), "uLampNearClamp");
+  assert.equal(shaderConst("tsl", "near"), "U.lampNearClamp");
+  assert.equal(shaderConst("wgsl", "near"), "F.params7.w");
+});
+
 // Independent reference: the lit shaders' per-lamp diffuse factor for N = +Y.
 function shaderPool(L, px, py, pz, nearClamp) {
   const LX = L[0] - px, LY = L[1] - py, LZ = L[2] - pz;
@@ -41,9 +83,9 @@ function shaderPool(L, px, py, pz, nearClamp) {
   if (dist >= rad) return [0, 0, 0];
   const Ld = [LX / dist, LY / dist, LZ / dist];
   const dn = dist / rad;
-  const win = Math.min(1, Math.max(0, 1 - dn ** 4));
+  const win = Math.min(1, Math.max(0, 1 - dn ** WIN_POW));
   const distC = Math.max(dist, nearClamp);
-  const att = (win * win) / (distC * distC + 1);
+  const att = (win * win) / (distC * distC + SOFT);
   const cd = -(Ld[0] * L[7] + Ld[1] * L[8] + Ld[2] * L[9]);
   const t = Math.min(1, Math.max(0, (cd - L[11]) / (L[10] - L[11])));
   const beam = t * t * (3 - 2 * t);
@@ -116,6 +158,57 @@ test("the bake reproduces the shader's diffuse pool at texel centres (sampled th
   }
   assert.ok(checked > 50, "enough lit texels were compared");
   assert.ok(maxRel < 2e-3, `half-float bake within 0.2% of the shader term (worst ${maxRel})`);
+});
+
+test("LAMP NEAR CLAMP changes the bake exactly where the lamp is closer than the clamp", () => {
+  // LAMP_A / LAMP_B hang 9 m up, so a 4 m clamp never binds in the test above and a
+  // bake that ignored the knob would still pass. A lamp 3.5 m up has real texels
+  // inside the clamp: the result must follow the shader at BOTH settings, differ
+  // between them under the lamp, and agree where the lamp is farther than both.
+  const LB = load();
+  const low = [0, 3.5, 0, 40, 32, 20, 24, 0, -1, 0, 0.85, 0.55, 0.12, 0.5, 1];   // 3.5 m: just above LO_HEIGHT, so it is baked
+  const near = LB.bake(low, () => 0, 0.5), clamped = LB.bake(low, () => 0, 6.0);
+  // Sample at the texel centre nearest (x, z), so the oracle sees the same point.
+  const at = (b, x, z, nc) => {
+    const px = b.x0 + (Math.floor((x - b.x0) / b.cell) + 0.5) * b.cell, pz = b.z0 + (Math.floor((z - b.z0) / b.cell) + 0.5) * b.cell;
+    return { got: sampleAtlas(b, px, pz, 0), want: shaderPool(low, px, 0, pz, nc)[0] };
+  };
+  for (const [b, nc] of [[near, 0.5], [clamped, 6.0]]) {
+    for (const x of [0.5, 1.5, 3, 5, 9]) {
+      const { got, want } = at(b, x, 0.25, nc);
+      assert.ok(got !== null && Math.abs(got - want) <= 2e-3 * want + 2e-3, `clamp ${nc} @ x=${x}: ${got} vs shader ${want}`);
+    }
+  }
+  const under = at(near, 0.5, 0.25, 0.5).got, underC = at(clamped, 0.5, 0.25, 6).got;
+  assert.ok(under > 1.5 * underC, `under the lamp the 6 m clamp must dim the pool (${under} vs ${underC})`);
+  const far = [at(near, 16, 0.25, 0.5).got, at(clamped, 16, 0.25, 6).got];
+  assert.ok(Math.abs(far[0] - far[1]) / far[0] < 0.02, `past both clamps the pool is unchanged (${far})`);
+});
+
+test("a surface ABOVE the lamp (N.L <= 0) gets no diffuse light, but the bounce still reaches it", () => {
+  // The back-face cull. A lamp on low ground beside a raised bank: the bank's
+  // texels are inside the radius and above the lens, so N=+Y faces away from the
+  // lamp. Without `NoL > 0` the loop adds att*spot*NoL with a NEGATIVE NoL,
+  // darkening the diffuse pool instead of leaving the texel unlit.
+  const LB = load();
+  const lamp = [0, 5, 0, 40, 32, 20, 24, 0, -1, 0, 0.85, 0.55, 0.12, 0.5, 1];
+  const bank = (x) => (x > 10 ? 20 : 0);
+  const b = LB.bake(lamp, bank, 4.0);
+  assert.ok(b && b.tiles > 0, "a bake");
+  let lit = 0, backDiffuse = 0, backBounce = 0, back = 0;
+  for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) {
+    const x = b.x0 + (i + 0.5) * b.cell, z = b.z0 + (j + 0.5) * b.cell;
+    const k = texelIdx(b, i, j), kb = texelIdx(b, i, j, 1);
+    if (k < 0) continue;
+    const d = [0, 1, 2].map((c) => halfToFloat(b.data[k + c])), bo = [0, 1, 2].map((c) => halfToFloat(b.data[kb + c]));
+    const faces = 5 - bank(x) > 0 && Math.hypot(x, 5 - bank(x), z) < 24;
+    if (x > 10.5 && Math.hypot(x, 15, z) < 24) {          // the raised bank, in range
+      back++; backDiffuse += Math.abs(d[0]) + Math.abs(d[1]) + Math.abs(d[2]); backBounce += bo[0] + bo[1] + bo[2];
+    } else if (faces && x < 5 && Math.abs(z) < 5) lit += d[0];
+  }
+  assert.ok(back > 20 && lit > 0, `fixture: bank texels (${back}) and lit ground (${lit}) both exist`);
+  assert.equal(backDiffuse, 0, "no diffuse (and no negative diffuse) on a surface facing away from the lamp");
+  assert.ok(backBounce > 0, "the soft-floored bounce fill still lands there");
 });
 
 test("tiles no lamp reaches are empty in the indirection and not stored", () => {

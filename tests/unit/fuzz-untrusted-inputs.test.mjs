@@ -26,7 +26,6 @@ import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const N = 2000;
-const BUDGET_MS = 10_000;
 
 function assertNoThrowResult(label, result, okShape) {
   if (okShape === "ok-reason") {
@@ -52,7 +51,12 @@ function assertNoThrowResult(label, result, okShape) {
     return;
   }
   if (okShape === "null-or-value") {
-    // NetSnapshot / NetSdp / NetQr: failure is null (or undefined for some lanes).
+    // NetSnapshot / NetSdp / NetQr: failure is null (or undefined for some lanes);
+    // success is an object (snapshot, QR matrix) or a string (SDP text) whose
+    // live fields carry no NaN/undefined.
+    assert.ok(result == null || typeof result === "object" || typeof result === "string",
+      `${label}: expected null, object or string, got ${typeof result}`);
+    assertCleanLive(label, result);
     return;
   }
   if (okShape === "string") {
@@ -593,7 +597,7 @@ test("LiveryTex.setTeamLogo refuses a decompression-bomb emblem before any draw"
 });
 
 // ── Wall-clock budget across the whole file ────────────────────────────────
-test("fuzz suite stays under 10 s wall clock", async (t) => {
+test("200 GhostShare decodes stay under 2 s of CPU", async (t) => {
   // The preceding tests already ran; this is a meta check that the file's
   // cumulative work (measured from process uptime of this file via a marker)
   // does not silently grow past the budget. We re-run a thin slice to measure
@@ -614,5 +618,4 @@ test("fuzz suite stays under 10 s wall clock", async (t) => {
   // Cap the slice itself so a sudden regression (inflate loops, etc.) fails here.
   assert.ok(slice < 2000, `200 GhostShare trials took ${slice} ms of CPU (budget 2000 ms)`);
   t.diagnostic(`budget slice: ${slice} ms for 200 GhostShare.decode trials`);
-  void BUDGET_MS;
 });

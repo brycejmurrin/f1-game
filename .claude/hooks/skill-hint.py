@@ -96,6 +96,13 @@ def main():
     if mode == "off":
         return
     data = json.load(sys.stdin)
+    # Use host event metadata, never prompt keywords: a user may ask to audit a
+    # notification or repair CI. Older standalone routing evals omit the event.
+    event = data.get("hook_event_name")
+    if event is not None and event != "UserPromptSubmit":
+        return
+    if event is None and data.get("notification_type") is not None:
+        return
     prompt = data.get("prompt") or ""
     if not prompt.strip() or prompt.lstrip().startswith("/"):
         return
