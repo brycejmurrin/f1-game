@@ -1,0 +1,338 @@
+<title>Apex 26 Body Candidates</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: garage pick sheet in the Body Styles Review system; ranked shortlist first, then one strip per candidate (real car beside the game car at matching framing), then phone check, numbers, validity, credits. */
+:root {
+  --bg: #f1f2f0; --panel: #ffffff; --fg: #191c1f; --muted: #5b6168; --line: #d6d9dc;
+  --accent: #c9620a; --ok: #2f7d4a; --warn: #a96d14; --bad: #c62a2a;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121417; --panel: #1b1e22; --fg: #e9ebed; --muted: #9aa1a8; --line: #2d3238;
+  --accent: #ff9a3d; --ok: #5cc483; --warn: #e6b04d; --bad: #ff6b6b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121417; --panel: #1b1e22; --fg: #e9ebed; --muted: #9aa1a8; --line: #2d3238;
+  --accent: #ff9a3d; --ok: #5cc483; --warn: #e6b04d; --bad: #ff6b6b; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1, h2, h3 { font-family: var(--f-display); text-transform: uppercase; letter-spacing: .01em; line-height: 1.05; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(32px, 6vw, 52px); }
+h1 span { color: var(--accent); }
+h2 { font-size: 28px; }
+h3 { font-size: 30px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+h3 code { font-family: var(--f-mono); font-size: 13px; font-weight: 500; color: var(--accent); text-transform: none; }
+h3 .rank { font-family: var(--f-mono); font-size: 14px; color: var(--muted); }
+p { margin: 0; max-width: 72ch; }
+code { font-family: var(--f-mono); font-size: 12.5px; }
+a { color: var(--accent); overflow-wrap: anywhere; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+header { display: flex; flex-direction: column; gap: 10px; }
+.meta { font-family: var(--f-mono); font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+section { display: flex; flex-direction: column; gap: 16px; }
+ol.rankings { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; max-width: 80ch; }
+ol.rankings b { font-family: var(--f-mono); font-weight: 500; }
+.body { display: flex; flex-direction: column; gap: 14px; padding-top: 18px; border-top: 1px solid var(--line); }
+.head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.info { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pitch { font-size: 16px; font-weight: 500; }
+.pill { align-self: flex-start; font: 600 12px/1 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; padding: 5px 8px; border-radius: 3px; border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--bad); }
+.pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.label { font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.note { font-size: 14px; color: var(--muted); }
+dl.recipe { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; align-content: start; }
+dl.recipe dt { color: var(--muted); }
+dl.recipe dd { margin: 0; min-width: 0; }
+dl.recipe dd.new { color: var(--accent); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+figure img { width: 100%; max-width: 100%; height: auto; display: block; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); }
+figure.real img { border-color: var(--accent); }
+figcaption { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+td.lo { color: var(--warn); }
+.phones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+@media (max-width: 860px) { .head { grid-template-columns: 1fr; } .phones { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .pair, .trio, .phones { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Design preview · Fleet B · B·D1 bodies · round 2 · 2026-10-19</div>
+  <h1>Five new <span>body styles</span>, beside the real cars</h1>
+  <p>Round 2 pushes each candidate toward its real car and away from the six shipped bodies. Each strip puts a real photo (orange frame) beside the game car at a similar framing, then adds a close-up and the 844×390 phone view. The shortlist is ranked by how well the shape reads at phone size.</p>
+  <div class="meta">branch cursor/design-preview-bodies-f0e0 @ 26a4b9b7 (round 1 90d91cd5, on #3118's clamp pass a9b5f889) · McLaren default livery · TLX · garage-angles.mjs --backend=three · front 3/4 az 0.72 el 0.24 d 5.4 · side az 1.571 el 0.06 d 8.5 · top az 1.15 el 0.95 d 5.4 · phone 844×390 default garage framing</div>
+</header>
+
+<section>
+  <h2>Round 2: what changed and why</h2>
+  <ul class="src">
+    <li>Bryce asked for "more accurate or distinct", so each body was pushed toward its real car and away from the nearest shipped body.</li>
+    <li><b>highnose</b>: nose raised from +0.17 to +0.24, longer and slimmer (side 3.2 → 4.1 %).</li>
+    <li><b>sharkfin</b>: the fin is taller (0.30 m) and thicker (45 mm, new <code>finW</code>), and the pods are wider (3.0 → 3.5 %).</li>
+    <li><b>stepnose</b>: the step is now 20 cm deep and 6 cm ahead of the nose root, with a longer, fatter cone (2.4 → 3.8 %).</li>
+    <li><b>lowline</b>: wider, lower pods and a smaller airbox.</li>
+    <li><b>zeropod</b>: the pods are lower as well as narrower. It still doesn't hold up from the side.</li>
+    <li>Added real-car photos beside each design, a wider side shot (the review camera cuts off the nose), close-ups, and phone frames for every design.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ranked shortlist</h2>
+  <ol class="rankings">
+    <li><b>highnose</b>: the strongest. It differs most from every shipped body in side view (4.1 %), and the raised nose with its pylons shows at phone size.</li>
+    <li><b>sharkfin</b>: the tall fin reads as a plate from the side and as a spike at phone size. It is the only body that changes the car's top line behind the halo.</li>
+    <li><b>stepnose</b>: round 2 made the step deeper and the cone longer (side 2.4 → 3.8 %). Clear in the side and nose shots, subtle in the phone 3/4.</li>
+    <li><b>lowline</b>: a low engine cover and wide, low pods. Clear in side view (3.7 %), but at phone size it is close to the team car.</li>
+    <li><b>zeropod</b>: does not hold up. Its side view stays at the floor of the shipped range (2.3 %) and it is hard to pick out at phone size. It differs only from above. Recommend dropping it, or keeping it as a top-view variant.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Candidates</h2>
+
+  <div class="body">
+    <div class="head">
+      <div class="info">
+        <h3><span class="rank">#1</span> Highnose <code>highnose</code></h3>
+        <p class="pitch">A raised nose on twin pylons, with the front wing hanging well below it.</p>
+        <div class="pills"><span class="pill ok">Valid on all 11 chassis</span><span class="pill ok">Reads at phone size</span></div>
+        <p class="note"><span class="label">Real car</span><br>Tyrrell 019 (1990) raised the nose to feed air under the floor. Benetton's B191 and B194 copied it, and by about 1996 every car had one.</p>
+      </div>
+      <dl class="recipe">
+        <dt>noseDroop</dt><dd>+0.240 (round 1: +0.170; every other body ≤ 0)</dd>
+        <dt>noseTipZ / noseSlim</dt><dd>+0.16 / 0.62</dd>
+        <dt>wing arch / foot</dt><dd>1.10 / 1.40</dd>
+        <dt>pylons</dt><dd class="new">new: twin blades when noseDroop &gt; 0.06</dd>
+        <dt>side, nearest shipped</dt><dd>4.1 % (team)</dd>
+      </dl>
+    </div>
+    <div class="pair">
+      <figure class="real"><img src="img/ref-highnose-side.jpg" alt="Benetton B191 in side view at the Goodwood Festival of Speed"><figcaption>real · Benetton B191 (1991) · side</figcaption></figure>
+      <figure><img src="img/highnose-wide.jpg" alt="Highnose game car, full side view"><figcaption>game · side, d 8.5</figcaption></figure>
+      <figure class="real"><img src="img/ref-highnose-34.jpg" alt="Benetton B194 from the front left"><figcaption>real · Benetton B194 (1994) · front 3/4</figcaption></figure>
+      <figure><img src="img/highnose-hero.jpg" alt="Highnose game car, front three-quarter"><figcaption>game · front 3/4</figcaption></figure>
+    </div>
+    <div class="trio">
+      <figure><img src="img/highnose-nose.jpg" alt="Highnose close-up: the nose rides high above the wing on two pylons"><figcaption>close-up · nose and pylons</figcaption></figure>
+      <figure><img src="img/highnose-top.jpg" alt="Highnose, top-down"><figcaption>top</figcaption></figure>
+      <figure><img src="img/phone-highnose.jpg" alt="Highnose in the garage at 844 by 390"><figcaption>phone 844×390</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="head">
+      <div class="info">
+        <h3><span class="rank">#2</span> Sharkfin <code>sharkfin</code></h3>
+        <p class="pitch">A tall, thick dorsal fin that rakes up from the airbox to the rear wing.</p>
+        <div class="pills"><span class="pill ok">Valid on all 11 chassis</span><span class="pill ok">Reads at phone size</span></div>
+        <p class="note"><span class="label">Real car</span><br>Red Bull ran a full-height shark fin from 2008 (RB4, RB5), and the fin came back across the grid in 2017 (Ferrari SF70H).</p>
+      </div>
+      <dl class="recipe">
+        <dt>fin</dt><dd>2 (tall blade)</dd>
+        <dt>finH / finRear / finW</dt><dd class="new">new: 0.30 m, 2.0× at the tail (capped at y 0.92), 45 mm thick</dd>
+        <dt>noseTipZ / noseSlim</dt><dd>+0.25 / 0.70</dd>
+        <dt>inletW / airbox</dt><dd>+0.16 / 0.80</dd>
+        <dt>side, nearest shipped</dt><dd>3.5 % (anteater)</dd>
+      </dl>
+    </div>
+    <div class="pair">
+      <figure class="real"><img src="img/ref-sharkfin-side.jpg" alt="Red Bull RB5 in side view at Suzuka"><figcaption>real · Red Bull RB5 (2009) · side</figcaption></figure>
+      <figure><img src="img/sharkfin-wide.jpg" alt="Sharkfin game car, full side view"><figcaption>game · side, d 8.5</figcaption></figure>
+      <figure class="real"><img src="img/ref-sharkfin-34.jpg" alt="Ferrari SF70H from the front"><figcaption>real · Ferrari SF70H (2017) · front 3/4</figcaption></figure>
+      <figure><img src="img/sharkfin-hero.jpg" alt="Sharkfin game car, front three-quarter"><figcaption>game · front 3/4</figcaption></figure>
+    </div>
+    <div class="trio">
+      <figure><img src="img/sharkfin-closeup.jpg" alt="Sharkfin close-up: the fin rises from the cover to the rear wing"><figcaption>close-up · fin (crop of the d 6.0 side still)</figcaption></figure>
+      <figure><img src="img/sharkfin-top.jpg" alt="Sharkfin, top-down"><figcaption>top</figcaption></figure>
+      <figure><img src="img/phone-sharkfin.jpg" alt="Sharkfin in the garage at 844 by 390"><figcaption>phone 844×390</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="head">
+      <div class="info">
+        <h3><span class="rank">#3</span> Stepnose <code>stepnose</code></h3>
+        <p class="pitch">The top of the tub ends in a 20 cm ledge, and a long, fat cone runs on below it.</p>
+        <div class="pills"><span class="pill ok">Valid on all 11 chassis</span><span class="pill warn">Subtle at phone size</span></div>
+        <p class="note"><span class="label">Real car</span><br>The 2012 "platypus" noses. A rule that lowered the nose, combined with a tall chassis, gave the Caterham CT01 and Ferrari F2012 a visible step.</p>
+      </div>
+      <dl class="recipe">
+        <dt>noseStep</dt><dd class="new">new: 0.20 m ledge, 6 cm ahead of the nose root (round 1: 0.14 m at 10 cm)</dd>
+        <dt>noseTipZ / noseSlim</dt><dd>+0.28 / 1.20</dd>
+        <dt>noseDroop</dt><dd>−0.028 (the team floor)</dd>
+        <dt>airbox / fin</dt><dd>1.30 / 1</dd>
+        <dt>side, nearest shipped</dt><dd>3.8 % (arched)</dd>
+      </dl>
+    </div>
+    <div class="pair">
+      <figure class="real"><img src="img/ref-stepnose-side.jpg" alt="Caterham CT01 in side view at Singapore 2012"><figcaption>real · Caterham CT01 (2012) · side</figcaption></figure>
+      <figure><img src="img/stepnose-wide.jpg" alt="Stepnose game car, full side view"><figcaption>game · side, d 8.5</figcaption></figure>
+      <figure class="real"><img src="img/ref-stepnose-34.jpg" alt="Ferrari F2012 stepped nose close-up"><figcaption>real · Ferrari F2012 (2012) · nose</figcaption></figure>
+      <figure><img src="img/stepnose-hero.jpg" alt="Stepnose game car, front three-quarter"><figcaption>game · front 3/4</figcaption></figure>
+    </div>
+    <div class="trio">
+      <figure><img src="img/stepnose-nose.jpg" alt="Stepnose close-up: a fat low cone below the tub's crown"><figcaption>close-up · nose (crop of front 3/4)</figcaption></figure>
+      <figure><img src="img/stepnose-top.jpg" alt="Stepnose, top-down"><figcaption>top</figcaption></figure>
+      <figure><img src="img/phone-stepnose.jpg" alt="Stepnose in the garage at 844 by 390"><figcaption>phone 844×390</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="head">
+      <div class="info">
+        <h3><span class="rank">#4</span> Lowline <code>lowline</code></h3>
+        <p class="pitch">The engine cover sits as low as the limits allow, over wide, low pods, so the rear wing gets clean air.</p>
+        <div class="pills"><span class="pill ok">Valid on all 11 chassis</span><span class="pill warn">Subtle at phone size</span></div>
+        <p class="note"><span class="label">Real car</span><br>Brabham BT55 (1986, Gordon Murray) had a very low body, an engine tilted about 18° and a driver lying back about 30°.</p>
+      </div>
+      <dl class="recipe">
+        <dt>coverLift</dt><dd>−0.16 (the clamp floor)</dd>
+        <dt>inletH / airbox</dt><dd>−0.20 / 0.40</dd>
+        <dt>inletW / waist</dt><dd>+0.20 / +0.20 (round 1: +0.10 / +0.10)</dd>
+        <dt>noseTipZ / noseSlim</dt><dd>+0.20 / 1.30</dd>
+        <dt>side, nearest shipped</dt><dd>3.7 % (needle)</dd>
+      </dl>
+    </div>
+    <div class="pair">
+      <figure class="real"><img src="img/ref-lowline-side.jpg" alt="Brabham BT55 in near-side view"><figcaption>real · Brabham BT55 (1986) · side</figcaption></figure>
+      <figure><img src="img/lowline-wide.jpg" alt="Lowline game car, full side view"><figcaption>game · side, d 8.5</figcaption></figure>
+      <figure class="real"><img src="img/ref-lowline-34.jpg" alt="Brabham BT55 from the front"><figcaption>real · Brabham BT55 (1986) · front 3/4</figcaption></figure>
+      <figure><img src="img/lowline-hero.jpg" alt="Lowline game car, front three-quarter"><figcaption>game · front 3/4</figcaption></figure>
+    </div>
+    <div class="trio">
+      <figure><img src="img/lowline-closeup.jpg" alt="Lowline close-up: the low engine cover behind the halo"><figcaption>close-up · engine cover (crop of the d 6.0 side still)</figcaption></figure>
+      <figure><img src="img/lowline-top.jpg" alt="Lowline, top-down"><figcaption>top</figcaption></figure>
+      <figure><img src="img/phone-lowline.jpg" alt="Lowline in the garage at 844 by 390"><figcaption>phone 844×390</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="head">
+      <div class="info">
+        <h3><span class="rank">#5</span> Zeropod <code>zeropod</code></h3>
+        <p class="pitch">Sidepods squeezed to low slivers behind a slot inlet, under a big airbox.</p>
+        <div class="pills"><span class="pill ok">Valid on all 11 chassis</span><span class="pill bad">Does not hold up at phone size</span></div>
+        <p class="note"><span class="label">Real car</span><br>Mercedes W13 (2022) and W14 (2023) had tiny, inward-angled pods with almost no undercut. From the side the real car looks fairly ordinary too, which is why this body only reads from above.</p>
+      </div>
+      <dl class="recipe">
+        <dt>inletW / waist</dt><dd>−0.30 / −0.30 (the clamp keeps the pod 4–12 cm wide)</dd>
+        <dt>inletH</dt><dd>−0.25 (round 1: +0.12)</dd>
+        <dt>airbox / coverLift</dt><dd>1.60 / −0.06</dd>
+        <dt>side, nearest shipped</dt><dd>2.3 % (team)</dd>
+        <dt>top, vs team</dt><dd>4.9 %</dd>
+      </dl>
+    </div>
+    <div class="pair">
+      <figure class="real"><img src="img/ref-zeropod-side.jpg" alt="Mercedes W13 in side view at the 2022 Austrian GP"><figcaption>real · Mercedes W13 (2022) · side</figcaption></figure>
+      <figure><img src="img/zeropod-wide.jpg" alt="Zeropod game car, full side view"><figcaption>game · side, d 8.5</figcaption></figure>
+      <figure class="real"><img src="img/ref-zeropod-34.jpg" alt="Mercedes W14 from the front, showing the narrow pods"><figcaption>real · Mercedes W14 (2023) · front 3/4</figcaption></figure>
+      <figure><img src="img/zeropod-hero.jpg" alt="Zeropod game car, front three-quarter"><figcaption>game · front 3/4</figcaption></figure>
+    </div>
+    <div class="trio">
+      <figure><img src="img/zeropod-closeup.jpg" alt="Zeropod close-up from above: slim pods beside the tub"><figcaption>close-up · pods from above (crop of top)</figcaption></figure>
+      <figure><img src="img/zeropod-top.jpg" alt="Zeropod, top-down"><figcaption>top</figcaption></figure>
+      <figure><img src="img/phone-zeropod.jpg" alt="Zeropod in the garage at 844 by 390"><figcaption>phone 844×390</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Phone check: team car for comparison</h2>
+  <div class="phones">
+    <figure><img src="img/phone-team.jpg" alt="Team body in the garage at 844 by 390"><figcaption>team · phone 844×390</figcaption></figure>
+    <figure><img src="img/phone-highnose.jpg" alt="Highnose at 844 by 390"><figcaption>highnose</figcaption></figure>
+    <figure><img src="img/phone-sharkfin.jpg" alt="Sharkfin at 844 by 390"><figcaption>sharkfin</figcaption></figure>
+  </div>
+  <p class="note">At the default garage framing the car fills about a third of the phone screen. The garage camera turns slowly on its own, so the six phone frames are 0.07 rad apart in azimuth (0.64 to 0.99), not identical.</p>
+</section>
+
+<section>
+  <h2>How different, in numbers</h2>
+  <p class="note">The share of pixels that change between two bodies' whole-car outlines (wheels and wings included), rasterized from <code>Car3D.buildComplete</code> at the phone scale (40 px per metre). The phone 3/4 view uses the garage camera's angle. For scale, the shipped six differ from the team car by 2.3–7.5 % in side view and 1.6–5.3 % in the phone 3/4. Values under 2.5 % are marked.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Candidate</th><th>side, nearest shipped</th><th>side, round 1</th><th>phone 3/4, nearest shipped</th><th>top, nearest shipped</th></tr></thead>
+    <tbody>
+      <tr><td>highnose</td><td class="n">4.1 % (team)</td><td class="n">3.2 %</td><td class="n lo">1.6 % (team)</td><td class="n lo">2.1 % (arched)</td></tr>
+      <tr><td>sharkfin</td><td class="n">3.5 % (anteater)</td><td class="n">3.0 %</td><td class="n lo">1.5 % (team)</td><td class="n lo">1.0 % (arched)</td></tr>
+      <tr><td>stepnose</td><td class="n">3.8 % (arched)</td><td class="n lo">2.4 %</td><td class="n lo">1.4 % (arched)</td><td class="n lo">2.0 % (arched)</td></tr>
+      <tr><td>lowline</td><td class="n">3.7 % (needle)</td><td class="n">3.7 %</td><td class="n lo">1.6 % (anteater)</td><td class="n">2.9 % (team)</td></tr>
+      <tr><td>zeropod</td><td class="n lo">2.3 % (team)</td><td class="n lo">2.3 %</td><td class="n lo">1.5 % (anteater)</td><td class="n">2.9 % (arched)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The phone 3/4 numbers stay low for every candidate. That view is dominated by the wheels and wings, which every body shares, so only brick among the shipped six clears 4 % there. A body's identity at phone size comes from one feature you can point to (the raised nose, the fin), not from the outline total.</p>
+</section>
+
+<section>
+  <h2>Validity</h2>
+  <p>All five are valid on every team chassis and every catalog engine after round 2. None inverts, overlaps the tyres or sinks under the road.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Check</th><th>Scope</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>tests/unit/body-styles.test.mjs</code> + <code>fin-design.test.mjs</code></td><td>The #3111 matrix: all 11 concept bodies × 11 factory setups and catalog engines, square and rounded. Pods not inside out, belly above the floor rail, mirrors not buried, nose meets the tub and clears the wing, cover under the roll hoop. Plus the fin contract.</td><td>48 / 48 pass</td></tr>
+      <tr><td>Per-team build of each candidate</td><td>5 bodies × 11 chassis × square and rounded = 110 builds. Every build is finite, its lowest point is no lower than the lowest shipped body on that chassis, and its pods are no wider than the widest shipped body at every station.</td><td>all pass (highnose's round-2 wing dipped 0.4 mm too low, so it keeps the round-1 wing)</td></tr>
+      <tr><td>Commit guards</td><td><code>npm run test:guards</code></td><td>pass</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The opt-in fields (<code>finH</code>, <code>finRear</code>, <code>finW</code>, <code>noseStep</code>) and the highnose pylons are off by default, so every grid car and the six shipped bodies build unchanged. Whoever lands the picks should remove the rows that weren't picked; the car3d.js size ratchet was raised on the preview branch only.</p>
+</section>
+
+<section>
+  <h2>Earlier rounds</h2>
+  <details>
+    <summary><b>Round 1</b> · 90d91cd5 · first five designs, review-gallery cameras</summary>
+    <div class="body" style="border-top:0">
+      <p class="note">The first pass used recipe values plus <code>finH</code>/<code>finRear</code>, <code>noseStep</code> (0.14 m) and the highnose pylons. Side silhouette differences from the nearest shipped body ranged from 2.4 % to 3.7 %.</p>
+      <div class="trio">
+        <figure><img src="img/r1-highnose-hero.jpg" alt="Round 1 highnose, front three-quarter" loading="lazy"><figcaption>r1 highnose · front 3/4</figcaption></figure>
+        <figure><img src="img/r1-sharkfin-hero.jpg" alt="Round 1 sharkfin, front three-quarter" loading="lazy"><figcaption>r1 sharkfin · front 3/4</figcaption></figure>
+        <figure><img src="img/r1-stepnose-hero.jpg" alt="Round 1 stepnose, front three-quarter" loading="lazy"><figcaption>r1 stepnose · front 3/4</figcaption></figure>
+        <figure><img src="img/r1-highnose-side.jpg" alt="Round 1 highnose, side" loading="lazy"><figcaption>r1 highnose · side</figcaption></figure>
+        <figure><img src="img/r1-sharkfin-side.jpg" alt="Round 1 sharkfin, side" loading="lazy"><figcaption>r1 sharkfin · side</figcaption></figure>
+        <figure><img src="img/r1-stepnose-side.jpg" alt="Round 1 stepnose, side" loading="lazy"><figcaption>r1 stepnose · side</figcaption></figure>
+        <figure><img src="img/r1-lowline-hero.jpg" alt="Round 1 lowline, front three-quarter" loading="lazy"><figcaption>r1 lowline · front 3/4</figcaption></figure>
+        <figure><img src="img/r1-zeropod-hero.jpg" alt="Round 1 zeropod, front three-quarter" loading="lazy"><figcaption>r1 zeropod · front 3/4</figcaption></figure>
+        <figure><img src="img/r1-zeropod-side.jpg" alt="Round 1 zeropod, side" loading="lazy"><figcaption>r1 zeropod · side</figcaption></figure>
+      </div>
+      <figure><img src="img/contact-sheet.jpg" alt="Round 1 contact sheet: five candidates, the team body and the six shipped bodies" loading="lazy"><figcaption>r1 contact sheet · all 12 bodies, front 3/4 and side</figcaption></figure>
+    </div>
+  </details>
+</section>
+
+<section>
+  <h2>Reference library</h2>
+  <p class="note">31 real-car photos of the 11 body styles' inspirations are saved privately with a source and licence list (<code>artifacts/body-designs/refs/</code>, not committed). Current-grid (2025–26) photos are still being collected: Wikimedia rate-limited the download agents, and only McLaren MCL39 and Ferrari SF-25 have arrived so far.</p>
+  <h3 style="font-size:22px">Photo credits</h3>
+  <ul class="src">
+    <li>Benetton B191: Brian Snelson, <a href="https://commons.wikimedia.org/wiki/File:2006FOS_1991BenettonB191.jpg">Wikimedia Commons</a>, CC BY 2.0</li>
+    <li>Benetton B194: Morio, <a href="https://commons.wikimedia.org/wiki/File:Benetton_B194_front-left_2019_Michael_Schumacher_Private_Collection.jpg">Wikimedia Commons</a>, CC BY-SA 4.0</li>
+    <li>Red Bull RB5: takenet, <a href="https://commons.wikimedia.org/wiki/File:RB5inSuzuka.jpg">Wikimedia Commons</a>, CC BY-SA 3.0</li>
+    <li>Ferrari SF70H: Calreyn88, <a href="https://commons.wikimedia.org/wiki/File:2017_Ferrari_SF70H.jpg">Wikimedia Commons</a>, CC BY-SA 4.0</li>
+    <li>Caterham CT01: suran2007, <a href="https://commons.wikimedia.org/wiki/File:2012_Singapore_GP_-_Caterham.jpg">Wikimedia Commons</a>, CC BY 2.0</li>
+    <li>Ferrari F2012: Sarah Larson (derivative), <a href="https://commons.wikimedia.org/wiki/File:Ferrari_F2012_-_'Stepped_nose'.jpg">Wikimedia Commons</a>, CC BY 2.0</li>
+    <li>Brabham BT55 (side): Rick W. Dryve, <a href="https://commons.wikimedia.org/wiki/File:Brabham_BT55.jpg">Wikimedia Commons</a>, CC BY 2.0</li>
+    <li>Brabham BT55 (front 3/4): Calreyn88, <a href="https://commons.wikimedia.org/wiki/File:1986_Brabham-BMW_BT55.jpg">Wikimedia Commons</a>, CC BY-SA 4.0</li>
+    <li>Mercedes W13: Lukas Raich, <a href="https://commons.wikimedia.org/wiki/File:FIA_F1_Austria_2022_Nr._63_Russell_(side_2).jpg">Wikimedia Commons</a>, CC BY-SA 4.0</li>
+    <li>Mercedes W14: MrWalkr, <a href="https://commons.wikimedia.org/wiki/File:2023_Mercedes-AMG_W14_SCD_24.jpg">Wikimedia Commons</a>, CC BY-SA 4.0</li>
+  </ul>
+  <h3 style="font-size:22px">Background reading</h3>
+  <ul class="src">
+    <li><a href="https://en.wikipedia.org/wiki/Tyrrell_019">Tyrrell 019</a>, <a href="https://en.wikipedia.org/wiki/Brabham_BT55">Brabham BT55</a> (Wikipedia)</li>
+    <li><a href="https://www.autosport.com/general/news/the-2008-technical-review-5079412/5079412/">Autosport, the 2008 technical review</a> (shark fins)</li>
+    <li><a href="https://www.the-race.com/formula-1/gary-anderson-red-bull-comparison-shows-likely-mercedes-flaw.md">The Race, Mercedes W13 vs Red Bull sidepods</a></li>
+    <li><a href="https://www.the-race.com/formula-1/f1-2026-new-car-rules-explained/">The Race, 2026 rules explained</a></li>
+  </ul>
+</section>
+</div>

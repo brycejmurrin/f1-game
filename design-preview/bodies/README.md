@@ -1,0 +1,13 @@
+# Body-style design preview (B·D1), not for merge
+
+Living gallery: https://claude.ai/artifact/EkspVdVKpht3wDjn4C81MS. Republish every round to this same URL.
+
+- `body-candidates.html` is the gallery source. Its images live in the ignored
+  `artifacts/body-designs/gallery/img/` and are published as artifact files, never committed.
+- `sil.mjs` measures silhouette XOR between bodies:
+  `R=40 NEW=highnose,sharkfin node design-preview/bodies/sil.mjs -`. Views are side, top, front and the phone 3/4 view, and R is px per metre (40 is about the phone scale).
+- `validity.mjs` builds each new body on all 11 team chassis, square and rounded:
+  `NEW=highnose node design-preview/bodies/validity.mjs`. It takes about 6 min for 5 bodies.
+- Shots: `node tools/shot/garage-angles.mjs --fast --settle=8 --view-settle=4 --label=1 --team=mclaren --backend=three --bodyStyle=<ids> --cam="hero:0.72,0.24,5.4;side:1.571,0.06,8.5;top:1.15,0.95,5.4" --clamp=0`.
+  The review's side camera at distance 6.0 cuts off the nose, so use 8.5. `--target` does not aim the camera; take close-ups as crops.
+- Real-car references: `artifacts/body-designs/refs/inspiration/manifest.jsonl` (CC photos, credited in the gallery).
