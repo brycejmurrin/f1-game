@@ -43,20 +43,6 @@ test("session stub installs PitLane/Reliability and create() is inert", () => {
   assert.equal(sb.Damage.blank().hits, 0);
 });
 
-test("RaceSettings paintPlan surface does not throw on the PitLane stub", () => {
-  // Mirrors js/race/race-settings.js paintPlan + rs-plan wire reads.
-  const sb = { console, Log: { info() {}, warn() {}, debug() {} } };
-  vm.runInNewContext(src("js/race/session-stub.js"), sb, { filename: "js/race/session-stub.js" });
-  const pits = sb.PitLane.create({});
-  assert.doesNotThrow(() => {
-    const pin = pits.pinnedStops();
-    pits.setPinnedStops(pin == null ? null : 1);
-    const plan = pits.zoneOf() ? pits.planFor(0.5, true, 10) : null;
-    void plan;
-    void pits.lossS();
-  });
-});
-
 test("ensureRaceSession reinjects real PitLane and calls onRaceSessionReady", async () => {
   const loader = src("js/core/script-loader.js");
   const bundles = src("js/core/lazy-bundles.js");

@@ -3887,7 +3887,6 @@
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "drawRound": [
-        "tests/unit/race-session-fixes.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
       "engage": [
@@ -4027,7 +4026,6 @@
       ],
       "stage": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/race-session-fixes.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
@@ -6603,7 +6601,6 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
-        "tests/unit/race-session-fixes.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
@@ -10814,7 +10811,6 @@
       ],
       "planFor": [
         "tests/unit/pit-lane.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "planInfo": [
@@ -10838,7 +10834,6 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "setPinnedStops": [
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
@@ -10880,7 +10875,6 @@
         "tests/unit/damage.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "*": [
@@ -10941,8 +10935,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/damage.test.mjs",
-        "tests/unit/race-session-fixes.test.mjs"
+        "tests/unit/damage.test.mjs"
       ]
     },
     "js/race/quali-net.js": {
@@ -11060,7 +11053,6 @@
         "tests/unit/incident-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/race-control.test.mjs",
-        "tests/unit/race-session-fixes.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs",
         "tests/unit/storm-weather.test.mjs"
       ],
@@ -11273,7 +11265,6 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/race-setup-sheets.test.mjs",
         "tests/unit/storm-weather.test.mjs",
