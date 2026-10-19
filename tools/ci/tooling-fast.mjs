@@ -469,9 +469,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
-  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break) and the bus cursor read; a real-git race on a local bare origin; < 2 s.
+  // fleet-bus-mirror: which bus lines become PR comments (to:#<n> only), the comment body, dedupe by bus sha and the closed/merged skip; gh injected, pure; < 0.2 s.
+  "tests/unit/fleet-bus-mirror.test.mjs",
+  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break), the bus cursor read and the deliverable-recipient rule; a real-git race on a local bare origin; < 2 s.
   "tests/unit/fleet-bus.test.mjs",
   "tests/unit/fleet-flags.test.mjs",
+  // fleet-owner: HELD (open PR diff) beats CLAIMED (board glob) beats FREE, RELEASE? answers, the 60-min lapse, fail-closed file lists; fake API, < 0.2 s.
+  "tests/unit/fleet-owner.test.mjs",
   // fleet-tick: the diff of two watcher states into changed rows, pure fixtures; < 0.1 s.
   "tests/unit/fleet-tick.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
