@@ -1478,6 +1478,9 @@ const Car3D = (function () {
       }
     }
     const exhGates = Math.max(0, Math.min(2, Math.round(exhStyle.wastegate || 0)));
+    const exhTint = Math.max(0, Math.min(2, Math.round(exhStyle.heatTint || 0)));
+    const tintBands = exhTint === 2 ? [[0.40, 0.24, 0.52], [0.22, 0.26, 0.62], [0.30, 0.22, 0.50], [0.18, 0.30, 0.66]]
+      : [[0.80, 0.64, 0.30], [0.66, 0.42, 0.26], [0.44, 0.30, 0.56], [0.22, 0.34, 0.68]];
     // gateStack (D6): wastegates stacked ABOVE the main tip on the centreline.
     const gateStack = !!exhStyle.gateStack && !exhTwin;
     for (let i = 0; i < exhGates; i++) {
@@ -1493,6 +1496,9 @@ const Car3D = (function () {
              [0.22, 0.22, 0.24], SURFACES.metal);
       addBox(out, tipX, gy + 0.005, tipZ + 0.032, gw * 0.66, gw * 0.66, 0.012,
              glazeOf(fTwin), SURFACES.metal);
+      // Stacked gates stand proud of the crash structure, tempered like the main tip.
+      if (gateStack) addTube(out, [[0, gy + 0.005, tipZ + 0.06], [0, gy + 0.005, tipZ - 0.09]], gw * 0.75, 10,
+                             exhTint ? tintBands[3 - i] : [0.62, 0.60, 0.58], SURFACES.metal);
     }
     const exhLip = Math.max(0, Math.min(2, Math.round(exhStyle.lip || 0)));
     if (exhLip >= 1) {
@@ -1526,9 +1532,6 @@ const Car3D = (function () {
     }
     // D6 preview: heatTint = titanium temper bands behind the tip (1 straw→blue, 2 burnt
     // purple); hood = carbon visor overhanging a single exit, red-edged.
-    const exhTint = Math.max(0, Math.min(2, Math.round(exhStyle.heatTint || 0)));
-    const tintBands = exhTint === 2 ? [[0.40, 0.24, 0.52], [0.22, 0.26, 0.62], [0.30, 0.22, 0.50], [0.18, 0.30, 0.66]]
-      : [[0.80, 0.64, 0.30], [0.66, 0.42, 0.26], [0.44, 0.30, 0.56], [0.22, 0.34, 0.68]];
     const tintR = (exhTwin ? exhR : tipRShow * 0.85) * 1.08;   // one radius: a stepped run read as jagged rings
     for (const cx of exhTint ? exits : []) { tintBands.forEach((c, i) => addTube(out, [[cx, EXH_Y, tipZ + 0.02 - i * 0.03],
       [cx, EXH_Y, tipZ - 0.01 - i * 0.03]], tintR, 10, c, SURFACES.metal));
