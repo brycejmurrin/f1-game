@@ -4,6 +4,7 @@
 // against real git: two hosts with stale views race for one lease on a local
 // bare origin, and the loser is refused. Bus cursor reads return only the new
 // lines. No network. Under two seconds.
+import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
