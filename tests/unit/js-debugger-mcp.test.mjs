@@ -315,7 +315,7 @@ test("async expression can await its promise without blocking MCP control", asyn
   const { s, c } = await attached();
   c.reply = async () => ({ result: { value: 42 } });
   s.run("Promise.resolve(42)", true); await new Promise(setImmediate);
-  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate").params.awaitPromise, true);
+  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate" && !x.params.expression.includes("__apexDbgClients")).params.awaitPromise, true);
   assert.equal(s.state(true).operations[0].result.result.value, 42);
 });
 test("tool responses carry only the latest operation result, not the last ten", async () => {
@@ -334,7 +334,7 @@ test("a run paused on a breakpoint reports paused, then pending after resume, ne
   };
   s.run("fixture()"); await new Promise(setImmediate);
   assert.equal(s.state().operations[0].status, "paused");
-  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate").timeout, 600000);
+  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate" && !x.params.expression.includes("__apexDbgClients")).timeout, 600000);
   c.emit("Debugger.resumed"); assert.equal(s.state().operations[0].status, "pending");
   finish({ result: { value: 1 } }); await new Promise(setImmediate); assert.equal(s.state().operations[0].status, "completed");
 });
@@ -454,7 +454,7 @@ test("A3: listeners counts by type via DOMDebugger.getEventListeners and release
   const r = await callTool(s, "debugger_listeners", { target: "#hud", detail: 2 });
   assert.deepEqual(r.structuredContent.byType, { keydown: 2, resize: 1 }); assert.equal(r.structuredContent.total, 3);
   assert.equal(r.structuredContent.listeners[0].url, frame.url); assert.equal(r.structuredContent.listeners.length, 2);
-  assert.match(c.calls.find(x => x.method === "Runtime.evaluate").params.expression, /querySelector\("#hud"\)/);
+  assert.match(c.calls.find(x => x.method === "Runtime.evaluate" && !x.params.expression.includes("__apexDbgClients")).params.expression, /querySelector\("#hud"\)/);
   assert.ok(c.calls.some(x => x.method === "Runtime.releaseObjectGroup" && x.params.objectGroup === "apex-dbg-listeners"));
 });
 test("A4: instances queries the prototype, reads the array length and releases the group", async () => {

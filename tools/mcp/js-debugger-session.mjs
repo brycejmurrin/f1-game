@@ -54,22 +54,16 @@ function operationResult(result) {
     result: { type: result.result?.type, subtype: result.result?.subtype, description: clip(result.result?.description, 200) },
     hadException: !!result.exceptionDetails };
 }
-// Chrome's browser endpoint reports `attached` per target (Target.getTargets); /json/list does not.
-// Read BEFORE our own attach, so true means some other client (DevTools, Playwright, an agent) holds it.
-async function browserPeers(endpoint, target) {
-  if (target.type === "node") return null;
-  const version = await (await fetch(new URL("/json/version", localUrl(endpoint)), { redirect: "error", signal: AbortSignal.timeout(1500) })).json();
-  const ws = localUrl(version.webSocketDebuggerUrl, true);
-  if (ws.host !== localUrl(endpoint).host) return null;
-  const browser = await Cdp.open(ws.href);
-  try {
-    const { targetInfos } = await browser.send("Target.getTargets", {}, 1500);
-    return { attached: !!targetInfos?.find(t => t.targetId === target.id)?.attached };
-  } finally { browser.close(); }
-}
+// Two js-debugger sessions on one target share every pause. Each session registers itself in a
+// page-global table (its generation + pid); a live pid there that is not ours is another debugger.
+// (Chrome's Target.getTargets `attached` cannot tell: debug-chrome's viewport holder is always attached.)
+const REGISTRY = "__apexDbgClients";
+const registerExpression = (gen, pid) => `(()=>{var M=globalThis.${REGISTRY}||(Object.defineProperty(globalThis,"${REGISTRY}",{value:{},configurable:true}),globalThis.${REGISTRY});var o=Object.entries(M).map(function(e){return {gen:e[0],pid:e[1].pid,since:e[1].since}});M[${JSON.stringify(gen)}]={pid:${pid},since:Date.now()};return o})()`;
+const unregisterExpression = gen => `(()=>{var M=globalThis.${REGISTRY};if(M)delete M[${JSON.stringify(gen)}];return true})()`;
+const pidAlive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
 export class DebugSession {
-  constructor({ discover = targets, open = Cdp.open, checkPeers = open === Cdp.open ? browserPeers : null } = {}) {
-    this.discover = discover; this.open = open; this.checkPeers = checkPeers;
+  constructor({ discover = targets, open = Cdp.open } = {}) {
+    this.discover = discover; this.open = open;
     this.cdp = null; this.pause = null; this.sequence = 0;
     this.scripts = new Map(); this.objects = new Set(); this.breakpoints = new Map();
     this.operations = new Map(); this.operationSequence = 0; this.connecting = false; this.attachGeneration = 0;
@@ -195,9 +189,9 @@ export class DebugSession {
       const target = rows.find(t => t.id === targetId);
       if (!target) throw Error("Unknown targetId; list again with debugger_targets (targets change: a service worker stops when idle, a Node process exits)");
       // The repository's debugger works on local repros, never the deployed site.
+      this.lastAttachType = target.type;
       if (!attachableUrl(target)) throw Error(`Refusing to attach ${clip(target.url, 200)}: the debugger only attaches pages served from 127.0.0.1, localhost or [::1] (local repros only, never the deployed site). Serve the page locally, e.g. node tools/mcp/debug-chrome.mjs start`);
-      const peers = this.checkPeers ? await this.checkPeers(endpoint, target).catch(() => null) : null;
-      current();
+
       const ws = localUrl(target.webSocketDebuggerUrl, true), origin = localUrl(endpoint);
       if (ws.host !== origin.host) throw Error("Target WebSocket must use the discovery host and port");
       client = await this.open(ws.href); current(); this.cdp = client;
@@ -262,11 +256,17 @@ export class DebugSession {
       if (target.type === "node") await client.send("Runtime.runIfWaitingForDebugger", {}, 2000).catch(() => {});
       const st = this.state();
       if (target.type === "node") st.note = "Node target: started with --inspect-brk it now stops at Break on start (cause start); set breakpoints, then resume. Node waits for this client to detach before it exits.";
-      if (peers?.attached) st.warning = "Another debugger client is already attached to this target (DevTools, Playwright or another agent). Pauses are shared: a pause with cause 'unowned' is theirs, and a resume releases it.";
+      try {
+        const r = await client.send("Runtime.evaluate", { expression: registerExpression(this.generation, process.pid), returnByValue: true, silent: true }, 2000);
+        const others = (r.result?.value || []).filter(o => o.gen !== this.generation && Number.isInteger(o.pid) && o.pid !== process.pid && pidAlive(o.pid));
+        if (others.length) st.warning = `Another js-debugger session (pid ${others.map(o => o.pid).join(", ")}) is attached to this target. Pauses are shared: a pause with cause 'unowned' is theirs, and your resume releases it. Coordinate, or detach one.`;
+      } catch {}
       return st;
     } catch (e) {
       client?.close();
       if (this.cdp === client || this.attachGeneration === attachGeneration) { this.cdp = null; this.target = null; }
+      // Measured 2026-10-19: a url-less worker that never ran answers no command, direct or via Target.attachToTarget.
+      if (/timed out/.test(e.message) && this.lastAttachType && this.lastAttachType !== "page") throw Error(`${e.message}. The ${this.lastAttachType} target accepted the socket but answered nothing: it is not running JavaScript (a worker still loading lists url "", a stopped service worker). List again; wake it from the page first.`);
       throw e;
     }
     finally { if (this.attachGeneration === attachGeneration) this.connecting = false; }
@@ -289,6 +289,7 @@ export class DebugSession {
       ...[...this.operationGroups].map(objectGroup => ["Runtime.releaseObjectGroup", { objectGroup }]),
       ["Runtime.releaseObjectGroup", { objectGroup: this.generation }]];
     if (this.pause) commands.push(["Runtime.releaseObjectGroup", { objectGroup: this.pause.token }]);
+    commands.push(["Runtime.evaluate", { expression: unregisterExpression(this.generation), returnByValue: true, silent: true }]);
     if (this.logpointRings.size) {
       const ids = JSON.stringify([...this.logpointRings]);
       commands.push(["Runtime.evaluate", { expression: `(function(ids){var R=globalThis.__apexDbgLog;if(!R)return false;ids.forEach(function(id){delete R[id]});if(!Object.keys(R).length)delete globalThis.__apexDbgLog;return true})(${ids})`, returnByValue: true, silent: true }]);

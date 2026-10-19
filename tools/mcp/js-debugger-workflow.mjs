@@ -14,7 +14,8 @@ export function valueSummary(v) {
   const props = v.preview?.properties;
   if (props) {
     const arr = v.subtype === "array";
-    const body = props.slice(0, 8).map(p => arr ? clip(p.value, 40) : `${clip(p.name, 30)}: ${clip(p.value, 40)}`).join(", ");
+    const shown = p => p.type === "function" ? "ƒ" : clip(p.value, 40);
+    const body = props.slice(0, 8).map(p => arr ? shown(p) : `${clip(p.name, 30)}: ${shown(p)}`).join(", ");
     return clip(`${arr ? `${clip(v.description, 30)} [` : "{"}${body}${v.preview.overflow || props.length > 8 ? ", …" : ""}${arr ? "]" : "}"}`, 300);
   }
   return clip(v.description || v.type, 200);
@@ -80,6 +81,12 @@ export function workflowMethods() {
       for (const b of breakpoints) {
         const bp = await this.setBreakpoint(b.url, b.line, b.column ?? 1, b.condition ?? "");
         set.push({ id: bp.id, url: bp.url ?? bp.urlRegex, line: b.line, locations: bp.locations, ...(bp.warning ? { warning: bp.warning } : {}) });
+      }
+      // Already paused (Node's Break on start, a previous hit) and no trigger: run to the next pause.
+      if (this.pause && !trigger) {
+        const at = this.pause.token;
+        await this.connected().send("Debugger.resume");
+        if (this.pause?.token === at) { this.resetPause(); this.markOperations("paused", "pending"); }
       }
       const operation = trigger ? this.run(trigger, awaitPromise, Math.max(timeoutMs, 1000)) : null;
       const started = Date.now();

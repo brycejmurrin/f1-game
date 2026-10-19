@@ -35,9 +35,11 @@ const relUrl = url => url?.startsWith("file://") ? rel(fileURLToPath(url)) : url
 // An arrow keeps the frame's `this`/`arguments`; the frame's locals resolve inside it.
 export function probeCondition(id, { expression, condition, maxValues = 20, pauses = 0, maxChars = 200 }) {
   const key = JSON.stringify(id);
-  const value = expression ? `var v;try{v=(${expression}\n);v=typeof v==="number"?(isFinite(v)?v:String(v)):typeof v==="string"?v.slice(0,${maxChars}):v===undefined?"undefined":(typeof v==="object"&&v!==null)?(function(){try{return JSON.stringify(v).slice(0,${maxChars})}catch(e){return String(v).slice(0,${maxChars})}})():String(v)}catch(e){v="!err: "+String(e&&e.message||e).slice(0,${maxChars})}` : "var v;";
-  return `(()=>{try{${condition ? `if(!(${condition}\n))return false;` : ""}var G=globalThis,N=G.__apexDbgN||(Object.defineProperty(G,"__apexDbgN",{value:{},configurable:true}),G.__apexDbgN),n=N[${key}]=(N[${key}]|0)+1;`
-    + `if(n<=${maxValues}||n%1000===0){${value}G.${BINDING}(JSON.stringify({p:${key},n:n,v:v}))}return n<=${pauses}}catch(e){return false}})()`;
+  // Same collision rule as logpointCondition: every helper name is __apexDbg-prefixed, since
+  // a hoisted `var G` would shadow (and blank) the frame's own `G`.
+  const value = expression ? `var __apexDbgV;try{__apexDbgV=(${expression}\n);__apexDbgV=typeof __apexDbgV==="number"?(isFinite(__apexDbgV)?__apexDbgV:String(__apexDbgV)):typeof __apexDbgV==="string"?__apexDbgV.slice(0,${maxChars}):__apexDbgV===undefined?"undefined":(typeof __apexDbgV==="object"&&__apexDbgV!==null)?(function(){try{return JSON.stringify(__apexDbgV).slice(0,${maxChars})}catch(e){return String(__apexDbgV).slice(0,${maxChars})}})():String(__apexDbgV)}catch(__apexDbgE){__apexDbgV="!err: "+String(__apexDbgE&&__apexDbgE.message||__apexDbgE).slice(0,${maxChars})}` : "";
+  return `(()=>{try{${condition ? `if(!(${condition}\n))return false;` : ""}var __apexDbgN=globalThis.__apexDbgN||(Object.defineProperty(globalThis,"__apexDbgN",{value:{},configurable:true}),globalThis.__apexDbgN),__apexDbgK=__apexDbgN[${key}]=(__apexDbgN[${key}]|0)+1;`
+    + `if(__apexDbgK<=${maxValues}||__apexDbgK%1000===0){${value}globalThis.${BINDING}(JSON.stringify(${expression ? `{p:${key},n:__apexDbgK,v:__apexDbgV}` : `{p:${key},n:__apexDbgK}`}))}return __apexDbgK<=${pauses}}catch(__apexDbgE){return false}})()`;
 }
 // Exact final counts: an exit hook flushes the counter table through the binding (Node keeps the
 // inspector open after exit until this client disconnects, so the message arrives).

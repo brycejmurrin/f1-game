@@ -100,7 +100,7 @@ test("node_test refuses files outside the repository and malformed probes before
     const r = await callTool(s, "debugger_node_test", args);
     assert.equal(r.isError, true, JSON.stringify(args));
   }
-  assert.match(probeCondition("p1", { expression: "x", pauses: 2 }), /return n<=2/);
+  assert.match(probeCondition("p1", { expression: "x", pauses: 2 }), /return __apexDbgK<=2/);
 });
 
 test("attach a live Node target: Break on start, debugger_break returns locals, debugger_collect counts, detach lets it exit", async () => {
@@ -111,8 +111,9 @@ test("attach a live Node target: Break on start, debugger_break returns locals, 
     const st = await s.attach(endpoint, id);
     assert.match(st.note, /Break on start/);
     assert.ok(await s.waitForPause(3000)); assert.equal(s.pause.cause, "start");
-    await s.control("resume", s.pause.token, 0);
-    await new Promise(r => setTimeout(r, 200));
+    // No trigger while paused at start: set, resume, run to the next pause (none here: mul is idle).
+    const idle = (await callTool(s, "debugger_break", { breakpoints: [], timeoutMs: 300 })).structuredContent;
+    assert.equal(idle.paused, false); assert.equal(s.pause, null);
     const hit = await callTool(s, "debugger_break", { breakpoints: [{ url: `${FX}/live.fixture.cjs`, line: 4 }], trigger: "mul(6, 7)", frames: 1 });
     const b = hit.structuredContent;
     assert.equal(b.paused, true, JSON.stringify(b)); assert.equal(b.cause, "breakpoint");
@@ -130,6 +131,22 @@ test("attach a live Node target: Break on start, debugger_break returns locals, 
     await s.detach();
     p.kill("SIGKILL");
   }
+});
+
+test("probe and logpoint conditions never shadow frame locals (a `var G` once blanked the game's G)", async () => {
+  const { logpointCondition } = await import("../../tools/mcp/js-debugger-trace.mjs");
+  const sent = [];
+  globalThis.__apexDbgEmit = m => sent.push(JSON.parse(m));
+  try {
+    for (const name of ["G", "R", "L", "N", "n", "v", "s", "e", "k"]) {
+      const frame = new Function(name, "cond", "return eval(cond)");
+      sent.length = 0;
+      assert.equal(frame({ state: "race" }, probeCondition("p9", { expression: `${name}.state`, condition: `${name}.state === "race"`, pauses: 0 })), false);
+      assert.deepEqual(sent.map(m => m.v), ["race"], name);
+      frame({ state: "race" }, logpointCondition(`lp-${name}`, `${name}.state`, 5, 50));
+      assert.equal(globalThis.__apexDbgLog[`lp-${name}`].items.at(-1).v, "race", name);
+    }
+  } finally { delete globalThis.__apexDbgEmit; delete globalThis.__apexDbgLog; delete globalThis.__apexDbgN; }
 });
 
 class FakeCdp extends EventEmitter {
@@ -156,3 +173,17 @@ test("pause cause says when a pause is not ours; a step waits for and returns th
   assert.equal(st.paused, true); assert.notEqual(st.pause.token, before); assert.equal(st.pause.cause, "step");
   assert.equal(TOOLS.filter(t => ["debugger_break", "debugger_collect", "debugger_node_test"].includes(t.name)).length, 3);
 });
+
+test("attach warns only when ANOTHER live js-debugger session registered on the target, and detach unregisters", async () => {
+  for (const [rows, warned] of [[[{ gen: "other", pid: process.ppid }], true], [[{ gen: "gone", pid: 2 ** 22 + 7 }], false], [[], false]]) {
+    const c = new FakeCdp();
+    c.send = async function (method, params) { this.calls.push({ method, params }); return method === "Runtime.evaluate" && params.expression.includes("__apexDbgClients") ? { result: { value: rows } } : {}; };
+    const s = new DebugSession({ discover: async () => [{ type: "page", id: "t", url: "about:blank", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/t" }], open: async () => c });
+    const st = await s.attach("http://127.0.0.1:9222", "t");
+    assert.equal(!!st.warning, warned, JSON.stringify(rows));
+    if (warned) assert.match(st.warning, new RegExp(`pid ${process.ppid}`));
+    await s.detach();
+    assert.ok(c.calls.some(x => x.method === "Runtime.evaluate" && /delete M\[/.test(x.params.expression)));
+  }
+});
+
