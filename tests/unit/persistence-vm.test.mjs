@@ -74,12 +74,26 @@ test("the session still reads back what it wrote (a lost save is not a lost sess
   assert.equal(g.apex.aeroMode(), "auto");
 });
 
-test("the loud warning fires once, not once per write", () => {
-  const mark = g.record.console.length;
-  breakStorage();
-  for (let i = 0; i < 6; i++) g.apex.aeroMode(i % 2 ? "auto" : "manual");
-  const warned = g.record.console.slice(mark).filter((c) => /localStorage .*failed/.test(c[1]));
-  assert.ok(warned.length <= 1);
-  const buffered = g.apex.logs({ ns: "game" }).filter((x) => /localStorage .*failed/.test(x.msg)).length;
-  assert.ok(buffered > 1);
+test("the loud warning fires once, not once per write", async () => {
+  // Fresh boot: on the shared one the single warning already fired in an
+  // earlier test, so `<= 1` could not tell "once" from "never" (review P1-07).
+  const v = await createGame({ storage: { trackId: "monza" } });
+  try {
+    const ls = v.sandbox.localStorage;
+    const real = ls.setItem.bind(ls);
+    ls.setItem = function (k, val) {
+      if (String(k).startsWith("apex26.")) {
+        const e = new Error("storage is full");
+        e.name = "QuotaExceededError";
+        throw e;
+      }
+      return real(k, val);
+    };
+    const mark = v.record.console.length;
+    for (let i = 0; i < 6; i++) v.apex.aeroMode(i % 2 ? "auto" : "manual");
+    const warned = v.record.console.slice(mark).filter((c) => /localStorage .*failed/.test(c[1]));
+    assert.equal(warned.length, 1);
+    const buffered = v.apex.logs({ ns: "game" }).filter((x) => /localStorage .*failed/.test(x.msg)).length;
+    assert.ok(buffered > 1);
+  } finally { v.close(); }
 });

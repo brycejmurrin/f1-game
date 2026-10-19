@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 850+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 854+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -327,6 +327,27 @@ Every failure automatically attaches three things (see `tests/helpers/fixtures.j
 | `apex-logs` | the `Log` ring buffer: retained diagnostics down to `info`, **including ones never printed** |
 | `page-console` | what the page actually said, in order, favicon noise stripped |
 
+### Debug a Node test
+
+Measured on Node v22 in `docs/notes/NODE-DEBUGGING-2026-10-19.md`; skill `js-debugger` drives the tools.
+
+1. **Default: one MCP call.** `debugger_node_test {files:[…], probes:[{file:"js/physics/brake-cue.js", line, expression, captureLocals}]}`
+   runs up to 8 files under the inspector, no attach, and returns hit counts, values and locals. Probe a body line,
+   not the `function` header. Add `runner:"test"` for the real `node --test`.
+2. **Interactive:** `node --inspect-brk=0 tests/unit/<f>.test.mjs` (no `--test`: one process, one ws URL, the runner
+   still reports), then `debugger_targets targetType:"node"` and attach. `--test` with several files hangs a single
+   client, because each file's child waits on its own port.
+3. **Which filename form is debuggable.** V8 reports a vm script under exactly the `filename` it was given:
+   an absolute path is a `file://` URL that url breakpoints and `--experimental-test-coverage` reach (the game-vm
+   family); a relative (`js/…`), bare or missing filename is not (coverage drops it, url breakpoints match 0). The MCP
+   still binds those by source inside an instrumentation pause, capped at `vmPauseBudget` executions, so a probe on
+   an unnamed vm script works but a vm-heavy suite pays for it (`cam-avoid-vm` 121 s uncapped). Issues #2960 (opt-in
+   preload) and #2961 (absolute filenames) track the permanent fix.
+4. **Breakpoint cost.** A logpoint is a condition that logs and returns `false`; a pause-then-resume on every hit
+   costs ~44 ms per round trip (`game-vm.test` 26 s → 84 s).
+5. **Columns shift by 2** on top-level `const` lines (the harness rewrites them to `var`); set line breakpoints.
+6. **Never leave a client attached at exit:** Node prints "Waiting for the debugger to disconnect…" and hangs.
+
 ---
 
 ## 2. Test groups
@@ -433,12 +454,14 @@ tools directly.)
 | `perf-race-entry` | `perf-race-entry.spec.js` — race vs practice PREPARING stage spans (`RaceEntryProfile` / `__apex.raceEntryStages`), writes `artifacts/perf-race-entry/*.json` for regression diffs (issue #1881) |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
 | `xr` | Immersive Web Emulation Runtime (IWER) emulated-VR suite — Playwright project `xr-emulated`, pinned `tests/vendor/iwer-2.5.0.min.js`, `forceInstall` metaQuest3. Spec-level only (not Quest GPU). Run `npm run test:xr`. Path-gated CI job (`xr-filter` → `xr`) when the diff touches `js/xr/`, IWER, or `vr-emulated.spec.js`. On-device checklist: `docs/notes/XR-QUEST-ON-DEVICE.md` |
+| `webkit` | WebKit iPhone-path proxy — Playwright project `webkit` (`Desktop Safari`), `tests/specs/webkit-boot.spec.js` only. Opt-in via `APEX_WEBKIT=1` or `--project=webkit` (so bare `npm test` never needs a WebKit binary). Pins `apex26.gfxBackend=three` + `apex26.tlxForceGL=1`. Run `npm run test:webkit` or dispatch `.github/workflows/webkit-leg.yml`. See §WebKit leg below |
 
 ### Node groups (`node --test`, no browser)
 
 | Group | What it runs |
 |---|---|
-| `guards` | the 35 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `log-namespaces`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
+| `agent-output` | Shared compact/diagnostic/full presentation, CLI process handling, MCP routing and saved evidence, launch pins and generated catalog; every file also runs in `tooling-fast`. |
+| `guards` | the 41 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `log-namespaces`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
 | `tooling-fast` | the structural half — most unit files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--changed` selects diff-owned files for the edit loop; the full command is the pre-push floor; `--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`. **CI (#1075):** the full suite is split across two parallel jobs — `Structural guards (tooling A)` and `Structural guards (tooling B)` — then the aggregator `Structural guards` runs ratchet/audit (~8 min wall, 461 s median 2026-10-05 per the `ci.yml` header); that aggregator name is what `ready-gate.mjs` requires green before draft→ready |
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `game-vm` | the Node VM game harness (`game-vm.test.mjs`), the friend-race quali handoff (`quali-handoff-vm`), physics parity (`physics-characterization-vm`) the `*-vm.test.mjs` TWINS of the JSON-only browser specs (every `TWINNED` pair in `tools/ci/twinned-specs.mjs` is the list; it is not copied here because the copy drifted) and `new-hooks-vm` — same assertions and thresholds, one boot per file, ~1 s a circuit build. ~3 min for the set (elevation-tracks builds 40 circuits and is the bulk of it, ~3 min through the worker pool; the rest are 2–30 s each), plus `game-vm-pool` — the pool's own parity suite; in CI's node suites, which the Pages gate runs unconditionally. **The twinned browser specs no longer run on the blocking gate** — `tools/ci/twinned-specs.mjs` lists the pairs (`TWINNED`, plus the `ADAPTED` specs the VM adapter replays) and holds the drift check that keeps the substitution honest (equal declared test counts, and the twin's group must still be gated, derived from ci.yml). They still run in their own group on the nightly. `new-hooks` has a VM file but is NOT twinned: its Madrid foundation test is deliberately unported |
@@ -449,7 +472,7 @@ tools directly.)
 | `vm-page` | local compatibility alias: runs both vm-page partitions serially through `tests/unit/adapted-specs.test.mjs` |
 | `vm-page-a` | four adapted specs (Albert Park foundation, autopilot, logging, projection), each as its own `APEX_VM_PAGE=1 node --test` child; CI slice `page-a` |
 | `vm-page-b` | seven adapted specs (agent-drive bench, COTA and Imola foundations, livery contrast, physics fixes, pit lane, race control), each as its own child; CI slice `page-b` |
-| `mcp` | Server defect regressions (`lsp-mcp` real-tree MCP client + fixtures, `lsp-reference-fixes`, `lsp-config-freshness`, `lsp-caller-fixes`, `lsp-navigation-efficiency`, `lsp-workflow-fixes`, `apex-server-fixes`, `js-debugger-lifecycle-fixes`, `chrome-server-fixes`); debugger primitive exceptions, reserved-name counts and trace regressions (`js-debugger-trace`); [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. Runs with `--test-concurrency=1` so parallel `tsc --lsp` cold starts cannot starve the MCP client case (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md). The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
+| `mcp` | Server defect regressions (`lsp-mcp` real-tree MCP client + fixtures, `lsp-reference-fixes`, `lsp-config-freshness`, `lsp-caller-fixes`, `lsp-navigation-efficiency`, `lsp-workflow-fixes`, `apex-server-fixes`, `js-debugger-lifecycle-fixes`, `chrome-server-fixes`); debugger primitive exceptions, reserved-name counts and trace regressions (`js-debugger-trace`); Node targets, `debugger_node_test` (probes, captures, parallel files, child auto-attach, `node --test` runner, timeout) and the `debugger_break`/`debugger_collect` workflows against live Node inspectors (`js-debugger-node`, ~6 s, no browser); [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. Runs with `--test-concurrency=1` so parallel `tsc --lsp` cold starts cannot starve the MCP client case (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md). The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
 | `docs-guards` | the unit files that READ the prose trees ci.yml's `paths-ignore` skips (`docs/**`, `**/*.md`, `.claude/**`, `.cursor/**`, `.codex/**`): docs-integrity, generated-docs, agent-config, skill-progressive, hooks-documented, F1 Dev Tools scene/preset/replay helper contracts and the rest of `tests/groups.json`'s list. `.github/workflows/docs-guards.yml` ran this group on every pull request from 2026-09-25 until 2026-10-15, when its required context was removed and the workflow retired (every file is in `tooling-fast`, so ci.yml's guards job already covered a prose PR; the second workflow was one job start per PR event — `docs/notes/CI-CLOG-SURVEY-2026-10-15.md`). The group remains the local alias the docs-only fast path and the agent-config skill call. |
 | `node-slow` | the raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) plus `flyby-fleet` (the flyby's twelve-circuit audit, ~1 min) and `foundation-core-vm` (~26 s, builds all sixteen foundation circuits) — CI guards always, locally when pick-tests names it |
 | `sweeps` | the full-fleet geometry audits (`package.json` `test:sweeps` IS the list; the enumeration that used to stand here had drifted four files behind it, so read the script). Most rebuild every circuit through `tools/lib/track-build-vm.cjs`; a few build no circuit at all (driving-line's synthetic stadium, driving-line-opts' store round-trip, track-build-vm-release.test.mjs's two-circuit harness check) and ride here beside the geometry they serve. `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
@@ -695,7 +718,7 @@ toMenu recovers (cancel, then un-hide the title), `#rs-go` would not.
 | `agent-view` | 117 | shared — **117/117**, 43 min → 11 min |
 | `new-hooks` | 56 | shared — 56/56 |
 | `dev-tools` | 56 | shared |
-| `camera-driving-hooks` | 25 | shared |
+| `camera-driving-hooks` | 26 | shared |
 | `headless-api` | 24 | shared — 24/24 |
 | `logging` | 6 | shared — 6/6 |
 | `career` | 101 | **reverted** — hub/garage flows click through menus |
@@ -781,6 +804,42 @@ they are in `tooling-fast`, where they skip loudly because the shards install no
 Suppressions live in `.github/actionlint.yaml`, `.github/zizmor.yml` and inline `# zizmor: ignore[audit] reason` comments; the test
 rejects a blanket ignore or a reasonless one. TLX is not checked (TSL node graphs have no static shader stage), and WGSL
 authority stays `tools/gfx/wgx-validate.mjs`. Evidence: `docs/notes/SKILL-MCP-SCOUT-2026-10-18.md` §Adopted.
+
+### WebKit leg (iPhone-path proxy) — #2705
+
+Every ordinary browser job and `npm test` project runs Chromium. The phone's
+shipped path is three.js WebGL2 on WebKit (JavaScriptCore + ANGLE-Metal), so a
+change that only looks green under Chromium/SwiftShader can still break on
+Bryce's iPhone. `.github/workflows/webkit-leg.yml` is the nearest CI proxy:
+
+| piece | what |
+|---|---|
+| trigger | `workflow_dispatch` only — not on every PR (macOS minutes; opt-in) |
+| runner | `macos-latest` by default (ANGLE-Metal like iOS, no extra packages). `ubuntu-latest` needs `npx playwright install --with-deps webkit` |
+| project | Playwright `webkit` (`devices["Desktop Safari"]`), gated by `APEX_WEBKIT=1`; `WEBKIT_SPECS` are ignored by `headless` / `render` / `xr-emulated` |
+| pins | `apex26.gfxBackend=three`, `apex26.tlxForceGL=1` |
+| report | `artifacts/webkit-leg/report.json` + job summary: `browser.version()`, boot (`__apex.info().track` + backend), first race frame, short rAF frame-time sample, heap after two race cycles |
+
+**It is a proxy, not the phone.** The repo pins `playwright-core` 1.63.0, whose
+`browsers.json` names WebKit revision 2359 / browserVersion **26.6**. That is
+Safari 26-era WebKit, not whatever Safari ships on the phone, and it does not
+reproduce iOS thermal or jetsam behaviour. The job log prints
+`browser.version()` so nobody reads a green tick as "the phone is fine".
+
+**Local install.** On this agent container, `npx playwright install webkit`
+downloads but host-library validation fails. Prove Chromium projects are
+unchanged locally (`npx playwright test --list` still shows only headless /
+render / xr-emulated collecting ordinary specs). Dispatching the workflow is
+Dad's call:
+
+```sh
+gh workflow run webkit-leg.yml --ref <branch> -f image=macos-latest
+```
+
+**pass-census under WebKit.** `tools/gfx/pass-census.mjs` launches Chromium via
+`tools/lib/harness.mjs` (`launchChromium`) and is not WebKit-capable. The
+Playwright WebKit boot above is the proxy leg; extending the harness is out of
+scope for #2705.
 
 ### Renderer specs on a real GPU (`macos-latest`) — first run 2026-09-03 (see §Field notes 2026-09-03, `image-grade-visual`)
 
@@ -1300,15 +1359,12 @@ comment saying why they are not one.
 
 ## 5. Coverage table
 
+The `agent-output` group covers shared presentation levels, literal CLI execution
+and retention, MCP protocol/level routing and retrieval, configured launch pins,
+and the generated surface catalog. It runs without browsers and is included in
+the structural floor; its files are listed in `tests/groups.json`.
+
 The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`.
-
-Focused browser-free diagnostics contracts also run in `tooling-fast`:
-
-| Unit file | Coverage |
-|---|---|
-| `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
-| `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
-| `tests/unit/i18n-lint.test.mjs` | Locale contribution lint (`tools/check/i18n-lint.mjs`): fixture locales (valid / missing-key / bad-placeholder / wrong-plural), ship `locales/` clean, `--guard` on `tests/data/i18n-migrated.json`. |
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 

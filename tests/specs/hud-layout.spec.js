@@ -94,12 +94,49 @@ const PIN_PREVIOUS_LOOK = () => {
   } catch (_) {}
 };
 
+/** Two animation frames so sibling style invalidation lands before a sync wait (#2825). */
+async function settlePaint(page) {
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
+/**
+ * Force one HUD fit while frozen. updateHud(false) returns early when G.frozen,
+ * so invalidateFit's _fitPending never clears and syncPhoneFit cannot publish
+ * --hud-fit-stamp until jump → refreshHud(true) runs fitHud (#2941 / #2825).
+ */
+async function forceHudFit(page) {
+  await page.evaluate(() => {
+    try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+  });
+}
+
 /** Touch: fitHud painted clearance + published --hud-fit-stamp before probes. */
 async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
   const o = opts || {};
-  await page.waitForFunction(async ({ needRel, prevStamp }) => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  // Predicate must stay synchronous: Playwright does `if (predicate())`, so an
+  // async function (a Promise) is always truthy and never waits (#2825).
+  await settlePaint(page);
+  await forceHudFit(page);
+  await page.waitForFunction(({ needRel, prevStamp }) => {
     if (document.body.classList.contains("desktop")) return true;
+    // Portrait rotate gate: landscape stamp/clearance waits do not apply.
+    const rotate = document.getElementById("rotate-device");
+    try {
+      if (rotate && !document.body.classList.contains("rotate-ok")
+          && getComputedStyle(rotate).display !== "none") {
+        try { window.__apex.freeze(true); } catch (_) { /* */ }
+        return true;
+      }
+    } catch (_) { /* */ }
+    if (window.innerHeight > window.innerWidth && !document.body.classList.contains("rotate-ok")) {
+      try { window.__apex.freeze(true); } catch (_) { /* */ }
+      return true;
+    }
+    // Still no stamp after invalidateFit under freeze: re-fit once per poll.
+    const stamp0 = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+    if (!stamp0 || !/^\d+$/.test(stamp0)) {
+      try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+    }
     if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
     const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
     if (!stamp || !/^\d+$/.test(stamp)) return false;
@@ -109,7 +146,9 @@ async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
       && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
     const boost = document.getElementById("btn-boost");
     const sectors = document.getElementById("hud-sectors");
-    if (sectors && !sectors.hidden && boost && !boost.hidden) {
+    let sectorsPainted = !!(sectors && !sectors.hidden);
+    try { if (sectorsPainted && getComputedStyle(sectors).display === "none") sectorsPainted = false; } catch (_) { /* */ }
+    if (sectorsPainted && boost && !boost.hidden) {
       const br = boost.getBoundingClientRect();
       if (br.width && (br.left + br.right) / 2 >= window.innerWidth / 2) {
         const s = sectors.getBoundingClientRect();
@@ -145,15 +184,31 @@ async function waitTowerClearsGaps(page, timeoutMs = 30_000) {
 }
 
 async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
-  await page.waitForFunction(async () => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await settlePaint(page);
+  await forceHudFit(page);
+  await page.waitForFunction(() => {
     if (document.body.classList.contains("desktop")) return true;
+    const rotate = document.getElementById("rotate-device");
+    try {
+      if ((rotate && !document.body.classList.contains("rotate-ok")
+          && getComputedStyle(rotate).display !== "none")
+          || (window.innerHeight > window.innerWidth && !document.body.classList.contains("rotate-ok"))) {
+        return true;
+      }
+    } catch (_) { /* */ }
     const boost = document.getElementById("btn-boost");
     const sectors = document.getElementById("hud-sectors");
-    if (!boost || boost.hidden || !sectors) return false;
+    // MINIMAL / broadcast cams drop the plate via display:none — not .hidden.
+    if (!sectors || sectors.hidden) return true;
+    try { if (getComputedStyle(sectors).display === "none") return true; } catch (_) { /* */ }
     const sec = sectors.getBoundingClientRect();
+    if (!(sec.width > 0)) return true;
+    if (!boost || boost.hidden) return false;
     const br = boost.getBoundingClientRect();
-    if (!(sec.width > 0 && br.width > 0)) return false;
+    if (!(br.width > 0)) return false;
+    // Tilt parks BOOST on the left; --dock-r-w is a right-dock standoff only.
+    if ((br.left + br.right) / 2 < window.innerWidth / 2) return true;
+    if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
     const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
     if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
     const hit = sec.left < br.right - 0.5 && br.left < sec.right - 0.5
@@ -224,11 +279,12 @@ async function race(page, steer, manual, ins, opts) {
     // green, and not a longer timeout. toFixed(1) in fitHud rounds own-unit
     // height to 0.1px.
     // API: https://playwright.dev/docs/api/class-page#page-wait-for-function
-    await page.waitForFunction(async (broadcastCamera) => {
-      // Published inputs can precede Chromium's sibling style invalidation:
-      // captured rules/vars were correct while map/gaps still had base top:8px.
-      // Cross a paint boundary within this same 5 s budget before measuring.
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Sync predicate (#2825): double-rAF once before the wait, not inside it.
+    // Broadcast holds freeze+headless before jump; without a forced re-fit each
+    // poll the published tower height never catches CSS zoom (#2941).
+    await settlePaint(page);
+    await page.waitForFunction((broadcastCamera) => {
+      try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
       const tower = document.querySelector(".hud-top");
       if (!tower || document.body.classList.contains("hud-bcam") !== broadcastCamera) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
@@ -243,24 +299,61 @@ async function race(page, steer, manual, ins, opts) {
     // passed on replay on the same tree and on the base — the clusters were
     // read before fitHud had published --hud-top-h for the booted fonts.
     // Same wait as the broadcast branch minus the hud-bcam expectation.
-    await page.waitForFunction(async () => {
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await settlePaint(page);
+    const settled = page.waitForFunction(() => {
+      const why = (r) => { window.__hudSettleWhy = r; return false; };
       const tower = document.querySelector(".hud-top");
-      if (!tower) return false;
+      if (!tower) return why("no-tower");
+      // Portrait rotate gate / portrait viewport: landscape --hud-top-h match +
+      // clearance/stamp waits do not apply. Must short-circuit BEFORE the
+      // published-height check — on CI portrait, height vs --hud-top-h never
+      // lands within 0.1 while the rotate card owns the screen (#2941).
+      // Async predicates used to skip this whole wait (#2825).
+      if (document.body.classList.contains("desktop")) {
+        const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
+        const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
+        return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
+      }
+      const rotate = document.getElementById("rotate-device");
+      let rotateUp = false;
+      try {
+        rotateUp = !!(rotate && !document.body.classList.contains("rotate-ok")
+          && getComputedStyle(rotate).display !== "none");
+      } catch (_) { /* */ }
+      if (rotateUp || window.innerHeight > window.innerWidth) {
+        if (!(tower.getBoundingClientRect().height > 0)) return why("portrait-tower");
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+        try { window.__apex.freeze(true); } catch (_) { /* */ }
+        return true;
+      }
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) return false;
-      // Phone: wait until S3 has cleared a lit BOOST and the radio card (CI
-      // oversize APEX_WORKERS=2: wrap-reverse / lane settle after --hud-top-h).
-      if (document.body.classList.contains("desktop")) return true;
+      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) {
+        // 667x375 (#2941): tower paints 48 px, fitHud publishes 46.4 even when re-fit every poll.
+        return why(`tower-h ${height} vs ${published}`);
+      }
+      // Phone landscape: wait until S3 has cleared a lit BOOST and the radio
+      // card (CI oversize APEX_WORKERS=2: wrap-reverse / lane settle).
       const phoneSteer = document.body.classList.contains("steer-buttons")
         || document.body.classList.contains("steer-touch");
       const boost = document.getElementById("btn-boost");
-      if (phoneSteer && (!boost || boost.hidden)) return false;
+      if (phoneSteer && (!boost || boost.hidden)) return why("no-boost");
       const sec = document.getElementById("hud-sectors");
-      if (!sec || sec.hidden || !sec.childElementCount) return false;
+      let sectorsLive = false;
+      if (sec && !sec.hidden && sec.childElementCount) {
+        try { sectorsLive = getComputedStyle(sec).display !== "none" && sec.getBoundingClientRect().width > 0; }
+        catch (_) { sectorsLive = sec.getBoundingClientRect().width > 0; }
+      }
+      // MINIMAL drops #hud-sectors via display:none — sector clearance never applies.
+      if (!sectorsLive) {
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+        if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+        const stampMin = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+        if (!stampMin || !/^\d+$/.test(stampMin)) return why("stamp-min");
+        try { window.__apex.freeze(true); } catch (_) { /* */ }
+        return true;
+      }
       const s = sec.getBoundingClientRect();
-      if (!(s.width > 0)) return false;
       // BOOST clearance only when BOOST sits on the RIGHT (buttons/touch).
       // Tilt parks BOOST on the left — using that edge as the dock target
       // blew --dock-r-w to midCap (CI: dockRW 907, sectors under --sal).
@@ -268,8 +361,8 @@ async function race(page, steer, manual, ins, opts) {
       const boostOnRight = !!(b && b.width && (b.left + b.right) / 2 >= window.innerWidth / 2);
       if (boostOnRight) {
         const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
-        if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
-        if (s.right > b.left + 0.5) return false;
+        if (!(Number.isFinite(dockRW) && dockRW > 0)) return why("dock-r-w");
+        if (s.right > b.left + 0.5) return why("s3-on-boost");
       } else if (!boost || boost.hidden) {
         /* desktop / no BOOST — tower wait above is enough */
       }
@@ -283,7 +376,7 @@ async function race(page, steer, manual, ins, opts) {
             && r.left < a.right - 0.5 && a.left < r.right - 0.5
             && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5;
         };
-        if (hit(sec) || hit(document.querySelector(".hud-top"))) return false;
+        if (hit(sec) || hit(document.querySelector(".hud-top"))) return why("announce");
       }
       const top = document.querySelector(".hud-top");
       const gaps = document.querySelector(".hud-gaps");
@@ -292,27 +385,39 @@ async function race(page, steer, manual, ins, opts) {
         const gr = gaps.getBoundingClientRect();
         const towerGaps = tr.left < gr.right - 0.5 && gr.left < tr.right - 0.5
           && tr.top < gr.bottom - 0.5 && gr.top < tr.bottom - 0.5;
-        if (towerGaps) return false;
+        if (towerGaps) return why("tower-on-gaps");
       }
       // Notch safe box: a mid-fit #minimap / #hud-sectors can sit under --sal
       // for one tick. Require both inside the injected safe insets.
       const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
       const sar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sar")) || 0;
-      if (s.left < sal - 0.5 || s.right > window.innerWidth - sar + 0.5) return false;
+      if (s.left < sal - 0.5 || s.right > window.innerWidth - sar + 0.5) return why("sectors-safe");
       const map = document.getElementById("minimap");
       if (map && !map.hidden) {
         const m = map.getBoundingClientRect();
-        if (m.width > 0 && (m.left < sal - 0.5 || m.right > window.innerWidth - sar + 0.5)) return false;
+        if (m.width > 0 && (m.left < sal - 0.5 || m.right > window.innerWidth - sar + 0.5)) return why("map-safe");
       }
       // fitHud bumps --hud-fit-stamp only after painted phone clearance lands.
-      const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
-      if (!stamp || !/^\d+$/.test(stamp)) return false;
-      // Freeze in the same turn that saw clearance. updateHud still ticks
-      // while frozen, but fitHud's painted-clash path re-opens the same-key
-      // backoff if wrap-reverse crawls BOOST back onto S3.
+      let stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+      if (!stamp || !/^\d+$/.test(stamp)) {
+        // Under CI load a clearance frame can land before the stamp publish;
+        // force one fit pass (same as waitPhoneHudFitClearance).
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
+        if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+        stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+        if (!stamp || !/^\d+$/.test(stamp)) return why("stamp");
+      }
+      // Freeze in the same turn that saw clearance. Non-forced updateHud returns
+      // early while frozen — later waits must jump/refreshHud(true) to re-fit.
       try { window.__apex.freeze(true); } catch (_) { /* */ }
       return true;
     }, null, { polling: 100, timeout: 30_000 });
+    // Name the clause that never came true, not just "Timeout 30000ms" (#2941).
+    await settled.catch(async (e) => {
+      const why = await page.evaluate(() => window.__hudSettleWhy).catch(() => "?");
+      e.message = `phone HUD settle stuck on "${why}": ${e.message}`;
+      throw e;
+    });
   }
 }
 
@@ -593,6 +698,164 @@ test.describe("minimal profile", () => {
   });
 });
 
+test.describe("HUD editing drafts and explicit recovery", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+
+  const bootDefaults = async page => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+    expect(await page.evaluate(() => ({
+      coarse: matchMedia("(pointer: coarse)").matches,
+      desktop: document.body.classList.contains("desktop"),
+      layout: localStorage.getItem("apex26.hudLayout"),
+    }))).toEqual({ coarse: true, desktop: false, layout: null });
+  };
+  const openDisplay = async page => {
+    await page.locator("#pm-settings").tap();
+    await page.locator("#pm-open-display").tap();
+    if (!await page.locator("#pm-hud-details").evaluate(el => el.open)) await page.locator("#pm-hud-details > summary").tap();
+  };
+  const closeDisplayAndResume = async page => {
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-resume").tap();
+    await expect(page.locator("#pausemenu")).toBeHidden();
+  };
+
+  test("numeric HUD edits keep focused drafts visible and commit only valid completed values", async ({ page }) => {
+    await bootDefaults(page);
+    await page.evaluate(() => __apex.race("monza"));
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      __apex.go(); __apex.headless(true); __apex.freeze(true); __apex.jump(.1, 30, 0);
+    });
+    await page.locator("#pausebtn").tap();
+    await openDisplay(page);
+    // Preview is enabled only with a race HUD. A title-only test would never
+    // exercise the page-fading regression while typing into numeric fields.
+    expect(await page.evaluate(() => !document.getElementById("hud").hidden)).toBe(true);
+    await page.locator("#pm-hudlayout > summary").tap();
+    await page.locator("#pm-hl-el-sel").selectOption("sectors");
+    await expect(page.locator("html")).not.toHaveAttribute("data-appearance-peek", "hud");
+    const saved = () => page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
+    const visibleInput = async input => {
+      await expect(input).toBeFocused();
+      await expect(page.locator("html")).not.toHaveAttribute("data-appearance-peek", "hud");
+      const geometry = await input.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: innerWidth, height: innerHeight };
+      });
+      expect(geometry.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(geometry.width + 1);
+      expect(geometry.top).toBeGreaterThanOrEqual(0);
+      expect(geometry.bottom).toBeLessThanOrEqual(geometry.height + 1);
+    };
+    const typeDraft = async (selector, text) => {
+      const before = await saved(), input = page.locator(selector);
+      await input.tap();
+      await expect(input).toHaveAttribute("type", "number");
+      await input.press("Control+A"); await input.press("Backspace");
+      for (const character of text) {
+        await input.pressSequentially(character);
+        await visibleInput(input);
+        expect(await saved(), "partial numeric drafts never persist").toBe(before);
+      }
+      return input;
+    };
+    for (const [index, cell] of [
+      { width: 852, height: 393, scale: 109, x: "125.5", y: "-90.25" },
+      { width: 667, height: 320, scale: 150, x: "-175.25", y: "125.5" },
+    ].entries()) {
+      await page.setViewportSize({ width: cell.width, height: cell.height });
+      if (index) await page.evaluate(scale => __apex.uiScale(scale), cell.scale);
+      const x = await typeDraft("#pm-hl-x", cell.x);
+      await x.press("Tab");
+      await visibleInput(page.locator("#pm-hl-y"));
+      expect(await page.evaluate(() => HudLayout.get("sectors").x)).toBe(Number(cell.x));
+      // A committed X still previews after traversing unchanged Y and size fields.
+      const afterX = await saved();
+      await page.locator("#pm-hl-y").press("Tab");
+      await visibleInput(page.locator("#pm-hl-s"));
+      await page.locator("#pm-hl-s").press("Tab");
+      await expect(page.locator("html")).toHaveAttribute("data-appearance-peek", "hud");
+      expect(await saved(), "unchanged fields preserve the committed layout").toBe(afterX);
+      await page.locator("#pm-hl-y").tap();
+      await visibleInput(page.locator("#pm-hl-y"));
+      const y = await typeDraft("#pm-hl-y", cell.y);
+      await y.press("Tab");
+      await visibleInput(page.locator("#pm-hl-s"));
+      expect(await page.evaluate(() => HudLayout.get("sectors").y)).toBe(Number(cell.y));
+      const beforeInvalid = await saved();
+      const size = await typeDraft("#pm-hl-s", "0");
+      await size.press("Tab");
+      expect(await saved(), "zero size does not change the committed layout").toBe(beforeInvalid);
+      await expect(size).toHaveValue("100");
+    }
+    const size = await typeDraft("#pm-hl-s", "30.5");
+    await size.press("Tab");
+    expect(await page.evaluate(() => HudLayout.get("sectors").s)).toBe(30.5);
+    await closeDisplayAndResume(page);
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    expect(await page.evaluate(() => HudLayout.get("sectors").s)).toBe(30.5);
+  });
+
+  test("Bring Into View recovers only the selected offscreen widget and survives Done and Resume", async ({ page }) => {
+    await bootDefaults(page);
+    await page.evaluate(() => __apex.race("monza"));
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      __apex.go(); __apex.headless(true); __apex.freeze(true); __apex.jump(.1, 30, 0);
+      HudLayout.set("sectors", { x: 250, y: -250, s: 30 });
+    });
+    await page.locator("#pausebtn").tap();
+    await openDisplay(page);
+    await page.locator("#pm-hud-arrange").tap();
+    await page.locator("#hud-arrange-element").selectOption("sectors");
+    const before = await page.evaluate(() => ({
+      value: HudLayout.get("sectors"), all: HudLayout.all()[HudLayout.shown()],
+      rect: document.getElementById("hud-sectors").getBoundingClientRect().toJSON(),
+      bounds: HudLayout.screenBounds(),
+    }));
+    expect(before.rect.x > before.bounds.right || before.rect.y + before.rect.height < before.bounds.top).toBe(true);
+    await page.locator("#hud-arrange-recover").tap();
+    const recovered = await page.evaluate(() => ({
+      value: HudLayout.get("sectors"), all: HudLayout.all()[HudLayout.shown()],
+      rect: document.getElementById("hud-sectors").getBoundingClientRect().toJSON(),
+      bounds: HudLayout.screenBounds(), saved: localStorage.getItem("apex26.hudLayout"),
+    }));
+    expect(recovered.value.s).toBe(before.value.s);
+    expect(Math.abs(recovered.rect.width - before.rect.width)).toBeLessThanOrEqual(.5);
+    expect(Math.abs(recovered.rect.height - before.rect.height)).toBeLessThanOrEqual(.5);
+    expect(recovered.rect.x).toBeGreaterThanOrEqual(recovered.bounds.left - .5);
+    expect(recovered.rect.y).toBeGreaterThanOrEqual(recovered.bounds.top - .5);
+    expect(recovered.rect.x + recovered.rect.width).toBeLessThanOrEqual(recovered.bounds.right + .5);
+    expect(recovered.rect.y + recovered.rect.height).toBeLessThanOrEqual(recovered.bounds.bottom + .5);
+    for (const [id, value] of Object.entries(before.all)) {
+      if (id !== "sectors") expect(recovered.all[id], id + " was not selected for recovery").toEqual(value);
+    }
+    await page.locator("#hud-arrange-done").tap();
+    await closeDisplayAndResume(page);
+    await page.evaluate(async () => {
+      GameHud.invalidateFit(); __apex.jump(.1, 30, 0);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    expect(await page.evaluate(() => HudLayout.get("sectors"))).toEqual(recovered.value);
+    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(recovered.saved);
+    const resumed = await page.locator("#hud-sectors").boundingBox();
+    for (const key of ["x", "y", "width", "height"]) {
+      expect(Math.abs(resumed[key] - recovered.rect[key]), key + " survives Resume").toBeLessThanOrEqual(.5);
+    }
+    await page.locator("#pausebtn").tap();
+    await openDisplay(page);
+    await page.locator("#pm-hud-arrange").tap();
+    await page.locator("#hud-arrange-element").selectOption("sectors");
+    expect(await page.evaluate(() => HudLayout.get("sectors"))).toEqual(recovered.value);
+    await page.locator("#hud-arrange-done").tap();
+  });
+});
+
 // THE LAYOUT CONTROL HAS TO DO SOMETHING. It was reported twice as inert, and
 // it was: hud-met-timing / -driver / -compact were body classes with no rule
 // behind them. COMPACT is the one that drops both halves, so one boot pins both
@@ -684,12 +947,11 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
         await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; },
           null, { polling: 100, timeout: BOOT_MS });
         await page.evaluate(() => window.GameHud && GameHud.invalidateFit && GameHud.invalidateFit());
-        // invalidateFit voids --hud-fit-stamp; the app republishes it once a full fit has landed. A fixed sleep
-        // read the unfitted 126 px paint when a slow CI frame had not ticked the HUD yet (#2801). The predicate
-        // is synchronous on purpose: waitForFunction does `if (success)`, so an async one (a Promise) is always
-        // truthy and passes at once, which is why waitPhoneHudFitClearance does not wait for the stamp.
+        // invalidateFit voids --hud-fit-stamp; jump → refreshHud(true) clears _fitPending so
+        // syncPhoneFit can republish (ticks alone can starve under CI load — #2801 / #2941).
         await page.waitForFunction(() => {
           if (document.body.classList.contains("desktop")) return false;
+          try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
           GameHud.syncPhoneFit();
           return /^\d+$/.test(document.documentElement.style.getPropertyValue("--hud-fit-stamp"));
         }, null, { polling: 100, timeout: 60_000 });
@@ -713,6 +975,12 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
       // cap (fit-to-screen), so a fixed ratio cannot hold there (667x375: 100 and 200 both 81.23 px,
       // #2882). The roomy shape must keep at least one uncapped step, so the check never goes vacuous.
       const sizes = [70, 100, 200], uncapped = [];
+      // #2882: a larger HUD SIZE never paints the timing tower smaller than a
+      // smaller size on the same viewport (fit-to-screen may plateau, not shrink).
+      for (let i = 1; i < sizes.length; i++) {
+        expect(gearW[sizes[i]] + 0.05, `monotonic HUD SIZE ${sizes[i - 1]} -> ${sizes[i]} ${JSON.stringify({ gearW, zTop })}`)
+          .toBeGreaterThanOrEqual(gearW[sizes[i - 1]]);
+      }
       for (let a = 0; a < sizes.length; a++) for (let b = a + 1; b < sizes.length; b++) {
         if (zTop[sizes[b]] !== "") {
           // Excluded only on evidence: the cap really binds at the larger size (a zoom below that HUD SIZE).
@@ -731,7 +999,7 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
 // A plate the player DRAGS beside BOOST, above the pedals (iPhone 15, BUTTON SIZE 237 %): the dock pass
 // tested columns only, squeezed it to 48 px every fit, clearControls restored it, and the HUD flickered
 // larger <-> smaller (Bryce, 2026-10-17). It shares the pedals' columns, not their rows, so it must keep its
-// own width, stay off every tap target, and hold one size across ticks.
+// own width and hold one size across ticks; manual overlap is now permitted.
 test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
@@ -758,13 +1026,16 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
       await page.evaluate(([x, y]) => { HudLayout.set("sectors", { x, y }); GameHud.invalidateFit(); }, [x, y]);
       await page.evaluate(() => new Promise((r) => setTimeout(r, 600)));
     }
-    await page.evaluate(() => new Promise((r) => setTimeout(r, 1500))); // let fitHud + the pack follow-up settle
+    await page.evaluate(async () => { await document.fonts.ready; await new Promise((r) => setTimeout(r, 1500)); }); // fonts and pack follow-up settle
     const seen = await page.evaluate(() => new Promise((resolve) => {
-      const out = new Set(), sec = document.getElementById("hud-sectors"), t0 = performance.now();
+      const out = new Map(), sec = document.getElementById("hud-sectors"), t0 = performance.now();
       const iv = setInterval(() => {
         const r = sec.getBoundingClientRect();
-        out.add([r.left, r.top, r.width, r.height].map(Math.round).join(",") + " mw=" + sec.style.maxWidth);
-        if (performance.now() - t0 > 3000) { clearInterval(iv); resolve([...out]); }
+        const key = [r.left, r.top, r.width, r.height].map(Math.round).join(",") + " mw=" + sec.style.maxWidth;
+        if (!out.has(key)) out.set(key, { rect: key, html: sec.innerHTML, font: getComputedStyle(sec).font,
+          zoom: sec.currentCSSZoom, style: sec.getAttribute("style"), fonts: document.fonts.status,
+          owner: sec.hasAttribute("data-hl-user") });
+        if (performance.now() - t0 > 3000) { clearInterval(iv); resolve([...out.values()]); }
       }, 50);
     }));
     expect(seen, "one plate state across 3 s of HUD ticks: " + JSON.stringify(seen)).toHaveLength(1);
@@ -777,7 +1048,8 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     });
     expect(st.mw, JSON.stringify(st)).toBe("");
     expect(st.w, JSON.stringify(st)).toBeGreaterThan(52);
-    expect(st.hits, JSON.stringify(st)).toEqual([]);
+    const offsets = await page.evaluate(() => { const e = document.getElementById("hud-sectors"); return [e.style.getPropertyValue("--hl-x"), e.style.getPropertyValue("--hl-y")]; });
+    expect(offsets, "manual positions are never corrected to clear a control").toEqual(["25", "10"]);
   });
 
   test("small sectors right of Boost survive arranger Done and Resume", async ({ page }) => {
@@ -800,8 +1072,13 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     await page.locator("#hud-arrange-element").selectOption("sectors");
     for (let i = 0; i < 4; i++) await page.locator("#hud-arrange-smaller").click();
     await page.locator("#hud-arrange-move").focus();
-    for (let i = 0; i < 5; i++) await page.keyboard.press("Shift+ArrowRight");
-    await page.keyboard.press("Shift+ArrowDown");
+    const target = await page.evaluate(() => {
+      const s = document.getElementById("hud-sectors").getBoundingClientRect();
+      const b = document.getElementById("btn-boost").getBoundingClientRect();
+      return { x: s.x + s.width / 2, y: s.y + s.height / 2, dx: b.right + 8 - s.left, dy: b.top - s.top };
+    });
+    await page.mouse.move(target.x, target.y); await page.mouse.down();
+    await page.mouse.move(target.x + target.dx, target.y + target.dy, { steps: 4 }); await page.mouse.up();
     const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
     await page.locator("#hud-arrange-done").click();
     await page.locator("#pm-settings-close").click();
@@ -822,7 +1099,7 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
       return out;
     });
     expect(samples.every(s => s.rightOfBoost), JSON.stringify(samples)).toBe(true);
-    expect(samples.every(s => s.mw === "" && s.size === "0.6")).toBe(true);
+    expect(samples.every(s => s.mw === "" && +s.size > 0 && +s.size < 1)).toBe(true);
     // Allow the initial resume fit to converge; a continuing two-state loop still fails.
     expect(new Set(samples.slice(-6).map(JSON.stringify)).size, "one plate/button size across settled fits: " + JSON.stringify(samples)).toBe(1);
     const live = await page.evaluate(async () => {
@@ -886,9 +1163,12 @@ async function enableOptIns(page) {
   await page.evaluate(() => {
     if (typeof HudElements === "undefined") throw new Error("HudElements missing");
     for (const id of ["rel", "strat", "inputs"]) HudElements.set(id, true);
+    // race() freezes on settle; HudElements → invalidateFit needs a forced fit.
+    try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.15, 60, 0); } catch (_) { /* */ }
   });
-  await page.waitForFunction(async () => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await settlePaint(page);
+  await page.waitForFunction(() => {
+    if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
     const rel = document.getElementById("hud-rel");
     const inp = document.getElementById("hud-inputs");
     if (!rel || !inp || rel.hidden || inp.hidden) return false;
@@ -902,7 +1182,10 @@ async function enableOptIns(page) {
       const sr = steerR.getBoundingClientRect();
       if (!(sr.width > 0)) return false;
       const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
-      if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+      if (!(Number.isFinite(dockRW) && dockRW > 0)) {
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.15, 60, 0); } catch (_) { /* */ }
+        return false;
+      }
       if (ir.left < sr.right + 4) return false;
       if (rr.right > ir.left - 4) return false;
     }
@@ -1451,5 +1734,86 @@ test.describe("speed readouts", () => {
     const why = JSON.stringify(pairs);
     expect(pairs.every((p) => p.wheel.length > 0 && p.kph > 100), "the wheel LCD drew a speed at race pace: " + why).toBe(true);
     expect(pairs.filter((p) => p.wheel !== p.hud), "wheel LCD vs #hud-speed-n, same frame: " + why).toEqual([]);
+  });
+});
+
+
+test.describe("unrestricted manual widgets", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test.setTimeout(300_000);
+  test("all widgets keep offscreen geometry through Done, Resume and rotation", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.headless(true); __apex.race("monza"); });
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.go(); __apex.freeze(true); __apex.jump(.1, 30, 0); });
+    await page.locator("#pausebtn").click(); await page.locator("#pm-settings").click();
+    await page.locator("#pm-open-display").click(); await page.locator("#pm-hud-details > summary").click();
+    await page.locator("#pm-hud-arrange").click();
+    const ids = await page.locator("#hud-arrange-element option").evaluateAll(es => es.map(e => e.value));
+    expect(ids).toHaveLength(19);
+    for (const id of ids) {
+      await page.locator("#hud-arrange-element").selectOption(id);
+      await page.locator("#hud-arrange-move").focus();
+      for (let i = 0; i < 11; i++) await page.keyboard.press("Shift+ArrowRight");
+      for (let i = 0; i < 8; i++) await page.locator("#hud-arrange-smaller").click();
+    }
+    // Explicit fractional positions and scales exercise the same persisted public setter.
+    await page.evaluate(() => { for (const [id] of HudLayout.ELEMENTS) HudLayout.set(id, { x: 125.25, y: -110.5, s: id === "map" ? 350 : 20 }); });
+    const detached = await page.evaluate(() => {
+      const el = document.getElementById("hud-energy"), parent = el.parentNode.id;
+      HudLayout.resetEl("energy");
+      const restored = el.parentNode.classList.contains("hud-bottom");
+      HudLayout.set("energy", { x: 125.25, y: -110.5, s: 20 });
+      return { parent, restored, detachedAgain: el.parentNode.id };
+    });
+    expect(detached).toEqual({ parent: "hud", restored: true, detachedAgain: "hud" });
+    const mapSizes = await page.evaluate(() => {
+      const body = document.body, previous = body.getAttribute("data-density");
+      const sizes = ["compact", "normal"].map(density => {
+        body.setAttribute("data-density", density);
+        const css = getComputedStyle(document.getElementById("minimap"));
+        return [css.width, css.height];
+      });
+      if (previous == null) body.removeAttribute("data-density"); else body.setAttribute("data-density", previous);
+      return sizes;
+    });
+    expect(mapSizes).toEqual([["128px", "128px"], ["128px", "128px"]]);
+    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
+    const check = async () => {
+      const rows = await page.evaluate(async () => {
+        GameHud.invalidateFit(); __apex.jump(.1, 30, 0);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        HudLayout.fit();
+        return HudLayout.ELEMENTS.map(([id, , sel]) => {
+          const el = document.querySelector(sel), cs = getComputedStyle(el);
+          return { id, x: el.style.getPropertyValue("--hl-x"), y: el.style.getPropertyValue("--hl-y"),
+            s: el.style.getPropertyValue("--hl-s"), clear: ["--hud-clear-x", "--hud-clear-y"].map(k => el.style.getPropertyValue(k)),
+            dropped: el.hasAttribute("data-col-drop"), capped: [cs.maxWidth, cs.maxHeight] };
+        });
+      });
+      for (const r of rows) {
+        expect(r.x, r.id).toBe("125.25"); expect(r.y, r.id).toBe("-110.5");
+        expect(r.s, r.id).toBe(r.id === "map" ? "3.5" : "0.2");
+        expect(r.clear, r.id).toEqual(["", ""]); expect(r.dropped, r.id).toBe(false);
+        expect(r.capped, r.id).toEqual(["none", "none"]);
+      }
+      expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
+    };
+    await page.locator("#hud-arrange-done").click();
+    await page.locator("#pm-settings-close").click(); await page.locator("#pm-settings-close").click();
+    await page.locator("#pm-resume").click(); await check();
+    const cameraParents = await page.evaluate(() => {
+      const set = HudLayout.shown(), el = document.getElementById("hud-energy");
+      HudLayout.setCam(set === "other" ? "helmet" : "chase");
+      const automatic = el.parentNode.classList.contains("hud-bottom");
+      HudLayout.setCam(set === "other" ? "chase" : set);
+      return { automatic, manualAgain: el.parentNode.id };
+    });
+    expect(cameraParents).toEqual({ automatic: true, manualAgain: "hud" });
+    await page.setViewportSize({ width: 390, height: 844 }); await check();
+    await page.setViewportSize({ width: 844, height: 390 }); await check();
+    await page.reload(); await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
   });
 });

@@ -95,7 +95,9 @@ const START_M = 40;
 function buriedLamps(track, lamps, reach = 2) {
   const arr = (a) => (a && a._data ? a._data : a);
   const P = arr(track.propsGeo && track.propsGeo.pos), I = arr(track.propsGeo && track.propsGeo.idx);
-  if (!P || !I) return 0;
+  // A circuit whose props geometry shape changed must FAIL, not read as "0 buried":
+  // returning 0 here would make the buried-lamps guard permanently green.
+  if (!P || !I || !P.length || !I.length) throw new Error(`${track.def && track.def.id}: propsGeo.pos/idx missing or empty, so buried start lamps cannot be checked`);
   const c = lamps[2];
   let rx = lamps[4][0] - lamps[0][0], rz = lamps[4][2] - lamps[0][2];
   const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
@@ -189,11 +191,13 @@ const survey = (() => {
   let out = null;
   return () => {
     if (out) return out;
-    out = { orphans: [], shortPools: [], darkRuns: [], startLamps: [], startGantry: [], lampHosts: { gantry: [], gate: [] } };
+    out = { orphans: [], shortPools: [], darkRuns: [], startLamps: [], startGantry: [], lampHosts: { gantry: [], gate: [] }, scoped: 0, total: 0 };
     // process.env.APEX_CIRCUITS narrows the pass to the circuits a circuit-only
     // pull request touched (tools/lib/circuit-scope.cjs); unset = every circuit.
     const { scope } = require("../../tools/lib/circuit-scope.cjs");
-    for (const def of Tracks().LIST.filter((d) => scope([d.id]).length)) {
+    const picked = Tracks().LIST.filter((d) => scope([d.id]).length);
+    out.scoped = picked.length; out.total = Tracks().LIST.length;
+    for (const def of picked) {
       const { track, L } = nightLights(def.id);
       const posts = track.lampPosts || [];
       const n = (L.length / STRIDE) | 0;
@@ -326,8 +330,13 @@ test("every circuit's start lamps hang over its grid, on a gantry at the line or
     survey().startLamps.join("\n  "));
   const { gantry, gate } = survey().lampHosts;
   console.log(`start lamps: ${gantry.length} on a scenery gantry, ${gate.length} on the engine gate (${gate.join(" ")})`);
-  // Anti-vacuity, while the whole fleet is in the pass: both hosts are used.
-  if (gantry.length + gate.length >= 52) assert.ok(gantry.length > 0 && gate.length > 0, "both lamp hosts are exercised");
+  // Anti-vacuity. Every circuit in the pass must have been surveyed (a scoped
+  // APEX_CIRCUITS run surveys fewer, never zero), and with the WHOLE fleet in the
+  // pass — judged against Tracks.LIST, not a literal count — both hosts are used.
+  const { scoped, total } = survey();
+  assert.ok(scoped > 0, "the circuit scope selected nothing, so no start lamp was checked");
+  assert.equal(gantry.length + gate.length, scoped, "every scoped circuit contributed a lamp host");
+  if (scoped === total) assert.ok(gantry.length > 0 && gate.length > 0, "both lamp hosts are exercised");
 });
 
 test("a circuit that dresses gantries stands one over its start line", () => {

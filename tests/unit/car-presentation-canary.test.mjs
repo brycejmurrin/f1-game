@@ -1,17 +1,12 @@
-/* car-presentation-canary.test.mjs — field cars share the player's pose path.
+/* car-presentation-canary.test.mjs — source invariants: the car-presentation wiring a
+ * VM cannot reach: ORDER and ONE-SITE facts in game.js's draw loop and step,
+ * and the few cross-file parities (the mirror's wheel material is the main
+ * pass's). Everything a draw BUILDS or KEYS is asked of the real CarDraw in
+ * car-presentation-vm.test.mjs; a pin here earns its place by naming a site
+ * the VM does not load (game.js, apex-cam.js, agentview.js, custom-team.js).
  *
- * Two leftover presentation bugs made the pack feel delayed and "a different
- * car": (1) an xVis low-pass (16/s AI, 30/s player) plus a shadow pass that
- * damped again at 30/s, so meshes lagged the road frame on corner entry;
- * (2) AI drew the factory FULL mesh (baked wheels) on the chassis attitude
- * matrix, so tyres leaned with the body while the player's wheels stayed
- * planted on _groundMat.
- *
- * Authority is unchanged: the player integrates world px/pz; AI stays on
- * (s, x) and mirrors world metres after the step. TEAM_STYLE / garage-vs-
- * factory parts stay. This file only locks the presentation contract —
- * including the second camera's (the HUD mirror / PiP share the field's
- * body + wheel meshes) and what the bounded team caches must hold.
+ * Behaviour moved to car-presentation-vm.test.mjs (test review 2026-10-19, C1-02);
+ * this file kept the canary path because js/car/car-draw.js cites it.
  *
  * Run: node --test tests/unit/car-presentation-canary.test.mjs
  */
@@ -19,11 +14,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
-import vm from "node:vm";
-import { carDrawVm, WORKS } from "../helpers/car-draw-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -84,54 +78,33 @@ test("AI world pose is mirrored after this step's (s, x) writes", () => {
   assert.doesNotMatch(coast[0], /c\.human && c\.px/);
 });
 
-test("visible procedural cars draw a body-only mesh and planted wheels", () => {
+// game.js's draw loop: every procedural car draws a body-only mesh with its
+// wheels planted on _groundMat (AI drew the factory FULL mesh on the chassis
+// attitude matrix, so tyres leaned with the body). What those meshes are and
+// how they key: car-presentation-vm.test.mjs.
+test("the draw loop draws body + planted wheels for every procedural car", () => {
   const game = gameSource();
-  // The mesh caches, wheel meshes and the GLB loader live in the car-draw seam
-  // (js/car/car-draw.js); game.js keeps the draw loop that consumes them.
-  const cd = read("js/car/car-draw.js");
-  assert.match(cd, /function teamBodyMesh\(team, car\)/);
-  // One hoisted factory builds all three team caches (no closure per car per pass);
-  // teamBodyMesh hands it the seat number and kind 2 = { noWheels: true, num }.
-  assert.match(cd, /_pbKind === 2 \? \{ noWheels: true, num, setup \}/);
-  // THE CAR, NOT JUST THE TEAM. The helmet js/car/helmets.js paints into the
-  // body is the design for opts.num; keyed on the team alone, both of a team's
-  // cars got drivers[0] and 22 cars on track showed 11 helmets, each pair
-  // identical. The number belongs in the key as well as the build, or the
-  // second driver draws whichever mesh the first one cached.
-  const teamMeshSrc = cd.slice(cd.indexOf("function buildPendingTeamMesh()"), cd.indexOf("function teamBodyMesh(team, car)"));
-  const teamBodySrc = cd.slice(cd.indexOf("function teamBodyMesh(team, car)"), cd.indexOf("function teamBodyMesh(team, car)") + 400);
-  // Painted path: driver number in the key (two seats → two helmets).
-  assert.match(teamMeshSrc, /carDecalNum\(team, car\)/, "teamMesh must resolve the driver number");
-  assert.match(teamMeshSrc, /teamMeshKeyFor\(team, sil \? shadow : painted\)/, "painted teamMesh must key on the driver number");
-  assert.match(teamMeshSrc, /\|\| num/, "a factory car still keys the painted mesh on the seat number");
-  assert.match(cd, /k = c\.val \+ ":" \+ suffix/, "teamMeshKeyFor(team, s) is teamMeshKey(team) + \":\" + s");
-  // Shadow path: ONE ":sh" per team(+parts). Depth cannot see helmet paint, and
-  // seat-keyed casters were bit-identical copies that doubled VRAM (22 → 11).
-  // A custom setup stamps its own ":sh" so two shelves do not share a caster.
-  assert.match(teamMeshSrc, /silhouette: true/);
-  assert.match(teamMeshSrc, /\|\| "sh"/);
-  assert.match(teamMeshSrc, /silhouette === true \|\| \(car == null && silhouette !== false\)/);
-  assert.doesNotMatch(teamMeshSrc, /num \+ \(sil \? ":sh"/,
-    "silhouette key must not include the seat number");
-  const cap = cd.match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/);
-  assert.ok(cap, "TEAM_MESH_CACHE_MAX is a named ceiling (what it must hold: the cache-occupancy test below)");
-  assert.match(teamBodySrc, /carDecalNum\(team, car\)/, "teamBodyMesh must resolve the driver number");
-  assert.match(teamBodySrc, /_pbNum = num/, "teamBodyMesh must resolve the driver number");
-  assert.match(teamBodySrc, /teamMeshKeyFor\(team, suffix\)/, "teamBodyMesh must key on the driver number");
-  assert.match(teamBodySrc, /_pbKind = 2/, "teamBodyMesh must build body-only with the driver number");
-  assert.match(cd, /function playerBodyMesh\(team, car, visualKey = playerVisualKey\)/);
-  assert.match(cd, /visualKey \+ ":" \+ carDecalNum\(team, car\)/, "the player's own body is keyed on the seat too");
-  assert.match(cd, /function getFieldWheelMeshes\(team, car\)/);
-  // Field wheels resolve from the car's visual setup when it has one, else the
-  // FACTORY setup via teamDecalState(team, false).
-  assert.match(cd, /const st = setup \? teamDecalState\(team, false, setup, car\.visStamp\) : teamDecalState\(team, false\);\s*\n\s*const vt = st\.parts;/);
-  assert.match(cd, /const parts = Parts\.getVisualTiers\(setup, team\);/);
+  const draw = game.match(
+    /const body = carDraw\.modelBuf \? null :[\s\S]{0,520}drawPlayerWheels\(c, _groundMat/
+  );
+  assert.ok(draw, "body + wheels on _groundMat for every procedural car");
+  assert.match(game, /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
+    "rivals past tier 2 share one distant body mesh");
+  assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
   // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.
+  const cd = read("js/car/car-draw.js");
   assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(c\.team\) : getFieldWheelMeshes\(c\.team, c\);/);
   assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
   assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
     "loadCarModel must clear fieldWheelOrder with the cache (putBoundedMesh desync frees a live mesh)");
+});
+
+// MISFILED, kept until their owners' lanes give them a home: MY TEAM's live
+// re-inject (custom-team.js) and agent error strings (js/agent/). They sat in
+// the car-presentation canary with no car-presentation claim; nothing else
+// pins them yet (grep, 2026-10-19).
+test("MY TEAM foreign-tab sync and the customize preview keep the structural livery (misfiled pins)", () => {
   const custom = gameAndCustom();
   assert.match(custom, /change\.key === "customTeam"\)[\s\S]{0,80}?syncCustomTeam\(\)/,
     "foreign-tab customTeam writes must re-inject MY TEAM via syncCustomTeam");
@@ -145,544 +118,72 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
     "czPreview must push the full structural draft, not bare {c1,c2}");
   assert.doesNotMatch(custom, /setLivDraftOverride\(\{ teamId: "custom", liv: \{ c1:/,
     "bare {c1,c2} override regrows the shark fin while customize is open");
-  assert.match(cd, /function cockpitBodyMesh\(team, car, visualKey = playerVisualKey\)/);
-  assert.match(read("js/garage/setup-camera.js"), /function garageSeat\(\)/);
-  const draw = game.match(
-    /const body = carDraw\.modelBuf \? null :[\s\S]{0,520}drawPlayerWheels\(c, _groundMat/
-  );
-  assert.ok(draw, "body + wheels on _groundMat for every procedural car");
-  assert.match(game, /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
-    "rivals past tier 2 share one distant body mesh");
-  // The caster passes live in js/render/shared/shadow-pass.js (teamMesh through deps, the player through G).
-  const sp = read("js/render/shared/shadow-pass.js");
-  // C8 (TLX-PERF-HUNT 2026-10-11): the car pass gates the player on distance like the AI cars.
-  assert.match(sp, /if \(_carPlayerIn\) _castPlayer\(\);/);
-  assert.match(sp, /const _carPlayerIn = _hasLivePlayerShadow && /);
-  assert.match(sp, /G\.gfx\.castShadow\(_playerCockpit \|\| deps\.teamMesh\(G\.player\.team, G\.player, true\), _playerMat\(\)\)/,
-    "the player casts the silhouette at livePlayerMat unless a first-person view resolved the cockpit body");
-  assert.match(sp, /G\.gfx\.castShadow\(deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);
-  assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
-  assert.match(game, /1\.5 \* Math\.max\(driveTune\.PACE, 0\.05\)/,
-    "beached gate additive floor must scale with PACE like the grass speed floor");
+});
+
+test("agent error strings (misfiled pins)", () => {
+  assert.match(read("js/agent/apex-net.js"), /error: "no_wire"/);
+  assert.match(read("js/agent/apex.js"), /error: "invalid_repro"/);
+  assert.match(read("js/agent/apex-lobby.js"), /ok: true, cleared: true/);
+  assert.match(read("js/agent/apex.js"), /return \{ ok: true, bytes: blob\.size \}/);
 });
 
 test("orbit / agent-view read the mirrored world pose for the field", () => {
-  const apex = read("js/agent/apex.js");
   const cam = read("js/agent/apex-cam.js");
   const view = read("js/agent/agentview.js");
   assert.match(cam, /const cx = \(c\.px != null\) \? c\.px/);
   assert.match(cam, /const cz = \(c\.pz != null\) \? c\.pz/);
   assert.doesNotMatch(cam, /c\.human && c\.px != null/);
-  assert.match(read("js/agent/apex-net.js"), /error: "no_wire"/);
-  assert.match(apex, /error: "invalid_repro"/);
-  assert.match(read("js/agent/apex-lobby.js"), /ok: true, cleared: true/);
-  assert.match(apex, /return \{ ok: true, bytes: blob\.size \}/);
   assert.match(view, /if \(c\.px != null\) return \[c\.px, c\.pz\];/);
   assert.doesNotMatch(view, /c\.human && c\.px != null/);
 });
 
-test("race warm-up builds the shadow casters the first countdown frame would", () => {
-  // The car and lamp shadow passes fetch teamMesh(team, car, true) for every car
-  // in range on their first frame. warmCarAssets builds the same keys behind the
-  // loading cover, under the passes' own gates, so lights-out builds none.
+// The race warm builds the casters the shadow passes' first frame fetches, under
+// the passes' own gate (car shadow below tier 3, lamp shadow below tier 2). The
+// warm's half runs in car-presentation-vm.test.mjs; this pins that the pass and
+// the warm still state the same gate and the same (team, car, true) key.
+test("the shadow passes and the race warm share one caster gate and key", () => {
   const cd = read("js/car/car-draw.js");
   const sp = read("js/render/shared/shadow-pass.js");
-  const warm = cd.slice(cd.indexOf("function warmCarAssets()"), cd.indexOf("async function prepareMenuCarAssets("));
-  assert.match(warm, /const casters = shadowCastersWanted\(\);/);
-  assert.match(warm, /if \(casters\) teamMesh\(c\.team, c, true\);/, "the caster key is the pass's own call");
-  assert.match(sp, /deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\)/, "the pass still fetches casters by (team, car, true)");
-  // The gate mirrors the passes: car shadow below tier 3, lamp shadow below tier 2.
+  assert.match(sp, /deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\)/, "the pass fetches casters by (team, car, true)");
   assert.match(sp, /G\.gfx\.carShadowBegin && LT\.carShadow && PerfGov\.tier\(\) < 3/);
   assert.match(sp, /G\.gfx\.lampShadowBegin && LT\.lampShadow && PerfGov\.tier\(\) < 2/);
-  assert.match(warm, /gfx\.carShadowBegin && LT\.carShadow && tier < 3\) \|\| \(gfx\.lampShadowBegin && LT\.lampShadow && tier < 2\)/);
-  // An agent's headless race never renders a shadow: no caster builds there.
-  assert.match(warm, /if \(G\.headlessMode \|\| !LT\) return false;/);
+  assert.match(cd, /gfx\.carShadowBegin && LT\.carShadow && tier < 3\) \|\| \(gfx\.lampShadowBegin && LT\.lampShadow && tier < 2\)/);
 });
 
-// THE COCKPIT LENS (car-draw.js drawMirrorLens, 2026-10-03): the HUD mirror's
-// LIVE image while that pass draws (gfx.drawMirrorGlass), else the sky-tint
-// fallback — exactly one of the two on every frame. Neither left the housings
-// as flat black slabs (2026-10-02); both would lay the fallback over the live
-// view. The real function runs against stubs of the six names it reads.
-test("the cockpit lens draws the live mirror glass XOR the sky-tint fallback", () => {
-  const src = read("js/car/car-draw.js");
-  const fn = fnSource(src, "function drawMirrorLens(");
-  const QUADS = [[[-0.5, 0.75, 0.9], [-0.7, 0.75, 0.9], [-0.7, 0.8, 0.9], [-0.5, 0.8, 0.9]]];
-  const GLASS = { glass: true }, FB = { fallback: true };
-  const run = ({ mp = "drawing", member = true, accepts = true, texMesh = true, nite = false }) => {
-    const calls = [];
-    const gfx = { draw: (m, b, o) => calls.push(["fallback", m, o.emissive]) };
-    if (member) gfx.drawMirrorGlass = (m, b) => { calls.push(["glass", m, b]); return accepts; };
-    const MirrorPass = { instance: () => (mp === null ? null : { drawing: () => mp === "drawing" }) };
-    const make = new Function("G", "MirrorPass", "Car3D", "teamDecalState", "getMirrorGlass", "getMirrorFallback",
-      `const _mirrorFbOpts = { doubleSided: true, emissive: 0.55 }, _glassBase = new Float32Array(16);
-       let _glassQuads = null, _glassLive = 0, _glassFb = 0;
-       ${fn}
-       return { draw: drawMirrorLens, counts: () => [_glassLive, _glassFb], quads: () => _glassQuads };`);
-    const lens = make({ gfx }, MirrorPass, { cockpitMirrorGlass: () => QUADS },
-      () => ({ parts: { _visual: { cockpit: { mirror: 1 } } } }),
-      (q) => (q === QUADS && texMesh ? GLASS : null), (q) => (q === QUADS ? FB : null));
-    const base = new Float32Array(16).fill(2);
-    const live = lens.draw({ team: {} }, base, nite);
-    return { calls, live, base, counts: lens.counts(), quads: lens.quads() };
-  };
-  // Live: one glass draw, on the cached glass mesh and the body's own matrix.
-  let r = run({});
-  assert.equal(r.live, true);
-  assert.deepEqual(r.calls.map((c) => c[0]), ["glass"]);
-  assert.equal(r.calls[0][1], GLASS);
-  assert.equal(r.calls[0][2], r.base, "the lens rides the cockpit body's matrix");
-  assert.deepEqual(r.counts, [1, 0]);
-  assert.equal(r.quads, QUADS, "glassState() projects the lens it drew");
-  // The backend refuses (no image yet, dead, the PiP, an open pass): the fallback, once.
-  r = run({ accepts: false });
-  assert.equal(r.live, false);
-  assert.deepEqual(r.calls.map((c) => c[0]), ["glass", "fallback"], "a refused glass drew nothing — the fallback covers it");
-  assert.deepEqual(r.counts, [0, 1]);
-  // The pass not drawing, no pass at all, a backend without the member, no
-  // textured mesh: the fallback only, and the backend is never asked.
-  for (const o of [{ mp: "off" }, { mp: null }, { member: false }, { texMesh: false }]) {
-    r = run(o);
-    assert.deepEqual(r.calls.map((c) => c[0]), ["fallback"], JSON.stringify(o));
-    assert.equal(r.calls[0][1], FB);
-    assert.deepEqual(r.counts, [0, 1], JSON.stringify(o));
-  }
-  // The fallback's look: day emissive 0.55; night shows the dim night-env mesh
-  // at emissive ~0.85 (was 0.08 × day-sky bands + glossy specular → 7–10× too bright).
-  assert.equal(run({ mp: "off" }).calls[0][2], 0.55);
-  assert.equal(run({ mp: "off", nite: true }).calls[0][2], 0.85);
-  // drawCockpitRig reaches it for every procedural cockpit, and it is the ONLY fallback draw.
-  assert.match(fnSource(src, "function drawCockpitRig("), /if \(!carModelBuf\) drawMirrorLens\(c, base, nite\);/);
-  assert.equal(src.split("getMirrorFallback(").length - 1, 1, "getMirrorFallback is drawn from drawMirrorLens only");
-  // Matte fallback — no day-env / lamp-specular blowout on the sky-tint card.
-  assert.match(src, /roughness:\s*0\.92/);
-  assert.match(fn, /getMirrorFallback\(quads,\s*!!nite\)/);
-});
-
-// THE HUD MIRROR AND THE BROADCAST PiP draw a rival the way the main pass does:
-// the body-only mesh and the planted FIELD wheels, from the same caches. They
-// drew teamMesh(team, car) — the WHOLE car, a cache nothing else filled — so
-// each rival new to the mirror cost a 140-250 ms Car3D.build mid-race.
-test("the mirror and the PiP draw rivals via teamBodyMesh + the field wheels, never teamMesh", () => {
+// The mirror's wheels share the main pass's material: TLX keys materials by
+// VALUE, so equal opts are the one material (and pipeline) the race already
+// compiled. What the mirror draws is asked of the real MirrorPass in
+// car-presentation-vm.test.mjs; game.js is not in that VM.
+test("the mirror's wheel material is the main pass's, night term included", () => {
   const cd = read("js/car/car-draw.js"), game = read("js/game.js");
-  const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-  const mp = code(read("js/render/shared/mirror-pass.js"));
-  assert.doesNotMatch(mp, /teamMesh/, "mirror-pass.js reaches no whole-car mesh");
-  assert.match(mp, /const \{ drawWorldMeshes, drawCar, /);
-  assert.match(mp, /drawCar\(c, _mat, paint, night\);/, "the uncapped loop (apex26.fieldLod=0)");
-  // Hunt 2 F6: ranked on renderPosOf, so only the kept cars are posed, just before their draw.
-  assert.match(mp, /if \(_cKeep\[i\]\) \{\s*if \(!_cPosed\[i\]\) \{ pose\(_cCars\[i\]\); basisMat\(_R, _U, _F, _P, _cMats\[i\]\); \}\s*drawCar\(_cCars\[i\], _cMats\[i\], paint, night\); _cars\+\+;/, "the FieldLod nearest-6 loop");
   assert.match(game, /MirrorPass\.create\(G, \{ drawWorldMeshes, drawCar: carDraw\.drawMirrorCar,/);
-  const fn = cd.match(/function drawMirrorCar\(c, mat, paint, night\) \{[\s\S]*?\n {4}\}/);
-  assert.ok(fn, "CarDraw.drawMirrorCar");
-  // The main pass's own selection (game.js: body + drawPlayerWheels on _groundMat).
-  assert.match(fn[0], /const body = carModelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);/);
-  assert.match(fn[0], /if \(!body\) \{ G\.gfx\.draw\(teamMesh\(c\.team, c\), mat, paint\); return; \}/, "a GLB is one piece, as in the main pass");
-  assert.equal(fn[0].split("teamMesh(").length - 1, 1, "teamMesh only on the GLB branch");
-  assert.match(fn[0], /drawPlayerWheels\(c, mat, 0, _mirWheelOpts, false, 0, 1, true\);/, "BARE wheels, dt 0 (the main pass spins them)");
-  assert.match(fn[0], /deps\.drawAeroFlaps\(c\.team, aSt\.val, c\.aeroX \|\| 0, mat, paint, aSt\.aero, null, true\);/,
-    "the flap set, STILL (one static mesh), on the body's matrix and paint");
-  assert.match(cd, /return \{[\s\S]*?drawMirrorCar,[\s\S]*?\};/, "exported");
-  // BARE: rotating wheels only and no Particles flare, at any distance.
-  assert.match(cd, /function drawPlayerWheels\(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare\)/);
-  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && \(haveTier \? lodT >= 1 : FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\)\);/);
-  assert.match(cd, /const flareA = !bare && /);
-  // The wheels' material is the main pass's: TLX keys materials by VALUE, so
-  // equal opts are the one material (and pipeline) the race already compiled.
   const lit = (src, re) => Object.assign({}, vm.runInNewContext("(" + src.match(re)[1] + ")"));
   assert.deepEqual(lit(cd, /const _mirWheelOpts = (\{[^}]*\});/), lit(game, /const _wheelOpts = (\{[^}]*\});/));
-  assert.match(fn[0], /_mirWheelOpts\.emissive = night \? 0\.12 : 0;/, "and its night term (game.js: _wheelOpts.emissive = night ? 0.12 : 0)");
+  assert.match(fnSource(cd, "function drawMirrorCar("), /_mirWheelOpts\.emissive = night \? 0\.12 : 0;/);
   assert.match(game, /_wheelOpts\.emissive = night \? 0\.12 : 0;/);
 });
 
-// THE MIRROR AND THE PiP DRAW EVERY CAR'S FLAP SET. The moveable wing elements
-// are not in the body mesh and drawMirrorCar never drew them, so every wing in
-// the mirror and on the PiP was its main plane only. Now one `still` call per
-// car (game.js drawAeroFlaps -> ONE static CarMesh set; field-lod.test.mjs
-// proves that draw), driven here through the REAL CarDraw and MirrorPass.
-test("the mirror and the PiP draw every car's flap set, still, one call per body", () => {
-  const v = carDrawVm();
-  v.G.teamIdx = 0; v.G.driverIdx = 0;
-  v.field((c, i) => (c.isPlayer ? 1000 : 1000 - 9 * i));
-  v.G.cars.forEach((c, i) => { c.aeroX = i % 2 ? 1 : 0.25; });
-  v.carDraw.warmCarAssets();
-  const mp = v.mirror();
-  const check = (why) => {
-    const bodies = v.rec.draws.filter((m) => m.kind === "body");
-    assert.ok(bodies.length >= 1, why + ": cars drawn");
-    assert.deepEqual(v.rec.flaps.map((f) => f.team), bodies.map((b) => b.team), why + ": a flap set per body, in order");
-    assert.ok(v.rec.flaps.every((f) => f.still && f.only === null), why + ": the static set, both wings");
-    const byZ = new Map(v.G.cars.map((c) => [String(c.s), c]));
-    for (const f of v.rec.flaps) {
-      const c = byZ.get(f.m.split(",")[1]);
-      assert.ok(c && c.team.id === f.team && c.aeroX === f.blend, why + ": on that car's own matrix, at its own aeroX");
-    }
-    v.rec.draws.length = 0; v.rec.flaps.length = 0;
-  };
-  v.rec.draws.length = 0; v.rec.flaps.length = 0;
-  v.draw(mp);
-  assert.equal(mp.state().cars, 6);
-  check("mirror");
-  v.classes.add("bc-on");
-  for (const sub of [v.G.cars[7], v.G.player]) {
-    mp.setSubject(sub, "tcam");
-    v.draw(mp);
-    assert.equal(mp.state().pip.shown, true);
-    check("PiP " + sub.code);
-  }
-});
-
-// THE MENU PREP BUILDS THE CASTERS (PR #803 built them in warmCarAssets, ~32 ms
-// each, ~11 a race, behind the loading card): same gate, same key, in the sliced
-// loop, so race entry's warm is all hits. warmCarAssets keeps its call.
-test("the menu prep builds the shadow casters under shadowCastersWanted(), keyed as the race keys them", () => {
+// ONE stamp helper (CarDraw.carVisual) keys every car in BOTH places: makeCars
+// (the player and MY TEAM's hire on getTeamParts, a career rival on its shelf)
+// and the menu prep's field, with the same `own` rule. The helper's behaviour
+// is in car-presentation-vm.test.mjs; makeCars lives in game.js.
+test("makeCars and the menu prep stamp cars through the one carVisual helper", () => {
   const cd = read("js/car/car-draw.js"), game = read("js/game.js");
   const prep = cd.slice(cd.indexOf("async function prepareMenuCarAssets("), cd.indexOf("function drawCarDecals("));
-  assert.match(prep, /const casters = shadowCastersWanted\(\);/, "warmCarAssets' own gate");
-  assert.match(prep, /const steps = casters \? field\.flatMap\(c => \[c, \{ caster: c \}\]\) : field;/, "a step of its own after its car");
-  // apex26.carWarmSlice appends the rivals' FieldLod steps (flaps, planted wheels) to the same sliced loop.
-  assert.match(prep, /const plan = lodPrep \? steps\.concat\(field\.filter\(c => !c\.isPlayer\)\.map\(c => \(\{ lod: c \}\)\)\) : steps;/, "lod steps after the bodies");
-  assert.match(prep, /for \(const step of plan\) \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*if \(performance\.now\(\) - sliceAt >= 8\) \{/, "the same slice discipline");
-  assert.match(prep, /if \(step\.caster\) teamMesh\(c\.team, c, true\);/, "the shadow passes' (team, car, true)");
-  const warm = cd.slice(cd.indexOf("function warmCarAssets()"), cd.indexOf("async function prepareMenuCarAssets("));
-  assert.match(warm, /if \(casters\) teamMesh\(c\.team, c, true\);/, "warmCarAssets keeps the call: the safety net, hits after the menu");
-  // ONE stamp helper (CarDraw.carVisual) keys every car in BOTH places: makeCars
-  // (the player and MY TEAM's hire on getTeamParts, a career rival on its shelf)
-  // and the menu prep's field, with the same `own` rule.
   assert.match(game, /\.\.\.CarDraw\.carVisual\(team, d\.num, isP \|\| mate, getTeamParts\),/, "makeCars stamps through the shared helper");
   assert.match(prep, /carVisual\(team, d\.num, ti === teamPick && \(isPlayer \|\| !!team\.custom\), G\.getTeamParts\)/, "…and so does the menu prep");
   assert.match(game, /const mate = !isP && ti === teamIdx && !!team\.custom;/, "the prep's own rule is makeCars' mate rule");
   const stampExpr = 'Parts.CATALOG.map((cat) => setup[cat.id] || "").join(",")';
   assert.equal(cd.split(stampExpr).length - 1, 1, "car-draw builds a stamp in ONE place");
   assert.equal((symbolSource("function makeCars(") + prep).split("Parts.CATALOG.map(").length - 1, 0, "neither makeCars nor the prep builds its own");
-  const helper = fnSource(cd, "function carVisual(");
-  assert.match(helper, /const setup = own \? getTeamParts\(team\.id\) : \(Career\.inCareer\(\) && Career\.aiSetup \? Career\.aiSetup\(team\) : null\);/);
-  assert.match(helper, /visPaint: stamp \? stamp \+ ":" \+ num : "", visSh: stamp \? stamp \+ ":sh" : ""/);
 });
 
-// carVisual on the real CarDraw: a build that RESOLVES to the factory parts is
-// the factory car (no stamp, no setup — the factory key), whatever object holds it.
-test("carVisual: a career shelf equal to the works build keys the factory; an upgrade keys its own build", () => {
-  const up = Object.assign({}, WORKS, { aero: "outwash_max" });
-  const v = carDrawVm({ career: {} });
-  const team = v.teams[0], other = v.teams[1];
-  v.careerOn({ [team.id]: Object.assign({}, WORKS), [other.id]: up });
-  const cv = (t, own) => ({ ...v.ctx.CarDraw.carVisual(t, 7, own, v.G.getTeamParts) });
-  assert.deepEqual(cv(team, false), { visualSetup: null, visStamp: "", visPaint: "", visSh: "" }, "R&D seeded with the works shelf: the factory car");
-  const stamp = Object.values(up).join(",");
-  assert.deepEqual(cv(other, false), { visualSetup: up, visStamp: stamp, visPaint: stamp + ":7", visSh: stamp + ":sh" }, "a real upgrade: its own key");
-  assert.deepEqual(cv(v.teams[2], false), { visualSetup: null, visStamp: "", visPaint: "", visSh: "" }, "no bag yet: factory");
-  assert.equal(cv(team, true).visStamp, ["hi-df", "", "", "", "", "", "", "soft", "", "", "", ""].join(","), "own: the saved build, stamped as before");
-  v.careerOn(null);
-  assert.equal(cv(other, false).visStamp, "", "outside career every rival is the factory car");
-});
-
-// THE CAREER RACE ENTRY. Once a career's R&D has started, CareerAiDev.ensureSeed
-// gives a team a fitted shelf — a copy of the works build until a step lands —
-// and makeCars stamped every such rival with its own key, while the menu prep
-// keyed the factory: ~21 bodies and ~11 casters (~32 ms each) rebuilt behind the
-// race-entry card, and the prep's 21 + the race's 21 bodies past the 40-entry LRU.
-// MY TEAM's hire races the saved build and was prepped as a factory car too.
-test("a career field and MY TEAM's hire: after the menu prep, race entry builds no body and no caster", async () => {
-  const cap = Number(read("js/car/car-draw.js").match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/)[1]);
-  const shelf = (v, upgraded) => Object.fromEntries(v.teams.filter((t) => v.ctx.Teams.isReal(t)).map((t, i) =>
-    [t.id, upgraded.includes(i) ? Object.assign({}, WORKS, { aero: "up" + i }) : Object.assign({}, WORKS)]));
-  const count = (v, k, from = 0) => v.rec.builds.slice(from).filter((b) => b.kind === k).length;
-  const raceEntry = (v, menu, label) => {
-    v.field((c, i) => 3000 - 9 * i);
-    v.carDraw.warmCarAssets();
-    assert.deepEqual(v.rec.builds.slice(menu), [], label + ": every body and caster a cache hit at race entry");
-    const mp = v.mirror();
-    v.draw(mp);
-    v.classes.add("bc-on");
-    for (const c of v.G.cars) { mp.setSubject(c, "tcam"); v.draw(mp); }
-    assert.deepEqual(v.rec.builds.slice(menu), [], label + ": the mirror and the PiP over every car: no build");
-    assert.equal(v.rec.freed, 0, label + ": no live mesh evicted");
-  };
-  // (1) R&D under way: every rival seeded, two teams upgraded — prepped with the career known.
-  {
-    const v = carDrawVm({ casters: true, career: {} });
-    v.careerOn(shelf(v, [1, 6]));
-    v.G.teamIdx = 3; v.G.driverIdx = 0;
-    await v.carDraw.prepareMenuCarAssets(() => true);
-    const bodies = count(v, "body") - 1, casters = count(v, "sh");
-    assert.deepEqual([count(v, "whole"), bodies, casters], [0, 21, 12],
-      "21 rival bodies (2 upgraded teams on their own keys); a :sh per team (an upgrade's own) + the player's build");
-    assert.ok(bodies <= cap && casters <= cap);
-    raceEntry(v, v.rec.builds.length, "career");
-  }
-  // (2) The prep ran BEFORE the career's shelves existed (factory keys), and the
-  // race runs on works-copy shelves: still the factory car, still all hits.
-  {
-    const v = carDrawVm({ casters: true });
-    v.G.teamIdx = 3; v.G.driverIdx = 0;
-    await v.carDraw.prepareMenuCarAssets(() => true);
-    const menu = v.rec.builds.length;
-    v.careerOn(shelf(v, []));
-    raceEntry(v, menu, "works-copy shelves");
-  }
-  // (3) MY TEAM: you and the hire, both on the saved build.
-  {
-    const v = carDrawVm({ casters: true, career: {} });
-    const T = v.ctx.Teams;
-    v.teams.push(Object.assign({}, T.DEFAULT_CUSTOM, { drivers: [{ name: "You", code: "YOU", num: 99 }, { name: "Hire", code: "HIR", num: 98 }] }));
-    v.careerOn(shelf(v, [2]));
-    v.G.teamIdx = v.teams.length - 1; v.G.driverIdx = 0;
-    await v.carDraw.prepareMenuCarAssets(() => true);
-    const hire = v.rec.builds.filter((b) => b.kind === "body" && b.num === 98);
-    assert.equal(hire.length, 1, "the hire's body is prepped once, on the saved build's key");
-    raceEntry(v, v.rec.builds.length, "MY TEAM");
-    assert.ok(v.G.cars.find((c) => c.num === 98).visStamp, "the hire races the saved build (its own stamp)");
-  }
-});
-
-// THE STEPPED RACE WARM (perf hunt 4 F3.3, apex26.carWarmSlice). warmCarAssets was
-// one main-thread task per race entry: 0.91 s GLX, 1.05-1.10 s three.js, 3.17 s WGX
-// on the macOS census (471, spa dusk). warmCarAssetsAsync runs the SAME four phases
-// per car (body, atlas, caster, FieldLod set) and yields once a slice has spent 8 ms,
-// so a task holds one heavy piece. A fake clock charges each heavy piece (a Car3D
-// build, an atlas paint, a flap solve) 20-40 ms; the recording renderer says what
-// was built. Knob 0: the single sync task, and the menu prep without the lod steps.
-function warmRig(opts = {}) {
-  const v = carDrawVm(Object.assign({ casters: true }, opts));
-  const ctx = v.ctx, got = { atlases: [], uploads: 0, solves: 0, yields: 0, slice: 0, maxSlice: 0 };
-  let clock = 0;
-  const heavy = (ms) => { clock += ms; got.slice++; got.maxSlice = Math.max(got.maxSlice, got.slice); };
-  ctx.performance = { now: () => clock };
-  const build = ctx.Car3D.build;
-  ctx.Car3D.build = (c1, c2, o) => { heavy(30); return build(c1, c2, o); };
-  ctx.Car3D.aeroFlaps = () => { heavy(40); got.solves++; return []; };
-  ctx.LiveryTex = { buildAtlas: (id, _liv, num) => { heavy(20); got.atlases.push(id + ":" + num); return { width: 8, height: 8 }; } };
-  v.G.gfx.createTexture = (cv) => ({ cv });
-  v.G.gfx.uploadTexture = () => { got.uploads++; };
-  ctx.setTimeout = (fn) => { got.yields++; got.slice = 0; Promise.resolve().then(fn); return 0; };
-  const warns = () => JSON.stringify(ctx.Log.records({ ns: "gfx" }).filter((r) => /warm-up failed|preparation failed/.test(r.msg || "")).map((r) => r.msg));
-  return { v, got, warns };
-}
-test("warmCarAssetsAsync builds exactly warmCarAssets' set, one heavy piece per task", async () => {
-  const a = warmRig(), b = warmRig();
-  a.v.field((c, i) => 3000 - 9 * i); b.v.field((c, i) => 3000 - 9 * i);
-  a.v.carDraw.warmCarAssets();
-  assert.equal(a.got.yields, 0, "the sync warm never yields");
-  assert.ok(a.got.maxSlice > 40, "…so the whole field is one task (" + a.got.maxSlice + " heavy pieces)");
-  assert.equal(await b.v.carDraw.warmCarAssetsAsync(() => true), true, "ran to the end");
-  assert.deepEqual(b.v.rec.builds, a.v.rec.builds, "the same bodies and casters, in the same order");
-  assert.deepEqual(b.got.atlases, a.got.atlases, "the same livery atlases");
-  assert.equal(b.v.rec.wheels, a.v.rec.wheels, "the same planted field wheels");
-  assert.equal(b.got.solves, a.got.solves, "the same flap solves");
-  assert.equal(b.got.solves, 21, "one per rival (Car3D memoises per recipe; the warm asks once a car)");
-  assert.equal(b.got.uploads, 22, "every atlas pushed to the GPU now (TLX's deferred upload), as the menu prep does");
-  assert.equal(a.got.uploads, 22, "the sync warm too, with the knob on");
-  assert.equal(b.got.maxSlice, 1, "no task holds more than one heavy piece");
-  assert.ok(b.got.yields >= 22 * 2, "it yielded between the pieces (" + b.got.yields + ")");
-  assert.deepEqual([a.warns(), b.warns()], ["[]", "[]"], "no phase threw");
-  const ready = b.v.ctx.Log.records({ ns: "gfx" }).filter((r) => /^race car assets ready/.test(r.msg || ""));
-  assert.equal(ready.length, 1, "the end-of-build line quali.spec.js waits on, once");
-});
-test("warmCarAssetsAsync stops when current() goes false; carWarmSlice=0 is today's single task", async () => {
-  {
-    const r = warmRig();
-    r.v.field((c, i) => 3000 - 9 * i);
-    let live = true;
-    const p = r.v.carDraw.warmCarAssetsAsync(() => live);
-    live = false;
-    assert.equal(await p, false, "abandoned at the first yield");
-    assert.ok(r.v.rec.builds.length <= 1, "one heavy piece, then nothing (" + r.v.rec.builds.length + " builds)");
-  }
-  {
-    const r = warmRig(), s = warmRig();
-    r.v.G.store.set("carWarmSlice", 0); s.v.G.store.set("carWarmSlice", 0);
-    r.v.field((c, i) => 3000 - 9 * i); s.v.field((c, i) => 3000 - 9 * i);
-    assert.equal(await r.v.carDraw.warmCarAssetsAsync(() => true), true);
-    s.v.carDraw.warmCarAssets();
-    assert.equal(r.got.yields, 0, "knob 0: no yield — the one sync task");
-    assert.deepEqual(r.v.rec.builds, s.v.rec.builds, "…building the same set");
-    assert.deepEqual([r.got.uploads, s.got.uploads], [0, 0], "…with no upload of its own (today's race warm)");
-  }
-});
-test("the menu prep solves the rivals' flaps and builds their planted wheels (carWarmSlice); race entry's lod phase hits", async () => {
-  {
-    const r = warmRig();
-    r.v.G.teamIdx = 3; r.v.G.driverIdx = 0;
-    await r.v.carDraw.prepareMenuCarAssets(() => true);
-    assert.equal(r.got.solves, 21, "a flap solve per rival, in the menu");
-    const wheels = r.v.rec.wheels;
-    assert.ok(wheels > 0, "the field wheel pair, in the menu");
-    assert.ok(r.got.maxSlice <= 2, "a prep step is at most body + atlas, as before (" + r.got.maxSlice + ")");
-    assert.equal(r.warns(), "[]", "no prep step threw");
-    const menu = r.v.rec.builds.length;
-    r.v.field((c, i) => 3000 - 9 * i);
-    r.v.carDraw.warmCarAssets();
-    assert.deepEqual(r.v.rec.builds.slice(menu), [], "race entry: bodies and casters all hits");
-    assert.equal(r.v.rec.wheels, wheels, "race entry: the field wheels a hit");
-  }
-  {
-    const r = warmRig();
-    r.v.G.store.set("carWarmSlice", 0);
-    r.v.G.teamIdx = 3; r.v.G.driverIdx = 0;
-    await r.v.carDraw.prepareMenuCarAssets(() => true);
-    assert.deepEqual([r.got.solves, r.v.rec.wheels], [0, 0], "knob 0: the menu prep as before (no lod steps)");
-  }
-});
-
-// TEAM_MESH_CACHE_MAX bounds teamMeshes AND teamBodies (two LRUs of 40). What
-// the menu prep now holds, measured on the REAL CarDraw: the real 11-team grid,
-// the casters on, the race warm and the mirror/PiP over every car afterwards —
-// nothing built after the menu (race entry is all hits) and nothing evicted.
-test("the bounded team caches hold the menu prep, the race warm and the mirror with nothing evicted", async () => {
-  const cap = Number(read("js/car/car-draw.js").match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/)[1]);
-  for (const pick of ["real", "legends"]) {
-    const v = carDrawVm({ casters: true, legends: pick === "legends" });
-    v.G.teamIdx = pick === "legends" ? v.teams.length - 1 : 3;
-    v.G.driverIdx = 1;
-    await v.carDraw.prepareMenuCarAssets(() => true);
-    {
-      const count = (k) => v.rec.builds.filter(b => b.kind === k).length;
-      // Bodies: playerBodyMesh (its own cache) + teamBodyMesh per rival seat the
-      // menu lists: 21 real; LEGENDS lists its other 11 legends as well, keyed by
-      // number, and most carry 1 (js/data/legends.js): 22 + 2 keys.
-      const teamBodies = count("body") - 1, casters = count("sh");
-      assert.deepEqual([pick, count("whole"), teamBodies, casters],
-        pick === "legends" ? [pick, 0, 24, 13] : [pick, 0, 21, 12],
-        "menu: no whole car; the rivals' bodies; a :sh per team (+ the picked team's) + the player's own build");
-      assert.ok(teamBodies <= cap && casters <= cap, `teamBodies ${teamBodies} / teamMeshes ${casters} within ${cap}`);
-      const menu = v.rec.builds.length;
-      v.field((c, i) => 3000 - 9 * i);
-      v.carDraw.warmCarAssets();
-      assert.deepEqual(v.rec.builds.slice(menu), [], "race entry's warm span: every body and caster a cache hit");
-      const mp = v.mirror();
-      v.draw(mp);
-      v.classes.add("bc-on");
-      for (const c of v.G.cars) { mp.setSubject(c, "tcam"); v.draw(mp); }
-      assert.deepEqual(v.rec.builds.slice(menu), [], "the mirror and the PiP over every car: no build");
-      assert.equal(v.rec.freed, 0, "no live mesh evicted, menu -> race -> mirror");
-    }
-  }
-});
-
-// putBoundedMesh promotes a hit by STAMP (one Map write) instead of indexOf +
-// splice + push. The contract the counts above rely on is unchanged: a hit
-// promotes, the least recently used is evicted, each victim freed once. Checked
-// against the old array implementation over a long random sequence.
-test("putBoundedMesh's stamp LRU evicts exactly what the old reorder-on-hit LRU did", () => {
-  const src = fnSource(read("js/car/car-draw.js"), "function putBoundedMesh(");
-  const body = src.slice(src.indexOf("{") + 1, src.lastIndexOf("}"));
-  const freedNew = [];
-  const make = new Function("G", "_lruStamp",
-    "let _lruTick = 0; return function (cache, order, key, create, max, freeOne) {" + body + "};");
-  const put = make({ gfx: { freeMesh: (m) => freedNew.push(m) } }, new WeakMap());
-  function oldPut(cache, order, key, create, max, free) {
-    if (cache[key]) {
-      if (order[order.length - 1] !== key) { const i = order.indexOf(key); if (i >= 0) order.splice(i, 1); order.push(key); }
-      return cache[key];
-    }
-    const mesh = create(); cache[key] = mesh; order.push(key);
-    while (order.length > max) { const old = order.shift(); const v = cache[old]; delete cache[old]; free(v); }
-    return mesh;
-  }
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-  const cNew = {}, oNew = [], cOld = {}, oOld = [], freedOld = [];
-  for (let i = 0; i < 4000; i++) {
-    const key = "k" + Math.floor(rnd() * 12);
-    const a = put(cNew, oNew, key, () => ({ key, i }), 5);
-    const b = oldPut(cOld, oOld, key, () => ({ key, i }), 5, (m) => freedOld.push(m));
-    assert.deepEqual(a, b, `step ${i}: the same mesh for ${key}`);
-    assert.deepEqual(Object.keys(cNew).sort(), Object.keys(cOld).sort(), `step ${i}: the same resident keys`);
-  }
-  assert.deepEqual(freedNew, freedOld, "the same victims, in the same order");
-  assert.ok(freedNew.length > 100, "the sequence exercised eviction");
-});
-
-// THE PLAYER'S CASTER IN A FIRST-PERSON VIEW (2026-10-04). Cockpit, helmet and
-// visor draw cockpitBodyMesh (no driver, the player's own halo) at the
-// camera-anchored cockpit matrix; the car and lamp maps cast the EXTERIOR
-// silhouette at the grounded matrix. Its helmet crown (~0.83 m) sits ~0.3 m
-// over the sidepod tops, past the 0.32 m bias, so with the factory halo it
-// stamped dark blobs on the cockpit sides that nothing visible cast. The real
-// CarDraw, the real ShadowPass and the real vantage.js in one VM: in first
-// person the player casts cockpitShadowMesh (the whole car, no driver, its own
-// halo; 2026-10-05, next test) at the drawn matrix, outside it the silhouette
-// at livePlayerMat, in both the car map and the lamp map.
-test("first-person views cast the first-person caster at the cockpit matrix; exterior views the silhouette at the ground matrix", () => {
-  const v = carDrawVm({ casters: true });
-  const { ctx, G, carDraw } = v;
-  ctx.CamModes.CAM_MODES.push({ id: "helmet" }, { id: "visor" });   // [chase, cockpit, helmet, visor]
-  ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });      // a seat that is not the visor's
-  for (const f of ["js/camera/vantage.js", "js/render/shared/shadow-pass.js"])
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
-  v.field((c, i) => 1000 + 9 * i);
-  const player = G.player;
-  let pass = null;
-  const casts = [];
-  Object.assign(G.gfx, {
-    shadowBegin() {}, shadowEnd() {}, castShadowChunked() {},
-    carShadowBegin: () => { pass = "car"; }, carShadowEnd: () => { pass = null; }, carShadowKeep() {},
-    lampShadowBegin: () => { pass = "lamp"; }, lampShadowEnd: () => { pass = null; }, lampShadowKeep() {},
-    castShadow: (mesh, m) => { if (pass) casts.push({ pass, mesh, m: Array.from(m) }); },
-  });
-  G.track = { total: 5000, propTop: 20, meshes: { terrain: {}, road: {}, props: {} } };
-  G.camEye = [0.31, 1.07, 1000.4]; G.camTgt = [0.2, 1, 1030];
-  const sp = ctx.ShadowPass.create(G, { teamMesh: carDraw.teamMesh, vStd: (x) => x, cockpitCaster: carDraw.cockpitCaster });
-  // The grounded transform currentCarGroundMat in game.js writes (banked: its
-  // right/up are rolled, which the camera-anchored cockpit basis is not).
-  const ground = [0.995, 0.0998, 0, 0, -0.0998, 0.995, 0, 0, 0, 0, 1, 0, 0.3, 0.05, 1000.2, 1];
-  const len = Math.hypot(0, 0.04, 1);
-  const smp = { p: [0, 0, 1000], t: [0, 0.04 / len, 1 / len], r: [-1, 0, 0], hw: 7 };   // the player's road sample (_smpPlayer)
-  const yv = 0.08;
-  const frame = { sunDir: [0.36, 0.8, 0.48], sunColor: [1, 1, 1], moonGate: 0 };
-  const night = { sunDir: [0, 0.97, 0.24], sunColor: [0.12, 0.14, 0.22], moonGate: 0, tailCount: 0,
-    lights: [0, 18, 1005, 3, 2.8, 2.4, 40, 0, -1, 0, 0, 0.5, 0, 0, 1] };
-  const cast = (camMode, f, which, state = "race") => {
-    G.camMode = camMode; G.state = state; casts.length = 0;
-    sp.reset();   // drop the lamp map's content key: every call here rebuilds
-    sp.livePlayerMat.set(ground);
-    sp.resolvePlayer(smp, yv);
-    if (which === "car") sp.sunPass(f, 0, true); else sp.lampPass(f, 0, true);
-    const mine = casts.filter((k) => k.pass === which);
-    assert.equal(mine.length, 1, `${which} map: one caster, the player (no rivals pooled)`);
-    return mine[0];
-  };
-  const close = (a, b, msg, eps = 2e-3) => a.forEach((x, i) => assert.ok(Math.abs(x - b[i]) < eps, `${msg}: [${i}] ${x} vs ${b[i]}`));
-  // What the cockpit branch in game.js draws the body at: the same call over the same inputs.
-  const drawnMat = (seat) => {
-    const R = [0, 0, 0], U = [0, 1, 0], F = [0, 0, 0], P = [0, 0, 0];
-    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat));
-    // Stored as game.js stores _cockMat (a Float32Array): the cast must match it bit for bit.
-    return Array.from(Float32Array.from([R[0], R[1], R[2], 0, U[0], U[1], U[2], 0, F[0], F[1], F[2], 0, P[0], P[1], P[2], 1]));
-  };
-  const eyeAt = (m, eyeU, eyeF) => [0, 1, 2].map((i) => m[4 + i] * eyeU + m[8 + i] * eyeF + m[12 + i]);
-  for (const which of ["car", "lamp"]) {
-    const f = which === "car" ? frame : night;
-    for (const [mode, seat, eyeU, eyeF] of [[1, "cockpit", 0.75, -0.10], [2, "cockpit", 0.75, -0.10], [3, "visor", 0.82, -0.20]]) {
-      const k = cast(mode, f, which);
-      const id = ctx.CamModes.CAM_MODES[mode].id;
-      assert.equal(k.mesh, carDraw.cockpitShadowMesh(player.team, player), `${id}/${which}: the first-person caster casts`);
-      assert.notEqual(k.mesh, carDraw.cockpitBodyMesh(player.team, player), `${id}/${which}: not the cockpit build (no wheels, no rear assembly)`);
-      assert.notEqual(k.mesh, carDraw.teamMesh(player.team, player, true), `${id}/${which}: not the exterior silhouette (helmet, factory halo)`);
-      assert.deepEqual(k.m, drawnMat(seat), `${id}/${which}: cast at the matrix the cockpit body is drawn with`);
-      close(eyeAt(k.m, eyeU, eyeF), G.camEye, `${id}/${which}: the ${seat} seat's eye sits at the camera`);
-    }
-    // The countdown is first person too (the car loop's race|count test).
-    assert.equal(cast(1, f, which, "count").mesh, carDraw.cockpitShadowMesh(player.team, player), `count/${which}: the first-person caster`);
-    // Exterior: chase, and the cockpit mode under a debug camera (no rig drawn).
-    for (const [mode, dbg, label] of [[0, null, "chase"], [1, { eye: [0, 50, 0] }, "debug cam"]]) {
-      G.dbgCam = dbg;
-      const k = cast(mode, f, which);
-      assert.equal(k.mesh, carDraw.teamMesh(player.team, player, true), `${label}/${which}: the exterior silhouette casts`);
-      assert.deepEqual(k.m, Array.from(Float32Array.from(ground)), `${label}/${which}: …at the grounded livePlayerMat`);
-    }
-    G.dbgCam = null;
-  }
-  G.state = "menu";
-  assert.equal(carDraw.cockpitCaster(player, smp, yv, new Float32Array(16)), null, "no first-person rig outside race/count");
-  G.state = "race";
-});
-
+// game.js resolves the first-person caster right after the grounded transform,
+// from the sample the car loop restores for the player and the same
+// interpolated yaw; the car-draw half (cockpitCaster, the real ShadowPass) runs
+// in car-presentation-vm.test.mjs.
 test("the first-person caster is pinned to the car loop's cockpit branch", () => {
-  const game = read("js/game.js"), cd = read("js/car/car-draw.js");
-  // game.js resolves the caster right after the grounded transform, from the
-  // sample the car loop restores for the player and the same interpolated yaw.
+  const game = read("js/game.js");
   assert.match(game, /if \(_hasLivePlayerShadow\) \{ currentCarGroundMat\(player, shadowPass\.livePlayerMat\); shadowPass\.resolvePlayer\(_smpPlayer, yawVisInterp\(player\)\); \}/);
   assert.match(game, /ShadowPass\.create\(G, \{ teamMesh, vStd, cockpitCaster: carDraw\.cockpitCaster \}\)/);
   assert.match(game, /if \(c\.isPlayer && _plBodyOk\) \{\s*\/\/[^\n]*\n\s*const S = _smpPlayer, p = smp2\.p, t = smp2\.t, r = smp2\.r;/,
@@ -692,155 +193,4 @@ test("the first-person caster is pinned to the car loop's cockpit branch", () =>
   assert.match(game, /const cockpitRigOnly = !dbgCam && \(state === "race" \|\| state === "count"\) && \(CAM_MODES\[camMode\]\.id === "cockpit" \|\| CAM_MODES\[camMode\]\.id === "helmet"\);/);
   assert.match(game, /const visorEye = !dbgCam && \(state === "race" \|\| state === "count"\) && CAM_MODES\[camMode\]\.id === "visor";/);
   assert.match(game, /GameCams\.cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,\s*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\)\);\s*basisMat\(tmpR, _cockU, tmpF, _cockP, _cockMat\);\s*drawCockpitRig\(c, _cockMat,/);
-  assert.match(cd, /const id = !G\.dbgCam && \(G\.state === "race" \|\| G\.state === "count"\) \? CamModes\.CAM_MODES\[G\.camMode\]\.id : "";\s*if \(id !== "cockpit" && id !== "helmet" && id !== "visor"\) return null;/);
-  assert.match(cd, /GameCams\.cockpitViewmodelAxes\(smp\.r, smp\.t, yv, G\.camEye, _ckR, _ckU, _ckF, _ckP, GameCams\.seatFwd\(seat\), GameCams\.seatUp\(seat\)\);/);
-  // …and the mesh it returns is the one drawCockpitRig draws at that base.
-  assert.match(cd, /return cockpitShadowMesh\(c\.team, c\);\s*\}/);
-  assert.match(cd, /G\.gfx\.draw\(cockpitBodyMesh\(c\.team, c\), base, paint\);/);
-});
-
-// THE FIRST-PERSON CASTER IS THE WHOLE CAR (2026-10-05). #840 cast the drawn
-// cockpit build, and `cockpit` + noWheels drop the engine cover/airbox, the
-// shark fin, the rear assembly and all four wheels: the shadow on the road was
-// a hollow half-car with no wheels. The caster now keeps all of that and drops
-// only what stamped #840's blobs — the driver/helmet and the factory halo with
-// its head-surround attachments — carrying the player's OWN cockpit halo. The
-// options car-draw.js really passes (recorded off the real CarDraw) are fed to
-// the REAL Car3D, so a car3d.js gate that drifts fails here.
-test("the first-person caster is the whole car minus the driver, with the player's own halo", () => {
-  const v = carDrawVm({ casters: true, cam: "cockpit" });
-  const { ctx, carDraw } = v;
-  v.field((c, i) => 1000 + 9 * i);
-  const seen = [], stub = ctx.Car3D.build;
-  ctx.Car3D.build = (c1, c2, o) => { seen.push(o); return stub(c1, c2, o); };
-  const halos = [0, 2, 4];
-  const opts = {};
-  for (const h of halos) {
-    ctx.CockpitOpts.haloSize = () => h;
-    seen.length = 0;
-    const m = carDraw.cockpitShadowMesh(v.G.player.team, v.G.player);
-    assert.equal(seen.length, 1, `halo ${h}: one caster build`);
-    assert.notEqual(m, carDraw.cockpitBodyMesh(v.G.player.team, v.G.player), `halo ${h}: its own cache key, not the cockpit body`);
-    opts[h] = seen[0];
-    const o = seen[0];
-    assert.equal(o.silhouette, true, "a depth silhouette");
-    assert.equal(o.noDriver, true, "no driver: the helmet crown stamped the cockpit sides");
-    assert.equal(o.ownHalo, true, "the player's halo, not the factory hoop");
-    assert.equal(o.halo, h, "the player's COCKPIT halo choice");
-    assert.ok(!o.noWheels && !o.cockpit, "wheels and the rear assembly stay: not the cockpit build");
-  }
-  // The real Car3D over those options.
-  const cx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
-  cx.globalThis = cx; vm.createContext(cx);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js",
-    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
-  const Car3D = vm.runInContext("Car3D", cx);
-  const C1 = [0.9, 0.1, 0.1], C2 = [0.1, 0.1, 0.9];
-  for (const teamId of ["ferrari", "mclaren", "redbull"]) {
-    const parts = (o) => Object.fromEntries(Car3D.build(C1, C2, Object.assign({}, o, { teamId, parts: undefined, livery: undefined, measure: true }))
-      .parts.map((p) => [p.name, p]));
-    const ext = parts({ silhouette: true }), ck = (h) => parts({ noWheels: true, noDriver: true, cockpit: true, halo: h });
-    for (const h of halos) {
-      const sh = parts(opts[h]);
-      for (const name of ["wheels", "rearAssembly", "engineCover", "sidepods", "frontWing", "suspension"]) {
-        assert.ok(sh[name] && sh[name].vertices > 0, `${teamId}/halo ${h}: the caster has ${name}`);
-        assert.equal(sh[name].vertices, ext[name].vertices, `${teamId}/halo ${h}: ${name} is the exterior silhouette's`);
-      }
-      if (ext.sharkFin) assert.equal(sh.sharkFin && sh.sharkFin.vertices, ext.sharkFin.vertices, `${teamId}: the fin stays`);
-      assert.ok(ext.helmet && ext.halo, `${teamId}: the exterior silhouette carries a helmet and the factory halo`);
-      // part("helmet") also holds the airbox intake mouth (bodywork, top y 0.805):
-      // with no driver that box is all it has, and nothing reaches the crown.
-      const lid = parts({ silhouette: true, noDriver: true }).helmet;
-      assert.ok(!sh.driver, `${teamId}/halo ${h}: no driver`);
-      assert.equal(sh.helmet && sh.helmet.vertices, lid.vertices, `${teamId}/halo ${h}: no helmet, only the intake box`);
-      assert.ok(sh.helmet.vertices < ext.helmet.vertices, `${teamId}/halo ${h}: the lid is gone`);
-      assert.ok(sh.helmet.centreM[1] + sh.helmet.sizeM[1] / 2 <= 0.81, `${teamId}/halo ${h}: nothing at the 0.83 m crown`);
-      assert.ok(!sh.halo, `${teamId}/halo ${h}: no factory hoop`);
-      // The player's halo: the same geometry the drawn cockpit build adds for it.
-      const nv = (p) => (p.cockpit ? p.cockpit.vertices : 0);   // the cockpit build with no halo emits no cockpit section
-      const ownH = nv(sh) - nv(parts(opts[0])), ckH = nv(ck(h)) - nv(ck(0));
-      assert.equal(ownH, ckH, `${teamId}/halo ${h}: the cockpit halo the player sees (${ckH} vertices)`);
-      if (h) assert.ok(ownH > 0, `${teamId}/halo ${h}: a halo is cast`);
-    }
-  }
-});
-
-// ── A-H3 (perf hunt 4): the aero flaps take R1's coalescing seam, exactly as the wheel layers do ────
-// game.js drawAeroFlaps hands its opaque bag through CarDraw.coOpt: on TLX (gfx.coalesce === true) the
-// sibling carries `coalesce` and every flap mesh of the field draws as one instanced run per pass;
-// GLX / WGX (no gfx.coalesce) and an alpha < 1 bag get the bag itself, so their draws are unchanged.
-// VM census (tools/lib/game-vm.cjs, montreal, helmet, 10 s): 22 flap records over 13 meshes -> 13.
-test("A-H3: drawAeroFlaps draws through CarDraw.coOpt — coalesced on TLX, the bag itself elsewhere", () => {
-  const src = symbolSource("function drawAeroFlaps(");
-  assert.match(src, /const co = typeof CarDraw !== "undefined" \? CarDraw\.coOpt\(mat\) : mat;/, "one sibling per call, before either branch");
-  assert.match(src, /if \(set\) gfx\.draw\(set, modelMat, co\);/, "the still / at-rest set");
-  assert.match(src, /if \(mesh\) gfx\.draw\(mesh, W, co\);/, "each moving element");
-  assert.equal(src.split("gfx.draw(").length - 1, 2, "no other draw in drawAeroFlaps bypasses the seam");
-  const v = carDrawVm();
-  const draws = [];
-  const gfx = { draw: (mesh, m, o) => draws.push({ mesh, o }) };
-  const CarMesh = { getAeroFlapSet: () => ({ set: true }), getAeroFlap: () => ({ flap: true }) };
-  const Car3D = { aeroFlaps: () => [{ wing: "front", zAngle: 0, xAngle: 0.3, y: 0.2, z: 1 }, { wing: "rear", zAngle: 0, xAngle: 0.4, y: 0.8, z: -1.5 }] };
-  const CarMaterials = vm.runInNewContext(read("js/car/car-materials.js") + "\nCarMaterials");
-  const run = (CarDraw) => new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarDraw", "CarMaterials",
-    src + "\nreturn drawAeroFlaps;")(() => [1, 0, 0], (x, a, b) => Math.min(b, Math.max(a, x)), () => ({}), Car3D, CarMesh, gfx, new Float32Array(16), CarDraw, CarMaterials);
-  const paint = { roughness: 0.3, metalness: 0.1, specular: 0.5, clearcoat: 0.4, emissive: 0, carPaint: 1, sparkle: 1, doubleSided: true };
-  const I = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-  // GLX / WGX: no gfx.coalesce — the bag itself, on both branches.
-  v.G.gfx.coalesce = undefined;
-  run(v.ctx.CarDraw)({ id: "t" }, 2, 0, I, paint, null);
-  run(v.ctx.CarDraw)({ id: "t" }, 2, 0.5, I, paint, null);
-  assert.equal(draws.length, 3);
-  assert.ok(draws.every((d) => d.o === paint), "GLX/WGX: every flap draw carries the caller's bag");
-  // TLX: the sibling, carrying coalesce and the bag's own values; alpha < 1 stays the bag.
-  draws.length = 0;
-  v.G.gfx.coalesce = true;
-  run(v.ctx.CarDraw)({ id: "t" }, 2, 1, I, paint, null);
-  run(v.ctx.CarDraw)({ id: "t" }, 2, 0.5, I, paint, null);
-  assert.equal(draws.length, 3);
-  for (const d of draws) {
-    assert.notEqual(d.o, paint, "TLX: a sibling, never the caller's bag");
-    assert.equal(d.o.coalesce, true);
-    for (const k in paint) assert.equal(d.o[k], paint[k], "TLX: the sibling copies " + k);
-  }
-  assert.equal(draws[0].o, draws[1].o, "one sibling per bag (refreshed per call), so the backend's run keys hold");
-  draws.length = 0;
-  const ghost = Object.assign({ alpha: 0.5 }, paint);
-  run(v.ctx.CarDraw)({ id: "t" }, 2, 0, I, ghost, null);
-  assert.equal(draws[0].o, ghost, "alpha < 1 (blended) never coalesces");
-  // Before create() (no instance) the module-level seam is the identity.
-  assert.equal(v.ctx.CarDraw.coOpt(paint), v.carDraw.coOpt(paint), "CarDraw.coOpt delegates to the live instance");
-  assert.match(read("js/car/car-draw.js"), /coOpt: \(o\) => \(_instance \? _instance\.coOpt\(o\) : o\)/, "…and is the identity before one exists");
-});
-
-
-test("custom decal recipes retain 32 recent states per team and re-resolve legality changes", () => {
-  const v = carDrawVm();
-  let resolutions = 0, legality = "2026";
-  v.ctx.Parts.legalityKey = () => legality;
-  v.ctx.Parts.getVisualTiers = (setup) => ({ recipe: setup.aero, legality, serial: ++resolutions });
-  v.ctx.Car3D.aeroLevelOf = (parts) => Number(parts.recipe.replace("upgrade", "")) % 5;
-  v.ctx.Car3D.aeroStyleOf = (parts) => ({ recipe: parts.recipe });
-  const team = v.teams[0], other = v.teams[1];
-  const resolve = (i, t = team) => v.carDraw.teamDecalState(t, false, { ...WORKS, aero: "upgrade" + i }, "stamp" + i);
-  const states = Array.from({ length: 32 }, (_, i) => resolve(i));
-  const otherState = resolve(1, other);
-  assert.strictEqual(resolve(0), states[0], "drawing an old but active recipe promotes it");
-  resolve(32);
-  assert.strictEqual(resolve(0), states[0], "the promoted active recipe survives the bound");
-  const evicted = resolve(1);
-  assert.notStrictEqual(evicted, states[1], "the least recently used recipe is recomputed");
-  assert.equal(evicted.parts.recipe, states[1].parts.recipe);
-  assert.equal(evicted.val, states[1].val);
-  assert.equal(evicted.aero.recipe, states[1].aero.recipe);
-  assert.strictEqual(resolve(1, other), otherState, "another team's working recipe stays warm");
-  for (let i = 33; i < 96; i++) { resolve(i); resolve(0); }
-  assert.strictEqual(resolve(0), states[0], "an active recipe survives years of upgrades");
-  const before = resolutions;
-  for (let i = 64; i < 96; i++) resolve(i);
-  assert.ok(resolutions > before, "history beyond the 32-state working set was discarded");
-  legality = "2027";
-  const nextRules = resolve(95);
-  assert.equal(nextRules.parts.legality, "2027", "same stamp is resolved against the new rules");
-  assert.strictEqual(resolve(95), nextRules, "new-rule results remain memoized");
 });

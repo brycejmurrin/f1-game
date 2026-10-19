@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync, execFileSync } from "node:child_process";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
-import { aggregate, diff, formatDiff, formatTable, intervalStats, supportsCaptureKey } from "./lib.mjs";
+import { aggregate, diff, formatDiff, formatTable, intervalStats, supportsCaptureKey, profileScenario, profileScenarioSignature, profileComparability } from "./lib.mjs";
 const CAPTURE_SRC = ["js/render/three/tlx.js", "js/render/glx/glx.js", "js/render/webgpu/wgx.js"];   // where a ref reads the apex26.wgxCapture switch
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -55,8 +55,9 @@ const asJson = argv.includes("--json");
 // frame-hitch.mjs does; --capture puts it back. The backend itself stays the default (TLX).
 // 320x180: spans time main-thread JS, and SwiftShader rasterisation scales with pixels (844x390: ~9 s a frame, 320x180: ~3 s).
 const VIEWPORT = { width: 320, height: 180 };
+const DEVICE_SCALE_FACTOR = 1;
 const noBlit = () => { try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) { /* blocked */ } };
-const newPage = async (browser) => { const ctx = await browser.newContext({ viewport: VIEWPORT }); if (!argv.includes("--capture")) await ctx.addInitScript(noBlit); return [ctx, await ctx.newPage()]; };
+const newPage = async (browser) => { const ctx = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_SCALE_FACTOR }); if (!argv.includes("--capture")) await ctx.addInitScript(noBlit); return [ctx, await ctx.newPage()]; };
 const log = (...a) => console.error(...a);
 // Page-ready / track-load wait: APEX_PROFILE_WAIT_MS raises the 30 s floor on a loaded SwiftShader box (as profile-gameloop.mjs does).
 const WAIT_MS = Math.max(30000, +process.env.APEX_PROFILE_WAIT_MS || 30000);
@@ -93,12 +94,24 @@ async function runSpans(root, label) {
       await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
       const res = await scenario(page, frames);
       res.spans = Object.assign({}, res.spans || {}, { raf: intervalStats(res.intervals) });
+      const identity = await page.evaluate(() => {
+        try {
+          const d = window.__apex.diag({ download: false });
+          return { backend: d.env?.backend || null, api: d.env?.backendState?.api || null, device: d.gl?.renderer || null };
+        } catch { return { backend: null, api: null, device: null }; }
+      });
+      res.scenario = profileScenario({ track, frames, viewport: { ...VIEWPORT, deviceScaleFactor: DEVICE_SCALE_FACTOR },
+        capture: argv.includes("--capture") || !supportsCaptureKey(CAPTURE_SRC.map(f => { try { return readFileSync(join(root, f), "utf8"); } catch { return ""; } })) ? "enabled" : "disabled",
+        environment: { ...identity, browser: browser.version() } });
       runs.push(res);
       log(`  ${label}: repeat ${r + 1}/${repeat} — ${res.intervals.length} frames, spans: ${Object.keys(res.spans).join(",")}`);
       await context.close();
     }
   } finally { await browser.close().catch(() => {}); await srv.close?.(); }
-  return runs;
+  const savedScenario = runs[0]?.scenario;
+  // A fallback or device change between repeats also prevents trustworthy judgments.
+  const stable = !!profileScenarioSignature(savedScenario) && runs.every(r => profileScenarioSignature(r.scenario) === profileScenarioSignature(savedScenario));
+  return { agg: aggregate(runs), scenario: stable ? savedScenario : null, observedScenarios: runs.map(r => r.scenario) };
 }
 
 function withWorktree(ref, fn) {
@@ -147,12 +160,16 @@ try {
   else if (mode === "spans") {
     mkdirSync(OUT, { recursive: true });
     log(`profile spans: ${track}, ${frames} frames x ${repeat} repeat${baseRef ? `, base ${baseRef}` : ""}`);
-    const head = aggregate(await runSpans(ROOT, "head"));
-    const out = { track, frames, repeat, head };
+    const headRun = await runSpans(ROOT, "head"), head = headRun.agg;
+    const out = { track, frames, repeat, head, scenario: headRun.scenario, scenarioSignature: profileScenarioSignature(headRun.scenario), observedScenarios: headRun.observedScenarios };
     console.log(`\nspans — ${track}, ${frames} frames, ${repeat} repeat(s) (ms)\n${formatTable(head)}`);
     if (baseRef) {
-      const { agg, sha, keyed } = await withWorktree(baseRef, async (dir, sha) => ({ agg: aggregate(await runSpans(dir, "base")), sha, keyed: argv.includes("--capture") || supportsCaptureKey(CAPTURE_SRC.map((f) => { try { return readFileSync(join(dir, f), "utf8"); } catch (_) { return ""; } })) }));
-      out.base = agg; out.baseRef = baseRef; out.baseSha = sha; out.delta = diff(agg, head, { incomparable: !keyed });
+      const { agg, scenario: baseScenario, observedScenarios: baseObservedScenarios, sha, keyed } = await withWorktree(baseRef, async (dir, sha) => ({ ...(await runSpans(dir, "base")), sha, keyed: argv.includes("--capture") || supportsCaptureKey(CAPTURE_SRC.map((f) => { try { return readFileSync(join(dir, f), "utf8"); } catch (_) { return ""; } })) }));
+      out.base = agg; out.baseRef = baseRef; out.baseSha = sha; out.baseScenario = baseScenario;
+      out.baseScenarioSignature = profileScenarioSignature(baseScenario); out.baseObservedScenarios = baseObservedScenarios;
+      out.comparability = profileComparability({ scenario: baseScenario }, out);
+      out.delta = diff(agg, head, { incomparable: !keyed || !out.comparability.comparable });
+      if (!out.comparability.comparable) console.log(`(comparison incomparable: ${out.comparability.reason})`);
       if (!keyed) console.log(`(base predates the apex26.wgxCapture key: it paid the per-frame readback HEAD skipped; verdicts are "incomparable" — re-run with --capture to put the readback on both arms)`);
       console.log("\n" + formatDiff(out.delta, `${baseRef}@${sha.slice(0, 8)}`, "HEAD"));
       if (!Object.keys(agg).some((k) => k !== "raf")) console.log("(base predates PerfSpans: only the rAF cadence row is comparable)");

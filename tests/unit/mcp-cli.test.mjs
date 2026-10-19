@@ -3,6 +3,7 @@
 // gfx-probe's backend flags, and the Playwright MCP pin. Nothing here launches
 // a browser or needs network. The tinyfish proxy and the probe bridge have
 // their own suites in tests/manual/ (tinyfish-mcp / probe-mcp), run by path.
+import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -59,7 +60,7 @@ test("Playwright MCP network fallback is pinned to the audited release", () => {
   assert.match(src, /MCP-ATTACHED AGAIN/, "the wrapper's run IS playwright-official");
   assert.match(src, /chromium-path\.mjs" --path/, "run resolves the installed Chromium for --executable-path");
   assert.doesNotMatch(src, /^\s*--user-data-dir/m, "--isolated and a --user-data-dir flag do not combine (the 2026-09 connect failure)");
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const cfg = nativeMcpConfig(JSON.parse(fs.readFileSync(MCP_JSON, "utf8")));
   assert.deepEqual(cfg.mcpServers["playwright-official"], { type: "stdio", command: "bash", args: ["tools/mcp/playwright-mcp.sh", "run"] });
   assert.doesNotMatch(src, /@playwright\/mcp@latest/);
   assert.match(src, /never --port \/ 0\.0\.0\.0/);
@@ -190,4 +191,37 @@ test("the Chrome wrapper passes the flags WebGPU and software WebGL need", () =>
   assert.match(argsMod, /--enable-unsafe-webgpu/);
   assert.match(argsMod, /--use-webgpu-adapter=swiftshader/);
   assert.match(argsMod, /--enable-unsafe-swiftshader/);
+});
+
+test("probe retains oversized JSON exactly while compact and full calls preserve errors", () => {
+  const script = `
+import argparse, contextlib, importlib.util, io, json, os, pathlib, stat, tempfile
+spec=importlib.util.spec_from_file_location("probe", "tools/mcp/probe-mcp.py")
+m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+with tempfile.TemporaryDirectory() as directory:
+    m.ROOT=pathlib.Path(directory)
+    original={"isError":True,"content":[{"type":"text","text":"é\\\""*20000}],"tail":"retained"}
+    class Bridge:
+        def call(self,*args): return original
+        def close(self): pass
+    m.Bridge=Bridge
+    args=argparse.Namespace(name="chrome_evaluate_script",args_json="{}")
+    os.environ.pop("PROBE_MCP_FULL",None)
+    compact=io.StringIO()
+    with contextlib.redirect_stdout(compact): code=m.cmd_call(args)
+    preview=json.loads(compact.getvalue())
+    artifact=pathlib.Path(preview["artifact"])
+    assert code==1 and preview["isError"] and preview["truncated"]
+    assert len(compact.getvalue())<12000
+    assert json.loads(artifact.read_text())==original
+    assert stat.S_IMODE(artifact.stat().st_mode)==0o600
+    assert stat.S_IMODE(artifact.parent.stat().st_mode)==0o700
+    os.environ["PROBE_MCP_FULL"]="1"
+    full=io.StringIO()
+    with contextlib.redirect_stdout(full): code=m.cmd_call(args)
+    assert code==1 and json.loads(full.getvalue())==original
+print("ok")
+`;
+  const r = spawnSync("python3", ["-c", script], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
+  assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout.trim(), "ok");
 });

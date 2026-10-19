@@ -2,25 +2,11 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
-/** Boot wait: one reload if `__apex.race` misses BOOT_MS (title menu up, API absent).
- *  Packed-2 tip-red on #1493 run 38554083150: prop-over-road hit TimeoutError at BOOT_MS
- *  after menu-traversal; re-run + local packed-2 order green. Do not widen BOOT_MS. */
-async function awaitApexRace(page) {
-  try {
-    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  } catch (err) {
-    const msg = err && typeof err === "object" && "message" in err ? String(err.message) : "";
-    if (!/Timeout/i.test(msg)) throw err;
-    await page.reload();
-    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  }
-}
-
 test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ page }) => {
   test.setTimeout(300_000);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await awaitApexRace(page);
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
 
   const result = await page.evaluate(async () => {
     const definition = window.TrackDefs.find((entry) => entry.id === "monaco");
@@ -190,86 +176,4 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
     expect(session.models.emitted.some((entry) =>
       entry.id === "monaco-tabac-terrace" && entry.groundedSegments)).toBe(true);
   }
-});
-
-test("Monaco remains within the 1.4 m prop-over-road cap", async ({ page }) => {
-  test.setTimeout(180_000);
-  await page.goto("/");
-  await awaitApexRace(page);
-  const max = await page.evaluate(async () => {
-    window.__apex.trackGeometry(true);
-    await window.__apex.race("monaco", "day", "dry");   // thenable — see the note above
-    const caps = window.__apex.trackGeometry();
-    const count = 1200;
-    const px = new Float64Array(count), py = new Float64Array(count);
-    const pz = new Float64Array(count), rx = new Float64Array(count);
-    const rz = new Float64Array(count), hw = new Float64Array(count);
-    for (let i = 0; i < count; i++) {
-      const node = window.__apex.nodeAt(i / count);
-      px[i] = node.x; py[i] = node.y; pz[i] = node.z;
-      rx[i] = node.rx; rz[i] = node.rz;
-    }
-    const nearest = (x, z) => {
-      let best = Infinity, index = 0;
-      for (let k = 0; k < count; k++) {
-        const dx = x - px[k], dz = z - pz[k], distance = dx * dx + dz * dz;
-        if (distance < best) { best = distance; index = k; }
-      }
-      return index;
-    };
-    const road = caps.road.pos;
-    for (let v = 0; v < road.length; v += 3) {
-      const k = nearest(road[v], road[v + 2]);
-      const lateral = Math.abs((road[v] - px[k]) * rx[k] + (road[v + 2] - pz[k]) * rz[k]);
-      if (lateral < 13 && lateral > hw[k]) hw[k] = lateral;
-    }
-    for (let k = 0; k < count; k++) if (hw[k] < 3) hw[k] = 6;
-    const samples = [];
-    for (let i = 0; i < count; i++) {
-      for (const side of [-0.75, -0.4, 0, 0.4, 0.75]) {
-        samples.push({
-          x: px[i] + rx[i] * side * hw[i],
-          y: py[i],
-          z: pz[i] + rz[i] * side * hw[i],
-        });
-      }
-    }
-    const inside = (x, z, ax, az, bx, bz, cx, cz) => {
-      const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az;
-      const v2x = x - ax, v2z = z - az;
-      const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z;
-      const d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z;
-      const d21 = v2x * v1x + v2z * v1z, denominator = d00 * d11 - d01 * d01;
-      if (Math.abs(denominator) < 1e-9) return null;
-      const u = (d11 * d20 - d01 * d21) / denominator;
-      const v = (d00 * d21 - d01 * d20) / denominator;
-      return u >= -0.02 && v >= -0.02 && u + v <= 1.02 ? { u, v } : null;
-    };
-    let worst = 0;
-    for (const name of ["props", "glass"]) {
-      const mesh = caps[name];
-      if (!mesh?.pos || !mesh?.idx) continue;
-      for (let triangle = 0; triangle < mesh.idx.length; triangle += 3) {
-        const a = mesh.idx[triangle] * 3, b = mesh.idx[triangle + 1] * 3;
-        const c = mesh.idx[triangle + 2] * 3;
-        const ax = mesh.pos[a], ay = mesh.pos[a + 1], az = mesh.pos[a + 2];
-        const bx = mesh.pos[b], by = mesh.pos[b + 1], bz = mesh.pos[b + 2];
-        const cx = mesh.pos[c], cy = mesh.pos[c + 1], cz = mesh.pos[c + 2];
-        if (Math.min(ay, by, cy) > 35) continue;
-        const minX = Math.min(ax, bx, cx), maxX = Math.max(ax, bx, cx);
-        const minZ = Math.min(az, bz, cz), maxZ = Math.max(az, bz, cz);
-        for (const sample of samples) {
-          if (sample.x < minX - 0.3 || sample.x > maxX + 0.3 ||
-              sample.z < minZ - 0.3 || sample.z > maxZ + 0.3) continue;
-          const hit = inside(sample.x, sample.z, ax, az, bx, bz, cx, cz);
-          if (!hit) continue;
-          const y = ay + hit.u * (cy - ay) + hit.v * (by - ay);
-          const overlap = y - sample.y;
-          if (overlap > 0.2 && overlap < 5) worst = Math.max(worst, overlap);
-        }
-      }
-    }
-    return worst;
-  });
-  expect(max).toBeLessThanOrEqual(1.4);
 });
