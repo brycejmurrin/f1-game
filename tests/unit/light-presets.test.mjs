@@ -201,24 +201,50 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
     "per-track dawn|dry must not re-pin a knob at the same value as *|dawn|dry");
 });
 
+/** The REAL resolver (js/lighting/profiles.js) over the real knob registry and
+ *  the shipped presets, for one (track, tod, weather). Returns the live LT after
+ *  apply(), so a layering bug in LightStore fails the tests built on it. */
+function resolveLive(trackId, tod, wx, extra = {}) {
+  const defs = vm.createContext({ GLX: { isMobile: false }, Math, Object });
+  vm.runInContext(read("js/lighting/knobs.js"), defs, { filename: "js/lighting/knobs.js" });
+  const TUNE_DEFS = vm.runInContext("LightKnobs.TUNE_DEFS", defs);
+  const ctx = vm.createContext({
+    window: { LightPresets: presets() },
+    LightTune: { TUNE_DEFS, LT: {} },
+    Tracks: { LIST: [] },
+    Log: { info() {}, debug() {}, warn() {}, enabled: () => false, DEBUG: 0 },
+    Math, JSON, Object, Array, Number, isFinite,
+  });
+  vm.runInContext(read("js/lighting/profiles.js"), ctx, { filename: "js/lighting/profiles.js" });
+  const stored = { lightTune: extra.saved || null };
+  const G = {
+    store: { get: (k, d) => (stored[k] == null ? d : stored[k]), set: (k, v) => { stored[k] = v; } },
+    clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
+    track: { def: { id: trackId, night: tod === "night" } },
+    raceTimeOfDay: tod, raceWeather: wx, state: "race",
+    applyRaceSettings() {}, isWetRoad: () => false, initRainDrops() {},
+  };
+  vm.runInContext("LightStore", ctx).create(G).apply();
+  return { LT: vm.runInContext("LightTune.LT", ctx), TUNE_DEFS };
+}
+
 test("*|dawn|dry hoisted knobs resolve identically on every track", () => {
-  // Shipped resolver only (no player profiles): * → *|tod|wx → track|tod|wx → *|tod.
-  // A hoist that changed any cell would make two tracks disagree on a fleet knob
-  // or disagree with the stamp — this is the zero-diff pin for R4 #5a.
-  const P = presets();
+  // The REAL LightStore resolver (profiles.js), not a copy of its layering: a
+  // resolver bug (shared stamp ignored, pin order swapped) must fail here. A
+  // hoist that changed any cell makes two tracks disagree on a fleet knob.
   const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
     .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
   assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
-  const shared = P["*|dawn|dry"];
+  const P = presets();
+  assert.ok(P["*|dawn|dry"], "expected LightPresets['*|dawn|dry']");
   const drift = [];
   for (const track of circuits) {
-    const pin = P[`${track}|dawn|dry`] || {};
+    const { LT, TUNE_DEFS } = resolveLive(track, "dawn", "dry");
+    const byId = Object.fromEntries(TUNE_DEFS.map((d) => [d.id, d]));
     for (const [id, want] of Object.entries(DAWN_DRY_HOIST)) {
-      const resolved = (typeof pin[id] === "number") ? pin[id]
-        : (typeof shared[id] === "number") ? shared[id]
-        : (P["*"] && typeof P["*"][id] === "number") ? P["*"][id]
-        : undefined;
-      if (resolved !== want) drift.push(`${track}|dawn|dry.${id}=${resolved} want ${want}`);
+      assert.ok(byId[id], `DAWN_DRY_HOIST names a knob TUNE_DEFS lacks: ${id}`);
+      const clamped = Math.min(byId[id].max, Math.max(byId[id].min, want));
+      if (!Number.isFinite(LT[id]) || LT[id] !== clamped) drift.push(`${track}|dawn|dry.${id}=${LT[id]} want ${clamped}`);
     }
   }
   assert.deepEqual(drift, [],
