@@ -94,8 +94,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
-  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras. Permanent
-  // only; streets stay at the prior baselines. No VM. < 0.1 s.
+  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras, plus the
+  // #2356 attack-zone soft pull. Permanent only; streets stay prior baselines. No VM.
   "tests/unit/ai-pass-complete.test.mjs",
   // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
   // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
