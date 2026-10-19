@@ -1,0 +1,1 @@
+Fixed: tyre squeal now starts at the race's 0.10 rad slip onset (no second audio gate on already-normalised skidIntensity); lock-up pitch rises from CarSfx lock without a game.js `{lat,long}` hand-off.

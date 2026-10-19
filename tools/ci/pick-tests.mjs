@@ -169,6 +169,9 @@ export const RULES = [
   [/^js\/physics\/incident-sim\.js/, ["collisions", "sweeps"], "the Rapier takeover is a CONTACT model"],
   [/^js\/physics\/debris-world\.js/, ["physics-core", "sweeps"], "debris.spec.js rides in test:physics-core"],
   [/^js\/physics\/tyre-model\.js/, ["physics-core"], "the wear model feeds the grip seam — pit-lane.spec.js and the characterization ride in test:physics-core"],
+  [/^js\/physics\/wheel-state\.js/, ["physics-core"], "opt-in torque-balanced κ — characterization OFF must stay baseline; ON is documented"],
+  [/^js\/physics\/player-forces\.js/, ["physics-core"], "human combined-slip / Fy / yaw; wheel-state hook when enabled"],
+  [/^js\/physics\/drive-tune\.js/, ["physics-core", "steering-unit"], "live driving-feel bag including WHEEL_STATE opt-in default"],
   [/^js\/race\/pit-lane\.js/, ["physics-core", "game-vm"], "pit-lane.spec.js rides in test:physics-core; the commitment's VM twin (pit-lane-vm) in test:game-vm"],
   [/^js\/physics\/(active-aero|aero)/, ["aero"], "the aero model — active-aero + aero-zones specs"],
   // CONTACT AND AI (test audit T10, 2026-10-05): these routed to physics-core
@@ -206,7 +209,7 @@ export const RULES = [
   [/^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
   [/^js\/audio\/rivals\.js/, ["audio-unit"], "rival-audio.test.mjs and the pass-by voice pool"],
   [/^js\/audio\/crowd\.js/, ["audio-unit"], "trackside crowd ambience bed + silence gates"],
-  [/^js\/audio\/engine\.js/, ["audio-unit"], "GameAudio init attach of the rival pass-by pool"],
+  [/^js\/audio\/engine\.js/, ["audio-unit", "ui"], "GameAudio init, OfflineAudioContext pitch/layer spec, rival pass-by pool"],
   [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
   [/^js\/perf\/(phone-recorder|soak-run)\.js/, ["phone-recorder"], "PHONE TEST recorder + AUTO SOAK (#1633)"],
@@ -225,6 +228,11 @@ export const RULES = [
   // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
   // the optional iwer Playwright smoke is test:xr (not selected by path alone).
   [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
+  // WebKit iPhone-path proxy (#2705): dispatch-only webkit-leg.yml + project
+  // `webkit`. Local Linux cannot install WebKit host libs here; structural
+  // guards still cover the config + group registration.
+  [/^\.github\/workflows\/webkit-leg\.yml$/, ["tooling-fast", "webkit"], "WebKit dispatch leg — structural guards + the boot group it runs"],
+  [/^tests\/specs\/webkit-boot\.spec\.js$/, ["webkit", "tooling-fast"], "WebKit boot probe (project=webkit only)"],
   [/^js\/share\//, ["state-unit"], "share-card data/layout/painter and Daily Challenge delivery hook"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
   [/^js\/ui\/dock-layout\.js/, ["steering-unit", "ui"], "dock-layout.test.mjs + ui-button-touch reposition"],

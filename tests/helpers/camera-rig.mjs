@@ -1,7 +1,7 @@
 // Shared camera-rig fixture: the REAL camera solvers (drive-*.js, feel.js,
 // extra-rigs.js, vantage.js) on a synthetic CURVED track, so corner lead, bend
 // hang and bank are exercised instead of a straight stub (test-review R1-05/R1-18).
-// CamTune is a stub whose cornerLead/cornerHang return null = the rig's shipped default.
+// CamTune is a stub whose cornerLead/cornerHang return null = the rig's shipped default (state.lead / state.hang override).
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,8 +15,8 @@ export function runFiles(ctx, files) {
   for (const f of files) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
 }
 export function camTune(state) {
-  return { get: () => 0, cornerLead: () => null, cornerHang: () => (state.hang == null ? null : state.hang),
-    speedFov: () => 1, bob: () => 1,
+  return { get: () => 0, cornerLead: () => (state.lead == null ? null : state.lead), cornerHang: () => (state.hang == null ? null : state.hang),
+    speedFov: () => (state.spFov == null ? 1 : state.spFov), bob: () => 1,
     apply: (_m, _e, _t, fov) => (state.fovAdd ? Math.max(20, Math.min(110, fov + state.fovAdd)) : fov) };
 }
 
@@ -55,7 +55,7 @@ export function synthTracks() {
   };
 }
 export function loadRig(extraCtx, files) {
-  const state = { hang: null, fovAdd: 0 };
+  const state = { hang: null, lead: null, fovAdd: 0 };
   const ctx = vm.createContext(Object.assign({ console, Math, Object, Array, Number, JSON, Float64Array,
     CamTune: camTune(state), Log: { info() {}, warn() {}, debug() {} } }, extraCtx || {}));
   runFiles(ctx, ["js/core/mat4.js"].concat(files || CAM_FILES));

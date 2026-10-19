@@ -1,7 +1,7 @@
 /* jump-start-vm.test.mjs — tests/specs/jump-start.spec.js replayed in the Node VM
  * (tools/lib/game-vm.cjs): false-start penalty at lights-out.
  *
- * Ported: all 3 tests.
+ * Ported: all 4 tests.
  * Not portable: none — the automatic-start regression also reads the real game context.
  * Regression: auto-throttle's own fast launch cannot earn a false-start penalty.
  *
@@ -63,6 +63,36 @@ test("waiting for green before throttle accrues no false-start penalty", async (
   a.clearInput();
   assert.equal(a.info().state, "race");
   assert.equal(penTime(a), 0);
+});
+
+test("a manual launch inside the reaction window is a false start, and only when the car really moved", async () => {
+  const game = await createGame({ track: "monza", storage: { unlimitedBudget: true } });
+  try {
+    const { apex: a, G, sandbox } = game;
+    const { SportingRegs } = sandbox, team = G.player.team;
+    const fast = {
+      engine: "sprint", aero: "reg26_concept", suspension: "titanium_spring", brakes: "regen_brakes",
+      tyres: "hypersoft", ers: "overcharge", gearbox: "seamless_shift", fuel: "custom_formula",
+      exhaust: "hyper_scav", floor: "venturi", cockpit: "open_cell", wheels: "mag_forged",
+    };
+    G.saveTeamParts(team.id, fast);
+    await a.race("monza", "day", "dry", { laps: 10 });
+    a.setInput({ steer: 0, throttle: false });   // released through the lights: the early-throttle rule is not what fires
+    await stepToRace(a);
+    assert.equal(G.state, "race");
+    assert.equal(G.raceT, 0);
+    assert.equal(penTime(a), 0);
+    a.setInput({ steer: 0, throttle: true });    // first green step
+    let crossed = false;
+    for (let i = 0; i < 30; i++) {
+      a.step(1 / 60, 1);
+      if (G.raceT < SportingRegs.JUMP_START_REACT_S && G.player.speed > G.vTop() * SportingRegs.JUMP_START_SPEED_VREF) crossed = true;
+    }
+    a.clearInput();
+    // The rule: moved meaningfully inside the 0.2 s window <=> penalised.
+    assert.equal(penTime(a) > 0, crossed, `crossed=${crossed} penalty=${penTime(a)}`);
+    assert.equal(crossed, true, "a full-throttle fast build launches inside 0.2 s: the case must exercise the rule");
+  } finally { game.close(); }
 });
 
 test("auto-throttle is exempt through the reaction window, including a fast legal build", async () => {

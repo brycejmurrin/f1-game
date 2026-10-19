@@ -167,6 +167,17 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
 #lighting, #camtune, #flyby, #freecam, #garrival { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
+/* Playback lowers the editor sheet; its touch exit must stay outside it. */
+#ga-preview-stop {
+  position: fixed;
+  top: calc(var(--sat) + 8px);
+  right: calc(var(--sar) + 8px);
+  width: auto;
+  max-width: calc(100vw - var(--sal) - var(--sar) - 16px);
+  margin: 0;
+  min-height: 44px;
+  pointer-events: auto;
+}
 #lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner {
   /* Docked, not centred: .sheet gives the head/body/foot shape and the query
      container, and these override the sheet's centred sizing. */

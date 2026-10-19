@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { ROOT } from "../../tools/gen/gen-lib.mjs";
 import { walkTools } from "../../tools/gen/gen-tools-readme.mjs";
 import {
-  classify, collect, render, TARGET, RUNNER, agentCommandFor, npmAgentCommand, resolveToolPolicy,
+  classify, collect, render, TARGET, RUNNER, agentCommandFor, npmAgentCommand, resolveToolPolicy, catalogCounts,
 } from "../../tools/gen/gen-output-surface.mjs";
 
 test("static inventory distinguishes commands from libraries, data and ambiguous modules", () => {
@@ -21,7 +21,13 @@ test("static inventory distinguishes commands from libraries, data and ambiguous
 
 test("catalog covers every file, npm command and configured MCP route without fake native flags", () => {
   const inventory = collect();
-  assert.equal(inventory.version, 2);
+  assert.equal(inventory.version, 3);
+  assert.equal(inventory.counts, undefined, "no global aggregates on disk: they conflict on every unrelated merge");
+  const counts = catalogCounts(inventory);
+  assert.equal(counts.files, inventory.tools.length);
+  assert.equal(Object.values(counts.classifications).reduce((a, b) => a + b, 0), inventory.tools.length);
+  assert.equal(counts.npmScripts, inventory.npmScripts.length);
+  assert.equal(counts.configuredMcpServers, inventory.mcpRoutes.length);
   assert.deepEqual(inventory.runner, RUNNER);
   assert.deepEqual(inventory.tools.map(row => row.path), walkTools().map(file => `tools/${file}`));
   const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
