@@ -1,1 +1,12 @@
-{"images":"macos-latest","track":"montreal","tod":"day","clock":12,"census_only":false,"force":"batches","ls":"","cam":"helmet","entry":"api","leg":"census-gate-2955-normal"}
+{
+  "images": "macos-latest",
+  "track": "monza",
+  "tod": "day",
+  "clock": 12,
+  "census_only": false,
+  "force": "env",
+  "ls": "apex26.team=1 apex26.livery.custom.ferrari=[{\"id\":\"_census_car_expansion\",\"name\":\"CensusHammeredBlade\",\"c1\":[0.08,0.3,0.8],\"c2\":[0.7,0.8,0.95],\"finish\":\"hammered\",\"bodyStyle\":\"blade\"}] apex26.livery.ferrari=\"_census_car_expansion\"",
+  "cam": "chase",
+  "entry": "api",
+  "leg": "car-design-expansion-84b2"
+}

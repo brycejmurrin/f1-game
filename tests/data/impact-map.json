@@ -2346,7 +2346,8 @@
         "tests/unit/livery-finish-contract.test.mjs"
       ],
       "finishOf": [
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs"
       ],
       "*": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -2594,6 +2595,9 @@
       ],
       "helmetKey": [
         "tests/unit/helmets.test.mjs"
+      ],
+      "teamStyleOf": [
+        "tests/unit/car-mesh-anchors.test.mjs"
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
@@ -12623,6 +12627,7 @@
         "tests/unit/vertex-pack.test.mjs"
       ],
       "pack": [
+        "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
       ],
       "toHalf": [
@@ -13281,6 +13286,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -13386,11 +13392,20 @@
       "_ensureSpatial": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "_expandPull": [
+        "tests/unit/livery-finish-contract.test.mjs"
+      ],
       "_fail": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "_flushLitRings": [
         "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "_interleave": [
+        "tests/unit/livery-finish-contract.test.mjs"
+      ],
+      "_makeAttrBG": [
+        "tests/unit/livery-finish-contract.test.mjs"
       ],
       "_matLayerBytes": [
         "tests/unit/assets-pack.test.mjs"

@@ -1334,6 +1334,10 @@
         // non-chunked mesh. Anchored here with the other varyings per the
         // standing rule, because roadMarkings() takes derivatives of it.
         const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
+        // Hammered cotangent inputs: anchor derivatives before any If graph.
+        const hmUV = objP.xz.add(objP.y.mul(vec2(0.73, -0.61))).toVar();
+        const hmDP1 = dFdx(wp).toVar(), hmDP2 = dFdy(wp).toVar();
+        const hmDUV1 = dFdx(hmUV).toVar(), hmDUV2 = dFdy(hmUV).toVar();
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
         // Puddle shape (wet block): derivatives taken here, in uniform control flow
         // (the WebGPU path compiles this graph to WGSL, which requires it) — an If
@@ -1381,9 +1385,9 @@
         // AFTER the ground relief, BEFORE paint/material bumps (js/render/glx/shaders/glsl-lit.js).
         const Ngeo = vec3(N).toVar();
 
-        // car surface ids 20-40 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
+        // car surface ids 20-44 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(40.0)).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(44.0)).toVar();
         // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (js/render/glx/shaders/glsl-lit.js); grain / saturation / rim below.
         const flakeSurface = surfaceId.equal(34.0).toVar();
         const candySurface = surfaceId.equal(35.0).toVar();
@@ -1406,6 +1410,12 @@
         const mirrorSurface = surfaceId.equal(27.0).or(tintedSurface).or(goldSurface).toVar();
         const forgedSurface = surfaceId.equal(38.0).toVar();
         const gunSurface = surfaceId.equal(39.0).toVar();
+        // EXPANDED FINISHES: independent surface identities; no new material resources.
+        const holoSurface = surfaceId.equal(41.0).toVar();
+        const velvetSurface = surfaceId.equal(42.0).toVar();
+        const hammerSurface = surfaceId.equal(43.0).toVar();
+        const anodSurface = surfaceId.equal(44.0).toVar();
+        // END EXPANDED FINISHES
         // Three more livery finishes, mirroring js/render/glx/shaders/glsl-lit.js. A
         // finish costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE
         // remaps a painted vertex. Carbon needs no id — 21 already exists.
@@ -1440,7 +1450,7 @@
         // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
         // clearcoat, dielectric env response — mirrors the GLX/WGSL split.
         const visorSurface = surfaceId.equal(32.0).toVar();
-        const paintLike = paintSurface.or(mirrorSurface).or(iriSurface).or(satinMetalSurface).or(forgedSurface).or(gunSurface).toVar();
+        const paintLike = paintSurface.or(mirrorSurface).or(iriSurface).or(satinMetalSurface).or(forgedSurface).or(gunSurface).or(holoSurface).or(hammerSurface).or(anodSurface).toVar();
         const carPaint = select(classifiedCar,
           select(paintLike, matU.carPaint, float(0.0)), matU.carPaint).toVar();
         const clearcoat = select(classifiedCar,
@@ -1489,6 +1499,12 @@
         // FORGED (38) satin-gloss lacquer, carbon metal/spec; GUNMETAL (39) anodised film on a metal lobe (glsl-lit.js chains).
         If(forgedSurface, () => { clearcoat.assign(clamp(matU.clearcoat, 0.40, 0.60)); metalness.assign(0.08); specular.assign(0.48); });
         If(gunSurface, () => { clearcoat.assign(min(matU.clearcoat, 0.30)); metalness.assign(max(matU.metalness, 0.85)); specular.assign(0.90); });
+        // EXPANDED FINISHES: only the newly classified surfaces take these responses.
+        If(holoSurface, () => { clearcoat.assign(max(matU.clearcoat, 0.80)); metalness.assign(0.35); specular.assign(0.90); });
+        If(velvetSurface, () => { clearcoat.assign(0.0); metalness.assign(0.0); specular.assign(0.08); });
+        If(hammerSurface, () => { clearcoat.assign(min(matU.clearcoat, 0.15)); metalness.assign(0.90); specular.assign(0.90); });
+        If(anodSurface, () => { clearcoat.assign(min(matU.clearcoat, 0.08)); metalness.assign(0.90); specular.assign(0.90); });
+        // END EXPANDED FINISHES
         const envSurface = carPaint.greaterThan(0.001).or(glassSurface).or(visorSurface)
           .and(clearcoat.greaterThan(0.001)).toVar();
 
@@ -1522,6 +1538,23 @@
           N.assign(normalize(N.add(wT.mul(wvT.x).add(wB.mul(wvT.y)).mul(0.26))));
         });
 
+        // EXPANDED FINISHES: smooth object-space dimples after the SAA snapshot.
+        If(hammerSurface, () => {
+          N.assign(Ngeo);
+          const hmF = clamp(vd.sub(8.0).div(14.0).oneMinus(), 0.0, 1.0).toVar();
+          If(hmF.greaterThan(0.0), () => {
+            const hmP = objP.xz.add(objP.y.mul(vec2(0.73, -0.61))).mul(90.0).toVar();
+            const hmT = hmP.add(hmP.yx.mul(0.73).sin().mul(0.80)).sin();
+            const hmC1 = cross(hmDP2, Ngeo), hmC2 = cross(Ngeo, hmDP1);
+            const hmU = hmC1.mul(hmDUV1.x).add(hmC2.mul(hmDUV2.x));
+            const hmV = hmC1.mul(hmDUV1.y).add(hmC2.mul(hmDUV2.y));
+            const hmOrient = select(dot(hmDP1, hmC1).lessThan(0.0), float(-1.0), float(1.0));
+            const hmScale = hmOrient.div(sqrt(max(max(dot(hmU, hmU), dot(hmV, hmV)), 1e-12)));
+            const hmTilt = hmU.mul(hmT.x).add(hmV.mul(hmT.y)).mul(hmScale);
+            N.assign(normalize(Ngeo.add(hmTilt.mul(hmF.mul(0.42)))));
+          });
+        });
+        // END EXPANDED FINISHES
         // per-material procedural bump (before V/L/H/NoL — js/render/glx/shaders/glsl-lit.js)
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
@@ -1574,6 +1607,12 @@
         If(iriSurface, () => { rough.assign(min(rough, 0.22)); });
         If(forgedSurface, () => { rough.assign(clamp(rough, 0.28, 0.42).add(fgM.sub(0.667).mul(0.20))); });
         If(gunSurface, () => { rough.assign(clamp(rough, 0.16, 0.28)); });
+        // EXPANDED FINISHES: distinct narrow-coat, fabric and satin-metal lobes.
+        If(holoSurface, () => { rough.assign(0.18); });
+        If(velvetSurface, () => { rough.assign(max(rough, 0.96)); });
+        If(hammerSurface, () => { rough.assign(clamp(rough, 0.24, 0.36)); });
+        If(anodSurface, () => { rough.assign(clamp(rough, 0.30, 0.42)); });
+        // END EXPANDED FINISHES
         // PEARLESCENT / FLIP PAINT (mirrors js/render/glx/shaders/glsl-lit.js): rotate
         // albedo through a cosine palette driven by the Fresnel term, so the
         // panel flips colour with view angle and returns to the livery's own
@@ -1608,6 +1647,13 @@
         }).ElseIf(goldSurface, () => {
           albedo.assign(vec3(0.83, 0.65, 0.23));
         });
+        // EXPANDED FINISHES: diffuse fabric absorption and bright anodised pigment.
+        If(velvetSurface, () => { albedo.mulAssign(0.65); });
+        If(anodSurface, () => {
+          const anHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04));
+          albedo.assign(anHue.mul(0.78).add(albedo.mul(0.22)));
+        });
+        // END EXPANDED FINISHES
         const chamFlip = float(0.0).toVar();
         const chamHue = vec3(1.0).toVar();
         If(chamSurface, () => {
@@ -1738,7 +1784,7 @@
         // world-keyed; the dull surfaces darken a little and gain a little gloss
         // and a water-film f0. No puddles, no ripples, wetSheen stays 0.
         If(U.wetness.greaterThan(0.001).and(classifiedCar), () => {
-          If(carbonSurface.or(carbonFinish).or(rubberSurface).or(sidewallSurface).or(matteSurface).or(panelSurface), () => {
+          If(carbonSurface.or(carbonFinish).or(rubberSurface).or(sidewallSurface).or(matteSurface).or(panelSurface).or(velvetSurface), () => {
             albedo.mulAssign(U.wetness.mul(0.20).oneMinus());
             rough.mulAssign(U.wetness.mul(0.25).oneMinus());
             a.assign(rough.mul(rough));
@@ -2146,7 +2192,7 @@
         // METAL ENV REFLECTION (glsl-lit.js, constant for constant): the metal
         // share the block above drops with (1 - metalness) — env x Schlick(NoV,
         // F0 = albedo) x metalness, sky/ground split + live probe as envCC, x ccTrans.
-        If(metalSurface.or(satinMetalSurface).or(mirrorSurface).or(gunSurface), () => {
+        If(metalSurface.or(satinMetalSurface).or(mirrorSurface).or(gunSurface).or(hammerSurface).or(anodSurface), () => {
           const Rm = reflect(V.negate(), N).toVar();
           const skyM = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rm.y, 0.0)));
           const envMet = mix(vec3(U.ambGround).mul(0.6), skyM, smoothstep(-0.12, 0.30, Rm.y)).toVar();
@@ -2173,6 +2219,22 @@
         If(chamSurface, () => {
           color.mulAssign(mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip.mul(0.90)));
         });
+        // EXPANDED FINISHES: responses use existing light, never emit their own.
+        If(holoSurface, () => {
+          const hoF = clamp(NoV.oneMinus(), 0.0, 1.0).toVar();
+          const hoS = vec3(0.0, 0.33, 0.67).add(hoF.mul(1.65)).mul(6.2831853).cos().mul(0.5).add(0.5);
+          const hoPeak = max(max(max(color.r, color.g), color.b), 0.0).toVar();
+          color.assign(mix(color, hoS.mul(0.75).add(0.25).mul(hoPeak), mix(float(0.28), float(0.85), smoothstep(0.05, 0.60, hoF))));
+        });
+        If(velvetSurface, () => {
+          const veF = clamp(NoV.oneMinus(), 0.0, 1.0).toVar();
+          color.mulAssign(veF.mul(veF).mul(1.50).add(1.0));
+        });
+        If(anodSurface, () => {
+          const anHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04));
+          color.mulAssign(mix(vec3(1.0), anHue, 0.72));
+        });
+        // END EXPANDED FINISHES
 
         // sky rim fresnel (js/render/glx/shaders/glsl-lit.js)
         {

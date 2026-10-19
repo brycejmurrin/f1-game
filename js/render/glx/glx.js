@@ -2511,20 +2511,13 @@ const GLXBackend = (function () {
   function draw(mesh, modelMat, opts) {
     if (ctxGone() || !mesh) return;
     const alpha = litMaterial(modelMat, opts);
-    // Each draw declares the full render state it needs (no restores afterwards),
-    // so runs of same-state draws collapse to a single real toggle via the cache.
-    // Translucent draws (ghost car, boost flame, pulsing rain light) must NOT
-    // write depth: a 35%-alpha ghost that lands in the depth buffer culls the
-    // cars/props drawn after it (they pop invisible "through" the ghost) and
-    // registers in sceneDepth as a solid wall for SSAO/SSR/god-rays.
+    // Declare depth/blend state per draw; translucent FX must not occlude later
+    // geometry or register as solid walls in sceneDepth for SSAO/SSR/god-rays.
     setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);
-    // Scene alpha is the SSR car-paint tag (see LIT_FS outColor), written only
-    // by OPAQUE draws — so ANY blended draw masks alpha writes automatically
-    // (default blending blends the alpha channel too, dragging a stored 0.35
-    // tag across the composite's 0.42-0.55 threshold). noAlphaWrite remains as
-    // an explicit opt-out for opaque FX quads.
+    // Only opaque draws write the SSR car-paint alpha tag; blended FX would
+    // drag it across the composite threshold. Opaque FX can opt out explicitly.
     const noAW = (opts && opts.noAlphaWrite) || alpha < 1;
     if (noAW) setAlphaWrite(false);
     // doubleSided: render back faces too (cull off) — for the wheels + car body,
@@ -2532,12 +2525,9 @@ const GLXBackend = (function () {
     // coincident duplicate to z-fight.
     const dbl = opts && opts.doubleSided;
     if (dbl) setCull(false);
-    // Depth bias for DECAL geometry (start line, road markings): nudge the
-    // fragment's depth toward the camera instead of lifting the mesh in Y.
-    // A geometric lift is resolution-dependent — it holds up close and
-    // z-fights at distance, where depth precision collapses under a 0.3 m
-    // near plane. polygonOffset scales with the local depth slope, so a
-    // decal wins at every distance and grazing angle without moving it.
+    // Bias decal depth toward the camera without moving geometry. Unlike a Y
+    // lift, polygonOffset follows depth slope and works at distance/grazing
+    // angles despite the 0.3 m near plane.
     const _db = opts && opts.depthBias;
     // Pass the caller's pair — no per-draw [f,u] literal (was ~alloc/draw).
     if (_db) { setPolyOffset(_db); }
@@ -2546,7 +2536,17 @@ const GLXBackend = (function () {
     // no depth (alpha < 1), and everything opaque after it overwrites it.
     const _ndt = opts && opts.noDepthTest;
     if (_ndt) gl.disable(gl.DEPTH_TEST);
-    gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    // Reflections reverse winding even without culling. Restore CCW for later
+    // passes; mutable model matrices cannot be cached by identity.
+    const m = modelMat;
+    const reflected = m[0] * (m[5] * m[10] - m[6] * m[9])
+      - m[4] * (m[1] * m[10] - m[2] * m[9])
+      + m[8] * (m[1] * m[6] - m[2] * m[5]) < 0;
+    if (reflected) {
+      gl.frontFace(gl.CW);
+      try { gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); }
+      finally { gl.frontFace(gl.CCW); }
+    } else gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     if (_ndt) gl.enable(gl.DEPTH_TEST);
     if (_db) { setPolyOffset(null); }
     if (dbl) setCull(true);

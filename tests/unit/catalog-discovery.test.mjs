@@ -34,6 +34,10 @@ test("liveries expose per-team ids and canonical editable fields without reading
   // The garage offers default gloss before finishes that remap paint surfaces.
   assert.deepEqual(finish.values, ["gloss", ...Object.keys(M.Car3D.FINISH_SURFACE)]);
   assert.equal(finish.values.filter((value) => value === "gloss").length, 1);
+  const bodies = discoverCatalog({ section: "liveries", filter: "bodyStyle", limit: 100 });
+  const body = bodies.rows.find((r) => r.kind === "field" && r.id === "bodyStyle");
+  assert.deepEqual(body.values, ["team", ...M.Car3D.BODY_STYLE_IDS]);
+  assert.equal(new Set(body.values).size, body.values.length, "body choices are unique");
   assert.ok(result.readOnly && !result.browser);
 });
 test("camera metadata has the shape consumers rely on, and the CLI reads the one canonical module", () => {

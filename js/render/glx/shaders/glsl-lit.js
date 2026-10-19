@@ -914,12 +914,17 @@ float sampleShadow(vec3 wpos) {
 }
 
 void main() {
+  float vDist = length(vWorldPos - uEye);
   // Eye distance PER FRAGMENT, as TLX (tsl-lit.js vd) and WGX (wgsl-chunks.js
   // vDist) take it. It was a vertex varying, and the interpolated length is
   // the average of the corners' — the 4-vertex ground floor (mesh.js
   // buildFloor, corners >= 1400 m out) read >= 1400 m under the car, so fog
   // and ground mist painted it >= 44 % fog colour 150 m away on a clear day.
-  float vDist = length(vWorldPos - uEye);
+  // Hammered cotangent inputs: hoisted uniformly, including the WGSL mirror.
+  // A world-up tangent would leave object-keyed relief behind when the car yaws.
+  vec2 hmUV = vObjPos.xz + vObjPos.y * vec2(0.73, -0.61);
+  vec3 hmDP1 = dFdx(vWorldPos), hmDP2 = dFdy(vWorldPos);
+  vec2 hmDUV1 = dFdx(hmUV), hmDUV2 = dFdy(hmUV);
   vec3 N = normalize(vNrm);
   // Puddle shape (wet block): the world xz direction of increasing track x, from
   // derivatives taken here in uniform control flow (WGX parity; see wgsl-chunks).
@@ -972,10 +977,10 @@ void main() {
   // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
   // they must not roughen the mirror shell (that's what read as "ghostly" before).
   vec3 Ngeo = N;
-  // Car3D surface ids occupy 20..40, above TrackGeom's 0..15 material range.
+  // Car3D surface ids occupy 20..44, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 40;
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 44;
   // 34 = METALLIC FLAKE and 35 = CANDY (FINISH_SURFACE.flake / .candy): both are PAINT responses (gloss
   // clearcoat, env mirror, sparkle), so paintSurface includes them; the flake grain and the candy
   // saturation / rim / tinted lacquer are layered on below (CarMaterialShade.FLAKE / .CANDY).
@@ -1004,6 +1009,12 @@ void main() {
   bool mirrorSurface = surfaceId == 27 || tintedSurface || goldSurface;
   bool forgedSurface = surfaceId == 38;   // chopped-carbon chips in dark resin under a satin-gloss lacquer
   bool gunSurface = surfaceId == 39;      // anodised dark metal: the livery hue as a dark tint on a metal lobe
+  // EXPANDED FINISHES: independent surface identities; no new material resources.
+  bool holoSurface = surfaceId == 41;
+  bool velvetSurface = surfaceId == 42;
+  bool hammerSurface = surfaceId == 43;
+  bool anodSurface = surfaceId == 44;
+  // END EXPANDED FINISHES
   // Three more livery finishes, on the SAME mechanism the existing ones use:
   // car3d.js FINISH_SURFACE remaps a painted vertex's id, so a finish costs a
   // surface id here rather than a new uniform. CARBON needs no id at all — 21
@@ -1018,7 +1029,7 @@ void main() {
   // THE HELMET VISOR is glass-like in roughness and clearcoat but NOT a chrome
   // mirror: see the baseRefl split in the env block below.
   bool visorSurface = surfaceId == 32;
-  bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface || forgedSurface || gunSurface;
+  bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface || forgedSurface || gunSurface || holoSurface || hammerSurface || anodSurface;
   // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
   // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 10-20 m so it
   // cannot moire at range while garage + near-track keep the twill readable
@@ -1086,6 +1097,12 @@ void main() {
   float emissive = classifiedCar
     ? (emissiveSurface ? max(uEmissive, 1.0) : (paintLike ? uEmissive : 0.0))
     : uEmissive;
+  // EXPANDED FINISHES: surface-specific response leaves every earlier id untouched.
+  if (holoSurface) { clearcoat = max(uClearcoat, 0.80); metalness = 0.35; specular = 0.90; }
+  if (velvetSurface) { clearcoat = 0.0; metalness = 0.0; specular = 0.08; }
+  if (hammerSurface) { clearcoat = min(uClearcoat, 0.15); metalness = 0.90; specular = 0.90; }
+  if (anodSurface) { clearcoat = min(uClearcoat, 0.08); metalness = 0.90; specular = 0.90; }
+  // END EXPANDED FINISHES
   bool envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;
   if (carPaint > 0.001) {
     // Two scales: coarse orange-peel waviness + fine metallic-flake sparkle.
@@ -1122,6 +1139,23 @@ void main() {
     vec3 wB = cross(N, wT);
     N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.26);
   }
+  // EXPANDED FINISHES: warped smooth dimples, welded to the panels, faded by 22 m.
+  if (hammerSurface) {
+    N = Ngeo;
+    float hmF = clamp(1.0 - (vDist - 8.0) / 14.0, 0.0, 1.0);
+    if (hmF > 0.0) {
+      vec2 hmP = (vObjPos.xz + vObjPos.y * vec2(0.73, -0.61)) * 90.0;
+      vec2 hmT = sin(hmP + sin(hmP.yx * 0.73) * 0.80);
+      vec3 hmC1 = cross(hmDP2, Ngeo), hmC2 = cross(Ngeo, hmDP1);
+      vec3 hmU = hmC1 * hmDUV1.x + hmC2 * hmDUV2.x;
+      vec3 hmV = hmC1 * hmDUV1.y + hmC2 * hmDUV2.y;
+      float hmOrient = dot(hmDP1, hmC1) < 0.0 ? -1.0 : 1.0;
+      float hmScale = hmOrient / sqrt(max(max(dot(hmU, hmU), dot(hmV, hmV)), 1e-12));
+      vec3 hmTilt = (hmU * hmT.x + hmV * hmT.y) * hmScale;
+      N = normalize(Ngeo + hmTilt * (0.42 * hmF));
+    }
+  }
+  // END EXPANDED FINISHES
   // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
   // mortar/plank seams/corrugation ridges etc. actually affect the lighting
   // response, not just an albedo tint applied after the fact.
@@ -1227,6 +1261,13 @@ void main() {
   } else if (goldSurface) {
     albedo = vec3(0.83, 0.65, 0.23);
   }
+  // EXPANDED FINISHES: velvet face absorption and bright anodised pigment.
+  if (velvetSurface) albedo *= 0.65;
+  if (anodSurface) {
+    vec3 anHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+    albedo = anHue * 0.78 + albedo * 0.22;
+  }
+  // END EXPANDED FINISHES
   float chamFlip = 0.0; vec3 chamHue = vec3(1.0);
   if (chamSurface) {
     // CHAMELEON keeps the team hue face-on and flips toward a fixed blue at grazing angles. The flip is applied to the LIT colour
@@ -1256,6 +1297,12 @@ void main() {
   if (satinMetalSurface) rough = clamp(rough, 0.24, 0.40);
   if (iriSurface) rough = min(rough, 0.22);
   if (forgedSurface) rough = clamp(rough, 0.28, 0.42) + (fgM - 0.667) * 0.20;   // each chip catches the light differently
+  // EXPANDED FINISHES: distinct narrow-coat, fabric and satin-metal lobes.
+  if (holoSurface) rough = 0.18;
+  if (velvetSurface) rough = max(rough, 0.96);
+  if (hammerSurface) rough = clamp(rough, 0.24, 0.36);
+  if (anodSurface) rough = clamp(rough, 0.30, 0.42);
+  // END EXPANDED FINISHES
   if (gunSurface) rough = clamp(rough, 0.16, 0.28);   // between chrome 27 (<= 0.09) and brushed 29 (0.24-0.40)
   // Repair patches read glossier: fold the patch mask into roughness (max
   // +-0.08) before the specular AA below widens it.
@@ -1405,7 +1452,7 @@ void main() {
   // rubber) and gain a little gloss and a water-film f0. No puddles, no ripples,
   // and wetSheen stays 0: the road's analytic wet mirror is not a car's.
   if (uWetness > 0.001 && classifiedCar) {
-    if (carbonSurface || carbonFinish || rubberSurface || sidewallSurface || matteSurface || panelSurface) {
+    if (carbonSurface || carbonFinish || rubberSurface || sidewallSurface || matteSurface || panelSurface || velvetSurface) {
       albedo *= 1.0 - 0.20 * uWetness;
       rough *= 1.0 - 0.25 * uWetness;
       a = rough * rough;
@@ -1906,7 +1953,7 @@ void main() {
   // own colour: env x Schlick(NoV, F0 = albedo), x metalness. Sky/ground split
   // and live probe exactly as the clearcoat mirror builds envCC (no sun disc —
   // the GGX lobe owns the sun); under a lacquer only ccTrans reaches the metal.
-  if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface) {
+  if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface || hammerSurface || anodSurface) {
     vec3 Rm = reflect(-V, N);
     vec3 skyM = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rm.y, 0.0)));
     vec3 envMet = mix(uAmbGround * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
@@ -1925,6 +1972,22 @@ void main() {
   if (tintedSurface) color *= albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
   if (goldSurface) color *= vec3(1.0, 0.78, 0.27);   // GOLD PLATE: the white lit terms take the fixed gold hue
   if (chamSurface) color *= mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip * 0.90);
+  // EXPANDED FINISHES: tint the lit result, preserving light/shadow response.
+  if (holoSurface) {
+    float hoF = clamp(1.0 - NoV, 0.0, 1.0);
+    vec3 hoS = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + hoF * 1.65));
+    float hoPeak = max(max(max(color.r, color.g), color.b), 0.0);
+    color = mix(color, hoPeak * (vec3(0.25) + 0.75 * hoS), mix(0.28, 0.85, smoothstep(0.05, 0.60, hoF)));
+  }
+  if (velvetSurface) {
+    float veF = clamp(1.0 - NoV, 0.0, 1.0);
+    color *= 1.0 + veF * veF * 1.50;
+  }
+  if (anodSurface) {
+    vec3 anHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+    color *= mix(vec3(1.0), anHue, 0.72);
+  }
+  // END EXPANDED FINISHES
 
   // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,
   // tinted by the horizon sky colour. Gives edges a little 'air' without
