@@ -35,7 +35,7 @@ const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cy
 // transition costs nothing and cannot pop, because the eye crosses a face's
 // plane exactly when that face is edge-on and covers zero pixels.
 let shellMesh = null;
-function buildShell(out, liv) {
+function buildShell(out, liv, L) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
   const dado = scale(c1, 0.45), stripe = scale(c2, 0.8);
@@ -83,12 +83,15 @@ function buildShell(out, liv) {
   // either side of it. Column count doubled so a batten is a batten and not a
   // half-wall-wide stripe: with 8 columns the alternation reads as panelling.
   const BANDS = [[0, 1.50, 2], [1.50, 1.62, 1], [1.62, CEIL_Y, 4]];
+  // A design-preview LOOK (GaragePrims.look) swaps the bands and colours only.
+  const LW = L ? GarageDress.lookWall(L, liv) : null;
   const wallBands = (o0, uVec, nu, nrm, y0Lo, y1Hi) => {
-    for (const [y0, y1, nv] of BANDS) {
+    for (const [y0, y1, nv, fixed] of LW ? LW.bands : BANDS) {
       if (y1 <= y0Lo || y0 >= y1Hi) continue;
       const a = Math.max(y0, y0Lo), b = Math.min(y1, y1Hi);
       panelGrid(out, [o0[0], o0[1] + a, o0[2]], uVec, [0, b - a, 0], nu, nv, nrm,
-        (u, v) => seamed(wallAt(a + (b - a) * v), u, nu), MAT.CONCRETE);
+        LW ? () => fixed || LW.wallAt((a + b) / 2, nrm[2] > 0.5)
+          : (u, v) => seamed(wallAt(a + (b - a) * v), u, nu), LW ? LW.mat : MAT.CONCRETE);
     }
   };
   for (let i = 0; i < walls.length; i++) {
@@ -129,15 +132,21 @@ function buildShell(out, liv) {
   // buildBayFloor. It is also dark, culled from `top` and above the frame in
   // `front`/`rear`, so there is nothing to gain by finding it a flat-keyed one.
   panelGrid(out, [-W, CEIL_Y, Z_BACK], [W * 2, 0, 0], [0, 0, Z_DOOR - Z_BACK], 4, 4,
-    [0, -1, 0], () => DARK);
+    [0, -1, 0], () => (LW ? LW.ceil : DARK));
   // Roof truss is its own mesh (buildTruss): the TOP preset looks down through
   // the ceiling, and the cross-members laid over the car have to hide there.
 }
-function buildTruss(out) {
+function buildTruss(out, L, bay) {
+  if (GarageDress.lookTruss(out, L)) return;
   for (let s = -1; s <= 1; s += 2)
     block(out, s * 2.6, CEIL_Y - 0.42, 0, 0.06, 0.06, (Z_DOOR - Z_BACK) / 2, STEEL, MAT.METAL);
-  for (let i = 0; i <= 4; i++)
-    block(out, 0, CEIL_Y - 0.42, Z_BACK + (Z_DOOR - Z_BACK) * (i / 4), 2.7, 0.05, 0.06, STEEL, MAT.METAL);
+  for (let i = 0; i <= 4; i++) {
+    const z = Z_BACK + (Z_DOOR - Z_BACK) * (i / 4);
+    block(out, 0, CEIL_Y - 0.42, z, 2.7, 0.05, 0.06, STEEL, MAT.METAL);
+    // Hanger rods to the roof: the truss hung 0.42 m under the ceiling held by
+    // nothing. Setup-screen bay only (`bay`); the trackside rows keep their tri budget.
+    if (bay) for (let s = -1; s <= 1; s += 2) block(out, s * 2.6, CEIL_Y - 0.185, z, 0.015, 0.185, 0.015, STEEL, MAT.METAL);
+  }
 }
 
 // ── props ──────────────────────────────────────────────────────────────────
@@ -817,10 +826,11 @@ function buildApron(out) {
     }
   }
 }
-function buildBayFloor(out, liv) {
-  const SLAB = [0.088, 0.090, 0.098], IN = [0.115, 0.118, 0.126];
-  const PAINT = [0.66, 0.67, 0.70], WALK = [0.70, 0.60, 0.12];
-  const band = scale(rgb(liv && liv.c1, [0.3, 0.32, 0.36]), 0.7);
+function buildBayFloor(out, liv, lk) {
+  const LF = lk ? GarageDress.lookFloorCols(lk, liv) : null;
+  const SLAB = LF ? LF.SLAB : [0.088, 0.090, 0.098], IN = LF ? LF.IN : [0.115, 0.118, 0.126];
+  const PAINT = LF ? LF.PAINT : [0.66, 0.67, 0.70], WALK = LF ? LF.WALK : [0.70, 0.60, 0.12];
+  const band = LF ? LF.band : scale(rgb(liv && liv.c1, [0.3, 0.32, 0.36]), 0.7);
   const L = -HALF_W, R = HALF_W, B = Z_BACK, F = Z_DOOR, W = 0.11;
   // ASPHALT, not CONCRETE, on a HORIZONTAL surface — and this is not a naming
   // preference. matWallLike() in js/render/glx/shaders/glsl-lit.js returns true for
@@ -831,7 +841,7 @@ function buildBayFloor(out, liv) {
   // world xz, and carries the most restrained relief in the table — which is
   // what a squeegeed resin bay floor actually looks like.
   const C = MAT.ASPHALT;
-  const key = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
+  const key = LF ? LF.key : rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
   tile(out, L, R, B, B + 0.8, band, 0, C);                 // team band, deep end
   tile(out, L, R, B + 0.8, BOX_ZB - W, SLAB, 0, C);
   tile(out, L, -BOX_HW - W, BOX_ZB, BOX_ZF, SLAB, 0, C);
@@ -872,7 +882,7 @@ function buildBayFloor(out, liv) {
     for (let k = 0; k < 4; k++) { out.pos.push(p[k][0], 0.002, p[k][1]); out.nrm.push(0, 1, 0); out.col.push(J[0], J[1], J[2]); }
     pushMat(out, 4, MAT.ASPHALT);
     out.idx.push(b2, b2 + 2, b2 + 1, b2, b2 + 3, b2 + 2);
-  }
+  }  if (lk) GarageDress.lookFloor(out, liv, lk);
 }
 
 const { seatDriverAt, boardInfo, boardKey, paintDress, paintBoards, buildDress, resetSpec, releaseDress } = GarageDress;
@@ -902,7 +912,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // BODY STRIPE, DETAIL or TEAM LOGO edit, while the car repaints
 // (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
 // preview mesh key). A slot that any future dressing reads MUST be added here too.
-let floorMesh = null, trussMesh = null, cacheKey = "";
+let floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
@@ -978,7 +988,7 @@ function roomKeys(team, liv, info, ctx) {
   // Shell, floor, LEDs, props and the career desks. Not the crest, the sponsor
   // banners or the pit-board numbers — those are atlas texels.
   const geom = `${team && team.id}|${(team && team.legend) || ""}|${paint}`
-               + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}`;
+               + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
   const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
   return { geom, live, dressId, key: `${geom}|${live}|${dressId}|${boardKey(info)}` };
@@ -1028,23 +1038,27 @@ function rebuild(team, liv, info, ctx) {
     if (floorMesh) _gfx.freeMesh(floorMesh);
     for (let i = 0; i < SIDES.length; i++)
       if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
+    const look = GaragePrims.look();   // design-preview room look; null = shipped
     const shell = acc();
-    buildShell(shell, liv);
+    buildShell(shell, liv, look);
     shellMesh = _gfx.createMesh(shell);
     // Roof geometry and wall-decal UVs never depend on paint, team or context.
     // Keep their GPU handles until release(), including across colour drags.
-    if (!trussMesh) {
+    if (!trussMesh || trussLook !== GaragePrims.lookId()) {
+      if (trussMesh) _gfx.freeMesh(trussMesh);
       const truss = acc();
-      buildTruss(truss);
+      buildTruss(truss, look, true);
       trussMesh = _gfx.createMesh(truss);
+      trussLook = GaragePrims.lookId();
     }
     const led = {};
     for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
     buildLed(led, liv);
+    if (look) GarageDress.lookLed(led, liv, look);
     for (let i = 0; i < SIDES.length; i++)
       if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
     const flr = acc();
-    buildApron(flr); buildPitLane(flr, liv, !!(ctx && ctx.night)); buildBayFloor(flr, liv);
+    buildApron(flr); buildPitLane(flr, liv, !!(ctx && ctx.night)); buildBayFloor(flr, liv, look);
     // The clear colour beyond the apron rim follows the hour outside.
     const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
     BACKDROP[0] = bd[0]; BACKDROP[1] = bd[1]; BACKDROP[2] = bd[2];
@@ -1054,6 +1068,7 @@ function rebuild(team, liv, info, ctx) {
     buildProps(g, liv);
     GarageEquipment.build(g, liv, ctx);
     GarageExperience.buildFacility(g, liv, ctx);
+    if (look) GarageDress.lookProps(g, liv, look);
     for (let i = 0; i < SIDES.length; i++)
       if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     // A new team or paint: the "what changed" marker on the spec board starts
