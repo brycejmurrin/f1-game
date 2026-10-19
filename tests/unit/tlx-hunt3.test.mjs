@@ -54,6 +54,40 @@ async function litGLSL(ctxOver = {}, matOpts = { clearcoat: 0.8, carPaint: 1 }) 
 }
 const cubeSamplers = (src) => (src.match(/uniform\s+(?:\w+\s+)?samplerCube\s+\w+/g) || []).length;
 
+test("decal bake reads stay behind the enabled/extent and occupied-tile gates in WGSL and GLSL", () => {
+  // Compile the production pool graph with the vendored builders. This checks
+  // generated control flow, not source indentation; no GPU timing is implied.
+  for (const live of [false, true]) for (const language of ["wgsl", "glsl"]) {
+    const lit = globalThis.TLXShaders.lit(THREE, TSL, {
+      chunks: globalThis.TLXShaders.chunks(THREE, TSL), maxLights: 16,
+    });
+    if (live) lit.setLampBake({
+      data: new Uint16Array(8), indir: new Uint16Array(4),
+      atlasW: 1, atlasH: 1, tilesX: 1, tilesY: 1, T: 16, cell: 1, x0: 0, z0: 0,
+    }, [1, 1, 1]);
+    const renderer = {
+      debug: { diagnostics: {} },
+      backend: { isWebGPUBackend: language === "wgsl", utils: { getTextureSampleData: () => ({ primarySamples: 1 }) } },
+      coordinateSystem: language === "wgsl" ? THREE.WebGPUCoordinateSystem : THREE.WebGLCoordinateSystem,
+      getRenderTarget: () => null, getMRT: () => null, getOutputRenderTarget: () => null,
+      library: new THREE.StandardNodeLibrary(), hasFeature: () => false,
+    };
+    const Builder = language === "wgsl" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
+    const builder = new Builder(null, renderer);
+    builder.shaderStage = "fragment";
+    const flow = builder.flowStagesNode(lit.decalLight.pool(TSL.vec3(0.5), TSL.vec3(0, 1, 0)), "vec3");
+    const depths = [];
+    let depth = 0;
+    for (const line of flow.code.split("\n")) {
+      depth += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      if (/\b(?:textureLoad|textureSampleLevel|textureLod)\s*\(/.test(line)) depths.push(depth);
+    }
+    assert.deepEqual(depths, [1, 2], `${language}, live=${live}: inactive/outside bake reads nothing; empty tile reads only indirection`);
+    assert.doesNotMatch(flow.code, /\b(?:textureSample|texture)\s*\(/,
+      "nonuniform tile branches must use explicit LOD, without implicit derivatives");
+  }
+});
+
 test("R4: the lit program built with envCube null declares no cube sampler and taps none", async () => {
   const off = await litGLSL({ envCube: null });
   assert.equal(cubeSamplers(off.src), 0, "opted out: the cube binding is compiled out");

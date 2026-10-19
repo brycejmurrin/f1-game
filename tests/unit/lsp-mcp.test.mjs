@@ -3,9 +3,11 @@
 // TypeScript 7's native `tsc --lsp`. Proves cross-file definition, semantic
 // references and workspace symbols resolve for script-global IIFEs (jsconfig.json),
 // including guarded head aliases (`typeof H !== "undefined" ? H : {}`, `(typeof H && H) || {}`,
-// `H || {}`) that feed PC.VMAX-style member reads. No browser. ~2 s (one tsc --lsp project load).
+// `H || {}`) that feed PC.VMAX-style member reads. No browser. One shared MCP
+// child (and its tsc --lsp) covers the real-tree client cases: cold start once,
+// then tens–hundreds of ms per tool (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md).
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -33,6 +35,19 @@ function client() {
   return { p, req, call, close: () => { p.stdin.end(); p.kill(); } };
 }
 
+// One MCP child for the real-tree client cases: initialize once, share the
+// warmed tsc project. Closing between cases re-paid the cold start and was the
+// 90 s CI timeout (Pure-node unit suites (slow), run 39158195670).
+let mcp;
+async function sharedMcp() {
+  if (mcp) return mcp;
+  mcp = client();
+  const init = await mcp.req("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "lsp-mcp.test", version: "0" } });
+  assert.equal(init.result.serverInfo.name, "apex-lsp");
+  return mcp;
+}
+after(() => { mcp?.close(); mcp = null; });
+
 test("jsconfig.json makes js/ one script project with checkJs off", () => {
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, "jsconfig.json"), "utf8"));
   assert.equal(cfg.compilerOptions.allowJs, true);
@@ -57,52 +72,86 @@ test("argument errors come back as tool errors before tsc starts", async () => {
   }
 });
 
-test("MCP client: definition, references and symbols on the real tree", { timeout: 90000 }, async () => {
-  const c = client();
-  try {
-    const init = await c.req("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "lsp-mcp.test", version: "0" } });
-    assert.equal(init.result.serverInfo.name, "apex-lsp");
-    const list = await c.req("tools/list", {});
-    assert.equal(list.result.tools.length, TOOLS.length);
+test("MCP client: definition, references and symbols on the real tree", { timeout: 60000 }, async () => {
+  const c = await sharedMcp();
+  const list = await c.req("tools/list", {});
+  assert.equal(list.result.tools.length, TOOLS.length);
 
-    // Liveries.forTeam is used in other files; the answer is its declaration in liveries.js.
-    const def = await c.call("lsp_definition", { symbol: "Liveries.forTeam" });
-    assert.equal(def.isError, false, def.content[0].text);
-    assert.match(def.content[0].text, /^js\/car\/liveries\.js:\d+:\d+ {2}\[def\] function forTeam\(/m);
-    assert.doesNotMatch(def.content[0].text.split("\n")[0], /query at js\/car\/liveries\.js/, "the query position is a use in another file");
+  // Warm the project with a cheap symbols call, then pipeline independent
+  // lookups so the case stays well under the timeout on a contended runner.
+  // (The MCP server still serializes tools/call; pipelining here keeps the
+  // client honest and overlaps JSON-RPC write/read with the next enqueue.)
+  await c.call("lsp_symbols", { query: "GameHud" });
+  const [def, refs, sym, g, pc] = await Promise.all([
+    c.call("lsp_definition", { symbol: "Liveries.forTeam" }),
+    // Default page (200) is enough: assertions need ≥30 rows / ≥10 files, not the full 2000.
+    c.call("lsp_references", { symbol: "Tracks.curvature" }),
+    c.call("lsp_symbols", { query: "GameHud" }),
+    c.call("lsp_hover", { symbol: "G.wrapS" }),
+    c.call("lsp_definition", { symbol: "PhysicsConsts.IDLE_RPM" }),
+  ]);
 
-    // Semantic references: many files, the declaration in tracks.js, no comment lines.
-    const refs = await c.call("lsp_references", { symbol: "Tracks.curvature", limit: 2000 });
-    assert.equal(refs.isError, false, refs.content[0].text);
-    const rows = refs.content[0].text.split("\n").filter(r => /^js\//.test(r));
-    const files = new Set(rows.map(r => r.split(":")[0]));
-    assert.ok(rows.length >= 30 && files.size >= 10, `${rows.length} refs in ${files.size} files`);
-    assert.ok(files.has("js/track/tracks.js") && files.has("js/game.js"));
-    // The enclosing label can hold parentheses (tsgo names callbacks `scanDists.map() callback`).
-    assert.ok(rows.every(r => /^\S+ {2}\[\w+\] \(.+?\) {2}\S/.test(r)), "every row: tag, enclosing function, source");
-    assert.ok(rows.every(r => !/^\S+ {2}\[\w+\] \(.+?\) {2}(\/\/|\*|\/\*)/.test(r)), "a comment line is not a reference");
+  // Liveries.forTeam is used in other files; the answer is its declaration in liveries.js.
+  assert.equal(def.isError, false, def.content[0].text);
+  assert.match(def.content[0].text, /^js\/car\/liveries\.js:\d+:\d+ {2}\[def\] function forTeam\(/m);
+  assert.doesNotMatch(def.content[0].text.split("\n")[0], /query at js\/car\/liveries\.js/, "the query position is a use in another file");
 
-    const sym = await c.call("lsp_symbols", { query: "GameHud" });
-    assert.match(sym.content[0].text.split("\n")[0], /^GameHud {2}\w+ {2}js\/ui\/hud\.js:\d+:\d+$/);
+  // Semantic references: many files, the declaration in tracks.js, no comment lines.
+  assert.equal(refs.isError, false, refs.content[0].text);
+  const rows = refs.content[0].text.split("\n").filter(r => /^js\//.test(r));
+  const files = new Set(rows.map(r => r.split(":")[0]));
+  assert.ok(rows.length >= 30 && files.size >= 10, `${rows.length} refs in ${files.size} files`);
+  assert.ok(files.has("js/track/tracks.js") && files.has("js/game.js"));
+  // The enclosing label can hold parentheses (tsgo names callbacks `scanDists.map() callback`).
+  assert.ok(rows.every(r => /^\S+ {2}\[\w+\] \(.+?\) {2}\S/.test(r)), "every row: tag, enclosing function, source");
+  assert.ok(rows.every(r => !/^\S+ {2}\[\w+\] \(.+?\) {2}(\/\/|\*|\/\*)/.test(r)), "a comment line is not a reference");
 
-    // The G façade answers from its contract, interface GameCtx in types/game-ctx.d.ts.
-    const g = await c.call("lsp_hover", { symbol: "G.wrapS" });
-    assert.match(g.content[0].text, /\nat types\/game-ctx\.d\.ts:\d+:\d+ {2}\[def\] readonly wrapS/);
-    assert.match(g.content[0].text, /^```typescript\n\(property\) GameCtx\.wrapS: \(s: number\) => number\n```/);
-    // window.X globals are untyped for the checker: a labelled text answer, not "0 definitions".
-    const pc = await c.call("lsp_definition", { symbol: "PhysicsConsts.IDLE_RPM" });
-    assert.match(pc.content[0].text, /text match.*\njs\/physics\/consts\.js:\d+:\d+ {2}\[def\] IDLE_RPM:/s);
+  assert.match(sym.content[0].text.split("\n")[0], /^GameHud {2}\w+ {2}js\/ui\/hud\.js:\d+:\d+$/);
 
-    // Callers follow `const lerp = M4.lerp` aliases to the local calls behind them.
-    const lerp = await c.call("lsp_callers", { symbol: "M4.lerp", limit: 2000 });
-    assert.match(lerp.content[0].text, /\(via lerp\) {2}×\d+/, lerp.content[0].text.slice(0, 300));
-    assert.ok(+/^(\d+) uses/.exec(lerp.content[0].text)[1] >= 50, "aliased helpers have far more callers than alias lines");
-    // A case slip gets a suggestion, not a guess.
-    assert.match((await c.call("lsp_definition", { symbol: "Tlx" })).content[0].text, /did you mean TLX \(js\/render\/three\/tlx\.js:\d+\)\?$/);
+  // The G façade answers from its contract, interface GameCtx in types/game-ctx.d.ts.
+  assert.match(g.content[0].text, /\nat types\/game-ctx\.d\.ts:\d+:\d+ {2}\[def\] readonly wrapS/);
+  assert.match(g.content[0].text, /^```typescript\n\(property\) GameCtx\.wrapS: \(s: number\) => number\n```/);
+  // window.X globals are untyped for the checker: a labelled text answer, not "0 definitions".
+  assert.match(pc.content[0].text, /text match.*\njs\/physics\/consts\.js:\d+:\d+ {2}\[def\] IDLE_RPM:/s);
 
-    const pos = await c.call("lsp_definition", { file: "js/ui/select-screen.js", line: 1, column: 1 });
-    assert.equal(pos.isError, false, pos.content[0].text);
-  } finally { c.close(); }
+  // Callers follow `const lerp = M4.lerp` aliases to the local calls behind them.
+  // Header total (not the printed page) must stay ≥50; limit is only for rows.
+  const lerp = await c.call("lsp_callers", { symbol: "M4.lerp" });
+  assert.match(lerp.content[0].text, /\(via lerp\) {2}×\d+/, lerp.content[0].text.slice(0, 300));
+  assert.ok(+/^(\d+) uses/.exec(lerp.content[0].text)[1] >= 50, "aliased helpers have far more callers than alias lines");
+  // A case slip gets a suggestion, not a guess.
+  assert.match((await c.call("lsp_definition", { symbol: "Tlx" })).content[0].text, /did you mean TLX \(js\/render\/three\/tlx\.js:\d+\)\?$/);
+
+  const pos = await c.call("lsp_definition", { file: "js/ui/select-screen.js", line: 1, column: 1 });
+  assert.equal(pos.isError, false, pos.content[0].text);
+});
+
+// Split from the case above: same warmed MCP child, separate timeout budget.
+// These assertions landed on the ship tip after the 90 s failure and must not
+// re-inflate that single case.
+test("MCP client: pipeline isolation and freeze/assign exports", { timeout: 60000 }, async () => {
+  const c = await sharedMcp();
+  // Pipelined requests must keep the diagnostic overlay isolated and recover
+  // after an invalid tool argument without dropping the next response.
+  // The server serializes tools/call (one LSP conversation); Promise.all still
+  // proves the client does not drop a later response when an earlier one errors.
+  const queued = await Promise.all([
+    c.call("lsp_diagnostics", { file: "js/core/log.js", all: true }),
+    c.call("lsp_symbols", { query: "GameHud", limit: -1 }),
+    c.call("lsp_definition", { symbol: "Liveries.forTeam" }),
+  ]);
+  assert.deepEqual(queued.map(r => r.isError), [false, true, false]);
+  assert.match(queued[2].content[0].text, /function forTeam/);
+  const frozenExport = await c.call("lsp_definition", { symbol: "FlybyOverrides.resolve", body: true });
+  assert.equal(frozenExport.isError, false, frozenExport.content[0].text);
+  assert.match(frozenExport.content[0].text, /js\/data\/flyby-overrides\.js:38:.*function resolve/);
+  // Pipeline the three assigned-export lookups (independent heads).
+  const assigned = await Promise.all(["SHADOW_VS", "LIT_VS", "SKY_VS"].map(member =>
+    c.call("lsp_definition", { symbol: `GLXShaders.${member}` })));
+  for (let i = 0; i < assigned.length; i++) {
+    assert.equal(assigned[i].isError, false, assigned[i].content[0].text);
+    assert.match(assigned[i].content[0].text, new RegExp(["SHADOW_VS", "LIT_VS", "SKY_VS"][i]));
+  }
 });
 
 test("tsc --lsp starts on the first call, exits when idle, and restarts on demand", { timeout: 60000 }, async () => {
@@ -188,10 +237,16 @@ const A = typeof Beta !== "undefined" ? Beta : {};
 const B = (typeof Beta !== "undefined" && Beta) || {};
 const C = window.Beta || {};
 const D = Beta || {};
+const E = typeof Beta !== "undefined" ? Beta : null;
+const Wrong = typeof Beta !== "undefined" ? Other : {};
+const Unguarded = enabled ? Beta : {};
 const a = A.KEY;
 const b = B.KEY;
 const c = C.KEY;
 const d = D.KEY;
+const e = E.KEY;
+const wrong = Wrong.KEY;
+const unguarded = Unguarded.KEY;
 `);
   const lsp = new Lsp({ root: dir, src: "src", anchor: "src/c.js", idleMs: 0 });
   try {
@@ -203,7 +258,9 @@ const d = D.KEY;
     assert.match(t, /src\/d\.js:\d+:\d+ {2}\[alias\] \(top level\) {2}const b = B\.KEY;/);
     assert.match(t, /src\/d\.js:\d+:\d+ {2}\[alias\] \(top level\) {2}const c = C\.KEY;/);
     assert.match(t, /src\/d\.js:\d+:\d+ {2}\[alias\] \(top level\) {2}const d = D\.KEY;/);
-    assert.match(t, /^5 references in 2 files .*4 of them through a destructure or alias/, t);
+    assert.match(t, /\[alias\].*const e = E\.KEY;/);
+    assert.doesNotMatch(t, /const (?:wrong|unguarded) =/);
+    assert.match(t, /^6 references in 2 files .*5 of them through a destructure or alias/, t);
   } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -391,4 +448,90 @@ test("lsp-hint.py: builtins and lowercase heads stay quiet; option values are no
   for (const loud of [{ tool_name: "Bash", tool_input: { command: "rg -t js GameHud js/" } }, { tool_name: "Bash", tool_input: { command: "grep -A 3 GameHud js/ui" } },
     { tool_name: "Bash", tool_input: { command: "grep -rn -e Tracks.curvature js" } }, { tool_name: "Grep", tool_input: { pattern: "G\\.player" } }])
     assert.equal(hint(loud), true, JSON.stringify(loud));
+});
+
+test("advertised argument constraints and JSON-RPC envelopes fail before starting tsc", async () => {
+  const { handleRpc } = await import("../../tools/mcp/lsp-mcp.mjs");
+  const never = { prepare() { throw Error("unexpected tsc start"); } };
+  for (const [name, args] of [
+    ["lsp_symbols", { query: "Beta", limit: -1 }], ["lsp_symbols", { query: "Beta", offset: 0.5 }],
+    ["lsp_symbols", { query: "Beta", limit: 2001 }], ["lsp_symbols", { query: "" }],
+    ["lsp_symbols", { query: 123 }], ["lsp_definition", { symbol: "Beta.[" }],
+    ["lsp_definition", { file: "src/a.js", line: 0 }], ["lsp_definition", { symbol: "Beta", body: "true" }],
+    ["lsp_references", { symbol: "Beta", format: "json" }], ["lsp_hover", { line: 1 }],
+    ["lsp_definition", { symbol: "Beta", file: "src/a.js", line: 1 }], ["lsp_symbols", null],
+    ["lsp_symbols", []], ["lsp_symbols", JSON.parse('{"query":"Beta","__proto__":{}}')], ["lsp_references", { symbol: "Beta", includeDeclaration: 0 }],
+  ]) {
+    const r = await callTool(never, name, args);
+    assert.equal(r.isError, true, JSON.stringify(args));
+    assert.doesNotMatch(r.content[0].text, /unexpected tsc start/);
+  }
+  for (const request of [null, [], { jsonrpc: "1.0", id: 1, method: "ping" },
+    { jsonrpc: "2.0", id: {}, method: "ping" }, { jsonrpc: "2.0", id: 1, method: "ping", params: [] }])
+    assert.equal((await handleRpc(never, request)).error.code, -32600);
+  for (const params of [{}, { name: "lsp_symbols", arguments: [] }, { name: "lsp_symbols", arguments: null }])
+    assert.equal((await handleRpc(never, { jsonrpc: "2.0", id: 1, method: "tools/call", params })).error.code, -32602);
+  assert.equal(await handleRpc(never, { jsonrpc: "2.0", method: "notifications/initialized" }), null);
+  assert.equal((await handleRpc(never, { jsonrpc: "2.0", id: null, method: "ping" })).id, null);
+  assert.equal((await handleRpc(never, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: {} } })).error.code, -32602);
+  assert.equal((await handleRpc(never, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "unsupported" } })).result.protocolVersion, "2025-06-18");
+});
+
+test("fixture: declaration freshness, owner boundaries, lexical aliases, dependency baseline and file lifecycle", { timeout: 60000 }, async () => {
+  const { execFileSync } = await import("node:child_process");
+  const base = path.join(ROOT, "scratch"); fs.mkdirSync(base, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(base, "lsp-hardening-"));
+  const w = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
+  const git = (...args) => execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", ...args], { cwd: dir, stdio: "ignore" });
+  w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, include: ["src/**/*.js", "types/**/*.d.ts"] }));
+  w("src/a.js", "const Alpha = { ping(x) { return x; } };\n");
+  w("src/b.js", "const value = Alpha.ping(1);\n");
+  w("src/w.js", "window.Beta = { KEY: 1 };\nwindow.Other = { nope: 2 };\nfunction local() { const { KEY: key } = Beta; return key; }\nfunction unrelated(key) { return key; }\n// const { KEY: commented } = Beta;\nfunction unrelatedComment(commented) { return commented; }\nfunction alias() { const B = Beta; return B.KEY; }\nfunction shadow(B) { return B.KEY; }\nfunction shadowOwner() { const Beta = { shadowOnly: 2 }; }\n");
+  w("src/frozen.js", "window.Frozen = (function () {\n  function resolve() { return 1; }\n  function internal() { return 2; }\n  return Object.freeze({ resolve });\n})();\n");
+  w("src/assigned.js", "window.Merged = Object.assign(window.Merged || {}, { first: 1 });\n");
+  w("src/assigned-extra.js", "window.Merged = Object.assign(window.Merged || {}, Object.freeze({ second: 2 }));\nwindow.Foreign = { hidden: 3 };\n");
+  w("types/game-ctx.d.ts", "interface GameCtx {\n  old: number;\n}\ninterface OldType {}\n");
+  git("init", "-q"); git("add", "."); git("commit", "-qm", "base");
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/a.js", idleMs: 0 });
+  const q = async (name, args) => { const r = await callTool(lsp, name, args); assert.equal(r.isError, false, r.content[0].text); return r.content[0].text; };
+  try {
+    assert.match(await q("lsp_definition", { symbol: "G.old" }), /old: number/);
+    w("types/game-ctx.d.ts", "interface GameCtx {\n  fresh: string;\n}\ninterface FreshType {}\n");
+    assert.match(await q("lsp_definition", { symbol: "G.fresh" }), /fresh: string/);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "G.old" })).isError, true);
+    assert.match(await q("lsp_definition", { symbol: "FreshType" }), /interface FreshType/);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "OldType" })).isError, true);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Beta.nope" })).isError, true);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Beta.shadowOnly" })).isError, true);
+    assert.match(await q("lsp_definition", { symbol: "Frozen.resolve" }), /function resolve/);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Frozen.internal" })).isError, true);
+    assert.match(await q("lsp_definition", { symbol: "Merged.first" }), /src\/assigned\.js/);
+    assert.match(await q("lsp_definition", { symbol: "Merged.second" }), /src\/assigned-extra\.js/);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Merged.hidden" })).isError, true);
+    const refs = await q("lsp_references", { symbol: "Beta.KEY", includeDeclaration: false });
+    assert.doesNotMatch(refs, /\[def\]|unrelated|commented|shadow/);
+    assert.match(refs, /return key/); assert.match(refs, /return B\.KEY/);
+    assert.match(refs, /^3 references/, refs); // alias binding, same-line local read, whole-object alias read
+    assert.match(await q("lsp_diagnostics", { file: "src/b.js" }), /0 high-signal diagnostics.*HEAD subtraction skipped/);
+    w("src/a.js", "const Alpha = { ping() { return 1; } };\n");
+    const diag = await q("lsp_diagnostics", { file: "src/b.js" });
+    assert.match(diag, /HEAD subtraction skipped.*dependencies differ from HEAD/);
+    assert.match(diag, /TS2554 Expected 0 arguments, but got 1/);
+    await q("lsp_definition", { symbol: "Alpha.ping" });
+    fs.renameSync(path.join(dir, "src/a.js"), path.join(dir, "src/moved.js"));
+    assert.match(await q("lsp_definition", { symbol: "Alpha.ping" }), /src\/moved\.js/);
+    fs.unlinkSync(path.join(dir, "src/moved.js"));
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Alpha.ping" })).isError, true);
+    w("src/new.js", "const Added = { yes: 1 };\nconst useAdded = Added.yes;\n");
+    assert.match(await q("lsp_definition", { symbol: "Added.yes" }), /src\/new\.js/);
+    // A staged rename has a source path in status's unprefixed second record.
+    // Moving a dependency outside src must prevent a false clean HEAD baseline.
+    w("src/a.js", "const Alpha = { ping(x) { return x; } };\n");
+    git("checkout", "HEAD", "--", "types/game-ctx.d.ts");
+    fs.unlinkSync(path.join(dir, "src/new.js"));
+    git("mv", "src/a.js", "outside-a.js");
+    const movedDependency = await q("lsp_diagnostics", { file: "src/b.js" });
+    assert.match(movedDependency, /HEAD subtraction skipped.*dependencies differ from HEAD/);
+    assert.match(movedDependency, /TS2304 Cannot find name 'Alpha'/);
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });

@@ -46,21 +46,17 @@ Load from the SKILL.md index when the task needs this detail.
      mobile guest never finishes ICE (`checking`/`connecting` forever). Probe ICE
      on the **stuck peer** (usually the guest), not only the host.
 
-   - **Guest stuck ON the countdown (lights visibly lighting, never launches)
-     is NOT an ICE symptom — signalling already worked.** If the connection is
-     up (both peers show `net().active`/roles correctly), stop probing ICE and
-     look at countdown *consumption* instead: `js/game.js` reads `netStart`
-     (`{ at, hold, now() }`) each frame and derives `countT` from it
-     (grep `countT = (COUNTDOWN_S`), which drives `lightsLit` (grep
-     `lightsLit === COUNTDOWN_S`) and only clears `netStart` once
-     `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold` — the
-     "consumed; never carry it into the next race" comment. (Grep, never a line
-     number: game.js moves every week and the three numbers that used to sit
-     here were ~800 lines stale.) A guest stuck with lights lit but the race never starting
-     means that consumption path never satisfied its exit condition — check the
-     guest's own `countT`/`lightsLit` progression via `G.countT`/`G.lightsLit`
-     (test-only accessors) or step through `netStartArm`/`netHostStart`, not the
-     ICE/candidate layer.
+   - **Guest stuck ON the countdown (lights lighting, never launches) is NOT an
+     ICE symptom — signalling already worked.** If both peers show
+     `net().active` and their roles, stop probing ICE; the bug is countdown
+     *consumption* in `js/game.js` (grep each, never a line number — game.js moves weekly):
+     - Each frame reads `netStart` (`{ at, hold, now() }`) and derives `countT`
+       (grep `countT = (COUNTDOWN_S`).
+     - `countT` drives `lightsLit` (grep `lightsLit === COUNTDOWN_S`).
+     - `netStart` clears only once `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold`
+       (the "consumed; never carry it into the next race" comment).
+     - Lights lit but no start = that exit condition never held. Read the guest's own
+       `G.countT` / `G.lightsLit` (test-only accessors) or step `netStartArm` / `netHostStart`.
    - `__apex.net().startPending` is boolean-only (`!!G.netStart`, `netHostStart()` in `js/agent/apex.js`); it cannot say why a guest is stuck, so read `countT`/`lightsLit` as above.
 
 5. **Mobile QR flow: two ways in, one code.**
@@ -106,8 +102,9 @@ Load from the SKILL.md index when the task needs this detail.
 
 ## "Build mismatch" though both are on the live build
 
-The build compared is the shell's own `<meta name="apex-build">` (meta wins without fetching; an unstamped shell falls back to `version.json`), not the deploy stamp. Not an encoding bug. `b` rides inside the invite/answer payload (`handshake.js` `createInvite`/`acceptInvite` -> `checkBuild(await localBuild(), payload.b)`).
-The `#vs=` link only carries the code (`inviteUrl`/`inviteFromUrl`; a corrupt link is `corrupt_code`/`bad_code`, never `build_mismatch`). 
+The build compared is the shell's own `<meta name="apex-build">`, not the deploy stamp (meta wins without fetching; an unstamped shell falls back to `version.json`).
+Not an encoding bug: `b` rides inside the invite/answer payload (`handshake.js` `createInvite`/`acceptInvite` -> `checkBuild(await localBuild(), payload.b)`).
+The `#vs=` link only carries the code (`inviteUrl`/`inviteFromUrl`; a corrupt link is `corrupt_code`/`bad_code`, never `build_mismatch`).
 So one tab's `<meta name="apex-build">` is stale: an installed PWA / service-worker-cached shell, or a tab left open across a deploy.
 - Compare `document.querySelector('meta[name=apex-build]').content` on BOTH devices with the live `index.html` (deploy-research). `res.mine`/`res.theirs` hold the numbers but the lobby shows only `res.message`, and `Log` prints just `handshake <action> fail build_mismatch`. `theirs > mine` = THIS device is stale.
 - `build_unknown` = no meta and the `version.json` fetch failed (offline phone). A link opened from Camera lands in Safari, not the installed app, so a mismatch there means Safari's cached shell.

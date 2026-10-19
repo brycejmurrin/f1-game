@@ -405,7 +405,12 @@ const DataHub = (function () {
     const staleMark = staleApi ? staleApi.staleMark() : 0;
 
     tabDef(id).load().then(function (node) {
-      if (gen[id] !== myGen) return;
+      if (gen[id] !== myGen) {
+        if (node && typeof node.dispose === "function") node.dispose();
+        return;
+      }
+      const previous = state[id] && state[id].node;
+      if (previous && previous !== node && typeof previous.dispose === "function") previous.dispose();
       Log.info("data", "tab " + id + " done");
       // A failed refetch that fell back to the API's stored copy: the footnote
       // dates the copy, not this render (`at` still governs node reuse).

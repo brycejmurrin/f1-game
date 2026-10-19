@@ -20,8 +20,9 @@ geometry bug.
 2. **Use the declared close door.** For real dialogs, let `TopModal` mirror
    `hidden` to `showModal()`/`close()`. Add
    `data-esc-close="<button-id>"` to name the same action the visible back
-   button uses. Use `data-esc="none"` only for screens that must refuse
-   Escape.
+   button uses; that id must EXIST (in `index.html`, or built by a declared
+   dynamic owner) — `menu-a11y-audit` fails a door that names nothing. Use
+   `data-esc="none"` only for screens that must refuse Escape.
 
 3. **Respect the platform top layer.** A modal dialog has `z-index: auto`;
    do not sort it with `parseInt(zIndex)`. `UiLayers` treats `:modal` as
@@ -129,15 +130,13 @@ pointer) and the unrun tool in the PR.
 
 ## Common mistakes
 
-- Closing a dialog by setting `open`/`close()` directly instead of `hidden`.
-- Adding a screen to markup/CSS but not to `UiLayers`, `ScrollFade`, or
-  `AriaState`.
-- A second Escape path instead of clicking the `data-esc-close` control.
-- Ranking a `<dialog>` by z-index.
-- Using viewport orientation as a proxy for sheet shape.
-- Forgetting that `zoom` changes layout boxes.
-- Using `requestAnimationFrame` for non-visual ARIA/scroll bookkeeping that
-  must also run when rendering is suspended.
+Pinned by `node --test tests/unit/menu-a11y-audit.test.mjs` (run it rather than
+re-reading a list): a screen missing from `ScrollFade`/`AriaState`, a second
+Escape path beside the `data-esc-close` control, a door id that does not exist.
+Not pinned: closing a dialog via `open`/`close()` instead of `hidden`; ranking a
+`<dialog>` by z-index; orientation as a proxy for sheet shape; forgetting that
+`zoom` changes layout boxes; `requestAnimationFrame` for non-visual ARIA/scroll
+bookkeeping that must also run while rendering is suspended.
 
 ## Reduced motion
 

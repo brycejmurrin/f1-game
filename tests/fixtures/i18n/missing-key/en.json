@@ -1,0 +1,5 @@
+{
+  "menu.title": "SETTINGS",
+  "menu.play": "PLAY",
+  "race.laps": "{n, plural, one {# lap} other {# laps}}"
+}

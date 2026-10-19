@@ -1,0 +1,150 @@
+name: Archive evidence
+
+# Deliberate promotion of one reviewed CI artifact to durable release assets.
+# No push/PR trigger: routine captures retain their existing artifact expiry.
+# Run the publisher from this workflow's revision, never from capture source.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Completed workflow run ID that produced the capture"
+        required: false
+        type: string
+      artifact_name:
+        description: "Exact artifact name to preserve"
+        required: false
+        type: string
+      source_commit:
+        description: "Historical Git evidence instead of a CI artifact: full commit SHA"
+        required: false
+        type: string
+      source_paths:
+        description: 'Historical paths as a JSON array, e.g. ["shots/1354"]'
+        required: false
+        default: "[]"
+        type: string
+      direct_images:
+        description: "Also publish selected historical images as direct documentation assets (max 997)"
+        required: false
+        default: false
+        type: boolean
+      label:
+        description: "Short lowercase label, e.g. monza-survey"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: publisher
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Identify the workflow-run head
+        id: capture
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          SOURCE_PATHS: ${{ inputs.source_paths }}
+        run: |
+          if [ -n "$SOURCE_COMMIT" ]; then
+            node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { validateHistorySelection } from './publisher/tools/shot/export-history-evidence.mjs';
+          if (process.env.RUN_ID || process.env.ARTIFACT_NAME) throw new Error('Choose historical Git evidence OR a CI artifact');
+          const paths = validateHistorySelection(process.env.SOURCE_COMMIT, JSON.parse(process.env.SOURCE_PATHS || '[]'));
+          fs.writeFileSync(`${process.env.RUNNER_TEMP}/evidence-history.json`, JSON.stringify({ sha: process.env.SOURCE_COMMIT, paths }));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `sha=${process.env.SOURCE_COMMIT}\nmode=history\n`);
+          JS
+            exit 0
+          fi
+          [ -n "$ARTIFACT_NAME" ] || { echo 'artifact_name is required for a CI capture'; exit 1; }
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'run_id must be numeric'; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/evidence-run.json"
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const run = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/evidence-run.json`));
+          if (run.repository?.full_name !== process.env.GITHUB_REPOSITORY || run.status !== 'completed' || !/^[a-f0-9]{40}$/.test(run.head_sha)) {
+            throw new Error('Select a completed run from this repository with a valid source SHA');
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `sha=${run.head_sha}\nmode=artifact\n`);
+          JS
+
+      # The run head is packaging provenance, not proof of the captured source:
+      # a job may explicitly check out another ref or use a PR merge commit.
+      # No scripts or dependencies from this checkout are executed.
+      - name: Check out the run head for packaging provenance
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.capture.outputs.sha }}
+          path: capture
+          persist-credentials: false
+
+      - name: Download the selected artifact
+        if: steps.capture.outputs.mode == 'artifact'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        run: |
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name="$ARTIFACT_NAME" --dir "$RUNNER_TEMP/evidence-download"
+
+      - name: Publish and verify the evidence bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: ${{ inputs.label }}
+          SOURCE_MODE: ${{ steps.capture.outputs.mode }}
+          DIRECT_IMAGES: ${{ inputs.direct_images }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { prepareEvidence, publishEvidence } from './publisher/tools/shot/publish-evidence.mjs';
+          import { exportHistoryEvidence } from './publisher/tools/shot/export-history-evidence.mjs';
+          const historical = process.env.SOURCE_MODE === 'history';
+          const run = historical ? null : JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/evidence-run.json`));
+          const root = path.resolve('capture');
+          const artifactRoot = path.join(root, 'artifacts');
+          const dir = path.join(root, 'artifacts/promoted-evidence');
+          if (fs.existsSync(artifactRoot) && fs.lstatSync(artifactRoot).isSymbolicLink()) throw new Error('Captured artifacts/ must not be a symlink');
+          if (fs.existsSync(dir)) throw new Error('Capture checkout already contains the promotion directory');
+          // Extract outside both checkouts, then copy without following links.
+          // prepareEvidence rejects any copied symlinks before reading files.
+          let exported;
+          if (historical) {
+            const selection = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/evidence-history.json`));
+            exported = exportHistoryEvidence({ root, ...selection });
+          } else {
+            fs.cpSync(`${process.env.RUNNER_TEMP}/evidence-download`, dir, { recursive: true, dereference: false, errorOnExist: true, force: false });
+            const origin = path.join(dir, '_evidence-promotion.json');
+            fs.writeFileSync(origin, JSON.stringify({ workflowRunUrl: run.html_url, runId: run.id, runAttempt: run.run_attempt, event: run.event, workflowHeadRepository: run.head_repository?.full_name, workflowRunHeadSha: run.head_sha, captureSourceSha: null, captureSourceVerification: 'unverified; consult producer metadata or checkout logs', artifactName: process.env.ARTIFACT_NAME }, null, 2), { flag: 'wx' });
+          }
+          if (!historical && process.env.DIRECT_IMAGES === 'true') throw new Error('direct_images applies only to selected historical Git evidence');
+          const linkableFiles = historical && process.env.DIRECT_IMAGES === 'true' ? exported.origin.files.filter((f) => /\.(png|jpe?g|webp|gif|avif)$/i.test(f.path)).map((f) => f.path) : undefined;
+          const bundle = prepareEvidence({ root, dir, label: process.env.LABEL, linkableFiles });
+          const result = publishEvidence(bundle.receiptPath);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Published evidence', '',
+            `[Evidence release](${result.url})`, '',
+            ...result.assets.map((a) => `- [${a.name}](${a.url})`), '',
+            `Packaging checkout (workflow-run head): ${result.sourceSha}`,
+            'Captured revision: **unverified**; consult the original producer metadata or checkout logs.',
+            historical ? `Original Git evidence commit: ${result.sourceSha}` : `[Original capture run](${run.html_url})`, '',
+          ].join('\n'));
+          console.log(JSON.stringify(result, null, 2));
+          JS

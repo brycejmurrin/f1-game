@@ -1381,9 +1381,9 @@
         // AFTER the ground relief, BEFORE paint/material bumps (js/render/glx/shaders/glsl-lit.js).
         const Ngeo = vec3(N).toVar();
 
-        // car surface ids 20-37 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
+        // car surface ids 20-40 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(37.0)).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(40.0)).toVar();
         // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (js/render/glx/shaders/glsl-lit.js); grain / saturation / rim below.
         const flakeSurface = surfaceId.equal(34.0).toVar();
         const candySurface = surfaceId.equal(35.0).toVar();
@@ -1401,7 +1401,11 @@
         // (keeps clearcoat + env lobe) but metallic and nearly smooth.
         // 36 = TINTED CHROME: mirror response, lacquer reflection tinted by the livery hue (CarMaterialShade.TINTED).
         const tintedSurface = surfaceId.equal(36.0).toVar();
-        const mirrorSurface = surfaceId.equal(27.0).or(tintedSurface).toVar();
+        // 40 = GOLD PLATE: chrome's mirror response, fixed gold albedo + hue (CarMaterialShade.GOLDPLATE); 38 FORGED, 39 GUNMETAL below.
+        const goldSurface = surfaceId.equal(40.0).toVar();
+        const mirrorSurface = surfaceId.equal(27.0).or(tintedSurface).or(goldSurface).toVar();
+        const forgedSurface = surfaceId.equal(38.0).toVar();
+        const gunSurface = surfaceId.equal(39.0).toVar();
         // Three more livery finishes, mirroring js/render/glx/shaders/glsl-lit.js. A
         // finish costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE
         // remaps a painted vertex. Carbon needs no id — 21 already exists.
@@ -1423,10 +1427,20 @@
           weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
           wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
         });
+        // FORGED CARBON (38): irregular chips faded to their mean 2/3 over 10-20 m (CarMaterialShade.FORGED; glsl-lit.js).
+        const fgM = float(0.667).toVar();
+        If(forgedSurface, () => {
+          const fgF = clamp(vd.sub(10.0).div(10.0).oneMinus(), 0.0, 1.0).toVar();
+          If(fgF.greaterThan(0.0), () => {
+            const fgA = floor(objP.mul(60.0));
+            const fgB = floor(vec3(objP.x.add(objP.z), objP.y.sub(objP.x), objP.z.add(objP.y)).mul(95.0));
+            fgM.assign(mix(float(0.667), max(hash21(fgA.xy.add(fgA.z.mul(19.7))), hash21(fgB.xz.add(fgB.y.mul(7.3)))), fgF));
+          });
+        });
         // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
         // clearcoat, dielectric env response — mirrors the GLX/WGSL split.
         const visorSurface = surfaceId.equal(32.0).toVar();
-        const paintLike = paintSurface.or(mirrorSurface).or(iriSurface).or(satinMetalSurface).toVar();
+        const paintLike = paintSurface.or(mirrorSurface).or(iriSurface).or(satinMetalSurface).or(forgedSurface).or(gunSurface).toVar();
         const carPaint = select(classifiedCar,
           select(paintLike, matU.carPaint, float(0.0)), matU.carPaint).toVar();
         const clearcoat = select(classifiedCar,
@@ -1472,6 +1486,9 @@
           select(emissiveSurface, max(matU.emissive, 1.0),
             select(paintLike, matU.emissive, float(0.0))),
           matU.emissive).toVar();
+        // FORGED (38) satin-gloss lacquer, carbon metal/spec; GUNMETAL (39) anodised film on a metal lobe (glsl-lit.js chains).
+        If(forgedSurface, () => { clearcoat.assign(clamp(matU.clearcoat, 0.40, 0.60)); metalness.assign(0.08); specular.assign(0.48); });
+        If(gunSurface, () => { clearcoat.assign(min(matU.clearcoat, 0.30)); metalness.assign(max(matU.metalness, 0.85)); specular.assign(0.90); });
         const envSurface = carPaint.greaterThan(0.001).or(glassSurface).or(visorSurface)
           .and(clearcoat.greaterThan(0.001)).toVar();
 
@@ -1555,6 +1572,8 @@
         If(matteSurface, () => { rough.assign(max(rough, 0.92)); });
         If(satinMetalSurface, () => { rough.assign(clamp(rough, 0.24, 0.40)); });
         If(iriSurface, () => { rough.assign(min(rough, 0.22)); });
+        If(forgedSurface, () => { rough.assign(clamp(rough, 0.28, 0.42).add(fgM.sub(0.667).mul(0.20))); });
+        If(gunSurface, () => { rough.assign(clamp(rough, 0.16, 0.28)); });
         // PEARLESCENT / FLIP PAINT (mirrors js/render/glx/shaders/glsl-lit.js): rotate
         // albedo through a cosine palette driven by the Fresnel term, so the
         // panel flips colour with view angle and returns to the livery's own
@@ -1580,6 +1599,14 @@
         If(candySurface, () => {
           const cdL = dot(albedo, vec3(0.299, 0.587, 0.114));
           albedo.assign(max(mix(vec3(cdL), albedo, 1.35), vec3(0.0)).mul(0.62));
+        });
+        // FORGED (38) resin + chips, GUNMETAL (39) dark anodised livery hue, GOLD PLATE (40) fixed gold (glsl-lit.js).
+        If(forgedSurface, () => {
+          albedo.assign(mix(albedo.mul(0.10).add(vec3(0.026, 0.027, 0.03)), albedo.mul(0.22), 0.20).mul(fgM.sub(0.667).mul(0.90).add(1.0)));
+        }).ElseIf(gunSurface, () => {
+          albedo.assign(mix(vec3(0.2, 0.205, 0.22), albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)).mul(0.24), 0.40));
+        }).ElseIf(goldSurface, () => {
+          albedo.assign(vec3(0.83, 0.65, 0.23));
         });
         const chamFlip = float(0.0).toVar();
         const chamHue = vec3(1.0).toVar();
@@ -1814,12 +1841,20 @@
           const cz = floor(wp.z.div(U.lgCell)).add(1024.0).sub(U.lgOrigin.y);
           const inside = on.and(cx.greaterThanEqual(0.0)).and(cx.lessThan(U.lgSize.x))
                            .and(cz.greaterThanEqual(0.0)).and(cz.lessThan(U.lgSize.y));
-          // One fetch to enter. Clamped so the out-of-extent case reads texel 0
-          // rather than sampling out of bounds; `inside` discards the result.
-          const g = textureLoad(LG_TEX.grid,
-            ivec2(select(inside, cx, float(0.0)), select(inside, cz, float(0.0)))).toVar();
-          const cnt = select(inside, g.y, float(0.0)).toVar();
-          return { base: g.x.toVar(), n: cnt, use: cnt.greaterThan(0.5) };
+          // base/count stay 0 unless the fragment is on the baked grid — so a
+          // disabled grid, a non-road ordinary material, or a position outside
+          // the extent never pays textureLoad(LG_TEX.grid). Integer textureLoad
+          // has no implicit derivatives, so the fetch may sit in the If.
+          // Empty cells (count 0) keep `use` false → pcN falls back to the
+          // global lamp set (same picture as before).
+          const base = float(0.0).toVar();
+          const cnt = float(0.0).toVar();
+          If(inside, () => {
+            const g = textureLoad(LG_TEX.grid, ivec2(cx, cz));
+            base.assign(g.x);
+            cnt.assign(g.y);
+          });
+          return { base, n: cnt, use: cnt.greaterThan(0.5) };
         })() : null;
 
         // Resolve slot `i` to a lamp record. On the per-chunk path `i` indexes
@@ -2037,6 +2072,8 @@
           If(tintedSurface, () => {
             addCC.mulAssign(mix(vec3(1.0), albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)), 0.88));
           });
+          // GOLD PLATE: the reflection takes the fixed gold hue (not the livery's).
+          If(goldSurface, () => { addCC.mulAssign(mix(vec3(1.0), vec3(1.0, 0.78, 0.27), 0.88)); });
           // CANDY: the lacquer is tinted (55 %) and the Fresnel rim glows in the saturated livery hue.
           If(candySurface, () => {
             const cdHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)).toVar();
@@ -2109,7 +2146,7 @@
         // METAL ENV REFLECTION (glsl-lit.js, constant for constant): the metal
         // share the block above drops with (1 - metalness) — env x Schlick(NoV,
         // F0 = albedo) x metalness, sky/ground split + live probe as envCC, x ccTrans.
-        If(metalSurface.or(satinMetalSurface).or(mirrorSurface), () => {
+        If(metalSurface.or(satinMetalSurface).or(mirrorSurface).or(gunSurface), () => {
           const Rm = reflect(V.negate(), N).toVar();
           const skyM = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rm.y, 0.0)));
           const envMet = mix(vec3(U.ambGround).mul(0.6), skyM, smoothstep(-0.12, 0.30, Rm.y)).toVar();
@@ -2122,7 +2159,7 @@
           const metAdd = envMet.mul(F_Schlick(NoV, albedo, rough.mul(0.5).oneMinus()))
             .mul(metalness.mul(rough.mul(0.7).oneMinus()).mul(ccTrans)).toVar();
           // Dark metals (halo titanium, exhaust) — CarMaterialShade.METAL.darkEnvBoost.
-          If(metalSurface, () => {
+          If(metalSurface.or(gunSurface), () => {   // GUNMETAL shares the dark-metal boost
             const metLum = dot(albedo, vec3(0.299, 0.587, 0.114));
             metAdd.mulAssign(clamp(metLum.mul(4.0), 0.0, 1.0).oneMinus().mul(0.32).add(1.0));
           });
@@ -2132,6 +2169,7 @@
         If(tintedSurface, () => {
           color.mulAssign(albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)));
         });
+        If(goldSurface, () => { color.mulAssign(vec3(1.0, 0.78, 0.27)); });   // GOLD PLATE: fixed gold hue
         If(chamSurface, () => {
           color.mulAssign(mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip.mul(0.90)));
         });
@@ -2605,16 +2643,20 @@
       const bUv = wp.xz.sub(U.bakeOrigin).div(U.bakeSize).toVar();
       const bIn = bUv.x.greaterThan(0.0).and(bUv.x.lessThan(1.0))
         .and(bUv.y.greaterThan(0.0)).and(bUv.y.lessThan(1.0));
-      const bG = bUv.mul(U.bakeGrid.xy).toVar();
-      const bTile = clamp(floor(bG), vec2(0.0), max(U.bakeGrid.xy.sub(1.0), vec2(0.0))).toVar();
-      const bSlot = BAKE_IDX_NODE.sample(bTile.add(0.5).div(U.bakeGrid.xy)).level(0).xy.toVar();
-      const bUvD = bSlot.add(bG.sub(bTile).mul(U.bakeGrid.z)).add(1.0).div(max(U.bakeAtlas, vec2(1.0))).toVar();
-      const bT = BAKE_NODE.sample(bUvD).level(0).toVar();
       const res = vec3(0.0).toVar();
-      If(U.bakeOn.greaterThan(0.5).and(bIn).and(bSlot.x.greaterThanEqual(0.0)), () => {
-        // alpha = the baked height: a car's marks (0-1.5 m up) share the road's pool
-        const hW = smoothstep(1.5, 3.0, abs(wp.y.sub(bT.a))).oneMinus();
-        res.assign(bT.rgb.mul(U.bakeScale).mul(hW).mul(n.y.mul(0.5).add(0.5)));
+      // Explicit LOD taps need no derivatives: keep them inside the gates so
+      // daytime/garage decals do not read an inactive bake, or an empty tile.
+      If(U.bakeOn.greaterThan(0.5).and(bIn), () => {
+        const bG = bUv.mul(U.bakeGrid.xy).toVar();
+        const bTile = clamp(floor(bG), vec2(0.0), max(U.bakeGrid.xy.sub(1.0), vec2(0.0))).toVar();
+        const bSlot = BAKE_IDX_NODE.sample(bTile.add(0.5).div(U.bakeGrid.xy)).level(0).xy.toVar();
+        If(bSlot.x.greaterThanEqual(0.0), () => {
+          const bUvD = bSlot.add(bG.sub(bTile).mul(U.bakeGrid.z)).add(1.0).div(max(U.bakeAtlas, vec2(1.0))).toVar();
+          const bT = BAKE_NODE.sample(bUvD).level(0).toVar();
+          // alpha = the baked height: a car's marks (0-1.5 m up) share the road's pool
+          const hW = smoothstep(1.5, 3.0, abs(wp.y.sub(bT.a))).oneMinus();
+          res.assign(bT.rgb.mul(U.bakeScale).mul(hW).mul(n.y.mul(0.5).add(0.5)));
+        });
       });
       return res;
     });

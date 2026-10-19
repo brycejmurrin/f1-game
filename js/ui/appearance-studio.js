@@ -170,24 +170,6 @@ const AppearanceStudio = (function () {
     for (const [id, name] of values) { const b = button(name, () => { const v = snapshot(); v[key] = id; applySnapshot(v); }); controls.appendChild(b); list.push({ id, b }); }
     row.append(text, controls); host.appendChild(row); ui.choices.push({ key, list }); return row;
   }
-  function colour(host, label, key, hexKey) {
-    choice(host, label, key, [["brand", "Brand"], ["team", "Team"], ["ember", "Ember"], ["amber", "Amber"], ["cyan", "Cyan"], ["violet", "Violet"], ["lime", "Lime"], ["custom", "Custom"]]);
-    const row = node("label", "as-row"), input = node("input"), name = node("span", "as-label", "Custom colour"); input.type = "color"; input.setAttribute("aria-label", label + " custom colour");
-    input.addEventListener("change", () => { const v = snapshot(); v[key] = "custom"; v[hexKey] = input.value; applySnapshot(v); }); row.append(name, input); host.appendChild(row); ui.colours.push({ key, hexKey, row, input });
-  }
-  function range(host, label, key, lo, hi) {
-    const row = node("label", "as-row"), name = node("span", "as-label", label), input = node("input"), out = node("output"); input.type = "range"; input.min = lo; input.max = hi; input.step = .25; input.setAttribute("aria-label", label);
-    input.id = "as-" + key;
-    let before = null; input.addEventListener("pointerdown", () => { before = snapshot(); });
-    input.addEventListener("keydown", (e) => {
-      // Keyboard and assistive-tech changes do not produce pointerdown. Keep
-      // the same undo boundary as a drag when a native range is adjusted with
-      // arrows, Home/End or PageUp/PageDown.
-      if (!before && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) before = snapshot();
-    });
-    input.addEventListener("input", () => { if (!before) before = snapshot(); const v = snapshot(); v[key] = Number(input.value); applySnapshot(v, { history: false }); });
-    input.addEventListener("change", () => { if (before) { remember(before); before = null; } }); row.append(name, input, out); host.appendChild(row); ui.ranges.push({ key, input, out });
-  }
   function previewContent(s) {
     const body = ui.preview; body.replaceChildren();
     body.appendChild(node("div", "as-preview-brand", "APEX 26"));
@@ -215,10 +197,7 @@ const AppearanceStudio = (function () {
   }
   function render() {
     if (!ui) return; const s = snapshot();
-    for (const c of ui.choices) for (const { id, b } of c.list) b.setAttribute("aria-pressed", String((s[c.key] == null && c.key === "motion" ? "auto" : s[c.key]) === id));
-    if (ui.motionNote) ui.motionNote.hidden = s.motion === "reduce" || !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    for (const c of ui.colours) { c.row.hidden = s[c.key] !== "custom"; c.input.value = s[c.hexKey]; }
-    for (const r of ui.ranges) { const v = s[r.key] || (r.key === "uiScale" && typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches ? 109 : 100); r.input.value = v; r.out.textContent = v + "%"; r.input.setAttribute("aria-valuetext", r.out.textContent); }
+    for (const c of ui.choices) for (const { id, b } of c.list) b.setAttribute("aria-pressed", String(s[c.key] === id));
     for (const { id, b } of ui.presets) b.setAttribute("aria-pressed", String(activePreset === id));
     for (const { id, b } of ui.pages) b.setAttribute("aria-pressed", String(previewPage === id));
     for (const { id, b } of ui.shapes) b.setAttribute("aria-pressed", String(previewShape === id));
@@ -285,22 +264,29 @@ const AppearanceStudio = (function () {
     if (ui || typeof document === "undefined") return;
     const panel = document.getElementById("pm-panel-appearance"); if (!panel) return;
     Log.info("ui", "AppearanceStudio.initUI");
-    ui = { choices: [], colours: [], ranges: [], presets: [], pages: [], shapes: [] };
+    ui = { choices: [], presets: [], pages: [], shapes: [] };
     const studio = node("div", "as-studio"), controls = node("div", "as-controls"), previewSide = node("section", "as-preview-side");
     studio.id = "appearance-studio"; studio.append(controls, previewSide); panel.prepend(studio); panel.dataset.appearanceStudio = "on";
     const gallery = group(controls, "APPLY APPEARANCE PRESET"), presets = node("div", "as-preset-list"); gallery.appendChild(presets);
     for (const p of PRESETS) { const b = button("", () => applyPreset(p.id)); b.dataset.preset = p.id; b.append(node("span", "as-preset-art"), node("strong", "", p.name)); b.title = p.note; presets.appendChild(b); ui.presets.push({ id: p.id, b }); }
     const profile = group(controls, "APPEARANCE PROFILE"), names = node("div", "as-profile-row"); ui.profileSelect = node("select"); ui.profileSelect.setAttribute("aria-label", "Saved appearance profiles"); ui.name = node("input"); ui.name.type = "text"; ui.name.maxLength = 40; ui.name.placeholder = "Name your appearance"; ui.name.setAttribute("aria-label", "Appearance profile name");
     ui.profileSelect.addEventListener("change", () => { selectedProfile = ui.profileSelect.value; const p = profiles().find((r) => r.id === selectedProfile); ui.name.value = p ? p.name : ""; render(); });
-    ui.load = button("APPLY PROFILE", () => loadProfile(selectedProfile)); const save = button("SAVE PROFILE", () => saveProfile(ui.name.value, selectedProfile)); const newProfile = button("SAVE AS NEW", () => saveProfile(ui.name.value)); ui.delete = button("DELETE", () => deleteProfile(selectedProfile)); names.append(ui.profileSelect, ui.name, ui.load, save, newProfile, ui.delete); profile.appendChild(names);
+    ui.load = button("APPLY PROFILE", () => loadProfile(selectedProfile)); ui.load.id = "ap-profile-apply"; const save = button("SAVE PROFILE", () => saveProfile(ui.name.value, selectedProfile)); const newProfile = button("SAVE AS NEW", () => saveProfile(ui.name.value)); ui.delete = button("DELETE", () => deleteProfile(selectedProfile)); ui.delete.id = "ap-profile-delete"; names.append(ui.profileSelect, ui.name, ui.load, save, newProfile, ui.delete); profile.appendChild(names);
     const scopeRow = node("div", "as-profile-row"); ui.scopeGlobal = button("GLOBAL", () => { scope = "global"; render(); }); ui.scopeScreen = button("THIS SCREEN", () => { scope = "screen"; render(); }); ui.undo = button("UNDO", undo); scopeRow.append(ui.scopeGlobal, ui.scopeScreen, ui.undo, button("RESET SCOPE", () => reset())); profile.appendChild(scopeRow); ui.scopeNote = node("p", "as-note"); profile.appendChild(ui.scopeNote);
-    const menu = group(controls, "MENU · GLOBAL"); choice(menu, "Theme", "uiTheme", [["dark", "Dark"], ["light", "Light"], ["system", "System"]]); colour(menu, "Accent colour", "menuAccent", "menuAccentHex"); choice(menu, "Text size", "textSize", [["normal", "Normal"], ["large", "Large"], ["larger", "Larger"]]); range(menu, "UI size", "uiScale", 40, 200); choice(menu, "Reduce motion", "motion", [["auto", "Auto"], ["reduce", "On"], ["off", "Off"]]); ui.motionNote = node("p", "as-note", "Menu motion is reduced by your system preference. Auto follows it; Off keeps motion on."); menu.appendChild(ui.motionNote); choice(menu, "High contrast", "uiContrast", [["off", "Off"], ["high", "On"]]);
-    const hud = group(controls, "RACE HUD"); choice(hud, "Style", "hudProfile", [["minimal", "Minimal"], ["standard", "Standard"], ["broadcast", "Broadcast"]]); colour(hud, "Accent colour", "hudAccent", "hudAccentHex"); range(hud, "HUD size", "hudScale", 70, 200); choice(hud, "Layout", "hudMetricsLayout", [["auto", "Auto"], ["full", "Full"], ["timing", "Timing"], ["driver", "Driver"], ["compact", "Compact"]]); hud.appendChild(button("ALL HUD & CAMERA OPTIONS", () => { if (hooks.openDisplay) hooks.openDisplay(); else say("Open Settings → HUD & Camera for all HUD options."); }));
+    // ONE HOME (#2846): the shell's own rows (index.html #pm-appearance-menu /
+    // #pm-appearance-hud, wired by appearance-opts.js and scale.js) are the only
+    // copy of theme, accents, sizes and contrast; the studio adopts them rather
+    // than building second rows. HUD style / size / layout and reduce motion
+    // live on HUD & CAMERA and ACCESSIBILITY: the studio jumps there.
+    const adopt = (box, id) => { const home = document.querySelector("#" + id); if (home) box.appendChild(home); };
+    const jump = (box, text, page, target) => { const b = node("button", "as-jump", text + " \u203a"); b.className = "adv-more-btn"; b.type = "button"; b.dataset.settingsJump = page; b.dataset.jumpTarget = target; box.appendChild(b); };
+    const menu = group(controls, "MENU · GLOBAL"); adopt(menu, "pm-appearance-menu"); jump(menu, "REDUCE MOTION is in ACCESSIBILITY", "a11y", "pm-motion-sel");
+    const hud = group(controls, "RACE HUD"); adopt(hud, "pm-appearance-hud"); jump(hud, "HUD STYLE is in HUD & CAMERA", "display", "pm-hudprofile-sel"); jump(hud, "HUD SIZE is in HUD & CAMERA", "display", "pm-hudscale"); jump(hud, "HUD LAYOUT is in HUD & CAMERA", "display", "pm-hudmetrics-sel");
     const sceneBox = group(controls, "SCENE · HOME"); choice(sceneBox, "Scene", "homeScene", [["auto", "Mix environments"], ["garage", "Garage"], ["night", "Night garage"], ["studio", "Studio"], ["track", "Circuit"], ["pitlane", "Pit lane"], ["static", "Static"], ["photo", "My photo"]]); choice(sceneBox, "Home camera", "homeCamera", [["auto", "Auto"], ["hero", "Hero"], ["front", "Front"], ["side", "Side"], ["rear", "Rear"]]); choice(sceneBox, "Background motion", "backgroundMotion", [["still", "Off"], ["ambient", "On"]]); ui.sceneNote = node("p", "as-note"); sceneBox.append(ui.sceneNote, button("PHOTO STUDIO & MY BACKGROUND", () => { if (hooks.openPhoto) hooks.openPhoto(); else say("Photo Studio becomes available after the game finishes loading."); }));
     ui.photoBox = node("section", "as-photo-picker"); ui.photoBox.setAttribute("aria-label", "Saved menu background photos");
-    ui.photoSelect = node("select"); ui.photoSelect.setAttribute("aria-label", "Saved photo"); ui.photoSelect.addEventListener("change", photoSelection);
+    ui.photoSelect = node("select"); ui.photoSelect.id = "ap-photo-select"; ui.photoSelect.setAttribute("aria-label", "Saved photo"); ui.photoSelect.addEventListener("change", photoSelection);
     ui.photoPreview = node("img", "as-photo-preview"); ui.photoPreview.alt = "Saved photo preview"; ui.photoPreview.hidden = true;
-    ui.photoChoose = button("CHOOSE PHOTO", choosePhoto); ui.photoChoose.disabled = true;
+    ui.photoChoose = button("CHOOSE PHOTO", choosePhoto); ui.photoChoose.id = "ap-photo-choose"; ui.photoChoose.disabled = true;
     const photoActions = node("div", "as-profile-row"); photoActions.append(ui.photoSelect, ui.photoChoose, button("REFRESH PHOTOS", refreshPhotos));
     ui.photoNote = node("p", "as-note"); ui.photoNote.setAttribute("role", "status"); ui.photoNote.setAttribute("aria-live", "polite");
     ui.photoBox.append(node("h3", "as-heading", "SAVED PHOTOS"), photoActions, ui.photoPreview, ui.photoNote); sceneBox.appendChild(ui.photoBox);
@@ -311,8 +297,10 @@ const AppearanceStudio = (function () {
     ui.status = node("p", "as-status"); ui.status.setAttribute("role", "status"); ui.status.setAttribute("aria-live", "polite"); controls.appendChild(ui.status);
     const advanced = node("details", "as-advanced"), sum = node("summary", "", "ADVANCED · GLOBAL & PER-SCREEN CUSTOMISATION"), body = node("div"); advanced.append(sum, body); panel.appendChild(advanced);
     for (const child of [...panel.children]) if (child !== studio && child !== advanced) body.appendChild(child);
-    panel.addEventListener("input", (e) => { if (studio.contains(e.target)) return; clearTimeout(pending); pending = setTimeout(() => { remember(last); last = snapshot(); }, 350); });
-    panel.addEventListener("click", (e) => { if (studio.contains(e.target)) return; queueMicrotask(() => { remember(last); last = snapshot(); }); });
+    // The adopted shell rows (data-studio-home) record undo like any other fold.
+    const own = (t) => studio.contains(t) && !(t.closest && t.closest("[data-studio-home]"));
+    panel.addEventListener("input", (e) => { if (own(e.target)) return; clearTimeout(pending); pending = setTimeout(() => { remember(last); last = snapshot(); }, 350); });
+    panel.addEventListener("click", (e) => { if (own(e.target)) return; queueMicrotask(() => { remember(last); last = snapshot(); }); });
     if (store.subscribe) store.subscribe((change) => { if (!muted && VISUAL_KEYS.includes(change.key)) { clearTimeout(pending); pending = setTimeout(() => { remember(last); last = snapshot(); render(); if (["homeScene", "homeCamera", "backgroundMotion", "motion"].includes(change.key)) sceneChanged(); }, 80); } });
     if (typeof MutationObserver !== "undefined") {
       const settings = document.getElementById("pmsettings");
@@ -344,15 +332,11 @@ const AppearanceStudio = (function () {
     }
     render();
     if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
-      { id: "appearance-theme", label: "Theme", page: "appearance", target: "as-uiTheme", aliases: "dark light system colour color" },
-      { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "as-menuAccent", aliases: "colour color highlight brand team custom" },
-      { id: "appearance-text-size", label: "Text size", page: "appearance", target: "as-textSize", aliases: "larger bigger words readability" },
-      { id: "appearance-reduce-motion", label: "Menu motion", page: "appearance", target: "as-motion", aliases: "reduce animation transitions comfort" },
-      { id: "appearance-contrast", label: "High contrast", page: "appearance", target: "as-uiContrast", aliases: "readability sunlight outlines" },
-      { id: "appearance-hud-style", label: "HUD style", page: "appearance", target: "as-hudProfile", aliases: "broadcast minimal standard race" },
-      { id: "appearance-hud-accent-choice", label: "HUD accent", page: "appearance", target: "as-hudAccent", aliases: "race colour color" },
-      { id: "appearance-hud-size", label: "HUD size", page: "appearance", target: "as-hudScale", aliases: "race bigger smaller readouts" },
-      { id: "appearance-hud-layout", label: "HUD layout", page: "appearance", target: "as-hudMetricsLayout", aliases: "timing compact driver metrics" },
+      { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system colour color" },
+      { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
+      { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },
+      { id: "appearance-contrast", label: "High contrast", page: "appearance", target: "pm-contrast-sel", aliases: "readability sunlight outlines" },
+      { id: "appearance-hud-accent-choice", label: "HUD accent", page: "appearance", target: "pm-hudaccent-sel", aliases: "race colour color" },
       { id: "appearance-home-scene", label: "Home scene", page: "appearance", target: "as-homeScene", aliases: "garage night studio circuit pitlane background" },
       { id: "appearance-home-camera", label: "Home camera", page: "appearance", target: "as-homeCamera", aliases: "hero front side rear view" },
       { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },

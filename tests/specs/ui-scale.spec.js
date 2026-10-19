@@ -248,6 +248,10 @@ test.describe("UI scale", () => {
         };
         await toTitle(page);
         await open(page, ["mb-race", "sel-go"]);
+        await page.evaluate(() => window.__apex.headless(true));
+        await page.locator("#rs-preset-options > summary").click();
+        await page.locator("#rs-body details[data-rs-help]").evaluateAll(folds => folds.forEach(fold => { fold.open = true; }));
+        await expect(page.locator("#rs-preset-options")).toHaveAttribute("open", "");
         const rs = await page.evaluate(TRUNC, "#rs-presets > .preset-btn small");
         if (rs.n) {   // the captions are hidden on narrow sheets by design
           expect(rs.cut, `preset blurbs truncated @${pct}% ${label}`).toEqual([]);
@@ -929,27 +933,27 @@ test("UI inspector verifies real scale bindings, persistence and CSS provenance"
   await open();
   const snapshot = () => page.evaluate(() => __apex.ui.inspect({ root: "#pmsettings" }));
   const before = await snapshot();
-  const input = page.locator("#as-uiScale"); const old = Number(await input.inputValue());
+  const input = page.locator("#pm-uiscale"); const old = Number(await input.inputValue());
   await input.focus(); await page.keyboard.press(old < 200 ? "ArrowRight" : "ArrowLeft");
   const value = Number(await input.inputValue()); expect(value).not.toBe(old);
-  await expect.poll(async () => (await snapshot()).controls.find(c => c.selector === "#as-uiScale")?.binding.runtime).toBeCloseTo(value, 5);
-  const after = await inspectPage(page, { root: "#pmsettings", styles: "#as-uiScale" });
-  const control = after.controls.find(c => c.selector === "#as-uiScale");
+  await expect.poll(async () => (await snapshot()).controls.find(c => c.selector === "#pm-uiscale")?.binding.runtime).toBeCloseTo(value, 5);
+  const after = await inspectPage(page, { root: "#pmsettings", styles: "#pm-uiscale" });
+  const control = after.controls.find(c => c.selector === "#pm-uiscale");
   expect(control.role).toBe("slider"); expect(control.binding.status).toBe("matches");
   expect(control.binding.saved.value).toBe(value);
   expect(after.styles.rules.some(r => r.source?.includes("/css/") && r.line > 0)).toBe(true);
-  expect(after.accessibility).toContain("UI size");
-  expect(diffInspections(before, after).changed.some(c => c.selector === "#as-uiScale")).toBe(true);
+  expect(after.accessibility).toContain("Interface size");
+  expect(diffInspections(before, after).changed.some(c => c.selector === "#pm-uiscale")).toBe(true);
   // A DOM-only mutation is deliberately NOT a working setting: the inspector must reject it.
   await input.evaluate(e => { e.value = Number(e.value) + (Number(e.value) < 200 ? 1 : -1); });
-  expect((await snapshot()).issues.some(i => i.kind === "binding-mismatch" && i.selector === "#as-uiScale")).toBe(true);
+  expect((await snapshot()).issues.some(i => i.kind === "binding-mismatch" && i.selector === "#pm-uiscale")).toBe(true);
   await page.reload(); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => __apex.headless(true)); await open();
-  expect((await snapshot()).controls.find(c => c.selector === "#as-uiScale").binding.saved.value).toBe(value);
+  expect((await snapshot()).controls.find(c => c.selector === "#pm-uiscale").binding.saved.value).toBe(value);
   for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport); const report = await snapshot();
     expect(report.viewport.width).toBe(viewport.width); expect(report.controls.length).toBeGreaterThan(0);
-    expect(report.controls.find(c => c.selector === "#as-uiScale").binding.status).toBe("matches");
+    expect(report.controls.find(c => c.selector === "#pm-uiscale").binding.status).toBe("matches");
   }
   writeFileSync(testInfo.outputPath("ui-inspection.json"), JSON.stringify(after, null, 2));
   expect(errors).toEqual([]);
@@ -1171,4 +1175,524 @@ test("UI inspector joins native findings only for matching rendered provenance",
   expect(report.auditEvidence.findings).toHaveLength(1);
   expect(report.auditEvidence.findings[0].mapping.status).toBe("mapped");
   expect(report.auditEvidence.findings[0].mapping.selector).toBe("#tiny");
+});
+
+
+// Exercise current reading preferences independently of the previous-look scale matrix.
+test.describe("Race setup adaptive task", () => {
+  test.use({ hasTouch: true });
+
+  for (const textSize of ["large", "larger"]) {
+    test(`race setup preserves an editable task across constrained layouts (${textSize})`, async ({ page }, testInfo) => {
+      const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
+      const errors = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.addInitScript(size => {
+        localStorage.setItem("apex26.textSize", JSON.stringify(size));
+      }, textSize);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto("/");
+      await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+      await expect(page.locator("html")).toHaveAttribute("data-text-size", textSize);
+      await page.locator("#mb-race").click();
+      await page.locator("#sel-go").click();
+      await expect(page.locator("#race-settings")).toBeVisible();
+
+      const chooseAnother = async selector => {
+        const select = page.locator(selector);
+        const next = await select.evaluate(el => [...el.options].find(option => !option.disabled && option.value !== el.value).value);
+        await select.selectOption(next);
+        return next;
+      };
+      const changeAndRestore = async (selector, nextSelector, prevSelector) => {
+        const select = page.locator(selector), value = await select.inputValue();
+        if (await page.locator(nextSelector).isVisible()) {
+          await page.locator(nextSelector).click();
+          await page.locator(prevSelector).click();
+        } else {
+          const changed = await chooseAnother(selector);
+          await expect(select).toHaveValue(changed);
+          await select.selectOption(value);
+        }
+      };
+
+      const presets = page.locator("#rs-preset-options");
+      const presetSummary = presets.locator(":scope > summary");
+      await expect(presets).not.toHaveAttribute("open", "");
+      await presetSummary.click();
+      await expect(presets).toHaveAttribute("open", "");
+      await page.locator("#rs-preset-quick").click();
+      await expect(presetSummary).toContainText(/QUICK/i);
+      await expect(page.locator("#rs-preset-quick")).toHaveAttribute("aria-pressed", "true");
+      await expect(presets).toHaveAttribute("open", "");
+      await presetSummary.click();
+      await expect(presets).not.toHaveAttribute("open", "");
+
+      // Native select actions and actual pointer clicks prove actionability;
+      // no DOM .click(), forced click or trial-only success for task controls.
+      await page.locator("#rs-weather-sel").selectOption("wet");
+      await expect(presetSummary).toContainText(/CUSTOM/i);
+      await page.locator("#rs-fold-field-sum").click();
+      await chooseAnother("#rs-diff-sel");
+      const difficulty = await page.locator("#rs-diff-sel").inputValue();
+      await page.locator("#rs-fold-assists-sum").click();
+      await chooseAnother("#rs-tyres-sel");
+      const tyres = await page.locator("#rs-tyres-sel").inputValue();
+
+      const weatherHelp = page.locator("#rs-weather > details[data-rs-help]");
+      await expect(weatherHelp).not.toHaveAttribute("open", "");
+      await weatherHelp.locator("summary").click();
+      await expect(page.locator("#rs-weather-help")).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath("weather-help-open.png") });
+      await weatherHelp.locator("summary").click();
+      await expect(page.locator("#rs-weather-help")).not.toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath("weather-help-closed.png") });
+      await page.evaluate(() => AppearanceOpts.setHelp("off"));
+      await expect(weatherHelp).not.toBeVisible();
+      await page.evaluate(() => AppearanceOpts.setHelp("on"));
+      await expect(weatherHelp).toBeVisible();
+
+      const cells = [
+        { width: 852, height: 393, scale: 109 },
+        { width: 390, height: 844, scale: 109 },
+        { width: 390, height: 844, scale: 150 },
+        { width: 390, height: 844, scale: 200 },
+        { width: 667, height: 320, scale: 200 },
+        { width: 844, height: 390, scale: 200 },
+        { width: 1280, height: 800, scale: 100 },
+        { width: 390, height: 844, scale: 150 },
+      ];
+      const evidence = [];
+      for (const [index, cell] of cells.entries()) {
+        await page.setViewportSize({ width: cell.width, height: cell.height });
+        await page.evaluate(pct => __apex.uiScale(pct), cell.scale);
+        const settled = await inspectSettled(page, { root: "#race-settings", styles: "#rs-body" });
+        expect(settled.settlement.stable, JSON.stringify(cell)).toBe(true);
+        await expect(page.locator("#rs-weather-sel")).toHaveValue("wet");
+        await expect(presets).not.toHaveAttribute("open", "");
+        await expect(page.locator("#rs-diff-sel")).toHaveValue(difficulty);
+        await expect(page.locator("#rs-tyres-sel")).toHaveValue(tyres);
+        await expect(page.locator("#rs-fold-field")).toHaveAttribute("open", "");
+        await expect(page.locator("#rs-fold-assists")).toHaveAttribute("open", "");
+
+        await page.evaluate(() => {
+          document.querySelector("#race-settings > .sheet").scrollTop = 0;
+          document.getElementById("rs-body").scrollTop = 0;
+        });
+        await page.screenshot({ path: testInfo.outputPath(`race-initial-${index}.png`) });
+        if (await page.locator("#rs-duel").isVisible()) await expect(page.locator("#rs-duel-open")).toBeVisible();
+        const valueFit = await page.locator("#rs-weather-sel").evaluate(el => {
+          const cs = getComputedStyle(el), ctx = document.createElement("canvas").getContext("2d");
+          ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+          const label = el.selectedOptions[0].textContent;
+          const text = ctx.measureText(label).width + (parseFloat(cs.letterSpacing) || 0) * Math.max(0, label.length - 1);
+          const nativeArrow = cs.appearance === "none" ? 0 : parseFloat(cs.fontSize);
+          const glyphs = ctx.measureText(label);
+          const line = parseFloat(cs.lineHeight);
+          return { available: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - nativeArrow, text,
+            availableHeight: el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom),
+            textHeight: Math.max(glyphs.actualBoundingBoxAscent + glyphs.actualBoundingBoxDescent,
+              Number.isFinite(line) ? line : 0) };
+        });
+        expect(valueFit.available, "selected weather label has room to render fully").toBeGreaterThanOrEqual(valueFit.text - 1);
+        expect(valueFit.availableHeight, "selected weather glyphs fit the control vertically").toBeGreaterThanOrEqual(valueFit.textHeight - 1);
+
+        if (cell.width === 390) {
+          const classification = await page.locator("#race-settings > .sheet").evaluate(el => ({
+            shape: el.dataset.shape, density: el.dataset.density,
+            compactAt: getComputedStyle(el).getPropertyValue("--compact-at"),
+            height: el.clientHeight, width: el.clientWidth,
+          }));
+          await expect(page.locator("#race-settings > .sheet"), JSON.stringify(classification)).toHaveCSS("overflow-y", "auto");
+          // Initial task capacity matters: pinned chrome must not consume the
+          // editable view even though a nested body remains scrollable.
+          await page.evaluate(() => {
+            document.querySelector("#race-settings > .sheet").scrollTop = 0;
+            document.getElementById("rs-body").scrollTop = 0;
+          });
+          const capacity = await page.evaluate(() => {
+            const sh = document.querySelector("#race-settings > .sheet");
+            const lap = document.getElementById("rs-laps-sel").getBoundingClientRect();
+            const box = sh.getBoundingClientRect();
+            return { owner: getComputedStyle(sh).overflowY, top: lap.top, bottom: lap.bottom,
+              viewTop: box.top, viewBottom: Math.min(box.bottom, innerHeight) };
+          });
+          expect(capacity.owner).toBe("auto");
+          expect(capacity.top).toBeGreaterThanOrEqual(capacity.viewTop);
+          expect(capacity.bottom, "first editable row fits without scrolling past chrome").toBeLessThanOrEqual(capacity.viewBottom);
+        }
+
+        if (cell.width === 667) {
+          const sheet = page.locator("#race-settings > .sheet");
+          await sheet.evaluate(el => { el.scrollTop = 0; });
+          const box = await sheet.boundingBox();
+          const gesture = await page.context().newCDPSession(page);
+          // Dispatch trusted touch events: synthesizeScrollGesture('touch')
+          // is a no-op on this headless host even on a plain scroll fixture.
+          const swipe = async (from, to) => {
+            const point = y => [{ x: box.x + 24, y }];
+            await gesture.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: point(from) });
+            for (let step = 1; step <= 12; step++) {
+              await gesture.send("Input.dispatchTouchEvent", {
+                type: "touchMove", touchPoints: point(from + (to - from) * step / 12),
+              });
+            }
+            await gesture.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+            // Finger release can fling; compare checkpoints only after the
+            // native scroller settles, rather than against a mid-fling value.
+            await sheet.evaluate(async el => {
+              let previous = el.scrollTop, stable = 0;
+              for (let frame = 0; frame < 180; frame++) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                const now = el.scrollTop;
+                stable = Math.abs(now - previous) < .1 ? stable + 1 : 0;
+                if (stable >= 8) return;
+                previous = now;
+              }
+              throw new Error("touch scroll did not settle");
+            });
+          };
+          const scrollPath = [];
+          try {
+            const limit = await sheet.evaluate(el => el.scrollHeight - el.clientHeight);
+            let middleCaptured = false;
+            for (let step = 0; step < 32; step++) {
+              const before = await sheet.evaluate(el => el.scrollTop);
+              if (before >= limit - 2) break;
+              await swipe(box.y + box.height * .7, box.y + box.height * .2);
+              const after = await sheet.evaluate(el => el.scrollTop);
+              scrollPath.push({ direction: "down", before, after, limit });
+              expect(after, "each downward gesture advances the task").toBeGreaterThan(before + 1);
+              if (!middleCaptured && after >= limit / 2) {
+                await page.screenshot({ path: testInfo.outputPath(`race-touch-scroll-${index}.png`) });
+                middleCaptured = true;
+              }
+            }
+            expect(middleCaptured).toBe(true);
+            expect(await sheet.evaluate(el => el.scrollTop), "touch reaches the end of the task").toBeGreaterThanOrEqual(limit - 2);
+            await page.screenshot({ path: testInfo.outputPath(`race-touch-end-${index}.png`) });
+            for (let step = 0; step < 32; step++) {
+              const before = await sheet.evaluate(el => el.scrollTop);
+              if (before <= 2) break;
+              await swipe(box.y + box.height * .2, box.y + box.height * .7);
+              const after = await sheet.evaluate(el => el.scrollTop);
+              scrollPath.push({ direction: "up", before, after, limit });
+              expect(after, "each upward gesture reveals earlier settings").toBeLessThan(before - 1);
+            }
+            expect(await sheet.evaluate(el => el.scrollTop), "touch returns to the task heading").toBeLessThanOrEqual(2);
+            await page.screenshot({ path: testInfo.outputPath(`race-touch-scroll-back-${index}.png`) });
+          } finally { await gesture.detach(); }
+
+          await presetSummary.focus();
+          const focusPath = [];
+          for (let step = 0; step < 64; step++) {
+            await page.keyboard.press("Tab");
+            const focused = await page.evaluate(() => {
+              const el = document.activeElement, r = el.getBoundingClientRect();
+              const sh = document.querySelector("#race-settings > .sheet").getBoundingClientRect();
+              return { id: el.id, tag: el.tagName, inTask: !!el.closest("#race-settings"),
+                visibleHeight: Math.max(0, Math.min(r.bottom, sh.bottom, innerHeight) - Math.max(r.top, sh.top, 0)),
+                height: r.height };
+            });
+            focusPath.push(focused);
+            expect(focused.inTask).toBe(true);
+            expect(focused.visibleHeight, JSON.stringify(focused)).toBeGreaterThanOrEqual(Math.min(44, focused.height) - 2);
+            if (focused.id === "rs-go") break;
+          }
+          expect(focusPath.at(-1).id, "keyboard traversal reaches the final action").toBe("rs-go");
+          await testInfo.attach(`race-scroll-focus-${textSize}`, {
+            body: JSON.stringify({ scrollPath, focusPath, dom: await page.locator("#race-settings").ariaSnapshot() }),
+            contentType: "application/json",
+          });
+          await page.screenshot({ path: testInfo.outputPath(`race-keyboard-end-${index}.png`) });
+        }
+
+        // Reach a lower control, change it, restore it, and then return to the
+        // weather row. This fails if a supposedly scrollable ancestor clips
+        // the control, or an action bar intercepts its actual pointer hit.
+        await changeAndRestore("#rs-tyres-sel", "#rs-tyres-next", "#rs-tyres-prev");
+        await expect(page.locator("#rs-tyres-sel")).toHaveValue(tyres);
+        await changeAndRestore("#rs-weather-sel", "#rs-weather-next", "#rs-weather-prev");
+        await expect(page.locator("#rs-weather-sel")).toHaveValue("wet");
+
+        const geometry = await page.evaluate(() => {
+          const root = document.getElementById("race-settings");
+          const sheet = root.querySelector(".sheet");
+          const body = document.getElementById("rs-body");
+          const control = document.getElementById("rs-weather-sel").getBoundingClientRect();
+          const br = body.getBoundingClientRect();
+          const scrollers = [root, sheet, body].filter(el => {
+            const cs = getComputedStyle(el);
+            return /auto|scroll/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1;
+          }).map(el => el.id || ".sheet");
+          return { scrollers,
+            bodyHeight: Math.max(0, Math.min(br.bottom, innerHeight) - Math.max(br.top, 0)),
+            controlHeight: control.height,
+            sideOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            requestedScale: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+            appliedZoom: Number(getComputedStyle(sheet).zoom) };
+        });
+        expect(geometry.sideOverflow).toBeLessThanOrEqual(1);
+        expect(geometry.scrollers.length).toBeLessThanOrEqual(1);
+        expect(geometry.bodyHeight).toBeGreaterThanOrEqual(geometry.controlHeight);
+        expect(Number(geometry.requestedScale)).toBeCloseTo(cell.scale / 100);
+        // Candidate removes Race Setup fit cap: requested enlargement must
+        // actually reach the sheet, rather than silently fitting smaller.
+        expect(geometry.appliedZoom).toBeCloseTo(cell.scale / 100);
+        await page.locator("#rs-go").click({ trial: true });
+        await page.screenshot({ path: testInfo.outputPath(`race-task-${index}.png`) });
+        evidence.push({ cell, geometry, settled });
+      }
+      await testInfo.attach("race-task-inspection", { body: JSON.stringify(evidence), contentType: "application/json" });
+      await page.locator("#rs-cancel").click();
+      await expect(page.locator("#race-settings")).toBeHidden();
+      await expect(page.locator("#select")).toBeVisible();
+      expect(errors).toEqual([]);
+    });
+  }
+});
+
+test.describe("Custom Home width on touch", () => {
+  test.use({ hasTouch: true, viewport: { width: 852, height: 393 } });
+
+  test("a narrow saved Home stack stays bounded and actionable after rotation", async ({ page }, testInfo) => {
+    const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
+    const profile = {
+      v: 2,
+      wide: {
+        btns: { x: -2, y: -2, size: 91, width: 20 },
+        title: { x: 3, y: 9, size: 106 },
+        art: { x: -6, y: 0, size: 88 },
+        layout: "grid", side: "auto",
+      },
+    };
+    await page.addInitScript(value => {
+      localStorage.setItem("apex26.titleLayout", JSON.stringify(value));
+    }, profile);
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex && !!window.SheetShape,
+      null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      __apex.agentHelp();
+      __apex.headless(true);
+      document.documentElement.dataset.titleIntro = "off";
+      document.getElementById("overlay").removeAttribute("data-intro");
+    });
+    const input = await page.evaluate(() => ({
+      coarse: matchMedia("(pointer: coarse)").matches,
+      desktop: document.body.classList.contains("desktop"),
+    }));
+    expect(input).toEqual({ coarse: true, desktop: false });
+    const saved = await page.evaluate(() => localStorage.getItem("apex26.titleLayout"));
+    expect(JSON.parse(saved)).toEqual(profile);
+
+    const observations = [];
+    for (const [index, viewport] of [
+      { width: 852, height: 393 },
+      { width: 393, height: 852 },
+      { width: 852, height: 393 },
+    ].entries()) {
+      await page.setViewportSize(viewport);
+      await page.evaluate(() => window.dispatchEvent(new Event("orientationchange")));
+      await expect(page.locator("body")).toHaveAttribute("data-shape", index === 1 ? "tall" : "wide");
+      const settled = await inspectSettled(page, { root: "#overlay", styles: "#menu-buttons" });
+      expect(settled.settlement.stable).toBe(true);
+      if (index !== 1) {
+        const box = await page.locator("#menu-buttons").boundingBox();
+        expect(box).toBeTruthy();
+        expect(Math.abs(box.width - viewport.width * 0.2)).toBeLessThanOrEqual(1);
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.y).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+        expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+      }
+      const destinations = await page.locator("#menu-buttons button").evaluateAll(buttons => buttons
+        .filter(button => button.getClientRects().length && !button.disabled)
+        .map(button => button.id));
+      expect(destinations).toContain("mb-race");
+      expect(destinations).toContain("mb-settings");
+      expect(destinations).toContain("mb-help");
+      for (const id of destinations) {
+        const button = page.locator("#" + id);
+        await button.scrollIntoViewIfNeeded();
+        await button.click({ trial: true });
+      }
+      expect(await page.evaluate(() => localStorage.getItem("apex26.titleLayout"))).toBe(saved);
+      await page.screenshot({ path: testInfo.outputPath(`custom-home-${index}.png`) });
+      observations.push({ viewport, destinations, settled });
+    }
+    await page.locator("#mb-settings").click();
+    await expect(page.locator("#pmsettings")).toBeVisible();
+    await page.locator("#pm-settings-close").click();
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    await expect(page.locator("#overlay")).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem("apex26.titleLayout"))).toBe(saved);
+    await testInfo.attach("custom-home-inspection", {
+      body: JSON.stringify(observations), contentType: "application/json",
+    });
+  });
+});
+
+test.describe("Factory Home on touch", () => {
+  // This is a layout contract: finite room transitions must not consume the
+  // inspector's bounded settlement window after returning to Home.
+  test.use({ hasTouch: true, reducedMotion: "reduce", viewport: { width: 852, height: 393 } });
+
+  test("default Home separates landscape regions and keeps destinations readable through enlargement", async ({ page }, testInfo) => {
+    const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
+    const cdp = await page.context().newCDPSession(page);
+    const observations = [];
+    const ready = async () => {
+      await page.waitForFunction(() => !!window.__apex && !!window.SheetShape,
+        null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => {
+        __apex.agentHelp(); __apex.headless(true);
+        document.documentElement.dataset.titleIntro = "off";
+        document.getElementById("overlay").removeAttribute("data-intro");
+      });
+    };
+    await page.goto("/");
+    await ready();
+    expect(await page.evaluate(() => ({
+      coarse: matchMedia("(pointer: coarse)").matches,
+      desktop: document.body.classList.contains("desktop"),
+      custom: localStorage.getItem("apex26.titleLayout"),
+      scale: Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")),
+    }))).toEqual({ coarse: true, desktop: false, custom: null, scale: 1.09 });
+
+    const cells = [
+      { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+      { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 }, returning: true },
+      { width: 852, height: 393, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
+      { width: 1280, height: 590, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
+      { width: 667, height: 320, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+      { width: 393, height: 852, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+      { width: 852, height: 393, safe: { top: 0, right: 47, bottom: 21, left: 47 }, enlarged: true },
+    ];
+    for (const [index, cell] of cells.entries()) {
+      await page.setViewportSize({ width: cell.width, height: cell.height });
+      await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: cell.safe });
+      if (cell.returning) {
+        await page.addInitScript(() => localStorage.setItem("apex26.lastSession", JSON.stringify({
+          trackId: "spa", session: "tt", flow: "gp", trackName: "Spa", at: 1,
+        })));
+        await page.reload(); await ready();
+        await expect(page.locator("#mb-continue")).toBeVisible();
+      }
+      if (cell.enlarged) {
+        // Retain the default layout; only the reading preference changes.
+        await page.addInitScript(() => localStorage.setItem("apex26.textSize", JSON.stringify("larger")));
+        await page.reload();
+        await ready();
+        await page.evaluate(() => __apex.uiScale(150));
+        await expect(page.locator("html")).toHaveAttribute("data-text-size", "larger");
+      }
+      await expect(page.locator("body")).toHaveAttribute("data-shape", cell.width > cell.height ? "wide" : "tall");
+      const settled = await inspectSettled(page, { root: "#overlay", styles: "#menu-buttons" });
+      expect(settled.settlement.stable).toBe(true);
+      const geometry = await page.evaluate(() => {
+        const rect = id => {
+          const r = document.getElementById(id).getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, height: r.height, cx: r.x + r.width / 2 };
+        };
+        return { brand: rect("menu-brand"), menu: rect("menu-buttons"),
+          sideOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      });
+      expect(geometry.sideOverflow).toBeLessThanOrEqual(1);
+      if (cell.width > cell.height && !cell.enlarged) {
+        expect(geometry.brand.cx).toBeLessThan(geometry.menu.cx);
+        expect(geometry.brand.x).toBeGreaterThanOrEqual(cell.safe.left - 1);
+        expect(geometry.menu.x + geometry.menu.width).toBeLessThanOrEqual(cell.width - cell.safe.right + 1);
+      }
+
+      if ([852, 1280].includes(cell.width) && !cell.enlarged) {
+        const fit = await page.locator("#menu-buttons").evaluate(el => ({
+          scrollHeight: el.scrollHeight, clientHeight: el.clientHeight,
+          clipped: [...el.querySelectorAll("button")].filter(b => !b.hidden && b.getClientRects().length).filter(b => {
+            const r = b.getBoundingClientRect(), m = el.getBoundingClientRect();
+            return r.top < m.top - 1 || r.bottom > m.bottom + 1;
+          }).map(b => b.id),
+        }));
+        expect(fit.scrollHeight, "all default landscape doors fit without scrolling, including Continue and safe area").toBeLessThanOrEqual(fit.clientHeight + 1);
+        expect(fit.clipped, "no door is outside the menu viewport at scrollTop zero").toEqual([]);
+        const race = await page.locator("#mb-race").boundingBox();
+        const timeTrial = await page.locator("#mb-tt").boundingBox();
+        expect(Math.abs(race.y - timeTrial.y), "normal landscape keeps paired play destinations").toBeLessThanOrEqual(1);
+        expect(race.x + race.width).toBeLessThanOrEqual(timeTrial.x + 1);
+        const practice = await page.locator("#mb-practice").boundingBox();
+        const garage = await page.locator("#mb-garage").boundingBox();
+        expect(Math.abs(practice.y - garage.y), "Practice and Garage share the final play row").toBeLessThanOrEqual(1);
+        expect(practice.x + practice.width).toBeLessThanOrEqual(garage.x + 1);
+        const settings = await page.locator("#mb-settings").boundingBox();
+        const help = await page.locator("#mb-help").boundingBox();
+        expect(Math.abs(settings.y - help.y), "normal landscape keeps utilities in a compact strip").toBeLessThanOrEqual(1);
+        const saves = await page.locator("#mb-saves").boundingBox();
+        expect(Math.abs(settings.y - saves.y), "Saves stays in the normal utility strip").toBeLessThanOrEqual(1);
+      }
+
+      const destinations = await page.locator("#menu-buttons button").evaluateAll(buttons => buttons
+        .filter(button => button.getClientRects().length && !button.disabled).map(button => button.id));
+      expect(destinations).toContain("mb-race");
+      expect(destinations).toContain("mb-help");
+      for (const id of destinations) {
+        const button = page.locator("#" + id);
+        await button.scrollIntoViewIfNeeded();
+        await button.click({ trial: true });
+        const clipped = await button.evaluate((el, keepWords) => {
+          const box = el.getBoundingClientRect();
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          const failures = [];
+          while (walker.nextNode()) {
+            const node = walker.currentNode;
+            // Secondary session metadata deliberately ellipsizes; the full
+            // context remains in its accessible button name. Check labels.
+            if (!node.textContent.trim() || node.parentElement.closest("svg, .mb-sub")) continue;
+            if (keepWords) for (const word of node.textContent.matchAll(/[A-Za-z]{4,}/g)) {
+              const part = document.createRange();
+              part.setStart(node, word.index); part.setEnd(node, word.index + word[0].length);
+              const lines = new Set([...part.getClientRects()].filter(r => r.width > 0).map(r => Math.round(r.top)));
+              if (lines.size > 1) failures.push("split word: " + word[0]);
+            }
+            const range = document.createRange(); range.selectNodeContents(node);
+            if ([...range.getClientRects()].some(r => r.width > 0 && r.height > 0 &&
+              (r.left < box.left - 2 || r.right > box.right + 2))) failures.push(node.textContent.trim());
+          }
+          return failures;
+        }, cell.width === 852 && !cell.enlarged && ["mb-settings", "mb-phonepad"].includes(id));
+        expect(clipped, `${id} ${cell.width}x${cell.height}`).toEqual([]);
+        const box = await button.boundingBox();
+        expect(box.x).toBeGreaterThanOrEqual(cell.safe.left - 1);
+        expect(box.x + box.width).toBeLessThanOrEqual(cell.width - cell.safe.right + 1);
+        expect(box.y + box.height).toBeGreaterThan(0);
+        expect(box.y).toBeLessThan(cell.height - cell.safe.bottom);
+      }
+      await page.locator("#mb-race").click();
+      await expect(page.locator("#select")).toBeVisible();
+      await page.locator("#sel-back").click();
+      await expect(page.locator("#overlay")).toBeVisible();
+      expect(await page.evaluate(() => localStorage.getItem("apex26.titleLayout"))).toBeNull();
+      await page.screenshot({ path: testInfo.outputPath(`factory-home-${index}.png`) });
+      observations.push({ cell, geometry, destinations, settled });
+    }
+    await page.setViewportSize({ width: 852, height: 393 });
+    await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: { top: 0, right: 0, bottom: 0, left: 0 } });
+    await page.evaluate(() => { __apex.uiScale(109); AppearanceOpts.setTextSize("large"); TitleLayout.reset(); });
+    await inspectSettled(page, { root: "#overlay" });
+    const menuBefore = await page.locator("#menu-buttons").boundingBox();
+    await page.evaluate(() => TitleLayout.set({ art: { x: 5, y: 0, size: 100 } }));
+    await expect(page.locator("html")).toHaveAttribute("data-title-layout", "on");
+    await inspectSettled(page, { root: "#overlay" });
+    const menuAfter = await page.locator("#menu-buttons").boundingBox();
+    // Artwork-only edits must keep the destination cluster put. #title font
+    // uses cqi against the brand column, so an art size change legitimately
+    // reflows title width — that is not the Home geometry contract.
+    expect(menuAfter.width).toBeCloseTo(menuBefore.width, 0);
+    expect(menuAfter.x).toBeCloseTo(menuBefore.x, 0);
+    await page.evaluate(() => TitleLayout.reset());
+    await testInfo.attach("factory-home-inspection", {
+      body: JSON.stringify(observations), contentType: "application/json",
+    });
+    await cdp.detach();
+  });
 });

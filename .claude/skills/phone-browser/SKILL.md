@@ -30,7 +30,7 @@ node tools/mcp/browser-http-up.mjs
 
 A line that starts `phone-browser reuse` means the address they already pasted still works. Say nothing about a new address.
 
-A line that starts `phone-browser new` means the public host changed. Give them that one URL and tell them to open grok.com/connectors, edit the custom connector, and paste it. That is the only step they do.
+A line that starts `phone-browser new` means the public host changed. Give them that one URL and tell them to open grok.com/connectors (the path `tools/mcp/browser-http.mjs` prints, unverified against Grok's UI; if it moved, their connector settings), edit the custom connector, and paste it. That is the only step they do.
 
 The script throws, takes long, or a URL needs checking (`browser_status`, `orientation`): `references/failures.md`.
 

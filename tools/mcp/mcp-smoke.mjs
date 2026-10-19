@@ -113,6 +113,8 @@ function parseApexStatus(step) {
 
 /** Minimal valid args per tree tool (the unit test's MIN_ARGS, kept cheap). */
 export const REAL_ARGS = {
+  apex_help: { tool: "apex_status" },
+  apex_locations: { track: "monza" },
   apex_select_specs: { since: "HEAD~1" },
   apex_graph_parity: { base: "HEAD", id: "monza" },
   apex_frame_report: { track: "monza" },
@@ -135,8 +137,21 @@ export function realTools(catalog) {
     .map((t) => t.name);
 }
 
+/** Refuse an empty or misspelled selection instead of reporting a vacuous 0/0 pass. */
+export function realCalls(catalog, { only = null, browser = false } = {}) {
+  const calls = realTools(catalog).map(name => [name, REAL_ARGS[name] || {}]);
+  if (browser) calls.push(...BROWSER_CHECKS);
+  if (!calls.length) throw Error("No smoke tools available in the catalog");
+  if (only === null) return calls;
+  const names = new Set(calls.map(([name]) => name));
+  const invalid = only.filter(name => !names.has(name));
+  if (!only.length || invalid.length) throw Error(`No valid smoke selection${invalid.length ? `: ${invalid.join(", ")}` : ""}. Available${browser ? "" : " (add --browser for browser checks)"}: ${[...names].join(", ")}`);
+  return calls.filter(([name]) => only.includes(name));
+}
+
 /** One verdict from a call body: ok:true needs a non-null out (or dryRun / a stated reason). */
 export function judgeReal(body, status) {
+  if (status !== undefined && status !== 0) return { pass: false, why: `tool process exited ${status === null ? "without an exit code" : status}` };
   if (!body || typeof body !== "object") return { pass: false, why: `unparseable reply (exit ${status})` };
   if (body.ok !== true) return { pass: false, why: `ok:${body.ok} ${body.error || ""} ${body.message || ""}`.trim() };
   if (body.out != null) return { pass: true, why: "out present" };
@@ -151,31 +166,43 @@ export function judgeReal(body, status) {
 }
 
 function realRun(argv) {
-  const only = (argv.find((a) => a.startsWith("--only=")) || "").slice(7).split(",").filter(Boolean);
-  const timeoutS = Number((argv.find((a) => a.startsWith("--timeout=")) || "").slice(10)) || 120;
+  const selection = argv.find(a => a.startsWith("--only="));
+  const only = selection === undefined ? null : selection.slice(7).split(",").filter(Boolean);
+  const timeoutArg = argv.find(a => a.startsWith("--timeout="));
+  const timeoutS = timeoutArg === undefined ? 120 : Number(timeoutArg.slice(10));
+  if (!Number.isInteger(timeoutS) || timeoutS < 1 || timeoutS > 3600) { process.stderr.write("mcp-smoke: --timeout must be an integer from 1 to 3600 seconds\n"); return 2; }
   const mcp = path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs");
   const lt = spawnSync(process.execPath, [mcp, "list-tools"], { encoding: "utf8", cwd: ROOT, timeout: 20000, maxBuffer: 16e6 });
-  let names;
-  try { names = realTools(JSON.parse(lt.stdout)); } catch { process.stderr.write("mcp-smoke --real: list-tools unparseable\n"); return 1; }
-  if (only.length) names = names.filter((n) => only.includes(n));
+  let calls;
+  try { calls = realCalls(JSON.parse(lt.stdout), { only, browser: argv.includes("--browser") }); }
+  catch (e) { process.stderr.write(`mcp-smoke --real: ${e.message}\n`); return 2; }
   const rows = [];
-  const calls = names.map((n) => [n, REAL_ARGS[n] || {}]);
   if (argv.includes("--browser")) {
     // A browser call under load measures the box, not the tool (AGENTS.md rule 8): refuse rather than report noise.
     let load = 0; try { load = Number(fs.readFileSync("/proc/loadavg", "utf8").split(" ")[0]); } catch { /* not linux */ }
     if (load >= 3 && process.env.APEX_MCP_MOCK !== "1") { process.stderr.write(`mcp-smoke --real --browser: loadavg ${load} >= 3, refusing to time a browser call on a busy box\n`); return 1; }
-    if (!only.length) calls.push(...BROWSER_CHECKS);
-    else calls.push(...BROWSER_CHECKS.filter(([n]) => only.includes(n)));
   }
   for (const [name, args] of calls) {
     const t0 = Date.now();
-    const r = spawnSync(process.execPath, [mcp, "call", name, JSON.stringify(args)], {
+    let fixtureDir = null;
+    const actualArgs = { ...args };
+    // Query parsing needs a real artifact even in a fresh checkout. This tiny synthetic
+    // CPU profile tests the reader, not game performance; remove it even with --no-write.
+    if (name === "apex_profile_query") {
+      fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+      fixtureDir = fs.mkdtempSync(path.join(ROOT, "scratch", "mcp-smoke-"));
+      actualArgs.file = path.relative(ROOT, path.join(fixtureDir, "synthetic.cpuprofile"));
+      fs.writeFileSync(path.join(ROOT, actualArgs.file), JSON.stringify({ nodes: [{ id: 1, callFrame: { functionName: "smokeFixture", url: "synthetic.js", lineNumber: 0 } }], samples: [1], timeDeltas: [1000] }));
+    }
+    let r;
+    try { r = spawnSync(process.execPath, [mcp, "call", name, JSON.stringify(actualArgs)], {
       encoding: "utf8", cwd: ROOT, timeout: timeoutS * 1000, maxBuffer: 32e6,
-    });
+    }); } finally { if (fixtureDir) fs.rmSync(fixtureDir, { recursive: true, force: true }); }
     let body = null;
     try { body = JSON.parse(r.stdout); } catch { /* judged below */ }
     const v = r.error && r.error.code === "ETIMEDOUT" ? { pass: false, why: `timeout ${timeoutS}s` } : judgeReal(body, r.status);
-    rows.push({ tool: name, args, pass: v.pass, why: v.why, ms: Date.now() - t0 });
+    rows.push({ tool: name, args: actualArgs, ...(fixtureDir ? { data: "synthetic CPU profile; parser smoke only" } : {}), pass: v.pass, why: v.why, ms: Date.now() - t0,
+      ...(!v.pass ? { stdout: (r.stdout || "").slice(-2000), stderr: (r.stderr || r.error?.message || "").slice(-2000) } : {}) });
     process.stdout.write(`${v.pass ? "PASS" : "FAIL"} ${name.padEnd(28)} ${String(Date.now() - t0).padStart(6)}ms  ${v.why}\n`);
   }
   const failed = rows.filter((x) => !x.pass);
@@ -200,6 +227,8 @@ status, playwright status, tinyfish help. No Chromium. Missing TinyFish key /
 chrome clone warn. Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json.
 
 --real runs each tree apex_* tool for real (minimal args); exit 1 on ok:false / out:null.
+Profile-query uses a temporary synthetic CPU profile (parser check, not a performance measurement).
+--only rejects unknown or unavailable tool names; --timeout is an integer 1..3600 seconds.
 
 Never wraps test-bg. playwright status only (never run).
 `);

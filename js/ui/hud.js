@@ -49,16 +49,8 @@ function create(G) {
 Log.info("ui", "GameHud.create");
 
 const els = G.els;
-const mm = els.minimap.getContext("2d");
 let hudT = 0;                 // ms until the next throttled HUD tick
 const HUD_TICK_MS = 100;      // ~10 Hz in WALL time, whatever the display refresh
-let minimapBg = null;         // offscreen canvas with pre-rendered track shape
-let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
-                              // derived (W,H): 140css@2x and 280css@1x share a
-                              // bitmap size but need different path transforms
-let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
-let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
-let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _flagSaid = "";   // the caution text last sent to #announce-live
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
@@ -101,6 +93,8 @@ const teamCss = (c) => {
   if (t._cssColor == null || t._cssRev !== rev) { t._cssColor = G.cssCol(t.color); t._cssRev = rev; }
   return t._cssColor;
 };
+// The minimap (#minimap) lives in js/ui/hud-minimap.js; fitKey is a getter because _fitKey moves.
+const _minimap = HudMinimap.create(G, { vpW, vpH, teamCss, replayGhost, motionReduced, fitKey: () => _fitKey });
 let _secRows = null;
 let _secFlash = [0, 0, 0];
 // THE GAIN, not only the split: each sector row shows the split's delta to the
@@ -280,7 +274,7 @@ function buildSecRows() {
   // 4.5:1 AA floor; no HUD text uses the brand red.)
   // Should they ever be coloured, they must NOT use the value palette's
   // --sec-best or --faster, or purple would mean both "sector 1" and
-  // "session best". The minimap colours its arcs by sector (drawMinimap:
+  // "session best". The minimap colours its arcs by sector (js/ui/hud-minimap.js:
   // the podium metals, TrackMaps.sectorColors), where identity is the only
   // thing distinguishing them.
   const labels = ["S1", "S2", "S3"];
@@ -1056,6 +1050,7 @@ function fitHud() {
   // without the row count the published height stayed at the empty box's for
   // the whole 3 s same-key backoff. childElementCount costs no layout.
   const secRows = els.hudSectors ? els.hudSectors.childElementCount : 0;
+  const placedSectors = els.hudSectors && els.hudSectors.hasAttribute("data-hl-user") && els.hudSectors.hasAttribute("data-hl");
   // BUTTON SIZE is independent, including its unset CSS default.
   const mult = _cssMult;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || mult;
@@ -1084,7 +1079,8 @@ function fitHud() {
       boost = _boostOnRightHalf();
       const b = boost ? boost.getBoundingClientRect() : null;
       // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset.
-      if (b && b.width && s.width && s.right > b.left - 8) clash = true;
+      if (b && b.width && s.width && s.right > b.left - 8 && s.left < b.right + 8
+          && s.top < b.bottom && b.top < s.bottom) clash = true;
       else {
         const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
         if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
@@ -1111,6 +1107,9 @@ function fitHud() {
   if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30; _stampKey = "";   // a full fit ran: the next stamp tick probes
   _fitPending = false;
+  // Measure the natural plate, never the previous dock pass's wrapped output.
+  // A saved MOVE & SIZE plate belongs to HudLayout's placement pass below.
+  if (els.hudSectors && els.hudSectors.style) els.hudSectors.style.removeProperty("max-width");
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css:
   // 0.82, 0.92 on the narrow tier), so the base the cap is judged against and
   // the divisor for its measured widths are that floor, not 1 — a flat 1 here
@@ -1158,7 +1157,7 @@ function fitHud() {
   pickDocks();
   const top = wide(_hudTop, zTopPub);
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
-  // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
+  // unlatched key re-ran this whole rect pass (and the minimap's layout reads)
   // 10×/s for as long as the layout stayed empty, i.e. the entire countdown.
   // AN EMPTY TOWER IS NOT AN EMPTY HUD: with POS/LAP/TIME/BEST all switched off
   // (HUD ELEMENTS) `.hud-top` has no width for the whole race, and returning
@@ -1284,7 +1283,6 @@ function fitHud() {
       if (!(r && r.width && r.left > half && r.top < tR.bottom + FIT_AIR)) continue;
       capChrome = Math.min(capChrome, (r.left - FIT_AIR - half) / (top / 2));
     }
-
   }
   // THE TOWER MUST CLEAR THE SECTOR PLATE'S ROW ON TOUCH. There #hud-sectors sits at a fixed SCREEN
   // y (8 + tap-hud + 4 + sat, below the pause button — its zoom cancels), while the tower's bottom
@@ -1292,9 +1290,10 @@ function fitHud() {
   // models the two side by side at the screen edge; once it stopped over-shrinking the band (the
   // plate's dock stand-off is no longer read as a safe-area inset) the full-size tower hung 2.2 px
   // below the plate's top and clipped its BEST tile (844x390 cockpit). Solved from the invariants
-  // (the tower's unzoomed top offset and height, the plate's screen top) so it cannot hunt.
+  // (the tower's unzoomed top offset and height, the plate's screen top).
+  // A placed plate has left this row; budgeting its old anchor made the whole band hunt.
   let capRow = Infinity;
-  if (!bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
+  if (!placedSectors && !bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
     const tR = layoutRect(_hudTop), zd = zoomDiv(_hudTop, zTopPub);
     let satPx = 0;
     try { satPx = parseFloat(getComputedStyle(root).getPropertyValue("--sat")) || 0; } catch (_) { /* mini-dom / detached root */ }
@@ -1304,6 +1303,8 @@ function fitHud() {
     if (hInt > 0 && y0 + hInt > 0 && scR.top > tR.top + ROW_AIR) capRow = (scR.top - ROW_AIR - satPx) / (y0 + hInt);
   }
   let capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
+  // Font metrics quantize with zoom. Keep the smaller fit when growth buys less than one screen pixel.
+  if (capTop < scale && capTop > zTopPub && (capTop - zTopPub) * Math.max(top, map, gaps, right, 1) < 1) capTop = zTopPub;
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -1757,20 +1758,16 @@ function fitHud() {
   if (typeof HudLayout !== "undefined") HudLayout.fit();
   // fit() can undo the dock inset; shrink the sector plate before any extra
   // inset widen (widening slides the plate left into #minimap).
-  if (!document.body.classList.contains("desktop") && els.hudSectors && _dockR) {
+  if (!document.body.classList.contains("desktop") && els.hudSectors && _dockR && !placedSectors) {
     const margin = DOCK_AIR;
     const mapR = els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null;
     const mapClear = mapR && mapR.width ? mapR.right + margin : 0;
     const secEl = els.hudSectors;
-    // A PLATE ONLY INTRUDES FROM THE LEFT, AND ONLY ON SHARED ROWS. Shrinking a right-anchored plate
-    // clears a group its right edge reaches into; it does nothing for a plate the player DRAGGED beside
-    // BOOST, above the pedals. Testing `right > group.left` alone squeezed that plate to 48 px, the
-    // wrapped split times grew it 139 px tall into BRAKE's rows, the next fit released it, and the HUD
-    // flipped larger <-> smaller every tick (iPhone 15, BUTTON SIZE 237 %, 2026-10-17). A plate
-    // inside or right of a group is hud-layout.js clearControls' to move, not this pass's to squeeze.
+    // Only automatic plates intruding from the left on shared rows can be
+    // squeezed clear. Saved plates belong to HudLayout; squeezing their split
+    // times into tall wrapped rows made the two solvers fight on later ticks.
     const rowHit = (a, b) => a.top < b.bottom && b.top < a.bottom;
     const intrudes = (a, b) => rowHit(a, b) && a.left < b.left && a.right > b.left - margin;
-    if (secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
     for (let pass = 0; pass < 4; pass++) {
       const secR = secEl.getBoundingClientRect();
       if (!secR.width) break;
@@ -1782,9 +1779,7 @@ function fitHud() {
       }
       if (!(worst > 0.5)) break;
       const zSec = zPaint() || 1;
-      const curW = secR.width / zSec;
-      secEl.style.maxWidth = Math.max(48, curW - worst / zSec).toFixed(1) + "px";
-      void secEl.offsetHeight;
+      secEl.style.maxWidth = Math.max(48, (secR.width - worst) / zSec).toFixed(1) + "px";
     }
     let secR = secEl.getBoundingClientRect();
     let worst = 0;
@@ -1801,7 +1796,6 @@ function fitHud() {
         if (zTop > 0) {
           dockRW = insetFor(left, zTop);
           hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
-          void secEl.offsetHeight;
         }
       }
     }
@@ -2354,7 +2348,7 @@ function updateHud(force, dtMs) {
   // runs at tick start and must not publish early (CI: stamp green, S3×BOOST).
   syncComputedRootVars();
   phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale);
-  drawMinimap();
+  _minimap.draw();
 }
 
 // THE FLAG IS SPOKEN through #announce-live, the radio card's always-present
@@ -2374,264 +2368,8 @@ function sayFlag(cn, words) {
   else if (els.announceLive) els.announceLive.textContent = said;
 }
 
-function drawMinimap() {
-  const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
-  if (!player || !track || !track.map) return;
-  // hud-hide-map is display:none (cockpit/onboard cams, MINIMAL, map OFF): a
-  // map nobody can see was sized, cached, blitted and dotted every HUD tick.
-  // Forget its measurement key so the next visible draw measures afresh.
-  if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) { _mmKey = null; return; }
-  // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
-  // the same convention js/ui/sheet-shape.js relies on). Bitmap = local x effective
-  // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu
-  // track preview (js/ui/select-screen.js), which solved this exact blur first.
-  // currentCSSZoom, not the raw --hud-scale: the element rides the CAPPED
-  // --hud-z, and the raw slider would over-allocate on a capped band. Ratio
-  // capped at 3 to bound fill/memory on a DPR-3 phone at HUD SIZE 200%.
-  // The fit key includes changing gap spelling/sector rows. Those cannot
-  // resize this explicit CSS box unless fitHud changes the band's scale, so
-  // keep a separate layout-free key rather than measuring after HUD writes.
-  // Density selects the 96/140px CSS box; DPR can change without a resize.
-  // Keep the bounded retry while the fit has no laid-out box, and the track
-  // invalidation path (minimapBg null) so a newly visible map measures afresh.
-  const root = document.documentElement, body = document.body;
-  const measureKey = vpW() + "x" + vpH() + "|" + body.className
-    + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
-    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
-    + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
-  if (_mmKey !== measureKey || _fitKey === "" || !minimapBg) {
-    _mmKey = measureKey;
-    _mmCssW = els.minimap.clientWidth || 140;
-    _mmCssH = els.minimap.clientHeight || 140;
-    _mmRatio = Math.min(3, Math.max(1,
-      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)
-      * (parseFloat(els.minimap.style.getPropertyValue("--hl-s")) || 1)));
-    _mmBgKey = _mmCssW + "|" + _mmCssH + "|" + _mmRatio;
-  }
-  const cssW = _mmCssW, cssH = _mmCssH, ratio = _mmRatio;
-  const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);
-  // Every CSS tier gives #minimap an explicit width/height, so the attribute
-  // change never moves the layout box (fitHud reads the same numbers).
-  if (els.minimap.width !== W || els.minimap.height !== H) {
-    els.minimap.width = W; els.minimap.height = H;
-  }
-  // pre-render the static track outline once; reuse as a cheap blit every HUD frame
-  const bgKey = _mmBgKey;   // no string built per HUD tick
-  if (!minimapBg || minimapBgKey !== bgKey) {
-    minimapBgKey = bgKey;
-    minimapBg = document.createElement("canvas");
-    minimapBg.width = W; minimapBg.height = H;
-    const mc = minimapBg.getContext("2d");
-    // Path math below stays in the local px it was tuned in; the transform
-    // carries it to physical px.
-    mc.setTransform(ratio, 0, 0, ratio, 0, 0);
-    const map = track.map, n = map.length;
-    mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
-    // SECTOR IDENTITY: the podium metals in rank order (S1 gold, S2 silver,
-    // S3 bronze), from css/tokens.css via TrackMaps.sectorColors — the CIRCUIT
-    // DETAIL diagram draws the same three, so the menu and the map agree. It
-    // was purple / red / lime: purple is the timing screen's SESSION BEST
-    // (--sec-best) and red against lime is the red-green colour-blind pair.
-    // The metals separate on lightness and chroma, which every colour-vision
-    // type keeps, and none is the AERO blue, the ghost cyan or --you. The
-    // HUD's S1/S2/S3 labels carry no colour (buildSecRows), so this is the
-    // only place sector identity is a colour at all. 0.8 alpha, as before.
-    const SC = TrackMaps.sectorColors();
-    mc.globalAlpha = 0.8;
-    // Same def.sectors splits as TrackMaps.draw / sectorAt (thirds if missing).
-    const sec = track.def && track.def.sectors;
-    const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
-    for (let s = 0; s < 3; s++) {
-      const from = Math.floor(splits[s] * n);
-      const to = s === 2 ? n - 1 : Math.max(from, Math.floor(splits[s + 1] * n));
-      mc.strokeStyle = SC[s];
-      mc.beginPath();
-      for (let i = from; i <= to; i++) {
-        const p = map[i % n];
-        const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
-        i === from ? mc.moveTo(x, y) : mc.lineTo(x, y);
-      }
-      if (s === 2) {
-        const p0 = map[0];
-        mc.lineTo(8 + p0[0] * (cssW - 16), 8 + p0[1] * (cssH - 16));
-      }
-      mc.stroke();
-    }
-    mc.globalAlpha = 1;
-    // Activation-zone highlight, slightly thicker, in the AERO chip's own blue
-    // (#hud-aero.ax-armed / #btn-aero.armed), so the map and the chip name the
-    // zone in one colour.
-    const zones = TrackMaps.drsZones(track.def);
-    if (zones && zones.length) {
-      mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
-      for (const z of zones) {
-        // z.b > 1 for a zone across the line: walk on past n and wrap.
-        const from2 = Math.floor(z.a * n), to2 = Math.floor(z.b * n);
-        mc.beginPath();
-        for (let i = from2; i <= to2; i++) {
-          const p = map[i % n];
-          mc.lineTo(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16));
-        }
-        mc.stroke();
-      }
-    }
-    // THE PIT LANE: a light dashed run from where the entry road peels off
-    // to where the exit road rejoins, a "P" where it PEELS OFF and a tick
-    // across the run at the entry line. The "P" marks the peel-off, not the
-    // line 70 m past it, where a driver steering at it is already on the road
-    // the boards named 100 m earlier.
-    const pit = track.pit;
-    _mmPitP = null;
-    if (pit && pit.entryRoadM != null) {
-      const L = track.total, fOf = (s) => (((s % L) + L) % L) / L;
-      const fa = fOf(pit.sA), fb = fOf(pit.sB);
-      const i0 = Math.floor(fa * n), steps = Math.max(2, Math.round((((fb - fa) % 1) + 1) % 1 * n));
-      mc.strokeStyle = "rgba(236,236,246,0.85)"; mc.lineWidth = 3; mc.setLineDash([3, 3]);
-      mmRun(mc, map, n, i0, steps, cssW, cssH);
-      mc.stroke(); mc.setLineDash([]);
-      // The entry line: a tick across the run, normal to the lane there.
-      const il = Math.floor(fOf(pit.sIn) * n) % n, pe = map[il], pn = map[(il + 1) % n];
-      const ex = 8 + pe[0] * (cssW - 16), ey = 8 + pe[1] * (cssH - 16);
-      let tx = (pn[0] - pe[0]) * (cssW - 16), ty = (pn[1] - pe[1]) * (cssH - 16);
-      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-      mc.strokeStyle = "rgba(255,255,255,0.95)"; mc.lineWidth = 2;
-      mc.beginPath(); mc.moveTo(ex - ty * 4, ey + tx * 4); mc.lineTo(ex + ty * 4, ey - tx * 4); mc.stroke();
-      const pa = map[i0 % n];
-      _mmPitP = [8 + pa[0] * (cssW - 16), 8 + pa[1] * (cssH - 16), i0 % n];
-      mmPitMark(mc, _mmPitP[0], _mmPitP[1], 5, "rgba(255,255,255,0.95)");
-      // The map's own "--you" (the token the cue and the tyre chip carry the
-      // stop in), read once per rebuild: a resolved colour is not a hot read.
-      _mmYou = (typeof getComputedStyle === "function"
-        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "#aeea00";
-    }
-  }
-  // Canvas resize resets 2D context state, so the transform is set every
-  // draw, not once. The blit destination is in local px: under the ratio
-  // transform the W-physical-px cache lands on cssW·ratio physical px — a 1:1
-  // copy when that product is whole, and a sub-pixel resample of the rounding
-  // remainder when it is not. Either way one cheap blit per HUD frame.
-  mm.setTransform(ratio, 0, 0, ratio, 0, 0);
-  mm.clearRect(0, 0, cssW, cssH);
-  mm.drawImage(minimapBg, 0, 0, cssW, cssH);
-  const map = track.map, n = map.length;
-  // THE NaN AMPLIFIER. `Math.floor(NaN) % n` is NaN, `map[NaN]` is undefined,
-  // and `p[0]` then throws — so ANY car whose `s` goes non-finite turns a
-  // silent physics NaN into a hard TypeError here. It is the only consumer of a
-  // bad `s` that throws; every other one (Tracks.sample and friends) degrades
-  // quietly. A negative `s` is the same trap: JS `%` keeps the sign.
-  //
-  // The throw lands AFTER render() in tickBody, so the world keeps moving and
-  // only the HUD freezes; js/perf/loop-health.js then swallows it, and because
-  // this path is throttled to ~10 Hz it never trips the 8-consecutive-fault
-  // rail — it grinds to the 240 lifetime cap and paints the error overlay
-  // ~24 s later at 60 fps. "HUD froze, then it died half a minute afterwards"
-  // is the signature, and it is a miserable one to trace back to a NaN.
-  const at = (v) => {
-    const i = Math.floor(v / track.total * n) % n;
-    return Number.isFinite(i) ? map[(i + n) % n] : null;
-  };
-  for (const c of cars) {
-    if (c === player) continue;
-    const p = at(c.s);
-    if (!p) continue;
-    const x = 6 + p[0] * (cssW - 16), y = 6 + p[1] * (cssH - 16);
-    mm.fillStyle = teamCss(c);   // keyed on store.rev: a livery edit repaints the dot
-    if (c.human && !c.local) {
-      mm.fillRect(x - 1, y - 1, 6, 6);
-      // A white ring, because the team colour is the one thing it cannot use to
-      // stand out — the car it must be told apart from may share it.
-      mm.strokeStyle = "#fff";
-      mm.lineWidth = 1;
-      mm.strokeRect(x - 1.5, y - 1.5, 7, 7);
-    } else {
-      mm.fillRect(x, y, 4, 4);
-    }
-  }
-  // ghost replay marker (time trial): shared rival first, otherwise your PB
-  const ghost = replayGhost();
-  if (timeTrial && (player.lap | 0) >= 1 && (GhostShare.hasGuest() || Ghost.hasGhost())) {   // S4
-    const gh = ghost.at(player.lapTime);
-    if (gh) {
-      const gp = at(gh.s);   // a persisted ghost is stored input: never trust its s
-      // Skip only the GHOST dot on a bad s — returning here would take the
-      // player's own white marker (drawn below) down with it for the session.
-      if (gp) {
-        mm.fillStyle = "rgba(120, 220, 255, 0.95)";
-        mm.beginPath();
-        mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
-        mm.fill();
-      }
-    }
-  }
-  const p = at(player.s);
-  if (!p) return;
-  // THE PIT MARKER CARRIES STATE. The static "P" is the map's "there are pits";
-  // over it, from the same three facts the cue reads (PitLane.worthStopping —
-  // ONE gate, so the map and the words can never disagree): a stop worth
-  // making grows it and gives it --you, an armed stop pulses it, and from
-  // CUE_M in an arc from the car to the peel-off says HOW FAR, the way the
-  // cue's metres do. The lane and the box turn the player's own disc --you.
-  const pits = G.pits, inPit = !!player.pitState && player.pitState !== "none";
-  if (_mmPitP && pits && pits.worthStopping && !inPit && pits.worthStopping(player)) {
-    const d = pits.toEntry(player), ip = Math.floor(player.s / track.total * n) % n;
-    if (d > 0 && d < pits.cueM && Number.isFinite(ip)) {
-      mm.strokeStyle = _mmYou; mm.lineWidth = 2;
-      mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
-      mm.stroke();
-    }
-    if (player.pitArmed && !motionReduced()) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
-    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, _mmYou);
-    mm.globalAlpha = 1;
-  }
-  mm.fillStyle = inPit ? _mmYou : "#fff";
-  mm.beginPath();
-  mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
-  mm.fill();
-}
-
-/** A polyline along `steps` map nodes forward from node `i0`, in the map's
- *  local px; the caller strokes it (the lane run and the distance arc). */
-function mmRun(ctx, map, n, i0, steps, cssW, cssH) {
-  ctx.beginPath();
-  for (let i = 0; i <= steps; i++) {
-    const p = map[(i0 + i) % n];
-    const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  }
-}
-/** The "P" disc at the peel-off, radius `r` in local px. Rendered once per
- *  (radius, fill, ratio) into a small canvas and blitted: a per-frame `font`
- *  set + `fillText` was 980 ms of a 30 s window (TLX-PERF-HUNT-5 F1). */
-const _mmPitGlyph = new Map();
-function mmPitMark(ctx, x, y, r, fill) {
-  const key = r + "|" + fill + "|" + _mmRatio;
-  let g = _mmPitGlyph.get(key);
-  if (g === undefined) {
-    if (_mmPitGlyph.size > 8) _mmPitGlyph.clear();   // fill is --you: a theme change is a new key
-    g = null;
-    const cw = Math.ceil((2 * r + 2) * _mmRatio), cv = document.createElement("canvas");
-    cv.width = cw; cv.height = cw;
-    const gc = cv.getContext && cv.getContext("2d");
-    if (gc) {
-      const L = cw / _mmRatio, c = L / 2;
-      gc.setTransform(_mmRatio, 0, 0, _mmRatio, 0, 0);
-      gc.fillStyle = fill; gc.beginPath(); gc.arc(c, c, r, 0, Math.PI * 2); gc.fill();
-      gc.fillStyle = "#14161c"; gc.font = "700 " + (r + 2) + "px system-ui, sans-serif";
-      gc.textAlign = "center"; gc.textBaseline = "middle";
-      gc.fillText("P", c, c + 0.5);
-      g = { cv, L };
-    }
-    _mmPitGlyph.set(key, g);
-  }
-  if (g) { ctx.drawImage(g.cv, x - g.L / 2, y - g.L / 2, g.L, g.L); return; }
-  ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#14161c"; ctx.font = "700 " + (r + 2) + "px system-ui, sans-serif";
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("P", x, y + 0.5);
-}
-
 // loadTrack() calls this so the outline re-renders for the new circuit.
-function invalidateMap() { minimapBg = null; }
+function invalidateMap() { _minimap.invalidate(); }
 
 // Per-race HUD memory: the POS box compared its first ranked tick of a new race
 // against the LAST race's finishing position and flashed "down" at lights-out.

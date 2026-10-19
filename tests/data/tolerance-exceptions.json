@@ -3,8 +3,8 @@
   "exceptions": [
     {
       "file": "tests/unit/webgpu-lifecycle.test.mjs",
-      "line": "surfaceId <= 37",
-      "reason": "Not a tolerance: the pinned value is the top of the car surface-id range in the WGSL classifier. Garage slice S3 (#2748) adds finish ids 36 (tinted chrome) and 37 (chameleon) under the reserved range from #2745, so the classifier bound moves 33 -> 37 in GLX, TLX and WGX together; car-materials/livery-finish-contract tests pin the new ids."
+      "line": "surfaceId <= 40",
+      "reason": "Not a tolerance: the pinned value is the top of the car surface-id range in the WGSL classifier. Garage finishes add ids 36 (tinted chrome), 37 (chameleon) and then 38 (forged carbon), 39 (gunmetal), 40 (gold plate) under FINISH_RESERVED, so the classifier bound moves 33 -> 37 -> 40 in GLX, TLX and WGX together; car-materials/livery-finish-contract tests pin the new ids."
     }
   ]
 }

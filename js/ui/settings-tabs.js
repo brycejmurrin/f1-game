@@ -48,7 +48,7 @@ const SettingsNav = (function () {
     for (let route = id; route; route = routes[route].parent || (route === "home" ? null : "home")) names.unshift(routes[route].title);
     return names.join(" › ");
   }
-  let live = null;
+  let live = null, jumpWired = false;
   // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
   // wizard disarms itself here). Module-level so a subscriber needs no instance.
   const leaveFns = [], enterFns = [];
@@ -232,6 +232,20 @@ const SettingsNav = (function () {
       host: document.getElementById("pm-settings-index"), show, onSelect,
       onLeave: (fn) => leaveFns.push(fn),
     });
+    // One setting, one home (UI audit 2026-10-18): a second mention elsewhere is
+    // a JUMP, data-settings-jump="<page>" data-jump-target="<control id>", that
+    // opens the home page on the stack (BACK returns) and focuses the control
+    // the way a search result does.
+    if (!jumpWired && typeof document !== "undefined") {
+      jumpWired = true;
+      document.addEventListener("click", (e) => {
+        const b = e.target && e.target.closest ? e.target.closest("[data-settings-jump]") : null;
+        if (!b || !live) return;
+        const target = b.getAttribute("data-jump-target");
+        live.show(b.getAttribute("data-settings-jump"), true,
+          () => typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(document.querySelector("#" + target)));
+      });
+    }
     live = {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return

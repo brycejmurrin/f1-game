@@ -70,7 +70,7 @@ export const RENDER_HEAVY_SPEC_IDS = [
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
   "parts-liveries",
   "parts-livery-designs",
-  "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard", "photo-studio",
+  "ui-audit", "ui-button-touch", "ui-scale", "menu-survey", "menu-keyboard", "photo-studio",
   "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",
   "menu-baseline", "track-designer",

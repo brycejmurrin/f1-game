@@ -1,0 +1,1 @@
+Fixed: Greyed-out buttons and settings now say why they are unavailable. Examples: Spotify before you connect, LAPS/WEATHER/TIME in a Daily Challenge, Photo Studio before a capture, practice tools outside practice, voice and battle-tone previews with sound off, title-layout tools away from the title screen, and the track designer and Data hub before a selection or gather.

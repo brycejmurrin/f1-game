@@ -114,7 +114,8 @@ There is **no UBO**. `frame.lights` is a flat JS array of 15-float records:
 ```
 
 `setFrameLights()` (`js/lighting/frame-lights.js`) culls to the nearest CAP lamps each frame
-(`LT.lampCull` def 40 with traffic, else `LightBudget.MAX` = 48) and GLX
+(`LT.lampCull` with traffic — its `def` in `js/lighting/knobs.js` — else
+`LightBudget.MAX`, `js/render/shared/light-budget.js`) and GLX
 uploads ONE interleaved `uLight[]` — 16 floats per lamp in a single
 `uniform4fv`, not parallel arrays. (`uLightPos[i]`/`uLightCol[i]` survive only
 in the god-ray pass, `glx/post.js`; grepping for them in the lit shader finds

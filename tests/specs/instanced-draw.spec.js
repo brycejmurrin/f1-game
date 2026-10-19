@@ -83,15 +83,21 @@ test.describe("GLX instanced draw", () => {
       const big = batches.reduce((a, b) => (b.count > a.count ? b : a));
       const batch = GLX.createInstancedBatch(big.geo, big.matrices, big.colors, { cellSize: 72 });
 
+      // Camera-path cullInstances also applies the live frame's radial draw
+      // budget (frameCullDist / fog). upload:false is the shadow path: eye/cd
+      // are nulled, so this pin stays frustum-only (counts only — no GPU upload
+      // to the camera buffer). Matches tlx-inst-cells lifting cull with cd = 0.
+      const CULL_FRUSTUM = { upload: false };
+
       // A frustum that contains nothing: all six planes reject everything. Built
       // as raw planes rather than from a camera so the test cannot drift with
       // the projection.
       const away = [[1,0,0,-1e9],[-1,0,0,-1e9],[0,1,0,-1e9],[0,-1,0,-1e9],[0,0,1,-1e9],[0,0,-1,-1e9]];
-      const none = GLX.cullInstances(batch, away);
+      const none = GLX.cullInstances(batch, away, CULL_FRUSTUM);
 
       // A frustum that contains everything.
       const all = [[1,0,0,1e9],[-1,0,0,1e9],[0,1,0,1e9],[0,-1,0,1e9],[0,0,1,1e9],[0,0,-1,1e9]];
-      const every = GLX.cullInstances(batch, all);
+      const every = GLX.cullInstances(batch, all, CULL_FRUSTUM);
 
       const out = { cells: batch.cells.length, total: batch.instances, none, every,
                     batches: batches.length };

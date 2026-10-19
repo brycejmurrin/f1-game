@@ -44,8 +44,11 @@ bare JS symbol. Take it for the next lookup.
    errors the edit **introduced**: per-file `// @ts-check`, high-signal codes
    (unknown name, "did you mean" typo, too many arguments, assign to const,
    calling a non-function, redeclare, syntax), minus the same file at git HEAD.
-   `all: true` lists the pre-existing ones as well. This is a fast first check,
-   not a substitute for the tests.
+   `all: true` lists the pre-existing ones as well. If project configuration or another JS/declaration
+   dependency differs from HEAD, subtraction is skipped and the output says so:
+   a per-file HEAD overlay cannot establish whether a cross-file/config error is old.
+   Configuration edits (including locally resolved extends chains) reload the persistent project before answering.
+   This is a fast first check, not a substitute for the tests.
 
 ## Reading the output
 

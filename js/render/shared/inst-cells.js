@@ -13,13 +13,37 @@ const InstCells = (function () {
 
   function enabled() { return _enabled; }
 
-  /** Fill ks[0..kN) with indices of cells whose AABB is in frustum. Returns kN. */
-  function collectVisible(planes, cells, ks, aabbInFrustum) {
+  /** Fill ks[0..kN) with indices of cells whose AABB survives the frustum and optional radial/fog budget. Returns kN. */
+  function collectVisible(planes, cells, ks, aabbInFrustum, eye, cd, fog) {
+    const radial = !!eye && (cd > 0 || !!(fog && fog[0] > 0));
     let kN = 0;
     for (let ci = 0, cn = cells.length; ci < cn; ci++) {
-      if (aabbInFrustum(planes, cells[ci].mn, cells[ci].mx)) ks[kN++] = ci;
+      const c = cells[ci];
+      if (!aabbInFrustum(planes, c.mn, c.mx)) continue;
+      if (radial && Frustum.radialCulled(c.mn, c.mx, eye[0], eye[1], eye[2], cd, fog)) continue;
+      ks[kN++] = ci;
     }
     return kN;
+  }
+
+  // These scalars describe the SAME physical pack as _cullPlanes. Never update
+  // either snapshot on a cell-key hit: a newer eye with older planes could
+  // otherwise claim a combination that never produced the resident bytes.
+  function sameRadial(batch, eye, cd, fog) {
+    const s = batch._cullRadial;
+    if (!s) return false;
+    const active = !!eye && (cd > 0 || !!(fog && fog[0] > 0));
+    if (!active) return s[6] === 0;   // moving an eye cannot alter an inactive budget
+    return s[6] === 1 && s[0] === eye[0] && s[1] === eye[1] && s[2] === eye[2]
+      && s[3] === (cd || 0) && s[4] === (fog ? fog[0] : 0) && s[5] === (fog ? fog[1] : 0);
+  }
+  function recordRadial(batch, eye, cd, fog) {
+    const s = batch._cullRadial || (batch._cullRadial = new Float64Array(7));
+    const active = !!eye && (cd > 0 || !!(fog && fog[0] > 0));
+    s[6] = active ? 1 : 0;
+    if (!active) return;
+    s[0] = eye[0]; s[1] = eye[1]; s[2] = eye[2];
+    s[3] = cd || 0; s[4] = fog ? fog[0] : 0; s[5] = fog ? fog[1] : 0;
   }
 
   /** Scratch Int32Array on the batch, grown to at least cn. */
@@ -51,6 +75,6 @@ const InstCells = (function () {
     if (batch) batch._cellKeyN = -1;
   }
 
-  return { enabled, collectVisible, scratchKeys, sameKey, recordKey, invalidate };
+  return { enabled, collectVisible, sameRadial, recordRadial, scratchKeys, sameKey, recordKey, invalidate };
 })();
 Object.freeze(InstCells);

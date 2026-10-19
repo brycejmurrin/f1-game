@@ -108,8 +108,8 @@ const DataSchedule = (function () {
       });
     }
 
-    function keepCountdownAlive(wrap, tile, clock, targetMs) {
-      let timer = null, shownMinute = null, labelledMinute = null;
+    function keepCountdownAlive(wrap, clock, targetMs) {
+      let timer = null, observer = null, disposed = false, shownMinute = null, labelledMinute = null;
       const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       function tick() {
@@ -129,7 +129,13 @@ const DataSchedule = (function () {
         for (let n = wrap; n; n = n.parentElement) if (n.hidden) return false;
         return true;
       }
+      function dispose() {
+        disposed = true;
+        if (timer !== null) { clearInterval(timer); timer = null; }
+        if (observer) observer.disconnect();
+      }
       function sync() {
+        if (disposed) return;
         if (visible()) {
           if (timer === null) {
             tick();
@@ -139,21 +145,16 @@ const DataSchedule = (function () {
           clearInterval(timer);
           timer = null;
         }
-        // A newer schedule tile means this cached node was replaced, not merely
-        // hidden while another tab is open; its observer can retire too.
-        if (!wrap.isConnected && typeof document !== "undefined") {
-          const current = document.querySelector("[data-nextgp=tile]");
-          if (current && current !== tile) observer.disconnect();
-        }
       }
 
       clock.setAttribute("aria-live", "off");
       clock.setAttribute("role", "timer");
       tick();
-      if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
-      const observer = new MutationObserver(sync);
+      if (typeof MutationObserver === "undefined" || typeof document === "undefined") return dispose;
+      observer = new MutationObserver(sync);
       observer.observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true });
       queueMicrotask(sync);
+      return dispose;
     }
 
     function nextTile(race, wrap) {
@@ -176,7 +177,8 @@ const DataSchedule = (function () {
       const clock = el("div", null, Number.isFinite(at) ? countdown(at - Date.now()) : "TIME TBC");
       clock.setAttribute("data-nextgp", "countdown");
       tile.appendChild(clock);
-      if (Number.isFinite(at)) keepCountdownAlive(wrap, tile, clock, at);
+      // The hub owns the cached node and retires it on replacement or a stale load.
+      if (Number.isFinite(at)) wrap.dispose = keepCountdownAlive(wrap, clock, at);
 
       const sessions = weekendSessions(race);
       if (sessions.length) {

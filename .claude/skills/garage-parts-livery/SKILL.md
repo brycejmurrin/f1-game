@@ -6,7 +6,7 @@ description: "Use when editing the GARAGE parts catalog, livery/finish/fin, pain
 # Garage — parts, livery, and car mesh
 
 The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you
-drive (12 categories + 780 cr, `Parts.BUDGET`), and how it looks. Catalog: `js/car/parts.js`.
+drive (12 categories under the `Parts.BUDGET` cap), and how it looks. Catalog: `js/car/parts.js`.
 Paint: `js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
 
 ## Where things live (garage scene + render hook)
@@ -37,21 +37,23 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 
 ## When NOT to Use
 
-- Pure driving feel → **tune-physics**. Career economy with no parts edit →
-  **career-mode**. Isolated car shots → **playwright-probe** (`references/car-studio.md`). Batch garage shot contract → [`references/shot-cli.md`](references/shot-cli.md). Cache bump →
-  `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)).
+- Pure driving feel → **tune-physics**.
+- Career economy with no parts edit → **career-mode**.
+- Isolated car shots → **playwright-probe** (`references/car-studio.md`); batch
+  garage shot contract → [`references/shot-cli.md`](references/shot-cli.md).
+- Cache bump → `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)).
 - A live, driven-by-hand look at the Garage/LIVERY screen (as opposed to a
   batch `garage-angles.mjs` run) → **mcp-probe** against the local server,
-  clicking category tabs / livery swatches directly — see
-  `.claude/skills/mcp-probe/references/recipes.md` (index) → [`chrome.md`](../mcp-probe/references/chrome.md) and
-  `.claude/skills/mcp-probe/references/traps-chrome.md` for the click-timeout and soft-present-wait
-  gotchas specific to that screen.
+  clicking category tabs / livery swatches directly.
+  Recipe: [`chrome.md`](../mcp-probe/references/chrome.md); click-timeout and
+  soft-present-wait gotchas for that screen:
+  [`traps-chrome.md`](../mcp-probe/references/traps-chrome.md).
 
 ## Quick Reference
 
 | Item | Contract |
 |---|---|
-| Catalog | Ordered 12-category array; budget 780 cr (`Parts.BUDGET`) |
+| Catalog | Ordered 12-category array; budget `Parts.BUDGET` (career: `Career.budget()`) |
 | SIGNATURE | Same cost/stats as `equivalent`; mesh-only |
 | FACTORY_PRESETS | AI visual setup only |
 | `_resolve` | Career-blind; supplier/team lock only |

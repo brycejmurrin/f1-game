@@ -3567,6 +3567,7 @@
       ],
       "replace": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/damage.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -4081,6 +4082,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/fuji.js": {
+      "*": [
+        "tests/unit/verify-live.test.mjs"
+      ]
+    },
     "js/circuits/imola.js": {
       "*": [
         "tests/specs/imola-foundation.spec.js",
@@ -4251,6 +4257,11 @@
         "tests/unit/dev-flags.test.mjs"
       ]
     },
+    "js/core/dom-apply.js": {
+      "*": [
+        "tests/unit/i18n.test.mjs"
+      ]
+    },
     "js/core/hash32.js": {
       "*": [
         "tests/unit/career-ai-dev.test.mjs",
@@ -4266,6 +4277,25 @@
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
+      ]
+    },
+    "js/core/i18n-pseudo.js": {
+      "*": [
+        "tests/unit/i18n.test.mjs"
+      ]
+    },
+    "js/core/i18n.js": {
+      "_installCatalog": [
+        "tests/unit/i18n.test.mjs"
+      ],
+      "_resetForTest": [
+        "tests/unit/i18n.test.mjs"
+      ],
+      "boot": [
+        "tests/unit/i18n.test.mjs"
+      ],
+      "pluralCategories": [
+        "tests/unit/i18n.test.mjs"
       ]
     },
     "js/core/lazy-bundles.js": {
@@ -4366,6 +4396,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/log-namespaces.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -4639,6 +4670,7 @@
         "tests/unit/data-api-status.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
@@ -5033,6 +5065,9 @@
       "dateLabel": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
+      "dispose": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "isUpcoming": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
@@ -5060,6 +5095,7 @@
         "tests/specs/debris.spec.js",
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/i18n.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
         "tests/unit/tools-runnable.test.mjs"
@@ -6456,6 +6492,7 @@
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
+        "tests/unit/publish-evidence.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
@@ -12506,7 +12543,8 @@
       ],
       "lampPass": [
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/lamp-shadow-pick.test.mjs"
+        "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "pushCaster": [
         "tests/unit/field-lod.test.mjs"
@@ -12790,6 +12828,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "_writeInstanceMatrices": [
+        "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "acquireMesh": [
@@ -12998,6 +13037,9 @@
       "retireTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
       ],
+      "setInstanceRange": [
+        "tests/unit/tlx-hunt4.test.mjs"
+      ],
       "setRange0": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
@@ -13090,6 +13132,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "setLampBake": [
+        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "setMaterialMaps": [
         "tests/unit/assets-pack.test.mjs",
@@ -14079,7 +14124,8 @@
       "*": [
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-one-home.test.mjs"
       ]
     },
     "js/ui/aria-state.js": {
@@ -14463,6 +14509,24 @@
         "tests/unit/hud-survey.test.mjs"
       ]
     },
+    "js/ui/hud-minimap.js": {
+      "create": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/hud-fit-idempotent.test.mjs",
+        "tests/unit/hud-minimap-pitmark.test.mjs",
+        "tests/unit/hud-pins.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs"
+      ],
+      "mmPitMark": [
+        "tests/unit/hud-minimap-pitmark.test.mjs"
+      ],
+      "*": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ]
+    },
     "js/ui/hud-readouts.js": {
       "bbText": [
         "tests/unit/hud-readouts.test.mjs"
@@ -14637,6 +14701,7 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-minimap-pitmark.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
@@ -14681,9 +14746,6 @@
       ],
       "invalidateMap": [
         "tests/unit/hud-feel.test.mjs"
-      ],
-      "mmPitMark": [
-        "tests/unit/hud-minimap-pitmark.test.mjs"
       ],
       "paintInstruments": [
         "tests/unit/hud-metrics-layout.test.mjs"
@@ -15476,7 +15538,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
-        "tests/unit/perf-try.test.mjs"
+        "tests/unit/perf-try.test.mjs",
+        "tests/unit/settings-one-home.test.mjs"
       ]
     },
     "js/ui/share-code.js": {

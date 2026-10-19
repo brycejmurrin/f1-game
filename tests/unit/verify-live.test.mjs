@@ -54,3 +54,99 @@ test("verifyLive reports a stale lazy response with exact hashes", async () => {
     assert.ok(result.errors.some((error) => error.includes("does not match shell")));
   } finally { server.close(); }
 });
+
+test("verifyLive retries transient HTTP 503 then accepts the body", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const lazy = Buffer.from("lazy-ok");
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ "js/circuits/fuji.js": sri(lazy) })}</script>`);
+  await fs.mkdir(path.join(root, "js/circuits"), { recursive: true });
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, "js/circuits/fuji.js"), lazy);
+
+  let hits = 0;
+  const server = http.createServer((req, res) => {
+    const name = decodeURIComponent(new URL(req.url, "http://localhost").pathname).replace(/^\//, "");
+    if (name === "js/circuits/fuji.js") {
+      hits += 1;
+      if (hits < 3) { res.writeHead(503); res.end("unavailable"); return; }
+      res.writeHead(200); res.end(lazy); return;
+    }
+    if (name === "index.html") { res.writeHead(200, { "content-type": "text/html" }); res.end(index); return; }
+    res.writeHead(404); res.end("missing");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}/`;
+  try {
+    const result = await verifyLive({
+      baseUrl: base,
+      root,
+      files: ["index.html"],
+      fetchOpts: { sleep: async () => {} },
+    });
+    assert.equal(result.ok, true, result.errors.join("\n"));
+    assert.ok(hits >= 3, `expected retries, got ${hits} hits`);
+  } finally { server.close(); }
+});
+
+test("verifyLive fails a persistent HTTP 503 after retries run out", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const lazy = Buffer.from("lazy-503");
+  const lazyRel = "fixture-lazy-503.bin";
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ [lazyRel]: sri(lazy) })}</script>`);
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, lazyRel), lazy);
+
+  let hits = 0;
+  const retries = 3;
+  const server = http.createServer((req, res) => {
+    const name = decodeURIComponent(new URL(req.url, "http://localhost").pathname).replace(/^\//, "");
+    if (name === lazyRel) { hits += 1; res.writeHead(503); res.end("unavailable"); return; }
+    if (name === "index.html") { res.writeHead(200); res.end(index); return; }
+    res.writeHead(404); res.end("missing");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}/`;
+  try {
+    const result = await verifyLive({
+      baseUrl: base,
+      root,
+      files: ["index.html"],
+      fetchOpts: { sleep: async () => {}, retries },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => /HTTP 503/.test(error)), result.errors.join("\n"));
+    assert.equal(hits, retries + 1, `initial try + ${retries} retries, got ${hits} hits`);
+  } finally { server.close(); }
+});
+
+test("verifyLive still fails a persistent HTTP 404 without endless retry", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const lazy = Buffer.from("missing-live");
+  // Use a fixture-only relative name (not a repo path) so docs-integrity does not
+  // treat the integrity key as a source comment pointing at a missing file.
+  const lazyRel = "fixture-lazy-missing.bin";
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ [lazyRel]: sri(lazy) })}</script>`);
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, lazyRel), lazy);
+
+  let hits = 0;
+  const server = http.createServer((req, res) => {
+    const name = decodeURIComponent(new URL(req.url, "http://localhost").pathname).replace(/^\//, "");
+    if (name === lazyRel) { hits += 1; res.writeHead(404); res.end("no"); return; }
+    if (name === "index.html") { res.writeHead(200); res.end(index); return; }
+    res.writeHead(404); res.end("missing");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}/`;
+  try {
+    const result = await verifyLive({
+      baseUrl: base,
+      root,
+      files: ["index.html"],
+      fetchOpts: { sleep: async () => {}, retries: 2 },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => /HTTP 404/.test(error)));
+    assert.equal(hits, 1, "404 must not retry like a CDN 503");
+  } finally { server.close(); }
+});

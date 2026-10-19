@@ -118,6 +118,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apex-career-delete.test.mjs",
   // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
   "tests/unit/apex-memory.test.mjs",
+  "tests/unit/apex-server-fixes.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
@@ -210,6 +211,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
   "tests/unit/career-data-audio-improvements.test.mjs",
+  // js/career/*.js never consumes simRnd and uses Math.random only at two allowlisted non-draw sites; source scan, < 50 ms.
+  "tests/unit/career-determinism.test.mjs",
   "tests/unit/career-experience.test.mjs",
   "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",
@@ -220,6 +223,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
   "tests/unit/carve-a-modules.test.mjs",
+  "tests/unit/catalog-discovery.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
   // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
@@ -231,6 +235,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/changelog-fragments.test.mjs",
   // Opt-in checkJs: files marked // @ts-check type-check clean under tsc (~0.5 s).
   "tests/unit/check-js-types.test.mjs",
+  "tests/unit/chrome-server-fixes.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
@@ -375,6 +380,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/destructure-usage.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
+  "tests/unit/diagnostics-tools.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
   "tests/unit/director.test.mjs",
@@ -592,6 +598,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-tyres.test.mjs",
   // Round-2: hwZones are control-point index fractions — every zone with a curated turn inside its window narrows that corner.
   "tests/unit/hw-zones.test.mjs",
+  // i18n contribution lint + migrated-file guard (Slice 2 / #1601): fixtures + ship locales + --guard.
+  "tests/unit/i18n-lint.test.mjs",
+  "tests/unit/i18n.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
@@ -602,7 +611,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
+  "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
+  "tests/unit/js-debugger-trace.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
   // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
@@ -684,8 +695,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
   // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
   "tests/unit/low-speed-lock.test.mjs",
-  // apex-lsp as an MCP client: definition / references / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). ~2 s.
+  "tests/unit/lsp-caller-fixes.test.mjs",
+  "tests/unit/lsp-config-freshness.test.mjs",
+  // apex-lsp as an MCP client: shared warmed child for definition / references / callers / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). Pipelined alias fan-out; test:mcp runs --test-concurrency=1 (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md).
   "tests/unit/lsp-mcp.test.mjs",
+  "tests/unit/lsp-navigation-efficiency.test.mjs",
+  "tests/unit/lsp-reference-fixes.test.mjs",
+  "tests/unit/lsp-workflow-fixes.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
@@ -807,6 +823,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-forces.test.mjs",
   "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
+  "tests/unit/poll-live-shell.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
   "tests/unit/pr-board.test.mjs",
   // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.
@@ -825,6 +842,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
   "tests/unit/pu-harvest-audio.test.mjs",
+  // Evidence archive round-trip, provenance and non-overwriting release publication; no live GitHub writes.
+  "tests/unit/publish-evidence.test.mjs",
   // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
   "tests/unit/publish-shots.test.mjs",
   // STANDING-WATER PUDDLES: js/render/shared/puddles.js reference mask (sample pins, growth/drying, edge bias) + every constant mirrored in GLX/TLX/WGX + the PUDDLES knob plumbing. Pure, < 1 s.
@@ -943,6 +962,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/setting-deps.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
+  "tests/unit/settings-one-home.test.mjs",
   "tests/unit/settings-search.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",

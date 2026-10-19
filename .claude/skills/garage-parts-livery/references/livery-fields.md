@@ -4,7 +4,7 @@ Load from the garage skill when editing paint,
 fin/spine/cover fields, or the draft lockstep.
 
 The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you drive
-(12 categories + 780 cr, `Parts.BUDGET`), and how it looks. Catalog: `js/car/parts.js`. Paint:
+(12 categories under the `Parts.BUDGET` cap), and how it looks. Catalog: `js/car/parts.js`. Paint:
 `js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
 
 `Parts.CATALOG` is an **ordered array**, not a keyed map. `Parts.getMods`
