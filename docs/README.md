@@ -224,6 +224,10 @@ read here — follow the link.
 For day-to-day workflows, see the **skills** in `.claude/skills/`
 (`.claude/skills/README.md`) and the **tools** in `tools/` (`tools/README.md`).
 
+## Deferred repository maintenance
+
+- [History cleanup while development continues](plans/2026-10-19-deferred-history-cleanup.md): saved future preparation and separate approval gates; no development freeze, history rewrite or recovery-ref deletion is authorized.
+
 ## Mechanics survey and implementation
 
 - [Mechanics opportunity survey](research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md): code survey, primary research and priorities.

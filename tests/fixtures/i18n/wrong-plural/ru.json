@@ -1,0 +1,3 @@
+{
+  "race.laps": "{n, plural, one {# круг} other {# кругов}}"
+}

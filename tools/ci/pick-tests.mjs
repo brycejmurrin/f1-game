@@ -320,6 +320,8 @@ export const RULES = [
   [/^index\.html/, ["service-worker"], "the precached shell: the SW's install list and the boot guard's repair"],
   [/^(index|cockpit-view)\.html/, ["tiny", "ui"], "script tags + DOM shell"],
   [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
+  [/^locales\//, ["tooling-fast"], "locale JSON: i18n-lint (unknown keys, placeholders, CLDR plurals)"],
+  [/^tools\/check\/i18n-lint\.mjs$/, ["tooling-fast"], "i18n-lint.test.mjs — contribution lint + migrated-file guard"],
   [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],
   [/^assets\//, ["hooks"], "the baked pack loader"],
   [/^tests\//, ["audit"], "every test file must belong to a topical group"],

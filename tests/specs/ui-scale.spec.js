@@ -1535,7 +1535,9 @@ test.describe("Custom Home width on touch", () => {
 });
 
 test.describe("Factory Home on touch", () => {
-  test.use({ hasTouch: true, viewport: { width: 852, height: 393 } });
+  // This is a layout contract: finite room transitions must not consume the
+  // inspector's bounded settlement window after returning to Home.
+  test.use({ hasTouch: true, reducedMotion: "reduce", viewport: { width: 852, height: 393 } });
 
   test("default Home separates landscape regions and keeps destinations readable through enlargement", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
@@ -1562,7 +1564,8 @@ test.describe("Factory Home on touch", () => {
     const cells = [
       { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
       { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 }, returning: true },
-      { width: 852, height: 393, safe: { top: 0, right: 47, bottom: 21, left: 47 } },
+      { width: 852, height: 393, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
+      { width: 1280, height: 590, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
       { width: 667, height: 320, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
       { width: 393, height: 852, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
       { width: 852, height: 393, safe: { top: 0, right: 47, bottom: 21, left: 47 }, enlarged: true },
@@ -1603,14 +1606,23 @@ test.describe("Factory Home on touch", () => {
         expect(geometry.menu.x + geometry.menu.width).toBeLessThanOrEqual(cell.width - cell.safe.right + 1);
       }
 
-      if (cell.width === 852 && !cell.enlarged) {
+      if ([852, 1280].includes(cell.width) && !cell.enlarged) {
+        const fit = await page.locator("#menu-buttons").evaluate(el => ({
+          scrollHeight: el.scrollHeight, clientHeight: el.clientHeight,
+          clipped: [...el.querySelectorAll("button")].filter(b => !b.hidden && b.getClientRects().length).filter(b => {
+            const r = b.getBoundingClientRect(), m = el.getBoundingClientRect();
+            return r.top < m.top - 1 || r.bottom > m.bottom + 1;
+          }).map(b => b.id),
+        }));
+        expect(fit.scrollHeight, "all default landscape doors fit without scrolling, including Continue and safe area").toBeLessThanOrEqual(fit.clientHeight + 1);
+        expect(fit.clipped, "no door is outside the menu viewport at scrollTop zero").toEqual([]);
         const race = await page.locator("#mb-race").boundingBox();
         const timeTrial = await page.locator("#mb-tt").boundingBox();
         expect(Math.abs(race.y - timeTrial.y), "normal landscape keeps paired play destinations").toBeLessThanOrEqual(1);
         expect(race.x + race.width).toBeLessThanOrEqual(timeTrial.x + 1);
         const practice = await page.locator("#mb-practice").boundingBox();
         const garage = await page.locator("#mb-garage").boundingBox();
-        expect(Math.abs(practice.y - garage.y), "Practice and Garage share the third play row").toBeLessThanOrEqual(1);
+        expect(Math.abs(practice.y - garage.y), "Practice and Garage share the final play row").toBeLessThanOrEqual(1);
         expect(practice.x + practice.width).toBeLessThanOrEqual(garage.x + 1);
         const settings = await page.locator("#mb-settings").boundingBox();
         const help = await page.locator("#mb-help").boundingBox();

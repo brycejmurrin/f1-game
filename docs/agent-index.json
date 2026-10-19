@@ -962,6 +962,7 @@
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",

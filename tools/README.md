@@ -96,6 +96,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/measure-pr-ci-after-close.mjs** | 24 h scan: PR ci.yml job-minutes starting after close + peak-hour PR wall median (#2213, epic #1949). | steward |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
+| **ci/poll-live-shell.mjs** | Poll github.io until the live shell matches this deploy, a newer train | — |
 | **ci/post-merge.mjs** | Checks a merged PR's merge commit has 2 parents, releases the claim, lists check-ins to delete. | agent-fleet |
 | **ci/pr-body.mjs** | Edits one PR-body Plan item, Status or fleet key, or adds a label, on the LIVE body via REST. | steward |
 | **ci/prune-branches.mjs** | Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first. | check-changes |
@@ -513,6 +514,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **check/cross-file-paths.mjs** | Every relative reference between files resolves to a file that exists (espree extraction; built for the tests/ split). |
 | **check/evaluate-scope-lint.mjs** | A `page.evaluate()` callback may not close over Node — flags module-scope reads inside serialised callbacks. |
 | **check/html-sink-lint.mjs** | Flags non-constant `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` sinks in js/ outside the audited allowlist. |
+| **check/i18n-lint.mjs** | Locale lint: unknown keys, placeholders, CLDR plurals; --guard bans new literals in migrated files. |
 | **check/offline-precache-check.cjs** | Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache. |
 | **check/reject-lint.mjs** | An unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs. |
 | **check/tolerance-diff.mjs** | Fails a PR that loosens a test tolerance (toBeCloseTo digits, a bound, tol/eps) beside production edits. |
