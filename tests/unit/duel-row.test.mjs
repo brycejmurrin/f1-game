@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 const HTML = fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8");
 
 // Arrays built inside the vm realm have that realm's prototype, so a strict
@@ -25,12 +26,25 @@ const Legends = withLegends("Legends");
 // The same module with js/data/legends.js absent — the degradation path.
 const RSbare = load(["js/core/mat4.js", "js/race/race-settings.js"])("RaceSettings");
 
-// The wire() handler as js/race/race-settings.js binds it, over a pair of cells.
-function pick(RSmod, v) {
-  const st = { duel: false, legend: "" };
-  st.duel = v !== "off";
-  st.legend = (v === "off" || v === "on") ? "" : v;
-  return { st, shown: RSmod.duelValue(() => st.duel, () => st.legend) };
+// The REAL picker (js/race/race-settings.js chooseDuel, reached by clicking an option of the built sheet in
+// the game VM) — not a copy of its handler (T2-06). Returns the state cells and the value the row paints.
+const require = createRequire(import.meta.url);
+const { createGame } = require("../../tools/lib/game-vm.cjs");
+async function realPicker() {
+  const g = await createGame({ storage: { trackId: "monza" } });
+  const { G } = g, doc = g.sandbox.document;
+  G.timeTrial = false; G.seasonMode = false;
+  G.trackIdx = 0; G.openRaceSettings("select");
+  const choose = (id) => {
+    doc.getElementById("rs-duel-open").onclick();   // builds the option list
+    const opts = RS.duelOpts().map((o) => o[0]);
+    const btn = [...doc.getElementById("duel-list").children][opts.indexOf(id)];
+    assert.ok(btn, `no option button for ${id}`);
+    btn.onclick();
+    return { st: { duel: G.duel, legend: G.duelLegend }, shown: RS.duelValue(() => G.duel, () => G.duelLegend),
+      label: doc.getElementById("rs-duel-value").textContent };
+  };
+  return { g, choose };
 }
 
 test("the row still offers OFF and ON, in that order, before any legend", () => {
@@ -53,15 +67,26 @@ test("no legend id can shadow OFF or ON", () => {
   for (const l of Legends.LIST) assert.ok(l.id !== "off" && l.id !== "on", `${l.id} shadows a row value`);
 });
 
-test("picking a value paints that same value back", () => {
-  for (const [v] of RS.duelOpts()) assert.equal(pick(RS, v).shown, v, `${v} did not round-trip`);
+test("picking a value in the real sheet paints that same value back", async () => {
+  const { g, choose } = await realPicker();
+  try {
+    for (const [v, label] of RS.duelOpts()) {
+      const r = choose(v);
+      assert.equal(r.shown, v, `${v} did not round-trip`);
+      assert.equal(r.label, label, `${v}: the row shows its label`);
+    }
+  } finally { g.close(); }
 });
 
-test("OFF and ON clear the legend; a legend turns the duel on", () => {
-  assert.deepEqual(pick(RS, "off").st, { duel: false, legend: "" });
-  assert.deepEqual(pick(RS, "on").st, { duel: true, legend: "" });
-  assert.deepEqual(pick(RS, "senna").st, { duel: true, legend: "senna" },
-    "a legend must set BOTH cells — duelMode gates the trim, duelLegend picks the driver");
+test("OFF and ON clear the legend; a legend turns the duel on (the real handler)", async () => {
+  const { g, choose } = await realPicker();
+  try {
+    assert.deepEqual(choose("off").st, { duel: false, legend: "" });
+    assert.deepEqual(choose("on").st, { duel: true, legend: "" });
+    assert.deepEqual(choose("senna").st, { duel: true, legend: "senna" },
+      "a legend must set BOTH cells — duelMode gates the trim, duelLegend picks the driver");
+    assert.deepEqual(choose("off").st, { duel: false, legend: "" }, "and OFF takes the legend back out");
+  } finally { g.close(); }
 });
 
 test("without the roster the row degrades to the OFF/ON it always was", () => {

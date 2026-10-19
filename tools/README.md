@@ -111,6 +111,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/fleet-flags.mjs** | Flags model drift, cost over cap, context over 300k and stalled "working" sessions from get_session JSON. | agent-fleet |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
 | **ci/handback.mjs** | Verifies a PR head's CI + ready-gate, prints one SWEEP and one DONE line, lists check-ins to delete. | agent-fleet |
+| **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
 | **ci/measure-guard-commit.mjs** | Measure commit-guard wall time vs a direct test:guards run (#2647). | check-changes |
 | **ci/measure-pr-ci-after-close.mjs** | 24 h scan: PR ci.yml job-minutes starting after close + peak-hour PR wall median (#2213, epic #1949). | steward |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
@@ -124,6 +125,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so the always-on riders (vm-a1 / vm-a2 / slow arms) do not double-bill. | — |
+| **ci/session-ledger.mjs** | Summarise an agent transcript into tool/command-family minutes, timeouts, repeats; redacts secrets. | check-changes |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, verdicts, live run); `--pr` adds live PR state. | check-changes |
 | **ci/session-transcript.mjs** | Digest saved `list_events` pages into a timeline: prompts, replies, commands, MCP calls, subagents, errors. | agent-fleet |
 | **ci/sweep-shards.mjs** | Deterministic measured-time packing for the geometry sweep CI matrix. | — |
@@ -599,7 +601,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 |---|---|
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
-| **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs` |
+| **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-mcp.test.mjs` |
 | **shot/scenery-locations.json** | `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/track-shot-survey.test.mjs` |

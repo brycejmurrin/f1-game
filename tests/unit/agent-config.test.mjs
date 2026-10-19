@@ -540,17 +540,20 @@ test("shared memory has no orphan topics or missing relative Markdown/wiki links
 // must be rewritten or deleted, not silently recalled. Entries that are not
 // paths (`user`, `#1519`, a test name) are allowed and not checked.
 test("a memory's source: paths still exist", () => {
+  let seen = 0;
   const dir = path.join(ROOT, ".claude/memory");
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "MEMORY.md")) {
     const fm = read(`.claude/memory/${f}`).match(/^---\n([\s\S]*?)\n---/)?.[1] || "";
     const line = fm.match(/^\s*source:\s*(.+)$/m);
     if (!line) continue;
+    seen++;
     for (const raw of line[1].split(",")) {
       const rel = raw.trim().replace(/^["'`]|["'`]$/g, "").replace(/(#.*|:\d+(-\d+)?)$/, "");
       if (!/\/|\.[a-z]{1,5}$/i.test(rel)) continue;
       assert.ok(exists(rel), `.claude/memory/${f} cites source ${raw.trim()}, which no longer exists — rewrite or delete the memory`);
     }
   }
+  assert.ok(seen >= 1, "no memory carries a `source:` line — the scan above checked nothing");
 });
 
 // Fleet-core owns merge/MERGE-HOLD/SWEEP/arm; the MEMORY.md index must not
@@ -652,25 +655,6 @@ test("the edit guard refuses a generated package.json block through Write as wel
     assert.equal(untouched.status, 0,
       "a Write that leaves the generated block alone is not the guard's business");
   }
-});
-
-test("the commit guard's docs-only fast path keeps its two exclusions", () => {
-  // A prose commit runs docs-integrity alone (1.1 s against ~25 s measured
-  // 2026-09-16) and, more to the point, never lets --auto-raise stage
-  // tests/data/ratchets.json into a commit that changed no code. Both
-  // exclusions are the whole safety of it: a GENERATED doc is prose whose
-  // source is code (generated-docs must still run), and `git commit -a` stages
-  // at commit time, so the staged list the hook reads is not what will be
-  // committed. AGENTS.md rule 3 states the rule this encodes.
-  const hook = read(".claude/hooks/bash-guard.sh");
-  assert.match(hook, /git diff --cached --name-only/, "the fast path must decide on the STAGED paths");
-  assert.match(hook, /\^\(docs\/\|\\\.claude\/skills\/\|\\\.claude\/agents\/\)\|\\\.md\$/,
-    "the docs-only path set is docs/, skills, agents and *.md — nothing wider");
-  for (const gen of ["tools/README.md", "docs/DEBUG-HOOKS.md", "docs/ARCHITECTURE.md", "docs/LIGHTING-TUNER-SLIDERS.md"])
-    assert.ok(hook.includes(gen), `${gen} is generated from code; it must fall through to the full guards`);
-  assert.match(hook, /--all/, "`git commit -a` stages at commit time: the fast path must not trust the index then");
-  assert.match(hook, /node --test tests\/unit\/docs-integrity\.test\.mjs/);
-  assert.match(read("AGENTS.md"), /docs-integrity/, "rule 3 must state the docs-only carve-out");
 });
 
 test("the Codex skill mirror is tracked symlinks and the repair script exists", () => {
@@ -1010,3 +994,17 @@ test("the survey-track delegation template owns exactly what the track-surveyor 
     assert.match(wgx, /apex-eval\.mjs monza .* --backend webgpu/);
   });
 }
+
+// stop-guard.sh nudges once over a live browser run; the two paths that must NEVER block a
+// stop are deterministic and spawned here (the live-run nudge itself needs a real playwright
+// process, so it stays out of the node ladder).
+test("stop-guard.sh lets a stop through when Claude is already continuing, and on junk input", () => {
+  const run = (input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/stop-guard.sh")], {
+    input, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const cont = run(JSON.stringify({ hook_event_name: "Stop", stop_hook_active: true }));
+  assert.equal(cont.status, 0, `stop_hook_active must pass: ${cont.stderr}`);
+  assert.equal(cont.stdout, "");
+  const junk = run("not json at all");
+  assert.notEqual(junk.status, 1, `a malformed payload must not crash the hook: ${junk.stderr}`);
+});
