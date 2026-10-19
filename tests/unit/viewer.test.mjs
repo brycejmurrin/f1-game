@@ -85,14 +85,20 @@ test("build-viewer: selection defaults, 'all', and refusals", () => {
   assert.ok(teamIds().includes("ferrari"));
 });
 
-test("close-ups: every part category has a frame the page defines, and the pair diff measures pixels", async () => {
+test("close-ups: every part category has a frame the page defines", () => {
   const html = viewerHtml({ cars: ["haas"] });
   for (const [cat, f] of Object.entries(CAT_FRAME)) assert.match(html, new RegExp(`\\b${f}:\\s*\\[\\[`), `${cat} -> ${f} is not a FRAMES entry`);
-  const sharp = (await import("sharp")).default;
+});
+
+test("close-ups: the pair diff measures pixels", async (t) => {
+  let sharp;
+  try { sharp = (await import("sharp")).default; }
+  catch (e) { t.skip(`sharp is not installed here (${e.code || e.message}) — the PNG diff is not checkable`); return; }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-diff-"));
-  const png = (name, g) => sharp({ create: { width: 10, height: 10, channels: 3, background: { r: g, g, b: g } } }).png().toFile(path.join(dir, name)).then(() => path.join(dir, name));
-  const [a, b, c] = await Promise.all([png("a.png", 0), png("b.png", 0), png("c.png", 200)]);
-  assert.equal(await pixelDiffPct(a, b), 0);
-  assert.equal(await pixelDiffPct(a, c), 100);
-  fs.rmSync(dir, { recursive: true, force: true });
+  try {
+    const png = (name, g) => sharp({ create: { width: 10, height: 10, channels: 3, background: { r: g, g, b: g } } }).png().toFile(path.join(dir, name)).then(() => path.join(dir, name));
+    const [a, b, c] = await Promise.all([png("a.png", 0), png("b.png", 0), png("c.png", 200)]);
+    assert.equal(await pixelDiffPct(a, b), 0);
+    assert.equal(await pixelDiffPct(a, c), 100);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

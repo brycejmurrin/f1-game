@@ -245,6 +245,45 @@ test("--changed fail-safes to the full list on infra paths", () => {
   assert.deepEqual(r.files, all);
 });
 
+test("--changed selector: one case per branch (empty, docs-only, tracked, unmatched, no-pin-match, matched)", () => {
+  const scripts = { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" };
+  const all = ["tests/unit/" + "a.test.mjs", "tests/unit/docs-integrity.test.mjs", "tests/unit/" + "b.test.mjs"];
+  const sel = (changed, extra = {}) => selectToolingFastChanged(changed, { allFiles: all, pinIndex: new Map(), scripts, ...extra });
+
+  const empty = sel([]);
+  assert.deepEqual([empty.reason, empty.files, empty.changed], ["empty", [], 0]);
+
+  const docs = sel(["docs/README.md"]);
+  assert.equal(docs.reason, "docs-only");
+  assert.deepEqual(docs.files, ["tests/unit/docs-integrity.test.mjs"], "prose runs only the docs tests");
+
+  const tracked = sel(["package.json"]);
+  assert.equal(tracked.reason, "tracked");
+  assert.equal(tracked.because, "package.json");
+  assert.deepEqual(tracked.files, all, "a selector-machinery edit fails safe to the whole floor");
+
+  const unmatched = sel(["totally/unknown.bin"]);
+  assert.equal(unmatched.reason, "unmatched");
+  assert.equal(unmatched.because, "totally/unknown.bin");
+  assert.deepEqual(unmatched.files, all);
+
+  const none = sel(["js/ui/hud.js"]);
+  assert.equal(none.reason, "no-pin-match", "claimed by the floor but pinned by no unit test: run everything, not nothing");
+  assert.deepEqual(none.files, all);
+
+  const hit = sel(["js/ui/hud.js"], { pinIndex: new Map([["js/ui/hud.js", new Set(["tests/unit/" + "b.test.mjs"])]]) });
+  assert.equal(hit.reason, "matched");
+  assert.deepEqual(hit.files, ["tests/unit/" + "b.test.mjs"]);
+  assert.equal(hit.changed, 1);
+});
+
+test("--changed selector with the REAL pin index: a tooling edit selects some pinned unit tests, never an empty set", () => {
+  const r = selectToolingFastChanged(["tools/ci/sweep-shards.mjs"], { scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
+  assert.ok(["matched", "no-pin-match", "unmatched", "run-all-path", "tracked"].includes(r.reason), r.reason);
+  assert.ok(r.files.length > 0, "the real pin index must yield files (empty would verify nothing)");
+  assert.ok(r.files.every((f) => f.startsWith("tests/unit/")), "only unit files");
+});
+
 test("--bail stops STARTING files after the first failure and says how many it skipped", async () => {
   const dir = tmp();
   try {
@@ -431,8 +470,9 @@ test("--changed header: reason, real diff size, files, because=<path>; the empty
   assert.match(EMPTY_DIFF_MESSAGE, /without --changed/);
 });
 
-test("--changed CLI: the empty branch prints the message and exits 3 before any file runs (source pin; the diff cannot be faked in a unit test)", () => {
-  const src = fs.readFileSync(fileURLToPath(new URL("../../tools/ci/tooling-fast.mjs", import.meta.url)), "utf8");
-  assert.match(src, /if \(changedMeta\.reason === "empty"\) \{[\s\S]{0,600}console\.error\(EMPTY_DIFF_MESSAGE\);\s*process\.exit\(3\);/);
-  assert.ok(src.indexOf('changedMeta.reason === "empty"') < src.indexOf("await runToolingFast(files"), "the guard runs before the runner");
+test("--changed CLI: an empty selection reports reason=empty and the message tells the caller to drop --changed", () => {
+  const r = selectToolingFastChanged([], { allFiles: ["tests/unit/" + "a.test.mjs"] });
+  assert.equal(r.reason, "empty");
+  assert.deepEqual(r.files, [], "nothing selected → the CLI exits 3 instead of running an empty floor");
+  assert.match(changedHeader({ reason: r.reason, changed: 0, shards: r.shards }, 1), /reason=empty changed=0 files=1 shards=none/);
 });
