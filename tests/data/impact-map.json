@@ -123,6 +123,9 @@
       ]
     },
     "js/agent/apex-cam.js": {
+      "hooks": [
+        "tests/unit/apex-cam-fallback.test.mjs"
+      ],
       "*": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
