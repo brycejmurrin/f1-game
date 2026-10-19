@@ -1,0 +1,4 @@
+{"type": "user", "uuid": "u1", "turnOrigin": "human", "origin": {"kind": "human"}, "message": {"role": "user", "content": "fix the red test"}}
+{"type": "assistant", "uuid": "a1", "requestId": "req_1", "message": {"id": "msg_1", "content": [{"type": "thinking"}], "usage": {"input_tokens": 2, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 10}}}
+{"type": "assistant", "uuid": "a2", "requestId": "req_1", "message": {"id": "msg_1", "content": [{"type": "tool_use", "id": "t1"}], "usage": {"input_tokens": 2, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 40}}}
+{"type": "user", "uuid": "r1", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1"}]}}

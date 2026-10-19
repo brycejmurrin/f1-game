@@ -30,9 +30,9 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 423,
+    "files": 424,
     "classifications": {
-      "entrypoint-candidate": 286,
+      "entrypoint-candidate": 287,
       "ambiguous": 56,
       "protocol-entrypoint": 28,
       "asset": 2,
@@ -721,6 +721,16 @@
       "nativeOutputFlagMentions": [
         "--failures-only",
         "--quiet"
+      ]
+    },
+    {
+      "path": "tools/ci/claude-usage.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--limit"
       ]
     },
     {

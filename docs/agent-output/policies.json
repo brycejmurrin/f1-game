@@ -461,6 +461,11 @@
       "presentation": "native",
       "preserve": "Pending/none/unknown/cancelled/superseded; head SHA run attempt and final exit"
     },
+    "tools/ci/claude-usage.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Aggregate by default; unknown usage counts, malformed/API-error counts and limit lines; --json bytes"
+    },
     "tools/ci/coverage-merge.mjs": {
       "action": "keep-native",
       "presentation": "native",

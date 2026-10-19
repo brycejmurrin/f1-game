@@ -264,6 +264,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // but-unapplied. This is the mirror — a class the markup wears that no rule
   // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
   "tests/unit/class-usage.test.mjs",
+  // tools/ci/claude-usage.mjs: requestId dedupe, unknown-vs-zero usage, turn triggers, sidechains, teleport copies; synthetic fixture.
+  "tests/unit/claude-usage.test.mjs",
   // tools/lib/cli-args.mjs: unknown flag is an error with the near miss, =/space forms agree, --help (#1697).
   "tests/unit/cli-args.test.mjs",
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,

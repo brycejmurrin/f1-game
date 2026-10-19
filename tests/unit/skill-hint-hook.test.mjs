@@ -110,3 +110,15 @@ test("host notification events skip routing while user audit and notification re
   assert.match(ask(prompt).out,/Skill check:/);
   assert.match(hint(JSON.stringify({prompt})).out,/Skill check:/,"legacy eval input still routes");
 });
+
+test("host envelopes delivered as UserPromptSubmit skip routing; the same words typed by a user still route", () => {
+  const body = "Soft tyres last the whole race; audit tyre-model.js stint life and pit lane loss";
+  for (const envelope of [
+    `<task-notification>\n<task-type>queued-remote-notifications</task-type>\n<summary>${body}</summary>\n</task-notification>`,
+    `  <agent-message from="session_x">${body}</agent-message>`,
+    `<system-reminder>\n[SYSTEM NOTIFICATION - NOT USER INPUT]\n${body}`,
+  ]) {
+    for (const mode of ["targeted", "generic"]) assert.deepEqual(ask(envelope, mode), { code: 0, out: "" }, envelope.slice(0, 30));
+  }
+  assert.match(ask(`${body}; explain the <task-notification> wake`).out, /Skill check:/);
+});
