@@ -556,20 +556,27 @@ function lookTruss(out, L) {
   if (!L || L.truss === "stock") return false;
   if (L.truss === "rails") {
     // Slim anodised light rails only: the studio ceiling is the panels.
-    for (const s of [-1, 1]) block(out, s * 2.6, CEIL_Y - 0.12, 0, 0.035, 0.035, (Z_DOOR - Z_BACK) / 2 - 0.3, GREY_RAIL);
+    for (const s of [-1, 1]) {
+      block(out, s * 2.6, CEIL_Y - 0.12, 0, 0.035, 0.035, (Z_DOOR - Z_BACK) / 2 - 0.3, GREY_RAIL);
+      // Hangers, so a rail is hung from the ceiling rather than floating under it.
+      for (let z = -5.0; z <= 5.01; z += 2.5) block(out, s * 2.6, CEIL_Y - 0.0425, z, 0.008, 0.0425, 0.008, GREY_RAIL);
+    }
     return true;
   }
   // "heavy": four deep Warren trusses spanning the bay plus purlins.
   const ST = [0.20, 0.21, 0.23], lo = CEIL_Y - 0.95, hi = CEIL_Y - 0.12;
   for (const z of [-4.8, -1.6, 1.6, 4.8]) {
-    block(out, 0, lo, z, HALF_W - 0.05, 0.05, 0.07, ST, MAT.METAL);
-    block(out, 0, hi, z, HALF_W - 0.05, 0.05, 0.07, ST, MAT.METAL);
+    // Chords run wall to wall (they bear on the walls), the top chord to the
+    // ceiling's underside: hi + 0.05 = CEIL_Y - 0.07, closed by the purlins.
+    block(out, 0, lo, z, HALF_W, 0.05, 0.07, ST, MAT.METAL);
+    block(out, 0, hi, z, HALF_W, 0.05, 0.07, ST, MAT.METAL);
     for (let i = 0; i < 10; i++) {
       const xa = -HALF_W + 0.05 + i * ((HALF_W * 2 - 0.1) / 10), xb = xa + (HALF_W * 2 - 0.1) / 10;
       tube(out, [xa, i % 2 ? hi : lo, z], [xb, i % 2 ? lo : hi, z], 0.035, ST, 6, MAT.METAL);
     }
   }
-  for (const x of [-3.6, -1.2, 1.2, 3.6]) block(out, x, hi + 0.08, 0, 0.05, 0.04, (Z_DOOR - Z_BACK) / 2 - 0.05, ST, MAT.METAL);
+  // Purlins sit on the top chords and carry the roof: wall to wall in z, top face at CEIL_Y.
+  for (const x of [-3.6, -1.2, 1.2, 3.6]) block(out, x, (hi + 0.05 + CEIL_Y) / 2, 0, 0.05, (CEIL_Y - hi - 0.05) / 2, (Z_DOOR - Z_BACK) / 2, ST, MAT.METAL);
   return true;
 }
 const GREY_RAIL = [0.55, 0.56, 0.60];
@@ -589,17 +596,17 @@ function lookProps(g, liv, L) {
 }
 // Emissive geometry: ceiling lighting, lit wall slats, back-wall frames and header bands.
 function lookLed(g, liv, L) {
-  const [c1, c2] = livCols(liv), zb = Z_BACK + 0.012;
+  const [c1, c2] = livCols(liv), zb = Z_BACK + 0.008;   // half-depth 0.008: back face on the wall
   if (L.ceilLed === "grid") {
     for (const x of [-2.0, 2.0]) for (let i = -2; i <= 2; i++) {
       const z = i * 2.4;
-      block(g.mid, x, CEIL_Y - 0.03, z, 0.34, 0.02, 0.34, GREY(0.30));
-      block(g.mid, x, CEIL_Y - 0.05, z, 0.30, 0.01, 0.30, [1.12, 1.12, 1.16]);
+      block(g.mid, x, CEIL_Y - 0.02, z, 0.34, 0.02, 0.34, GREY(0.30));     // trim, top at CEIL_Y
+      block(g.mid, x, CEIL_Y - 0.045, z, 0.30, 0.005, 0.30, [1.12, 1.12, 1.16]);   // lens, against the trim
     }
   } else if (L.ceilLed === "strips") {
     for (const x of [-1.4, 1.4]) {
-      block(g.mid, x, CEIL_Y - 0.03, 0, 0.07, 0.02, 6.0, GREY(0.03));
-      block(g.mid, x, CEIL_Y - 0.05, 0, 0.035, 0.01, 5.95, [0.95, 1.05, 1.20]);
+      block(g.mid, x, CEIL_Y - 0.02, 0, 0.07, 0.02, (Z_DOOR - Z_BACK) / 2, GREY(0.03));    // channel, wall to wall
+      block(g.mid, x, CEIL_Y - 0.045, 0, 0.035, 0.005, (Z_DOOR - Z_BACK) / 2 - 0.05, [0.95, 1.05, 1.20]);
     }
   } else if (L.ceilLed === "pendants") {
     for (const x of [-2.2, 2.2]) for (const z of [-4.0, 0, 4.0]) {
@@ -611,15 +618,16 @@ function lookLed(g, liv, L) {
   if (L.wall.seam === "slat") {
     // Lit accent slats up the side walls, in the gaps between the boards.
     for (const s of [-1, 1]) for (const z of [-6.0, -1.7, 3.0, 5.9])
-      block(s < 0 ? g.nx : g.px, s * (HALF_W - 0.02), 1.55, z, 0.015, 1.40, 0.035, scale(c2, 1.3));
+      block(s < 0 ? g.nx : g.px, s * (HALF_W - 0.015), 1.55, z, 0.015, 1.40, 0.035, scale(c2, 1.3));   // back face on the wall
   }
   if (L.backWall === "frame") {
     const fc = scale(c2, 1.25), X = HALF_W - 0.25;
-    for (const y of [0.18, 4.55]) block(g.back, 0, y, zb, X, 0.03, 0.006, fc);
-    for (const sx of [-1, 1]) block(g.back, sx * X, 2.365, zb, 0.03, 2.215, 0.006, fc);
+    for (const y of [0.18, 4.55]) block(g.back, 0, y, zb, X, 0.03, 0.008, fc);
+    for (const sx of [-1, 1]) block(g.back, sx * X, 2.365, zb, 0.03, 2.215, 0.008, fc);
   } else if (L.backWall === "header") {
-    block(g.back, 0, 3.92, zb, HALF_W - 0.02, 0.20, 0.006, scale(c1, 1.05));
-    block(g.back, 0, 3.70, zb, HALF_W - 0.02, 0.015, 0.006, scale(c2, 1.2));
+    // Wall to wall: a header band that stops 2 cm short of each corner reads as a stuck-on strip.
+    block(g.back, 0, 3.92, zb, HALF_W, 0.20, 0.008, scale(c1, 1.05));
+    block(g.back, 0, 3.70, zb, HALF_W, 0.015, 0.008, scale(c2, 1.2));
   }
 }
 const GREY = (v) => [v, v * 1.01, v * 1.05];

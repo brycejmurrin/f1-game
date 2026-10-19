@@ -136,12 +136,17 @@ function buildShell(out, liv, L) {
   // Roof truss is its own mesh (buildTruss): the TOP preset looks down through
   // the ceiling, and the cross-members laid over the car have to hide there.
 }
-function buildTruss(out, L) {
+function buildTruss(out, L, bay) {
   if (GarageDress.lookTruss(out, L)) return;
   for (let s = -1; s <= 1; s += 2)
     block(out, s * 2.6, CEIL_Y - 0.42, 0, 0.06, 0.06, (Z_DOOR - Z_BACK) / 2, STEEL, MAT.METAL);
-  for (let i = 0; i <= 4; i++)
-    block(out, 0, CEIL_Y - 0.42, Z_BACK + (Z_DOOR - Z_BACK) * (i / 4), 2.7, 0.05, 0.06, STEEL, MAT.METAL);
+  for (let i = 0; i <= 4; i++) {
+    const z = Z_BACK + (Z_DOOR - Z_BACK) * (i / 4);
+    block(out, 0, CEIL_Y - 0.42, z, 2.7, 0.05, 0.06, STEEL, MAT.METAL);
+    // Hanger rods to the roof: the truss hung 0.42 m under the ceiling held by
+    // nothing. Setup-screen bay only (`bay`); the trackside rows keep their tri budget.
+    if (bay) for (let s = -1; s <= 1; s += 2) block(out, s * 2.6, CEIL_Y - 0.185, z, 0.015, 0.185, 0.015, STEEL, MAT.METAL);
+  }
 }
 
 // ── props ──────────────────────────────────────────────────────────────────
@@ -1042,7 +1047,7 @@ function rebuild(team, liv, info, ctx) {
     if (!trussMesh || trussLook !== GaragePrims.lookId()) {
       if (trussMesh) _gfx.freeMesh(trussMesh);
       const truss = acc();
-      buildTruss(truss, look);
+      buildTruss(truss, look, true);
       trussMesh = _gfx.createMesh(truss);
       trussLook = GaragePrims.lookId();
     }

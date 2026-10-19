@@ -105,3 +105,20 @@ test("a look's upper wall takes its panel colour, not the accent stripe", () => 
   const c = shell.col.slice(hit, hit + 3);
   assert.ok(c[0] > 0.6 && c[2] < 0.2, `upper wall is team colour, got ${Array.from(c).map((v) => v.toFixed(2))}`);
 });
+
+// FIT: nothing in the roof floats. Every roof mesh (the truss, per look) must
+// reach the ceiling's underside, and a truss that spans the bay bears on both walls.
+test("fit: every look's roof structure is hung from the ceiling", () => {
+  const { GaragePrims } = harness();
+  const { CEIL_Y, HALF_W } = GaragePrims;
+  for (const id of GaragePrims.LOOK_IDS) {
+    const { plain } = build(id);
+    // The truss mesh is the one whose every vertex sits above 3.9 m.
+    const truss = plain.find((m) => { for (let i = 1; i < m.pos.length; i += 3) if (m.pos[i] < 3.9) return false; return m.pos.length > 0; });
+    assert.ok(truss, `${id}: a roof mesh`);
+    let top = -1, xmin = 1e9, xmax = -1e9;
+    for (let i = 0; i < truss.pos.length; i += 3) { top = Math.max(top, truss.pos[i + 1]); xmin = Math.min(xmin, truss.pos[i]); xmax = Math.max(xmax, truss.pos[i]); }
+    assert.ok(Math.abs(top - CEIL_Y) < 1e-3, `${id}: roof reaches the ceiling (top ${top.toFixed(3)})`);
+    if (id === "workshop") assert.ok(xmin <= -HALF_W + 1e-3 && xmax >= HALF_W - 1e-3, `${id}: trusses bear on both walls`);
+  }
+});
