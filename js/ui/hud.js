@@ -862,6 +862,7 @@ function mirrorClear(root) {
   hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
 }
 /** Conservative rect overlap — same 0.5 px slack as hud-layout.spec.js probes. */
+const manualHud = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
 function _hudRectsHit(a, b) {
   return !!(a && b && a.width > 0 && b.width > 0
     && a.left < b.right - 0.5 && b.left < a.right - 0.5
@@ -884,7 +885,7 @@ function towerGapsPaintedClash() {
   if (!_hudGaps || !_hudGaps.isConnected) _hudGaps = document.querySelector(".hud-gaps");
   const gaps = _hudGaps, bc = document.body.classList;
   // css/hud.css hides the strip outright under these: no computed-style read needed.
-  if (!tower || !gaps || gaps.hidden || bc.contains("hud-hide-gaps") || bc.contains("bc-on")) return false;
+  if (!tower || !gaps || manualHud(tower) || manualHud(gaps) || gaps.hidden || bc.contains("hud-hide-gaps") || bc.contains("bc-on")) return false;
   try {
     const gs = getComputedStyle(gaps);
     if (gs.display === "none" || gs.visibility === "hidden") return false;
@@ -910,9 +911,9 @@ function phonePaintedClash(boostIn) {
   if (towerGapsPaintedClash()) return true;
   const sectors = els.hudSectors;
   const boost = boostIn !== undefined ? boostIn : _boostOnRightHalf();   // a caller that already measured it this tick passes it
-  if (sectors && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
+  if (sectors && !manualHud(sectors) && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
   const rel = typeof document !== "undefined" ? document.getElementById("hud-rel") : null;
-  if (rel && !rel.hidden) {
+  if (rel && !manualHud(rel) && !rel.hidden) {
     const rr = rel.getBoundingClientRect();
     // Pedals are #btn-* siblings, not #dock-left children (index.html).
     if (_dockL) {
@@ -966,7 +967,7 @@ function phoneFitStampSync(scale, force) {
   const shrinkSectors = () => {
     const secEl = els.hudSectors;
     const boost = _boostOnRightHalf();
-    if (!secEl || secEl.hidden || !boost) return false;
+    if (!secEl || manualHud(secEl) || secEl.hidden || !boost) return false;
     const br = boost.getBoundingClientRect();
     const secR = secEl.getBoundingClientRect();
     if (!secR.width || !_hudRectsHit(secR, br)) return false;
@@ -1050,7 +1051,7 @@ function fitHud() {
   // without the row count the published height stayed at the empty box's for
   // the whole 3 s same-key backoff. childElementCount costs no layout.
   const secRows = els.hudSectors ? els.hudSectors.childElementCount : 0;
-  const placedSectors = els.hudSectors && els.hudSectors.hasAttribute("data-hl-user") && els.hudSectors.hasAttribute("data-hl");
+  const placedSectors = manualHud(els.hudSectors);
   // BUTTON SIZE is independent, including its unset CSS default.
   const mult = _cssMult;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || mult;
@@ -1074,7 +1075,7 @@ function fitHud() {
     // still crawls BOOST left under load (CI oversize APEX_WORKERS=2:
     // #hud-sectors+btn-boost after the wait already saw clearance).
     let clash = false, boost;
-    if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
+    if (!placedSectors && !document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
       const s = els.hudSectors.getBoundingClientRect();
       boost = _boostOnRightHalf();
       const b = boost ? boost.getBoundingClientRect() : null;
@@ -1083,7 +1084,7 @@ function fitHud() {
           && s.top < b.bottom && b.top < s.bottom) clash = true;
       else {
         const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
-        if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
+        if (ann && !manualHud(ann) && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
           const a = ann.getBoundingClientRect();
           if (a.width > 0 && s.width && s.left < a.right - 0.5 && a.left < s.right - 0.5
               && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) clash = true;
@@ -1143,7 +1144,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   let zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
-    if (!el) return 0;
+    if (!el || manualHud(el)) return 0;
     const r = layoutRect(el);
     if (!r.width) return 0;
     return r.width / zoomDiv(el, pub);
@@ -1159,13 +1160,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (!el) return 0;
     let lo = Infinity, hi = -Infinity;
     for (const c of el.children) {
-      if (c.id === "hud-tyre" && outOfFlow(c)) continue;
+      if (manualHud(c) || (c.id === "hud-tyre" && outOfFlow(c))) continue;
       const r = layoutRect(c);
       if (!r.width) continue;
       if (r.left < lo) lo = r.left;
       if (r.right > hi) hi = r.right;
     }
-    return hi > lo ? (hi - lo) / zoomDiv(el, pub) : wide(el, pub);
+    return hi > lo ? (hi - lo) / zoomDiv(el, pub) : 0;
   };
   if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); }
   pickDocks();
@@ -1215,8 +1216,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // rather than on the class, so any future hide rule is covered too; the
   // fallback is the other side's measurement, which is right on every phone
   // whose notch is symmetric in landscape and never worse than 0.
-  const mmR = els.minimap ? layoutRect(els.minimap) : null;
-  const scR = els.hudSectors ? layoutRect(els.hudSectors) : null;
+  const mmR = els.minimap && !manualHud(els.minimap) ? layoutRect(els.minimap) : null;
+  const scR = els.hudSectors && !manualHud(els.hudSectors) ? layoutRect(els.hudSectors) : null;
   const mz = zoomDiv(els.minimap, zTopPub), sz = zoomDiv(els.hudSectors, zTopPub);
   const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
   // THE RIGHT INSET IS THE TOKEN WHEN IT IS READABLE. On touch #hud-sectors is pushed inboard by
@@ -1545,14 +1546,14 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       const kids = _hudBottom.children;
       for (let i = 0; i < kids.length; i++) {
         const c = kids[i];
-        if (!c || c.id === "hud-tyre") continue;
+        if (!c || manualHud(c) || c.id === "hud-tyre") continue;
         const r = layoutRect(c);
         if (!r.width) continue;
         if (r.left < lo) lo = r.left;
         if (r.right > hi) hi = r.right;
       }
       const tyreEl = document.getElementById("hud-tyre");
-      const tyreR = tyreEl && !tyreEl.hidden ? layoutRect(tyreEl) : null;
+      const tyreR = tyreEl && !manualHud(tyreEl) && !tyreEl.hidden ? layoutRect(tyreEl) : null;
       if (hi > lo && tyreR && tyreR.width && zNow) {
         const cW = (hi - lo) / zNow, tW = tyreR.width / zNow, cMid = (lo + hi) / 2;
         const denom = cW / 2 + tW;
@@ -1603,7 +1604,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (bcast && phone && window.innerWidth > window.innerHeight) {
       const stack = [_hudTop, els.minimap, gapsEl, els.flag, els.announce, els.tyre];
       const height = stack.reduce((sum, el) => {
-        if (!el || el.hidden) return sum;
+        if (!el || manualHud(el) || el.hidden) return sum;
         const r = layoutRect(el);
         return sum + r.height / zoomDiv(el, el === els.tyre ? zBotPub : zTopPub);
       }, 6 * FIT_AIR);
@@ -1766,7 +1767,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   if (_dockR) void _dockR.offsetHeight;
-  if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
+  if (!placedSectors && !document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
     const secR = els.hudSectors.getBoundingClientRect();
     const brLeft = boostRightLeft();
     const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf();
@@ -1783,7 +1784,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     }
   }
   mirrorClear(root);
-  // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.
+  // Refresh automatic pieces; manually owned geometry remains untouched.
   if (typeof HudLayout !== "undefined") HudLayout.fit();
   // fit() can undo the dock inset; shrink the sector plate before any extra
   // inset widen (widening slides the plate left into #minimap).

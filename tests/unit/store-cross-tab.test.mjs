@@ -167,13 +167,22 @@ test("a foreign write to someone else's key is ignored entirely", () => {
 });
 
 test("a write this tab made still wins its own cache — no self-invalidation loop", () => {
-  const { store, disk } = load();
+  const { store, disk, onStorage } = load();
+  const foreign0 = store.foreign;
   store.set("track", 7);
   assert.equal(disk.get("apex26.track"), "7");
   assert.equal(store.get("track", -1), 7);
-  // `storage` never fires for the document that wrote it, so the local value
-  // survives; if that ever changed, set()-then-get() would round-trip the disk.
-  assert.equal(store.get("track", -1), 7);
+  // The disk moves behind the cache with NO event: only a `storage` event may
+  // invalidate, so a get() that re-reads disk (a self-invalidating cache) shows 9.
+  disk.set("apex26.track", "9");
+  assert.equal(store.get("track", -1), 7, "set() must leave the key served from the cache");
+  // A foreign write to ANOTHER apex26 key must not drop this key's cache.
+  onStorage(evt("apex26.career", JSON.stringify({ money: 1 })));
+  assert.equal(store.get("track", -1), 7, "an unrelated foreign write keeps the cached key");
+  assert.equal(store.foreign, foreign0 + 1, "…while still counting as one foreign write");
+  // The same event for THIS key is the real invalidation: the next read hits disk.
+  onStorage(evt("apex26.track", "9"));
+  assert.equal(store.get("track", -1), 9);
 });
 
 

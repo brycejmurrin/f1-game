@@ -13,40 +13,46 @@ async function load(page, trackId = "monza") {
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
-function episodeScript() {
-  return (seed) => {
-    const A = window.__apex;
-    A.headless(true);
-    A.reset(0.02, 55, 0, seed);
-    const r = A.rollout({ seconds: 4, input: { steer: 0.05, throttle: true } });
-    const f = A.field({ detail: "full" });
-    A.headless(false);
-    return {
-      distanceM: r.distanceM,
-      speed: r.speedKph,
-      to: r.to,
-      grid: f.positions.map((p) => p.code + ":" + p.pace).join(","),
-    };
-  };
-}
-
 test.describe("simulation determinism — rendered frames", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("cosmetic randomness does not draw from the seeded stream", async ({ page }) => {
     await load(page);
-    // Rendering frames between two identical episodes must not shift the sim.
-    // If particles/camera-shake ever moved onto the seeded stream, drawing them
-    // would advance it and this would fail.
-    const r = await page.evaluate((src) => {
-      const run = eval("(" + src + ")");
-      const a = run(42);
-      return new Promise((res) => {
+    // reset() WITHOUT a seed argument keeps the stream where seed(42) and the
+    // frames since left it; reset(.., seed) re-seeds and would erase any advance
+    // (the previous version could not fail — review R3-01).
+    // LIMIT: no __apex hook reads the stream position, and reset()/a 1 s rollout
+    // do not depend on it, so no in-page positive control exists; the
+    // comparison below catches a cosmetic draw only where a later draw (the
+    // frames themselves, reliability, start hold) feeds the episode. A real
+    // control needs a stream-position read (sub-issue of #2952).
+    const r = await page.evaluate(() => {
+      const A = window.__apex;
+      const episode = () => {
+        const reset = A.reset(0.02, 55, 0);        // NO seed: keeps the stream position
+        const ro = A.rollout({ seconds: 1, input: { steer: 0.05, throttle: true } });
+        const f = A.field({ detail: "full" });
+        return JSON.stringify({ reset: !!reset, d: ro.distanceM, s: ro.speedKph, to: ro.to,
+          grid: f.positions.map((p) => p.code + ":" + p.pace).join(",") });
+      };
+      const frames = (n) => new Promise((res) => {
         let i = 0;
-        const tick = () => (++i > 20 ? res([a, run(42)]) : requestAnimationFrame(tick));
+        const tick = () => (++i > n ? res() : requestAnimationFrame(tick));
         requestAnimationFrame(tick);
       });
-    }, episodeScript().toString());
-    expect(JSON.stringify(r[1])).toBe(JSON.stringify(r[0]));
+      A.headless(true);
+      A.seed(42); const baseline = episode();
+      // Same seed, but real frames render between the rewind and the episode:
+      // if particles / camera shake / sparks drew from the seeded stream, the
+      // stream would have advanced and the grid + rollout would differ.
+      A.headless(false);
+      A.seed(42); return frames(20).then(() => {
+        A.headless(true);
+        const afterFrames = episode();
+        A.headless(false);
+        return { baseline, afterFrames };
+      });
+    });
+    expect(r.afterFrames).toBe(r.baseline);
   });
 });

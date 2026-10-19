@@ -84,6 +84,9 @@ test("no open PR: create one, never arm auto-merge, and keep the token off the a
     const nonMerge = [`origin/${DEPLOY_BRANCH}..HEAD`, `${DEPLOY_BRANCH}..HEAD`, "HEAD"]
       .map((r) => { try { return git(["log", "-1", "--no-merges", "--format=%s", r]); } catch { return ""; } })
       .find(Boolean);
+    // A checkout with no readable non-merge commit would make `nonMerge` undefined and
+    // turn the equality below into a comparison with nothing: fail on that, by name.
+    assert.ok(nonMerge, "no non-merge commit is reachable from HEAD in this checkout (shallow/detached clone?) — the title cannot be pinned");
     assert.equal(body.title, nonMerge, "the title must be the last NON-MERGE commit's subject");
     const headIsMerge = git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ").length > 2;
     if (headIsMerge) assert.notEqual(body.title, git(["log", "-1", "--format=%s", "HEAD"]), "never the merge commit's own subject");
