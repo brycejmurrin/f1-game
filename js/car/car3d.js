@@ -1478,16 +1478,20 @@ const Car3D = (function () {
       }
     }
     const exhGates = Math.max(0, Math.min(2, Math.round(exhStyle.wastegate || 0)));
+    // gateStack (D6): wastegates stacked ABOVE the main tip on the centreline.
+    const gateStack = !!exhStyle.gateStack && !exhTwin;
     for (let i = 0; i < exhGates; i++) {
       const s = i === 0 ? -1 : 1;
-      const gx = exhTwin ? s * (EXH_OUT * 0.55) : s * 0.075;
-      const tipX = exhTwin ? s * EXH_OUT * 0.72 : s * 0.098;
-      addSpan(out, { z: -2.02, x: gx, y: 0.47, w: 0.036, h: 0.036 },
-                   { z: tipZ + 0.06, x: tipX, y: 0.53, w: 0.030, h: 0.030 },
+      const gx = gateStack ? s * 0.03 : exhTwin ? s * (EXH_OUT * 0.55) : s * 0.075;
+      const tipX = gateStack ? 0 : exhTwin ? s * EXH_OUT * 0.72 : s * 0.098;
+      const gy = gateStack ? EXH_Y + tipRShow + 0.05 + i * 0.075 : 0.53;
+      const gw = gateStack ? 0.050 : 0.030;
+      addSpan(out, { z: -2.02, x: gx, y: gateStack ? gy - 0.04 : 0.47, w: 0.036, h: 0.036 },
+                   { z: tipZ + 0.06, x: tipX, y: gy, w: gw, h: gw },
               [0.20, 0.20, 0.22], null, SURFACES.metal);
-      addBox(out, tipX, 0.535, tipZ + 0.05, 0.034, 0.034, 0.028,
+      addBox(out, tipX, gy + 0.005, tipZ + 0.05, gw + 0.010, gw + 0.010, 0.028,
              [0.22, 0.22, 0.24], SURFACES.metal);
-      addBox(out, tipX, 0.535, tipZ + 0.032, 0.020, 0.020, 0.012,
+      addBox(out, tipX, gy + 0.005, tipZ + 0.032, gw * 0.66, gw * 0.66, 0.012,
              glazeOf(fTwin), SURFACES.metal);
     }
     const exhLip = Math.max(0, Math.min(2, Math.round(exhStyle.lip || 0)));
@@ -1519,6 +1523,19 @@ const Car3D = (function () {
           }
         }
       }
+    }
+    // D6 preview: heatTint = titanium temper bands behind the tip (1 straw→blue, 2 burnt
+    // purple); hood = carbon visor overhanging a single exit, red-edged.
+    const exhTint = Math.max(0, Math.min(2, Math.round(exhStyle.heatTint || 0)));
+    const tintBands = exhTint === 2 ? [[0.40, 0.24, 0.52], [0.22, 0.26, 0.62], [0.30, 0.22, 0.50], [0.18, 0.30, 0.66]]
+      : [[0.80, 0.64, 0.30], [0.66, 0.42, 0.26], [0.44, 0.30, 0.56], [0.22, 0.34, 0.68]];
+    for (const cx of exhTint ? exits : []) tintBands.forEach((c, i) => addTube(out, [[cx, EXH_Y, tipZ + 0.34 - i * 0.075],
+      [cx, EXH_Y, tipZ + 0.27 - i * 0.075]], (exhTwin ? exhR : tipRShow * 0.85) * 1.12, 10, c, SURFACES.metal));
+    if (exhStyle.hood && !exhTwin) {
+      const hr = tipRShow * (1 + 1.15 * exhFlare) + 0.03;
+      addBox(out, 0, EXH_Y + hr, tipZ - 0.02, hr * 2.4, 0.016, 0.30, CARBON, SURFACES.carbon);
+      for (const s of [-1, 1]) addBox(out, s * hr * 1.2, EXH_Y + hr * 0.35, tipZ - 0.02, 0.014, hr * 1.4, 0.30, CARBON, SURFACES.carbon);
+      addBox(out, 0, EXH_Y + hr + 0.014, tipZ - 0.16, hr * 2.4, 0.010, 0.02, [0.85, 0.12, 0.10], SURFACES.paint);
     }
     exhTipRForLamp = tipRShow * (exhFlare > 0 && !exhTwin ? (1 + 1.15 * exhFlare) : 1);
     // STACK (STYLE parts, 2026-10-18): an upswept tail-pipe stack over the crash
