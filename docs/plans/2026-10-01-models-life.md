@@ -157,37 +157,43 @@ stands, the pits garage along the pit lane, one landmark. Verify per circuit:
 
 ## Slice F — bake-time trees (item 14) — M — design notes 2026-10-02
 
+**Decision 2026-10-19 (option B):** stay within the procedural triangle budget;
+do **not** add a `createInstancedBatch` VM stub. Measured means and LOD caps:
+[`docs/notes/TREE-BUDGET-2026-10-19.md`](../notes/TREE-BUDGET-2026-10-19.md).
+pine LOD0≤45 / LOD1≤22, tree ≤51/25, palm ≤156/78; placements 1:1; no
+props-tris-baseline raise. Format + bake tools land first; committing models
+and swapping placements is a follow-up once scenery/kenney hunters land.
+
 `@dgreenheck/ez-tree` 1.1.0 is reachable from the container (`npm view`), so
 the bake can run here (`npm i --no-save @dgreenheck/ez-tree three`, never a
-`package.json` dependency: the bake is a manual tool whose output is
-committed). Two things the plan under-sized:
+`package.json` dependency: the bake is a manual tool whose output lands under
+ignored `artifacts/trees/` until the placement slice commits the pack). Two
+things the plan under-sized:
 
 1. **Sway weights need the format.** The procedural crowns carry wind as the
    FRACTION of the per-vertex `mat` (`MAT.FOLIAGE + w × SWAY_FRAC`, nature.js
    `swayOn`); AX26 v2 stores `mat` as u8, so a baked tree loses it. AX26 v3 =
    v2 + a trailing u8 `sway` stream (w × 255), read back as `mat + sway/255 ×
    SWAY_FRAC` in `_parseModel`, its node mirror `tools/lib/pack-assets.cjs`
-   and `tests/helpers/ax26.mjs`; `model-pack-format.test.mjs` must admit v3
-   for the tree ids. That is Slice G's encoding delivered with F.
+   (`writeAX26v3` / `parseModel`) and `tests/helpers/ax26.mjs`;
+   `model-pack-format.test.mjs` admits v3; `model-sway-parity.test.mjs` pins
+   procedural weights ↔ round-trip. That is Slice G's encoding delivered with F.
 2. **The VM measures copies.** Slice D instances baked models only where the
    batch API exists; every sweep (`props-tri-ratchet`, `track-build-vm-release`,
    `coplanar-faces`, …) builds on the copy path, so a 200-triangle tree in
    place of a ~70-triangle cone pine, placed thousands of times by
    `forestEdge`, raises the measured props triangles ~3× on forested
    circuits (Spa, Suzuka) and trips the tri ratchets even though the browser
-   draws one geometry per species. Either the sweeps' VM grows a
-   `createInstancedBatch` stub (then `baked-model-instancing.test.mjs`'s
-   copy-path pins move to a flag) or the tree LOD stays within the cone's
-   budget (~70 tris: 8 leaf cards + a 4-segment trunk) and the win is shape,
-   not detail. Decide before baking.
+   draws one geometry per species. The stub is rejected (TLX software WebGPU
+   skips instanced batches — CI would lose trees and ratchets would go blind);
+   LOD stays inside the measured means above.
 
 ez-tree (MIT, https://github.com/dgreenheck/ez-tree) generates branching
-trees with leaf cards and per-vertex wind weights. A bake script under
-`tools/gen/<new>/bake-trees.mjs` renders three species × two LODs to AX26 v3
-(leaf cards as a FOLIAGE-material quad set) and the existing sway path
-(`js/track/scenery/nature.js` `swayOn`) drives them. Verify: a graph bake
-vertex-count test; the sway parity test; `verify-track` on a forested
-circuit (Spa).
+trees with leaf cards; `tools/gen/trees/bake-trees.mjs` bakes three species ×
+two LODs to AX26 v3 (leaf-card fallback when ez-tree overshoots the cap) and
+the existing sway path (`js/track/scenery/nature.js` `swayOn`) drives them.
+Verify: `model-sway-parity.test.mjs`; bake self-check against `caps.mjs`;
+placement slice adds `verify-track` on Spa.
 
 ## Slice G — per-vertex wind, Crysis style (item 15) — S after F
 

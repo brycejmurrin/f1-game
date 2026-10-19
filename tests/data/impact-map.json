@@ -13689,6 +13689,7 @@
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs",
+        "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/scene-live.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs"

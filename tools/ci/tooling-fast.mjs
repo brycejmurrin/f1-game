@@ -744,6 +744,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mobile-native-download.test.mjs",
   "tests/unit/mobile-sync-web.test.mjs",
   "tests/unit/model-pack-format.test.mjs",
+  "tests/unit/model-sway-parity.test.mjs",
   "tests/unit/move-tree.test.mjs",
   // needs-sync: the sync predicate (conflict | stale-red | no) that sync-pr and pr-board run first.
   "tests/unit/needs-sync.test.mjs",

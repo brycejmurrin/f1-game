@@ -9,7 +9,8 @@
  * So this runs js/render/shared/assets.js in a vm with a fetch that serves one
  * file from disk, and returns what Assets.model() returns. If the real reader
  * cannot read the file, the test fails — which is the only claim these suites
- * are actually trying to make.
+ * are actually trying to make. v3 (trailing u8 sway) rides the same path once
+ * _parseModel admits it — no second parser here.
  */
 import fs from "node:fs";
 import path from "node:path";
