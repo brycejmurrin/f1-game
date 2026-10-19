@@ -124,23 +124,14 @@ const CustomLiveries = (function () {
     // Optional detail colours are additive. Every live LIV_DRAFT_COLORS tint must be
     // listed. Dead keys (crestInk / plateInk / ridgeTint / airboxTint) are stripped
     // by Liveries.migratePaint before this runs — do not put them back.
-    // A COPY of `Liveries.FIELDS` that had drifted by one row: `bodySplit`
-    // (Cadillac's L/R body) was published and painted but missing here, so every
-    // resolveLivery came back single-colour. team-livery.test.mjs now asserts the
-    // two lists are the same set — the only thing that keeps a copy honest.
-    const LIVERY_FIELDS = ["stripe", "accent", "nose", "pod", "wing", "halo", "fin", "finArt", "logo", "logo2",
-      "logo3", "noseStripe", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape",
-      "tcam", "coverVents", "spineHeight", "spineSide", "rearWing", "wingCarbon", "cover", "spineTint", "sideTint",
-      "sunTint", "bandTint2", "plateTint",
-      "saddleTint", "coverBind", "finHandoff", "bodySplit", "lower", "upper",
-    "patternTint", "patternSecond", "patternPlacement", "patternSide", "patternWidth", "patternRepeat",
-    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "coverFinish", "wingFinish", "haloFinish",
-    "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
-    "podFinish", "finFinish", "mirrorFinish", "helmetStyle", "endplate", "crestStyle",
-    "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
-    "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint", "bodyStyle"];
+    // A copied list once omitted bodySplit: Cadillac's published L/R paint
+    // resolved single-colour. Read the canonical owner so new fields cannot
+    // disappear between the editor and the car again.
+    // Use the published field order at call time, shared by stored and draft
+    // resolution. These objects are transient paint/cache inputs; authored rows
+    // keep their own insertion order when saved or encoded.
     // A stored garage file may still carry the four RETIRED keys, so every read
-    // path folds them once, here, and the list above never mentions them again:
+    // path folds them once, here, and the published list never mentions them again:
     // RIDGE was the crown's centreline only and is now the BAND it always fell
     // back to; CREST INK and PLATE INK are auto-inked (see Liveries.migratePaint).
     // AIRBOX is DROPPED rather than folded onto `cover`: it painted the roll hoop
@@ -153,7 +144,7 @@ const CustomLiveries = (function () {
     }
     function pickLivery(l) {
       const v = { id: l.id || null, c1: l.c1, c2: l.c2 };
-      for (let i = 0; i < LIVERY_FIELDS.length; i++) { const k = LIVERY_FIELDS[i]; v[k] = l[k] || null; }
+      for (const k of Liveries.FIELDS) v[k] = l[k] || null;
       return v;
     }
 

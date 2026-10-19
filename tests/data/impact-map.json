@@ -2613,13 +2613,20 @@
     },
     "js/car/custom-liveries.js": {
       "create": [
+        "tests/unit/body-styles.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "pickLivery": [
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/body-styles.test.mjs",
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
+        "tests/unit/team-livery.test.mjs"
       ],
       "resolveLivery": [
         "tests/unit/team-livery.test.mjs"
@@ -2639,9 +2646,6 @@
         "tests/unit/team-livery.test.mjs"
       ],
       "*": [
-        "tests/unit/body-styles.test.mjs",
-        "tests/unit/livery-finish-contract.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/share-code.test.mjs"
       ]
@@ -6912,6 +6916,7 @@
     },
     "js/garage/setup-camera.js": {
       "create": [
+        "tests/unit/body-styles.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-personality.test.mjs",
@@ -6990,7 +6995,6 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "*": [
-        "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
@@ -7056,6 +7060,8 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -7096,9 +7102,7 @@
         "tests/unit/garage-before.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
-        "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",

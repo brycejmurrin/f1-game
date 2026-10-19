@@ -232,34 +232,30 @@ test("resolveLivery falls back through the team's own list", () => {
 });
 
 test("resolveLivery and the live preview keep every editor tint", () => {
-  // Aston's launch car authors spineTint; dropping it in resolveLivery painted
-  // stripe||accent (lime) on the crown band. Editor tints must reach the atlas,
-  // and both paths now go through ONE field list (pickLivery / LIVERY_FIELDS),
-  // so a tint is on the car iff it is in that list and both paths call it.
-  // The four RETIRED keys (crestInk / plateInk / ridgeTint / airboxTint) are
-  // folded or dropped by migratePaint and must not be in the list at all.
-  const fields = CUSTOM_LIV_SRC.match(/const LIVERY_FIELDS = \[([\s\S]*?)\];/);
-  assert.ok(fields, "LIVERY_FIELDS is gone from js/car/custom-liveries.js");
+  const ctx = vm.createContext({});
+  vm.runInContext(LIVERIES_SRC, ctx);
+  const fields = vm.runInContext("Liveries.FIELDS", ctx);
+  const custom = vm.runInContext(CUSTOM_LIV_SRC + "; CustomLiveries", ctx).create({ store: {} });
   for (const k of ["spineTint", "sideTint", "sunTint", "bandTint2", "plateTint",
-    "saddleTint", "coverBind", "finHandoff"]) {
-    assert.match(fields[1], new RegExp('"' + k + '"'), `LIVERY_FIELDS must carry ${k}`);
+    "saddleTint", "coverBind", "finHandoff", "bodySplit"]) {
+    assert.ok(fields.includes(k), `published fields must carry ${k}`);
   }
-  for (const k of ["crestInk", "plateInk", "ridgeTint", "airboxTint"]) {
-    assert.equal(fields[1].includes('"' + k + '"'), false,
-      `LIVERY_FIELDS must not carry the retired key ${k}`);
-  }
-  // …and it is the SAME SET as the published list it copies. Naming the rows
-  // one at a time above could only catch the rows someone thought to name:
-  // `bodySplit` shipped on Cadillac, was listed by the editor and painted by
-  // Car3D, and was absent here for nine days because no assertion compared the
-  // two lists. Every field Liveries.FIELDS publishes reaches the car through
-  // resolveLivery, or it does not reach it at all.
-  const published = listFrom(LIVERIES_SRC, /const FIELDS = \[([\s\S]*?)\];/);
-  const picked = listFrom(CUSTOM_LIV_SRC, /const LIVERY_FIELDS = \[([\s\S]*?)\];/);
-  const missing = [...published].filter((k) => !picked.has(k)).sort();
-  const extra = [...picked].filter((k) => !published.has(k)).sort();
-  assert.deepEqual(missing, [], "LIVERY_FIELDS drops fields Liveries.FIELDS publishes");
-  assert.deepEqual(extra, [], "LIVERY_FIELDS names fields Liveries.FIELDS does not");
+  for (const k of ["crestInk", "plateInk", "ridgeTint", "airboxTint"])
+    assert.equal(fields.includes(k), false, `published fields must not revive ${k}`);
+  const row = { id: "mine", c1: [1, 0, 0], c2: [0, 1, 0] };
+  for (const k of fields) row[k] = "value:" + k;
+  const resolved = custom.pickLivery(row);
+  for (const k of fields) assert.equal(resolved[k], row[k], `canonical field ${k} reaches the resolver`);
+  assert.deepEqual(Object.keys(resolved), ["id", "c1", "c2", ...fields], "transient resolved JSON uses canonical schema order");
+  assert.equal(resolved.c1, row.c1, "base colour references stay unchanged");
+  assert.equal(resolved.c2, row.c2);
+  assert.equal(JSON.stringify(custom.pickLivery(row)), JSON.stringify(resolved), "repeated resolution has stable cache-key bytes");
+  const falsy = custom.pickLivery({ id: "", c1: row.c1, c2: row.c2, stripe: false, noseStripe: 0, accent: "", nose: null });
+  for (const k of ["id", "stripe", "noseStripe", "accent", "nose"]) assert.equal(falsy[k], null, `${k} keeps || null semantics`);
+  fields.push("futureFromSchema");
+  try {
+    assert.equal(custom.pickLivery({ ...row, futureFromSchema: "propagated" }).futureFromSchema, "propagated", "a later schema addition reaches the resolver without a copied list");
+  } finally { fields.pop(); }
   // …and every read path folds a stored file's retired keys exactly once.
   assert.match(CUSTOM_LIV_SRC, /return pickLivery\(migrateLivery\(livDraftOverride\.liv\)\)/,
     "draft resolveLivery must migrate, then resolve through pickLivery");

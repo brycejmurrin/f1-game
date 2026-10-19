@@ -38,14 +38,17 @@ test("reserved finish ids are unique, past the shipped chain, and disjoint from 
 test("every new livery field is in every field list the game keeps", () => {
   const lists = {
     "Liveries.FIELDS": /const FIELDS = \[([\s\S]*?)\];/.exec(read("js/car/liveries.js"))[1],
-    "CustomLiveries LIVERY_FIELDS": /const LIVERY_FIELDS = \[([\s\S]*?)\];/.exec(read("js/car/custom-liveries.js"))[1],
   };
+  const ctx = vm.createContext({});
+  for (const f of ["js/car/liveries.js", "js/car/custom-liveries.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const resolve = vm.runInContext("CustomLiveries.create({ store: {} })", ctx);
   const sheet = read("js/garage/setup-sheet.js");
   lists["LIV_DRAFT_COLORS"] = /const LIV_DRAFT_COLORS = \[([\s\S]*?)\];/.exec(sheet)[1];
   lists["LIV_DRAFT_PILLS"] = /const LIV_DRAFT_PILLS = \{([\s\S]*?)\};/.exec(sheet)[1];
   for (const k of COLOURS.concat(PILLS)) {
-    const where = COLOURS.includes(k) ? ["Liveries.FIELDS", "CustomLiveries LIVERY_FIELDS", "LIV_DRAFT_COLORS"] : ["Liveries.FIELDS", "CustomLiveries LIVERY_FIELDS", "LIV_DRAFT_PILLS"];
+    const where = COLOURS.includes(k) ? ["Liveries.FIELDS", "LIV_DRAFT_COLORS"] : ["Liveries.FIELDS", "LIV_DRAFT_PILLS"];
     for (const name of where) assert.match(lists[name], new RegExp(`["']?${k}["']?`), `${k} missing from ${name}`);
+    assert.equal(resolve.pickLivery({ id: "mine", c1: [0, 0, 0], c2: [1, 1, 1], [k]: "kept:" + k })[k], "kept:" + k, `${k} reaches live resolution`);
     assert.match(sheet, new RegExp(`\\n  ${k}: "`), `${k} has no LIV_ROW_HINT`);
   }
   for (const k of PILLS) assert.ok(!/LIV_DRAFT_COLORS = \[[\s\S]*?\];/.exec(sheet)[0].includes(`"${k}"`), `${k} is a pill, not a colour`);

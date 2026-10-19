@@ -7,11 +7,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (p) => readFileSync(new URL("../../" + p, import.meta.url), "utf8");
 const M = loadParts({ liveries: true });
 const W = M;
+// Exercise the real paint resolver with the canonical catalog already loaded
+// by the shared parts profile; the mesh and wheel fixtures keep that profile.
+W.custom = vm.runInContext(
+  read("js/car/custom-liveries.js") + "\nCustomLiveries.create({ store: {} });",
+  vm.createContext({ Liveries: W.Liveries }),
+  { filename: absSrc("js/car/custom-liveries.js") },
+);
 const team = M.Teams.LIST.find((t) => t.id === "ferrari");
 const S = M.Car3D.SURFACES, FS = M.Car3D.FINISH_SURFACE;
 const sel = Object.assign({}, M.Parts.defaults ? M.Parts.defaults() : {});
@@ -180,10 +189,10 @@ test("GRIPS: getCockpitWheel keys on gripTint only when it is set", () => {
 
 test("every new field is published, copied, offered in the garage, hinted and filed in an editor section", () => {
   const fields = new Set(W.Liveries.FIELDS);
-  const cust = read("js/car/custom-liveries.js"), sheet = read("js/garage/setup-sheet.js"), ed = read("js/garage/livery-design-editor.js");
+  const sheet = read("js/garage/setup-sheet.js"), ed = read("js/garage/livery-design-editor.js");
   for (const k of NEW) {
     assert.ok(fields.has(k), `${k} in Liveries.FIELDS`);
-    assert.match(cust.match(/const LIVERY_FIELDS = \[([\s\S]*?)\];/)[1], new RegExp(`"${k}"`), `${k} in LIVERY_FIELDS`);
+    assert.equal(W.custom.pickLivery({ id: "mine", c1: [0, 0, 0], c2: [1, 1, 1], [k]: "kept:" + k })[k], "kept:" + k, `${k} reaches resolved paint`);
     assert.ok(sheet.includes(`"${k}"`), `${k} has a garage row`);
     assert.match(sheet, new RegExp(`^  ${k}: "`, "m"), `${k} has a LIV_ROW_HINT`);
     assert.ok(ed.includes(`"${k}"`), `${k} filed in an editor section`);

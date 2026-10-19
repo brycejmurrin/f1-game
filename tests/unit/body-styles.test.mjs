@@ -92,8 +92,11 @@ test("no concept body lowers the flap solver's nose-droop floor", () => {
   assert.equal(floor([...teams, ...Object.values(Car3D.BODY_STYLES)]), floor(teams));
 });
 
-test("bodyStyle is a published livery field and the garage's copy list carries it", () => {
+test("bodyStyle is a published livery field and live resolution carries it", () => {
   assert.ok(Liveries.FIELDS.includes("bodyStyle"));
-  assert.match(fs.readFileSync("js/car/custom-liveries.js", "utf8"), /"bodyStyle"\]/);
+  const ctx = vm.createContext({});
+  for (const file of ["js/car/liveries.js", "js/car/custom-liveries.js"]) vm.runInContext(fs.readFileSync(file, "utf8"), ctx, { filename: absSrc(file) });
+  const resolve = vm.runInContext("CustomLiveries.create({ store: {} })", ctx);
+  assert.equal(resolve.pickLivery({ id: "mine", c1: [0, 0, 0], c2: [1, 1, 1], bodyStyle: "needle" }).bodyStyle, "needle");
   assert.match(fs.readFileSync("js/garage/setup-camera.js", "utf8"), /SP_HULL_GEOM_FIELDS = \[[^\]]*"bodyStyle"/);
 });
