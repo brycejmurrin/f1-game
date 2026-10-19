@@ -55,31 +55,28 @@ const snapPrep = async (page) => page.evaluate(() => {
 });
 
 /**
- * Force the select-screen flyby prep to land WHILE #select is still up.
+ * Force the select-screen flyby prep to finish WHILE #select is still up.
  * scheduleFlybyTrack's ensureScenery / ensureTrackBuild window is invisible to Tracks.building();
- * waiting here means Bahrain cannot step geoLive after the warm baseline.
+ * leaving as soon as menuPrep.world is true also races menuFinish's program warm — the garage then
+ * edits under gfx.warming() and the flap/atlas baseline is empty (warm flaps=0, end mints them).
+ * Wait for world + done + !warming so Bahrain geos and shader warm both land before the garage.
  */
 const awaitMenuTrackBuilt = async (page) => {
   // #region agent log
-  dbg("A", "garage-livery-churn.spec.js:awaitMenuTrackBuilt:enter", "await menu world on select", await snapPrep(page));
+  dbg("A", "garage-livery-churn.spec.js:awaitMenuTrackBuilt:enter", "await menu prep done on select", await snapPrep(page));
   // #endregion
   await page.waitForFunction(() => {
     const A = window.__apex;
     if (!A || typeof A.menuPrep !== "function") return false;
     const p = A.menuPrep();
-    if (!p || p.building) return false;
+    if (!p || p.building || p.warming || !p.world || !p.done) return false;
     try {
       if (typeof Tracks !== "undefined" && Tracks.building && Tracks.building()) return false;
     } catch (_) { /* */ }
-    // menuWorld() — selection's track meshes are resident (geos already registered).
-    if (p.world) return true;
-    try {
-      const info = typeof A.info === "function" ? A.info() : null;
-      return !!(info && info.track);
-    } catch (_) { return false; }
-  }, null, { polling: 100, timeout: 120000 });
+    return true;
+  }, null, { polling: 100, timeout: 180000 });
   // #region agent log
-  dbg("A", "garage-livery-churn.spec.js:awaitMenuTrackBuilt:exit", "menu world ready", await snapPrep(page));
+  dbg("A", "garage-livery-churn.spec.js:awaitMenuTrackBuilt:exit", "menu prep done", await snapPrep(page));
   // #endregion
 };
 
@@ -100,7 +97,7 @@ const settleGeo = async (page, label) => {
     if (!window.__modelsReadyOk) return false;
     try {
       const p = (window.__apex && typeof window.__apex.menuPrep === "function") ? window.__apex.menuPrep() : null;
-      if (p && p.building) {
+      if (p && (p.building || p.warming)) {
         window.__geoSettle.last = -1;
         window.__geoSettle.since = 0;
         return false;
@@ -180,6 +177,13 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
   for (let i = 0; i < WARM; i++) await edit();
   await pause(page, 2500);   // past the garage's flap idle window (setup-camera.js FLAP_IDLE_MS)
   await edit();
+  // Turntable flaps must exist before the leak baseline (menu warm can delay the first garage frame).
+  await page.waitForFunction(() => {
+    try {
+      const f = typeof CarMesh !== "undefined" && CarMesh.flapState && CarMesh.flapState();
+      return !!(f && f.sets > 0);
+    } catch (_) { return false; }
+  }, null, { polling: 100, timeout: 120000 });
   await settleGeo(page, "warm");   // absorb late model/bay geos before the baseline (#2897)
   const warm = await read();
   // #region agent log
