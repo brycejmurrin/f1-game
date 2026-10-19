@@ -3,8 +3,11 @@
 # Images: <id>-{wheel,cockpit,hero,phone,near,diff}.jpg (current), r<N>/... (archived).
 import html, json
 
-ROUND = 2
+ROUND = 3
 CHANGELOG = [
+    (3, "Fit check added (tools/car/car-fit-audit.mjs from cursor/fit-audit-420b, McLaren, each look vs the factory car and vs its own equivalent). "
+        "halomirror: the stays floated 5.7 mm off the halo tube and ended buried inside the housing; they now root on the tube and end at the housing wall (dc9d048b). "
+        "The other four add no new FAIL against their equivalents."),
     (2, "drum: pale drilled face (3 rings of 54 holes) and a wide gold heat-foil band, so it no longer reads as the dark carbon disc. "
         "blownaxle: hub ring 0.34→0.44 of the rim, bore 0.55→0.62, orange machined lip and six drive pegs. "
         "Reference hunt stopped (Commons 429 fleet-wide): ysplit, drum and halomirror marked 'no CC photo found'."),
@@ -36,6 +39,14 @@ C = [
   what="A pale weave drum encloses the disc: three rings of cooling holes on each face and a wide gold heat-foil band at the outer edge.",
   haus=None, area=None, refs=[], refnote="No CC photo found (three searches; Commons rate-limited).", r=2),
 ]
+
+FIT = [
+ ("ysplit", "parity", "No new FAIL vs mag_forged. Two extra 4×16×16 mm rotor-mark pieces (wheels↔brakeDucts GAP 10.7 mm ×4 vs ×2) — the existing disc drill-mark boxes, unchanged by the fork."),
+ ("mirrorframe", "parity", "No new FAIL vs deflector. The frame boxes touch the housing (no mirrors GAP row beyond the factory's own 8.2 mm housing gap)."),
+ ("halomirror", "fixed r3", "Round 2: mirrors↔halo GAP 5.7 mm ×2 (stays rooted at y 0.845 over a tube squashed to ±15 mm round crownY). Round 3: rooted on crownY and ended at the housing wall — the row is gone; the remaining mirror row is the factory's own 8.2 mm."),
+ ("blownaxle", "parity", "No new FAIL vs open_spoke. Same two extra rotor-mark pieces as ysplit."),
+ ("drum", "warn", "No new FAIL vs carbon. OPEN edges +1.8 m (86.1 vs 84.3 m): the drum faces are single-sided annuli drawn cull-off, so their rims count as boundary edges. WARN only; closing them would double the drum's triangles."),
+]
 MEAS = json.load(open("meas.json")) if __import__("os").path.exists("meas.json") else {}
 
 def fig(src, cap, cls=""):
@@ -63,6 +74,12 @@ for i, c in enumerate(C, 1):
 <div class="grid g4">{fig(f"{c['id']}-diff.jpg", 'Changed pixels (magenta) over the nearest part')}{fig(f"{c['id']}-{other}.jpg", ('Wheel' if other == 'wheel' else 'Cockpit') + ' close-up')}{fig(f"{c['id']}-hero.jpg", '3/4 garage view')}{fig(f"{c['id']}-phone.jpg", 'Phone 844×390')}</div>
 </section>''')
 
+fitrows = "".join(f'<tr><td><span class="sid">{i}</span></td><td><span class="chip">{st}</span></td><td>{html.escape(t)}</td></tr>' for i, st, t in FIT)
+fitsec = f'''<section class="cand" id="fit"><header><div class="hd"><h2>Fit check</h2>
+<p class="meta"><code>node tools/car/car-fit-audit.mjs --team=mclaren --styles=&lt;cat/id,…&gt;</code> (branch cursor/fit-audit-420b) · GAP / PENETRATION / ZFIGHT fail, OPEN warns</p></div></header>
+<p class="src">Each look is compared with the factory McLaren and with its own equivalent part, so rows the equivalent already carries are not counted against the look. The factory car itself has 67 failing rows (front wing, engine cover, brake ducts into tyres…); those belong to other lanes and are unchanged here.</p>
+<div class="tablewrap"><table><thead><tr><th>id</th><th>result</th><th>joints</th></tr></thead><tbody>{fitrows}</tbody></table></div>
+<p class="note">Not included: the boxy cockpit blocks D8 flagged. That list was not sent to this lane. Captures above are round 2; the round-3 stay move is under 2 cm and was not re-shot.</p></section>'''
 r1 = "".join(f'<div class="r1row"><h4>{c["name"]} <span class="sid">{c["id"]}</span> · {ROUND1_DIFF[c["id"]]}% changed</h4><div class="grid g3">{fig(f"r1/{c["id"]}-{c["close"]}.jpg", "Round 1 candidate")}{fig(f"r1/{c["id"]}-near.jpg", "Nearest existing")}{fig(f"r1/{c["id"]}-diff.jpg", "Round 1 diff")}</div></div>' for c in C if c["r"] > 1)
 log = "".join(f"<li><b>Round {n}.</b> {html.escape(t)}</li>" for n, t in CHANGELOG)
 ranked = " · ".join(c["id"] for c in C)
@@ -102,6 +119,7 @@ figure.ref img{{object-fit:contain}} figcaption{{font-size:12.5px;color:var(--mu
 .note{{margin:0;font-size:13px;color:var(--muted)}}
 details{{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 20px}} summary{{cursor:pointer;font:600 22px var(--display)}}
 summary:focus-visible{{outline:2px solid var(--accent);outline-offset:3px}}
+table{{border-collapse:collapse;width:100%;font-size:14px}} th,td{{text-align:left;padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}} th{{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}} .tablewrap{{overflow-x:auto}}
 footer{{color:var(--muted);font-size:13px;max-width:80ch}}
 </style>
 <main>
@@ -116,6 +134,7 @@ footer{{color:var(--muted);font-size:13px;max-width:80ch}}
 <li><b>blownaxle</b>: round 2 hub is wider with a coloured lip; reads in close-up and 3/4.</li>
 <li><b>drum</b>: round 2 face is now pale and drilled with a gold band, clearly not the carbon disc up close.</li></ol></div>
 {''.join(secs)}
+{fitsec}
 <details><summary>Round 1 (earlier designs, changed since)</summary>{r1}</details>
 <footer>Diff threshold: any channel moving more than 24/255. Hausdorff and moved area come from tools/car/parts-sweep.mjs compare() on the full car mesh against the candidate's equivalent. Phone frames use the garage hero view at 844×390. Reference photos are from Wikimedia Commons under the licences shown; authors are on each source page. Ranked: {ranked}.</footer>
 </main>'''
