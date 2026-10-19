@@ -850,6 +850,7 @@
     {
       "path": "tools/ci/live-run-check.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
@@ -1137,6 +1138,7 @@
     {
       "path": "tools/ci/session-ledger.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
