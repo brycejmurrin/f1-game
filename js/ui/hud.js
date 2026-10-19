@@ -1119,9 +1119,11 @@ function fitHud() {
   else ["--hud-z-top", "--hud-z-bot"].forEach((p, i) => (zWas[i] ? root.style.setProperty(p, zWas[i]) : root.style.removeProperty(p)));   // nothing laid out
 }
 let _fitCanon = null;   // the cap pass's { top, bot }, consumed by the paint pass
+let _tyreRestack = null;   // the paint pass's stored limits-left TYRES restack { key, leftBot, metricsB } (#2797)
 function fitPass(canon, scale, btnScale, placedSectors) {
   const root = document.documentElement;
-  if (canon) { root.style.setProperty("--hud-z-top", "1"); root.style.setProperty("--hud-z-bot", "1"); }
+  // A band already at zoom 1 (HUD 100, uncapped) is measured as it stands: no "1" write and undo (#2797).
+  if (canon) for (const p of ["--hud-z-top", "--hud-z-bot"]) if ((+root.style.getPropertyValue(p) || scale) !== 1) root.style.setProperty(p, "1");
   // Measure the natural plate, never the previous dock pass's wrapped output.
   // A saved MOVE & SIZE plate belongs to HudLayout's placement pass below.
   if (els.hudSectors && els.hudSectors.style) els.hudSectors.style.removeProperty("max-width");
@@ -1352,148 +1354,144 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // and a var that is only sometimes present is a var that is sometimes 0.
   // Same published divisor as wide() — do not re-read currentCSSZoom here.
   const topHPub = tall(_hudTop, zTopPub);
-  hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
-  // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
-  // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
-  // where the BOOST pedal is on a touch phone, so a track-limits warning painted
-  // over a tap target. Published in the chrome's own zoom space (the dock zooms
-  // by the RAW slider, the chrome by --hud-z-top) so the CSS can add it directly.
-  // The dock's SCREEN width over the CHROME's zoom: #hud-limits is inside the
-  // --hud-z-top group, so its `right:` needs the stand-off in that space, and
-  // the dock's own zoom (the raw slider) never enters it.
-  // THE SECTOR BOX'S HEIGHT, for the chip that hangs off its bottom edge.
-  // #hud-limits derived that offset from a hand-computed `4.8em` (three rows at
-  // line-height 1.6) — which is only the box's height while the box EXISTS. Every
-  // profile that hides it (MINIMAL, and a broadcast camera outside the broadcast
-  // profile) left the chip hanging in mid-air below an empty corner, reported
-  // from a phone as "LIMITS floats in the middle of the screen". Measured, in
-  // the chip's own zoom units, it is 0 exactly when the box is gone.
-  const secH = tall(els.hudSectors, zTopPub);
-  hStyle(root, "--hud-sec-h", secH.toFixed(1) + "px");
-  const chromeZ = zoomDiv(_hudTop || els.minimap, zTopPub) || scale || 1;
-  // THE RIGHT DOCK'S WIDTH — BUT ONLY WHEN THE CHIP ACTUALLY REACHES IT.
-  // Standing off unconditionally dragged a top-right chip halfway across the
-  // screen on any viewport tall enough for the two never to meet (the second
-  // half of the same phone report). #hud-dock is bottom-anchored and only as
-  // tall as its tallest column, so the test is one rect comparison: does the
-  // chip's bottom edge reach the dock's top edge? The chip's own box cannot be
-  // measured — it is `hidden` until the player takes a strike — so its top is
-  // reconstructed from the column it hangs in: #pausebtn's bottom edge plus the
-  // same 4 px of air css/hud.css puts between them, then the sector box, then
-  // the 15 px offset. CHIP_H is its one line plus padding at --fs-micro.
-  const CHIP_H = 26, CHIP_DROP = 15;
-  const pauseR = els.pausebtn ? els.pausebtn.getBoundingClientRect() : null;
-  const colTop = scR && scR.height ? scR.top : (pauseR && pauseR.height ? pauseR.bottom + 4 : 0);
-  const limBot = colTop + (secH + CHIP_DROP + CHIP_H) * chromeZ;
-  const dockR = _dockR ? _dockR.getBoundingClientRect() : null;
-  const hitsRight = !!(dockR && dockR.width && limBot > dockR.top);
-  // WHEN THE RIGHT COLUMN IS FULL, GO LEFT — DO NOT WALK INTO THE MIDDLE.
-  // Standing off the dock's width is the only way to stay right-anchored, and
-  // on a phone that dock is ~150px: the chip landed a third of the way across
-  // the screen, over the track, which is the second half of the same report.
-  // The LEFT column has room the right one does not — the map ends well above
-  // the steering arrows — so the chip moves there instead, and only falls back
-  // to the horizontal stand-off when the left is full too.
-  //
-  // --hud-left-h is that column's occupied BOTTOM EDGE, measured off whatever
-  // is actually in it: the map, the gap strip, either, or neither (both have
-  // their own OFF switches, and the strip drops into that column on its own).
-  // It is a screen y over the shared --hud-z-top, which is the chip's own
-  // coordinate space, so the CSS adds its air and nothing else. The BROADCAST
-  // tower lives in this column too, so it is a floor on the same measurement.
-  const gapsEl = els.gapA ? els.gapA.parentNode : null;
-  const gapsR = gapsEl ? layoutRect(gapsEl) : null;
-  let leftBot = bcast && _hudTop ? layoutRect(_hudTop).bottom : 0;
-  if (mmR && mmR.width) leftBot = Math.max(leftBot, mmR.bottom);
-  if (gapsR && gapsR.width) leftBot = Math.max(leftBot, gapsR.bottom);
-  // Gaps strip alone (centre flag clears it; TYRES must not lift the flag).
-  hStyle(root, "--hud-gaps-b", ((gapsR && gapsR.width ? gapsR.bottom : 0) / chromeZ).toFixed(1) + "px");
-  const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
-  // Phone landscape: when the dock-top TYRES anchor would cover the map (HUD
-  // 150% broadcast survey), stack TYRES under the left column and extend
-  // --hud-left-h so REL / STRATEGY follow. MOVE & SIZE (data-hl-user) wins.
   const phone = !document.body.classList.contains("desktop");
-  const tyreEl = els.tyre;
-  // colBot: map/gaps edge only (leftBot+tyre latched into the safe area).
-  const colBot = leftBot;
-  const tyreZ = zBotPub || scale || 1;
-  let tyreStack = false;
-  if (phone && tyreEl && !tyreEl.hidden && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user"))) {
-    const tBox = tyreEl.getBoundingClientRect();
-    const tHpx = Math.max(tBox.height, 36);
-    const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
-    const naturalTopPx = dockTopPx - tHpx - 8;
-    const minTopPx = colBot + 2;
-    const roomPx = Math.max(0, dockTopPx - minTopPx - 2);
-    if (naturalTopPx < minTopPx - 0.5 && roomPx >= 12) {
-      // Divide by .hud-bottom zoom so painted screen y == minTopPx.
-      hStyle(root, "--hud-tyre-top", (minTopPx / tyreZ).toFixed(1) + "px");
-      if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", (roomPx / tyreZ).toFixed(1) + "px");
-      else hUnstyle(root, "--hud-tyre-max-h");
-      if (tyreEl.dataset) {
-        if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";
-        else delete tyreEl.dataset.tyreCompact;
-      }
-      leftBot = Math.max(leftBot, minTopPx + Math.min(tHpx, roomPx));
-      tyreStack = true;
+  const gapsEl = els.gapA ? els.gapA.parentNode : null;
+  // THE CAP PASS PUBLISHES ONLY ITS CAPS (#2797): the paint pass rewrites all of this at the painted zoom,
+  // so a zoom-1 copy was an A->B swap of root vars (a whole-document restyle) on every full fit.
+  if (!canon) {
+    hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
+    // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
+    // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
+    // where the BOOST pedal is on a touch phone, so a track-limits warning painted
+    // over a tap target. Published in the chrome's own zoom space (the dock zooms
+    // by the RAW slider, the chrome by --hud-z-top) so the CSS can add it directly.
+    // The dock's SCREEN width over the CHROME's zoom: #hud-limits is inside the
+    // --hud-z-top group, so its `right:` needs the stand-off in that space, and
+    // the dock's own zoom (the raw slider) never enters it.
+    // THE SECTOR BOX'S HEIGHT, for the chip that hangs off its bottom edge.
+    // #hud-limits derived that offset from a hand-computed `4.8em` (three rows at
+    // line-height 1.6) — which is only the box's height while the box EXISTS. Every
+    // profile that hides it (MINIMAL, and a broadcast camera outside the broadcast
+    // profile) left the chip hanging in mid-air below an empty corner, reported
+    // from a phone as "LIMITS floats in the middle of the screen". Measured, in
+    // the chip's own zoom units, it is 0 exactly when the box is gone.
+    const secH = tall(els.hudSectors, zTopPub);
+    hStyle(root, "--hud-sec-h", secH.toFixed(1) + "px");
+    const chromeZ = zoomDiv(_hudTop || els.minimap, zTopPub) || scale || 1;
+    // THE RIGHT DOCK'S WIDTH — BUT ONLY WHEN THE CHIP ACTUALLY REACHES IT.
+    // Standing off unconditionally dragged a top-right chip halfway across the
+    // screen on any viewport tall enough for the two never to meet (the second
+    // half of the same phone report). #hud-dock is bottom-anchored and only as
+    // tall as its tallest column, so the test is one rect comparison: does the
+    // chip's bottom edge reach the dock's top edge? The chip's own box cannot be
+    // measured — it is `hidden` until the player takes a strike — so its top is
+    // reconstructed from the column it hangs in: #pausebtn's bottom edge plus the
+    // same 4 px of air css/hud.css puts between them, then the sector box, then
+    // the 15 px offset. CHIP_H is its one line plus padding at --fs-micro.
+    const CHIP_H = 26, CHIP_DROP = 15;
+    const pauseR = els.pausebtn ? els.pausebtn.getBoundingClientRect() : null;
+    const colTop = scR && scR.height ? scR.top : (pauseR && pauseR.height ? pauseR.bottom + 4 : 0);
+    const limBot = colTop + (secH + CHIP_DROP + CHIP_H) * chromeZ;
+    const dockR = _dockR ? _dockR.getBoundingClientRect() : null;
+    const hitsRight = !!(dockR && dockR.width && limBot > dockR.top);
+    // WHEN THE RIGHT COLUMN IS FULL, GO LEFT — DO NOT WALK INTO THE MIDDLE.
+    // Standing off the dock's width is the only way to stay right-anchored, and
+    // on a phone that dock is ~150px: the chip landed a third of the way across
+    // the screen, over the track, which is the second half of the same report.
+    // The LEFT column has room the right one does not — the map ends well above
+    // the steering arrows — so the chip moves there instead, and only falls back
+    // to the horizontal stand-off when the left is full too.
+    //
+    // --hud-left-h is that column's occupied BOTTOM EDGE, measured off whatever
+    // is actually in it: the map, the gap strip, either, or neither (both have
+    // their own OFF switches, and the strip drops into that column on its own).
+    // It is a screen y over the shared --hud-z-top, which is the chip's own
+    // coordinate space, so the CSS adds its air and nothing else. The BROADCAST
+    // tower lives in this column too, so it is a floor on the same measurement.
+    const gapsR = gapsEl ? layoutRect(gapsEl) : null;
+    let leftBot = bcast && _hudTop ? layoutRect(_hudTop).bottom : 0;
+    if (mmR && mmR.width) leftBot = Math.max(leftBot, mmR.bottom);
+    if (gapsR && gapsR.width) leftBot = Math.max(leftBot, gapsR.bottom);
+    // Gaps strip alone (centre flag clears it; TYRES must not lift the flag).
+    hStyle(root, "--hud-gaps-b", ((gapsR && gapsR.width ? gapsR.bottom : 0) / chromeZ).toFixed(1) + "px");
+    const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
+    // Phone landscape: when the dock-top TYRES anchor would cover the map (HUD
+    // 150% broadcast survey), stack TYRES under the left column and extend
+    // --hud-left-h so REL / STRATEGY follow. MOVE & SIZE (data-hl-user) wins.
+    const tyreEl = els.tyre;
+    // colBot: map/gaps edge only (leftBot+tyre latched into the safe area).
+    const colBot = leftBot;
+    const tyreZ = zBotPub || scale || 1;
+    let tyreStack = false, limLeft = false, metricsB = "", restacked = false;
+    // THE LIMITS-LEFT RESTACK IS DECIDED ONCE PER INPUT (#2797). Each full fit un-stacked TYRES (A), read
+    // the panel and re-stacked it (B): root writes that restyled the whole document every ~3 s for a still
+    // layout. The outcome is a function of what is read here in the stacked state, so the same read replays it.
+    const tyreFree = phone && tyreEl && !tyreEl.hidden && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user"));
+    const gmEl = typeof document !== "undefined" ? document.getElementById("game-metrics") : null;
+    const readRestackKey = (tR = tyreEl.getBoundingClientRect(), gR = gmEl && !gmEl.hidden ? gmEl.getBoundingClientRect() : null) => [colBot, tR.left, tR.top, tR.height,
+      dockL ? dockL.top + "," + dockL.width : "-", hitsRight, gR && gR.width ? gR.top + "," + gR.bottom + gmEl.dataset.pos : "-", chromeZ, tyreZ].join("|");
+    const restackKey = tyreFree && _tyreRestack ? readRestackKey() : "";
+    if (restackKey && restackKey === _tyreRestack.key) {
+      ({ leftBot, metricsB } = _tyreRestack); tyreStack = limLeft = true;   // every write below is already in place
+      document.body.classList.toggle("hud-tyre-stack", true); hStyle(root, "--hud-metrics-b", metricsB);
+      hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px"); hStyle(root, "--hud-left-px", leftBot.toFixed(1) + "px");
     } else {
-      hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h");
-      if (tyreEl.dataset) delete tyreEl.dataset.tyreCompact;
-    }
-  } else {
-    hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h");
-    if (tyreEl && tyreEl.dataset) delete tyreEl.dataset.tyreCompact;
-  }
-  if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", tyreStack);
-  hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
-  // THE SAME EDGE IN SCREEN PIXELS. #hud-limits reads --hud-left-h from INSIDE
-  // the chrome zoom, so it wants the divided value. #game-metrics is OUTSIDE it
-  // — nothing zooms that subtree (see its own note in css/hud.css) — so handing
-  // it the zoomed number would misplace the panel at every HUD SIZE but 100%.
-  // Two vars for one edge is cheaper than one var and a unit bug.
-  hStyle(root, "--hud-left-px", leftBot.toFixed(1) + "px");
-  // …and the panel's OWN bottom, so the track-limits chip can stack BELOW it in
-  // left mode instead of under it. One direction only: the map decides where the
-  // panel goes, the panel decides where the chip goes. Feeding the panel's own
-  // bottom back into --hud-left-px would be a latch — a decision reading its own
-  // output — which is the defect shape this file has been bitten by before.
-  const gmEl = typeof document !== "undefined" ? document.getElementById("game-metrics") : null;
-  const gmR = gmEl && !gmEl.hidden ? gmEl.getBoundingClientRect() : null;
-  const gmBot = gmR && gmR.width ? gmR.bottom : 0;
-  hStyle(root, "--hud-metrics-b", (gmBot / chromeZ).toFixed(1) + "px");
-  // The metrics panel is part of what fills this column now, so the room test
-  // measures from whichever is lower — the map/strip edge or the panel's bottom.
-  const leftFilled = Math.max(leftBot, gmBot);
-  const leftRoom = !(dockL && dockL.width && leftFilled + (8 + CHIP_H) * chromeZ > dockL.top);
-  const limLeft = hitsRight && leftRoom;
-  // LIMITS on the left lands under --hud-left-h; a dock-top TYRES still sits
-  // in that slot at HUD ≤125% (phoneL survey: limits×tyre). Stack TYRES under
-  // the map/gaps edge and re-publish so the chip hangs below it.
-  if (limLeft && phone && tyreEl && !tyreEl.hidden
-      && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user")) && !tyreStack) {
-    const tBox = tyreEl.getBoundingClientRect();
-    const tHpx = Math.max(tBox.height, 36);
-    const minTopPx = colBot + 2;
-    const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
-    const roomPx = Math.max(0, dockTopPx - minTopPx - 2);
-    if (roomPx >= 12) {
-      hStyle(root, "--hud-tyre-top", (minTopPx / tyreZ).toFixed(1) + "px");
-      if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", (roomPx / tyreZ).toFixed(1) + "px");
-      else hUnstyle(root, "--hud-tyre-max-h");
-      if (tyreEl.dataset) {
-        if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";
-        else delete tyreEl.dataset.tyreCompact;
+      // Stack TYRES under the map/gaps edge: always when its dock-top anchor would reach that edge, and
+      // (force) when LIMITS takes the slot below. Divide by .hud-bottom zoom so painted y == minTopPx.
+      const stackTyre = (force) => {
+        const tHpx = Math.max(tyreEl.getBoundingClientRect().height, 36), minTopPx = colBot + 2;
+        const dockTopPx = dockL && dockL.height ? dockL.top : vpH(), roomPx = Math.max(0, dockTopPx - minTopPx - 2);
+        if (!(roomPx >= 12 && (force || dockTopPx - tHpx - 8 < minTopPx - 0.5))) return false;
+        hStyle(root, "--hud-tyre-top", (minTopPx / tyreZ).toFixed(1) + "px");
+        if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", (roomPx / tyreZ).toFixed(1) + "px");
+        else hUnstyle(root, "--hud-tyre-max-h");
+        if (tyreEl.dataset) {
+          if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";
+          else delete tyreEl.dataset.tyreCompact;
+        }
+        leftBot = Math.max(leftBot, minTopPx + Math.min(tHpx, roomPx));
+        return true;
+      };
+      if (!(tyreFree && (tyreStack = stackTyre(false)))) {
+        hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h");
+        if (tyreEl && tyreEl.dataset) delete tyreEl.dataset.tyreCompact;
       }
-      leftBot = Math.max(leftBot, minTopPx + Math.min(tHpx, roomPx));
-      tyreStack = true;
-      if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", true);
+      if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", tyreStack);
       hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
+      // THE SAME EDGE IN SCREEN PIXELS. #hud-limits reads --hud-left-h from INSIDE
+      // the chrome zoom, so it wants the divided value. #game-metrics is OUTSIDE it
+      // — nothing zooms that subtree (see its own note in css/hud.css) — so handing
+      // it the zoomed number would misplace the panel at every HUD SIZE but 100%.
+      // Two vars for one edge is cheaper than one var and a unit bug.
       hStyle(root, "--hud-left-px", leftBot.toFixed(1) + "px");
+      // …and the panel's OWN bottom, so the track-limits chip can stack BELOW it in
+      // left mode instead of under it. One direction only: the map decides where the
+      // panel goes, the panel decides where the chip goes. Feeding the panel's own
+      // bottom back into --hud-left-px would be a latch — a decision reading its own
+      // output — which is the defect shape this file has been bitten by before.
+      const gmR = gmEl && !gmEl.hidden ? gmEl.getBoundingClientRect() : null;
+      const gmBot = gmR && gmR.width ? gmR.bottom : 0;
+      hStyle(root, "--hud-metrics-b", metricsB = (gmBot / chromeZ).toFixed(1) + "px");
+      // The metrics panel is part of what fills this column now, so the room test
+      // measures from whichever is lower — the map/strip edge or the panel's bottom.
+      const leftFilled = Math.max(leftBot, gmBot);
+      const leftRoom = !(dockL && dockL.width && leftFilled + (8 + CHIP_H) * chromeZ > dockL.top);
+      limLeft = hitsRight && leftRoom;
+      // LIMITS on the left lands under --hud-left-h; a dock-top TYRES still sits
+      // in that slot at HUD ≤125% (phoneL survey: limits×tyre): stack it and re-publish so the chip hangs below.
+      if (limLeft && tyreFree && !tyreStack && stackTyre(true)) {
+        tyreStack = restacked = true;
+        document.body.classList.toggle("hud-tyre-stack", true);
+        hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
+        hStyle(root, "--hud-left-px", leftBot.toFixed(1) + "px");
+      }
+      // Stored only when it ENDED re-stacked, keyed on that state (the next fit starts there): one read, on a miss.
+      _tyreRestack = restacked ? { key: readRestackKey(), leftBot, metricsB } : null;
     }
-  }
-  if (limLeft !== ("limitsLeft" in root.dataset)) {
-    if (limLeft) root.dataset.limitsLeft = "1";
-    else delete root.dataset.limitsLeft;
+    if (limLeft !== ("limitsLeft" in root.dataset)) {
+      if (limLeft) root.dataset.limitsLeft = "1";
+      else delete root.dataset.limitsLeft;
+    }
   }
   // --dock-r-w is published AFTER the zoom caps below: publishing it here
   // with the pre-cap chromeZ left the inset in z=1 space while #hud-sectors
