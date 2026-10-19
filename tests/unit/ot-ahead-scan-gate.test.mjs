@@ -12,70 +12,75 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import vm from "node:vm";
-import { seedLog } from "../helpers/seed-log.mjs";
+import { runInContext } from "node:vm";
+import { createRequire } from "node:module";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const src = (p) => readFileSync(join(ROOT, p), "utf8");
+const require = createRequire(import.meta.url);
+const { createGame } = require("../../tools/lib/game-vm.cjs");
+void readFileSync; void join; void dirname; void fileURLToPath;
 
-function loadOM() {
-  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, isNaN, isFinite, console, window: {} });
-  ctx.window = ctx;
-  seedLog(ctx);
-  for (const f of ["js/physics/consts.js", "js/track/core/space.js", "js/race/overtake-mode.js"])
-    vm.runInContext(src(f), ctx, { filename: f });
-  return vm.runInContext("OvertakeMode", ctx);
+// The REAL updateCar in the game VM, with Collide.scanOtAhead counted per car (T3-06). The old file
+// regex-matched game.js and re-implemented the gate (need()) in the test, so only OM.crossed was real.
+async function rig() {
+  const g = await createGame({ track: "monza" });
+  g.G.daily.stop();
+  await g.G.startRace(); g.apex.go(); g.apex.headless(true);
+  runInContext(`globalThis.__scans = new Map(); globalThis.__reach = new Map();
+    const real = Collide.scanOtAhead;
+    Collide.scanOtAhead = function (c, L, w) {
+      __scans.set(c.code, (__scans.get(c.code) || 0) + 1); __reach.set(c.code, w);
+      return real.apply(this, arguments);
+    };`, g.ctx);
+  g.ctx.__track = g.G.track;
+  const scans = (c) => g.ctx.__scans.get(c.code) || 0;
+  const place = (c, s, speed) => { g.apex.aiPlace(g.G.cars.indexOf(c), s / g.G.track.total, speed, 0); c.lap = Math.max(c.lap, 2); c.otE = 0; c.otOn = false; c._otS = c.s; c._otLap = c.lap; };
+  const ai = g.G.cars.find((c) => !c.human);
+  // Everyone else out of the way so the car under test is the only one that can earn or fire.
+  for (const o of g.G.cars) if (o !== ai) g.apex.retire(g.G.cars.indexOf(o));
+  return { g, ai, scans, place, det: runInContext("OvertakeMode.detectS(__track)", g.ctx) };
 }
 
-test("updateCar gates the overtake ahead scan on otNeedAhead", () => {
-  const game = src("js/game.js");
-  const a = game.indexOf("const otSpeed = Math.max(0, c.speed);");
-  const endMark = "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;";
-  const b = game.indexOf(endMark, a);
-  assert.ok(a > 0 && b > a, "ahead scan site present");
-  const block = game.slice(a, b + endMark.length);
-  assert.match(block, /otNeedAhead/, "scan is gated");
-  assert.match(block, /OvertakeMode\.crossed\s*\(/, "crossing check feeds the gate");
-  assert.match(block, /c\.otE\s*>\s*0/, "held allowance still pays for the walk");
-  assert.match(block, /if\s*\(\s*otNeedAhead\s*\)/, "walk runs only when needed");
-  assert.match(block, /Collide\.scanOtAhead/, "ahead walk is the wrap-aware bucket scan");
-  assert.match(block, /const otSpeed = Math\.max\(0, c\.speed\)/, "reverse speed cannot make the arc reach negative");
-  assert.match(block, /otW = OT_GAP \* otSpeed \+ 1/, "ahead scan uses the clamped speed");
-  const collide = src("js/physics/collide.js");
-  const fn = collide.slice(collide.indexOf("function _onOtO"), collide.indexOf("function scanOtAhead"));
-  assert.match(fn, /o\.finished \|\| o\.retired/);
-  assert.match(fn, /s\.skip && s\.skip\(o\)/);
+test("the ahead scan is skipped in clear air with no allowance, and runs when OT energy is held", async () => {
+  const { g, ai, scans, place, det } = await rig();
+  try {
+    place(ai, det - 600, 55);                        // mid-lap, far from the detection line
+    const before = scans(ai);
+    g.step(20);
+    assert.equal(scans(ai), before, "clear air, no allowance, no crossing: the O(n) walk is skipped");
+    ai.otE = 0.5;
+    const held = scans(ai);
+    g.step(10);
+    assert.ok(scans(ai) - held >= 9, "a held allowance pays for the walk every step: " + (scans(ai) - held));
+  } finally { g.close(); }
 });
 
-test("a held allowance keeps a valid ahead-search radius while reversing", () => {
-  const game = src("js/game.js");
-  const a = game.indexOf("const otSpeed = Math.max(0, c.speed);");
-  const b = game.indexOf("if (c._otLap == null || c._otS == null)", a);
-  assert.ok(a > 0 && b > a, "reverse-safe overtake block present");
-  const block = game.slice(a, b);
-  assert.match(block, /const otSpeed = Math\.max\(0, c\.speed\)/);
-  assert.match(block, /otW = OT_GAP \* otSpeed \+ 1/);
-  // The radius is 1 m at a stop or in reverse, so Collide's bucket walker
-  // receives a finite non-negative reach even when an allowance is retained.
-  assert.equal(Math.max(0, -5) * 1 + 1, 1);
+test("the ahead scan runs on the step that crosses the detection line while detection is open, and not when it is closed", async () => {
+  const { g, ai, scans, place, det } = await rig();
+  try {
+    place(ai, det - 4, 60);                          // ~0.07 s from the line
+    const before = scans(ai);
+    g.step(10);
+    assert.ok(scans(ai) > before, "crossing detection while open: scan");
+    // Closed: a caution at level 3 (SC) shuts detection (RaceControl.otDetectOpen).
+    g.G.holdCaution(3, "test safety car"); g.G.applyCaution({ level: 3 });
+    place(ai, det - 4, 60);
+    const closed = scans(ai);
+    g.step(10);
+    assert.equal(scans(ai), closed, "crossing while closed: the gap is unused, no walk");
+  } finally { g.close(); }
 });
 
-test("otNeedAhead is true on a detection-line crossing when open, false in clear air with no allowance", () => {
-  const OM = loadOM();
-  const L = 5000;
-  const track = { total: L, def: {} };
-  const det = OM.detectS(track);
-  // Mirror the game.js seed + gate (no raceCtl — open is an argument).
-  const need = (c, open) => {
-    if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
-    return (c.otE > 0 || c.otOn) ||
-      (!!track && open && OM.crossed(c._otS, c.s, OM.detectS(track), L));
-  };
-  const coast = { s: 100, lap: 2, otE: 0, otOn: false, _otS: 90, _otLap: 2 };
-  assert.equal(need(coast, true), false, "mid-lap clear air: skip");
-  assert.equal(need({ s: 100, lap: 2, otE: 0.125, otOn: false, _otS: 90, _otLap: 2 }, true), true, "held OT energy: scan");
-  assert.equal(need({ s: 100, lap: 2, otE: 0, otOn: true, _otS: 90, _otLap: 2 }, true), true, "deploying: scan");
-  const cross = { s: det + 5, lap: 2, otE: 0, otOn: false, _otS: det - 10, _otLap: 2 };
-  assert.equal(need(cross, true), true, "crossed detection while open: scan");
-  assert.equal(need({ ...cross }, false), false, "crossed while closed: gap unused (no earn)");
+test("a held allowance keeps a finite, positive ahead-search radius while reversing", async () => {
+  const { g, ai, scans, place, det } = await rig();
+  try {
+    place(ai, det - 600, 5);
+    ai.otE = 0.5;
+    ai.speed = -6;                                   // a held allowance can outlive a forward pass
+    const before = scans(ai);
+    g.step(2);
+    assert.ok(scans(ai) > before, "the walk still runs");
+    const w = g.ctx.__reach.get(ai.code);
+    assert.ok(Number.isFinite(w) && w >= 1, "reach is OT_GAP * max(0, speed) + 1, never negative: " + w);
+  } finally { g.close(); }
 });

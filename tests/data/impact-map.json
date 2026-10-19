@@ -6602,7 +6602,6 @@
         "tests/unit/mobile-sync-web.test.mjs",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/offline-precache-nav.test.mjs",
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
@@ -9764,7 +9763,6 @@
       ],
       "*": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/pick-tests.test.mjs"
       ]
     },
@@ -9794,7 +9792,6 @@
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs",
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/pace-math.test.mjs",
         "tests/unit/parts-ladder.test.mjs",
@@ -10625,14 +10622,12 @@
         "tests/unit/overtake-mode.test.mjs"
       ],
       "crossed": [
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs"
       ],
       "detectFrac": [
         "tests/unit/overtake-mode.test.mjs"
       ],
       "detectS": [
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs"
       ],
       "energy": [
@@ -13805,7 +13800,6 @@
     },
     "js/track/core/space.js": {
       "*": [
-        "tests/unit/ot-ahead-scan-gate.test.mjs",
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs"
       ]
