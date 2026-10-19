@@ -9300,7 +9300,8 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "attackOK": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/ai-pass-complete.test.mjs"
       ],
       "attemptRoll": [
         "tests/unit/ai-drive.test.mjs"
@@ -9469,7 +9470,8 @@
         "tests/unit/ai-pass-complete.test.mjs"
       ],
       "otPull": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/ai-pass-complete.test.mjs"
       ],
       "otShouldFire": [
         "tests/unit/ai-drive.test.mjs"
@@ -9497,7 +9499,8 @@
         "tests/unit/ai-pass-complete.test.mjs"
       ],
       "passReach": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/ai-pass-complete.test.mjs"
       ],
       "passSideClosed": [
         "tests/unit/ai-drive.test.mjs"
@@ -9507,6 +9510,9 @@
       ],
       "pitNow": [
         "tests/unit/ai-strategy.test.mjs"
+      ],
+      "pullReachM": [
+        "tests/unit/ai-pass-complete.test.mjs"
       ],
       "pushLook": [
         "tests/unit/ai-drive.test.mjs"
@@ -9552,6 +9558,9 @@
       ],
       "sideYieldsA": [
         "tests/unit/ai-drive.test.mjs"
+      ],
+      "softPairEdgeN": [
+        "tests/unit/ai-pass-complete.test.mjs"
       ],
       "splitStints": [
         "tests/unit/ai-strategy.test.mjs"
