@@ -87,6 +87,17 @@ const Car3D = (function () {
     wedge:   Object.freeze({ noseTipZ:  0.52, noseSlim: 1.45, noseDroop: -0.028, airbox: 0.28, fin: 0, mirror: 1, inlet: -0.110, inletH: -0.260, inletW:  0.100, undercutD:  0.220, waist: -0.220, floorStep:  0.120, coverCrown:  0.200, coverLift:  0.200, wingStyle: W({ flaps: 2, arch: 0.55, twist: 0.20, teCurve: 0.090, chordTaper: 0.30, tipRise: 0.024 }) }),
     // Barge (reads): short fat blunt hull, wide low pods, heavy waist, low flat cover.
     barge:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.10, noseDroop: -0.006, airbox: 1.55, fin: 1, mirror: 2, inlet:  0.100, inletH: -0.060, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep: -0.120, coverCrown: -0.080, coverLift: -0.100, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
+    // DESIGN PREVIEW (B·D1, 2026-10-19) — five candidates for Bryce to pick from.
+    // Highnose: 1990 Tyrrell 019 / Benetton B191 raised nose, slim cone, anhedral-ish wing.
+    highnose: Object.freeze({ noseTipZ: 0.04, noseSlim: 0.72, noseDroop:  0.170, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.020, inletH:  0.040, inletW:  0.020, undercutD:  0.040, waist: -0.040, floorStep:  0.020, coverCrown:  0.040, coverLift:  0.040, wingStyle: W({ arch: 1.10, twist: 0.30, teCurve: 0.14, foot: 1.40, tipRise: 0.060 }) }),
+    // Sharkfin: 2008-11 / 2017 tall dorsal fin over a long raised cover, clutter wing.
+    sharkfin: Object.freeze({ noseTipZ: 0.25, noseSlim: 0.70, noseDroop: -0.020, airbox: 0.80, fin: 2, finH: 0.24, finRear: 1.6, mirror: 2, inlet: -0.020, inletH: -0.060, inletW:  0.100, undercutD:  0.080, waist: -0.150, floorStep:  0.040, coverCrown:  0.060, coverLift:  0.020, wingStyle: W({ flaps: 3, arch: 0.90, twist: 0.38, teCurve: 0.18, chordTaper: 0.44, canard: 2, tipRise: 0.050 }) }),
+    // Zeropod: 2022 Mercedes W13 — pods squeezed to slivers, tall slot inlet, big airbox.
+    zeropod:  Object.freeze({ noseTipZ: 0.04, noseSlim: 0.92, noseDroop: -0.020, airbox: 1.60, fin: 0, mirror: 1, inlet:  0.060, inletH:  0.120, inletW: -0.300, undercutD:  0.120, waist: -0.300, floorStep:  0.060, coverCrown: -0.040, coverLift: -0.060, wingStyle: W({ arch: 0.45, twist: 0.15, teCurve: 0.06, chordTaper: 0.22, foot: 0.95, tipRise: 0.016 }) }),
+    // Downwash: 2023 RB19 — high wide mouth ramping steeply down to a low tail.
+    lowline:  Object.freeze({ noseTipZ: 0.20, noseSlim: 1.30, noseDroop: -0.028, airbox: 0.50, fin: 0, mirror: 0, inlet: -0.080, inletH: -0.200, inletW:  0.100, undercutD:  0.000, waist:  0.100, floorStep:  0.000, coverCrown: -0.080, coverLift: -0.160, wingStyle: W({ flaps: 2, arch: 0.30, twist: 0.10, teCurve: 0.04, chordTaper: 0.20, foot: 0.85, tipRise: 0.010 }) }),
+    // Stepnose: 2012 Caterham CT01 / Ferrari F2012 — tall tub crown stepping down to a low cone.
+    stepnose: Object.freeze({ noseTipZ: 0.12, noseSlim: 1.05, noseDroop: -0.028, noseStep: 0.14, airbox: 1.30, fin: 1, mirror: 2, inlet:  0.040, inletH:  0.060, inletW:  0.060, undercutD:  0.060, waist: -0.060, floorStep:  0.030, coverCrown:  0.080, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.75, twist: 0.30, teCurve: 0.14, chordTaper: 0.40, canard: 2, tipRise: 0.040 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -570,12 +581,15 @@ const Car3D = (function () {
       // so the two never intersect. Garage/near: rounded loft so the ridge
       // is not a square plank where it meets the rear wing (Cadillac et al.).
       if (teamStyle.fin) {
-        const finH = teamStyle.fin >= 2 ? 0.19 : 0.095;
+        const finH = teamStyle.finH || (teamStyle.fin >= 2 ? 0.19 : 0.095);
         const ff = anchors.coverAt(-0.95), fr = anchors.coverAt(-1.85);
+        // finRear (preview bodies only): rear blade height as a share of finH;
+        // > 1 rakes the fin UP toward the rear wing (2008-10 / 2017 shark fin).
+        const finR = teamStyle.finRear ? Math.min(finH * teamStyle.finRear, 0.92 - fr.top) : finH * 0.66;
         const bladeF = { z: ff.z, y: ff.top + finH * 0.5, w: 0.016, h: finH };
-        const bladeR = { z: fr.z, y: fr.top + finH * 0.33, w: 0.014, h: finH * 0.66 };
+        const bladeR = { z: fr.z, y: fr.top + (teamStyle.finRear ? finR * 0.5 : finH * 0.33), w: 0.014, h: finR };
         const crestF = { z: ff.z, y: ff.top + finH + 0.006, w: 0.020, h: 0.014 };
-        const crestR = { z: fr.z, y: fr.top + finH * 0.66 + 0.005, w: 0.018, h: 0.012 };
+        const crestR = { z: fr.z, y: fr.top + finR + 0.005, w: 0.018, h: 0.012 };
         if (shadeFlags.round && shadeFlags.coverHi) {
           CarShade.loft(out, bladeF, bladeR, c1, addTri, { n: 10 });
           CarShade.loft(out, crestF, crestR, accentC, addTri, { n: 8 });
@@ -971,6 +985,13 @@ const Car3D = (function () {
     // 580 mm rearward when the nose was cut back to sit behind the front wing,
     // and a literal 2.70 would have painted a stripe in mid-air ahead of it.
     const styledTipZ = styledNoseStations(teamStyle)[0].z;
+    // Raised nose (preview highnose): twin wing pylons from the cone's underside
+    // down to the front-wing main plane, as on the 1990 Tyrrell 019 — without
+    // them the wing reads as floating 30 cm under the nose.
+    if ((teamStyle.noseDroop || 0) > 0.06) {
+      const pz = styledTipZ - 0.20, nb = anchors.noseAt(pz).bottom, wy = 0.10;
+      for (const sx of [-1, 1]) addBox(out, sx * 0.05, (nb + wy) / 2 + 0.01, pz, 0.012, nb - wy + 0.02, 0.16, DARK, SURFACES.carbon);
+    }
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(styledTipZ - 0.04);
     addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, 0.09, 0.016,
            styledTipZ - 0.04, 0, noseAccentFront.top + 0.008, 0.05, 0.014, c2);

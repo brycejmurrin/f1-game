@@ -79,6 +79,11 @@ const CarBodyGeom = (function () {
     const root = CHASSIS.nose[2];
     const st = [...cone, { z: root.z, y: root.y, w: root.w, h: root.h, t: root.t }];
     if (st[1].z < root.z + 0.15) st[1].z = root.z + 0.15;    // keep the mid ahead of the pinned root
+    // noseStep (preview bodies only): the 2012 "platypus" step — a station 10 cm
+    // ahead of the root whose TOP drops by noseStep, bottom unchanged, so the
+    // tub's crown ends in a ledge and the cone runs on lower.
+    const step = Math.max(0, Math.min(0.16, s.noseStep || 0));
+    if (step) st.splice(2, 0, { z: root.z + 0.10, y: root.y - step * 0.5, w: root.w * 0.94, h: root.h - step, t: root.t });
     // The underside is linear in the tip/mid lift; behind the mid only the
     // mid's share of the root-to-mid blend moves, so divide by that share.
     const floor = teamNoseFloor(), up = st.map((p, i) => (i < 2 ? Object.assign({}, p, { y: p.y + 1 }) : p));
@@ -1069,8 +1074,7 @@ const CarBodyGeom = (function () {
     if (shadeFlags.round) CarShade.floor(out, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
     const nose = noseStations || CHASSIS.nose;
-    bodySpan(out, nose[0], nose[1], c1, 0.022);
-    bodySpan(out, nose[1], nose[2], c1, 0.028);
+    for (let i = 0; i < nose.length - 1; i++) bodySpan(out, nose[i], nose[i + 1], c1, i ? 0.028 : 0.022);
     const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];
     // COCKPIT: this span is the tub the driver sits IN — the deck under the
     // wheel and the rear wall above it, 0.65 m from the eye. In body paint it
