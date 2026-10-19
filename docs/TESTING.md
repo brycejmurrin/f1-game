@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 850+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 854+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1328,18 +1328,6 @@ and the generated surface catalog. It runs without browsers and is included in
 the structural floor; its files are listed in `tests/groups.json`.
 
 The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`.
-
-Focused browser-free diagnostics contracts also run in `tooling-fast`:
-
-| Unit file | Coverage |
-|---|---|
-| `tests/unit/fleet-bus.test.mjs` | `fleet-bus.mjs`: merge-lease rules (acquire, renew, release, break, expiry, TTL clamp), bus line grammar and addressing, and a real-git race on a local bare origin (one holder; cursor reads return only new lines). |
-| `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
-| `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
-| `tests/unit/fleet-tick.test.mjs` | `fleet-tick.mjs`: board-row compaction, state diff (changed fields, new/gone PRs, ship/Pages, new session flags) and the 40-row cap, fixtures only. |
-| `tests/unit/i18n-lint.test.mjs` | Locale contribution lint (`tools/check/i18n-lint.mjs`): fixture locales (valid / missing-key / bad-placeholder / wrong-plural), ship `locales/` clean, `--guard` on `tests/data/i18n-migrated.json`. |
-| `tests/unit/tyre-squeal-race-vm.test.mjs` | #2975: race `skidIntensity` onset at 0.10 rad → `GameAudio.skidLevel()` (game-vm + fake-audio); lock-up pitch via CarSfx. |
-| `tests/specs/engine-audio-offline.spec.js` | #2966: OfflineAudioContext render of the engine graph — fundamental pitch vs rev, sub-layer crossfade in samples. |
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 
