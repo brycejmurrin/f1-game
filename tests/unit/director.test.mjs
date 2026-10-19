@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -24,8 +25,8 @@ function boot(globals = {}) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   // Broadcast first: Director reuses its battles/shotFor when present.
-  vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: "broadcast.js" });
-  vm.runInContext(src("js/camera/director.js"), ctx, { filename: "director.js" });
+  vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: absSrc("js/race/broadcast.js") });
+  vm.runInContext(src("js/camera/director.js"), ctx, { filename: absSrc("js/camera/director.js") });
   return vm.runInContext("Director", ctx);
 }
 
@@ -100,8 +101,8 @@ test("create().tick writes dbgCam from camVantage and never mutates car speed", 
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: "broadcast.js" });
-  vm.runInContext(src("js/camera/director.js"), ctx, { filename: "director.js" });
+  vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: absSrc("js/race/broadcast.js") });
+  vm.runInContext(src("js/camera/director.js"), ctx, { filename: absSrc("js/camera/director.js") });
   const Dir = vm.runInContext("Director", ctx);
   G.camMode = 1;   // tv
   const api = Dir.create(G);
@@ -133,8 +134,8 @@ test("the live director's battle pick is the same at OVERALL SPEED 0.469 as at p
     };
     sb.window = sb;
     const ctx = vm.createContext(sb);
-    vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: "broadcast.js" });
-    vm.runInContext(src("js/camera/director.js"), ctx, { filename: "director.js" });
+    vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: absSrc("js/race/broadcast.js") });
+    vm.runInContext(src("js/camera/director.js"), ctx, { filename: absSrc("js/camera/director.js") });
     const Dir = vm.runInContext("Director", ctx);
     const car = (code, prog) => ({ code, prog: prog * pace, s: prog * pace, x: 0, speed: 12 * pace, retired: false, finished: false });
     const field = [car("LEA", 1024), car("CHA", 1000), car("TAI", 0)];
@@ -265,7 +266,7 @@ function realCamScene() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   for (const f of ["js/core/mat4.js", "js/camera/drive-chase.js", "js/camera/drive-broadcast.js", "js/camera/drive-onboard.js",
-    "js/camera/feel.js", "js/camera/vantage.js", "js/camera/director.js"]) vm.runInContext(src(f), ctx, { filename: f });
+    "js/camera/feel.js", "js/camera/vantage.js", "js/camera/director.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const [Director, GameCams, CamFeel] = ["Director", "GameCams", "CamFeel"].map((g) => vm.runInContext(g, ctx));
   // A parked subject: nothing moves but the bend under it.
   const car = { code: "VER", prog: 100, s: 1000, x: 0, speed: 50, px: 0, pz: 1000, head: 0 };
@@ -459,8 +460,8 @@ test("create().tick skips the running-car scan while holding a fresh shot (SHOT_
     CamModes: { CAM_MODES: [{ id: "chase" }, { id: "tv", label: "TV", cut: 0.5 }] } };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: "broadcast.js" });
-  vm.runInContext(src("js/camera/director.js"), ctx, { filename: "director.js" });
+  vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: absSrc("js/race/broadcast.js") });
+  vm.runInContext(src("js/camera/director.js"), ctx, { filename: absSrc("js/camera/director.js") });
   const Dir = vm.runInContext("Director", ctx);
   const api = Dir.create(G);
   api.tick(Dir.SHOT_MIN_S + 1);                 // first cut scans the field
@@ -563,7 +564,7 @@ test("automatic chase, side, helicopter and cinematic framing keeps a laterally 
 test("subject framing preserves tuner pitch/yaw and the viewer's look-back", () => {
   const { G, ctx } = realCamScene();
   ctx.GameStore = { store: { get: () => null } };
-  vm.runInContext(src("js/camera/offsets.js"), ctx, { filename: "offsets.js" });
+  vm.runInContext(src("js/camera/offsets.js"), ctx, { filename: absSrc("js/camera/offsets.js") });
   const tune = vm.runInContext("CamTune", ctx);
   let held = false;
   ctx.Input = { lookingBack: () => held };

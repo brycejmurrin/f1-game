@@ -77,6 +77,7 @@ const SaveSchemaRegistry = (function () {
     "gfxBackendProbe": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxDebug": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "inspector": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "gpuCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag, #2964 Spector/webgl-lint)", "raw", 1, "rawScalar"),
     "gfxTlxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxWgxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxWgxLevel": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

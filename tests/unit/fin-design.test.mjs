@@ -22,6 +22,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { loadCrests } from "../../tools/car/crest-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { RecCtx } = loadCrests();
@@ -93,7 +94,7 @@ function loadAtlas() {
   sb.globalThis = sb;
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: absSrc(f) });
   const LT = vm.runInContext("LiveryTex", sb);
   const Teams = vm.runInContext("Teams", sb), Liveries = vm.runInContext("Liveries", sb);
   return { LT, Teams, Liveries,

@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -21,13 +22,13 @@ const KNOBLESS_ALLOW = new Set([
 
 function tuneDefs() {
   const ctx = vm.createContext({ GLX: { isMobile: false }, Math, Object });
-  vm.runInContext(read("js/lighting/knobs.js"), ctx, { filename: "js/lighting/knobs.js" });
+  vm.runInContext(read("js/lighting/knobs.js"), ctx, { filename: absSrc("js/lighting/knobs.js") });
   return vm.runInContext("LightKnobs.TUNE_DEFS", ctx);
 }
 
 function presets() {
   const ctx = vm.createContext({ window: {}, Math, JSON, Object, Array });
-  vm.runInContext(read("js/lighting/presets.js"), ctx, { filename: "js/lighting/presets.js" });
+  vm.runInContext(read("js/lighting/presets.js"), ctx, { filename: absSrc("js/lighting/presets.js") });
   const P = vm.runInContext("window.LightPresets", ctx);
   assert.ok(P && typeof P === "object", "presets.js did not assign window.LightPresets");
   return P;

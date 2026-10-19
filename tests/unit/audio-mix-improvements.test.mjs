@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
+import { absSrc } from "../helpers/abs-src.mjs";
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const copy = (v) => JSON.parse(JSON.stringify(v));
@@ -17,7 +18,7 @@ test('Spotify actual input invalidates pending searches synchronously, including
 });
 test('race mix audition respects disabled buses and cancels all owned work at Stop or mute', () => {
   let next = 0; const timers = new Map(), calls = []; let sound = true;
-  const ctx = vm.createContext({ setTimeout: (fn) => { timers.set(++next, fn); return next; }, clearTimeout: (id) => timers.delete(id) }); vm.runInContext(read('js/audio/race-mix-audition.js'), ctx); const A = vm.runInContext('RaceMixAudition', ctx);
+  const ctx = vm.createContext({ setTimeout: (fn) => { timers.set(++next, fn); return next; }, clearTimeout: (id) => timers.delete(id) }); vm.runInContext(read('js/audio/race-mix-audition.js'), ctx, { filename: absSrc("js/audio/race-mix-audition.js") }); const A = vm.runInContext('RaceMixAudition', ctx);
   let engineGeneration = 0;
   const audio = { enginePlaybackGeneration: () => engineGeneration, stopEngineIfGeneration(g) { if (g !== engineGeneration) return false; ++engineGeneration; calls.push('engine-stop'); return true; }, enabled: () => sound, init() {}, debug: () => ({ engineOn: false }), currentTrackId: () => 'already-playing', musicBackend: () => null, startEngine: () => { ++engineGeneration; calls.push('engine-start'); }, stopEngine: () => { ++engineGeneration; calls.push('engine-stop'); }, setEngine() {}, setSkid() {}, startMusic: () => calls.push('music-start'), stopMusic: () => calls.push('music-stop') };
   const store = { get: (key, d) => key === 'sfx' || key === 'radioVoice' ? false : d };
@@ -27,7 +28,7 @@ test('race mix audition respects disabled buses and cancels all owned work at St
 test('uploaded-track playback failures skip normally and report only the current track; success clears health', async () => {
   const states = [], media = [];
   const ctx = vm.createContext({ Log: { info() {}, warn() {} }, MusicLib: { playbackStatus: (id, state) => states.push([id, state.state]) }, localStorage: { getItem: () => '1' }, document: { hidden: false }, Audio: function () { const el = { play: () => Promise.resolve(), pause() {}, load() {}, removeAttribute() {} }; media.push(el); return el; } });
-  vm.runInContext(read('js/audio/soundtrack.js'), ctx);
+  vm.runInContext(read('js/audio/soundtrack.js'), ctx, { filename: absSrc("js/audio/soundtrack.js") });
   const graph = { state: 'running', createGain: () => ({ gain: { value: 1, setTargetAtTime() {} }, connect() {} }), createMediaElementSource: () => ({ connect() {} }) };
   ctx.host = { context: () => graph, master: () => ({}), clamp01: (v) => Math.max(0, Math.min(1, v)), now: () => 0, enabled: () => true, engineRunning: () => false, sfxOk: () => true };
   const S = vm.runInContext('GameAudioSoundtrack.create(host)', ctx);
@@ -38,7 +39,7 @@ test('uploaded-track playback failures skip normally and report only the current
 test('music library health is scoped to an existing upload and focused Retry does not affect another row', async () => {
   const played = [], ctx = vm.createContext({ Log: { info() {}, warn() {} }, GameAudio: { addTracks() {}, tracks: () => [], playTrackId: (id) => { played.push(id); return true; } }, document: { readyState: 'loading', getElementById: () => null, addEventListener() {} }, URL: { createObjectURL: () => 'blob:upload', revokeObjectURL() {} }, setTimeout, clearTimeout,
     indexedDB: { open() { const request = {}; queueMicrotask(() => { request.result = { close() {}, transaction: () => ({ objectStore: () => ({ getAll() { const r = {}; queueMicrotask(() => { r.result = [{ id: 1, name: 'bad', blob: {}, size: 10 }, { id: 2, name: 'other', blob: {}, size: 10 }]; r.onsuccess(); }); return r; } }) }) }; request.onsuccess(); }); return request; } } });
-  ctx.window = ctx; vm.runInContext(read('js/audio/music-lib.js'), ctx); const L = ctx.MusicLib; await L.init();
+  ctx.window = ctx; vm.runInContext(read('js/audio/music-lib.js'), ctx, { filename: absSrc("js/audio/music-lib.js") }); const L = ctx.MusicLib; await L.init();
   assert.equal(L.playbackStatus('user:unknown', { state: 'failed' }), false);
   L.playbackStatus('user:1', { state: 'failed', reason: 'unsupported format' }); L.playbackStatus('user:2', { state: 'failed', reason: 'unavailable' });
   assert.equal(L.health('user:1').reason, 'unsupported format'); L.retry('user:1'); assert.deepEqual(played, ['user:1']); assert.equal(L.health('user:1'), null); assert.equal(L.health('user:2').state, 'failed');

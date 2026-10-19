@@ -17,16 +17,19 @@ Reuse the parent's authorized local Chrome page and dedicated debug profile.
 The debugger attaches; it never launches a browser. Browser setup and canvas
 inspection belong to `mcp-probe`.
 
-Prefer the attached `debugger_*` tools. If this host cannot load them, use the
-same tools through the shell wrapper. First run:
+Requires Node 22+ and Bash for the wrapper. The debugger itself needs no npm
+package; source navigation and the game launcher need the checkout dependencies
+(`npm ci` on a fresh checkout). See [bootstrap and host attachment](../../../docs/AGENT-SURFACE.md#bootstrap-auto-setup).
+Prefer attached `debugger_*` tools when the session lists them. Otherwise inspect
+the local schemas without a daemon or browser:
 
 ```sh
-bash tools/mcp/js-debugger-mcp.sh status
 bash tools/mcp/js-debugger-mcp.sh list-tools
-bash tools/mcp/js-debugger-mcp.sh call debugger_targets '{"endpoint":"http://127.0.0.1:9222"}'
+bash tools/mcp/js-debugger-mcp.sh status
 ```
 
-A missing daemon needs one explicitly owned `serve-http` process. Keep it
+A down status is expected before setup. If no daemon exists, start
+`bash tools/mcp/js-debugger-mcp.sh serve-http` in one owned terminal and keep it
 alive between independent `call <tool> '<JSON object>'` clients. Do not start a
 second controller. `APEX_DEBUGGER_PORT` selects the bridge port on daemon and
 callers; the Chrome CDP endpoint is a separate address supplied by its owner.
@@ -36,12 +39,23 @@ client reload/trust. Never edit global agent instructions for this workflow.
 ## Get a Chrome to attach to
 
 ```sh
-node tools/mcp/debug-chrome.mjs start     # static server 3456 + headless Chromium on 9222, 844x390 phone-landscape
-                                          # (--device desktop = 1280x720); refuses beside a test run
-node tools/mcp/debug-chrome.mjs status    # endpoint + targets;  stop: kills only its own PIDs
+node tools/mcp/debug-chrome.mjs start --headless-game
+node tools/mcp/debug-chrome.mjs status
 ```
 
-Not an MCP tool: the debugger still never launches Chrome.
+This starts the static server on 3456 and headless Chromium on 9222 at 844×390
+with touch (`--device desktop` selects 1280×720); it refuses beside a test run.
+`--headless-game` suppresses game drawing for logic hunts on software GL; omit
+it when pixels are required. Reuse an existing authorized browser instead of
+starting another. The launcher is a CLI; the debugger never launches Chrome.
+
+Once the browser is ready, check daemon health and discover targets (attached
+MCP users make the equivalent `debugger_targets` call):
+
+```sh
+bash tools/mcp/js-debugger-mcp.sh status
+bash tools/mcp/js-debugger-mcp.sh call debugger_targets '{"endpoint":"http://127.0.0.1:9222"}'
+```
 
 ## Without pausing, long runs, workers
 
@@ -64,8 +78,10 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
 1. Call `debugger_targets` with the real CDP `endpoint`; attach its exact
    `targetId` using `debugger_attach`. On a game page establish identity with
    `__apex.info()` and call `__apex.agentHelp()` once per page session.
-2. Find the function first (`Grep` `js/` for its symbol), then narrow `debugger_scripts` by that file name, then use `debugger_source` (it needs
-   that row's `scriptId`, not a URL) to find the statement. Preserve the returned URL including its query suffix.
+2. Find the function through `code-nav` (`lsp_definition {symbol, body:true}`;
+   fallback `bash tools/mcp/lsp-mcp.sh def Ghost.snapshot --body`), then narrow
+   `debugger_scripts` by the returned file name, then use `debugger_source` with
+   that row's `scriptId` (or its exact `url`) to find the statement. Preserve the returned URL including its query suffix.
    Source lines/columns are one-based; frame indices are zero-based. A URL without a query
    (or a bare `js/agent/apex.js`) matches every `?v=`, so a deferred `?v=1695` script resolves.
 3. Set `debugger_breakpoint` at that URL/line, optionally with a condition
@@ -115,7 +131,11 @@ broader scripts and page lifecycle; a timeout alone establishes neither a bug no
 Reload requires fresh script IDs and pause/object handles. Exact-URL
 breakpoints persist. Remove unused breakpoints with `debugger_remove_breakpoint`,
 then always `debugger_detach`; record `cleanupErrors` and any observed resume.
-The parent stops its owned bridge/browser and verifies no run remains.
+For shell sessions, call `bash tools/mcp/js-debugger-mcp.sh call debugger_detach '{}'`,
+then stop the owned `serve-http` terminal with Ctrl-C (or SIGTERM to its recorded
+PID). Stop a browser launched here with `node tools/mcp/debug-chrome.mjs stop`;
+verify with `node tools/mcp/debug-chrome.mjs status` and daemon `status` (down is
+expected after shutdown). Never stop an inherited controller or browser.
 
 Save bounded evidence under `artifacts/`: source SHA/dirty diff, page identity,
 trigger, breakpoint/stack/locals, result, expected versus actual, and cleanup.

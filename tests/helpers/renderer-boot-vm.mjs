@@ -9,6 +9,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "./seed-log.mjs";
+import { absSrc } from "./abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const BOOT_SRC = fs.readFileSync(path.join(ROOT, "js/render/renderer-boot.js"), "utf8")
@@ -49,7 +50,7 @@ export function bootRendererBoot(opts = {}) {
     requestIdleCallback: undefined,
   });
   seedLog(ctx);
-  vm.runInContext(BOOT_SRC, ctx, { filename: "js/render/renderer-boot.js" });
+  vm.runInContext(BOOT_SRC, ctx, { filename: absSrc("js/render/renderer-boot.js") });
   const RendererBoot = vm.runInContext("RendererBoot", ctx);
   const api = RendererBoot.create({
     $: () => null,

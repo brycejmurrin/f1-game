@@ -9,11 +9,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const SRC = readFileSync(new URL("../../js/data/schedule.js", import.meta.url), "utf8");
 const API_SRC = readFileSync(new URL("../../js/data/api.js", import.meta.url), "utf8");
 const ctx = vm.createContext({});
-vm.runInContext(SRC + ";globalThis.DataSchedule = DataSchedule;", ctx, { filename: "js/data/schedule.js" });
+vm.runInContext(SRC + ";globalThis.DataSchedule = DataSchedule;", ctx, { filename: absSrc("js/data/schedule.js") });
 const S = ctx.DataSchedule;
 
 const VEGAS = { date: "2026-11-22", time: "04:00:00Z", name: "Las Vegas Grand Prix" };
@@ -73,7 +74,7 @@ test("schedule venue lines do not stamp a native title (scroll leaves it hung)",
       locality: "Melbourne", country: "Australia", date: "2026-03-08", time: "05:00:00Z"
     }]) }
   });
-  vm.runInContext(SRC + ";globalThis.DataSchedule = DataSchedule;", ctx2, { filename: "schedule.js" });
+  vm.runInContext(SRC + ";globalThis.DataSchedule = DataSchedule;", ctx2, { filename: absSrc("js/data/schedule.js") });
   const { loadSchedule } = ctx2.DataSchedule.create({ el, emptyMsg: (t) => el("div", "empty", t) });
   await loadSchedule();
   const sub = nodes.find((n) => n.cls === "dh-race-sub");
@@ -157,7 +158,7 @@ test("F1API.schedule preserves Jolpica weekend session dates and times", async (
       staleMark: noop, staleSince: noop, forget: noop
     }) }
   });
-  vm.runInContext(API_SRC + ";globalThis.F1API = F1API;", apiCtx, { filename: "js/data/api.js" });
+  vm.runInContext(API_SRC + ";globalThis.F1API = F1API;", apiCtx, { filename: absSrc("js/data/api.js") });
   const [race] = await apiCtx.F1API.schedule();
   assert.deepEqual(JSON.parse(JSON.stringify(race.sessions)), {
     fp1: { date: "2026-10-23", time: "17:30:00Z" },

@@ -18,13 +18,14 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/debris-opts.js";
 const SRC = fs.readFileSync(path.join(ROOT, FILE), "utf8").replace(/^const\b/gm, "var");
 const DEFAULTS = (() => {   // the REAL shipped SettingsDefaults, not a stub that answers "0" for everything
   const ctx = vm.createContext({});
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/settings-defaults.js"), "utf8").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/settings-defaults.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/data/settings-defaults.js") });
   return vm.runInContext("SettingsDefaults", ctx);
 })();
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
@@ -48,7 +49,7 @@ function load({ stored = {}, readyState = "complete", world = true } = {}) {
   if (world) sb.DebrisWorld = { setEnabled: (on) => { calls.push(on); return { enabled: on }; } };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(SRC, ctx, { filename: FILE });
+  vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   return { M: vm.runInContext("DebrisOpts", ctx), rows, calls, stored, doc: sb.document };
 }
 

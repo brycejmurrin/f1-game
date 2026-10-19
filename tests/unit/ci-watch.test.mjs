@@ -34,6 +34,17 @@ test("a same-second tie goes to the higher run id, whatever order the API lists 
   assert.equal(verdict(latestPerWorkflow([live, cancelled]), { 11: [] }).state, "running", "not a false `cancelled`");
 });
 
+test("a same-second tie prefers the live run over a cancelled twin even when the cancelled one has the higher id (#2944)", () => {
+  const live = run(39193176583, "CI", "in_progress", null, "2026-10-19T03:07:33Z");
+  const cancelled = run(39193176639, "CI", "completed", "cancelled", "2026-10-19T03:07:33Z");
+  for (const order of [[cancelled, live], [live, cancelled]]) {
+    assert.deepEqual(latestPerWorkflow(order).map((r) => r.id), [live.id]);
+  }
+  assert.equal(verdict(latestPerWorkflow([cancelled, live]), { [live.id]: [] }).state, "running");
+  const done = { ...live, status: "completed", conclusion: "success" };
+  assert.equal(verdict(latestPerWorkflow([cancelled, done]), { [done.id]: [job(1, "g", "completed", "success")] }).state, "passed");
+});
+
 test("verdict: failed as soon as a job fails, done only when every run completed", () => {
   const live = [run(1, "CI", "in_progress", null, "t")];
   const v = verdict(live, { 1: [job(1, "a", "completed", "failure"), job(2, "b", "in_progress", null)] });

@@ -14,17 +14,18 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = rel => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
 function sunVP(sunDir, ctr = [0, 0, 0], propTop) {
   const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
   seedLog(ctx);
-  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(`var LightTune = { LT: { shadowRange: 80, carShadow: false, moonShadow: 0, lampShadow: false } };
     var PerfGov = { tier: () => 0 };`, ctx);
   vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx,
-    { filename: "shadow-pass.js" });
+    { filename: absSrc("js/render/shared/shadow-pass.js") });
   let vp = null;
   const noop = () => {};
   const G = {
@@ -130,11 +131,11 @@ test("propTop counts the instanced placements a real backend withholds from prop
 test("reset() stops the cadence keep re-arming the previous session's car map", () => {
   const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
   seedLog(ctx);
-  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(`var LightTune = { LT: { shadowRange: 80, carShadow: true, moonShadow: 0, lampShadow: false } };
     var PerfGov = { tier: () => 0 };`, ctx);
   vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx,
-    { filename: "shadow-pass.js" });
+    { filename: absSrc("js/render/shared/shadow-pass.js") });
   const noop = () => {};
   const calls = { begin: 0, keep: 0 };
   const G = {
@@ -166,10 +167,10 @@ test("reset() stops the cadence keep re-arming the previous session's car map", 
 function dynamicShadowFixture() {
   const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
   seedLog(ctx);
-  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(`var LightTune = { LT: { shadowRange: 80, shadowStr: 1, carShadow: 1, moonShadow: 0, lampShadow: 1 } };
     var PerfGov = { tier: () => 1 };`, ctx);
-  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
   const calls = { sun: 0, car: 0, lamp: 0, keep: 0, mesh: 0, cull: 0 };
   const enabled = { car: false, lamp: false };
   const noop = () => {};

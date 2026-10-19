@@ -13,6 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "./abs-src.mjs";
 
 const DOM_JS = fs.readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/ui/dom.js"),
@@ -25,7 +26,7 @@ const DOM_EVAL = DOM_JS.replace(/^const\b/m, "var");
 
 /** Evaluate js/ui/dom.js into an existing VM context. */
 export function seedDom(ctx) {
-  vm.runInContext(DOM_EVAL, ctx, { filename: "js/ui/dom.js" });
+  vm.runInContext(DOM_EVAL, ctx, { filename: absSrc("js/ui/dom.js") });
   return ctx;
 }
 

@@ -12,6 +12,7 @@
  * rec.builds: one { kind: "whole" | "body" | "sh", team, num } per Car3D.build;
  * rec.wheels: Car3D.buildWheelLayers calls; rec.freed: meshes an LRU let go;
  * rec.flaps: one { team, blend, m, only, still } per deps.drawAeroFlaps call.
+ * rec.mats: the world matrix (16 numbers, or null) handed to each gfx.draw, parallel to rec.draws.
  * Real teams come from js/data/teams.js (11 x 2 seats); `legends: true` appends
  * js/data/legends.js's twelve-seat LEGENDS entry, the menu's widest pick.
  * `career`: null (no career) or { teamId: fitted setup } — Career.aiSetup's
@@ -20,9 +21,10 @@
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "./seed-log.mjs";
+import { absSrc } from "./abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
-const run = (ctx, rel) => vm.runInContext(read(rel).replace(/^const\b/gm, "var"), ctx, { filename: rel });
+const run = (ctx, rel) => vm.runInContext(read(rel).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(rel) });
 
 // Parts' twelve visual categories, by id: the stamp makeCars keys a car's own build on.
 const CATALOG = ["aero", "floor", "engine", "ers", "gearbox", "suspension", "brakes", "tyres", "wheels", "cooling", "fuel", "livery"]
@@ -31,7 +33,7 @@ const CATALOG = ["aero", "floor", "engine", "ers", "gearbox", "suspension", "bra
 export const WORKS = Object.freeze(Object.fromEntries(CATALOG.map((c) => [c.id, "w:" + c.id])));
 
 export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" }, career = null } = {}) {
-  const rec = { builds: [], wheels: 0, freed: 0, draws: [], flaps: [] };
+  const rec = { builds: [], wheels: 0, freed: 0, draws: [], flaps: [], mats: [] };
   const stored = { hudMirror: "on" };
   const classes = new Set();
   const rect = (l, t, w, h) => () => ({ left: l, top: t, width: w, height: h, right: l + w, bottom: t + h });
@@ -45,7 +47,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     softPresent: () => false,
     createMesh: (buf) => buf,
     freeMesh: () => { rec.freed++; },
-    draw: (mesh) => { rec.draws.push(mesh); },
+    draw: (mesh, m) => { rec.draws.push(mesh); rec.mats.push(m && m.length === 16 ? Array.from(m) : null); },
     drawSky() {},
     mirrorBegin: () => true, mirrorEnd: () => { st = { dead: false, ready: true, renders: st.renders + 1 }; },
     mirrorRect() {}, mirrorState: () => st,

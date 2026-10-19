@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -229,7 +230,7 @@ test("the row carries each team's code for the painter", () => {
 function loadPainter(sandbox) {
   const ctx = vm.createContext(Object.assign({ Math, Object, Array, Number, String, JSON, Error, Float32Array,
     console, Log: { warn() {}, info() {}, error() {}, debug() {} } }, sandbox));
-  for (const f of ["js/track/core/pit.js", "js/garage/pit-signs.js"]) vm.runInContext(read(f), ctx, { filename: f });
+  for (const f of ["js/track/core/pit.js", "js/garage/pit-signs.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   return vm.runInContext("PitSigns", ctx);
 }
 

@@ -23,7 +23,7 @@
 // and the title button that follows — #mb-vs or the garage's own picker —
 // re-reads it (js/game.js restoreFreePlaySelection). enterRoom() first walks
 // back to the title with the last room cancelled and the fake peer re-armed
-// (lobbyReset). UNVERIFIED IN A BROWSER at conversion time.
+// (lobbyReset)..
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { lobbyReset, toMenu, pinFreePlay } from "../helpers/shared-page.js";
 

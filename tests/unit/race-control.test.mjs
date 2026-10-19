@@ -30,6 +30,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8");
@@ -44,7 +45,7 @@ function load(debris) {
   });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx,
-    { filename: "js/race/race-control.js" });
+    { filename: absSrc("js/race/race-control.js") });
   return vm.runInContext("RaceControl", ctx);
 }
 

@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -192,11 +193,11 @@ function boot(opts = {}) {
     ...(opts.sandbox || {}),
   };
   sb.window = sb;
-  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
-  vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: "js/ui/hud-readouts.js" });
-  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: "js/ui/hud-minimap.js" });   // GameHud.create builds its HudMinimap (#1656)
-  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
-  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
+  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
+  vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
+  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
+  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
   const $ = (id) => dom.byId(id);
   const els = {
     pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
@@ -323,7 +324,7 @@ function loadRegion() {
     clearTimeout: (h) => { const i = timers.findIndex((x) => x.id === h); if (i >= 0) timers.splice(i, 1); },
     performance: { now: () => t }, document: { getElementById: (id) => (id === "announce-live" ? live : null) } };
   vm.createContext(ctx);
-  vm.runInContext(src("js/ui/live-region.js") + "; this.LiveRegion = LiveRegion;", ctx);
+  vm.runInContext(src("js/ui/live-region.js") + "; this.LiveRegion = LiveRegion;", ctx, { filename: absSrc("js/ui/live-region.js") });
   // Run the next timer; returns the region's text after it.
   const step = () => { const x = timers.shift(); if (x) { t += x.ms; x.fn(); } return live.textContent; };
   return { L: ctx.LiveRegion, live, step, timers, advance: (ms) => { t += ms; } };
@@ -507,7 +508,7 @@ test("hud.js: resetRace clears the chips' carried state — team bar, tow, pit w
 test("R2-07: the chip behind a car a lap DOWN says -1L, REL's own spelling for it", () => {
   const { els, rival, player, G, tick } = boot();
   const rel = { Math, Number, Object, Array, Infinity, isFinite };
-  vm.runInNewContext(src("js/ui/hud-relative.js") + "; this.HudRelative = HudRelative;", rel, { filename: "js/ui/hud-relative.js" });
+  vm.runInNewContext(src("js/ui/hud-relative.js") + "; this.HudRelative = HudRelative;", rel, { filename: absSrc("js/ui/hud-relative.js") });
   const back = { ...player, code: "BEA", rank: 3, prog: player.prog - 1300, s: 0 };
   G.cars = [rival, player, back]; G.ranked = [rival, player, back];
   tick();

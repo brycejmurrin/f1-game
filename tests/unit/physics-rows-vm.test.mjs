@@ -19,6 +19,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -52,11 +53,11 @@ test("a lap counted under a takeover resets the player's sector clock and keeps 
     DebrisWorld, Tracks: { sample: () => {}, wallAt: () => 8 },
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   for (const file of ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"])
-    vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: file });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx, { filename: "js/race/race-control.js" });
-  vm.runInContext(SRC, ctx, { filename: "js/physics/incident-sim.js" });
+    vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx, { filename: absSrc("js/race/race-control.js") });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/physics/incident-sim.js") });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mk = (s) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0, yawRateCur: 0, prog: s,
                        lap: 3, lapTime: 80, finished: false, retired: false, human: true, isPlayer: true, local: true });
