@@ -597,6 +597,17 @@ const Parts = (function () {
       { band: [0.96, 0.96, 0.98], bandWidth: 0.132, grooves: 4, grooveDepth: 0.075, sidewall: 2, shoulder: 2 }],
     ["tyres", "compound_c4", "style_tyres_classic", "Classic Grooved", "four-groove tread on a plain dark wall",
       { band: [0.20, 0.20, 0.22], bandWidth: 0.045, grooves: 4, grooveDepth: 0.075, shoulder: 0, spokes: 8 }],
+    // D6 design preview (2026-10-19): sidewall branding, bead guard and wet
+    // sipes. Pirelli's 2019+ wall splits the band into two arcs with the
+    // P ZERO / PIRELLI wordmark in the gaps.
+    ["tyres", "medium", "style_tyres_arcscript", "Arc Script", "band split into two arcs with white lettering in the gaps",
+      { bandArcs: 2, letters: 1, bandWidth: 0.10, sidewall: 0, shoulder: 2 }],
+    ["tyres", "hard", "style_tyres_quadarc", "Quad Arc Guard", "four short band arcs over a coloured rim-guard lip",
+      { bandArcs: 4, letters: 1, rimGuard: 1, bandWidth: 0.09, shoulder: 1 }],
+    ["tyres", "intermediate", "style_tyres_chevron", "Chevron Wet", "directional chevron sipes over a split wet band",
+      { sipes: 1, grooves: 2, grooveDepth: 0.06, bandArcs: 2, letters: 0, shoulder: 2 }],
+    ["tyres", "soft", "style_tyres_retroletter", "Raised Letters", "no band ring — a big white lettering ring all the way round",
+      { letters: 2, bandArcs: 4, bandWidth: 0.035, sidewall: 0, shoulder: 0 }],
     ["ers", "deploy", "style_ers_neon", "Neon Cells", "eight-cell pack under a glowing blister",
       { cells: 8, pack: 1.35, blister: 2, conduit: 2, coolerIntake: 2, led: [1.9, 0.35, 1.7], ledStrip: 1 }],
     ["ers", "harvest", "style_ers_slim", "Slim Pack", "thin, flush pack with no blister",
@@ -615,6 +626,16 @@ const Parts = (function () {
       { bore: 1.45, flare: 1, wastegate: 2, wrap: 1, lip: 2, stack: 2, shield: 1 }],
     ["exhaust", "free_flow", "style_exhaust_tripipe", "Tri-Pipe", "three narrow outlets, no flare",
       { pipes: 3, bore: 0.92, flare: 0, wastegate: 0, wrap: 0, lip: 0, shield: 0, stack: 2 }],
+    // D6 exhaust looks: temper-coloured titanium, the 2019+ stacked
+    // wastegates above the main tip, and a hooded exit.
+    ["exhaust", "sport_cat", "style_exhaust_titanium", "Burnt Titanium", "straw-to-blue heat-tempered tailpipe with a flared tip",
+      { pipes: 1, heatTint: 1, bore: 1.18, flare: 0.5, wrap: 0, lip: 0, shield: 0 }],
+    ["exhaust", "twin_gate", "style_exhaust_stackgate", "Stacked Gates", "two wastegate pipes stacked over the main tip",
+      { pipes: 1, gateStack: 1, wastegate: 2, heatTint: 2, wrap: 0, lip: 1, shield: 0 }],
+    ["exhaust", "free_flow", "style_exhaust_hooded", "Hooded Exit", "tip tucked under a carbon visor with a red edge",
+      { pipes: 1, hood: 1, heatTint: 1, wrap: 0, lip: 0, shield: 0, bore: 1.10 }],
+    ["exhaust", "inconel", "style_exhaust_bluetri", "Blued Tri-Exit", "three purple-blue tempered pipes, bare and flareless",
+      { pipes: 3, heatTint: 2, wrap: 0, lip: 0, shield: 0, flare: 0 }],
     ["floor", "fence_array", "style_floor_tallfence", "Tall Fences", "eight tall fences and a raised edge lip",
       { fences: 8, fenceH: 2.20, edgeLip: 2, skid: 2, skirt: 2, plank: 0, gurney: 0, scroll: 0 }],
     ["floor", "step_plank", "style_floor_flat", "Flat Board", "fenceless flat floor with a plain painted edge",
@@ -674,13 +695,14 @@ const Parts = (function () {
       // spokes / dish / gunNut: open-rim identity consumed by car-wheels when the
       // wheel part leaves them unset (wheel recipe still wins when set).
       tyres: Object.freeze(["grooves", "grooveDepth", "bandWidth", "coverVanes", "cover",
-        "shoulder", "sidewall", "spokes", "dish", "gunNut"]),
+        "shoulder", "sidewall", "spokes", "dish", "gunNut",
+        "bandArcs", "letters", "rimGuard", "sipes"]),
       ers: Object.freeze(["pack", "cells", "conduit", "blister", "coolerIntake", "ledStrip"]),
       gearbox: Object.freeze(["strakes", "fin", "strakeH", "finSY", "finSZ",
         "casing", "louvres", "heat", "caseWidth", "heatFins", "ribs", "rearFins"]),
       fuel: Object.freeze(["filler", "hatch", "vent", "breather", "capBig"]),
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap",
-        "lip", "shield", "stack"]),
+        "lip", "shield", "stack", "heatTint", "gateStack", "hood"]),
       floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt"]),
       cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror", "mirrorMount", "mirrorFrame"]),
       // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.

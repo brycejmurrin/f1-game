@@ -283,14 +283,72 @@ const CarWheels = (function () {
       // player's and the AI teammate's alike); livery sidewallInk paints the lettering rings below.
       const BAND = bandColor || [0.85, 0.10, 0.08];
       const bandWidth = tyreStyle && tyreStyle.bandWidth != null ? tyreStyle.bandWidth : 0.09;
+      // bandArcs (D6 design preview): 0 full ring; 2 / 4 split the band into
+      // arcs with a gap between each, the 2019+ Pirelli sidewall. letters: 1
+      // white glyph blocks in each gap, 2 a big lettering ring inboard of the
+      // band all the way round (the 1970s raised-letter wall).
+      const bandArcs = tyreStyle && (tyreStyle.bandArcs === 2 || tyreStyle.bandArcs === 4) ? tyreStyle.bandArcs : 0;
+      const letters = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.letters) || 0)));
+      const gapHalf = bandArcs === 2 ? 0.42 : 0.26;
+      const inGap = (a) => {
+        if (!bandArcs) return false;
+        const step = (Math.PI * 2) / bandArcs;
+        const d = ((a - Math.PI / 2) % step + step) % step;
+        return d < gapHalf || d > step - gapHalf;
+      };
+      const outerB = 0.96 * edgeRm, innerB = Math.max(0.76 * edgeRm, outerB - bandWidth);
+      const GLYPH = [0.95, 0.95, 0.96];
+      // A row of glyph blocks along an arc: alternating widths read as a word.
+      const glyphRow = (xb, aMid, span, r0, r1, n) => {
+        for (let g = 0; g < n; g++) {
+          const t0 = aMid - span / 2 + (g / n) * span, w = (span / n) * (g % 3 === 1 ? 0.45 : 0.72);
+          const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, P(r * r1, t0), P(r * r1, t0 + w), P(r * r0, t0 + w), P(r * r0, t0), GLYPH, SURFACES.rubber);
+        }
+      };
       for (const bs of [[x0, -1], [x1, 1]]) {
         const xb = bs[0] + bs[1] * 0.004;
         for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+          if (inGap((a0 + a1) / 2)) continue;
           const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-          const outer = 0.96 * edgeRm, inner = Math.max(0.76 * edgeRm, outer - bandWidth);
-          const A = P(r * outer, a0), B = P(r * outer, a1), C = P(r * inner, a1), D = P(r * inner, a0);
+          const A = P(r * outerB, a0), B = P(r * outerB, a1), C = P(r * innerB, a1), D = P(r * innerB, a0);
           addQuad(out, A, B, C, D, BAND, SURFACES.rubber);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
+        }
+        const xg = bs[0] + bs[1] * 0.005;
+        if (letters === 1 && bandArcs) {
+          for (let k = 0; k < bandArcs; k++) {
+            glyphRow(xg, Math.PI / 2 + k * (Math.PI * 2) / bandArcs, gapHalf * 1.5,
+                     (outerB + innerB) / 2 - 0.03, (outerB + innerB) / 2 + 0.03, 5);
+          }
+        } else if (letters === 2) {
+          for (let k = 0; k < 4; k++) {
+            glyphRow(xg, k * Math.PI / 2 + Math.PI / 4, 0.95, innerB - 0.085, innerB - 0.015, 7);
+          }
+        }
+      }
+      // rimGuard (D6): a proud bead ring in the band colour where the tyre
+      // meets the rim, just outboard of the rim lip so the two never overlap.
+      if (tyreStyle && tyreStyle.rimGuard) {
+        for (const bs of [[x0, -1], [x1, 1]]) {
+          const xb = bs[0] + bs[1] * 0.007;
+          for (let i = 0; i < SEG; i++) {
+            const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+            const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+            addQuad(out, P(r * 0.735, a0), P(r * 0.735, a1), P(r * 0.705, a1), P(r * 0.705, a0), BAND, SURFACES.rubber);
+          }
+        }
+      }
+      // sipes (D6): directional chevrons across the tread, a shade lighter
+      // than the rubber — how a wet tyre reads from behind.
+      if (tyreStyle && tyreStyle.sipes) {
+        const SIPE = [0.30, 0.30, 0.32], N = 18, xm = (x0 + x1) / 2;
+        for (let k = 0; k < N; k++) {
+          const a = (k / N) * Math.PI * 2, rr = r * 1.004, hw = 0.022;
+          const P = (x, t) => [x, cy + rr * Math.cos(t), cz + rr * Math.sin(t)];
+          for (const [xa, xb2] of [[x0 + (x1 - x0) * SH2_W, xm], [x1 - (x1 - x0) * SH2_W, xm]]) {   // flat crown only: past the shoulder a sipe floats
+            addQuad(out, P(xa, a), P(xb2, a + 0.12), P(xb2, a + 0.12 + hw * 3), P(xa, a + hw * 3), SIPE, SURFACES.rubber);
+          }
         }
       }
       // Raised sidewall lettering ring(s): proud dark annulus inboard of the band
@@ -364,9 +422,12 @@ const CarWheels = (function () {
             addQuad(out, E(dR * 0.80, a0, xo), E(dR * 0.80, a1, xo), E(dR, a1, xo), E(dR, a0, xo), FOIL, SURFACES.metal);
           }
         }
-        for (const xf of [x0 + 0.004 - 0.003, x1 - 0.004 + 0.003]) for (const [rf, n] of [[0.38, 12], [0.55, 18], [0.70, 24]]) for (let k = 0; k < n; k++) {
-          const a = k / n * Math.PI * 2 + rf, rr = dR * rf;
-          addBox(out, xf, cy + rr * Math.cos(a), cz + rr * Math.sin(a), 0.003, 0.011, 0.011, SLOT, SURFACES.carbon);
+        // Holes are flat dark quads just outboard of each face: only that face is
+        // ever seen, and a box per hole put the drum over the triangle budget.
+        const H = 0.0055;
+        for (const xf of [x0 + 0.004 - 0.0035, x1 - 0.004 + 0.0035]) for (const [rf, n] of [[0.38, 12], [0.55, 18], [0.70, 24]]) for (let k = 0; k < n; k++) {
+          const a = k / n * Math.PI * 2 + rf, rr = dR * rf, hy = cy + rr * Math.cos(a), hz = cz + rr * Math.sin(a);
+          addQuad(out, [xf, hy - H, hz - H], [xf, hy - H, hz + H], [xf, hy + H, hz + H], [xf, hy + H, hz - H], SLOT, SURFACES.carbon);
         }
       }
       const HUBCAP = RC;                   // raised boss: lighter than the dish floor
