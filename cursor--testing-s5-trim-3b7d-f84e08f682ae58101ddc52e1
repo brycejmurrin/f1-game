@@ -1,1 +1,0 @@
-1792419148	Claude	tip red 8ece0ef: test-groups #7 TESTING.md §5 inlined coverage table (2572>2500; #2998+#2924 rows collided); drop the inlined table, rows live in generated TESTING-COVERAGE.md; OWNED docs/TESTING.md §5  [cursor/testing-s5-trim-3b7d; session f84e08f682ae58101ddc52e1]
