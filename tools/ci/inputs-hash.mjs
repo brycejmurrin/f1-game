@@ -32,6 +32,7 @@ export const JOB_INPUTS = Object.freeze({
   guards: Object.freeze([
     "tools/",
     "tests/unit/",
+    "tests/helpers/",
     "tests/groups.json",
     "tests/data/",
     "docs/",
@@ -145,6 +146,7 @@ export function guardsExpectedPaths() {
   return [
     "tools/",
     "tests/unit/",
+    "tests/helpers/",
     "tests/groups.json",
     "tests/data/",
     "docs/",

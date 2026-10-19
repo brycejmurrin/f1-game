@@ -118,3 +118,17 @@ test("changing only the car profile invalidates the parts verdict cache", () => 
     assert.notEqual(inputsHash("sweeps-parts", { root: dir }), before);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+
+test("changing only a shared unit helper invalidates the guards verdict cache", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-helper-hash-"));
+  try {
+    fs.mkdirSync(path.join(dir, "tests", "helpers"), { recursive: true });
+    const helper = path.join(dir, "tests", "helpers", "shared-fixture.mjs");
+    fs.writeFileSync(helper, "export const fixtureValue = 1;");
+    const before = inputsHash("guards", { root: dir });
+    fs.writeFileSync(helper, "export const fixtureValue = 2;");
+    assert.notEqual(inputsHash("guards", { root: dir }), before,
+      "a helper implementation change must not reuse a cached tooling verdict");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
