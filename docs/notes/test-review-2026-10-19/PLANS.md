@@ -1,6 +1,6 @@
 # Test suite review 2026-10-19 — pass-2 fix plans
 
-**PLANS FINAL** (2026-10-19 07:00Z): all 22 batches reported; 21 of 37 lanes are ready to launch. A draft lane names the continuation it waits on; fold that continuation into its row file and lane, then launch.
+**PLANS FINAL** (2026-10-19 07:25Z): all 22 batches reported; 23 of 37 lanes are ready to launch. A draft lane names the continuation it waits on; fold that continuation into its row file and lane, then launch.
 
 Generated with `SYNTHESIS.md`. Each lane is one PR-sized owner session; OWNED globs are disjoint between lanes. A lane stays **draft** until every batch it draws from has a final report.
 
@@ -21,9 +21,9 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L0 — Debuggable vm code: preload, then absolute filenames (ready to launch)
 
 - **Goal:** every vm-loaded module carries an absolute filename, so file-path breakpoints and coverage reach it; the MCP half (#2957) is PR #2967 and is not this lane
-- **Owned:** `tools/lib/<new: vm-debug-preload>.cjs`, `tests/helpers/fn-source.mjs`, `tests/helpers/game-source.mjs`, `tests/helpers/vm-page.js`, `tools/check/<new: vm-filename-lint>.mjs`, `docs/TESTING.md §Debug a Node test`, `tests/unit/js-debugger-mcp.test.mjs`
-- **Closes:** DBG-01, DBG-02, DBG-03, DBG-04, DBG-05, T3-15 (6 findings; effort S×4 M×2 L×0)
-- **Draws from batches:** render-1, render-2, render-3, physics-1, tooling-3
+- **Owned:** `tools/lib/<new: vm-debug-preload>.cjs`, `tests/helpers/fn-source.mjs`, `tests/helpers/game-source.mjs`, `tests/helpers/vm-page.js`, `tools/check/<new: vm-filename-lint>.mjs`, `docs/TESTING.md §Debug a Node test`, `tests/unit/js-debugger-mcp.test.mjs`, `tests/specs/collisions-deep.spec.js`
+- **Closes:** DBG-01, DBG-02, DBG-03, DBG-04, DBG-05, T3-15, P2-27 (7 findings; effort S×5 M×2 L×0)
+- **Draws from batches:** render-1, render-2, render-3, physics-1, tooling-3, physics-2
 - **Verify:** `node --test tests/unit/js-debugger-*.test.mjs && npm run test:tooling-fast`
 - **Effort:** S (#2960) + M (#2961, ~460 mechanical call sites via codemod)
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`); DEBUGGER-B's Q3 table also picks Sonnet for #2960 and #2961
@@ -136,7 +136,7 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 
 - **Goal:** player-physics and collision tests assert the shipped behaviour (both walls, grass drag, scrub, contact extents) instead of test-local copies, and every 'loses speed' title asserts speed
 - **Owned:** `tests/unit/wall-clamp.test.mjs`, `tests/unit/collision*.test.mjs`, `tests/unit/physics-rows-vm.test.mjs`, `tests/unit/player-forces.test.mjs`, `tests/unit/steer-lock-taper.test.mjs`, `tests/unit/grip-steer.test.mjs`, `tests/unit/trail-brake-turnin.test.mjs`, `tests/unit/tyre-peak-slip.test.mjs`, `tests/unit/tyre-model.test.mjs`, `tests/specs/longitudinal.spec.js`, `tests/specs/world-physics.spec.js`, `tests/specs/physics-boot.spec.js`, `tests/specs/physics-hotpath.spec.js`, `tests/specs/collisions-deep.spec.js`, `tests/specs/physics-fixes.spec.js`, `tests/specs/drift.spec.js`, `tests/unit/speed-coupling.test.mjs`, `tests/specs/offtrack.spec.js`, `tests/unit/contact-geometry.test.mjs`, `tests/unit/damage.test.mjs`, `tests/unit/dirty-air.test.mjs`
-- **Closes:** R3-08, P1-02, P1-03, P1-04, P1-05, P1-06, P1-08, P1-10, P1-11, P1-14, P1-15, P1-17, P1-19, P2-01, P2-02, P2-06, P2-07, P2-08, P2-09, P2-14, P2-18, P2-21, T4-11, T2-11, T2-21, T2-30, TK2-18 (27 findings; effort S×25 M×2 L×0)
+- **Closes:** R3-08, P1-02, P1-03, P1-04, P1-05, P1-06, P1-08, P1-10, P1-11, P1-14, P1-15, P1-17, P1-19, P2-01, P2-02, P2-06, P2-07, P2-08, P2-09, P2-14, P2-18, P2-21, T4-11, T2-11, T2-21, T2-30, TK2-18, P2-25 (28 findings; effort S×25 M×3 L×0)
 - **Draws from batches:** render-3, physics-1, physics-2, tooling-4, tooling-2, tracks-2
 - **Verify:** `node --test tests/unit/wall-clamp.test.mjs tests/unit/collision*.test.mjs tests/unit/physics-rows-vm.test.mjs tests/unit/player-forces.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/grip-steer.test.mjs tests/unit/tyre-*.test.mjs; specs via node tools/ci/remote-group.mjs <group> on the pushed branch (longitudinal.spec alone is 556 s locally)`
 - **Effort:** L (22 findings; three PRs)
@@ -148,7 +148,7 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 
 - **Goal:** the physics-characterization gate covers ERS, X-mode, wet, kerbs and AI beyond 4 Monza dry scenarios, its baseline blessing is provable, and aero/ERS specs assert what their titles promise
 - **Owned:** `tests/specs/physics-characterization.spec.js`, `tests/unit/physics-characterization-vm.test.mjs`, `tests/unit/physics-baseline-provenance.test.mjs`, `tests/helpers/baseline-blessing.mjs`, `tests/unit/aero-*.test.mjs`, `tests/specs/aero-zones.spec.js`, `tests/specs/parts-ers.spec.js`
-- **Closes:** P1-01, P1-13, P1-22, P2-03, P2-05, P2-11, P2-17 (7 findings; effort S×5 M×2 L×0)
+- **Closes:** P1-01, P1-13, P1-22, P2-03, P2-05, P2-11, P2-17, P2-26 (8 findings; effort S×6 M×2 L×0)
 - **Draws from batches:** physics-1, physics-2
 - **Verify:** `node --test tests/unit/physics-characterization-vm.test.mjs tests/unit/physics-baseline-provenance.test.mjs tests/unit/aero-*.test.mjs && npm test -- tests/specs/physics-characterization.spec.js`
 - **Effort:** M–L
@@ -158,9 +158,9 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L13 — Determinism, assets, persistence and untrusted-input contracts (ready to launch)
 
 - **Goal:** the determinism spec can fail, the assets spec reads real GL errors, the save-failed warning is proven to fire, and fuzzing asserts every shape branch
-- **Owned:** `tests/specs/agent-determinism-frame.spec.js`, `tests/specs/assets-api.spec.js`, `tests/unit/persistence-vm.test.mjs`, `tests/unit/fuzz-untrusted-inputs.test.mjs`, `tests/unit/store-cross-tab.test.mjs`, `tests/unit/store-registry.test.mjs`, `tests/unit/episode-transients.test.mjs`, `tests/unit/html-sink-lint.test.mjs`, `tests/unit/load-order.test.mjs`, `tests/unit/baked-model-instancing.test.mjs`, `tests/unit/determinism-replay-vm.test.mjs`, `tests/unit/save-durability.test.mjs`, `tests/unit/save-schema-registry.test.mjs`, `tests/unit/share-code.test.mjs`
-- **Closes:** R3-01, R3-02, P1-07, P1-12, T4-14, T4-15, T2-09, T3-14, T3-19, M1-05, M1-16, M1-17, M1-18, M1-19 (14 findings; effort S×10 M×4 L×0)
-- **Draws from batches:** render-3, physics-1, tooling-4, tooling-2, tooling-3, modes-1
+- **Owned:** `tests/specs/agent-determinism-frame.spec.js`, `tests/specs/assets-api.spec.js`, `tests/unit/persistence-vm.test.mjs`, `tests/unit/fuzz-untrusted-inputs.test.mjs`, `tests/unit/store-cross-tab.test.mjs`, `tests/unit/store-registry.test.mjs`, `tests/unit/episode-transients.test.mjs`, `tests/unit/html-sink-lint.test.mjs`, `tests/unit/load-order.test.mjs`, `tests/unit/baked-model-instancing.test.mjs`, `tests/unit/determinism-replay-vm.test.mjs`, `tests/unit/save-durability.test.mjs`, `tests/unit/save-schema-registry.test.mjs`, `tests/unit/share-code.test.mjs`, `tests/specs/persistence.spec.js`
+- **Closes:** R3-01, R3-02, P1-07, P1-12, T4-14, T4-15, T2-09, T3-14, T3-19, M1-05, M1-16, M1-17, M1-18, M1-19, P2-28 (15 findings; effort S×11 M×4 L×0)
+- **Draws from batches:** render-3, physics-1, tooling-4, tooling-2, tooling-3, modes-1, physics-2
 - **Verify:** `node --test tests/unit/persistence-vm.test.mjs tests/unit/fuzz-untrusted-inputs.test.mjs && npm test -- tests/specs/agent-determinism-frame.spec.js tests/specs/assets-api.spec.js`
 - **Effort:** S–M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -221,12 +221,12 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
 - **Depends on:** modes-1 report may add career rows
 
-### L19 — Car render, garage and livery (draft)
+### L19 — Car render, garage and livery (ready to launch)
 
 - **Goal:** car and garage tests run the mesh/material builders instead of ~370 source pins, hidden-class asserts are unconditional, and garage specs can fail
-- **Owned:** `tests/unit/car-*.test.mjs`, `tests/unit/garage-*.test.mjs`, `tests/unit/crest-marks.test.mjs`, `tests/unit/carve-a-modules.test.mjs`, `tests/unit/finish-coast-rev-vm.test.mjs`, `tests/specs/garage-aero.spec.js`, `tests/specs/parts-persistence.spec.js`, `tests/unit/surface-id-parity.test.mjs`, `tests/unit/setup-preview-hull.test.mjs`, `tests/specs/livery-sidewall.spec.js`, `tests/unit/fill-gating.test.mjs`, `tests/unit/livery-cover-graphics.test.mjs`, `tests/specs/parts-factory-presets.spec.js`, `tests/specs/car-effects.spec.js`, `tests/specs/garage-out-before-card.spec.js`, `tests/specs/livery-wheels.spec.js`, `tests/specs/parts-catalog.spec.js`, `tests/specs/parts-liveries.spec.js`, `tests/specs/parts-livery-contrast.spec.js`, `tests/specs/parts-livery-zones.spec.js`, `tests/specs/parts-mesh-cache.spec.js`, `tests/unit/cockpit-wheels.test.mjs`, `tests/unit/legend-parts-seed.test.mjs`, `tests/unit/legends-team.test.mjs`, `tests/unit/livery-decal-surfaces.test.mjs`, `tests/unit/livery-design.test.mjs`, `tests/unit/livery-draft-mesh-cache.test.mjs`, `tests/unit/livery-helmet-style.test.mjs`, `tests/unit/livery-tier.test.mjs`, `tests/unit/loading-card.test.mjs`, `tests/unit/parts-locked-equivalent.test.mjs`, `tests/unit/share-card.test.mjs`, `tests/unit/team-style-relief.test.mjs`
-- **Closes:** C1-02, C1-05, C1-06, C1-08, C1-09, C1-10, C1-12, C1-13, C1-14, C1-15, C1-18, P2-12, P2-16, T5-18, T4-02, T2-15, TK1-04, TK2-07, R3-24, RC1-20, C2-01, C2-02, C2-03, C2-04, C2-06, C2-07, C2-08, C2-09, C2-10, C2-11, C2-12, C2-13, C2-14, C2-15, C2-16, C2-17, C2-18, C2-19, C2-20 (39 findings; effort S×28 M×9 L×2)
-- **Draws from batches:** physics-1, physics-2, car-1, tooling-5, tooling-4, tooling-2, tracks-1, tracks-2, render-3, race-1, car-2 — waiting on: car-2
+- **Owned:** `tests/unit/car-*.test.mjs`, `tests/unit/garage-*.test.mjs`, `tests/unit/crest-marks.test.mjs`, `tests/unit/carve-a-modules.test.mjs`, `tests/unit/finish-coast-rev-vm.test.mjs`, `tests/specs/garage-aero.spec.js`, `tests/specs/parts-persistence.spec.js`, `tests/unit/surface-id-parity.test.mjs`, `tests/unit/setup-preview-hull.test.mjs`, `tests/specs/livery-sidewall.spec.js`, `tests/unit/fill-gating.test.mjs`, `tests/unit/livery-cover-graphics.test.mjs`, `tests/specs/parts-factory-presets.spec.js`, `tests/specs/car-effects.spec.js`, `tests/specs/garage-out-before-card.spec.js`, `tests/specs/livery-wheels.spec.js`, `tests/specs/parts-catalog.spec.js`, `tests/specs/parts-liveries.spec.js`, `tests/specs/parts-livery-contrast.spec.js`, `tests/specs/parts-livery-zones.spec.js`, `tests/specs/parts-mesh-cache.spec.js`, `tests/unit/cockpit-wheels.test.mjs`, `tests/unit/legend-parts-seed.test.mjs`, `tests/unit/legends-team.test.mjs`, `tests/unit/livery-decal-surfaces.test.mjs`, `tests/unit/livery-design.test.mjs`, `tests/unit/livery-draft-mesh-cache.test.mjs`, `tests/unit/livery-helmet-style.test.mjs`, `tests/unit/livery-tier.test.mjs`, `tests/unit/loading-card.test.mjs`, `tests/unit/parts-locked-equivalent.test.mjs`, `tests/unit/share-card.test.mjs`, `tests/unit/team-style-relief.test.mjs`, `tests/unit/livery-finish-contract.test.mjs`, `tests/unit/parts-ladder.test.mjs`
+- **Closes:** C1-02, C1-05, C1-06, C1-08, C1-09, C1-10, C1-12, C1-13, C1-14, C1-15, C1-18, P2-12, P2-16, T5-18, T4-02, T2-15, TK1-04, TK2-07, R3-24, RC1-20, C2-01, C2-02, C2-03, C2-04, C2-06, C2-07, C2-08, C2-09, C2-10, C2-11, C2-12, C2-13, C2-14, C2-15, C2-16, C2-17, C2-18, C2-19, C2-20, C2-22, C2-23, C2-24 (42 findings; effort S×30 M×10 L×2)
+- **Draws from batches:** physics-1, physics-2, car-1, tooling-5, tooling-4, tooling-2, tracks-1, tracks-2, render-3, race-1, car-2
 - **Verify:** `node --test tests/unit/car-*.test.mjs tests/unit/garage-*.test.mjs tests/unit/crest-marks.test.mjs tests/unit/carve-a-modules.test.mjs && npm test -- tests/specs/garage-aero.spec.js`
 - **Effort:** L (car-presentation-canary split is the bulk)
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -289,12 +289,12 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 - **Depends on:** T4-30 moves a ceiling into tests/data/ratchets.json: edit the source and `npm run gen`, never the generated file; no ratchet raise
 - **PR slices:** PR 1: T4-01 select() fixtures, T4-03 ratchet refusal, T4-16 skip→fail (high); PR 2: T4-08, T4-21, T4-22, T4-27, T4-29, T4-30
 
-### L25 — Test-infra hygiene and agent-surface tools (draft)
+### L25 — Test-infra hygiene and agent-surface tools (ready to launch)
 
 - **Goal:** source-integrity parses js/ as classic scripts, agent-surface tool tests drive the real CLI, and tests stop using sleeps, os.tmpdir() and order-dependent state
 - **Owned:** `tests/unit/source-integrity.test.mjs`, `tests/unit/shot-survey-runner.test.mjs`, `tests/unit/profile-mcp.test.mjs`, `tests/unit/skill-gameplay-surface.test.mjs`, `tests/unit/skill-progressive.test.mjs`, `tests/unit/report-server.test.mjs`, `tests/unit/publish-shots.test.mjs`, `tests/unit/ready-gate.test.mjs`, `tests/unit/sheetshape-*.test.mjs`, `tests/unit/script-loader-throw.test.mjs`, `tests/unit/clipboard.test.mjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/menu-nav-spatial.test.mjs`, `tests/unit/offline-precache-nav.test.mjs`, `tests/unit/track-line.test.mjs`, `tests/unit/track-shot-survey.test.mjs`, `tests/unit/trackside.test.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/assert-audit.test.mjs`, `tests/unit/bash-guard-hardening.test.mjs`, `tests/unit/body-attitude.test.mjs`, `tests/unit/boot-idle-prefetch.test.mjs`, `tests/unit/cdmcp-measure.test.mjs`, `tests/unit/game-ctx-surface.test.mjs`, `tests/unit/game-vm.test.mjs`, `tests/unit/gen-arch-table.test.mjs`, `tests/unit/godray-keep-nearest.test.mjs`, `tests/unit/harness-display.test.mjs`, `tests/unit/key-binds.test.mjs`, `tests/unit/no-bare-console.test.mjs`, `tests/specs/car-effects.spec.js`
 - **Closes:** T4-06, T4-07, T4-09, T4-18, T4-19, T4-23, T4-24, T4-25, T4-26, T4-28, T2-08, T2-17, T2-27, TK1-03, TK1-09, TK1-15, TK2-04, TK2-08, T1-01, T1-02, T1-06, T1-07, T1-08, T1-18, T1-20, T1-23, T3-01, T3-10, T3-13, T3-03, T3-16, T3-18, T3-20, C2-21 (34 findings; effort S×27 M×7 L×0)
-- **Draws from batches:** tooling-4, tooling-2, tracks-1, tracks-2, tooling-1, tooling-3, car-2 — waiting on: car-2
+- **Draws from batches:** tooling-4, tooling-2, tracks-1, tracks-2, tooling-1, tooling-3, car-2
 - **Verify:** `npm run test:tooling-fast`
 - **Effort:** M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -384,7 +384,7 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 - **Goal:** menu, picker, title-rotation and photo-studio tests press keys or taps on the shipped DOM at phone landscape 844x390 with touch first, and assert focus, selection and what is visible
 - **Owned:** `js/ui/experience.js`, `tests/specs/menu-keyboard.spec.js`, `tests/specs/menu-survey.spec.js`, `tests/specs/photo-studio.spec.js`, `tests/specs/picker-edit-button.spec.js`, `tests/specs/picker-tab-inplace.spec.js`, `tests/specs/title-menu-rotation.spec.js`, `tests/unit/title-fx.test.mjs`, `tests/unit/title-home-scene-prepaint.test.mjs`, `tests/unit/title-menu-even.test.mjs`, `tests/unit/ui-improve-pass.test.mjs`
 - **Closes:** U2-03, U2-08, U2-09, U2-10, U2-13, U2-15, U2-16, U2-19, U2-20, U2-21, C2-05 (11 findings; effort S×9 M×2 L×0)
-- **Draws from batches:** ui-2, car-2 — waiting on: ui-2, car-2
+- **Draws from batches:** ui-2, car-2 — waiting on: ui-2
 - **Verify:** `node --test on the owned units; each owned spec alone via test-bg.mjs`
 - **Effort:** M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
