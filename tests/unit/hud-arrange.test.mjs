@@ -444,6 +444,19 @@ test('editor: hidden map, gaps and mirror stay selectable and their owner modes 
   }
 });
 
+// #2852: pieces without a VISIBILITY policy keep the row greyed, and the reason
+// lives on the hint line (phones never see title= tooltips).
+test('editor: auto-shown pieces grey VISIBILITY with a visible hint reason', () => {
+  const e = editor('pos', { on: true });
+  e.api.setEditing(true);
+  const hint = e.ids.get('hud-arrange-hint');
+  const vis = e.ids.get('hud-arrange-vis');
+  assert.match(hint.textContent, /shown automatically with race events/i);
+  assert.equal(hint.hidden, false, 'hint must be visible on a phone');
+  assert.equal(vis.getAttribute('aria-describedby'), 'hud-arrange-hint');
+  assert.equal(vis.disabled, true);
+});
+
 
 test('editor holds the MOVE & SIZE preview before hiding settings and releases after restoring them', () => {
   const states = [];

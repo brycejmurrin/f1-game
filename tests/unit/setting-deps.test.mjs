@@ -34,6 +34,8 @@ const WHEN = {
   "vignette-motion": (h, on) => { h.mode.motion = on ? "on" : "reduce"; },
   "touch-dock": (h, on) => { h.mode.touch = on; },
   "panel-contrast": (h, on) => { h.d.documentElement.setAttribute("data-ui-contrast", on ? "normal" : "high"); },
+  "turnchase-cam": (h, on) => { h.mode.cam = on ? "cockpit" : "chase"; },
+  "photo-scene": (h, on) => { h.mode.scene = on ? "photo" : "garage"; },
 };
 
 function boot() {
@@ -41,12 +43,16 @@ function boot() {
   const d = dom.document;
   d.getElementById = (id) => d.querySelector("#" + id);
   const el = (tag, id, parent = dom.body) => { const n = dom.makeElement(tag, id); parent.appendChild(n); return n; };
-  const mode = { line: "full", motion: "on", touch: true };
+  const mode = { line: "full", motion: "on", touch: true, cam: "cockpit", scene: "photo" };
   const ctx = vm.createContext({
     document: d, setTimeout, Log: { info() {}, warn() {} },
     DrivingLine: { mode: () => mode.line }, TitleFx: { mode: () => mode.motion },
     Input: { touchControlsNeeded: () => mode.touch },
+    GameStore: { store: { get: (k, fallback) => (k === "homeScene" ? mode.scene : k === "camMode" ? 0 : fallback) } },
+    CamModes: { CAM_MODES: [{ id: "cockpit" }] },
   });
+  // turnchase-cam OFF flips the mode id at the stored camMode index.
+  Object.defineProperty(ctx.CamModes.CAM_MODES[0], "id", { get: () => mode.cam, enumerable: true });
   vm.runInContext(SRC, ctx);
   return { dom, d, el, ctx, mode, Deps: ctx.SettingDeps };
 }
