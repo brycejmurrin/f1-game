@@ -64,6 +64,25 @@ for d in sorted(DATA["designs"], key=lambda d: d["rank"]):
   <p class="metric">{near_txt}</p>
 </section>''')
 
+st = DATA.get("stations")
+stations = ""
+if st:
+    order = ["cockpitSide", "haloTop", "drsFlap", "floorEdge", "noseTip", "airbox", "mirrors", "wheelCovers"]
+    props = sorted(st["proposed"], key=lambda p: order.index(p["id"]) if p["id"] in order else 99)
+    base = jpg(os.path.join(SRC, "williams-borderedStripe-free_az90_el8_d7.png"), "map-side.jpg")
+    pins = "".join(f'<span class="pin have" style="left:{x}%;top:{y}%" title="{html.escape(l)}"></span>' for l, x, y in st["existing"])
+    pins += "".join(f'<span class="pin new" style="left:{p["x"]}%;top:{p["y"]}%"><b>{i + 1}</b></span>' for i, p in enumerate(props))
+    rows = "".join(f'<tr><td class="n">{i + 1}</td><td><b>{html.escape(p["label"])}</b><br><code>{p["id"]}</code></td><td>{html.escape(p["what"])}</td><td>{html.escape(p["precedent"])}</td><td>{html.escape(p["view"])}</td><td>{html.escape(p["effort"])}</td></tr>' for i, p in enumerate(props))
+    have = "".join(f"<li>{html.escape(l)}</li>" for l, _, _ in st["existing"])
+    stations = f'''<section class="design" id="stations">
+  <header><h2>Where else can decals go?</h2><code>stations</code></header>
+  <p class="layout">Numbered rings are candidate new spots, ranked by how often you'd see them (the chase camera first). Filled dots are spots that already carry paint or decals. The view is the Williams car from the side, from round 1.</p>
+  <div class="map"><img src="{base}" alt="Williams car from the side with decal spots marked">{pins}</div>
+  <p class="ref"><span>Already decal-able</span> nose top (number) and nose sides, plus:</p><ul class="have">{have}</ul>
+  <div class="wrap"><table class="st"><thead><tr><th>#</th><th>Spot</th><th>What goes there</th><th>Real-F1 precedent</th><th>Seen from</th><th>Effort</th></tr></thead><tbody>{rows}</tbody></table></div>
+  <p class="metric">Pick the spots to build with “build &lt;id&gt;”, e.g. “build cockpitSide, haloTop”.</p>
+</section>'''
+
 matrix = '<table><thead><tr><th></th>' + "".join(f"<th>{i}</th>" for i in ids) + "</tr></thead><tbody>"
 for a in ids:
     matrix += f"<tr><th>{a}</th>"
@@ -79,6 +98,6 @@ rounds = "".join(
 
 page = open(os.path.join(ROOT, "template.html")).read()
 page = page.replace("{{ROUND}}", str(ROUND)).replace("{{CARDS}}", "\n".join(cards))
-page = page.replace("{{MATRIX}}", matrix).replace("{{ROUNDS}}", rounds).replace("{{RANKED}}", ", ".join(d["id"] for d in sorted(DATA["designs"], key=lambda d: d["rank"])))
+page = page.replace("{{STATIONS}}", stations).replace("{{MATRIX}}", matrix).replace("{{ROUNDS}}", rounds).replace("{{RANKED}}", ", ".join(d["id"] for d in sorted(DATA["designs"], key=lambda d: d["rank"])))
 open(os.path.join(SITE, "index.html"), "w").write(page)
 print(json.dumps({"pairs": {"|".join(k): round(min(v), 2) for k, v in diffs.items()}}, indent=1))

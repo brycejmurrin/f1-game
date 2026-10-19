@@ -87,6 +87,117 @@
    "round": 1,
    "date": "2026-10-19",
    "changed": "First round: five new cover layouts added to the SPINE TOP design picker (wrap placement so the art reaches both cover flanks), each shot on TLX in McLaren and Williams colours, front three-quarter and side. Before publishing, spearhead was reshaped from a raked wedge to a level-shafted arrow because it read like the tricolour on the flank. Known weak spots: on McLaren colours, bordered stripe and spearhead barely show because both pattern colours sit close to papaya, and spearhead vs bordered stripe is the least distinct pair (29.7% of the paint area). Round 2 target: give the stripe and arrow a contrast colour that is guaranteed to stand off the body."
+  },
+  {
+   "round": 2,
+   "date": "2026-10-19",
+   "changed": "Bryce: liveries are fine, so no fit investigation for this lane; instead, look at where else on the car decals and details could go. Added a map of the decal spots the car has today and eight candidate new spots, with real-F1 precedent and rough effort. No new captures this round (reuses round-1 frames)."
   }
- ]
+ ],
+ "stations": {
+  "existing": [
+   [
+    "Front-wing endplate, outer face",
+    "4.7",
+    "59"
+   ],
+   [
+    "Sidepod panel (main sponsor) + lower strip",
+    "36",
+    "56"
+   ],
+   [
+    "Engine-cover flank, top and tail",
+    "51",
+    "46"
+   ],
+   [
+    "Rear-wing band and endplates (number)",
+    "68.5",
+    "47"
+   ]
+  ],
+  "proposed": [
+   {
+    "id": "cockpitSide",
+    "label": "Cockpit side",
+    "x": "27",
+    "y": "49",
+    "what": "Driver name or three-letter code with a small flag, on the chassis side between the halo and the sidepod.",
+    "precedent": "Every current car carries the driver's name or code here, next to the cockpit.",
+    "effort": "Low: one flat decal quad like the existing sidepod panel decal, plus a new atlas region.",
+    "view": "Side, garage, broadcast"
+   },
+   {
+    "id": "haloTop",
+    "label": "Halo top",
+    "x": "35",
+    "y": "40.5",
+    "what": "A sponsor wordmark or colour band along the top of the halo.",
+    "precedent": "McLaren sold its halo to Gandys at the 2018 Australian GP; Force India then ran Havaianas there.",
+    "effort": "Medium: the halo is a tube, so the decal needs its own UV strip along it.",
+    "view": "Chase camera (always in view), front"
+   },
+   {
+    "id": "floorEdge",
+    "label": "Floor edge",
+    "x": "40",
+    "y": "59.5",
+    "what": "A long thin wordmark or accent line along the visible floor edge under the sidepod.",
+    "precedent": "Common secondary-sponsor spot on 2022\u20132026 cars.",
+    "effort": "Low: a strip quad on the floor edge.",
+    "view": "Side, broadcast"
+   },
+   {
+    "id": "noseTip",
+    "label": "Nose tip",
+    "x": "7.5",
+    "y": "52.5",
+    "what": "Paint the nose tip a contrast colour, or carry a small mark there.",
+    "precedent": "2026 cars paint the tip deliberately (Alpine dark blue, Red Bull red), per the 2026 livery reference note.",
+    "effort": "Low: a colour zone on the existing nose mesh; no new atlas region.",
+    "view": "Front, chase (far)"
+   },
+   {
+    "id": "airbox",
+    "label": "Airbox surround",
+    "x": "41.5",
+    "y": "35",
+    "what": "A ring of colour or a small mark around the roll-hoop intake above the driver.",
+    "precedent": "Teams often colour the intake lip or put a mark on the roll hoop.",
+    "effort": "Low\u2013medium: a colour zone, or a decal on the hoop's front face.",
+    "view": "Front, chase, onboard"
+   },
+   {
+    "id": "mirrors",
+    "label": "Mirror housings",
+    "x": "31",
+    "y": "46",
+    "what": "Mirror housings in the accent colour, or a tiny mark on the back of each.",
+    "precedent": "Teams may mount mirrors on the halo (FIA technical directive, 2018); housings are often painted as accents.",
+    "effort": "Low: a colour zone; marks would be too small to read on a phone.",
+    "view": "Onboard, close-ups"
+   },
+   {
+    "id": "drsFlap",
+    "label": "Rear-wing flap top",
+    "x": "66",
+    "y": "40.5",
+    "what": "A wordmark on the top flap, read from the chase camera.",
+    "precedent": "A common spot for the team name or main sponsor.",
+    "effort": "Low\u2013medium: the flap moves (active aero), so the decal must follow it.",
+    "view": "Chase camera (always in view)"
+   },
+   {
+    "id": "wheelCovers",
+    "label": "Wheel covers",
+    "x": "13",
+    "y": "55.5",
+    "what": "A ring or accent on the wheel cover face.",
+    "precedent": "Teams colour wheel-cover rims in team colours.",
+    "effort": "Medium, and it's the wheels lane (D4); would need to be coordinated with them.",
+    "view": "Side, garage"
+   }
+  ]
+ }
 }
