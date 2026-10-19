@@ -168,3 +168,38 @@ Round 2 (ORCH15 ~20:34Z) and Bryce's picks (his session, ~20:36Z, AskUserQuestio
   comment on that PR (never `to:*`), which wakes the owner through its existing subscription; the owner's 50-min check-in
   reads `fleet-bus.mjs read --to '#<PR>'` as the backstop.
 - Item 5 adds: subscribe once, never re-subscribe on resume (`subscription.created` echoes cost ~4k tokens each).
+
+## 8. Many hosts at once: Codex, Cursor, and Claude on a second account (Bryce, 2026-10-19 ~20:40Z)
+
+Evidence, 2026-10-19 (bus, claims board, open PRs, hook wiring):
+- Four kinds of fleet ran at the same time: Fleet A (Claude, this account), Fleet B (Claude, Bryce's second account,
+  invisible to A's `list_sessions` / `send_message`), Fleet C (Codex coordinator `C·O1 refactor-all` with ~20 `C·W`
+  workers on `cursor/*` branches), and stand-alone Codex/Cursor lanes (track-accuracy, track-engine, ci-bootstrap,
+  issue-coverage, QA). Bus traffic: 141 Claude lines, 36 Codex lines, 0 Cursor/Grok lines.
+- All 119 deploy-branch merges today carry one GitHub identity (`brycejmurrin`); a Codex session merged #3095 itself.
+  The bus `DONE` line is the only record of WHICH host merged, so every merger must post it.
+- Path ownership collided across fleets: C·O1 sent 9 `BLOCKED` lines asking Fleet A/B owners to "release" paths covered by
+  broad claims (`[B·H1]` all of `js/render/three/**`, `[B·H2]` CPU-wide); `to:#<PR>` lines reached no owner and ORCH15
+  relayed them by hand. Claims are authored `Bryce Murrin` / `Claude` with a hash session, so a claim is not messageable.
+- Guards: Cursor's MCP door runs github-mcp-guard.sh and Codex/Cursor shell runs bash-guard.sh, so the merge-gate
+  receipt binds them; Codex wires ONLY a Bash hook (`.codex/hooks.json`), so a Codex merge through an MCP GitHub tool
+  bypasses the gate. Codex/Cursor cannot use `send_message`, `subscribe_pr_activity` or `send_later`.
+
+Design (one protocol for every host; the bus and the PR are the only shared channels):
+1. **Fleet letters are hosts' identities.** A = Claude acct 1, B = Claude acct 2, C = Codex coordinator, D = Cursor
+   coordinator; a stand-alone lane takes the next free letter. Every bus line, claim text and fleet block starts
+   `<Fleet>·<Slot>`; `fleet-bus.mjs --as <host>:<id>` already carries the host. No fleet acts on another's sessions.
+2. **Ownership is by narrow path claim, released on request with a deadline.** A claim lists the files in the claimant's
+   actual diff (not a directory glob) plus `--session <messageable id or PR#>`. A `RELEASE? <paths> for <reason>` bus line
+   to `#<PR>` gets an answer within one owner check-in: `RELEASED <paths>` or `HELD <paths> until #<PR> merges`. No answer
+   in 60 min = released. Directory-wide claims need a reason line and lapse after 120 min like any other.
+3. **One merge protocol for every host**: `merge-gate.mjs` + receipt + `GAME-SLOT` + `DONE` on the bus (host, sha, game|non-game).
+   Close the Codex MCP gap: `.codex/hooks.json` gains an MCP matcher running github-mcp-guard.sh (needs Bryce's typed yes:
+   `.codex/` config). Any host that merges without a bus DONE is treated as Bryce (`bryce-merges-manually`) and paced around.
+4. **Reach non-Claude hosts by PR, not by session.** The PR-comment mirror (§7) is the delivery path to Codex/Cursor PR
+   owners too; a coordinator on another host is addressed `to:<host>:<id>` on the bus and reads it once per step.
+5. **Partition the backlog by fleet before launch.** An issue gets a `fleet:<letter>` label when a fleet claims it;
+   cross-fleet refactors (Fleet C's refactor-all) run AFTER the touched owners' PRs merge, or take a single
+   `RELEASE?` round, never a standing negotiation.
+6. **Who may start new fleets is Bryce.** A coordinator on any host launches only inside its own fleet; a new fleet
+   (letter) starts with Bryce's word and a bus `FLEET <letter> LIVE <host>:<id> scope:<…>` line.
