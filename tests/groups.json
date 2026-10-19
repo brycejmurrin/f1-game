@@ -636,7 +636,7 @@
     "tests/unit/low-speed-lock.test.mjs",
     "tests/unit/lsp-caller-fixes.test.mjs",
     "tests/unit/lsp-config-freshness.test.mjs",
-    "// apex-lsp as an MCP client: definition / references / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). ~2 s.",
+    "// apex-lsp as an MCP client: shared warmed child for definition / references / callers / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). Pipelined alias fan-out; test:mcp runs --test-concurrency=1 (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md).",
     "tests/unit/lsp-mcp.test.mjs",
     "tests/unit/lsp-navigation-efficiency.test.mjs",
     "tests/unit/lsp-reference-fixes.test.mjs",
@@ -1825,6 +1825,9 @@
         "tests/unit/ui-inspector-audit.test.mjs",
         "tests/unit/ui-inspector-css.test.mjs",
         "tests/unit/ui-inspector-transitions.test.mjs"
+      ],
+      "flags": [
+        "--test-concurrency=1"
       ],
       "kind": "node"
     },
