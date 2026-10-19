@@ -37,7 +37,7 @@ test("pages.yml verifies the live site serves the stamped build", () => {
   assert.match(pages, /node tools\/ci\/poll-live-shell\.mjs --url "\$PAGE_URL" --build "\$BUILD" --sha "\$GITHUB_SHA"/);
   const pollSrc = fs.readFileSync(path.join(ROOT, "tools/ci/poll-live-shell.mjs"), "utf8");
   assert.match(pollSrc, /never reached build \$\{?build\}?/, "poll script still fails closed with the live build/sha");
-  assert.match(pollSrc, /Date\.now\(\)/, "cache-bust query on each live fetch");
+  // cache-bust behaviour: tests/unit/poll-live-shell.test.mjs ("cache-busts every fetch …"), not a text pin.
 });
 
 test("ci.yml no longer demands a committed generation newer than live", () => {

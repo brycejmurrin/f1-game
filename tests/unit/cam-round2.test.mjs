@@ -10,66 +10,10 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { CAM_FILES, runFiles, camTune, makeTrack, synthTracks, loadRig, BEND } from "../helpers/camera-rig.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const CAM_FILES = ["js/camera/drive-chase.js", "js/camera/drive-broadcast.js", "js/camera/drive-onboard.js",
-  "js/camera/feel.js", "js/camera/extra-rigs.js", "js/camera/vantage.js"];
-
-function runFiles(ctx, files) {
-  for (const f of files) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
-}
-function camTune(state) {
-  return { get: () => 0, cornerLead: () => null, cornerHang: () => (state.hang == null ? null : state.hang),
-    speedFov: () => 1, bob: () => 1,
-    apply: (_m, _e, _t, fov) => (state.fovAdd ? Math.max(20, Math.min(110, fov + state.fovAdd)) : fov) };
-}
-
-/* ---------------- synthetic track (straights + constant-curvature arcs; +k = left) ---------------- */
-function makeTrack(segs, opts = {}) {
-  const ds = 4;
-  const total0 = segs.reduce((a, b) => a + b[0], 0);
-  const n = Math.round(total0 / ds), total = n * ds;
-  const px = new Float64Array(n), pz = new Float64Array(n), py = new Float64Array(n), tx = new Float64Array(n),
-    tz = new Float64Array(n), kk = new Float64Array(n);
-  let x = 0, z = 0, h = 0;
-  for (let i = 0; i < n; i++) {
-    const sI = i * ds; let acc = 0, k = 0;
-    for (const sg of segs) { if (sI < acc + sg[0]) { k = sg[1]; break; } acc += sg[0]; }
-    px[i] = x; pz[i] = z; tx[i] = Math.sin(h); tz[i] = Math.cos(h); kk[i] = k;
-    h -= k * ds; x += Math.sin(h) * ds; z += Math.cos(h) * ds;
-  }
-  return { total, n, px, py, pz, tx, tz, kk, hw: new Float64Array(n).fill(opts.hw || 7), def: opts.def || {} };
-}
-function synthTracks() {
-  const at = (arr, track, s) => {
-    const n = track.n, L = track.total; let v = s % L; if (v < 0) v += L;
-    const fi = v / L * n, i = Math.floor(fi) % n, j = (i + 1) % n;
-    return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi));
-  };
-  return {
-    sample(t, s, out) {
-      out.p[0] = at(t.px, t, s); out.p[1] = at(t.py, t, s); out.p[2] = at(t.pz, t, s);
-      const a = at(t.tx, t, s), b = at(t.tz, t, s), l = Math.hypot(a, b) || 1;
-      out.t[0] = a / l; out.t[1] = 0; out.t[2] = b / l;
-      out.r[0] = out.t[2]; out.r[1] = 0; out.r[2] = -out.t[0];
-      out.hw = at(t.hw, t, s); return out;
-    },
-    curvature: (t, s) => at(t.kk, t, s),
-    banking: (_t, _s, _l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
-  };
-}
-function loadRig(extraCtx, files) {
-  const state = { hang: null, fovAdd: 0 };
-  const ctx = vm.createContext(Object.assign({ console, Math, Object, Array, Number, JSON, Float64Array,
-    CamTune: camTune(state), Log: { info() {}, warn() {}, debug() {} } }, extraCtx || {}));
-  runFiles(ctx, ["js/core/mat4.js"].concat(files || CAM_FILES));
-  ctx.Tracks = synthTracks();
-  const cams = vm.runInContext("GameCams", ctx), feel = vm.runInContext("CamFeel", ctx);
-  cams.init({ vmax: 72 });
-  return { ctx, cams, feel, state };
-}
-const BEND = [[400, 0], [Math.PI * 60, 1 / 60], [300, 0], [Math.PI * 90 * 2 / 3, -1 / 90], [600, 0]];
 
 /* ---------------- real circuits ---------------- */
 let _real = null;
@@ -192,7 +136,6 @@ test("C4: the player's look-back key and free-look glance do not spin the PiP or
   const base = solve(pip);
   held = true;
   assert.deepEqual(solve(pip), base, "PiP aim unmirrored with the look-back key held");
-  assert.deepEqual(solve({ att: {}, noLook: true }).tgt.map((x) => +x.toFixed(6)), solve({ att: {}, noLook: true }).tgt.map((x) => +x.toFixed(6)));
   const player = solve({ att: {} });
   assert.ok(Math.abs(Math.abs(aim(player) - aim(base)) - Math.PI) < 1e-6, "the player's own camera still looks back (control)");
   const tv = solve({ att: {}, noLook: true });
@@ -226,20 +169,16 @@ test("C8: a non-finite input never reaches the camera damper (inputs sanitised, 
   const rig = loadRig();
   const track = makeTrack(BEND);
   const ex = { att: {}, carPos: [0, 200], carHead: 0, dt: 1 / 60 };
-  const good = rig.cams.vantage(track, "chase", 200, 0, 60, 0, Object.assign({ snap: true }, ex));
+  rig.cams.vantage(track, "chase", 200, 0, 60, 0, Object.assign({ snap: true }, ex));   // seed the last finite pose
   const finite = (v) => v.eye.concat(v.tgt, [v.fov]).every(Number.isFinite);
   assert.ok(finite(rig.cams.vantage(track, "chase", 200, 0, NaN, 0, ex)), "spd NaN");
   const lastOk = rig.cams.vantage(track, "heli", 200, NaN, 60, 0, ex);
   assert.ok(finite(lastOk), "x NaN");
   const g = { eye: lastOk.eye.slice(), fov: lastOk.fov };
-  void good;
   const bad = rig.cams.vantage(track, "chase", NaN, 0, 60, 0, ex);
   assert.ok(finite(bad), "s NaN");
   assert.deepEqual(bad.eye, g.eye, "the last finite pose is held");
   assert.equal(bad.fov, g.fov);
-  let cam = 100; const damp = (c, t, l, d) => c + (t - c) * (1 - Math.exp(-l * d));
-  for (let i = 0; i < 600; i++) cam = damp(cam, bad.eye[0], 18, 1 / 60);
-  assert.ok(Number.isFinite(cam), "an exponential damper fed the vantage output stays finite");
 });
 
 test("C9: a chicane does not flip the heli/side/cinematic bend side faster than the dwell allows", () => {

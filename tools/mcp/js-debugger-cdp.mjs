@@ -10,16 +10,19 @@ export function localUrl(raw, websocket = false) {
 }
 
 // T7: /json/list also lists service_worker and worker targets; each has its own page-style
-// WebSocket, so the same Debugger/Runtime session attaches to them directly.
-export const TARGET_TYPES = { page: ["page"], service_worker: ["service_worker"], worker: ["worker"], all: ["page", "service_worker", "worker"] };
-export async function targets(endpoint, kind = "page") {
-  const wanted = TARGET_TYPES[kind];
-  if (!wanted) throw Error("targetType must be page, service_worker, worker or all");
+// WebSocket, so the same Debugger/Runtime session attaches to them directly. #2957: a Node
+// inspector (`node --inspect[-brk]=PORT`, incl. a `node --test` child) lists `type:"node"`.
+export const TARGET_TYPES = { page: ["page"], service_worker: ["service_worker"], worker: ["worker"], node: ["node"], all: ["page", "service_worker", "worker", "node"] };
+// The default lists pages AND node targets: Chrome never lists node rows and Node never lists
+// pages, so a bare `debugger_targets` on a Node port no longer returns [] (#2957).
+export async function targets(endpoint, kind = "default") {
+  const wanted = kind === "default" ? ["page", "node"] : TARGET_TYPES[kind];
+  if (!wanted) throw Error("targetType must be page, service_worker, worker, node or all");
   const u = localUrl(endpoint);
   if (u.pathname !== "/") throw Error("Browser endpoint must be an origin, e.g. http://127.0.0.1:9222");
   let response;
   try { response = await fetch(new URL("/json/list", u), { redirect: "error", signal: AbortSignal.timeout(5000) }); }
-  catch (e) { throw Error(`Cannot reach Chrome at ${u.origin} (${e.cause?.code || e.name}); start Chrome with --remote-debugging-port and check the endpoint`); }
+  catch (e) { throw Error(`Cannot reach a debug endpoint at ${u.origin} (${e.cause?.code || e.name}); start Chrome with --remote-debugging-port, or Node with --inspect-brk=PORT, and check the endpoint`); }
   if (!response.ok) throw Error(`Target discovery HTTP ${response.status}`);
   const raw = await response.text();
   if (raw.length > 1024 * 1024) throw Error("Target discovery response too large");

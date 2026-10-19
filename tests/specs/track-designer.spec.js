@@ -17,54 +17,75 @@ async function raceAndBuild(page, id) {
 }
 
 const LANDSCAPE = { width: 1180, height: 720 };
+// Cells where a toolbar label really overflows its chip today (issue #3041, found by this very assertion).
+// Remove the entry when the CSS is fixed; the chip is still held to the tap floor meanwhile.
+const KNOWN_CLIPPED_CHIPS = new Set(["393x659@200", "1194x834@200"]);
 
 test.describe("Touch designer workspace", () => {
   test.use({ hasTouch: true, isMobile: true });
-  test("short and scaled phones keep both views and every workspace reachable", async ({ page }, testInfo) => {
+  const cells = [[734, 343, 200], [393, 659, 100], [734, 343, 100], [852, 344, 100],
+    [393, 659, 150], [734, 343, 150], [852, 344, 150], [844, 390, 150],
+    [393, 659, 200], [852, 344, 200], [844, 390, 200], [1194, 834, 200], [390, 844, 100], [844, 390, 100]];
+  for (const [width, height, scale] of cells) test(`short and scaled phones keep both views and every workspace reachable at ${width}x${height}@${scale}`, async ({ page }, testInfo) => {
+    test.slow();
     await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
     await page.evaluate(() => TrackDesigner.save());
     const root = page.locator("#trackdesigner");
-    const cells = [[734, 343, 200], [393, 659, 100], [734, 343, 100], [852, 344, 100],
-      [393, 659, 150], [734, 343, 150], [852, 344, 150], [844, 390, 150],
-      [393, 659, 200], [852, 344, 200], [844, 390, 200], [1194, 834, 200], [390, 844, 100], [844, 390, 100]];
-    for (const [width, height, scale] of cells) {
-      await page.setViewportSize({ width, height });
-      await page.evaluate(({ width, height, scale }) => {
-        const d = document.documentElement.style, portrait = height > width, side = width === 844 ? 47 : 59;
-        const insets = width > 1000 ? { t: 0, r: 0, b: 0, l: 0 } : portrait ? { t: 59, r: 0, b: 34, l: 0 } : { t: 0, r: side, b: 21, l: side };
-        for (const [key, value] of Object.entries(insets)) d.setProperty("--sa" + key, value + "px");
-        window.__apex.uiScale(scale);
-      }, { width, height, scale });
-      await root.getByRole("tab", { name: "DESIGN", exact: true }).tap();
-      for (const mode of ["edit", "elevation"]) {
-        await root.locator(`[data-role="mode-bar"] [data-mode="${mode}"]`).tap();
-        await expect(root.locator('canvas[data-role="profile"]')).toBeVisible();
-        expect(await root.evaluate((e) => Math.min(...[...e.querySelectorAll(".td-stage > canvas")]
-          .flatMap((c) => { const r = c.getBoundingClientRect(); return [r.width, r.height]; }))), `${width}x${height}@${scale}: both drawing surfaces retain usable dimensions`).toBeGreaterThanOrEqual(44);
-        await expect.poll(() => root.evaluate((e) => {
-          const stage = e.querySelector(".td-stage").getBoundingClientRect();
-          const profile = e.querySelector('canvas[data-role="profile"]').getBoundingClientRect();
-          const map = e.querySelector('.td-stage > canvas:not([data-role="profile"])').getBoundingClientRect();
-          return Math.max(profile.bottom - stage.bottom, map.bottom - profile.top);
-        }), { message: `${width}x${height}@${scale} ${mode}: profile must fit its stage` }).toBeLessThanOrEqual(1);
+    await page.setViewportSize({ width, height });
+    await page.evaluate(({ width, height, scale }) => {
+      const d = document.documentElement.style, portrait = height > width, side = width === 844 ? 47 : 59;
+      const insets = width > 1000 ? { t: 0, r: 0, b: 0, l: 0 } : portrait ? { t: 59, r: 0, b: 34, l: 0 } : { t: 0, r: side, b: 21, l: side };
+      for (const [key, value] of Object.entries(insets)) d.setProperty("--sa" + key, value + "px");
+      window.__apex.uiScale(scale);
+    }, { width, height, scale });
+    await root.getByRole("tab", { name: "DESIGN", exact: true }).tap();
+    for (const mode of ["edit", "elevation"]) {
+      await root.locator(`[data-role="mode-bar"] [data-mode="${mode}"]`).tap();
+      await expect(root.locator('canvas[data-role="profile"]')).toBeVisible();
+      expect(await root.evaluate((e) => Math.min(...[...e.querySelectorAll(".td-stage > canvas")]
+        .flatMap((c) => { const r = c.getBoundingClientRect(); return [r.width, r.height]; }))), `${width}x${height}@${scale}: both drawing surfaces retain usable dimensions`).toBeGreaterThanOrEqual(44);
+      // The toolbar chips (UI Fit r6): every label fits its own chip (no clipped text) and every chip is a --tap-paint (painted-px) target.
+      const chips = await root.evaluate((e) => {
+        const probe = e.appendChild(document.createElement("div")); probe.style.cssText = "position:absolute;visibility:hidden;height:var(--tap-paint)";
+        const tap = probe.getBoundingClientRect().height; probe.remove();
+        return { tap, chips: [...e.querySelectorAll('.td-stage > [data-role="toolbar"] .sel-chip')].filter((c) => c.getClientRects().length).map((c) => {
+          const r = c.getBoundingClientRect();
+          // Where the label's text really paints, against the chip's own box (the skewed chip's bbox is the generous side).
+          const range = document.createRange(); range.selectNodeContents(c); const t = range.getBoundingClientRect();
+          return { label: c.textContent.trim(), w: r.width, h: r.height, clipX: Math.max(r.left - t.left, t.right - r.right, 0), clipY: Math.max(r.top - t.top, t.bottom - r.bottom, 0) };
+        }) };
+      });
+      expect(chips.chips.length, `${width}x${height}@${scale} ${mode}: toolbar chips are drawn`).toBeGreaterThan(0);
+      const knownClipped = KNOWN_CLIPPED_CHIPS.has(`${width}x${height}@${scale}`);
+      if (chips.chips.some((c) => c.clipX > 1 || c.clipY > 1)) await page.screenshot({ path: testInfo.outputPath(`chips-clipped-${width}x${height}-${scale}-${mode}.png`) });
+      for (const c of chips.chips) {
+        if (!knownClipped) expect(c.clipX <= 1 && c.clipY <= 1, `${width}x${height}@${scale} ${mode}: "${c.label}" is clipped inside its chip (${c.clipX}x${c.clipY} px)`).toBe(true);
+        expect(Math.min(c.w, c.h), `${width}x${height}@${scale} ${mode}: "${c.label}" is under the ${chips.tap} px painted tap floor (--tap-paint)`).toBeGreaterThanOrEqual(chips.tap - 2);
       }
-      if (width > height && height <= 500 && scale === 100) {
-        // Short landscape phone: the foot rides under the rail, so the dialog never scrolls and SAVE / RACE stay on screen.
-        expect(await root.evaluate((e) => [e.dataset.foot, e.scrollHeight <= e.clientHeight + 1,
-          e.querySelector(".td-foot .sel-edit").getBoundingClientRect().bottom <= innerHeight + 1]), `${width}x${height}: foot tucked, no dialog scroll, SAVE on screen`).toEqual(["in", true, true]);
-      }
-      await root.locator('[data-role="mode-bar"] [data-mode="scenery"]').tap();
-      for (const section of ["themes", "atmosphere", "objects"]) {
-        await root.locator(`[data-scenery-section="${section}"]`).tap({ timeout: 10_000 });
-        await expect(root.locator(`#td-scenery-panel-${section}`)).toBeVisible();
-      }
-      for (const name of ["MY CIRCUITS", "HOW TO", "DESIGN"]) await root.getByRole("tab", { name, exact: true }).tap();
-      await root.locator('[data-role="file-menu"] > summary').tap();
-      for (const name of ["SHARE", "Share a picture card of this circuit", "EXPORT", "IMPORT"]) await root.getByRole("button", { name, exact: true }).click({ trial: true });
-      await page.keyboard.press("Escape");
-      expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), `${width}x${height}@${scale}: no horizontal escape`).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`responsive-${width}x${height}-${scale}.jpg`) });
+      await expect.poll(() => root.evaluate((e) => {
+        const stage = e.querySelector(".td-stage").getBoundingClientRect();
+        const profile = e.querySelector('canvas[data-role="profile"]').getBoundingClientRect();
+        const map = e.querySelector('.td-stage > canvas:not([data-role="profile"])').getBoundingClientRect();
+        return Math.max(profile.bottom - stage.bottom, map.bottom - profile.top);
+      }), { message: `${width}x${height}@${scale} ${mode}: profile must fit its stage` }).toBeLessThanOrEqual(1);
     }
+    if (width > height && height <= 500 && scale === 100) {
+      // Short landscape phone: the foot rides under the rail, so the dialog never scrolls and SAVE / RACE stay on screen.
+      expect(await root.evaluate((e) => [e.dataset.foot, e.scrollHeight <= e.clientHeight + 1,
+        e.querySelector(".td-foot .sel-edit").getBoundingClientRect().bottom <= innerHeight + 1]), `${width}x${height}: foot tucked, no dialog scroll, SAVE on screen`).toEqual(["in", true, true]);
+    }
+    await root.locator('[data-role="mode-bar"] [data-mode="scenery"]').tap();
+    for (const section of ["themes", "atmosphere", "objects"]) {
+      await root.locator(`[data-scenery-section="${section}"]`).tap({ timeout: 10_000 });
+      await expect(root.locator(`#td-scenery-panel-${section}`)).toBeVisible();
+    }
+    for (const name of ["MY CIRCUITS", "HOW TO", "DESIGN"]) await root.getByRole("tab", { name, exact: true }).tap();
+    await root.locator('[data-role="file-menu"] > summary').tap();
+    for (const name of ["SHARE", "Share a picture card of this circuit", "EXPORT", "IMPORT"]) await root.getByRole("button", { name, exact: true }).click({ trial: true });
+    await page.keyboard.press("Escape");
+    expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), `${width}x${height}@${scale}: no horizontal escape`).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`responsive-${width}x${height}-${scale}.jpg`) });
+  
   });
   test("touch scrolling keeps the map, profile and scenery sections reachable", async ({ page }) => {
     await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
@@ -89,101 +110,101 @@ test.describe("Touch designer workspace", () => {
   });
 });
 
-test("workspace organization preserves controls and scroll across modes and library", async ({ page }, testInfo) => {
+const WORKSPACE_VIEWPORTS = [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }, { width: 1280, height: 800, scale: 2 }, { width: 1920, height: 937, scale: 2 }, { width: 1920, height: 1080, scale: 2 }];
+for (const viewport of WORKSPACE_VIEWPORTS) test(`workspace organization preserves controls and scroll across modes and library at ${viewport.width}x${viewport.height}@${viewport.scale}`, async ({ page }, testInfo) => {
+  test.slow();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
-  for (const viewport of [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }, { width: 1280, height: 800, scale: 2 }, { width: 1920, height: 937, scale: 2 }, { width: 1920, height: 1080, scale: 2 }]) {
-    await page.setViewportSize(viewport);
-    const root = page.locator("#trackdesigner"), rail = root.locator(".td-rail");
-    await root.evaluate((e, scale) => e.style.setProperty("--ui-scale", String(scale)), viewport.scale || 1);
-    for (const id of ["draw", "edit", "elevation", "scenery", "test"]) {
-      await root.locator(`[data-role="mode-bar"] [data-mode="${id}"]`).click();
-      await expect(root).toHaveAttribute("data-mode", id);
-      await rail.evaluate((e) => { e.scrollTop = 0; });
-      await expect(root.locator('[data-role="checks-summary"]')).toBeVisible();
-      expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
-      if (id === "edit" || id === "elevation") {
-        await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.height}-${viewport.scale || 1}-${id}.jpg`) });
-        const toolbar = root.locator('[data-role="toolbar"]'), map = root.locator('.td-stage > canvas:not([data-role="profile"])');
-        const t = await toolbar.boundingBox(), m = await map.boundingBox();
-        expect(t.y + t.height <= m.y + 1 || t.x >= m.x + m.width - 1).toBe(true);
-        const bounds = await root.locator('.td-stage').evaluate((e) => ({ stage: e.getBoundingClientRect().bottom,
-          profile: e.querySelector('canvas[data-role="profile"]').getBoundingClientRect().bottom }));
-        const layout = await root.locator('.td-stage').evaluate((e) => ({
-          width: getComputedStyle(e).width, height: getComputedStyle(e).height,
-          container: getComputedStyle(e).containerName,
-          rows: [...e.children].map((c) => ({ tag: c.tagName, role: c.dataset.role,
-            display: getComputedStyle(c).display, height: getComputedStyle(c).height,
-            flex: getComputedStyle(c).flex, minHeight: getComputedStyle(c).minHeight,
-            buttons: [...c.querySelectorAll('button')].map((b) => getComputedStyle(b).flex) })),
-        }));
-        expect(bounds.profile, JSON.stringify(layout)).toBeLessThanOrEqual(bounds.stage + 1);
-      }
-      if (id === "scenery") {
-        for (const section of ["themes", "atmosphere", "objects"]) {
-          await root.locator(`[data-scenery-section="${section}"]`).click();
-          await expect(root.locator(`#td-scenery-panel-${section}`)).toBeVisible();
-          if (section === "atmosphere") {
-            await root.getByRole("button", { name: "GOLDEN HOUR", exact: true }).click();
-            await expect(root.locator('[data-role="look-summary"]')).toContainText("DUSK");
-            await root.getByRole("button", { name: "Reset time of day, trees and crowd to theme defaults", exact: true }).click();
-            await expect(root.locator('[data-role="look-summary"]')).toContainText("AUTO");
-          }
-          await rail.evaluate((e) => { e.scrollTop = e.scrollHeight; });
-          expect(await rail.evaluate((e) => e.scrollTop + e.clientHeight >= e.scrollHeight - 1)).toBe(true);
+  await page.setViewportSize(viewport);
+  const root = page.locator("#trackdesigner"), rail = root.locator(".td-rail");
+  await root.evaluate((e, scale) => e.style.setProperty("--ui-scale", String(scale)), viewport.scale || 1);
+  for (const id of ["draw", "edit", "elevation", "scenery", "test"]) {
+    await root.locator(`[data-role="mode-bar"] [data-mode="${id}"]`).click();
+    await expect(root).toHaveAttribute("data-mode", id);
+    await rail.evaluate((e) => { e.scrollTop = 0; });
+    await expect(root.locator('[data-role="checks-summary"]')).toBeVisible();
+    expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+    if (id === "edit" || id === "elevation") {
+      await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.height}-${viewport.scale || 1}-${id}.jpg`) });
+      const toolbar = root.locator('[data-role="toolbar"]'), map = root.locator('.td-stage > canvas:not([data-role="profile"])');
+      const t = await toolbar.boundingBox(), m = await map.boundingBox();
+      expect(t.y + t.height <= m.y + 1 || t.x >= m.x + m.width - 1).toBe(true);
+      const bounds = await root.locator('.td-stage').evaluate((e) => ({ stage: e.getBoundingClientRect().bottom,
+        profile: e.querySelector('canvas[data-role="profile"]').getBoundingClientRect().bottom }));
+      const layout = await root.locator('.td-stage').evaluate((e) => ({
+        width: getComputedStyle(e).width, height: getComputedStyle(e).height,
+        container: getComputedStyle(e).containerName,
+        rows: [...e.children].map((c) => ({ tag: c.tagName, role: c.dataset.role,
+          display: getComputedStyle(c).display, height: getComputedStyle(c).height,
+          flex: getComputedStyle(c).flex, minHeight: getComputedStyle(c).minHeight,
+          buttons: [...c.querySelectorAll('button')].map((b) => getComputedStyle(b).flex) })),
+      }));
+      expect(bounds.profile, JSON.stringify(layout)).toBeLessThanOrEqual(bounds.stage + 1);
+    }
+    if (id === "scenery") {
+      for (const section of ["themes", "atmosphere", "objects"]) {
+        await root.locator(`[data-scenery-section="${section}"]`).click();
+        await expect(root.locator(`#td-scenery-panel-${section}`)).toBeVisible();
+        if (section === "atmosphere") {
+          await root.getByRole("button", { name: "GOLDEN HOUR", exact: true }).click();
+          await expect(root.locator('[data-role="look-summary"]')).toContainText("DUSK");
+          await root.getByRole("button", { name: "Reset time of day, trees and crowd to theme defaults", exact: true }).click();
+          await expect(root.locator('[data-role="look-summary"]')).toContainText("AUTO");
         }
-        await expect(root.locator('[data-role="look-summary"]')).not.toContainText("undefined");
+        await rail.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+        expect(await rail.evaluate((e) => e.scrollTop + e.clientHeight >= e.scrollHeight - 1)).toBe(true);
       }
-      await rail.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+      await expect(root.locator('[data-role="look-summary"]')).not.toContainText("undefined");
     }
-    await page.getByRole("textbox", { name: "Circuit name", exact: true }).fill("ABCDEFGHIJKLMNOPQRSTUVWX");
-    await page.getByRole("button", { name: "SAVE", exact: true }).click();
-    if (viewport.width > 760) {
-      await root.getByRole("button", { name: "Help with test", exact: true }).click();
-      await expect(root.locator('[data-help-task="test"]')).toHaveJSProperty("open", true);
-      await root.getByRole("button", { name: "OPEN TEST", exact: true }).click();
-      await expect(root).toHaveAttribute("data-mode", "test");
-    }
-    await root.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
-    await expect(root.locator(".td-stage")).toBeHidden();
-    await expect(root.locator(".td-card > strong").first()).toHaveText("ABCDEFGHIJKLMNOPQRSTUVWX");
-    await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.scale || 1}-library.jpg`) });
-    await root.getByRole("tab", { name: "HOW TO", exact: true }).click();
     await rail.evaluate((e) => { e.scrollTop = e.scrollHeight; });
-    const helpScroll = await rail.evaluate((e) => e.scrollTop);
-    expect(helpScroll, "the long help page must have a real scrollport").toBeGreaterThan(0);
-    // Click the pinned tabs as a user does, without scrollIntoView moving the
-    // rail before the click (which would replace the position being saved).
-    for (const name of ["DESIGN", "HOW TO"]) {
-      const box = await root.getByRole("tab", { name, exact: true }).boundingBox();
-      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    }
-    await expect.poll(() => rail.evaluate((e) => e.scrollTop), { message: `${viewport.width}x${viewport.height}@${viewport.scale || 1}: HOW TO scroll survives a tab round trip` }).toBe(helpScroll);
-    await root.locator('[data-role="file-menu"] > summary').click();
-    await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(root).toBeVisible();
-    await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeHidden();
-    await root.locator('[data-role="file-menu"] > summary').click();
-    await root.dispatchEvent("cancel", { bubbles: true, cancelable: true });
-    await expect(root).toBeVisible();
-    await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeHidden();
-    await root.locator('[data-role="checks-summary"]').click();
-    await expect(root).toHaveAttribute("data-pane", "design");
-    await expect(root).toHaveAttribute("data-mode", "test");
-    await root.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
-    await page.evaluate(() => {
-      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("clipboard blocked for regression test"); } } });
-      document.execCommand = () => false;
-    });
-    await root.locator('[data-role="file-menu"] > summary').click();
-    await root.getByRole("button", { name: "SHARE", exact: true }).click();
-    const copy = root.getByRole("textbox", { name: "Share code or link", exact: true });
-    await expect(root).toHaveAttribute("data-pane", "design");
-    await expect(copy).toBeVisible(); await expect(copy).toBeFocused();
-    await expect(copy).toHaveValue(/#track=APXT1/);
   }
+  await page.getByRole("textbox", { name: "Circuit name", exact: true }).fill("ABCDEFGHIJKLMNOPQRSTUVWX");
+  await page.getByRole("button", { name: "SAVE", exact: true }).click();
+  if (viewport.width > 760) {
+    await root.getByRole("button", { name: "Help with test", exact: true }).click();
+    await expect(root.locator('[data-help-task="test"]')).toHaveJSProperty("open", true);
+    await root.getByRole("button", { name: "OPEN TEST", exact: true }).click();
+    await expect(root).toHaveAttribute("data-mode", "test");
+  }
+  await root.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
+  await expect(root.locator(".td-stage")).toBeHidden();
+  await expect(root.locator(".td-card > strong").first()).toHaveText("ABCDEFGHIJKLMNOPQRSTUVWX");
+  await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.scale || 1}-library.jpg`) });
+  await root.getByRole("tab", { name: "HOW TO", exact: true }).click();
+  await rail.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+  const helpScroll = await rail.evaluate((e) => e.scrollTop);
+  expect(helpScroll, "the long help page must have a real scrollport").toBeGreaterThan(0);
+  // Click the pinned tabs as a user does, without scrollIntoView moving the
+  // rail before the click (which would replace the position being saved).
+  for (const name of ["DESIGN", "HOW TO"]) {
+    const box = await root.getByRole("tab", { name, exact: true }).boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+  await expect.poll(() => rail.evaluate((e) => e.scrollTop), { message: `${viewport.width}x${viewport.height}@${viewport.scale || 1}: HOW TO scroll survives a tab round trip` }).toBe(helpScroll);
+  await root.locator('[data-role="file-menu"] > summary').click();
+  await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(root).toBeVisible();
+  await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeHidden();
+  await root.locator('[data-role="file-menu"] > summary').click();
+  await root.dispatchEvent("cancel", { bubbles: true, cancelable: true });
+  await expect(root).toBeVisible();
+  await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeHidden();
+  await root.locator('[data-role="checks-summary"]').click();
+  await expect(root).toHaveAttribute("data-pane", "design");
+  await expect(root).toHaveAttribute("data-mode", "test");
+  await root.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("clipboard blocked for regression test"); } } });
+    document.execCommand = () => false;
+  });
+  await root.locator('[data-role="file-menu"] > summary').click();
+  await root.getByRole("button", { name: "SHARE", exact: true }).click();
+  const copy = root.getByRole("textbox", { name: "Share code or link", exact: true });
+  await expect(root).toHaveAttribute("data-pane", "design");
+  await expect(copy).toBeVisible(); await expect(copy).toBeFocused();
+  await expect(copy).toHaveValue(/#track=APXT1/);
   expect(errors).toEqual([]);
 });
 
@@ -865,80 +886,79 @@ test.describe("Track designer", () => {
   });
 });
 
-test("designer workspaces author bridges, water and landscapes on desktop and phone", async ({ page }, testInfo) => {
+for (const [size, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 844 }]]) test(`designer workspace authors bridges, water and landscapes on ${size}`, async ({ page }, testInfo) => {
+  test.slow();
   const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
   await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
-  for (const [size, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 844 }]]) {
-    await page.setViewportSize(viewport);
-    const mode = (id) => page.locator('#trackdesigner [data-mode="' + id + '"]');
-    await mode("draw").click();
-    await expect(page.getByRole("button", { name: "RANDOMISE", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "REVERSE", exact: true })).toBeHidden();
-    await mode("edit").click();
-    await expect(page.getByRole("button", { name: "RANDOMISE", exact: true })).toBeHidden();
-    await expect(page.getByRole("button", { name: "REVERSE", exact: true })).toBeVisible();
-    await mode("elevation").click();
-    await page.getByRole("spinbutton", { name: "Selected point number", exact: true }).fill("11");
-    await page.getByRole("spinbutton", { name: "Selected point number", exact: true }).press("Enter");
-    const bridges = page.locator('#trackdesigner [data-role="bridges"]');
-    await bridges.locator('[data-role="add-bridge"]').click();
-    expect(await page.evaluate(() => TrackDesigner.state().design.bridges.length)).toBe(1);
-    await expect(bridges.getByRole("button", { name: "Remove road bridge 1", exact: true })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(size + "-bridge.png") });
-    await bridges.getByRole("button", { name: "Remove road bridge 1", exact: true }).click();
-    await mode("scenery").click();
-    await page.locator('[data-scenery-section="objects"]').click();
-    await page.locator('[data-object-category="water"]').click();
-    for (const kind of ["water", "pond", "lake", "river"]) await expect(page.locator('[data-prop="' + kind + '"]')).toBeVisible();
-    await expect(page.locator('[data-prop="stand"]')).toBeHidden();
-    await page.locator('[data-prop="pond"]').click();
-    await page.getByRole("button", { name: "Place the selected prop at the selected control point", exact: true }).click();
-    expect(await page.evaluate(() => TrackDesigner.state().design.props.filter((p) => p.kind === "pond").length)).toBe(size === "desktop" ? 1 : 2);
-    for (const role of ["prop-side", "prop-gap", "object-filters"]) {
-      const fits = await page.locator('[data-role="' + role + '"]').evaluate((row) => {
-        const outer = row.getBoundingClientRect();
-        return [...row.querySelectorAll("button,input")].every((control) => {
-          const r = control.getBoundingClientRect();
-          return r.left >= outer.left - 1 && r.right <= outer.right + 1;
-        });
+  await page.setViewportSize(viewport);
+  const mode = (id) => page.locator('#trackdesigner [data-mode="' + id + '"]');
+  await mode("draw").click();
+  await expect(page.getByRole("button", { name: "RANDOMISE", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "REVERSE", exact: true })).toBeHidden();
+  await mode("edit").click();
+  await expect(page.getByRole("button", { name: "RANDOMISE", exact: true })).toBeHidden();
+  await expect(page.getByRole("button", { name: "REVERSE", exact: true })).toBeVisible();
+  await mode("elevation").click();
+  await page.getByRole("spinbutton", { name: "Selected point number", exact: true }).fill("11");
+  await page.getByRole("spinbutton", { name: "Selected point number", exact: true }).press("Enter");
+  const bridges = page.locator('#trackdesigner [data-role="bridges"]');
+  await bridges.locator('[data-role="add-bridge"]').click();
+  expect(await page.evaluate(() => TrackDesigner.state().design.bridges.length)).toBe(1);
+  await expect(bridges.getByRole("button", { name: "Remove road bridge 1", exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath(size + "-bridge.png") });
+  await bridges.getByRole("button", { name: "Remove road bridge 1", exact: true }).click();
+  await mode("scenery").click();
+  await page.locator('[data-scenery-section="objects"]').click();
+  await page.locator('[data-object-category="water"]').click();
+  for (const kind of ["water", "pond", "lake", "river"]) await expect(page.locator('[data-prop="' + kind + '"]')).toBeVisible();
+  await expect(page.locator('[data-prop="stand"]')).toBeHidden();
+  await page.locator('[data-prop="pond"]').click();
+  await page.getByRole("button", { name: "Place the selected prop at the selected control point", exact: true }).click();
+  expect(await page.evaluate(() => TrackDesigner.state().design.props.filter((p) => p.kind === "pond").length)).toBe(1);
+  for (const role of ["prop-side", "prop-gap", "object-filters"]) {
+    const fits = await page.locator('[data-role="' + role + '"]').evaluate((row) => {
+      const outer = row.getBoundingClientRect();
+      return [...row.querySelectorAll("button,input")].every((control) => {
+        const r = control.getBoundingClientRect();
+        return r.left >= outer.left - 1 && r.right <= outer.right + 1;
       });
-      expect(fits, role + " controls fit the sidebar at " + size).toBe(true);
-    }
-    const waterFootprints = await page.evaluate(() => {
-      const d = TrackDesigner.state().design, tr = TrackValidate.build(d).tr;
-      return DesignerSceneryPreview.plan(d, tr).ground.filter((p) => p.kind === "water").length;
     });
-    expect(waterFootprints, "authored water reaches the map preview").toBeGreaterThan(0);
-    await page.screenshot({ path: testInfo.outputPath(size + "-water.png") });
-    await page.locator('[data-object-category="terrain"]').click();
-    for (const kind of ["mountain", "snowpeak", "hill", "dune", "rocks"]) await expect(page.locator('[data-prop="' + kind + '"]')).toBeVisible();
-    const search = page.getByRole("searchbox", { name: "Find a scenery object" });
-    await search.fill("snowy");
-    await expect(page.locator('[data-prop="snowpeak"]')).toBeVisible();
-    await expect(page.locator('[data-prop="mountain"]')).toBeHidden();
-    await search.fill("");
-    await page.locator('[data-prop="snowpeak"]').click();
-    await page.getByRole("button", { name: "Place the selected prop at the selected control point", exact: true }).click();
-    expect(await page.evaluate(() => TrackDesigner.state().design.props.filter((p) => p.kind === "snowpeak").length)).toBe(size === "desktop" ? 1 : 2);
-    await page.locator('[data-scenery-section="themes"]').click();
-    await page.locator('[data-theme="fjord"]').click();
-    expect(await page.evaluate(() => TrackDesigner.state().design.theme)).toBe("fjord");
-    await page.locator('[data-scenery-section="objects"]').click();
-    await page.screenshot({ path: testInfo.outputPath(size + "-terrain.png") });
-
-    await mode("test").click();
-    await expect(page.getByRole("textbox", { name: "Circuit name", exact: true })).toBeVisible();
-    await expect(page.getByRole("list", { name: "Design checks", exact: true })).toBeVisible();
-    await expect(bridges).toBeHidden();
-    expect(await page.locator("#trackdesigner").evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+    expect(fits, role + " controls fit the sidebar at " + size).toBe(true);
   }
+  const waterFootprints = await page.evaluate(() => {
+    const d = TrackDesigner.state().design, tr = TrackValidate.build(d).tr;
+    return DesignerSceneryPreview.plan(d, tr).ground.filter((p) => p.kind === "water").length;
+  });
+  expect(waterFootprints, "authored water reaches the map preview").toBeGreaterThan(0);
+  await page.screenshot({ path: testInfo.outputPath(size + "-water.png") });
+  await page.locator('[data-object-category="terrain"]').click();
+  for (const kind of ["mountain", "snowpeak", "hill", "dune", "rocks"]) await expect(page.locator('[data-prop="' + kind + '"]')).toBeVisible();
+  const search = page.getByRole("searchbox", { name: "Find a scenery object" });
+  await search.fill("snowy");
+  await expect(page.locator('[data-prop="snowpeak"]')).toBeVisible();
+  await expect(page.locator('[data-prop="mountain"]')).toBeHidden();
+  await search.fill("");
+  await page.locator('[data-prop="snowpeak"]').click();
+  await page.getByRole("button", { name: "Place the selected prop at the selected control point", exact: true }).click();
+  expect(await page.evaluate(() => TrackDesigner.state().design.props.filter((p) => p.kind === "snowpeak").length)).toBe(1);
+  await page.locator('[data-scenery-section="themes"]').click();
+  await page.locator('[data-theme="fjord"]').click();
+  expect(await page.evaluate(() => TrackDesigner.state().design.theme)).toBe("fjord");
+  await page.locator('[data-scenery-section="objects"]').click();
+  await page.screenshot({ path: testInfo.outputPath(size + "-terrain.png") });
+
+  await mode("test").click();
+  await expect(page.getByRole("textbox", { name: "Circuit name", exact: true })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Design checks", exact: true })).toBeVisible();
+  await expect(bridges).toBeHidden();
+  expect(await page.locator("#trackdesigner").evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
   await page.getByRole("button", { name: "SAVE", exact: true }).click();
   const savedId = await page.evaluate(() => TrackDesigner.state().design.originId);
   await page.reload();
   await page.waitForFunction(() => window.__apex && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
   const saved = await page.evaluate((id) => CustomTracks.get(id), savedId);
   expect(saved.theme).toBe("fjord");
-  expect(saved.props.filter((p) => p.kind === "snowpeak")).toHaveLength(2);
+  expect(saved.props.filter((p) => p.kind === "snowpeak")).toHaveLength(1);
   await raceAndBuild(page, savedId);
   expect(errors).toEqual([]);
 });

@@ -92,10 +92,15 @@ before every `create_session`:
    message per ask; a correction is `RETRACT <ask>`, never a second broadcast.
    No peer fan-out ("send to every session below"): replies go to the
    orchestrator only (three asks in four minutes cost ~21 wakes each, 2026-10-17).
-12. Size stop, every role: the launch prompt ends `STOP AT: 300k context or $<cap>`.
-   The session reads its own `context_usage` / `usage` via `get_session` (no id)
-   at every wake after a green push and, at the stop, sends HANDOFF/FINAL and
-   ends. Docs-only owners stop at 100k (role review, #2737).
+12. Size stop, every role: the launch prompt ends `STOP AT: <limit> context or $<cap>`,
+   the limit per role (reviewer 120k, worker 150k at a verified checkpoint, PR owner 150k /
+   docs-only 100k, synth 150k, watcher 100k, orchestrator 200k; launch-policy.md §Size stop).
+   The limits are soft caps; hard = soft + 50k. The session measures its live context (`/context` or the statusline, not
+   `get_session` `used_tokens`) at every wake and, at the soft cap, finishes the unit, pushes, sends HANDOFF.
+13. `USER GRANTS:` quotes every standing grant verbatim with its date and the session it was typed in.
+   A changed grant is a relaunch with the amended brief, never a message: relayed grants are refused (authority.md).
+14. Route verbose reads (CI logs, transcripts, big lists) through a subagent that returns a summary;
+   no tool result over 10k characters enters your context (comms.md §Output budget).
 
 ### Pre-launch quota check (#2380)
 

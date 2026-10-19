@@ -64,20 +64,28 @@ test("trim-comments removes dividers embedded in // comment runs", () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("trim-comments preserves KEEP keywords in narrative blocks", () => {
+test("trim-comments preserves KEEP keywords in narrative blocks and removes plain ones", () => {
   fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "trim-keep-"));
-  const file = path.join(dir, "keep.js");
-  fs.writeFileSync(file, [
-    "// measured on Bahrain: the governor must not oscillate.",
-    "// Without it the ladder cannot be reached on a CPU-bound frame.",
-    "let x = 1;",
-  ].join("\n"));
+  try {
+    const file = path.join(dir, "keep.js");
+    fs.writeFileSync(file, [
+      "// the quick brown fox jumps over the lazy dog again and again today.",
+      "// nothing special happens in this block of narrative filler text here.",
+      "let a = 1;",
+      "// measured on Bahrain: the governor must not oscillate.",
+      "// Without it the ladder cannot be reached on a CPU-bound frame.",
+      "let x = 1;",
+    ].join("\n"));
 
-  spawnSync(process.execPath, [TOOL, "--narrative", file], { encoding: "utf8" });
-  const out = fs.readFileSync(file, "utf8");
-  assert.match(out, /measured on Bahrain/);
-  fs.rmSync(dir, { recursive: true, force: true });
+    const r = spawnSync(process.execPath, [TOOL, "--narrative", file], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    const out = fs.readFileSync(file, "utf8");
+    assert.doesNotMatch(out, /quick brown fox/, "a plain narrative block is removed (the trimmer is not a no-op)");
+    assert.match(out, /measured on Bahrain/);
+    assert.match(out, /ladder cannot be reached/);
+    assert.match(out, /let a = 1;/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("trim-comments keeps whitespace-padded boxed prose in /* */", () => {

@@ -118,6 +118,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/announcer.test.mjs",
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-arg-guards.test.mjs",
+  "tests/unit/apex-cam-fallback.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
   // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
   "tests/unit/apex-memory.test.mjs",
@@ -244,11 +245,17 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/chromium-shell.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
+  "tests/unit/ci-gate-selection.test.mjs",
+  "tests/unit/ci-gpu-census.test.mjs",
   // CI guards born 2026-10-15: ci-rerun.mjs refuses a superseded/live/green/re-run run; ci-cancel-on-close.yml joins ci.yml's PR group. Pure, no network or browser.
   "tests/unit/ci-guard-tools.test.mjs",
+  "tests/unit/ci-pages-train.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
+  "tests/unit/ci-ship-filter-geometry.test.mjs",
+  "tests/unit/ci-ship-smoke-renderer.test.mjs",
   "tests/unit/ci-verdict.test.mjs",
   "tests/unit/ci-watch.test.mjs",
+  "tests/unit/ci-workflow-triggers.test.mjs",
   "tests/unit/circuit-axis.test.mjs",
   "tests/unit/circuit-corner-anchors.test.mjs",
   // Round-2: manifest.json / meta description circuit counts pinned to Tracks.LIST.
@@ -383,6 +390,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/destructure-usage.test.mjs",
+  // #2963: first-divergent-step finder over game-vm stepTrace (player/field/rng/timers).
+  "tests/unit/determinism-bisect.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
   "tests/unit/diagnostics-tools.test.mjs",
@@ -452,12 +461,22 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
+  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break) and the bus cursor read; a real-git race on a local bare origin; < 2 s.
+  "tests/unit/fleet-bus.test.mjs",
   "tests/unit/fleet-flags.test.mjs",
+  // fleet-tick: the diff of two watcher states into changed rows, pure fixtures; < 0.1 s.
+  "tests/unit/fleet-tick.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
   // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
   // runs only in ci.yml's non-blocking flicker-gate job.
   "tests/unit/flicker-metric.test.mjs",
   "tests/unit/floodmast-lamp-register.test.mjs",
+  // The flyby audit's RULES, shown to fail: a stub sequencer fed through auditTrack
+  // and fleetFindings must yield a finding per rule (negative control), no VM.
+  "tests/unit/flyby-audit-rules.test.mjs",
+  // The intro/menu planning lifecycle split out of flyby-shots (game.js source +
+  // small vm harnesses, ~0.4 s): runs beside the real-VM file, not behind it.
+  "tests/unit/flyby-intro.test.mjs",
   // The ORDERING that lights the flyby: raceIntro() applies the race settings
   // before the loading screen starts, so a dawn race stops showing a day sky.
   "tests/unit/flyby-lighting.test.mjs",
@@ -618,6 +637,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
+  "tests/unit/js-debugger-node.test.mjs",
   "tests/unit/js-debugger-trace.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -654,6 +674,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/light-store-copy.test.mjs",
   "tests/unit/light-store-perchunk-pin.test.mjs",
+  "tests/unit/lighting-ab-catalog.test.mjs",
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
   "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -1013,7 +1034,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/skill-gameplay-surface.test.mjs",
   "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
-  "tests/unit/skill-render-ui-surface.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",
@@ -1252,9 +1272,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
-  // ui-fit round 6: Track Designer tool-strip labels wrap+balance and
-  // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
-  "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
   "tests/unit/ui-fixer-uncommitted.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-inspector-audit.test.mjs",
@@ -1271,6 +1288,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
   "tests/unit/viewer.test.mjs",
   "tests/unit/visual-oracle.test.mjs",
+  // #2960: opt-in vm-debug-preload turns a no-filename brake-cue load into a file:// URL.
+  "tests/unit/vm-debug-preload.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",

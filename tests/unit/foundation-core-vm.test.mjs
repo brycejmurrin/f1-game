@@ -1,6 +1,6 @@
-/* foundation-core-vm.test.mjs — the CORE contract that all sixteen
- * tests/specs/*-foundation.spec.js assert, replayed for every one of their
- * circuits in the Node VM (tools/lib/game-vm.cjs).
+/* foundation-core-vm.test.mjs — the CORE contract that the
+ * tests/specs/*-foundation.spec.js files assert, replayed for EVERY circuit in
+ * Tracks.LIST (spec or not) in the Node VM (tools/lib/game-vm.cjs).
  *
  * WHY THIS EXISTS, AND WHAT IT IS NOT.
  *
@@ -40,20 +40,19 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
-// DERIVED FROM THE SPECS, never re-typed: the circuits covered here are exactly
-// the ones that have a foundation spec. A spec added or renamed changes this
-// list on its own, so the two cannot drift — which is the failure mode that put
-// dead `js/game/` paths in a CI filter for a fortnight.
-const SPEC_DIR = new URL("../specs/", import.meta.url);
-const CIRCUITS = fs.readdirSync(SPEC_DIR)
-  .filter((f) => f.endsWith("-foundation.spec.js"))
-  .map((f) => f.replace("-foundation.spec.js", ""))
-  .sort();
+// DERIVED FROM THE ROSTER, not from spec filenames: a circuit with no
+// *-foundation.spec.js still gets the shared finite-geometry / barrier / required
+// model contract (TK1-17: 52 circuits, ~16 specs). The ids come from a headless
+// Tracks.LIST so the test names exist before the game VM boots.
+const require2 = createRequire(import.meta.url);
+const ROSTER = Array.from(require2("../../tools/track/verify-track.cjs")
+  .buildContext(undefined, { quiet: true }).LIST, (t) => t.id).sort();
 
-// The spec files' own id is the FILE stem; two circuits spell theirs
-// differently in Tracks.LIST. Map only those, and fail loudly on an unknown id
-// rather than silently skipping a circuit — a twin that quietly covers fifteen
-// of sixteen is the kind of green that taught nobody anything.
+// Foundation specs whose file stem differs from the Tracks.LIST id.
+const SPEC_DIR = new URL("../specs/", import.meta.url);
+const SPEC_STEMS = fs.readdirSync(SPEC_DIR)
+  .filter((f) => f.endsWith("-foundation.spec.js"))
+  .map((f) => f.replace("-foundation.spec.js", ""));
 const ID_OF = { redbull: "redbull", "albert-park": "albert_park" };
 const trackId = (stem) => ID_OF[stem] || stem;
 
@@ -61,20 +60,17 @@ let g = null;
 before(async () => { g = await createGame({ storage: { trackId: "monza" } }); });
 after(() => { if (g) g.close(); });
 
-test("every foundation circuit has a spec and a resolvable track id", () => {
-  assert.ok(CIRCUITS.length >= 16,
-    `found ${CIRCUITS.length} foundation specs — expected at least 16; did the glob break?`);
-  // Tracks.LIST off the VM sandbox, the way the browser reads the page global
-  // (new-hooks-vm.test.mjs's Jeddah foundation test does the same for its def).
+test("the whole roster is covered, and every foundation spec names a real circuit", () => {
   const known = new Set(Array.from(g.sandbox.Tracks.LIST, (t) => t.id));
-  for (const stem of CIRCUITS) {
+  assert.deepEqual(ROSTER, Array.from(known).sort(), "the headless roster and the game VM roster disagree");
+  assert.ok(ROSTER.length >= 52, `roster shrank to ${ROSTER.length}`);
+  for (const stem of SPEC_STEMS) {
     assert.ok(known.has(trackId(stem)),
       `${stem}-foundation.spec.js names track "${trackId(stem)}", which Tracks.LIST does not have`);
   }
 });
 
-for (const stem of CIRCUITS) {
-  const id = trackId(stem);
+for (const id of ROSTER) {
   test(`${id}: the shared foundation contract holds`, async () => {
     await g.race(id);
     g.apex.go();

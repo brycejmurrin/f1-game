@@ -15,6 +15,7 @@ import { MODE_TITLES, MISSIONS, missionBrief } from "./explorer/catalog.mjs";
 import { explore } from "./explorer/modes.mjs";
 import { writeReport } from "./explorer/report.mjs";
 import { openSession } from "./explorer/browser.mjs";
+import { resolveUIProfile, measureUIProfile } from "../lib/ui-device-profile.mjs";
 import { inspectSettled, inspectResponsive, installInspector } from "./explorer/inspector.mjs";
 
 import { captureAuditSource } from "./explorer/audit-evidence.mjs";
@@ -32,14 +33,15 @@ const HELP = `UI explorer — one Chromium, bounded captures, offline HTML evide
     [--viewports 390x844,844x390,1280x800] [--roundtrip] [--audit FILE]   # 1..8 bounded sizes; restores the original viewport
     [--touch] [--boot 932x430] [--safe 0,59,21,59] [--summary]   # touch context, boot size, env(safe-area-inset-*) T,R,B,L; coverage + issues per size
   node tools/ui/explorer.mjs --list|--help
-Flags: --url URL --out DIR --modes a,b --scenario FILE --max-shots 0..25
+Flags: --device "iPhone 13" --settings FILE  # descriptor + baseline; no inferred phone zoom
+       --url URL --out DIR --modes a,b --scenario FILE --max-shots 0..25
        --max-attempts 1..30 --track ID --frac 0..1 --repro FILE --reference IMAGE
        --scene-views original,45,225 --scene-backend webgl2|three
 Browser-free commands: --help, --list, brief, report. Native motion; isolated saves.
 Reports distinguish guided missions from exported blind Browser Use briefs.
 Exit 0: probes completed (inspect advisories); 1: failed probe; 2: invalid invocation; 75: deferred (load >= 3 or browser lock held), retry later.
 `;
-const FLAGS = ["--out", "--url", "--modes", "--scenario", "--max-shots", "--max-attempts", "--track", "--frac", "--repro", "--reference", "--mission", "--scene-views", "--scene-backend", "--screen", "--selector", "--styles", "--viewports", "--roundtrip", "--audit", "--touch", "--boot", "--safe", "--summary", "--list", "--help"];
+const FLAGS = ["--device", "--settings", "--out", "--url", "--modes", "--scenario", "--max-shots", "--max-attempts", "--track", "--frac", "--repro", "--reference", "--mission", "--scene-views", "--scene-backend", "--screen", "--selector", "--styles", "--viewports", "--roundtrip", "--audit", "--touch", "--boot", "--safe", "--summary", "--list", "--help"];
 
 export function parseOptions(argv) {
   const f = makeFlags(argv, FLAGS);
@@ -71,6 +73,10 @@ export function parseOptions(argv) {
   };
   const modes = String(flag("--modes", command === "all" ? Object.keys(MODE_TITLES).join(",") : command === "replay" ? "missions" : command)).split(",").map((v) => v.trim()).filter(Boolean);
   if (!f.has("--help") && !f.has("--list") && !["brief", "report", "inspect"].includes(command) && (!modes.length || modes.some((m) => !MODE_TITLES[m]))) throw new Error("Unknown or empty --modes");
+  const device = flag("--device", null), settingsFile = flag("--settings", null);
+  if (device !== null && !device.trim()) throw new Error("--device requires a device name");
+  if (settingsFile !== null && !settingsFile.trim()) throw new Error("--settings requires a file");
+  if (device) resolveUIProfile({ device });
   const screen = flag("--screen", "title"), selector = flag("--selector", null), styles = flag("--styles", null);
   if (!SCREENS.some(s => s.id === screen)) throw new Error("Unknown --screen; use --list");
   const inspectOnly = ["--screen", "--selector", "--styles", "--viewports", "--roundtrip", "--audit", "--touch", "--boot", "--safe", "--summary"];
@@ -110,7 +116,7 @@ export function parseOptions(argv) {
   const outside = relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
   if (!outside && !/^(artifacts|scratch)([\\/]|$)/.test(relative)) throw new Error("Inside the repository, --out must be under artifacts/ or scratch/");
   return { command, file: positional[1] || flag("--scenario", null), help: f.has("--help"), list: f.has("--list"), modes: [...new Set(modes)], url, screen, selector, styles, viewports, roundTrip: f.has("--roundtrip"), audit,
-    touch: f.has("--touch"), boot, safe, summary: f.has("--summary"),
+    device, settingsFile, touch: f.has("--touch"), boot, safe, summary: f.has("--summary"),
     outDir, maxShots: numeric("--max-shots", 25, 0, 25, true), maxAttempts: numeric("--max-attempts", 8, 1, 30, true),
     track, sceneViews, sceneBackend, frac: numeric("--frac", 0.4, 0, 1), repro: flag("--repro", null), reference: flag("--reference", null), mission: flag("--mission", "first-race") };
 }
@@ -164,6 +170,8 @@ export async function main(argv = process.argv.slice(2)) {
   const blob = opts.repro ? readJSON(opts.repro) : null;
   const sceneRepro = blob?.repro || blob;
   if (sceneRepro && (typeof sceneRepro !== "object" || Array.isArray(sceneRepro))) throw new Error("--repro must contain an __apex.repro() object");
+  const settings = opts.settingsFile ? readJSON(opts.settingsFile) : null;
+  if (opts.settingsFile && (!settings || typeof settings !== "object" || settings.format !== "apex26-settings-v1")) throw new Error("--settings requires an Apex settings export");
   const audits = opts.audit ? readJSON(opts.audit) : null;
   const source = opts.command === "inspect" ? await captureAuditSource(ROOT) : null;
   const busy = loadDeferral(); if (busy) throw busy;
@@ -176,7 +184,7 @@ export async function main(argv = process.argv.slice(2)) {
     browser = await launchChromium({ args: chromiumArgsForBackend("three") });
     let gitHead = "unknown"; try { gitHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim(); } catch { /* metadata only */ }
     if (opts.command === "inspect") {
-      const s = await openSession(browser, url, { touch: opts.touch, ...(opts.boot ? { viewport: opts.boot } : {}) });
+      const s = await openSession(browser, url, { touch: opts.touch, device: opts.device, settings, ...(opts.boot ? { viewport: opts.boot } : {}) });
       try {
         // Real env(safe-area-inset-*) values (CDP Emulation.setSafeAreaInsetsOverride), not injected tokens.
         if (opts.safe) await (await s.context.newCDPSession(s.page)).send("Emulation.setSafeAreaInsetsOverride", { insets: opts.safe });
@@ -188,7 +196,7 @@ export async function main(argv = process.argv.slice(2)) {
         const report = opts.viewports ? await inspectResponsive(s.page, args)
           : await inspectSettled(s.page, args).then(({ settlement, inspection }) => ({ ...inspection, settlement }));
         report.provenance = { sha: gitHead, screen: opts.screen, route: "catalog setup; use replay for real interaction proof",
-          emulation: { touch: opts.touch, boot: opts.boot || { width: 1280, height: 800 }, safeArea: opts.safe } };
+          emulation: { requested: s.profile, engine: s.engine, measured: await s.page.evaluate(measureUIProfile), settingsImport: s.settingsImport, safeArea: opts.safe } };
         report.errors = s.logs.errors; report.requests = s.logs.requests;
         fs.mkdirSync(opts.outDir, { recursive: true });
         fs.writeFileSync(path.join(opts.outDir, "inspection.json"), JSON.stringify(report, null, 2));
@@ -202,7 +210,7 @@ export async function main(argv = process.argv.slice(2)) {
       fs.mkdirSync(path.join(opts.outDir, "evidence"), { recursive: true });
       opts.referenceName = `evidence/reference${ext}`; fs.copyFileSync(opts.reference, path.join(opts.outDir, opts.referenceName));
     }
-    const bundle = await explore(browser, url, { ...opts, gitHead, catalog: SCREENS, sceneRepro,
+    const bundle = await explore(browser, url, { ...opts, settings, gitHead, catalog: SCREENS, sceneRepro,
       scenarios: ["replay", "missions", "all"].includes(opts.command) && scenario ? [scenario] : undefined,
       minimizeScenario: ["minimize", "all"].includes(opts.command) ? scenario : undefined });
     const html = await writeReport(bundle, opts.outDir);

@@ -298,9 +298,57 @@ function makeTimers() {
       return n;
     },
     pending: () => pending.size,
+    // Opt-in fingerprint for determinism bisect (#2963): id/at/every only — no fn.
+    snapshot: () => [...pending.entries()]
+      .map(([id, r]) => ({ id, at: +r.at, every: +r.every || 0 }))
+      .sort((a, b) => a.id - b.id),
     clear: () => pending.clear(),
   };
   return api;
+}
+
+/**
+ * Per-step state for an opt-in determinism trace (#2963). Zero cost when unused.
+ * Covers player pose/speed, field pose/speed, sim RNG seed+stream, and timers.
+ */
+function captureStepState(handle, step) {
+  const G = handle && handle.G;
+  const apex = handle && handle.apex;
+  const phys = (apex && typeof apex.physState === "function" && apex.physState()) || {};
+  const player = {
+    s: numOrNull(phys.s),
+    x: numOrNull(phys.x),
+    speed: numOrNull(phys.speed),
+    px: numOrNull(phys.px),
+    pz: numOrNull(phys.pz),
+    head: numOrNull(phys.head),
+  };
+  const cars = (G && Array.isArray(G.cars)) ? G.cars : [];
+  const field = cars.map((c, id) => ({
+    id,
+    code: c && c.code != null ? String(c.code) : "",
+    s: numOrNull(c && c.s),
+    x: numOrNull(c && c.x),
+    speed: numOrNull(c && c.speed),
+    prog: numOrNull(c && c.prog),
+  }));
+  let seed = null, stream = null;
+  if (G) {
+    if (typeof G.simSeed === "function") {
+      seed = numOrNull(G.simSeed());
+      stream = numOrNull(G.simSeed(undefined, true));
+    } else if (G.seed != null) {
+      seed = numOrNull(G.seed);
+    }
+  }
+  const timers = handle && handle._timers
+    ? { pending: handle._timers.pending(), rows: handle._timers.snapshot() }
+    : { pending: 0, rows: [] };
+  return { step: step == null ? -1 : step, player, field, rng: { seed, stream }, timers };
+}
+
+function numOrNull(v) {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -701,8 +749,13 @@ async function createGame(opts) {
     }
 
     const apex = sandbox.__apex;
+    // Opt-in per-step state-hash trace (#2963). Off by default — zero cost when
+    // unset. Enable with createGame({ stepTrace: true }) or APEX_STEP_TRACE=1.
+    const stepTraceOn = !!(opts.stepTrace || process.env.APEX_STEP_TRACE === "1");
+    const stepTrace = [];
     const handle = {
       apex, ctx, sandbox, record, bootMs, trackMs: 0,
+      _timers: timers,
       get G() { return G; },
       get seat() { return seatReport(seatName, sandbox, G); },
       // Same shape the specs use: race(id, tod, wx) → wait info().track → go().
@@ -726,7 +779,20 @@ async function createGame(opts) {
         handle.trackMs = performance.now() - t1;
         return r;
       },
-      step: (n, dt) => apex.step(dt != null ? dt : 1 / 60, n != null ? n : 1),
+      step: (n, dt) => {
+        const ticks = n != null ? n : 1;
+        const d = dt != null ? dt : 1 / 60;
+        if (!stepTraceOn) return apex.step(d, ticks);
+        for (let i = 0; i < ticks; i++) {
+          apex.step(d, 1);
+          stepTrace.push(captureStepState(handle, stepTrace.length));
+        }
+        return undefined;
+      },
+      // Filled only when stepTrace is on; otherwise stays empty (zero cost).
+      get stepTrace() { return stepTrace; },
+      captureStepState: () => captureStepState(handle, stepTrace.length),
+      clearStepTrace: () => { stepTrace.length = 0; },
       // AI-ONLY FIELD. A VM race has a player with no input: it sat PARKED on its
       // grid box all race, a blocker the AI attacked 7-10 times a race (11-21 % of
       // passes within 60 m of it) and the leading human the rubber band banded
@@ -776,7 +842,7 @@ async function createGame(opts) {
   }
 }
 
-module.exports = { createGame, settle, settleAsync: settle, ROOT, SKIP, SEATS };
+module.exports = { createGame, settle, settleAsync: settle, captureStepState, ROOT, SKIP, SEATS };
 
 if (require.main === module) {
   (async () => {

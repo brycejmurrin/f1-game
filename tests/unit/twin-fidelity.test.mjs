@@ -62,3 +62,18 @@ test("twin-fidelity --help exits 0 without running mutants", () => {
   assert.match(r.stdout, /usage:.*twin-fidelity/);
   assert.doesNotMatch(r.stdout, /^PASS /m);
 });
+
+test("every named catcher is a real test title in the mutant's spec (a renamed test must not leave a dead name)", () => {
+  for (const m of MUTANTS) {
+    const src = fs.readFileSync(new URL(`../../${m.spec}`, import.meta.url), "utf8");
+    for (const name of Object.keys(m.catchers)) {
+      // titles are quoted in source; allow the three quote styles and escaped quotes inside
+      const variants = [name, name.replace(/"/g, '\\"'), name.replace(/'/g, "\\'"), name.replace(/`/g, "\\`")];
+      // a generated title (`... on ${track}`) matches by its template shape
+      const templated = [...src.matchAll(/`([^`\n]*\$\{[^`\n]*)`/g)].some(([, t]) =>
+        new RegExp("^" + t.split(/\$\{[^}]*\}/).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".+") + "$").test(name));
+      assert.ok(templated || variants.some((v) => src.includes(v)),
+        `${m.id}: catcher "${name}" is not a test title in ${m.spec} — the verdict would read it as "never ran"`);
+    }
+  }
+});

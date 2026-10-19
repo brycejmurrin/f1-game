@@ -26,21 +26,19 @@ const GRADE_NEUTRAL = {
   gainR: 1, gainG: 1, gainB: 1,
 };
 
-const GRADE_MIN = {
-  blacks: -1, shadows: -1, midtones: -1, highlights: -1, whites: -1,
-  toe: -1, shoulder: -1,
-  liftR: -0.15, liftG: -0.15, liftB: -0.15,
-  gammaR: 0.5, gammaG: 0.5, gammaB: 0.5,
-  gainR: 0.5, gainG: 0.5, gainB: 0.5,
-};
-
-const GRADE_MAX = {
-  blacks: 1, shadows: 1, midtones: 1, highlights: 1, whites: 1,
-  toe: 1, shoulder: 1,
-  liftR: 0.15, liftG: 0.15, liftB: 0.15,
-  gammaR: 2, gammaG: 2, gammaB: 2,
-  gainR: 1.5, gainG: 1.5, gainB: 1.5,
-};
+// The range extremes are READ from TUNE_DEFS in the page (the sliders' own min/max),
+// not retyped here: a hand-kept GRADE_MIN/MAX went stale the moment the knob ranges
+// were widened (blacks +-0.6, midtones -2..1.4, whites -1.8..3, lift +-0.3 ...) and the
+// "extremes" test was then neither extreme nor checked against anything.
+async function gradeExtremes(page) {
+  return page.evaluate((ids) => {
+    const def = (id) => LightTune.TUNE_DEFS.find((x) => x.id === id);
+    return {
+      min: Object.fromEntries(ids.map((id) => [id, def(id).min])),
+      max: Object.fromEntries(ids.map((id) => [id, def(id).max])),
+    };
+  }, Object.keys(GRADE_NEUTRAL));
+}
 
 // lightTune()/setLightTune write a sync in-memory store (js/lighting/profiles.js
 // LT + clamp). There is nothing async to wait for — and page.waitForFunction
@@ -426,15 +424,28 @@ test.describe("rendered image grade", () => {
     expect(red, diag).toBeGreaterThan(blue * 1.5);
   });
 
-  test("grade extremes keep the race canvas renderable", async ({ page }) => {
+  test("grade extremes keep the race canvas renderable and move the frame off neutral", async ({ page }) => {
     await boot(page);
-    for (const values of [GRADE_MIN, GRADE_MAX]) {
+    const neutral = await pixels(page);
+    const extremes = await gradeExtremes(page);
+    for (const [edge, values] of Object.entries(extremes)) {
+      // The extremes must really be extreme: every knob at its slider end, not neutral.
+      expect(Object.entries(values).some(([id, v]) => v !== GRADE_NEUTRAL[id]), edge).toBe(true);
       await setTune(page, values);
       const image = await pixels(page);
       const state = await page.evaluate(() => window.__apex.info().state);
       expect(state).toBe("race");
       expect(image.length).toBe(640 * 360 * 4);
-      expect(new Set(image).size).toBeGreaterThan(16);
+      expect(image.length).toBe(neutral.length);
+      // Mean absolute channel difference from the neutral frame (0-255). A grade
+      // at both ends of every slider that left the picture alone would be a dead
+      // grade; the old assertion (a Set of > 16 distinct bytes) held for ANY image.
+      let sum = 0;
+      for (let i = 0; i < image.length; i += 4) {
+        sum += Math.abs(image[i] - neutral[i]) + Math.abs(image[i + 1] - neutral[i + 1]) + Math.abs(image[i + 2] - neutral[i + 2]);
+      }
+      const mean = sum / ((image.length / 4) * 3);
+      expect(mean, JSON.stringify({ edge, mean })).toBeGreaterThan(2);
     }
   });
 });
