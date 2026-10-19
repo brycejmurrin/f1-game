@@ -169,7 +169,7 @@ the defect lives elsewhere; **useless** means pausing changes or hides the behav
 
 | subsystem | where in tree | verdict | why | use instead (exists today) | would need to build |
 |---|---|---|---|---|---|
-| vm-loaded game source in Node tests | 480 files calling vm; helpers in `tests/helpers/`, `tools/lib/*-vm.cjs` | **partial → works with the preload** | relative/missing `filename` gives URLs a file-path breakpoint never matches (Q1) | `urlRegex`; game-vm family already absolute | the preload (#R1), the helper migration (#R2), MCP Node targets (#2957) |
+| vm-loaded game source in Node tests | 480 files calling vm; helpers in `tests/helpers/`, `tools/lib/*-vm.cjs` | **partial → works with the preload** | relative/missing `filename` gives URLs a file-path breakpoint never matches (Q1) | `urlRegex`; game-vm family already absolute | the preload (#2960), the helper migration (#2961), MCP Node targets (#2957) |
 | `node --test` multi-file runs | every `npm test:*` node suite | **partial** | each file is a new child on a new port, run serially; single-attach clients hang | run one file directly with `node --inspect-brk=0` | MCP follows forwarded "Debugger listening" lines (sent to DEBUGGER-A as R3) |
 | source-text-scan tests | ~206 `tests/unit` files read source and assert on text, not behaviour | **useless** (nothing executes) | the "code under test" is a string; a breakpoint can only stop in the test's regex | read the regex and failing line; `fn-source.mjs` / `game-source.mjs` helpers | a failure message that prints the matched span (lint-style), not a debugger |
 | generated files | `index.html` gen-shell blocks, `sw.js`, `js/roster.js`, `js/track/circuit-meta.js`, `version.json`, … | **partial** | a breakpoint in a generated file shows output, not the generator's decision; edits are refused | break in the generator (`tools/gen/*.mjs`, plain Node: debuggable as above); `npm run gen:check` names drift | none — debug the generator |
@@ -190,14 +190,14 @@ the defect lives elsewhere; **useless** means pausing changes or hides the behav
 
 | # | recommendation | value | cost | owner area | model | issue |
 |---|---|---|---|---|---|---|
-| R1 | ship the opt-in `vm-debug-preload.cjs` (proposed home: `tools/lib/`) and `npm run debug:unit -- <file>` (prototype above) | high: every vm test becomes file-path debuggable and coverable, with no test edits | S (~60 lines plus one unit test) | tools/lib | Sonnet | ISSUE_R1 |
-| R2 | migrate the shared helpers and `"js/…"` literals to absolute filenames, plus a `vm-filename-lint` guard | high: CI coverage of vm code and debuggable ordinary runs | M (~460 call sites, mechanical; one codemod) | tests/helpers, tests/unit | Sonnet | ISSUE_R2 |
+| R1 | ship the opt-in `vm-debug-preload.cjs` (proposed home: `tools/lib/`) and `npm run debug:unit -- <file>` (prototype above) | high: every vm test becomes file-path debuggable and coverable, with no test edits | S (~60 lines plus one unit test) | tools/lib | Sonnet | #2960 |
+| R2 | migrate the shared helpers and `"js/…"` literals to absolute filenames, plus a `vm-filename-lint` guard | high: CI coverage of vm code and debuggable ordinary runs | M (~460 call sites, mechanical; one codemod) | tests/helpers, tests/unit | Sonnet | #2961 |
 | R3 | js-debugger MCP Node targets: launch `--inspect-brk=0`, auto-detach on "Waiting for the debugger to disconnect", follow `--test` children, `urlRegex` file matching, condition-based logpoints, resolved-location reporting | high: replaces the hand-rolled CDP clients | M | tools/mcp (DEBUGGER-A, #2957) | Opus | sent to DEBUGGER-A, tracked in #2957 |
-| R4 | agent guidance: a "Debug a Node test" section in the js-debugger skill and `docs/TESTING.md` (the recipe above, the URL table, the cost table) | med: stops re-discovery | S | .claude/skills, docs | Sonnet | ISSUE_R4 |
-| R5 | determinism bisect: per-step state-hash trace in game-vm plus a first-divergent-step finder | med: determinism reds are the hardest to debug | M | tools/lib/game-vm.cjs, tools/check | Opus | ISSUE_R5 |
-| R6 | GPU capture hooks: label every WGX object, and a dev-only Spector/webgl-lint loader for the debug Chrome | med: shader and GL-state bugs have no tool today | M | js/render (renderer lanes) | Opus | ISSUE_R6 |
-| R7 | timeline instrumentation: `performance.measure` with `detail.devtools` tracks around update/render/audio phases | low–med: frame-loop timing without pausing | S | js/game.js (claim needed) | Opus | ISSUE_R7 |
-| R8 | `OfflineAudioContext` render test for engine pitch and layers | low–med | S | tests/unit, js/audio | Sonnet | ISSUE_R8 |
+| R4 | agent guidance: a "Debug a Node test" section in the js-debugger skill and `docs/TESTING.md` (the recipe above, the URL table, the cost table) | med: stops re-discovery | S | .claude/skills, docs | Sonnet | #2962 |
+| R5 | determinism bisect: per-step state-hash trace in game-vm plus a first-divergent-step finder | med: determinism reds are the hardest to debug | M | tools/lib/game-vm.cjs, tools/check | Opus | #2963 |
+| R6 | GPU capture hooks: label every WGX object, and a dev-only Spector/webgl-lint loader for the debug Chrome | med: shader and GL-state bugs have no tool today | M | js/render (renderer lanes) | Opus | #2964 |
+| R7 | timeline instrumentation: `performance.measure` with `detail.devtools` tracks around update/render/audio phases | low–med: frame-loop timing without pausing | S | js/game.js (claim needed) | Opus | #2965 |
+| R8 | `OfflineAudioContext` render test for engine pitch and layers | low–med | S | tests/unit, js/audio | Sonnet | #2966 |
 
 R1, R2 and R3 together close the #2952 gap. The rest map the remaining blind spots to the tools that see them.
 
