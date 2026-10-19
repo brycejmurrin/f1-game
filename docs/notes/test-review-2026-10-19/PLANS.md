@@ -16,17 +16,17 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 
 ## Lanes
 
-### L0 — Debugger on Node targets + vm filenames (draft)
+### L0 — Debuggable vm code: preload, then absolute filenames (draft)
 
-- **Goal:** the js-debugger MCP attaches to `node --inspect-brk` test processes and every vm-loaded module carries its repo path as filename, so pass-2 lanes can set line breakpoints
-- **Owned:** `tools/mcp/js-debugger-*.mjs`, `tests/unit/js-debugger-*.test.mjs`, `tests/helpers/fn-source.mjs`, `tests/helpers/game-source.mjs`, `tests/helpers/vm-page.js`, `.claude/skills/js-debugger/**`
-- **Closes:** DBG-01, DBG-02, DBG-03 (3 findings; effort S×1 M×2 L×0)
-- **Draws from batches:** render-1, render-2, render-3 — waiting on: render-3
+- **Goal:** every vm-loaded module carries an absolute filename, so file-path breakpoints and coverage reach it; the MCP half (#2957) is PR #2967 and is not this lane
+- **Owned:** `tools/lib/<new: vm-debug-preload>.cjs`, `tests/helpers/fn-source.mjs`, `tests/helpers/game-source.mjs`, `tests/helpers/vm-page.js`, `tools/check/<new: vm-filename-lint>.mjs`, `docs/TESTING.md §Debug a Node test`
+- **Closes:** DBG-01, DBG-02, DBG-03, DBG-04, DBG-05 (5 findings; effort S×3 M×2 L×0)
+- **Draws from batches:** render-1, render-2, render-3, physics-1 — waiting on: render-3
 - **Verify:** `node --test tests/unit/js-debugger-*.test.mjs && npm run test:tooling-fast`
-- **Effort:** M (two PRs, ~1 day of agent time)
-- **Model:** claude-opus-5-5 — an MCP protocol change plus a helper contract every lane depends on; it keeps the Sonnet cost cap (launch-policy.md, cost and context)
-- **Depends on:** none; coordinate with #2957's claimant and the DEBUGGER-A/B notes before launch (they may already own the MCP half)
-- **PR slices:** PR 1: MCP node targets (#2957); PR 2: filename option in test-helper loaders + a lint for vm.run* without filename
+- **Effort:** S (#2960) + M (#2961, ~460 mechanical call sites via codemod)
+- **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`); DEBUGGER-B's Q3 table also picks Sonnet for #2960 and #2961
+- **Depends on:** #2967 merged for DBG-01/04/05 (they close with it); #2960 before #2961; the helper migration touches tests/unit files other lanes own, so #2961 runs as a codemod-only PR AFTER the test lanes land, or each lane migrates its own files
+- **PR slices:** #2960 preload + npm run debug:unit (S); #2962 docs: Debug a Node test (S); #2961 helper migration + vm-filename-lint (M, codemod, last)
 
 ### L1 — Camera tests behave, not scan (draft)
 

@@ -5,7 +5,6 @@
 - Posted: 2026-10-19T04:42:49Z (comment author `brycejmurrin`; the reviewer session id is not stated in the comment)
 - Status: final
 - Line cites are the reviewer's, taken on the deploy tip of 2026-10-19; see `../SYNTHESIS.md` §Verification for spot checks
-- Normalized (only change to the body): backticks dropped around test files that do not exist yet, so docs-integrity does not read a proposal as a claim: census-verdict.test.mjs, flyby-fleet.test.mjs
 
 ---
 
@@ -57,11 +56,11 @@ Flakiness: not measured (one run each). The `flyby-shots` timeout was my own 110
 8. `appearance-sunlight-chrome.test.mjs:26-27, 66-67` | pins hex literals; the claimed ~4.5:1 contrast is never computed | any legitimate retune fails; a real contrast regression passes | compute WCAG contrast from the token pair | medium
 9. `assets-pack.test.mjs:1070-1085` | `MAT_LAYERS = 17` / `[17]` are regex-pinned (subagent counts 5 files with the pin; I did not verify the count) | a legitimate 18th material needs many manual edits | import one shared constant | medium
 10. `flyby-shots.test.mjs:1795-1848` | frame-report floors are the recorded "was 77/78" scores, not requirements; the file takes 138 s; a conditional assert at :386 `if (!films) assert…` | brittle; slow edit loop | split into real-VM / intro-lifecycle / slow frame-report files | medium
-11. flyby-fleet.test.mjs vs `flyby-shots.test.mjs:1824` | fleet rules allow pan up to 45 deg/s while flyby-shots pins `PAN_MAX` to 25 (per subagent; not re-measured) | two disagreeing limits for the same property | reconcile; add a negative control feeding `auditTrack` a bad shot list | medium
+11. `flyby-fleet.test.mjs` vs `flyby-shots.test.mjs:1824` | fleet rules allow pan up to 45 deg/s while flyby-shots pins `PAN_MAX` to 25 (per subagent; not re-measured) | two disagreeing limits for the same property | reconcile; add a negative control feeding `auditTrack` a bad shot list | medium
 12. `free-cam.test.mjs:212, 227, 300` | tautologies: asserts the stub planner's own return values; condition-wrapped `G.photoMode && api.close(false)`; real clearance never exercised | the corner-snap framing is only tested against a stub | one real-`FlybySeq` corner snap on a built circuit | medium
 13. `elev-presets.test.mjs:53, 57, 84` | tautology at :53, `tiny[1]` never checked, the hilly>rolling check holds for one seed | the real invariant (grade cap `halfM/19.6` in `plan`) is untested | assert max grade over several seeds | medium
 14. `cam-round2.test.mjs:195, 235, 240-242` | self-comparison and dead code (`void good`), plus a copy of the damper tested against itself | assertions that cannot fail | remove them; import the real damper | medium
-15. census-verdict.test.mjs (`healthy()` fixture) | a field renamed in `gpu-game-check.mjs` leaves the test green | the real-GPU gate could drift silently | derive the fixture from the producer's schema | low
+15. `census-verdict.test.mjs` (`healthy()` fixture) | a field renamed in `gpu-game-check.mjs` leaves the test green | the real-GPU gate could drift silently | derive the fixture from the producer's schema | low
 
 ## Gaps
 - No test of `tuner-panel.js` button sync for track/car scope (F1); `cam-comfort.js` `fxSet` clamp/round (coverage: NOT-HIT).

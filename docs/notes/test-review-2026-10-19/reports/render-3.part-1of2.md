@@ -5,7 +5,7 @@
 - Posted: 2026-10-19T05:02:48Z (comment author `brycejmurrin`; the reviewer session id is not stated in the comment)
 - Status: partial 1/2 (a later part supersedes overlapping rows; both are kept)
 - Line cites are the reviewer's, taken on the deploy tip of 2026-10-19; see `../SYNTHESIS.md` §Verification for spot checks
-- Normalized (only change to the body): backticks dropped around test files that do not exist yet, so docs-integrity does not read a proposal as a claim: wgx-source-pins.test.mjs
+- Normalized (only change to the body): files that do not exist yet (reviewer proposals) are unquoted or written `dir/<new:name>.ext`, so docs-integrity does not read a proposal as a claim: wgx-source-pins.test.mjs
 
 ---
 

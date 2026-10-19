@@ -1,10 +1,13 @@
-UPDATED = "2026-10-19 ~05:25Z (22:25 Pacific, 10-18)"
-FINAL = {"render-1", "render-2"}
-PARTIAL = {"render-3": "1/2"}
+UPDATED = "2026-10-19 ~05:50Z (22:50 Pacific, 10-18)"
+FINAL = {"render-1", "render-2", "physics-1", "physics-2", "car-1", "ui-1"}
+PARTIAL = {"render-3": "1/2", "race-2": "1/n"}
 ALL = ["audio-1","physics-1","physics-2","race-1","race-2","render-1","render-2","render-3","tracks-1","tracks-2","car-1","car-2","modes-1","ui-1","ui-2","tooling-1","tooling-2","tooling-3","tooling-4","tooling-5","net","platform"]
 k_final = len(FINAL); k_partial = len(PARTIAL); k_in = k_final + k_partial
 PENDING = [b for b in ALL if b not in FINAL and b not in PARTIAL]
-REP = {"render-1": "[render-1](reports/render-1.md)", "render-2": "[render-2](reports/render-2.md)", "render-3": "[part 1/2](reports/render-3.part-1of2.md)"}
+REP = {"render-1": "[render-1](reports/render-1.md)", "render-2": "[render-2](reports/render-2.md)", "render-3": "[part 1/2](reports/render-3.part-1of2.md)",
+       "physics-1": "[physics-1](reports/physics-1.md) + [debugger addendum](reports/physics-1.addendum-debugger.md)",
+       "physics-2": "[part 1/2](reports/physics-2.part-1of2.md) + [part 2/2](reports/physics-2.part-2of2.md) (stopped at the context cap; counted final)",
+       "race-2": "[part 1/n](reports/race-2.part-1ofn.md)", "car-1": "[car-1](reports/car-1.md)", "ui-1": "[ui-1](reports/ui-1.md)"}
 TABLE = [(b, "final" if b in FINAL else (f"partial {PARTIAL[b]}" if b in PARTIAL else "pending"), REP.get(b, "—")) for b in ALL]
 PATTERNS = [
  ("source-scan", "Source-text scans standing in for behaviour", "regex / indexOf / slice over js, css or md source; nothing under test executes (debugger n.a. or not-hit)"),
@@ -23,17 +26,21 @@ GAP_NOTES = [
  "Reviewer gap lists not carried as rows (low impact or unverified): render-1 lamp caps `MAST_LAMP_CAP`/`PIT_LAMP_CAP`/`CUSTOM_LAMP_MAX` and `selectCustomLamps` ties, `frame-math.mjs` `cullBoxes`/`marchGround`/flag thresholds, `elev-presets.js` loop closure; render-2 GLX partial-failure paths (`createTextureArray`/`createMesh`/`createChunkedMesh`), occlusion with mixed chunks, multi-draw UNSIGNED_INT, governor `cleanRace`, `PerfSpans.loaf()`, `renderer-picker.js` with no test file of its own; render-3 TLX WebGPU path and picker-driven backend switch, lit/sky WGSL compile.",
 ]
 DEBUGGER = [
- "- **#2957 (open, claimed):** the js-debugger MCP filters to Chrome page targets, so `debugger_targets` returns `[]` for `node --inspect-brk` and attach fails \"Unknown page targetId\". Measured by tracks-1, render-2, race-2, render-3 and car-2 (render-1 too). Fix proposed in the issue: accept `type: \"node\"` targets, skip Page/DOM calls, a unit test that attaches to a child and reads a local, and the Node path in the js-debugger skill. Row DBG-01, lane L0.",
- "- **Reviewer workarounds** (three different ones in three batches, which is itself the finding): render-1 used `NODE_V8_COVERAGE` function counts only; render-2 a hand CDP client with `setBreakpointByUrl` and a logging condition; render-3 `setInstrumentationBreakpoint beforeScriptExecution` plus breakpoints matched by source-line text, which reaches vm scripts without a filename (`artifacts/test-review/render-3/cdpbp2.mjs`, uncommitted). L0 should take render-3's method as the reference.",
- "- **vm without filename (DBG-02):** the root cause of most `hit (coverage)` rows. A `filename:` on the test-helper loaders is the prerequisite for line breakpoints in pass 2.",
+ "- **#2957 → PR #2967 (DEBUGGER-A, draft, head 2fd22f22, `Closes #2957`):** `type: \"node\"` targets in `debugger_targets` and attach, `Runtime.runIfWaitingForDebugger` on attach, and new batched tools `debugger_node_test` (per-file `--inspect-brk=127.0.0.1:0`, up to 8 in parallel, probes with locals, `runner:\"test\"` with a `NODE_OPTIONS --require` bootloader that attaches every `--test` child), `debugger_break` and `debugger_collect`. 85/85 js-debugger unit tests pass there. Its note `JS-DEBUGGER-IMPROVEMENTS-2026-10-19.md` (docs/notes, on that PR) lists bugs B1–B11 with repros. Row DBG-01.",
+ "- **B2 matters for this review:** before #2967, a logpoint whose expression named `G`, `R`, `L`, `v`, `s` or `e` read a shadowing `var` from the logpoint wrapper (`G.state` logged `\"undefined\"`). Any reviewer evidence taken with js-debugger logpoints on page code that names `G` is suspect until re-taken on #2967's build (row DBG-04). The render and physics reviewers used their own CDP clients or coverage, so their columns are not affected.",
+ "- **B7:** an exact-URL breakpoint on `js/<module>.js?v=dev` missed the deferred `?v=<hash>` script; #2967 matches query-less URLs (row DBG-05).",
+ "- **DEBUGGER-B, PR #2959 (draft, head 8b095856):** note `NODE-DEBUGGING-2026-10-19.md` (docs/notes, on that PR). Measured: V8 names a vm script exactly by its `filename`; only an ABSOLUTE filename gives a `file://` URL that a file-path breakpoint and `--experimental-test-coverage` match. Relative `js/…` and bare names match only `urlRegex`; no filename is `evalmachine.<anonymous>`, shared by every unnamed script. ~480 files call vm. An opt-in preload (`NODE_OPTIONS=--require`, ~60 lines) rewrites relative and unnamed filenames to absolute; a 71-file sweep gave identical pass/fail with and without it. This refines DBG-02.",
+ "- **Sub-issues of #2952 filed by DEBUGGER-B:** #2960 ship the preload + `npm run debug:unit`; #2961 migrate helpers to absolute filenames + a `vm-filename-lint`; #2962 a \"Debug a Node test\" section in the skill and TESTING.md; #2963 determinism bisect (per-step state hash); #2964 GPU capture hooks (WGX labels, Spector/webgl-lint loader); #2965 `performance.measure` timeline tracks; #2966 `OfflineAudioContext` engine-pitch test. Plus #2957 (closed by #2967 on merge).",
+ "- **Gap map (DEBUGGER-B Q2):** a breakpoint is useless for ~206 source-text-scan unit files (nothing executes; the fix is behaviour tests or a failure message printing the matched span), inside GLSL/WGSL and Rapier wasm, and in the live rAF loop (use `freeze()`/`headless()`/`step()`); partial for WebAudio, WebRTC timing, determinism (diff two runs, #2963) and WebXR.",
+ "- **Reviewer workarounds** before the MCP fix: render-1 `NODE_V8_COVERAGE` only; render-2 a CDP client with `setBreakpointByUrl` + logging condition; render-3 and physics-1 `setInstrumentationBreakpoint beforeScriptExecution` + scriptId breakpoints by source match (reproduced by DEBUGGER-B: brake-cue 64 hits, cam-avoid 7). Later batches should use `debugger_node_test` from #2967 once it merges.",
  "- **Node 22 flag (DBG-03):** `--experimental-test-isolation=none`, not `--test-isolation=none`.",
- "- **DEBUGGER-A** (`JS-DEBUGGER-IMPROVEMENTS-2026-10-19.md` in docs/notes on its own PR) and **DEBUGGER-B** (`NODE-DEBUGGING-2026-10-19.md` in docs/notes on its own PR, plus sub-issues of #2952): no PR open yet at this update; folded in when they land. Sub-issues of #2952 today: #2957 only.",
 ]
 VERIFY = [
  "Synthesis spot checks (`git show origin/claude/f1-game-project-26h3ng:<file>`, tip cd907d4c unless noted):",
  "- Confirmed: R1-03 `insides >= 0`; R1-04 no `--expose-gc` in package.json or groups.json; R2-01 assert after `//` on perf-try:337 (e90ae858); R2-05 render-rate test asserts only `drawn === ticks`; R2-07 the `>= 52` wrapper and `return 0`; R3-01 `run(seed)` calls `A.reset(…, seed)`; R3-02 `__apexGlErrors` only on assets-api.spec:153; R3-03 `APEX_PERF_FRAMETIME_STRICT` set nowhere; R3-12 four modes in the loop; R1-10 flyby-shots in toolingFast.",
  "- Partly: R1-09 the `MAT_LAYERS = 17` / `[17]` literal is in 2 test files, not 5. R1-11 both limits exist (45 deg/s in `tests/helpers/flyby-audit-rules.mjs:19`, PAN_MAX 25 deg), but whether they measure the same thing is unproven, so it is ranked low.",
  "- Line drift: reported lines for render-rate (252 → 99) and lamp-fixture-anchor (302 → 330) differ on the tip; rows carry both. Reviewers worked on the 2026-10-19 tip; a pass-2 lane re-locates by the quoted code, not the line.",
+ "- Batches folded on 2026-10-19 ~05:50Z (physics-1, physics-2, race-2 part 1, car-1, ui-1) were normalized by two read-only subagents, which re-read their batch's highest-severity cites on cd907d4c; their `synth_check` says what they found.",
  "- Not checked by the synthesis: rows marked `subagent-unverified` without a `synth_check` (R1-12…R1-15, R1-17, R3-07, R3-09, R3-14). They rank one point lower until a lane re-reads them.",
 ]
 HIDDEN_BUG = {"R1-01": "tuner-panel.js scope buttons never set aria-pressed (shipped a11y bug)"}
