@@ -168,11 +168,18 @@ const AiDrive = (function () {
   // +0.3–0.6 % edges below PASS_EDGE so queueT/hunger never arm. A shallow
   // tow floor was tried and reverted (contact↑, longest unchanged). Instead:
   // a soft edge lets the follower start the aside move while the wake still
-  // reaches (PULL_REACH = TOW_RANGE), clear of dirty air, then latch at 16 m.
-  // Streets ignore every soft-edge path (monaco gates).
+  // reaches (PULL_REACH at PACE 1), clear of dirty air, then latch at 16 m.
+  // Streets ignore every soft-edge path (monaco gates). Reach scales with
+  // vTop so a fixed 34 m window does not swallow the field at PACE 0.44
+  // (quali-pace-parity monza: model/driven −3.3 % off the PACE-1 ratio).
   const PULL_EDGE = 0.003;       // ~0.3 % — aside-first floor (not tow/fire)
   const PULL_EDGE_FULL = 0.007;  // soft edge saturates at the old PASS_EDGE
-  const PULL_REACH = 34;         // m — TOW_RANGE; pull while the wake reaches
+  const PULL_REACH = 34;         // m at PACE 1 (vTop ≈ 72) — TOW_RANGE
+  const PULL_REACH_V0 = 72;      // vTop that names PULL_REACH
+  function pullReachM(vTop) {
+    const ref = vTop > 0 ? vTop : PULL_REACH_V0;
+    return clamp(PULL_REACH * (ref / PULL_REACH_V0), 16, PULL_REACH);
+  }
   function paceEdgeN(fasterV, slowerV, vTop, full, floor) {
     const ref = vTop > 0 ? vTop : 72;
     const edge = ((fasterV || 0) - (slowerV || 0)) / ref;
@@ -644,12 +651,12 @@ const AiDrive = (function () {
     const street = !!ctx.street;
     const t = ctx.traits;
     const gap = ctx.blockerGap;
-    // Soft pace edge (#2356): pull from the tow band (≤ PULL_REACH) so a
-    // faster car leaves dirty air before the 16 m latch. Equal-pace and
-    // streets keep the old 16 / 14 m ceilings.
+    // Soft pace edge (#2356): pull from the pace-scaled tow band so a faster
+    // car leaves dirty air before the 16 m latch. Equal-pace and streets keep
+    // the old 16 / 14 m ceilings.
     const soft = street ? 0
       : softPairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop);
-    const reach = street ? 14 : (soft > 0 ? PULL_REACH : 16);
+    const reach = street ? 14 : (soft > 0 ? pullReachM(ctx.vTop) : 16);
     if (gap >= reach) return 0;
     // The old trigger was "I am ALREADY going faster than the car ahead", which
     // a queued car can never be: the queue cap holds it 6 m/s BELOW the
@@ -719,12 +726,13 @@ const AiDrive = (function () {
     // not wait for a 7 % margin the field's spread can never produce.
     const edgeHeld = edgeN > 0 && clear && press >= 0.25
       && (ctx.freeSpeed || ctx.ourVmax || 0) + 0.002 * ref >= bv;
-    // Soft trail pull (#2356): ≥ ~0.3 % edge inside the tow band, clear side —
-    // want the aside move without queueT. Best measured slice (after4 / after1):
-    // monza max 231→164, median 147→99. Restricting to gap>16 lengthened monza
-    // (after5 max 342); soft tow / soft cover also reverted (contact↑ / longest↑).
+    // Soft trail pull (#2356): ≥ ~0.3 % edge inside the pace-scaled tow band,
+    // clear side — want the aside move without queueT. reach > 16 is required
+    // so PACE 0.44 (pullReachM floors at 16) does not re-arm every soft pair
+    // inside the latch window (quali-pace-parity). At PACE 1, reach = 34 m.
     const gap = ctx.blockerGap || 0;
-    const trailPull = softN > 0 && clear && gap > 0 && gap < PULL_REACH
+    const reach = pullReachM(ref);
+    const trailPull = softN > 0 && clear && reach > 16.5 && gap > 0 && gap < reach
       && (ctx.freeSpeed || ctx.ourVmax || 0) + 0.002 * ref >= bv;
     return crawling || closing || held || impatient || edgeHeld || trailPull;
   }
@@ -1014,7 +1022,8 @@ const AiDrive = (function () {
     // Monza straight — allow when there is runway (≥80 m to turn-in).
     const softN = ctx.street ? 0
       : softPairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ref);
-    if (softN > 0 && ctx.blockerGap <= PULL_REACH) {
+    const reach = pullReachM(ref);
+    if (softN > 0 && reach > 16.5 && ctx.blockerGap <= reach) {
       if (ctx.blockerGap <= 16) return true;
       return !(to < 80);
     }
@@ -1795,7 +1804,7 @@ const AiDrive = (function () {
     lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
-    passHunger, coverConcede, paceEdgeN, pairEdgeN, softPairEdgeN,
+    passHunger, coverConcede, paceEdgeN, pairEdgeN, softPairEdgeN, pullReachM,
     PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL, PULL_EDGE, PULL_EDGE_FULL, PULL_REACH,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, bankGrip, aiRescueDelay, otSide,

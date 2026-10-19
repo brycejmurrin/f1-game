@@ -66,3 +66,10 @@ Monza max / median: **164 / 99 s** (−67 / −48 vs tip). Silverstone max / med
 lives in `js/game.js` (`AI_PASS_LATCH_M = 16`); without widening it, ai-drive
 can only start the aside move — not finish the pass from 20–45 m. Further work
 needs that wiring or a different close model.
+
+## CI follow-up (2026-10-19)
+
+Full-tier `quali-pace-parity-vm` monza failed: fixed 34 m reach at PACE 0.44 made
+driven laps too fast vs the model (−3.3 % off PACE-1 ratio). `pullReachM(vTop)`
+now scales reach with OVERALL SPEED (floor 16 m, cap 34 m); trailPull requires
+`reach > 16.5`. Monaco unchanged.

@@ -153,6 +153,9 @@ test("attack-zone pull (#2356): soft edge wants and pulls from the dirty-air ban
   // the 16 m otPull window, with queueT ≈ 0. Soft edge (PULL_EDGE 0.3 %) arms
   // the aside move inside TOW_RANGE; streets and equal pace stay at the old gates.
   assert.ok(A.PULL_REACH >= 34 && A.PULL_EDGE === 0.003);
+  assert.equal(A.pullReachM(72), 34, "PACE 1 reach is TOW_RANGE");
+  assert.equal(A.pullReachM(72 * 0.44), 16, "PACE 0.44 floors at the latch window");
+  assert.ok(A.pullReachM(72 * 0.7) > 16 && A.pullReachM(72 * 0.7) < 34, "mid PACE scales");
   const softUs = vTop;
   const softThem = vTop * (1 - 0.005); // +0.5 % → softN = 0.5 (clear of float edge)
   const trail = {
@@ -163,11 +166,13 @@ test("attack-zone pull (#2356): soft edge wants and pulls from the dirty-air ban
   };
   assert.equal(A.passHunger(trail), 1, "0.5 % stays below PASS_EDGE hunger (pull, not tow)");
   assert.ok(A.softPairEdgeN(softUs, softThem, 0, 0, vTop) > 0, "soft edge sees 0.5 %");
-  assert.equal(A.otWant(trail), true, "soft trail wants without queueT");
+  assert.equal(A.otWant(trail), true, "soft trail wants without queueT at PACE 1");
   assert.equal(A.otWant({ ...trail, street: true }), false, "street ignores soft trail");
   assert.equal(A.otWant({ ...trail, ourVmax: softThem, freeSpeed: softThem }), false,
     "equal pace still needs the old path");
-  assert.notEqual(A.otPull(trail), 0, "otPull reaches 28 m on a soft edge");
+  assert.equal(A.otWant({ ...trail, vTop: 72 * 0.44 }), false,
+    "PACE 0.44 does not trail-pull (reach floors at 16)");
+  assert.notEqual(A.otPull(trail), 0, "otPull reaches 28 m on a soft edge at PACE 1");
   assert.equal(A.otPull({ ...trail, ourVmax: softThem, freeSpeed: softThem, blockerVmax: softThem }), 0,
     "equal pace still caps at 16 m");
   assert.equal(A.otPull({ ...trail, street: true, blockerGap: 20, speed: 58, blockerSpeed: 52 }), 0,

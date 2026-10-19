@@ -9479,6 +9479,9 @@
       "pitNow": [
         "tests/unit/ai-strategy.test.mjs"
       ],
+      "pullReachM": [
+        "tests/unit/ai-pass-complete.test.mjs"
+      ],
       "pushLook": [
         "tests/unit/ai-drive.test.mjs"
       ],
