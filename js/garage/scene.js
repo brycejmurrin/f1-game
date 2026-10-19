@@ -408,6 +408,9 @@ const FIXTURES = [
 const E = 0.55;   // the same physical energy factor the track lamps use
 const LED_DROP = 0.06;   // light record sits under its panel so the halo clears the housing
 
+// [bottom, top] of a ceiling fixture's hanger rod: from the housing's top face
+// (lit face y, housing centred 6 cm above it, 5 cm half-height) to the ceiling.
+function hangerSpan(y) { return [y + 0.11, CEIL_Y]; }
 const ledMesh = {};
 // PER SIDE, like the props and the dress, and for the same reason: a wall the
 // eye is outside of is not drawn, and anything mounted ON that wall must go
@@ -452,8 +455,13 @@ function buildLed(g, liv) {
     // (smoothstep(0.50, 0.95, max(albedo)) plus an HDR push on max(bright-1,0))
     // never fires and it reads as white plastic instead of a light.
     block(out, x, y, z, hw * 0.95, 0.02, hd * 0.8, scale(F[3], 1.14));
-    for (let s = -1; s <= 1; s += 2)
-      block(out, x + s * hw * 0.8, y + 0.30, z, 0.02, 0.26, 0.02, STEEL);
+    // Hangers run from the housing's top face to the ceiling. The old fixed 52 cm rod stopped 8 cm short of
+    // the ceiling over the keys and fills (a lamp hanging from nothing) and
+    // ran 22 cm through the roof over the washers.
+    for (let s = -1; s <= 1; s += 2) {
+      const hx = x + s * hw * 0.8, h = hangerSpan(y);
+      block(out, hx, (h[0] + h[1]) / 2, z, 0.02, (h[1] - h[0]) / 2, 0.02, STEEL);
+    }
   }
   // Team-colour dado uplights: cans grazing up the side walls. These are what
   // make the bay read as THIS team's garage before you notice any logo. Three
@@ -1479,7 +1487,7 @@ function debug() {
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
-  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, mood, moodDef, moodCtx, MOODS, draw, framingHull, recentre,
+  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, mood, moodDef, moodCtx, MOODS, hangerSpan, FIXTURES, LED_DROP, CEIL_Y, draw, framingHull, recentre,
            previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, release };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

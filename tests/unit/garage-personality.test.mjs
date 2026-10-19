@@ -177,3 +177,14 @@ test("lighting moods: shipped is the identity, every mood finite and distinct, t
   assert.ok(Math.abs(sum(S.live(LIV, 0, { night: false, ambient: false }).slice()) - base) < 1e-9, "shipped rig restored");
   assert.deepEqual(Array.from(S.SKYLIGHT), sky, "skylight restored");
 });
+
+test("fit: every ceiling fixture's hangers reach from its housing to the ceiling, never short or through it", () => {
+  const S = sceneHarness();
+  for (const F of S.FIXTURES) {
+    const y = F[1] + S.LED_DROP, [lo, hi] = S.hangerSpan(y);
+    assert.ok(Math.abs(lo - (y + 0.11)) < 1e-9, "rod starts on the housing's top face");
+    assert.ok(Math.abs(hi - S.CEIL_Y) < 1e-9, "rod ends at the ceiling");
+    assert.ok(hi - lo > 0.2, `a real drop (${(hi - lo).toFixed(2)} m)`);
+  }
+  assert.match(read("js/garage/scene.js"), /\bh = hangerSpan\(y\)/, "buildLed builds its rods from hangerSpan");
+});

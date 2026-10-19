@@ -6886,6 +6886,9 @@
       "framingHull": [
         "tests/unit/garage-mesh.test.mjs"
       ],
+      "hangerSpan": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
       "init": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
