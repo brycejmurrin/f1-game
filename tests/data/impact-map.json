@@ -168,6 +168,7 @@
       ],
       "*": [
         "tests/specs/camera-driving-hooks.spec.js",
+        "tests/specs/car-effects.spec.js",
         "tests/specs/collisions-deep.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/scenery-kits.spec.js",

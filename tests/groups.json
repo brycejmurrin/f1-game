@@ -745,6 +745,7 @@
     "// mesh, so a part that stops changing the car is caught where the catalog",
     "// is edited rather than in a 2-hour render sweep nobody runs.",
     "tests/unit/parts-distinct-mesh.test.mjs",
+    "tests/unit/parts-factory-key.test.mjs",
     "// Both node-only and both under half a second: the catalog LADDER (no paid",
     "// option dominated by a cheaper one, no row that is never optimal) and the",
     "// garage's per-vertex MATERIAL column. Neither was in the edit loop, which",
