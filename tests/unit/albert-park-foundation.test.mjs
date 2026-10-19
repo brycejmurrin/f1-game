@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
@@ -19,7 +20,7 @@ const SCENERY_FILE = path.join(ROOT, SCENERY_REL);
 function loadDefinition() {
   const window = { TrackDefs: [] };
   vm.runInNewContext(fs.readFileSync(TRACK_FILE, "utf8"), { window }, {
-    filename: TRACK_REL,
+    filename: absSrc(TRACK_REL),
   });
   return window.TrackDefs[0];
 }

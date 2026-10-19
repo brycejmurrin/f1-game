@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8");
@@ -22,7 +23,7 @@ function load() {
     GaragePrims: { block(out) { out.pos.push(0, 0, 0); out.idx.push(out.idx.length); } },
   };
   vm.createContext(ctx);
-  vm.runInContext(SRC + "\n;this.CarMesh = CarMesh;", ctx, { filename: "car-mesh.js" });
+  vm.runInContext(SRC + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   const gfx = {
     createMesh(d) { const m = { id: made.length, verts: d.pos.length / 3, d }; made.push(m); return m; },
     freeMesh(m) { freed.push(m); },

@@ -18,6 +18,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
@@ -44,7 +45,7 @@ function load(legacyRearCue = false) {
   ]) {
     let source = fs.readFileSync(path.join(ROOT, f), "utf8");
     if (legacyRearCue && f.endsWith("player-forces.js")) source = source.replace("pastF = sat / TyreModel.CURVE_PEAK_X_F;", "pastF = sat / TyreModel.CURVE_PEAK_X;");
-    vm.runInContext(source, ctx, { filename: f });
+    vm.runInContext(source, ctx, { filename: absSrc(f) });
   }
   return {
     ctx,

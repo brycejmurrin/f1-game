@@ -13,17 +13,18 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ctx = vm.createContext({});
 seedLog(ctx);
 seedDom(ctx);   // telemetry.js formats lap times through Dom.fmtLap
 // js/core/mat4.js first — the shared scalar helpers (M4.clamp) telemetry.js binds at eval.
-vm.runInContext(readFileSync("js/core/mat4.js", "utf8"), ctx, { filename: "mat4.js" });
+vm.runInContext(readFileSync("js/core/mat4.js", "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
 for (const file of [
   "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
   "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
 ]) {
-  vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: file });
+  vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: absSrc(file) });
 }
 const T = vm.runInContext("DataTelemetry", ctx);
 
@@ -135,7 +136,7 @@ test("F1API.locationData drops origin rows and unparseable timestamps", async ()
   api.window = api;
   seedLog(api);
   for (const name of ["api-transport", "api"]) {
-    vm.runInContext(readFileSync(`js/data/${name}.js`, "utf8"), api, { filename: `${name}.js` });
+    vm.runInContext(readFileSync(`js/data/${name}.js`, "utf8"), api, { filename: absSrc(`${name}.js`) });
   }
   const F1API = vm.runInContext("F1API", api);
   const out = await F1API.locationData(9999, 4, null, null);
@@ -362,7 +363,7 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
     "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
     "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
-    vm.runInContext(readFileSync(file, "utf8"), context, { filename: file });
+    vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
   }
   const api = vm.runInContext("DataTelemetry", context).create({
     el, clear: (node) => node.replaceChildren(), emptyMsg: (text) => el("div", "dh-empty", text),

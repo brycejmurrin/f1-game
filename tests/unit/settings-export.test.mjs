@@ -14,6 +14,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { readDefaults } from "../../tools/gen/settings-defaults.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -51,22 +52,22 @@ function boot(opts = {}) {
   const ctx = vm.createContext(sb);
   // In the page js/data/teams.js loads long before this file; opt in where a
   // test is about what Teams.sanitizeCustom does to an imported team.
-  if (opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
+  if (opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
   // Career collect/apply run migrateCareer. Teams is a HARD_EDGES dep of
   // SaveMigrate.remapPoints — load both only when a test exercises the career
   // file, so garage round-trips keep their pre-Teams verbatim customTeam shape.
   if (opts.career) {
-    if (!opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
-    vm.runInContext(read("js/career/save-migrate.js"), ctx, { filename: "js/career/save-migrate.js" });
+    if (!opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
+    vm.runInContext(read("js/career/save-migrate.js"), ctx, { filename: absSrc("js/career/save-migrate.js") });
     vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
-    vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: "js/career/career-backup.js" });
+    vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
   }
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
-    vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: "js/ui/" + file + ".js" });
+    vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
-  vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: "js/input/controller-profiles.js" });
-  vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: "js/car/custom-liveries.js" });
-  vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: "js/ui/settings-export.js" });
+  vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: absSrc("js/input/controller-profiles.js") });
+  vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
+  vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -681,7 +682,7 @@ test("the difficulty allowlist is exactly PhysicsConsts.DIFF's ladder", () => {
   const row = boot().SettingsExport.SPEC.find((r) => r.k === "difficulty");
   const src = fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8");
   const ctx = vm.createContext({ window: {} });
-  vm.runInContext(src, ctx, { filename: "js/physics/consts.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/physics/consts.js") });
   assert.deepEqual(Array.from(row.oneOf), Object.keys(ctx.window.PhysicsConsts.DIFF), "SPEC's oneOf must name every DIFF level and nothing else");   // Array.from: vm arrays are another realm's Array
 });
 
@@ -1546,7 +1547,7 @@ test("Saves and Data exposes independent garage and career loaders without dupli
 // would be lost silently on a garage-file import. The cap now follows Liveries.FIELDS plus a margin.
 test("a livery carrying every Liveries.FIELDS key survives import, with room for new fields", () => {
   const lsb = vm.createContext({ Math, Object, Array });
-  vm.runInContext(read("js/car/liveries.js"), lsb, { filename: "js/car/liveries.js" });
+  vm.runInContext(read("js/car/liveries.js"), lsb, { filename: absSrc("js/car/liveries.js") });
   const FIELDS = vm.runInContext("Liveries.FIELDS", lsb);
   const Liveries = { FIELDS: Array.from(FIELDS) };
   const b = boot({ globals: { Liveries } });

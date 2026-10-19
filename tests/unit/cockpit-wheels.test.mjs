@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import { loadCar3D } from "../../tools/car/cockpit-pale-sweep.mjs";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -26,10 +27,10 @@ function loadOpts(disk, search = "", withCams = false) {
     location: { search },
     Tracks: {}, CamTune: { get: () => 0, cornerLead: () => 0, apply: (_, __, ___, fov) => fov },
   });
-  vm.runInContext(read("js/camera/cockpit-opts.js") + "\n;this.CockpitOpts = CockpitOpts;", ctx);
+  vm.runInContext(read("js/camera/cockpit-opts.js") + "\n;this.CockpitOpts = CockpitOpts;", ctx, { filename: absSrc("js/camera/cockpit-opts.js") });
   if (withCams) {
-    vm.runInContext(read("js/core/mat4.js"), ctx);
-    vm.runInContext(read("js/camera/vantage.js") + "\n;this.GameCams = GameCams;", ctx);
+    vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
+    vm.runInContext(read("js/camera/vantage.js") + "\n;this.GameCams = GameCams;", ctx, { filename: absSrc("js/camera/vantage.js") });
   }
   return { opts: ctx.CockpitOpts, cams: ctx.GameCams, store };
 }
@@ -39,9 +40,9 @@ function loadMesh(extra = {}, gfxExtra = {}) {
   const ctx = { Log: { info() {}, warn() {}, error() {} }, GaragePrims: { block() {} }, ...extra };
   ctx.window=ctx;
   vm.createContext(ctx);
-  vm.runInContext(read("js/core/mat4.js"),ctx);
-  vm.runInContext(read("js/physics/consts.js"),ctx);
-  vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: "car-mesh.js" });
+  vm.runInContext(read("js/core/mat4.js"),ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/physics/consts.js"),ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({
     createMesh(d) { const m = { d }; made.push(m); return m; },
     freeMesh(m) { freed.push(m); },

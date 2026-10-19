@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/appearance-opts.js"), "utf8").replace(/^const\b/gm, "var");
@@ -220,7 +221,7 @@ function load({
     _fire() { for (const fn of mqListeners) fn(); },
   });
   const ctx = vm.createContext(sb);
-  vm.runInContext(SRC, ctx, { filename: "js/ui/appearance-opts.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/appearance-opts.js") });
   return {
     M: vm.runInContext("AppearanceOpts", ctx),
     rows, written, style, dataset, stored, byId, created, mqListeners, document: sb.document, mq, tokens,

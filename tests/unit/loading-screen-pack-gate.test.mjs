@@ -11,6 +11,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
@@ -19,7 +20,7 @@ function load() {
   const sandbox = { console, performance: { now: () => 0 } };
   sandbox.globalThis = sandbox;
   sandbox.window = sandbox;
-  vm.runInNewContext(SRC.replace(/^const\b/m, "var"), sandbox, { filename: "loading-screen.js" });
+  vm.runInNewContext(SRC.replace(/^const\b/m, "var"), sandbox, { filename: absSrc("js/ui/loading-screen.js") });
   return sandbox.LoadingScreen;
 }
 

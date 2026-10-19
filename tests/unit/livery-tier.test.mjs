@@ -30,6 +30,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { loadCrests } from "../../tools/car/crest-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { LiveryTex } = loadParts();
@@ -419,7 +420,7 @@ function paintAtlasWidths(isPlayer, hiRes) {
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js",
                    "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: absSrc(f) });
   const LT = vm.runInContext("LiveryTex", sb);
   const returned = LT.buildAtlas("ferrari", {}, 16, isPlayer, hiRes);
   return { LT, widths, returned };
@@ -455,7 +456,7 @@ test("M28: an emblem that finishes decoding after CLEAR or a newer upload never 
   vm.createContext(ctx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
                    "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const LT = vm.runInContext("LiveryTex", ctx);
   let marks = 0;
   LT.onMarkChange(() => { marks++; });

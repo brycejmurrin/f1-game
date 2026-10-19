@@ -29,13 +29,14 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // mat4.js declares `const M4` at script top level, which lands in the context's
 // global LEXICAL scope rather than on the global object — read it back by name.
 const ctx = vm.createContext({});
-vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
 const M4 = vm.runInContext("M4", ctx);
 const V3 = vm.runInContext("V3", ctx);
 

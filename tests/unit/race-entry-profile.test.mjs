@@ -14,6 +14,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadingProbeReady } from "../../tools/shot/loading-probe.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/perf/race-entry-profile.js"), "utf8");
@@ -37,7 +38,7 @@ function load(env = {}) {
   sandbox.globalThis = sandbox;
   sandbox.window = sandbox;
   // IIFE assigns `const RaceEntryProfile` — promote to var so the sandbox sees it.
-  vm.runInNewContext(SRC.replace(/^const\b/m, "var"), sandbox, { filename: "race-entry-profile.js" });
+  vm.runInNewContext(SRC.replace(/^const\b/m, "var"), sandbox, { filename: absSrc("js/perf/race-entry-profile.js") });
   return sandbox.RaceEntryProfile;
 }
 
@@ -321,7 +322,7 @@ function profileSessionHarness() {
   const P = load({ PerformanceObserver: FakeObserver, performance: { now: () => 1000 } });
   const context = {};
   vm.runInNewContext(ENTRY_SRC.replace(/^const\b/m, "var"), context,
-    { filename: "js/race/session-entry.js" });
+    { filename: absSrc("js/race/session-entry.js") });
   const entry = context.SessionEntry.create();
   function start(key, { body = () => true, valid = () => true } = {}) {
     const held = profileDeferred(), entered = profileDeferred();

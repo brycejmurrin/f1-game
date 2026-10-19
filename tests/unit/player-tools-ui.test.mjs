@@ -5,6 +5,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const read = (name) => fs.readFileSync(new URL("../../" + name, import.meta.url), "utf8");
 function host() {
   const dom = makeDom({ readyState: "loading" }), events = new Map();
@@ -16,7 +17,7 @@ function host() {
     removeEventListener: (t, fn) => { events.set(t, (events.get(t) || []).filter((f) => f !== fn)); },
   };
   sb.window = sb; vm.createContext(sb);
-  const run = (file, name) => { vm.runInContext(read(file), sb, { filename: file }); return vm.runInContext(name, sb); };
+  const run = (file, name) => { vm.runInContext(read(file), sb, { filename: absSrc(file) }); return vm.runInContext(name, sb); };
   const el = (tag, id, parent = dom.body) => { const node = dom.makeElement(tag, id); parent.appendChild(node); return node; };
   return { dom, sb, run, el, events };
 }

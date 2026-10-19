@@ -24,6 +24,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/weather-arc.js"), "utf8").replace(/^const\b/gm, "var");
@@ -42,7 +43,7 @@ function boot(over = {}) {
   ctx.Career = { inCareer: () => false, hash };
   // SeasonCal.luckSeed's contract: the season's stamped seed wins over the session's.
   ctx.SeasonCal = { drawRound: (s) => s.round, luckSeed: (season, session) => season.seed || session };
-  vm.runInContext(SRC, ctx, { filename: "js/race/weather-arc.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/race/weather-arc.js") });
   const G = Object.assign({
     state: "menu", flow: "single", season: null, seasonMode: false,
     raceWeather: "dry", raceRound: 0, raceLaps: 25, lapsTarget: 1,

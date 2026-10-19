@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const P = loadParts();
 
@@ -30,7 +31,7 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }, over = {}) {
     document: { querySelectorAll: () => [] } });
   ctx.globalThis = ctx;
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"]) {
-    vm.runInContext(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: absSrc(f) });
   }
   const Legends = vm.runInContext("Legends", ctx);
   const CustomTeam = vm.runInContext("CustomTeam", ctx);
@@ -219,10 +220,10 @@ test("a fresh install's Legends seat 0 builds the period car, not the shipped sh
   seedSaveMigrate(ctx);
   ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
   const read = (f) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
-  vm.runInContext(read("js/data/garage-defaults.js") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx);
-  vm.runInContext(read("js/core/store.js") + "\n;globalThis.GameStore = GameStore;", ctx);
+  vm.runInContext(read("js/data/garage-defaults.js") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx, { filename: absSrc("js/data/garage-defaults.js") });
+  vm.runInContext(read("js/core/store.js") + "\n;globalThis.GameStore = GameStore;", ctx, { filename: absSrc("js/core/store.js") });
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const { store } = vm.runInContext("GameStore", ctx);
   const Legends = vm.runInContext("Legends", ctx), CustomTeam = vm.runInContext("CustomTeam", ctx);
   assert.ok(store.get("parts.legends", null), "precondition: the shipped sheet answers on a miss");

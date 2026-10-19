@@ -12,6 +12,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -78,7 +79,7 @@ function load(enabled) {
   const ctx = { window: {}, console };
   ctx.window = ctx;
   vm.createContext(ctx);
-  vm.runInContext(read("js/render/three/tsl-viewport.js"), ctx);
+  vm.runInContext(read("js/render/three/tsl-viewport.js"), ctx, { filename: absSrc("js/render/three/tsl-viewport.js") });
   const TSL = fakeTSL();
   return { VP: ctx.TLXShaders.viewport({ Vector2: V2 }, TSL, { enabled }), TSL };
 }

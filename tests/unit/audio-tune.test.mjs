@@ -25,6 +25,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
@@ -120,8 +121,8 @@ function boot(opts) {
   if (opts && opts.Audio) sb.Audio = opts.Audio;
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   // The crackle scheduler is TIME-driven: it fires when ctx.currentTime passes
   // the next due moment, so a harness with a frozen clock would see one burst
@@ -1725,7 +1726,7 @@ test("a downshift flares the note, then it settles; an upshift does not", async 
 test("car SFX levels follow the car's own state, never the road's curvature", () => {
   const sb = { Math, Number, Object, GameAudio: {} };
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "car-sfx.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
   const sent = [], guns = [];
   sb.GameAudio.setCarSfx = (o) => sent.push({ ...o });
   sb.GameAudio.pitGun = (t) => guns.push(t);
@@ -1758,7 +1759,7 @@ test("car SFX levels follow the car's own state, never the road's curvature", ()
 test("a rewind that jumps the race clock across a pit edge re-seeds wheel guns silently", () => {
   const sb = { Math, Number, Object, GameAudio: {} };
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "car-sfx.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
   const guns = [];
   sb.GameAudio.setCarSfx = () => {};
   sb.GameAudio.pitGun = (t) => guns.push(t);
@@ -1929,7 +1930,7 @@ test("the pit limiter only ever CUTS the engine: base down by the depth, never l
 test("pit limiter follows the lane's own predicate (the exit road too); a red flag in the box fires no guns", () => {
   const sb = { Math, Number, Object, GameAudio: {} };
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "car-sfx.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/car-sfx.js") });
   const guns = [];
   sb.GameAudio.setCarSfx = () => {};
   sb.GameAudio.pitGun = (t) => guns.push(t);
@@ -2163,7 +2164,7 @@ async function runAudioProbe(pageErrorBrowser = 0) {
       if (name === "node:path") return path;
       throw new Error("Unexpected CLI dependency: " + name);
     },
-  }, { filename: "tools/check/audio-test.cjs" });
+  }, { filename: absSrc("tools/check/audio-test.cjs") });
   return { status: exits.at(-1) ?? cliProcess.exitCode ?? 0, events, messages, launches };
 }
 
@@ -2402,7 +2403,7 @@ test("wet spray is 0 dry, rises with speed when wet, and rivals-ahead only adds 
   const { GameAudio: A, release, vctx } = boot();
   // RivalAudio.sprayAhead lives in rivals.js; the tune harness only loads the
   // engine stack, so install the real helper for the wake path.
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"), vctx, { filename: "rivals.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"), vctx, { filename: absSrc("js/audio/rivals.js") });
   A.init();
   await release();
   A.startEngine();
