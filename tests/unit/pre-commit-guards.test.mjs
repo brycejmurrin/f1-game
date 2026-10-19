@@ -19,6 +19,7 @@ import {
   writeTree,
   isFreshHit,
   okPath,
+  unstagedTracked,
 } from "../../tools/ci/guards-verdict.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -68,11 +69,17 @@ function writeTinyPass(dir, name = "tiny-pass.test.mjs") {
   return rel;
 }
 
+function guardRoster(dir, files) {
+  fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "tests/groups.json"), JSON.stringify({ groups: { "test:guards": { files } } }));
+}
+
 /** Spawn that runs listed relative test files under cwd. */
 function spawnTests(files, cwd) {
   return spawnSync(process.execPath, ["--test", ...files], {
     cwd,
     encoding: "utf8",
+    env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "NODE_TEST_CONTEXT")),
   });
 }
 
@@ -120,6 +127,7 @@ test("run writes the cache only when green and the worktree matches the index", 
   const repo = scratchRepo("guards-run-");
   try {
     const pass = writeTinyPass(repo.dir);
+    guardRoster(repo.dir, [pass]);
     fs.writeFileSync(path.join(repo.dir, "code.js"), "ok\n");
     repo.g("add", "-A");
     repo.g("commit", "-qm", "init");
@@ -285,4 +293,75 @@ test("shipped pre-commit still early-exits on APEX_SKIP_GUARDS and CLAUDECODE", 
   assert.match(src, /guards-verdict\.mjs check/);
   assert.match(src, /apex\.guardTimeout/);
   assert.match(src, /timeout -k 5/);
+});
+
+
+test("a passing subset cannot certify the full guards roster; a complete rerun recovers", (t) => {
+  const repo = scratchRepo("guards-subset-");
+  t.after(repo.rm);
+  const pass = writeTinyPass(repo.dir);
+  const fail = writeTinyPass(repo.dir, "other.test.mjs");
+  fs.writeFileSync(path.join(repo.dir, fail), 'import { test } from "node:test"; test("regression", () => { throw Error("red"); });');
+  guardRoster(repo.dir, [pass, fail]);
+  repo.g("add", "-A");
+  const partial = runGuards({ root: repo.dir, files: [pass], spawn: spawnTests });
+  assert.equal(partial.status, 0);
+  assert.equal(partial.wrote, false, "a subset pass is not a full guard verdict");
+  assert.equal(partial.reason, "partial-suite");
+  assert.equal(checkVerdict({ root: repo.dir }).hit, false);
+  assert.equal(runGuards({ root: repo.dir, spawn: spawnTests }).status, 1, "omitted failing guard must still run");
+  writeTinyPass(repo.dir, "other.test.mjs");
+  repo.g("add", "-A");
+  assert.equal(runGuards({ root: repo.dir, files: [fail, pass], spawn: spawnTests }).wrote, true, "reordering the complete roster is safe");
+  assert.equal(checkVerdict({ root: repo.dir }).hit, true);
+});
+
+test("guards cannot cache a different tree staged during execution", (t) => {
+  const repo = scratchRepo("guards-restage-");
+  t.after(repo.rm);
+  const pass = writeTinyPass(repo.dir);
+  guardRoster(repo.dir, [pass]);
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "original");
+  repo.g("add", "-A");
+  const result = runGuards({ root: repo.dir, spawn: () => {
+    fs.writeFileSync(path.join(repo.dir, "code.js"), "untested");
+    repo.g("add", "code.js");
+    return { status: 0 };
+  } });
+  assert.equal(result.status, 0);
+  assert.equal(result.wrote, false);
+  assert.equal(result.reason, "changed-tree");
+  assert.equal(checkVerdict({ root: repo.dir }).hit, false);
+  assert.equal(runGuards({ root: repo.dir, spawn: spawnTests }).wrote, true);
+});
+
+test("failed and interrupted reruns invalidate an earlier green cache", (t) => {
+  const repo = scratchRepo("guards-invalidate-");
+  t.after(repo.rm);
+  const pass = writeTinyPass(repo.dir);
+  guardRoster(repo.dir, [pass]);
+  repo.g("add", "-A");
+  for (const result of [{ status: 1 }, { status: null, signal: "SIGTERM" }]) {
+    writeOk(okPath(repo.dir), writeTree(repo.dir));
+    const red = runGuards({ root: repo.dir, spawn: () => result });
+    assert.notEqual(red.status, 0);
+    assert.equal(checkVerdict({ root: repo.dir }).hit, false, "a previous pass cannot hide the latest failure");
+  }
+});
+
+test("unavailable Git observations never establish a clean cacheable tree", (t) => {
+  const repo = scratchRepo("guards-unknown-");
+  t.after(repo.rm);
+  const pass = writeTinyPass(repo.dir);
+  guardRoster(repo.dir, [pass]);
+  repo.g("add", "-A");
+  const result = runGuards({ root: repo.dir, spawn: () => {
+    fs.renameSync(path.join(repo.dir, ".git"), path.join(repo.dir, "git-unavailable"));
+    fs.writeFileSync(path.join(repo.dir, ".git"), "unreadable Git metadata");
+    return { status: 0 };
+  } });
+  assert.equal(result.wrote, false);
+  assert.equal(result.reason, "git-inspection");
+  assert.throws(() => unstagedTracked(repo.dir), /Cannot inspect/, "Git failure is unknown, not clean");
+  assert.equal(fs.existsSync(okPath(repo.dir)), false);
 });
