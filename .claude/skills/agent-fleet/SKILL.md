@@ -83,14 +83,15 @@ reference §Escalate).
 
 ## Rules that bind both roles
 
-- Nobody in the fleet merges or arms auto-merge on their own initiative. When a
-  **merge desk** session is live it may arm MERGE (merge commit only, ≤ 2 armed).
-  Each **orchestrator** (a peer; one per fleet) merges its own fleet's PRs only at the level in
-  references/role-merge-holder.md — Level 3 merges directly with head-sha pin,
-  one merge per green Pages run, `gen:check` on the merge result first. With
-  no live desk, each orchestrator merges its own PRs (game pacing read from the bus). A hold
-  is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
-  Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0.
+- Authority is standing, not per session (AGENTS.md §Concurrent PRs,
+  `references/authority.md`): each **orchestrator** (a peer; one per fleet)
+  merges its own fleet's PRs when `node tools/ci/merge-gate.mjs --pr <n>`
+  exits 0 (references/role-merge-holder.md: the hooks require that receipt,
+  pinned to the gated head; game PRs take the bus `GAME-SLOT` first), archives
+  by `fleet-archive.mjs`, and never re-asks any of it at a hand-off. Workers
+  never merge or arm (their brief says so). A hold is a PR-body line starting
+  `MERGE-HOLD:`, never "do not merge" wording. Draft → ready only after
+  `node tools/ci/ready-gate.mjs --pr <n>` exits 0 (its receipt, too).
 - One owner per path: OWNED / FORBIDDEN globs in the launch prompt, a
   `who-is-on-it.mjs --claim` before editing, and stand down on overlap.
   A claim's age is the only liveness signal today; a branch pushed in the last

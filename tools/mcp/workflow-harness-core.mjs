@@ -5,6 +5,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { types } from "node:util";
 import { Lsp, callTool, TOOLS as LSP_TOOLS } from "./lsp-mcp.mjs";
 
 export const TOOL_SCHEMAS = {
@@ -14,7 +15,7 @@ export const TOOL_SCHEMAS = {
   probe: { type: "object", additionalProperties: false, required: ["files", "test"], properties: { files: { type: "array", minItems: 1, maxItems: 8, items: { type: "string", minLength: 1 } }, setup: { type: "string" }, test: { type: "string", minLength: 1 } } },
 };
 export const ALL_TOOL_SCHEMAS = Object.freeze({ ...TOOL_SCHEMAS, ...Object.fromEntries(LSP_TOOLS.map(tool => [tool.name, tool.inputSchema])) });
-export const PROBE_HELP = "probe.test is a script completion value. Use an expression or an IIFE such as (() => { ...; return value; })(); a top-level return is invalid.";
+export const PROBE_HELP = "probe.test is a synchronous script completion value. Use an expression or an IIFE such as (() => { ...; return value; })(); a top-level return is invalid. Promise completion values are unsupported; return a synchronous JSON value.";
 const ROOT_DIRS = new Set(["js", "types", "tests", "docs", "css"]);
 const ROOT_FILES = new Set(["index.html", "controller.html"]);
 const MAX_OUTPUT = 24_000;
@@ -236,13 +237,27 @@ export class WorkflowHarness {
       if (typeof args.test !== "string" || !args.test) throw fail(`probe.test must be non-empty JavaScript. ${PROBE_HELP}`);
       if (args.setup !== undefined && typeof args.setup !== "string") throw fail("probe.setup must be JavaScript text");
       const files = args.files.map(f => { const x = resolveAllowed(this.snapshot, this.tracked, f); if (!x.rel.startsWith("js/")) throw fail("probe files must be under js/"); return x; });
-      const logs = [], context = vm.createContext({ console: { log: (...v) => logs.push(v.map(String).join(" ")), warn: (...v) => logs.push(v.map(String).join(" ")), error: (...v) => logs.push(v.map(String).join(" ")) }, performance: { now: () => 0 } });
+      // Node's default microtask queue can run Promise callbacks after the VM
+      // timeout scope. Keep context-created callbacks inside that scope.
+      // https://nodejs.org/docs/latest-v24.x/api/vm.html#timeout-interactions-with-asynchronous-tasks-and-promises
+      const logs = [], context = vm.createContext({ console: { log: (...v) => logs.push(v.map(String).join(" ")), warn: (...v) => logs.push(v.map(String).join(" ")), error: (...v) => logs.push(v.map(String).join(" ")) }, performance: { now: () => 0 } }, { microtaskMode: "afterEvaluate" });
+      // Capture intrinsics before setup/source can replace them. Serialization
+      // can execute getters/toJSON, so invoke it inside a timed VM evaluation.
+      const finish = vm.runInContext(`((stringify, then, apply) => (value, logs, promise) => {
+        if (promise) { apply(then, value, [undefined, () => {}]); return null; }
+        return stringify({ logs, result: value ?? null });
+      })(JSON.stringify, Promise.prototype.then, Reflect.apply)`, context, { timeout: this.probeTimeoutMs });
       vm.runInContext("globalThis.window=globalThis", context, { timeout: this.probeTimeoutMs });
       if (args.setup) vm.runInContext(args.setup, context, { timeout: this.probeTimeoutMs, filename: "probe-setup.js" });
       for (const f of files) vm.runInContext(fs.readFileSync(f.real, "utf8"), context, { timeout: this.probeTimeoutMs, filename: f.rel });
       let result; try { result = vm.runInContext(args.test, context, { timeout: this.probeTimeoutMs, filename: "probe-test.js" }); }
       catch (e) { if (e instanceof SyntaxError || e?.name === "SyntaxError") throw fail(`${e.message}. ${PROBE_HELP}`); throw e; }
-      return JSON.stringify({ logs, result: result ?? null });
+      const promise = types.isPromise(result), slot = "__workflowProbe_" + crypto.randomBytes(8).toString("hex");
+      Object.defineProperty(context, slot, { value: { finish, result, logs, promise }, configurable: true });
+      const bridge = `globalThis[${JSON.stringify(slot)}]`;
+      const output = vm.runInContext(`${bridge}.finish(${bridge}.result, ${bridge}.logs, ${bridge}.promise)`, context, { timeout: this.probeTimeoutMs, filename: "probe-result.js" });
+      if (promise) throw fail(PROBE_HELP);
+      return output;
     }
     throw fail(`unknown tool: ${tool}`);
   }

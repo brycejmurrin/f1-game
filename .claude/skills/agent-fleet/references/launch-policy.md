@@ -25,7 +25,7 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
     Scope ∈ game | tests | tools | docs | track | ui | ci | fleet (game = js/, css/, assets/, index.html, sw.js: paced). Model = Opus | Sonnet.
   - Tags: `fleet:<a|b>`, `role:<orchestrator|watch|worker|hunter|owner|sync|review|merge-desk>`, `orchestrator:<session id>`,
     `wave:<n>`, `lane:<Lnn|sync|…>`, `scope:<…>`, `pr:<n>` (owner, sync, review), `variant:<medic|survey|synth>`; plus the flag `f1-game-fleet`.
-  - Examples: `[Orchestrator] B·O1 · fleet · Opus — backlog waves, own-fleet Level 3 merges` · `[Watch] B·FW1 · fleet · Sonnet — PR/CI/session watch`
+  - Examples: `[Orchestrator] B·O1 · fleet · Opus — backlog waves, own-fleet gated merges` · `[Watch] B·FW1 · fleet · Sonnet — PR/CI/session watch`
     · `[Worker] B·W1·L3 · tests · Sonnet — L25 agent-config budgets` · `[Hunter] B·H2·physics · game · Opus — live-debugger round 1`
     · `[Owner] A·#3020 · game · Sonnet — drive #3020 to merged` · `[Sync] A·#2920 · game · Sonnet — conflict-only resync`
     · `[Review] B·R1·#3053 · tests · Sonnet — test-review pass` · `[Coordinator] C·cursor · fleet · — Cursor agents (title in PR comments/bus)`
@@ -98,8 +98,10 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   about 40 %; Opus to Sonnet halves them again. Keep tool results small (comms.md §Output budget), route verbose reads through a subagent.
 - **Monitoring and reporting.** Every hunter and PR-owner launch prompt carries the block in `role-pr-owner.md` §Monitoring and reporting
   (own the PR to merged or STOP AT; `fleet-status:` line in the fleet block plus a PR comment per state change; decisions to the orchestrator via needs-decision).
-- **Desk field.** Every launch prompt carries `merge_desk: <session id | none>`; `none` means the lane reports `SWEEP-N/A` and never runs
-  `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16).
+- **No desk field.** READY goes to the lane's own orchestrator (`ORCHESTRATOR:` in the brief); no Merge Desk exists
+  unless Bryce designates one, and a lane never runs `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16).
+  The standing rules (merge by `merge-gate`, archive by rule, Plan edits, Pages dispatch) are AGENTS.md §Concurrent PRs
+  and are never quoted as grants or re-asked (2026-10-19).
 - **Before launching an owner:** `who-is-on-it.mjs`, armed auto-merge, PR `updated_at` < 15 min. Skip a PR that is armed and green or is
   being driven (6 owners did no work on 2026-10-17).
 - **Hunters and perf lanes:** stop after the first zero-finding round and put the note in the single docs PR (5 of 13 debugger hunts and

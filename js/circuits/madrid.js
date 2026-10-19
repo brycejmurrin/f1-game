@@ -65,6 +65,7 @@
       sun: [1.0, 0.91, 0.70],
       sunColor: [1.0, 0.98, 0.94],
     },
+    crossover: true,   // road crosses itself: terrain-over-road scans the other deck by mesh provenance
     elevations: [
       { s: 0.40, halfM: 520, rise: 18 },
       { s: 0.52, halfM: 360, rise: -8 },
