@@ -5,7 +5,7 @@
 "use strict";
 const LiveryStations = (function () {
   const IDS = Object.freeze(["noseTip", "cockpitSide", "podTop", "haloTop"]);
-  const HALO_GREY = [0.55, 0.57, 0.6];
+  const HALO_GREY = [0.22, 0.225, 0.245];   // CarMaterials HALO: the untinted titanium hoop
 
   // Driver code for the car's race number (Teams.LIST), else the team's short name.
   function driverCode(teamId, num) {
