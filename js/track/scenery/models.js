@@ -56,13 +56,10 @@ const TrackModels = (function () {
     // to 1e-6 m, and the canonical path accumulates in plain-array f64 — f32
     // here put every circuit ~6e-5 m (f32 epsilon at world scale) off parity.
     // Halving the accumulator footprint needs BOTH paths converted together.
-    // col is the exception: every backend uploads it as f32, so storing f32
-    // here rounds once, exactly as that upload would (-3 to -6 MB per track).
-    // mat stays f64: it holds non-integer ids compared with zero tolerance.
     return {
       pos: makeAccum(Float64Array, v * 3),
       nrm: makeAccum(Float64Array, v * 3),
-      col: makeAccum(Float32Array, v * 3),
+      col: makeAccum(Float64Array, v * 3),
       mat: makeAccum(Float64Array, v),
       idx: makeAccum(Uint32Array, v * 3),
       _mat: 0,
@@ -72,7 +69,12 @@ const TrackModels = (function () {
     if (!geo) return geo;
     if (geo.pos && typeof geo.pos.seal === "function") geo.pos = geo.pos.seal();
     if (geo.nrm && typeof geo.nrm.seal === "function") geo.nrm = geo.nrm.seal();
-    if (geo.col && typeof geo.col.seal === "function") geo.col = geo.col.seal();
+    // col leaves as f32 (-3 to -6 MB per track posted and resident): every
+    // backend uploads it as f32, so this rounds exactly as that upload would.
+    // Accumulated f64 like the rest: a Float32Array accumulator made the shared
+    // push() polymorphic and cost ~50 ms of props:geo on spa/monza (Chromium A/B).
+    // mat stays f64: it holds non-integer ids compared with zero tolerance.
+    if (geo.col && typeof geo.col.seal === "function") geo.col = new Float32Array(geo.col.seal());
     if (geo.mat && typeof geo.mat.seal === "function") geo.mat = geo.mat.seal();
     if (geo.idx && typeof geo.idx.seal === "function") geo.idx = geo.idx.seal();
     return geo;
