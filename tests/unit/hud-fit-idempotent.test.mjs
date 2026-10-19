@@ -689,3 +689,29 @@ test("fitHud leaves a manually sized sector plate to HudLayout and releases stal
     assert.equal(sec.style.getPropertyValue("max-width"), "", "saved plate keeps its intrinsic width on every fit");
   }
 });
+
+
+test("fitHud: intentional manual overlaps neither squeeze sectors nor reopen the fitter", () => {
+  const h = bootFlipHarness();
+  const { sectors } = forceUnresolvableClash(h);
+  sectors.setAttribute("data-hl-user", "");
+  // An explicit 0,0 / 100% entry is still manual, even without data-hl.
+  let fits = 0;
+  h.sb.HudLayout = { fit() { fits++; } };
+  h.invalidate(); h.tick();
+  const initial = fits;
+  for (let i = 0; i < 10; i++) h.tick();
+  assert.equal(fits, initial, "intentional overlap is not an automatic-fit failure");
+  assert.equal(sectors.style.getPropertyValue("max-width"), "");
+  assert.ok(h.root.style.getPropertyValue("--hud-fit-stamp"), "manual overlap does not void the settled stamp");
+});
+
+test("fitHud: a manually placed huge plate does not reduce the automatic top band's budget", () => {
+  const small = bootFlipHarness(), huge = bootFlipHarness();
+  for (const h of [small, huge]) {
+    h.$("hud-sectors").setAttribute("data-hl-user", ""); h.$("hud-sectors").setAttribute("data-hl-v4", "");
+  }
+  huge.$("hud-sectors")._rect = huge.R(-10000, -10000, 20000, 20000);
+  for (const h of [small, huge]) { h.invalidate(); h.tick(); }
+  assert.equal(huge.pub(), small.pub(), "manual plate dimensions do not constrain other readouts");
+});

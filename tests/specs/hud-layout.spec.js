@@ -731,7 +731,7 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
 // A plate the player DRAGS beside BOOST, above the pedals (iPhone 15, BUTTON SIZE 237 %): the dock pass
 // tested columns only, squeezed it to 48 px every fit, clearControls restored it, and the HUD flickered
 // larger <-> smaller (Bryce, 2026-10-17). It shares the pedals' columns, not their rows, so it must keep its
-// own width, stay off every tap target, and hold one size across ticks.
+// own width and hold one size across ticks; manual overlap is now permitted.
 test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
@@ -758,13 +758,16 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
       await page.evaluate(([x, y]) => { HudLayout.set("sectors", { x, y }); GameHud.invalidateFit(); }, [x, y]);
       await page.evaluate(() => new Promise((r) => setTimeout(r, 600)));
     }
-    await page.evaluate(() => new Promise((r) => setTimeout(r, 1500))); // let fitHud + the pack follow-up settle
+    await page.evaluate(async () => { await document.fonts.ready; await new Promise((r) => setTimeout(r, 1500)); }); // fonts and pack follow-up settle
     const seen = await page.evaluate(() => new Promise((resolve) => {
-      const out = new Set(), sec = document.getElementById("hud-sectors"), t0 = performance.now();
+      const out = new Map(), sec = document.getElementById("hud-sectors"), t0 = performance.now();
       const iv = setInterval(() => {
         const r = sec.getBoundingClientRect();
-        out.add([r.left, r.top, r.width, r.height].map(Math.round).join(",") + " mw=" + sec.style.maxWidth);
-        if (performance.now() - t0 > 3000) { clearInterval(iv); resolve([...out]); }
+        const key = [r.left, r.top, r.width, r.height].map(Math.round).join(",") + " mw=" + sec.style.maxWidth;
+        if (!out.has(key)) out.set(key, { rect: key, html: sec.innerHTML, font: getComputedStyle(sec).font,
+          zoom: sec.currentCSSZoom, style: sec.getAttribute("style"), fonts: document.fonts.status,
+          owner: sec.hasAttribute("data-hl-user") });
+        if (performance.now() - t0 > 3000) { clearInterval(iv); resolve([...out.values()]); }
       }, 50);
     }));
     expect(seen, "one plate state across 3 s of HUD ticks: " + JSON.stringify(seen)).toHaveLength(1);
@@ -777,7 +780,8 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     });
     expect(st.mw, JSON.stringify(st)).toBe("");
     expect(st.w, JSON.stringify(st)).toBeGreaterThan(52);
-    expect(st.hits, JSON.stringify(st)).toEqual([]);
+    const offsets = await page.evaluate(() => { const e = document.getElementById("hud-sectors"); return [e.style.getPropertyValue("--hl-x"), e.style.getPropertyValue("--hl-y")]; });
+    expect(offsets, "manual positions are never corrected to clear a control").toEqual(["25", "10"]);
   });
 
   test("small sectors right of Boost survive arranger Done and Resume", async ({ page }) => {
@@ -800,8 +804,13 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     await page.locator("#hud-arrange-element").selectOption("sectors");
     for (let i = 0; i < 4; i++) await page.locator("#hud-arrange-smaller").click();
     await page.locator("#hud-arrange-move").focus();
-    for (let i = 0; i < 5; i++) await page.keyboard.press("Shift+ArrowRight");
-    await page.keyboard.press("Shift+ArrowDown");
+    const target = await page.evaluate(() => {
+      const s = document.getElementById("hud-sectors").getBoundingClientRect();
+      const b = document.getElementById("btn-boost").getBoundingClientRect();
+      return { x: s.x + s.width / 2, y: s.y + s.height / 2, dx: b.right + 8 - s.left, dy: b.top - s.top };
+    });
+    await page.mouse.move(target.x, target.y); await page.mouse.down();
+    await page.mouse.move(target.x + target.dx, target.y + target.dy, { steps: 4 }); await page.mouse.up();
     const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
     await page.locator("#hud-arrange-done").click();
     await page.locator("#pm-settings-close").click();
@@ -822,7 +831,7 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
       return out;
     });
     expect(samples.every(s => s.rightOfBoost), JSON.stringify(samples)).toBe(true);
-    expect(samples.every(s => s.mw === "" && s.size === "0.6")).toBe(true);
+    expect(samples.every(s => s.mw === "" && +s.size > 0 && +s.size < 1)).toBe(true);
     // Allow the initial resume fit to converge; a continuing two-state loop still fails.
     expect(new Set(samples.slice(-6).map(JSON.stringify)).size, "one plate/button size across settled fits: " + JSON.stringify(samples)).toBe(1);
     const live = await page.evaluate(async () => {
@@ -1451,5 +1460,86 @@ test.describe("speed readouts", () => {
     const why = JSON.stringify(pairs);
     expect(pairs.every((p) => p.wheel.length > 0 && p.kph > 100), "the wheel LCD drew a speed at race pace: " + why).toBe(true);
     expect(pairs.filter((p) => p.wheel !== p.hud), "wheel LCD vs #hud-speed-n, same frame: " + why).toEqual([]);
+  });
+});
+
+
+test.describe("unrestricted manual widgets", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test.setTimeout(300_000);
+  test("all widgets keep offscreen geometry through Done, Resume and rotation", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.headless(true); __apex.race("monza"); });
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.go(); __apex.freeze(true); __apex.jump(.1, 30, 0); });
+    await page.locator("#pausebtn").click(); await page.locator("#pm-settings").click();
+    await page.locator("#pm-open-display").click(); await page.locator("#pm-hud-details > summary").click();
+    await page.locator("#pm-hud-arrange").click();
+    const ids = await page.locator("#hud-arrange-element option").evaluateAll(es => es.map(e => e.value));
+    expect(ids).toHaveLength(19);
+    for (const id of ids) {
+      await page.locator("#hud-arrange-element").selectOption(id);
+      await page.locator("#hud-arrange-move").focus();
+      for (let i = 0; i < 11; i++) await page.keyboard.press("Shift+ArrowRight");
+      for (let i = 0; i < 8; i++) await page.locator("#hud-arrange-smaller").click();
+    }
+    // Explicit fractional positions and scales exercise the same persisted public setter.
+    await page.evaluate(() => { for (const [id] of HudLayout.ELEMENTS) HudLayout.set(id, { x: 125.25, y: -110.5, s: id === "map" ? 350 : 20 }); });
+    const detached = await page.evaluate(() => {
+      const el = document.getElementById("hud-energy"), parent = el.parentNode.id;
+      HudLayout.resetEl("energy");
+      const restored = el.parentNode.classList.contains("hud-bottom");
+      HudLayout.set("energy", { x: 125.25, y: -110.5, s: 20 });
+      return { parent, restored, detachedAgain: el.parentNode.id };
+    });
+    expect(detached).toEqual({ parent: "hud", restored: true, detachedAgain: "hud" });
+    const mapSizes = await page.evaluate(() => {
+      const body = document.body, previous = body.getAttribute("data-density");
+      const sizes = ["compact", "normal"].map(density => {
+        body.setAttribute("data-density", density);
+        const css = getComputedStyle(document.getElementById("minimap"));
+        return [css.width, css.height];
+      });
+      if (previous == null) body.removeAttribute("data-density"); else body.setAttribute("data-density", previous);
+      return sizes;
+    });
+    expect(mapSizes).toEqual([["128px", "128px"], ["128px", "128px"]]);
+    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
+    const check = async () => {
+      const rows = await page.evaluate(async () => {
+        GameHud.invalidateFit(); __apex.jump(.1, 30, 0);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        HudLayout.fit();
+        return HudLayout.ELEMENTS.map(([id, , sel]) => {
+          const el = document.querySelector(sel), cs = getComputedStyle(el);
+          return { id, x: el.style.getPropertyValue("--hl-x"), y: el.style.getPropertyValue("--hl-y"),
+            s: el.style.getPropertyValue("--hl-s"), clear: ["--hud-clear-x", "--hud-clear-y"].map(k => el.style.getPropertyValue(k)),
+            dropped: el.hasAttribute("data-col-drop"), capped: [cs.maxWidth, cs.maxHeight] };
+        });
+      });
+      for (const r of rows) {
+        expect(r.x, r.id).toBe("125.25"); expect(r.y, r.id).toBe("-110.5");
+        expect(r.s, r.id).toBe(r.id === "map" ? "3.5" : "0.2");
+        expect(r.clear, r.id).toEqual(["", ""]); expect(r.dropped, r.id).toBe(false);
+        expect(r.capped, r.id).toEqual(["none", "none"]);
+      }
+      expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
+    };
+    await page.locator("#hud-arrange-done").click();
+    await page.locator("#pm-settings-close").click(); await page.locator("#pm-settings-close").click();
+    await page.locator("#pm-resume").click(); await check();
+    const cameraParents = await page.evaluate(() => {
+      const set = HudLayout.shown(), el = document.getElementById("hud-energy");
+      HudLayout.setCam(set === "other" ? "helmet" : "chase");
+      const automatic = el.parentNode.classList.contains("hud-bottom");
+      HudLayout.setCam(set === "other" ? "chase" : set);
+      return { automatic, manualAgain: el.parentNode.id };
+    });
+    expect(cameraParents).toEqual({ automatic: true, manualAgain: "hud" });
+    await page.setViewportSize({ width: 390, height: 844 }); await check();
+    await page.setViewportSize({ width: 844, height: 390 }); await check();
+    await page.reload(); await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
   });
 });

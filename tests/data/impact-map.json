@@ -14467,6 +14467,7 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "resetEl": [
+        "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
@@ -14477,10 +14478,10 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "screenBounds": [
-        "tests/unit/hud-dock-pack.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-dock-pack.test.mjs"
       ],
       "setCam": [
+        "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-layout.test.mjs"
       ],
       "setVisibility": [

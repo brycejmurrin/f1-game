@@ -36,13 +36,14 @@ function load() {
 // vm-realm objects fail deepStrictEqual on prototype identity: compare plain copies.
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
-test("dragTo: screen px become a share of the screen, rounded to 0.1 and clamped at HudLayout's ±50", () => {
+test("dragTo: screen offsets remain unbounded and invalid gestures retain prior positions", () => {
   const A = load();
   assert.deepEqual(plain(A.dragTo({ x: 0, y: 0 }, 84.4, -39, 844, 390)), { x: 10, y: -10 });
   assert.deepEqual(plain(A.dragTo({ x: 12, y: 3 }, 0, 0, 844, 390)), { x: 12, y: 3 }, "no movement keeps the offset");
-  assert.deepEqual(plain(A.dragTo({ x: 45, y: -45 }, 844, -390, 844, 390)), { x: 50, y: -50 }, "clamped at the slider's range");
+  assert.deepEqual(plain(A.dragTo({ x: 45, y: -45 }, 844, -390, 844, 390)), { x: 145, y: -145 });
   assert.deepEqual(plain(A.dragTo(null, 8.44, 3.9, 844, 390)), { x: 1, y: 1 }, "a missing origin is the shipped 0 / 0");
-  assert.deepEqual(plain(A.dragTo({ x: 0, y: 0 }, 10, 10, 0, 0)), { x: 50, y: 50 }, "a zero-size screen cannot divide by zero");
+  assert.deepEqual(plain(A.dragTo({ x: 0, y: 0 }, 10, 10, 0, 0)), { x: 1000, y: 1000 }, "a zero-size screen cannot divide by zero");
+  assert.deepEqual(plain(A.dragTo({ x: 120.25, y: -80.5 }, Infinity, NaN, 844, 390)), { x: 120.25, y: -80.5 });
 });
 
 test("placedOrig: an auto-placed radio card's first drag starts from where it sits, measured from the fixed point", () => {
@@ -54,21 +55,26 @@ test("placedOrig: an auto-placed radio card's first drag starts from where it si
   assert.deepEqual(plain(back), { x: -25, y: 0 }, "a still press leaves it in place");
 });
 
-test("pinchTo: a pinch scales the size on 5 % steps between 50 and 200; a zero distance is ignored", () => {
+test("pinchTo: preserves any positive finite size without upper or visual lower bounds", () => {
   const A = load();
   assert.equal(A.pinchTo(100, 100, 150), 150);
-  assert.equal(A.pinchTo(100, 100, 123), 125, "rounded to the slider's 5 % step");
-  assert.equal(A.pinchTo(100, 100, 10), 50, "floored at 50");
-  assert.equal(A.pinchTo(150, 100, 400), 200, "capped at 200");
+  assert.equal(A.pinchTo(100, 100, 123), 123);
+  assert.equal(A.pinchTo(100, 100, 10), 10);
+  assert.equal(A.pinchTo(150, 100, 400), 600);
+  assert.equal(A.pinchTo(1, 100, 10), .1);
+  assert.equal(A.pinchTo(100, 1, Infinity), 100);
   assert.equal(A.pinchTo(100, 0, 150), 100, "no first distance: unchanged");
   assert.equal(A.pinchTo(100, 100, 0), 100, "no second distance: unchanged");
 });
 
-test("stepSize: the toolbar's − / + move by STEP inside the range", () => {
+test("stepSize: toolbar grows beyond 200 and can repeatedly shrink below one percent", () => {
   const A = load();
   assert.equal(A.stepSize(100, 1), 100 + A.STEP);
-  assert.equal(A.stepSize(55, -1), 50);
-  assert.equal(A.stepSize(200, 1), 200);
+  assert.equal(A.stepSize(55, -1), 45);
+  assert.equal(A.stepSize(200, 1), 210);
+  assert.equal(A.stepSize(10, -1), 5);
+  assert.equal(A.stepSize(.1, -1), .05);
+  assert.equal(A.stepSize(Number.MAX_VALUE, 1), Number.MAX_VALUE);
 });
 
 test("clashes: only pairs overlapping by more than the margin on BOTH axes; touching and empty rects are not clashes", () => {
@@ -119,6 +125,19 @@ function editor(pieceId = "piece", options = {}) {
         const left = parseFloat(this.style.left) || 0, top = parseFloat(this.style.top) || 0;
         return { left, top, right: left + this.offsetWidth, bottom: top + this.offsetHeight, width: this.offsetWidth, height: this.offsetHeight };
       }
+      if (this.id === pieceId) {
+        const base = options.rect || { left: 10, top: 10, width: 20, height: 20 };
+        if (!this.hasAttribute('data-hl-v4')) return { ...base, right: base.left + base.width, bottom: base.top + base.height };
+        const current = get(pieceId);
+        const anchor = options.manualAnchor || (pieceId === 'announce'
+          ? { left: viewport.innerWidth / 2, top: viewport.innerHeight / 4 }
+          : base);
+        const left = anchor.left + current.x / 100 * viewport.innerWidth;
+        const top = anchor.top + current.y / 100 * viewport.innerHeight;
+        const manualSize = options.manualSize || base;
+        const width = manualSize.width * current.s / 100, height = manualSize.height * current.s / 100;
+        return { left, top, right: left + width, bottom: top + height, width, height };
+      }
       return { left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20 };
     }
     get offsetWidth() {
@@ -145,7 +164,10 @@ function editor(pieceId = "piece", options = {}) {
       writes.push({ id, v: { ...v }, sn, pn });
       const stored = options.snap ? Object.fromEntries(Object.entries(v).map(([k,n]) => [k, Math.round(n)])) : v;
       values.set(key(sn, pn), { ...get(id, sn, pn), ...stored });
-      if (id === 'map') { const el = ids.get(pieceId); el.setAttribute('data-hl-user', ''); el.style.removeProperty('--hud-clear-x'); el.style.removeProperty('--hud-clear-y'); }
+      const el = ids.get(pieceId);
+      el.setAttribute('data-hl-user', '');
+      el.setAttribute('data-hl-v4', '');
+      if (id === 'map') { el.style.removeProperty('--hud-clear-x'); el.style.removeProperty('--hud-clear-y'); }
     }, resetEl() {} };
   const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
   const elements = { isOn: id => on.has(id), setMany(ids, enabled) {
@@ -162,7 +184,6 @@ function editor(pieceId = "piece", options = {}) {
   Object.assign(layout, { LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
     screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() {} });
   if (options.hidden) ids.get(pieceId).hidden = true;
-  if (options.rect) ids.get(pieceId).getBoundingClientRect = () => options.rect;
   const ctx = { document: doc, window: viewport,
     HudElements: elements,
     HudLayout: layout, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) }, Log: { info() {} },
@@ -181,12 +202,13 @@ function editor(pieceId = "piece", options = {}) {
 test('editor: exit flushes the final drag once into its original camera/style and clears its frame', () => {
   const e = editor(); e.api.setEditing(true);
   e.fire('pointerdown'); e.fire('pointermove', { clientX: 200 });
+  assert.equal(e.writes.length, 3, 'first press adopts manual scale and anchor before queuing the gesture');
   e.context('cockpit', 'broadcast');
   assert.equal(e.api.isEditing(), false);
-  assert.equal(e.writes.length, 1);
-  assert.equal(e.writes[0].sn, 'chase'); assert.equal(e.writes[0].pn, 'standard');
-  assert.equal(e.writes[0].v.x, 10); assert.equal(e.frames.size, 0);
-  e.tick(); assert.equal(e.writes.length, 1);
+  assert.equal(e.writes.length, 4, 'one queued gesture follows the three scale/anchor adoption writes');
+  assert.equal(e.writes.at(-1).sn, 'chase'); assert.equal(e.writes.at(-1).pn, 'standard');
+  assert.equal(e.writes.at(-1).v.x, 10); assert.equal(e.frames.size, 0);
+  e.tick(); assert.equal(e.writes.length, 4, 'no gesture is flushed twice');
 });
 
 test('editor: lifting either pinch finger rebases the remaining drag without a position jump', () => {
@@ -234,9 +256,9 @@ test('editor: resizing preserves selection and pending movement, ends the old ge
   e.viewport.innerWidth = 600; e.viewport.innerHeight = 300;
   e.fire('resize'); e.fire('resize');
   assert.equal(e.api.isEditing(), true); assert.equal(e.api.selected(), 'piece');
-  assert.equal(e.writes.length, 1); assert.equal(e.writes[0].v.x, 5); assert.equal(e.frames.size, 1);
+  assert.equal(e.writes.length, 4); assert.equal(e.writes.at(-1).v.x, 5); assert.equal(e.frames.size, 1);
   e.tick(); e.fire('pointermove', { clientX: 200 }); e.tick();
-  assert.equal(e.writes.length, 1, 'the old pointer cannot move the piece in the new coordinate system');
+  assert.equal(e.writes.length, 4, 'the old pointer cannot move the piece in the new coordinate system');
   const r = e.ids.get('hud-arrange-bar').getBoundingClientRect();
   assert.ok(r.left >= 8 && r.right <= 592 && r.top >= 8 && r.bottom <= 292);
   e.fire('resize'); e.api.setEditing(false);
@@ -274,7 +296,7 @@ test('editor: first keyboard radio move starts at its painted position on phone 
   const before = e.get('announce'); move('ArrowDown', true);
   assert.equal(e.get('announce').x, before.x); assert.equal(e.get('announce').y, before.y + 5);
   for (let i = 0; i < 30; i++) move('ArrowLeft', true);
-  assert.equal(e.get('announce').x, -50);
+  assert.equal(e.get('announce').x, before.x - 150, "keyboard movement continues beyond the viewport");
 });
 
 test('editor: opt-in readouts are selectable previews without enabling them and restore on exit', () => {
@@ -423,9 +445,44 @@ test('editor: first cleared-map edits adopt its painted origin on the whole-perc
 
 test('editor: explicit custom maps never adopt stale automatic clearance', () => {
   const e=editor('map',{snap:true}),map=e.ids.get('map');
-  map.setAttribute('data-hl-user','');map.style.setProperty('--hud-clear-x','117px');
+  map.setAttribute('data-hl-user','');map.setAttribute('data-hl-v4','');map.style.setProperty('--hud-clear-x','117px');
   e.api.setEditing(true);e.ids.get('hud-arrange-larger').onclick();
   assert.equal(e.get('map').x,0);assert.equal(e.get('map').y,0);assert.equal(e.get('map').s,110);
+});
+
+test('editor: first edits preserve painted position and size across different automatic/manual homes', () => {
+  for (const id of ['speed', 'energy', 'tyre', 'damage', 'rel', 'inputs']) {
+    for (const gesture of ['drag', 'keyboard', 'size', 'pinch']) {
+      const base = { left: 178, top: 64, width: 100, height: 30 };
+      const e = editor(id, { rect: base, manualAnchor: { left: 500, top: 450 }, manualSize: { width: 200, height: 60 } });
+      const piece = e.ids.get(id);
+      e.api.setEditing(true);
+      assert.equal(e.writes.length, 0, 'entering the editor does not own a widget');
+      if (gesture === 'drag' || gesture === 'pinch') {
+        e.fire('pointerdown');
+        const adopted = piece.getBoundingClientRect();
+        assert.ok(Math.abs(adopted.left - base.left) < 1e-9, `${id} adopts its painted horizontal home`);
+        assert.ok(Math.abs(adopted.top - base.top) < 1e-9, `${id} adopts its painted vertical home`);
+        assert.equal(adopted.width, base.width, `${id} keeps its painted width on press`);
+        assert.equal(adopted.height, base.height, `${id} keeps its painted height on press`);
+      }
+      if (gesture === 'drag') { e.fire('pointermove', { clientX: 110 }); e.tick(); }
+      if (gesture === 'keyboard') e.fire('keydown', { key: 'ArrowRight', target: e.ids.get('hud-arrange-move') });
+      if (gesture === 'size') e.ids.get('hud-arrange-larger').onclick();
+      if (gesture === 'pinch') {
+        e.fire('pointerdown', { pointerId: 2, clientX: 200 });
+        e.fire('pointermove', { pointerId: 2, clientX: 300 }); e.tick();
+      }
+      const after = piece.getBoundingClientRect();
+      const moved = gesture === 'drag' || gesture === 'keyboard' ? 10 : 0;
+      assert.ok(Math.abs(after.left - (base.left + moved)) < 1e-9, `${id}/${gesture} only applies the requested movement`);
+      assert.ok(Math.abs(after.top - base.top) < 1e-9, `${id}/${gesture} preserves its vertical home`);
+      const factor = gesture === 'size' ? 1.2 : gesture === 'pinch' ? 2 : 1;
+      assert.equal(after.width, base.width * factor, `${id}/${gesture} only applies the requested size change`);
+      assert.equal(after.height, base.height * factor, `${id}/${gesture} preserves the painted aspect ratio`);
+      assert.equal(e.get(id).s, gesture === 'size' ? 60 : gesture === 'pinch' ? 100 : 50);
+    }
+  }
 });
 
 test('editor: hidden map, gaps and mirror stay selectable and their owner modes can be restored', () => {

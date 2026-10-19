@@ -1,40 +1,21 @@
 /* Apex 26 — HudLayout: move and size each race HUD element, as a player
    setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE.
 
-   Every element keeps its shipped anchor (and fitHud's collision handling);
-   the player's choice is an OFFSET on top of it — X and Y as a share of the
-   screen, SIZE as a percentage — painted through the independent `translate`
-   and `scale` properties, so it composes with the `transform: translateX(-50%)`
-   the centred pieces already carry. The numbers land as --hl-x / --hl-y /
-   --hl-s on the element itself plus data-hl, and ONE rule in css/hud.css
-   reads them; an untouched element carries nothing and lays out exactly as
-   it shipped. Offsets divide by the element's own --hud-z (its band zoom), so
-   a 10% move is 10% of the screen at every HUD SIZE.
+   Explicit entries own their geometry: finite screen-share X/Y offsets and
+   a positive SIZE percentage. Untouched widgets retain the automatic layout.
+   Manual widgets use stable homes and global HUD zoom, independently of the
+   adaptive bands; bottom instruments leave the transformed flex/grid cluster.
 
-   SIX LAYOUTS: HUD STYLE × CAMERA SET. The cockpit cameras
-   (CamGroups.COCKPIT_LAYOUT, js/camera/cam-groups.js) put the steering wheel
-   across the bottom of the screen, so a layout tuned for the chase camera
-   would sit on it. And an offset is relative to the element's SHIPPED anchor,
-   which differs per HUD STYLE: BROADCAST left-anchors the timing tower and
-   parks map + gaps under it (css/hud.css), so a STANDARD-made tower move of
-   -30% pushed the broadcast tower off the left edge. One stored object,
-   apex26.hudLayout:
-   {v: 3, standard: {cockpit: {id: {x, y, s}}, other: {…}}, minimal: {…},
-   broadcast: {…}} — a missing profile or element is the SHIPPED layout for
-   that profile and set (SHIPPED below), which for the cockpit is not zero:
-   OVERTAKE / AERO / ENERGY / TYRES move off the wheel to either side of it,
-   so a cockpit player can read why OVERTAKE is unavailable without a
-   setting. RESET returns to that shipped layout, not to zero.
-   MIGRATION: v1 and v2 stored {cockpit, other} for every style; that is the
-   layout the player built, almost always in STANDARD (the default), so it
-   becomes STANDARD's and MINIMAL / BROADCAST start shipped. (v1's "missing =
-   zero" reads as v2 unchanged: the only v1 cockpit element that could matter
-   was TYRES, and a v1 TYRES move is kept verbatim.)
-   The STYLE is read from the live body.hud-prof-* classes js/ui/hud.js
-   paints while the HUD is up (this module never reaches into game.js), else
-   from the stored setting. js/ui/hud.js reports camera changes (setCam, also
-   on a style change); the settings fold edits the CURRENT style's layout for
-   either camera set and previews the one it is editing.
+   HUD STYLE × CAMERA SET keeps independent layouts for STANDARD / MINIMAL /
+   BROADCAST and COCKPIT / HELMET / OTHER. apex26.hudLayout stores:
+   {v: 4, standard: {cockpit: {id: {x, y, s}}, helmet: {…},
+   other: {…}}, minimal: {…}, broadcast: {…}}.
+   An explicit entry remains manual even at shipped values. RESET removes the
+   entry and restores its shipped automatic layout, which need not be zero.
+
+   Older layout formats start from the shipped automatic layout.
+   The live camera/style selects the race layout; the settings fold previews
+   and edits its chosen set without changing other saved layouts.
 
    HIDDEN ELEMENTS: hiddenReason(id) says why an element is not on screen in
    the current mode (MINIMAL, a LAYOUT, a broadcast camera, the cockpit wheel,
@@ -58,7 +39,7 @@
 const HudLayout = (function () {
   "use strict";
 
-  const KEY = "hudLayout";   // apex26.hudLayout — {v: 3, standard?, minimal?, broadcast?} | null
+  const KEY = "hudLayout";   // apex26.hudLayout — {v: 4, standard?, minimal?, broadcast?} | null
   // [id, label, selector, transform-origin]. The origin keeps a corner piece
   // growing away from its corner. The four centred by `left: 50%;
   // transform: translateX(-50%)` scale about their UNtransformed left edge,
@@ -89,7 +70,7 @@ const HudLayout = (function () {
   const PROFILES = Object.freeze(["standard", "minimal", "broadcast"]);
   const COCKPIT_CAMS = typeof CamGroups !== "undefined" ? CamGroups.COCKPIT_LAYOUT : Object.freeze({ cockpit: 1 });
   const LAYOUT_SET = typeof CamGroups !== "undefined" && CamGroups.layoutSet ? CamGroups.layoutSet : (id) => (COCKPIT_CAMS[id] ? "cockpit" : "other");
-  const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], s: [50, 200] });
+  const LIM = Object.freeze({ x: [-Infinity, Infinity], y: [-Infinity, Infinity], s: [0, Infinity] });
   const DEF = Object.freeze({ x: 0, y: 0, s: 100 });
   const fz = (o) => { for (const k in o) Object.freeze(o[k]); return Object.freeze(o); };
   // SHIPPED per set — what RESET returns to. The wheel covers roughly the middle
@@ -195,15 +176,14 @@ const HudLayout = (function () {
   let onModeChange = null;   // the fold's repaint, while it is built (style / camera changed)
   let _pub = false;          // true after this IIFE finishes its first apply (HudLayout is then readable)
 
-  function num(v, k) {
-    const n = Math.round(Number(v));
-    if (!Number.isFinite(n)) return DEF[k];
-    return Math.max(LIM[k][0], Math.min(LIM[k][1], n));
+  function num(v, k, fallback) {
+    const n = typeof v === "number" || (typeof v === "string" && v.trim()) ? Number(v) : NaN;
+    return Number.isFinite(n) && (k !== "s" || n > 0) ? n : fallback;
   }
-  /** One element's {x, y, s}, clamped; anything unreadable is shipped. */
-  function normEl(v) {
+  /** Finite offsets and a positive finite size; invalid edits keep prior values. */
+  function normEl(v, fallback = DEF) {
     const o = v && typeof v === "object" ? v : {};
-    return { x: num(o.x == null ? 0 : o.x, "x"), y: num(o.y == null ? 0 : o.y, "y"), s: num(o.s == null ? 100 : o.s, "s") };
+    return { x: num(o.x, "x", fallback.x), y: num(o.y, "y", fallback.y), s: num(o.s, "s", fallback.s) };
   }
   const isDefEl = (e) => e.x === 0 && e.y === 0 && e.s === 100;
   const sameEl = (a, b) => a.x === b.x && a.y === b.y && a.s === b.s;
@@ -214,25 +194,23 @@ const HudLayout = (function () {
   /** The shipped {x, y, s} of element `id` in style `pn`, camera set `sn` (a
    *  touch screen takes TOUCH_SHIPPED's for the sets that have one). */
   const shippedEl = (id, sn, pn) => normEl(touch() && TOUCH_SHIPPED[sn] ? TOUCH_SHIPPED[sn][id] : SHIPPED[pn] && SHIPPED[pn][sn] && SHIPPED[pn][sn][id]);
-  /** One stored layout: only the elements that differ from that set's shipped layout. */
+  /** Explicit entries own their placement, including values equal to shipped. */
   function normSet(v, sn, pn) {
     const out = {};
     if (!v || typeof v !== "object") return out;
     for (const id of IDS) {
       if (!(id in v)) continue;
-      const e = normEl(v[id]);
-      if (!sameEl(e, shippedEl(id, sn, pn))) out[id] = e;
+      if (!v[id] || typeof v[id] !== "object" || Array.isArray(v[id])) continue;
+      out[id] = normEl(v[id]);
     }
     return out;
   }
   const normProf = (v, pn) => Object.fromEntries(SETS.map((sn) => [sn, normSet(v && v[sn], sn, pn)]));
-  /** Pure: a raw stored value -> {standard, minimal, broadcast}, each {cockpit,
-   *  other} of differences. v3 is per style; v1 / v2 (one {cockpit, other} for
-   *  every style) become STANDARD's and the others start shipped (header). */
+  /** Read only the current schema; other formats use fresh shipped layouts. */
   function migrate(raw) {
     const r = raw && typeof raw === "object" ? raw : {};
     const out = {};
-    for (const pn of PROFILES) out[pn] = normProf(r.v === 3 ? r[pn] : pn === "standard" ? r : null, pn);
+    for (const pn of PROFILES) out[pn] = normProf(r.v === 4 ? r[pn] : null, pn);
     return out;
   }
   /** The STORED differences per style and camera set. */
@@ -250,7 +228,7 @@ const HudLayout = (function () {
   }
   function save(st) {
     if (!store) return;
-    const out = { v: 3 };
+    const out = { v: 4 };
     let any = false;
     for (const pn of PROFILES) {
       const p = normProf(st[pn], pn);
@@ -293,8 +271,40 @@ const HudLayout = (function () {
     const row = ELEMENTS.find((e) => e[0] === id);
     if (!row) return null;
     const root = doc && doc.documentElement;
-    if (id === "limits" && root && root.hasAttribute && root.hasAttribute("data-limits-left")) return "top left";
+    if (id === "limits" && !stored()[shownProf()][shown()].limits && root && root.hasAttribute && root.hasAttribute("data-limits-left")) return "top left";
     return row[3];
+  }
+
+  const manuallyPlaced = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
+  // Automatic placement is disposable output. Once a widget is edited, its
+  // saved geometry owns it even outside the viewport or over another control.
+  function releaseAutomatic(el) {
+    if (!el || !el.style) return;
+    if (el.hasAttribute("data-hl-pack")) {
+      for (const p of ["translate", "margin-left", "margin-top"]) el.style.removeProperty(p);
+    }
+    for (const p of ["--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) el.style.removeProperty(p);
+    if (el.id === "hud-rel") el.style.removeProperty("left");
+    for (const a of ["data-hl-pack", "data-col-compact", "data-col-drop", "data-lane-collapsed"]) el.removeAttribute(a);
+  }
+
+  const bottomHomes = new Map();
+  // A manual instrument must leave the capped, transformed flex/grid cluster.
+  // Remember its slot so Reset or a different camera restores normal layout.
+  function ownBottom(el) {
+    const home = bottomHomes.get(el);
+    if (el.hasAttribute("data-hl-v4")) {
+      if (!home && el.parentNode && el.parentNode.classList.contains("hud-bottom")) {
+        const host = doc.getElementById("hud");
+        if (!host) return;
+        bottomHomes.set(el, { parent: el.parentNode, next: el.nextSibling });
+        el.setAttribute("data-hl-bottom", ""); host.appendChild(el);
+      }
+    } else if (home) {
+      if (home.next && home.next.parentNode === home.parent && home.parent.insertBefore) home.parent.insertBefore(el, home.next);
+      else home.parent.appendChild(el);
+      el.removeAttribute("data-hl-bottom"); bottomHomes.delete(el);
+    }
   }
 
   function apply() {
@@ -312,7 +322,7 @@ const HudLayout = (function () {
       const el = doc.querySelector(sel);
       if (!el || !el.style) continue;
       const e = a[id];
-      if (e && !isDefEl(e)) {
+      if (e && (!isDefEl(e) || st[pn][sn][id])) {
         el.style.setProperty("--hl-x", String(e.x));
         el.style.setProperty("--hl-y", String(e.y));
         el.style.setProperty("--hl-s", String(e.s / 100));
@@ -324,11 +334,19 @@ const HudLayout = (function () {
       }
       if (st[pn][sn][id]) el.setAttribute("data-hl-user", "");
       else if (el.hasAttribute("data-hl-user")) el.removeAttribute("data-hl-user");
+      const entry = st[pn][sn][id];
+      if (entry) el.setAttribute("data-hl-v4", "");
+      else el.removeAttribute("data-hl-v4");
+      if (manuallyPlaced(el)) releaseAutomatic(el);
+      ownBottom(el);
       if (selected === id && preview) el.setAttribute("data-hl-sel", "");
       else if (el.hasAttribute("data-hl-sel")) el.removeAttribute("data-hl-sel");
     }
     // A MOVED radio card leaves auto-placement (js/ui/hud.js radioTopSlot): it stays where it was put.
-    if (body && body.toggleAttribute) { const r = a.announce; body.toggleAttribute("data-radio-placed", !!(r && (r.x || r.y))); }
+    if (body && body.toggleAttribute) {
+      const radio = st[pn][sn].announce;
+      body.toggleAttribute("data-radio-placed", !!radio);
+    }
     fit();
     // A move changes what fitHud measured: let it re-lay the bands out now
     // (js/ui/hud.js; optional — absent at eval and in node harnesses).
@@ -344,13 +362,8 @@ const HudLayout = (function () {
     }
   }
 
-  /* KEEP MOVED PIECES ON SCREEN. An offset chosen on one screen (or at one HUD
-     SIZE) can push a piece past the edge of another. After every apply, and
-     after js/ui/hud.js's fitHud re-lays the bands out, measure each moved
-     element and pull its PAINTED --hl-x/--hl-y back inside the viewport (less
-     EDGE px). The stored offsets are untouched, so the layout comes back in
-     full on a screen that has room. translate runs in vw/vh divided by the
-     band's zoom, so a screen-px correction is exactly px / innerWidth * 100. */
+  /* Keep automatic shipped offsets on screen. Explicit user entries bypass
+     every placement correction, including viewport and safe-area bounds. */
   const EDGE = 4;
   // Intersect the visible viewport with hardware insets. Browser zoom and
   // keyboards can expose only part of the layout viewport; never save this fit.
@@ -399,6 +412,7 @@ const HudLayout = (function () {
       if (!e || isDefEl(e)) continue;
       const el = doc.querySelector(sel);
       if (!el || !el.getBoundingClientRect || !el.hasAttribute("data-hl")) continue;
+      if (manuallyPlaced(el)) continue;
       el.style.setProperty("--hl-x", String(e.x));
       el.style.setProperty("--hl-y", String(e.y));
       // fitHud may have crossed TRACK LIMITS to the other column since apply().
@@ -620,14 +634,14 @@ const HudLayout = (function () {
     want.announce = 1; want.flag = 1; want.map = 1; want.tower = 1;
     for (let i = 0; i < ELEMENTS.length; i++) {
       const [id, , sel] = ELEMENTS[i];
-      if (!want[id]) continue;
       const el = doc.querySelector(sel);
       if (!el || el.hidden) continue;
+      if (!want[id] && !manuallyPlaced(el)) continue;
       const cs = typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
       if (cs && (cs.display === "none" || cs.visibility === "hidden")) continue;
       const r = el.getBoundingClientRect();
       if (!(r.width && r.height)) continue;
-      boxes.push({ id, x: r.left, y: r.top, w: r.width, h: r.height });
+      boxes.push({ id, x: r.left, y: r.top, w: r.width, h: r.height, fixed: manuallyPlaced(el) });
     }
     // Touch discs are FIXED obstacles so a packed tyre cannot cover steer/BRAKE.
     try {
@@ -647,6 +661,7 @@ const HudLayout = (function () {
       if (!row) continue;
       const el = doc.querySelector(row[2]);
       if (!el || !el.style) continue;
+      if (manuallyPlaced(el)) continue;
       const c = corr[id];
       // Dock corrections are margins in local CSS pixels, preserving saved --hl-*.
       let z = 1;
@@ -703,6 +718,7 @@ const HudLayout = (function () {
       if (!e || isDefEl(e)) continue;
       const el = doc.querySelector(sel);
       if (!el || !el.hasAttribute("data-hl")) continue;
+      if (manuallyPlaced(el)) continue;
       let r = el.getBoundingClientRect();
       if (!(r.width && r.height)) continue;
       // Seed from what fit()'s edge clamp already painted, so the nudge adds to it instead of replacing it.
@@ -735,8 +751,9 @@ const HudLayout = (function () {
   function resetClearance() {
     if (!doc || !doc.querySelector) return;
     for (const [id, , sel] of ELEMENTS) {
-      if (CLEAR_READOUTS.indexOf(id) < 0) continue;
       const el = doc.querySelector(sel);
+      if (manuallyPlaced(el)) { releaseAutomatic(el); continue; }
+      if (CLEAR_READOUTS.indexOf(id) < 0) continue;
       if (el && el.style) {
         el.style.removeProperty("--hud-clear-x"); el.style.removeProperty("--hud-clear-y");
         el.removeAttribute("data-col-compact"); el.removeAttribute("data-col-drop");
@@ -773,6 +790,11 @@ const HudLayout = (function () {
     // A player-placed radio is an obstacle, never another automatic candidate.
     const placedRadio = bodyAttr("data-radio-placed");
     if (placedRadio) { const r = box(doc.querySelector("#announce")); if (r) blocks.push(r); }
+    // Edited secondary readouts are fixed obstacles too, not placement candidates.
+    for (const [, , sel] of rows) {
+      const el = doc.querySelector(sel);
+      if (manuallyPlaced(el)) { const r = box(el); if (r) blocks.push(r); }
+    }
     // Scalar form of the rect-vs-block overlap test: findSlot tries ~1000 candidates, so no object or closure per try.
     // Obstacle bounds (already inflated by EDGE) live in a reused Float64Array, synced lazily as `blocks` grows:
     // reading DOMRect doubles in a ~1000-try loop boxed a heap number per read.
@@ -804,6 +826,7 @@ const HudLayout = (function () {
     };
     for (const id of CLEAR_READOUTS) {
       const row = rows.find((e) => e[0] === id), el = doc.querySelector(row[2]);
+      if (manuallyPlaced(el)) continue;
       // A stale lane collapse has no rectangle to place after rotation or a
       // camera switch. Reopen it locally; the lane producer owns the next reset.
       if (id === "announce" && el && el.hasAttribute("data-lane-collapsed")) {
@@ -908,8 +931,11 @@ const HudLayout = (function () {
     if (IDS.indexOf(id) < 0) return null;
     const sn = setArg(setName), p = profArg(pn);
     const st = stored();
-    const e = normEl(Object.assign(effective(st, sn, p)[id], v || {}));
-    st[p][sn][id] = e;   // save() drops it again when it equals the shipped layout
+    const previous = effective(st, sn, p)[id];
+    if (!v || typeof v !== "object" || Array.isArray(v)
+        || !["x", "y", "s"].some(k => Number.isFinite(num(v[k], k, NaN)))) return previous;
+    const e = normEl(Object.assign({}, previous, v || {}), previous);
+    st[p][sn][id] = e;
     save(st);
     apply();
     // A place on MIRROR (data-hl-user) cures the soft hide — same contract as
@@ -921,7 +947,11 @@ const HudLayout = (function () {
     return e;
   }
   function resetEl(id, setName, pn) {
-    return IDS.indexOf(id) < 0 ? null : set(id, shippedEl(id, setArg(setName), profArg(pn)), setName, pn);
+    if (IDS.indexOf(id) < 0) return null;
+    const sn = setArg(setName), p = profArg(pn), st = stored();
+    delete st[p][sn][id];
+    save(st); apply();
+    return shippedEl(id, sn, p);
   }
   function resetSet(setName, pn) {
     const st = stored();
@@ -945,10 +975,11 @@ const HudLayout = (function () {
   /** Write preset `pid` into set `setName` of style `pn` (default: on screen). */
   function applyPreset(pid, setName, pn) {
     const sn = setArg(setName), p = profArg(pn);
+    if (pid === "shipped") { resetSet(sn, p); return true; }
     const lay = presetLayout(pid, sn, p);
     if (!lay) return false;
     const st = stored();
-    st[p][sn] = lay;
+    st[p][sn] = Object.fromEntries(IDS.filter((id) => !sameEl(lay[id], shippedEl(id, sn, p))).map((id) => [id, lay[id]]));
     save(st); apply();
     return true;
   }
@@ -1140,7 +1171,7 @@ const HudLayout = (function () {
     const paintHelp = () => {
       help.textContent = "Choose an element to show, hide, move or resize. AUTO follows the camera and HUD style. " +
         "Editing " + editingProf.toUpperCase() + " · " + editing.toUpperCase() + ": other styles and camera layouts keep their own positions. " +
-        "Start with a preset or reset an element. In a race, hold a slider to preview the HUD.";
+        "Start with a preset or reset an element. In a race, edit a value to preview the HUD.";
     };
     // Use the settings control's native-select and disabled-option semantics.
     function stepper(id, label, options, read, write) {
@@ -1172,15 +1203,16 @@ const HudLayout = (function () {
     const painters = [], sliders = [];
     for (const k of ["x", "y", "s"]) {
       const out = el("b");
-      const inp = el("input", { type: "range", min: String(LIM[k][0]), max: String(LIM[k][1]), step: k === "s" ? "5" : "1",
+      const inp = el("input", { type: "number", step: "any",
         attrs: { "aria-label": NAMES[k].toLowerCase() } });
       inp.id = "pm-hl-" + k;
       sliders.push(inp);
       inp.addEventListener("input", () => {
-        const e = set(sel, { [k]: parseFloat(inp.value) }, editing, editingProf);
+        const e = set(sel, { [k]: inp.value }, editing, editingProf);
         out.textContent = txt(k, e[k]); paintSum(); paintPreset();
         peek(true, 900);
       });
+      inp.addEventListener("change", () => { inp.value = String(get(sel, editing, editingProf)[k]); });
       inp.addEventListener("pointerdown", () => peek(true));
       inp.addEventListener("pointerup", () => peek(true, 500));
       inp.addEventListener("pointercancel", () => peek(false));
@@ -1218,7 +1250,7 @@ const HudLayout = (function () {
       const r = hiddenReason(sel), off = !!(r && !r.soft);
       for (const inp of sliders) inp.disabled = off;
       resetOne.disabled = off;
-      why.textContent = off ? "Not drawn now: " + r.reason + ". Its sliders come back when it shows." : r ? "Note: " + r.reason + "." : "";
+      why.textContent = off ? "Not drawn now: " + r.reason + ". Its controls come back when it shows." : r ? "Note: " + r.reason + "." : "";
     }
     function paintAll() {
       if (!fold.open) editingProf = profile();
