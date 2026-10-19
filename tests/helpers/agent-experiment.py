@@ -169,14 +169,15 @@ def main():
                     pass
                 try:
                     out, err = child.communicate(timeout=.3)
-                    break
                 except subprocess.TimeoutExpired as pending:
                     out, err = pending.output or b'', pending.stderr or b''
-            else:
-                # Detached descendants may retain pipes; do not wait for them.
-                child.stdout.close()
-                child.stderr.close()
-                child.wait()
+            # Pipe completion only proves the direct child exited. A same-group
+            # descendant can ignore TERM after redirecting its pipes, so always
+            # escalate the owned group before finishing. Detached descendants
+            # may retain pipes; close those rather than waiting for them.
+            child.stdout.close()
+            child.stderr.close()
+            child.wait()
     except OSError as exc:
         error = str(exc)
     finally:

@@ -82,6 +82,38 @@ test('timeout records original terminating signal and bounded cleanup', t => {
   assert.ok(row.command_wall_seconds < 2);
 });
 
+test('timeout kills a TERM-ignoring owned descendant after its pipes close', async t => {
+  const f = fixture(t);
+  const ready = path.join(f.root, 'descendant-ready');
+  const code = `import os,signal,time
+pid=os.fork()
+if pid == 0:
+ signal.signal(signal.SIGTERM, signal.SIG_IGN)
+ fd=os.open(os.devnull, os.O_WRONLY)
+ os.dup2(fd, 1); os.dup2(fd, 2); os.close(fd)
+ open(${JSON.stringify(ready)}, 'w').write(str(os.getpid()))
+ time.sleep(30)
+else:
+ while not os.path.exists(${JSON.stringify(ready)}): time.sleep(.005)
+ print(pid, flush=True)
+ time.sleep(30)
+`;
+  const result = f.run(['--timeout', '0.3'], code);
+  assert.equal(result.status, 124);
+  const pid = Number(readFileSync(ready, 'utf8'));
+  t.after(() => { try { process.kill(pid, 'SIGKILL'); } catch (e) { if (e.code !== 'ESRCH') throw e; } });
+  const alive = () => {
+    try { process.kill(pid, 0); }
+    catch (e) { if (e.code === 'ESRCH') return false; throw e; }
+    if (process.platform !== 'linux') return true;
+    try { return !/\) Z /.test(readFileSync(`/proc/${pid}/stat`, 'utf8')); }
+    catch (e) { if (e.code === 'ENOENT') return false; throw e; }
+  };
+  for (let i = 0; i < 50 && alive(); i++) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(alive(), false, 'owned descendant must not survive pipe completion');
+  assert.equal(f.rows()[0].timed_out, true);
+});
+
 test('agent-run route is inferred from its options and ignores child options', t => {
   const f = fixture(t);
   const runner = fileURLToPath(new URL('../../tools/agent-run.mjs', import.meta.url));
