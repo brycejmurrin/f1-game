@@ -254,28 +254,25 @@ const TrackBuildProps = (function () {
     const _CELL = 6;
     let _grid = null;
     const _buildGrid = () => {
-      const pos = _tg.pos, idx = _tg.idx;
+      const pos = _tg.pos, idx = _tg.idx, rng = new Int32Array(idx.length / 3 * 4);   // per triangle cx0 cx1 cz0 cz1; cx1 < cx0 = skipped
       let cx0 = Infinity, cz0 = Infinity, cx1 = -Infinity, cz1 = -Infinity;
-      const cellsOf = (t, fn) => {
+      for (let t = 0, r = 0; t < idx.length; t += 3, r += 4) {
         const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
         const mnx = __M.min(pos[a], pos[b], pos[c]), mxx = __M.max(pos[a], pos[b], pos[c]);
         const mnz = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]), mxz = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]);
-        if (mxx - mnx > 30 || mxz - mnz > 30) return;
-        fn(__M.floor(mnx / _CELL), __M.floor(mxx / _CELL), __M.floor(mnz / _CELL), __M.floor(mxz / _CELL));
-      };
-      for (let t = 0; t < idx.length; t += 3) cellsOf(t, (i0, i1, j0, j1) => {
+        if (mxx - mnx > 30 || mxz - mnz > 30) { rng[r] = 1; rng[r + 1] = 0; continue; }
+        const i0 = rng[r] = __M.floor(mnx / _CELL), i1 = rng[r + 1] = __M.floor(mxx / _CELL);
+        const j0 = rng[r + 2] = __M.floor(mnz / _CELL), j1 = rng[r + 3] = __M.floor(mxz / _CELL);
         if (i0 < cx0) cx0 = i0; if (i1 > cx1) cx1 = i1; if (j0 < cz0) cz0 = j0; if (j1 > cz1) cz1 = j1;
-      });
-      const nx = cx1 >= cx0 ? cx1 - cx0 + 1 : 0, nz = cz1 >= cz0 ? cz1 - cz0 + 1 : 0;
-      const start = new Int32Array(nx * nz + 1);
-      for (let t = 0; t < idx.length; t += 3) cellsOf(t, (i0, i1, j0, j1) => {
-        for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) start[(i - cx0) * nz + (j - cz0) + 1]++;
-      });
-      for (let k = 0; k < nx * nz; k++) start[k + 1] += start[k];
-      const list = new Uint32Array(start[nx * nz]), fill = start.slice(0, nx * nz);
-      for (let t = 0; t < idx.length; t += 3) cellsOf(t, (i0, i1, j0, j1) => {
-        for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) list[fill[(i - cx0) * nz + (j - cz0)]++] = t;
-      });
+      }
+      const nx = cx1 >= cx0 ? cx1 - cx0 + 1 : 0, nz = cz1 >= cz0 ? cz1 - cz0 + 1 : 0, nc = nx * nz;
+      const start = new Int32Array(nc + 1);
+      for (let r = 0; r < rng.length; r += 4)
+        for (let i = rng[r]; i <= rng[r + 1]; i++) for (let j = rng[r + 2]; j <= rng[r + 3]; j++) start[(i - cx0) * nz + (j - cz0) + 1]++;
+      for (let k = 0; k < nc; k++) start[k + 1] += start[k];
+      const list = new Uint32Array(start[nc]), fill = start.slice(0, nc);
+      for (let r = 0; r < rng.length; r += 4)
+        for (let i = rng[r]; i <= rng[r + 1]; i++) for (let j = rng[r + 2]; j <= rng[r + 3]; j++) list[fill[(i - cx0) * nz + (j - cz0)]++] = r / 4 * 3;
       _grid = { cx0, cz0, nx, nz, start, list };
     };
     const terrainYAt = (x, z) => {

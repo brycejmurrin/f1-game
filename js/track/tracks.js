@@ -658,38 +658,35 @@ const Tracks = (function () {
     const nx = Math.max(1, Math.ceil((mxx - mnx) / CELL));
     const nz = Math.max(1, Math.ceil((mxz - mnz) / CELL));
     const nc = nx * nz, start = new Int32Array(nc + 1), lo = new Float64Array(nc).fill(Infinity);
-    let list = null, fill = null;   // pass 0: count + floors, 1: fill in triangle order
-    for (let pass = 0; pass < 2; pass++) {   // 0: count + floors, 1: fill in triangle order
-      for (let t = 0; t < idx.length; t += 3) {
-        const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-        const x0 = __M.min(pos[a], pos[b], pos[c]) - TRI_EPS, x1 = __M.max(pos[a], pos[b], pos[c]) + TRI_EPS;
-        const z0 = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]) - TRI_EPS;
-        const z1 = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]) + TRI_EPS;
-        const i0 = __M.max(0, __M.floor((x0 - mnx) / CELL)), i1 = __M.min(nx - 1, __M.floor((x1 - mnx) / CELL));
-        const j0 = __M.max(0, __M.floor((z0 - mnz) / CELL)), j1 = __M.min(nz - 1, __M.floor((z1 - mnz) / CELL));
-        const tl = pass ? 0 : _triLo(pos, a, b, c);
-        for (let j = j0; j <= j1; j++) {
-          for (let i = i0, k = j * nx + i0; i <= i1; i++, k++) {
-            if (pass) list[fill[k]++] = t;
-            else { start[k + 1]++; if (tl < lo[k]) lo[k] = tl; }
-          }
-        }
-      }
-      if (!pass) { for (let k = 0; k < nc; k++) start[k + 1] += start[k]; list = new Uint32Array(start[nc]); fill = start.slice(0, nc); }
+    const rng = new Int32Array(idx.length / 3 * 4);   // per triangle i0 i1 j0 j1: counted, then filled
+    for (let t = 0, r = 0; t < idx.length; t += 3, r += 4) {
+      const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+      const x0 = __M.min(pos[a], pos[b], pos[c]) - TRI_EPS, x1 = __M.max(pos[a], pos[b], pos[c]) + TRI_EPS;
+      const z0 = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]) - TRI_EPS;
+      const z1 = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]) + TRI_EPS;
+      const i0 = rng[r] = __M.max(0, __M.floor((x0 - mnx) / CELL)), i1 = rng[r + 1] = __M.min(nx - 1, __M.floor((x1 - mnx) / CELL));
+      const j0 = rng[r + 2] = __M.max(0, __M.floor((z0 - mnz) / CELL)), j1 = rng[r + 3] = __M.min(nz - 1, __M.floor((z1 - mnz) / CELL));
+      const tl = _triLo(pos, a, b, c);
+      for (let j = j0; j <= j1; j++) for (let k = j * nx + i0, e = j * nx + i1; k <= e; k++) { start[k + 1]++; if (tl < lo[k]) lo[k] = tl; }
+    }
+    for (let k = 0; k < nc; k++) start[k + 1] += start[k];
+    const list = new Uint32Array(start[nc]), fill = start.slice(0, nc);
+    for (let t = 0, r = 0; t < idx.length; t += 3, r += 4) {
+      for (let j = rng[r + 2]; j <= rng[r + 3]; j++) for (let k = j * nx + rng[r], e = j * nx + rng[r + 1]; k <= e; k++) list[fill[k]++] = t;
     }
     track._terrGrid = { geo: g, mnx, mnz, mxx, mxz, nx, nz, cell: CELL, start, list, lo };
     return track._terrGrid;
   }
   // The lowest height _triY can return: the lowest vertex, less the dip of each
   // barycentric to -TRI_EPS / altitude (altitude = 2A / edge): at most (maxY -
-  // minY) * TRI_EPS * perimeter / 2A. 1e-6 m covers rounding.
+  // minY) * TRI_EPS * perimeter / 2A, and perimeter <= sqrt(3 * sum of edge^2)
+  // (one sqrt, still a floor). 1e-6 m covers rounding.
   function _triLo(pos, a, b, c) {
     const v0x = pos[c] - pos[a], v0z = pos[c + 2] - pos[a + 2], v1x = pos[b] - pos[a], v1z = pos[b + 2] - pos[a + 2];
     const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z;
     const den = d00 * d11 - d01 * d01; if (__M.abs(den) < 1e-9) return Infinity;
-    const ya = pos[a + 1], yb = pos[b + 1], yc = pos[c + 1], mn = __M.min(ya, yb, yc);
-    const per = __M.sqrt(d00) + __M.sqrt(d11) + __M.sqrt((v0x - v1x) * (v0x - v1x) + (v0z - v1z) * (v0z - v1z));
-    return mn - (__M.max(ya, yb, yc) - mn) * TRI_EPS * per / __M.sqrt(den) - 1e-6;
+    const ya = pos[a + 1], yb = pos[b + 1], yc = pos[c + 1], mn = __M.min(ya, yb, yc), dy = __M.max(ya, yb, yc) - mn;
+    return dy > 0 ? mn - dy * TRI_EPS * __M.sqrt(3 * (d00 + d11 + (d00 + d11 - 2 * d01)) / den) - 1e-6 : mn - 1e-6;
   }
   // terrainGrid cell holding (x, z), or -1 off the grid (terrainY answers null there).
   function terrainCell(G, x, z) {
