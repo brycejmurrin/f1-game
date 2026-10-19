@@ -1,6 +1,6 @@
 /* net-rendezvous.test.mjs — the room-code client, against a REAL relay.
  *
- * The relay is a throwaway node HTTP server implementing the same contract as
+ * The relay is a throwaway node HTTP server backed by the real
  * worker/rendezvous.js: POST/GET /v3/r/<opaque-id>/<offer|answer>, 404 when nothing is
  * there, 409 when a live offer would be overwritten. Real fetch, real status
  * codes, real JSON — the only thing not exercised is Cloudflare itself.
@@ -18,6 +18,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
+import { randomUUID } from "node:crypto";
+import worker from "../../worker/rendezvous.js";
+import { roomNamespace } from "../helpers/rendezvous-room.mjs";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
@@ -61,12 +64,16 @@ test("a successful response arriving after cancellation never publishes a payloa
 });
 
 // ---------------------------------------------------------------------------
-// A stand-in for worker/rendezvous.js, same contract.
+// The real Worker, reached through a real HTTP socket. Failure middleware
+// stays outside the Worker so the client still sees outages and slow relays.
 // ---------------------------------------------------------------------------
 function relay(opts = {}) {
-  const rooms = new Map();          // opaque room id -> {offer, answer}
+  const { rooms, env } = roomNamespace();
   const requests = [];
-  const server = http.createServer((req, res) => {
+  // Worker rate buckets are module-local. Each relay has its own client IP so
+  // one case's real writes/polls cannot exhaust another case's rate budget.
+  const ip = `fixture-${randomUUID()}`;
+  const server = http.createServer(async (req, res) => {
     const seen = { path: req.url }; requests.push(seen);
     const send = (code, obj) => {
       res.writeHead(code, { "content-type": "application/json", "x-apex-rendezvous": "3" });
@@ -74,37 +81,33 @@ function relay(opts = {}) {
     };
     if (opts.dead) return send(500, { error: "boom" });
     if (opts.hang) return;          // never responds — the timeout path
-
-    const m = req.url.match(/^\/v3\/r\/([0-9a-f]{64})\/(offer|answer)$/);
-    if (!m) return send(404, { error: "not_found" });
-    const [, code, slot] = m;
-    const room = rooms.get(code) || {};
-
-    if (req.method === "GET") {
-      // flakyGets: answer the first N polls with a 429 — the transient hiccup
-      // waitFor() must ride out rather than abort the poll wait on.
-      if (opts.flakyGets > 0) { opts.flakyGets--; return send(429, { error: "rate_limited" }); }
-      if (!room[slot]) return send(404, { error: "not_found" });
-      return send(200, { payload: room[slot].payload });
+    // Transient errors are deliberately injected before the healthy handler.
+    if (req.method === "GET" && opts.flakyGets > 0) {
+      opts.flakyGets--;
+      return send(429, { error: "rate_limited" });
     }
-    let body = "";
-    req.on("data", (c) => { body += c; });
-    req.on("end", () => {
-      const parsed = JSON.parse(body || "{}");
-      seen.body = parsed;
-      const payload = parsed.payload;
-      const owner = parsed.owner || null;
-      // v2 envelopes only, like worker/rendezvous.js: the operator never holds
-      // a plaintext SDP, and a retry is recognised by the owner capability.
-      if (typeof payload !== "string" || !payload.startsWith("v2.")) return send(400, { error: "bad_payload" });
-      if (slot === "offer" && room.offer) {
-        const sameOwner = owner && room.offer.owner && owner === room.offer.owner;
-        if (!sameOwner) return send(409, { error: "taken" });
+    try {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const body = Buffer.concat(chunks);
+      if (body.length) {
+        try { seen.body = JSON.parse(body.toString("utf8")); } catch (_) {}
       }
-      room[slot] = { payload, owner };
-      rooms.set(code, room);
-      send(200, { ok: true });
-    });
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(req.headers)) {
+        if (value != null) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
+      }
+      headers.set("cf-connecting-ip", ip);
+      const init = { method: req.method, headers };
+      if (req.method !== "GET" && req.method !== "HEAD") init.body = body;
+      const response = await worker.fetch(new Request(`http://relay.test${req.url}`, init), env);
+      res.writeHead(response.status, Object.fromEntries(response.headers));
+      res.end(Buffer.from(await response.arrayBuffer()));
+    } catch (error) {
+      // Unexpected fixture failures must fail the client's observable request,
+      // rather than escaping an async HTTP listener and hanging the suite.
+      send(500, { error: String(error) });
+    }
   });
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
@@ -193,6 +196,26 @@ test("the two halves meet at the same code", async () => {
   } finally { await r.close(); }
 });
 
+test("HTTP relay enforces real Worker owner validation and stored-record expiry", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    assert.equal((await NetRendezvous.put(code, "offer", "REAL-OFFER")).ok, true);
+    const id = await NetRendezvous.privateRoomId(code);
+    const stored = r.rooms.get(id).offer;
+    const rejected = await fetch(`${r.url}/v3/r/${id}/offer`, {
+      method: "POST", body: JSON.stringify({ payload: stored.payload, owner: "short" }),
+    });
+    assert.equal(rejected.status, 400);
+    assert.equal((await rejected.json()).error, "bad_owner");
+    assert.equal(r.rooms.get(id).offer.payload, stored.payload, "invalid owner cannot replace the offer");
+    stored.expires = Date.now() - 1;
+    assert.equal((await NetRendezvous.get(code, "offer")).error, "not_found", "expired stored offers are not served");
+    assert.equal((await NetRendezvous.put(code, "offer", "RENEWED-OFFER")).ok, true, "an expired slot accepts a fresh offer");
+    assert.equal((await NetRendezvous.get(code, "offer")).body.payload, "RENEWED-OFFER");
+  } finally { await r.close(); }
+});
+
 test("an encrypted offer retry changes ciphertext but keeps ownership", async () => {
   const r = await relay();
   try {
@@ -214,11 +237,11 @@ test("a plaintext (or v1) mailbox record from the relay is refused, never used a
   const r = await relay();
   try {
     const code = NetRendezvous.makeCode();
-    r.rooms.set(await NetRendezvous.privateRoomId(code), { offer: { payload: "LEGACY-OFFER", owner: null } });
+    r.rooms.set(await NetRendezvous.privateRoomId(code), { offer: { payload: "LEGACY-OFFER", owner: null, expires: Date.now() + 60000 } });
     const got = await NetRendezvous.get(code, "offer");
     assert.equal(got.ok, false);
     assert.equal(got.error, "corrupt");
-    r.rooms.set(await NetRendezvous.privateRoomId(code), { offer: { payload: "v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", owner: null } });
+    r.rooms.set(await NetRendezvous.privateRoomId(code), { offer: { payload: "v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", owner: null, expires: Date.now() + 60000 } });
     assert.equal((await NetRendezvous.get(code, "offer")).error, "corrupt");
   } finally { await r.close(); }
 });

@@ -1,21 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import worker, { Room } from "../../worker/rendezvous.js";
-
-function roomHarness() {
-  const records = new Map();
-  const calls = { get: 0, put: 0, alarm: 0, deleteAll: 0 };
-  const state = {
-    storage: {
-      async get(key) { calls.get++; return records.get(key); },
-      async put(key, value) { calls.put++; records.set(key, value); },
-      async setAlarm() { calls.alarm++; },
-      async deleteAll() { calls.deleteAll++; records.clear(); },
-    },
-  };
-  return { room: new Room(state), records, calls };
-}
+import worker from "../../worker/rendezvous.js";
+import { roomHarness } from "../helpers/rendezvous-room.mjs";
 
 const route = "https://relay.test/v3/r/" + "a".repeat(64) + "/offer";
 const url = route + "?slot=offer";
