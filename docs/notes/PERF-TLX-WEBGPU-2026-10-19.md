@@ -36,6 +36,15 @@ census on macos-latest is the only hardware evidence here.
 | F6 | three r186 renderer | every `renderer.render()` into a target is its own command encoder + `queue.submit` (~9/frame; post chain, mirror, shadows, main) | needs upstream (render bundles / one encoder per frame); not reachable without a vendor change | census `gpu.submit` per frame | recommendation (vendor is out of scope) |
 | F7 | `js/render/shared/mirror-pass.js:79` | full mirror rung culls at 400 m for a 230x66 target: 55–67k tris, ~25% of the frame's triangles | GPU vertex work; a design call (look) | pass-census mirror row | open: structural, needs visual sign-off (TLX-WEBGPU-PERF-2026-10-18 §mirror density) |
 
+### Round 2 (js/render/shared/, js/lighting/)
+
+| # | file:line | mechanism | expected win | measure | status |
+|---|---|---|---|---|---|
+| R2-1 | `js/lighting/frame-lights.js:238,399` | the lamp-rank cache compared the RAW `camTgt - camEye` forward vector (~8 m long, game.js) against `1e-4`, so ~0.07° of yaw failed it and every cornering frame re-ranked the whole lamp set; the mirror's ~20 m aim vector did the same | corner re-ranks 600 → 120 per 600 frames | `frame-lights-rank-cache` corner test (base: 0 reuses, 600 rebuilds; fails on base); vm bench 1000 lamps 174 → 103 µs/frame (relative) | FIXED this PR: unit direction, 1.5° budget, 100 ms age cap unchanged |
+| R2-2 | `js/lighting/frame-lights.js:214,363` | per-chunk lamps + flicker: `_fillAllLights` re-tints every baked lamp each 50 ms (2 sin, hash, warm-up maths, 2 `LT` reads per lamp) | ~85 µs/frame at 5000 lamps (Node bench) | bench `setFrameLights` perChunkLights:1 flicker 0.1 | open (tracking issue) |
+| R2-3 | `js/render/shared/mirror-pass.js:594` | `measure()`/`side()` read layout boxes at 2 Hz inside `render()`, after the previous frame's HUD writes: forced sync layout | est. 0.2–2 ms per hit on a phone | getBoundingClientRect count per span | open (tracking issue) |
+| R2-4 | `js/lighting/atmosphere.js:79` | during a 25 s weather blend `_mixv` allocates per vector key per frame, and continuously moving `lampCullFade` breaks rank reuse | allocation + per-frame re-rank for 25 s | `Atmosphere.tick` 60-frame allocation count | open (tracking issue) |
+
 Prior art re-checked and STALE: MEM-1 (post targets never disposed) is fixed
 by `SHED_FRAMES` in `tlx-post.js:376`.
 
