@@ -1,9 +1,6 @@
 /* Apex 26 — SceneryNature: the nature/landscape band of the buildProps composite-model toolkit — the shared trackside anchor() plus vegetation (pine/tree/palm/con… */
 const SceneryNature = (function () {
   "use strict";
-  // Local alias: inside the TRACK_VM context a bare global costs ~88 ns per read
-  // against ~7 ns here, so bare Math inflated these emitters ~12x in VM profiles (#3113).
-  const __M = Math;
 
   // Opt-in opaque broadleaf silhouettes, in a 12 m canonical frame. Each
   // [x,z,y,radius,lowerRise,capRise] lobe intersects the trunk/other lobes.
@@ -19,16 +16,16 @@ const SceneryNature = (function () {
   // centre-anchored. These rectangles contain every vertex of each primitive.
   function palmFootprint(part) {
     const [r, u, t] = part.b, [w, h, d] = part.size;
-    const L = __M.hypot(r[0], r[2]) || 1;
+    const L = Math.hypot(r[0], r[2]) || 1;
     const rx = [r[0] / L, 0, r[2] / L], tz = [-rx[2], 0, rx[0]];
-    const proj = (v, axis) => __M.abs(v[0] * axis[0] + v[2] * axis[2]);
+    const proj = (v, axis) => Math.abs(v[0] * axis[0] + v[2] * axis[2]);
     const c = part.type === "box" ? part.c : TrackGeom.vadd(part.c, u, h / 2);
     const fw = w * proj(r, rx) + h * proj(u, rx) + d * proj(t, rx);
     const fd = w * proj(r, tz) + h * proj(u, tz) + d * proj(t, tz);
-    const ey = (w * __M.abs(r[1]) + h * __M.abs(u[1]) + d * __M.abs(t[1])) / 2;
+    const ey = (w * Math.abs(r[1]) + h * Math.abs(u[1]) + d * Math.abs(t[1])) / 2;
     return { c, w: fw, d: fd, b: [rx, [0, 1, 0], tz], minY: c[1] - ey, maxY: c[1] + ey,
-      ex: (fw * __M.abs(rx[0]) + fd * __M.abs(tz[0])) / 2,
-      ez: (fw * __M.abs(rx[2]) + fd * __M.abs(tz[2])) / 2 };
+      ex: (fw * Math.abs(rx[0]) + fd * Math.abs(tz[0])) / 2,
+      ez: (fw * Math.abs(rx[2]) + fd * Math.abs(tz[2])) / 2 };
   }
 
   function palmVertices(part) {
@@ -41,16 +38,16 @@ const SceneryNature = (function () {
     return verts;
   }
 
-  const palmBoundsOverlap = (a, b) => __M.abs(a.c[0] - b.c[0]) <= a.ex + b.ex &&
-    __M.abs(a.c[2] - b.c[2]) <= a.ez + b.ez && a.minY <= b.maxY && b.minY <= a.maxY;
+  const palmBoundsOverlap = (a, b) => Math.abs(a.c[0] - b.c[0]) <= a.ex + b.ex &&
+    Math.abs(a.c[2] - b.c[2]) <= a.ez + b.ez && a.minY <= b.maxY && b.minY <= a.maxY;
 
   function palmOverlaps(a, b) {
     if (!palmBoundsOverlap(a, b)) return false;
     const dx = a.c[0] - b.c[0], dz = a.c[2] - b.c[2];
     return [a.b[0], a.b[2], b.b[0], b.b[2]].every((axis) => {
-      const reach = (f) => (f.w * __M.abs(f.b[0][0] * axis[0] + f.b[0][2] * axis[2]) +
-                            f.d * __M.abs(f.b[2][0] * axis[0] + f.b[2][2] * axis[2])) / 2;
-      return __M.abs(dx * axis[0] + dz * axis[2]) <= reach(a) + reach(b);
+      const reach = (f) => (f.w * Math.abs(f.b[0][0] * axis[0] + f.b[0][2] * axis[2]) +
+                            f.d * Math.abs(f.b[2][0] * axis[0] + f.b[2][2] * axis[2])) / 2;
+      return Math.abs(dx * axis[0] + dz * axis[2]) <= reach(a) + reach(b);
     });
   }
 
@@ -89,11 +86,11 @@ const SceneryNature = (function () {
           if (d < bestD) { bestD = d; best = i; }
         }
       }
-      return groundYAt(best, __M.max(0, __M.sqrt(bestD) - hw[best]));
+      return groundYAt(best, Math.max(0, Math.sqrt(bestD) - hw[best]));
     };
 
     const anchor = (kRaw, side, dist) => {
-      const k = __M.round(((kRaw % n) + n) % n) % n;
+      const k = Math.round(((kRaw % n) + n) % n) % n;
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -155,11 +152,11 @@ const SceneryNature = (function () {
     // always adjacent, so consecutive slots is exactly the guarantee needed.
     let hillSeq = 0, standSeq = 0;
     const spotOccupied = (x, z, reserve = true) => {
-      const cx = __M.floor(x / TREE_GAP), cz = __M.floor(z / TREE_GAP);
+      const cx = Math.floor(x / TREE_GAP), cz = Math.floor(z / TREE_GAP);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
         const cell = planted.get(`${cx + i}|${cz + j}`);
         if (cell) for (const q of cell)
-          if (__M.hypot(q[0] - x, q[1] - z) < TREE_GAP) return true;
+          if (Math.hypot(q[0] - x, q[1] - z) < TREE_GAP) return true;
       }
       if (!reserve) return false;
       const key = `${cx}|${cz}`;
@@ -172,16 +169,16 @@ const SceneryNature = (function () {
     // 10 m grid, for pine()'s coplanar guard.
     const PINE_CELL = 10, pineFacetGrid = new Map();
     const pineFacetsNear = (x, z, reach) => {
-      const res = [], cx = __M.floor(x / PINE_CELL), cz = __M.floor(z / PINE_CELL);
+      const res = [], cx = Math.floor(x / PINE_CELL), cz = Math.floor(z / PINE_CELL);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
         const cell = pineFacetGrid.get(`${cx + i}|${cz + j}`);
         if (cell) for (const q of cell)
-          if (__M.hypot(q.x - x, q.z - z) < q.reach + reach) res.push(q.facets);
+          if (Math.hypot(q.x - x, q.z - z) < q.reach + reach) res.push(q.facets);
       }
       return res;
     };
     const pineFacetsAdd = (x, z, reach, facets) => {
-      const key = `${__M.floor(x / PINE_CELL)}|${__M.floor(z / PINE_CELL)}`;
+      const key = `${Math.floor(x / PINE_CELL)}|${Math.floor(z / PINE_CELL)}`;
       if (!pineFacetGrid.has(key)) pineFacetGrid.set(key, []);
       pineFacetGrid.get(key).push({ x, z, reach, facets });
     };
@@ -195,7 +192,7 @@ const SceneryNature = (function () {
       // grew through the bay roofs. A tree is one object: if its crown would
       // reach in, none of it stands. (clearTreeDist plants with the same
       // margin; this is the guard for a direct call.)
-      if (onTrack(a.c[0], a.c[2], 3, __M.max(0.5, h * 0.225))) {
+      if (onTrack(a.c[0], a.c[2], 3, Math.max(0.5, h * 0.225))) {
         ctx.noteSuppressed("pine", `pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
@@ -206,11 +203,11 @@ const SceneryNature = (function () {
       const sparse = opts.sparse != null ? !!opts.sparse : vr > 0.82;   // ~18% thinner 3-tier trees
       const lean = opts.lean != null ? opts.lean
         : (!sparse && vr > 0.55 ? (vr - 0.55) * 2.2 : 0);              // ~27% windswept lean
-      const tiers = opts.tiers != null ? __M.max(2, __M.min(6, __M.round(opts.tiers)))
+      const tiers = opts.tiers != null ? Math.max(2, Math.min(6, Math.round(opts.tiers)))
         : (sparse ? 3 : 4);
       const PINE_REF_H = 12;
-      const jQ = 0.85 + __M.round((j - 0.85) / 0.15) * 0.15;
-      const leanQ = lean <= 0 ? 0 : __M.round(lean / 0.4) * 0.4;
+      const jQ = 0.85 + Math.round((j - 0.85) / 0.15) * 0.15;
+      const leanQ = lean <= 0 ? 0 : Math.round(lean / 0.4) * 0.4;
       const s = h / PINE_REF_H;
       const o = [a.c[0] - a.u[0] * 0.5, a.c[1] - a.u[1] * 0.5, a.c[2] - a.u[2] * 0.5];
       const r = side < 0 ? [-a.r[0], -a.r[1], -a.r[2]] : a.r;
@@ -236,8 +233,8 @@ const SceneryNature = (function () {
           const ap = W([lx, y + H * 0.32, 0]);
           for (let f = 0; f < 7; f++) {
             const a0 = f / 7 * 6.2832, a1 = (f + 1) / 7 * 6.2832;
-            const p0 = W([lx + __M.cos(a0) * w, y, __M.sin(a0) * w]);
-            const p1 = W([lx + __M.cos(a1) * w, y, __M.sin(a1) * w]);
+            const p0 = W([lx + Math.cos(a0) * w, y, Math.sin(a0) * w]);
+            const p1 = W([lx + Math.cos(a1) * w, y, Math.sin(a1) * w]);
             const e1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], e2 = [ap[0] - p0[0], ap[1] - p0[1], ap[2] - p0[2]];
             const n = norm([e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]);
             facets.push([n[0], n[1], n[2], n[0] * ap[0] + n[1] * ap[1] + n[2] * ap[2]]);
@@ -250,13 +247,13 @@ const SceneryNature = (function () {
       if (near.length) {
         const clash = (d) => {
           for (const q of near) for (const F of facets) for (const G of q) {
-            if (__M.abs(F[0] * G[0] + F[1] * G[1] + F[2] * G[2]) < 0.999) continue;
+            if (Math.abs(F[0] * G[0] + F[1] * G[1] + F[2] * G[2]) < 0.999) continue;
             const dF = F[3] - d * F[1], sgn = F[0] * G[0] + F[1] * G[1] + F[2] * G[2] > 0 ? 1 : -1;
-            if (__M.abs(dF - sgn * G[3]) < TrackGeom.MIN_SEP) return true;
+            if (Math.abs(dF - sgn * G[3]) < TrackGeom.MIN_SEP) return true;
           }
           return false;
         };
-        for (let i = 0; clash(dz) && i < 12; i++) dz = TrackGeom.SEP_SLOTS[i % 4] + __M.floor(i / 4) * 0.2;
+        for (let i = 0; clash(dz) && i < 12; i++) dz = TrackGeom.SEP_SLOTS[i % 4] + Math.floor(i / 4) * 0.2;
       }
       if (dz) { o[1] -= dz; for (const F of facets) F[3] -= dz * F[1]; }
       pineFacetsAdd(a.c[0], a.c[2], reach, facets);
@@ -303,8 +300,8 @@ const SceneryNature = (function () {
     const TREE_CELL = 24, placedTrees = new Map();
     const treeOccupied = (f, relocated) => {
       const seen = new Set();
-      for (let x = __M.floor((f.c[0] - f.ex) / TREE_CELL); x <= __M.floor((f.c[0] + f.ex) / TREE_CELL); x++)
-        for (let z = __M.floor((f.c[2] - f.ez) / TREE_CELL); z <= __M.floor((f.c[2] + f.ez) / TREE_CELL); z++)
+      for (let x = Math.floor((f.c[0] - f.ex) / TREE_CELL); x <= Math.floor((f.c[0] + f.ex) / TREE_CELL); x++)
+        for (let z = Math.floor((f.c[2] - f.ez) / TREE_CELL); z <= Math.floor((f.c[2] + f.ez) / TREE_CELL); z++)
           for (const site of placedTrees.get(`${x}|${z}`) || []) {
             if (seen.has(site) || (!relocated && !site.relocated)) continue;
             seen.add(site);
@@ -313,7 +310,7 @@ const SceneryNature = (function () {
       return false;
     };
     const lobedTree = (k, side, dist, h, col, opts, vr) => {
-      const variant = opts.variant === undefined ? __M.floor(vr * 3) : opts.variant;
+      const variant = opts.variant === undefined ? Math.floor(vr * 3) : opts.variant;
       if (!Number.isFinite(h) || h <= 0 || !Number.isInteger(variant) || variant < 0 || variant > 2 ||
           (opts.spread !== undefined && opts.spread !== 1) ||
           !Array.isArray(col) || col.length !== 3 || !col.every(Number.isFinite)) return false;
@@ -331,7 +328,7 @@ const SceneryNature = (function () {
       const clear = footprints.every((f, i) => {
         if (rejBox(f.c, [f.w, f.maxY - f.minY, f.d], f.b) ||
             ctx.massBlocked(f.c, f.w, f.d, f.b, 1) || treeOccupied(f, false) ||
-            !ctx.barrierClear(f.c[0], f.c[2], __M.hypot(f.w, f.d) / 2)) return false;
+            !ctx.barrierClear(f.c[0], f.c[2], Math.hypot(f.w, f.d) / 2)) return false;
         if (!i) return true;
         const p = parts[i], half = p.size[0] / 2;
         for (const [x, z] of [[0, 0], [-half, -half], [-half, half], [half, -half], [half, half]]) {
@@ -362,13 +359,13 @@ const SceneryNature = (function () {
       out._mat = 0; out._matAt = null;
       if (!landed) return false;
       spotTaken(a.c[0], a.c[2]);
-      const minX = __M.min(...footprints.map((f) => f.c[0] - f.ex)), maxX = __M.max(...footprints.map((f) => f.c[0] + f.ex));
-      const minZ = __M.min(...footprints.map((f) => f.c[2] - f.ez)), maxZ = __M.max(...footprints.map((f) => f.c[2] + f.ez));
-      const minY = __M.min(...footprints.map((f) => f.minY)), maxY = __M.max(...footprints.map((f) => f.maxY));
+      const minX = Math.min(...footprints.map((f) => f.c[0] - f.ex)), maxX = Math.max(...footprints.map((f) => f.c[0] + f.ex));
+      const minZ = Math.min(...footprints.map((f) => f.c[2] - f.ez)), maxZ = Math.max(...footprints.map((f) => f.c[2] + f.ez));
+      const minY = Math.min(...footprints.map((f) => f.minY)), maxY = Math.max(...footprints.map((f) => f.maxY));
       const site = { parts: footprints, relocated: false, c: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
         ex: (maxX - minX) / 2, ez: (maxZ - minZ) / 2, minY, maxY };
-      for (let x = __M.floor(minX / TREE_CELL); x <= __M.floor(maxX / TREE_CELL); x++)
-        for (let z = __M.floor(minZ / TREE_CELL); z <= __M.floor(maxZ / TREE_CELL); z++) {
+      for (let x = Math.floor(minX / TREE_CELL); x <= Math.floor(maxX / TREE_CELL); x++)
+        for (let z = Math.floor(minZ / TREE_CELL); z <= Math.floor(maxZ / TREE_CELL); z++) {
           const key = `${x}|${z}`;
           if (!placedTrees.has(key)) placedTrees.set(key, []);
           placedTrees.get(key).push(site);
@@ -382,8 +379,8 @@ const SceneryNature = (function () {
     // trunk or crown inside this box (centre c, w x h x d, basis b)?
     const treeInFootprint = (c, w, h, d, b) => {
       const f = palmFootprint({ type: "box", c, size: [w, h, d], b }), seen = new Set();
-      for (let x = __M.floor((f.c[0] - f.ex) / TREE_CELL); x <= __M.floor((f.c[0] + f.ex) / TREE_CELL); x++)
-        for (let z = __M.floor((f.c[2] - f.ez) / TREE_CELL); z <= __M.floor((f.c[2] + f.ez) / TREE_CELL); z++)
+      for (let x = Math.floor((f.c[0] - f.ex) / TREE_CELL); x <= Math.floor((f.c[0] + f.ex) / TREE_CELL); x++)
+        for (let z = Math.floor((f.c[2] - f.ez) / TREE_CELL); z <= Math.floor((f.c[2] + f.ez) / TREE_CELL); z++)
           for (const site of placedTrees.get(`${x}|${z}`) || []) {
             if (seen.has(site)) continue;
             seen.add(site);
@@ -409,7 +406,7 @@ const SceneryNature = (function () {
           part("cyl", -0.5, 0.32, h * 0.7 + 0.5);
           for (let i = 0; i < 3; i++) {
             const bh = hash(k * 11 + i * 3.1 + initialDist), angle = (i / 3 + bh * 0.4) * 6.2832;
-            const bu = p.u.map((v, axis) => v * 0.7 + (p.r[axis] * __M.cos(angle) + p.t[axis] * __M.sin(angle)) * 0.7);
+            const bu = p.u.map((v, axis) => v * 0.7 + (p.r[axis] * Math.cos(angle) + p.t[axis] * Math.sin(angle)) * 0.7);
             part("cyl", h * 0.7 + i * 0.25, 0.09, 1.6 + bh * 1.4, 0, [p.r, bu, p.t]);
           }
         } else {
@@ -435,12 +432,12 @@ const SceneryNature = (function () {
         }
         return parts;
       };
-      const clearAt = (p, relocated = false) => !onTrack(p.c[0], p.c[2], 4, __M.max(0.5, h * 0.3 * sp)) &&
+      const clearAt = (p, relocated = false) => !onTrack(p.c[0], p.c[2], 4, Math.max(0.5, h * 0.3 * sp)) &&
         partsAt(p).every((part) => {
           const f = palmFootprint(part);
           return !ctx.massBlocked(f.c, f.w, f.d, f.b, 1) &&
             !treeOccupied(f, relocated) &&
-            ctx.barrierClear(f.c[0], f.c[2], __M.hypot(f.w, f.d) / 2) &&
+            ctx.barrierClear(f.c[0], f.c[2], Math.hypot(f.w, f.d) / 2) &&
             !rejBox(f.c, [f.w, f.maxY - f.minY, f.d], f.b);
         });
       let a = anchor(k, side, dist);
@@ -460,13 +457,13 @@ const SceneryNature = (function () {
       if (spotTaken(a.c[0], a.c[2])) return;   // reserve only the successful site
       const reserve = () => {
         const parts = partsAt(a).map(palmFootprint);
-        const minX = __M.min(...parts.map((f) => f.c[0] - f.ex)), maxX = __M.max(...parts.map((f) => f.c[0] + f.ex));
-        const minZ = __M.min(...parts.map((f) => f.c[2] - f.ez)), maxZ = __M.max(...parts.map((f) => f.c[2] + f.ez));
+        const minX = Math.min(...parts.map((f) => f.c[0] - f.ex)), maxX = Math.max(...parts.map((f) => f.c[0] + f.ex));
+        const minZ = Math.min(...parts.map((f) => f.c[2] - f.ez)), maxZ = Math.max(...parts.map((f) => f.c[2] + f.ez));
         const site = { parts, relocated: dist !== initialDist, c: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
           ex: (maxX - minX) / 2, ez: (maxZ - minZ) / 2,
-          minY: __M.min(...parts.map((f) => f.minY)), maxY: __M.max(...parts.map((f) => f.maxY)) };
-        for (let x = __M.floor(minX / TREE_CELL); x <= __M.floor(maxX / TREE_CELL); x++)
-          for (let z = __M.floor(minZ / TREE_CELL); z <= __M.floor(maxZ / TREE_CELL); z++) {
+          minY: Math.min(...parts.map((f) => f.minY)), maxY: Math.max(...parts.map((f) => f.maxY)) };
+        for (let x = Math.floor(minX / TREE_CELL); x <= Math.floor(maxX / TREE_CELL); x++)
+          for (let z = Math.floor(minZ / TREE_CELL); z <= Math.floor(maxZ / TREE_CELL); z++) {
             const key = `${x}|${z}`;
             if (!placedTrees.has(key)) placedTrees.set(key, []);
             placedTrees.get(key).push(site);
@@ -488,7 +485,7 @@ const SceneryNature = (function () {
         for (let i = 0; i < 3; i++) {
           const bh = hash(k * 11 + i * 3.1 + initialDist);
           const ang = (i / 3 + bh * 0.4) * 6.2832;
-          const ca = __M.cos(ang), sa = __M.sin(ang);
+          const ca = Math.cos(ang), sa = Math.sin(ang);
           const bu = [
             a.u[0] * 0.7 + (a.r[0] * ca + a.t[0] * sa) * 0.7,
             a.u[1] * 0.7 + (a.r[1] * ca + a.t[1] * sa) * 0.7,
@@ -512,7 +509,7 @@ const SceneryNature = (function () {
         const usCol = [col[0] * 0.5, col[1] * 0.52, col[2] * 0.5];
         const uref = vadd(a.c, a.u, h * 0.7);
         const apex = vadd(a.c, a.u, apexY);
-        const ring = (ang) => vadd(vadd(vadd(a.c, a.u, ringY), a.r, __M.cos(ang) * usR), a.t, __M.sin(ang) * usR);
+        const ring = (ang) => vadd(vadd(vadd(a.c, a.u, ringY), a.r, Math.cos(ang) * usR), a.t, Math.sin(ang) * usR);
         // A wedge whose whole rim is under the terrain is hidden: the trunk is
         // seated at ONE point, and a tree at the foot of a cutting or bank has
         // ground rising metres above its 5-6 m wide skirt (ground-audit: 219
@@ -522,7 +519,7 @@ const SceneryNature = (function () {
         // centroid) is under the terrain; a tilted `u` can leave one rim corner
         // alone at the top, so the rim is not assumed level.
         const hidden = (tri) => {
-          const top = __M.max(tri[0][1], tri[1][1], tri[2][1]) - 0.02;
+          const top = Math.max(tri[0][1], tri[1][1], tri[2][1]) - 0.02;
           let sx = 0, sy = 0, sz = 0, m = 0, seen = 0;
           const under = (x, y, z) => { const ty = terrainYAt(x, z); if (ty === null) return true; seen++; return ty > y; };
           for (const p of tri) {
@@ -583,14 +580,14 @@ const SceneryNature = (function () {
         for (let t = 0; t < 3; t++) {
           const p0 = t ? joint(t) : vadd(a.c, a.u, -0.6), p1 = joint(t + 1);
           const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
-          const L = __M.hypot(d[0], d[1], d[2]) || seg, rad = 0.34 - t * 0.06;
+          const L = Math.hypot(d[0], d[1], d[2]) || seg, rad = 0.34 - t * 0.06;
           parts.push({ type: "cyl", c: p0, size: [rad * 2, L, rad * 2],
             b: [a.r, [d[0] / L, d[1] / L, d[2] / L], a.t], col: [0.45 - t * 0.03, 0.36, 0.22] });
         }
         const base = joint(3), top = vadd(base, a.u, -0.35);
         parts.push({ type: "box", c: top, size: [1.7, 1.2, 1.7], b, col: frDark });
         for (let i = 0; i < 9; i++) {
-          const ang = (i / 9 + hash(k + i * 1.7) * 0.06) * 6.2832, dir = [__M.cos(ang), 0, __M.sin(ang)];
+          const ang = (i / 9 + hash(k + i * 1.7) * 0.06) * 6.2832, dir = [Math.cos(ang), 0, Math.sin(ang)];
           const fr = [dir[0] * a.r[0] + dir[2] * a.t[0], 0, dir[0] * a.r[2] + dir[2] * a.t[2]];
           const droop = 0.45 + hash(k * 2.1 + i) * 0.5;
           const fu = [fr[0] * droop + a.u[0] * (1 - droop), a.u[1] * (1 - droop * 0.7), fr[2] * droop + a.u[2] * (1 - droop)];
@@ -600,7 +597,7 @@ const SceneryNature = (function () {
         }
         for (let i = 0; i < 3; i++) {
           const ang = i / 3 * 6.2832;
-          parts.push({ type: "box", c: vadd(vadd(top, a.r, __M.cos(ang) * 0.5), a.t, __M.sin(ang) * 0.5),
+          parts.push({ type: "box", c: vadd(vadd(top, a.r, Math.cos(ang) * 0.5), a.t, Math.sin(ang) * 0.5),
             size: [0.34, 0.34, 0.34], b, col: [0.32, 0.24, 0.14] });
         }
         return { parts, base };
@@ -610,7 +607,7 @@ const SceneryNature = (function () {
         return !ctx.massBlocked(f.c, f.w, f.d, f.b, 1) &&
           !placedPalms.some((p) => (barriers || p.relocated) && palmBoundsOverlap(f, p) &&
             p.parts.some((q) => palmOverlaps(f, q))) &&
-          (!barriers || ctx.barrierClear(f.c[0], f.c[2], __M.hypot(f.w, f.d) / 2));
+          (!barriers || ctx.barrierClear(f.c[0], f.c[2], Math.hypot(f.w, f.d) / 2));
       });
       const foliageClear = (parts) => parts.slice(3).every((part) => palmVertices(part).every((v) => {
         const ground = typeof Tracks !== "undefined" && typeof Tracks.terrainY === "function"
@@ -649,11 +646,11 @@ const SceneryNature = (function () {
         else addBox(out, part.c, part.size, part.col, part.b);
       });
       const footprints = assembly.parts.map(palmFootprint);
-      const minX = __M.min(...footprints.map((f) => f.c[0] - f.ex)), maxX = __M.max(...footprints.map((f) => f.c[0] + f.ex));
-      const minZ = __M.min(...footprints.map((f) => f.c[2] - f.ez)), maxZ = __M.max(...footprints.map((f) => f.c[2] + f.ez));
+      const minX = Math.min(...footprints.map((f) => f.c[0] - f.ex)), maxX = Math.max(...footprints.map((f) => f.c[0] + f.ex));
+      const minZ = Math.min(...footprints.map((f) => f.c[2] - f.ez)), maxZ = Math.max(...footprints.map((f) => f.c[2] + f.ez));
       placedPalms.push({ parts: footprints, relocated: dist !== initialDist,
         c: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2], ex: (maxX - minX) / 2, ez: (maxZ - minZ) / 2,
-        minY: __M.min(...footprints.map((f) => f.minY)), maxY: __M.max(...footprints.map((f) => f.maxY)) });
+        minY: Math.min(...footprints.map((f) => f.minY)), maxY: Math.max(...footprints.map((f) => f.maxY)) });
       out._mat = 0;
     };
     const conifer = (k, side, dist, h, col) => {
@@ -676,7 +673,7 @@ const SceneryNature = (function () {
     const cypress = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      const slim = opts.slim != null ? __M.max(0.4, __M.min(2.2, opts.slim)) : 1;
+      const slim = opts.slim != null ? Math.max(0.4, Math.min(2.2, opts.slim)) : 1;
       if (onTrack(a.c[0], a.c[2], 1.6 * slim + 0.6)) {
         ctx.noteSuppressed("cypress", `cypress SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
@@ -698,14 +695,14 @@ const SceneryNature = (function () {
     const stonePine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      const spread = opts.spread != null ? __M.max(0.5, __M.min(1.8, opts.spread)) : 1;
+      const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
       if (onTrack(a.c[0], a.c[2], h * 0.44 * spread + 0.6)) {
         ctx.noteSuppressed("stonePine", `stonePine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("stonePine", [a.c[0], a.c[1] + h * 0.7, a.c[2]],
                [h * 0.9 * spread, h, h * 0.9 * spread], { k, side });
-      const amt = opts.lean != null ? __M.max(0, __M.min(1.5, opts.lean)) : 1;
+      const amt = opts.lean != null ? Math.max(0, Math.min(1.5, opts.lean)) : 1;
       const lean = (hash(k * 13.1 + side * 3.7 + dist) - 0.5) * 0.9 * amt;
       const foot = vadd(a.c, a.r, lean * 0.6);
       out._mat = MAT.WOOD;
@@ -722,14 +719,14 @@ const SceneryNature = (function () {
     const broadleafFall = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      const spread = opts.spread != null ? __M.max(0.5, __M.min(1.8, opts.spread)) : 1;
+      const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
       if (onTrack(a.c[0], a.c[2], h * 0.50 * spread + 0.8)) {
         ctx.noteSuppressed("broadleafFall", `broadleafFall SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("broadleafFall", [a.c[0], a.c[1] + h * 0.6, a.c[2]],
                [h * 1.0 * spread, h, h * 1.0 * spread], { k, side });
-      const lobes = __M.max(2, __M.min(5, __M.round(opts.lobes || 3)));
+      const lobes = Math.max(2, Math.min(5, Math.round(opts.lobes || 3)));
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.22 + h * 0.012, h * 0.42 + 0.5,
              opts.barkCol || [0.36, 0.30, 0.24], 5, b) === false) { out._mat = 0; return; }   // no trunk, no crown
@@ -740,7 +737,7 @@ const SceneryNature = (function () {
       for (let i = 0; i < lobes; i++) {
         const ang = i * (6.2832 / lobes) + hash(k + i * 1.9 + side) * 1.2, rr = h * 0.16 * spread;
         const p = vadd(vadd(vadd(a.c, a.u, h * (0.40 + i * 0.09)),
-                            a.r, __M.cos(ang) * rr), a.t, __M.sin(ang) * rr);
+                            a.r, Math.cos(ang) * rr), a.t, Math.sin(ang) * rr);
         addFrustum(out, p, h * (0.30 - i * 0.05) * spread, h * (0.34 - i * 0.08) * spread,
                    h * 0.26, i ? c2 : col, 6, b);
       }
@@ -751,14 +748,14 @@ const SceneryNature = (function () {
     const acacia = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      const spread = opts.spread != null ? __M.max(2, opts.spread) : h * 1.15;
+      const spread = opts.spread != null ? Math.max(2, opts.spread) : h * 1.15;
       if (onTrack(a.c[0], a.c[2], spread * 0.5 + 0.8)) {
         ctx.noteSuppressed("acacia", `acacia SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("acacia", [a.c[0], a.c[1] + h * 0.8, a.c[2]], [spread, h, spread], { k, side });
       const bark = opts.barkCol || [0.34, 0.26, 0.18];
-      const layers = __M.max(1, __M.min(3, __M.round(opts.layers || 2)));
+      const layers = Math.max(1, Math.min(3, Math.round(opts.layers || 2)));
       const c2 = [col[0] * 0.82, col[1] * 0.86, col[2] * 0.80];
       // ONE CONNECTED STACK: trunk -> fork -> slab 0 -> slab 1 … each part
       // starts where the one below ends. Fixed fractions (fork at h*0.68,
@@ -774,8 +771,8 @@ const SceneryNature = (function () {
       // Crown layer i's TOP is at layerY(i) + thick(i)/2. Its rise off the
       // trunk is capped in METRES, not held at a fraction of h (a 12 m tree at
       // h*0.14 per layer opened a 0.88 m step between slabs).
-      const layerY = (i) => h * 0.80 + i * __M.min(h * 0.14, 1.0);
-      const thick = (i) => i === 0 ? __M.max(0.9, 2 * (h * 0.12 - 0.90)) : 0.9 - i * 0.2;
+      const layerY = (i) => h * 0.80 + i * Math.min(h * 0.14, 1.0);
+      const thick = (i) => i === 0 ? Math.max(0.9, 2 * (h * 0.12 - 0.90)) : 0.9 - i * 0.2;
       // A joint already closed to within JOINT (under the 0.15 m a grounding
       // audit bridges) keeps its old geometry: moving faces that were fine
       // only risks new coplanar coincidences with neighbouring trees.
@@ -805,14 +802,14 @@ const SceneryNature = (function () {
     const plane = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      const spread = opts.spread != null ? __M.max(0.5, __M.min(1.8, opts.spread)) : 1;
+      const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
       const rad = (4.2 + h * 0.12) * spread;
       if (onTrack(a.c[0], a.c[2], rad + 0.6)) {
         ctx.noteSuppressed("plane", `plane SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("plane", [a.c[0], a.c[1] + h * 0.6, a.c[2]], [rad * 2, h, rad * 2], { k, side });
-      const stages = __M.max(1, __M.min(3, __M.round(opts.stages || 2)));
+      const stages = Math.max(1, Math.min(3, Math.round(opts.stages || 2)));
       const c2 = [col[0] * 0.80, col[1] * 0.84, col[2] * 0.80];
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.42, h * 0.48 + 0.5,
@@ -856,7 +853,7 @@ const SceneryNature = (function () {
       addPyramid(out, [x, baseY, z], [w, h, w], col, null);
       addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
       const pj = hash(x * 0.17 + z * 0.19), pa = pj * 6.2832, so = w * (0.25 + pj * 0.13);
-      addPyramid(out, [x + __M.cos(pa) * so, baseY - 0.6, z + __M.sin(pa) * so],
+      addPyramid(out, [x + Math.cos(pa) * so, baseY - 0.6, z + Math.sin(pa) * so],
         [w * 0.6, h * (0.5 + pj * 0.25), w * 0.72], [col[0] * 0.94, col[1] * 0.95, col[2] * 0.96], null);
       out._mat = 0;
     };
@@ -865,14 +862,14 @@ const SceneryNature = (function () {
       const rough = opts.rough != null ? opts.rough : 0.34;
       const reach = (ww) =>
         ROAD_SKIRT +
-        __M.max(ww * 0.62, ww * 0.5 * (1 + 0.7 * rough) * (1 + 0.35 * rough));
+        Math.max(ww * 0.62, ww * 0.5 * (1 + 0.7 * rough) * (1 + 0.35 * rough));
       let fit = w;
       for (let i = 0; i < 6 && onTrack(x, z, reach(fit)); i++) fit *= 0.88;
       if (onTrack(x, z, reach(fit))) {
         ctx.noteSuppressed("mountain", `mountain SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
         return;
       }
-      if (fit < w) h *= __M.sqrt(fit / w);   // narrower dune, plausible slope
+      if (fit < w) h *= Math.sqrt(fit / w);   // narrower dune, plausible slope
       w = fit;
       ctx.note("mountain", [x, baseY + h / 2, z], [w, h, w]);
       addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18,
@@ -885,12 +882,12 @@ const SceneryNature = (function () {
     const ridge = (x, z, baseY, ang, len, w, h, col, opts) => {
       const hill = opts && opts.profile;
       // Skip if footprint half-extent reaches tarmac (a rounded hill's noisy foot reaches ~1.3x further).
-      if (onTrack(x, z, __M.max(len, w) * 0.5 * (hill ? 1.3 : 1) + ROAD_SKIRT)) {
+      if (onTrack(x, z, Math.max(len, w) * 0.5 * (hill ? 1.3 : 1) + ROAD_SKIRT)) {
         ctx.noteSuppressed("ridge", `ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
         return;
       }
       ctx.note("ridge", [x, baseY + h / 2, z], [w, h, len]);
-      const f = [__M.cos(ang), 0, __M.sin(ang)], r = [-f[2], 0, f[0]];
+      const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
       // BURY the base. addPrism anchors at the BASE (Trap A in
       // docs/SCENERY-GROUNDING.md), so a prism placed at baseY has its underside
       // exactly there — and every one of the 28 ridge() calls across 24 circuits
@@ -908,7 +905,7 @@ const SceneryNature = (function () {
       const SINK = 2;
       if (hill) {
         addMountain(out, [x, baseY - SINK, z], w * 0.5, h + SINK, {
-          profile: opts.profile, stretch: len / w, right: r, fwd: f, seed: __M.round(x * 0.37 + z * 0.29),
+          profile: opts.profile, stretch: len / w, right: r, fwd: f, seed: Math.round(x * 0.37 + z * 0.29),
           rough: opts.rough != null ? opts.rough : 0.22, crest: opts.crest != null ? opts.crest : 0.35,
           forest: col, rock: col, snow: col, snowline: 9 });
         return;
@@ -916,7 +913,7 @@ const SceneryNature = (function () {
       addPrism(out, [x, baseY - SINK, z], [w, h + SINK, len], col, [r, [0, 1, 0], f]);
       const jr = hash(x * 0.13 + z * 0.11 + ang);
       const a2 = ang + (jr - 0.5) * 0.6;
-      const f2 = [__M.cos(a2), 0, __M.sin(a2)], r2 = [-f2[2], 0, f2[0]];
+      const f2 = [Math.cos(a2), 0, Math.sin(a2)], r2 = [-f2[2], 0, f2[0]];
       const off = (0.06 + jr * 0.06) * len, dY = 1.0;
       addPrism(out,
         [x + f[0] * off, baseY - SINK - dY, z + f[2] * off],
@@ -929,8 +926,8 @@ const SceneryNature = (function () {
     // roof/shell alone read as a backwards/empty box (bahrain T1, 2026-09).
     const crowdBank = (k, side, gap, len, rise, depth, riserCol, lift) => {
       const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-      const rows = __M.max(3, __M.round(rise / 1.4));
-      const perRow = __M.max(6, __M.round(len / 1.15));
+      const rows = Math.max(3, Math.round(rise / 1.4));
+      const perRow = Math.max(6, Math.round(len / 1.15));
       const riser = riserCol || (NIGHT ? [0.10, 0.10, 0.13] : [0.28, 0.26, 0.27]);
       const y0 = lift || 0;
       let placed = 0;
@@ -965,7 +962,7 @@ const SceneryNature = (function () {
                 : h1 > 0.55  ? [0.09, 0.10, 0.13]            // dark bodies
                              : [0.16, 0.16, 0.21];
           } else {
-            col = CROWD_DAY[__M.floor(h1 * CROWD_DAY.length) % CROWD_DAY.length];
+            col = CROWD_DAY[Math.floor(h1 * CROWD_DAY.length) % CROWD_DAY.length];
           }
           ctx.instance("crowd-body",
             { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.72 + h2 * 0.2, 1], col },
@@ -985,8 +982,8 @@ const SceneryNature = (function () {
         // venue rotates through; the three permanent-circuit greys otherwise.
         const set = (def && def.standSet) || TrackSceneryData.STAND_SET_DEF;
         if (set && set.length) {
-          const kk = ((__M.round(s * n) % n) + n) % n;
-          liveryName = set[__M.floor(hash(kk * 2.7 + side * 1.9) * set.length) % set.length];
+          const kk = ((Math.round(s * n) % n) + n) % n;
+          liveryName = set[Math.floor(hash(kk * 2.7 + side * 1.9) * set.length) % set.length];
         }
       }
       const liv = (liveryName && lib[liveryName]) || null;
@@ -995,10 +992,10 @@ const SceneryNature = (function () {
       const roofKind = opts.roof || "cantilever";
       const roofCol = opts.roofCol || (liv && liv.roof) || [0.86, 0.88, 0.92];
       const fasciaCol = opts.fasciaCol || (liv && liv.fascia) || shell || [0.40, 0.41, 0.46];
-      const tiers = __M.max(1, __M.min(3, __M.round(opts.tiers || 1)));
-      const shellH = opts.h != null ? __M.max(6, opts.h) : 12;
+      const tiers = Math.max(1, Math.min(3, Math.round(opts.tiers || 1)));
+      const shellH = opts.h != null ? Math.max(6, opts.h) : 12;
 
-      const k = ((__M.round(s * n) % n) + n) % n;
+      const k = ((Math.round(s * n) % n) + n) % n;
       const halfFrac = (len / 2) / track.total;
       recordBarrier(s - halfFrac, s + halfFrac, side, gap);
       ctx.indexSolid(s - halfFrac, s + halfFrac, side, gap, 12.5);
@@ -1042,7 +1039,7 @@ const SceneryNature = (function () {
       // unchanged; no crowd row of the stand is inside any of these boxes.
       const SHELL_IN = 6, SHELL_OUT = 12.5, SEP = TrackGeom.MIN_SEP;
       const BANK_AT = 1.5, BANK_RISE = 7, BANK_DEPTH = 4.2, TIER_BACK = 4.6, TIER_LIFT = 7.6;
-      const bankRows = __M.max(3, __M.round(BANK_RISE / 1.4));   // crowdBank's own row count
+      const bankRows = Math.max(3, Math.round(BANK_RISE / 1.4));   // crowdBank's own row count
       // Back face of tier i's rake (last riser: row centre + half its 1.3 m
       // depth), and a rake's floor above its anchor (row 0's riser bottom).
       const rakeBack = (i) => BANK_AT + TIER_BACK * i + BANK_DEPTH * (bankRows - 0.5) / bankRows + 0.65;
@@ -1060,7 +1057,7 @@ const SceneryNature = (function () {
           addBox(out, c, [b - a, shellH, len], shellCol, [r, u, t]);
           return { top: c[1] + shellH / 2 };
         }
-        const h = __M.min(shellH, capU - dotU(base));
+        const h = Math.min(shellH, capU - dotU(base));
         if (h < 1) return null;
         const c = vadd(base, u, h / 2);
         addBox(out, c, [b - a, h, len], shellCol, [r, u, t]);
@@ -1096,7 +1093,7 @@ const SceneryNature = (function () {
           crowdBank(k, side, gap + BANK_AT + back, tl, BANK_RISE, BANK_DEPTH, riserTint, lift);
           // The shell under this rake, capped below its floor, 1.5 SEP behind
           // the stripe's face so the two front faces never share a plane.
-          shellSection(__M.max(shellFront, bandA + 1.5 * SEP), __M.min(SHELL_OUT, rakeBack(ti)), capU);
+          shellSection(Math.max(shellFront, bandA + 1.5 * SEP), Math.min(SHELL_OUT, rakeBack(ti)), capU);
           prevBack = rakeBack(ti);
           shellFront = prevBack + 2.5 * SEP;
           // Only a tier that actually BUILT raises the roof — a culled tier
@@ -1118,13 +1115,13 @@ const SceneryNature = (function () {
       // it would leave the slab floating (indianapolis). The slab grows back
       // to cover it; one- and two-tier cantilevers are unchanged (<= 1.5 cm).
       let f0 = 5 + roofW / 2 - 4.08, f1 = f0 + 4;
-      if (tierLift.length) { f0 = __M.max(f0, shellFront + SEP); f1 = __M.max(f1, f0 + 0.3); }
-      const roofExt = __M.max(0, f1 + 0.08 - (5 + roofW / 2));
+      if (tierLift.length) { f0 = Math.max(f0, shellFront + SEP); f1 = Math.max(f1, f0 + 0.3); }
+      const roofExt = Math.max(0, f1 + 0.08 - (5 + roofW / 2));
       const slabC = vadd(roofC, a.r, side * roofExt / 2);
       if (roofKind !== "none") {
         if (roofKind === "truss") {
           addBox(out, slabC, [12 + roofExt, 0.35, len + 2], roofCol, [a.r, a.u, a.t]);
-          const bays = __M.max(2, __M.min(14, __M.round(len / 9)));
+          const bays = Math.max(2, Math.min(14, Math.round(len / 9)));
           for (let i = 0; i < bays; i++) {
             const off = ((i + 0.5) / bays - 0.5) * len;
             addBox(out, vadd(vadd(a.c, a.t, off), a.u, roofY - 0.9), [11.4, 1.1, 0.5], roofCol, [a.r, a.u, a.t]);
@@ -1155,12 +1152,12 @@ const SceneryNature = (function () {
         // different terrain and made Red Bull Ring WORSE (13 -> 15 floating
         // primitives), because a foot that lands somewhere new can land worse.
         if (opts.pylons) {
-          const posts = __M.max(2, __M.min(12, __M.round(len / 14)));
+          const posts = Math.max(2, Math.min(12, Math.round(len / 14)));
           const H = roofY - 0.5;
           for (let i = 0; i < posts; i++) {
             const off = ((i + 0.5) / posts - 0.5) * len;
             const pc = vadd(vadd(a.c, a.t, off), a.r, -side * 4.6);
-            const drop = __M.max(0, pc[1] - groundUnder(pc[0], pc[2])) + 0.3;
+            const drop = Math.max(0, pc[1] - groundUnder(pc[0], pc[2])) + 0.3;
             addCyl(out, vadd(pc, a.u, -drop), 0.28, H + drop,
                    fasciaCol, 6, [a.r, a.u, a.t]);
           }
@@ -1177,7 +1174,7 @@ const SceneryNature = (function () {
       if (opts.endWalls) {
         for (const sgn of [-1, 1]) {
           const base = vadd(a.c, a.t, sgn * (len / 2));
-          const drop = __M.max(0, base[1] - groundUnder(base[0], base[2])) + 0.3;
+          const drop = Math.max(0, base[1] - groundUnder(base[0], base[2])) + 0.3;
           const h = roofY - 1 + drop;
           const ec = vadd(base, a.u, (roofY - 1) / 2 - drop / 2);
           if (!rejBox(ec, [11, h, 0.5], [a.r, a.u, a.t]))
@@ -1246,7 +1243,7 @@ const SceneryNature = (function () {
       const slot = hillSeq++ % 5, SEP = TrackGeom.MIN_SEP;
       gap += 0.017 + slot * SEP;
       const sShift = 0.007 + ((slot * 2) % 5) * SEP;
-      const rows = __M.max(2, __M.min(8, __M.round(opts.rows || 4)));
+      const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
       const rise = opts.rise != null ? opts.rise : 1.15;      // per-row height gain
       // `opts.h` (total bank height, passed by donington / mosport / okayama)
       // is deliberately NOT honoured. Measured 2026-09-25 with rise = h / rows:
@@ -1261,7 +1258,7 @@ const SceneryNature = (function () {
       // (donington, mosport, okayama): honoured when `grass` is absent.
       const grass = opts.grass || opts.col || [0.26, 0.42, 0.20];
       const riser = opts.riser || [0.30, 0.30, 0.28];
-      const dens = opts.density != null ? __M.max(0.05, __M.min(1, opts.density)) : 0.65;
+      const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.65;
       const step = opts.step || 5;
       // The bank is a solid mass — index it so treelines cannot grow through it.
       ctx.indexSolid(s0, s1, side, gap, rows * depth + 1);
@@ -1287,23 +1284,23 @@ const SceneryNature = (function () {
           // lengthen outside) without clamping to `spacing`, then cap at the
           // curvature-scaled arc so a hairpin fold cannot stretch a tread
           // across the apex.
-          const nodes = __M.max(1, __M.round(spacing / ds));
+          const nodes = Math.max(1, Math.round(spacing / ds));
           const prev = anchor((k - nodes + n) % n, side, gap);
           const next = anchor((k + nodes) % n, side, gap);
           const e1x = a.c[0] - prev.c[0], e1z = a.c[2] - prev.c[2];
           const e2x = next.c[0] - a.c[0], e2z = next.c[2] - a.c[2];
-          const l1 = __M.hypot(e1x, e1z) || 1, l2 = __M.hypot(e2x, e2z) || 1;
-          const κ = __M.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) / ((l1 + l2) / 2);
+          const l1 = Math.hypot(e1x, e1z) || 1, l2 = Math.hypot(e2x, e2z) || 1;
+          const κ = Math.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) / ((l1 + l2) / 2);
           const x = side * (hw[k] + gap + back);
-          const curveCap = spacing * __M.min(1.85, __M.max(0.15, 1 + κ * x));
+          const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 + κ * x));
           let treadSpan = curveCap;
           for (const dk of [-nodes, nodes]) {
             const q = anchor((k + dk + n) % n, side, gap);
             const qc = vadd(vadd(vadd(q.c, q.t, sShift), q.u, up + rise * 0.5), q.r, side * back);
             const delta = [qc[0] - tc[0], qc[1] - tc[1], qc[2] - tc[2]];
-            const d = __M.hypot(delta[0], delta[1], delta[2]);
+            const d = Math.hypot(delta[0], delta[1], delta[2]);
             if (!(d > 0)) { treadSpan = 0; break; }
-            const proj = (axis) => __M.abs((axis[0] * delta[0] + axis[1] * delta[1] + axis[2] * delta[2]) / d);
+            const proj = (axis) => Math.abs((axis[0] * delta[0] + axis[1] * delta[1] + axis[2] * delta[2]) / d);
             const along = proj(a.t);
             const available = d - depth * proj(a.r) - (rise + 0.5) * proj(a.u);
             // Fixed radial/vertical support can fill the separating interval
@@ -1312,14 +1309,14 @@ const SceneryNature = (function () {
             if (!(available > 0)) { treadSpan = 0; break; }
             // Cap at the Euclidean neighbour distance: available/along OVERSIZES
             // when along < 1 on a bend (jerez Expo bank measured 1.5 m overlap).
-            if (along > 0) treadSpan = __M.min(treadSpan, available / along, d * 0.98);
+            if (along > 0) treadSpan = Math.min(treadSpan, available / along, d * 0.98);
           }
           // Live terrain only: |κ|·|x| shrink clears depth-corner re-overlap
           // after footing (jerez @0.252). scenery-kits fixtures omit
           // Tracks.terrainY, so they keep the bisector span and full crowd.
           if (treadSpan > 0 && typeof Tracks !== "undefined" &&
               typeof Tracks.terrainY === "function") {
-            const bend = __M.min(0.35, __M.abs(κ * x));
+            const bend = Math.min(0.35, Math.abs(κ * x));
             treadSpan *= 0.96 * (1 - bend);
           }
           if (!(treadSpan > 0) || rejBox(tc, [depth, rise + 0.5, treadSpan], b)) { previousRow = false; continue; }
@@ -1338,7 +1335,7 @@ const SceneryNature = (function () {
               const q = vadd(vadd(bot, a.r, xz * depth), a.t, zz * treadSpan);
               const y = Tracks.terrainY(track, q[0], q[2]);
               if (!Number.isFinite(y)) { drop = NaN; break; }
-              drop = __M.max(drop, q[1] - y);
+              drop = Math.max(drop, q[1] - y);
             }
             if (drop > 0.05) {
               const ext = (drop + 0.05) / a.u[1];
@@ -1355,15 +1352,15 @@ const SceneryNature = (function () {
             const bottom = vadd(treadC, a.u, -treadH / 2);
             const pr = norm([a.r[0], 0, a.r[2]]), pt = norm([a.t[0], 0, a.t[2]]);
             const pb = [pr, [0, 1, 0], pt];
-            const w = __M.min(0.4, depth * 0.5);
-            const d = __M.min(0.4, treadSpan * __M.hypot(a.t[0], a.t[2]) * 0.5);
+            const w = Math.min(0.4, depth * 0.5);
+            const d = Math.min(0.4, treadSpan * Math.hypot(a.t[0], a.t[2]) * 0.5);
             let footY = Infinity;
             for (const x of [-w / 2, w / 2]) for (const z of [-d / 2, d / 2]) {
               const q = vadd(vadd(bottom, pr, x), pt, z);
               const y = typeof Tracks !== "undefined" && typeof Tracks.terrainY === "function"
                 ? Tracks.terrainY(track, q[0], q[2]) : terrainYAt(q[0], q[2]);
               if (!Number.isFinite(y)) { footY = NaN; break; }
-              footY = __M.min(footY, y);
+              footY = Math.min(footY, y);
             }
             if (Number.isFinite(footY) && bottom[1] > footY + 0.05) {
               const h = bottom[1] + 0.04 - (footY - 0.05);
@@ -1380,12 +1377,12 @@ const SceneryNature = (function () {
           // fit. Short chords need fewer slots; the whole footprint, including
           // jitter, stays on its tread rather than hanging past the ends.
           const bodyW = 0.5, bodyD = 0.46, edge = 0.03;
-          const originalCount = __M.max(2, __M.round(spacing / 1.8));
+          const originalCount = Math.max(2, Math.round(spacing / 1.8));
           const perRow = treadSpan >= bodyD + 2 * edge && depth >= bodyW + 2 * edge
-            ? __M.min(originalCount, __M.max(1, __M.floor(treadSpan / 0.6))) : 0;
+            ? Math.min(originalCount, Math.max(1, Math.floor(treadSpan / 0.6))) : 0;
           const slotSpan = perRow ? treadSpan / perRow : 0;
-          const alongJitter = __M.min(0.25, __M.max(0, slotSpan / 2 - bodyD / 2 - edge));
-          const backJitter = __M.min(depth / 4, __M.max(0, depth / 2 - bodyW / 2 - edge));
+          const alongJitter = Math.min(0.25, Math.max(0, slotSpan / 2 - bodyD / 2 - edge));
+          const backJitter = Math.min(depth / 4, Math.max(0, depth / 2 - bodyW / 2 - edge));
           for (let i = 0; i < perRow; i++) {
             const h1 = hash(k * 3.3 + r * 7.1 + i * 2.3 + side * 1.9);
             if (h1 > dens) continue;
@@ -1395,7 +1392,7 @@ const SceneryNature = (function () {
                            a.r, side * (back + (h2 - 0.5) * 2 * backJitter));
             const col = NIGHT
               ? (h2 > 0.95 ? [2.4, 2.2, 1.9] : [0.12, 0.13, 0.17])
-              : (opts.crowd || CROWD_DAY)[__M.floor(h2 * (opts.crowd || CROWD_DAY).length) % (opts.crowd || CROWD_DAY).length];
+              : (opts.crowd || CROWD_DAY)[Math.floor(h2 * (opts.crowd || CROWD_DAY).length) % (opts.crowd || CROWD_DAY).length];
             ctx.instance("crowd-standing",
               { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.86 + h1 * 0.2, 1], col },
               (rec) => { rec.mat(MAT.FABRIC); rec.box([0, 0, 0], [0.5, 1, 0.46], TrackGraph.NODE_COLOR); },
@@ -1469,7 +1466,7 @@ const SceneryNature = (function () {
       if (kind === "fir") {
         const mesh = (2.1 + h * 0.06) * jMax + 0.8;
         const broad = (3.7 + h * 0.14) * jMax + 0.4;
-        return __M.max(mesh, broad * 0.9);
+        return Math.max(mesh, broad * 0.9);
       }
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
       if (kind === "cypress")       return 1.45 * jMax + 0.4;   // narrow column
@@ -1509,7 +1506,7 @@ const SceneryNature = (function () {
       // interlocking canopies, and thinning to 8 m to satisfy the metric costs
       // half the trees for a small fraction of the spots (measured on
       // hockenheim: 180 k props for 20 spots). Baseline it, don't thin it.
-      const dens = opts.density != null ? __M.max(0.05, __M.min(1, opts.density)) : 0.7;
+      const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.7;
       // `spacing` (METRES between trunks) is the escape hatch from the two
       // reachable density spacings above. A sparse background woodland — a tree
       // every 15-25 m — is simply not expressible as a density: the knob bottoms
@@ -1517,12 +1514,12 @@ const SceneryNature = (function () {
       // 4 m dense belt, i.e. ~4x the trees they asked for. along() still
       // quantises to whole nodes (round(stepM / 4)), so the honest grid is
       // multiples of 4 m: spacing 15 → 16 m, spacing 24 → 24 m.
-      const step = opts.spacing != null ? __M.max(ds, opts.spacing) : 7 - dens * 4;
+      const step = opts.spacing != null ? Math.max(ds, opts.spacing) : 7 - dens * 4;
       // opts.crown:"lobed" is shorthand for treeOptions:{crown:"lobed"}; opts.palmFrac (default 0) turns
       // that share of the line into palms (frond colour = opts.palmCol || col2).
       const treeOpts = opts.treeOptions || (opts.crown === "lobed" ? { crown: "lobed" } : null);
       const detailed = treeOpts && treeOpts.crown === "lobed" ? treeOpts : null;
-      const palmFrac = opts.palmFrac > 0 ? __M.min(1, opts.palmFrac) : 0;
+      const palmFrac = opts.palmFrac > 0 ? Math.min(1, opts.palmFrac) : 0;
       const palmCol = opts.palmCol || treeCol;
       const limit = detailed && detailed.maxDetailed !== undefined ? detailed.maxDetailed : 30;
       let accepted = 0;
@@ -1570,7 +1567,7 @@ const SceneryNature = (function () {
         // Spiky rosette — desert circuits need something that is not a blob.
         for (let i = 0; i < 6; i++) {
           const ang = i / 6 * 6.2832;
-          const tip = vadd(vadd(vadd(p.c, p.u, 1.5), p.r, __M.cos(ang) * 1.3), p.t, __M.sin(ang) * 1.3);
+          const tip = vadd(vadd(vadd(p.c, p.u, 1.5), p.r, Math.cos(ang) * 1.3), p.t, Math.sin(ang) * 1.3);
           addCone(out, vadd(p.c, p.u, 0.2), 0.34, 1.9, bc, 4,
             [p.r, norm([tip[0] - p.c[0], 1.3, tip[2] - p.c[2]]), p.t]);
         }
@@ -1582,7 +1579,7 @@ const SceneryNature = (function () {
         const lh = hash(k * 5.9 + side * 3.3 + dist + i * 1.7);
         const ang = (i / lobes + lh * 0.3) * 6.2832;
         const off = lobes > 1 ? 0.6 + lh * 0.5 : 0;
-        const lx = __M.cos(ang) * off, lz = __M.sin(ang) * off;
+        const lx = Math.cos(ang) * off, lz = Math.sin(ang) * off;
         const lc = vadd(vadd(p.c, p.r, lx), p.t, lz);
         const rad = (1.1 + lh * 0.9) * (lobes > 1 ? 0.82 : 1.15);
         addCone(out, vadd(lc, p.u, -0.3 + lh * 0.1), rad, 2.2 + lh * 1.0, i === 0 ? bc : c2, 6, b);
