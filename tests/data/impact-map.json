@@ -6979,6 +6979,9 @@
       "resetSetupCam": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "setSetupAero": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "setSetupSpin": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -6995,6 +6998,9 @@
       "stepDriveOut": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
+      ],
+      "stepSetupAero": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "*": [
         "tests/unit/body-styles.test.mjs",
@@ -9786,6 +9792,7 @@
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
