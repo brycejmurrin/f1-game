@@ -40,8 +40,20 @@ const SCENARIOS = [
     steps: [{ n: 45, in: { brake: true, steer: 0.5 } }, { n: 45, in: { throttle: true, steer: 0.3 } }] },
   { name: "off-track recovery", seed: 3, frac: 0.5, speed: 45, x: 11,
     steps: [{ n: 90, in: { throttle: true, steer: -0.4 } }] },
+  { name: "right-hand loaded corner", seed: 5, frac: 0.83, speed: 50, wide: true,
+    steps: [{ n: 90, in: { throttle: true, steer: 0.75 } }] },
+  { name: "boost and x-mode on the straight", seed: 9, frac: 0.92, speed: 60, wide: true, aero: true, boost: true,
+    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
+  { name: "kerb strike", seed: 13, frac: 0.368, speed: 40, x: 8.5, wide: true,
+    steps: [{ n: 90, in: { throttle: true, steer: 0.5 } }] },
+  { name: "ai car launch", seed: 7, frac: 0.05, speed: 20, wide: true, ai: 1,
+    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
+  { name: "wet right-hand corner", seed: 5, frac: 0.83, speed: 50, wide: true, wx: "wet",
+    steps: [{ n: 90, in: { throttle: true, steer: 0.75 } }] },
 ];
 const FIELDS = ["s", "x", "speed", "slipDeg", "head", "prog"];
+const WIDE = ["yawRate", "gear", "aeroX", "energy"];
+const fieldsOf = (s) => [...FIELDS, ...(s.wide ? WIDE : []), ...(s.ai != null ? ["ai.s", "ai.x", "ai.speed"] : [])];
 const R = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 1e4) / 1e4 : v);
 
 // Read only literal recipe data, never evaluate the browser module or import
@@ -69,6 +81,8 @@ test("the complete ordered scenario recipes match the browser spec", () => {
   const spec = browserSource();
   assert.deepEqual(browserScenarios(spec), SCENARIOS, "browser/VM recipe drift: compare every input, duration, lateral offset and scenario/stage order");
   assert.ok(spec.includes("if (i % 15 === 0)") && spec.includes("Math.round(v * 1e4) / 1e4"), "spec sampling or rounding changed");
+  assert.ok(spec.includes("row.push(p.yawRate, c.gear, p.aeroX, c.energy)") && spec.includes("row.push(q.s, q.x, q.speed)"),
+    "spec wide/ai columns changed: keep them identical to run() below");
   assert.ok(spec.includes("pinFactorySeat"),
     "browser characterization must pin factory McLaren before loadTrack so GarageDefaults cannot move the baseline");
 });
@@ -76,7 +90,8 @@ test("the complete ordered scenario recipes match the browser spec", () => {
 test("recipe parity detects changes invisible to scenario-name checks", () => {
   const source = browserSource();
   for (const [from, to] of [["n: 120", "n: 121"], ["steer: 0.6", "steer: 0.7"],
-    ["x: 11", "x: 12"], ["throttle: true, steer: 0", "throttle: false, steer: 0"]]) {
+    ["x: 11", "x: 12"], ["throttle: true, steer: 0", "throttle: false, steer: 0"],
+    ["boost: true", "boost: false"], ['wx: "wet"', 'wx: "dry"'], ["ai: 1", "ai: 2"]]) {
     assert.ok(source.includes(from), `mutation anchor missing: ${from}`);
     assert.notDeepEqual(browserScenarios(source.replace(from, to)), SCENARIOS, from);
   }
@@ -113,10 +128,12 @@ test("A3: characterization boot pins dry weather and zero wetness", () => {
 });
 
 function run(a, s) {
-  a.weather("dry");
+  a.weather(s.wx || "dry");
   a.step(0, 1);
   a.seed(s.seed);
   a.reset(s.frac, s.speed, s.x || 0);
+  if (s.aero) a.aero(true);
+  if (s.boost) a.setBoost(true);
   const trace = [];
   for (const stage of s.steps) {
     a.setInput(stage.in);
@@ -124,7 +141,10 @@ function run(a, s) {
       a.step(1 / 60, 1);
       if (i % 15 === 0) {
         const p = a.physState();
-        trace.push([p.s, p.x, p.speed, p.slipDeg, p.head, p.prog].map(R));
+        const row = [p.s, p.x, p.speed, p.slipDeg, p.head, p.prog];
+        if (s.wide) { const c = a.carAt(); row.push(p.yawRate, c.gear, p.aeroX, c.energy); }
+        if (s.ai != null) { const q = a.carAt(s.ai); row.push(q.s, q.x, q.speed); }
+        trace.push(row.map(R));
       }
     }
   }
@@ -139,10 +159,12 @@ for (const s of SCENARIOS) {
     assert.ok(Array.isArray(w), `baseline lacks scenario "${s.name}"`);
     const v = run(g.apex, s);
     assert.equal(v.length, w.length, `${v.length} rows vs baseline ${w.length}`);
+    const fields = fieldsOf(s);
     for (let r = 0; r < w.length; r++) {
-      for (let c = 0; c < FIELDS.length; c++) {
+      assert.equal(w[r].length, fields.length, `baseline row ${r} has ${w[r].length} fields, recipe wants ${fields.length}`);
+      for (let c = 0; c < fields.length; c++) {
         if (v[r][c] !== w[r][c]) {
-          assert.fail(`diverges at step ${r * 15} field ${FIELDS[c]}: vm=${v[r][c]} browser=${w[r][c]} ` +
+          assert.fail(`diverges at step ${r * 15} field ${fields[c]}: vm=${v[r][c]} browser=${w[r][c]} ` +
             `(row vm=${JSON.stringify(v[r])} browser=${JSON.stringify(w[r])})`);
         }
       }

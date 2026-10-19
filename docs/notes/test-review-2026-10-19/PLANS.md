@@ -338,7 +338,7 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L29 — Track designer tests on the real editor (ready to launch)
 
 - **Goal:** designer DOM, canvas, toolbar fit and fleet validation drive js/editor/ and assert what the player sees; the designer spec is green alone before any assert change
-- **Owned:** `tests/specs/track-designer.spec.js`, `tests/unit/designer-canvas.test.mjs`, `tests/unit/track-designer-dom.test.mjs`, `tests/unit/track-validate-fleet.test.mjs`, `tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs`
+- **Owned:** `tests/specs/track-designer.spec.js`, `tests/unit/designer-canvas.test.mjs`, `tests/unit/track-designer-dom.test.mjs`, `tests/unit/track-validate-fleet.test.mjs`
 - **Closes:** TK1-13, TK1-24, TK2-06, TK2-13, TK2-14 (5 findings; effort S×3 M×2 L×0)
 - **Draws from batches:** tracks-1, tracks-2
 - **Verify:** `node --test on the owned units; track-designer.spec.js alone via test-bg.mjs`

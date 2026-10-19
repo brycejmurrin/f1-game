@@ -156,7 +156,10 @@ test("a fully twinned group RUNS its twins, and an empty run never reports a pas
     "a pass must have run something: passed > 0, never a 0/0 green");
   assert.match(runner, /passed === null \|\| failed === null[\s\S]{0,300}= run failed/,
     "an unreadable twin summary is a failure verdict");
-  if (process.env.APEX_RUNNER_E2E !== "1") return;
+});
+
+test("run-playwright on a fully twinned spec runs only the node twin (E2E, APEX_RUNNER_E2E=1)", { skip: process.env.APEX_RUNNER_E2E !== "1" && "set APEX_RUNNER_E2E=1 (by hand or in a serial lane): spawns the real runner" }, () => {
+  const spec = "tests/specs/wake-lock.spec.js";
   const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ci/run-playwright.mjs"), spec],
     { cwd: ROOT, encoding: "utf8", timeout: 180000 });
   const out = `${r.stdout || ""}${r.stderr || ""}`;

@@ -160,3 +160,17 @@ test("PG1 pages.yml passes no fast-tier run and no ship_only/smoke_only plumbing
   const verdict = read("tools/ci/pages-reuse-verdict.sh");
   assert.doesNotMatch(verdict, /ship_only=|SHIP_ONLY|fast_run=|FAST_RUN/, "the verdict emits reuse/source/run only");
 });
+
+// ---- G1b: a NEW generator must join the unknown-flag guard, not sit silently outside it ----
+test("G1b every tools/gen/gen-*.mjs generator is in the G1 list or named here as not yet covered", () => {
+  const src = fs.readFileSync(new URL(import.meta.url), "utf8");
+  const listed = new Set(/const gens = \[([^\]]*)\]/.exec(src)[1].match(/"([^"]+)"/g).map((q) => q.slice(1, -1)));
+  // Not covered by G1 today; each needs its own --chek probe before it can join (some write on a bare run).
+  const NOT_YET_COVERED = new Set(["gen-changelog", "gen-cursor-rules", "gen-ladder-figures", "gen-locales", "gen-output-surface", "gen-lib"]);
+  const found = fs.readdirSync(path.join(ROOT, "tools/gen")).filter((f) => /^gen-.*\.mjs$/.test(f)).map((f) => f.replace(/\.mjs$/, ""));
+  assert.ok(found.length >= 10, "generators discovered");
+  assert.deepEqual(found.filter((g) => !listed.has(g) && !NOT_YET_COVERED.has(g)), [],
+    "a new generator must be added to the G1 unknown-flag list (or consciously to NOT_YET_COVERED)");
+  assert.deepEqual([...listed].filter((g) => g.startsWith("gen-") && !found.includes(g)), [], "the G1 list names a generator that no longer exists");
+  assert.deepEqual([...NOT_YET_COVERED].filter((g) => listed.has(g) || !found.includes(g)), [], "NOT_YET_COVERED is stale");
+});

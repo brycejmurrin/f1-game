@@ -38,8 +38,8 @@ test("touch helmet ENERGY stays in the cluster grid beside the gear (never ancho
   // anchor() cannot resolve a LATER sibling: tethering ENERGY to the tyre dropped the bar onto the gear plate (852x393 helmet).
   assert.doesNotMatch(src, /body\[data-hl-set="helmet"\]:not\(\.desktop\) #hud-energy\s*\{[^}]*position-anchor:/,
     "helmet touch ENERGY must not tether to the tyre anchor");
-  assert.match(src, /body\[data-hl-set="helmet"\]:not\(\.desktop\) #hud-tyre\[data-hl\]\s*\{\s*translate:\s*none/,
-    "the shipped y:-6 translate is dropped so the dock anchor on TYRES is the only shift");
+  assert.match(src, /body\[data-hl-set="helmet"\]:not\(\.desktop\) #hud-tyre\[data-hl\]:not\(\[data-hl-v4\]\)\s*\{\s*translate:\s*none/,
+    "only automatic TYRES drop the shipped translate; manual offsets remain intact");
 });
 
 test("portrait helmet touch hides the PLAN row when it would crowd GEAR/SPEED", () => {

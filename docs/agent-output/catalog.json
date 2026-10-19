@@ -30,16 +30,16 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 424,
+    "files": 433,
     "classifications": {
-      "entrypoint-candidate": 287,
-      "ambiguous": 56,
+      "entrypoint-candidate": 292,
+      "ambiguous": 58,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
-      "library": 40
+      "library": 42
     },
-    "npmScripts": 72,
+    "npmScripts": 73,
     "configuredMcpServers": 5
   },
   "tools": [
@@ -352,6 +352,15 @@
     },
     {
       "path": "tools/check/destructure-usage.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/check/determinism-bisect.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
@@ -743,6 +752,15 @@
       ]
     },
     {
+      "path": "tools/ci/debug-unit.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "npmScripts": [
+        "debug:unit"
+      ]
+    },
+    {
       "path": "tools/ci/deploy.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "job-status",
@@ -774,9 +792,29 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ci/fleet-bus.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-flags.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/fleet-tick.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
@@ -1991,7 +2029,17 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/ui-device-profile.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/ui-mock-core.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/vm-debug-preload.cjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -2210,6 +2258,12 @@
       "outputPolicy": "keep-native"
     },
     {
+      "path": "tools/mcp/js-debugger-boot.cjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/mcp/js-debugger-cdp.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2242,6 +2296,11 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/mcp/js-debugger-node.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "page-results"
+    },
+    {
       "path": "tools/mcp/js-debugger-session.mjs",
       "classification": "ambiguous",
       "outputPolicy": "page-results"
@@ -2254,6 +2313,11 @@
     },
     {
       "path": "tools/mcp/js-debugger-trace.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "page-results"
+    },
+    {
+      "path": "tools/mcp/js-debugger-workflow.mjs",
       "classification": "ambiguous",
       "outputPolicy": "page-results"
     },
@@ -3164,6 +3228,10 @@
       "command": "node tools/lighting/ab-lighting.mjs"
     },
     {
+      "name": "debug:unit",
+      "command": "node tools/ci/debug-unit.mjs"
+    },
+    {
       "name": "gen",
       "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && node tools/gen/gen-cursor-rules.mjs && npm run gen:docs"
     },
@@ -3321,7 +3389,7 @@
     },
     {
       "name": "test:mcp",
-      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs"
+      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-node.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs"
     },
     {
       "name": "test:mobile-unit",
@@ -3341,7 +3409,7 @@
     },
     {
       "name": "test:node-slow",
-      "command": "node --test --test-concurrency=1 tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/slider-effect.test.mjs"
+      "command": "node --test --test-concurrency=1 tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/slider-effect.test.mjs"
     },
     {
       "name": "test:perf-frametime",

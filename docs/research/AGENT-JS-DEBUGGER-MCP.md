@@ -51,8 +51,9 @@ normally `/opt/pw-browsers/chromium-*/chrome-linux/chrome`), headless and withou
 
 Navigate that browser to `http://127.0.0.1:3456/`. Only attach to an authorized
 local reproduction in this dedicated profile. The debugger supports HTTP
-loopback pages and `about:blank`, not GitHub Pages, browser extensions, workers,
-Node Inspector or remote hosts. `debugger_targets` lists candidate page IDs;
+loopback pages, `about:blank`, their workers and service workers, and local Node
+inspectors (`node --inspect-brk=PORT`, see [Node](#node-tests-and-processes)); not GitHub Pages,
+browser extensions or remote hosts. `debugger_targets` lists candidate page IDs;
 `debugger_attach` requires the exact ID. Discovery and the page WebSocket must
 use the same loopback host/port; redirects and credential-bearing URLs fail.
 
@@ -117,8 +118,11 @@ mode, pass the same name and a JSON argument object to the wrapper's `call`.
 
 | Tool | Use |
 | --- | --- |
-| `debugger_targets` | List page IDs in an existing loopback Chrome debugging endpoint. `targetType: service_worker\|worker\|all` also lists `sw.js` and worker targets (each has its own WebSocket; attach works the same, `blob:` worker URLs included). |
-| `debugger_attach` | Attach the exact selected page ID; does not launch Chrome. |
+| `debugger_targets` | List targets at a loopback Chrome or Node inspector endpoint. Default: pages and `node` targets; `targetType: service_worker\|worker\|node\|all` (each has its own WebSocket; attach works the same, `blob:` and url-less worker URLs included). |
+| `debugger_attach` | Attach the exact selected target ID (page, worker, service worker, Node); does not launch Chrome. Warns when another client already holds the page (`Target.getTargets` `attached`). A Node `--inspect-brk` process is released and stops at `Break on start`. |
+| `debugger_break` | **Workflow, one call:** set breakpoints, run an optional `trigger`, wait for the first pause, return `cause`, `stack` and the top frames' locals as values. Leaves the target paused with `token`, or `resume:true` resumes and removes them. Replaces breakpoint → run → state → state → properties. |
+| `debugger_collect` | **Workflow, one call:** set logpoints, run `trigger`, wait, return hit counts and values, remove the logpoints. |
+| `debugger_node_test` | **Workflow, no attach:** run up to 8 Node test files under the inspector in parallel with probes (counts, values, locals captures) and exception records; returns exit code, TAP pass/fail and failing test names. See [Node](#node-tests-and-processes). |
 | `debugger_state` | Read attachment, current pause token/stack/scopes and background operation status. Adds `detached: "target gone: …"` after a lost target and `pageUnresponsive` (+`pageNote`) when a run pending > 2 s blocks the page. |
 | `debugger_incident` | After an exception, save its latest log entry, current `__apex` scene state, and a JPEG of the attached local page in `scratch/debug-incidents/`. Returns links to the image and JSON report. It rechecks the current URL before and after capture, refusing a page that navigated away from loopback. The page must be running; the image is taken *after* the exception, so it is not the failing frame. No browser is launched. |
 | `debugger_scripts` | Find parsed script IDs. Named URLs first; anonymous/eval scripts hidden unless `includeAnonymous:true`; `filter` is a substring (`regex:true` for a regex). Reports `total` and `truncated` (200-row cap). |
@@ -255,6 +259,60 @@ were read for parameters):
 [`DOMDebugger.getEventListeners {objectId,depth?,pierce?}`](https://chromedevtools.github.io/devtools-protocol/tot/DOMDebugger/#method-getEventListeners),
 [`Runtime.queryObjects {prototypeObjectId,objectGroup?}`](https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#method-queryObjects),
 [`Runtime.callFunctionOn`/`releaseObjectGroup`](https://chromedevtools.github.io/devtools-protocol/tot/Runtime/).
+
+## Node tests and processes
+
+Added 2026-10-19 (#2957; measurements and sources: `docs/notes/JS-DEBUGGER-IMPROVEMENTS-2026-10-19.md`).
+
+**One call per question: `debugger_node_test`.** It needs no attach and runs beside an
+attached page session:
+
+```json
+{"files": ["tests/unit/js-debugger-trace.test.mjs", "tests/unit/js-debugger-node.test.mjs"],
+ "probes": [{"file": "tools/x.mjs", "line": 42, "expression": "({row, n})", "captureLocals": 2},
+            {"line": 17, "condition": "i === 3"}],
+ "testNamePattern": "parses", "timeoutMs": 60000}
+```
+
+- Each file runs as `node --inspect-brk=127.0.0.1:0 <file>` (node:test runs a file's tests when it is
+  the entry script) on its own kernel-chosen port and CDP socket, so files run in parallel
+  (`concurrency`, default 4, at most 8 files). `runner:"test"` runs the real `node --test <file>`.
+- A probe is a conditional breakpoint whose condition counts the hit and streams `expression` through
+  `Runtime.addBinding` (exact final counts arrive from an exit hook). It never pauses unless
+  `captureLocals: N`, which pauses the first N hits to read locals and the stack, then resumes.
+  `probe.file` defaults to each run's test file; a probe that never resolves gets a `warning`.
+- **Game code under vm.** Repo harnesses load `js/` files with `vm.runInContext(src, ctx, {filename})`, and
+  the script URL is whatever filename they pass (`file:///abs/js/x.js`, `js/x.js`, a bare `x.js`) or
+  nothing (`evalmachine.<anonymous>`). A probe's `file` is matched against every named form, and an
+  unnamed script is matched by content (line count, first 400 chars after the harnesses' `^const`→`var`
+  rewrite) and bound by scriptId (`boundBy: "source (unnamed vm script)"`). The entry process does this
+  inside a pause before each script runs (`Debugger.setInstrumentationBreakpoint`, armed at Break on
+  start), so a call in the load's own tick still hits; `vmTopLevel:false` skips the pauses. Every script
+  execution pauses while armed, so it stops after `vmPauseBudget` (default 300) and says so in
+  `vmNote` (a heavy game-vm test: 121 s uncapped, 42 s capped, 38 s without). Each vm
+  context counts separately (`contexts: N`). Prefer line-only probes: the rewrite shifts columns on
+  top-level `const` lines. A function's header line never hits on a call; probe its first body line.
+- `children:true` (implied by `runner:"test"`) auto-attaches every Node process the test spawns: a
+  `NODE_OPTIONS=--require tools/mcp/js-debugger-boot.cjs` bootloader opens an inspector on a free
+  port, reports it, and waits until the runner has set the probes (VS Code js-debug's design).
+  Values and captures then carry the `pid`.
+- Exceptions (`exceptions: uncaught|all|none`) are recorded with message and stack, never left paused.
+  A hung test is killed with its process group at `timeoutMs`.
+- The reply: per file `exitCode`, `summary` (TAP `pass`/`fail`, failing test names), probe results,
+  `stdoutTail` (longer when something failed) and `stderrTail`.
+
+**Interactive Node session.** `node --inspect-brk=127.0.0.1:9229 tests/unit/js-debugger-trace.test.mjs` (or
+`node --inspect-brk=127.0.0.1:9229 --test tests/unit/js-debugger-trace.test.mjs`: the runner hands the port to its child and
+runs files one at a time), then `debugger_targets {endpoint:"http://127.0.0.1:9229"}`, attach the
+`node` row: the process stops at `Break on start` (`cause:"start"`). `debugger_breakpoint` and
+`debugger_break` take a repo path on a Node target. Node keeps the process alive until the client
+detaches, so always `debugger_detach`.
+
+**Fewer round trips on any target.** `debugger_break` and `debugger_collect` above; `debugger_control`
+steps now wait (`waitMs`, default 1500) and return the new token; a breakpoint URL without a query
+matches every `?v=` (so `js/agent/apex.js` works for a deferred `?v=1695` script); every pause carries
+`cause` (`breakpoint`, `step`, `exception`, `start`, or `unowned`: another client, a `debugger`
+statement or a pause request).
 
 ## Starting the browser: `debug-chrome.mjs`
 

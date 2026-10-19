@@ -85,7 +85,11 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
     // |dy/ds| measures 2.19 %, against 15.30 % for Monaco and 22.30 % for Spa
     // through the same probe, so 3.5 % separates a flat desert circuit from
     // every circuit with real relief while leaving the ripple room to move.
+    // Lower bound too: the authored profile measures 6.699 m, a flattened track
+    // reads ~0.27 m (ripple only) and would pass the upper bound alone.
     expect(session.elevationRange, `${label} Qatar keeps its authored desert relief`)
+      .toBeGreaterThan(3);
+    expect(session.elevationRange, `${label} Qatar relief stays desert-scale`)
       .toBeLessThan(7.5);
     const maxGrade = Math.max(...session.slopes.map(Math.abs));
     expect(maxGrade, `${label} Qatar remains effectively flat underfoot`).toBeLessThan(0.035);

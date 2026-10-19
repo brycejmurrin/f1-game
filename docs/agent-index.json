@@ -1137,6 +1137,7 @@
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/js-debugger-node.test.mjs",
         "tests/unit/js-debugger-trace.test.mjs",
         "tests/unit/lsp-caller-fixes.test.mjs",
         "tests/unit/lsp-config-freshness.test.mjs",
@@ -1236,6 +1237,7 @@
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/flyby-fleet.test.mjs",
+        "tests/unit/flyby-frame-report.test.mjs",
         "tests/unit/foundation-core-vm.test.mjs",
         "tests/unit/slider-effect.test.mjs"
       ],

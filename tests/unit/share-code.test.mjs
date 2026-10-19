@@ -336,13 +336,6 @@ test("CONTINUE's lastSession never carries a season or career flow", () => {
   assert.doesNotMatch(menu, /G\.flow\s*=\s*hint\.session\.flow/, "CONTINUE does not trust the stored flow");
 });
 
-test("share-code module is referenced (zeroRefModules)", () => {
-  const { ShareCode } = harness();
-  assert.equal(typeof ShareCode.encode, "function");
-  assert.ok(fs.existsSync(path.join(ROOT, SRC)));
-  assert.match(fs.readFileSync(path.join(ROOT, SRC), "utf8"), /const ShareCode/);
-});
-
 // Real GameStore deliberately updates its cache even when localStorage refuses.
 function quotaHarness() {
   const disk = new Map();

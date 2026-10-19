@@ -130,12 +130,18 @@ test("cinematic camera outside right corner (k<0)", async ({ page }) => {
 test("carOrbit returns eye/target/fov/carIdx/speed", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  const res = await page.evaluate(() => __apex.carOrbit(0, 180, 14, 25));
-  expect(res).not.toBeFalsy();
-  expect(Array.isArray(res.eye)).toBe(true);
-  expect(res.carIdx).toBe(0);
-  expect(typeof res.speed).toBe("number");
-  expect(typeof res.fov).toBe("number");
+  // idx 0 means the player — carIdx is the player's grid index, not the ask (#2976).
+  const r = await page.evaluate(() => {
+    const playerIdx = __apex.cars().findIndex((c) => c.p);
+    const res = __apex.carOrbit(0, 180, 14, 25);
+    return { res, playerIdx };
+  });
+  expect(r.res).not.toBeFalsy();
+  expect(Array.isArray(r.res.eye)).toBe(true);
+  expect(r.res.carIdx).toBe(r.playerIdx);
+  expect(r.res.fallback).toBeFalsy();
+  expect(typeof r.res.speed).toBe("number");
+  expect(typeof r.res.fov).toBe("number");
 });
 
 test("carOrbit fov defaults to 55", async ({ page }) => {
@@ -164,11 +170,48 @@ test("carOrbit eye different from target", async ({ page }) => {
 test("carOrbit works for AI car (non-player)", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
-  // cars[1] is an AI car (AI cars only have s/x, no px/pz)
-  const res = await page.evaluate(() => __apex.carOrbit(1, 180, 14, 30));
-  expect(res).not.toBeFalsy();
-  expect(res.carIdx).toBe(1);
-  expect(Array.isArray(res.eye)).toBe(true);
+  // cars[1] is AI — assert we frame THAT car (target near its pose), not the player (#2976).
+  const r = await page.evaluate(() => {
+    const idx = 1;
+    const row = __apex.cars()[idx];
+    const st = __apex.carState()[idx];
+    const res = __apex.carOrbit(idx, 180, 14, 30, 1.0);
+    if (!res || !st || !row) return { ok: false };
+    const isAi = !row.p && !st.isPlayer;
+    // gridUp / sync write px,pz on every car; look-at XZ is the car (h only lifts Y).
+    const dist = (st.px != null && st.pz != null)
+      ? Math.hypot(res.target[0] - st.px, res.target[2] - st.pz)
+      : null;
+    return { ok: true, res, isAi, dist };
+  });
+  expect(r.ok).toBe(true);
+  expect(r.isAi).toBe(true);
+  expect(r.res.carIdx).toBe(1);
+  expect(r.res.fallback).toBeFalsy();
+  expect(Array.isArray(r.res.eye)).toBe(true);
+  expect(r.dist).not.toBeNull();
+  expect(r.dist).toBeLessThan(2);
+});
+
+test("carOrbit out-of-range falls back to player and sets fallback", async ({ page }) => {
+  await page.setViewportSize(VIEWPORT);
+  await loadTrack(page);
+  const r = await page.evaluate(() => {
+    const n = __apex.cars().length;
+    const playerIdx = __apex.cars().findIndex((c) => c.p);
+    const miss = __apex.carOrbit(99, 180, 14, 25);
+    const player = __apex.carOrbit(0, 180, 14, 25);
+    const d = miss && player
+      ? Math.hypot(miss.target[0] - player.target[0], miss.target[2] - player.target[2])
+      : Infinity;
+    return { n, playerIdx, miss, d };
+  });
+  expect(r.n).toBeGreaterThan(1);
+  expect(r.n).toBeLessThan(99);
+  expect(r.miss).not.toBeFalsy();
+  expect(r.miss.fallback).toBe(true);
+  expect(r.miss.carIdx).toBe(r.playerIdx);
+  expect(r.d).toBeLessThan(0.01);
 });
 
 // ── setSpeed() ────────────────────────────────────────────────────────────────

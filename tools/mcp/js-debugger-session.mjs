@@ -2,9 +2,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
+import { pathSuffixRegex, workflowMethods } from "./js-debugger-workflow.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
@@ -14,6 +15,29 @@ function previewSummary(r) {
   if (!props) return undefined;
   const body = props.slice(0, 12).map(p => `${clip(p.name, 40)}: ${clip(p.value, 60)}`).join(", ");
   return clip(`${r.subtype === "array" ? "[" : "{"}${body}${r.preview.overflow || props.length > 12 ? ", …" : ""}${r.subtype === "array" ? "]" : "}"}`, 600);
+}
+// Which local URLs a target may carry: http loopback pages; a dedicated worker created from a
+// blob or data URL lists url "" (bug: it was refused); a Node target is a file:// script (#2957).
+export function attachableUrl(target) {
+  const url = target.url;
+  if (url === "about:blank" || (url === "" && ["worker", "service_worker"].includes(target.type))) return true;
+  if (target.type === "node") return /^(?:file:\/\/|node:|$)/.test(url) || url.startsWith("/");
+  try { localUrl(url.replace(/^blob:/, "").split(/[?#]/)[0]); return true; } catch { return false; }
+}
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// A URL without a query matches the script under ANY query: the shell tags scripts ?v=dev but
+// deferred backends load ?v=<n>, and the deploy rewrites both, so an exact URL broke on each.
+// A bare path (js/agent/apex.js) matches by path suffix; a Node target takes an fs path.
+export function breakpointTarget(url, target) {
+  if (target?.type === "node" && !/^[a-z]+:/i.test(url)) {
+    // A vm-loaded file's url is whatever filename the harness passed (absolute, repo-relative, or a bare name).
+    const root = fileURLToPath(new URL("../../", import.meta.url));
+    const abs = url.startsWith("/") ? url : path.resolve(root, url);
+    return abs.startsWith(root) ? { urlRegex: pathSuffixRegex(path.relative(root, abs)) } : { url: pathToFileURL(abs).href };
+  }
+  if (/[?#]/.test(url)) return { url };
+  if (/^[a-z]+:\/\//i.test(url)) return { urlRegex: `^${escapeRe(url)}(?:[?#].*)?$` };
+  return { urlRegex: `(?:^|/)${escapeRe(url.replace(/^\.?\//, ""))}(?:[?#].*)?$` };
 }
 const sourceLocation = p => ({ scriptId: p.scriptId, line: p.lineNumber + 1, column: (p.columnNumber ?? 0) + 1 });
 function exceptionPreview(value) {
@@ -38,6 +62,13 @@ function operationResult(result, id) {
     result: { type: result.result?.type, subtype: result.result?.subtype, description: clip(result.result?.description, 200) },
     hadException: !!result.exceptionDetails };
 }
+// Two js-debugger sessions on one target share every pause. Each session registers itself in a
+// page-global table (its generation + pid); a live pid there that is not ours is another debugger.
+// (Chrome's Target.getTargets `attached` cannot tell: debug-chrome's viewport holder is always attached.)
+const REGISTRY = "__apexDbgClients";
+const registerExpression = (gen, pid) => `(()=>{var M=globalThis.${REGISTRY}||(Object.defineProperty(globalThis,"${REGISTRY}",{value:{},configurable:true}),globalThis.${REGISTRY});var o=Object.entries(M).map(function(e){return {gen:e[0],pid:e[1].pid,since:e[1].since}});M[${JSON.stringify(gen)}]={pid:${pid},since:Date.now()};return o})()`;
+const unregisterExpression = gen => `(()=>{var M=globalThis.${REGISTRY};if(M)delete M[${JSON.stringify(gen)}];return true})()`;
+const pidAlive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
 export class DebugSession {
   constructor({ discover = targets, open = Cdp.open } = {}) {
     this.discover = discover; this.open = open;
@@ -145,7 +176,7 @@ export class DebugSession {
       screenshot: imagePath, report: reportPath, bytes: image.length,
       note: "Screenshot and state were collected after the exception; this is not the exact failing frame." };
   }
-  async listTargets(endpoint, kind = "page") {
+  async listTargets(endpoint, kind = "default") {
     this.lastEndpoint = endpoint;
     return { targets: (await this.discover(endpoint, kind)).map(({ webSocketDebuggerUrl, ...t }) => t) };
   }
@@ -164,12 +195,11 @@ export class DebugSession {
       const rows = await this.discover(endpoint, "all");
       current();
       const target = rows.find(t => t.id === targetId);
-      if (!target) throw Error("Unknown page targetId; use debugger_targets");
+      if (!target) throw Error("Unknown targetId; list again with debugger_targets (targets change: a service worker stops when idle, a Node process exits)");
       // The repository's debugger works on local repros, never the deployed site.
-      if (target.url !== "about:blank") {
-        try { localUrl(target.url.replace(/^blob:/, "").split(/[?#]/)[0]); }
-        catch { throw Error(`Refusing to attach ${clip(target.url, 200)}: the debugger only attaches pages served from 127.0.0.1, localhost or [::1] (local repros only, never the deployed site). Serve the page locally, e.g. node tools/mcp/debug-chrome.mjs start`); }
-      }
+      this.lastAttachType = target.type;
+      if (!attachableUrl(target)) throw Error(`Refusing to attach ${clip(target.url, 200)}: the debugger only attaches pages served from 127.0.0.1, localhost or [::1] (local repros only, never the deployed site). Serve the page locally, e.g. node tools/mcp/debug-chrome.mjs start`);
+
       const ws = localUrl(target.webSocketDebuggerUrl, true), origin = localUrl(endpoint);
       if (ws.host !== origin.host) throw Error("Target WebSocket must use the discovery host and port");
       client = await this.open(ws.href); current(); this.cdp = client;
@@ -188,7 +218,13 @@ export class DebugSession {
         if (recordException(this, event)) return;
         this.resetPause();
         this.markOperations("pending", "paused");
-        this.pause = { token: `${this.generation}:${++this.sequence}`, reason: event.reason,
+        const owned = (event.hitBreakpoints || []).some(id => this.breakpoints.has(id));
+        // Every client with Debugger enabled sees every pause; say when nothing of ours explains it.
+        const cause = owned ? "breakpoint" : ["exception", "promiseRejection"].includes(event.reason) ? "exception"
+          : event.reason === "Break on start" ? "start" : this.stepping ? "step"
+          : "unowned: a debugger statement, a pause request, or ANOTHER debugger client on this target";
+        this.stepping = false;
+        this.pause = { token: `${this.generation}:${++this.sequence}`, reason: event.reason, cause,
           exception: ["exception", "promiseRejection"].includes(event.reason) ? this.remember(exceptionPreview(event.data)) : undefined,
           hitBreakpoints: event.hitBreakpoints || [],
           frames: event.callFrames.slice(0, 10).map((f, index) => ({ index, functionName: clip(f.functionName, 200),
@@ -223,10 +259,22 @@ export class DebugSession {
       current();
       await client.send("Debugger.setAsyncCallStackDepth", { maxDepth: 8 });
       current();
-      return this.state();
+      // A Node process started with --inspect-brk waits for this; it then stops at "Break on start",
+      // so breakpoints can be set before the first user statement. Harmless when not waiting.
+      if (target.type === "node") await client.send("Runtime.runIfWaitingForDebugger", {}, 2000).catch(() => {});
+      const st = this.state();
+      if (target.type === "node") st.note = "Node target: started with --inspect-brk it now stops at Break on start (cause start); set breakpoints, then resume. Node waits for this client to detach before it exits.";
+      try {
+        const r = await client.send("Runtime.evaluate", { expression: registerExpression(this.generation, process.pid), returnByValue: true, silent: true }, 2000);
+        const others = (r.result?.value || []).filter(o => o.gen !== this.generation && Number.isInteger(o.pid) && o.pid !== process.pid && pidAlive(o.pid));
+        if (others.length) st.warning = `Another js-debugger session (pid ${others.map(o => o.pid).join(", ")}) is attached to this target. Pauses are shared: a pause with cause 'unowned' is theirs, and your resume releases it. Coordinate, or detach one.`;
+      } catch {}
+      return st;
     } catch (e) {
       client?.close();
       if (this.cdp === client || this.attachGeneration === attachGeneration) { this.cdp = null; this.target = null; }
+      // Measured 2026-10-19: a url-less worker that never ran answers no command, direct or via Target.attachToTarget.
+      if (/timed out/.test(e.message) && this.lastAttachType && this.lastAttachType !== "page") throw Error(`${e.message}. The ${this.lastAttachType} target accepted the socket but answered nothing: it is not running JavaScript (a worker still loading lists url "", a stopped service worker). List again; wake it from the page first.`);
       throw e;
     }
     finally { if (this.attachGeneration === attachGeneration) this.connecting = false; }
@@ -237,7 +285,7 @@ export class DebugSession {
     const detachGeneration = ++this.attachGeneration;
     this.connecting = false;
     const client = this.cdp;
-    if (!client) { this.pause = null; return { detached: true, cleanupErrors: [] }; }
+    if (!client) { this.pause = null; this.operations.clear(); return { detached: true, cleanupErrors: [] }; }
     const cleanupErrors = [], cleanupWarnings = [];
     let resumedEventObserved = false, timer;
     const observed = () => { resumedEventObserved = true; };
@@ -249,6 +297,7 @@ export class DebugSession {
       ...[...this.operationGroups].map(objectGroup => ["Runtime.releaseObjectGroup", { objectGroup }]),
       ["Runtime.releaseObjectGroup", { objectGroup: this.generation }]];
     if (this.pause) commands.push(["Runtime.releaseObjectGroup", { objectGroup: this.pause.token }]);
+    commands.push(["Runtime.evaluate", { expression: unregisterExpression(this.generation), returnByValue: true, silent: true }]);
     if (this.logpointRings.size) {
       const ids = JSON.stringify([...this.logpointRings]);
       commands.push(["Runtime.evaluate", { expression: `(function(ids){var R=globalThis.__apexDbgLog;if(!R)return false;ids.forEach(function(id){delete R[id]});if(!Object.keys(R).length)delete globalThis.__apexDbgLog;return true})(${ids})`, returnByValue: true, silent: true }]);
@@ -281,7 +330,7 @@ export class DebugSession {
       // still settling. Never let that old detach erase the replacement session.
       if (this.attachGeneration === detachGeneration) {
         this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null;
-        this.breakpoints.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.scripts.clear(); this.operationGroups.clear(); this.connecting = false;
+        this.breakpoints.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.scripts.clear(); this.operationGroups.clear(); this.operations.clear(); this.connecting = false;
       }
     }
     return { detached: true, cleanupErrors: [...cleanupErrors], cleanupWarnings, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
@@ -304,7 +353,8 @@ export class DebugSession {
   async source(scriptId, startLine, count, { url, endLine } = {}) {
     if (!scriptId && url) {
       const rows = [...this.scripts.values()].filter(x => x.url === url);
-      const pick = rows.at(-1) || [...this.scripts.values()].filter(x => x.url && x.url.split(/[?#]/)[0].endsWith(url)).at(-1);
+      const bare = url.split(/[?#]/)[0];
+      const pick = rows.at(-1) || [...this.scripts.values()].filter(x => x.url && x.url.split(/[?#]/)[0].endsWith(bare)).at(-1);
       if (!pick) throw Error(`No parsed script with url ${clip(url, 200)}; list it with debugger_scripts {filter}`);
       scriptId = pick.scriptId;
     }
@@ -334,16 +384,19 @@ export class DebugSession {
     const same = [...this.breakpoints.values()].find(b => b.url === url && b.line === line && b.column === column);
     if (same) await this.dropBreakpoint(same).catch(e => { throw Error(`Cannot replace breakpoint ${same.id} (old condition may still be armed): ${e.message}`); });
     if (this.breakpoints.size >= 100) throw Error("Breakpoint limit 100 reached; remove unused breakpoints");
-    const r = await this.connected().send("Debugger.setBreakpointByUrl", { url, lineNumber: line - 1,
+    const spec = breakpointTarget(url, this.target);
+    const r = await this.connected().send("Debugger.setBreakpointByUrl", { ...spec, lineNumber: line - 1,
       columnNumber: column - 1, condition });
-    const bp = { id: r.breakpointId, url, line, column, condition: clip(condition, 300), locations: [], ...extra };
+    const bp = { id: r.breakpointId, url, ...(spec.urlRegex ? { urlRegex: spec.urlRegex } : spec.url !== url ? { resolvedUrl: spec.url } : {}),
+      line, column, condition: clip(condition, 300), locations: [], ...extra };
     this.breakpoints.set(bp.id, bp);
     if (bp.logpoint) this.logpointRings.add(bp.logpoint);
     for (const p of (r.locations || []).slice(0, 5)) this.resolveBreakpoint(bp.id, p);
     if (!bp.locations.length) {
       const base = url.split(/[?#]/)[0].split("/").pop();
       const near = [...this.scripts.values()].filter(s => s.url && base && s.url.split(/[?#]/)[0].endsWith(base)).map(s => s.url);
-      bp.warning = near.length && !near.includes(url)
+      const re = spec.urlRegex && new RegExp(spec.urlRegex);
+      bp.warning = near.length && !near.some(u => re ? re.test(u) : u === spec.url)
         ? `NO LOCATIONS: no parsed script has this exact URL. Use one of these exact URLs: ${[...new Set(near)].slice(0, 5).join(" | ")}`
         : "NO LOCATIONS: the script is not parsed yet (it resolves on load) or the URL is wrong. Check debugger_scripts {filter} for the exact URL; a line past the script's end also never resolves.";
     }
@@ -355,7 +408,7 @@ export class DebugSession {
     await this.dropBreakpoint(bp);
     return { removed: id };
   }
-  async control(action, token) {
+  async control(action, token, waitMs = 1500) {
     const methods = { pause: "Debugger.pause", resume: "Debugger.resume", over: "Debugger.stepOver", into: "Debugger.stepInto", out: "Debugger.stepOut" };
     if (action === "cancel") {
       // Runtime.terminateExecution ends the running script with an uncatchable termination.
@@ -366,11 +419,16 @@ export class DebugSession {
     if (action !== "pause") this.paused(token);
     else if (this.pause) return this.state();
     const before = this.pause?.token;
+    this.stepping = ["over", "into", "out"].includes(action);
     await this.connected().send(methods[action]);
     // CDP events, not command acknowledgments, prove the new pause. If resumed
     // has not arrived yet, remove the old frame handles before returning.
-    if (action !== "pause" && this.pause?.token === before) this.resetPause();
-    return this.state();
+    if (action !== "pause" && this.pause?.token === before) { this.resetPause(); this.markOperations("paused", "pending"); }
+    // A step normally lands within milliseconds: wait for it so the reply carries the new token.
+    if (this.stepping || action === "pause") await this.waitForPause(waitMs);
+    const st = this.state();
+    if (this.stepping && !st.paused) st.note = `No pause within ${waitMs} ms of the step: execution ran on (the stepped frame returned to non-JS) or is still running. Read debugger_state.`;
+    return st;
   }
   async exceptions(state) { await this.connected().send("Debugger.setPauseOnExceptions", { state }); return { state }; }
   async evaluate(token, frame, expression, allowSideEffects = false) {
@@ -462,4 +520,4 @@ export class DebugSession {
     return { operationId: id, status: "pending", timeoutMs, ...(abandoned.length ? { abandoned } : {}), note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution (timedOut ops still report a late result)." };
   }
 }
-Object.assign(DebugSession.prototype, traceMethods());
+Object.assign(DebugSession.prototype, traceMethods(), workflowMethods());
