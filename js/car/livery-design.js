@@ -3,13 +3,16 @@
 const LiveryDesign = (function () {
   const PATTERNS = Object.freeze(["ribbon", "brokenChevron", "contours", "honeycomb", "segments", "gradient", "twoTone", "checker", "diamonds", "slashes", "pinstripes", "dots", "lightning", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade", "speedlines",
     // 2026-grid motifs (docs/notes/LIVERY-REF-2026-10-18.md): generic geometry, no team's or sponsor's mark.
-    "keylineSplit", "halftone", "chevronStack", "gradBands", "slashBlock", "lineFade"]);
+    "keylineSplit", "halftone", "chevronStack", "gradBands", "slashBlock", "lineFade",
+    // Paint layouts after classic schemes (docs/notes/LIVERY-LAYOUTS-2026-10-19.md): generic geometry, no marks.
+    "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
   const SECOND_COLOR = Object.freeze(["gradient", "twoTone", "segments", "checker", "diamonds", "dots", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade",
-    "keylineSplit", "chevronStack", "slashBlock"]);
+    "keylineSplit", "chevronStack", "slashBlock", "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
   const LINE_PATTERNS = Object.freeze(["contours", "honeycomb", "waves", "herringbone", "circuit", "speedlines", "keylineSplit"]);
   // Editor names for the 2026-motif designs; the garage editor falls back to the id for any it does not name.
   const LABELS = Object.freeze({ keylineSplit: "Keyline split", halftone: "Halftone fade", chevronStack: "Chevron stack",
-    gradBands: "Graduated bands", slashBlock: "Slash block", lineFade: "Line fade" });
+    gradBands: "Graduated bands", slashBlock: "Slash block", lineFade: "Line fade",
+    tartanBand: "Tartan band", borderedStripe: "Bordered stripe", tricolour: "Tricolour sweep", spearhead: "Spearhead", deckSplit: "Deck split" });
   const RANGES = Object.freeze({
     patternWidth: [20, 100, 70], patternRepeat: [2, 12, 6], patternOffset: [-40, 40, 0],
     patternTaper: [0, 80, 20], patternOpacity: [10, 100, 100],
@@ -237,6 +240,43 @@ const LiveryDesign = (function () {
         const t = Math.max(0, 1 - (z - 0.5) / 1.5) * step * 0.45;
         if (t > 0.003) ctx.fillRect(-1.2, z, 2.4, t);
       }
+    } else if (kind === "tartanBand") {
+      // A broad band woven from crossing stripes: a plaid sett, two colours over the second colour's ground.
+      const pitch = step * 0.8, key = color(liv.accent, "#ffffff");
+      ctx.fillStyle = secondary; ctx.fillRect(offset - width, 0.5, width * 2, 1.5);
+      ctx.globalAlpha *= 0.62; ctx.fillStyle = primary;
+      for (let i = -12; i <= 12; i++) ctx.fillRect(offset + i * pitch - pitch * 0.2, 0.5, pitch * 0.4, 1.5);
+      for (let z = 0.5; z < 2; z += pitch) ctx.fillRect(offset - width, z, width * 2, pitch * 0.4);
+      ctx.globalAlpha /= 0.62; ctx.fillStyle = key;
+      for (let i = -12; i <= 12; i++) ctx.fillRect(offset + (i + 0.5) * pitch - 0.006 * weight, 0.5, 0.012 * weight, 1.5);
+      for (let z = 0.5 + pitch * 0.7; z < 2; z += pitch) ctx.fillRect(offset - width, z, width * 2, 0.012 * weight);
+    } else if (kind === "borderedStripe") {
+      // One centre stripe with a keyline each side in the second colour, a body-colour gap between.
+      const w = width * 0.45, gap = 0.03, line = 0.03 * weight;
+      ctx.fillRect(offset - w, 0.5, w * 2, 1.5);
+      ctx.fillStyle = secondary;
+      for (const side of [-1, 1]) ctx.fillRect(offset + side * (w + gap) - (side < 0 ? line : 0), 0.5, line, 1.5);
+    } else if (kind === "tricolour") {
+      // Three equal raked bands sweeping across the rear half: first colour, accent, second colour.
+      const w = width * 0.32, key = color(liv.accent, "#ffffff");
+      [primary, key, secondary].forEach((fill, i) => {
+        const x0 = offset - w * 1.5 + i * w;
+        ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(x0 - 0.5, 1.05); ctx.lineTo(x0 - 0.5 + w, 1.05);
+        ctx.lineTo(x0 + 0.25 + w, 2); ctx.lineTo(x0 + 0.25, 2); ctx.closePath(); ctx.fill();
+      });
+    } else if (kind === "spearhead") {
+      // A single arrowhead from the nose that opens to the full panel, notched tail, keylined in the second colour.
+      const tail = 1.45, notch = 1.15;
+      ctx.beginPath(); ctx.moveTo(offset, 0.5); ctx.lineTo(offset + width, tail); ctx.lineTo(offset + width, 2);
+      ctx.lineTo(offset, 2 - (tail - notch)); ctx.lineTo(offset - width, 2); ctx.lineTo(offset - width, tail); ctx.closePath();
+      ctx.fill(); ctx.strokeStyle = secondary; ctx.lineWidth = 0.035 * weight; ctx.stroke();
+    } else if (kind === "deckSplit") {
+      // A level split, first colour on one deck and second on the other, with a double pinline on the seam.
+      const key = color(liv.accent, "#ffffff");
+      ctx.fillRect(-1.2, 0.5, offset + 1.2, 1.5);
+      ctx.fillStyle = secondary; ctx.fillRect(offset, 0.5, 1.2 - offset, 1.5);
+      ctx.fillStyle = key; ctx.fillRect(offset - 0.02 * weight, 0.5, 0.04 * weight, 1.5);
+      ctx.fillRect(offset + 0.05 * weight, 0.5, 0.012 * weight, 1.5);
     }
     ctx.restore();
   }

@@ -492,3 +492,20 @@ test("2026-motif designs: named, registered in their colour/line lists, and each
     monotone(dots, "halftone dot radius");
   }
 });
+
+test("classic paint layouts: named, two-colour, deterministic, and each paints distinct art", () => {
+  const { D } = load();
+  const layouts = ["tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"];
+  const sigs = new Set();
+  for (const id of layouts) {
+    assert.ok(D.PATTERNS.includes(id), id); assert.ok(D.LABELS[id], id + " has an editor label");
+    assert.ok(D.SECOND_COLOR.includes(id), id + " uses the second colour");
+    const a = drawing(), b = drawing(), liv = { spineLogo: id, c1: [0, 0, 0], c2: [1, 1, 1], accent: [1, 0, 0], patternPlacement: "wrap" };
+    assert.equal(D.drawAtlas(a.ctx, liv, a.regions, a.flank, a.each), true, id + " paints");
+    D.drawAtlas(b.ctx, liv, b.regions, b.flank, b.each);
+    assert.deepEqual(a.ops, b.ops, id + " is deterministic");
+    assert.ok(a.ops.length > 3, id + " painted something");
+    sigs.add(JSON.stringify(a.ops));
+  }
+  assert.equal(sigs.size, layouts.length, "no two layouts paint the same art");
+});
