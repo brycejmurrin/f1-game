@@ -1,0 +1,1 @@
+1792389136	Cursor Agent	#2960 #2963 vm-debug preload + determinism bisect; OWNED tools/lib/vm-debug-preload.cjs tools/lib/game-vm.cjs(opt-in trace) tools/check/determinism-bisect* tests/unit/vm-debug-preload* tests/unit/determinism-bisect* package.json(debug:unit) docs/DEBUG-HOOKS.md(section) REGISTRATION  [claude/f1-game-project-26h3ng; session 644b2f1293b351452de96f42]
