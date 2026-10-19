@@ -465,7 +465,10 @@ const AiDrive = (function () {
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     const catchEdge = !ctx.street
       && pairEdgeN(ctx.ourVmax, ctx.towVmax, ctx.ourPace, ctx.towPace, ref) > 0;
-    const catching = !!(ctx.towCar && ctx.towGap < 28 && (
+    // A pushing trail (trailPush) is catching from any gap in its window: a
+    // car 37 m back has no tow car, banked its ERS and lost the straight to a
+    // leader deploying "rich" — pace edge cancelled (monza RUS<GAS, #2356).
+    const catching = trailN(ctx.trailT, ctx.street) > 0 || !!(ctx.towCar && ctx.towGap < 28 && (
       (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1 * vs || catchEdge));
     const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2 * vs);
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
@@ -656,7 +659,11 @@ const AiDrive = (function () {
     // the old 16 / 14 m ceilings.
     const soft = street ? 0
       : softPairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop);
-    const reach = street ? 14 : (soft > 0 ? pullReachM(ctx.vTop) : 16);
+    // A pushing trail (trailPush) reaches the whole trail window and pulls a
+    // full lane: a half pull left the car at |dx| 1.8, inside the 2.2 m box
+    // that defines a blocker, capped in its wake for minutes (monza, #2356).
+    const tN = trailN(ctx.trailT, street);
+    const reach = street ? 14 : Math.max(soft > 0 ? pullReachM(ctx.vTop) : 16, tN > 0 ? TRAIL_WIN_S * Math.max(ctx.speed || 0, 1) : 0);
     if (gap >= reach) return 0;
     // The old trigger was "I am ALREADY going faster than the car ahead", which
     // a queued car can never be: the queue cap holds it 6 m/s BELOW the
@@ -674,7 +681,7 @@ const AiDrive = (function () {
       return side * lerp(0.7, 2.35, clamp(1 - gap / 14, 0, 1))
         * clamp(need / 2.3, 0, 1) * streetOtScale(t) * house;
     }
-    return side * lerp(0.8, 2.6, clamp(1 - gap / reach, 0, 1))
+    return side * lerp(0.8, 2.6, Math.max(clamp(1 - gap / reach, 0, 1), tN))
       * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, t.craft) * house;
   }
 
@@ -705,6 +712,7 @@ const AiDrive = (function () {
     let margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx))
       * lerp(1.10, 0.88, (aggr + 1) * 0.5);
     if (edgeN) margin *= lerp(1, 0.42, edgeN);
+    margin *= lerp(1, 0.25, trailN(ctx.trailT, street));   // a pushing trail wants the move (trailPush)
     // A car under ~12 % of the top speed is an OBSTACLE whatever its pace: the
     // follower behind it sits on the queue crawl floor, which is below the
     // closing margin, so neither test below could ever fire — measured as an
@@ -797,6 +805,72 @@ const AiDrive = (function () {
     const amp = lerp(0.016, 0.005, consistency == null ? 0.75 : consistency);
     const period = 24 + r * 36;
     return 1 + amp * Math.sin((t || 0) * (2 * Math.PI / period) + r * 6 * Math.PI);
+  }
+
+  // PUSH TO PASS (#2356). The longest faster-behind-slower episodes were pairs
+  // 30-45 m apart at ~0.9 s: outside the traffic scan, the tow and the latch,
+  // with a 0.3-0.9 % edge that the pace phase above (±0.5-1.6 %) swamps for
+  // half of every period, so the quicker car never closed and no queue knob
+  // ever reached it (docs/notes/AI-PASS-COMPLETION-TRAIL-YIELD-2026-10-19.md). A driver
+  // stuck behind a slower car pushes: after TRAIL_T0 s within TRAIL_WIN_S of
+  // the SAME scripted-slower car directly ahead, vmax rises to +TRAIL_PUSH by
+  // TRAIL_T1. The extra pace also lifts paceVmax, so the hunger and concede
+  // knobs gated on PASS_EDGE reach the pair once it closes. Permanents only
+  // (streets keep their gates); a human ahead never triggers it; pace is the
+  // scripted tierV x skill, so nothing derived from the arc goes in.
+  const TRAIL_WIN_S = 1.2, TRAIL_EDGE = 0.0025, TRAIL_T0 = 6, TRAIL_T1 = 20, TRAIL_PUSH = 0.02;
+  function trailCase(street, ourPace, aheadPace, gap, speed, aheadHuman) {
+    if (street || aheadHuman || !(ourPace > 0) || !(aheadPace > 0)) return false;
+    if (ourPace / aheadPace - 1 <= TRAIL_EDGE) return false;
+    return gap > 0 && gap < TRAIL_WIN_S * Math.max(speed || 0, 1);
+  }
+  // The per-car step game.js calls once per AI update (beside pacePhase):
+  // `ahead` is the car directly ahead in rank, `open` the caller's session
+  // gate (a green race, out of the pit lane). Writes c.trailT / c._trOf — the
+  // same car must stay ahead or the timer restarts — and returns the push.
+  function scriptPaceOf(o) { return o && o.tierV > 0 && o.skill > 0 ? o.tierV * o.skill : 0; }
+  function trailStep(c, ahead, open, street, dt) {
+    const on = !!ahead && !!open && !ahead.finished && !(ahead.pitState && ahead.pitState !== "none")
+      && trailCase(street, scriptPaceOf(c), scriptPaceOf(ahead), ahead.prog - c.prog, c.speed, !!ahead.human);
+    c.trailT = trailTime(ahead === c._trOf ? c.trailT : 0, on, dt);
+    if (on || !c.trailT) c._trOf = on ? ahead : null;
+    return trailPush(c.trailT, street);
+  }
+  function trailTime(prev, on, dt) { return on ? (prev || 0) + dt : Math.max(0, (prev || 0) - 3 * dt); }   // a flicker past the window bleeds, it does not reset
+  function trailN(trailT, street) { return street || !(trailT > TRAIL_T0) ? 0 : clamp((trailT - TRAIL_T0) / (TRAIL_T1 - TRAIL_T0), 0, 1); }
+  function trailPush(trailT, street) { return 1 + TRAIL_PUSH * trailN(trailT, street); }
+  // ...and the backstop: a car the SAME quicker car has trailed for
+  // TRAIL_YIELD_T s lets it by (game.js letPass: ease, pull aside, no cover),
+  // so no faster-behind-slower episode outlives a minute on a permanent.
+  const TRAIL_YIELD_T = 8;
+  function trailYield(trailT, street) { return !street && trailT > TRAIL_YIELD_T; }
+  // The car-side step (game.js, at letPass): `behind` is the car directly
+  // behind in rank. Sets c._trYT (its trail time, 0 = no yield) and c._trYS,
+  // the side to step to: AWAY from the move — the latched pass side when it
+  // has one, else away from where it sits — never just our freer side, which
+  // was the attacker's own side often enough to put it in the run-off
+  // (silverstone BEA<PER, 8-10 m wide).
+  function trailYieldStep(c, behind, street) {
+    if (!(behind && behind._trOf === c && trailYield(behind.trailT, street))) { c._trYT = 0; return false; }
+    c._trYT = behind.trailT;
+    c._trYS = behind.passOf === c ? -behind.passSide : (c.x >= behind.x ? 1 : -1);
+    return true;
+  }
+  // The blue-flag ease (letPassEase, 1-3.5 %) let the follower draw alongside
+  // and lose it again off-line in the next corner (monza RUS<GAS: 1.7 m short
+  // at T1, then 20 m down on the exit); past the patience the lift deepens to
+  // 6 % over TRAIL_YIELD_RAMP s so the move completes on one straight.
+  const TRAIL_YIELD_RAMP = 6, TRAIL_YIELD_EASE = 0.90;
+  function trailYieldEase(trailT, t) {
+    return lerp(letPassEase(t), TRAIL_YIELD_EASE, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1));
+  }
+  // The lift is a vmax cap, so it only binds on the straights; the corners were
+  // where the yielder kept pulling 15 m on every exit while the follower sat
+  // off-line in its wake (silverstone). The yielder's corner authority eases
+  // too, a third as deep, so the follower is still on its gearbox at the exit.
+  const TRAIL_YIELD_CORNER = 0.965;
+  function trailYieldCorner(trailT) {
+    return lerp(1, TRAIL_YIELD_CORNER, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1));
   }
 
   // A PASS IS A POSITION, NOT A BIAS. otPull's return is a lateral offset
@@ -1811,7 +1885,7 @@ const AiDrive = (function () {
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
     otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
-    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, startQWinBonus, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
+    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, startQWinBonus, pacePhase, trailCase, trailTime, trailStep, trailN, trailPush, trailYield, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,

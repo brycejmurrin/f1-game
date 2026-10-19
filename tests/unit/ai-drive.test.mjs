@@ -883,6 +883,42 @@ test("pacePhase is a zero-mean drift whose amplitude falls with consistency", ()
   assert.equal(A.pacePhase(0, undefined, undefined), 1, "no consistency, no roll: phase zero at t=0");
 });
 
+test("trailPush: a quicker car held behind the same slower car pushes past the pace phase (#2356)", () => {
+  // the case: scripted-slower AI directly ahead, inside 1.2 s, on a permanent
+  assert.equal(A.trailCase(false, 1.004, 1.0, 40, 50, false), true, "+0.4 % at 0.8 s is a trail");
+  assert.equal(A.trailCase(false, 1.002, 1.0, 40, 50, false), false, "under the 0.25 % edge floor");
+  assert.equal(A.trailCase(false, 1.01, 1.0, 70, 50, false), false, "1.4 s back is not held");
+  assert.equal(A.trailCase(true, 1.01, 1.0, 20, 50, false), false, "streets keep their gates");
+  assert.equal(A.trailCase(false, 1.01, 1.0, 20, 50, true), false, "a human ahead never triggers it");
+  assert.equal(A.trailCase(false, 1.01, 0, 20, 50, false), false, "no scripted pace ahead (a human) is no case");
+  // the timer: builds while held, bleeds (not resets) on a flicker
+  let t = 0; for (let i = 0; i < 600; i++) t = A.trailTime(t, true, 1 / 60);
+  assert.ok(Math.abs(t - 10) < 1e-6, "10 s held");
+  assert.ok(Math.abs(A.trailTime(t, false, 0.5) - 8.5) < 1e-9, "a 0.5 s break bleeds 1.5 s");
+  assert.equal(A.trailTime(0.5, false, 1), 0, "never negative");
+  // the push: none before the patience runs out, then a ramp that beats the
+  // metronome's phase swing (±0.5 %) and matches a rookie's (±1.6 %)
+  assert.equal(A.trailPush(5, false), 1, "no push in the first seconds of a trail");
+  assert.ok(A.trailPush(13, false) > 1 && A.trailPush(13, false) < A.trailPush(20, false), "ramps");
+  assert.ok(A.trailPush(60, false) >= 1.016, "full push at least a rookie's phase amplitude");
+  assert.ok(A.trailPush(60, false) <= 1.025, "bounded: a push, not a second car");
+  assert.equal(A.trailPush(60, true), 1, "streets: no push");
+});
+
+test("trailYield: past its patience the slower car lifts and lets the trailing car by (#2356)", () => {
+  assert.equal(A.trailYield(5, false), false, "a short trail is racing, not a yield");
+  assert.equal(A.trailYield(20, false), true, "past the patience: let it by");
+  assert.equal(A.trailYield(60, true), false, "streets never yield on a trail");
+  // the lift starts at the blue-flag ease and deepens; the corner eases a third as deep
+  const t = { experience: 1 };
+  assert.ok(Math.abs(A.trailYieldEase(8, t) - A.letPassEase(t)) < 1e-9, "starts at the blue-flag ease");
+  assert.ok(A.trailYieldEase(60, t) <= 0.91, "deepens enough to finish the move on one straight");
+  assert.ok(A.trailYieldEase(60, t) >= 0.88, "a lift, not a stop");
+  assert.equal(A.trailYieldCorner(8), 1, "no corner ease at the start");
+  assert.ok(A.trailYieldCorner(60) < 1 && A.trailYieldCorner(60) > 0.95, "corner ease is mild");
+  assert.ok(1 - A.trailYieldCorner(60) < (1 - A.trailYieldEase(60, t)) / 2, "corner ease is shallower than the straight lift");
+});
+
 test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an obstacle", () => {
   const base = { street: false, speed: 3, freeSpeed: 55, vTop: 60, blockerVmax: 60, blockerSpeed: 4 };
   assert.equal(A.otWant({ ...base, blockerAccel: 0 }), true, "parked: pass it");
