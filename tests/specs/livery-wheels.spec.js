@@ -1,9 +1,9 @@
 // @ts-check
 // Livery rimTint / caliperTint (garage slice S2): paint-only wheel colour overrides.
 // Unset = today's wheels byte for byte; set = colour arrays only, on all four wheels.
-// The node twin is tests/unit/livery-wheels.test.mjs; this pins the same contract on the live
-// page's real globals. UNRUN at authoring (no browser in the authoring session): the parent
-// runs it with `npm test -- tests/specs/livery-wheels.spec.js`.
+// The wheel-colour contract (unset = byte identical, colour arrays only, four corners) is
+// pinned on the real Car3D build by tests/unit/livery-wheels.test.mjs; this spec keeps only what
+// needs the live creator UI.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
 
@@ -17,42 +17,6 @@ async function reveal(page, sel) {
 }
 
 test.describe("Livery wheel tints", () => {
-  test("rimTint / caliperTint recolour the four wheels and nothing else", async ({ page }) => {
-    await ensureLive(page);
-    const r = await page.evaluate(() => {
-      const team = Teams.LIST[2];
-      const parts = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
-      const build = (livery) => Car3D.build([0.8, 0.05, 0.05], [0.9, 0.9, 0.9], { teamId: team.id, parts, livery, noDriver: true });
-      const none = build(undefined), unset = build({ rimTint: null, caliperTint: null });
-      const tinted = build({ rimTint: [1, 0, 1], caliperTint: [0, 1, 1] });
-      const same = (a, b, k) => a[k].length === b[k].length && a[k].every((v, i) => v === b[k][i]);
-      const A = Car3D.AXLES, centres = [[0.79, A.frontZ], [0.76, A.rearZ]].flatMap(([x, z]) => [[x, z], [-x, z]]);
-      const off = [], corners = new Set();
-      for (let i = 0; i < none.col.length / 3; i++) {
-        if (none.col[i * 3] === tinted.col[i * 3] && none.col[i * 3 + 1] === tinted.col[i * 3 + 1] && none.col[i * 3 + 2] === tinted.col[i * 3 + 2]) continue;
-        const x = none.pos[i * 3], y = none.pos[i * 3 + 1], z = none.pos[i * 3 + 2];
-        if (!centres.some(([cx, cz]) => Math.hypot(x - cx, y - A.wheelY, z - cz) < 0.45)) off.push(i);
-        corners.add((x > 0 ? "R" : "L") + (z > 0 ? "F" : "B"));
-      }
-      return {
-        unsetIdentical: ["pos", "nrm", "col", "mat", "idx"].every((k) => same(none, unset, k)),
-        geometryIdentical: ["pos", "nrm", "mat", "idx"].every((k) => same(none, tinted, k)),
-        colourChanged: !same(none, tinted, "col"),
-        offWheel: off.length,
-        corners: [...corners].sort(),
-        key: CarWheels.tints({ rimTint: [1, 0, 1] }).key,
-        emptyKey: CarWheels.tints({}).key,
-      };
-    });
-    expect(r.unsetIdentical).toBe(true);
-    expect(r.geometryIdentical).toBe(true);
-    expect(r.colourChanged).toBe(true);
-    expect(r.offWheel).toBe(0);
-    expect(r.corners).toEqual(["LB", "LF", "RB", "RF"]);
-    expect(r.emptyKey).toBe("");
-    expect(r.key).not.toBe("");
-  });
-
   test("the creator's WHEELS & BRAKES section offers RIM and CALIPER colour rows", async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await ensureLive(page);

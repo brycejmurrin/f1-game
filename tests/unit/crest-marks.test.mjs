@@ -19,12 +19,11 @@ import { loadCrests, replay, cssOf } from "../../tools/car/crest-sweep.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { LiveryTex: LT, Teams, Liveries, RecCtx } = loadCrests();
 
-// The ONLY colours a crest may paint that do not come from the palette, each
-// with a reason. A national flag is not a livery colour: re-tinting it from the
-// paint job would make it a different flag.
-const HARDCODED_OK = new Set([
-  cssOf([0.00, 0.55, 0.25]), cssOf([0.95, 0.95, 0.96]), cssOf([0.80, 0.10, 0.12]),
-]);
+// No crest paints a colour outside its palette. (This once allowed three national-flag
+// colours for EVERY crest; measured against the shipped roster none paints one, so the
+// allowance only hid a stray red/white/green fill. A crest that needs a fixed colour
+// has to name its team here.)
+const HARDCODED_OK = new Map();   // team id -> Set of css colours that team's crest may hardcode
 
 const SIZES = [
   ["cover", LT.REGIONS.crest, false],
@@ -50,15 +49,21 @@ function paletteFor(id, liv, bare) {
   const field = fieldsFor(liv, bare);
   return { P: LT.markPalette(id, liv, field, bare), field };
 }
-function every(fn) {
+// The replay is the cost (every team x 2 sizes), and seven tests walk it: run it once.
+let CASES = null;
+function cases() {
+  if (CASES) return CASES;
+  CASES = [];
   for (const team of Teams.LIST) {
     const liv = Liveries.forTeam(team)[0];      // the team's own livery
     for (const [name, R, bare] of SIZES) {
       const { P } = paletteFor(team.id, liv, bare);
-      fn({ team, liv, name, R, bare, P, m: replay(LT, team.id, R, P, bare) });
+      CASES.push({ team, liv, name, R, bare, P, m: replay(LT, team.id, R, P, bare) });
     }
   }
+  return CASES;
 }
+function every(fn) { for (const c of cases()) fn(c); }
 
 test("every team on the roster has a vector crest", () => {
   // Not `>= 11`, which passes vacuously when a team is renamed. "custom" is the
@@ -132,7 +137,7 @@ test("a crest paints only palette colours", () => {
   // livery could recolour some of a crest and silently skip the rest.
   every(({ team, name, P, m }) => {
     const ok = new Set([cssOf(P.mark), cssOf(P.alt), cssOf(P.plate), cssOf(P.part),
-                        cssOf(P.halo), ...HARDCODED_OK]);
+                        cssOf(P.halo), ...(HARDCODED_OK.get(team.id) || [])]);
     for (const c of m.colours)
       assert.ok(ok.has(c), `${team.id} ${name} paints ${c}, which is not in its palette`);
   });

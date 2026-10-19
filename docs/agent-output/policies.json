@@ -1701,6 +1701,16 @@
       "presentation": "native",
       "preserve": "@c8"
     },
+    "tools/perf/mesh-census-lib.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/perf/mesh-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
+    },
     "tools/perf/profile.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",

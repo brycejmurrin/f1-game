@@ -30,10 +30,10 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 437,
+    "files": 439,
     "classifications": {
-      "entrypoint-candidate": 296,
-      "ambiguous": 58,
+      "entrypoint-candidate": 297,
+      "ambiguous": 59,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
@@ -2523,6 +2523,20 @@
       "path": "tools/perf/lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/mesh-census-lib.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/mesh-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/perf/profile.mjs",
