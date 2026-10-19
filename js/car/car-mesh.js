@@ -17,6 +17,8 @@ const CAR_DECAL_CACHE_MAX = 24;
 // Is this decal sheet for the ROUNDED car? The same switch Car3D.build reads
 // (CarShade.on(teamId)); an imported body never is.
 const decalRound = (legacyBody, teamId) => !legacyBody && typeof CarShade !== "undefined" && CarShade.on(teamId);
+// The body the anchors follow: a livery's bodyStyle swaps the chassis, not the team (Car3D.bodyStyleKey).
+const anchorKey = (teamId, bodyStyle) => (Car3D.bodyStyleKey ? Car3D.bodyStyleKey(teamId, bodyStyle) : teamId);
 // A colour's "r,g,b" key at 0.01 (the toFixed(2) every colour-keyed cache here
 // uses), memoised per ARRAY and re-derived the moment its numbers move: the
 // key build ran per wheel and per flap, per car, per frame. A new array (a
@@ -31,7 +33,7 @@ function colKey3(c) {
   e.r = c[0]; e.g = c[1]; e.b = c[2]; e.k = k;
   return k;
 }
-function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
+function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bodyStyle) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
   // Imported GLBs are static and do not consume the procedural parts recipe.
@@ -44,7 +46,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // `round`: the rounded car (CarShade on for this team, as Car3D.build decides
   // it) carries the coke-bottle cover and the downwash ramp in its anchors.
   const round = decalRound(legacyBody, teamId);
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, round) : null;
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : anchorKey(teamId, bodyStyle), spineHeight, round) : null;
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
   const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / SH, vB: 1 - (r.y + r.h) / SH });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
@@ -331,20 +333,20 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
 // (finShape / spineHeight), a GLB swap (legacyBody) or the CarShade switch
 // (round) rebuilds through the string path below — still the backing store.
 const _decalKeyMemo = new WeakMap(), _decalNoParts = {};
-function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
+function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bodyStyle) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
   const round = decalRound(legacyBody, teamId);
   const pk = parts == null ? _decalNoParts : typeof parts === "object" ? parts : null;
   const m = pk && _decalKeyMemo.get(pk);
   let k;
   if (m && m.aLvl === aLvl && m.legacy === legacyBody && m.team === teamId && m.fin === finShape
-    && m.spine === spineHeight && m.round === round) k = m.k;
+    && m.spine === spineHeight && m.round === round && m.body === bodyStyle) k = m.k;
   else {
-    k = decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round);
-    if (pk) _decalKeyMemo.set(pk, { aLvl, legacy: legacyBody, team: teamId, fin: finShape, spine: spineHeight, round, k });
+    k = decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round, bodyStyle);
+    if (pk) _decalKeyMemo.set(pk, { aLvl, legacy: legacyBody, team: teamId, fin: finShape, spine: spineHeight, round, body: bodyStyle, k });
   }
   if (!_carDecalMeshes[k]) {
-    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(aLvl == null ? 2 : Number(aLvl), parts, legacyBody, teamId, finShape || "standard", spineHeight));
+    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(aLvl == null ? 2 : Number(aLvl), parts, legacyBody, teamId, finShape || "standard", spineHeight, bodyStyle));
     _carDecalOrder.push(k);
     while (_carDecalOrder.length > CAR_DECAL_CACHE_MAX) {
       const old = _carDecalOrder.shift(), mesh = _carDecalMeshes[old];
@@ -354,11 +356,11 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight)
   }
   return _carDecalMeshes[k];
 }
-function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round) {
+function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round, bodyStyle) {
   const anchorParts = legacyBody ? null : parts;
   // spineHeight reaches the cache key through anchors.key (the lift is in it),
   // and so does the rounded car ("|r": its flank is draped at the loft's rings).
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, round) : { key: "legacy" };
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : anchorKey(teamId, bodyStyle), spineHeight, round) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
   // anchors.key covers the engine-cover fields and the team, NOT the aero
   // recipe — so a fin-height change alone would hit a cached decal mesh built
@@ -382,10 +384,11 @@ function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, roun
   return level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
 }
 let _cockpitDecalMesh = null, _cockpitDecalKey = "";
-function getCockpitDecalMesh(parts, teamId) {
+function getCockpitDecalMesh(parts, teamId, bodyStyle) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
-  const anchorsForKey = Car3D.bodyAnchors ? Car3D.bodyAnchors(parts, teamId) : null;
-  const wantKey = (teamId || "") + "|" + (anchorsForKey ? anchorsForKey.key : "legacy");
+  const sk = anchorKey(teamId, bodyStyle);
+  const anchorsForKey = Car3D.bodyAnchors ? Car3D.bodyAnchors(parts, sk) : null;
+  const wantKey = (sk || "") + "|" + (anchorsForKey ? anchorsForKey.key : "legacy");
   if (_cockpitDecalMesh && _cockpitDecalKey !== wantKey) {
     if (_gfx.freeMesh) _gfx.freeMesh(_cockpitDecalMesh);
     _cockpitDecalMesh = null;
@@ -1023,8 +1026,8 @@ function _wheelRimRetro(out, CARB, RUB, GRIP, acc) {
   for(let i=0;i<7;i++) _rigDisc(out, -0.042+i*0.014, 0.071, -0.016, 0.0035, 8, [0.12,0.15,0.10]);
   _wheelPaddles(out, false);
 }
-function _wheelRimRound(out, GRIP, acc) {
-  const R=0.165, MET=[0.46,0.48,0.50], LEATHER=[0.14,0.095,0.065];
+function _wheelRimRound(out, GRIP, acc, grip) {
+  const R=0.165, MET=[0.46,0.48,0.50], LEATHER=grip||[0.14,0.095,0.065];
   const path=Array.from({length:41},(_,i)=>[R*Math.cos(i/40*Math.PI*2),R*Math.sin(i/40*Math.PI*2)]);
   _rigGrip(out,path,0.016,0.019,LEATHER);
   for(const s of [-1,1]) _rigPlate(out, [[s*0.025,-0.020],[s*0.146,-0.026],[s*0.151,0.007],[s*0.027,0.018]],0.018,0.009,MET);
@@ -1056,8 +1059,11 @@ function getCockpitWheel(liv, style) {
   const c1 = _wheelTint(liv && liv.c1, 0.45);
   const acc = _wheelTint(liv && (liv.accent || liv.c2), 0.55);
   const c2 = _wheelTint(liv && liv.c2, 0.40);
+  // GRIPS (liv.gripTint): the hand-grip rubber / round-wheel leather in the picked colour, at the
+  // same ~55% the accent lands at. Unset = today's black rubber, and the key gains nothing.
+  const gt = _wheelTint(liv && typeof CarMaterials !== "undefined" && CarMaterials.zoneColour(liv.gripTint), 0.55);
   const kc = (c) => c ? c.map((v) => v.toFixed(2)).join(",") : "-";
-  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2);
+  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2) + (gt ? "|g" + kc(gt) : "");
   if (cockpitWheelMesh && _cockpitWheelKey !== wantKey) {
     if (_gfx.freeMesh) _gfx.freeMesh(cockpitWheelMesh);
     cockpitWheelMesh = null;
@@ -1065,9 +1071,9 @@ function getCockpitWheel(liv, style) {
   if (cockpitWheelMesh) return cockpitWheelMesh;
   _cockpitWheelKey = wantKey;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  const CARB = [0.09, 0.095, 0.105], RUB = [0.11, 0.115, 0.12];
+  const CARB = [0.09, 0.095, 0.105], RUB = gt || [0.11, 0.115, 0.12];
   const GRIP = c1 || RUB;
-  if (st === "round") _wheelRimRound(out, GRIP, acc);
+  if (st === "round") _wheelRimRound(out, GRIP, acc, gt);
   else if (st === "retro") _wheelRimRetro(out, CARB, RUB, GRIP, acc);
   else {
     _wheelRimF1(out, CARB, RUB, GRIP, acc, st);

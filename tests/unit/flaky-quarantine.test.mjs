@@ -197,43 +197,56 @@ test("the selected gate honours the quarantine: its specs get a leg of their own
   assert.match(run, /--retries=\$\{\{ matrix\.retries \|\| 0 \}\}/);
 });
 
-test("real quarantine matches exact TLX title only and expires after review deadline", () => {
-  const row = FILE.quarantine[0];
-  assert.equal(row.owner, "brycejmurrin");
-  assert.match(row.evidence, /^https:\/\/github.com\/brycejmurrin\/f1-game\/actions\/runs\/\d+$/);
-  assert.ok(row.review.length > 40);
-  assert.ok(row.expires > row.since);
-  const active = loadQuarantine(QUARANTINE, new Date(row.expires + "T12:00:00Z"));
-  const known = {spec: row.spec, title: row.title};
-  assert.equal(flakyVerdict([known], active).fail, false);
-  for (const title of ["GLX renders the mirror pass", row.title + " new regression", "HUD rear-view mirror › TLX › TLX renders the mirror pass"]) {
-    assert.equal(flakyVerdict([{spec: row.spec, title}], active).fail, true, title);
-  }
-  const after = new Date(row.expires + "T00:00:00Z"); after.setUTCDate(after.getUTCDate() + 1);
-  assert.equal(flakyVerdict([known], loadQuarantine(QUARANTINE, after)).fail, true);
- });
+// Fixture ledgers: the policy is pinned on rows these tests own, so retiring,
+// reordering or extending a live quarantine row never reds this file (T2-01).
+function withLedger(rows, fn) {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "quarantine-policy-"));
+  const file = path.join(dir, "ledger.json");
+  try { fs.writeFileSync(file, JSON.stringify({ quarantine: rows })); return fn(file); }
+  finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+const fixtureRow = (over = {}) => ({
+  spec: "fixture/mirror.spec.js", since: "2026-01-01", owner: "fixture-owner",
+  why: "fixture row: a cold-start flake measured on a fixture run, used only by this unit test",
+  title: "Fixture suite › TLX › TLX renders the fixture pass",
+  evidence: "https://github.com/brycejmurrin/f1-game/actions/runs/1", expires: "2026-02-01",
+  review: "Fixture review: fix the cause and remove this row after three clean runs, no extension.", ...over,
+});
 
-test("phone title quarantine cannot waive sibling goldens and expires after one week", () => {
-  const row = FILE.quarantine.find((r) => r.spec === "tests/specs/menu-baseline.spec.js");
-  assert.equal(row.title, "menu identity — phone-landscape › title looks like itself");
-  assert.equal(row.owner, "brycejmurrin");
-  assert.equal(row.expires, "2026-10-23");
-  const q = loadQuarantine(QUARANTINE, new Date("2026-10-16T00:00:00Z"));
-  assert.equal(flakyVerdict([{ spec: row.spec, title: row.title }], q).fail, false);
-  for (const shape of ["phone-landscape", "desktop"]) {
-    for (const screen of ["title", "select", "garage"]) {
-      const title = `menu identity — ${shape} › ${screen} looks like itself`;
-      assert.equal(flakyVerdict([{ spec: row.spec, title }], q).fail, title !== row.title, title);
+test("a quarantine row waives its exact title only, and only through its inclusive expiry", () => {
+  const row = fixtureRow();
+  withLedger([row], (file) => {
+    const active = loadQuarantine(file, new Date(row.expires + "T12:00:00Z"));
+    const known = { spec: row.spec, title: row.title };
+    assert.equal(flakyVerdict([known], active).fail, false);
+    for (const title of ["Fixture suite › GLX › GLX renders the fixture pass", row.title + " new regression", "Fixture suite › TLX › other test"]) {
+      assert.equal(flakyVerdict([{ spec: row.spec, title }], active).fail, true, title);
     }
-  }
-  const expired = loadQuarantine(QUARANTINE, new Date("2026-10-24T00:00:00Z"));
-  assert.equal(flakyVerdict([{ spec: row.spec, title: row.title }], expired).fail, true);
+    assert.equal(flakyVerdict([{ spec: "fixture/other.spec.js", title: row.title }], active).fail, true, "same title in another spec is not waived");
+    const lastDay = new Date(row.expires + "T23:59:59Z");
+    assert.equal(flakyVerdict([known], loadQuarantine(file, lastDay)).fail, false, "expires is inclusive");
+    const after = new Date(row.expires + "T00:00:00Z"); after.setUTCDate(after.getUTCDate() + 1);
+    assert.equal(flakyVerdict([known], loadQuarantine(file, after)).fail, true, "an expired row blocks again");
+  });
+});
+
+test("a one-test quarantine cannot waive sibling tests of the same spec", () => {
+  const row = fixtureRow({ spec: "fixture/menu.spec.js", title: "identity — phone-landscape › title looks like itself" });
+  withLedger([row], (file) => {
+    const q = loadQuarantine(file, new Date("2026-01-15T00:00:00Z"));
+    for (const shape of ["phone-landscape", "desktop"]) {
+      for (const screen of ["title", "select", "garage"]) {
+        const title = `identity — ${shape} › ${screen} looks like itself`;
+        assert.equal(flakyVerdict([{ spec: row.spec, title }], q).fail, title !== row.title, title);
+      }
+    }
+  });
 });
 
 test("invalid quarantine identity or review metadata cannot waive a failure", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "quarantine-policy-"));
   const file = path.join(dir, "ledger.json");
-  const row = FILE.quarantine[0];
+  const row = fixtureRow();
   try {
     for (const key of ["title", "owner", "review", "evidence", "expires"]) {
       const invalid = {...row}; delete invalid[key];

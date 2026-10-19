@@ -101,6 +101,10 @@
      "number" are the crown designs that carry no mark (LiveryTex.SPINE_LOGO_IDS).
      The band designs run on down the tail top (REGIONS.tail); the crest and
      the number read top-down, nose up (the chase camera's view).
+   bodyStyle? optional BODY — the chassis the car is built on: absent / "team"
+     keeps the team's own (Car3D.TEAM_STYLE); another team's id borrows its
+     nose, pods and airbox; Car3D.BODY_STYLES adds concept bodies (needle,
+     brick, anteater, arched, wedge, barge). Geometry only, never performance.
    finShape? optional FIN SHAPE — the blade's outline: "standard" (absent),
      "swept" (raked leading edge), "stub" (short rear blade) or "none" (no fin;
      the fin's graphic and badge go with it). Geometry, not paint — the one
@@ -118,7 +122,28 @@
      Car3D.FINISH_SURFACE) — decals, carbon, rubber and glass are untouched, and
      it costs no extra geometry. Sponsor-board / wordmark crispness is atlas
      raster + mip policy in LiveryTex / car-draw, never a finish override
-     (garage paint lives in #1025). }.
+     (garage paint lives in #1025).
+   PAINT ZONES (all optional; absent = today's mesh byte for byte; CarMaterials.PAINT_ZONES):
+   floorTint?:[r,g,b] FLOOR EDGE — the floor edge rails, floor fences and the bargeboard
+     vanes / wakeboard, which are bare carbon by default. A pick makes them paint.
+   floorFinish? FLOOR FINISH — "inherit" (absent; FINISH) or a finish id; alone it
+     finishes the carbon floor edge without recolouring it.
+   suspTint?:[r,g,b] SUSPENSION — every wishbone, pushrod and rocker (dark carbon by
+     default). Beats the suspension part's own arm colour.
+   suspFinish? SUSPENSION FINISH — "inherit" or a finish id, like floorFinish.
+   ductTint?:[r,g,b] BRAKE DUCTS — the duct bodies and scoops; the inlet voids stay dark.
+   rimFinish? RIM FINISH — the wheel rim lip, spokes and hub boss in a finish ("chrome",
+     "brushed", …; with rimTint gold makes gold rims). Absent = bare metal.
+   deflectorTint?:[r,g,b] DEFLECTORS — the over-wheel deflector planes and stalks.
+   cockpitTint?:[r,g,b] COCKPIT SURROUND — the headrest pad and the cockpit-side
+     bolsters (the cockpit view dims it like every other livery paint).
+   gripTint?:[r,g,b] GRIPS — the steering-wheel hand grips (rubber / leather).
+   noseFinish? NOSE FINISH — every painted surface ahead of the nose bulkhead
+     (cone, nose cap, nose stripes) in its own finish; "inherit" = FINISH.
+   boardTint?:[r,g,b] NUMBER BOARD — the rear-wing endplate board under the race
+     number (body colour by default). The number keeps its own inked patch.
+   exhaustTint?:[r,g,b] EXHAUST HEAT — the heat-tinted exhaust tip, which otherwise
+     follows the FUEL part's flame colour. }.
    UNIVERSAL apply to every team; BY_TEAM are team-specific specials. A team's own
    colours are the synthesized "default" livery. Consumed by game.js
    (resolveLivery + the LIVERY tab in car setup). Colours are [r,g,b] 0..1. */
@@ -516,7 +541,12 @@ const Liveries = (function () {
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
     "podFinish", "finFinish", "mirrorFinish", "helmetStyle",
     // LD zones slice (docs/notes/LIVERY-REF-2026-10-18.md): front and rear wing endplates.
-    "endplate", "crestStyle"];
+    "endplate", "crestStyle",
+    // BODY (2026-10-18): the chassis shape, Car3D.bodyStyleKey — geometry, like finShape.
+    "bodyStyle",
+    // PAINT ZONES (CarMaterials.PAINT_ZONES; header above): new surfaces, each optional.
+    "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
+    "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint"];
 
   // One-shot paint migrate: fold ridge→BAND, airbox→COVER; drop lettering overrides.
   // Idempotent. Mutates and returns `liv` (or a shallow copy when null-safe).

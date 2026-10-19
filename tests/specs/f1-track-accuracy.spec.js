@@ -91,7 +91,7 @@ test("every game circuit matches its pinned real-circuit reference", async ({ pa
   await page.goto("/");
   // Title boots LAZY_CIRCUIT meta stubs (picker fields only). Hydrate every
   // full js/circuits/<id>.js before reading path.pts — same gate as race entry.
-  await page.waitForFunction(() => typeof Tracks !== "undefined" && Tracks.LIST.length === 52, null, { polling: 100 });
+  await page.waitForFunction((n) => typeof Tracks !== "undefined" && Tracks.LIST.length === n, Object.keys(CIRCUIT_MAP).length, { polling: 100 });
   await page.evaluate(async () => {
     const ensure = window.__apex && window.__apex.ensureCircuit;
     if (!ensure) throw new Error("ensureCircuit not on __apex — circuit meta split needs a hydrate gate");

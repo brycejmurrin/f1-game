@@ -3480,7 +3480,7 @@ _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove th
 const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps,
   teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render,
   previewDecalMesh: (team) => { const decal = teamDecalState(team, true), liv = resolveLivery(team);
-    return getCarDecalMesh(decal.val, decal.parts, !!carDraw.modelBuf, team.id, liv.finShape, liv.spineHeight); } });
+    return getCarDecalMesh(decal.val, decal.parts, !!carDraw.modelBuf, team.id, liv.finShape, liv.spineHeight, liv.bodyStyle); } });
 const { resetSetupCam, setSetupCamPanel, spMeshBust } = setupCam;
 // The garage pre-built while the menu idles (js/garage/prebuild.js); `timed` measures tap -> first garage frame.
 const garagePre = GaragePrebuild.create(G, { gate: _menuGate, setupCam, menuIdle, menuSlice,
@@ -8020,7 +8020,7 @@ function render(dt) {
       if (c.isPlayer || mdx * mdx + mdy * mdy + mdz * mdz < 40 * 40) {
         const mSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
         const cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
-        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(c.team.id, cm && cm.mirror));
+        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(Car3D.bodyStyleKey(c.team.id, resolveLivery(c.team).bodyStyle), cm && cm.mirror));
       }
     }
     // The player's ERS strip and every car's throttle-lift after-fire (rivals
@@ -8381,7 +8381,7 @@ function tickBody(now) {
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
-      render(Math.min(dt, 1 / 20));
+      render(Math.min(dt, setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
     }
     GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
   }
@@ -8436,7 +8436,7 @@ function tickBody(now) {
   RenderRate.observe(_dtMs);
   if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame
     dt = RenderRate.dt();
-    PerfSpans.begin("render"); render(Math.min(dt, 1 / 20)); PerfSpans.end("render");   // camera/visual damping at (clamped) frame dt
+    PerfSpans.begin("render"); render(Math.min(dt, setupPreviewOn ? 0.1 : 1 / 20)); PerfSpans.end("render");   // garage motion keeps wall pace down to 10 fps; race camera damping stays capped
     if (state === "race" || state === "count") { PerfSpans.begin("hud"); updateHud(false, RenderRate.ms()); PerfSpans.end("hud"); }
   }
 }

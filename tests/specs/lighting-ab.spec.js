@@ -1,12 +1,11 @@
 // Lighting A/B invariants — the fast, always-on companion to the offline
-// variant harness (tools/lighting/ab-lighting.mjs). Two layers:
+// variant harness (tools/lighting/ab-lighting.mjs).
 //
-// 1. CATALOG INTEGRITY: every knob in tools/lighting/ab-lighting.mjs must match its
-//    source file EXACTLY ONCE. Retuning or renaming a lighting constant
-//    without updating the catalog fails here, immediately — so the A/B
-//    harness can never silently rot.
+// (CATALOG INTEGRITY — every knob in tools/lighting/ab-lighting.mjs matches its source
+// file EXACTLY ONCE — is a node-only file scan and lives in
+// tests/unit/lighting-ab-catalog.test.mjs.)
 //
-// 2. LIVE A/B: the invariants the engine can flip at runtime without a
+// LIVE A/B: the invariants the engine can flip at runtime without a
 //    variant server — weather live-apply (regression for the bug where
 //    weather() changed nothing but wetness), glowing fog, the night light
 //    budget, the PCSS rig, and the TOD exposure table.
@@ -19,20 +18,6 @@ import { pageScreenshot } from "../helpers/soft-capture.js";
 // scratch/perf/boot-budget.mjs) the page needs up to 24.6 s to publish __apex
 // and 16.9 s to build a track, and this file was asking for 15 s and 25 s. See
 // the BOOT_MS note in tests/helpers/fixtures.js — these are the same numbers.
-import { readFileSync } from "node:fs";
-import { KNOBS, FREEZE_FLICKER, FREEZE_FLICKER_FILE } from "../../tools/lighting/ab-lighting.mjs";
-import { fileURLToPath } from "node:url";
-import { join } from "node:path";
-
-// JOINED, NOT CONCATENATED. dc06779 stripped ROOT's trailing slash (a real fix
-// for a Windows path bug elsewhere), but every consumer here appends a
-// RELATIVE path — "js/lighting/lighting.js" — so `ROOT + k.file` became
-// `/home/user/f1-gamejs/game/lighting.js` and this guard died with ENOENT on
-// the deploy branch. path.join is correct whichever way ROOT is normalised
-// next, which string concatenation never was.
-const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
-const at = (rel) => join(ROOT, rel);
-
 // Solo on an idle box the heaviest test here takes 179.8 s — over the 120 s
 // default before any contention. Measured, not guessed.
 // ONE per-test budget for this file. Three tests carried their own
@@ -103,27 +88,6 @@ async function regionMean(page, fx, fy, fw, fh) {
     return s / (d.length / 4);
   }, { b64: buf.toString("base64"), fx, fy, fw, fh });
 }
-
-test("A/B knob catalog matches the source exactly (1 hit per knob)", () => {
-  const srcCache = {};
-  const problems = [];
-  for (const k of KNOBS) {
-    const src = srcCache[k.file] || (srcCache[k.file] = readFileSync(at(k.file), "utf8"));
-    const n = src.split(k.find).length - 1;
-    if (n !== 1) problems.push(`${k.id}: "${k.find.slice(0, 60)}..." found ${n}x in ${k.file}`);
-    if (k.find === k.b) problems.push(`${k.id}: A and B are identical`);
-  }
-  // The flicker-freeze patch is applied with a silent .includes() guard in the
-  // variant server — a stale string just stops freezing (noisy night A/Bs)
-  // without any error, so it must be pinned here like the knobs.
-  // Read the file the harness actually patches, not a hardcoded one: the flicker
-  // moved to js/lighting/lighting.js with the LightTune extraction, and pinning
-  // js/game.js here meant this guard reported the failure it could not fix.
-  const ff = srcCache[FREEZE_FLICKER_FILE] || readFileSync(at(FREEZE_FLICKER_FILE), "utf8");
-  const nFF = ff.split(FREEZE_FLICKER[0]).length - 1;
-  if (nFF !== 1) problems.push(`FREEZE_FLICKER: "${FREEZE_FLICKER[0].slice(0, 60)}..." found ${nFF}x in ${FREEZE_FLICKER_FILE}`);
-  expect(problems, problems.join("\n")).toEqual([]);
-});
 
 test("weather() applies lighting live (fog mutes sun + lifts exposure)", async ({ page }) => {
   await boot(page, "monza", "day", "dry", undefined, { headless: true });
@@ -217,10 +181,45 @@ test("night light budget: lamps on at night, off by day, exposure per table", as
   expect(day.numLights).toBe(0);
 });
 
-test("PCSS contact-hardening rig is alive", async ({ page }) => {
-  await boot(page, "monza", "day", "dry");
+test("PCSS contact-hardening rig is alive: SHADOW SOFTEN changes the shadow edges in the picture", async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 360 });
+  await boot(page, "monza", "day", "dry", 0.1);
   const pcss = await page.evaluate(() => (typeof GLX !== "undefined" && GLX.pcss) ? GLX.pcss() : null);
-  expect(pcss).toBe(true);
+  expect(pcss, "the PCSS blocker rig must be enabled").toBe(true);
+  await page.evaluate(() => {
+    window.__apex.hud(false);
+    window.__apex.govHold(true);
+    window.__apex.renderClock(100, true);
+    window.__apex.freeze(true);
+  });
+  // The penumbra growth knob (uPcssPen) is the only thing that differs between the two
+  // captures: a rig that is "enabled" but not sampled leaves the frame byte-identical,
+  // which is the defect this catches (the flag alone cannot see it).
+  const shot = async (pen) => {
+    await page.evaluate((v) => window.__apex.lightTune({ pcssPen: v }), pen);
+    const buf = await pageScreenshot(page, { type: "png", timeout: 150_000, softTimeout: 60_000 });
+    return buf.toString("base64");
+  };
+  const tight = await shot(5), wide = await shot(200);
+  const stats = await page.evaluate(async ({ a, b }) => {
+    const load = async (b64) => {
+      const img = new Image(); img.src = "data:image/png;base64," + b64; await img.decode();
+      const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+      const cx = c.getContext("2d"); cx.drawImage(img, 0, 0);
+      return cx.getImageData(0, 0, img.width, img.height).data;
+    };
+    const A = await load(a), B = await load(b);
+    let changed = 0, sum = 0;
+    for (let i = 0; i < A.length; i += 4) {
+      const d = Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1]) + Math.abs(A[i + 2] - B[i + 2]);
+      if (d > 12) changed++;
+      sum += d;
+    }
+    return { pixels: A.length / 4, same: A.length === B.length, changed, changedPct: 100 * changed / (A.length / 4) };
+  }, { a: tight, b: wide });
+  test.info().attach("pcss-pen-ab", { body: JSON.stringify(stats), contentType: "application/json" });
+  expect(stats.same, JSON.stringify(stats)).toBe(true);
+  expect(stats.changedPct, JSON.stringify(stats)).toBeGreaterThan(0.1);
 });
 
 test("dark sessions keep their exposure floors in fog (night must stay night)", async ({ page }) => {

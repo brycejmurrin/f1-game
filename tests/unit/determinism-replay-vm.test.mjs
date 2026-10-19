@@ -110,3 +110,37 @@ test("a different seed really does deal a different field", () => {
   // The guard above passes trivially if the seed is ignored altogether.
   assert.notEqual(episode(7), episode(42), "seeds 7 and 42 produced identical episodes");
 });
+
+/** A race, not a 4 s drive: the weather arc, the reliability plan (a seeded
+ * retirement) and a launched incident all draw from the seeded stream or the
+ * state reset() must clear, and a 20 s field has time to change running order.
+ * Review M1-16: the 4 s steer episode above exercises none of them. */
+function raceEpisode(seed) {
+  const A = g.apex;
+  A.headless(true);
+  A.reset(0.02, 55, 0, seed);
+  A.reliability("real");
+  A.weatherArc("dry", "rain", 12);
+  A.incident({ launch: true });
+  const checkpoints = [checkpoint(0)];
+  try {
+    for (let seconds = 5; seconds <= 20; seconds += 5) {
+      A.rollout({ seconds: 5, input: { steer: 0.05, throttle: true } });
+      checkpoints.push({ ...checkpoint(seconds), weather: A.weather(), arc: !!A.weatherArc() });
+    }
+    return JSON.stringify(checkpoints);
+  } finally {
+    A.weatherArc(null); A.weather("dry"); A.incident({ reset: true }); A.headless(false);
+  }
+}
+
+test("a 20 s race with a weather arc, reliability and an incident replays byte-identically", () => {
+  const a = raceEpisode(42), b = raceEpisode(42);
+  assert.equal(b, a, "the second replay of the long race differs from the first");
+  const cps = JSON.parse(a);
+  assert.ok(cps.some((c) => c.weather && c.weather !== "dry"), "the weather arc must actually reach the sim");
+  const orderOf = (c) => c.cars.slice().sort((x, y) => x.pos - y.pos).map((x) => x.id).join(",");
+  assert.ok(new Set(cps.map(orderOf)).size > 1,
+    "the running order never changed in 20 s: this episode would not see an overtake-order divergence");
+  assert.notEqual(raceEpisode(7), a, "another seed must not replay the same long race");
+});

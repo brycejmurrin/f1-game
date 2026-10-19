@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 004a81f0-80ec-5313-8267-7e049bcded05
-  modified: 2026-10-10T05:09:03.898Z
+  modified: 2026-10-19T03:08:51Z
 ---
 
 On 2026-10-10 (phone-landscape HUD "floating elements" report) Bryce asked to
@@ -25,4 +25,4 @@ In parallel spawn ≤2 read-only `Explore` agents with file:line briefs (one on
 the slot/placement logic, one on survey coverage and anchors). Write the plan
 to `docs/notes/<TOPIC>-PLAN-<date>.md` (phases, pins, verify commands, open
 decisions), commit it on the PR branch, and point the PR body at it. Pattern
-of [[survey-then-fix]]; phone cells per [[user-plays-on-phone]].
+of [survey then fix](survey-then-fix.md); phone cells per [user plays on phone](user-plays-on-phone.md).

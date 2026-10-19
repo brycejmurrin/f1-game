@@ -126,7 +126,9 @@ export const PRESETS = Object.freeze({
 // HudLayout.ELEMENTS ids and LIM (js/ui/hud-layout.js).
 export const LAYOUT_IDS = Object.freeze(["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "announce",
   "gearbox", "speed", "energy", "tyre", "ot", "aero", "bb", "damage", "rel", "strat", "inputs"]);
-export const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], s: [50, 200] });
+// null denotes an unbounded endpoint, keeping survey metadata JSON-safe.
+// All values must be finite; the size lower endpoint is exclusive (s > 0).
+export const LIM = Object.freeze({ x: [null, null], y: [null, null], s: [0, null] });
 // Percent ranges the CLI accepts; the game clamps to its own (HUD 70..200,
 // UI 40..200, BUTTON 40..300 — js/ui/scale.js).
 export const SCALES = Object.freeze({ hudScale: [40, 200], uiScale: [40, 200], btnScale: [40, 300] });
@@ -175,10 +177,10 @@ export function validateOffsets(o) {
     if (!v || typeof v !== "object" || Array.isArray(v)) bad(`preset offsets.${id} must be {x, y, s}`);
     const e = {};
     for (const k of Object.keys(v)) {
-      if (!LIM[k]) bad(`preset offsets.${id}.${k}: only x, y, s`);
+      if (!Object.hasOwn(LIM, k)) bad(`preset offsets.${id}.${k}: only x, y, s`);
       const n = v[k];
-      if (typeof n !== "number" || !Number.isFinite(n) || n < LIM[k][0] || n > LIM[k][1]) {
-        bad(`preset offsets.${id}.${k} must be a number in ${LIM[k][0]}..${LIM[k][1]}`);
+      if (typeof n !== "number" || !Number.isFinite(n) || (k === "s" && n <= 0)) {
+        bad(`preset offsets.${id}.${k} must be ${k === "s" ? "a positive finite number" : "a finite number"}`);
       }
       e[k] = n;
     }

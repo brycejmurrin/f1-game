@@ -72,6 +72,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
+import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 import { CliArgError, makeFlags, runCli } from "../lib/cli-args.mjs";
 import { probeHudElements, analyzeOverlap } from "../lib/hud-geometry.mjs";
 import {
@@ -399,7 +400,9 @@ export const REPAINT_FRAMES = 4;
 async function runGroup(browser, group, plan, log) {
   const c0 = group.cells[0];
   const dev = DEVICES[c0.device];
-  const ctx = await browser.newContext({ viewport: { width: dev.w, height: dev.h }, hasTouch: dev.touch, deviceScaleFactor: 1 });
+  // DPR 1 deliberately reduces raster cost for this CSS-geometry survey.
+  const ctx = await browser.newContext(resolveUIProfile({ touch: dev.touch,
+    viewport: { width: dev.w, height: dev.h }, deviceScaleFactor: 1 }).contextOptions);
   const page = await ctx.newPage();
   let current = "boot";
   const errs = [];
