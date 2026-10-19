@@ -1,45 +1,31 @@
 "use strict";
 /**
  * Meeting picker labels must stay unique when OpenF1 reuses meeting_name
- * (two Pre-Season Testing rows, two Bahrain GPs). Mirrors hub.js
- * meetingPickerOptions — the source scan below fails if hub drifts.
+ * (two Pre-Season Testing rows, two Bahrain GPs). Executes hub.js
+ * meetingPickerOptions with independent expected labels.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import vm from "node:vm";
+import { fnSource } from "../helpers/fn-source.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HUB = fs.readFileSync(path.join(ROOT, "js/data/hub.js"), "utf8");
 
-function meetingPickerOptions(ms) {
-  const base = ms.map(function (m) {
-    let label = m.name || m.circuit || "Round";
-    if (m.circuit && label.indexOf(m.circuit) < 0) label += " · " + m.circuit;
-    return label;
-  });
-  const counts = Object.create(null);
-  for (let i = 0; i < base.length; i++) counts[base[i]] = (counts[base[i]] || 0) + 1;
-  return ms.map(function (m, i) {
-    let label = base[i];
-    if (counts[label] > 1 && m.dateStart) {
-      label += " · " + String(m.dateStart).slice(0, 10);
-    }
-    return { value: m.meetingKey, label: label };
-  });
+function loadMeetingPicker(source = HUB) {
+  return vm.runInNewContext(`(${fnSource(source, "function meetingPickerOptions(ms)")})`);
 }
+const meetingPickerOptions = loadMeetingPicker();
 
 test("the hub panel drops native titles on scroll", () => {
   assert.match(HUB, /contentEl\.addEventListener\("scroll"/);
   assert.match(HUB, /querySelectorAll\("\[title\]"\)/);
 });
 
-test("hub.js still hosts meetingPickerOptions with circuit + date disambiguation", () => {
-  assert.match(HUB, /function meetingPickerOptions\s*\(/);
-  assert.match(HUB, /m\.circuit && label\.indexOf\(m\.circuit\) < 0/);
-  assert.match(HUB, /counts\[label\] > 1 && m\.dateStart/);
-  assert.match(HUB, /slice\(0,\s*10\)/);
+test("hub.js wires the production meeting picker into the GP select", () => {
   assert.match(HUB, /setSelectOptions\(gpSel,\s*meetingPickerOptions\(ms\)/);
 });
 
@@ -57,6 +43,24 @@ test("duplicate meeting names get a date; unique names stay short", () => {
   assert.ok(labels[1].includes("2026-02-08"), labels[1]);
   assert.equal(labels[2], "Australian Grand Prix · Melbourne");
   assert.ok(labels[3].includes("Bahrain") && labels[4].includes("Sakhir"));
+});
+
+test("picker keeps meeting keys and fallback labels without mutating input", () => {
+  const meetings = [{ meetingKey: 1 }, { meetingKey: 2, circuit: "Bahrain" },
+    { meetingKey: 3, name: "Bahrain Grand Prix", circuit: "Bahrain" }];
+  const before = structuredClone(meetings);
+  const options = meetingPickerOptions(meetings);
+  assert.deepEqual(Array.from(options, (o) => ({ ...o })), [
+    { value: 1, label: "Round" }, { value: 2, label: "Bahrain" },
+    { value: 3, label: "Bahrain Grand Prix" },
+  ]);
+  assert.deepEqual(meetings, before);
+});
+
+test("real-source seam detects a changed returned meeting key", () => {
+  const source = HUB.replace("value: m.meetingKey, label: label", "value: -1, label: label");
+  assert.notEqual(source, HUB, "return-value mutation anchor exists");
+  assert.notEqual(loadMeetingPicker(source)([{ meetingKey: 1304, name: "Testing" }])[0].value, 1304);
 });
 
 test("data hub tabs can shrink to scroll and wrap when height allows", () => {
