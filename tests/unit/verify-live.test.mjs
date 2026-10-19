@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { createHash } from "node:crypto";
-import { verifyLive } from "../../tools/ci/verify-live.mjs";
+import { fetchBytes, verifyLive } from "../../tools/ci/verify-live.mjs";
 
 const sri = (bytes) => `sha256-${createHash("sha256").update(bytes).digest("base64")}`;
 
@@ -51,6 +51,237 @@ test("verifyLive reports a stale lazy response with exact hashes", async () => {
   try {
     const result = await verifyLive({ baseUrl: base, root, files: ["index.html"] });
     assert.equal(result.ok, false);
-    assert.ok(result.errors.some((error) => error.includes("does not match shell")));
+    const msg = result.errors.find((error) => error.includes("does not match shell")) || "";
+    assert.ok(msg.includes(sri(stale)), `live hash named: ${msg}`);
+    assert.ok(msg.includes(sri(expected)), `shell hash named: ${msg}`);
   } finally { server.close(); }
+});
+
+test("verifyLive flags live bytes that match the shell but differ from the checked-out commit", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const checkedOut = Buffer.from("checked-out bytes");
+  const live = Buffer.from("live bytes");
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ "lazy.js": sri(live) })}</script>`);
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, "lazy.js"), checkedOut);
+  const { server, base } = await fixtureServer(new Map([["index.html", index], ["lazy.js", live]]));
+  try {
+    const result = await verifyLive({ baseUrl: base, root, files: ["index.html"] });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.errors, ["lazy.js: live bytes differ from checked-out commit"]);
+  } finally { server.close(); }
+});
+
+test("verifyLive reports live index.html bytes that differ from the checkout", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  await fs.writeFile(path.join(root, "index.html"), "<html>checked out</html>");
+  const { server, base } = await fixtureServer(new Map([["index.html", Buffer.from("<html>live</html>")]]));
+  try {
+    const result = await verifyLive({ baseUrl: base, root, files: ["index.html"] });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((e) => e.startsWith("index.html: live bytes differ")), result.errors.join("\n"));
+    assert.ok(result.errors.includes("index.html: missing apex-lazy-integrity"), "a shell without the lazy block is an error");
+  } finally { server.close(); }
+});
+
+test("verifyLive retries transient HTTP 503 then accepts the body", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const lazy = Buffer.from("lazy-ok");
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ "js/circuits/fuji.js": sri(lazy) })}</script>`);
+  await fs.mkdir(path.join(root, "js/circuits"), { recursive: true });
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, "js/circuits/fuji.js"), lazy);
+
+  let hits = 0;
+  const server = http.createServer((req, res) => {
+    const name = decodeURIComponent(new URL(req.url, "http://localhost").pathname).replace(/^\//, "");
+    if (name === "js/circuits/fuji.js") {
+      hits += 1;
+      if (hits < 3) { res.writeHead(503); res.end("unavailable"); return; }
+      res.writeHead(200); res.end(lazy); return;
+    }
+    if (name === "index.html") { res.writeHead(200, { "content-type": "text/html" }); res.end(index); return; }
+    res.writeHead(404); res.end("missing");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}/`;
+  try {
+    const result = await verifyLive({
+      baseUrl: base,
+      root,
+      files: ["index.html"],
+      fetchOpts: { sleep: async () => {} },
+    });
+    assert.equal(result.ok, true, result.errors.join("\n"));
+    assert.ok(hits >= 3, `expected retries, got ${hits} hits`);
+  } finally { server.close(); }
+});
+
+test("verifyLive fails a persistent HTTP 503 after retries run out", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const lazy = Buffer.from("lazy-503");
+  const lazyRel = "fixture-lazy-503.bin";
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ [lazyRel]: sri(lazy) })}</script>`);
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, lazyRel), lazy);
+
+  let hits = 0;
+  const retries = 3;
+  const server = http.createServer((req, res) => {
+    const name = decodeURIComponent(new URL(req.url, "http://localhost").pathname).replace(/^\//, "");
+    if (name === lazyRel) { hits += 1; res.writeHead(503); res.end("unavailable"); return; }
+    if (name === "index.html") { res.writeHead(200); res.end(index); return; }
+    res.writeHead(404); res.end("missing");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}/`;
+  try {
+    const result = await verifyLive({
+      baseUrl: base,
+      root,
+      files: ["index.html"],
+      fetchOpts: { sleep: async () => {}, retries },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => /HTTP 503/.test(error)), result.errors.join("\n"));
+    assert.equal(hits, retries + 1, `initial try + ${retries} retries, got ${hits} hits`);
+  } finally { server.close(); }
+});
+
+test("verifyLive still fails a persistent HTTP 404 without endless retry", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-"));
+  const lazy = Buffer.from("missing-live");
+  // Use a fixture-only relative name (not a repo path) so docs-integrity does not
+  // treat the integrity key as a source comment pointing at a missing file.
+  const lazyRel = "fixture-lazy-missing.bin";
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ [lazyRel]: sri(lazy) })}</script>`);
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, lazyRel), lazy);
+
+  let hits = 0;
+  const server = http.createServer((req, res) => {
+    const name = decodeURIComponent(new URL(req.url, "http://localhost").pathname).replace(/^\//, "");
+    if (name === lazyRel) { hits += 1; res.writeHead(404); res.end("no"); return; }
+    if (name === "index.html") { res.writeHead(200); res.end(index); return; }
+    res.writeHead(404); res.end("missing");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}/`;
+  try {
+    const result = await verifyLive({
+      baseUrl: base,
+      root,
+      files: ["index.html"],
+      fetchOpts: { sleep: async () => {}, retries: 2 },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => /HTTP 404/.test(error)));
+    assert.equal(hits, 1, "404 must not retry like a CDN 503");
+  } finally { server.close(); }
+});
+
+const transportFailure = (code) => new TypeError("fetch failed", {
+  cause: Object.assign(new Error("connection interrupted"), { code }),
+});
+
+test("fetchBytes recovers from wrapped transport and aggregate timeouts within its retry budget", async () => {
+  const failures = [
+    transportFailure("ECONNRESET"),
+    new TypeError("fetch failed", { cause: new AggregateError([
+      Object.assign(new Error("connection timed out"), { code: "UND_ERR_CONNECT_TIMEOUT" }),
+    ], "address attempts failed") }),
+    new TypeError("fetch failed", { cause: Object.assign(new Error("deadline expired"), { name: "TimeoutError" }) }),
+    Object.assign(new Error("request interrupted"), { name: "AbortError" }),
+  ];
+  for (const failure of failures) {
+    let calls = 0;
+    const sleeps = [];
+    const actual = await fetchBytes("https://example.invalid/fixture.bin", {
+      retries: 1,
+      sleep: async (ms) => sleeps.push(ms),
+      fetchImpl: async () => {
+        if (++calls === 1) throw failure;
+        return new Response("recovered");
+      },
+    });
+    assert.equal(actual.toString(), "recovered");
+    assert.equal(calls, 2);
+    assert.deepEqual(sleeps, [400]);
+  }
+});
+
+test("fetchBytes exhausts its finite budget and retains URL plus aggregate cause diagnostics", async () => {
+  const url = "https://example.invalid/fixture-exhausted.bin";
+  const cause = Object.assign(new Error("socket closed"), { code: "UND_ERR_SOCKET" });
+  const failure = new TypeError("fetch failed", { cause: new AggregateError([cause], "all addresses failed") });
+  let calls = 0;
+  const sleeps = [];
+  await assert.rejects(fetchBytes(url, {
+    retries: 2,
+    sleep: async (ms) => sleeps.push(ms),
+    fetchImpl: async () => { calls++; throw failure; },
+  }), (error) => {
+    assert.ok(error.message.includes(url));
+    assert.match(error.message, /fetch failed.*AggregateError.*all addresses failed.*UND_ERR_SOCKET.*socket closed/);
+    assert.equal(error.cause, failure);
+    return true;
+  });
+  assert.equal(calls, 3);
+  assert.deepEqual(sleeps, [400, 800]);
+});
+
+test("fetchBytes fails unknown, permanent and cyclic causes without treating generic fetch failures as transient", async () => {
+  const cyclic = new TypeError("fetch failed");
+  cyclic.cause = cyclic;
+  const deep = new TypeError("fetch failed");
+  let cursor = deep;
+  for (let i = 0; i < 10; i++) cursor = cursor.cause = new Error("nested".repeat(100));
+  cursor.cause = transportFailure("ECONNRESET");
+  for (const failure of [new TypeError("fetch failed"), transportFailure("CERT_HAS_EXPIRED"), cyclic, deep]) {
+    let calls = 0;
+    await assert.rejects(fetchBytes("https://example.invalid/fixture-permanent.bin", {
+      sleep: async () => assert.fail("permanent errors must not retry"),
+      fetchImpl: async () => { calls++; throw failure; },
+    }), (error) => {
+      assert.match(error.message, /fixture-permanent\.bin/);
+      assert.ok(error.message.length < 5000, "diagnostics must bound deep/cyclic error graphs");
+      if (failure.cause?.code) assert.ok(error.message.includes(failure.cause.code));
+      return true;
+    });
+    assert.equal(calls, 1);
+  }
+});
+
+test("verifyLive identifies the failing lazy asset and wrapped network cause while preserving byte checks", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "verify-live-transport-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const rel = "fixture-network-lazy.bin", expected = Buffer.from("expected bytes");
+  const index = Buffer.from(`<script type="application/json" id="apex-lazy-integrity">${JSON.stringify({ [rel]: sri(expected) })}</script>`);
+  await fs.writeFile(path.join(root, "index.html"), index);
+  await fs.writeFile(path.join(root, rel), expected);
+  for (const mode of ["network", "404", "hash"]) {
+    let hits = 0;
+    const result = await verifyLive({
+      baseUrl: "https://example.invalid/", root, files: ["index.html"],
+      fetchOpts: {
+        retries: 1, sleep: async () => {},
+        fetchImpl: async (url) => {
+          if (new URL(url).pathname === "/index.html") return new Response(index);
+          hits++;
+          if (mode === "network") throw transportFailure("ETIMEDOUT");
+          return new Response(mode === "hash" ? "stale bytes" : "missing", { status: mode === "404" ? 404 : 200 });
+        },
+      },
+    });
+    assert.equal(result.ok, false, mode);
+    assert.equal(hits, mode === "network" ? 2 : 1, `${mode} retries`);
+    assert.ok(result.errors.every((error) => error.includes(rel)), result.errors.join("\n"));
+    if (mode === "network") {
+      assert.match(result.errors[0], /https:\/\/example\.invalid\/fixture-network-lazy\.bin.*ETIMEDOUT.*connection interrupted/);
+    } else if (mode === "404") assert.match(result.errors[0], /HTTP 404/);
+    else {
+      assert.ok(result.errors.some((error) => error.includes("does not match shell")));
+      assert.ok(result.errors.some((error) => error.includes("live bytes differ from checked-out commit")));
+    }
+  }
 });

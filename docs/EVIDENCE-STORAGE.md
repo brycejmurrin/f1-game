@@ -173,6 +173,8 @@ Code or tooling fixes still use a normal deploy-branch PR.
 The older `tools/ci/publish-shots.mjs` writes Git image branches and is a legacy
 maintenance tool; use the release uploader for new evidence.
 
+The remaining history cleanup is tracked in the [deferred cleanup plan](plans/2026-10-19-deferred-history-cleanup.md). Development continues; that plan schedules no rewrite, maintenance freeze or recovery-ref purge.
+
 ## Sources
 
 - [Release storage quotas](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)

@@ -5492,6 +5492,28 @@ test("TLX registry pruning preserves live refs and is independent of mirror rele
   assert.doesNotMatch(body, /isMobile|releaseGeoMirrors|_sweepOptIn/);
 });
 
+// #2928: buildGeometry registers as "mesh"; createMesh registers again with
+// carSh/mesh. Without WeakSet membership, every ordinary mesh doubles
+// WeakRefs and memState/geoCensus live counts. Kind must still upgrade.
+test("TLX _regGeo registers once and upgrades __tlxKind on a second call", () => {
+  const _geoReg = [];
+  const _geoSeen = new WeakSet();
+  const body = fnBody(code("js/render/three/tlx.js"), "_regGeo");
+  const reg = eval("(function(g, kind){" + body + "})");
+  const g = {};
+  assert.equal(reg(g, "mesh"), g);
+  assert.equal(g.__tlxKind, "mesh");
+  assert.equal(_geoReg.length, 1, "first registration pushes one WeakRef");
+  assert.equal(reg(g, "carSh"), g);
+  assert.equal(g.__tlxKind, "carSh", "createMesh upgrades kind after buildGeometry");
+  assert.equal(_geoReg.length, 1, "second registration must not push another WeakRef");
+  const other = {};
+  reg(other, "tex");
+  assert.equal(_geoReg.length, 2, "a distinct geometry still registers");
+  assert.equal(other.__tlxKind, "tex");
+  assert.ok(_geoReg[0].deref() === g && _geoReg[1].deref() === other, "WeakRefs keep weak ownership");
+});
+
 test("TLX warm holds renderer state across awaits and restores it on rejection", async () => {
   let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
   // Fix C: the warm's finally sets _warmDone and the try calls the caster warm.

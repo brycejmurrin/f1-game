@@ -1,0 +1,1 @@
+Fixed: The default landscape-phone title menu uses the available right-hand width and a compact three-column play grid so all destinations fit above the home indicator, including returning players' Continue button.

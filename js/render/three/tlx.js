@@ -3573,6 +3573,12 @@ const TLX = (function () {
       // Every geometry this backend creates, held WEAKLY — a census that
       // retains what it measures is a leak, not an instrument.
       const _geoReg = [];
+      // Membership for _regGeo: createMesh calls _regGeo(buildGeometry(...), kind)
+      // and buildGeometry already registered as "mesh". Without this, every
+      // ordinary mesh adds two WeakRefs and memState/geoCensus double-count
+      // (issue #2928). WeakSet keys die with the geometry; kind is always
+      // stamped first so the later call still upgrades mesh → carSh.
+      const _geoSeen = (typeof WeakSet !== "undefined") ? new WeakSet() : null;
       let _geoPruneAt = -Infinity;
       function pruneGeoRegistry(now) {
         if (now - _geoPruneAt < 2000) return;
@@ -3729,7 +3735,17 @@ const TLX = (function () {
         }
       }
 
-      function _regGeo(g, kind) { try { g.__tlxKind = kind; _geoReg.push(new WeakRef(g)); } catch (_) { /* no WeakRef: census degrades, nothing leaks */ } return g; }
+      function _regGeo(g, kind) {
+        try {
+          g.__tlxKind = kind;   // always: createMesh upgrades after buildGeometry
+          if (_geoSeen) {
+            if (_geoSeen.has(g)) return g;
+            _geoSeen.add(g);
+          }
+          _geoReg.push(new WeakRef(g));
+        } catch (_) { /* no WeakRef: census degrades, nothing leaks */ }
+        return g;
+      }
       // Attributes go through TLXShaders.packAttr: it range-scans each source
       // and quantises ONLY what provably fits (colour 8-bit, unit normal 16,
       // MAT id 0..16), keeping Float32 otherwise, and backs an absent source
@@ -4442,9 +4458,11 @@ const TLX = (function () {
           // after upload) and the source kind: what a later source must match.
           if (src && src.width > 0 && src.height > 0) { t.__tlxPoolW = src.width; t.__tlxPoolH = src.height; t.__tlxPoolBmp = _isBitmap(src); }
           t.flipY = true;                       // GLX uploads UNPACK_FLIP_Y
-          // Never lowered on a reused texture: its sampler was made at the first
-          // upload, and car-draw's crispPlayerDecal raised the player's to 8.
-          if (!(t.anisotropy >= 4)) t.anisotropy = 4;
+          // Final sampler before eager upload releases the canvas: a later
+          // needsUpdate would otherwise re-upload the 1x1 source stand-in.
+          // Never lower a reused player's sampler when an AI borrows it.
+          const anisotropy = opts && Number.isFinite(opts.anisotropy) ? Math.max(4, Math.min(16, opts.anisotropy)) : 4;
+          if (!(t.anisotropy >= anisotropy)) t.anisotropy = anisotropy;
           t.colorSpace = THREE.NoColorSpace;    // no-sRGB calibration invariant
           t.premultiplyAlpha = true;            // decal atlas: premultiplied, ONE/ONE_MINUS_SRC_ALPHA (GLX parity)
           // Drop the CPU source once three has copied it to the GPU (see
@@ -4453,11 +4471,12 @@ const TLX = (function () {
           // whether the upload came from uploadTexture() or the first draw.
           t.onUpdate = releaseTexSource;
           t.needsUpdate = true;
-          // Phones: LiveryTex paints EVERY atlas on ONE scratch canvas
+          // Phones: LiveryTex paints AI atlases on ONE scratch canvas even at
+          // GRAPHICS HIGH (the player's atlas alone follows mobileTier).
           // (liverytex.js scratchAtlas) and GLX/WGX copy it inside createTexture.
           // three defers, so two atlas misses in one frame both uploaded the
           // second car's paint. Upload now, as GLX does, so the reuse is safe.
-          if (mobileTier) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
+          if (mobileTier || isMobile) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
           return { __tlx: true, tex: t };
         },
         // Upload a createTexture() handle NOW instead of at the first frame that

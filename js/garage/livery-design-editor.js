@@ -139,7 +139,7 @@ const GarageLiveryDesignEditor = (function () {
     }
     section("COLOUR PALETTE", "Changes body primary, accent and adjustable-pattern colours. Other painted surfaces keep their colours.", [], [palettes]);
     section("BODY PAINT & BASE FINISH", "Main body, nose and sidepods. FINISH is the whole-car default; regional INHERIT buttons use it.",
-      ["finish", "c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod", "podFinish", "lower", "upper", "bodySplit"]);
+      ["finish", "c1", "c2", "stripe", "noseStripe", "accent", "nose", "noseFinish", "pod", "podFinish", "lower", "upper", "bodySplit"]);
     section("ENGINE COVER — SHAPE & PAINT", "The raised cover behind the cockpit. Shape, vents, base colour and finish.",
       ["cover", "coverFinish", "spineHeight", "coverVents"]);
     section("SPINE TOP — ARTWORK & COLOURS", "Artwork along the top of the engine cover. Select one design; only the colour controls it uses are enabled.",
@@ -153,9 +153,11 @@ const GarageLiveryDesignEditor = (function () {
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
-      ["crestStyle", "logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
-    section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "tcam"]);
-    section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk"]);
+      ["crestStyle", "logo", "logo2", "logo3", "numFont", "sponsors", "boardTint"], [api.markNote]);
+    section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "cockpitTint", "gripTint", "tcam"]);
+    section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk", "rimFinish"]);
+    section("FLOOR, SUSPENSION & RUNNING GEAR", "Parts that are bare carbon by default: floor edge and bargeboards, suspension arms, brake ducts, wheel deflectors, plus the exhaust tip's heat colour. Unset keeps them carbon.",
+      ["floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "deflectorTint", "exhaustTint"]);
     section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
     section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
     // One SPINE TOP selection, divided by purpose rather than a wall of pills.
@@ -182,7 +184,8 @@ const GarageLiveryDesignEditor = (function () {
       ["body", "BODY", ["BODY PAINT & BASE FINISH"]],
       ["cover", "ENGINE COVER", ["ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "SPINE PATTERN — SIZE & PLACEMENT", "COVER SIDES & TAIL LINK"]],
       ["wings", "WINGS", ["WINGS"]], ["fin", "TAIL FIN", ["TAIL FIN"]], ["marks", "MARKS & NUMBERS", ["TEAM MARKS & NUMBERS"]],
-      ["cockpit", "COCKPIT", ["COCKPIT & CAMERA"]], ["wheels", "WHEELS", ["WHEELS & BRAKES"]], ["helmet", "HELMET", ["HELMET"]],
+      ["cockpit", "COCKPIT", ["COCKPIT & CAMERA"]], ["wheels", "WHEELS", ["WHEELS & BRAKES"]],
+      ["running", "RUNNING GEAR", ["FLOOR, SUSPENSION & RUNNING GEAR"]], ["helmet", "HELMET", ["HELMET"]],
     ];
     const ADVANCED = new Set(["podFinish", "coverFinish", "wingFinish", "finFinish", "haloFinish", "mirrorFinish", "coverBind", "finHandoff",
       "logo3", "lower", "upper", "bodySplit", "noseStripe", "accent", "spineHeight", "coverVents", "tcam", "sidewallInk",

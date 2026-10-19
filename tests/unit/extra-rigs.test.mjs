@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { CAM_MODE_IDS, camModeStubs } from "../helpers/camera-modes.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -28,10 +29,7 @@ function loadExtraRigs() {
     Broadcast: undefined,
     CamTune: { cornerLead() { return null; } },
     CamModes: {
-      CAM_MODES: [
-        { id: "chase" }, { id: "far" }, { id: "visor" },
-        { id: "rival" }, { id: "pitwall" }, { id: "drone" },
-      ],
+      CAM_MODES: camModeStubs(),   // the shipped ids at their shipped indices
     },
     GameStore: {
       store: {
@@ -49,13 +47,10 @@ function loadExtraRigs() {
 }
 
 test("CAM_MODES appends rival, pitwall, drone after trackside (save-format contract)", () => {
-  const src = fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8");
-  const ids = [...src.matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
   // TRACKSIDE (#702) landed on ship first at index 14; our three append after it.
-  // TV (the live director) then HELMET append after drone; never reorder earlier ids.
-  assert.deepEqual(ids.slice(-7), ["visor", "trackside", "rival", "pitwall", "drone", "tv", "helmet"],
-    "new cams must append — apex26.camMode is an index (TV at 18, HELMET at 19)");
-  assert.equal(ids.length, 20);
+  // never reorder earlier ids — apex26.camMode is an index (tv at 18 is pinned in director.test).
+  assert.deepEqual(CAM_MODE_IDS.slice(14, 18), ["trackside", "rival", "pitwall", "drone"]);
+  assert.equal(CAM_MODE_IDS.length, 20);
 });
 
 test("ExtraRigs.pickRival uses Broadcast.battles when present", () => {
@@ -134,10 +129,10 @@ test("ExtraRigs.tickPitAuto cuts to pitwall on entry and restores on exit", () =
     setCamMode(i) { mode = i; return "x"; },
     store: { get: () => true, set() {} },
   };
-  // Enter the pits from chase (index 0) → ephemeral cut to pitwall (index 4 in our stub).
+  // Enter the pits from chase (index 0) → ephemeral cut to pitwall (its real CAM_MODES index).
   G.player.pitState = "lane";
   assert.equal(ExtraRigs.tickPitAuto(G), "pitwall");
-  assert.equal(mode, 4);
+  assert.equal(mode, CAM_MODE_IDS.indexOf("pitwall"), "cut lands on the real pitwall index");
   // Leave the pits → restore chase.
   G.player.pitState = "none";
   assert.equal(ExtraRigs.tickPitAuto(G), "chase");

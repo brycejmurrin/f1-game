@@ -7,11 +7,16 @@
 // hidden coalesced TLX run per set: edit N paid for N - 1 paint jobs nobody could see.
 // Contract, measured on the shipped TLX backend: after a warm-up, N more WING colour edits (the flap key; each a
 // colour never seen before, as a dragged picker gives) create NO new GPU textures, and once the edits pause the
-// next edit leaves the flap meshes, coalesced runs and textures where the warm-up left them.
-// THE LEAKING CACHE, COUNTED DIRECTLY: renderer.info.memory.geometries and three's RenderObject count follow what
-// the last frames drew (deploy tip 75864637: 11 → 34 → 12 → 34 …), and even TLX's live-geometry census after a
-// forced GC swings ~22 between edits as the bay's rebuild lands (35/57 on the tip, 38/61 on the base, both flat).
-// None of them is the leak. The flap caches are: CarMesh.flapState() — the base held one more set per wing colour.
+// next edit leaves the flap meshes, coalesced runs, textures and settled TLX live geometries where the warm-up
+// left them.
+// THE LEAKING CACHE, COUNTED DIRECTLY: CarMesh.flapState() — the base held one more set per wing colour.
+// SETTLED GEO (#2897): renderer.info.memory.geometries follows what the last frames drew and is not a leak meter.
+// The menu/flyby lazy build (scheduleFlybyTrack) often STARTS after a Tracks.building()-only settle: ensureScenery
+// and ensureTrackBuild run with prep.building still false, so warm can sample garage-only geoLive (~35) and then
+// Bahrain lands mid-edits (~50). Force-await menuPrep world+done+!warming on #select before the garage. Before each
+// geo sample: menuPrep idle, Tracks.building clear, modelsReady, and 1.5 s of post-GC geoLive stability. Total geoLive
+// is bimodal from bay rebuilds (~+15 mesh) even after GC, so the leak assert uses sticky kinds (chunk+carSh+tex) —
+// late Bahrain steps chunk; bay mesh churn is excluded. Flap/GPU texture asserts stay strict.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const WARM = 3, EDITS = 6;
@@ -24,7 +29,73 @@ const frames = (page, n) => page.evaluate((k) => new Promise((done) => {
   let i = 0; const f = () => (++i >= k ? done(null) : requestAnimationFrame(f)); requestAnimationFrame(f);
 }), n);
 
-test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and textures flat (TLX)", async ({ page }) => {
+/**
+ * Force the select-screen flyby prep to finish WHILE #select is still up.
+ * scheduleFlybyTrack's ensureScenery / ensureTrackBuild window is invisible to Tracks.building();
+ * leaving as soon as menuPrep.world is true also races menuFinish's program warm — the garage then
+ * edits under gfx.warming() and the flap/atlas baseline is empty (warm flaps=0, end mints them).
+ * Wait for world + done + !warming so Bahrain geos and shader warm both land before the garage.
+ */
+const awaitMenuTrackBuilt = async (page) => {
+  await page.waitForFunction(() => {
+    const A = window.__apex;
+    if (!A || typeof A.menuPrep !== "function") return false;
+    const p = A.menuPrep();
+    if (!p || p.building || p.warming || !p.world || !p.done) return false;
+    try {
+      if (typeof Tracks !== "undefined" && Tracks.building && Tracks.building()) return false;
+    } catch (_) { /* */ }
+    return true;
+  }, null, { polling: 100, timeout: 180000 });
+};
+
+/**
+ * Wait out menu prep / paced builds / model-pack / bay rebuild spikes, then return a post-GC sample.
+ * Bay rebuilds leave transient mesh WeakRefs; settle with the same double-GC read() uses so warm and end
+ * share one post-GC floor before the sticky-kind assert.
+ */
+const settleGeo = async (page, cdp, label) => {
+  await page.evaluate(() => {
+    window.__modelsReadyOk = false;
+    const p = (typeof Assets !== "undefined" && Assets.modelsReady)
+      ? Assets.modelsReady(4000)
+      : Promise.resolve(0);
+    p.then(() => { window.__modelsReadyOk = true; }, () => { window.__modelsReadyOk = true; });
+  });
+  const deadline = Date.now() + 90000;
+  let last = -1, since = 0, sample = null;
+  while (Date.now() < deadline) {
+    const ready = await page.evaluate(() => {
+      if (!window.__modelsReadyOk) return false;
+      try {
+        const p = (window.__apex && typeof window.__apex.menuPrep === "function") ? window.__apex.menuPrep() : null;
+        if (p && (p.building || p.warming)) return false;
+      } catch (_) { /* */ }
+      try {
+        if (typeof Tracks !== "undefined" && Tracks.building && Tracks.building()) return false;
+      } catch (_) { /* */ }
+      return !!(typeof GLX !== "undefined" && GLX.__tlx && typeof GLX.__tlx.memState === "function");
+    });
+    if (!ready) { last = -1; since = 0; await pause(page, 100); continue; }
+    for (let i = 0; i < 2; i++) await cdp.send("HeapProfiler.collectGarbage");
+    sample = await page.evaluate(() => {
+      const r = window.renderer, co = GLX.__tlx.coState(), f = CarMesh.flapState ? CarMesh.flapState() : null;
+      const ms = GLX.__tlx.memState();
+      return {
+        gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures,
+        geoLive: ms.geoLive, geoKinds: ms.geoKinds, geoRegLen: ms.geoRegLen,
+      };
+    });
+    const live = sample.geoLive | 0;
+    const now = Date.now();
+    if (live !== last) { last = live; since = now; await pause(page, 100); continue; }
+    if (now - since >= 1500) return sample;
+    await pause(page, 100);
+  }
+  throw new Error("settleGeo timed out (" + label + ")");
+};
+
+test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, textures and settled geoLive flat (TLX)", async ({ page }) => {
   test.setTimeout(480000);   // ~10 s an edit on SwiftShader, plus boot
   await page.setViewportSize({ width: 844, height: 390 });
   await page.addInitScript(() => {
@@ -37,6 +108,9 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and
   await page.evaluate(() => { const S = GameStore.store; S.set("team", 2); S.set("driver", 0); S.set("livery.custom." + Teams.LIST[2].id, []); });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
+  // Land the menu/flyby track (Bahrain) before the garage — otherwise ensureScenery can
+  // finish after warm and step geoLive mid-edits (#2897 flake: warm=35, end=50).
+  await awaitMenuTrackBuilt(page);
   await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
@@ -54,7 +128,11 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and
     for (let i = 0; i < 2; i++) await cdp.send("HeapProfiler.collectGarbage");   // the second pass collects what the first released
     return page.evaluate(() => {
       const r = window.renderer, co = GLX.__tlx.coState(), f = CarMesh.flapState ? CarMesh.flapState() : null;
-      return { gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures };
+      const ms = GLX.__tlx.memState();
+      return {
+        gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures,
+        geoLive: ms.geoLive, geoKinds: ms.geoKinds, geoRegLen: ms.geoRegLen,
+      };
     });
   };
   let n = 0;
@@ -71,12 +149,19 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and
   for (let i = 0; i < WARM; i++) await edit();
   await pause(page, 2500);   // past the garage's flap idle window (setup-camera.js FLAP_IDLE_MS)
   await edit();
-  const warm = await read();
+  // Turntable flaps must exist before the leak baseline (menu warm can delay the first garage frame).
+  await page.waitForFunction(() => {
+    try {
+      const f = typeof CarMesh !== "undefined" && CarMesh.flapState && CarMesh.flapState();
+      return !!(f && f.sets > 0);
+    } catch (_) { return false; }
+  }, null, { polling: 100, timeout: 120000 });
+  const warm = await settleGeo(page, cdp, "warm");   // post-GC stable baseline (#2897)
   const rows = [warm];
   for (let i = 0; i < EDITS; i++) { await edit(); rows.push(await read()); }
   await pause(page, 2500);
   await edit();
-  const end = await read();
+  const end = await settleGeo(page, cdp, "end");
   rows.push(end);
   test.info().annotations.push({ type: "churn", description: JSON.stringify(rows) });
   expect(end.gpuTex - warm.gpuTex, `GPU textures created by ${EDITS + 1} edits after the warm-up (each edit used to make new ones): ${JSON.stringify(rows)}`).toBe(0);
@@ -85,4 +170,10 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and
   expect(end.flaps.sets, `flap sets held: ${rows.map((r) => r.flaps.sets).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.sets);
   expect(end.flaps.elements, `flap elements held: ${rows.map((r) => r.flaps.elements).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.elements);
   expect(end.tex, `textures: ${rows.map((r) => r.tex).join(" → ")}`).toBeLessThanOrEqual(warm.tex);
+  // Sticky geos: track chunks + car shadows + tex geos. Bay rebuild mesh oscillates ~56↔71 and is not a leak meter.
+  const sticky = (r) => {
+    const k = r.geoKinds || {};
+    return (k.chunk || 0) + (k.carSh || 0) + (k.tex || 0);
+  };
+  expect(sticky(end), `sticky geo (chunk+carSh+tex): ${rows.map(sticky).join(" → ")} geoLive=${rows.map((r) => r.geoLive).join(" → ")} kinds=${JSON.stringify(end.geoKinds)}`).toBeLessThanOrEqual(sticky(warm));
 });

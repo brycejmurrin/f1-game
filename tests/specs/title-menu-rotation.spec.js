@@ -124,7 +124,7 @@ for (const sz of [...PHONES, TABLET]) {
       expectDoorsReachable(s, "land-1");
       expect(s.inert, "title must not stay inert after a bare rotation").toBe(false);
       if (sz.land.width === 844 && sz.land.height === 390) {
-        // Live scene, then the still one (data-home-live removed): same four-row fit, no word split.
+        // Live scene, then the still one (data-home-live removed): same compact fit, no word split.
         for (const scene of ["live", "static"]) {
           if (scene === "static") {
             await page.evaluate(() => AppearanceStudio.setScene("static", "still"));
@@ -133,7 +133,11 @@ for (const sz of [...PHONES, TABLET]) {
           }
           const fit = await page.evaluate(() => {
             const mb = document.getElementById("menu-buttons");
-            const row = (id) => getComputedStyle(document.getElementById(id)).gridRowStart;
+            const play = ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice", "mb-garage"].map(id => {
+              const el = document.getElementById(id), r = el.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+              return { id, hit: !!hit && (hit === el || el.contains(hit)) };
+            });
             const lab = mb.querySelector(".menu-destination-label");
             const broken = [];
             for (const t of mb.querySelectorAll(".menu-destination .bigbtn")) {
@@ -153,12 +157,14 @@ for (const sz of [...PHONES, TABLET]) {
             }
             return {
               sh: mb.scrollHeight, ch: mb.clientHeight, broken,
-              rows: [row("menu-garage"), row("menu-explore"), row("menu-create")],
+              play,
               labelDisplay: lab ? getComputedStyle(lab).display : "none",
             };
           });
           expect(fit.sh, `${scene}: phone-landscape Home menu must fit without scrolling`).toBeLessThanOrEqual(fit.ch + 1);
-          expect(fit.rows, `${scene}: compact Home rows 2/3/4`).toEqual(["2", "3", "4"]);
+          // Static tiles are skewed: their axis-aligned corner boxes may
+          // intersect while their painted click targets remain separate.
+          expect(fit.play.filter(cell => !cell.hit).map(cell => cell.id), `${scene}: every Play/Garage centre remains hittable`).toEqual([]);
           expect(fit.labelDisplay, `${scene}: compact Home group labels stay hidden`).toBe("none");
           expect(fit.broken, `${scene}: no tile label splits or overflows a word`).toEqual([]);
         }

@@ -121,9 +121,10 @@ test("Car3D.build: no ink = byte-identical car; ink changes only wheel-vertex co
 
 test("wheel mesh call sites pass the ink and the editor has the row (source pins)", () => {
   const draw = read("js/car/car-draw.js");
-  assert.equal((draw.match(/wt\.ink\)/g) || []).length, 4, "car-draw: player + field, front + rear");
-  assert.equal((read("js/car/car3d.js").match(/wheelStyle, wt\.ink\)/g) || []).length, 2);
-  assert.match(read("js/camera/cockpit-preview.js"), /visual\.wheels,wt\.ink\)/);
+  // `, wt.surf` is the RIM FINISH surface (livery-paint-zones.test.mjs), passed after the ink.
+  assert.equal((draw.match(/wt\.ink(, wt\.surf)?\)/g) || []).length, 4, "car-draw: player + field, front + rear");
+  assert.equal((read("js/car/car3d.js").match(/wheelStyle, wt\.ink(, wt\.surf)?\)/g) || []).length, 2);
+  assert.match(read("js/camera/cockpit-preview.js"), /visual\.wheels,wt\.ink(,wt\.surf)?\)/);
   assert.match(read("js/garage/livery-design-editor.js"), /section\("WHEELS & BRAKES"[^\n]*"sidewallInk"/);
   assert.match(read("js/garage/setup-sheet.js"), /colorRow\("SIDEWALL INK", "sidewallInk", true\)/);
 });

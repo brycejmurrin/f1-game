@@ -23,7 +23,9 @@
 // exactly what the component restructure is about to do. Every check here is
 // relative or a containment test.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
+// Explicit phone cells use a coherent mobile identity; DPR 1 intentionally limits raster cost.
 const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary play shape
 // 50 is SCALE_MIN; 100 is what ships; 115 stays because three defects confirmed
 // on 2026-08-08 were invisible at 100% and present at 115% (garage overlapping
@@ -187,7 +189,7 @@ test.describe("UI scale", () => {
 
   for (const [shape, viewport] of SHAPES) {
     test.describe(shape, () => {
-      test.use({ viewport });
+      test.use({ ...uiTestOptions({ touch: true, viewport, deviceScaleFactor: 1 }) });
 
       for (const pct of SCALES) {
         test(`every main screen fits at ${pct}%`, async ({ page }) => {
@@ -875,7 +877,7 @@ test.describe("UI scale", () => {
 
 
 test.describe("Broadcast map control clearance", () => {
-  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
   test("unplaced map clears tall left pedals while custom placement and dimensions survive", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("apex26.steerMode", JSON.stringify("tilt"));
@@ -1454,7 +1456,7 @@ test.describe("Race setup adaptive task", () => {
 });
 
 test.describe("Custom Home width on touch", () => {
-  test.use({ hasTouch: true, viewport: { width: 852, height: 393 } });
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 }, deviceScaleFactor: 1 }) });
 
   test("a narrow saved Home stack stays bounded and actionable after rotation", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
@@ -1535,7 +1537,8 @@ test.describe("Custom Home width on touch", () => {
 });
 
 test.describe("Factory Home on touch", () => {
-  test.use({ hasTouch: true, viewport: { width: 852, height: 393 } });
+  // Keep finite transitions disabled while measuring the layout contract.
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 }, deviceScaleFactor: 1 }), reducedMotion: "reduce" });
 
   test("default Home separates landscape regions and keeps destinations readable through enlargement", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
@@ -1562,7 +1565,8 @@ test.describe("Factory Home on touch", () => {
     const cells = [
       { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
       { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 }, returning: true },
-      { width: 852, height: 393, safe: { top: 0, right: 47, bottom: 21, left: 47 } },
+      { width: 852, height: 393, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
+      { width: 1280, height: 590, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
       { width: 667, height: 320, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
       { width: 393, height: 852, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
       { width: 852, height: 393, safe: { top: 0, right: 47, bottom: 21, left: 47 }, enlarged: true },
@@ -1603,14 +1607,23 @@ test.describe("Factory Home on touch", () => {
         expect(geometry.menu.x + geometry.menu.width).toBeLessThanOrEqual(cell.width - cell.safe.right + 1);
       }
 
-      if (cell.width === 852 && !cell.enlarged) {
+      if ([852, 1280].includes(cell.width) && !cell.enlarged) {
+        const fit = await page.locator("#menu-buttons").evaluate(el => ({
+          scrollHeight: el.scrollHeight, clientHeight: el.clientHeight,
+          clipped: [...el.querySelectorAll("button")].filter(b => !b.hidden && b.getClientRects().length).filter(b => {
+            const r = b.getBoundingClientRect(), m = el.getBoundingClientRect();
+            return r.top < m.top - 1 || r.bottom > m.bottom + 1;
+          }).map(b => b.id),
+        }));
+        expect(fit.scrollHeight, "all default landscape doors fit without scrolling, including Continue and safe area").toBeLessThanOrEqual(fit.clientHeight + 1);
+        expect(fit.clipped, "no door is outside the menu viewport at scrollTop zero").toEqual([]);
         const race = await page.locator("#mb-race").boundingBox();
         const timeTrial = await page.locator("#mb-tt").boundingBox();
         expect(Math.abs(race.y - timeTrial.y), "normal landscape keeps paired play destinations").toBeLessThanOrEqual(1);
         expect(race.x + race.width).toBeLessThanOrEqual(timeTrial.x + 1);
         const practice = await page.locator("#mb-practice").boundingBox();
         const garage = await page.locator("#mb-garage").boundingBox();
-        expect(Math.abs(practice.y - garage.y), "Practice and Garage share the third play row").toBeLessThanOrEqual(1);
+        expect(Math.abs(practice.y - garage.y), "Practice and Garage share the final play row").toBeLessThanOrEqual(1);
         expect(practice.x + practice.width).toBeLessThanOrEqual(garage.x + 1);
         const settings = await page.locator("#mb-settings").boundingBox();
         const help = await page.locator("#mb-help").boundingBox();

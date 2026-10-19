@@ -388,7 +388,7 @@ const CarDraw = (function () {
     // anisotropy for player / garage atlases so sponsor boards stay crisp at
     // grazing 3/4 angles. GLX/WGX already apply their own cap inside
     // createTexture (4×) — those handles have no `.tex`, so this is a no-op.
-    // Render backends stay untouched (OWNED: car-draw only).
+    // TLX also receives this sampler before eager upload can release its canvas.
     function crispPlayerDecal(t) {
       const tex = t && t.tex;
       if (!tex || typeof tex.anisotropy !== "number") return t;
@@ -473,7 +473,7 @@ const CarDraw = (function () {
         try {
           if (!owns()) return;
           const transfer = !!bitmap && G.gfx.backend === "three";
-          const next = crispPlayerDecal(G.gfx.createTexture(src, transfer ? { disposeSource: closeBitmap } : undefined));
+          const next = crispPlayerDecal(G.gfx.createTexture(src, transfer ? { disposeSource: closeBitmap, anisotropy: 8 } : { anisotropy: 8 }));
           if (!next) throw new Error("no texture");   // keep the preview rather than cache a null over it
           keep = transfer;   // TLX owns this bitmap until Texture.dispose; GLX/WGX already copied it
           const prev = _decalTexCache[key];
@@ -542,7 +542,7 @@ const CarDraw = (function () {
           // Sync path is ALWAYS the preview tier for the player (hiRes false).
           // Full 2048 is schedulePlayerHiRes only — never boot / garage-open.
           const canvas = LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer, false);
-          t = G.gfx.createTexture(canvas);
+          t = G.gfx.createTexture(canvas, isPlayer ? { anisotropy: 8 } : undefined);
           if (isPlayer) t = crispPlayerDecal(t);
           _decalTexBytes[key] = atlasBytes(canvas);
         }
@@ -1200,9 +1200,9 @@ const CarDraw = (function () {
         const caliper = wt.cal || (playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier]);
         const rim = wt.rim || (playerBrakeVisual && playerBrakeVisual.rim);
         const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf);
         const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf);
         return {
           F: G.gfx.createMesh(front.rotating),
           R: G.gfx.createMesh(rear.rotating),
@@ -1255,8 +1255,8 @@ const CarDraw = (function () {
         const wt = _fwTints;
         const caliper = wt.cal || (brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes]);
         const rim = wt.rim || (brake && brake.rim);
-        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel, wt.ink);
-        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel, wt.ink);
+        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf);
+        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf);
         // A MARKER, not behaviour (Car3D.build's `field` opt is the same idea): this
         // cache and getPlayerWheelMeshes() call buildWheelLayers identically, so a
         // mesh probe cannot otherwise tell a FIELD pair from a PLAYER one, and

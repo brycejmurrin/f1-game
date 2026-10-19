@@ -118,8 +118,27 @@ const SettingDeps = (function () {
     layer("as-t-gravel", "as-l-gravel", "GRAVEL"),
     { key: "layer-as-l-limiter", ids: ["as-t-lim", "as-t-limrate", "as-t-limsag"], parent: "as-l-limiter", reason: "LIMITER layer is off" },
     // The DRIVING LINE mode is a RACE SETTINGS row (another screen), so read the module.
-    { key: "line-off", ids: ["pm-linecolor", "pm-lineopacity"], reason: "Driving line is OFF",
+    { key: "line-off", ids: ["pm-linecolor", "pm-lineopacity"], reason: "OFF in Race settings",
       when: () => (typeof DrivingLine !== "undefined" && DrivingLine.mode ? DrivingLine.mode() !== "off" : null) },
+    // TURN CHASING only aims the cockpit / visor / helmet look (vantage.js).
+    { key: "turnchase-cam", ids: ["pm-turnchase"], runtime: true, reason: "Cockpit views only",
+      when: () => {
+        if (typeof GameStore === "undefined" || !GameStore.store || typeof CamModes === "undefined") return null;
+        // Default 19 matches game.js's shipped camMode read (store-registry).
+        const idx = GameStore.store.get("camMode", 19);
+        const id = CamModes.CAM_MODES && CamModes.CAM_MODES[idx | 0] && CamModes.CAM_MODES[idx | 0].id;
+        return id ? (id === "cockpit" || id === "visor" || id === "helmet") : null;
+      } },
+    // USE AS MENU BACKGROUND only paints when Appearance Scene is My photo.
+    // No capture yet → leave alone so EXPLAIN can say "CAPTURE a photo first".
+    { key: "photo-scene", ids: ["ps-background"], runtime: true, reason: "Needs My photo scene",
+      when: () => {
+        if (typeof GameStore === "undefined" || !GameStore.store) return null;
+        if (GameStore.store.get("homeScene", "photo") === "photo") return true;
+        const prev = byId("ps-preview");
+        if (prev && prev.hidden) return null;
+        return false;
+      } },
   ]);
 
   /* EXPLAIN: { key, ids?, sel?, text?, why, link? }. `ids` and/or `sel` (a CSS
@@ -167,9 +186,29 @@ const SettingDeps = (function () {
     { key: "why-season-quali", ids: ["rs-quali"], why: "Set by SEASON SETUP" },
     // PHOTO STUDIO, APPEARANCE
     { key: "why-photo", ids: ["ps-save", "ps-export", "ps-background"], why: "CAPTURE a photo first", link: "ps-message" },
+    // Library tile MENU BACKGROUND: owner greys when Scene is not My photo (photo-studio.js).
+    { key: "why-photo-lib-bg", sel: "button.ps-use-bg", why: "Needs My photo scene" },
     { key: "why-ap-profile", ids: ["ap-profile-apply", "ap-profile-delete"], why: "Pick a saved PROFILE first" },
     { key: "why-ap-photo", ids: ["ap-photo-select", "ap-photo-choose"],
       why: (s) => (s.off("ap-photo-select") ? "No saved photos yet" : "Select a saved photo first") },
+    // GARAGE team tab: owner greys the card / chips / EDIT; phone never sees title= tooltips (#2852).
+    // Reasons mirror the title= strings setup-sheet already sets (shortened for the label).
+    { key: "why-garage-team", ids: ["cs-team-card"],
+      why: () => (/race/i.test((byId("cs-team-card") || {}).title || "") ? "Fixed while in a race" : "Fixed by your career") },
+    { key: "why-garage-edit", ids: ["cs-customize"], why: "Fixed while in a race" },
+    { key: "why-garage-driver", sel: "#cs-driver button",
+      why: () => {
+        const row = byId("cs-driver");
+        if (!row) return "Taken by the other player";
+        for (const b of row.querySelectorAll("button")) {
+          if (!b.disabled) continue;
+          const t = b.title || "";
+          if (/Taken/i.test(t)) return "Taken by the other player";
+          if (/race/i.test(t)) return "Fixed while in a race";
+          if (t) return "Fixed by your career";
+        }
+        return "Taken by the other player";
+      } },
     // TITLE SCREEN layout and PEEK
     { key: "why-title-only", ids: ["pm-tl-edit"], sel: 'button[data-peek="title"]', why: "Open from the TITLE screen" },
     { key: "why-tl-width", ids: ["tl-width-dn", "tl-width-up"], why: "Select the BUTTONS piece" },
@@ -212,6 +251,14 @@ const SettingDeps = (function () {
         r.setAttribute("data-dep-reason", "line");
         const sum = el.querySelector("summary");
         el.insertBefore(r, sum ? sum.nextSibling || null : el.children[0] || null);
+      } else if (el.tagName === "BUTTON") {
+        // A reason inside a disabled button inherits opacity 0.45 and vanishes on
+        // a phone. Put a line under the button group (same slot EXPLAIN uses).
+        r = d.createElement("p");
+        r.setAttribute("data-dep-reason", "line");
+        const g = groupOf(el);
+        if (g.parentNode) g.parentNode.insertBefore(r, g.nextSibling || null);
+        else if (row.parentNode) row.parentNode.insertBefore(r, row.nextSibling || null);
       } else {
         r = d.createElement("span");
         r.setAttribute("data-dep-reason", "label");

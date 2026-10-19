@@ -81,18 +81,68 @@ test("app-protocol exports registerScheme / handleScheme for main.js", () => {
   assert.equal(proto.HOST, "apex");
 });
 
-test("desktop package.json ships app-protocol.js and pins Electron 44.4.5", () => {
+test("desktop package.json ships app-protocol.js, pins Electron to one exact version, locks the fuses", () => {
   const pkg = JSON.parse(
     require("node:fs").readFileSync(join(ROOT, "desktop/package.json"), "utf8"),
   );
   const cfg = require("../../desktop/electron-builder.config.cjs");
-  assert.equal(pkg.devDependencies.electron, "44.4.5");
+  // Exact pin, not a copied number: a routine bump must not red this test, a range ("^44") must.
+  assert.match(pkg.devDependencies.electron, /^\d+\.\d+\.\d+$/, "electron must be pinned to one exact version");
   assert.ok(cfg.files.includes("app-protocol.js"));
   assert.equal(cfg.electronFuses.enableNodeCliInspectArguments, false);
   assert.equal(cfg.electronFuses.grantFileProtocolExtraPrivileges, false);
   assert.ok(pkg.scripts["pack:test"]);
-  assert.ok(
-    require("node:fs").existsSync(join(ROOT, "desktop/app-protocol.js")),
-  );
-  assert.ok(String(pathToFileURL(join(ROOT, "desktop/app-protocol.js"))).startsWith("file:"));
+});
+
+// handleScheme against a fake electron: the 206 / 416 / traversal handling
+// that desktop users hit was never executed (T2-14).
+async function withHandler(fn) {
+  const Module = require("node:module");
+  let handler = null;
+  const realLoad = Module._load;
+  Module._load = function (request, ...rest) {
+    if (request === "electron") return { protocol: { handle: (scheme, h) => { assert.equal(scheme, "app"); handler = h; } } };
+    return realLoad.call(this, request, ...rest);
+  };
+  const root = mkdtempSync(join(tmpdir(), "apex-scheme-"));
+  try {
+    writeFileSync(join(root, "index.html"), "<!doctype html>");
+    writeFileSync(join(root, "data.bin"), "0123456789");
+    writeFileSync(join(tmpdir(), `apex-scheme-secret-${process.pid}.txt`), "secret");
+    proto.handleScheme(root);
+    assert.equal(typeof handler, "function", "handleScheme must register a handler for the scheme");
+    await fn((pathname, headers = {}, host = "apex") => handler(new Request(`app://${host}${pathname}`, { headers })));
+  } finally {
+    Module._load = realLoad;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(join(tmpdir(), `apex-scheme-secret-${process.pid}.txt`), { force: true });
+  }
+}
+
+test("handleScheme: 200 full body, 206 range, suffix range, 416, 404, 403 traversal, 400 bad host", async () => {
+  await withHandler(async (get) => {
+    let r = await get("/");
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get("content-type"), /text\/html/);
+    assert.equal(r.headers.get("accept-ranges"), "bytes");
+
+    r = await get("/data.bin", { range: "bytes=2-5" });
+    assert.equal(r.status, 206);
+    assert.equal(await r.text(), "2345");
+    assert.equal(r.headers.get("content-range"), "bytes 2-5/10");
+    assert.equal(r.headers.get("content-length"), "4");
+
+    r = await get("/data.bin", { range: "bytes=-3" });
+    assert.equal(r.status, 206);
+    assert.equal(await r.text(), "789");
+    assert.equal(r.headers.get("content-range"), "bytes 7-9/10");
+
+    r = await get("/data.bin", { range: "bytes=50-60" });
+    assert.equal(r.status, 416);
+    assert.equal(r.headers.get("content-range"), "bytes */10");
+
+    assert.equal((await get("/missing.js")).status, 404);
+    assert.equal((await get("/..%2fapex-scheme-secret-" + process.pid + ".txt")).status, 403, "traversal must be refused");
+    assert.equal((await get("/", {}, "evil")).status, 400);
+  });
 });

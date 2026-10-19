@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 38d1f7a1-44f9-59ef-8d91-6805030a6180
-  modified: 2026-10-05T05:09:10.352Z
+  modified: 2026-10-19T03:08:51Z
 ---
 
 When a survey or audit produces a ranked gap list, the user's next message is
@@ -20,4 +20,4 @@ stops at recommendations costs a second round-trip.
 after delivering the survey, be ready to apply them on the same branch, verify
 with the gate, and refresh the PR body. Name what cannot be done in the cloud
 session (interactive slash commands) explicitly rather than skipping it silently.
-Related: [[merge-fast-verify-on-ci]], [[pr-auto-merge]].
+Related: [merge fast verify on ci](../../AGENTS.md), [pr auto merge](../rules/fleet-core.md).

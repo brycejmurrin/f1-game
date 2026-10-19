@@ -647,16 +647,25 @@ test("capture/shot.mjs clips the presented canvas instead of locator.screenshot"
 });
 
 test("WGX validator distinguishes frame counts from circuit names before launching", () => {
-  for (const args of [["--frames", "2"], ["--frames=2"], ["--frames", "2", "monza"], ["monza", "--frames", "2"]]) {
+  const run = (...args) => {
+    const started = performance.now();
     const r = spawnSync(process.execPath, [tool("wgx-validate.mjs"), "--static", ...args], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
-    assert.equal(r.status, 0, r.stderr);
+    const detail = JSON.stringify({ args, elapsedMs: Math.round(performance.now() - started), status: r.status, signal: r.signal,
+      error: r.error ? { code: r.error.code, message: r.error.message } : null, stdout: r.stdout, stderr: r.stderr });
+    assert.equal(r.error, undefined, detail);
+    assert.equal(r.signal, null, detail);
+    return { ...r, detail };
+  };
+  for (const args of [["--frames", "2"], ["--frames=2"], ["--frames", "2", "monza"], ["monza", "--frames", "2"]]) {
+    const r = run(...args);
+    assert.equal(r.status, 0, r.detail);
     const result = JSON.parse(r.stdout);
     assert.equal(result.track, args.includes("monza") ? "monza" : "montreal");
     assert.equal(result.frames, 2);
   }
   for (const args of [["--frames"], ["--frames", "0"], ["--frames", "2junk"], ["--frames", "1.5"], ["--unknown"], ["monza", "montreal"]]) {
-    const r = spawnSync(process.execPath, [tool("wgx-validate.mjs"), "--static", ...args], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
-    assert.notEqual(r.status, 0, `invalid arguments accepted: ${args.join(" ")}`);
+    const r = run(...args);
+    assert.equal(r.status, 1, r.detail);
   }
 });
 

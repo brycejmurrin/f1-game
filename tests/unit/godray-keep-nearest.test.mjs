@@ -78,3 +78,25 @@ test("every backend aliases _grKeepNearest to the shared PostCommon.keepNearest 
     assert.doesNotMatch(src, /_grSel\.sort\(/, p + " must not full-sort the floodlight list");
   }
 });
+
+// Edge table for keepNearest(sel, total, k): the pool stays a permutation, the first
+// min(k, total) slots hold the nearest, and ties never alias an object.
+const edgeCases = [
+  { name: "k above total selects everything, sorted", ds: [5, 1, 3], k: 6, want: [1, 3, 5], n: 3 },
+  { name: "k equal to total", ds: [4, 2, 9, 1], k: 4, want: [1, 2, 4, 9], n: 4 },
+  { name: "all ties keep a permutation", ds: [2, 2, 2, 2, 2], k: 2, want: [2, 2], n: 2 },
+  { name: "k of one picks the minimum", ds: [7, 3, 8, 3.5], k: 1, want: [3], n: 1 },
+  { name: "empty total", ds: [], k: 3, want: [], n: 0 },
+];
+for (const c of edgeCases) {
+  test(`keepNearest edge: ${c.name}`, () => {
+    const keep = new Function(extract(SHARED, "keepNearest") + "; return keepNearest;")();
+    const sel = c.ds.map((d, i) => ({ d, o: i * 15, i }));
+    const before = new Set(sel);
+    const n = keep(sel, c.ds.length, c.k);
+    assert.equal(n, c.n);
+    assert.deepEqual(sel.slice(0, n).map((e) => e.d).sort((a, b) => a - b), c.want);
+    assert.equal(sel.length, c.ds.length);
+    assert.deepEqual(new Set(sel), before, "same objects, none aliased or dropped");
+  });
+}
