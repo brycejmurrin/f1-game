@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 906201f1-dc4e-5e9e-926d-5f0ea39f1e1f
-  modified: 2026-10-18T06:57:16.555Z
+  modified: 2026-10-19T03:08:51Z
 ---
 
 When sending Bryce a sheet of new designs (parts, bodies, finishes), each variant must look clearly different in the image he sees on his phone. A geometry metric (parts-sweep "OK", 25–300 mm) is not evidence.

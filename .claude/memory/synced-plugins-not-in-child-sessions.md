@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: 1138139f-97b0-56ad-a9a9-703e995795c1
-  modified: 2026-10-18T08:01:17.065Z
+  modified: 2026-10-19T03:08:51Z
 ---
 
 Synced claude.ai plugins (`claude plugin list` → `<name>@synced`) load in the session Bryce starts, but a sibling spawned via `create_session` reported on 2026-10-18 that "plugin skills don't load in my session" (harness-audit sibling, PR #2873).
