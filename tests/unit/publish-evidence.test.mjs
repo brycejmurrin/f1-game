@@ -8,6 +8,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { inspectEvidence, prepareEvidence, publishEvidence, STORAGE_ANCHOR } from "../../tools/shot/publish-evidence.mjs";
+import { exportHistoryEvidence, validateHistorySelection } from "../../tools/shot/export-history-evidence.mjs";
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "evidence-test-"));
@@ -126,4 +127,77 @@ test("existing conflicting tags and draft releases require inspection instead of
     return JSON.stringify({ object: { type: "commit", sha: "f".repeat(40) } });
   }), /another storage anchor/);
   assert.throws(() => publishEvidence(bundle.receiptPath, () => JSON.stringify({ draft: true })), /release metadata/);
+});
+
+test("historical exports preserve committed bytes and blob identities despite working-tree edits", (t) => {
+  const f = fixture(t), image = path.join(f.root, "gallery", "view.png");
+  fs.mkdirSync(path.dirname(image));
+  const original = Buffer.from([137, 80, 78, 71, 0, 255, 1]);
+  fs.writeFileSync(image, original); f.git("add", "gallery"); f.git("commit", "-m", "capture");
+  const sha = f.git("rev-parse", "HEAD"), blob = f.git("rev-parse", "HEAD:gallery/view.png");
+  fs.writeFileSync(image, "uncommitted modification");
+  const exported = exportHistoryEvidence({ root: f.root, sha, paths: ["gallery/view.png"] });
+  assert.deepEqual(fs.readFileSync(path.join(exported.dir, "gallery/view.png")), original);
+  assert.equal(exported.origin.archivedCommit, sha);
+  assert.equal(exported.origin.captureSourceSha, null);
+  assert.equal(exported.origin.files[0].gitBlobSha1, blob);
+  assert.equal(exported.origin.files[0].sha256, createHash("sha256").update(original).digest("hex"));
+  assert.throws(() => exportHistoryEvidence({ root: f.root, sha, paths: ["gallery"] }), /already exists/);
+});
+
+test("historical selections reject traversal, ref/pathspec injection, missing paths and wrong checkouts", (t) => {
+  const f = fixture(t), sha = f.git("rev-parse", "HEAD");
+  for (const p of ["../gallery", "/gallery/a.png", ":(glob)gallery/*", "gallery/../a.png", "gallery/.git/config", "js/game.js"]) {
+    assert.throws(() => validateHistorySelection(sha, [p]), /path|evidence/);
+  }
+  assert.throws(() => validateHistorySelection("main", ["gallery/view.png"]), /full commit/);
+  assert.throws(() => exportHistoryEvidence({ root: f.root, sha: "f".repeat(40), paths: ["gallery/missing.png"] }), /does not match/);
+  assert.throws(() => exportHistoryEvidence({ root: f.root, sha, paths: ["gallery/missing.png"] }), /missing/);
+  assert.equal(fs.existsSync(path.join(f.root, "artifacts/promoted-evidence")), false);
+  fs.mkdirSync(path.join(f.root, "gallery"));
+  fs.writeFileSync(path.join(f.root, "gallery", "unsafe\tname.png"), "image");
+  f.git("add", "gallery"); f.git("commit", "-m", "unsupported path");
+  assert.throws(() => exportHistoryEvidence({ root: f.root, sha: f.git("rev-parse", "HEAD"), paths: ["gallery"] }), /unsafe historical path/);
+  assert.equal(fs.existsSync(path.join(f.root, "artifacts/promoted-evidence")), false);
+});
+
+test("historical export refuses committed links and symlinked output before writing outside the checkout", (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.join(f.root, "gallery"));
+  fs.symlinkSync("../.gitignore", path.join(f.root, "gallery/link.md"));
+  f.git("add", "gallery"); f.git("commit", "-m", "link");
+  assert.throws(() => exportHistoryEvidence({ root: f.root, sha: f.git("rev-parse", "HEAD"), paths: ["gallery"] }), /regular files/);
+  fs.unlinkSync(path.join(f.root, "gallery/link.md"));
+  fs.writeFileSync(path.join(f.root, "gallery/view.png"), "image");
+  f.git("add", "gallery"); f.git("commit", "-m", "regular capture");
+  fs.rmSync(path.join(f.root, "artifacts"), { recursive: true });
+  const external = path.join(f.root, "elsewhere"); fs.mkdirSync(external);
+  fs.symlinkSync(external, path.join(f.root, "artifacts"), "dir");
+  assert.throws(() => exportHistoryEvidence({ root: f.root, sha: f.git("rev-parse", "HEAD"), paths: ["gallery"] }), /symlink/);
+  assert.deepEqual(fs.readdirSync(external), []);
+});
+
+test("optional direct image assets preserve nested filename collisions and are verified on publication", (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.join(f.dir, "other"));
+  fs.writeFileSync(path.join(f.dir, "media/view.png"), "first image");
+  fs.writeFileSync(path.join(f.dir, "other/view.png"), "second image");
+  const bundle = prepareEvidence({ ...f, linkableFiles: ["media/view.png", "other/view.png"] });
+  assert.equal(bundle.assets.length, 5);
+  const dir = path.dirname(bundle.receiptPath);
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, "monza-survey-manifest.json")));
+  assert.equal(new Set(manifest.directAssets.map((a) => a.name)).size, 2);
+  for (const a of manifest.directAssets) {
+    assert.deepEqual(fs.readFileSync(path.join(dir, a.name)), fs.readFileSync(path.join(f.dir, a.path)));
+    assert.ok(bundle.assets.some((f) => f.name === a.name && f.sha256 === a.sha256));
+  }
+  const checksum = fs.readFileSync(path.join(dir, bundle.assets.at(-1).name), "utf8");
+  assert.equal(checksum.trim().split("\n").length, 4);
+  assert.equal(publishEvidence(bundle.receiptPath, fakeGitHub(bundle).run).assets.length, 5);
+});
+
+test("direct assets cannot select missing or non-image files", (t) => {
+  const f = fixture(t);
+  assert.throws(() => prepareEvidence({ ...f, linkableFiles: ["index.html"] }), /selected images/);
+  assert.throws(() => prepareEvidence({ ...f, linkableFiles: ["../secret.png"] }), /selected images/);
 });

@@ -1,4 +1,4 @@
-# Repository size — 2026-10-01/02
+# Repository size — October 2026
 
 What makes a clone of this repository big, measured on FULL history with
 `.github/workflows/repo-size.yml` (`tools/ci/repo-size.mjs`). Dated: re-run the
@@ -79,3 +79,53 @@ branch and their doc links pinned to that commit. History is not rewritten:
 this shrinks the tip and every shallow or blobless clone, not a full clone.
 `tests/unit/committed-images.test.mjs` now refuses a new image under `docs/` or
 `artifacts/` outside a shrink-only allow-list.
+
+## 2026-10-19: conservative local rewrite rehearsal
+
+A full mirror at deploy commit `24cb26e2380f3e954007e5b9b537dbc12da9f3ad`
+contained 2,756 advertised refs and six open PRs. The rehearsal removed 4,196
+obsolete generated-image blobs while protecting all 266 branch/tag/archive tip
+trees, the six open PR head trees and 40 resolvable pinned targets. Every one of
+24,387 mapped commits was checked for parent topology, authors, committers, dates
+and messages; all 59,534 historical file deletions were approved image candidates.
+The independent rewritten mirror passed full `git fsck`.
+
+| Standalone pack scope | Before bytes | After bytes | Result |
+| --- | ---: | ---: | --- |
+| Ordinary branches and tags | 2,497,418,538 | 1,707,507,791 | 753.32 MiB smaller; 31.63% |
+| All refs, including locally rewritten PR refs | 2,860,880,277 | 1,902,436,896 | 914.04 MiB smaller; 33.50% |
+| Rewritten writable refs plus original GitHub PR refs | 2,860,880,277 | 2,869,006,992 | 7.75 MiB larger |
+
+Measurements used standalone, non-thin `git pack-objects --threads=2 --stdout
+--revs --quiet` streams. Physical `count-objects` subtraction is misleading when
+an input mirror borrows objects through alternates. These pack sizes measure
+reachable transfer scopes, not GitHub's physical storage or garbage collection.
+
+The original GitHub-owned PR refs still reach **4,194 of the 4,196 candidates**.
+Clients cannot force-push those refs. Rewriting writable refs therefore cannot
+promise hosted reclamation. The hypothetical rewrite changes 19,905 commit IDs,
+including all six open PR heads and their deploy base; unchanged file trees do
+not preserve review/check identity or guarantee unchanged merge-base behavior.
+All 40 pinned commit URLs would need remapping. Standard filtering also strips
+**18,599 commit signatures**; identity, date and message preservation does not
+preserve cryptographic signatures.
+
+The rehearsal stayed local, has no remote configured, and left its source refs
+byte-identical (inventory SHA-256
+`04326f3d4cc482f29b5a7581858847a67558975a4b744dd479d5a20808b29992`).
+Original mirrors and recovery bundles were retained. Subsequent remote changes,
+external consumers, dynamic links, forks, caches and server retention remain
+outside this snapshot's proof. This is evidence against a routine remote rewrite
+while open PRs must remain unaffected.
+
+[Historical evidence catalog](../evidence/historical-catalog.json) records the
+separate retention migration. Verified release bundles and updated links improve
+future storage policy; they do not reclaim these historical bytes or authorize
+purging recovery refs. For smaller working clones now, use the partial-clone
+command above or a shallow checkout when full history is unnecessary.
+
+GitHub's [history-removal documentation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)
+confirms that PR references, caches, clones and forks can retain rewritten commits.
+It also explicitly says Support will not remove non-sensitive data. These survey
+images are a storage issue; the sensitive-data purge process is not a promised
+route to reclaiming them.

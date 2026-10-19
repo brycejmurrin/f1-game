@@ -40,11 +40,11 @@ colour, cockpit. These are **catalog choices** (cost/stat bearing), not free col
 
 ## 2. Render evidence (car studio, TLX/GLX soft path, Ferrari, day, same camera)
 
-The sheet (committed on `track-survey-assets`, not here — repo rule: no new docs images) shows the seven shipped finishes via
+The sheet (preserved as a verified release asset — repo rule: no new docs images) shows the seven shipped finishes via
 `node tools/car/render-car.mjs --team=ferrari --preset=livery --finish=<f>` (one small tooling change: `finish` is now
 a forwarded `render-car` flag; `carview.html` already honoured `?finish=`).
 
-Sheet: <https://github.com/brycejmurrin/f1-game/blob/014ff2d6c2268e6c3f7840074c37788ce905204b/gallery/garage-finishes/garage-finishes-current.jpg?raw=1> (branch `cursor/garage-finishes-survey-4f2a`, based on `track-survey-assets`).
+Sheet: <https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/image-ab0cd5f477761efe9a5c535b752ab9b588791ef80199ec4f2f797963c603339f-garage-finishes-current.jpg> (originally stored on `cursor/garage-finishes-survey-4f2a`, based on `track-survey-assets`; original Git bytes retained in the release archive).
 
 Findings from the sheet:
 
