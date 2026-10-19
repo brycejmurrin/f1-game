@@ -18,10 +18,11 @@ test('plans pin local CLIs, bounded cycles, modes and real shader-link evidence'
   assert.equal(p.browser, true); assert.equal(p.timeoutMs, 900000);
   assert.ok(p.argv.includes('--quiet')); assert.ok(!p.argv.includes('--snapshot'));
   assert.equal(p.argv[p.argv.indexOf('--cycles') + 1], '3');
-  for (const a of [{ cycles: 2 }, { cycles: 99 }, { settle: NaN }, { tracks: ['../../etc'] }, { tracks: 'monza' }, { target: 'deploy' }, { snapshot: 'artifacts/x' }, { backend: 'webgpu' }]) assert.throws(() => diagnosticPlan('memory_census', a, { root, knownCircuits: circuits }));
+  for (const [a, why] of [[{ cycles: 2 }, /cycles bounds: 3\.\.5/], [{ cycles: 99 }, /cycles bounds: 3\.\.5/], [{ settle: NaN }, /settle bounds: 0\.\.10/], [{ tracks: ['../../etc'] }, /unknown circuit \.\.\/\.\.\/etc/], [{ tracks: 'monza' }, /tracks needs 1\.\.4 circuit ids/], [{ target: 'deploy' }, /only support the local checkout/], [{ snapshot: 'artifacts/x' }, /snapshot is unsupported for memory_census/], [{ backend: 'webgpu' }, /backend: three\|webgl2/]])
+    assert.throws(() => diagnosticPlan('memory_census', a, { root, knownCircuits: circuits }), why, JSON.stringify(a));
   const g = diagnosticPlan('gpu_memory_census', { realLink: true, visits: ['spa'] }, { root, knownCircuits: circuits });
   assert.ok(g.argv.includes('--real-link')); assert.match(g.evidence, /not driver residency/);
-  assert.throws(() => diagnosticPlan('gpu_memory_census', { realLink: 'true' }, { root, knownCircuits: circuits }));
+  assert.throws(() => diagnosticPlan('gpu_memory_census', { realLink: 'true' }, { root, knownCircuits: circuits }), /realLink must be boolean/);
   const vm = diagnosticPlan('vm_lifecycle', { cycles: 2, seed: 0xffffffff }, { root, knownCircuits: circuits });
   assert.equal(vm.browser, false); assert.equal(vm.timeoutMs, 120000);
   const r = diagnosticPlan('renderer_probe', {}, { root, knownCircuits: circuits });
@@ -32,7 +33,7 @@ test('plans pin local CLIs, bounded cycles, modes and real shader-link evidence'
 }));
 test('paths reject traversal, symlink roots, existing child redirects and dangling symlinks', () => fixture((root) => {
   assert.equal(diagnosticPath(root, 'artifacts/fresh/report.json'), resolve(root, 'artifacts/fresh/report.json'));
-  for (const p of ['artifacts', '../escape', '/etc/passwd', 'artifacts/../../escape']) assert.throws(() => diagnosticPath(root, p));
+  for (const p of ['artifacts', '../escape', '/etc/passwd', 'artifacts/../../escape']) assert.throws(() => diagnosticPath(root, p), /must be a child of artifacts\/ or scratch\//, p);
   symlinkSync(resolve(root, 'scratch'), resolve(root, 'artifacts/redirect'));
   assert.throws(() => diagnosticPath(root, 'artifacts/redirect/a'));
   symlinkSync('/missing/diagnostic-unit', resolve(root, 'artifacts/dangling'));
@@ -48,8 +49,8 @@ test('report queries bound input/output and refuse to infer leak or A/B comparab
   const q = diagnosticQuery({ kind: 'memory_census', file: 'artifacts/a.json', compare: 'artifacts/b.json' }, { root });
   assert.match(q.comparability, /unproven/); assert.match(q.baseline.interpretation, /not a leak verdict/);
   assert.equal(q.baseline.observations[0].aliveTrackCount, 1);
-  assert.throws(() => diagnosticQuery({ kind: 'memory_census', file: 'artifacts/a.json', limit: 51 }, { root }));
-  assert.throws(() => summariseDiagnostic('memory_census', { rows: [] }));
+  assert.throws(() => diagnosticQuery({ kind: 'memory_census', file: 'artifacts/a.json', limit: 51 }, { root }), /limit bounds: 1\.\.50/);
+  assert.throws(() => summariseDiagnostic('memory_census', { rows: [] }), /not a bounded memory census report/);
   writeFileSync(resolve(root, 'artifacts/big.json'), ' '.repeat(5 * 1024 * 1024 + 1));
   assert.throws(() => diagnosticQuery({ kind: 'memory_census', file: 'artifacts/big.json' }, { root }), /5 MiB/);
   doc.summary.verdict = 'x'.repeat(50000);

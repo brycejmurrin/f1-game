@@ -73,11 +73,22 @@ test("CHECKS.float on a real circuit: ok is exactly count <= cap", () => {
 test("CHECKS.ground: a missing baseline row is cap 0, matching ground-audit --gate", () => {
   // Hunt 2026-10-10: audit-circuit treated absent rows as "no cap" (always ok)
   // while ground-audit --gate reads cap 0 — hungaroring flatCoplanar 1 slipped.
-  const src = fs.readFileSync(new URL("../../tools/track/audit-circuit.cjs", import.meta.url), "utf8");
-  const ground = src.slice(src.indexOf("ground(id)"), src.indexOf("function main"));
-  assert.match(ground, /cap 0/, "documents absent = 0");
-  assert.match(ground, /\?\s*base\[k\]\[id\]\s*:\s*0/, "ternary falls through to 0, not null");
-  assert.doesNotMatch(ground, /cap\s*!=\s*null\s*&&/, "must not skip the compare when the row is absent");
+  // Run the real check against a baseline with hungaroring's rows removed: the
+  // circuit's real counts must then read as over a cap of 0.
+  const BASE = "scenery-audit-baseline.json";
+  const real = JSON.parse(fs.readFileSync(new URL(`../../tests/data/${BASE}`, import.meta.url), "utf8"));
+  assert.ok(real.flatCoplanar?.hungaroring > 0, "fixture: hungaroring carries a non-zero flatCoplanar cap");
+  const stub = {};
+  for (const [k, rows] of Object.entries(real))
+    stub[k] = rows && typeof rows === "object" ? Object.fromEntries(Object.entries(rows).filter(([id]) => id !== "hungaroring")) : rows;
+  const orig = fs.readFileSync;
+  fs.readFileSync = function patched(file, ...rest) {
+    return String(file).endsWith(BASE) ? JSON.stringify(stub) : orig.call(this, file, ...rest);
+  };
+  let res;
+  try { res = AC.CHECKS.ground("hungaroring"); } finally { fs.readFileSync = orig; }
+  assert.equal(res.ok, false, `absent baseline row must fail, got: ${res.summary}`);
+  assert.ok(res.over.some((o) => /^flatCoplanar [1-9]\d* > 0$/.test(o)), `over: ${res.over.join(", ")}`);
 });
 
 test("CHECKS.ground: retain footprint advisories without treating them as baseline failures", () => {

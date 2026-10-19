@@ -2,7 +2,17 @@
 // definition for the two files that apply them: tests/unit/flyby-shots.test.mjs
 // (one circuit, in the edit loop) and tests/unit/flyby-fleet.test.mjs (every
 // circuit the 2026-09-24 audit named, in test:node-slow). Same thresholds in
-// both, because it is the same function.
+// both, because it is the same function. tests/unit/flyby-audit-rules.test.mjs
+// is the negative control: a stub sequencer committing each defect must yield
+// a finding per rule, so a measurement that silently reads zero cannot pass.
+//
+// UNITS, for the two pan limits (test review #2952 R1-11): both are deg/s of
+// view-direction turn. The PLANNER's FlybySeq.PAN_MAX (25 deg/s at REF_S 20 s,
+// flyby-seq.js) is the target it squeezes a shot to; this audit's 45 deg/s is
+// the hard backstop above it, measured per 60 ms sample step at FLY_MS 24 s
+// (tools/lib/flyby-audit.cjs), where cuts and the step quantisation can read
+// higher than the planner's smooth estimate. A shot between 25 and 45 passes
+// here on purpose; the frame report's FAST_PAN (25) is the tighter judge.
 
 /** The DEFAULT sequence at 400 samples: every rule the fleet audit holds. */
 export function fleetFindings(id, rows) {

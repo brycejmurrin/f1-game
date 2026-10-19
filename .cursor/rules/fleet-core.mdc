@@ -10,6 +10,11 @@ alwaysApply: true
   two parents (a "merge" call once landed as a squash, #1743). Who merges/arms:
   `.claude/skills/agent-fleet/references/role-merge-holder.md`. Agents never
   merge or arm auto-merge; only on an in-session user grant for that merge.
+- One merger at a time, on any host: the holder of the merge lease. Before
+  every merge `node tools/ci/fleet-bus.mjs lease check` exits 0; exit 2 names
+  the holder: do not merge. Lines another host needs (READY/GREEN/BLOCKED/
+  HANDOFF/DONE/INCIDENT) go on the bus (`fleet-bus.mjs send`); read it once
+  per tick (`fleet-bus.mjs read`), never in a loop.
 - `SWEEP <PR#>` only to a desk session id named in the launch prompt; none →
   `SWEEP-N/A` in the REPORT — never `list_sessions` to hunt for a desk.
 - The only veto is a PR-body line starting `MERGE-HOLD:`. Free-form "do not

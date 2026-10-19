@@ -29,6 +29,7 @@
 // Needs the repo's Chromium; boots its own static server. ~1 min on SwiftShader.
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
+import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 import { DEVICES } from "../lib/hud-survey-matrix.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
@@ -137,7 +138,9 @@ async function main() {
     const browser = await launchChromium({
       args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
     });
-    const ctx = await browser.newContext({ viewport: { width: dev.w, height: dev.h }, hasTouch: dev.touch, deviceScaleFactor: 1 });
+    // DPR 1 deliberately reduces raster cost while sampling CSS geometry.
+    const ctx = await browser.newContext(resolveUIProfile({ touch: dev.touch,
+      viewport: { width: dev.w, height: dev.h }, deviceScaleFactor: 1 }).contextOptions);
     const page = await ctx.newPage();
     await page.addInitScript(() => {
       try { localStorage.setItem("apex26.gfxBackend", "three"); localStorage.setItem("apex26.tlxForceGL", "1"); } catch (_) { /* blocked storage */ }

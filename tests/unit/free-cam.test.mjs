@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
@@ -319,4 +320,33 @@ test("suspended PhotoKit effects stay hidden across frame updates and restore th
   assert.equal(grid.hidden, true); assert.equal(dof.hidden, true);
   api.setOverlaysVisible(true); assert.equal(grid.hidden, false); assert.equal(dof.hidden, false);
   assert.equal(api.state().grid, "thirds"); assert.equal(api.state().dofBlur, 0.5);
+});
+
+// ---- one corner snap through the REAL planner on a BUILT circuit (R1-12) ----
+// Everything above plans against a stub FlybySeq, so the corner-snap framing
+// (outside of the bend, a little before the apex, looking at it) was only ever
+// checked against the stub's own arithmetic.
+test("snap to a corner on built Monza: the real planner frames it from the outside, looking at the apex", () => {
+  const { buildContext } = createRequire(import.meta.url)(path.join(ROOT, "tools/track/verify-track.cjs"));
+  const Trk = buildContext(undefined, { quiet: true });
+  const ctx = Trk._vmContext;
+  for (const f of ["js/ui/track-maps.js", "js/camera/flyby-seq.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  const FC = vm.runInContext("FreeCam", ctx), Fly = vm.runInContext("FlybySeq", ctx);
+  const track = Trk.buildCenterline(Trk.LIST.find((d) => d.id === "monza"));
+
+  const pose = FC.cornerPose(track, 3);
+  assert.equal(pose.count, 11, "Monza's real corner count");
+  assert.equal(FC.cornerPose(track, 14).n, 3, "n wraps into the circuit's own count");
+  assert.ok([...pose.eye, ...pose.target].every(Number.isFinite));
+
+  const apexS = Fly.cornerS(track, 3), sm = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+  Trk.sample(track, apexS, sm);
+  const rel = (v) => [v[0] - sm.p[0], v[1] - sm.p[1], v[2] - sm.p[2]];
+  const lat = (v) => rel(v)[0] * sm.r[0] + rel(v)[2] * sm.r[2];
+  assert.ok(Math.hypot(...rel(pose.target)) < 4, `looking at the apex, ${Math.hypot(...rel(pose.target)).toFixed(1)} m off it`);
+  const side = Fly.cornerSide(track, 3);
+  assert.ok(lat(pose.eye) * side > 10, `eye stands ${lat(pose.eye).toFixed(1)} m out on the OUTSIDE (side ${side})`);
+  const dist = Math.hypot(pose.eye[0] - pose.target[0], pose.eye[1] - pose.target[1], pose.eye[2] - pose.target[2]);
+  assert.ok(dist > 20 && dist < 60, `a corner-sized framing distance, got ${dist.toFixed(1)} m`);
+  assert.ok(pose.eye[1] > pose.target[1] + 2, "from above the apex, not at kerb level");
 });

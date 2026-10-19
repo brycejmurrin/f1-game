@@ -92,42 +92,71 @@ test("with no zone, the mode can never arm however hard it is asked for", async 
 });
 
 test("zones are a property of the CIRCUIT — the pace slider cannot add or remove one", async () => {
+  // Each pace REBUILDS the zones. aeroZones() maps G.aeroZones, which
+  // AeroZones.build() fills only when the track is BUILT — and race() on the
+  // circuit already loaded skips the build (same id, session darkness and grid
+  // size). So pace was compared against one cached list (#2952 P2-03). The
+  // session flips night -> day to force each build, and the Log ring proves it
+  // ran; zones are pure geometry, so the darkness cannot move them either.
   await loadTrack("monza");
-  g.apex.setPhysics({ pace: 0.5 });
-  const slow = g.apex.aeroZones();
-  g.apex.setPhysics({ pace: 1.5 });
-  const fast = g.apex.aeroZones();
-  deepEq(fast, slow);
+  const builds = () => g.apex.logs().filter((l) => /AeroZones\.build track=monza/.test(l.msg)).length;
+  const zonesAt = async (pace, tod) => {
+    const b0 = builds();
+    g.apex.setPhysics({ pace });
+    await g.race("monza", tod);
+    return { pace: g.apex.tuning().pace, rebuilt: builds() - b0, zones: host(g.apex.aeroZones()) };
+  };
+  const slow = await zonesAt(0.5, "night");
+  const fast = await zonesAt(1.5, "day");
+  assert.equal(slow.pace, 0.5, "the rebuild kept the slow pace");
+  assert.equal(fast.pace, 1.5, "the rebuild kept the fast pace");
+  assert.equal(slow.rebuilt, 1, "the slow-pace zones were built at that pace");
+  assert.equal(fast.rebuilt, 1, "the fast-pace zones were built at that pace");
+  gt(slow.zones.length, 0, "monza has zones to compare");
+  deepEq(fast.zones, slow.zones);
 });
 
 test("inZone and zoneAhead agree with the zone list, wrap included", async () => {
   await loadTrack("monza");
   const A = g.apex;
   A.headless(true); A.go();
-  const zones = A.aeroZones();
-  const z = zones.slice().sort((a, b) => b.len - a.len)[0];
-  A.jump(z.midFrac, 60, 0);
-  A.step(1 / 60, 2);
-  const inside = A.aero();
-  assert.equal(inside.inZone, true);
-  assert.equal(inside.zoneAhead, 0, "zero distance while standing in one");
-  assert.equal(inside.xArmed, true);
+  // Monza's main-straight zone crosses the start line (endFrac < startFrac).
+  // Stand in it on BOTH sides of the line — the far side is only found by
+  // AeroZones' wrapped branch (s + L <= z.end) (#2952 P2-17).
+  const zones = host(A.aeroZones());
+  const z = zones.find((q) => q.endFrac < q.startFrac);
+  assert.ok(z, `monza has a zone across the line: ${JSON.stringify(zones)}`);
+  for (const frac of [(z.startFrac + 1) / 2, z.endFrac / 2]) {
+    A.jump(frac, 60, 0);
+    A.step(1 / 60, 2);
+    const a = A.aero();
+    assert.equal(a.inZone, true, `in the wrapped zone at frac ${frac}`);
+    assert.equal(a.zoneAhead, 0, `zero distance while standing in it at frac ${frac}`);
+    assert.equal(a.xArmed, true, `armed at frac ${frac}`);
+  }
 });
 
-test("outside a zone, zoneAhead counts down a real distance", async () => {
+test("outside a zone, zoneAhead is the distance to the next zone start", async () => {
   await loadTrack("monza");
   const A = g.apex;
   A.headless(true); A.go();
+  const zones = host(A.aeroZones());
+  const L = A.info().total;
+  gt(L, 0, "info().total is the lap");
+  // The nearest zone START at or after s, wrapping the line. aeroZones()
+  // rounds start to the metre and zoneAhead is rounded, so allow 1.5 m.
+  const expected = (s) => Math.min(...zones.map((q) => (((q.start - s) % L) + L) % L));
   const seen = [];
   for (let i = 0; i < 40; i++) {
     A.jump(i / 40, 60, 0);
     A.step(1 / 60, 1);
     const a = A.aero();
-    seen.push({ inZone: a.inZone, ahead: a.zoneAhead });
+    seen.push({ i, s: A.probe().s, inZone: a.inZone, ahead: a.zoneAhead });
   }
   for (const p of seen) {
-    if (p.inZone) assert.equal(p.ahead, 0);
-    else { gt(p.ahead, 0); assert.ok(Number.isFinite(p.ahead)); }
+    if (p.inZone) { assert.equal(p.ahead, 0, `sample ${p.i}`); continue; }
+    assert.ok(Math.abs(p.ahead - expected(p.s)) <= 1.5,
+      `sample ${p.i} at s=${p.s.toFixed(1)}: zoneAhead ${p.ahead} vs next start ${expected(p.s).toFixed(1)}`);
   }
   assert.equal(seen.some((p) => p.inZone), true, "some of the lap is inside a zone");
   assert.equal(seen.some((p) => !p.inZone), true, "and some of it is not");

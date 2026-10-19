@@ -532,7 +532,10 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
   g.step(2); g.apex.go();
   const replay = Real.replay();
   try {
-    advanceLoop();
+    // The preceding solo RESUME arms UiExperience.resumeHolding: nominal frames
+    // include its countdown, not just replay time. Wait for the actual clock,
+    // bounded at six virtual seconds, before testing the competing replay door.
+    for (let i = 0; i < 360 && replay.status().T <= 3; i++) frame();
     assert.ok(replay.status().T > 3, "WATCH has run long enough to expose a competing instant-replay ring");
     pause();
     assert.equal(instantReplayButton().hidden, true, "WATCH reserves pose ownership and hides the competing replay door");

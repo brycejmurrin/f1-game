@@ -103,14 +103,18 @@ test("concurrent report streams reserve quota before either one commits", async 
       res.on("end", () => resolve(res.statusCode));
     });
     req.on("error", reject);
-    req.write(body);                  // reserve bytes, deliberately do not end yet
-    return { req, response };
+    // Reserve bytes, deliberately do not end yet; `flushed` settles once the
+    // chunk has left this socket.
+    const flushed = new Promise((res) => req.write(body, res));
+    return { req, response, flushed };
   };
 
   try {
     const first = openPost("first.json");
-    // Let the first chunk reach the route while its request remains in flight.
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    // The first chunk must be on the wire, and the server must have turned its
+    // event loop once (an ordinary GET round trip), before the second opens.
+    await first.flushed;
+    await fetch(srv.url);
     const second = openPost("second.json");
     assert.equal(await second.response, 413,
       "an in-flight report must count against the total quota");

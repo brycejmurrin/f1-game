@@ -150,8 +150,16 @@ test("the game still renders with the baked materials fully on", async ({ page }
   });
   expect(r.uploaded).toBe(true);
   // No GL error tripped the renderer into its failure path.
-  const errs = await page.evaluate(() => (window.__apexGlErrors || []).length);
-  expect(errs).toBe(0);
+  // Read through the live backend's own counter (GLX.gpuErrors, glx.js). The
+  // old window.__apexGlErrors was defined nowhere, so this was always 0
+  // (review R3-02); assert the reader exists so "nobody asked" cannot read as 0.
+  const gl = await page.evaluate(() => ({
+    reader: typeof GLX !== "undefined" && typeof GLX.gpuErrors === "function",
+    errs: typeof GLX !== "undefined" && typeof GLX.gpuErrors === "function" ? GLX.gpuErrors() : null,
+    first: typeof GLX !== "undefined" && GLX.backendState ? (GLX.backendState().gpuFirstError || null) : null,
+  }));
+  expect(gl.reader, "GLX.gpuErrors must exist or the check below is vacuous").toBe(true);
+  expect(gl.errs, `first GL error: ${JSON.stringify(gl.first)}`).toBe(0);
 });
 
 test("credits cover every baked asset", async ({ page }) => {
