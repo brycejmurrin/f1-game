@@ -16,6 +16,7 @@
 //
 // So this does not test jsonClone against a description of JSON. It tests it
 // against JSON, on the real lifted source, over every shape that could differ.
+import { fnSource } from "../helpers/fn-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -28,12 +29,8 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/race/driving-coach.js"), "utf8")
 /** Lift jsonClone out of the factory IIFE it lives in. It closes over nothing,
  *  which is what makes this the real function rather than a copy of it. */
 function liftClone() {
-  const start = SRC.indexOf("    function jsonClone(v) {");
-  assert.notEqual(start, -1, "jsonClone moved — update this test, do not delete it");
-  const end = SRC.indexOf("\n    function captureCar(c) {", start);
-  assert.notEqual(end, -1, "captureCar no longer follows jsonClone — update this test");
   // eslint-disable-next-line no-new-func
-  return new Function(`"use strict";${SRC.slice(start, end)};return jsonClone;`)();
+  return new Function(`"use strict";${fnSource(SRC, "function jsonClone(v) {")};return jsonClone;`)();
 }
 const jsonClone = liftClone();
 

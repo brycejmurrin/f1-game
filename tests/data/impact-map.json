@@ -9705,6 +9705,9 @@
       ]
     },
     "js/physics/collide.js": {
+      "_colResolvePair": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
+      ],
       "blockerReach": [
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
@@ -9741,6 +9744,7 @@
       "resolveCollisions": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
+        "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
       ],
       "scanOtAhead": [
@@ -9758,7 +9762,6 @@
         "tests/unit/ai-stuck-vm.test.mjs"
       ],
       "*": [
-        "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/pick-tests.test.mjs"
       ]
     },
@@ -10445,9 +10448,6 @@
       ],
       "canArm": [
         "tests/unit/driving-coach.test.mjs"
-      ],
-      "captureCar": [
-        "tests/unit/coach-clone.test.mjs"
       ],
       "create": [
         "tests/unit/driving-coach.test.mjs",
@@ -11952,6 +11952,9 @@
       ]
     },
     "js/render/glx/glx.js": {
+      "_shadowPackFor": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
+      ],
       "awaitSoftPresent": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -11987,6 +11990,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "cullInstances": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "draw": [
@@ -12108,6 +12112,9 @@
       ],
       "setMaterialMaps": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "setPolyOffset": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "setRenderScale": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -12841,6 +12848,7 @@
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "_decalAppend": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "_fail": [
@@ -12946,6 +12954,7 @@
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "cullInstances": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
@@ -13022,6 +13031,9 @@
       "pinSkyMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs"
+      ],
+      "poolModelMat": [
+        "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "postFailure": [
         "tests/unit/render-final-contracts.test.mjs"
@@ -13454,6 +13466,7 @@
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "cullInstances": [
+        "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],

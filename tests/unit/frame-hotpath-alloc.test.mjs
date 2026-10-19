@@ -6,6 +6,7 @@
  *   - GLX shadow cull does not allocate/upload shadowCbo / _shadowColors
  *   - GLX begin caches uPitLane/uPitBox via uf4 and uTime via uf1
  */
+import { fnSource } from "../helpers/fn-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -16,26 +17,16 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function lift(src, name) {
-  const start = src.indexOf(`function ${name}(`);
-  assert.notEqual(start, -1, `${name} moved`);
-  let depth = 0, i = src.indexOf("{", start);
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}" && --depth === 0) break;
-  }
-  return src.slice(start, i + 1);
-}
 
 test("TLX cullInstances does not for…of over c.idx", () => {
-  const body = lift(read("js/render/three/tlx.js"), "cullInstances");
+  const body = fnSource(read("js/render/three/tlx.js"), "function cullInstances(");
   assert.equal(/for\s*\(\s*const\s+\w+\s+of\s+c\.idx\s*\)/.test(body), false);
   assert.match(body, /const idx = c\.idx/);
   assert.match(body, /for\s*\(\s*let j = 0/);
 });
 
 test("TLX poolModelMat short-circuits identity to null", () => {
-  const body = lift(read("js/render/three/tlx.js"), "poolModelMat");
+  const body = fnSource(read("js/render/three/tlx.js"), "function poolModelMat(");
   assert.match(body, /return null/);
   assert.match(body, /model\[0\] === 1/);
   assert.match(body, /model\[15\] === 1/);
@@ -43,13 +34,13 @@ test("TLX poolModelMat short-circuits identity to null", () => {
 
 test("GLX shadow cull skips colour pack/upload", () => {
   const glx = read("js/render/glx/glx.js");
-  const pack = lift(glx, "_shadowPackFor");
+  const pack = fnSource(glx, "function _shadowPackFor(");
   // Strip comments — the intentional "skip shadowCbo" note must not fail the pin.
   const packCode = pack.replace(/\/\/.*$/gm, "");
   assert.equal(packCode.includes("_shadowColors"), false);
   assert.equal(packCode.includes("shadowCbo"), false);
   assert.equal(/bufferData\([^)]*Colors/.test(packCode), false);
-  const cull = lift(glx, "cullInstances");
+  const cull = fnSource(glx, "function cullInstances(");
   assert.match(cull, /const dc = shadow \? null : batch\.packColors/);
   assert.equal(/shadowCbo/.test(cull.replace(/\/\/.*$/gm, "")), false);
 });
@@ -92,10 +83,10 @@ test("TLX/GLX/WGX honour opts.bloomLevels truncation", () => {
 
 test("GLX setPolyOffset caches bias and draw() passes depthBias without a literal", () => {
   const glx = read("js/render/glx/glx.js");
-  const setPoly = lift(glx, "setPolyOffset");
+  const setPoly = fnSource(glx, "function setPolyOffset(");
   assert.match(setPoly, /_polyOn/);
   assert.match(setPoly, /_polyF/);
-  const draw = lift(glx, "draw");
+  const draw = fnSource(glx, "function draw(");
   assert.match(draw, /setPolyOffset\(_db\)/);
   assert.equal(/setPolyOffset\(\[_db/.test(draw), false);
   assert.match(glx, /function uf2\(/);
@@ -263,7 +254,7 @@ test("CarMesh tail glows: a decalRuns backend gets the field back to back after 
 });
 test("TLX decal runs: A6's live-record guard, one material per run, and the normal carried in the planar quad's Y column", () => {
   const tlx = read("js/render/three/tlx.js");
-  const body = lift(tlx, "_decalAppend");
+  const body = fnSource(tlx, "function _decalAppend(");
   assert.match(body, /b\.rec >= 0 && b\.rec < drawList\.n && drawList\[b\.rec\]\.instanced === b/, "the record sentinel guard (A6 fix)");
   assert.match(body, /b\.rec !== drawList\.n - 1 \|\| b\.visible >= BLOB_CAP \|\| drawList\[b\.rec\]\.mat !== mat/, "contiguous, capped, one material");
   assert.match(body, /if \(skipBatches\(\)\) return false;/);
@@ -294,7 +285,7 @@ test("car loop: a world-posed rival behind the eye is culled before sampleAt (pe
 
 test("Collide relaxation stops after a pass that reached no contact (hunt-2 P6)", () => {
   const src = read("js/physics/collide.js");
-  const body = lift(src, "resolveCollisions");
+  const body = fnSource(src, "function resolveCollisions(");
   assert.match(body, /if \(pass > 0 && !_colTouched\) break;/);
-  assert.match(lift(src, "_colResolvePair"), /if \(!ct\) return;\s*_colTouched = true;/);
+  assert.match(fnSource(src, "function _colResolvePair("), /if \(!ct\) return;\s*_colTouched = true;/);
 });

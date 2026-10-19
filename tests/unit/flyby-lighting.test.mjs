@@ -27,13 +27,12 @@
  *
  * Run: node --test tests/unit/flyby-lighting.test.mjs
  */
+import { symbolSource } from "../helpers/game-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
-
-const SRC = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
 
 /** The body of `name` with its comments stripped, sliced to its real closing
  *  brace. BOTH halves matter: an earlier draft of this guard matched the prose
@@ -41,15 +40,7 @@ const SRC = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8"
  *  applyRaceSettings() — and so failed against correct code. A guard that reads
  *  comments is measuring the explanation, not the behaviour. */
 function bodyOf(name) {
-  const at = SRC.indexOf(name);
-  assert.ok(at >= 0, name + " is gone from js/game.js — this guard is reading the wrong file");
-  let depth = 0, started = false, end = SRC.length;
-  for (let i = SRC.indexOf("{", at); i < SRC.length; i++) {
-    const c = SRC[i];
-    if (c === "{") { depth++; started = true; }
-    else if (c === "}") { depth--; if (started && depth === 0) { end = i; break; } }
-  }
-  return SRC.slice(at, end)
+  return symbolSource(name)
     .replace(/\/\*[\s\S]*?\*\//g, "")   // block comments
     .replace(/(^|\n)\s*\/\/[^\n]*/g, "$1"); // line comments
 }
@@ -124,7 +115,7 @@ test("one flag decides the whole lens, and the preview carries it", () => {
   // if any of them went back to asking `dbgCam` instead, the editor would be
   // rendering a debug free camera again and the screen would be rendering
   // gameplay — which is what the two screenshots in the report showed.
-  const body = bodyOf("function render(");
+  const body = bodyOf("function render(dt)");
   assert.match(body, /if \(dbgCam && dbgCam\.cine\) cine = true;/,
     "the editor's preview must be recognised as the cinematic it is previewing");
   // Set outright, never damped: level (0) unless the FREE CAMERA's ROLL dial put
@@ -150,7 +141,7 @@ test("one flag decides the whole lens, and the preview carries it", () => {
 });
 
 test("both the live screen and the editor's preview read them", () => {
-  const body = bodyOf("function render(");
+  const body = bodyOf("function render(dt)");
   assert.match(body, /farPlane = FlybySeq\.FAR/,
     "the live flyby renders at gameplay's 900 m far plane, so a shot the editor framed across a whole " +
     "circuit arrives as a wall of fog");

@@ -20,6 +20,7 @@
 //
 // The subject is EXTRACTED FROM THE REAL SOURCE, not re-implemented here, so a
 // change to the shipped function is what these assertions run against.
+import { fnSource } from "../helpers/fn-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -35,17 +36,6 @@ const SRC_PATH = path.join(ROOT, "js/physics/debris-world.js");
 const SRC = fs.readFileSync(SRC_PATH, "utf8");
 
 // ── pull the real projectHazard + HAZARD_Y_TOL out of the module ────────────
-function extractFn(src, name) {
-  const i = src.indexOf(`function ${name}(`);
-  assert.ok(i >= 0, `${name}() not found in js/physics/debris-world.js — was it renamed?`);
-  let depth = 0;
-  for (let k = src.indexOf("{", i); k < src.length; k++) {
-    if (src[k] === "{") depth++;
-    else if (src[k] === "}" && --depth === 0) return src.slice(i, k + 1);
-  }
-  throw new Error(`unbalanced braces reading ${name}()`);
-}
-
 const HAZARD_Y_TOL = Number(/const HAZARD_Y_TOL = ([\d.]+)/.exec(SRC)[1]);
 const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 
@@ -55,7 +45,7 @@ const Tracks = env.Tracks;
 // The shipped function, given the three names it closes over.
 const projectHazard = new Function(
   "Tracks", "_smp", "HAZARD_Y_TOL",
-  `${extractFn(SRC, "projectHazard")}; return projectHazard;`,
+  `${fnSource(SRC, "function projectHazard(")}; return projectHazard;`,
 )(Tracks, _smp, HAZARD_Y_TOL);
 
 // Two deliberately-broken variants, to prove each half of the guard is what the
