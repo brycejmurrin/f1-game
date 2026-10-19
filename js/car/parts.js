@@ -651,12 +651,13 @@ const Parts = (function () {
     geometry: Object.freeze({
       engine: Object.freeze(["in", "snork", "twin", "inlet", "outlet",
         "podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight",
-        "servicePanel", "heatShield", "chimney", "scoopLip"]),
+        "servicePanel", "heatShield", "chimney", "scoopLip", "louvre"]),
       aero: Object.freeze(["lvl", "beam", "drs", "vane", "plate", "casc", "swan", "tvane",
         "arch", "gill", "duct", "board", "slot",
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin"]),
-      suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave"]),
+      suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
+        "pullAt", "antiDive", "upright"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop"]),
       // cover + coverVanes: opt-in covered face only (open rim is the default).
       // spokes / dish / gunNut: open-rim identity consumed by car-wheels when the
