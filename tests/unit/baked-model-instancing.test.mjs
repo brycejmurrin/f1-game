@@ -33,6 +33,12 @@ const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm
 // Monza: two repeated kit placements (construction barriers along the
 // Rettifilo, cones) beside six one-off buildings — both branches in one build.
 const ID = "monza";
+// Read the shipped threshold from the build code instead of copying 1024 (review M1-19).
+const MIN_SAVED = (() => {
+  const m = /const MODEL_INST_MIN_SAVED = (\d+);/.exec(fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8"));
+  assert.ok(m, "MODEL_INST_MIN_SAVED not found in build-props.js: update this test's reader");
+  return +m[1];
+})();
 const ctx = buildContext();
 const stub = (geo, matrices, colors) => ({ geo, matrices, colors, instances: matrices.length / 16 });
 const build = (opts) => {
@@ -54,8 +60,8 @@ test("the batch API on: repeated placements leave the soup, one-offs stay copies
   const inst = Object.values(rec).filter((r) => r.inst), copies = Object.values(rec).filter((r) => !r.inst);
   assert.ok(inst.length >= 1, "nothing was instanced");
   assert.ok(copies.length >= 1, "nothing was copied");
-  for (const r of inst) assert.ok(r.n >= 2 && (r.n - 1) * r.verts >= 1024, `${r.id} instanced below the saving threshold`);
-  for (const r of copies) assert.ok(r.n < 2 || (r.n - 1) * r.verts < 1024, `${r.id} copied above the saving threshold`);
+  for (const r of inst) assert.ok(r.n >= 2 && (r.n - 1) * r.verts >= MIN_SAVED, `${r.id} instanced below the saving threshold`);
+  for (const r of copies) assert.ok(r.n < 2 || (r.n - 1) * r.verts < MIN_SAVED, `${r.id} copied above the saving threshold`);
   // The flag off restores the copies — and the record still says so.
   assert.ok(Object.values(off.modelInstances).every((r) => !r.inst), "apex26.modelInst=0 still instanced");
   assert.deepEqual([...Object.keys(off.modelInstances)], [...Object.keys(rec)], "the flag changed WHICH models were placed");

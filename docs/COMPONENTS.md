@@ -211,6 +211,7 @@ file changes a screen owned by another.
   count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
 - `.bigbtn` — `components` + `menus` + `overlays` + `responsive` + `tokens`
 - `.hud-box` / `.hud-label` / `.hud-value` / `.hud-gaps` / `.hud-top` — `hud` + `responsive` (+ `tokens`)
+- `.hud-hidden` — `touch-controls` + `hud`. Hides the driving HUD, including manually positioned instruments detached from the bottom cluster.
 - `.hud-bottom` / `.hud-unit` / `.touchbtn` — `hud` + `overlays`
 - `.pc-stickwrap` / `.pc-move-wrap` / `.pc-look-wrap` / `.pc-altcol` / `.pc-btn` —
   `hud` + `photo-studio`. Photo Studio borrows the camera controls, then fits

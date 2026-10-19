@@ -2844,6 +2844,9 @@
       "timeAt": [
         "tests/specs/time-trial.spec.js",
         "tests/unit/ghost-share.test.mjs"
+      ],
+      "*": [
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/car/helmets.js": {
@@ -13790,9 +13793,11 @@
     },
     "js/track/scenery/build-props.js": {
       "bakedModel": [
+        "tests/unit/baked-model-instancing.test.mjs",
         "tests/unit/scenery-guards.test.mjs"
       ],
       "build": [
+        "tests/unit/baked-model-instancing.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
@@ -14520,6 +14525,7 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "resetEl": [
+        "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
@@ -14530,10 +14536,11 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "screenBounds": [
-        "tests/unit/hud-dock-pack.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/specs/hud-layout.spec.js",
+        "tests/unit/hud-dock-pack.test.mjs"
       ],
       "setCam": [
+        "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-layout.test.mjs"
       ],
       "setVisibility": [
