@@ -20,6 +20,14 @@ async function waitApex(page) {
 
 test("OfflineAudioContext engine pitch tracks rev; screech layer crossfade is audible", async ({ page }) => {
   test.setTimeout(180_000);
+  // sharedTest reuses one page per worker, and a sibling audio spec leaves its
+  // state behind (audio-smoke persists SFX volume 0 and SOUND OFF; the render
+  // is then near-silent and the windowed argmax lands on the search window's
+  // edge: rev=0.25 f0=244, or rev=1 f0=773). The graph's pitch is independent
+  // of what an earlier test did to the player's settings, so boot clean.
+  await waitApex(page);
+  await page.evaluate(() => { localStorage.clear(); });
+  await page.reload();
   await waitApex(page);
   await page.evaluate(() => {
     window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
