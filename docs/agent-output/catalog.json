@@ -2335,6 +2335,8 @@
         "argv-or-parser"
       ],
       "sourceBytes": 11716,
+      "outputPolicy": "keep-native",
+      "outputContract": "Native exit status; match vs superseded vs timeout; last live build/sha; GITHUB_OUTPUT outcome when set.",
       "doc": "Poll github.io until the live shell matches this deploy, a newer train",
       "skill": null,
       "nativeOutputFlagMentions": [],

@@ -546,6 +546,11 @@
       "preserve": "Browser server versus active test; PID command classifications",
       "presentation": "native"
     },
+    "tools/ci/poll-live-shell.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status; match vs superseded vs timeout; last live build/sha; GITHUB_OUTPUT outcome when set.",
+      "presentation": "native"
+    },
     "tools/ci/post-merge.mjs": {
       "action": "keep-native",
       "preserve": "SQUASH versus two parents; release failure must remain visible",
