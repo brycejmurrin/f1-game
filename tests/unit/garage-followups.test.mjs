@@ -181,7 +181,10 @@ test('palette rebuild preserves only palette-owned focus, including repeated mat
   assert.deepEqual(palette.children, initialChips);
   assert.deepEqual(palette.children.map(b => b.onclick), initialHandlers, 'unchanged palette handlers remain installed');
   assert.ok(document.activeElement === chip, 'pattern edits leave palette-owned focus untouched');
-  const colour = row.querySelector('input'); colour.value = '#00ff00'; colour.oninput(); colour.onchange();
+  const colour = row.querySelector('input'); colour.value = '#00ff00'; const beforeDrag = buttonsMade;
+  for (const hex of ['#00fe00', '#00fd00', '#00ff00']) { colour.value = hex; colour.oninput(); }
+  assert.equal(buttonsMade, beforeDrag, 'a colour drag (input ticks) rebuilds no palette chips');
+  colour.onchange();
   assert.equal(document.activeElement.dataset.csColour, '#0000ff', 'the same matching colour retains focus when another colour appears');
   assert.ok(palette.children.some(b => b.dataset.csColour === '#00ff00'), 'the newly edited colour becomes matchable');
   assert.ok(buttonsMade > afterBuild, 'a changed colour palette rebuilds its choices');
