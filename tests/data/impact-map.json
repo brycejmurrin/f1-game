@@ -4386,6 +4386,7 @@
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
         "tests/unit/crest-marks.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/fin-design.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/legends-team.test.mjs",
@@ -4494,6 +4495,7 @@
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/data-replay-improvements.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
@@ -7892,6 +7894,7 @@
     "js/lighting/atmosphere.js": {
       "applyRaceSettings": [
         "tests/unit/ambient-env-override.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
@@ -7900,6 +7903,7 @@
       ],
       "create": [
         "tests/unit/ambient-env-override.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -7921,8 +7925,7 @@
         "tests/unit/weather-blend.test.mjs"
       ],
       "*": [
-        "tests/unit/circuit-def-fields.test.mjs",
-        "tests/unit/day-sky-palette-storm-deck.test.mjs"
+        "tests/unit/circuit-def-fields.test.mjs"
       ]
     },
     "js/lighting/frame-lights.js": {
@@ -7976,6 +7979,7 @@
         "tests/unit/all-lights-fill.test.mjs",
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -12139,6 +12143,7 @@
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
@@ -12253,6 +12258,7 @@
       ],
       "manifest": [
         "tests/specs/assets-api.spec.js",
+        "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
@@ -13247,6 +13253,7 @@
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
