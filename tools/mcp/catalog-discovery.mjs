@@ -86,7 +86,7 @@ function liveryRows(args) {
   const enums = { numFont: LT.NUM_FONT_IDS, sponsors: LT.SPONSOR_PACK_IDS, finStyle: LT.TAIL_STYLE_IDS,
     finBadge: LT.FIN_BADGE_IDS, spineLogo: LT.SPINE_LOGO_IDS, spineSide: LT.SPINE_SIDE_IDS,
     finShape: Car3D.FIN_SHAPE_IDS, tcam: Car3D.TCAM_IDS, coverVents: Car3D.COVER_VENT_IDS,
-    spineHeight: Car3D.SPINE_HEIGHT_IDS, finish: Object.keys(Car3D.FINISH_SURFACE) };
+    spineHeight: Car3D.SPINE_HEIGHT_IDS, finish: ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)] };
   for (const id of Liveries.FIELDS) rows.push({ kind: "field", id, ...(enums[id] ? { values: enums[id] } : {}), stations: FIELD_STATIONS[id] || [] });
   return { rows, limitation: "Canonical universal/team catalog only; optional Legends runtime additions, custom player liveries and saved selections are not loaded. Fields without values have no enum exposed by the canonical loader." };
 }
