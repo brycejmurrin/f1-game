@@ -1308,14 +1308,14 @@ const SceneryNature = (function () {
             // otherwise keep the actual positive span, however short it is.
             if (!(available > 0)) { treadSpan = 0; break; }
             // Cap at the Euclidean neighbour distance: available/along OVERSIZES
-            // when the neighbour is not purely along a.t (along < 1 on a bend),
-            // which is exactly when jerez's Expo bank measured 1.5 m of overlap.
+            // when along < 1 on a bend (jerez Expo bank measured 1.5 m overlap).
             if (along > 0) treadSpan = Math.min(treadSpan, available / along, d * 0.98);
           }
-          if (treadSpan > 0) {
-            // On a meaningful bend, also shrink by |κ|·|x| so neighbouring
-            // stations' depth-corners cannot re-overlap after the terrain
-            // footing extends the front tread (jerez Expo bank, frac 0.262).
+          // Live terrain only: |κ|·|x| shrink clears depth-corner re-overlap
+          // after footing (jerez @0.252). scenery-kits fixtures omit
+          // Tracks.terrainY, so they keep the bisector span and full crowd.
+          if (treadSpan > 0 && typeof Tracks !== "undefined" &&
+              typeof Tracks.terrainY === "function") {
             const bend = Math.min(0.35, Math.abs(κ * x));
             treadSpan *= 0.96 * (1 - bend);
           }
@@ -1331,8 +1331,8 @@ const SceneryNature = (function () {
           if (r === 0 && a.u[1] > 0.1 && typeof Tracks !== "undefined" && typeof Tracks.terrainY === "function") {
             const bot = vadd(tc, a.u, -treadH / 2);
             let drop = 0;
-            for (const [x, z] of [[-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5], [0.5, 0.5]]) {
-              const q = vadd(vadd(bot, a.r, x * depth), a.t, z * treadSpan);
+            for (const [xz, zz] of [[-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5], [0.5, 0.5]]) {
+              const q = vadd(vadd(bot, a.r, xz * depth), a.t, zz * treadSpan);
               const y = Tracks.terrainY(track, q[0], q[2]);
               if (!Number.isFinite(y)) { drop = NaN; break; }
               drop = Math.max(drop, q[1] - y);
