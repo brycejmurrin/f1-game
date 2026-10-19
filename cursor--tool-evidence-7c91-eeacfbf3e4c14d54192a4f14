@@ -1,1 +1,0 @@
-1792438096	Bryce Murrin	TOOLS: report collector validation/shutdown (tools/mcp/report-server.mjs, existing tools-runnable tests) plus baseline Node24 debugger TAP reporter fix in tools/mcp/js-debugger-node.mjs; no gateway, census, shared browser or CI source edits  [cursor/tool-evidence-7c91; session eeacfbf3e4c14d54192a4f14]
