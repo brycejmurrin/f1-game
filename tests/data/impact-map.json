@@ -6438,6 +6438,7 @@
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
@@ -6465,6 +6466,7 @@
       "tickBody": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -6742,6 +6744,9 @@
       "stop": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "tick": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "timed": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -6834,6 +6839,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "init": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
@@ -6880,7 +6886,6 @@
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
-        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
@@ -6901,6 +6906,9 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "driveOutLeft": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "endGarageRes": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "endHome": [
@@ -6932,8 +6940,14 @@
       "presentOpts": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "renderSetupPreview": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "spMeshBust": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
+      ],
+      "startArrivalPreview": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "startDriveOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -9073,6 +9087,7 @@
         "tests/unit/thermal-drift.test.mjs"
       ],
       "init": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
@@ -9080,6 +9095,7 @@
         "tests/unit/render-rate.test.mjs"
       ],
       "setMode": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ]
     },
