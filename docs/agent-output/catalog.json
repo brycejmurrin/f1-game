@@ -43,7 +43,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 13832,
+      "sourceBytes": 15166,
       "outputPolicy": "job-status",
       "outputContract": "Literal argv, no command-argument persistence, no implicit timeout, child cancellation ownership, separate stream retention, --read cursor/limits, full-mode compatibility.",
       "doc": "Runs commands with selectable output levels and saved stdout/stderr; --read retrieves without rerunning.",
@@ -4687,7 +4687,7 @@
       "path": "tools/lib/agent-output.mjs",
       "classification": "library",
       "evidence": [],
-      "sourceBytes": 14099,
+      "sourceBytes": 14103,
       "outputPolicy": "no-direct-output",
       "outputContract": "Original content and isError, private artifact path/bytes, presentation failures, safe containment, bounded page cursor.",
       "doc": "Shared bounded agent output with private, retrievable original artifacts.",

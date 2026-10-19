@@ -35,6 +35,12 @@ node tools/agent-run.mjs --output-level full -- npm run test:audit
 node tools/agent-run.mjs --help
 ```
 
+Compact is most useful for bulky producer output. Native tool limits may already
+give a concise answer: use the native route or `--output-level full` for a bounded
+source definition or a small VM report whose facts are all needed. Receipt
+metadata adds overhead, and retrieving omitted facts adds another response.
+Compare the whole workflow, including retrievals, when choosing a level.
+
 For long commands, add `--progress` before `--`. One JSON receipt goes to stderr
 before launch with stdout/stderr and status artifact identities. Stdout remains
 one final JSON record (or the unchanged full streams). There is no polling timer
@@ -61,7 +67,13 @@ Compact terminal logs include a bounded actionable failure block even when the
 cause occurs in the middle, plus reported test counts and artifact/verdict
 receipts where available. Diagnostic adds surrounding context. Test counts
 describe reported stream summaries; nested/repeated suites can overlap, so the
-exit/status remains authoritative. Capture and performance commands that print
+exit/status remains authoritative. Passing TAP/spec test names cannot consume
+failure slots; explicit failure markers take priority over generic error text.
+Warnings have a separate bounded `warnings` block in each stream summary.
+Status-bearing JSON collections prioritize failed/warning rows regardless of
+their field name (`rows`, `items`, or producer-specific names); ordinary arrays
+keep their original order. Omission counts and saved-result pointers still apply.
+Capture and performance commands that print
 phase logs followed by final JSON receive a semantic preview of that report,
 including validity, baselines, units and prioritized failures. Complete phase
 logs and numeric data remain in the original artifact. A mixed-log stream also

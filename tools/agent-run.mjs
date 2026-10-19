@@ -85,9 +85,16 @@ async function streamSummary(root, artifact, level) {
     catch { /* An ordinary log is represented by its excerpt. */ }
   }
   if (result.data === undefined || result.reportScope) {
-    const failures = [], previous = [];
+    const failures = [[], [], []], warnings = [], previous = [];
     const counts = {}, receipts = [];
-    let active, following = 0;
+    const cap = level === 'diagnostic' ? 3 : 1;
+    let active, activeWarning;
+    const context = (line, rank = 0) => ({ lines: level === 'diagnostic' ? [...previous, line] : [line], remaining: level === 'diagnostic' ? 4 : 2, rank });
+    function continueContext(block, line) {
+      if (!block) return;
+      block.lines.push(line);
+      return --block.remaining > 0 && block.lines.length < 9 ? block : undefined;
+    }
     function lineContext(raw) {
       const line = raw.slice(0, 1500);
       const count = /^# (tests|suites|pass|fail|cancelled|skipped|todo) (\d+)\s*$/.exec(line);
@@ -97,13 +104,20 @@ async function streamSummary(root, artifact, level) {
       if (/^= (run |bg exit|ci |gate |deploy )|(?:report|manifest|trace|artifact|screenshot|capture).{0,30}(?:saved|written|path|:)/i.test(line)) {
         receipts.push(line); if (receipts.length > 8) receipts.shift();
       }
-      const match = /error|fail|exception|caused by|\bat .+?:\d|^not ok\b/i.test(line) && !/^# fail 0\s*$|\b0 (?:failed|failures|errors)\b|\b(?:failed|failures|errors)\s*[:=]\s*0\b/i.test(line);
-      if (match && !active && failures.length < (level === 'diagnostic' ? 3 : 1)) {
-        active = level === 'diagnostic' ? [...previous, line] : [line]; failures.push(active); following = level === 'diagnostic' ? 4 : 2;
-      } else if (active) {
-        active.push(line);
-        if (--following <= 0 || active.length >= 9) active = null;
-      }
+      // Passing negative-case names describe expected errors; they are not failures.
+      const passed = /^\s*(?:ok\b|[✔✓]|PASS(?:ED)?\b)/i.test(line);
+      const zeroFailures = /^(?:#|ℹ)\s*fail\s+0\s*$|\b0 (?:failed|failures|errors)\b|\b(?:failed|failures|errors)\s*[:=]\s*0\b/i.test(line);
+      const explicitFailure = /^\s*(?:not ok\b|[✖✗×]|FAIL(?:ED)?\b|(?:Assertion|Type|Reference|Syntax|Range)?Error\b)/i.test(line);
+      const match = !passed && !zeroFailures && (explicitFailure || /error|fail|exception|caused by|\bat .+?:\d|^\s*not ok\b/i.test(line));
+      const rank = match ? (explicitFailure ? 2 : 1) : 0;
+      if (rank && (!active || rank > active.rank) && failures[rank].length < cap) {
+        active = context(line, rank); failures[rank].push(active);
+      } else active = continueContext(active, line);
+      // Warnings get their own bounded context so they cannot displace real failures.
+      const warning = !passed && /\bwarn(?:ing)?s?\b/i.test(line) && !/\b(?:warn(?:ing)?s?)\s*[:=]?\s*0\b|\b0\s+warnings?\b/i.test(line);
+      if (warning && !activeWarning && warnings.length < cap) {
+        activeWarning = context(line); warnings.push(activeWarning);
+      } else activeWarning = continueContext(activeWarning, line);
       previous.push(line); if (previous.length > 2) previous.shift();
     }
     let carry = '';
@@ -112,7 +126,9 @@ async function streamSummary(root, artifact, level) {
       for (const line of lines) lineContext(line);
     }
     if (carry) lineContext(carry);
-    if (failures.length) result.diagnostics = failures;
+    const selectedFailures = [...failures[2], ...failures[1]].slice(0, cap);
+    if (selectedFailures.length) result.diagnostics = selectedFailures.map(block => block.lines);
+    if (warnings.length) result.warnings = warnings.map(block => block.lines);
     if (Object.keys(counts).length) result.testCounts = { ...counts, scope: 'reported stream summaries; repeated nested suites may overlap', verdictSource: 'command exit/status, never counts alone' };
     if (receipts.length) result.receipts = receipts;
   }

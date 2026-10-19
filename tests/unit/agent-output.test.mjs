@@ -159,6 +159,43 @@ test('compact retains actionable middle failures and reported test counts', t =>
   assert.equal(fs.readFileSync(path.join(root, data.stdout.artifact.path), 'utf8'), log);
 });
 
+test('passing error-related test names and generic chatter cannot crowd out real failures or warnings', t => {
+  const root = fixture(t);
+  const lines = Array.from({ length: 1300 }, (_, i) => `INFO sample ${i} ${'.'.repeat(85)}`);
+  lines[100] = '✔ NET: a failed prepare is rejected as expected';
+  lines[200] = 'ok 201 - error response is handled';
+  lines[300] = 'PASS exception path returns to title';
+  lines[400] = 'INFO error catalog loaded';
+  lines[410] = 'INFO failure policy configured';
+  lines[420] = 'INFO exception handler registered';
+  lines[650] = 'not ok 651 - REAL_CAUSE js/game.js:65 expected=0.12 actual=0.987654321';
+  lines[900] = 'WARNING tyre temperature sensor stale at js/game.js:90';
+  lines[950] = '✔ a warning is expected for invalid input';
+  lines[1000] = '# fail 0';
+  lines[1001] = 'warnings: 0';
+  const log = lines.join('\n') + '\n= run failed\n';
+  const source = path.join(root, 'log.txt'); fs.writeFileSync(source, log);
+  for (const level of ['compact', 'diagnostic']) {
+    const run = cli(root, ['--output-level', level, '--', process.execPath, '-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1]));process.exitCode=7', source]);
+    assert.equal(run.status, 7, run.stderr);
+    const data = JSON.parse(run.stdout), failure = JSON.stringify(data.stdout.diagnostics), warning = JSON.stringify(data.stdout.warnings);
+    assert.match(failure, /REAL_CAUSE.*0\.987654321/);
+    assert.doesNotMatch(failure, /failed prepare|error response|exception path/);
+    assert.match(warning, /tyre temperature sensor stale/);
+    assert.doesNotMatch(warning, /warning is expected|warnings: 0/);
+    assert.equal(fs.readFileSync(path.join(root, data.stdout.artifact.path), 'utf8'), log);
+  }
+});
+
+test('spec failure markers are actionable even when their names contain no error keywords', t => {
+  const root = fixture(t);
+  const log = 'INFO nominal\n'.repeat(1200) + '✖ wrong pose at tools/agent-run.mjs:3\n';
+  const source = path.join(root, 'spec.log'); fs.writeFileSync(source, log);
+  const run = cli(root, ['--', process.execPath, '-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1]));process.exitCode=1', source]);
+  assert.equal(run.status, 1);
+  assert.match(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), /✖ wrong pose/);
+});
+
 test('capture and performance phase logs retain semantic final reports and validity evidence', t => {
   const root = fixture(t);
   const report = { status: 'unknown', valid: false, renderer: 'software fixture', units: 'ms', baseline: 16.7, sampleCount: 400, manifest: 'artifacts/captures/manifest.json', results: [...Array.from({ length: 20 }, (_, i) => ({ id: i, status: 'passed' })), { id: 20, status: 'failed', cause: 'camera stale' }] };
@@ -250,6 +287,22 @@ test('diagnostic collections surface late failures and warnings while ordinary a
   assert.equal(summary.checks.at(-1).omittedItems, 239);
   assert.deepEqual(summary.checks.at(-1).statusCounts, { passed: 240, warning: 1, failed: 1 });
   assert.deepEqual(summary.refs.slice(0, 3), ['one', 'two', 'three']);
+});
+
+test('status-bearing collections prioritize late issues independently of their names', () => {
+  const rows = Array.from({ length: 300 }, (_, index) => ({ id: index, status: index === 287 ? 'failed' : index === 295 ? 'warning' : 'passed', value: index === 287 ? 0.123456789 : index }));
+  for (const key of ['rows', 'items', 'entries', 'producerSpecificName']) {
+    for (const level of ['compact', 'diagnostic']) {
+      const result = summarizeOutput({ [key]: rows }, { level })[key];
+      assert.equal(result[0].id, 287); assert.equal(result[0].value, 0.123456789);
+      assert.equal(result[1].id, 295);
+      assert.equal(result.at(-1).sourcePointer, '/' + key);
+      assert.deepEqual(result.at(-1).statusCounts, { passed: 298, failed: 1, warning: 1 });
+    }
+  }
+  assert.equal(summarizeOutput({ rows: [{ level: 'info' }, { level: 'error' }] }).rows[0].level, 'error');
+  const plain = summarizeOutput({ rows: Array.from({ length: 20 }, (_, value) => ({ value })) }).rows;
+  assert.deepEqual(plain.slice(0, 3), [{ value: 0 }, { value: 1 }, { value: 2 }]);
 });
 test('MCP summaries deduplicate identical transport text and structured data', () => {
   const data = { verdict: 'failed', cause: 'missing file', checks: [{ status: 'warning' }] };
