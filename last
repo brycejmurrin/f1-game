@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_016ACTVM5qJp8ikRKJDUGbnt ORCH9 → ORCH10 session_01381dVqqgcXWWQuT94wo9rM; lease released
+LEASE to:* from:claude:session_01381dVqqgcXWWQuT94wo9rM acquire ttl=60m until=2026-10-19T12:57Z ORCH10 session_01381dVqqgcXWWQuT94wo9rM orchestrator, Level 3
