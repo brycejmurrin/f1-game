@@ -15,6 +15,25 @@ const MCP = path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs");
 const SH = path.join(ROOT, "tools/mcp/apex-tools-mcp.sh");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
 
+/** Temp dir guaranteed outside artifacts/ and scratch/ (TMPDIR may live under artifacts/). */
+function mkOutsideTemp(prefix = "apex-mcp-outside-") {
+  const artifacts = path.join(ROOT, "artifacts");
+  const scratch = path.join(ROOT, "scratch");
+  const inside = (base, target) => {
+    const rel = path.relative(base, target);
+    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  };
+  for (const parent of [os.tmpdir(), "/tmp", path.join(ROOT, "..")]) {
+    try {
+      const dir = fs.mkdtempSync(path.join(parent, prefix));
+      if (!inside(artifacts, dir) && !inside(scratch, dir) && !inside(ROOT, dir)) return dir;
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch { /* try next parent */ }
+  }
+  throw new Error("could not allocate a temp directory outside the repo roots");
+}
+
+
 function rpc(lines, env = {}) {
   const r = spawnSync(process.execPath, [MCP, "serve"], {
     encoding: "utf8",
@@ -1026,7 +1045,7 @@ test("positional values cannot replace pinned CLI flags", () => {
 });
 
 test("output preflight resolves existing and nearest ancestors without creating paths", () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mcp-output-"));
+  const outside = mkOutsideTemp("apex-mcp-output-");
   const dir = path.join(ROOT, "scratch", `apex-mcp-output-${process.pid}`);
   fs.mkdirSync(dir, { recursive: true });
   try {
@@ -2213,7 +2232,7 @@ test("apex_shot_survey report images cannot escape artifact roots", () => {
 
 test("saved gallery cannot write through an assets directory symlink", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "survey-gallery-symlink-"));
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "apex-gallery-outside-"));
+  const outside = mkOutsideTemp("apex-gallery-outside-");
   try {
     const image = path.join(dir, "source.jpg"), report = path.join(dir, "report.json"), out = path.join(dir, "out");
     fs.writeFileSync(image, "JPEG fixture");

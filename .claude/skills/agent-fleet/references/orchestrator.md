@@ -67,8 +67,8 @@ before every `create_session`:
 1. `permission_mode: "auto"`, confirmed afterwards with `get_session`.
 2. `source_url` plus `source_revision` = the deploy branch or a NAMED
    integration branch, never a stale topic branch or the default.
-3. The model stated: cloud-agent launches use `default` (launch-policy.md);
-   `claude-sonnet-5-5` applies only to local Claude sessions.
+3. The model stated, with its reason: `MODEL: <id> — <why>` per
+   launch-policy.md §Model by task (Opus or Sonnet by the task, never Fable).
 4. Who opens the PR and its base (survey lane: `track-survey-assets`). A brief
    that says "no PR" contradicts AGENTS.md rule 12; say who opens it instead.
 5. The full deliverable checklist in the FIRST brief (sections, weathers and

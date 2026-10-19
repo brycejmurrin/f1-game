@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { spawnAgentProcess } from '../../tools/lib/agent-process.mjs';
+import { spawnAgentProcess } from '../../tools/agent/process.mjs';
 import { fileURLToPath } from 'node:url';
-import { OUTPUT_LEVELS, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection } from '../../tools/lib/agent-output.mjs';
+import { OUTPUT_LEVELS, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection } from '../../tools/agent/output.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = path.join(ROOT, 'tools/agent-run.mjs');
 function fixture(t) {

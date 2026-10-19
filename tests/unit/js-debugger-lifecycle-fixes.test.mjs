@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import vm from "node:vm";
 import { readFileSync, rmSync, statSync } from "node:fs";
-import { readOutputArtifact } from "../../tools/lib/agent-output.mjs";
+import { readOutputArtifact } from "../../tools/agent/output.mjs";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 
 const target = { type: "page", id: "t", url: "about:blank", title: "fixture",

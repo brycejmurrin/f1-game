@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // @doc Wrap a stdio MCP server with bounded output levels and saved-result retrieval.
 import fs from 'node:fs';
-import { spawnAgentProcess } from '../lib/agent-process.mjs';
+import { spawnAgentProcess } from '../agent/process.mjs';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection, saveOutputArtifact, validateOutputLevel } from '../lib/agent-output.mjs';
+import { presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection, saveOutputArtifact, validateOutputLevel } from '../agent/output.mjs';
 
 const LEVEL = { type: 'string', enum: ['compact', 'diagnostic', 'full'], default: 'compact', description: 'Presentation only: compact (default), diagnostic, or original full result. The action executes once; use the saved-result retrieval tool for saved evidence.' };
 const ENVELOPE = { type: 'object', required: ['outputLevel', 'summary', 'artifact'], properties: { outputLevel: { enum: ['compact', 'diagnostic'] }, summary: {}, artifact: { type: 'object' } } };

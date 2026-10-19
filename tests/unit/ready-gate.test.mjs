@@ -411,6 +411,37 @@ test("withMemory: a memory-leak turns a green tip into memory-leak (exit 1)", ()
   assert.equal(withMemory(GREEN, null), GREEN, "no file list ( --sha ) skips the check");
 });
 
+test("memoryVerdict: a marker needs a reason on the same line", () => {
+  const files = [".claude/memory/foo.md"];
+  for (const body of ["memory-change:\n## Goal\nUnrelated text", "memory-change:\t \r\n## Goal", "memory-change:\t "]) {
+    assert.equal(memoryVerdict(files, { body }).state, "memory-leak", JSON.stringify(body));
+  }
+  assert.equal(memoryVerdict(files, { body: "## Goal\nMemory cleanup\nmemory-change:\t prune stale links\r\n## Plan" }).state, "ok");
+});
+
+test("PR-file renames into or out of memory require explicit intent", () => {
+  const head = "c".repeat(40);
+  for (const [previous, current, expected] of [
+    [".claude/memory/orphan.md", "docs/README.md", "memory-leak"],
+    ["docs/README.md", ".claude/memory/orphan.md", "memory-leak"],
+    ["docs/VERIFICATION.md", "docs/DEBUG-HOOKS.md", "passed"],
+  ]) {
+    const request = (url) => {
+      if (url === "pulls/9") return { json: { head: { sha: head }, changed_files: 101 } };
+      if (url === "pulls/9/files?per_page=100") return { json: Array.from({ length: 100 }, (_, i) => ({ filename: `docs/page-${i}.md` })) };
+      if (url === "pulls/9/files?per_page=100&page=2") return { json: [{ status: "renamed", previous_filename: previous, filename: current }] };
+      return { error: `unexpected ${url}` };
+    };
+    const resolved = resolveSha({ pr: "9", request });
+    assert.equal(resolved.filesError, null);
+    const verdict = withMemory(GREEN, resolved.files, resolved);
+    assert.equal(verdict.state, expected, `${previous} -> ${current}`);
+    if (expected === "memory-leak") {
+      assert.equal(withMemory(GREEN, resolved.files, { ...resolved, body: "memory-change: move topic" }).state, "passed");
+    }
+  }
+});
+
 test("withMemory: a files-API failure fails closed (never treats as no memory edits)", () => {
   const v = withMemory(GREEN, undefined, { filesError: "HTTP 502" });
   assert.equal(v.state, "memory-unknown");
@@ -443,4 +474,14 @@ test("resolveSha --pr records filesError when the files list cannot be fetched",
   assert.equal(r.sha, head);
   assert.match(r.filesError || "", /HTTP 502/);
   assert.equal(r.files, null, "a failed files fetch must not look like an empty diff");
+});
+
+test("resolveSha --pr fails closed when the API returns fewer files than the PR reports", () => {
+  const request = (url) => url === "pulls/11"
+    ? { json: { head: { sha: "d".repeat(40) }, changed_files: 3001 } }
+    : { json: Array.from({ length: url.includes("page=31") ? 0 : 100 }, (_, i) => ({ filename: `docs/file-${i}.md` })) };
+  const resolved = resolveSha({ pr: "11", request });
+  assert.equal(resolved.files, null);
+  assert.match(resolved.filesError, /received 3000 of 3001/);
+  assert.equal(withMemory(GREEN, resolved.files, resolved).state, "memory-unknown");
 });

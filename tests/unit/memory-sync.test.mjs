@@ -14,23 +14,28 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HOOK = path.join(ROOT, ".claude/hooks/memory-sync.sh");
 const topic = (name, body) => `---\nname: ${name}\ndescription: d\nmetadata:\n  type: feedback\n---\n\n${body}\n`;
 
-function rig() {
+function rig({ cloneFrom, branch } = {}) {
   const dir = path.join(ROOT, "artifacts", `memory-sync-test-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
   const main = path.join(dir, "repo"), cfg = path.join(dir, "config");
-  fs.mkdirSync(path.join(main, ".claude/memory"), { recursive: true });
-  execFileSync("git", ["init", "-q", main]);
+  if (cloneFrom) {
+    fs.mkdirSync(dir, { recursive: true });
+    execFileSync("git", ["clone", "-q", "--depth=1", "--no-single-branch", "--branch", branch, pathToFileURL(cloneFrom).href, main]);
+  } else {
+    fs.mkdirSync(path.join(main, ".claude/memory"), { recursive: true });
+    execFileSync("git", ["init", "-q", main]);
+  }
   const real = fs.realpathSync(main);
   const live = path.join(cfg, "projects", real.replace(/[^A-Za-z0-9]/g, "-"), "memory");
   const repo = path.join(main, ".claude/memory");
-  const run = (mode, input = "") => {
+  const run = (mode, input = "", extraEnv = {}) => {
     const r = spawnSync("bash", [HOOK, mode], { input, encoding: "utf8",
-      env: { ...process.env, CLAUDE_PROJECT_DIR: main, CLAUDE_CONFIG_DIR: cfg, APEX_MEMORY_SYNC: "1", CLAUDE_CODE_REMOTE: "" } });
+      env: { ...process.env, CLAUDE_PROJECT_DIR: main, CLAUDE_CONFIG_DIR: cfg, APEX_MEMORY_SYNC: "1", CLAUDE_CODE_REMOTE: "", ...extraEnv } });
     assert.equal(r.status, 0, r.stderr);
     return r.stdout;
   };
@@ -253,3 +258,73 @@ test("memory conflicts use event-specific context without changing advisory cont
     } finally {r.done();}
   }
 });
+
+// Separate depth-1 roots contain no evidence that the deploy branch retired
+// the old memory. Exercise the real hook twice, then restore ancestry and
+// prove the same retained baseline can safely complete the retirement.
+for (const retireTopic of [true, false]) {
+  test(`shallow branch retirement defers without resurrecting ${retireTopic ? "topic and index" : "index-only removal"}`, () => {
+    const source = rig();
+    const main = path.dirname(path.dirname(source.repo));
+    const git = (cwd, ...a) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" });
+    let r;
+    try {
+      source.put(source.repo, "MEMORY.md", "# idx\n- [A](a.md)\n");
+      source.put(source.repo, "a.md", topic("a", "alpha"));
+      git(main, "add", ".claude"); git(main, "commit", "-qm", "old memory");
+      git(main, "branch", "old"); git(main, "checkout", "-qb", "deploy");
+      source.put(source.repo, "MEMORY.md", "# idx\n");
+      if (retireTopic) git(main, "rm", "-q", ".claude/memory/a.md");
+      git(main, "add", ".claude"); git(main, "commit", "-qm", "reviewed retirement");
+      r = rig({ cloneFrom: main, branch: "old" });
+      const clone = path.dirname(path.dirname(r.repo));
+      r.run("restore"); r.run("unmark");
+      const base = path.join(clone, "artifacts/.memory-base");
+      const before = [r.get(r.live, "MEMORY.md"), r.get(r.live, "a.md"), r.get(base, "MEMORY.md"), r.get(base, ".head")];
+      git(clone, "checkout", "-q", "--track", "origin/deploy");
+      assert.equal(git(clone, "rev-parse", "--is-shallow-repository").trim(), "true");
+      assert.equal(spawnSync("git", ["merge-base", "old", "HEAD"], { cwd: clone }).status, 1, "fixture has genuinely disconnected shallow roots");
+      for (let attempt = 0; attempt < 2; attempt++) {
+        assert.match(r.run("save"), /WARNING sync deferred.*ancestry/);
+        assert.equal(r.get(r.repo, "MEMORY.md"), "# idx\n", "reviewed index never gets rewritten");
+        assert.equal(r.get(r.repo, "a.md"), retireTopic ? null : topic("a", "alpha"));
+        assert.deepEqual([r.get(r.live, "MEMORY.md"), r.get(r.live, "a.md"), r.get(base, "MEMORY.md"), r.get(base, ".head")], before, "keep recovery copies and old HEAD across retries");
+      }
+      git(clone, "fetch", "-q", "--unshallow");
+      assert.doesNotMatch(r.run("restore"), /WARNING/);
+      assert.equal(r.get(r.live, "MEMORY.md"), "# idx\n");
+      assert.equal(r.get(r.live, "a.md"), retireTopic ? null : topic("a", "alpha"));
+    } finally { r?.done(); source.done(); }
+  });
+}
+
+for (const failedCommand of ["merge-base", "diff", "log"]) {
+  test(`failed git ${failedCommand} defers memory sync before changing any store`, () => {
+    const r = rig();
+    const main = path.dirname(path.dirname(r.repo));
+    const git = (...a) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: main, encoding: "utf8" });
+    try {
+      r.put(r.repo, "MEMORY.md", "# idx\n- [A](a.md)\n");
+      r.put(r.repo, "a.md", topic("a", "alpha"));
+      git("add", ".claude"); git("commit", "-qm", "memory"); r.run("restore"); r.run("unmark");
+      const base = path.join(main, "artifacts/.memory-base");
+      const oldHead = r.get(base, ".head");
+      r.put(r.repo, "MEMORY.md", "# idx\n"); git("rm", "-q", ".claude/memory/a.md");
+      git("add", ".claude"); git("commit", "-qm", "retire");
+      const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+      const bin = path.join(r.dir, "bin"); fs.mkdirSync(bin);
+      fs.writeFileSync(path.join(bin, "git"), `#!/bin/sh\nif [ "$3" = "${failedCommand}" ]; then exit 128; fi\nexec '${realGit.replaceAll("'", "'\\''")}' "$@"\n`, { mode: 0o755 });
+      const output = r.run("save", "", { PATH: `${bin}:${process.env.PATH}` });
+      assert.match(output, /WARNING sync deferred/);
+      assert.equal(r.get(r.repo, "a.md"), null);
+      assert.equal(r.get(r.repo, "MEMORY.md"), "# idx\n");
+      assert.equal(r.get(r.live, "a.md"), topic("a", "alpha"));
+      assert.equal(r.get(r.live, "MEMORY.md"), "# idx\n- [A](a.md)\n");
+      assert.equal(r.get(base, ".head"), oldHead);
+      assert.equal(r.get(base, "MEMORY.md"), "# idx\n- [A](a.md)\n");
+      assert.doesNotMatch(r.run("save"), /WARNING/);
+      assert.equal(r.get(r.live, "a.md"), null, "recovery succeeds after git works again");
+    } finally { r.done(); }
+  });
+}
+

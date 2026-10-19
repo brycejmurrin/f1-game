@@ -6,9 +6,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
-import { spawnAgentProcess } from './lib/agent-process.mjs';
+import { spawnAgentProcess } from './agent/process.mjs';
 import { pipeline } from 'node:stream/promises';
-import { validateOutputLevel, saveOutputArtifact, summarizeOutput, readOutputArtifact, readOutputCollection } from './lib/agent-output.mjs';
+import { validateOutputLevel, saveOutputArtifact, summarizeOutput, readOutputArtifact, readOutputCollection } from './agent/output.mjs';
 
 const HELP = `Usage: node tools/agent-run.mjs [--output-level compact|diagnostic|full] [--timeout-ms N] -- executable [args...]
        node tools/agent-run.mjs --read artifacts/agent-output/FILE [--offset N] [--limit N] [--output-level LEVEL]

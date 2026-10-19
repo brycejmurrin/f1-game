@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
-import { saveOutputArtifact } from "../lib/agent-output.mjs";
+import { saveOutputArtifact } from "../agent/output.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
 /** One-line value of an object result from V8's preview, so an agent need not chain debugger_properties for `{a, b}`. */
