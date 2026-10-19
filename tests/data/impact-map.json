@@ -1405,73 +1405,13 @@
       ]
     },
     "js/camera/feel.js": {
-      "applyFreeLook": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "consumeAimSnap": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "drive": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
       "follow": [
-        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "freeLookState": [
-        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
-      "isBuzzMode": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "isFreeLookMode": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "lookBackLatch": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "lookingBackNow": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "modeFov": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "resetFollow": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "resetFreeLook": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "resetLatch": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "scoped": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "setLookBackLatch": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "setSpeedVignette": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "shake": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "shakeNoise": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "shouldLookBack": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "speedFov": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
-      "speedVignette": [
-        "tests/unit/camera-feel.test.mjs"
-      ],
       "tick": [
-        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
@@ -1799,6 +1739,7 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
@@ -1814,13 +1755,13 @@
       "setCamMode": [
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "*": [
         "tests/unit/cam-comfort.test.mjs",
-        "tests/unit/camera-ride.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/trackside.test.mjs"
@@ -2169,7 +2110,7 @@
         "tests/unit/rival-audio.test.mjs"
       ],
       "resetSmoothing": [
-        "tests/unit/camera-feel.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "seatFwd": [
@@ -2181,6 +2122,7 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "vantage": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
@@ -2189,7 +2131,6 @@
       "*": [
         "tests/unit/body-attitude.test.mjs",
         "tests/unit/cam-avoid.test.mjs",
-        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/mirror-pass.test.mjs"
@@ -2242,7 +2183,6 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "cockpitBodyMesh": [
-        "tests/unit/camera-ride.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs"
       ],
       "cockpitCaster": [
@@ -2272,7 +2212,6 @@
         "tests/unit/livery-tier.test.mjs"
       ],
       "drawCockpitRig": [
-        "tests/unit/camera-ride.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
@@ -2281,7 +2220,6 @@
         "tests/unit/mirror-glass-night.test.mjs"
       ],
       "drawPlayerWheels": [
-        "tests/unit/camera-ride.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "finish": [
@@ -2490,7 +2428,6 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "getCockpitWheel": [
-        "tests/unit/camera-ride.test.mjs",
         "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
@@ -6327,7 +6264,6 @@
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/ui-scale.spec.js",
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
@@ -6395,7 +6331,6 @@
         "tests/unit/storm-vm.test.mjs"
       ],
       "snapGameCam": [
-        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
@@ -9642,7 +9577,8 @@
         "tests/unit/body-attitude.test.mjs"
       ],
       "create": [
-        "tests/unit/body-attitude.test.mjs"
+        "tests/unit/body-attitude.test.mjs",
+        "tests/unit/camera-ride.test.mjs"
       ],
       "crit": [
         "tests/unit/body-attitude.test.mjs"
@@ -9655,9 +9591,6 @@
       ],
       "update": [
         "tests/unit/body-attitude.test.mjs"
-      ],
-      "*": [
-        "tests/unit/camera-ride.test.mjs"
       ]
     },
     "js/physics/brake-cue.js": {
@@ -14631,12 +14564,10 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "push": [
-        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ],
       "reset": [
-        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/hud-readouts.test.mjs"
       ],
       "sample": [

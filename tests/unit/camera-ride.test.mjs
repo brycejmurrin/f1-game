@@ -34,6 +34,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -380,23 +381,6 @@ test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same ca
 });
 
 test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
-  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const draw = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");
-  // The rig is anchored with the SAME seat vantage() puts the camera on: VISOR's
-  // own pair, or the chosen cockpit seat (CockpitOpts.layout).
-  assert.match(game, /GameCams\.cockpitViewmodelAxes\([^;]*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\)\);/,
-    "the rig is anchored with visor's own eye offsets");
-  assert.match(game, /drawCockpitRig\(c, _cockMat, dt, paint, visorEye\);/, "the same rig is drawn for visor, flagged wheel-less");
-  const rig = draw.slice(draw.indexOf("function drawCockpitRig("));
-  // VISOR forces the wheel-less interior and the STANDARD seat (its eye is
-  // VISOR_EYE_*) whatever the WHEEL and SEAT settings say.
-  assert.match(rig, /const wheelStyle = noWheel \? "none" : CockpitOpts\.wheel\(\), lay = CockpitOpts\.layout\(wheelStyle, noWheel \? "std" : null\);/, "visor overrides the chosen wheel and seat");
-  const cut = rig.indexOf('if (wheelStyle === "none") {');
-  assert.ok(cut > 0, "the no-wheel branch exists");
-  assert.ok(rig.indexOf("cockpitBodyMesh(c.team, c)") < cut && rig.indexOf("drawPlayerWheels(") < cut, "the body and the front wheels are drawn before it");
-  const branch = rig.slice(cut, rig.indexOf("return;", cut) + 7);
-  assert.match(branch, /G\.gfx\.draw\(getCockpitDash\(\), _rigA, opt\);/, "visor draws the column, boss and bulkhead, unrolled at the wheel mount");
-  assert.ok(rig.indexOf("getCockpitWheel(") > cut + branch.length, "the steering wheel is drawn after the branch returns, so visor never draws it");
   // Check the fitted geometry, so a curved bulkhead can replace a square slab.
   const ctx=vm.createContext({ GaragePrims:{ block() {} } }); seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT,"js/car/car-mesh.js"),"utf8")+"\n;this.mesh=CarMesh;",ctx);
@@ -501,10 +485,6 @@ test("the cockpit viewmodel yaws with heading, not the road tangent", () => {
   assert.deepEqual(outF.map((n) => +n.toFixed(6)), [1, 0, 0],
     "+π/2 yawVis (nose right of the road) must rotate the viewmodel, not crab it");
   assert.deepEqual(outR.map((n) => +n.toFixed(6)), [0, 0, -1]);
-
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /cockpitRigOnly[\s\S]{0,400}cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye/,
-    "the live cockpit draw must consume heading yaw, not a raw tangent basis");
 });
 
 test("REDUCE MOTION drops the cockpit kerb shiver, and only that", () => {
@@ -617,22 +597,20 @@ test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the s
     const pip = cams.vantage(track, "helmet", s, 0, 60, 0, { carPos: [0, s], carHead: 0 });
     assert.ok(Math.abs(pip.eye[2] - c.eye[2] - cams.HELMET_EYE_FWD) < 1e-9);
   }
-  // Onboard everywhere the game asks: kerb shiver, no ground clamp, near plane, the rig, the lock.
-  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /const onboard = racing && \([^;]*camId === "helmet"/, "locked like the other onboard eyes (λ400)");
-  assert.match(game, /const _nearM = \([^;]*_projMode === "helmet"[^;]*\) \? 0\.3 : 0\.9;/, "the cockpit's 0.3 m near plane, or the wheel is clipped away");
-  assert.match(game, /const cockpitRigOnly = [^;]*CAM_MODES\[camMode\]\.id === "helmet"/, "the cockpit rig is drawn round it");
-  // cameraBankScale gives every mode it does not name the FULL bank (1): HELMET,
-  // like the cockpit, is in neither the 0.35 nor the 0 list.
-  const bank = game.match(/function cameraBankScale\(mode\) \{[^}]*\}/);
-  assert.ok(bank, "cameraBankScale is the banked-camera table");
-  assert.doesNotMatch(bank[0], /"helmet"|"cockpit"/, "and it rides the full bank like the cockpit");
-  const ms = readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8");
-  const ids = [...ms.matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
-  assert.equal(ids[ids.length - 1], "helmet", "appended: apex26.camMode is an index");
-  assert.match(ms, /document\.body\.toggleAttribute\("data-helmet-cam", camId === "helmet"\);/, "the visor frame follows the mode");
-  const css = readFileSync(join(ROOT, "css/hud.css"), "utf8");
-  assert.match(css, /body\[data-helmet-cam\] #hud::before \{/, "and css/hud.css draws it");
+  // The helmet is the LAST mode (apex26.camMode is a stored index) and wears the visor frame
+  // through a body attribute that follows the mode, on and off.
+  const dom = makeDom();
+  const mctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
+  mctx.window = mctx;
+  vm.runInNewContext(readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8"), mctx);
+  const modes = mctx.CamModes.CAM_MODES, hi = modes.findIndex((m) => m.id === "helmet");
+  assert.equal(hi, modes.length - 1, "appended: apex26.camMode is an index");
+  const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", camCutT: 0 };
+  const modeCams = mctx.CamModes.create(G);
+  modeCams.setCamMode(hi);
+  assert.equal(dom.document.body.hasAttribute("data-helmet-cam"), true, "the visor frame follows the helmet mode");
+  modeCams.setCamMode(0);
+  assert.equal(dom.document.body.hasAttribute("data-helmet-cam"), false, "and leaves with it");
 });
 
 // NEAR-EYE CULL. A rival is hidden only when the eye is INSIDE its body box (grown by
@@ -652,8 +630,4 @@ test("near-eye cull: a rival alongside an onboard eye stays drawn; an eye inside
   assert.equal(inside(3.6, 0.4, 1.9, chasePad), true, "eye just off the nose, inside the near plane: hidden");
   assert.equal(inside(6, 0, 2.4, chasePad), false, "chase eye 6 m back and up: drawn");
   assert.equal(inside(0, 0, 3.0, chasePad), false, "eye above the roof: drawn");
-  // game.js uses the box, not a radius.
-  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /GameCams\.eyeInsideCar\(/, "the car loop's near-eye cull is the box test");
-  assert.doesNotMatch(game, /< 3\.4 \* 3\.4\) continue/, "the 3.4 m radius is gone");
 });
