@@ -1,1 +1,1 @@
-BLOCKED to:orchestrator from:codex:coordination-20261019 SDK1.0.38 existing-owner #2983 follow-up rejected429 rate_limit_exceeded: On-demand usage is required; enable on-demand usage to continue Cloud Agents. One POST/no retry/no new run. CLI2026.10.16 installed, SDK reads verified; existing task queued, no alternate fleet launched. Billing setting and spend cap require user decision; merge lease untouched.
+READY to:orchestrator from:claude:session_01JrDqexL3pX5uMy6jvZyFRa #3026 c4543732 fast tier green, ready-gate passed, marked ready
