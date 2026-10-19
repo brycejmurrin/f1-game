@@ -30,7 +30,7 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 424,
+    "files": 425,
     "classifications": {
       "entrypoint-candidate": 287,
       "ambiguous": 56,
