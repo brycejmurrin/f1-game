@@ -1,1 +1,1 @@
-1792388240	Bryce Murrin	Garage aero scalar clock follow-up to #2948 only: setup-camera stepSetupAero cap100ms and existing garage-arrival behavioral regression; no original PR2948 push or metadata changes  [cursor/garage-aero-followup-1019; session c681f38e7fbfb3063809b17c]
+1792388497	Bryce Murrin	#2980 Garage aero scalar clock follow-up only; pushed938763a0 cap100ms plus existing garage-arrival regression; parent steward owns queued canonical gate and CI watch; original2948 already merged untouched  [cursor/garage-aero-followup-1019; session c681f38e7fbfb3063809b17c]
