@@ -32,6 +32,9 @@
 #               commit since the merge-base with the old HEAD removed them
 #               (2026-10-18, #2873: a committed dedupe came back). The
 #               baseline records HEAD in .head to tell a move from an edit.
+#             * unavailable ancestry/history after HEAD moves defers the sync,
+#               preserving all three copies and reporting recovery guidance;
+#               missing history never proves a branch never had a memory.
 #           Until 2026-10-02 save copied every differing live file over the
 #           repo and deleted repo files the session lacked: a resumed session,
 #           whose live dir predated a branch checkout, reverted other sessions'
@@ -93,21 +96,27 @@ try:
     with open(os.path.join(base, ".head"), encoding="utf-8") as h: prev_head = h.read().strip()
 except OSError: prev_head = None
 moved = prev_head is not None and prev_head != head
+class HistoryUnknown(Exception): pass
+def history(*args):
+    try:
+        r = subprocess.run(["git", "-C", main, *args], capture_output=True, text=True)
+    except OSError as e:
+        raise HistoryUnknown("git history query could not run") from e
+    if r.returncode != 0:
+        raise HistoryUnknown("git " + args[0] + " could not establish memory history")
+    return r.stdout
 def deleted_in_history(f):
-    """True when a commit reachable from HEAD deleted this memory file."""
-    if not head: return False
-    r = subprocess.run(["git", "-C", main, "log", "-1", "--diff-filter=D", "--format=%H", head, "--",
-                        os.path.relpath(os.path.join(repo, f), main)], capture_output=True, text=True)
-    return bool(r.stdout.strip())
-def removed_by_commits(f):
-    """Lines that commits reachable from HEAD, but not from the previous HEAD,
-    removed from f: a deliberate edit (this branch's commit, or a merged one),
-    unlike lines a checked-out branch simply never had (2026-10-18, #2873)."""
-    if not (head and prev_head): return set()
-    mb = subprocess.run(["git", "-C", main, "merge-base", prev_head, head], capture_output=True, text=True).stdout.strip()
-    if not mb: return set()
-    d = subprocess.run(["git", "-C", main, "diff", "-U0", mb, head, "--",
-                        os.path.relpath(os.path.join(repo, f), main)], capture_output=True, text=True).stdout
+    """False requires complete history; an empty shallow log is inconclusive."""
+    deleted = history("log", "-1", "--diff-filter=D", "--format=%H", head, "--",
+                      os.path.relpath(os.path.join(repo, f), main)).strip()
+    if deleted: return True
+    if history("rev-parse", "--is-shallow-repository").strip() != "false":
+        raise HistoryUnknown("shallow history cannot establish whether a missing topic was retired")
+    return False
+def removed_by_commits(f, merge_base):
+    """Deliberate removals since the known common ancestor, never a failed diff."""
+    d = history("diff", "-U0", merge_base, head, "--",
+                os.path.relpath(os.path.join(repo, f), main))
     return {x[1:] for x in d.splitlines() if x.startswith("-") and not x.startswith("---")}
 def read(d, f):
     p = os.path.join(d, f)
@@ -129,6 +138,27 @@ def merge_index(b, l, r):
     out += [x for x in added if x not in out]
     return "\n".join(out) + "\n"
 names = {f for d in (live, repo, base) for f in os.listdir(d) if f.endswith(".md")}
+# Resolve every history-dependent decision before touching any memory or baseline.
+# A shallow checkout or missing old object must not turn "unknown" into
+# "branch never had it" and resurrect a reviewed retirement. Keep LIVE for
+# recovery, REPO authoritative, and the old baseline/HEAD so retry stays safe.
+deleted, removed = {}, {}
+if moved:
+    try:
+        merge_base = history("merge-base", prev_head, head).strip()
+        if not merge_base: raise HistoryUnknown("no common ancestor is available")
+        for f in sorted(names):
+            b, l, r = read(base, f), read(live, f), read(repo, f)
+            if l != r and l == b and r != b and l is not None:
+                if f == "MEMORY.md" and r is not None:
+                    removed[f] = removed_by_commits(f, merge_base)
+                elif r is None:
+                    deleted[f] = deleted_in_history(f)
+    except HistoryUnknown as e:
+        print("memory: WARNING sync deferred (" + str(e) + "); kept live, repo and baseline unchanged. "
+              "Restore the previous HEAD object/common ancestry (deepen or unshallow a shallow clone), "
+              "then retry memory-sync.sh restore; do not delete the baseline.")
+        sys.exit(0)
 n_in = n_out = 0
 conflicts = []
 for f in sorted(names):
@@ -143,12 +173,12 @@ for f in sorted(names):
         else: write(repo, f, l)
         n_out += 1; final = l
     elif repo_changed and not live_changed and moved and l is not None and (
-            (r is None and not deleted_in_history(f)) or f == "MEMORY.md"):
+            (r is None and not deleted[f]) or f == "MEMORY.md"):
         # HEAD moved: a branch that never had this memory is not a deletion,
         # and an index line the branch lacks is not a removal (#2128).
         if r is None: final = l
         else:
-            rl, gone = r.splitlines(), removed_by_commits(f)
+            rl, gone = r.splitlines(), removed[f]
             final = "\n".join(rl + [x for x in l.splitlines() if x not in rl and x not in gone]) + "\n"
         write(repo, f, final)
         if final != l: write(live, f, final); n_in += 1
