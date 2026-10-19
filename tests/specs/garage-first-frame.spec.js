@@ -171,6 +171,10 @@ test.describe("garage arrival preview touch exit", () => {
     await clickId(page, "pm-open-visual");
     await page.locator("#pm-garrival").tap();
     for (const dir of ["in", "out"]) {
+      const tools = page.locator("#garrival .ew-tools");
+      if (await tools.count() && !await tools.evaluate(el => el.open)) {
+        await tools.locator(":scope > summary").tap();
+      }
       await page.locator("#ga-preview-" + dir).tap();
       await expect(page.locator("#garrival-inner")).toBeHidden();
       const stop = page.locator("#ga-preview-stop");
@@ -228,6 +232,13 @@ test.describe("garage touch gesture lifecycle", () => {
     await pointer(page, "pointerdown", 11, 100);
     await pointer(page, "pointerdown", 12, 200);
   }
+  async function resetGestureCamera(page) {
+    if (await page.locator("#cs-cam-panel").isHidden()) await page.locator("#cs-cam").tap();
+    await page.locator("#cs-view-reset").tap();
+    await expect(page.locator("#cs-view-spin")).toHaveAttribute("aria-pressed", "true");
+    await page.locator("#cs-cam").tap();
+    await expect(page.locator("#cs-cam-panel")).toBeHidden();
+  }
   async function freshDragAndPinch(page) {
     await pointer(page, "pointerdown", 31, 100);
     const before = await page.evaluate(() => window.__apex.garageCam());
@@ -245,6 +256,9 @@ test.describe("garage touch gesture lifecycle", () => {
 
   test("blur and pagehide abandon old pinch IDs before the next gesture", async ({ page }) => {
     for (const type of ["blur", "pagehide"]) {
+      // Reset BEFORE the old gesture, never after the lifecycle event: doing
+      // it afterwards would mask a failure to clear stale pointer IDs.
+      await resetGestureCamera(page);
       await leaveTwoFingers(page);
       await page.evaluate(type => window.dispatchEvent(new Event(type)), type);
       await freshDragAndPinch(page);
@@ -253,7 +267,7 @@ test.describe("garage touch gesture lifecycle", () => {
 
   test("closing and reopening garage abandons the previous gesture", async ({ page }) => {
     await leaveTwoFingers(page);
-    await clickId(page, "cs-back");
+    await page.locator("#cs-done").tap();
     await expect(page.locator("#carsetup")).toBeHidden();
     await openGarageNoPanelInput(page);
     await freshDragAndPinch(page);
