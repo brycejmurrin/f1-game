@@ -123,6 +123,6 @@ bare JS symbol. Take it for the next lookup.
 
 ```sh
 node --test tests/unit/lsp-mcp.test.mjs   # MCP client on the real tree
-node tools/check/skill-smoke.mjs --skill code-nav --check # five hermetic fixture cases, 15 s cap
+node --test tests/unit/lsp-mcp-fixture.test.mjs # hermetic fixture workspaces
 node tools/mcp/lsp-eval.mjs               # 12 pinned questions, apex-lsp vs grep
 ```
