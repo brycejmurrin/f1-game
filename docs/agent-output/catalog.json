@@ -362,6 +362,7 @@
     {
       "path": "tools/check/determinism-bisect.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
@@ -744,6 +745,7 @@
     {
       "path": "tools/ci/debug-unit.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "npmScripts": [
         "debug:unit"
@@ -2018,7 +2020,8 @@
     },
     {
       "path": "tools/lib/vm-debug-preload.cjs",
-      "classification": "library"
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/lib/vm-script-cache.cjs",
