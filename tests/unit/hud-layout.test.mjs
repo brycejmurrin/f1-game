@@ -21,7 +21,8 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   assert.ok(helper); const timeline=[];
   let camera="chase", broadcast=false, published="0px", frozen=false, headless=false;
   const elements=new Map();
-  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
+  // settlePaint is a sibling helper (#2825); stub it in the VM so race() resolves.
+  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},settlePaint:async()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
     document:{
       body:{classList:{contains:()=>broadcast}},
       getElementById:(id)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},
@@ -47,11 +48,18 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
 
 test("broadcast layout probe waits for paint, camera and published tower height, not collision results", async () => {
   const spec=fs.readFileSync(path.join(ROOT,"tests/specs/hud-layout.spec.js"),"utf8");
-  const predicate=spec.match(/await page\.waitForFunction\((async \(broadcastCamera\) => \{[\s\S]*?\n    \}), o\.cam/);
-  assert.ok(predicate,"the broadcast helper carries its bounded input-readiness predicate");
+  // #2825: double-rAF is settlePaint() before the wait; the predicate stays synchronous.
+  assert.match(spec, /await settlePaint\(page\);\s*\n\s*await page\.waitForFunction\(\(broadcastCamera\) => \{/,
+    "paint settles outside waitForFunction so the predicate can be sync");
+  assert.doesNotMatch(spec, /waitForFunction\(async \(broadcastCamera\)/,
+    "broadcast waitForFunction predicate must not be async");
+  const start = spec.indexOf("await page.waitForFunction((broadcastCamera) => {");
+  assert.ok(start >= 0, "the broadcast helper carries its bounded input-readiness predicate");
+  const end = spec.indexOf("}, o.cam === \"heli\"", start);
+  assert.ok(end > start, "broadcast predicate ends before o.cam");
+  const predSrc = spec.slice(start + "await page.waitForFunction(".length, end + 1);
   let broadcast=false, published="", height=132.04, zoom=2, queries=0;
-  const frames=[];
-  const ctx=vm.createContext({requestAnimationFrame:(fn)=>frames.push(fn),document:{
+  const ctx=vm.createContext({document:{
     body:{classList:{contains:()=>broadcast}},
     querySelector:(selector)=>{
       queries++;
@@ -60,23 +68,13 @@ test("broadcast layout probe waits for paint, camera and published tower height,
     },
     documentElement:{style:{getPropertyValue:()=>published}},
   }});
-  const ready=vm.runInContext("("+predicate[1]+")",ctx);
-  const afterPaint=async()=>{
-    const before=queries; let settled=false;
-    const result=ready(true); result.then(()=>{settled=true;});
-    assert.equal(frames.length,1,"first frame scheduled");
-    assert.equal(queries,before,"no layout read before paint");
-    frames.shift()(); await Promise.resolve();
-    assert.equal(settled,false,"one frame cannot complete paint readiness");
-    assert.equal(queries,before,"no layout read between frames");
-    assert.equal(frames.length,1,"second frame scheduled");
-    frames.shift()(); return await result;
-  };
-  assert.equal(await afterPaint(),false,"camera class has not caught up");
-  broadcast=true; assert.equal(await afterPaint(),false,"height is not published yet");
-  published="0px"; assert.equal(await afterPaint(),false,"initial zero height is stale");
-  published="40px"; assert.equal(await afterPaint(),false,"old tower height is stale");
-  published="66.0px"; assert.equal(await afterPaint(),true,"own units honor zoom and toFixed(1) rounding");
+  const ready=vm.runInContext("("+predSrc+")",ctx);
+  assert.equal(ready(true),false,"camera class has not caught up");
+  broadcast=true; assert.equal(ready(true),false,"height is not published yet");
+  published="0px"; assert.equal(ready(true),false,"initial zero height is stale");
+  published="40px"; assert.equal(ready(true),false,"old tower height is stale");
+  published="66.0px"; assert.equal(ready(true),true,"own units honor zoom and toFixed(1) rounding");
+  assert.ok(queries > 0, "sync predicate reads layout");
   // fitHud re-publishes --hud-top-h AFTER writing --hud-z-top so a zoom cap
   // in the same pass cannot leave the wait 0.1px behind.
   const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
@@ -84,8 +82,8 @@ test("broadcast layout probe waits for paint, camera and published tower height,
   const zTop = fit.indexOf('set("--hud-z-top"');
   const republish = fit.indexOf('hStyle(root, "--hud-top-h"', zTop);
   assert.ok(zTop >= 0 && republish > zTop, "--hud-top-h must be published after the top zoom cap");
-  height=0; published="0px"; assert.equal(await afterPaint(),false,"hidden tower is not ready");
-  height=132; zoom=1; published="132px"; assert.equal(await afterPaint(),true);
+  height=0; published="0px"; assert.equal(ready(true),false,"hidden tower is not ready");
+  height=132; zoom=1; published="132px"; assert.equal(ready(true),true);
 });
 
 function fakeEl() {
