@@ -8381,7 +8381,9 @@ function tickBody(now) {
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
-      render(Math.min(dt, 1 / 20));
+      // Garage motion has its own 100 ms stall limit. The race camera's
+      // 50 ms damping cap otherwise makes arrivals/previews run slow below 20 fps.
+      render(Math.min(dt, setupPreviewOn ? 0.1 : 1 / 20));
     }
     GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
   }
@@ -8436,7 +8438,7 @@ function tickBody(now) {
   RenderRate.observe(_dtMs);
   if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame
     dt = RenderRate.dt();
-    PerfSpans.begin("render"); render(Math.min(dt, 1 / 20)); PerfSpans.end("render");   // camera/visual damping at (clamped) frame dt
+    PerfSpans.begin("render"); render(Math.min(dt, setupPreviewOn ? 0.1 : 1 / 20)); PerfSpans.end("render");   // garage motion keeps wall pace down to 10 fps; race camera damping stays capped
     if (state === "race" || state === "count") { PerfSpans.begin("hud"); updateHud(false, RenderRate.ms()); PerfSpans.end("hud"); }
   }
 }

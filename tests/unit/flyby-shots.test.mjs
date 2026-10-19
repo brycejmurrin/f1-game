@@ -461,7 +461,9 @@ test("the flyby editor keeps the world rendering while it is open", () => {
   const game = gameSource();
   const i = game.indexOf("if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active())");
   assert.ok(i > 0, "tickBody still parks on a paused frame");
-  const branch = game.slice(i, i + 2400);
+  const end = game.indexOf('\n    GameAudio.feedReplayScrub', i);
+  assert.ok(end > i, "the paused branch still ends with its audio feed and return");
+  const branch = game.slice(i, end);
   const gate = branch.match(/if \(setupPreviewOn \|\| (?:replayBuf\.isScrubbing\(\) \|\| )?\(\(state === "race" \|\| state === "count"\) &&[\s\S]{0,200}?\) \{/);
   assert.ok(gate, "the paused branch still gates its preview render");
   assert.match(gate[0], /replayBuf\.isScrubbing\(\)/, "instant-replay scrub keeps rendering while scrubbing");
