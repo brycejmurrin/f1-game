@@ -266,7 +266,7 @@ test("inventory tags: chunk-lamps / saturate / sparse-pixels / wet-drizzle", () 
   assert.deepEqual(glx.knobs.map((k) => k.id).sort(), ["perChunkLights", "roadChunkLamps"]);
 });
 
-test("--shots 5 --dry-run linspaces TUNE_DEFS min→max", () => {
+test("--shots 5 --dry-run linspaces TUNE_DEFS min→max", async () => {
   const r = run(["--live", "lampLevel", "--shots", "5", "--dry-run"]);
   assert.equal(r.status, 0, r.stderr);
   const plan = JSON.parse(r.stdout);
@@ -274,7 +274,10 @@ test("--shots 5 --dry-run linspaces TUNE_DEFS min→max", () => {
   assert.equal(plan.shots, 5);
   assert.equal(plan.levels.length, 5);
   assert.equal(plan.levels[0], 0);
-  assert.equal(plan.levels[4], 0.687);
+  const { loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
+  const def = loadTuneDefs(ROOT).find((d) => d.id === "lampLevel");
+  assert.equal(plan.levels[0], def.min);
+  assert.equal(plan.levels[4], def.max, "the last of five shots is the knob's own max");
   assert.equal(plan.from, plan.levels[0]);
   assert.equal(plan.to, plan.levels[4]);
   assert.ok(plan.levels[2] > plan.levels[1]);
