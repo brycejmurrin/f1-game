@@ -55,7 +55,7 @@
     {
       "name": "carView",
       "group": "know",
-      "signature": "carView({team,parts,detail})",
+      "signature": "carView({team,parts,bodyStyle,detail})",
       "summary": "WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, measured geometry; detail:\"parts\" adds per-part boxes"
     },
     {

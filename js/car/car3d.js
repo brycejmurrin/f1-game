@@ -269,7 +269,8 @@ const Car3D = (function () {
     // 1900 mm car. The rails carry an edge lip and a gurney another ~45 mm
     // outboard of whatever this returns, so the cap leaves that much room.
     const floorX = (k) => Math.min(CAR_HALF - 0.055, k * floorEdge);
-    const floorStep = teamStyle.floorStep || 0;
+    // ≥ −0.03 (team worst −0.025): barge's −0.12 put the edge rail under the road (#3111 F6).
+    const floorStep = Math.max(-0.03, teamStyle.floorStep || 0);
     const floorStepY = floorStep * 0.85;
     const floorEdgeAt = (z) => {   // hoisted too: the rounded floor plate (CarShade.floor) follows it
       const t = Math.max(0, Math.min(1, (0.78 - z) / 2.36));
@@ -420,7 +421,8 @@ const Car3D = (function () {
     let coverGeom = null;
     if (!ckpt) {
       const engT = tier("engine");
-      const inScale = (engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0)) * teamStyle.airbox;
+      // ≤ 1.9 (grid max 1.85): arched x a 1.40 PU gave 3.36, hoop base over its 0.968 top (#3111 F5).
+      const inScale = Math.min(1.9, (engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0)) * teamStyle.airbox);
       const engSnork = engStyle ? !!engStyle.snork : engT === 2;
       // Roll hoop / snorkel / intake lips: airboxMeshColour (wrap sun wins).
       const airboxC = (typeof LiveryTex !== "undefined" && LiveryTex.airboxMeshColour)
@@ -835,13 +837,12 @@ const Car3D = (function () {
       const fenceN = Math.max(0, Math.min(10, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(2.25, floorStyle.fenceH));
       const fenceStep = fenceN > 1 ? 1.08 / (fenceN - 1) : 0;
-      // Floor fences sit outboard of the pod. Stock heights stay under the
-      // sponsor board (yFrac 0.32..0.80) so a side ray hits the board first
-      // (body-split). Tall STYLE fences (fenceH≫1) are allowed to climb toward
-      // the shoulder so the height knob still reads in a garage 3/4 shot.
+      // Floor fences sit outboard of the pod and stay under the sponsor board
+      // (yFrac 0.32..0.80) so a side ray hits the board first (body-split);
+      // tall STYLE fences climbed to 0.58, into the board (#3111 F14).
       const fenceCap = (z) => {
         const pod = anchors.podAt(z);
-        const frac = 0.28 + 0.30 * Math.max(0, Math.min(1, (fenceH - 1.0) / 1.25));
+        const frac = 0.28 + 0.02 * Math.max(0, Math.min(1, (fenceH - 1.0) / 1.25));
         return pod.bottom + frac * (pod.top - pod.bottom);
       };
       const fenceFit = (y, h, cap) => {
@@ -951,11 +952,13 @@ const Car3D = (function () {
       addBox(out, 0.14, cyb + 0.030, cz + 0.10, 0.10, 0.035, 0.18, capC, SURFACES.metal);
     }
     // SKIRT (STYLE): a painted strip down each floor edge. skirt≥2 widens it.
+    // Ends 4 cm ahead of the rear tyre (was −1.50, 14 cm into it; #3111 F11).
     if (!ckpt && floorStyle && floorStyle.skirt) {
       const sk = Math.max(1, Math.min(2, Math.round(floorStyle.skirt)));
+      const skF = 0.90, skR = AXLES.rearZ + AXLES.wheelY + 0.04;
       for (const s of [-1, 1])
-        addBox(out, s * 0.76, Math.max(CHASSIS.floor.cy + rideDY, 0.052) + 0.03, -0.30,
-               0.035 + 0.030 * (sk - 1), 0.07 + 0.04 * (sk - 1), 2.4, sk >= 2 ? accentC : c2);
+        addBox(out, s * 0.76, Math.max(CHASSIS.floor.cy + rideDY, 0.052) + 0.03, (skF + skR) / 2,
+               0.035 + 0.030 * (sk - 1), 0.07 + 0.04 * (sk - 1), skF - skR, sk >= 2 ? accentC : c2);
     }
 
     part("livery");
@@ -1384,8 +1387,11 @@ const Car3D = (function () {
           addBox(out, p[0], p[1] + hr + 0.095, p[2], 0.020, 0.028, 0.070,
                  accentC, SURFACES.paint);
         }
-        // Painted brow bar across the crown — open_cell has none.
-        addBox(out, 0, crownY + hr + 0.055, 0.10, 0.42, 0.022, 0.10, accentC, SURFACES.paint);
+        // Painted brow bar across the crown — open_cell has none. It spans the
+        // outermost vanes (hoop[4]/[10]) instead of floating at ±0.21 (#3111 F12).
+        const bL = hoop[4], bR = hoop[10];
+        if (bL && bR) addBox(out, 0, (bL[1] + bR[1]) / 2 + hr + 0.055, (bL[2] + bR[2]) / 2,
+                             bR[0] - bL[0] + 0.030, 0.022, 0.10, accentC, SURFACES.paint);
       }
     }
 
@@ -1955,13 +1961,14 @@ const Car3D = (function () {
       const gbRibs     = gbStyle ? Math.max(0, Math.min(3, Math.round(gbStyle.ribs || 0))) : 0;
       const gbCaseWmul = Math.max(0.55, Math.min(1.45, (gbStyle && gbStyle.caseWidth) || 1));
       // STYLE cases: paint strakes / casing so they leave the under-wing shadow.
-      const gbPaint = !!(gbStyle && (gbStyle.rearFins || gbStyle.heatFins || (gbStyle.caseWidth && gbStyle.caseWidth < 0.85)));
+      // STYLE-only markers: heatFins rides factory/sig boxes too, which keep carbon strakes (#3111 F9).
+      const gbPaint = !!(gbStyle && (gbStyle.rearFins || (gbStyle.caseWidth && gbStyle.caseWidth < 0.85)));
       const gbStrakeC = gbPaint ? accentC : CARBON;
       if (gbStrakes > 0) {
         const half = (gbStrakes - 1) / 2;
         for (let i = 0; i < gbStrakes; i++) {
-          addBox(out, (i - half) * 0.24, 0.18 + gbStrakeH / 2, -2.28, 0.022, gbStrakeH, 0.55, gbStrakeC,
-                 gbPaint ? SURFACES.paint : SURFACES.carbon);
+          if (gbPaint) addBox(out, (i - half) * 0.24, 0.18 + gbStrakeH / 2, -2.28, 0.022, gbStrakeH, 0.55, gbStrakeC, SURFACES.paint);
+          else addBox(out, (i - half) * 0.24, 0.13 + gbStrakeH / 2, -2.20, 0.015, gbStrakeH, 0.42, CARBON);
         }
       }
       let gbCw = 0, gbCh = 0;
@@ -2075,9 +2082,11 @@ const Car3D = (function () {
     if (!ckpt && brakeStyle && brakeStyle.bigScoop) {
       const sc = (brakeStyle.cal || [0.85, 0.12, 0.10]).map((v) => Math.min(v, 1));
       const sm = Math.max(1, Math.min(1.45, (brakeStyle.rotorScale || 1) / 1.18));
+      // Grows in x/y only, 1 cm ahead of the tread: a depth x sm sat 8 cm in the tyre (#3111 F10).
+      const zB = AXLES.frontZ + AXLES.wheelY + 0.01;
       for (const s of [-1, 1]) {
-        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.40, 0.20 * sm, 0.26 * sm, 0.20 * sm, DARK);
-        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.52, 0.24 * sm, 0.28 * sm, 0.04, sc, SURFACES.metal);
+        addBox(out, s * 0.60, 0.34, zB + 0.10, 0.20 * sm, 0.26 * sm, 0.20, DARK);
+        addBox(out, s * 0.60, 0.34, zB + 0.22, 0.24 * sm, 0.28 * sm, 0.04, sc, SURFACES.metal);
       }
     }
 
