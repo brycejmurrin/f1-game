@@ -518,8 +518,12 @@ export function createExtras(ctx) {
       if (start && boot) return `proc:${boot}:${start}`;
     } catch { /* portable fallback below */ }
     try {
-      const start = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], { encoding: "utf8", timeout: 5000 }).trim();
-      return start ? `ps:${start}` : null;
+      const start = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
+        encoding: "utf8", timeout: 5000, env: { ...process.env, TZ: "UTC0", LC_ALL: "C", LANG: "C" },
+      }).trim();
+      // Version the canonical format: old ps records inherited TZ/locale, so a
+      // mismatch with them cannot prove that the original process has exited.
+      return start ? `ps-utc-v1:${start}` : null;
     } catch { return null; }
   };
   const ownedCleanup = (cleanup) => {

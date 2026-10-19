@@ -281,7 +281,7 @@ test("durable cleanup excludes reused PIDs and keeps unknown live identities occ
     assert.equal(incompatible.survivors, 1);
     assert.equal(observer.runningBrowserJob()?.id, id, "incompatible birth schemes retain occupancy");
     assert.equal(alive(unrelated.pid), true, "incompatible identity cannot authorize a signal");
-    const currentScheme = alternateScheme === "ps" ? "proc" : "ps";
+    const currentScheme = alternateScheme === "ps" ? "proc" : "ps-utc-v1";
     marker.cleanup.identities = [{ pid: unrelated.pid, birth: `${currentScheme}:previous-boot:stale-start` }];
     fs.writeFileSync(markerPath, JSON.stringify(marker));
     const stale = body(await observer.handlers.apex_job_cancel({ jobId: id }));
@@ -290,6 +290,65 @@ test("durable cleanup excludes reused PIDs and keeps unknown live identities occ
     assert.equal(observer.runningBrowserJob(), null);
   } finally {
     await killTreeAndWait([unrelated.pid], { graceMs: 0 });
+    f.cleanup();
+  }
+});
+
+test("portable cleanup identities survive timezone changes and retain legacy ambiguity", async () => {
+  const { spawn, execFileSync } = await import("node:child_process");
+  const { alive, killTreeAndWait } = await import("../../tools/lib/process-tree.mjs");
+  const f = await fixture();
+  const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { detached: true, stdio: "ignore" });
+  const read = fs.readFileSync;
+  const saved = Object.fromEntries(["TZ", "LC_ALL", "LANG"].map((key) => [key, process.env[key]]));
+  try {
+    const dir = path.join(f.root, "artifacts/logs/apex-jobs");
+    fs.mkdirSync(dir, { recursive: true });
+    const id = "portable_birth_fixture", markerPath = path.join(dir, `${id}.cancelled`);
+    fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, state: "running", browser: true,
+      pid: child.pid, kind: "survey_track", started: Date.now(), argv: [],
+      log: "artifacts/fixture.log", stderr: "artifacts/fixture.err" }));
+    // Exercise the actual portable path even on Linux, without a real browser.
+    fs.readFileSync = function (file, ...args) {
+      if (String(file).startsWith("/proc/")) throw Object.assign(new Error("no procfs"), { code: "ENOENT" });
+      return read.call(this, file, ...args);
+    };
+    process.env.TZ = "UTC0"; process.env.LC_ALL = "C";
+    const legacyBirth = `ps:${execFileSync("ps", ["-p", String(child.pid), "-o", "lstart="], { encoding: "utf8" }).trim()}`;
+    const signalled = [];
+    const observer = f.make({ killJobTree: async (pids) => { signalled.push(...pids); return { survivors: pids }; } });
+    const first = body(await observer.handlers.apex_job_cancel({ jobId: id }));
+    assert.equal(first.ok, false);
+    assert.deepEqual(signalled, [child.pid]);
+    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    assert.match(marker.cleanup.identities[0].birth, /^ps-utc-v1:/);
+    process.env.TZ = "America/Los_Angeles"; process.env.LC_ALL = "POSIX"; process.env.LANG = "fr_FR.UTF-8";
+    signalled.length = 0;
+    const retry = body(await observer.handlers.apex_job_cancel({ jobId: id }));
+    assert.equal(retry.ok, false);
+    assert.deepEqual(signalled, [child.pid], "timezone/locale changes still identify the same live process");
+    assert.equal(observer.runningBrowserJob()?.id, id);
+
+    marker.cleanup.identities = [{ pid: child.pid, birth: legacyBirth }];
+    fs.writeFileSync(markerPath, JSON.stringify(marker));
+    signalled.length = 0;
+    const legacy = body(await observer.handlers.apex_job_cancel({ jobId: id }));
+    assert.equal(legacy.ok, false);
+    assert.equal(legacy.cleanupPending, true);
+    assert.deepEqual(signalled, [], "legacy ps identity cannot authorize a signal or prove PID reuse");
+    assert.equal(observer.runningBrowserJob()?.id, id);
+    assert.equal(alive(child.pid), true);
+    fs.readFileSync = read;
+    await killTreeAndWait([child.pid], { graceMs: 0 });
+    const finished = body(await observer.handlers.apex_job_cancel({ jobId: id }));
+    assert.equal(finished.ok, true, "legacy cleanup completes once the original PID is actually gone");
+    assert.equal(observer.runningBrowserJob(), null);
+  } finally {
+    fs.readFileSync = read;
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    await killTreeAndWait([child.pid], { graceMs: 0 });
     f.cleanup();
   }
 });
