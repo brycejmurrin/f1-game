@@ -53,6 +53,7 @@ export const JOB_INPUTS = Object.freeze({
     "js/data/",
     "js/car/",
     "tools/car/parts-sweep.mjs",
+    "tools/lib/car-source-vm.mjs",
     "tests/unit/parts-visual-distinctness.test.mjs",
     "package.json",
     "package-lock.json",
@@ -164,10 +165,10 @@ export function sweepsPartsExpectedPaths() {
   try {
     parts = require("./geometry-paths.mjs");
   } catch (_) {
-    return ["js/car/", "tools/car/parts-sweep.mjs", "tests/unit/parts-visual-distinctness.test.mjs"];
+    return ["js/car/", "tools/car/parts-sweep.mjs", "tools/lib/car-source-vm.mjs", "tests/unit/parts-visual-distinctness.test.mjs"];
   }
   // PARTS_ERE is a regex string; expand the known roots from PARTS_PATHS if exported.
-  const roots = ["js/core/", "js/data/", "js/car/", "tools/car/parts-sweep.mjs", "tests/unit/parts-visual-distinctness.test.mjs"];
+  const roots = ["js/core/", "js/data/", "js/car/", "tools/car/parts-sweep.mjs", "tools/lib/car-source-vm.mjs", "tests/unit/parts-visual-distinctness.test.mjs"];
   if (typeof parts.PARTS_ERE === "function") {
     // Keep the static roots; the unit test also asserts PARTS_ERE mentions them.
   }

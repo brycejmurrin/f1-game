@@ -538,16 +538,16 @@ test("the parts pattern covers every module the sweep actually loads", () => {
   // than to restate it: every file parts-sweep.mjs runs into its VM, plus the
   // tool and the suite, must match; a path outside the census must not.
   const re = new RegExp(PARTS_ERE());
-  for (const f of [...partsFiles(), "tools/car/parts-sweep.mjs",
+  for (const f of [...partsFiles(), "tools/car/parts-sweep.mjs", "tools/lib/car-source-vm.mjs",
                    "tests/unit/parts-visual-distinctness.test.mjs"]) {
     assert.ok(re.test(f), `the parts pattern misses ${f}, which the census reads`);
     assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist — the load list has drifted`);
   }
   for (const f of ["docs/README.md", "js/track/tracks.js", "js/circuits/monza.js", "tests/specs/smoke.spec.js"])
     assert.ok(!re.test(f), `the parts pattern matches ${f}, which the census never reads`);
-  // ANTI-VACUITY on the parse: a partial read must THROW, not return a short
+  // ANTI-VACUITY on the profile: a partial list must THROW, not return a short
   // list that quietly stops matching the modules it dropped.
-  assert.ok(partsFiles().length >= 4, `parsed only ${partsFiles().length} modules out of parts-sweep.mjs`);
+  assert.ok(partsFiles().length >= 4, `only ${partsFiles().length} modules in the parts source profile`);
 });
 
 /* A PULL REQUEST HAS A BASE, AND THE SWEEPS FILTER IGNORED IT (2026-09-22).

@@ -51,6 +51,7 @@
  */
 
 import fs from "node:fs";
+import { carSourceFiles } from "../lib/car-source-vm.mjs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -90,24 +91,21 @@ export const GEOMETRY_PATHS = new RegExp(GEOMETRY_ERE);
 /** THE PARTS CENSUS IS NOT A FLEET SWEEP, and it had no trigger at all.
  *  `sweeps-parts` (tests/unit/parts-visual-distinctness.test.mjs) builds the
  *  CAR, never a circuit, and ran unconditionally on every push, PR and train —
- *  71-106 s of runner for a docs edit. It reads exactly one thing:
- *  tools/car/parts-sweep.mjs, which names the modules it loads into its VM on
- *  one line.
+ *  71-106 s of runner for a docs edit. Read the same named source profile as
+ *  tools/car/parts-sweep.mjs, without loading game sources or creating a VM.
  *
- *  DERIVED from that line, never retyped. The hand-written half of the sweeps
+ *  DERIVED from that owner, never retyped. The hand-written half of the sweeps
  *  filter had already drifted once (scenery-grounding was missing from it), and
  *  a list that must be edited in two places to stay true will drift again.
- *  Throws rather than returning a short list: a trigger derived from a partial
- *  parse is a filter that fails OPEN, which is the one thing these filters may
- *  never do. ci.yml's step catches the throw and runs the census. */
+ *  A malformed or short profile throws rather than silently omitting inputs:
+ *  ci.yml catches the error and runs the census (fail safe). */
 export function partsFiles() {
-  const src = fs.readFileSync(path.join(ROOT, "tools/car/parts-sweep.mjs"), "utf8");
-  // The `for (const f of [...])` list the sweep runs through vm.runInContext.
-  const block = src.match(/for \(const f of \[([\s\S]*?)\]\)/);
-  const mods = block ? [...block[1].matchAll(/"([^"]+\.js)"/g)].map((m) => m[1]) : [];
-  if (mods.length < 4) throw new Error(
-    `geometry-paths: parsed ${mods.length} module(s) out of tools/car/parts-sweep.mjs's load list — ` +
-    "refusing to derive a parts trigger from a partial parse");
+  const mods = carSourceFiles("parts");
+  if (!Array.isArray(mods) || mods.length < 4 ||
+      Array.from(mods).some((m) => typeof m !== "string" || !m.startsWith("js/") || !m.endsWith(".js")) ||
+      new Set(mods).size !== mods.length) throw new Error(
+    "geometry-paths: invalid or partial car source profile parts — " +
+    "refusing to derive a parts trigger from a partial profile");
   return mods;
 }
 
@@ -118,7 +116,8 @@ export function partsFiles() {
 export const PARTS_ERE = () => {
   const mods = partsFiles();
   const dirs = [...new Set(mods.map((m) => m.slice(0, m.lastIndexOf("/") + 1)))];
-  const files = ["tools/car/parts-sweep.mjs", "tests/unit/parts-visual-distinctness.test.mjs"];
+  const files = ["tools/car/parts-sweep.mjs", "tools/lib/car-source-vm.mjs",
+    "tests/unit/parts-visual-distinctness.test.mjs"];
   return "^(" + [...dirs.map(ere), ...files.map((f) => ere(f) + "$")].join("|") + ")";
 };
 
