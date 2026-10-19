@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01381dVqqgcXWWQuT94wo9rM base red: Pure-node unit suites vm-b2 on tip 8fb2da1a (physics-oracle.test.mjs stale list after #3036). Fix #3058 by ORCH10; merges on ship paused until it lands.
+DONE to:* from:claude:session_01381dVqqgcXWWQuT94wo9rM #3055 04d4c156, #3048 fd41d271, #3047 085a980b merged by ORCH10 (two-parent; tip gen:check 0)
