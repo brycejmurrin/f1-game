@@ -345,7 +345,7 @@ const Car3D = (function () {
       }
     }
 
-    for (const side of [-1, 1]) {
+    zone("floor", () => { for (const side of [-1, 1]) {
       addSpan(out,
         { z: 0.78, x: side * floorX(0.69), y: 0.108 + rideDY + floorStepY, w: 0.062, h: 0.048 + Math.max(0, floorStepY) * 0.35 },
         { z: -0.42 - floorCut, x: side * floorX(0.72), y: 0.114 + rideDY + floorStepY * 0.55, w: 0.052, h: 0.054 + Math.abs(floorStepY) * 0.25 },
@@ -357,7 +357,7 @@ const Car3D = (function () {
         CARBON, null, SURFACES.carbon);
       addBox(out, side * floorX(0.71), 0.128 + rideDY + floorStepY * 0.5, -0.45,
              0.038, 0.016 + Math.abs(floorStepY) * 0.4, 0.058, CARBON, SURFACES.carbon);
-    }
+    } });
     // 2026 floor leading-edge devices — up to five vortex teeth across the
     // width (motorsport.tech Issue-12). Chase only: they sit under the nose
     // and never enter the onboard frame.
@@ -809,7 +809,7 @@ const Car3D = (function () {
         const room = Math.max(0.018, cap - (y - h * 0.5));
         return { y: cap - room * 0.5, h: room };
       };
-      for (let i = 0; i < fenceN; i++) {
+      zone("floor", () => { for (let i = 0; i < fenceN; i++) {
         const fz = 0.42 - i * fenceStep;
         const ex = floorEdgeAt(fz);
         const cap = fenceCap(fz);
@@ -819,7 +819,7 @@ const Car3D = (function () {
           { z: fz + 0.095, x: s * (ex + 0.014), y: a.y, w: 0.028, h: a.h },
           { z: fz - 0.095, x: s * (ex + 0.038), y: b.y, w: 0.022, h: b.h },
           CARBON);
-      }
+      } });
       const edgeLip = Math.max(0, Math.min(2, floorStyle.edgeLip || 0));
       if (edgeLip > 0) {
         const ef = floorEdgeAt(0.50), er = floorEdgeAt(-1.10);
@@ -1033,7 +1033,7 @@ const Car3D = (function () {
 
     part("cockpit");
     // Exterior head surround stays out of the dedicated driver-eye mesh.
-    if (!ckpt) {
+    if (!ckpt) zone("headrest", () => {
       // Recipe-gated HEADREST behind the helmet: 0 flat rim (shipped) / 1 raised
       // horseshoe pad / 2 winged pad. Front face stays behind the helmet dome
       // (centre z -0.075, r 0.145 -> rear extent -0.220); pad tops stay under
@@ -1058,7 +1058,7 @@ const Car3D = (function () {
           }
         }
       }
-    }
+    });
     if (!exHalo && opts && opts.halo) {
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
@@ -1363,7 +1363,7 @@ const Car3D = (function () {
     const exhBase = engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
     const exhR = (exhTwin ? Math.max(exhBase, 0.076) : exhBase) * exhBore;
-    const fuelFlame = fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];
+    const fuelFlame = _ckAcc(CarMaterials.zoneColour(liv.exhaustTint)) || fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];   // EXHAUST HEAT (liv.exhaustTint) beats the fuel part's flame
     const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     const exhMetal = [0.16, 0.16, 0.17], exhFlareC = [0.18, 0.18, 0.19];
     const glazeOf = (rgb) => rgb.map((value) => Math.min(value * 0.45, 0.65));
@@ -1714,7 +1714,7 @@ const Car3D = (function () {
 
     const aVane = aeroStyle && aeroStyle.vane != null ? aeroStyle.vane
                 : (aLvl >= 4 ? 3 : aLvl >= 3 ? 2 : aLvl >= 1 ? 1 : 0);
-    if (!ckpt && aVane > 0) {
+    if (!ckpt && aVane > 0) zone("floor", () => {
       for (const s of [-1, 1]) {
         // Primary vane — always present.
         addBeveledSpan(out,
@@ -1744,12 +1744,12 @@ const Car3D = (function () {
           addBox(out, s*0.60, 0.19, 0.86, 0.16, 0.014, 0.36, CARBON);   // horizontal turning vane
         }
       }
-    }
+    });
     // 2026 in-wash WAKEBOARD (`board`) — the regulated floor-board / bargeboard
     // return, inboard of the turning-vane cluster so the two never occupy the
     // same volume. 0 none · 1 vertical fence · 2 fence + horizontal foot.
     const aBoard = Math.max(0, Math.min(2, Math.round((aeroStyle && aeroStyle.board) || 0)));
-    if (aBoard > 0 && !ckpt) {
+    if (aBoard > 0 && !ckpt) zone("floor", () => {
       for (const s of [-1, 1]) {
         addBeveledSpan(out,
           { z: 1.38, x: s * 0.48, y: 0.20, w: 0.014, h: aBoard === 2 ? 0.20 : 0.14, t: 0.45 },
@@ -1760,7 +1760,7 @@ const Car3D = (function () {
           { z: 0.86, x: s * 0.56, y: 0.165, w: 0.12, h: 0.014, t: 0.80 },
           0.005, CARBON);
       }
-    }
+    });
 
     part("rearAssembly");
     if (!ckpt) {
@@ -2198,16 +2198,16 @@ const Car3D = (function () {
       const rimColor = wt.rim || (wheelStyle && wheelStyle.rim) || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
-          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink, wt.surf);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
-          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink, wt.surf);
       }
     }
     // Fixed deflectors belong to the chassis, including the split race body.
     // 2026 over-wheel deflector above each FRONT wheel (tyre crown y 0.68):
     // 0 none / 1 single plane on a stalk / 2 biplane + outboard endplate.
     const wDefl = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.deflector) || 0)));
-    if (wDefl > 0) {
+    if (wDefl > 0) zone("deflector", () => {
       for (const s of [-1, 1]) {
         addBeveledSpan(out,
           { z: AXLES.frontZ + 0.20, x: s * 0.79, y: 0.745, w: 0.30, h: 0.012, t: 0.70 },
@@ -2225,9 +2225,9 @@ const Car3D = (function () {
                  CARBON, SURFACES.carbon);
         }
       }
-    }
+    });
 
-    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
+    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3; CarMaterials.applyZones(out, zoneRanges, sections, liv, _ckAcc);   // PAINT ZONES (unset = no-op)
     CarMaterials.applyFinish(out, liv.finish, sections, liv, zoneRanges);
 
     shadeFlags.round = false;
