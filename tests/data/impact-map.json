@@ -4405,7 +4405,8 @@
         "tests/unit/track-line.test.mjs",
         "tests/unit/track-shot-survey.test.mjs",
         "tests/unit/trim-comments.test.mjs",
-        "tests/unit/ui-improve-pass.test.mjs"
+        "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/vm-debug-preload.test.mjs"
       ]
     },
     "js/core/mat4.js": {
@@ -9661,7 +9662,8 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/lsp-mcp.test.mjs"
+        "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/vm-debug-preload.test.mjs"
       ]
     },
     "js/physics/collide.js": {

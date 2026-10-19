@@ -74,6 +74,7 @@
     "physics:sweep": "node tools/check/physics-tune-sweep.mjs",
     "wgx:capture": "node tools/gfx/gfx-probe.mjs --backend webgpu",
     "prepare": "git config core.hooksPath .githooks || true",
+    "debug:unit": "node tools/ci/debug-unit.mjs",
     "test:perf-race-entry": "node tools/ci/run-playwright.mjs tests/specs/perf-race-entry.spec.js"
   },
   "devDependencies": {
