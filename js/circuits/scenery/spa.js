@@ -139,24 +139,26 @@
       broadcastCompound(K(0.755), -1, 45, { vans: 3, dishes: 2, mastH: 9 });
 
       {
+        // Paddock / Kemmel Racing Kit modules (#1617 Slice C) — pits and tents
+        // replace the retired synthetic commercial / industrial boxes.
         const pads = [
-          ["kenney_com_building-e", 0.748, -1, 58],
-          ["kenney_ind_building-h", 0.772, -1, 56],
-          ["kenney_com_low-detail-building-wide-a", 0.105, -1, 52],
-          ["kenney_twr_building-sample-tower-a", 0.018, -1, 52],
+          ["k_pitsoffice", 0.748, -1, 58, 2.6],
+          ["k_pitsgarage", 0.772, -1, 56, 2.6],
+          ["k_tentclosedlong", 0.105, -1, 52, 2.4],
+          ["k_bannertowerred", 0.018, -1, 52, 2.0],
         ];
-        for (const [id, s, side, dist] of pads) {
-          if (!bakedModel(id, K(s), side, dist))
+        for (const [id, s, side, dist, sc] of pads) {
+          if (!bakedModel(id, K(s), side, dist, { scale: sc }))
             building(K(s), side, dist, 16, 12, 14,
               { kind: "hall", wall: [0.70, 0.68, 0.64], window: [0.30, 0.32, 0.34], floor: 4 });
         }
       }
-      // Jersey barriers on La Source runoff (pack-optional; tyreWall stays).
+      // Jersey barriers on La Source runoff (Racing Kit; tyreWall stays).
       along(0.015, 0.028, 4.5, (k) => {
-        bakedModel("kenney_construction-barrier", k, 1, 6.2, { scale: 1.15 });
+        bakedModel("k_barrierwhite", k, 1, 6.2, { scale: 1.5 });
       });
       along(0.016, 0.027, 6.0, (k) => {
-        bakedModel("kenney_construction-cone", k, 1, 5.0, { tint: [1.0, 0.42, 0.10] });
+        bakedModel("k_pylon", k, 1, 5.0, { scale: 1.3 });
       });
 
       const ARD_TIMBER = [0.46, 0.36, 0.26];   // creosote-dark plank

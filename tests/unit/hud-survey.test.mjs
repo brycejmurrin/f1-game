@@ -42,7 +42,10 @@ test("the survey's tables lockstep the game's: CamModes, HudLayout, HudElements,
     const keys = [...m[1].matchAll(/([a-z]+): \{/g)].map((x) => x[1]);
     assert.deepEqual(keys.sort(), [...placed].sort(), `PRESETS.${id} places what HudLayout's preset writes`);
   }
-  assert.match(hl, /LIM = Object\.freeze\(\{ x: \[-50, 50\], y: \[-50, 50\], s: \[50, 200\] \}\)/);
+  const limits = hl.match(/const LIM = Object\.freeze\((\{[^;]+\})\);/);
+  assert.ok(limits, "HudLayout exposes its coordinate and size limits");
+  const gameLimits = vm.runInNewContext(`(${limits[1]})`);
+  assert.deepEqual(M.LIM, JSON.parse(JSON.stringify(gameLimits)), "survey uses JSON-safe null endpoints for the game's unbounded limits");
   const he = read("js/ui/hud-elements.js");
   const toggles = [...he.slice(he.indexOf("const ELEMENTS"), he.indexOf("const store")).matchAll(/\["([a-z]+)", "/g)].map((m) => m[1]);
   assert.deepEqual(Object.keys(M.ELEMENT_TOGGLES), toggles, "ELEMENT_TOGGLES = HudElements.ELEMENTS");
@@ -266,7 +269,7 @@ test("shards: whole boot groups, a partition, balanced, baselines stay with thei
 
 test("cells: validation, stable ids, boot keys", () => {
   for (const bad of [{ cam: "x" }, { hudScale: 10 }, { btnScale: 400 }, { off: ["map"] }, { preset: { nope: {} } },
-    { preset: { map: { s: 300 } } }, { track: "../x" }, { wat: 1 }, { checks: [{ type: "eval" }] }]) {
+    { preset: { map: { s: 0 } } }, { track: "../x" }, { wat: 1 }, { checks: [{ type: "eval" }] }]) {
     assert.throws(() => M.normalizeCell(bad), M.CellError, JSON.stringify(bad));
   }
   const c = M.normalizeCell({ device: "phone-landscape-844x390", cam: "cockpit", preset: { map: { s: 150 } }, hudScale: 70, off: ["ot", "gear"] });
@@ -274,6 +277,22 @@ test("cells: validation, stable ids, boot keys", () => {
   assert.match(M.cellId(c), /^phoneL-cockpit-offsets-[a-z0-9]+-hud70-off-gear\.ot$/);
   assert.equal(M.bootKey(c), "phone-landscape-844x390|monza|standard|full|default|race");
   assert.equal(M.bootKey({ ...c, map: "off", theme: "light" }), M.bootKey(c), "MAP / theme are live, not boot keys");
+});
+
+test("inline offsets retain unrestricted finite coordinates and positive fractional sizes", () => {
+  const preset = { map: { x: -125.25, y: 240.125, s: 350 }, energy: { x: 0, y: -0.125, s: 0.01 } };
+  assert.deepEqual(M.validateOffsets(preset), preset);
+  assert.deepEqual(M.normalizeCell({ preset }).preset, preset);
+  const parsed = parseArgs(["--preset", JSON.stringify(preset)]);
+  assert.deepEqual(parsed.cells[0].preset, preset, "the CLI accepts the same values without clamping");
+  assert.deepEqual(JSON.parse(JSON.stringify(M.LIM)), M.LIM, "limit metadata round-trips through JSON");
+  for (const key of ["x", "y", "s"]) {
+    for (const value of [NaN, Infinity, -Infinity, null, "125", {}, []]) {
+      assert.throws(() => M.validateOffsets({ map: { [key]: value } }), M.CellError, `${key}: ${String(value)}`);
+    }
+  }
+  for (const s of [0, -0.01, -350]) assert.throws(() => M.validateOffsets({ map: { s } }), /positive finite/);
+  assert.throws(() => M.validateOffsets({ map: { constructor: 1 } }), /only x, y, s/);
 });
 
 // ── rules + findings ──────────────────────────────────────────────────────

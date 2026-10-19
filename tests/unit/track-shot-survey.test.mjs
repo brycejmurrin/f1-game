@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import zlib from "node:zlib";
 import path from "node:path";
 import {
@@ -22,6 +21,14 @@ import {
   MAX_SURVEY_SHOTS,
   SURVEY_ASYNC_MS,
 } from "../../tools/lib/track-shot-survey.mjs";
+
+// Scratch dirs live under the ignored artifacts/ tree, never the system tmp (AGENTS.md).
+const TMP_BASE = (() => {
+  const d = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..", "artifacts", "tmp");
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+})();
+
 
 test("linspaceFracs spreads without hitting 1.0 duplicate", () => {
   assert.deepEqual(linspaceFracs(4), [0, 0.25, 0.5, 0.75]);
@@ -116,7 +123,7 @@ test('named batches partition tracks and reject missing, duplicate and oversized
 test('native custom scenery targets preserve content ids and reject unsupported scenery', async () => {
   const { loadSurveyDesigns } = await import('../../tools/lib/custom-survey-locations.mjs');
   const { design } = await import('../helpers/editor-vm.mjs');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'survey-custom-')), file = path.join(dir, 'designs.json');
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, 'survey-custom-')), file = path.join(dir, 'designs.json');
   const row = design({ props: [{ kind: 'pond', s: .25, side: 1, gap: 30 }, { kind: 'pond', s: .75, side: -1, gap: 40 }] });
   const write = items => fs.writeFileSync(file, JSON.stringify({ format: 'apex26.tracks', v: 1, items }));
   try {
@@ -144,7 +151,7 @@ test('native custom scenery targets preserve content ids and reject unsupported 
 });
 
 test("filterResumeShots and findings helpers", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-survey-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-survey-"));
   const plan = buildTrackShotSurveyPlan({ preset: "lap", label: "r" });
   fs.writeFileSync(path.join(dir, `${plan.shots[0].name}.png`), tinyPng());
   const { pending, resumed, invalid } = filterResumeShots(dir, plan.shots, true);
@@ -165,7 +172,7 @@ test("filterResumeShots and findings helpers", () => {
 });
 
 test("writeSurveyIndex writes readable gallery", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-survey-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-survey-"));
   const html = writeSurveyIndex(dir, {
     track: "monza",
     label: "scenery",
@@ -192,7 +199,7 @@ test("buildTrackShotSurveyPlan: weather is validated and reaches every shot (nul
 
 
 test("compare gallery shows every track view, captions, failures and legacy panels", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-gallery-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-gallery-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = writeCompareIndex(dir, { label: '<Gallery "review">', tracks: [
     { track: "custom-first", label: "Fjord <ridge>", captured: 1, failed: 1, failures: [{ name: "bad <view>", error: '<script>alert("x")</script>' }], shots: [{ name: "ridge", png: path.join(dir, "first", "ridge one.jpg"), cam: "orbit", frac: 0.25, tod: "day" }] },
@@ -215,7 +222,7 @@ test("compare gallery shows every track view, captions, failures and legacy pane
 });
 
 test("report galleries copy repeated shot names portably and preserve actual custom identities", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-reports-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-reports-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const reports = ["first", "second"].map((name, i) => {
     const root = path.join(dir, name);
@@ -246,7 +253,7 @@ test("report galleries copy repeated shot names portably and preserve actual cus
 });
 
 test("report gallery rejects missing reports, images and unsupported asset types before writing", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-missing-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-missing-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const out = path.join(dir, "gallery");
   assert.throws(() => writeSurveyGalleryFromReports(out, []), /at least one/);
@@ -263,7 +270,7 @@ test("report gallery rejects missing reports, images and unsupported asset types
 
 
 test("report gallery applies the asset policy before file reads, including symbolic links", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-gallery-policy-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-gallery-policy-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const out = path.join(dir, "gallery");
   const report = path.join(dir, "findings.json");
@@ -284,7 +291,7 @@ test("report gallery applies the asset policy before file reads, including symbo
 });
 
 test("compare gallery shows all-failed tracks without inventing index links", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-gallery-failed-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-gallery-failed-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = writeCompareIndex(dir, { tracks: [{ track: "broken", error: "Boot failed", relIndex: null }] });
   const html = fs.readFileSync(file, "utf8");
@@ -308,7 +315,7 @@ test('every circuit exposes authored turn locations usable by named shot plans',
  const { createRequire } = await import('node:module');
  const require = createRequire(import.meta.url);
  const defs = require('../../tools/track/verify-track.cjs').buildContext(null, {quiet:true}).LIST;
- assert.equal(defs.length,52);
+ assert.equal(defs.length,require('../../tools/manifest.cjs').CIRCUITS.length);
  for (const def of defs) {
    const locations = listSurveyLocations(def.id);
    assert.equal(locations.filter(l=>l.kind==='turn').length,def.turns.length,def.id);
@@ -373,7 +380,7 @@ test("sourceDigest ignores an unrelated manifest module and follows TRACK_VM", a
  const { TRACK_VM } = require("../../tools/manifest.cjs");
  const root = path.resolve(".");
  const baseline = scenerySourceDigest(root);
- const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-digest-"));
+ const tmp = fs.mkdtempSync(path.join(TMP_BASE, "apex-digest-"));
  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
  const files = [
    "tools/shot/gen-scenery-locations.cjs",
@@ -396,7 +403,7 @@ test("sourceDigest ignores an unrelated manifest module and follows TRACK_VM", a
  for (const rel of files) {
    const dest = path.join(tmp, rel);
    fs.mkdirSync(path.dirname(dest), { recursive: true });
-   if (!fs.existsSync(dest)) fs.linkSync(path.join(root, rel), dest);
+   if (!fs.existsSync(dest)) fs.copyFileSync(path.join(root, rel), dest);
  }
  fs.mkdirSync(path.join(tmp, "tools"), { recursive: true });
  const manifestPath = path.join(tmp, "tools/manifest.cjs");
@@ -408,21 +415,22 @@ test("sourceDigest ignores an unrelated manifest module and follows TRACK_VM", a
      if (key === resolved || key.startsWith(tmp + path.sep)) delete require.cache[key];
    }
  };
- fs.writeFileSync(manifestPath, manifestSrc.replace(
-   "const FULL = [\n",
-   `const FULL = [\n  "${probe}",\n`,
- ));
+ const withProbe = manifestSrc.replace("const FULL = [\n", `const FULL = [\n  "${probe}",\n`);
+ assert.notEqual(withProbe, manifestSrc, "the FULL anchor moved: the unrelated-module half would pass vacuously");
+ fs.writeFileSync(manifestPath, withProbe);
  dropCache();
  assert.equal(scenerySourceDigest(tmp), baseline, "an unrelated FULL module must leave the digest unchanged");
- fs.writeFileSync(manifestPath, manifestSrc.replace(
+ const withMember = manifestSrc.replace(
    "\"@circuits\",\n  \"js/track/circuit-elevations.js\",\n  \"js/track/tracks.js\",",
    "\"@circuits\",\n  \"js/track/circuit-elevations.js\",\n  \"js/core/log.js\",\n  \"js/track/tracks.js\",",
- ));
+ );
+ assert.notEqual(withMember, manifestSrc, "the TRACK_VM anchor moved: the membership half would pass vacuously");
+ fs.writeFileSync(manifestPath, withMember);
  dropCache();
  assert.notEqual(scenerySourceDigest(tmp), baseline, "a TRACK_VM membership change must change the digest");
 });
 test('resume requires matching receipt identity when a capture context is supplied',()=>{
- const dir=fs.mkdtempSync(path.join(os.tmpdir(),'survey-identity-'));
+ const dir=fs.mkdtempSync(path.join(TMP_BASE,'survey-identity-'));
  try {
   const shot={name:'one'};const file=path.join(dir,'one.jpg');fs.writeFileSync(file,'fixture');
   const context={extension:'jpg',identities:{one:'current'}};
@@ -451,7 +459,7 @@ test('survey GPU auto-selection does not mistake installed Mesa for a usable loc
 });
 
 test('survey galleries preserve the actual JPEG capture path and native navigation', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-gallery-jpeg-'));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, 'apex-gallery-jpeg-'));
   try {
     const file = writeSurveyIndex(dir, { track: 'spa', shots: [{ name: 'pond', png: path.join(dir, 'pond.jpg'), cam: 'orbit' }] });
     const html = fs.readFileSync(file, 'utf8');
@@ -471,7 +479,7 @@ test("two fracs that round to one name are rejected at plan time, not overwritte
 });
 
 test("resume only counts a structurally sound PNG: text, truncation and a flipped byte are recaptured and reported", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-survey-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "apex-survey-"));
   const plan = buildTrackShotSurveyPlan({ preset: "custom", fracs: [0.1, 0.3, 0.5, 0.7], cam: "orbit", label: "v" });
   const [ok, text, cut, flipped] = plan.shots.map((s) => path.join(dir, `${s.name}.png`));
   fs.writeFileSync(ok, tinyPng());

@@ -106,6 +106,96 @@ test("densify inserts into gaps shorter than 2× stride (the MCP monza no-op)", 
     `dens=2 must insert into span=2/target=1 gaps (got ${count} lights from ${track.lampPosts.length} posts)`);
 });
 
+/* ---- R2-22 / R2-31: the density maths on a circle with a known node pitch ----
+ * ds = 5.5 m, so LAMP DENSITY 2 gives targetGap = 2 nodes (asserted below), and
+ * a post spacing of 3 sits in (gap, 2*gap) — the band the old no-op lived in.
+ * Posts are placed where buildProps would put them (px + r*(hw+6)*side), so
+ * resolvePostNodes keeps their k. A light record is 15 floats: x y z .. glareW. */
+const REC = 15, I_GLARE = 14;
+function ringTrack(posts, n = 60) {
+  const t = fakeTrack(n, n * 5.5);
+  t.lampPosts = posts.map((p) => {
+    const k = p.k, side = p.side;
+    return { ...p, x: t.px[k] + t.rx[k] * (t.hw[k] + 6) * side, y: t.py[k] + 13, z: t.pz[k] + t.rz[k] * (t.hw[k] + 6) * side };
+  });
+  return t;
+}
+function records(api, track, dens) {
+  api.LT.lampDensity = dens; api.LT.lampGapFill = 0;
+  const L = api.buildTrackLights(track), out = [];
+  for (let o = 0; o < L.length; o += REC) out.push(Array.from(L.slice(o, o + REC)));
+  return out;
+}
+const keyOf = (r) => r.slice(0, 3).map((v) => v.toFixed(3)).join(",");
+/** Records present at density 2 but not at density 1 = the synthetic fill lamps. */
+function fillLamps(api, track) {
+  const base = new Set(records(api, track, 1).map(keyOf));
+  return records(api, track, 2).filter((r) => !base.has(keyOf(r)));
+}
+const every = (step, n, side0 = 1, extra = {}) =>
+  Array.from({ length: Math.ceil(n / step) }, (_, i) => ({ k: i * step, side: i % 2 ? -side0 : side0, kind: "halide", ...extra }));
+
+test("a post spacing inside (gap, 2*gap) still gets a fill lamp per gap, wrap-around gap included", () => {
+  // Kills the floor((span-1)/gap) -> floor(span/gap)-1 mutant: at span 3, gap 2
+  // the first yields 1 insert and the second 0. (The older span=2/gap=1 fixture
+  // gives 1 both ways, so it never saw the dead band.)
+  const api = loadLightTune();
+  const t = ringTrack(every(3, 60));                       // 20 posts, 20 gaps of 3 incl. 57 -> 0
+  api.LT.lampDensity = 2;
+  assert.equal(api.lampStrideNodes(t.total / t.n), 2, "fixture: density 2 must give a 2-node target gap");
+  assert.equal(fillLamps(api, t).length, 20, "one fill lamp in every span-3 gap, the wrap gap too");
+});
+
+test("a gap exactly one target wide is left alone", () => {
+  const api = loadLightTune();
+  const t = ringTrack(every(2, 60));                       // span == gap everywhere
+  api.LT.lampDensity = 2;
+  assert.equal(fillLamps(api, t).length, 0, "span <= gap must not insert (that would stack lamps)");
+});
+
+test("fill lamps alternate sides, carry no halo, and the wrap-around gap is filled", () => {
+  const api = loadLightTune();
+  // Two posts on a 60-node ring: gaps 0->6 (span 6) and 6->0 (wrap, span 54).
+  const t = ringTrack([{ k: 0, side: 1, kind: "halide" }, { k: 6, side: -1, kind: "halide" }]);
+  api.LT.lampDensity = 2;
+  const fill = fillLamps(api, t);
+  assert.equal(fill.length, 2 + 26, "floor(5/2)=2 in the short gap, floor(53/2)=26 across the wrap");
+  for (const r of fill) assert.equal(r[I_GLARE], 0, "a fill lamp has no fixture, so no lens halo");
+  // Lateral sign: the ring is radial, so side = sign of (position . radial) - hw.
+  const sideOf = (r) => (Math.hypot(r[0], r[2]) > 400 ? 1 : -1);
+  const sides = fill.slice(0, 2).map(sideOf);
+  assert.notEqual(sides[0], sides[1], "consecutive fill lamps in one gap sit on opposite sides");
+});
+
+test("a fill lamp never copies the signal kind or an aimAt from its neighbour", () => {
+  // The pit-entrance red-pool defect: a fill lamp inherited the signal aspect
+  // and threw a red pool at the near lane. Same ring, same ordering, only the
+  // neighbours' kind differs -> the fill lamps must be byte-identical to those
+  // beside kind-less posts (an ordinary kind, e.g. halide, is legitimately copied).
+  const api = loadLightTune();
+  const plain = fillLamps(api, ringTrack(every(3, 60, 1, { kind: null })));
+  const sig = fillLamps(api, ringTrack(every(3, 60, 1, { kind: "signal" })));
+  const aimed = fillLamps(api, ringTrack(every(3, 60, 1, { kind: null, aimAt: [0, 0, 0] })));
+  assert.ok(plain.length === 20 && sig.length === 20 && aimed.length === 20);
+  assert.deepEqual(sig, plain, "signal-kind neighbours leaked their kind into the fill lamps");
+  assert.deepEqual(aimed, plain, "aimAt neighbours leaked their aim into the fill lamps");
+  // And the neighbours themselves really are different, so the comparison can fail.
+  const post = (k) => records(api, ringTrack(every(3, 60, 1, { kind: "signal" })), 1)[k];
+  const plainPost = (k) => records(api, ringTrack(every(3, 60, 1, { kind: null })), 1)[k];
+  assert.notDeepEqual(post(1), plainPost(1), "a signal post must differ from a halide post");
+});
+
+test("LAMP DENSITY below 1 keeps every gap-th post and wraps like a ring", () => {
+  const api = loadLightTune();
+  const t = ringTrack(every(1, 60));                       // a post on every node
+  const extras = records(api, t, 1).length - 60;           // constant start-gantry lights
+  api.LT.lampDensity = 0.5;
+  const gap = api.lampStrideNodes(t.total / t.n);
+  assert.ok(gap >= 4, `fixture: density 0.5 should give a wide gap (got ${gap})`);
+  assert.equal(records(api, t, 0.5).length - extras, Math.ceil(60 / gap),
+    "first post kept, then one per gap nodes");
+});
+
 test("dressingExcluded lamps aliases match floodlights/lighting rules", () => {
   // Source-level: the mast pass queries "lamps", and LIGHTING_KINDS treats the
   // three names as one family (any rule ↔ any query).

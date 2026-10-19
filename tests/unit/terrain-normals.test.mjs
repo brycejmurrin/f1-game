@@ -168,16 +168,19 @@ test("Tracks.bankAngle is banking()'s roll at every node (zandvoort)", () => {
 // (test above). A revert that re-wraps banking() fails this call-count pin.
 test("Tracks.bankAngle does not call banking() (AI look hot path)", () => {
   const Tracks = _ctx || (_ctx = buildContext());
-  const tr = Tracks.buildCenterline(Tracks.LIST.find((d) => d.id === "monza"), { line: false });
-  let hits = 0;
-  const keep = Tracks.banking;
-  Tracks.banking = function () { hits++; return keep.apply(this, arguments); };
-  try {
-    for (let k = 0; k < tr.n; k++) Tracks.bankAngle(tr, (k + 0.37) * tr.total / tr.n);
-  } finally {
-    Tracks.banking = keep;
+  // bankAngle calls TrackMesh's own closure banking(), which a spy on Tracks.banking
+  // cannot see (reviewer mutation: a re-wrap still passed). So pin the function body.
+  const body = Tracks.bankAngle.toString();
+  assert.doesNotMatch(body, /\bbanking\s*\(/, "bankAngle body must not call banking()");
+  assert.doesNotMatch(body, /\batan2\b[\s\S]*\bbanking\b/, "no banking reference");
+  // and still the same value on both a banked and a flat circuit (behaviour, not just text)
+  for (const id of ["monza", "zandvoort"]) {
+    const tr = Tracks.buildCenterline(Tracks.LIST.find((d) => d.id === id), { line: false });
+    for (let k = 0; k < tr.n; k += 7) {
+      const s = (k + 0.37) * tr.total / tr.n, b = Tracks.banking(tr, s, 0, {});
+      assert.equal(Tracks.bankAngle(tr, s), b ? b.roll : 0, `${id} k=${k}`);
+    }
   }
-  assert.equal(hits, 0, `bankAngle must not route through banking() (got ${hits} calls)`);
 });
 
 // Source pin for the updateCar grip path: bankAngle === banking().roll, so the

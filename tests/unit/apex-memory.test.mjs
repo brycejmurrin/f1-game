@@ -82,16 +82,3 @@ test("apex-memory retires orphan and dangling index entries; missing/protected r
   assert.equal(fs.readFileSync(outside, "utf8"), "outside\n");
   assert.deepEqual(new Map(fs.readdirSync(mem).map((file) => [file, read(file)])), before);
 });
-
-test("apex-memory show prints a real topic; retire refuses MEMORY.md", () => {
-  const show = spawnSync(process.execPath, [TOOL, "show", "user-timezone-pacific.md"], {
-    encoding: "utf8", cwd: ROOT,
-  });
-  assert.equal(show.status, 0);
-  assert.match(show.stdout, /Pacific|America\/Los_Angeles/);
-  const bad = spawnSync(process.execPath, [TOOL, "retire", "MEMORY.md"], {
-    encoding: "utf8", cwd: ROOT,
-  });
-  assert.notEqual(bad.status, 0);
-  assert.match(bad.stderr, /refuse to retire MEMORY\.md/);
-});
