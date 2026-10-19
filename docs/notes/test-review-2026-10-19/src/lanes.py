@@ -160,7 +160,8 @@ _FOLD = {
  "L15": (["tooling-5"], ["tests/unit/tt-lap-validity-vm.test.mjs"], ["T5-23"]),
  "L16": (["tooling-5"], ["tests/unit/wind.test.mjs"], ["T5-19"]),
  "L19": (["tooling-5"], ["tests/unit/surface-id-parity.test.mjs"], ["T5-18"]),
- "L21": (["tooling-5"], ["tests/unit/wind-speed.test.mjs"], ["T5-21"]),
+ "L21": (["tooling-5", "audio-1"], ["tests/unit/wind-speed.test.mjs"] + ['tests/unit/fake-audio-vm.cjs', 'tests/unit/rival-contact-sfx.test.mjs', 'tests/unit/audio-*.test.mjs', 'tests/unit/spotify-refresh.test.mjs', 'tests/unit/career-data-audio-improvements.test.mjs', 'tests/specs/audio-smoke.spec.js', 'tests/specs/music-library.spec.js', 'tests/unit/lazy-audio-yield.test.mjs', 'tests/unit/end-race-music-vm.test.mjs', 'tests/unit/crowd-audio.test.mjs'],
+        ["T5-21"] + ['A1-01', 'A1-02', 'A1-03', 'A1-04', 'A1-05', 'A1-06', 'A1-07', 'A1-08', 'A1-09', 'A1-10', 'A1-11', 'A1-12', 'A1-13', 'A1-14', 'A1-16', 'A1-17', 'A1-18', 'A1-19', 'A1-20', 'A1-21', 'A1-22']),
  "L17": ([], ["tests/specs/terrain-over-road.spec.js"], ["RC2-19", "RC2-20", "RC2-21"]),
 }
 for _L in LANES:

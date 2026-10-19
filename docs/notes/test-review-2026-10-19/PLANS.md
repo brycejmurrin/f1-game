@@ -241,12 +241,12 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
 - **Depends on:** U1-02's fixes live on unmerged branch cursor/hud-band-allocator-5e2c: land that PR first, then flip the todo tests to real asserts; ui-2 report may add rows
 
-### L21 — Audio paths the race actually takes (ready to launch)
+### L21 — Audio paths the race actually takes (draft)
 
 - **Goal:** audio tests call GameAudio the way the race does (scalar skid, pause/resume), so the double-gated squeal and lock-up pitch are caught
-- **Owned:** `tests/unit/tyre-squeal-slip.test.mjs`, `tests/unit/pause-silence.test.mjs`, `tests/unit/wind-speed.test.mjs`
-- **Closes:** P2-13, U1-04, T5-21 (3 findings; effort S×3 M×0 L×0)
-- **Draws from batches:** physics-2, ui-1, car-1, tooling-5
+- **Owned:** `tests/unit/tyre-squeal-slip.test.mjs`, `tests/unit/pause-silence.test.mjs`, `tests/unit/wind-speed.test.mjs`, `tests/unit/fake-audio-vm.cjs`, `tests/unit/rival-contact-sfx.test.mjs`, `tests/unit/audio-*.test.mjs`, `tests/unit/spotify-refresh.test.mjs`, `tests/unit/career-data-audio-improvements.test.mjs`, `tests/specs/audio-smoke.spec.js`, `tests/specs/music-library.spec.js`, `tests/unit/lazy-audio-yield.test.mjs`, `tests/unit/end-race-music-vm.test.mjs`, `tests/unit/crowd-audio.test.mjs`
+- **Closes:** P2-13, U1-04, T5-21, A1-01, A1-02, A1-03, A1-04, A1-05, A1-06, A1-07, A1-08, A1-09, A1-10, A1-11, A1-12, A1-13, A1-14, A1-16, A1-17, A1-18, A1-19, A1-20, A1-21, A1-22 (24 findings; effort S×14 M×10 L×0)
+- **Draws from batches:** physics-2, ui-1, car-1, tooling-5, audio-1 — waiting on: audio-1
 - **Verify:** `node --test tests/unit/tyre-squeal-slip.test.mjs tests/unit/pause-silence.test.mjs`
 - **Effort:** S (test) + a product fix for P2-13
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
