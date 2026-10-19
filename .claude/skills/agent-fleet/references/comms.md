@@ -12,6 +12,7 @@ restated. Tools are the `claude-code-remote` MCP: `send_message`,
 
 - Authority (the rule everything else hangs on)
 - Messaging
+- Output budget (2026-10-19)
 - PR subscription
 - Quota park
 - Claims
@@ -56,8 +57,8 @@ HANDOFF <PR> <to session>, <state>, branch <name> @ <sha7>
 STAND-DOWN <PR> <who is pushing>
 ```
 
-Rotation is routine: an owner hands off at ~350 k context, the orchestrator at
-300 k (owners reached 400-550 k, $15-25, before anyone rotated). The HANDOFF
+Rotation is routine: a worker or owner hands off at 150 k context (STOP AT table, launch-policy.md), the orchestrator at
+200 k (owners reached 400-550 k, $15-25, before anyone rotated). The HANDOFF
 message body (after the one-line `HANDOFF <PR> …` first line above), so the successor starts cold with no questions:
 
 ```
@@ -88,6 +89,15 @@ every HANDOFF/DONE. The child prompt is a full standalone brief (it sees no
 parent context): goal, PR numbers, branch, OWNED/FORBIDDEN paths, what is
 delegated, and "follow `.claude/skills/steward/references/ownership.md`". Point to the
 skill, do not retype its rules.
+
+## Output budget (2026-10-19)
+
+No tool result over 10k characters enters context.
+- `list_sessions`: `limit` <= 10, or save the page and parse it with `python3 -I`.
+- `list_events`: pass `kinds`, or save the page and digest it with `session-transcript.mjs --summary` (transcripts.md).
+- `actions_list` / `pull_request_read`: `minimal_output`, `per_page` <= 5.
+- Prefer `ci-watch.mjs --once` and `pr-board.mjs --json` over raw API pages.
+- A long web page goes to a subagent that returns the facts, not into the main context.
 
 ## PR subscription
 

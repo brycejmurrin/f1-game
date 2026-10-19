@@ -50,10 +50,25 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
 - Every worker hand-back reports its head SHA; on a token failure it stops and reports. Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
 - **Cost and context (retro 2026-10-17, `docs/notes/AGENT-RETRO-2026-10-17.md`).** Three long-lived Opus sessions were 53 % of one night's
   ≈ $660: a 750 k-context orchestrator at ≈ $0.35 per 5 s wake, a Home CSS fixer at $100 with nothing committed. The launch
-  prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past ~300 k
+  prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past 200k
   context. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
   may choose a tighter cadence (Bryce chose 5 min on 2026-10-17), and then the orchestrator follows that.
-- **Size stop.** Every launch prompt ends `STOP AT: 300k context or $<cap>` (orchestrator.md hard line 12); the session self-checks `get_session` `context_usage` at each wake.
+- **Size stop (per role, 2026-10-19).** Every launch prompt ends `STOP AT: <limit> context or $<cap>` (orchestrator.md hard line 12):
+
+| Role | STOP AT (context) |
+|---|---|
+| reviewer | 120k |
+| worker | 150k, at a verified checkpoint |
+| PR owner | 150k (docs-only PR: 100k) |
+| synth | 150k |
+| fleet watcher | 100k |
+| orchestrator | 200k |
+
+  At every wake read your own `context_usage` via `get_session` (no id); at or over STOP AT: push, post the partial or FINAL, send HANDOFF, end.
+- **Cost and context (2026-10-19, `docs/notes/FLEET-COST-2026-10-19.md`, prices from platform.claude.com pricing).** Per-call cost is
+  about context x cache-read price ($0.20 / MTok Opus 5.5, $0.10 Sonnet 5.5), and a session's cost is roughly quadratic in its calls.
+  Cache reads were 41-69 % of every long session's bill. A handoff at 150k instead of 300k cuts cache-read dollars per unit of work by
+  about 40 %; Opus to Sonnet halves them again. Keep tool results small (comms.md §Output budget), route verbose reads through a subagent.
 - **Monitoring and reporting.** Every hunter and PR-owner launch prompt carries the block in `role-pr-owner.md` §Monitoring and reporting
   (own the PR to merged or STOP AT; `fleet-status:` line in the fleet block plus a PR comment per state change; decisions to the orchestrator via needs-decision).
 - **Desk field.** Every launch prompt carries `merge_desk: <session id | none>`; `none` means the lane reports `SWEEP-N/A` and never runs

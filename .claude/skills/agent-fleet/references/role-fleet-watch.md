@@ -28,19 +28,27 @@ needs a decision or a merge. Merging stays with the merge holder
   `source_url` + `source_revision` = the deploy branch, tags `f1-game-fleet`,
   `role:fleet-watch`.
 - The prompt carries this file's path, the orchestrator id, the Merge Desk id
-  (or `none`), the user's quotes above as `USER GRANTS:`, and `STOP AT: 300k
-  context`.
+  (or `none`), `USER GRANTS:` quoting every standing grant verbatim with its date and the
+  session it was typed in (the quotes above included), and `STOP AT: 100k context`.
+  A changed grant is a relaunch with the amended brief, never a message: relayed grants are refused (authority.md).
 - One watcher at a time. Before launching, archive the old one and delete its
   pending `FLEET-WATCH tick` one-shots (`list_triggers`).
 
 ## The wake sources
 
+Different checks run at different frequencies (Bryce, 2026-10-19: "check different things at different
+frequencies like ci jobs for failures more frequently like 1 min while rest at 3").
+
 | Source | What it catches | How it is armed |
 |---|---|---|
-| PR events | CI red/green, review, conflict, ready, merge/close | `subscribe_pr_activity` on every open PR; new ones each tick |
-| Fast tick, every 3 min | anything an event missed: ship CI, Pages, new PRs, stale reds | `send_later` delay 3, re-armed at the end of every wake |
+| CI red loop, every 60 s | a red job within a minute | a background loop plus `Monitor` on `ci-watch.mjs --sha <head> --timeout 30 --failures-only` (≤ 6 heads), re-armed on expiry |
+| Fast tick, every 3 min | everything else: ship CI, Pages, new PRs, stale reds, conflicts | `send_later` delay 3, re-armed at the end of every wake |
 | Full sweep, every 5th tick (~15 min) | sessions, cost, context, model drift, transcripts | the same tick, counted in state |
-| CI Monitors (≤ 6) | a red job within a minute | `Monitor` on `ci-watch.mjs --sha <head> --timeout 30 --failures-only`, re-armed on expiry |
+| Hourly fresh-session sweep | sessions, cost, dashboard, independent of the watcher's own context | `create_trigger` `create_new_session_on_fire`, model `claude-sonnet-5-5`, cron `0 * * * *` (hourly is the minimum) |
+
+The watcher does NOT `subscribe_pr_activity` per PR: PR owners keep their own subscriptions, and a watcher
+subscribed to every PR reads every echo into one growing context. A PR another Claude session already
+watches stays with that session (`watched-by-other` in state); never fight for it.
 
 Keep exactly one pending tick: before arming, delete any older pending
 `FLEET-WATCH tick` one-shot. A PR another Claude session already watches stays
@@ -95,6 +103,10 @@ Never report your own events echoing back.
 
 ## Dashboard
 
+Watcher state and the dashboard data live in the dashboard artifact's `db` (`ArtifactData`) or in a
+committed generator, never only in container-local files: a reclaimed container loses `artifacts/`.
+The local `artifacts/fleet-watch/state.json` is a cache that `fleet-tick.mjs` rebuilds.
+
 A private Artifact page that the watcher creates on its first wake (Dashboard
 type via `quickstart`, else a plain page with the `db` capability) and keeps
 current. Rows: every open PR (CI, mergeable, hold, owner, age), every fleet
@@ -104,6 +116,10 @@ republishing. Send its URL to the orchestrator once.
 
 ## Handoff
 
-Near 300k context, send `FLEET-WATCH HANDOFF | state <path> | dashboard <url> |
-subscribed <PR list> | pending tick <trigger id>` and stop arming ticks. The
-orchestrator starts a fresh watcher from this card.
+STOP AT 100k context. At every wake read your own `context_usage` via `get_session` (no id); at or over STOP AT: send
+`FLEET-WATCH HANDOFF | dashboard <url> | pending triggers <ids>` and stop arming ticks. State is in the
+dashboard `db`, so the handoff carries only the URL and the pending trigger ids. The orchestrator starts a
+fresh watcher from this card.
+
+Output budget: no tool result over 10k characters enters context (comms.md §Output budget); the hourly
+fresh-session sweep is the safety net while the watcher turns over.
