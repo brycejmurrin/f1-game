@@ -251,6 +251,14 @@ const SettingDeps = (function () {
         r.setAttribute("data-dep-reason", "line");
         const sum = el.querySelector("summary");
         el.insertBefore(r, sum ? sum.nextSibling || null : el.children[0] || null);
+      } else if (el.tagName === "BUTTON") {
+        // A reason inside a disabled button inherits opacity 0.45 and vanishes on
+        // a phone. Put a line under the button group (same slot EXPLAIN uses).
+        r = d.createElement("p");
+        r.setAttribute("data-dep-reason", "line");
+        const g = groupOf(el);
+        if (g.parentNode) g.parentNode.insertBefore(r, g.nextSibling || null);
+        else if (row.parentNode) row.parentNode.insertBefore(r, row.nextSibling || null);
       } else {
         r = d.createElement("span");
         r.setAttribute("data-dep-reason", "label");
