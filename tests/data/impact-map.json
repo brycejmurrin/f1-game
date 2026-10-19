@@ -8034,7 +8034,6 @@
     },
     "js/lighting/lighting.js": {
       "*": [
-        "tests/specs/lighting-ab.spec.js",
         "tests/specs/lighting-tuner-grade.spec.js",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/lamp-density.test.mjs",
@@ -12654,6 +12653,7 @@
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -12694,8 +12694,7 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "*": [
-        "tests/unit/godray-keep-nearest.test.mjs",
-        "tests/unit/image-grade-shaders.test.mjs"
+        "tests/unit/godray-keep-nearest.test.mjs"
       ]
     },
     "js/render/three/tlx-shadow.js": {
