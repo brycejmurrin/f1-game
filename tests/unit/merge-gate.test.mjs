@@ -11,7 +11,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, REQUIRED_CHECK } from "../../tools/ci/merge-gate.mjs";
-import { receiptVerdict, writeReceipt, readReceipt, receiptPath, MAX_AGE_MIN } from "../../tools/lib/gate-receipt.mjs";
+import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN } from "../../tools/lib/gate-receipt.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -179,4 +179,20 @@ test("main: every row must pass; the receipt records the refusal, and a pass pin
     assert.equal(main(["--pr", "9"], { ...deps, request: () => ({ error: "HTTP 500" }) }), 3);
     assert.equal(readReceipt(dir, "merge", 9), null);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a gate run in a linked worktree also leaves its receipt in the main checkout the hooks read", () => {
+  const main = scratch("rcpt-main-");
+  const wt = path.join(main, "..", path.basename(main) + "-wt");
+  const git = (cwd, ...a) => { const r = spawnSync("git", a, { cwd, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
+  try {
+    git(main, "init", "-q"); git(main, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x");
+    git(main, "worktree", "add", "-q", wt);
+    assert.equal(mainCheckout(main), null, "the main checkout mirrors nowhere");
+    assert.equal(mainCheckout(path.join(main, "..")), null, "a dir inside a checkout is not a checkout");
+    assert.equal(fs.realpathSync(mainCheckout(wt)), fs.realpathSync(main));
+    writeReceipt(wt, "ready", { pr: 9, head: "a".repeat(40), ok: true });
+    assert.equal(readReceipt(main, "ready", 9).pr, 9, "the hook's root has the receipt");
+    assert.equal(readReceipt(wt, "ready", 9).pr, 9);
+  } finally { fs.rmSync(wt, { recursive: true, force: true }); fs.rmSync(main, { recursive: true, force: true }); }
 });
