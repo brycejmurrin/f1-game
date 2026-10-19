@@ -20,15 +20,17 @@
  * hear the same forecast. Nothing here reads Math.random or a wall clock.
  *
  * THE ROAD MODEL is WeatherArc's own closed-form lag (js/race/weather-arc.js wetAt: τ 8 s wetting / 36 s drying),
- * mirrored here because that module exports no per-arc wetness accessor; tests/unit/forecast.test.mjs runs the
- * real weather-arc.js beside this one and fails on drift. A WeatherArc arc's own `wetIn` (the second the road
+ * read through its shared `road` evaluator; each wrapper keeps its own weather/default normalization.
+ * A WeatherArc arc's own `wetIn` (the second the road
  * turns inter-wet) is used for the rain onset when present. Event thresholds are TyreModel.treadFor's
  * (0.25 inter, 0.72 full wet) — read-only, with the same numbers inline for a VM with no tyre model.
  */
 const Forecast = (function () {
   "use strict";
 
-  const TAU_WET = 8, TAU_DRY = 36;            // s — js/race/weather-arc.js TAU_WET / TAU_DRY (guarded by the test)
+  // Retained public constants / timeline horizon; the integration itself is
+  // WeatherArc.road's. No eval-time dependency: standalone require stays inert.
+  const TAU_WET = 8, TAU_DRY = 36;
   const ERR_FRAC = 0.10, ERR_MIN = 20;       // the stated time's error bound: ±10 % of the lead, min ±20 s…
   const ERR_CAP = 0.5;                        // …but never more than half the lead (a call never points into the past)
   const CONF_FLOOR = 0.35, CONF_SPAN = 0.6, CONF_TAU = 300;   // confidence 0.95 at arrival → 0.35 far out
@@ -42,15 +44,12 @@ const Forecast = (function () {
   }
   const treadOf = (w) => hasTM() ? TyreModel.treadFor(null, w) : (w >= 0.72 ? 2 : w >= 0.25 ? 1 : 0);
 
-  /** Road wetness `e` s into arc `a` — weather-arc.js wetAt, verbatim maths. */
+  /** Road wetness `e` s into arc `a` — shared model, forecast input defaults. */
   function wetAt(a, e) {
     const w0 = typeof a.w0 === "number" ? a.w0 : wetOf(a.from);
     if (!(e > 0)) return w0;
-    const w1 = wetOf(a.to), dur = Math.max(1, a.dur || 60), s = (w1 - w0) / dur, tau = s >= 0 ? TAU_WET : TAU_DRY;
-    const ramp = (u) => w0 + s * u - s * tau * (1 - Math.exp(-u / tau));
-    if (e <= dur) return ramp(e);
-    const wE = ramp(dur);
-    return w1 + (wE - w1) * Math.exp(-(e - dur) / (w1 >= wE ? TAU_WET : TAU_DRY));
+    const w1 = wetOf(a.to), dur = Math.max(1, a.dur || 60);
+    return WeatherArc.road.at(w0, w1, dur, e);
   }
 
   // What each tread crossing is CALLED. Wetting crosses 0→1 (rain starts) and 1→2 (heavy); drying 2→1 (easing,

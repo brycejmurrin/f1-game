@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { spawnSync } from "node:child_process";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -266,4 +267,121 @@ test("source: the engineer reads Forecast through a typeof guard, and the lap-co
   assert.match(src, /typeof Forecast === "undefined"/);
   assert.match(src, /case "rain": case "rainplan": return lapBucket/);
   assert.match(read("tools/manifest.cjs"), /"js\/race\/forecast\.js"/);
+});
+
+
+// Literal differential fixtures captured from d25d60ac by the read-only
+// artifacts/refactor-all/capture-base.mjs probe before extraction. No expected
+// road formula is recomputed here; existing tread/uncertainty oracles stay above.
+const BASE_ROAD = [
+  { arc: {"from":"dry","to":"rain","dur":60}, normalized: [0,1,60], values: [0,0,-1.3790061827109696e-18,0.0002550750417967748,0.0009995870112793938,0.04905059215619231,0.46814786620509896,0.8667404112493531,0.9999262962042897,1] },
+  { arc: {"from":"rain","to":"dry","dur":60}, normalized: [1,0,60], values: [1,1,1,0.9999423966203169,0.9997706470635243,0.9862242249165818,0.7792723352971347,0.48667463829746294,0.09192096569418566,0.00011698172799421756] },
+  { arc: {"from":"wet","to":"storm","dur":8}, normalized: [0.5,1,8], values: [0.5,0.5,0.5,0.5009565314067379,0.5037484512922977,0.6839397205857212,0.990455806557962,0.9995248225885851,0.9999997371868007,1] },
+  { arc: {"from":"rain","to":"fog","dur":36,"w0":0.3}, normalized: [0.3,0,36], values: [0.3,0.3,0.3,0.29997119831015845,0.2998853235317621,0.29311211245829094,0.1896361676485673,0.09736245485850906,0.0183893923551458,2.3402962297258412e-05] },
+  { arc: {"from":"unknown","to":"rain"}, normalized: [0,1,60], values: [0,0,-1.3790061827109696e-18,0.0002550750417967748,0.0009995870112793938,0.04905059215619231,0.46814786620509896,0.8667404112493531,0.9999262962042897,1] },
+  { arc: {"from":"rain","to":"unknown","dur":0}, normalized: [1,0,60], values: [1,1,1,0.9999423966203169,0.9997706470635243,0.9862242249165818,0.7792723352971347,0.48667463829746294,0.09192096569418566,0.00011698172799421756] },
+  { arc: {"from":"dry","to":"rain","dur":-5}, normalized: [0,1,1], values: [0,0,-8.274037093680878e-17,0.015304502507806461,0.05997522067676364,0.6081393719434716,0.9881668343664665,0.999410861373595,0.9999996741566339,1] },
+  { arc: {"from":"dry","to":"wet","dur":1,"w0":0.91}, normalized: [0.91,0.5,1], values: [0.91,0.91,0.91,0.9085829568597962,0.9043579177626986,0.8329046046324323,0.6529449723086096,0.5785245670532059,0.5148313749397329,0.5000188749090686] },
+  { arc: {"from":"fog","to":"overcast","dur":60}, normalized: [0,0,60], values: [0,0,0,0,0,0,0,0,0,0] },
+  { arc: {"from":"rain","to":"dry","dur":NaN,"w0":-0}, normalized: [-0,0,60], values: [-0,-0,0,0,0,0,0,0,0,0] },
+ ];
+const ROAD_TIMES = [-1, 0, 1e-9, 0.5, 1, 8, 36, 60, 120, 360];
+function bareRoad() {
+  const c = vm.createContext({}); seedLog(c);
+  c.Particles = { rainShow() {} };
+  c.GameAudio = { startRain() {}, stopRain() {} };
+  for (const f of ["js/race/rain-cells.js", "js/race/weather-arc.js", "js/race/forecast.js"])
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), c, { filename: absSrc(f) });
+  return c;
+}
+
+test("shared road owner exactly preserves BASE forecast defaults, ramp and settling tails", () => {
+  const c = bareRoad(), road = c.WeatherArc.road;
+  assert.equal(road.TAU_WET, 8); assert.equal(road.TAU_DRY, 36);
+  assert.ok(Object.isFrozen(road));
+  assert.equal(c.Forecast.TAU_WET, 8); assert.equal(c.Forecast.TAU_DRY, 36);
+  for (const { arc, normalized, values } of BASE_ROAD) {
+    for (const i of [0, 9, 4, 7, 2, 1, 8, 3, 6, 5]) {
+      assert.equal(c.Forecast.wetAt(arc, ROAD_TIMES[i]), values[i], JSON.stringify(arc) + " at " + ROAD_TIMES[i]);
+      assert.equal(road.at(...normalized, ROAD_TIMES[i]), values[i]);
+    }
+  }
+});
+
+test("road wrappers retain early returns, distinct weather mapping and adopted duration policy", () => {
+  const c = bareRoad();
+  const G = { raceWeather: "dry" };
+  const wa = c.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
+  const early = { w0: 0.35, t: 0, get to() { throw new Error("target read before elapsed guard"); },
+    get dur() { throw new Error("duration read before elapsed guard"); } };
+  assert.equal(c.Forecast.wetAt(early, 0), 0.35);
+  assert.equal(c.Forecast.wetAt(early, NaN), 0.35);
+  wa.arc = early; assert.equal(wa.wetness(), 0.35);
+  wa.arc = { from: "dry", to: "rain", dur: 0, t: 1, w0: 0 };
+  assert.ok(Number.isNaN(wa.wetness()), "an adopted raw arc does not use the forecast's duration default");
+  assert.equal(c.Forecast.wetAt({ from: "dry", to: "rain", dur: 0 }, 8), BASE_ROAD[0].values[5]);
+  c.TyreModel = { treadFor: (_tyre, w) => w >= 0.72 ? 2 : w >= 0.25 ? 1 : 0,
+    wetness: w => ({ dry: 0.1, rain: 0.9, odd: 0.4 }[w] || 0) };
+  assert.equal(c.Forecast.wetAt({ from: "odd", to: "rain" }, 0), 0);
+  assert.equal(c.Forecast.wetAt({ from: "storm", to: "dry" }, 0), 1);
+  wa.arc = { from: "odd", to: "rain", dur: 60, t: 0 };
+  assert.equal(wa.wetness(), 0.4, "live normalization still delegates unknown weather to TyreModel");
+  wa.arc = { from: "storm", to: "dry", dur: 60, t: 0 };
+  assert.equal(wa.wetness(), 0.9, "live storm normalization uses asRain before TyreModel");
+});
+
+const BASE_RETARGET = [[0,0,"dry",true],[8,0.04905059215619231,"dry",true],[30,0.36980236611413453,"wet",true],["retarget",0.36980236611413453,0.36980236611413453,24,0],[31,0.3695903279676747,"wet",true],[54,0.2699092510385696,"wet",true],[90,0.09929406443907153,"dry",true],[180,0.008150553142842505,"dry",true],[360,0,"dry",false]];
+const BASE_LOCAL = [[0,0.4375,0.125,0.25,0.75,0.625,0.125],[8,0.46509095808785816,0.16791926813666824,0.28678794411714426,0.7622626480390481,0.6433939720585721,0.16791926813666824],[30,0.6455138309392007,0.4485770703498677,0.5273517745856009,0.8424505915285336,0.7636758872928004,0.4485770703498677],[60,0.9250414813277611,0.883397859843184,0.9000553084370149,0.9666851028123382,0.9500276542185073,0.883397859843184],[100,0.9994949334740565,0.9992143409596435,0.9993265779654086,0.9997755259884695,0.9996632889827044,0.9992143409596435]];
+
+test("road extraction preserves BASE retarget continuity and local segment sampling/cache identities", () => {
+  const c = bareRoad(); let wa;
+  const G = { state: "race", raceT: 0, raceWeather: "dry", soundOn: false, track: { total: 1000 },
+    applyRaceSettings() {}, initRainDrops() {}, announce() {},
+    isWetRoad: () => wa.wetness() >= 0.25, isRaining: () => wa.wetness() >= 0.72 };
+  wa = c.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
+  wa.startArc("dry", "rain", 60);
+  const rows = [];
+  for (const t of [0, 8, 30]) { G.raceT = t; wa.tick(0); rows.push([t, wa.wetness(), G.raceWeather, !!wa.arc]); }
+  wa.startArc(G.raceWeather, "dry", 24);
+  rows.push(["retarget", wa.arc.w0, wa.wetness(), wa.arc.dur, wa.arc.wetIn]);
+  for (const t of [31, 54, 90, 180, 360]) { G.raceT = t; wa.tick(0); rows.push([t, wa.wetness(), G.raceWeather, !!wa.arc]); }
+  assert.deepEqual(rows, BASE_RETARGET);
+  const w0s = [0, 0.5, 1, 0.25];
+  const local = { from: "dry", to: "rain", dur: 60, w0: 0, t: 0, w0s, seq: ["dry", "wet", "rain"] };
+  wa.arc = local;
+  wa.wetness(); const grid = local._sg;
+  for (const row of [...BASE_LOCAL, ...BASE_LOCAL.slice().reverse()]) {
+    local.t = row[0];
+    const mean = wa.wetness();
+    const values = [0, 250, 500, 750, 1000].map(s => wa.wetnessAt(s));
+    assert.deepEqual([row[0], mean, ...values], row);
+    assert.equal(local._sg, grid, "sampling times in another order reuses the same segment buffer");
+    assert.equal(local.w0s, w0s);
+    assert.equal(wa.arc, local);
+  }
+});
+
+
+test("standalone CommonJS Forecast load remains inert without a WeatherArc host global", () => {
+  // BASE has no Forecast CommonJS API. This package's .js loads as an empty
+  // ESM namespace; an actual CommonJS host gets default empty exports. Both
+  // must keep loading without an eval-time WeatherArc read.
+  const script = `
+    const assert = require("node:assert/strict");
+    assert.equal(typeof global.WeatherArc, "undefined");
+    const loaded = require("./js/race/forecast.js");
+    assert.deepEqual(Object.keys(loaded), []);
+    assert.equal(Object.getPrototypeOf(loaded), null);
+    const fs = require("node:fs"), path = require("node:path");
+    const host = fs.mkdtempSync(path.join(process.cwd(), "artifacts", "forecast-cjs-"));
+    try {
+      const entry = path.join(host, "forecast.cjs");
+      fs.copyFileSync("./js/race/forecast.js", entry);
+      assert.deepEqual(require(entry), {});
+    } finally { fs.rmSync(host, { recursive: true, force: true }); }
+    assert.equal(typeof global.WeatherArc, "undefined");
+    assert.equal(require.cache[require.resolve("./js/race/weather-arc.js")], undefined);
+  `;
+  const result = spawnSync(process.execPath, ["-e", script], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 });

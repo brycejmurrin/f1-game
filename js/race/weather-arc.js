@@ -22,6 +22,19 @@ const WeatherArc = (function () {
   const intOf = (w) => INTENSITY[w] || 0;
   const STORM_AT = 1.25;
 
+  // The scalar road model has one owner for live weather and the forecast.
+  // Normalization belongs to each caller; these are already-normalized numbers.
+  const TAU_WET = 8, TAU_DRY = 36;   // s: the lag wetting / drying (4.5x slower)
+  function roadAt(w0, w1, dur, e) {
+    if (!(e > 0)) return w0;
+    const s = (w1 - w0) / dur, tau = s >= 0 ? TAU_WET : TAU_DRY;
+    const ramp = (u) => w0 + s * u - s * tau * (1 - Math.exp(-u / tau));
+    if (e <= dur) return ramp(e);
+    const wE = ramp(dur);
+    return w1 + (wE - w1) * Math.exp(-(e - dur) / (w1 >= wE ? TAU_WET : TAU_DRY));
+  }
+  const road = Object.freeze({ at: roadAt, TAU_WET, TAU_DRY });
+
   function arcSeq(from, to) {
     const a = LADDER.indexOf(from), b = LADDER.indexOf(to);
     if (a >= 0 && b >= 0 && a !== b) {
@@ -227,7 +240,6 @@ const WeatherArc = (function () {
     // loop) is read OFF that wetness with the tyre model's own thresholds, so
     // the road can no longer be inter-wet under a sky that still reads dry. An
     // arc stays armed past `dur` until the road has settled on its target.
-    const TAU_WET = 8, TAU_DRY = 36;   // s: the lag wetting / drying (4.5x slower)
     const SETTLE = 0.005;              // |wetness - target| that ends an arc
     const WET_ROAD = 0.25, RAINING = 0.72;   // game.js isWetRoad / isRaining (TyreModel.treadFor's ladder)
     // game.js initRainDrops picks the tier off the LAP's wetness; under a local
@@ -265,11 +277,8 @@ const WeatherArc = (function () {
      *  for the linear ramp (w(0) = w0), then for the constant target past `dur`. */
     function wetAt(a, e) {
       if (!(e > 0)) return a.w0;
-      const w1 = wetOf(a.to), dur = a.dur, s = (w1 - a.w0) / dur, tau = s >= 0 ? TAU_WET : TAU_DRY;
-      const ramp = (u) => a.w0 + s * u - s * tau * (1 - Math.exp(-u / tau));
-      if (e <= dur) return ramp(e);
-      const wE = ramp(dur);
-      return w1 + (wE - w1) * Math.exp(-(e - dur) / (w1 >= wE ? TAU_WET : TAU_DRY));
+      const w1 = wetOf(a.to), dur = a.dur;
+      return roadAt(a.w0, w1, dur, e);
     }
     /** Seconds into `a` at which the road turns inter-wet (0.25): 0 if it
      *  already is, null if this arc never gets there — what the engineer's
@@ -494,6 +503,6 @@ const WeatherArc = (function () {
       get plan() { return plan; }, set plan(v) { plan = v; },
     };
   }
-  return { create, arcSeq, LADDER, VALID, TARGETS };
+  return { create, arcSeq, LADDER, VALID, TARGETS, road };
 })();
 Object.freeze(WeatherArc);
