@@ -8381,9 +8381,7 @@ function tickBody(now) {
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
-      // Garage motion has its own 100 ms stall limit. The race camera's
-      // 50 ms damping cap otherwise makes arrivals/previews run slow below 20 fps.
-      render(Math.min(dt, setupPreviewOn ? 0.1 : 1 / 20));
+      render(Math.min(dt, setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
     }
     GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
   }
