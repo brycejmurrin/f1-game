@@ -1369,25 +1369,16 @@
     "js/camera/drive-broadcast.js": {
       "apply": [
         "tests/unit/director.test.mjs"
-      ],
-      "*": [
-        "tests/unit/cam-round2.test.mjs"
       ]
     },
     "js/camera/drive-chase.js": {
       "apply": [
         "tests/unit/director.test.mjs"
-      ],
-      "*": [
-        "tests/unit/cam-round2.test.mjs"
       ]
     },
     "js/camera/drive-onboard.js": {
       "apply": [
         "tests/unit/director.test.mjs"
-      ],
-      "*": [
-        "tests/unit/cam-round2.test.mjs"
       ]
     },
     "js/camera/extra-rigs.js": {
@@ -1400,17 +1391,12 @@
       "reset": [
         "tests/unit/replay-buf.test.mjs"
       ],
-      "resetAuto": [
-        "tests/unit/cam-round2.test.mjs"
-      ],
       "solve": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/extra-rigs.test.mjs",
         "tests/unit/replay-buf.test.mjs"
       ],
       "tickPitAuto": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/extra-rigs.test.mjs"
       ]
     },
@@ -1429,7 +1415,6 @@
         "tests/unit/director.test.mjs"
       ],
       "freeLookState": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
@@ -1449,7 +1434,6 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "resetFollow": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs"
       ],
       "resetFreeLook": [
@@ -1483,7 +1467,6 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "tick": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -2170,7 +2153,6 @@
       ],
       "init": [
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/rival-audio.test.mjs"
@@ -2179,7 +2161,6 @@
         "tests/unit/rival-audio.test.mjs"
       ],
       "resetSmoothing": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs"
       ],
@@ -2192,7 +2173,6 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "vantage": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
@@ -4485,7 +4465,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
         "tests/unit/body-attitude.test.mjs",
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
