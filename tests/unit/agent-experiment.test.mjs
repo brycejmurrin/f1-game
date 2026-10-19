@@ -128,7 +128,7 @@ test('launch errors retain an error and do not fabricate a child exit', t => {
   const result = spawnSync('python3', [recorder, '--worktree', f.root, '--', path.join(f.root, 'missing-executable')], { cwd: f.root });
   assert.equal(result.status, 127);
   assert.equal(f.rows()[0].exit_code, null);
-  assert.match(f.rows()[0].launch_error, /No such file/);
+  assert.equal(f.rows()[0].launch_error, `[Errno 2] No such file or directory: '${path.join(f.root, 'missing-executable')}'`);
 });
 
 

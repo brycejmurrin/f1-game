@@ -34,8 +34,8 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
     assert.doesNotMatch(r.t, /src\/b\.js/);
     assert.match(r.t, /no direct Alpha\.wrap use in src\/.*module-file fallback.*export and caller coverage unverified/, "fallback cannot establish export membership");
     r = await text("lsp_definition", { symbol: "Alpha.quiet" });
-    assert.match(r.t, /function quiet\(x\)/);
-    assert.match(r.t, /module-file fallback.*export and caller coverage unverified/);
+    assert.equal(r.t, "1 definition (at the declaration; no direct Alpha.quiet use in src/; module-file fallback for quiet; " +
+      "export and caller coverage unverified)\nsrc/a.js:5:12  [def] function quiet(x) { return x; }");
     assert.doesNotMatch(r.t, /may not export/, "an exported unused member must not imply missing export");
     r = await text("lsp_definition", { symbol: "Alpha.nope" });
     assert.equal(r.err, true); assert.match(r.t, /has no member nope/);

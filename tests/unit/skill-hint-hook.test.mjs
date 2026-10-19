@@ -122,7 +122,10 @@ test("host envelopes delivered as UserPromptSubmit skip routing; the same words 
   ]) {
     for (const mode of ["targeted", "generic"]) assert.deepEqual(ask(envelope, mode), { code: 0, out: "" }, envelope.slice(0, 30));
   }
-  assert.match(ask(`${body}; explain the <task-notification> wake`).out, /Skill check:/);
+  // The same words typed by a user route exactly as the bare prompt does.
+  const typed = ask(body);
+  assert.ok(typed.out.startsWith("Skill check: "), typed.out);
+  assert.deepEqual(ask(`${body}; explain the <task-notification> wake`), typed);
   // Leading reminders followed by a typed prompt are still a user turn.
-  assert.match(ask(`<system-reminder>\nContents of CLAUDE.md\n</system-reminder>\n${body}`).out, /Skill check:/);
+  assert.deepEqual(ask(`<system-reminder>\nContents of CLAUDE.md\n</system-reminder>\n${body}`), typed);
 });

@@ -35,7 +35,8 @@ test("absent usage is unknown, never zero; malformed lines and API errors are co
   assert.equal(r.total.unknown.output_tokens, 1);         // req_2 reported nothing
   assert.equal(r.total.unknown.cache_read_input_tokens, 2); // req_2 + req_4's partial usage
   assert.equal(r.byTrigger.task_notification.input_tokens, 3);
-  assert.match(render(r), /cache-read 1,800 \+2 unknown/);
+  assert.equal(render(r).split("\n").find((l) => l.startsWith("total ")),
+    "total  input 7 +1 unknown  cache-write 100 +1 unknown  cache-read 1,800 +2 unknown  output 54 +1 unknown");
 });
 
 test("triggers: host field first, envelope only as inferred, otherwise unclassified", async () => {
@@ -72,14 +73,18 @@ test("low-tool turns are reported as a proxy and the limits are printed", () => 
   addRecord(d, { type: "assistant", requestId: "r", message: { content: [], usage: { input_tokens: 1, cache_creation_input_tokens: 2, cache_read_input_tokens: 3, output_tokens: 4 } } });
   const r = finish(d);
   assert.deepEqual([r.byTrigger.task_notification.lowToolTurns, r.byTrigger.task_notification.lowToolInput], [1, 6]);
-  assert.match(render(r), /# limit: lowToolTurns is a proxy/);
-  assert.match(render(r), /# limit: no sidechain rows/);
+  assert.deepEqual(render(r).split("\n").filter((l) => l.startsWith("# limit:")), [
+    "# limit: billing, plan-limit weighting and dollars are not in a transcript",
+    "# limit: no sidechain rows: subagent usage unobserved, not zero",
+    "# limit: lowToolTurns is a proxy for a wasted wake, not proof",
+  ]);
 });
 
 test("CLI: aggregate by default, --json parses, a bad --limit exits 2", () => {
   const cli = path.join(ROOT, "tools", "ci", "claude-usage.mjs");
   const out = execFileSync(process.execPath, [cli, FIX], { encoding: "utf8" });
-  assert.match(out, /^# claude-usage: 2 file\(s\)/);
+  assert.equal(out.split("\n")[0],
+    "# claude-usage: 2 file(s), 19 records (1 malformed), 6 unique requests, 1 API-error rows, 0 before any turn");
   assert.doesNotMatch(out, /top \d+ turns/);
   assert.equal(JSON.parse(execFileSync(process.execPath, [cli, FIX, "--json"], { encoding: "utf8" })).requests, 6);
   assert.throws(() => execFileSync(process.execPath, [cli, FIX, "--limit", "0"], { stdio: "pipe" }), (e) => e.status === 2);
