@@ -1226,6 +1226,12 @@
       ],
       "detectXr": [
         "tests/unit/cam-comfort.test.mjs"
+      ],
+      "fxGet": [
+        "tests/unit/cam-comfort.test.mjs"
+      ],
+      "fxSet": [
+        "tests/unit/cam-comfort.test.mjs"
       ]
     },
     "js/camera/cam-groups.js": {
@@ -1366,25 +1372,16 @@
     "js/camera/drive-broadcast.js": {
       "apply": [
         "tests/unit/director.test.mjs"
-      ],
-      "*": [
-        "tests/unit/cam-round2.test.mjs"
       ]
     },
     "js/camera/drive-chase.js": {
       "apply": [
         "tests/unit/director.test.mjs"
-      ],
-      "*": [
-        "tests/unit/cam-round2.test.mjs"
       ]
     },
     "js/camera/drive-onboard.js": {
       "apply": [
         "tests/unit/director.test.mjs"
-      ],
-      "*": [
-        "tests/unit/cam-round2.test.mjs"
       ]
     },
     "js/camera/extra-rigs.js": {
@@ -1397,17 +1394,12 @@
       "reset": [
         "tests/unit/replay-buf.test.mjs"
       ],
-      "resetAuto": [
-        "tests/unit/cam-round2.test.mjs"
-      ],
       "solve": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/extra-rigs.test.mjs",
         "tests/unit/replay-buf.test.mjs"
       ],
       "tickPitAuto": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/extra-rigs.test.mjs"
       ]
     },
@@ -1426,7 +1418,6 @@
         "tests/unit/director.test.mjs"
       ],
       "freeLookState": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
@@ -1446,7 +1437,6 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "resetFollow": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs"
       ],
       "resetFreeLook": [
@@ -1480,7 +1470,6 @@
         "tests/unit/camera-feel.test.mjs"
       ],
       "tick": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -1593,11 +1582,13 @@
       ],
       "cornerS": [
         "tests/unit/flyby-pose-inverse.test.mjs",
-        "tests/unit/flyby-shots.test.mjs"
+        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/free-cam.test.mjs"
       ],
       "cornerSide": [
         "tests/unit/flyby-pose-inverse.test.mjs",
-        "tests/unit/flyby-shots.test.mjs"
+        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/free-cam.test.mjs"
       ],
       "cornerTurn": [
         "tests/unit/flyby-shots.test.mjs"
@@ -1643,6 +1634,7 @@
       "reset": [
         "tests/unit/flyby-pose-inverse.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/free-cam.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "setDuration": [
@@ -1673,6 +1665,7 @@
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/flyby-pose-inverse.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/free-cam.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
       "swayAt": [
@@ -1821,7 +1814,6 @@
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/director.test.mjs",
-        "tests/unit/extra-rigs.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
@@ -2168,7 +2160,6 @@
       ],
       "init": [
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/rival-audio.test.mjs"
@@ -2177,7 +2168,6 @@
         "tests/unit/rival-audio.test.mjs"
       ],
       "resetSmoothing": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs"
       ],
@@ -2190,7 +2180,6 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "vantage": [
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/director.test.mjs",
@@ -4409,7 +4398,8 @@
         "tests/unit/track-line.test.mjs",
         "tests/unit/track-shot-survey.test.mjs",
         "tests/unit/trim-comments.test.mjs",
-        "tests/unit/ui-improve-pass.test.mjs"
+        "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/vm-debug-preload.test.mjs"
       ]
     },
     "js/core/mat4.js": {
@@ -4480,7 +4470,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
         "tests/unit/body-attitude.test.mjs",
-        "tests/unit/cam-round2.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
@@ -9255,22 +9244,19 @@
     },
     "js/physics/aero-zones.js": {
       "build": [
+        "tests/specs/aero-zones.spec.js",
         "tests/unit/aero-zone-tables.test.mjs",
-        "tests/unit/aero-zones-turns.test.mjs"
+        "tests/unit/aero-zones-turns.test.mjs",
+        "tests/unit/aero-zones-vm.test.mjs"
       ],
       "create": [
         "tests/unit/aero-zones-turns.test.mjs"
-      ],
-      "runForTurnPair": [
-        "tests/unit/aero-zone-tables.test.mjs"
       ],
       "zonesFor": [
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/track-maps-corners.test.mjs"
       ],
       "*": [
-        "tests/specs/aero-zones.spec.js",
-        "tests/unit/aero-zones-vm.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
@@ -9690,7 +9676,8 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/lsp-mcp.test.mjs"
+        "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/vm-debug-preload.test.mjs"
       ]
     },
     "js/physics/collide.js": {
@@ -11044,6 +11031,7 @@
         "tests/unit/race-control.test.mjs"
       ],
       "info": [
+        "tests/unit/aero-zones-vm.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/incident-gate.test.mjs",
@@ -15839,6 +15827,7 @@
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/free-cam.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
     },

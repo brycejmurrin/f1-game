@@ -388,6 +388,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/destructure-usage.test.mjs",
+  // #2963: first-divergent-step finder over game-vm stepTrace (player/field/rng/timers).
+  "tests/unit/determinism-bisect.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
   "tests/unit/diagnostics-tools.test.mjs",
@@ -457,6 +459,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
+  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break) and the bus cursor read; a real-git race on a local bare origin; < 2 s.
+  "tests/unit/fleet-bus.test.mjs",
   "tests/unit/fleet-flags.test.mjs",
   // fleet-tick: the diff of two watcher states into changed rows, pure fixtures; < 0.1 s.
   "tests/unit/fleet-tick.test.mjs",
@@ -1282,6 +1286,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
   "tests/unit/viewer.test.mjs",
   "tests/unit/visual-oracle.test.mjs",
+  // #2960: opt-in vm-debug-preload turns a no-filename brake-cue load into a file:// URL.
+  "tests/unit/vm-debug-preload.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",

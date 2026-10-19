@@ -122,6 +122,9 @@ export const RULES = [
   // tests/data/ratchets.json is what catches a file no rule names.
   [/^js\/overlay\//, ["state-unit"], "stream overlay frame schema and transform-only DOM painter"],
   [/^tools\/lib\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
+  [/^tools\/lib\/vm-debug-preload\.cjs/, ["tooling-fast"], "opt-in vm filename rewrite; vm-debug-preload.test.mjs"],
+  [/^tools\/check\/determinism-bisect\.mjs/, ["tooling-fast"], "per-step state-hash first-divergence finder; determinism-bisect.test.mjs"],
+  [/^tools\/ci\/debug-unit\.mjs/, ["tooling-fast"], "npm run debug:unit wrapper for the vm-debug preload"],
   [/^tools\/lighting\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
 
   // ── car ─────────────────────────────────────────────────────────────────
