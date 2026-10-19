@@ -27,7 +27,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const P = loadParts();
 
 function boot(sel = { teamIdx: 0, driverIdx: 0 }, over = {}) {
-  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON,
+  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON, setTimeout: () => 1, clearTimeout() {},
     document: { querySelectorAll: () => [] } });
   ctx.globalThis = ctx;
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"]) {
@@ -193,12 +193,12 @@ test("MY TEAM preview invalidates the decal atlas as the livery changes, not onl
   // LOGO TINT row: a colour is chosen -> the draft's livery changes -> atlas dropped.
   const tint = d.el("cz-logo");
   tint.value = "#ff0000";
-  tint.listeners.input();
+  tint.listeners.input(); tint.listeners.change();   // input debounces the 3D half; change flushes it
   assert.equal(draft.liv.logo, "#ff0000");
   assert.ok(invalidated.filter((x) => x === "custom").length > n0, "LOGO TINT change invalidates the atlas");
   // An identical event (a drag repeating the same value) does not thrash the atlas.
   const n1 = invalidated.filter((x) => x === "custom").length;
-  tint.listeners.input();
+  tint.listeners.input(); tint.listeners.change();   // input debounces the 3D half; change flushes it
   assert.equal(invalidated.filter((x) => x === "custom").length, n1, "an unchanged preview is deduped");
   // CANCEL drops the draft atlas so the saved look comes back.
   d.el("cz-cancel").onclick();
