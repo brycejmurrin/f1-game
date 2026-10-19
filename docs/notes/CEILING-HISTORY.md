@@ -1,5 +1,16 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-19 — PR #2839 (cursor/parts-style-m7q3): STYLE reskins readable after DAD review
+
+`js/car/car3d.js` lines 2218 → **2289** (+71). Deliberate raise past the 40-line absorb.
+The growth is the STYLE readability consumers Bryce's MERGE-HOLD asked for: taller
+floor fences (fenceCap scales with fenceH; edgeLip to 2), sealed Full Disc path
+helpers live in `car-wheels.js`, painted gearbox strakes / Smooth Case belly plate,
+larger fuel `capBig`, Fenced Halo crest vanes + brow, thicker ERS LED strip, taller
+exhaust stacks, and skirt tiering. Fragment delta:
+`tests/data/ratchets.d/cursor--parts-style-m7q3.json` (+71 lines). No wholesale
+replacement — each block is gated on an existing STYLE recipe key.
+
 ## 2026-10-18 — PR #2856 (cursor/captions-comfort-d9e8): captions wave 1 (#1597)
 
 `css/hud.css` codeLines 2193 → **2239** (+46), lines 2428 → **2475** (+47). Deliberate raise past the

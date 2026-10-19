@@ -2,7 +2,7 @@
  * updateCar traffic / slipstream / OT-ahead walks. The O(n) ranked scan had
  * to stay wrap-aware (a lapped car is a lap away in rank and beside you on
  * the road); collide.js already buckets that topology. This file is the
- * old-vs-new characterization: same roomL/R, nearbyN, sep, blocker, towCar,
+ * production-vs-brute-force check: same roomL/R, nearbyN, sep, blocker, towCar,
  * chaser, player tow, OT ahead. Zero per-tick allocation is a source pin.
  *
  * Run: node --test tests/unit/traffic-arc-buckets.test.mjs
@@ -71,146 +71,81 @@ function makeField(seed, L) {
     cars[i].x = cars[i]._snapX = (i % 3) - 1;
   }
   cars[6].prog = cars[6]._snapProg = cars[5].prog + 20;
+  cars[6].retired = true;   // traffic still sees it; tow / OT skip it
+  // A slow car 90 m ahead of ego: only the closing-speed BLOCKER reach (#2565) sees it.
+  cars[7].prog = cars[7]._snapProg = 92; cars[7].x = cars[7]._snapX = 0.5;
+  for (const o of cars) { o.speed = 55; o._snapSpeed = o === cars[7] ? 0 : 55; }
   return cars;
 }
 
-function scanTrafficFull(c, ranked, L, BACK, MIN_GAP, street) {
+// One brute-force reference with the CURRENT production semantics, walking every
+// car (no buckets). Finishers are still cars on the road: they block, take room
+// and sit alongside, but give no tow and chase nobody. Retired cars are NOT
+// skipped by the traffic scan (they are by tow / OT). The BLOCKER reaches past
+// 34 m by closing speed (#2565); that reach also widens the cheap-reject window.
+const BRAKE_PLAN = 0.5 * 22;
+const blockerReach = (closing) => (closing > 0 ? Math.min(160, 10 + closing * closing / (2 * BRAKE_PLAN)) : 0);
+const wrapD = (d, L) => ((d + L / 2) % L + L) % L - L / 2;
+
+function refTraffic(c, ranked, L, BACK, REJ0, MIN_GAP, street) {
   let roomL = 12 + c.x, roomR = 12 - c.x;
-  let blocker = null, blockerGap = Infinity;
-  let towCar = null, towGap = Infinity;
-  let chaser = null, chaserGap = Infinity;
-  let nearbyN = 0, sep = 0;
-  let alongO = null, alongDx = 0, alongDprog = 0, alongAdx = Infinity;
-  const REJ = Math.max(34.1, BACK + 0.1);
-  for (let i = 0; i < ranked.length; i++) {
-    const o = ranked[i];
-    if (o === c || o.finished) continue;
-    let dprog = o._snapProg - c.prog;
-    if (!Number.isFinite(dprog)) continue;
-    const ad = dprog < 0 ? -dprog : dprog;
-    if (ad > REJ && ad < L - REJ) continue;
-    dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-    if (dprog < -BACK || dprog > 34) continue;
-    const dx = o._snapX != null ? o._snapX - c.x : o.x - c.x;
-    const adp = dprog < 0 ? -dprog : dprog;
+  let blocker = null, blockerGap = Infinity, towCar = null, towGap = Infinity;
+  let chaser = null, chaserGap = Infinity, nearbyN = 0, sep = 0;
+  let alongO = null, alongAdx = Infinity;
+  const REJ = Math.max(REJ0, blockerReach(c.speed));
+  for (const o of ranked) {
+    if (o === c) continue;
+    const raw = o._snapProg - c.prog;
+    if (Math.abs(raw) > REJ && Math.abs(raw) < L - REJ) continue;
+    const dprog = wrapD(raw, L);
+    if (dprog < -BACK) continue;
+    if (dprog > TOW_RANGE) {
+      if (dprog < blockerGap && dprog < blockerReach(c.speed - (o._snapSpeed || 0)) &&
+          Math.abs(o._snapX - c.x) < BLOCKER_HALF_W) { blocker = o; blockerGap = dprog; }
+      continue;
+    }
+    const dx = o._snapX - c.x, adp = Math.abs(dprog);
     if (adp < 5.5) {
       if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
       else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
-      const adx = dx < 0 ? -dx : dx;
-      if (adx < alongAdx) { alongO = o; alongDx = dx; alongDprog = dprog; alongAdx = adx; }
+      if (Math.abs(dx) < alongAdx) { alongO = o; alongAdx = Math.abs(dx); }
     }
     if (adp < 6.5) {
       nearbyN++;
-      const deficit = MIN_GAP - (dx < 0 ? -dx : dx);
+      const deficit = MIN_GAP - Math.abs(dx);
       if (deficit > 0) sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
     }
-    if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 && !street ? 6 : BLOCKER_HALF_W)) {
-      blocker = o; blockerGap = dprog;
-    }
+    const blockW = o === c.passFailOf && c.passFailT > 0 && !street ? 6 : BLOCKER_HALF_W;
+    if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < blockW) { blocker = o; blockerGap = dprog; }
+    if (o.finished) continue;
     if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < TOW_HALF_W) { towCar = o; towGap = dprog; }
-    if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < (!street && -dprog < 0.5 * Math.max(c.speed || 0, 10) ? 5.5 : 3)) {
-      chaser = o; chaserGap = -dprog;
-    }
+    const chaseW = !street && -dprog < 0.5 * Math.max(c.speed, 10) ? 5.5 : 3;
+    if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < chaseW) { chaser = o; chaserGap = -dprog; }
   }
-  roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
-  return { roomL, roomR, nearbyN, sep, blocker, blockerGap, towCar, towGap, chaser, chaserGap, alongO, alongDx, alongDprog };
+  return { roomL: Math.max(0, roomL), roomR: Math.max(0, roomR), nearbyN, sep, blocker, blockerGap, towCar, towGap, chaser, chaserGap, alongO };
 }
 
-function scanTrafficBuckets(Collide, c, ranked, L, BACK, MIN_GAP, street) {
-  const REJ = Math.max(34.1, BACK + 0.1);
-  let roomL = 12 + c.x, roomR = 12 - c.x;
-  let blocker = null, blockerGap = Infinity;
-  let towCar = null, towGap = Infinity;
-  let chaser = null, chaserGap = Infinity;
-  let nearbyN = 0, sep = 0;
-  let alongO = null, alongDx = 0, alongDprog = 0, alongAdx = Infinity;
-  Collide.forArcNear(c, L, REJ, function (o) {
-    if (o.finished) return;
-    let dprog = o._snapProg - c.prog;
-    if (!Number.isFinite(dprog)) return;
-    const ad = dprog < 0 ? -dprog : dprog;
-    if (ad > REJ && ad < L - REJ) return;
-    dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-    if (dprog < -BACK || dprog > 34) return;
-    const dx = o._snapX != null ? o._snapX - c.x : o.x - c.x;
-    const adp = dprog < 0 ? -dprog : dprog;
-    if (adp < 5.5) {
-      if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
-      else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
-      const adx = dx < 0 ? -dx : dx;
-      if (adx < alongAdx) { alongO = o; alongDx = dx; alongDprog = dprog; alongAdx = adx; }
-    }
-    if (adp < 6.5) {
-      nearbyN++;
-      const deficit = MIN_GAP - (dx < 0 ? -dx : dx);
-      if (deficit > 0) sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
-    }
-    if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 && !street ? 6 : BLOCKER_HALF_W)) {
-      blocker = o; blockerGap = dprog;
-    }
-    if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < TOW_HALF_W) { towCar = o; towGap = dprog; }
-    if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < (!street && -dprog < 0.5 * Math.max(c.speed || 0, 10) ? 5.5 : 3)) {
-      chaser = o; chaserGap = -dprog;
-    }
-  }, function (car) { return car.prog; });
-  roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
-  return { roomL, roomR, nearbyN, sep, blocker, blockerGap, towCar, towGap, chaser, chaserGap, alongO, alongDx, alongDprog };
-}
-
-function scanTowFull(c, ranked, L) {
+function refTow(c, ranked, L) {
   let tc = null, tg = Infinity;
-  for (let i = 0; i < ranked.length; i++) {
-    const o = ranked[i];
+  for (const o of ranked) {
     if (o === c || o.finished || o.retired) continue;
-    let dprog = o._snapProg - c.prog;
-    if (!Number.isFinite(dprog)) continue;
-    const ad = dprog < 0 ? -dprog : dprog;
-    if (ad > TOW_RANGE + 0.1 && ad < L - TOW_RANGE - 0.1) continue;
-    dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-    const dx = (o._snapX != null ? o._snapX : o.x) - c.x;
-    if (dprog > 0.5 && dprog < tg && Math.abs(dx) < TOW_HALF_W) { tc = o; tg = dprog; }
+    const raw = o._snapProg - c.prog;
+    if (Math.abs(raw) > TOW_RANGE + 0.1 && Math.abs(raw) < L - TOW_RANGE - 0.1) continue;
+    const dprog = wrapD(raw, L);
+    if (dprog > 0.5 && dprog < tg && Math.abs(o._snapX - c.x) < TOW_HALF_W) { tc = o; tg = dprog; }
   }
   return { tc, tg };
 }
 
-function scanTowBuckets(Collide, c, L) {
-  let tc = null, tg = Infinity;
-  const reach = TOW_RANGE + 0.1;
-  Collide.forArcNear(c, L, reach, function (o) {
-    if (o.finished || o.retired) return;
-    let dprog = o._snapProg - c.prog;
-    if (!Number.isFinite(dprog)) return;
-    const ad = dprog < 0 ? -dprog : dprog;
-    if (ad > reach && ad < L - reach) return;
-    dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-    const dx = (o._snapX != null ? o._snapX : o.x) - c.x;
-    if (dprog > 0.5 && dprog < tg && Math.abs(dx) < TOW_HALF_W) { tc = o; tg = dprog; }
-  }, function (car) { return car.prog; });
-  return { tc, tg };
-}
-
-function scanOtFull(c, ranked, L, otW) {
+function refOt(c, ranked, L, otW) {
   let ahead = null, gapAhead = Infinity;
-  for (let i = 0; i < ranked.length; i++) {
-    const o = ranked[i];
+  for (const o of ranked) {
     if (o === c || o.finished || o.retired) continue;
-    const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp;
-    if (adp > otW && adp < L - otW) continue;
-    const d = ((dp + L / 2) % L + L) % L - L / 2;
+    const dp = o._snapProg - c.prog;
+    if (Math.abs(dp) > otW && Math.abs(dp) < L - otW) continue;
+    const d = wrapD(dp, L);
     if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
   }
-  return { ahead, gapAhead };
-}
-
-function scanOtBuckets(Collide, c, L, otW) {
-  let ahead = null, gapAhead = Infinity;
-  Collide.forArcNear(c, L, otW, function (o) {
-    if (o.finished || o.retired) return;
-    const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp;
-    if (adp > otW && adp < L - otW) return;
-    const d = ((dp + L / 2) % L + L) % L - L / 2;
-    if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
-  }, function (car) { return car.prog; });
   return { ahead, gapAhead };
 }
 
@@ -244,41 +179,45 @@ test("fillArcBuckets / forArcNear are on Collide and allocation-free after warmu
   assert.match(src, /function forArcNear/);
 });
 
-test("seeded 22-car run: bucket scan matches full-field (wrap, lapped, chaser)", () => {
+test("seeded 22-car run: production scanTraffic/scanTow/scanOtAhead match a brute-force reference", () => {
   const Collide = loadCollide();
-  const L = 6200, BACK = 72, MIN_GAP = 2.8, street = false;
-  const ranked = makeField(20261006, L);
-  for (const c of ranked) c.speed = 55;
-  Collide.fillArcBuckets(ranked, L, TRAFFIC_BUCKET_M, (c) => c._snapProg);
+  const L = 6200, BACK = 72, REJ = 72.1, MIN_GAP = 2.8, street = false;
   const keys = ["roomL", "roomR", "nearbyN", "sep", "blocker", "blockerGap", "towCar", "towGap", "chaser", "chaserGap", "alongO"];
+  const ranked = makeField(20261006, L);
+  Collide.fillArcBuckets(ranked, L, TRAFFIC_BUCKET_M, (c) => c._snapProg);
+  let ots = 0;
   for (const c of ranked) {
-    if (c.finished) continue;
-    const oldS = scanTrafficFull(c, ranked, L, BACK, MIN_GAP, street);
-    const newS = scanTrafficBuckets(Collide, c, ranked, L, BACK, MIN_GAP, street);
-    snapEq(oldS, newS, keys);
-    const otW = 1.0 * 55 + 1;
-    const otOld = scanOtFull(c, ranked, L, otW);
-    const otNew = scanOtBuckets(Collide, c, L, otW);
-    assert.equal(otOld.ahead, otNew.ahead, "ot ahead " + c.id);
-    assert.ok(otOld.gapAhead === otNew.gapAhead || Math.abs(otOld.gapAhead - otNew.gapAhead) < 1e-9, "ot gap " + c.id);
-    const towOld = scanTowFull(c, ranked, L);
-    const towNew = scanTowBuckets(Collide, c, L);
-    assert.equal(towOld.tc, towNew.tc, "tow " + c.id);
-    assert.ok(towOld.tg === towNew.tg || Math.abs(towOld.tg - towNew.tg) < 1e-9, "tow gap " + c.id);
+    const want = refTraffic(c, ranked, L, BACK, REJ, MIN_GAP, street);
+    const got = Collide.scanTraffic(c, L, BACK, REJ, MIN_GAP, street, 12 + c.x, 12 - c.x);
+    snapEq(want, got, keys);
+    const otW = 1.0 * c.speed + 1;
+    const otWant = refOt(c, ranked, L, otW);
+    const otGot = Collide.scanOtAhead(c, L, otW);
+    assert.equal(otGot.ahead, otWant.ahead, "ot ahead " + c.id);
+    assert.ok(otGot.gapAhead === otWant.gapAhead || Math.abs(otGot.gapAhead - otWant.gapAhead) < 1e-9, "ot gap " + c.id);
+    if (otWant.ahead) ots++;
+    const towWant = refTow(c, ranked, L);
+    const towGot = Collide.scanTow(c, L);
+    assert.equal(towGot.tc, towWant.tc, "tow " + c.id);
+    assert.ok(towGot.tg === towWant.tg || Math.abs(towGot.tg - towWant.tg) < 1e-9, "tow gap " + c.id);
   }
+  assert.ok(ots > 0, "seed must place at least one OT-ahead pair");
+  // Pin the scenarios the reference is meant to exercise, so it cannot go vacuous.
   const ego = ranked[0];
-  const egoNew = scanTrafficBuckets(Collide, ego, ranked, L, BACK, MIN_GAP, street);
-  assert.equal(egoNew.alongO, ranked[1], "wrap neighbour beside ego");
-  assert.ok(egoNew.nearbyN >= 2, "lapped car beside ego counts as nearby");
-  assert.equal(egoNew.chaser, ranked[1], "nearest wrap chaser (5 m behind at S/F)");
+  const e = Collide.scanTraffic(ego, L, BACK, REJ, MIN_GAP, street, 12 + ego.x, 12 - ego.x);
+  assert.equal(e.alongO, ranked[1], "wrap neighbour beside ego");
+  assert.ok(e.nearbyN >= 2, "lapped car beside ego counts as nearby");
+  assert.equal(e.chaser, ranked[1], "nearest wrap chaser (5 m behind at S/F)");
+  assert.equal(e.blocker, ranked[4], "a FINISHED car 6 m ahead still blocks (collide.js keeps finishers)");
+  assert.equal(e.towCar, null, "a finisher gives no tow");
+  const tow = Collide.scanTow(ranked[5], L);
+  assert.equal(tow.tc, null, "a retired car gives no tow");
+  const far = Collide.scanTraffic(ranked[5], L, BACK, REJ, MIN_GAP, street, 12, 12);
+  assert.equal(far.blocker, ranked[6], "a retired car still blocks the traffic scan");
   const only = [ranked[0], ranked[3]];
   Collide.fillArcBuckets(only, L, TRAFFIC_BUCKET_M, (c) => c._snapProg);
-  const far = scanTrafficBuckets(Collide, ranked[0], only, L, BACK, MIN_GAP, street);
-  const farOld = scanTrafficFull(ranked[0], only, L, BACK, MIN_GAP, street);
-  assert.equal(far.chaser, ranked[3], "70 m chaser still seen");
-  assert.equal(farOld.chaser, ranked[3]);
-  const withAhead = ranked.filter((c) => !c.finished && scanOtFull(c, ranked, L, 1.0 * 55 + 1).ahead);
-  assert.ok(withAhead.length > 0, "seed must place at least one OT-ahead pair");
+  const lone = Collide.scanTraffic(ranked[0], L, BACK, REJ, MIN_GAP, street, 12, 12);
+  assert.equal(lone.chaser, ranked[3], "70 m chaser still seen");
 });
 
 test("game.js traffic / slipstream / OT-ahead use forArcNear, not a ranked walk", () => {

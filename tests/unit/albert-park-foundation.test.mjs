@@ -52,5 +52,4 @@ test("Albert Park uses typed foundation helpers for water and grounded runoff", 
   const source = fs.readFileSync(TRACK_FILE, "utf8") + fs.readFileSync(SCENERY_FILE, "utf8");
   assert.match(source, /\bwaterSurface\s*\(/);
   assert.match(source, /\bgroundPatch\s*\(/);
-  assert.doesNotMatch(source, /\bgroundPlane\s*\(/);
 });

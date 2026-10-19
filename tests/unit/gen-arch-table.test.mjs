@@ -59,7 +59,6 @@ test("every non-data manifest file gets exactly one row", () => {
   // 2026-09-03 spike-out. This is an anti-vacuity floor — it catches a
   // generator that emitted nothing — so it tracks the roster, and the
   // exact per-file coverage is the one-row-per-file test above.
-  assert.ok(rows.length > 120, `expected > 120 rows, found ${rows.length}`);
   const dataFiles = new Set([...MANIFEST.CIRCUITS.map(MANIFEST.circuitPath), ...MANIFEST.LAZY_SCENERY]);
   const rostered = [
     ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
@@ -67,8 +66,12 @@ test("every non-data manifest file gets exactly one row", () => {
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
     ...(MANIFEST.LAZY_CAREER_UI || []),
   ].filter((f) => !dataFiles.has(f));
-  const named = new Set(rows.map((r) => r.file));
-  const missing = rostered.filter((f) => !named.has(path.posix.basename(f)));
+  // Key by dir/file: a bare basename would let experience.js in garage/ hide a
+  // missing row for experience.js in career/.
+  const named = new Set(groups.flatMap((g) => g.rows.map((r) => `${g.dir}/${r.file}`)));
+  const missing = rostered.filter((f) => !named.has(f));
+  // The floor is the roster itself (plus the two collapsed data rows), not a stale constant.
+  assert.ok(rows.length >= rostered.length + 2, `${rows.length} rows for ${rostered.length} rostered files`);
   assert.deepEqual(missing, [], "a rostered file has no row in the generated module index");
   // Both collapsed directories appear exactly once, with the roster's own count.
   const circuitsRow = rows.find((r) => r.file.startsWith("<id>.js"));

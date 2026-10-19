@@ -25,10 +25,10 @@ after(() => { if (g) g.close(); if (cold) cold.close(); });
 const A = () => g.apex;
 async function load(track = "monza") { await g.race(track); }
 async function parked(frac = 0.1, track = "monza") { await load(track); A().park(frac); }
-async function virgin(fn) {
-  // Catalog reads share one unraced boot. A call that races (or tt()) gets its
-  // own, because the shared cold boot has to stay pre-race for the later tests.
-  const racing = fn.toString().includes(".race(") || fn.toString().includes(".tt(");
+async function virgin(fn, { race: racing = false } = {}) {
+  // Catalog reads share one unraced boot. A call that races (or tt()) passes
+  // {race: true} and gets its own, because the shared cold boot has to stay
+  // pre-race for the later tests.
   if (!racing) return fn(cold.apex);
   const v = await createGame({ storage: { trackId: "monza" } });
   try { await fn(v.apex); }
@@ -82,11 +82,11 @@ test("loads a track by id and returns metadata", async () => {
     const r = await a.race("spa");
     assert.equal(r.track, "spa");
     assert.equal(r.weather, "dry");
-  });
+  }, { race: true });
 });
 
 test("returns false for unknown track id", async () => {
-  await virgin(async (a) => { assert.equal(await a.race("notatrack"), false); });
+  await virgin(async (a) => { assert.equal(await a.race("notatrack"), false); }, { race: true });
 });
 
 test("race() with wet sets weather", async () => {
@@ -94,7 +94,7 @@ test("race() with wet sets weather", async () => {
     const r = await a.race("bahrain", "day", "wet");
     assert.equal(r.weather, "wet");
     assert.equal(a.weather(), "wet");
-  });
+  }, { race: true });
 });
 
 test("transitions state to results", async () => {
@@ -139,7 +139,7 @@ test("tt() sets timeTrial:true", async () => {
     const info = a.info();
     assert.equal(info.timeTrial, true);
     assert.equal(info.track, "monza");
-  });
+  }, { race: true });
 });
 
 test("returns current mode and available modes list", async () => {
@@ -173,7 +173,7 @@ test("returns eye, tgt arrays and fov number", async () => {
   assert.ok(Array.isArray(s.eye));
   assert.equal(s.eye.length, 3);
   assert.ok(Array.isArray(s.tgt));
-  assert.equal(typeof s.fov, "number");
+  assert.ok(Number.isFinite(s.fov), `s.fov must be a finite number`);
   assert.ok(s.fov > 0);
 });
 
@@ -259,7 +259,7 @@ test("returns x, angle, k, hw, speed, s after park()", async () => {
   await parked();
   const p = A().probe();
   assert.ok(p);
-  for (const k of ["x", "angle", "k", "hw", "speed", "s"]) assert.equal(typeof p[k], "number");
+  for (const k of ["x", "angle", "k", "hw", "speed", "s"]) assert.ok(Number.isFinite(p[k]), `${k} must be a finite number`);
 });
 
 test("player is near centreline after park(0.1, 0)", async () => {
@@ -271,14 +271,14 @@ test("returns required fields including lap and wrongWay", async () => {
   await parked();
   const ps = A().physState();
   assert.ok(ps);
-  for (const k of ["s", "x", "speed", "lap", "rescueT"]) assert.equal(typeof ps[k], "number");
+  for (const k of ["s", "x", "speed", "lap", "rescueT"]) assert.ok(Number.isFinite(ps[k]), `${k} must be a finite number`);
   assert.equal(typeof ps.wrongWay, "boolean");
 });
 
 test("exposes combined-slip traction circle fields", async () => {
   await parked();
   const ps = A().physState();
-  for (const k of ["axEstSm", "axFrac", "slipFactor"]) assert.equal(typeof ps[k], "number");
+  for (const k of ["axEstSm", "axFrac", "slipFactor"]) assert.ok(Number.isFinite(ps[k]), `${k} must be a finite number`);
   closeTo(ps.axFrac, 0, 1);
   closeTo(ps.slipFactor, 1, 1);
 });
@@ -299,8 +299,8 @@ test("returns player car data when called with no index", async () => {
   const c = A().carAt();
   assert.ok(c);
   assert.equal(c.isPlayer, true);
-  assert.equal(typeof c.x, "number");
-  assert.equal(typeof c.speed, "number");
+  assert.ok(Number.isFinite(c.x), `c.x must be a finite number`);
+  assert.ok(Number.isFinite(c.speed), `c.speed must be a finite number`);
   assert.equal(typeof c.wrongWay, "boolean");
 });
 
@@ -344,7 +344,7 @@ test("returns array of fractions for Monza", async () => {
 test("returns world coords and tangent for fraction 0.5", async () => {
   await parked();
   const n = A().nodeAt(0.5);
-  for (const k of ["x", "y", "z", "tx", "frac"]) assert.equal(typeof n[k], "number");
+  for (const k of ["x", "y", "z", "tx", "frac"]) assert.ok(Number.isFinite(n[k]), `${k} must be a finite number`);
 });
 
 test("returns barrier stats without NaN for Monza", async () => {
@@ -362,7 +362,7 @@ test("repositions player car and returns physState", async () => {
   A().jump(0.2, 60, 8);
   const result = A().resetPlayer();
   assert.notEqual(result, false);
-  assert.equal(typeof result.x, "number");
+  assert.ok(Number.isFinite(result.x), `result.x must be a finite number`);
   assert.ok(Math.abs(result.x) < 6);
 });
 
@@ -395,8 +395,8 @@ test("180° aim sets the car pointing backwards", async () => {
 test("single distance returns one reading", async () => {
   await parked();
   const s = A().scan(50);
-  assert.equal(typeof s.k, "number");
-  assert.equal(typeof s.hw, "number");
+  assert.ok(Number.isFinite(s.k), `s.k must be a finite number`);
+  assert.ok(Number.isFinite(s.hw), `s.hw must be a finite number`);
 });
 
 test("array of distances returns one reading per entry", async () => {

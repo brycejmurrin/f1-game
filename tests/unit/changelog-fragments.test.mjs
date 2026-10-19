@@ -37,7 +37,7 @@ test("fold: a new build lands above the newest section, categories in the fixed 
 test("fold: an existing build section is extended in place, never duplicated", () => {
   const out = fold(HIST, 1695, [{ category: "Fixed", text: "x" }, { category: "Improved", text: "z" }]);
   assert.equal(out.match(/^## 1695$/gm).length, 1);
-  assert.match(out, /### Fixed\n- old fix\.\n- x\n\n### New\n- old new\.\n\n## 1690|### Improved\n- z/);
+  assert.match(out, /### Fixed\n- old fix\.\n- x\n\n### New\n- old new\.\n\n### Improved\n- z\n\n## 1690/, "existing categories keep their order; the new one is appended before the next build");
   assert.match(out, /- old fix\.\n- x\n/);
   assert.match(out, /### Improved\n- z\n\n## 1690/);
 });
@@ -49,7 +49,8 @@ test("every committed fragment is well-formed", () => {
 
 // A PR may not edit the build sections of CHANGELOG.md by hand: only a fold commit (which also deletes fragments)
 // may. The intro above the first "## " is hand prose and stays editable.
-test("this branch edits CHANGELOG.md sections only via a fold (a deleted fragment), never by hand", { skip: !baseRef() }, () => {
+test("this branch edits CHANGELOG.md sections only via a fold (a deleted fragment), never by hand", { skip: !baseRef() && !process.env.CI && "no local base ref (set up origin/" + BASE_BRANCH + "); CI must have one" }, () => {
+  assert.ok(baseRef(), "CI has no base ref to compare CHANGELOG.md against — fetch the deploy branch (fetch-depth: 0)");
   // Against the MERGE-BASE, not the tip: a branch behind a tip that folded or gained entries has not edited them.
   const git = (...args) => cp.execFileSync("git", args, { cwd: ROOT, encoding: "utf8" });
   const ref = git("merge-base", baseRef(), "HEAD").trim();

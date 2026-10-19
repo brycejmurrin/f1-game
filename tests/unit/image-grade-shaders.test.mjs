@@ -13,14 +13,47 @@ const smooth = (a, b, x) => {
   return t * t * (3 - 2 * t);
 };
 
+// ── The numbers the grade runs on, READ from each backend's source ────────────
+// (comments stripped, so a value only mentioned in a comment does not count). The JS
+// oracle below is driven by the GLSL set and the first test asserts WGSL and the TLX
+// node graph (the default backend, js/render/three/tsl-post.js) carry the same set.
+const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/[^\n]*/g, "$1");
+const TSL = stripComments(readFileSync(new URL("../../js/render/three/tsl-post.js", import.meta.url), "utf8"));
+const GLSL_C = stripComments(GLSL), WGSL_C = stripComments(WGSL);
+const nums = (m, n) => { assert.ok(m, "grade constant statement not found — the shader maths moved"); return m.slice(1, n + 1).map(Number); };
+const edgePairs = (text) => [...text.matchAll(/smoothstep\((-?[\d.]+), (-?[\d.]+), z\)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+function contract(which) {
+  if (which === "glsl") {
+    const zones = /void gradeZoneWeights[\s\S]*?\n}/.exec(GLSL_C)[0];
+    return { edges: edgePairs(zones),
+      toneGain: nums(/vec4 toneGain = uTone0 \* vec4\(([\d.]+), ([\d.]+), ([\d.]+), ([\d.]+)\)/.exec(GLSL_C), 4),
+      lowLift: nums(/c \+= w0\.x \* uTone0\.x \* ([\d.]+) \+ w0\.y \* uTone0\.y \* ([\d.]+)/.exec(GLSL_C), 2),
+      pivot: nums(/float z = log2\(max\(y, 1e-6\) \/ ([\d.]+)\)/.exec(zones), 1)[0] };
+  }
+  if (which === "wgsl") {
+    const zones = /fn gradeZoneWeights[\s\S]*?\n}/.exec(WGSL_C)[0];
+    return { edges: edgePairs(zones),
+      toneGain: nums(/U\.tone0 \* vec4<f32>\(([\d.]+), ([\d.]+), ([\d.]+), ([\d.]+)\)/.exec(WGSL_C), 4),
+      lowLift: nums(/weights\.tone0\.x \* U\.tone0\.x \* ([\d.]+) \+ weights\.tone0\.y \* U\.tone0\.y \* ([\d.]+)/.exec(WGSL_C), 2),
+      pivot: nums(/let z = log2\(max\(y, 1e-6\) \/ ([\d.]+)\)/.exec(zones), 1)[0] };
+  }
+  const block = /const lift = vec3\(C\.lift\)[\s\S]*?c\.assign\(max\(c\.mul\(newY/.exec(TSL)[0];
+  const tg = nums(/C\.tone0\.x\.mul\(([\d.]+)\)\)\.add\(w0y\.mul\(C\.tone0\.y\.mul\(([\d.]+)\)\)\)\s*\.add\(w0z\.mul\(C\.tone0\.z\)\)\.add\(w0w\.mul\(C\.tone0\.w\)\)/.exec(block), 2);
+  return { edges: edgePairs(block), toneGain: [tg[0], tg[1], 1, 1],
+    lowLift: nums(/w0x\.mul\(C\.tone0\.x\)\.mul\(([\d.]+)\)\.add\(w0y\.mul\(C\.tone0\.y\)\.mul\(([\d.]+)\)\)/.exec(block), 2),
+    pivot: nums(/const z = log2\(y\.div\(([\d.]+)\)\)/.exec(block), 1)[0] };
+}
+const CONTRACT = contract("glsl");
+
 function zoneWeights(y) {
-  const z = Math.log2(Math.max(y, 1e-6) / 0.18);
+  const z = Math.log2(Math.max(y, 1e-6) / CONTRACT.pivot);
+  const E = CONTRACT.edges.map(([a, b]) => (x) => smooth(a, b, x));
   return [
-    1 - smooth(-4, -0.75, z),
-    smooth(-4, -1.5, z) * (1 - smooth(-1, 0.75, z)),
-    smooth(-2.5, -0.5, z) * (1 - smooth(0.5, 2.5, z)),
-    smooth(0, 1.5, z) * (1 - smooth(3, 5, z)),
-    smooth(2.5, 5, z),
+    1 - E[0](z),
+    E[1](z) * (1 - E[2](z)),
+    E[3](z) * (1 - E[4](z)),
+    E[5](z) * (1 - E[6](z)),
+    E[7](z),
   ];
 }
 
@@ -48,11 +81,33 @@ function hdrGrade(c, p = {}) {
 
   const weights = zoneWeights(Math.max(luma(out.map((v) => Math.max(v, 0))), 1e-6));
   const tones = p.tones ?? [0, 0, 0, 0, 0];
-  const stops = clamp(weights.reduce((sum, w, i) => sum + w * tones[i], 0), -4, 4);
+  // Blacks/shadows get a wider swing (toneGain), then a small additive low-end lift.
+  const gain4 = CONTRACT.toneGain;
+  const stops = clamp(weights.slice(0, 4).reduce((sum, w, i) => sum + w * tones[i] * gain4[i], 0) + weights[4] * tones[4], -4, 4);
   out = out.map((v) => v * 2 ** stops);
+  const lift4 = weights[0] * tones[0] * CONTRACT.lowLift[0] + weights[1] * tones[1] * CONTRACT.lowLift[1];
+  out = out.map((v) => Math.max(v + lift4, 0));
   out = applyToeShoulder(out, p.toe ?? 0, p.shoulder ?? 0);
   return out.map((v) => Math.max(v, 0));
 }
+
+test("GLSL, WGSL and the TLX node graph run the SAME grade numbers (zone edges, tone gains, low-end lift, pivot)", () => {
+  const g = contract("glsl");
+  assert.equal(g.edges.length, 8, "five masks = 8 smoothstep edges");
+  assert.deepEqual(g.toneGain, [3, 2, 1, 1], "blacks x3, shadows x2");
+  assert.deepEqual(g.lowLift, [0.05, 0.025]);
+  assert.equal(g.pivot, 0.18);
+  for (const which of ["wgsl", "tsl"]) assert.deepEqual(contract(which), g, which + " drifted from the GLX grade");
+});
+
+test("BLACKS / SHADOWS bite: a positive blacks tone brightens near-black more than a mid grey", () => {
+  const dark = [0.004, 0.004, 0.004], mid = [0.18, 0.18, 0.18];
+  const gainDark = hdrGrade(dark, { tones: [1, 0, 0, 0, 0] })[0] / dark[0];
+  const gainMid = hdrGrade(mid, { tones: [1, 0, 0, 0, 0] })[0] / mid[0];
+  assert.ok(gainDark > 3 * gainMid, `blacks lift near-black (${gainDark.toFixed(2)}x) far more than mid (${gainMid.toFixed(2)}x)`);
+  assert.ok(hdrGrade([0, 0, 0], { tones: [1, 0, 0, 0, 0] })[0] > 0, "the additive lift reveals true black, which a multiply cannot");
+  assert.equal(hdrGrade([0, 0, 0], { tones: [-1, -1, 0, 0, 0] })[0], 0, "a negative lift stays clamped at black");
+});
 
 test("tonal masks target ordered luminance ranges", () => {
   const dark = zoneWeights(0.01);

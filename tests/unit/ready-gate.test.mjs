@@ -7,13 +7,20 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   GUARDS_A, GUARDS_B, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
   planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine,
 } from "../../tools/ci/ready-gate.mjs";
+
+// Scratch dirs live under the ignored artifacts/ tree, never the system tmp (AGENTS.md).
+const TMP_BASE = (() => {
+  const d = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..", "artifacts", "tmp");
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+})();
+
 
 const run = (name, status, conclusion, id = 1) => ({
   id, name, status, conclusion,
@@ -85,7 +92,7 @@ test("newestByName keeps the latest completed check-run per name", () => {
 });
 
 test("localVerdict: stamp + passed log matching tip is green", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   const tip = "abcdef1234567890abcdef1234567890abcdef12";
@@ -97,7 +104,7 @@ test("localVerdict: stamp + passed log matching tip is green", () => {
 });
 
 test("localVerdict: stamp for another tip refuses", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   fs.writeFileSync(stamp, "1111111111111111111111111111111111111111\n");
@@ -108,7 +115,7 @@ test("localVerdict: stamp for another tip refuses", () => {
 });
 
 test("localVerdict: failed suite log refuses even with matching stamp", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   const tip = "abcdef1";
@@ -119,7 +126,7 @@ test("localVerdict: failed suite log refuses even with matching stamp", () => {
 
 test("evaluate: CI success wins; CI failure refuses even with local stamp", () => {
   const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   fs.writeFileSync(stamp, tip + "\n");
@@ -146,7 +153,7 @@ test("evaluate: CI success wins; CI failure refuses even with local stamp", () =
 
 test("evaluate: pending CI can be unblocked by a matching local stamp", () => {
   const tip = "abcdef1234567890abcdef1234567890abcdef12";
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "tooling-fast-ready.sha");
   const log = path.join(dir, "tooling-fast-suite.log");
   fs.writeFileSync(stamp, tip + "\n");
@@ -165,8 +172,8 @@ test("evaluate: API error with no local stamp is unknown (exit 3)", () => {
     sha: "abcdef1234567890abcdef1234567890abcdef12",
     request: () => ({ error: "no token" }),
     localOpts: {
-      stampPath: path.join(os.tmpdir(), "no-such-ready-stamp"),
-      logPath: path.join(os.tmpdir(), "no-such-ready-log"),
+      stampPath: path.join(TMP_BASE, "no-such-ready-stamp"),
+      logPath: path.join(TMP_BASE, "no-such-ready-log"),
       exists: () => false,
     },
   });
@@ -175,7 +182,7 @@ test("evaluate: API error with no local stamp is unknown (exit 3)", () => {
 });
 
 test("stampReadySha writes the tip", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "nested", "tooling-fast-ready.sha");
   assert.equal(stampReadySha("abcdef1234567890", { stampPath: stamp }), true);
   assert.equal(fs.readFileSync(stamp, "utf8").trim(), "abcdef1234567890");
@@ -184,7 +191,7 @@ test("stampReadySha writes the tip", () => {
 // M36 (2026-10-09): the stamp names the tree the suite MEASURED, not HEAD read afterwards.
 const T1 = "1".repeat(40), T2 = "2".repeat(40);
 const stampFiles = (stampBody, logBody) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stampPath = path.join(dir, "tooling-fast-ready.sha"), logPath = path.join(dir, "tooling-fast-suite.log");
   fs.writeFileSync(stampPath, stampBody); fs.writeFileSync(logPath, logBody);
   return { stampPath, logPath };
@@ -215,7 +222,7 @@ test("a tree stamp needs the suite log of the SAME run", () => {
 });
 
 test("stampReadySha writes `sha tree=<hash>` and refuses a malformed tree", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-"));
   const stamp = path.join(dir, "s.sha");
   assert.equal(stampReadySha("abcdef1234567890", { tree: T1, stampPath: stamp }), true);
   assert.equal(fs.readFileSync(stamp, "utf8").trim(), `abcdef1234567890 tree=${T1}`);
@@ -225,7 +232,7 @@ test("stampReadySha writes `sha tree=<hash>` and refuses a malformed tree", () =
 test("workTreeId is the committed tree once the dirty edits are committed, and moves when they change", async () => {
   const { workTreeId, commitTreeId } = await import("../../tools/lib/work-tree-id.mjs");
   const { execFileSync } = await import("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-tree-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-tree-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
@@ -250,7 +257,7 @@ test("workTreeId sees a same-size rewrite that git's stat cache would call clean
   // fresh mtime made every entry look safely older, git trusted the stat cache, and the old tree came back.
   const { workTreeId } = await import("../../tools/lib/work-tree-id.mjs");
   const { execFileSync } = await import("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-racy-"));
+  const dir = fs.mkdtempSync(path.join(TMP_BASE, "ready-gate-racy-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t"); g("config", "core.trustctime", "false");
@@ -362,26 +369,23 @@ test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
   assert.deepEqual(open.open, ["still todo", "Deferred-ish not closed"]);
 });
 
-test("planVerdict: when several ## Plan sections remain, the last with items wins (Cursor agent append)", () => {
+test("planVerdict: CURSOR_AGENT_PR_BODY Plan wins over an outer open Plan (#2899)", () => {
   const dual = [
     "## Plan",
-    "- [ ] **now:** stale human item",
-    "- [ ] another open",
+    "- [ ] **now:** outer human opener still open",
+    "- [x] publish",
     "",
     "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->",
     "## Plan",
-    "- [x] sync — sha",
-    "- [~] Deferred: hosted upload",
-    "- [x] CI green",
+    "- [x] synced tip — 8e0900369",
+    "- [x] CI passed — run 39126646785",
+    "- [~] Deferred: Bryce follow-up",
     "<!-- CURSOR_AGENT_PR_BODY_END -->",
     "",
   ].join("\n");
-  const v = planVerdict(dual);
-  assert.equal(v.state, "done");
-  assert.equal(v.items, 3);
-  assert.deepEqual(v.open, []);
-  const onlyStaleLast = "## Plan\n- [x] a\n\n## Plan\n- [ ] still open\n";
-  assert.equal(planVerdict(onlyStaleLast).state, "open");
+  assert.deepEqual(planVerdict(dual), { state: "done", items: 3, open: [] });
+  // Ordinary HTML comments still do not count as Plan items.
+  assert.equal(planVerdict(body("<!-- - [ ] example -->\n- [x] real")).state, "done");
 });
 
 test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", () => {
@@ -412,6 +416,37 @@ test("withMemory: a memory-leak turns a green tip into memory-leak (exit 1)", ()
   assert.equal(v.code, 1);
   assert.equal(withMemory(GREEN, ["AGENTS.md"], { title: "docs" }).code, 0);
   assert.equal(withMemory(GREEN, null), GREEN, "no file list ( --sha ) skips the check");
+});
+
+test("memoryVerdict: a marker needs a reason on the same line", () => {
+  const files = [".claude/memory/foo.md"];
+  for (const body of ["memory-change:\n## Goal\nUnrelated text", "memory-change:\t \r\n## Goal", "memory-change:\t "]) {
+    assert.equal(memoryVerdict(files, { body }).state, "memory-leak", JSON.stringify(body));
+  }
+  assert.equal(memoryVerdict(files, { body: "## Goal\nMemory cleanup\nmemory-change:\t prune stale links\r\n## Plan" }).state, "ok");
+});
+
+test("PR-file renames into or out of memory require explicit intent", () => {
+  const head = "c".repeat(40);
+  for (const [previous, current, expected] of [
+    [".claude/memory/orphan.md", "docs/README.md", "memory-leak"],
+    ["docs/README.md", ".claude/memory/orphan.md", "memory-leak"],
+    ["docs/VERIFICATION.md", "docs/DEBUG-HOOKS.md", "passed"],
+  ]) {
+    const request = (url) => {
+      if (url === "pulls/9") return { json: { head: { sha: head }, changed_files: 101 } };
+      if (url === "pulls/9/files?per_page=100") return { json: Array.from({ length: 100 }, (_, i) => ({ filename: `docs/page-${i}.md` })) };
+      if (url === "pulls/9/files?per_page=100&page=2") return { json: [{ status: "renamed", previous_filename: previous, filename: current }] };
+      return { error: `unexpected ${url}` };
+    };
+    const resolved = resolveSha({ pr: "9", request });
+    assert.equal(resolved.filesError, null);
+    const verdict = withMemory(GREEN, resolved.files, resolved);
+    assert.equal(verdict.state, expected, `${previous} -> ${current}`);
+    if (expected === "memory-leak") {
+      assert.equal(withMemory(GREEN, resolved.files, { ...resolved, body: "memory-change: move topic" }).state, "passed");
+    }
+  }
 });
 
 test("withMemory: a files-API failure fails closed (never treats as no memory edits)", () => {
@@ -446,4 +481,14 @@ test("resolveSha --pr records filesError when the files list cannot be fetched",
   assert.equal(r.sha, head);
   assert.match(r.filesError || "", /HTTP 502/);
   assert.equal(r.files, null, "a failed files fetch must not look like an empty diff");
+});
+
+test("resolveSha --pr fails closed when the API returns fewer files than the PR reports", () => {
+  const request = (url) => url === "pulls/11"
+    ? { json: { head: { sha: "d".repeat(40) }, changed_files: 3001 } }
+    : { json: Array.from({ length: url.includes("page=31") ? 0 : 100 }, (_, i) => ({ filename: `docs/file-${i}.md` })) };
+  const resolved = resolveSha({ pr: "11", request });
+  assert.equal(resolved.files, null);
+  assert.match(resolved.filesError, /received 3000 of 3001/);
+  assert.equal(withMemory(GREEN, resolved.files, resolved).state, "memory-unknown");
 });

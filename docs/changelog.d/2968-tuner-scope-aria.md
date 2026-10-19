@@ -1,0 +1,1 @@
+Fixed: the camera tuner THIS TRACK and THIS CAR scope buttons now expose `aria-pressed` (and the `on` style) when selected, so exactly one of the four scope chips is pressed for screen readers (#2968).
