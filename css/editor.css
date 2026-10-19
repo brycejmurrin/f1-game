@@ -80,8 +80,6 @@
   flex: none;
   justify-content: flex-start;
 }
-/* A chip is never narrower than its label (#3041): at 200% UI scale the row wraps. */
-.td-stage > .td-chips[data-role="toolbar"] .sel-chip { min-width: fit-content; white-space: nowrap; }
 .td-stats, .td-hint, .td-card-meta, .td-msg {
   font-size: var(--fs-micro);
   color: var(--dim);
@@ -341,9 +339,8 @@
     font-family: var(--font-hud);
     font-size: var(--fs-micro);
     min-height: var(--tap-paint);
-    /* Never squeeze a chip below its label (#3041, 200% UI scale): the row wraps instead. */
-    min-width: fit-content;
-    flex: 1 1 auto;
+    min-width: 0;
+    flex: 1 1 0;
     padding-inline: calc(var(--gap) / 3);
   }
   /* Keep the history toolbar in its own row on portrait phones. Floating it
@@ -587,7 +584,9 @@
   box-sizing: border-box;
   font-size: var(--fs-micro);
   min-height: var(--tap);
-  min-width: var(--tap);
+  /* Floor at the longest word, padding included (#3041): at 200% UI scale a chip
+     never shrinks under its label; the wrapping row takes the overflow instead. */
+  min-width: max(var(--tap), min-content);
   max-width: 100%;
   flex: 1 1 4.5rem;
   /* Leading-edge bias so the -6deg parallelogram does not slice the tail. */
