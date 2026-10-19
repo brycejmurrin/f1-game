@@ -37,7 +37,7 @@ needs a decision or a merge. Merging stays with the merge holder
 
 | Source | What it catches | How it is armed |
 |---|---|---|
-| PR events | CI red/green, review, conflict, ready, merge/close | `subscribe_pr_activity` on every open PR; new ones each tick |
+| PR changes | CI red/green, review, conflict, ready, merge/close | the watcher does NOT subscribe: each event echo costs ~10k tokens (a watcher hit 220k in 12 min). PR owners keep their own subscriptions; the watcher sees every change as a row in the next `fleet-tick.mjs` diff |
 | Fast tick, every 3 min | anything an event missed: ship CI, Pages, new PRs, stale reds | `send_later` delay 3, re-armed at the end of every wake |
 | Full sweep, every 5th tick (~15 min) | sessions, cost, context, model drift, transcripts | the same tick, counted in state |
 | CI Monitors (≤ 6) | a red job within a minute | `Monitor` on `ci-watch.mjs --sha <head> --timeout 30 --failures-only`, re-armed on expiry |
