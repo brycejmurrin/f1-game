@@ -1,0 +1,1 @@
+1792437060	Bryce Murrin	CAR MODELS: fit nose paint strips and running-light crown bar to canonical styled nose width; owned js/car/car3d.js, tests/unit/car-mesh-anchors.test.mjs, docs/changelog.d/car-nose-trim.md. No shaders, Garage cameras/UI, catalog, saves or physics edits.  [cursor/car-flank-review-71c9; session 7628c1b73f1971ff197776d9]
