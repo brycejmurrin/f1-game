@@ -2241,7 +2241,7 @@
       "global": "Tracks",
       "order": 56,
       "roster": "tag",
-      "ratchetLines": 762
+      "ratchetLines": 800
     },
     {
       "path": "js/track/build-client.js",
@@ -2326,7 +2326,7 @@
       "global": "Car3D",
       "order": 70,
       "roster": "tag",
-      "ratchetLines": 2207
+      "ratchetLines": 2330
     },
     {
       "path": "js/input/tilt-roll.js",
@@ -3419,7 +3419,7 @@
       "global": "GameHud",
       "order": 252,
       "roster": "tag",
-      "ratchetLines": 2737
+      "ratchetLines": 2481
     },
     {
       "path": "js/ui/results-story.js",
@@ -3654,7 +3654,7 @@
       "global": null,
       "order": 291,
       "roster": "tag",
-      "ratchetLines": 9626
+      "ratchetLines": 9351
     },
     {
       "path": "js/render/glx/shaders/glsl-chunks.js",
@@ -3709,7 +3709,7 @@
       "global": "GLXBackend",
       "order": 300,
       "roster": "DEFERRED:webgl2",
-      "ratchetLines": 2978
+      "ratchetLines": 3002
     },
     {
       "path": "js/render/webgpu/wgsl-chunks.js",
@@ -3836,7 +3836,7 @@
       "global": "AgentView",
       "order": 321,
       "roster": "LAZY_AGENT",
-      "ratchetLines": 2584
+      "ratchetLines": 2316
     },
     {
       "path": "js/agent/apex-net.js",
@@ -3867,14 +3867,13 @@
       "global": "ApexApi",
       "order": 326,
       "roster": "LAZY_AGENT",
-      "ratchetLines": 3323
+      "ratchetLines": 2483
     },
     {
       "path": "js/lighting/presets.js",
       "global": "LightPresets",
       "order": 327,
-      "roster": "LAZY_RACE",
-      "ratchetLines": 7339
+      "roster": "LAZY_RACE"
     },
     {
       "path": "js/race/reliability.js",
@@ -4847,7 +4846,7 @@
       "global": "NetLobby",
       "order": 489,
       "roster": "LAZY_NET",
-      "ratchetLines": 2407
+      "ratchetLines": 2342
     },
     {
       "path": "js/input/phone-pad.js",
