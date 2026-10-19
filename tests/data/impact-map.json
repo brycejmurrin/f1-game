@@ -2589,6 +2589,9 @@
       "helmetKey": [
         "tests/unit/helmets.test.mjs"
       ],
+      "teamStyleOf": [
+        "tests/unit/car-mesh-anchors.test.mjs"
+      ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/garage-before.test.mjs",

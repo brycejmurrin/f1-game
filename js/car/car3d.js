@@ -962,15 +962,15 @@ const Car3D = (function () {
     // Nose TIP z moves per team (TEAM_STYLE.noseTipZ, ±0.10): the cap and both
     // stripes must end at the STYLED tip, not a shared literal, or the paint
     // floats past a short nose (haas) / stops short of a long one (williams).
-    // anchors.noseAt clamps y/w beyond the tip station, so only the z endpoints
-    // need deriving. Every nose graphic below is now expressed as a distance
-    // BEHIND the tip for the same reason the cap already was — the tip moved
-    // 580 mm rearward when the nose was cut back to sit behind the front wing,
-    // and a literal 2.70 would have painted a stripe in mid-air ahead of it.
+    // noseAt clamps beyond the tip; derive z endpoints as distances behind it.
+    // The old literal 2.70 painted mid-air after the tip moved 580 mm rearward.
     const styledTipZ = styledNoseStations(teamStyle)[0].z;
+    // Paint and the crown lamp stay inside the styled crown, including the
+    // pencil-thin concept noses. Keep authored widths wherever they still fit.
+    const noseTrimW = (a, w) => Math.min(w, a.topSide * 1.8);
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(styledTipZ - 0.04);
-    addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, 0.09, 0.016,
-           styledTipZ - 0.04, 0, noseAccentFront.top + 0.008, 0.05, 0.014, c2);
+    addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, noseTrimW(noseAccentRear, 0.09), 0.016,
+           styledTipZ - 0.04, 0, noseAccentFront.top + 0.008, noseTrimW(noseAccentFront, 0.05), 0.014, c2);
     // Spine accent along the ROLL-STRUCTURE crown, not the airbox roof it used
     // to lie on: the blade now occupies z -0.33..-0.63 and a flat band at
     // y 0.862 would be buried inside it. A span follows the crown's rearward
@@ -1006,7 +1006,7 @@ const Car3D = (function () {
                0.014, 0.026, 0.028, drlC, SURFACES.glass);
       }
       const drlBar = anchors.noseAt(styledTipZ - 0.05);
-      addBox(out, 0, drlBar.top + 0.005, drlBar.z, 0.13, 0.010, 0.020, drlC, SURFACES.glass);
+      addBox(out, 0, drlBar.top + 0.005, drlBar.z, noseTrimW(anchors.noseAt(drlBar.z + 0.010), 0.13), 0.010, 0.020, drlC, SURFACES.glass);
     }
     if (!ckpt) zone("sidepods", () => addPodFlankSpan(0.425, -0.025, 0.88, 0.035, accentC, SURFACES.paint, 0.012));
 
@@ -1016,10 +1016,10 @@ const Car3D = (function () {
     if (stripeC) {
       const ns314 = anchors.noseAt(stripeTipZ), ns270 = anchors.noseAt(stripeMidZ);
       const ns155 = anchors.noseAt(1.55), ns105 = anchors.noseAt(1.05);
-      addLoft(out, stripeMidZ, 0, ns270.top + 0.012, 0.075, 0.014,
-             stripeTipZ, 0, ns314.top + 0.012, 0.040, 0.012, stripeC);
-      addLoft(out, 1.55, 0, ns155.top + 0.012, 0.13, 0.016,
-             stripeMidZ, 0, ns270.top + 0.012, 0.075, 0.014, stripeC);
+      addLoft(out, stripeMidZ, 0, ns270.top + 0.012, noseTrimW(ns270, 0.075), 0.014,
+             stripeTipZ, 0, ns314.top + 0.012, noseTrimW(ns314, 0.040), 0.012, stripeC);
+      addLoft(out, 1.55, 0, ns155.top + 0.012, noseTrimW(ns155, 0.13), 0.016,
+             stripeMidZ, 0, ns270.top + 0.012, noseTrimW(ns270, 0.075), 0.014, stripeC);
       // CHASE ONLY, exactly as the hood's accent stripe above: these two runs
       // start at z 0.05 — 0.25 m from the eye, AT the near plane — then go 1.5 m
       // down the centre of the view at 0.12 m wide. Measured 739 of 24045 view
@@ -1028,7 +1028,7 @@ const Car3D = (function () {
       // stripe; _ckAcc only makes it grey. The nose run below (1.55 → tip) is
       // 1.75 m out and under 4 deg, and stays. Guard: cockpit-crest-stripe.
       if (!ckpt) addLoft(out, 1.05, 0, ns105.top + 0.012, 0.12, 0.016,
-             1.55, 0, ns155.top + 0.012, 0.13, 0.016, stripeC);
+             1.55, 0, ns155.top + 0.012, noseTrimW(ns155, 0.13), 0.016, stripeC);
       if (!ckpt) addLoft(out, 0.05, 0, 0.655, 0.12, 0.022, 1.05, 0, 0.545, 0.13, 0.022, stripeC);   // monocoque → hood crest
       if (!ckpt) zone("engineCover", () => { addSpan(out, { z: -0.27, y: 0.984, w: 0.080, h: 0.020 },
                               { z: -0.67, y: 0.954, w: 0.070, h: 0.018 }, stripeC);  // spine band over the roll structure
@@ -1038,10 +1038,10 @@ const Car3D = (function () {
     const noseStripeC = _ckAcc(liv.noseStripe) || null;
     if (noseStripeC) {
       const ns155 = anchors.noseAt(1.55), ns270 = anchors.noseAt(stripeMidZ), ns314 = anchors.noseAt(stripeTipZ);
-      addLoft(out, 1.55, 0, ns155.top + 0.016, 0.115, 0.014,
-             stripeMidZ, 0, ns270.top + 0.016, 0.064, 0.012, noseStripeC);
-      addLoft(out, stripeMidZ, 0, ns270.top + 0.016, 0.064, 0.012,
-             stripeTipZ, 0, ns314.top + 0.016, 0.036, 0.010, noseStripeC);
+      addLoft(out, 1.55, 0, ns155.top + 0.016, noseTrimW(ns155, 0.115), 0.014,
+             stripeMidZ, 0, ns270.top + 0.016, noseTrimW(ns270, 0.064), 0.012, noseStripeC);
+      addLoft(out, stripeMidZ, 0, ns270.top + 0.016, noseTrimW(ns270, 0.064), 0.012,
+             stripeTipZ, 0, ns314.top + 0.016, noseTrimW(ns314, 0.036), 0.010, noseStripeC);
     }
 
     if (noseC) {
