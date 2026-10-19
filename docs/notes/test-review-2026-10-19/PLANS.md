@@ -200,8 +200,8 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 ### L17 — Track geometry tests that bite (draft)
 
 - **Goal:** terrain/normal tests fail under the mutations the reviewer tried (TRI_EPS=0, banking() called per sample), and foundation overlap checks have no blind band
-- **Owned:** `tests/unit/terrain-*.test.mjs`, `tests/specs/bahrain-foundation.spec.js`
-- **Closes:** RC2-01, RC2-02, RC2-13 (3 findings; effort S×3 M×0 L×0)
+- **Owned:** `tests/unit/terrain-*.test.mjs`, `tests/specs/bahrain-foundation.spec.js`, `tests/specs/terrain-over-road.spec.js`
+- **Closes:** RC2-01, RC2-02, RC2-13, RC2-19, RC2-20, RC2-21 (6 findings; effort S×5 M×1 L×0)
 - **Draws from batches:** race-2 — waiting on: race-2
 - **Verify:** `node --test tests/unit/terrain-*.test.mjs && node tools/track/verify-track.cjs bahrain && npm test -- tests/specs/bahrain-foundation.spec.js`
 - **Effort:** S–M

@@ -5,7 +5,7 @@ Generated from `findings.jsonl`, `reports/` and the status table below; issue #2
 ## Status
 
 - Reports in: **9/22** batches (7 final, 2 partial). Updated 2026-10-19 05:55Z (22:55 Pacific, 10-18): pass 3 folds tooling-5 and the render-2 mutation addendum.
-- Findings: 209 rows, 201 after de-duplication; 171 reviewer-verified, 38 subagent-unverified; 51 re-checked by the synthesis on the tree.
+- Findings: 212 rows, 204 after de-duplication; 174 reviewer-verified, 38 subagent-unverified; 52 re-checked by the synthesis on the tree.
 - Not yet in: audio-1, race-1, tracks-1, tracks-2, car-2, modes-1, ui-2, tooling-1, tooling-2, tooling-3, tooling-4, net, platform.
 
 Not run inside reported batches:
@@ -146,4 +146,4 @@ Synthesis spot checks (`git show origin/claude/f1-game-project-26h3ng:<file>`, t
 
 ## Rows by subsystem
 
-tooling 17, render 14, lighting 14, camera 10, player-physics 9, hud 8, career 7, render-perf 6, input 6, collision 6, test-infra 6, render-tlx 5, debugger 5, garage 5, race-session 4, flyby 3, xr 3, physics 3, aero 3, audio 3, weather 3, car-render 3, ci 3, ui-css 2, assets 2, ui 2, render-wgx 2, steering 2, ai-physics 2, physics-gate 2, race-ux 2, tyres 2, track-geometry 2, css 2, pwa 2, camera-ui 1, track-editor 1, agent-api 1, persistence 1, net 1, ers 1, dev-api 1, race-radio 1, real-race 1, career-reliability 1, start-lights 1, quali 1, scenery 1, race-regs 1, perf 1, ai 1, debris 1, car-sim 1, livery 1, car-audio 1, data-hub 1, hud-dock 1, a11y 1, i18n 1, loading 1, ai-traffic 1, deploy 1, lighting-tools 1, track-designer 1, fleet-tools 1, race-rules 1
+tooling 17, render 14, lighting 14, camera 10, player-physics 9, hud 8, career 7, render-perf 6, input 6, collision 6, test-infra 6, render-tlx 5, debugger 5, garage 5, race-session 4, flyby 3, xr 3, physics 3, aero 3, audio 3, weather 3, car-render 3, ci 3, tracks 3, ui-css 2, assets 2, ui 2, render-wgx 2, steering 2, ai-physics 2, physics-gate 2, race-ux 2, tyres 2, track-geometry 2, css 2, pwa 2, camera-ui 1, track-editor 1, agent-api 1, persistence 1, net 1, ers 1, dev-api 1, race-radio 1, real-race 1, career-reliability 1, start-lights 1, quali 1, scenery 1, race-regs 1, perf 1, ai 1, debris 1, car-sim 1, livery 1, car-audio 1, data-hub 1, hud-dock 1, a11y 1, i18n 1, loading 1, ai-traffic 1, deploy 1, lighting-tools 1, track-designer 1, fleet-tools 1, race-rules 1

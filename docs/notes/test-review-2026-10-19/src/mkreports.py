@@ -26,7 +26,7 @@ for x in c:
     edits.append(mo.group(1)); return mo.group(1)
   body=TOK.sub(fix,body)
   import os
-  PATH=re.compile(r'(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs)/[A-Za-z0-9_./-]+)/([A-Za-z0-9_.-]+)\.(json|mjs|cjs|css|js|md|sh)(?![A-Za-z0-9])')
+  PATH=re.compile(r'(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs)(?:/[A-Za-z0-9_.-]+)*)/([A-Za-z0-9_.-]+)\.(json|mjs|cjs|css|js|md|sh)(?![A-Za-z0-9])')
   root=subprocess.run(['git','rev-parse','--show-toplevel'],capture_output=True,text=True).stdout.strip()
   def pfix(mo):
     full=mo.group(0)

@@ -161,6 +161,7 @@ _FOLD = {
  "L16": (["tooling-5"], ["tests/unit/wind.test.mjs"], ["T5-19"]),
  "L19": (["tooling-5"], ["tests/unit/surface-id-parity.test.mjs"], ["T5-18"]),
  "L21": (["tooling-5"], ["tests/unit/wind-speed.test.mjs"], ["T5-21"]),
+ "L17": ([], ["tests/specs/terrain-over-road.spec.js"], ["RC2-19", "RC2-20", "RC2-21"]),
 }
 for _L in LANES:
     if _L["id"] in _FOLD:

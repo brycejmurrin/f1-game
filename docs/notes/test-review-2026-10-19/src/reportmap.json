@@ -9,4 +9,7 @@
  "6260188414": ["car-1", "final"],
  "6260329296": ["ui-1", "final"],
  "6260418512": ["tooling-5", "final"],
- "6260418691": ["render-2.addendum-mutation", "final (mutation-testing addendum; extends reports/render-2.md)"]}
+ "6260418691": ["render-2.addendum-mutation", "final (mutation-testing addendum; extends reports/render-2.md)"],
+ "6260584298": ["audio-1", "final"],
+ "6260585884": ["race-2.part-2of2", "partial 2/2 (handoff at the context limit; spec runs still going)"],
+ "6260692878": ["tooling-4", "final"]}
