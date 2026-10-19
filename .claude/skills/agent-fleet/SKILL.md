@@ -27,6 +27,8 @@ Read your role's reference before acting:
   merged: subscribe, CI watch, check-in, fix reds and conflicts unasked); merge
   holder → [`references/role-merge-holder.md`](references/role-merge-holder.md)
   (each orchestrator merges its own fleet's PRs at the user's level; Merge Desk is dormant unless designated);
+  seed → [`references/role-seed.md`](references/role-seed.md) (one tiny depth-0 session per
+  fleet that Bryce starts once; it only launches orchestrators on `SPAWN ORCH`);
   reviewer → [`references/role-reviewer.md`](references/role-reviewer.md)
   (one pass, findings only, STOP AT 120k);
   fleet watch → [`references/role-fleet-watch.md`](references/role-fleet-watch.md)
@@ -40,6 +42,9 @@ Read your role's reference before acting:
 - **In-session worker subagent** (the Agent tool inside ONE session, not a
   sibling session) → agent `worker` (`.claude/agents/worker.md`): all tools,
   its own worktree, `SendMessage` to `main` or a named peer mid-task.
+- **Many hosts at once** (Claude on two accounts, Codex, Cursor: fleet letters, computed
+  path ownership, RELEASE?, the PR-comment mirror, who merges a PR whose host cannot) →
+  [`references/multi-host.md`](references/multi-host.md).
 - **Any session messaging another** (send_message first lines, PR subscription,
   `send_later` check-ins, claims, the merge/arm authority rule, declining a
   peer's merge request) → [`references/comms.md`](references/comms.md); the decline
