@@ -243,6 +243,12 @@ try {
         catch (e) { return { n: 0, err: String(e) }; }
       });
     }
+    if (process.env.APEX_SHOT_FINISH) {   // DESIGN PREVIEW: paint the pinned team's livery with one finish before the race builds
+      await page.evaluate(([teamId, fin]) => {
+        const t = Teams.LIST.find((x) => x.id === teamId) || Teams.LIST[0];
+        t.livery = Object.assign({}, t.livery || {}, { finish: fin });
+      }, [first.team || "ferrari", process.env.APEX_SHOT_FINISH]);
+    }
     if (currentTrack !== group.trackId) {
       await raceTrack(page, group.trackId, plan.waitMs);
       currentTrack = group.trackId;

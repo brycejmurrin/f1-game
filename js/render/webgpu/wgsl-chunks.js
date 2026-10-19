@@ -1023,7 +1023,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let wetness   = F.params1.z;
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
-  let surfaceId = i32(vMatId + 0.5);
+  // DESIGN PREVIEW finishes 60-64 (not shipped): remapped onto 39/28/20/27/34, tinted after the metal block (glsl-lit.js).
+  let previewId = i32(vMatId + 0.5);
+  var surfaceId = previewId;
+  if (previewId == 60) { surfaceId = 39; } else if (previewId == 61) { surfaceId = 28; }
+  else if (previewId == 62) { surfaceId = 20; } else if (previewId == 63) { surfaceId = 27; }
+  else if (previewId == 64) { surfaceId = 34; }
   let classifiedCar = surfaceId >= 20 && surfaceId <= 40;
   // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (see js/render/glx/shaders/glsl-lit.js); the grain / saturation / rim
   // are layered in the albedo and env blocks (CarMaterialShade.FLAKE / .CANDY).
@@ -1249,6 +1254,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let fkH = hash21(fkC.xy + fkC.z * 19.7);
       let fkS = smoothstep(0.82, 1.0, fkH);
       albedo = albedo * (1.0 + ((fkH - 0.5) * 0.30 + (fkS - 0.09) * 0.90) * fkF);
+      if (previewId == 64) {   // PREVIEW holo: prismatic sparks
+        albedo = mix(albedo, (0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + fkH * 5.0 + (1.0 - NoV) * 2.0))) * 1.8,
+          vec3<f32>(fkS * fkF));
+      }
       specular = min(1.0, specular + fkS * 0.40 * fkF);
     }
   }
@@ -1795,6 +1804,32 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
   if (goldSurface) { color = color * vec3<f32>(1.0, 0.78, 0.27); }   // GOLD PLATE: lit terms take the fixed gold hue
   if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
+  // DESIGN PREVIEW finish tints 60-64 (mirrors glsl-lit.js).
+  if (previewId >= 60 && previewId <= 64) {
+    let pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+    let pvG = 1.0 - NoV;
+    if (previewId == 60) {
+      let film = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + pvG * 1.8 + in.objPos.y * 0.9 + in.objPos.z * 0.12));
+      color = color * (0.25 + film * 2.6);
+    } else if (previewId == 61) {
+      let frC = floor(in.objPos * 140.0);
+      let frH = hash21(frC.xy + frC.z * 19.7);
+      let frF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
+      let frL = dot(color, vec3<f32>(0.299, 0.587, 0.114));
+      color = mix(color, vec3<f32>(frL) * vec3<f32>(0.92, 0.96, 1.04), vec3<f32>(0.50)) * 1.25 * (0.70 + 1.70 * pvG * pvG) * (1.0 + (frH - 0.5) * 0.45 * frF);
+      color = color + (F.ambSky.xyz + F.sunColor.xyz * 0.25) * pvG * pvG * 0.22;
+    } else if (previewId == 62) {
+      let sat = pow(pvHue, vec3<f32>(1.8));
+      color = color + sat * albedo * (F.ambSky.xyz * 2.4 + F.sunColor.xyz * 0.80 * max(dot(N, F.sunDir.xyz), 0.0) + vec3<f32>(0.12));
+    } else if (previewId == 63) {
+      let t = clamp(0.5 + in.objPos.z * 0.30 + pvG * 0.20, 0.0, 1.0);
+      let ox = mix(mix(vec3<f32>(1.0, 0.74, 0.32), vec3<f32>(0.62, 0.30, 0.86), vec3<f32>(smoothstep(0.15, 0.55, t))),
+        vec3<f32>(0.25, 0.52, 1.0), vec3<f32>(smoothstep(0.50, 0.90, t)));
+      color = vec3<f32>(dot(color, vec3<f32>(0.299, 0.587, 0.114))) * ox * 1.7;
+    } else {
+      color = color * mix(vec3<f32>(1.0), 0.75 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + (in.objPos.x + in.objPos.z) * 4.0 + pvG * 3.0)), vec3<f32>(0.65));
+    }
+  }
 
   // Sky rim / fresnel (GLX js/render/glx/shaders/glsl-lit.js): grazing-angle atmospheric
   // brightening tinted by the horizon. SKY RIM GLOW = params9.w (def 1.0).
