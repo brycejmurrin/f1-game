@@ -18,7 +18,6 @@
 // starts from the title with the last loopback session stopped and the default
 // car (McLaren seat 0) pinned — the rival asks for ferrari:1 and "no fallback"
 // is only meaningful when the local car is not already in that seat.
-// UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 

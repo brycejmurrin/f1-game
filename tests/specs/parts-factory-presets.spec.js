@@ -4,7 +4,6 @@
 // ONE BOOT PER WORKER (sharedTest): the boot-seed-reload pair became none. The
 // saved setup goes in through the store (cache and disk together) and the team
 // through #mb-race's own re-read, which is all the reload was for.
-// UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 

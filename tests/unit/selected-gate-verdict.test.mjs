@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectedGateVerdict, shardEvidence } from "../../tools/ci/selected-gate-verdict.mjs";
@@ -84,7 +84,7 @@ test("a red guards is not repeated here, and never hides a spec failure (2026-10
 });
 
 test("CLI: cancelled + staged clean junit fails closed despite clean sibling junit", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sel-gate-"));
+  const dir = mkTmpDir("sel-gate-");
   const slot = path.join(dir, "test-results-1");
   fs.mkdirSync(slot);
   fs.writeFileSync(path.join(slot, "junit.xml"),
@@ -107,7 +107,7 @@ test("CLI: cancelled + staged clean junit fails closed despite clean sibling jun
 });
 
 test("CLI: cancelled + junit failure exits 1", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sel-gate-"));
+  const dir = mkTmpDir("sel-gate-");
   const slot = path.join(dir, "test-results-1");
   fs.mkdirSync(slot);
   fs.writeFileSync(path.join(slot, "junit.xml"),
@@ -165,7 +165,7 @@ test("15-F2: unreadable evidence or a failed artifact download cannot be read as
 });
 
 test("15-F2: shardEvidence counts only junit with testcases, per shard folder", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sel-ev-"));
+  const dir = mkTmpDir("sel-ev-");
   const j = path.join(dir, "junit-in"), st = path.join(dir, "started-in");
   fs.mkdirSync(path.join(j, "spec-timings-junit-selected-a-1", "test-results-1"), { recursive: true });
   fs.writeFileSync(path.join(j, "spec-timings-junit-selected-a-1", "test-results-1", "junit.xml"),
@@ -181,7 +181,7 @@ test("15-F2: shardEvidence counts only junit with testcases, per shard folder", 
 });
 
 test("15-F2 CLI: cancelled + a started shard with an empty junit exits 1; a classname-less failure exits 1", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sel-gate-"));
+  const dir = mkTmpDir("sel-gate-");
   fs.mkdirSync(path.join(dir, "started-in", "selected-started-a-1"), { recursive: true });
   fs.mkdirSync(path.join(dir, "junit-in"), { recursive: true });
   const run = (extra = []) => {
@@ -208,7 +208,7 @@ test("15-F2 CLI: cancelled + a started shard with an empty junit exits 1; a clas
 test("CI selection reporter annotates unreadable specs and counts them as dropped", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8");
   const report = src.slice(src.lastIndexOf("node -e '") + "node -e '".length, src.lastIndexOf("'"));
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sel-report-"));
+  const dir = mkTmpDir("sel-report-");
   const brokenSpec = ["tests", "specs", "broken.spec.js"].join("/");
   try {
     fs.writeFileSync(path.join(dir, "sel.json"), JSON.stringify({ reason: "helper", selected: [], groups: [], tracked: [], overBudgetSpecs: [], coveredByFixedGates: [], skipped: [], unreadable: [{ file: brokenSpec, tests: null }] }));

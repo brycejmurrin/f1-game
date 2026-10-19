@@ -7,7 +7,6 @@
 // the shared page back to the title and pin the default car (McLaren, nothing
 // fitted) before racing — the ERS and exhaust contracts below are about THAT
 // car, and the shared page carries whatever the previous test fitted.
-// UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
