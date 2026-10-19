@@ -77,6 +77,11 @@ const LiveryTex = (function () {
     spineSideL: { x: 80, y: 2080, w: 608, h: 320 },  // the same for the LEFT flank, authored in its own outside-view frame
     fwEnd: { x: 760, y: 2080, w: 680, h: 280 },  // front-wing endplate, outer face (both sides); in the extra rows beside spineSideL
     tail: { x: 1000, y: 840, w: 360, h: 160 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
+    // LiveryStations (js/car/livery-stations.js): nose-tip cap, driver code, sidepod top, halo crown.
+    podTop: { x: 1480, y: 2080, w: 488, h: 160 },
+    cockpitSide: { x: 1480, y: 2260, w: 488, h: 130 },
+    haloTop: { x: 80, y: 2420, w: 1240, h: 120 },
+    noseTip: { x: 1360, y: 2420, w: 608, h: 120 },
   };
 
   // Primary driver number per team.
@@ -2515,6 +2520,8 @@ const LiveryTex = (function () {
     }
 
     const num = resolveRaceNumber(numberOverride, teamId);
+    if (typeof LiveryStations !== "undefined")
+      LiveryStations.paint(ctx, REGIONS, { teamId, colors, c1, accent, names, num, fillRegion, drawWordmark, inkOn, haloIf });
     drawNumber(ctx, num, REGIONS.num, ink, accent, c1, colors.numFont, NUM_CREST_HEAD);
     // Same lockup as the spine / fin, on the nose and both rear endplates.
     const numBadge = numCrestBox(REGIONS.num);

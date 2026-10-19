@@ -14,3 +14,20 @@ colour; `tricolour`, `tartanBand` and `deckSplit` also use the car's accent.
 | `deckSplit` | Deck split | a level split, one colour per deck, double pinline on the seam | Lotus 49B Gold Leaf (1968) red / white / gold — https://f1colours.sebpatrick.co.uk/best-liveries-ever/1968-gold-leaf-team-lotus/ |
 
 Gate: `node --test tests/unit/livery-design.test.mjs` ("classic paint layouts").
+
+## Decal stations (round 3)
+
+Bryce asked where else on the car decals can go (2026-10-19). `js/car/livery-stations.js` adds four
+atlas regions and their decal geometry, each placed from the geometry the body is built from:
+
+| id | where | art | fit source |
+|---|---|---|---|
+| `noseTip` | last 280 mm of the nose: top, sides, front face | solid `liv.noseTip`, else the accent | `Car3D.styledNoseStations` + `anchors.noseAt` |
+| `cockpitSide` | monocoque flank, z 0.68–0.98, ahead of the pod inlet | driver code for the race number (`Teams.LIST`) | `Car3D.CHASSIS.monocoque`, 5 mm proud |
+| `podTop` | sidepod upper face, z 0.42 → −0.30 | main sponsor | `anchors.podAt` inner/outer tops, 8 mm proud |
+| `haloTop` | halo crown bar only | sixth sponsor | `Car3D.haloHoopPath` + addTube's ring frame, 3 mm proud; none under a blade fairing or the fenced crown |
+
+Not built: `floorEdge` (ride height moves the floor and the decal cache does not key on it), and the
+other-lane spots found by survey (front-wing flap top, rear endplate inner face, tyre sidewall,
+bargeboard, brake duct, headrest pad, T-cam, steering wheel). The rear-wing upper flap already
+carries the `wing` sponsor band. Gate: `node --test tests/unit/livery-stations.test.mjs`.

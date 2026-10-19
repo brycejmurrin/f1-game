@@ -2325,5 +2325,5 @@ const Car3D = (function () {
            sharkFin: FIN, sharkFinPanel, sharkFinBadge, sharkFinRoot, FIN_SHAPES, FIN_SHAPE_IDS,
            TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, cockpitMirrorGlass, SPINE_HEIGHT_IDS, spineRise,
            coverProfile, coverFlankX, coverSurfaceY, COVER_STACK,
-           aeroLevelOf, aeroStyleOf };
+           aeroLevelOf, aeroStyleOf, styledNoseStations, haloHoopPath };   // the last two: LiveryStations decal fit
 })();
