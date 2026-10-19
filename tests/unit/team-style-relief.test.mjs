@@ -84,6 +84,16 @@ test("stock-recipe sidepods: four showcase teams stay ≥4 cm apart at the inlet
 test("TEAM_STYLE is frozen and never consults Math.random", () => {
   assert.ok(Object.isFrozen(Car3D.TEAM_STYLE));
   for (const k of Object.keys(Car3D.TEAM_STYLE)) assert.ok(Object.isFrozen(Car3D.TEAM_STYLE[k]), k);
-  const src = `${S.Car3D}`;
-  assert.doesNotMatch(String(src), /Math\.random/);
+  // `${S.Car3D}` stringified the module object ("[object Object]"), so the old
+  // doesNotMatch could never fail. Run the builds with Math.random armed to throw.
+  const rnd = Math.random;
+  let calls = 0;
+  Math.random = () => { calls++; throw new Error("Math.random in a car build"); };
+  try {
+    for (const team of Teams.LIST) {
+      Car3D.build(team.color, team.color2, { teamId: team.id, parts: S.Parts.getVisualTiers(STOCK, team) });
+      Car3D.bodyAnchors(STOCK, team.id, undefined, true);
+    }
+  } finally { Math.random = rnd; }
+  assert.equal(calls, 0);
 });

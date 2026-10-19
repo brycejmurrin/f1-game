@@ -46,9 +46,9 @@ jobs:
         with:
           ref: claude/f1-game-project-26h3ng
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
+      # Node 22 + npm ci: ratchets.mjs imports tools/check/check-gctx.mjs, which
+      # needs espree (run 39259294196 failed "Cannot find package 'espree'").
+      - uses: ./.github/actions/setup-apex
 
       - name: Skip while a fold PR is open
         id: open

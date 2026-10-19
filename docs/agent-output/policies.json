@@ -801,6 +801,11 @@
       "presentation": "native",
       "preserve": "Timeout versus success and condition identity; no polling spam"
     },
+    "tools/ci/webkit-leg-summary.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Markdown job-summary text for webkit-leg.yml; the no-report.json message and exit 0 when the boot step wrote nothing"
+    },
     "tools/ci/who-is-on-it.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",

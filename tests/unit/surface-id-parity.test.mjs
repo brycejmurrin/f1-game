@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -32,8 +33,11 @@ const BACKENDS = {
          bound: /surfaceId\.lessThanEqual\((\d+)(?:\.0)?\)/ },
 };
 
+// Comments out first: a commented-out `surfaceId == 24` branch must not satisfy
+// the scan (shader text lives in template strings, which use the same // and /* */).
+const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'\\])\/\/[^\n]*/g, "$1");
 const idsIn = (b) => {
-  const src = read(b.file);
+  const src = stripComments(read(b.file));
   return { ids: new Set([...src.matchAll(b.re)].map((m) => Number(m[1]))),
            bound: Number((src.match(b.bound) || [])[1]) };
 };
@@ -65,13 +69,21 @@ test("classifiedCar's upper bound covers every id each backend branches on", () 
 });
 
 test("every id the shaders branch on is a real Car3D surface, and vice versa", () => {
-  // SURFACES / FINISH_SURFACE live in car-materials.js (pure-moved from car3d); Car3D re-exports them.
-  const mats = read("js/car/car-materials.js");
-  const block = mats.slice(mats.indexOf("const SURFACES = Object.freeze({"));
-  const declared = new Set([...block.slice(0, block.indexOf("});")).matchAll(/:\s*(\d+)/g)]
-    .map((m) => Number(m[1])).filter((n) => n >= 20));
-  const finish = mats.slice(mats.indexOf("const FINISH_SURFACE = Object.freeze({"));
-  for (const m of finish.slice(0, finish.indexOf("});")).matchAll(/:\s*(\d+)/g)) declared.add(Number(m[1]));
+  // SURFACES / FINISH_SURFACE live in car-materials.js (pure-moved from car3d); the
+  // REAL tables, evaluated, not a regex over them.
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/car/car-materials.js").replace(/^const CarMaterials\b/m, "var CarMaterials"), ctx);
+  const { SURFACES, FINISH_SURFACE } = ctx.CarMaterials;
+  const all = new Set([...Object.values(SURFACES), ...Object.values(FINISH_SURFACE)]);
+  // The low ids are the unclassified path (custom: 0 takes the default shading):
+  // no shader may branch on one, and every one must sit below classifiedCar's 20.
+  const low = [...all].filter((id) => id < 20);
+  assert.deepEqual(low, [SURFACES.custom], "the only low surface id is `custom`, the default path");
+  for (const [name, b] of Object.entries(BACKENDS)) {
+    const lowBranch = [...idsIn(b).ids].filter((id) => id < 20);
+    assert.deepEqual(lowBranch, [], `${name} branches on low surface id ${lowBranch.join(", ")}: classifiedCar never reaches it`);
+  }
+  const declared = new Set([...all].filter((n) => n >= 20));
   assert.ok(declared.size >= 8, `only ${declared.size} car surfaces parsed — the scanner stopped matching`);
 
   const shader = idsIn(BACKENDS.GLX).ids;
