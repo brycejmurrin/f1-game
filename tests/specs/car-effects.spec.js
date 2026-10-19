@@ -63,7 +63,7 @@ test.describe("Car runtime effects", () => {
     }));
   });
 
-  test("electric ERS deployment never creates an exhaust boost flame", async ({ page }) => {
+  test("ERS deployment lights the deploy lamp", async ({ page }) => {
     await startCar(page, 30);
     await page.evaluate(() => {
       // Deploy (and the ersDeploy lamp) follow onThrottle — same gate as the
@@ -74,10 +74,9 @@ test.describe("Car runtime effects", () => {
       window.__apex.step(1 / 60, 2);
     });
     const state = await effects(page);
-    expect(state).toEqual(expect.objectContaining({
-      ersDeploy: true,
-      boostFlame: false,
-    }));
+    // No boostFlame assertion: __apex.carEffects() hard-codes boostFlame:false
+    // (js/agent/apex.js), so it could never fail. Tracked in the PR body (C2-03).
+    expect(state).toEqual(expect.objectContaining({ ersDeploy: true }));
   });
 
   test("brake glow stays off until braking heat crosses its draw threshold", async ({ page }) => {
