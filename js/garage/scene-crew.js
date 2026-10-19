@@ -59,7 +59,7 @@ const GarageCrew = (function () {
       shoulder: [0.22, 0.95, 0.16], elbow: [0.20, 0.62, 0.30], hand: [0.07, 0.42, 0.46] },
     jack: { chest: [0, 1.26, 0.16], neck: [0, 1.38, 0.22], head: [0, 1.53, 0.27], shoulder: [0.22, 1.30, 0.16],
       elbow: [0.22, 1.08, 0.36], hand: [0.08, 0.92, 0.50], footL: [0.12, 0.05, 0.22], kneeL: [0.12, 0.50, 0.18] },
-    carry: { shoulder: [0.22, 1.38, 0.02], elbow: [0.28, 1.12, 0.22], hand: [0.22, 1.02, 0.40] },
+    carry: { shoulder: [0.22, 1.38, 0.02], elbow: [0.30, 1.08, 0.18], hand: [0.36, 0.88, 0.48] },
     lean: { pelvis: [0, 0.95, -0.06], hip: [0.10, 0.92, -0.06], chest: [0, 1.22, 0.34], neck: [0, 1.30, 0.47], head: [0, 1.40, 0.58],
       shoulder: [0.22, 1.26, 0.36], elbow: [0.27, 1.00, 0.52], hand: [0.26, 0.76, 0.64], foot: [0.12, 0.05, -0.04] },
     crouch: { foot: [0.15, 0.05, 0.14], knee: [0.17, 0.52, 0.30], hip: [0.11, 0.52, -0.10], pelvis: [0, 0.55, -0.12],
@@ -132,16 +132,19 @@ const GarageCrew = (function () {
     block(out, 0, 0.14, 1.52, 0.2, 0.06, 0.12, JACK);                                // lift saddle
     for (const s of [-1, 1]) tube(out, [s * 0.17, 0.07, 1.42], [s * 0.23, 0.07, 1.42], 0.07, RUBBER, 10);
   }
-  function tyre(out, c, ax, blanket, mark) {
-    const a = [c[0] - ax, c[1], c[2]], b = [c[0] + ax, c[1], c[2]];
+  // A tyre about centre c, half-width ax along x (on the car) or along z (held
+  // face-on toward the hub, the way the tyre-on man offers it).
+  function tyre(out, c, ax, blanket, mark, alongZ) {
+    const at = (w) => alongZ ? [c[0], c[1], c[2] + w] : [c[0] + w, c[1], c[2]];
+    const a = at(-ax), b = at(ax);
     if (blanket) {
       tube(out, a, b, 0.37, BLANKET, 16);
-      tube(out, [c[0] - ax - 0.004, c[1], c[2]], [c[0] + ax + 0.004, c[1], c[2]], 0.36, BLANKET, 16);
-      tube(out, [c[0] - ax * 0.25, c[1], c[2]], [c[0] + ax * 0.25, c[1], c[2]], 0.375, mark, 16);   // the compound band
+      tube(out, at(-(ax - 0.004)), at(ax + 0.004), 0.36, BLANKET, 16);
+      tube(out, at(-(ax * 0.25)), at(ax * 0.25), 0.375, mark, 16);   // the compound band
     } else {
       tube(out, a, b, 0.35, RUBBER, 16);
-      tube(out, [c[0] - ax - 0.006, c[1], c[2]], [c[0] + ax + 0.006, c[1], c[2]], 0.26, mark, 14);  // sidewall stripe
-      tube(out, [c[0] - ax - 0.01, c[1], c[2]], [c[0] + ax + 0.01, c[1], c[2]], 0.2, ALLOY, 12);
+      tube(out, at(-(ax - 0.006)), at(ax + 0.006), 0.26, mark, 14);  // sidewall stripe
+      tube(out, at(-(ax - 0.01)), at(ax + 0.01), 0.2, ALLOY, 12);
     }
   }
   function tablet(out) { block(out, 0.02, 1.15, 0.33, 0.13, 0.085, 0.012, VISOR); block(out, 0.02, 1.15, 0.342, 0.11, 0.07, 0.002, [0.25, 0.45, 0.7]); }
@@ -173,7 +176,7 @@ const GarageCrew = (function () {
         const s = Math.sign(wx);
         person(m, c1, c2, "kneel", "helmet", wx + s * 1.05, wz, FACE_X(s), wheelGun);                // gunner
         person(m, c1, c2, "carry", "helmet", wx + s * 1.25, wz + (wz > 0 ? 0.95 : -0.95), FACE_X(s),
-          (o) => tyre(o, [0, 1.0, 0.48], 0.17, false, soft));                                            // tyre on
+          (o) => tyre(o, [0, 0.88, 0.5], 0.17, false, soft, true));                                            // tyre on
         person(m, c1, c2, "stand", "helmet", wx + s * 1.55, wz + (wz > 0 ? -0.9 : 0.9), FACE_X(s));    // tyre off
       }
       person(m, c1, c2, "jack", "helmet", 0, 3.25 + 1.5, Math.PI, frontJack);
@@ -184,7 +187,7 @@ const GarageCrew = (function () {
       person(m, c1, c2, "lean", "cap", 1.25, 0.3, -Math.PI / 2);                                        // in the cockpit
       person(m, c1, c2, "crouch", "cap", -1.55, 1.9, Math.PI / 2);                                      // at the front corner
       person(m, c1, c2, "tablet", "cap", -2.4, -1.4, Math.PI / 2 - 0.5, tablet);                        // engineer
-      person(m, c1, c2, "carry", "cap", 2.6, -2.8, -Math.PI / 2 - 0.6, (o) => tyre(o, [0, 1.0, 0.48], 0.17, true, soft));
+      person(m, c1, c2, "carry", "cap", 2.6, -2.8, -Math.PI / 2 - 0.6, (o) => tyre(o, [0, 0.88, 0.5], 0.17, true, soft, true));
       person(m, c1, c2, "stand", "cap", 3.6, 2.2, -Math.PI / 2 - 0.4);
     } else if (id === "welcome") {
       for (const s of [-1, 1]) for (let i = 0; i < 3; i++)
