@@ -415,9 +415,7 @@ const api = {
   // the rAF render, and a headless page composites no frames at all, so the
   // whole garage animation was unobservable from a test — which is exactly how
   // "the wings do not move" reached a player instead of a spec. No argument
-  // reads the state; garageStep(dt) advances the ease by dt seconds. With the
-  // garage shut both answer {ok:false, error:"garage_closed"} (garageTeam's
-  // shape) — a bare null hid a call made on the wrong screen.
+  // reads the state; garageStep(dt) advances the ease by dt seconds. Shut: garage_closed.
   garageAero(on, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (on !== undefined) G.setSetupAero(!!on, opts);
