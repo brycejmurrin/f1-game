@@ -1140,3 +1140,35 @@ test('garage ticks retain the 100 ms background-stall bound and other render pat
     assert.deepEqual(world.c.worldFrames, [0.05], 'world and paused-camera visual damping stay at 50 ms');
   }
 });
+
+
+test('garage aero keeps authored opening and closing rates at 10, 20 and 60 FPS', () => {
+  const camera = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const start = camera.indexOf('function stepSetupAero(dt) {');
+  const end = camera.indexOf('function setSetupAero(on, opts)', start);
+  assert.ok(start >= 0 && end > start, 'exercise the production garage aero step');
+  const c = vm.createContext({ window: {}, setupPreviewXOn: true, setupPreviewAeroX: 0,
+    clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) });
+  vm.runInContext(readFileSync(new URL('../../js/physics/consts.js', import.meta.url), 'utf8'), c);
+  vm.runInContext('const { X_OPEN_RATE, X_CLOSE_RATE } = window.PhysicsConsts;' + camera.slice(start, end), c);
+  const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 1e-12,
+    `${label}: ${actual} versus ${expected}`);
+  for (const fps of [10, 20, 60]) {
+    c.setupPreviewXOn = true; c.setupPreviewAeroX = 0;
+    for (let i = 0; i < fps / 5; i++) c.stepSetupAero(1 / fps);
+    near(c.setupPreviewAeroX, c.window.PhysicsConsts.X_OPEN_RATE * 0.2, `${fps} FPS opening`);
+    for (let i = 0; i < fps; i++) c.stepSetupAero(1 / fps);
+    assert.equal(c.setupPreviewAeroX, 1, 'opening reaches the endpoint without overshoot');
+    c.setupPreviewXOn = false;
+    for (let i = 0; i < fps / 10; i++) c.stepSetupAero(1 / fps);
+    near(c.setupPreviewAeroX, 1 - c.window.PhysicsConsts.X_CLOSE_RATE * 0.1, `${fps} FPS closing`);
+    for (let i = 0; i < fps; i++) c.stepSetupAero(1 / fps);
+    assert.equal(c.setupPreviewAeroX, 0, 'closing reaches the endpoint without overshoot');
+  }
+  c.setupPreviewXOn = true; c.setupPreviewAeroX = 0;
+  c.stepSetupAero(60);
+  near(c.setupPreviewAeroX, c.window.PhysicsConsts.X_OPEN_RATE * 0.1, 'background gap bounds opening');
+  c.setupPreviewXOn = false; c.setupPreviewAeroX = 1;
+  c.stepSetupAero(60);
+  near(c.setupPreviewAeroX, 1 - c.window.PhysicsConsts.X_CLOSE_RATE * 0.1, 'background gap bounds closing');
+});

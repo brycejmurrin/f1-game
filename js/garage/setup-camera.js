@@ -393,7 +393,7 @@ function setSetupSpin(on) {
 function stepSetupAero(dt) {
   const want = setupPreviewXOn ? 1 : 0;
   const rate = want > setupPreviewAeroX ? X_OPEN_RATE : X_CLOSE_RATE;
-  const step = rate * Math.min(dt, 1 / 20);
+  const step = rate * Math.min(dt, 0.1);
   setupPreviewAeroX = clamp(setupPreviewAeroX + Math.sign(want - setupPreviewAeroX) * step,
                             Math.min(setupPreviewAeroX, want), Math.max(setupPreviewAeroX, want));
 }
