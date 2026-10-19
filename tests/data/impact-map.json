@@ -6590,6 +6590,7 @@
         "tests/unit/survey-hud.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/terrain-normals.test.mjs",
+        "tests/unit/test-bg-waste.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tolerance-diff.test.mjs",

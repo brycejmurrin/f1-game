@@ -42,8 +42,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { changedPaths } from "../lib/changed-files.mjs";
+import { isDocsOnly } from "./select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+// Same deploy tip pick-tests uses — docs-only waste is vs that base, not main.
+const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 const LOGDIR = path.join(ROOT, "artifacts/logs");
 const STATEFILE = path.join(LOGDIR, "test-bg.json");
 // One worker on a 4-core box: two SwiftShader workers push loadavg to 6-8 and
@@ -475,6 +479,42 @@ export function chromeRefusal({ browser, force, sessions }) {
     `[test-bg] park it to about:blank, then: python3 tools/mcp/probe-mcp.py chrome-stop   (or --force, and do not trust a timeout).`;
 }
 
+/**
+ * Advisory WASTE line when a browser group starts on a docs-only diff (#1714).
+ * Pure: callers pass the changed path list (pick-tests' set). `--force` silences
+ * it; non-browser groups never warn. Exit stays 0 — advisory until the ledger
+ * shows it firing on real waste (measurement.md item 3).
+ */
+export function docsOnlyWasteWarning({ groups, scripts = {}, changed = [], force = false } = {}) {
+  if (force) return null;
+  const browserGroups = (groups || []).filter((g) => /run-playwright/.test(scripts[`test:${g}`] || ""));
+  if (!browserGroups.length) return null;
+  if (!isDocsOnly(changed || [])) return null;
+  const g = browserGroups.join(", ");
+  return `WASTE: docs-only diff — group ${g} buys nothing (AGENTS.md verification table). --force to run.`;
+}
+
+/** Changed paths vs the deploy tip (+ dirty tree), same question pick-tests asks. */
+export function changedForWaste({ root = ROOT } = {}) {
+  let base = "";
+  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "origin/main", "main", "HEAD~1"]) {
+    try {
+      base = String(execSync(`git -C ${JSON.stringify(root)} merge-base HEAD ${JSON.stringify(ref)}`, {
+        encoding: "utf8",
+      })).trim();
+      if (base) break;
+    } catch (_) { /* try next */ }
+  }
+  try {
+    if (!base) return changedPaths(["HEAD"], { cwd: root });
+    const out = new Set(changedPaths([base], { cwd: root }));
+    for (const f of changedPaths(["HEAD"], { cwd: root })) out.add(f);
+    return [...out];
+  } catch (_) {
+    return [];
+  }
+}
+
 function start(groups, { force = false, parallel = false, lastFailed = false } = {}) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
@@ -488,6 +528,14 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
     force, sessions: force ? [] : probeChromeSessions(),
   });
   if (refusal) { console.error(refusal); process.exit(3); }
+
+  // Advisory: a browser group on a docs-only diff buys nothing (AGENTS.md table).
+  try {
+    const waste = docsOnlyWasteWarning({
+      groups, scripts: pkg.scripts, changed: changedForWaste(), force,
+    });
+    if (waste) console.error(waste);
+  } catch (_) { /* advisory — never block a start */ }
 
   // Default: one group at a time. --parallel raises the cap to cores/WORKERS.
   // --force removes the cap (legacy escape hatch).

@@ -1,0 +1,1 @@
+New: `session-ledger.mjs --from-transcript` summarises where session minutes went (tool/family, timeouts, repeats) with a redaction-tested fixture; `test-bg` prints `WASTE:` on a docs-only browser start; `live-run-check.mjs` is the standalone push-over-live-CI helper for bash-guard (#1714).

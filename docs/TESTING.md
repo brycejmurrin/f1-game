@@ -1309,6 +1309,9 @@ Focused browser-free diagnostics contracts also run in `tooling-fast`:
 | `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
 | `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
 | `tests/unit/i18n-lint.test.mjs` | Locale contribution lint (`tools/check/i18n-lint.mjs`): fixture locales (valid / missing-key / bad-placeholder / wrong-plural), ship `locales/` clean, `--guard` on `tests/data/i18n-migrated.json`. |
+| `tests/unit/session-ledger.test.mjs` | Transcript → minutes by tool/family (`tools/ci/session-ledger.mjs --from-transcript`); redaction fixture (no tokens, emails, or paths outside the repo). |
+| `tests/unit/live-run-check.test.mjs` | Advisory WARN when a push would cancel live ci.yml runs (`tools/ci/live-run-check.mjs`); bash-guard wiring is a Refs follow-up. |
+| `tests/unit/test-bg-waste.test.mjs` | `test-bg.mjs` prints `WASTE:` when a browser group starts on a docs-only diff. |
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 
