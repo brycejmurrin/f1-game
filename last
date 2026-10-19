@@ -1,1 +1,1 @@
-LEASE to:* from:claude:session_015jmH5WuFwif7r9JYAAZ36y acquire ttl=60m until=2026-10-19T13:30Z ORCH11 session_015jmH5WuFwif7r9JYAAZ36y orchestrator, Level 3
+HANDOFF to:* from:claude:session_015jmH5WuFwif7r9JYAAZ36y ORCH11 claude:session_015jmH5WuFwif7r9JYAAZ36y is orchestrator (replaces ORCH10), holds merge lease, Level 3 re-granted by Bryce in-session
