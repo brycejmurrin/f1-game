@@ -243,7 +243,21 @@ async function writeFragment(name, rows) {
 async function writeAbsolute(data) {
   const { normalizeRatchets, stableStringify } = await import("./merge-hygiene.mjs");
   fs.writeFileSync(DATA, stableStringify(normalizeRatchets(data)));
-  for (const { name } of readFragments()) fs.rmSync(path.join(FRAG_DIR, name), { force: true });
+  const names = readFragments().map((f) => f.name);
+  for (const name of names) fs.rmSync(path.join(FRAG_DIR, name), { force: true });
+  unlinkFolded(names);
+}
+
+/** A CEILING-HISTORY reason may name its branch's fragment by path; once the
+ *  fragment is folded that path is gone and docs-integrity fails the fold's
+ *  commit (ratchets-fold run 39277641065). Keep the name, drop the repo path. */
+function unlinkFolded(names) {
+  const file = path.join(ROOT, "docs/notes/CEILING-HISTORY.md");
+  if (!names.length || !fs.existsSync(file)) return;
+  const text = fs.readFileSync(file, "utf8");
+  let out = text;
+  for (const n of names) out = out.split(`tests/data/ratchets.d/${n}`).join(`ratchets.d/${n} (folded)`);
+  if (out !== text) fs.writeFileSync(file, out);
 }
 
 /** `--fold`: sum the fragments into ratchets.json. No measuring, so every
