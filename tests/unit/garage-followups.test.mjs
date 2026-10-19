@@ -70,7 +70,7 @@ test('live atlas retries same-key failures with bounded backoff and skips unsupp
   const c = vm.createContext({ roomKeys: () => ({ geom: 'g', live: 'l', dressId: 'd', key: 'k' }), performance: { now: () => now },
     cacheKey: 'k', shellMesh: {}, geomKey: 'g', liveKey: 'l', liveTex: null, liveCanvas: {}, liveMesh: { mid: {} },
     liveFail: 0, liveRetryAt: 0, dressTex: {}, dressFail: 0, dressRetryAt: 0, dressIdKey: 'd', dressFullKey: 'd|b',
-    boardKey: () => 'b', paintLive() {}, GarageExperience: { paintCareer() {} }, LiveryTex: {},
+    boardKey: () => 'b', paintLive() {}, paintTrace() {}, traceFail: 0, lastTrace: -1e9, GarageExperience: { paintCareer() {} }, LiveryTex: {},
     _gfx: { createTexMesh() {}, createTexture() { attempts++; if (attempts === 1) throw Error('injected'); return {}; } },
     Log: { warn() {} },
   });
