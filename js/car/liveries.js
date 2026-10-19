@@ -212,6 +212,11 @@ const Liveries = (function () {
       nose: [0.10, 0.09, 0.10], halo: [0.92, 0.62, 0.30], finish: "chrome" },
     { id: "bronzeage", name: "Bronze Age",  c1: [0.55, 0.42, 0.20], c2: [0.90, 0.80, 0.52], stripe: [0.30, 0.24, 0.14], accent: [0.96, 0.90, 0.70],
       pod: [0.30, 0.24, 0.14], wing: [0.90, 0.80, 0.52], finish: "chrome" },
+    // Finish showcases (S5): forged carbon body with gold trim; gold plate (the finish ignores the livery hue, so c1 is its gold).
+    { id: "forgedblack", name: "Forged Black", c1: [0.06, 0.06, 0.07], c2: [0.84, 0.66, 0.24], stripe: [0.90, 0.74, 0.30], accent: [0.94, 0.95, 0.97],
+      halo: [0.84, 0.66, 0.24], finish: "forged" },
+    { id: "goldleaf",  name: "Gold Leaf",   c1: [0.83, 0.65, 0.23], c2: [0.06, 0.06, 0.07], stripe: [0.10, 0.10, 0.11], accent: [0.96, 0.92, 0.70],
+      wing: [0.06, 0.06, 0.07], finish: "goldplate" },
     { id: "graphite",  name: "Graphite Mirror", c1: [0.34, 0.36, 0.40], c2: [0.98, 0.42, 0.10], stripe: [0.08, 0.08, 0.10], accent: [0.86, 0.88, 0.92],
       nose: [0.98, 0.42, 0.10], wing: [0.08, 0.08, 0.10], finish: "chrome" },
     { id: "steelrose", name: "Steel Rose",  c1: [0.86, 0.62, 0.58], c2: [0.14, 0.14, 0.18], stripe: [0.96, 0.86, 0.82], accent: [0.42, 0.20, 0.26],

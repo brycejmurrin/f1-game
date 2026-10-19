@@ -3,11 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { createHash } from "node:crypto";
-import { validateScenario, addGraphStep, minimizeActions, stateKey } from "./core.mjs";
+import { validateScenario, addGraphStep, minimizeActions, stateKey, catalogCoverage } from "./core.mjs";
 import { MODE_TITLES, MISSIONS, missionBrief } from "./catalog.mjs";
 import { gotoGame, mutateCaptureScene } from "../../shot/probe-page.mjs";
 import { inspectUI, openSession, performAction, matchesOracle, captureRecord, startPerformanceTrace, installFault, positionScene } from "./browser.mjs";
 import { diffInspections } from "./inspector.mjs";
+import { settleLayout } from "./transitions.mjs";
 
 export async function explore(browser, url, options) {
   const { outDir, modes = Object.keys(MODE_TITLES), maxShots = 25 } = options;
@@ -40,9 +41,10 @@ export async function explore(browser, url, options) {
   const step = async (s, action) => {
     const before = await s.page.evaluate(inspectUI); const started = performance.now();
     await performAction(s, action);
+    const settlement = await s.page.evaluate(settleLayout);
     const after = await s.page.evaluate(inspectUI);
-    addGraphStep(bundle.graph, before, after, action);
-    return { before, after, diff: diffInspections(before, after), durationMs: Math.round(performance.now() - started) };
+    if (settlement.stable) addGraphStep(bundle.graph, before, after, action);
+    return { before, after, settlement, diff: diffInspections(before, after), durationMs: Math.round(performance.now() - started) };
   };
   const withSession = async (fn, opts) => {
     const s = await openSession(browser, url, opts); let timer;
@@ -88,9 +90,8 @@ export async function explore(browser, url, options) {
       await record(s, "atlas", "atlas-routes", "Observed settings and circuit-picker routes", actions);
     });
     const catalog = options.catalog || [];
-    const visited = new Set(bundle.graph.nodes.flatMap((n) => n.snapshot.roots || []));
     cap("atlas").records.push({ id: "atlas-coverage", label: "Observed navigation coverage", mode: "atlas", status: "passed", details: { observedStates: bundle.graph.nodes.length, observedEdges: bundle.graph.edges.length,
-      catalog: catalog.map((s) => ({ id: s.id, root: s.root, visited: visited.has(s.root.replace(/^#/, "")) })), note: "Unvisited catalog screens are unexplored, not unreachable. Guided recipes do not prove discoverability." } });
+      catalog: catalogCoverage(catalog, bundle.graph.nodes.map(n => n.snapshot)), note: "Subpages require observed view markers; shared roots alone do not prove them visited. Unvisited screens remain unexplored. Guided recipes do not prove discoverability." } });
   });
 
   await run("transitions", () => withSession(async (s) => {

@@ -138,11 +138,12 @@ const SURF = {
   28: [0.9, 0], 29: [0.3, 0.85], 30: [0.3, 0.15, { clearcoat: 1, sheen: 1 }], 31: [0.35, 0.35, { tint: 0x777777, clearcoat: 0.6 }],
   32: [0.08, 0, { clearcoat: 1 }], 33: [0.7, 0], 34: [0.3, 0.6, { clearcoat: 1 }], 35: [0.12, 0.3, { clearcoat: 1 }],
   36: [0.2, 0.55, { clearcoat: 0.6 }], 37: [0.25, 0.5, { iridescence: 1, clearcoat: 1 }],
+  38: [0.35, 0.2, { tint: 0x2a2a2e, clearcoat: 0.5 }], 39: [0.3, 0.9], 40: [0.05, 1, { tint: 0xd4a63a, fixed: true }],
 };
 function surfaceMaterial(id) {
   const [roughness, metalness, x = {}] = SURF[id] || SURF[0];
   if (x.unlit) return new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
-  return new THREE.MeshPhysicalMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness, metalness,
+  return new THREE.MeshPhysicalMaterial({ vertexColors: !x.fixed, side: THREE.DoubleSide, roughness, metalness,
     color: x.tint || 0xffffff, clearcoat: x.clearcoat || 0, clearcoatRoughness: 0.1, sheen: x.sheen || 0,
     iridescence: x.iridescence || 0, transparent: !!x.transparent, opacity: x.opacity == null ? 1 : x.opacity });
 }

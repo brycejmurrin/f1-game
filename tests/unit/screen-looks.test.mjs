@@ -367,7 +367,7 @@ test("CSS: every non-default answer and every range token has a rule; every peek
 });
 
 /* ── the GENERAL fold ─────────────────────────────────────────────────── */
-test("shell: GENERAL wraps the preview, COLOURS and READABILITY, before PAUSE MENU", () => {
+test("shell: one home (#2846) — the studio's adopted blocks hold the six, GENERAL holds units and help, before PAUSE MENU", () => {
   const a = SHELL.indexOf('<section id="pm-panel-appearance"');
   const look = SHELL.slice(a, SHELL.indexOf("</section>", a));
   const g = look.indexOf('<details id="pm-general"');
@@ -375,8 +375,14 @@ test("shell: GENERAL wraps the preview, COLOURS and READABILITY, before PAUSE ME
   assert.match(look, /<summary class="adv-more-btn" id="pm-general-sum">GENERAL · /);
   const end = look.indexOf("</details>", g);
   const fold = look.slice(g, end);
-  for (const id of ["pm-appearance-preview", "pm-uitheme", "pm-menuaccent", "pm-hudaccent", "pm-uiscale", "pm-textsize", "pm-contrast", "pm-units", "pm-helptext"])
-    assert.ok(fold.includes(`id="${id}"`), `${id} inside GENERAL`);
+  for (const id of ["pm-units", "pm-helptext", "pm-general-jump"]) assert.ok(fold.includes(`id="${id}"`), `${id} inside GENERAL`);
+  const block = (id) => look.slice(look.indexOf(`<div id="${id}" data-studio-home=`), g);
+  for (const id of ["pm-uitheme", "pm-menuaccent", "pm-uiscale", "pm-textsize", "pm-contrast"]) {
+    assert.ok(block("pm-appearance-menu").includes(`id="${id}"`), `${id} in the studio's MENU block`);
+    assert.ok(!fold.includes(`id="${id}"`), `${id} not twice`);
+  }
+  assert.ok(block("pm-appearance-hud").includes('id="pm-hudaccent"'), "HUD accent in the studio's RACE HUD block");
+  assert.ok(!look.includes('id="pm-appearance-preview"'), "the studio preview is the only preview");
   assert.ok(!fold.includes('id="pm-motion"'), "REDUCE MOTION lives under ACCESSIBILITY");
   assert.ok(end < look.indexOf('<details id="pm-pausemenu"'), "before PAUSE MENU");
 });

@@ -233,17 +233,39 @@
 }
 
 /* ---------- race settings ---------- */
-/* Eight SETTING ROWS (css/components.css .set-row, js/ui/setting-row.js) —
-   the same control as pause > SETTINGS, so the two screens a player sees
-   before and during every race share one grammar. One column on a tall
-   sheet; two once the sheet is 440px wide, the width at which LAPS and
-   WEATHER used to pair up. The ~130 lines of data-shape / data-density
-   grid-row placement that used to fit seven CHIP groups on a landscape phone
-   went with the chips: eight rows at --tap pitch are ~210px in two columns,
-   inside the ~285px of body a landscape phone gives this sheet, so nothing
-   sits below the fold at any shape (measured 852x393 / 393x852, 2026-09-05).
-   The body keeps overflow-y for the one case that still scrolls: UI SIZE
-   200% on a landscape phone. */
+/* Race Setup owns its bounds and composition. A short task scrolls as one
+   surface instead of shrinking the player's requested UI size around fixed
+   chrome. Other sheets retain the shared compact cap during this pilot. */
+#race-settings { --sheet-w: 760px; }
+#race-settings > .sheet {
+  --fit-at: 0px;
+  --compact-at: 260px;
+  --_sheet-z: var(--ui-scale);
+  zoom: var(--ui-scale);
+}
+/* A tall task reads as one page: wrapped context and stacked actions must
+   not reserve most of its viewport outside the settings scroller. */
+#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) {
+  display: block;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--plate-line) transparent;
+}
+#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) > #rs-body { overflow: visible; }
+/* Context stays one glanceable line; its full text remains available to
+   assistive technology. Editable values take priority over repeated context. */
+#rs-body #rs-preset-options > summary,
+#rs-body .set-row > details > summary {
+  display: flex; flex-wrap: nowrap; align-items: center;
+  gap: calc(var(--gap) * .5); padding: calc(var(--gap) * .25) 0;
+  min-height: var(--tap-paint); font-size: var(--fs-micro);
+  font-style: normal; font-weight: 600; line-height: 1.3; letter-spacing: 0;
+}
+#rs-body .set-row > details { grid-column: 1 / -1; border: 0; }
+:root[data-menu-help="off"] #rs-body [data-rs-help] { display: none; }
+#rs-body .set-row > details > summary { font-weight: 400; }
+
 #rs-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -286,14 +308,9 @@
   overflow-wrap: anywhere;
   text-align: center;
 }
-/* Narrow sheets (phone portrait ~390, not landscape 844): even 2×2 tracks and
-   no <small> captions. Title + caption are both --fs-micro, so on a ~150px tile
-   the caption still reads as jammed against FULL WEEKEND / ENDURANCE even with
-   a 3px flex gap (measured 390×844 after the wrap fix).
-   Max-width only — not orientation:portrait and not body[data-shape=tall]
-   #rs-* (ui-improve-pass pins those out of the menus.css family this file is
-   inlined into via readCssSource). */
-@media (max-width: 480px) {
+/* The local sheet width also reflects UI enlargement and saved width. Keep
+   the four preset choices balanced without relying on viewport orientation. */
+@container sheet (max-width: 480px) {
   #rs-presets {
     --balance-basis: calc(50% - var(--gap) * 0.5);
     --balance-min: calc(50% - var(--gap) * 0.5);
@@ -463,7 +480,20 @@
 .duel-option.active { background: var(--plate-on); border-color: var(--red); }
 .duel-option-name { font-weight: 800; letter-spacing: var(--ls-3); }
 .duel-option-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
-@container sheet (min-width: 440px) {
+/* Two rows need their control clusters plus labels and the sheet gutters. */
+/* At narrow effective widths the select is the complete control. Repeating
+   step buttons beside it would squeeze the chosen value at larger text sizes. */
+@container sheet (max-width: 360px) {
+  #rs-body .set-row > div { flex: 1 1 12rem; }
+  #rs-body .set-row > div > button[data-step] { display: none; }
+  #rs-body .set-row > div > select {
+    flex: 1 1 100%; width: 100%; min-width: 0;
+    appearance: auto; -webkit-appearance: auto;
+    height: auto; min-height: max(var(--chip-h), 1.6em);
+    line-height: 1.3; padding-block: calc(var(--gap) * .25);
+  }
+}
+@container sheet (min-width: 640px) {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
   #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
@@ -487,7 +517,7 @@
   padding-block: calc(var(--gap) * 0.3);
 }
 :root[data-look-race-presets="compact"] #rs-presets > .preset-btn small { display: none; }
-:root[data-look-race-presets="hide"] #rs-presets { display: none; }
+:root[data-look-race-presets="hide"] :is(#rs-preset-options, #rs-presets) { display: none; }
 /* The Settings pages' steel italic label (css/components.css) restated here:
    that rule is scoped to #pmsettings-inner .pm-group. */
 #rs-body .tune-label {
@@ -513,6 +543,9 @@
    keeps the longest RACE-SETTINGS value, PACE ORDER, inside 7rem (95px into 98).
    The label's own share comes from the --ls-3 tracking above. */
 #rs-body .set-row > div > select {
+  height: max(var(--chip-h), 1.6em);
+  min-height: max(var(--chip-h), 1.6em);
+  line-height: 1.3;
   flex-basis: 7rem;
   width: 7rem;
   padding-inline: calc(var(--gap) * 0.3);

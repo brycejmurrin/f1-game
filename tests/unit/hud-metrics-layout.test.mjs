@@ -172,7 +172,7 @@ test("a hidden HUD does not keep measuring or painting the map", () => {
 // an unknown stored value and the façade setter fell back to "auto": a garage
 // file listed it as CHANGED, and the appearance studio — which offered no AUTO
 // chip — showed no layout selected (review 2026-10-04, verify-core #16).
-test("an unknown HUD layout falls back to the shipped FULL, and the studio can show AUTO", () => {
+test("an unknown HUD layout falls back to the shipped FULL, and the studio jumps to the row that shows AUTO", () => {
   const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
   const studio = fs.readFileSync(path.join(root, "js/ui/appearance-studio.js"), "utf8");
   const exp = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
@@ -180,8 +180,9 @@ test("an unknown HUD layout falls back to the shipped FULL, and the studio can s
   assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(hudMetricsLayout\) < 0\) hudMetricsLayout = "full";/);
   assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(v\) < 0\) v = "full";\s*\n\s*hudMetricsLayout = v;/);
   assert.match(exp, /k: "hudMetricsLayout", lane: "json", group: "hud", def: "full"/);
-  assert.match(studio, /choice\(hud, "Layout", "hudMetricsLayout", \[\["auto", "Auto"\]/,
-    "AUTO is a pause-menu choice, so the studio row must be able to show it selected");
+  // One home (#2846): the studio jumps to the HUD & CAMERA LAYOUT row, which offers AUTO.
+  assert.match(studio, /"HUD LAYOUT is in HUD & CAMERA", "display", "pm-hudmetrics-sel"/,
+    "the studio's HUD layout entry is a jump to the pause-menu row that shows AUTO");
 });
 
 // A LAYOUT hides READOUTS, never a CUE. TIMING and COMPACT once hid #hud-pit

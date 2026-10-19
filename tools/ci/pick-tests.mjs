@@ -66,6 +66,7 @@ export const RULES = [
    "load order, docs integrity, api contracts — ~2 min at three files at a time, catches the structural slips"],
 
   [/^tests\/unit\/render-final-contracts\.test\.mjs$/, ["tooling-fast"], "renderer ownership, post health, material detail and particle residency contracts"],
+  [/^plugins\/f1-dev-tools\//, ["tooling-fast"], "F1 Dev Tools helpers and package routing — f1-dev-tools.test.mjs"],
   // ── renderer ────────────────────────────────────────────────────────────
   // NOT "visual" — tests/manual/tracks-visual.spec.js is PARKED. It has no
   // committed golden baselines and self-skips all 40 circuits, so the group
@@ -299,9 +300,10 @@ export const RULES = [
   // either. Without baseline here a type-metric or art change ships unseen:
   // that is incident 2026-09-16, where an 8 -> 9 px garage tab label went red
   // on the deploy branch and blocked five consecutive Pages runs.
-  // carsetup/tokens/select.css paint the same blessed screens (the garage
-  // panel, the global type and colour tokens, the picker), so they ride along.
-  [/^css\/(menus|carsetup|tokens|select)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
+  // carsetup/tokens/select/components.css paint the same blessed screens (the
+  // garage panel, the global type and colour tokens, the picker, the shared
+  // .screen/.sheet/.pane primitives every menu is built from), so they ride along.
+  [/^css\/(menus|carsetup|tokens|select|components)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],

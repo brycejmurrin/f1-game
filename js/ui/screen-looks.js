@@ -491,7 +491,7 @@ const ScreenLooks = (function () {
   /** A PEEK toggle and its polite status line, mounted into `host` for screen `id`. */
   function mountPeekButton(host, id, before) {
     if (!host || !doc) return null;
-    const btn = el("button", { type: "button", textContent: "PEEK", attrs: { "aria-pressed": "false" } });
+    const btn = el("button", { type: "button", textContent: "PEEK", attrs: { "aria-pressed": "false", "data-peek": id } });
     btn.addEventListener("click", () => holdPeek(id));
     const status = el("p", { className: "adv-help", attrs: { "aria-live": "polite", "data-help": "keep" } });
     peekUi[id] = Object.assign(peekUi[id] || {}, { btn, status });

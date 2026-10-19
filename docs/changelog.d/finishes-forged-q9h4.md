@@ -1,0 +1,1 @@
+New: Three garage paint finishes — forged carbon (chopped-carbon chips under a satin lacquer), gunmetal (dark anodised metal in the livery hue) and gold plate (a gold mirror) — on every renderer, plus the Forged Black and Gold Leaf liveries.

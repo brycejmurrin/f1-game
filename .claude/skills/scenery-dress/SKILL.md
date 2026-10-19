@@ -23,8 +23,13 @@ Destructure `out` from `api` first; `verify-track` catches a `scenery()` throw.
 `K(s)` is AUTHORED-frame: pass it straight through, never pre-shift it. On a
 shifted circuit, wrapped helpers and `along()` callbacks both expect authored
 `k` (the double-shift bug is fixed — see [references/rules.md](references/rules.md)
-§Frames). Residual `_sceneryShift` is still frame debt: survey before dropping
-`sceneryStartFrac`.
+§Frames). Residual `_sceneryShift` is still frame debt. Print it before touching
+`sceneryStartFrac` (no browser):
+`node -e 'const T=require("./tools/track/verify-track.cjs").buildContext(),d=T.LIST.find(x=>x.id==="spa");T.buildCenterline(d,{line:false});console.log(d.sceneryStartFrac,d._sceneryShift)'`
+(Spa: `0.9875 0.958`). Non-zero means every authored frac literal in
+`js/circuits/scenery/<id>.js` sits that far from racing frac; dropping the field
+re-bases all of them at once, so it needs the `audit-circuit` baseline before and
+after, not a one-line edit.
 
 ## Helper families
 

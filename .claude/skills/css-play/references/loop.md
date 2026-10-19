@@ -5,6 +5,7 @@ Load from the SKILL.md index when opening a non-catalog screen, reading a
 
 ## Contents
 - 1. Host + open
+- Who owns a row
 - 2. DOM dump (`dom.json`)
 - 3. Hot-swap
 - 4. Screenshot
@@ -53,6 +54,17 @@ in `tools/ui/menu-screens.mjs` (imported by `layout-audit.mjs`).
 
 Wait for the open transition (`opacity !== 0`, no running animations) before
 measuring. `#pmsettings` can take ~1.2 s.
+
+## Who owns a row
+
+Find the class in `index.html`, then `grep -n 'tune-row' css/*.css`.
+Settings sliders (`label.tune-row` > `.tune-label` + `input[type=range]`): base
+`css/tuner.css`, sheet override `.pm-group .tune-row` in `css/settings.css`,
+DISPLAY panel `#pm-panel-display .tune-row` in `css/settings-controls.css`; sizes
+are tokens `--slider`/`--tap` (`css/tokens.css`). Enumerated rows are `.set-row`
+(`css/settings-controls.css`). The pause menu (`--screen pause`, which boots a
+Monza race first) is `#pausemenu` in `css/dialogs.css`, compact-density rules
+included; `css/menus.css` is the title chrome, not the pause sheet.
 
 ## 2. DOM dump (`dom.json`)
 
