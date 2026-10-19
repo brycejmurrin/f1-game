@@ -413,7 +413,9 @@ jobs:
           key: ${{ steps.h.outputs.key }}
       - name: Memoized skip
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'
-        run: echo "SKIPPED tooling A — inputs-hash verdict cache hit for ${{ steps.h.outputs.key }}"
+        env:
+          CACHE_KEY: ${{ steps.h.outputs.key }}
+        run: echo "SKIPPED tooling A — inputs-hash verdict cache hit for $CACHE_KEY"
       - name: Reused draft
         if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling A — draft fast-tier already green on this head SHA"
@@ -516,7 +518,9 @@ jobs:
           key: ${{ steps.h.outputs.key }}
       - name: Memoized skip
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'
-        run: echo "SKIPPED tooling B — inputs-hash verdict cache hit for ${{ steps.h.outputs.key }}"
+        env:
+          CACHE_KEY: ${{ steps.h.outputs.key }}
+        run: echo "SKIPPED tooling B — inputs-hash verdict cache hit for $CACHE_KEY"
       - name: Reused draft
         if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling B — draft fast-tier already green on this head SHA"
