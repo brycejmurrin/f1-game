@@ -181,6 +181,8 @@ function bootMenus(disk = {}, o = {}) {
   const announced = [];
   const G = {
     $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {},
+    getLiveryId: (id) => store.get("livery." + id, "default"),
+    getLiveries: (team) => [{ id: "default", c1: team.color, c2: team.color2 }].concat(store.get("livery.custom." + team.id, [])),
     els: { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
       selCircuitLabel: $("sel-circuit-label"), selPreviewMap: null, selTeams: $("sel-teams") },
     trackIdx: 1, teamIdx: 0, timeTrial: false, seasonMode: false, netRoom: false, daily: null, soundOn: false,

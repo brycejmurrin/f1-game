@@ -1,6 +1,6 @@
 {
   "generatedBy": "tools/gen/gen-output-surface.mjs",
-  "version": 2,
+  "version": 3,
   "runner": [
     "node",
     "tools/agent-run.mjs",
@@ -28,19 +28,6 @@
     },
     "coverage": "Wrapper presentation, not native verbosity flags. Reconstruct candidate argv as catalog.runner + interpreter + path (or npm run <name>). Protocol entrypoints keep exact native stdout and are never recommended through the terminal wrapper. Libraries, ambiguous modules and assets are not asserted to be executable commands. Preservation contracts live in docs/agent-output/policies.json (including @contract refs).",
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
-  },
-  "counts": {
-    "files": 440,
-    "classifications": {
-      "entrypoint-candidate": 298,
-      "ambiguous": 59,
-      "protocol-entrypoint": 28,
-      "asset": 2,
-      "data": 11,
-      "library": 42
-    },
-    "npmScripts": 74,
-    "configuredMcpServers": 5
   },
   "tools": [
     {
@@ -2473,6 +2460,24 @@
       ]
     },
     {
+      "path": "tools/mcp/workflow-harness-client.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ]
+    },
+    {
+      "path": "tools/mcp/workflow-harness-core.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/mcp/workflow-harness.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/net/nostr-local.cjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -3443,7 +3448,7 @@
     },
     {
       "name": "test:mcp",
-      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-node.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/js-debugger-tracks.test.mjs tests/unit/js-debugger-transport.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp-fixture.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs"
+      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-node.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/js-debugger-tracks.test.mjs tests/unit/js-debugger-transport.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp-fixture.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs tests/unit/workflow-harness.test.mjs"
     },
     {
       "name": "test:mobile-unit",

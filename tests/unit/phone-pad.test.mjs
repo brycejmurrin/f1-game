@@ -544,14 +544,55 @@ test("closing the link drops the pedals and the source at once and unhooks the h
   assert.equal(phone.buzz.length, 0, "no haptic is forwarded to a phone that is gone");
 });
 
-test("Input.reset() (blur / everything-off) clears the phone's pedals until it re-sends", () => {
-  const { Input, phone, frame } = pair();
-  phone.thr = 1; frame();
+test("Input.reset() clears the remote command without disconnecting its next fresh sample", () => {
+  const { Input, clock } = bootInput();
+  clock.t = 1000;
+  Input.remoteSample({ source: "xr", steer: 0.8, thr: 1, brk: 0, held: 1 });
+  assert.equal(Input.steer(), 0.8);
   assert.equal(Input.throttle(), true);
+
   Input.reset();
+  assert.equal(Input.remoteActive(), false, "reset invalidates the sample's freshness");
+  assert.equal(Input.remoteSteers(), false);
+  assert.equal(Input.steer(), 0, "reset releases a remote stick like every other steering source");
   assert.equal(Input.throttle(), false, "reset drops the held pedal like every other source");
+  assert.equal(Input.lookingBack(), false, "reset drops remote held controls too");
+  assert.equal(Input.debugState().remote.owner, "xr", "reset does not impersonate a transport disconnect");
+
+  clock.t += 16;
+  Input.remoteSample({ source: "xr", steer: -0.6, thr: 1, brk: 0, held: 0 });
+  assert.equal(Input.steer(), -0.6, "the next fresh sample restores the still-connected remote");
+  assert.equal(Input.throttle(), true);
+  assert.equal(Input.remoteLost("phone"), false, "source-filtered remoteLost remains intact after reset");
+  assert.equal(Input.steer(), -0.6);
+  Input.remoteLost("xr");
+  assert.equal(Input.steer(), 0, "the matching remoteLost path still drops steering");
+});
+
+test("the registered blur reset releases phone tilt until a fresh axis sample arrives", () => {
+  const { Input, phone, frame, sb, hostEnd, link } = pair();
+  phone.roll = 30; phone.thr = 1;
+  for (let i = 0; i < 30; i++) frame();
+  assert.ok(Input.steer() > 0.1, "the pre-blur roll has entered the tilt slew");
+
+  sb.dispatchEvent({ type: "blur" });
+  assert.equal(Input.remoteActive(), false);
+  assert.equal(Input.steer(), 0, "the event callback cannot retain the pre-blur roll");
+  assert.equal(Input.throttle(), false);
+
+  const seq = link.stats().lastSeq;
+  hostEnd._emit("message", NetTransport.STATE, PhonePad.encodeSample({ seq, roll: -30, thr: 1, brk: 0, held: 0 }));
+  hostEnd._emit("message", NetTransport.STATE, PhonePad.encodeSample({ seq: seq - 1, roll: -30, thr: 1, brk: 0, held: 0 }));
+  assert.equal(Input.remoteActive(), false, "duplicate and older packets stay rejected after reset");
+  assert.equal(Input.steer(), 0);
+  assert.equal(Input.throttle(), false);
+  assert.equal(link.stats().stale, 2);
+
+  phone.roll = 0; phone.thr = 0;
   frame();
-  assert.equal(Input.throttle(), true, "the next sample restores it — the phone is still pressing");
+  assert.equal(Input.remoteActive(), true, "the paired phone can resume on a fresh sample");
+  assert.equal(Input.remoteSteers(), true, "zero is a present axis, not a missing sensor");
+  assert.equal(Input.steer(), 0, "the fresh zero axis cannot inherit the pre-blur tilt");
 });
 
 test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, activate, back)", () => {

@@ -1,7 +1,7 @@
 # Role: PR owner
 
 One sibling session that drives exactly one existing PR to merged. It does not
-hunt, build features or start sessions. The orchestrator (or Fleet Desk) starts
+hunt, build features or start sessions. The orchestrator (or Fleet Watch) starts
 one per PR the moment a hunter or builder hands the PR off (`NEW-PR`), and
 archives it on `DONE`. Why a session and not a subagent: the owner must keep
 a subscription, a CI watch and timers alive for hours and survive a container

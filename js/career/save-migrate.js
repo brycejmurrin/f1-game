@@ -29,6 +29,18 @@ const SaveMigrate = (function () {
     return Number.isFinite(n) ? n : 0;
   }
 
+  // A version marker has one representation policy at every ingress. Missing
+  // means the pre-versioned v0 shape; explicit markers must be non-negative
+  // safe integers, with digit-only JSON strings accepted for compatibility.
+  function careerVersion(value) {
+    if (value === undefined) return 0;
+    if (typeof value === "string") {
+      if (!/^\d+$/.test(value)) return null;
+      value = Number(value);
+    }
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  }
+
   // Mirrors of career.js's TDEV_MAX / DEV_MAX / EXP_MAX (this file loads first
   // and cannot read them; save-migrate.test.mjs pins the three pairs equal).
   const TDEV_LIMIT = 8;
@@ -277,12 +289,16 @@ const SaveMigrate = (function () {
       if (career != null) log("warn", "Career save rejected: not an object type=" + (Array.isArray(career) ? "array" : typeof career));
       return null;
     }
-    const version = scalarNumber(career.v);
+    const version = careerVersion(career.v);
+    if (version === null) {
+      log("warn", "Career save rejected: invalid version marker.");
+      return null;
+    }
     if (version > CAREER_V) {
       log("warn", "Career save requires a newer build (v" + version + "); update the game to open it. Save preserved.");
       return null;
     }
-    let v = Number.isSafeInteger(career.v) && career.v >= 0 ? career.v : 0;
+    let v = version;
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
     career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
@@ -395,6 +411,7 @@ const SaveMigrate = (function () {
   }
 
   return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V, tallyOf,
+           careerVersion,
            validateCareerSave,
            LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT }) };
 })();
