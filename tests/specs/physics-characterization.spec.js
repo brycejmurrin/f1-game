@@ -47,6 +47,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { SCENARIOS, fieldsOf } from "../helpers/physics-scenarios.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, "..", "data", "physics-baseline.json");
@@ -61,43 +62,6 @@ if (!UPDATING && !fs.existsSync(BASELINE)) {
   throw new Error(`no physics baseline at ${path.relative(path.join(HERE, "..", ".."), BASELINE)} — ` +
     "restore it, or generate it with APEX_UPDATE_BASELINE=1 and a stated APEX_BASELINE_REASON (see the header)");
 }
-
-// Fixed scenarios. Each is a seed, a start state and a scripted input sequence.
-// Kept small and varied rather than long: the point is to touch several regions
-// of the model (steady state, cornering load, trail braking, off-track) so a
-// change anywhere shows up, not to simulate a whole lap.
-//
-// The first four are the original gate and keep their 6-field rows, so their
-// committed numbers never moved when the gate widened (2026-10-19, #2952 P2-11).
-// The rest are `wide`: each row also carries yawRate, gear, aeroX and energy,
-// and `ai` appends that AI car's [s, x, speed]. They reach regions the first
-// four never touched — "steady corner load" at frac 0.28 sits on a straight
-// (|k| < 3e-4), so nothing loaded a real right-hander; nothing pressed BOOST,
-// opened X-mode, wetted the road, struck a kerb or drove an AI car. Optional
-// fields: wx (weather chip, default "dry"), aero (X-mode requested), boost.
-// Monza fracs, measured on the VM: 0.83 Parabolica (k ~ -0.012, right),
-// 0.92 inside the main-straight activation zone, 0.368 Lesmo with kerb at
-// x 8-9 m. Keep "wet" LAST: a wet chip must not reach a later dry scenario.
-const SCENARIOS = [
-  { name: "straight-line accel", seed: 7, frac: 0.05, speed: 20,
-    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
-  { name: "steady corner load", seed: 7, frac: 0.28, speed: 55,
-    steps: [{ n: 90, in: { throttle: true, steer: 0.6 } }] },
-  { name: "trail brake into rotation", seed: 11, frac: 0.28, speed: 70,
-    steps: [{ n: 45, in: { brake: true, steer: 0.5 } }, { n: 45, in: { throttle: true, steer: 0.3 } }] },
-  { name: "off-track recovery", seed: 3, frac: 0.5, speed: 45, x: 11,
-    steps: [{ n: 90, in: { throttle: true, steer: -0.4 } }] },
-  { name: "right-hand loaded corner", seed: 5, frac: 0.83, speed: 50, wide: true,
-    steps: [{ n: 90, in: { throttle: true, steer: 0.75 } }] },
-  { name: "boost and x-mode on the straight", seed: 9, frac: 0.92, speed: 60, wide: true, aero: true, boost: true,
-    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
-  { name: "kerb strike", seed: 13, frac: 0.368, speed: 40, x: 8.5, wide: true,
-    steps: [{ n: 90, in: { throttle: true, steer: 0.5 } }] },
-  { name: "ai car launch", seed: 7, frac: 0.05, speed: 20, wide: true, ai: 1,
-    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
-  { name: "wet right-hand corner", seed: 5, frac: 0.83, speed: 50, wide: true, wx: "wet",
-    steps: [{ n: 90, in: { throttle: true, steer: 0.75 } }] },
-];
 
 // The fields that define "the car moved the same way". Rounded to 1e-4 so the
 // comparison survives JSON round-tripping, and no tighter — a tolerance loose
@@ -179,6 +143,10 @@ test("the driving model produces the same numbers it did before", async ({ page,
   // a change that moved three regions reported one. Every drift is named; the
   // test still fails at the end.
   for (const sc of SCENARIOS) {
+    const fields = fieldsOf(sc);
+    for (const row of rounded[sc.name]) {
+      expect.soft(row.length, `scenario "${sc.name}" column count`).toBe(fields.length);
+    }
     expect.soft(want[sc.name], `baseline lacks scenario "${sc.name}" — regenerate with APEX_UPDATE_BASELINE=1`)
       .toBeDefined();
     expect.soft(rounded[sc.name], `scenario "${sc.name}" drifted — if this change was intentional, ` +

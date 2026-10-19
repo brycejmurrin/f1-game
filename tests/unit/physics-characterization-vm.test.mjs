@@ -17,7 +17,7 @@
  * Run: node --test tests/unit/physics-characterization-vm.test.mjs
  */
 import { test, before, after } from "node:test";
-import * as espree from "espree";
+import { SCENARIOS, FIELDS, WIDE, AI, fieldsOf } from "../helpers/physics-scenarios.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -30,77 +30,77 @@ const { createGame } = require("../../tools/lib/game-vm.cjs");
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, "..", "data", "physics-baseline.json");
 
-// Verbatim from the browser spec — the two lists must stay identical.
-const SCENARIOS = [
-  { name: "straight-line accel", seed: 7, frac: 0.05, speed: 20,
-    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
-  { name: "steady corner load", seed: 7, frac: 0.28, speed: 55,
-    steps: [{ n: 90, in: { throttle: true, steer: 0.6 } }] },
-  { name: "trail brake into rotation", seed: 11, frac: 0.28, speed: 70,
-    steps: [{ n: 45, in: { brake: true, steer: 0.5 } }, { n: 45, in: { throttle: true, steer: 0.3 } }] },
-  { name: "off-track recovery", seed: 3, frac: 0.5, speed: 45, x: 11,
-    steps: [{ n: 90, in: { throttle: true, steer: -0.4 } }] },
-  { name: "right-hand loaded corner", seed: 5, frac: 0.83, speed: 50, wide: true,
-    steps: [{ n: 90, in: { throttle: true, steer: 0.75 } }] },
-  { name: "boost and x-mode on the straight", seed: 9, frac: 0.92, speed: 60, wide: true, aero: true, boost: true,
-    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
-  { name: "kerb strike", seed: 13, frac: 0.368, speed: 40, x: 8.5, wide: true,
-    steps: [{ n: 90, in: { throttle: true, steer: 0.5 } }] },
-  { name: "ai car launch", seed: 7, frac: 0.05, speed: 20, wide: true, ai: 1,
-    steps: [{ n: 120, in: { throttle: true, steer: 0 } }] },
-  { name: "wet right-hand corner", seed: 5, frac: 0.83, speed: 50, wide: true, wx: "wet",
-    steps: [{ n: 90, in: { throttle: true, steer: 0.75 } }] },
-];
-const FIELDS = ["s", "x", "speed", "slipDeg", "head", "prog"];
-const WIDE = ["yawRate", "gear", "aeroX", "energy"];
-const fieldsOf = (s) => [...FIELDS, ...(s.wide ? WIDE : []), ...(s.ai != null ? ["ai.s", "ai.x", "ai.speed"] : [])];
 const R = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 1e4) / 1e4 : v);
 
-// Read only literal recipe data, never evaluate the browser module or import
-// Playwright. Full AST equality catches durations, inputs, offsets and order.
-function browserScenarios(source) {
-  const ast = espree.parse(source, {ecmaVersion: "latest", sourceType: "module"});
-  const literal = (node) => {
-    if (node.type === "Literal") return node.value;
-    if (node.type === "UnaryExpression" && node.operator === "-") return -literal(node.argument);
-    if (node.type === "ArrayExpression") return node.elements.map(literal);
-    if (node.type === "ObjectExpression") return Object.fromEntries(node.properties.map((p) => {
-      assert.equal(p.type, "Property", "recipe must remain serializable data");
-      return [p.key.name ?? p.key.value, literal(p.value)];
-    }));
-    assert.fail(`unsupported recipe node ${node.type}; keep browser and VM recipes comparable`);
-  };
-  const declaration = ast.body.filter((n) => n.type === "VariableDeclaration")
-    .flatMap((n) => n.declarations).find((n) => n.id.name === "SCENARIOS");
-  assert.ok(declaration, "browser recipe SCENARIOS is required");
-  return literal(declaration.init);
-}
 const browserSource = () => fs.readFileSync(path.join(HERE, "..", "specs", "physics-characterization.spec.js"), "utf8");
 
-test("the complete ordered scenario recipes match the browser spec", () => {
+// Independent anchors keep meaningful recipe edits visible, including changes
+// formerly checked by mutating a duplicate literal in the browser source.
+function assertRecipeContract(recipes) {
+  assert.deepEqual(recipes.map((s) => s.name), ["straight-line accel", "steady corner load",
+    "trail brake into rotation", "off-track recovery", "right-hand loaded corner",
+    "boost and x-mode on the straight", "kerb strike", "ai car launch", "wet right-hand corner"]);
+  assert.deepEqual([recipes[0].steps[0].n, recipes[1].steps[0].in.steer, recipes[3].x,
+    recipes[0].steps[0].in.throttle, recipes[5].boost, recipes[8].wx, recipes[7].ai],
+  [120, 0.6, 11, true, true, "wet", 1]);
+  assert.deepEqual(recipes[2].steps, [
+    { n: 45, in: { brake: true, steer: 0.5 } },
+    { n: 45, in: { throttle: true, steer: 0.3 } },
+  ]);
+  for (const recipe of recipes) {
+    assert.equal(typeof recipe.name, "string");
+    assert.ok(Number.isInteger(recipe.seed));
+    assert.ok(Number.isFinite(recipe.frac) && recipe.frac >= 0 && recipe.frac < 1);
+    assert.ok(Number.isFinite(recipe.speed));
+    assert.ok(recipe.steps.length > 0);
+    for (const stage of recipe.steps) {
+      assert.ok(Number.isInteger(stage.n) && stage.n > 0);
+      assert.ok(Number.isFinite(stage.in.steer));
+    }
+  }
+}
+
+test("shared recipes retain order, schema, independent anchors and immutable nested inputs", () => {
+  assertRecipeContract(SCENARIOS);
+  assert.deepEqual(JSON.parse(JSON.stringify(SCENARIOS)), SCENARIOS, "recipes remain serializable page.evaluate inputs");
+  function assertFrozen(value) {
+    if (value && typeof value === "object") {
+      assert.ok(Object.isFrozen(value));
+      for (const child of Object.values(value)) assertFrozen(child);
+    }
+  }
+  assertFrozen(SCENARIOS);
+  for (const fields of [FIELDS, WIDE, AI]) assertFrozen(fields);
+  assert.deepEqual(fieldsOf({ wide: true, ai: 1 }), ["s", "x", "speed", "slipDeg", "head", "prog",
+    "yawRate", "gear", "aeroX", "energy", "ai.s", "ai.x", "ai.speed"]);
+  const fields = fieldsOf({});
+  fields.reverse();
+  assert.equal(fieldsOf({})[0], "s", "field lists are fresh per caller");
+});
+
+test("recipe contract detects duration, input, offset, flags, weather and order changes", () => {
+  const mutations = [
+    (s) => { s[0].steps[0].n = 121; }, (s) => { s[1].steps[0].in.steer = 0.7; },
+    (s) => { s[3].x = 12; }, (s) => { s[0].steps[0].in.throttle = false; },
+    (s) => { s[5].boost = false; }, (s) => { s[8].wx = "dry"; },
+    (s) => { s[7].ai = 2; }, (s) => { s.reverse(); },
+    (s) => { s[2].steps.reverse(); },
+  ];
+  for (const mutate of mutations) {
+    const changed = structuredClone(SCENARIOS);
+    mutate(changed);
+    assert.throws(() => assertRecipeContract(changed), assert.AssertionError);
+  }
+});
+
+test("browser retains its independent runner, sampling, columns and factory seat", () => {
   const spec = browserSource();
-  assert.deepEqual(browserScenarios(spec), SCENARIOS, "browser/VM recipe drift: compare every input, duration, lateral offset and scenario/stage order");
+  assert.ok(spec.includes('from "../helpers/physics-scenarios.mjs"'), "browser imports the shared recipes");
   assert.ok(spec.includes("if (i % 15 === 0)") && spec.includes("Math.round(v * 1e4) / 1e4"), "spec sampling or rounding changed");
   assert.ok(spec.includes("row.push(p.yawRate, c.gear, p.aeroX, c.energy)") && spec.includes("row.push(q.s, q.x, q.speed)"),
     "spec wide/ai columns changed: keep them identical to run() below");
   assert.ok(spec.includes("pinFactorySeat"),
     "browser characterization must pin factory McLaren before loadTrack so GarageDefaults cannot move the baseline");
-});
-
-test("recipe parity detects changes invisible to scenario-name checks", () => {
-  const source = browserSource();
-  for (const [from, to] of [["n: 120", "n: 121"], ["steer: 0.6", "steer: 0.7"],
-    ["x: 11", "x: 12"], ["throttle: true, steer: 0", "throttle: false, steer: 0"],
-    ["boost: true", "boost: false"], ['wx: "wet"', 'wx: "dry"'], ["ai: 1", "ai: 2"]]) {
-    assert.ok(source.includes(from), `mutation anchor missing: ${from}`);
-    assert.notDeepEqual(browserScenarios(source.replace(from, to)), SCENARIOS, from);
-  }
-  const reordered = browserScenarios(source);
-  reordered.reverse();
-  assert.notDeepEqual(reordered, SCENARIOS, "scenario order matters");
-  const stages = browserScenarios(source);
-  stages.find((s) => s.name === "trail brake into rotation").steps.reverse();
-  assert.notDeepEqual(stages, SCENARIOS, "stage order matters");
 });
 
 // ONE boot for the file (createGame ~2-3 s on this box); each scenario is its
