@@ -30,9 +30,9 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 436,
+    "files": 438,
     "classifications": {
-      "entrypoint-candidate": 293,
+      "entrypoint-candidate": 295,
       "ambiguous": 60,
       "protocol-entrypoint": 28,
       "asset": 2,
@@ -848,6 +848,15 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/live-run-check.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/measure-guard-commit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1125,6 +1134,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/session-ledger.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/ci/session-status.mjs",
