@@ -98,6 +98,8 @@ test("identity: --as, then APEX_FLEET_AS, then the host's session env", () => {
   assert.equal(whoAmI({ CLAUDE_CODE_SESSION_ID: "s1" }, "codex:x"), "codex:x");
   assert.equal(whoAmI({ APEX_FLEET_AS: "grok:bot", CLAUDE_CODE_SESSION_ID: "s1" }), "grok:bot");
   assert.equal(whoAmI({ CLAUDE_CODE_SESSION_ID: "s1" }), "claude:s1");
+  assert.equal(whoAmI({ CLAUDE_CODE_REMOTE_SESSION_ID: "cse_01Ab", CLAUDE_CODE_SESSION_ID: "s1" }), "claude:session_01Ab",
+    "a cloud session signs with the id send_message takes");
   assert.equal(whoAmI({ CODEX_THREAD_ID: "t" }), "codex:t");
   assert.equal(whoAmI({}), null);
 });

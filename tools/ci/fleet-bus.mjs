@@ -27,7 +27,7 @@
 //   node tools/ci/fleet-bus.mjs send READY --to orchestrator "#2990 abc1234 ready-gate 0"
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json]
 //
-// Identity: --as <host>:<id>, else APEX_FLEET_AS, else claude:<CLAUDE_CODE_SESSION_ID>
+// Identity: --as <host>:<id>, else APEX_FLEET_AS, else claude:session_<id> (cloud), claude:<CLAUDE_CODE_SESSION_ID>
 // or codex:<CODEX_THREAD_ID>. Exit: 0 ok, 1 usage or git failure, 2 refused.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -48,6 +48,8 @@ const CURSOR_DIR = path.join(ROOT, "artifacts", "fleet-bus");
 export function whoAmI(env = process.env, flag = "") {
   if (flag) return flag;
   if (env.APEX_FLEET_AS) return env.APEX_FLEET_AS;
+  // A cloud session's remote id (cse_X) is the session_X that send_message and get_session take.
+  if (env.CLAUDE_CODE_REMOTE_SESSION_ID) return `claude:${env.CLAUDE_CODE_REMOTE_SESSION_ID.replace(/^cse_/, "session_")}`;
   if (env.CLAUDE_CODE_SESSION_ID) return `claude:${env.CLAUDE_CODE_SESSION_ID}`;
   if (env.CODEX_THREAD_ID) return `codex:${env.CODEX_THREAD_ID}`;
   return null;
