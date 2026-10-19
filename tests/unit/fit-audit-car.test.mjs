@@ -99,6 +99,9 @@ test("compareRuns: NEW, WORSE and PRE-EXISTING; a branch-only style is charged a
   const out = compareRuns(head, base);
   assert.deepEqual(out.cars[0].rows.map((r) => r.status), ["PRE-EXISTING", "WORSE", "NEW"]);
   assert.deepEqual(out.cars[1].rows.map((r) => r.status), ["PRE-EXISTING", "NEW"]);
+  // a fresh row within NOISE of its limit is listed but does not gate (seam jitter)
+  const jitter = compareRuns({ cars: [{ team: "haas", style: "factory", rows: [row("GAP", "mirrors", "chassis", 3.6), row("PENETRATION", "brakeDucts", "tyre LF", 4.5)] }] }, base);
+  assert.deepEqual(jitter.cars[0].rows.map((r) => r.status), ["NEAR-LIMIT", "NEW"]);
 });
 
 test("shipped fixture: the Fenced Halo brow floats over the cockpit (a NEW GAP vs the factory car)", () => {

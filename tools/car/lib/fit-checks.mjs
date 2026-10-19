@@ -77,12 +77,18 @@ export function gaps(A) {
         });
       }
     }
-    const secs = [...new Set(members.map((p) => A.S.names[p.sec]))].sort();
+    // Keyed by the cluster's DOMINANT section (largest area), not the list of
+    // every section in it: a style that welds one more bracket onto a floating
+    // assembly must not rename the row and read as NEW under --base.
+    const areaBy = new Map();
+    for (const p of members) areaBy.set(p.sec, (areaBy.get(p.sec) || 0) + p.area);
+    const dom = [...areaBy].sort((x, y) => y[1] - x[1])[0][0];
+    const secs = [...areaBy.keys()].map((s) => A.S.names[s]).sort();
     const b = bestT >= 0 ? A.S.names[A.sec[bestT]] : "(nothing within " + FIT.GAP_SEARCH_MM + " mm)";
     const gapMM = bestT >= 0 ? mm(best) : FIT.GAP_SEARCH_MM;
     const bb = bbox(A, members);
-    rows.push({ check: "GAP", a: secs.join("+"), b, value: gapMM, unit: "mm", fail: gapMM > FIT.GAP_MM, count: 1,
-      where: at(from || bb.c), note: `floating cluster of ${members.length} piece(s), size ${bb.s.map((v) => mm(v)).join("x")} mm` });
+    rows.push({ check: "GAP", a: A.S.names[dom], b, value: gapMM, unit: "mm", fail: gapMM > FIT.GAP_MM, count: 1,
+      where: at(from || bb.c), note: `floating cluster of ${members.length} piece(s) [${secs.join("+")}], size ${bb.s.map((v) => mm(v)).join("x")} mm` });
   }
   const joints = [...contacts.entries()].map(([k, n]) => ({ pair: k, contacts: n })).sort((x, y) => x.pair < y.pair ? -1 : 1);
   return { rows, joints };

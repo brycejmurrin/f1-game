@@ -107,6 +107,14 @@ export function run(root, opts) {
 // preview option that only exists on the branch) is compared against the
 // base's FACTORY car of the same team, so it is charged only for what it adds.
 const SLACK = { GAP: FIT.GAP_MM, PENETRATION: FIT.ATTACH_MM, ZFIGHT: FIT.ZFIGHT_AREA_M2 * 1e4, OPEN: FIT.OPEN_MM };
+// NOISE: a row with no failing base twin is NEW only past this margin over
+// its limit. Measured on the 2026-10-19 --all-styles sweep (275 builds): a
+// style that only reshapes a neighbour moves seams by ~0.1-0.9 mm, so a 2.9 mm
+// joint in the base reads 3.1 mm on the branch and flapped NEW across the
+// whole catalog. 1 mm is above that jitter and still a third of the 3 mm seam.
+export const NOISE = Object.freeze({ GAP: 1, PENETRATION: 1, ZFIGHT: 0.5, OPEN: 10 });
+const LIMIT = { GAP: FIT.GAP_MM, ZFIGHT: FIT.ZFIGHT_AREA_M2 * 1e4, OPEN: FIT.OPEN_MM };
+const limitOf = (r) => r.check === "PENETRATION" ? (/^tyre /.test(r.b) ? FIT.TYRE_PEN_MM : FIT.PEN_MM) : LIMIT[r.check];
 export function compareRuns(head, base) {
   const idx = new Map();
   for (const c of base.cars) for (const r of c.rows) if (r.fail) idx.set(c.team + "|" + c.style + "|" + r.check + "|" + r.a + "|" + r.b, r);
@@ -119,7 +127,9 @@ export function compareRuns(head, base) {
       // count: vertices inside / face pairs / open edges / floating clusters;
       // a quarter more (and at least 3 more) is a part that grew into the fault.
       const grew = r.nFail > b?.nFail || r.count > b?.count * 1.25 + 2;
-      r.status = !b ? "NEW" : (r.value > b.value + SLACK[r.check] || grew) ? "WORSE" : "PRE-EXISTING";
+      // NEAR-LIMIT: no failing base twin, but within NOISE of the limit. Listed, never gates.
+      r.status = !b ? (r.value > limitOf(r) + NOISE[r.check] ? "NEW" : "NEAR-LIMIT")
+        : (r.value > b.value + SLACK[r.check] || grew) ? "WORSE" : "PRE-EXISTING";
       r.baseValue = b ? b.value : null;
     }
   }

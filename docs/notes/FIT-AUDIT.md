@@ -49,7 +49,13 @@ position in car metres, +X right, +Y up, +Z forward). `--base` charges a style
 the base cannot build (a branch-only preview option) against the base FACTORY
 car, so it is charged only for what it adds. WORSE = past the base value by the
 check's own threshold, or a count (vertices inside, face pairs, open edges,
-floating clusters) up by a quarter and at least 3.
+floating clusters) up by a quarter and at least 3. A failing row with no failing
+base twin is NEW only past its limit plus `NOISE` (GAP/PENETRATION 1 mm, ZFIGHT
+0.5 cm², OPEN 10 mm); inside that margin it is NEAR-LIMIT, listed, never gating.
+Why: the first `--all-styles --base` sweep (275 builds) flapped NEW across the
+catalog on seams that sit at 2.9 mm in the base and 3.1 mm on a styled car, and
+on GAP rows renamed by a bracket joining the floating cluster (GAP rows are now
+keyed by the cluster's largest-area section; the note lists every section).
 
 ## Blind spots
 
