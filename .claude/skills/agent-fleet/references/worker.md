@@ -97,7 +97,9 @@ Keep working on anything the blocker does not touch while you wait.
   `STAND DOWN <old PR> superseded by <new PR>` (Merge Desk, #2388) or a
   `Superseded by #<n>` body line means stop: no push, release the claim, say so.
 - After `SWEEP <PR#>` hand the PR to Merge Desk and stop watching it.
-- Past ~300k context at a verified checkpoint, hand off (PR body current, new
+- Idle-wake discipline: a duplicate or no-change event gets no tool call and at most one line;
+  keep the ~1 h timer (it fits the 1 h cache TTL, so the wake reads a warm cache).
+- STOP AT 150k context at a verified checkpoint (docs-only 100k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop). Hand off (PR body current, new
   small session or Merge Desk watches) instead of idling in the big session:
   at 677k an idle wake costs $0.26–0.55.
 - `SendMessage` reaches in-session subagents only. A parent `session_…` id

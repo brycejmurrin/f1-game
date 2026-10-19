@@ -1314,6 +1314,7 @@ Focused browser-free diagnostics contracts also run in `tooling-fast`:
 |---|---|
 | `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
 | `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
+| `tests/unit/fleet-tick.test.mjs` | `fleet-tick.mjs`: board-row compaction, state diff (changed fields, new/gone PRs, ship/Pages, new session flags) and the 40-row cap, fixtures only. |
 | `tests/unit/i18n-lint.test.mjs` | Locale contribution lint (`tools/check/i18n-lint.mjs`): fixture locales (valid / missing-key / bad-placeholder / wrong-plural), ship `locales/` clean, `--guard` on `tests/data/i18n-migrated.json`. |
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
