@@ -77,8 +77,11 @@ BLOAT none
 plus the three most likely future sites (file + why), then the `COVERED:` line.
 
 Project memory (`.claude/agent-memory/bloat-auditor/MEMORY.md`, tracked): one
-line per finding the parent REJECTED — `file:line — kind — why not`. Read it
-first and never re-propose a listed carve; append when the parent says no.
+line per finding the parent REJECTED —
+`file:line — kind — why not — recorded-at: <full commit SHA>`. Read it first.
+Suppress a listed carve only while its file matches that recorded commit;
+if the file changed, the commit is unavailable, or the SHA is missing, re-check
+the rejection before suppressing it. Append the reviewed SHA when the parent says no.
 
 Cap: **eight** `BLOAT` rows. Prefer the highest `cost` with `do-not: none`.
 
