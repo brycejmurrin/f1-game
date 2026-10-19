@@ -2,23 +2,32 @@
 // Time Trial mode: ghost recording, ghost delta HUD, sector-split announces,
 // and the TT results panel. Uses __apex.tt() to enter TT mode programmatically.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, test as journeyTest } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-test.describe("Practice return journeys — phone landscape", () => {
+journeyTest.describe("Practice return journeys — phone landscape", () => {
+  // Keep literal test(...) calls visible to the static CI budget counter.
+  const test = journeyTest;
+  // Shared fixture pins GLX, test mode, tyre/wind off and offline API stubs.
   test.use(uiTestOptions({ touch: true, viewport: LANDSCAPE }));
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, pageErrors }) => {
     // Match the player's phone identity, including UA and touch, not just size.
     // The dev-only Inspector must not intercept the shipped game's controls.
     await page.goto("/?inspector=0");
     await page.waitForFunction(() => !!window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-    // Only rendering is suppressed. Entry, input, DOM and physics stay real;
+    expect(pageErrors).toEqual([]);
+    // Rendering and intro presentation are suppressed; input and physics stay real;
     // this checks navigation/re-entry, not the full garage/flyby presentation.
     await page.evaluate(() => window.__apex.headless(true));
+  });
+
+  test.afterEach(async ({ pageErrors, consoleLines }) => {
+    expect(pageErrors).toEqual([]);
+    expect(consoleLines.filter(line => line.startsWith("error:"))).toEqual([]);
   });
 
   test("cancelling Practice twice leaves ordinary TT and Race pickers usable", async ({ page }) => {
@@ -53,8 +62,6 @@ test.describe("Practice return journeys — phone landscape", () => {
   });
 
   test("Practice and TT restart and quit require confirmation and reset the session", async ({ page }) => {
-    const errors = [];
-    page.on("pageerror", error => errors.push(error.message));
     for (const [door, label] of [["#mb-practice", "START PRACTICE"], ["#mb-tt", "START TIME TRIAL"]]) {
       await page.locator(door).tap();
       await page.locator("#sel-go").tap();
@@ -77,6 +84,14 @@ test.describe("Practice return journeys — phone landscape", () => {
       await expect.poll(() => page.evaluate(() => window.__apex.timing()?.lap), { timeout: BOOT_MS }).toBe(0);
       await expect(page.locator("#pausemenu")).toBeHidden();
       expect(await page.evaluate(() => window.__apex.info().session)).toBe("tt");
+      // gridUp resets laps before asynchronous warmup commits the new start.
+      // Wait for a playable session and a natural clock tick, not only lap zero.
+      await expect(page.locator("#loading")).toBeHidden();
+      await page.waitForFunction(() => window.__apex.info().state === "race" && !window.__apex.freeze(), null,
+        { polling: 100, timeout: BOOT_MS });
+      const restartedAt = await page.evaluate(() => window.__apex.timing().raceT);
+      await expect.poll(() => page.evaluate(() => window.__apex.timing().raceT), { timeout: BOOT_MS })
+        .toBeGreaterThan(restartedAt);
 
       await page.locator("#pausebtn").tap();
       await page.locator("#pm-quit").tap();
@@ -96,7 +111,6 @@ test.describe("Practice return journeys — phone landscape", () => {
     await page.locator("#sel-go").tap();
     await expect(page.locator("#rs-go")).toHaveText("START RACE");
     expect(await page.evaluate(() => window.__apex.info().session)).toBe("race");
-    expect(errors).toEqual([]);
   });
 });
 
