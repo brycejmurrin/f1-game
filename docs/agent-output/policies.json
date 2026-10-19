@@ -531,6 +531,11 @@
       "presentation": "native",
       "preserve": "Regex/suite strings are consumed by shell; unknown argument exit 2"
     },
+    "tools/ci/github-api.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Import-only GET helper; no-token and HTTP error text unchanged"
+    },
     "tools/ci/github-token.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

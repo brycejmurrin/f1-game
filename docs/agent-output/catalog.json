@@ -817,7 +817,8 @@
     },
     {
       "path": "tools/ci/github-api.mjs",
-      "classification": "ambiguous"
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/ci/github-token.mjs",
