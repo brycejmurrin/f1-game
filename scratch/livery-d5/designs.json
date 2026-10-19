@@ -1,0 +1,92 @@
+{
+ "designs": [
+  {
+   "id": "tartanBand",
+   "label": "Tartan band",
+   "rank": 1,
+   "layout": "A broad band down the engine cover woven from crossing stripes over the second colour, with thin accent sett lines.",
+   "after": "Stewart SF01 (1997), the Stewart Racing tartan band",
+   "refs": [
+    [
+     "Stewart SF01 (Wikipedia)",
+     "https://en.wikipedia.org/wiki/Stewart_SF01"
+    ],
+    [
+     "Stewart Racing tartan",
+     "https://www.kinlochanderson.com/tartan/stewart-racing"
+    ]
+   ]
+  },
+  {
+   "id": "deckSplit",
+   "label": "Deck split",
+   "rank": 2,
+   "layout": "A level split, one colour per deck, with a double pinline on the seam (accent stripe plus a fine second line).",
+   "after": "Lotus 49B Gold Leaf (1968), red over white with gold",
+   "refs": [
+    [
+     "1968 Gold Leaf Team Lotus (F1 Colours)",
+     "https://f1colours.sebpatrick.co.uk/best-liveries-ever/1968-gold-leaf-team-lotus/"
+    ],
+    [
+     "Lotus 49 (Wikipedia)",
+     "https://en.wikipedia.org/wiki/Lotus_49"
+    ]
+   ]
+  },
+  {
+   "id": "borderedStripe",
+   "label": "Bordered stripe",
+   "rank": 3,
+   "layout": "One centre stripe with a keyline each side in the second colour and a body-colour gap between.",
+   "after": "McLaren MCL35M Gulf livery, Monaco 2021",
+   "refs": [
+    [
+     "Formula1.com: McLaren one-off Gulf livery",
+     "https://www.formula1.com/en/latest/article/breaking-mclaren-to-run-one-off-livery-for-monaco-grand-prix-gulf.4hkyBhSrcmPhpwK8WVIwu7"
+    ],
+    [
+     "Goodwood: McLaren Gulf livery",
+     "https://www.goodwood.com/grr/f1/mclaren-reveals-one-off-gulf-livery-for-monaco/"
+    ]
+   ]
+  },
+  {
+   "id": "tricolour",
+   "label": "Tricolour sweep",
+   "rank": 4,
+   "layout": "Three equal raked bands across the rear half: first colour, accent, second colour.",
+   "after": "Alpine A521 (2021) launch livery, flag stripes across the rear",
+   "refs": [
+    [
+     "F1Technical: Alpine reveals its 2021 livery",
+     "https://www.f1technical.net/news/23007"
+    ],
+    [
+     "Formula1.com: A521 livery",
+     "https://www.formula1.com/en/latest/article/fans-give-thumbs-up-to-alpines-fresh-new-look-after-team-reveal-a521-livery.4KKW1JIzFM94dvr8liCizI"
+    ]
+   ]
+  },
+  {
+   "id": "spearhead",
+   "label": "Spearhead",
+   "rank": 5,
+   "layout": "One arrow along the car: a broad head at the front of the cover and a level shaft behind it, keylined in the second colour.",
+   "after": "Brabham BT52 (1983), a two-colour block scheme drawn to read on TV",
+   "refs": [
+    [
+     "Motor Sport: Peter Stevens on his liveries",
+     "https://motorsportmagazine.com/articles/single-seaters/f1/f1s-master-of-liveries-names-his-greatest-designs"
+    ]
+   ]
+  }
+ ],
+ "rounds": [
+  {
+   "round": 1,
+   "date": "2026-10-19",
+   "changed": "First round: five new cover layouts added to the SPINE TOP design picker (wrap placement so the art reaches both cover flanks), each shot on TLX in McLaren and Williams colours, front three-quarter and side. Before publishing, spearhead was reshaped from a raked wedge to a level-shafted arrow because it read like the tricolour on the flank."
+  }
+ ]
+}

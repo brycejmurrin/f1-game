@@ -265,10 +265,11 @@ const LiveryDesign = (function () {
         ctx.lineTo(x0 + 0.25 + w, 2); ctx.lineTo(x0 + 0.25, 2); ctx.closePath(); ctx.fill();
       });
     } else if (kind === "spearhead") {
-      // A single arrowhead from the nose that opens to the full panel, notched tail, keylined in the second colour.
-      const tail = 1.45, notch = 1.15;
-      ctx.beginPath(); ctx.moveTo(offset, 0.5); ctx.lineTo(offset + width, tail); ctx.lineTo(offset + width, 2);
-      ctx.lineTo(offset, 2 - (tail - notch)); ctx.lineTo(offset - width, 2); ctx.lineTo(offset - width, tail); ctx.closePath();
+      // One arrow along the car: a broad head at the front, a level shaft behind it, keylined in the second colour.
+      const shaft = width * 0.3, neck = 1.15;
+      ctx.beginPath(); ctx.moveTo(offset, 0.5); ctx.lineTo(offset + width, neck); ctx.lineTo(offset + shaft, neck);
+      ctx.lineTo(offset + shaft, 2); ctx.lineTo(offset - shaft, 2); ctx.lineTo(offset - shaft, neck);
+      ctx.lineTo(offset - width, neck); ctx.closePath();
       ctx.fill(); ctx.strokeStyle = secondary; ctx.lineWidth = 0.035 * weight; ctx.stroke();
     } else if (kind === "deckSplit") {
       // A level split, first colour on one deck and second on the other, with a double pinline on the seam.
