@@ -111,3 +111,45 @@ test("Daily Challenge exposes a delivery hook built from its canonical result", 
   assert.equal(rendered[1][2], "portrait");
   assert.match(delivered[0][1], /^apex26-daily-2026-10-17\.png$/);
 });
+
+// render(): the REAL ShareCardLayout + NetQr + ShareCard over a recording
+// OffscreenCanvas. No test called render, ensureFonts or the QR painter before.
+test("render waits on both card fonts, paints the layout with a real QR, encodes PNG and frees the canvas", async () => {
+  const fills = [], texts = [], fontsAsked = [], canvases = [];
+  const ctx2d = {
+    save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+    fillRect(...a) { fills.push(a); }, fillText(t) { texts.push(String(t)); },
+    measureText: (t) => ({ width: String(t).length * 10 }),
+    set fillStyle(_) {}, set strokeStyle(_) {}, set lineWidth(_) {}, set font(_) {}, set textAlign(_) {}, set textBaseline(_) {},
+  };
+  class OffscreenCanvas {
+    constructor(w, h) { this.width = w; this.height = h; canvases.push(this); }
+    getContext(kind) { assert.equal(kind, "2d"); return ctx2d; }
+    convertToBlob(o) { return Promise.resolve({ type: o.type, size: this.width * this.height }); }
+  }
+  const sb = vm.createContext({ Object, Array, String, Number, Math, Promise, setTimeout, clearTimeout, Uint8Array, TextEncoder, OffscreenCanvas });
+  for (const f of ["js/net/qr.js", "js/share/share-card-layout.js", "js/share/share-card.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
+  const card = vm.runInContext("ShareCard", sb);
+  const link = "https://example.test/#share=APXD1.x";
+  const model = { kind: "daily", trackName: "Spa-Francorchamps", title: "DAILY", hero: { label: "BEST", value: "1:21.345", medal: "GOLD", streak: 4 },
+    rows: [], link, displayName: "DRIVER 7" };
+  const doc = { fonts: { load: (f) => { fontsAsked.push(f); return Promise.resolve([]); } } };
+  const blob = await card.render(model, "portrait", { document: doc });
+  assert.deepEqual(fontsAsked, ["700 48px 'Barlow Condensed'", "600 24px 'Titillium Web'"], "both card fonts are awaited");
+  assert.equal(blob.type, "image/png");
+  assert.equal(blob.size, 1080 * 1350, "encoded at the portrait spec's size");
+  assert.deepEqual([canvases[0].width, canvases[0].height], [0, 0], "the canvas is released after encoding");
+  assert.ok(texts.includes("1:21.345"), "the hero time is painted: " + texts.join(" | "));
+  const qr = vm.runInContext("NetQr", sb).encode(link);
+  assert.ok(qr && qr.size >= 21, "the link encodes");
+  const dark = qr.modules.reduce((n, m) => n + (m ? 1 : 0), 0);
+  // One background square for the QR plus one fillRect per dark module, all one size.
+  const unit = fills.filter((r) => r[2] === r[3] && r[2] > 0);
+  const bySize = new Map();
+  for (const r of unit) bySize.set(r[2], (bySize.get(r[2]) || 0) + 1);
+  assert.ok([...bySize.values()].some((n) => n === dark), `a fillRect per dark QR module (${dark}) — sizes ${JSON.stringify([...bySize])}`);
+  // Fonts are awaited once per page: a second render does not reload them.
+  await card.render(model, "square", { document: doc });
+  assert.equal(fontsAsked.length, 2);
+});

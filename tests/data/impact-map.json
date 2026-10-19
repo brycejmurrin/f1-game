@@ -4905,6 +4905,7 @@
         "tests/specs/parts-physics.spec.js",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs"
       ],
       "*": [
@@ -8600,7 +8601,8 @@
     "js/net/qr.js": {
       "encode": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
-        "tests/unit/net-qr.test.mjs"
+        "tests/unit/net-qr.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "*": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
@@ -13602,6 +13604,9 @@
     "js/share/share-card-layout.js": {
       "layout": [
         "tests/unit/share-card-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/share-card.test.mjs"
       ]
     },
     "js/share/share-card.js": {
