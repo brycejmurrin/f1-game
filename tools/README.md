@@ -554,6 +554,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/debug-unit.mjs** | Wrapper: npm run debug:unit -- <file> loads vm-debug-preload so vm-loaded js/ is file://-debuggable. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
+| **ci/fleet-bus.mjs** | Merge lease (one holder, expiry, refusal) and typed fleet bus on the claude/fleet-bus branch, any host. |
 | **ci/fleet-tick.mjs** | One fleet-watch fast tick: board + sync + ship/Pages CI, diffed against the saved state; prints only what changed. |
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
