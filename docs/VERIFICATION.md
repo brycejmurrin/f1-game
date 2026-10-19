@@ -51,9 +51,10 @@ Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
 
 ## CI and Pages
 
-PR CI validates the PR head. Ship CI validates the deploy-branch push. Pages runs
-the release gate against its selected `before_sha` and publishes the staged
-artifact. A green PR is not proof that Pages is live; verify live `version.json`
+PR CI validates the PR head. A deploy-branch push starts the Pages release train;
+there is no separate ship-push CI run. Pages runs the reusable CI release gate
+against its selected `before_sha` and publishes the staged artifact.
+A green PR is not proof that Pages is live; verify live `version.json`
 and the apex SHA with `deploy-research` after Pages succeeds.
 
 For failure triage, use `ci-watch` and `ci-red-triage`; do not infer a verdict
