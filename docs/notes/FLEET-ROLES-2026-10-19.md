@@ -2,6 +2,8 @@
 
 Study by Fleet B (ORCH-B), 2026-10-19; Bryce approved "Land it as proposed" for the §4 taxonomy and §5 title/tag scheme (ORCH-B session, AskUserQuestion). Implementation: the follow-up roles PR.
 
+Status: taxonomy (§4) and title/tag scheme (§5) landed in `.claude/skills/agent-fleet/` by the roles-implementation PR (stacks on #3074); role 6 has the card `references/role-sync.md`, Merge Desk is dormant-unless-designated. `.claude/agents/merge-desk.md:3` (outside that lane) still carries the old wording.
+
 Read-only study, 2026-10-19 (~17:50Z). Sources: `.claude/skills/agent-fleet/**`, `.claude/rules/fleet-core.md`,
 AGENTS.md §Concurrent PRs, `.claude/agents/*.md`, `docs/notes/{MULTI-AGENT-ORCHESTRATION-2026-10-10,AGENT-RETRO-2026-10-17,FLEET-COST-2026-10-19,FLEET-BUS-2026-10-19,SHARED-BRANCH-COORDINATION,AGENT-WORK-TRACKING-2026-10-14}.md`,
 headers of `tools/ci/{fleet-bus,who-is-on-it,pr-board}.mjs`, `ci-watch` and `steward` skills, `origin/claude/fleet-bus` (all 58 lines),

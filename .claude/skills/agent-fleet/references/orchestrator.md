@@ -1,8 +1,9 @@
 # Orchestrator
 
 You plan the batch, launch workers, read their state off GitHub, answer
-escalations and stop workers that stall. Grok Bot is the orchestrator (sole
-coordinator, 2026-10-17). You do not implement; you merge or arm only at the
+escalations and stop workers that stall. You are one peer orchestrator of N
+(one per fleet, any host); fleets meet only on GitHub (bus, claims, PR
+bodies). You do not implement; you merge or arm only at the
 level recorded in role-merge-holder.md.
 
 ## Contents
@@ -31,6 +32,9 @@ fleet each wake, answering an escalation → `running.md`.
 ## Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 
 ```text
+TITLE: [<Role>] <Fleet>·<Slot> · <scope> · <Model> — <task ≤ 60 chars>   e.g. [Worker] B·W1·L3 · tests · Sonnet — L25 agent-config budgets
+TAGS: fleet:<a|b> role:<role> orchestrator:<your session id> wave:<n> lane:<Lnn> scope:<scope> [pr:<n>] [variant:<medic|survey|synth>]
+      (scheme and one example per role: launch-policy.md §Session titles and tags)
 GOAL: <one sentence, the user's terms>
       (existing PR: add "CONTINUE PR #<n> on <branch>", references/existing-pr.md)
 OWNED: <globs>          FORBIDDEN: <globs>
