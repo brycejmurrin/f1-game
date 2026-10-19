@@ -9168,9 +9168,6 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
-      "rendererSlot": [
-        "tests/unit/gfx-backend-canary.test.mjs"
-      ],
       "saveScreenshot": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"

@@ -73,6 +73,8 @@
     "// falls through to ZONE_COUNT — silently, which is how monza shipped a",
     "// table nobody read. Node-side via verify-track.cjs, so it is cheap.",
     "tests/unit/assert-audit.test.mjs",
+    "// #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).",
+    "tests/unit/assert-match-ratchet.test.mjs",
     "tests/unit/assets-pack.test.mjs",
     "tests/unit/audio-mix-improvements.test.mjs",
     "// Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.",
