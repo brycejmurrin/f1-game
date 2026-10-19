@@ -69,4 +69,4 @@ The merger gates and merges it like its own, and the DONE names the PR's host.
 |---|---|---|
 | Claude Code | `bash-guard.sh` | `github-mcp-guard.sh` |
 | Cursor | `.cursor/hooks/shell-guard.sh` → `bash-guard.sh` | `.cursor/hooks/mcp-guard.sh` → `github-mcp-guard.sh` |
-| Codex | `.codex/hooks.json` → `shell-guard.sh` → `bash-guard.sh` | **none yet**: a Codex MCP merge bypasses the gate; adding the matcher needs Bryce's typed yes (`.codex/` config) |
+| Codex | `.codex/hooks.json` → `shell-guard.sh` → `bash-guard.sh` | `.codex/hooks/mcp-guard.sh` → `github-mcp-guard.sh`; every ask becomes a deny (Codex cannot ask). Trust it once with `/hooks` (Bryce approved 2026-10-19) |
