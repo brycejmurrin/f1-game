@@ -13201,6 +13201,7 @@
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/fleet-owner.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
