@@ -509,8 +509,9 @@ const TLX = (function () {
         try {
           await renderer.init();
           checkInit();
-          // WebGL2 only: that is the phone's path, measured (paired census); WebGPU keeps three's own loop untouched.
-          if (renderer.backend && renderer.backend.isWebGLBackend) renderer.__apexPump = pumpAnimation(renderer);
+          // Both backends: three's Animation tick is backend-agnostic (inspector, info.reset, nodeFrame) and the
+          // WebGPU leg still counted 2.05 rAF callbacks per drawn frame (gpu-census 39262990733) with WebGL2 pumped.
+          renderer.__apexPump = pumpAnimation(renderer);
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
