@@ -349,21 +349,24 @@ const CarWheels = (function () {
       // barrel, closed on each face between the hub and the band, with 16 vent
       // slots near its rim and a foil lip at the OD — read through the spokes.
       if (!useCover && brakeStyle && brakeStyle.drum) {
-        const dR = Math.max(rimR * 0.80, rotorOuter + 0.012), dIn = rimR * (wheelStyle && wheelStyle.blownAxle ? 0.36 : 0.25);
-        const DRUM = [0.19, 0.19, 0.21], FOIL = [0.66, 0.62, 0.52], SLOT = [0.025, 0.025, 0.03];
+        // Round 2: a pale weave face drilled with three rings of cooling holes
+        // and a wide gold heat-foil band at the OD — the carbon disc behind an
+        // open rim is a dark plain ring, so the drum must read lighter and busy.
+        const dR = Math.max(rimR * 0.84, rotorOuter + 0.012), dIn = rimR * (wheelStyle && wheelStyle.blownAxle ? 0.46 : 0.25);
+        const DRUM = [0.34, 0.34, 0.37], FOIL = [0.80, 0.64, 0.26], SLOT = [0.02, 0.02, 0.025];
         for (let i = 0; i < SEG; i++) {
           const a0 = i / SEG * Math.PI * 2, a1 = (i + 1) / SEG * Math.PI * 2;
           const E = (rad, a, xx) => [xx, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-          addQuad(out, E(dR, a0, x0 + 0.004), E(dR, a1, x0 + 0.004), E(dR, a1, x1 - 0.004), E(dR, a0, x1 - 0.004), DRUM, SURFACES.carbon);
+          addQuad(out, E(dR, a0, x0 + 0.004), E(dR, a1, x0 + 0.004), E(dR, a1, x1 - 0.004), E(dR, a0, x1 - 0.004), FOIL, SURFACES.metal);
           for (const xf of [x0 + 0.004, x1 - 0.004]) {
-            addQuad(out, E(dIn, a0, xf), E(dIn, a1, xf), E(dR, a1, xf), E(dR, a0, xf), DRUM, SURFACES.carbon);
-            addQuad(out, E(dR * 0.95, a0, xf + (xf < cx ? -0.002 : 0.002)), E(dR * 0.95, a1, xf + (xf < cx ? -0.002 : 0.002)),
-                         E(dR, a1, xf + (xf < cx ? -0.002 : 0.002)), E(dR, a0, xf + (xf < cx ? -0.002 : 0.002)), FOIL, SURFACES.metal);
+            const xo = xf + (xf < cx ? -0.002 : 0.002);
+            addQuad(out, E(dIn, a0, xf), E(dIn, a1, xf), E(dR * 0.80, a1, xf), E(dR * 0.80, a0, xf), DRUM, SURFACES.carbon);
+            addQuad(out, E(dR * 0.80, a0, xo), E(dR * 0.80, a1, xo), E(dR, a1, xo), E(dR, a0, xo), FOIL, SURFACES.metal);
           }
         }
-        for (const xf of [x0 + 0.004 - 0.003, x1 - 0.004 + 0.003]) for (let k = 0; k < 16; k++) {
-          const a = k / 16 * Math.PI * 2 + 0.1, rr = dR * 0.80;
-          addBox(out, xf, cy + rr * Math.cos(a), cz + rr * Math.sin(a), 0.003, 0.016, 0.016, SLOT, SURFACES.carbon);
+        for (const xf of [x0 + 0.004 - 0.003, x1 - 0.004 + 0.003]) for (const [rf, n] of [[0.38, 12], [0.55, 18], [0.70, 24]]) for (let k = 0; k < n; k++) {
+          const a = k / n * Math.PI * 2 + rf, rr = dR * rf;
+          addBox(out, xf, cy + rr * Math.cos(a), cz + rr * Math.sin(a), 0.003, 0.011, 0.011, SLOT, SURFACES.carbon);
         }
       }
       const HUBCAP = RC;                   // raised boss: lighter than the dish floor
@@ -379,20 +382,27 @@ const CarWheels = (function () {
       const blownAxle = !useCover && !!(wheelStyle && wheelStyle.blownAxle);
       const spokeSplit = !!(wheelStyle && wheelStyle.spokeSplit);
       for (const ss of [[x0, -1], [x1, 1]]) {
-        const dir = ss[1], hubX = ss[0] + dir * hubLift, xc0 = hubX - dir * 0.014, hcR = rimR * (blownAxle ? 0.34 : hubFrac), ctr = [xc0, cy, cz];
+        const dir = ss[1], hubX = ss[0] + dir * hubLift, xc0 = hubX - dir * 0.014, hcR = rimR * (blownAxle ? 0.44 : hubFrac), ctr = [xc0, cy, cz];
         if (blownAxle) {
           // Bore radius 0.55 hcR (~43 mm) — the axle's open exit; a dark tube
           // 60 mm deep behind a machined lip, the ring carrying the spokes.
-          const boreR = hcR * 0.55, BORE = [0.035, 0.035, 0.04];
+          // Round 2: wider ring (0.44 rimR), bore 0.62 of it, the lip in the nut
+          // colour and six drive pegs round the ring so the hub reads at 3/4.
+          const boreR = hcR * 0.62, BORE = [0.02, 0.02, 0.025];
+          const lipC = (wheelStyle && wheelStyle.nut) || LIP;
           for (let i = 0; i < SEG; i++) {
             const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
             const P = (rad, a, x) => [x, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
             addQuad(out, P(boreR, a0, xc0), P(boreR, a1, xc0), P(hcR, a1, xc0), P(hcR, a0, xc0), HUBCAP, RS);
-            addQuad(out, P(boreR, a0, xc0 + dir * 0.012), P(boreR * 1.22, a0, xc0 + dir * 0.012),
-                         P(boreR * 1.22, a1, xc0 + dir * 0.012), P(boreR, a1, xc0 + dir * 0.012), LIP, RS);
+            addQuad(out, P(boreR, a0, xc0 + dir * 0.012), P(boreR * 1.18, a0, xc0 + dir * 0.012),
+                         P(boreR * 1.18, a1, xc0 + dir * 0.012), P(boreR, a1, xc0 + dir * 0.012), lipC, SURFACES.metal);
             addQuad(out, P(boreR, a0, xc0 + dir * 0.012), P(boreR, a1, xc0 + dir * 0.012),
                          P(boreR, a1, xc0 - dir * 0.06), P(boreR, a0, xc0 - dir * 0.06), BORE, SURFACES.carbon);
             addTri(out, [xc0 - dir * 0.06, cy, cz], P(boreR, a0, xc0 - dir * 0.06), P(boreR, a1, xc0 - dir * 0.06), BORE, SURFACES.carbon);
+          }
+          for (let k = 0; k < 6; k++) {
+            const a = k / 6 * Math.PI * 2 + 0.4, pr = (boreR * 1.18 + hcR) / 2;
+            addBox(out, xc0 + dir * 0.008, cy + pr * Math.cos(a), cz + pr * Math.sin(a), 0.016, 0.014, 0.014, lipC, SURFACES.metal);
           }
         } else for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;

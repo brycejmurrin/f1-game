@@ -634,7 +634,7 @@ const Parts = (function () {
     ["wheels", "mag_forged", "style_wheels_ysplit", "Y-Split Mag", "five Y-split spokes, ten tips at the lip (BBS 18-inch mag, 2022+)",
       { spokes: 5, spokeSplit: 1, dish: 1, tape: 0, deflector: 0, gunNut: 1, nut: [0.85, 0.72, 0.10] }],
     ["wheels", "open_spoke", "style_wheels_blownaxle", "Blown Axle", "hollow axle bore instead of a nut (Mercedes W11, 2020)",
-      { spokes: 6, blownAxle: 1, dish: 1, tape: 0, deflector: 0, gunNut: 0 }],
+      { spokes: 6, blownAxle: 1, dish: 1, tape: 0, deflector: 0, gunNut: 0, nut: [0.95, 0.42, 0.05] }],
     ["brakes", "carbon", "style_brakes_drum", "Cake-Tin Drum", "vented carbon drum round the disc (2017–21 front corners)",
       { drum: 1, coverOpen: 1, scoop: 1 }],
     ["cockpit", "faired_halo", "style_cockpit_halomirror", "Halo Mirrors", "mirrors hung off the halo crown (Ferrari SF71H, 2018)",
