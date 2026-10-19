@@ -157,3 +157,58 @@ test("caught backend failures and stale ready targets do not claim preparation s
 // mirrorPrepare and one frame spike per rival new to the 6 nearest, mid-race.
 // Here the REAL CarDraw warms a full field (warmCarAssets, as race entry does)
 // and the REAL MirrorPass draws through its drawMirrorCar: no build, ever.
+
+// The ranking hook runs after the first camera override, before mirrorBegin.
+// Its failure used to bypass restoration entirely.
+test("lamp setup failure restores every main-frame field before Begin, for visible and hidden views", async () => {
+  for (const preparing of [false, true]) {
+    const failure = new Error("ranking failed");
+    let broken = true;
+    const h = boot({ mode: "on", state: preparing ? "count" : "race", frameLights: {
+      viewLights() { if (broken) throw failure; return null; },
+    } });
+    Object.assign(h.frame, { view: { main: true }, cullDist: 513, mirrorLite: "main-lite",
+      mirrorFreezeInstanced: "main-freeze", lights: [1, 2, 3], tailStart: 17, tailCount: 2, mirrorLampCap: 23 });
+    const saved = { ...h.frame }, sky = h.frameSky.invViewProj;
+    const ready = preparing ? h.mp.prepareRace() : null;
+    if (preparing) { h.render(); h.render(); assert.equal(await ready, false); }
+    else assert.throws(() => h.render(), e => e === failure);
+    for (const [key, value] of Object.entries(saved)) assert.equal(h.frame[key], value, key);
+    assert.equal(h.frameSky.invViewProj, sky);
+    assert.equal(h.calls.filter(c => c[0] === "begin" || c[0] === "end").length, 0);
+    broken = false;
+    h.G.state = "race";
+    h.render();
+    assert.equal(h.calls.filter(c => c[0] === "begin").length, 1, "next valid frame recovers");
+    for (const [key, value] of Object.entries(saved)) assert.equal(h.frame[key], value, key);
+  }
+});
+
+test("draw plus End failures retain the existing cleanup exception precedence and still restore", () => {
+  const h = boot({ mode: "on", throwInWorld: true });
+  const failure = new Error("end wins");
+  h.gfx.mirrorEnd = () => { throw failure; };
+  const saved = { ...h.frame };
+  assert.throws(() => h.render(), e => e === failure);
+  for (const [key, value] of Object.entries(saved)) assert.equal(h.frame[key], value, key);
+  assert.equal(h.frameSky.invViewProj, h.mainInv);
+});
+
+test("failed tune-view creation never caches its source or reuses the previous view", () => {
+  const h = boot({ mode: "on" });
+  h.render(); // establish a cached view over the original tune
+  const before = h.calls.filter(c => c[0] === "begin").length;
+  h.frame.tune = 7; // Object.create requires an object or null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assert.throws(() => h.render(), e => e.name === "TypeError");
+    assert.equal(h.frame.tune, 7);
+    assert.equal(h.frame.viewProj, h.mainVP);
+    assert.equal(h.frameSky.invViewProj, h.mainInv);
+    assert.equal(h.calls.filter(c => c[0] === "begin").length, before,
+      "each retry attempts creation rather than accepting the old tune view");
+  }
+  h.frame.tune = { keyMul: 2 };
+  h.render();
+  assert.equal(h.calls.filter(c => c[0] === "begin").length, before + 1);
+  assert.equal(h.calls.filter(c => c[0] === "world").at(-1)[4].keyMul, 2);
+});

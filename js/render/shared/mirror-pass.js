@@ -669,38 +669,38 @@ const MirrorPass = (function () {
       sv.invViewProj = frame.invViewProj; sv.eye = frame.eye; sv.cullDist = frame.cullDist;
       sv.lite = frame.mirrorLite; sv.freezeInst = frame.mirrorFreezeInstanced;
       sv.sky = frameSky.invViewProj; sv.tune = frame.tune;
-      const cull = _q.cull;
-      frame.viewProj = _vp; frame.view = _view; frame.proj = _proj; frame.invProj = _invProj;
-      frame.invViewProj = _invVP; frame.eye = _eye;
-      frame.cullDist = sv.cullDist > 0 ? Math.min(sv.cullDist, cull) : cull;
-      frame.mirrorLite = _q.lite;
-      // Audit #8: on full, reuse last mirror instance pack every other drawn
-      // frame (cars still redraw). First drawn frame always refreshes.
-      // The cadence counts the current RUN of full passes, not every pass ever drawn: a lite/hidden/failed interval
-      // leaves b._mirMats from before it, and a global parity could freeze the first full pass onto that old pack.
-      // _run is zeroed here and only advanced after a pass that drew, so a throw or a refused begin also resets it.
-      const ie = _q.instEvery || 1;
-      const run = _run; _run = 0;
-      const freezeInst = !_q.lite && ie > 1 && run > 0 && (run % ie) !== 0;
-      frame.mirrorFreezeInstanced = freezeInst;
-      if (freezeInst) _instFreezeSkips++; else if (!_q.lite) _instRefresh++;
-      if (_mirTune === null || _mirTuneSrc !== sv.tune) {
-        _mirTuneSrc = sv.tune;
-        _mirTune = Object.assign(Object.create(sv.tune || null), MIRROR_TUNE);
-      }
-      frame.tune = _mirTune;
-      frameSky.invViewProj = _invVP;
-      // THE MIRROR'S OWN LAMPS (FrameLights.viewLights): frame.lights is culled
-      // for the forward camera, which ranks lamps behind it last — the very
-      // lamps this camera sees — so they flashed in and out as the car moved.
       sv.lights = frame.lights; sv.tailStart = frame.tailStart; sv.tailCount = frame.tailCount;
-      _aim[0] = _tgt[0] - _eye[0]; _aim[1] = 0; _aim[2] = _tgt[2] - _eye[2];
-      const vl = mirrorLights(frame);
-      if (vl) { frame.lights = vl.lights; frame.tailStart = vl.tailStart; frame.tailCount = vl.tailCount; }
       sv.lampCap = frame.mirrorLampCap;
-      frame.mirrorLampCap = _lampCap;   // tsl-lit's per-chunk cap for this pass (0 = uncapped)
+      const run = _run; _run = 0;
       let began = false;
       try {
+        const cull = _q.cull;
+        frame.viewProj = _vp; frame.view = _view; frame.proj = _proj; frame.invProj = _invProj;
+        frame.invViewProj = _invVP; frame.eye = _eye;
+        frame.cullDist = sv.cullDist > 0 ? Math.min(sv.cullDist, cull) : cull;
+        frame.mirrorLite = _q.lite;
+        // Audit #8: on full, reuse last mirror instance pack every other drawn
+        // frame (cars still redraw). First drawn frame always refreshes.
+        // The cadence counts the current RUN of full passes, not every pass ever drawn: a lite/hidden/failed interval
+        // leaves b._mirMats from before it, and a global parity could freeze the first full pass onto that old pack.
+        // _run is zeroed here and only advanced after a pass that drew, so a throw or a refused begin also resets it.
+        const ie = _q.instEvery || 1;
+        const freezeInst = !_q.lite && ie > 1 && run > 0 && (run % ie) !== 0;
+        frame.mirrorFreezeInstanced = freezeInst;
+        if (freezeInst) _instFreezeSkips++; else if (!_q.lite) _instRefresh++;
+        if (_mirTune === null || _mirTuneSrc !== sv.tune) {
+          _mirTune = Object.assign(Object.create(sv.tune || null), MIRROR_TUNE);
+          _mirTuneSrc = sv.tune;
+        }
+        frame.tune = _mirTune;
+        frameSky.invViewProj = _invVP;
+        // THE MIRROR'S OWN LAMPS (FrameLights.viewLights): frame.lights is culled
+        // for the forward camera, which ranks lamps behind it last — the very
+        // lamps this camera sees — so they flashed in and out as the car moved.
+        _aim[0] = _tgt[0] - _eye[0]; _aim[1] = 0; _aim[2] = _tgt[2] - _eye[2];
+        const vl = mirrorLights(frame);
+        if (vl) { frame.lights = vl.lights; frame.tailStart = vl.tailStart; frame.tailCount = vl.tailCount; }
+        frame.mirrorLampCap = _lampCap;   // tsl-lit's per-chunk cap for this pass (0 = uncapped)
         began = g.mirrorBegin(frame, w, h);
         if (began) {
           drawWorldMeshes(frame, night, wet, floodEmit, false);

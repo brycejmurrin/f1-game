@@ -7,7 +7,7 @@ import { absSrc } from "./abs-src.mjs";
 
 export const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null } = {}) {
+export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null, frameLights = null } = {}) {
   const writes = { cls: 0, prop: 0 };   // <body> class toggles and custom-property writes
   const stored = {};
   if (mode) stored.hudMirror = mode;
@@ -35,6 +35,7 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
       body: { classList: { contains: (c) => classes.has(c), toggle: (c, on) => { writes.cls++; return on ? classes.add(c) : classes.delete(c); } },
         style: { setProperty: (k, v) => { writes.prop++; props[k] = v; } } },
     },
+    ...(frameLights ? { FrameLights: frameLights } : {}),
     Input: { consumeMirror: () => { const v = mirrorPressed; mirrorPressed = false; return v; }, lookingBack: () => false },
     // autoTier/userTier only when a test names them: the older governor shape had tier() alone.
     PerfGov: Object.assign({ tier: () => tier }, autoTier === undefined ? {} : { autoTier: () => autoTier },
