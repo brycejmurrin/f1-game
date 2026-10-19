@@ -534,7 +534,7 @@
     "tools/ci/fleet-bus.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
-      "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha"
+      "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha; who: the one `<letter> <host:id> <sha7> <age>` line or exit 1 none"
     },
     "tools/ci/fleet-flags.mjs": {
       "action": "page-results",
@@ -664,7 +664,7 @@
     "tools/ci/pr-board.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
-      "preserve": "ARM/READY/SYNC blockers; CI unknown; open Plan and repository-wide cap"
+      "preserve": "ARM/READY/SYNC blockers; CI unknown; open Plan and repository-wide cap; fleet letter and slot per row"
     },
     "tools/ci/pr-body.mjs": {
       "action": "keep-native",
@@ -694,7 +694,7 @@
     "tools/ci/ready-gate.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan"
+      "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan; missing fleet-block field on a cursor/ branch"
     },
     "tools/ci/release-provenance.mjs": {
       "action": "keep-native",

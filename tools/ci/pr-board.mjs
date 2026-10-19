@@ -36,6 +36,10 @@
  * reporting): the body's `fleet-status: <state> | <reason> | <utc>` line,
  * or the newest PR comment starting `fleet-status:` or `@orchestrator
  * NEEDS-DECISION:` when it is newer than the body line; state, age, reason.
+ * FL and SLOT (JSON `fleetLetter`, `slot`; `fleet` stays the report above, which
+ * fleet-tick.mjs reads) are the body's ```fleet block: the letter from `fleet:`,
+ * a letter `orchestrator:` or the slot; the slot from `slot:` or a `<letter>·<slot>`
+ * token in the block's title (ready-gate.mjs fleetIdentity; no extra API call).
  *
  *   node tools/ci/pr-board.mjs              # the table
  *   node tools/ci/pr-board.mjs --json       # rows, for the skill
@@ -46,7 +50,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, DEPLOY } from "./github-api.mjs";
-import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
+import { guardsVerdict, planVerdict, fleetIdentity } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
 
@@ -202,8 +206,11 @@ export function evaluate(items, opts = {}) {
     const ci = ciState(it.runs);
     const gate = guardsVerdict(it.checkRuns || []);
     const failing = [...new Set((it.jobs || []).filter((j) => BAD_JOB.has(j.conclusion)).map((j) => j.name))].sort();
+    const who = fleetIdentity(pr.body);
     const row = {
       number: pr.number,
+      fleetLetter: who.letter || "-",
+      slot: who.slot || "-",
       title: pr.title || "",
       branch: pr.head?.ref || "",
       draft: pr.draft === true,
@@ -234,11 +241,11 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 /** The table plus a one-line footer. */
 export function render(result, { now = Date.now() } = {}) {
   const { rows } = result;
-  const head = ["PR", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "FLEET", "SUGGEST"];
+  const head = ["PR", "FL", "SLOT", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "FLEET", "SUGGEST"];
   const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
   const fleet = (f) => (!f ? "-" : clip(`${f.state} ${ageLabel(f.at, now)}${f.reason ? `: ${f.reason}` : ""}`, 40));
   const body = rows.map((r) => [
-    `#${r.number}`, clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
+    `#${r.number}`, r.fleetLetter || "-", clip(r.slot || "-", 12), clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
     clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), fleet(r.fleet), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
   ]);
@@ -334,7 +341,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
-the worker's fleet-status report (state, age, reason), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
+the worker's fleet-status report (state, age, reason), the fleet block's letter (FL)
+and slot (SLOT), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
 Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
 Exit 0 printed, 2 bad args, 3 API/token.`);
   const args = parseArgs(argv);

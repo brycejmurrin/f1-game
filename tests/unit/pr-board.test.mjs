@@ -155,8 +155,8 @@ test("render: header, one line per PR, a footer; empty board says so", () => {
   const r = evaluate([{ pr: prObj(1, { title: "x".repeat(80) }), runs: [], checkRuns: guard() }]);
   const out = render(r);
   const lines = out.split("\n");
-  assert.match(lines[0], /^PR\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+FLEET\s+SUGGEST$/);
-  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+-\s+WAIT$/);
+  assert.match(lines[0], /^PR\s+FL\s+SLOT\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+FLEET\s+SUGGEST$/);
+  assert.match(lines[1], /^#1\s+-\s+-\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+-\s+WAIT$/);
   assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\)$/);
   const empty = render(evaluate([]));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);
@@ -522,4 +522,21 @@ test("suggest: ci.yml pending on the head never yields ARM or READY, even with f
     }
   }
   assert.equal(evaluate([{ pr: prObj(1), runs: [{ id: 1, status: "completed", conclusion: null }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() }]).rows[0].suggest, "WAIT");
+});
+
+test("fleet letter and slot: JSON fleetLetter/slot and the FL/SLOT columns come from the body's fleet block", () => {
+  const block = (lines) => "## Goal\nx\n\n```fleet\n" + lines.join("\n") + "\n```\n";
+  const items = [
+    { pr: prObj(1, { body: block(["worker: claude:session_01W", "fleet: B", "slot: B·W3", "orchestrator: B"]) }), runs: [] },
+    { pr: prObj(2, { body: block(["orchestrator: A", "title: [Worker] A·W7 · tools · Opus"]) }), runs: [] },
+    { pr: prObj(3, { body: block(["orchestrator: claude:session_01ORCH"]) }), runs: [] },
+    { pr: prObj(4, { body: "no block\nfleet-status: ready | green | 2026-10-17T19:00:00Z" }), runs: [] },
+  ];
+  const r = evaluate(items);
+  assert.deepEqual(r.rows.map((x) => [x.fleetLetter, x.slot]), [["B", "B·W3"], ["A", "A·W7"], ["-", "-"], ["-", "-"]]);
+  assert.equal(r.rows[3].fleet.state, "ready", "`fleet` stays the fleet-status report fleet-tick.mjs reads");
+  const lines = render(r).split("\n");
+  assert.match(lines[1], /^#1\s+B\s+B·W3\s+/);
+  assert.match(lines[2], /^#2\s+A\s+A·W7\s+/);
+  assert.match(lines[3], /^#3\s+-\s+-\s+/);
 });
