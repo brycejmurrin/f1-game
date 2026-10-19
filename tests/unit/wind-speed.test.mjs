@@ -9,6 +9,7 @@
  *
  * Run: node --test tests/unit/wind-speed.test.mjs
  */
+import fakeAudio from "./fake-audio-vm.cjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -22,27 +23,6 @@ const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrac
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const SR = 44100;
 
-function param(v) {
-  const p = {
-    value: v, sets: 0, snaps: 0, lastMethod: null,
-    setTargetAtTime(x) { p.sets++; p.lastMethod = "target"; p.value = x; },
-    setValueAtTime(x) { p.sets++; p.snaps++; p.lastMethod = "value"; p.value = x; },
-    linearRampToValueAtTime(x) { p.sets++; p.lastMethod = "linear"; p.value = x; },
-    exponentialRampToValueAtTime(x) { p.sets++; p.lastMethod = "exp"; p.value = x; },
-    cancelScheduledValues() {},
-  };
-  return p;
-}
-const live = new Set();
-function node(kind) {
-  const self = {
-    kind, connect: (t) => t, disconnect() { live.delete(self); },
-    start() {}, stop() {}, type: "", loop: false, loopStart: 0, loopEnd: 0, buffer: null,
-    gain: param(1), frequency: param(440), detune: param(0), Q: param(1), playbackRate: param(1),
-  };
-  live.add(self);
-  return self;
-}
 function sampleBuf(seconds, sr) {
   const len = Math.floor(seconds * sr), d = new Float32Array(len);
   for (let i = 0; i < len; i++) d[i] = Math.sin(i * 0.05);
@@ -50,22 +30,6 @@ function sampleBuf(seconds, sr) {
 }
 
 function boot() {
-  live.clear();
-  const ctx = {
-    currentTime: 0, state: "running", sampleRate: SR, destination: node("dest"),
-    createGain: () => node("gain"), createBiquadFilter: () => node("biquad"),
-    createOscillator: () => node("osc"), createBufferSource: () => node("src"),
-    createAnalyser: () => node("analyser"),
-    createWaveShaper: () => Object.assign(node("shaper"), { curve: null }),
-    createConvolver: () => Object.assign(node("convolver"), { buffer: null }),
-    createStereoPanner: () => Object.assign(node("panner"), { pan: param(0) }),
-    createDynamicsCompressor: () => Object.assign(node("comp"),
-      { threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25) }),
-    createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
-    decodeAudioData: (ab, res) => res(sampleBuf(4, SR)),
-    createMediaElementSource: (el) => Object.assign(node("mediaSrc"), { mediaElement: el }),
-    resume: () => Promise.resolve(), close() {},
-  };
   const held = [];
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error,
@@ -73,9 +37,14 @@ function boot() {
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     document: { addEventListener() {}, hidden: false }, addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    AudioContext: function () { return ctx; },
     fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
   };
+  const { live } = fakeAudio.install(sb, null, {
+    recordParameters: true, cancelAndHoldAtTime: false,
+    decodeAudioData: (ab, res) => res(sampleBuf(4, SR)),
+  });
+  const ctx = new sb.AudioContext();
+  sb.AudioContext = function () { return ctx; };
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
@@ -83,7 +52,7 @@ function boot() {
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const ctxTime = (dt) => { ctx.currentTime += dt; };
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
-  return { GameAudio, release, ctx, ctxTime };
+  return { GameAudio, release, ctx, ctxTime, live };
 }
 
 async function sampleEngine() {
@@ -140,7 +109,7 @@ test("setEngine wind level and cutoff follow speed, gated on the grid", async ()
 });
 
 test("setEngine wind ramps via setTargetAtTime and creates no nodes per frame", async () => {
-  const { GameAudio: A, ctx, ctxTime } = await sampleEngine();
+  const { GameAudio: A, ctx, ctxTime, live } = await sampleEngine();
   let created = 0;
   for (const k of Object.keys(ctx)) {
     if (!k.startsWith("create") || typeof ctx[k] !== "function") continue;

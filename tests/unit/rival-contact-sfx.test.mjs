@@ -8,6 +8,7 @@
  * Run: node --test tests/unit/rival-contact-sfx.test.mjs
  *      npm run test:audio-unit
  */
+import fakeAudio from "./fake-audio-vm.cjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -23,58 +24,9 @@ const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/so
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const RIVALS_SRC = fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8");
 
-function param(v) {
-  const p = {
-    value: v, calls: [],
-    setTargetAtTime(x, t, tau) { p.calls.push(["target", x, t, tau]); p.value = x; },
-    setValueAtTime(x) { p.calls.push(["value", x]); p.value = x; },
-    linearRampToValueAtTime(x) { p.calls.push(["linear", x]); p.value = x; },
-    exponentialRampToValueAtTime(x) { p.value = x; },
-    cancelScheduledValues(t) { p.calls.push(["cancel", t]); },
-  };
-  return p;
-}
-
-function countingContext() {
+function boot(listener, engineSource = ENGINE_SRC) {
   const gains = [];
   const counts = { src: 0, gain: 0, panner: 0, biquad: 0 };
-  function node(kind) {
-    if (counts[kind] != null) counts[kind]++;
-    return {
-      kind, connect(t) { return t; }, disconnect() {}, start() {}, stop() {},
-      type: "", loop: false, buffer: null, onended: null,
-      gain: param(1), frequency: param(440), detune: param(0), Q: param(1),
-      playbackRate: param(1), pan: param(0),
-    };
-  }
-  const ctx = {
-    currentTime: 0, state: "running", sampleRate: 44100, destination: node("dest"),
-    createGain: () => { const n = node("gain"); gains.push(n); return n; }, createOscillator: () => node("osc"),
-    createBiquadFilter: () => node("biquad"), createBufferSource: () => node("src"),
-    createAnalyser: () => node("analyser"),
-    createWaveShaper: () => Object.assign(node("shaper"), { curve: null }),
-    createConvolver: () => Object.assign(node("convolver"), { buffer: null }),
-    createStereoPanner: () => Object.assign(node("panner"), { pan: param(0) }),
-    createDynamicsCompressor: () => Object.assign(node("comp"), {
-      threshold: param(-24), knee: param(30), ratio: param(12),
-      attack: param(0.003), release: param(0.25),
-    }),
-    createBuffer: (ch, len, sr) => ({
-      sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch,
-      getChannelData: () => new Float32Array(len),
-    }),
-    decodeAudioData: (ab, res) => res({
-      sampleRate: 44100, length: 44100 * 4, duration: 4, numberOfChannels: 1,
-      getChannelData: () => new Float32Array(44100 * 4),
-    }),
-    createMediaElementSource: () => node("media"),
-    resume: () => Promise.resolve(), close() {},
-  };
-  return { ctx, counts, gains };
-}
-
-function boot(listener) {
-  const { ctx, counts, gains } = countingContext();
   const held = [];
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Int32Array, Float64Array,
@@ -84,8 +36,6 @@ function boot(listener) {
     addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {}, navigator: {},
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    AudioContext: function () { return ctx; },
-    webkitAudioContext: function () { return ctx; },
     // Hold fetches so startEngine takes the synth path (no sample wait).
     fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000, GEARS: 8, GEAR_TOP: [0, 80, 120, 160, 200, 240, 280, 320, 360] },
@@ -95,11 +45,24 @@ function boot(listener) {
       },
     },
   };
+  fakeAudio.install(sb, null, {
+    recordParameters: true, cancelAndHoldAtTime: false,
+    onNode(node) {
+      if (counts[node.kind] != null) counts[node.kind]++;
+      if (node.kind === "gain") gains.push(node);
+    },
+    decodeAudioData: (ab, res) => res({
+      sampleRate: 44100, length: 44100 * 4, duration: 4, numberOfChannels: 1,
+      getChannelData: () => new Float32Array(44100 * 4),
+    }),
+  });
+  const ctx = new sb.AudioContext();
+  sb.AudioContext = sb.webkitAudioContext = function () { return ctx; };
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"),
     vctx, { filename: absSrc("js/core/mat4.js") });
-  vm.runInContext(ENGINE_SRC, vctx, { filename: absSrc("js/audio/engine.js") });
+  vm.runInContext(engineSource, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   GameAudio.init();
   GameAudio.setEnabled(true);
@@ -145,24 +108,52 @@ test("fieldContact: hard cap of pool size — excess denied", () => {
   assert.ok(GameAudio.fieldContactState().deniedCap >= 2);
 });
 
-test("fieldContact: gain falls with distance (far quieter than near)", () => {
+function assertContactRangeGating(engineSource = ENGINE_SRC) {
   const { GameAudio, ctx } = boot({
     external: true, x: 0, z: 0, fwdX: 0, fwdZ: 1, rightX: 1, rightZ: 0, valid: true,
-  });
-  // Peek at live gain via fieldContactState.live and by reading pool after fire.
-  // Near at REF (8 m) vs far (~80 m): both fire, near peak > far peak.
-  const peaks = [];
-  const spy = GameAudio.fieldContactState;
-  // Re-fire after cooldown with different distances; capture gain.value after env.
+  }, engineSource);
   assert.equal(GameAudio.fieldContact("bump", 1, 4, 0, 1), true);
-  // The fake env sets gain to peak then to floor — last set is the floor.
-  // Instead compare deniedGate for out-of-range.
   ctx.currentTime += 0.3;
   assert.equal(GameAudio.fieldContact("bump", 1, 0, 200, 2), false, "200 m past CONTACT_RANGE");
   assert.ok(GameAudio.fieldContactState().deniedGate >= 1);
   ctx.currentTime += 0.3;
   assert.equal(GameAudio.fieldContact("bump", 1, 0, 10, 3), true, "10 m still audible");
-  void spy; void peaks;
+}
+
+test("fieldContact: admits nearby contacts and rejects out-of-range contacts", () => {
+  assertContactRangeGating();
+});
+
+// Read newly scheduled positive peaks, not gain.value: the envelope ends at
+// the floor. Each distance gets a fresh pool and key so capacity/cooldown cannot
+// stand in for attenuation. No production distance formula is copied here.
+function assertDistanceAttenuation(engineSource = ENGINE_SRC) {
+  function peakAt(distance) {
+    const { GameAudio, gains } = boot(undefined, engineSource);
+    const before = gains.map(node => node.gain.calls.length);
+    assert.equal(GameAudio.fieldContact("bump", 1, 0, distance, 1), true);
+    const peaks = gains.flatMap((node, i) => node.gain.calls.slice(before[i])
+      .filter(call => call[0] === "linear" && call[1] > 0).map(call => call[1]));
+    assert.ok(peaks.length > 0, "contact schedules a positive envelope peak");
+    return Math.max(...peaks);
+  }
+  const near = peakAt(8), far = peakAt(80);
+  assert.ok(far > 0 && near > far * 2,
+    `near peak ${near} must be more than twice far peak ${far} across a tenfold distance`);
+}
+
+test("fieldContact: admitted distant contacts have quieter envelope peaks", () => {
+  assertDistanceAttenuation();
+});
+
+test("distance envelope oracle rejects attenuation-disabled source", () => {
+  // Mutate only the in-memory test subject; shipped source stays untouched.
+  const mutated = ENGINE_SRC.replace(
+    "const near = CONTACT_REF / (CONTACT_REF + 1.15 * Math.max(0, dist - CONTACT_REF));",
+    "const near = 1;");
+  assert.notEqual(mutated, ENGINE_SRC, "the attenuation mutation must apply");
+  assertContactRangeGating(mutated);
+  assert.throws(() => assertDistanceAttenuation(mutated), /near peak .*far peak/);
 });
 
 test("fieldContact: silent in countdown (setGridIdle) and when SFX off", () => {
