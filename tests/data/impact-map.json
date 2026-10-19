@@ -129,6 +129,12 @@
         "tests/unit/flyby-lighting.test.mjs"
       ]
     },
+    "js/agent/apex-gpu-capture.js": {
+      "*": [
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/wgx-labels.test.mjs"
+      ]
+    },
     "js/agent/apex-lobby.js": {
       "*": [
         "tests/unit/car-presentation-canary.test.mjs"
@@ -187,7 +193,8 @@
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/three-inspector.test.mjs",
-        "tests/unit/vstd-invariant.test.mjs"
+        "tests/unit/vstd-invariant.test.mjs",
+        "tests/unit/wgx-labels.test.mjs"
       ]
     },
     "js/audio/announcer-recorded.js": {
@@ -13282,6 +13289,17 @@
         "tests/unit/lamp-chunks.test.mjs"
       ]
     },
+    "js/render/webgpu/wgx-debug-labels.js": {
+      "_resetCounters": [
+        "tests/unit/wgx-labels.test.mjs"
+      ],
+      "install": [
+        "tests/unit/wgx-labels.test.mjs"
+      ],
+      "validationMessage": [
+        "tests/unit/wgx-labels.test.mjs"
+      ]
+    },
     "js/render/webgpu/wgx-post.js": {
       "init": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13384,7 +13402,8 @@
       "createTexture": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-labels.test.mjs"
       ],
       "createTextureArray": [
         "tests/unit/assets-pack.test.mjs",
@@ -13446,7 +13465,8 @@
       ],
       "finish": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-labels.test.mjs"
       ],
       "freeInstancedBatch": [
         "tests/unit/gfx-backend-canary.test.mjs"

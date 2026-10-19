@@ -145,6 +145,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts
   "js/workers/bitmap-decode-client.js": ["__APEX_BUILD"], // stamps the bitmap decode Worker's URL like build-client
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
+  "js/agent/apex-gpu-capture.js": ["SPECTOR"], // vendored Spector.js bundle (vendor/gpu-capture); window["SPECTOR"] after enable (#2964)
   "js/render/three/tlx.js": ["__apexReportError", "XRWebGLLayer"], // shell error card; WebXR immersive layer (browser API)
   "js/render/glx/glx.js": ["__apexReportError"], // shell error card: the third visible context loss says so, like TLX
   "js/xr/xr-session.js": ["XRRigidTransform"], // WebXR recenter offset (browser API)

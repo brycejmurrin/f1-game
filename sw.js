@@ -296,6 +296,7 @@ async function precacheAssetLists() {
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
     "js/render/webgpu/wgx-roadlut.js",
+    "js/render/webgpu/wgx-debug-labels.js",
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-viewport.js",
@@ -575,7 +576,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex.js"];
+  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);

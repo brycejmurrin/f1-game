@@ -1290,6 +1290,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // guard the two tools a session reaches for at push time.
   // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
   "tests/unit/wgx-free-retire.test.mjs",
+  // WGX debug labels + pass debug groups; validation-shaped messages name the label; Spector/webgl-lint vendor pin (#2964). VM, < 0.2 s.
+  "tests/unit/wgx-labels.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
   // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
   // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.
