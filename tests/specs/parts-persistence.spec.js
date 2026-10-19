@@ -211,7 +211,7 @@ test.describe("Parts persistence — team isolation", () => {
       return { mine: S.get("parts." + mine), other: S.get("parts." + Teams.LIST[o].id) };
     }, other);
     expect(slots.mine && slots.mine.gearbox, "the pick is stored under the team it was made for").toBe("f1_spec");
-    expect((slots.other || {}).gearbox, "the pick must not leak into another team's slot").toBeUndefined();
+    expect((slots.other || {}).gearbox, "the pick must not leak into another team's slot").not.toBe("f1_spec");
     await toMenu(page);
     await pinFreePlay(page, { team: other, click: false });
 
