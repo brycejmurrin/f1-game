@@ -832,6 +832,11 @@
       ]
     },
     {
+      "path": "tools/ci/github-api.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/ci/github-token.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -1019,15 +1024,6 @@
     },
     {
       "path": "tools/ci/queue-depth.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/ready-full-cap.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",

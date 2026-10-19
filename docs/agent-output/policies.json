@@ -541,6 +541,11 @@
       "presentation": "native",
       "preserve": "Regex/suite strings are consumed by shell; unknown argument exit 2"
     },
+    "tools/ci/github-api.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Import-only GET helper; no-token and HTTP error text unchanged"
+    },
     "tools/ci/github-token.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -665,11 +670,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Informational gauge versus historical hold policy; timeout 124 and API 3"
-    },
-    "tools/ci/ready-full-cap.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Cap/exclude flags and no-token/API failure; do not hide row identities"
     },
     "tools/ci/ready-gate.mjs": {
       "action": "keep-native",
