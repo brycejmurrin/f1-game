@@ -102,3 +102,30 @@ NEW += [
  "a broken haptic cue passes",
  "stub navigator.vibrate and assert one call while understeering with haptics on","S","input",R,None,"player",[],None),
 ]
+
+# ---- platform part 2/2 (REPORT platform continuation, final, comment c6263765590)
+# status: FINAL for platform: the 9 specs part 1 read but did not run (or ran red at load) re-run alone, one at a time,
+#   loadavg < 3 at each start (0.7-2.8), SwiftShader, no /dev/dri. 4 pass (dev-tools 36 s, new-hooks 1453 s, ui-redesign
+#   246 s, agent-view 52 s), 5 fail (smoke, dev-tools-dom, ui-resize, ui-button-touch, ui-scale). ui-audit not re-run (78
+#   tests, est. > 1 h); part 1's result stands. All 22 specs have now run at least once.
+# reclassified: PL-01 smoke (3/10 timeouts again solo at loadavg 0.72; maxStepMs 12324 on the race build, a SW activation
+#   mid-test) and PL-02 dev-tools-dom (hud(false) again solo, a 60 s screenshot step) are environment, reproducible: the
+#   SwiftShader cost, not load. These gates give no local verdict on this container; CI llvmpipe (remote-group.mjs) does.
+# confirmed by run (Node VM __apex, helpers/platform/audit-probe.sh on branch cursor/test-review-helpers-platform, no PR):
+#   PL-05 jump(0.01,25,0) lands s=53.9 m, 90 reverse frames end at s=12.7 m, lap 0 -> 0 (the line is never crossed);
+#   PL-06 player and rival both 50 m/s at start, closing speed ~0, no contact.
+# debugger: not done for any of the 22 files (wall time went to spec runs); hit/not-hit stays unverified.
+NEW += [
+("PL-27","platform","tests/specs/ui-scale.spec.js","","gap","med","med",
+ "the only deterministic assertion failure in the batch: `portrait › every main screen fits at 200%` reports the title screen's #overlay scrolling sideways by 6 px (expected <= 1, received 6; 12.9 s, no timeout), reproduced on a second solo run; root cause not found, and no other spec checks title/overlay horizontal overflow",
+ "a player with a large UI scale may see a horizontally scrollable title screen; product defect versus test viewport is undecided",
+ "find the overflowing child (js-debugger on the title DOM at portrait @200%), then fix the product or the fixture; add an overflow check outside ui-scale","S","ui",R,"reproduced by the reviewer alone (2 runs)","player",[],None),
+("PL-28","platform","tests/specs/ui-resize.spec.js","","flaky","med","high",
+ "the file's first test (`resizing into a size matches loading fresh at that size`) waits 15 s in waitForFunction right after a cold navigate, while cold boot logs 27 s; it failed on both solo runs (157 s, 147 s); the other 6 pass",
+ "a deterministic false red on a cold server that hides whether the resize path works",
+ "give the first wait a boot-sized budget or warm the page in beforeAll","S","ui",R,"reproduced by the reviewer alone (2/2 fail)","pipeline",[],None),
+("PL-29","platform","tests/specs/ui-button-touch.spec.js","","slow","high","high",
+ "45 tests with 1 worker take 1 h 1 m locally; 17 fail (15 at the 120 s test timeout: lighting tuner pause lifecycle and free camera, pause menu calibrate, touch dock REPOSITION; 2 waitForFunction 5 s), with single click/evaluate steps at 20-27 s and no assertion message among them",
+ "the file is not a usable local unit and its red count measures SwiftShader, not the touch UI",
+ "split by subject and run the parts on CI shards","M","touch-ui",R,"measured by the reviewer (one 1 h run)","pipeline",[],None),
+]

@@ -34,4 +34,5 @@
  "6261492542": ["car-2.part-2of2", "final (continuation; covers the items part 1 left open)"],
  "6261683714": ["physics-2.part-3bof3", "partial 3b/3 (continuation physics-2b)"],
  "6261855739": ["race-2.part-3of3", "final (continuation race-2b: the 6 not-run specs of parts 1 and 2)"],
- "6262452032": ["physics-2.part-3cof3", "final (continuation physics-2c: the physics-2b leftovers)"]}
+ "6262452032": ["physics-2.part-3cof3", "final (continuation physics-2c: the physics-2b leftovers)"],
+ "6263765590": ["platform.part-2of2", "final (continuation; 9 specs re-run alone, ui-audit not re-run, no debugger pass)"]}
