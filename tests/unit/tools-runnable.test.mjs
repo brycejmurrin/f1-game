@@ -21,6 +21,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { syncBuiltinESMExports } from "node:module";
 import { makeClosedDbFaults, makeStorageFaults } from "../helpers/storage-faults.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -669,10 +670,58 @@ test("WGX validator distinguishes frame counts from circuit names before launchi
   }
 });
 
-// The wgx-shot gallery test that stood here (and the wgx-validate --static
-// smoke case above) covered tools that left for tools/gfx/ in the
-// 2026-09-03 spike-out. They are not shipped tools any more, so this shipped
-// guard has nothing to say about them; they travel with the backend.
+test("WGX gallery owns only its selected output, including failed captures", async (t) => {
+  const { runWgxGallery, WGX_GALLERY_SHOTS } = await import("../../tools/gfx/wgx-shot.mjs");
+  const tmpRoot = path.join(ROOT, "artifacts", "tmp");
+  fs.mkdirSync(tmpRoot, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(tmpRoot, "wgx-gallery-unit-"));
+  const writeFile = fs.writeFileSync;
+  const writes = [];
+  // Block unexpected publication before it can alter retained evidence. Named
+  // builtin imports must see the same guard as the default fs export.
+  t.mock.method(fs, "writeFileSync", (file, ...args) => {
+    writes.push(path.resolve(file));
+    if (!path.resolve(file).startsWith(dir + path.sep)) return;
+    return writeFile(file, ...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    for (const mode of ["success", "failed", "throw"]) {
+      const outRoot = path.join(dir, mode);
+      const calls = [];
+      const result = await runWgxGallery({ lite: true, outRoot }, {
+        capture: async (options) => {
+          calls.push(options);
+          if (mode === "throw") throw new Error("capture unavailable");
+          fs.writeFileSync(path.join(options.outDir, "state.json"), JSON.stringify({
+            backend: "webgpu", gpuErrors: 0, coveragePct: 84,
+          }));
+          return { ok: mode === "success" };
+        },
+      });
+      assert.deepEqual(calls.map(({ track, cam, lite }) => ({ track, cam, lite })),
+        WGX_GALLERY_SHOTS.map(({ track, cam }) => ({ track, cam, lite: true })));
+      assert.equal(result.ok, mode === "success");
+      assert.equal(result.failures, mode === "success" ? 0 : 7);
+      assert.equal(result.outRoot, outRoot);
+      const manifest = JSON.parse(fs.readFileSync(path.join(outRoot, "manifest.json"), "utf8"));
+      assert.deepEqual(manifest, result.manifest);
+      assert.equal(manifest.shots.length, 7);
+      assert.equal(manifest.backend, "webgpu");
+      assert.equal(manifest.lite, true);
+      assert.ok(manifest.shots.every(shot => !Object.hasOwn(shot, "canvas")));
+      assert.ok(manifest.shots.every(shot => shot.exitCode === (mode === "success" ? 0 : 1)));
+      if (mode === "throw") assert.ok(manifest.shots.every(shot => shot.error === "capture unavailable"));
+    }
+    assert.ok(writes.length > 0);
+    assert.deepEqual(writes.filter(file => !file.startsWith(dir + path.sep)), [],
+      "gallery must never overwrite retained docs or another output directory");
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("the survey forwarders are gone — layout-audit --survey is the entry point", () => {
   // Two stacked forwarders (ui-mcp-survey.mjs -> ui-survey.mjs -> layout-audit

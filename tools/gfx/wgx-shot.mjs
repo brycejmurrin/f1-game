@@ -49,7 +49,7 @@ function printHelp() {
 `);
 }
 
-export async function runWgxGallery({ lite = false, outRoot } = {}) {
+export async function runWgxGallery({ lite = false, outRoot } = {}, { capture = runWgxShot } = {}) {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   const dest = outRoot || join("artifacts", "tmp", "wgx-gallery", stamp);
   mkdirSync(dest, { recursive: true });
@@ -64,7 +64,7 @@ export async function runWgxGallery({ lite = false, outRoot } = {}) {
     let shotErr = null;
     let shotOk = false;
     try {
-      const result = await runWgxShot({ track: spec.track, lite, cam: spec.cam, outDir: shotDir });
+      const result = await capture({ track: spec.track, lite, cam: spec.cam, outDir: shotDir });
       shotOk = !!(result && result.ok);
     } catch (e) {
       shotErr = String((e && e.message) || e).slice(0, 300);
@@ -99,14 +99,7 @@ export async function runWgxGallery({ lite = false, outRoot } = {}) {
   };
   writeFileSync(join(dest, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 
-  const refPath = join(ROOT, "docs/research/wgx-gallery-manifest.json");
-  writeFileSync(refPath, JSON.stringify({
-    ...manifest,
-    note: "PNG output is gitignored under artifacts/; re-run node tools/gfx/wgx-shot.mjs --gallery to regenerate.",
-  }, null, 2) + "\n");
-
   console.log("wrote", join(dest, "manifest.json"));
-  console.log("updated", refPath);
   return { ok: failures === 0, failures, outRoot: dest, manifest };
 }
 
