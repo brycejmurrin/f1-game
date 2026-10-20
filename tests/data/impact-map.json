@@ -2252,7 +2252,8 @@
       ],
       "drawCockpitRig": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "drawMirrorCar": [
         "tests/unit/car-presentation-canary.test.mjs"
@@ -6451,7 +6452,8 @@
         "tests/unit/results-cam.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/session-transcript.test.mjs",
-        "tests/unit/source-integrity.test.mjs"
+        "tests/unit/source-integrity.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "renderLightingPrep": [
         "tests/unit/render-lighting-prep.test.mjs"
@@ -8220,6 +8222,7 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/weather-blend.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
@@ -12778,6 +12781,7 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
       ]
@@ -13084,8 +13088,12 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
+      "_captureRec": [
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
       "_coAppend": [
-        "tests/unit/tlx-hunt4.test.mjs"
+        "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "_coDrop": [
         "tests/unit/render-final-contracts.test.mjs",
@@ -13120,6 +13128,9 @@
       "_mirWarmSwap": [
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "_mirWarmUnswap": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "_mul4Col": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13316,6 +13327,7 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
@@ -13381,12 +13393,17 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "startMirrorWarm": [
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "startProgramWarm": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "startRigWarm": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "sweepGeoMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13401,10 +13418,17 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
+      "warmDraws": [
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
       "warmFxPrograms": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4.test.mjs"
+        "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "warmMirrorStage": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "wrapStream": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13431,7 +13455,8 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13458,7 +13483,8 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "setLampBake": [
         "tests/unit/tlx-hunt3.test.mjs"
