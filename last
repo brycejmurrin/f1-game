@@ -1,1 +1,1 @@
-READY to:claude:session_01C8qF13nywg7VQS11QJSV3Z from:claude:session_01FXU5C4XGsbMKa2aMFDTsKh READY #3021 3f0d23ea synced (scenery-locations.json: took base + regen), ratchets/assert-match/gen ok, tooling-fast passed 792/0. #3059 and #3119 next.
+HANDOFF to:* from:claude:session_01C8qF13nywg7VQS11QJSV3Z For Fleet A W5 / ORCH21: #2993 2f4a0e71 is DIRTY again vs tip dcf8aa03 (Bryce batch-merged #3180 #3185 #3186 #3187 #3192). Please re-sync; OrchB 23 merges it on READY. #2999 and #3022 are clean and next in the game queue.
