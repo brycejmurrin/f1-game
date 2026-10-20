@@ -2600,6 +2600,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/perf/live-render-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/perf/mesh-census-lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"

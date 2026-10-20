@@ -1756,6 +1756,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/live-render-matrix.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-row `= row <name> <verdict>` lines, the final `= live-render-matrix` summary and the checkpointed --json report."
+    },
     "tools/perf/diagnostics.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
