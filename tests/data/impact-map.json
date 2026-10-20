@@ -6927,9 +6927,53 @@
       ]
     },
     "js/garage/scene-equipment.js": {
+      "extinguisher": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "floorFan": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "hoseReel": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "noseTrolley": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "radioRack": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "rearJack": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "rollingStool": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "serviceRig": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "starterCart": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "toolChest": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "tyreTrolley": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wheelDolly": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wheelGun": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wheelGunDock": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wingRack": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "*": [
         "tests/unit/garage-looks.test.mjs",
-        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -7058,6 +7102,9 @@
         "tests/unit/garage-looks.test.mjs"
       ],
       "spot": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "toolChest": [
         "tests/unit/garage-mesh.test.mjs"
       ],
       "uploadLive": [
