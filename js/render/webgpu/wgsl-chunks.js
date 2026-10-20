@@ -985,6 +985,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // second dpdx/dpdy pair of topNgeo across divergent later uses.
   let saaDxGeo = ccDx;
   let saaDyGeo = ccDy;
+  // Car finish anti-alias input (finishes 60/63/85, glsl-lit.js): 1 on a hard panel edge.
+  let fnCrease = smoothstep(0.02, 0.20, dot(ccDx, ccDx) + dot(ccDy, ccDy));
   // Paint peel ran for EVERY fragment — road, terrain, buildings — feeding a
   // mix whose factor (carPaint, D.mat1.w) is 0 on all of them. The gate lives
   // INSIDE paintPeelN as a uniform early return (see its header) so these
@@ -1023,8 +1025,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let wetness   = F.params1.z;
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
-  let surfaceId = i32(vMatId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 40;
+  // FINISHES 60/63/85 (CarMaterials.FINISH_RESERVED): ride an existing base branch, tinted after the metal block
+  // (js/render/glx/shaders/glsl-lit.js). The rows test surfaceId (surface-id-parity).
+  var surfaceId = i32(vMatId + 0.5);
+  let finishId = surfaceId;
+  if (surfaceId == 85) { surfaceId = 28; }
+  if (surfaceId == 63) { surfaceId = 29; }
+  if (surfaceId == 60) { surfaceId = 39; }
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 90;
   // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (see js/render/glx/shaders/glsl-lit.js); the grain / saturation / rim
   // are layered in the albedo and env blocks (CarMaterialShade.FLAKE / .CANDY).
   let flakeSurface = surfaceId == 34;
@@ -1795,6 +1803,30 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
   if (goldSurface) { color = color * vec3<f32>(1.0, 0.78, 0.27); }   // GOLD PLATE: lit terms take the fixed gold hue
   if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
+  // FINISH TINTS 60/63/85 (mirrors glsl-lit.js: geometric-normal angles, crease mask).
+  if (finishId >= 60 && finishId <= 85) {
+    let pvG = 1.0 - clamp(dot(Ngeo, V), 0.0, 1.0);
+    let pvL = dot(color, vec3<f32>(0.299, 0.587, 0.114));
+    let pvA = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.05);
+    let pvLit = pvL / pvA;
+    let pvEdge = 1.0 - fnCrease;
+    if (finishId == 60) {
+      let film0 = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + pvG * 0.9 + in.objPos.y * 1.3 + in.objPos.z * 0.32 + in.objPos.x * 0.4));
+      let film = mix(vec3<f32>(dot(film0, vec3<f32>(0.3333))), film0, vec3<f32>(0.75));
+      color = mix(color, color * film * 2.4, vec3<f32>((0.35 + 0.65 * smoothstep(0.05, 0.6, pvG)) * mix(0.35, 1.0, pvEdge)));
+    } else if (finishId == 63) {
+      let t = clamp(0.5 - in.objPos.z * 0.30 + pvG * 0.10, 0.0, 1.0);
+      var ox = vec3<f32>(0.85, 0.86, 0.88);
+      ox = mix(ox, vec3<f32>(0.95, 0.82, 0.52), vec3<f32>(smoothstep(0.10, 0.25, t)));
+      ox = mix(ox, vec3<f32>(0.92, 0.66, 0.30), vec3<f32>(smoothstep(0.25, 0.40, t)));
+      ox = mix(ox, vec3<f32>(0.72, 0.42, 0.40), vec3<f32>(smoothstep(0.40, 0.55, t)));
+      ox = mix(ox, vec3<f32>(0.50, 0.30, 0.75), vec3<f32>(smoothstep(0.55, 0.70, t)));
+      ox = mix(ox, vec3<f32>(0.25, 0.45, 0.95), vec3<f32>(smoothstep(0.70, 0.88, t)));
+      color = vec3<f32>(min(pvLit, 2.5)) * ox * 0.85;
+    } else if (finishId == 85) {   // ultrablack: ~1% reflectance, only a faint hint of shape survives; livery ignored
+      color = vec3<f32>(0.010, 0.010, 0.011) * (1.0 + 0.6 * min(pvLit, 1.6)) + F.ambSky.xyz * (0.010 * pvG);
+    }
+  }
 
   // Sky rim / fresnel (GLX js/render/glx/shaders/glsl-lit.js): grazing-angle atmospheric
   // brightening tinted by the horizon. SKY RIM GLOW = params9.w (def 1.0).

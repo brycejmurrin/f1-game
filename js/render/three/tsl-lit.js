@@ -1382,8 +1382,17 @@
         const Ngeo = vec3(N).toVar();
 
         // car surface ids 20-40 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
+        // FINISHES 60/63/85 (CarMaterials.FINISH_RESERVED): ride an existing base branch, tinted after the metal block
+        // (js/render/glx/shaders/glsl-lit.js). The rows test surfaceId (surface-id-parity).
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(40.0)).toVar();
+        const finishId = surfaceId.toVar();
+        If(surfaceId.equal(85.0), () => { surfaceId.assign(28.0); });
+        If(surfaceId.equal(63.0), () => { surfaceId.assign(29.0); });
+        If(surfaceId.equal(60.0), () => { surfaceId.assign(39.0); });
+        // Finish anti-alias inputs in uniform control flow (glsl-lit.js): metres per pixel, and 1 on a hard panel edge.
+        const fnDx = dFdx(Ngeo).toVar(), fnDy = dFdy(Ngeo).toVar();
+        const fnCrease = smoothstep(0.02, 0.20, dot(fnDx, fnDx).add(dot(fnDy, fnDy))).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(90.0)).toVar();
         // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (js/render/glx/shaders/glsl-lit.js); grain / saturation / rim below.
         const flakeSurface = surfaceId.equal(34.0).toVar();
         const candySurface = surfaceId.equal(35.0).toVar();
@@ -2172,6 +2181,32 @@
         If(goldSurface, () => { color.mulAssign(vec3(1.0, 0.78, 0.27)); });   // GOLD PLATE: fixed gold hue
         If(chamSurface, () => {
           color.mulAssign(mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip.mul(0.90)));
+        });
+        // FINISH TINTS 60/63/85 (mirrors glsl-lit.js: geometric-normal angles, crease mask).
+        If(finishId.greaterThanEqual(60.0).and(finishId.lessThanEqual(85.0)), () => {
+          // Snapshot once with toVar(): a bare node is inlined and cached by TSL, so later branches read a stale (zero) value
+          // (pearlwhite / silverfade / alubare rendered black on TLX while GLX was right, 2026-10-19).
+          const pvG = clamp(dot(Ngeo, V), 0.0, 1.0).oneMinus().toVar();
+          const pvL = dot(color, vec3(0.299, 0.587, 0.114)).toVar();
+          const pvA = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05).toVar();
+          const pvLit = pvL.div(pvA).toVar();
+          const pvEdge = fnCrease.oneMinus().toVar();
+          If(finishId.equal(60.0), () => {
+            const film0 = (cos(vec3(0.0, 0.33, 0.67).add(pvG.mul(0.9)).add(objP.y.mul(1.3)).add(objP.z.mul(0.32)).add(objP.x.mul(0.4)).mul(6.2831853)).mul(0.5).add(0.5)).toVar();
+            const film = (mix(vec3(dot(film0, vec3(0.3333))), film0, 0.75)).toVar();
+            color.assign(mix(color, color.mul(film).mul(2.4), smoothstep(0.05, 0.6, pvG).mul(0.65).add(0.35).mul(mix(float(0.35), float(1.0), pvEdge))));
+          }).ElseIf(finishId.equal(63.0), () => {
+            const t = (clamp(float(0.5).sub(objP.z.mul(0.30)).add(pvG.mul(0.10)), 0.0, 1.0)).toVar();
+            const ox = vec3(0.85, 0.86, 0.88).toVar();
+            ox.assign(mix(ox, vec3(0.95, 0.82, 0.52), smoothstep(0.10, 0.25, t)));
+            ox.assign(mix(ox, vec3(0.92, 0.66, 0.30), smoothstep(0.25, 0.40, t)));
+            ox.assign(mix(ox, vec3(0.72, 0.42, 0.40), smoothstep(0.40, 0.55, t)));
+            ox.assign(mix(ox, vec3(0.50, 0.30, 0.75), smoothstep(0.55, 0.70, t)));
+            ox.assign(mix(ox, vec3(0.25, 0.45, 0.95), smoothstep(0.70, 0.88, t)));
+            color.assign(vec3(min(pvLit, 2.5)).mul(ox).mul(0.85));
+          }).ElseIf(finishId.equal(85.0), () => {   // ultrablack: ~1% reflectance, a faint hint of shape; livery ignored
+            color.assign(vec3(0.010, 0.010, 0.011).mul(min(pvLit, 1.6).mul(0.6).add(1.0)).add(vec3(U.ambSky).mul(pvG.mul(0.010))));
+          });
         });
 
         // sky rim fresnel (js/render/glx/shaders/glsl-lit.js)

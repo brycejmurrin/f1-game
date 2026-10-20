@@ -974,8 +974,19 @@ void main() {
   vec3 Ngeo = N;
   // Car3D surface ids occupy 20..40, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
+  // FINISHES 60/63/85 (CarMaterials.FINISH_RESERVED): each rides an existing base branch for its lighting and adds
+  // one tint after the metal block (finishId keeps the original id). The rows branch as "surfaceId == N" so
+  // surface-id-parity sees them.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 40;
+  int finishId = surfaceId;
+  if (surfaceId == 85) surfaceId = 28;
+  if (surfaceId == 63) surfaceId = 29;
+  if (surfaceId == 60) surfaceId = 39;
+  // Finish anti-alias input, taken here in uniform control flow (the tint block is a branch): fnCrease = 1 on a hard
+  // panel edge, where an angle-driven effect would draw an outline round every panel.
+  vec3 fnDx = dFdx(Ngeo), fnDy = dFdy(Ngeo);
+  float fnCrease = smoothstep(0.02, 0.20, dot(fnDx, fnDx) + dot(fnDy, fnDy));
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 90;
   // 34 = METALLIC FLAKE and 35 = CANDY (FINISH_SURFACE.flake / .candy): both are PAINT responses (gloss
   // clearcoat, env mirror, sparkle), so paintSurface includes them; the flake grain and the candy
   // saturation / rim / tinted lacquer are layered on below (CarMaterialShade.FLAKE / .CANDY).
@@ -1925,6 +1936,32 @@ void main() {
   if (tintedSurface) color *= albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
   if (goldSurface) color *= vec3(1.0, 0.78, 0.27);   // GOLD PLATE: the white lit terms take the fixed gold hue
   if (chamSurface) color *= mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip * 0.90);
+  // FINISH TINTS 60/63/85 (see the remap at surfaceId; tuned against reference photos in the design preview, round 4).
+  // Angle terms read the GEOMETRIC normal: the shading N carries orange peel, which broke angle-driven bands into jagged
+  // contours. Angle effects are withheld on hard panel edges (fnCrease).
+  if (finishId >= 60 && finishId <= 85) {
+    float pvG = 1.0 - clamp(dot(Ngeo, V), 0.0, 1.0);
+    float pvL = dot(color, vec3(0.299, 0.587, 0.114));
+    float pvA = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05);
+    float pvLit = pvL / pvA;   // the lighting with the livery divided out
+    float pvEdge = 1.0 - fnCrease;
+    if (finishId == 60) {   // oilslick: thin-film bands on dark anodised metal, few per panel, stronger toward grazing
+      vec3 film = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + pvG * 0.9 + vObjPos.y * 1.3 + vObjPos.z * 0.32 + vObjPos.x * 0.4));
+      film = mix(vec3(dot(film, vec3(0.3333))), film, 0.75);
+      color = mix(color, color * film * 2.4, (0.35 + 0.65 * smoothstep(0.05, 0.6, pvG)) * mix(0.35, 1.0, pvEdge));
+    } else if (finishId == 63) {   // burnt titanium on the satin metal: silver nose -> straw -> gold -> bronze -> purple -> blue tail
+      float t = clamp(0.5 - vObjPos.z * 0.30 + pvG * 0.10, 0.0, 1.0);
+      vec3 ox = vec3(0.85, 0.86, 0.88);
+      ox = mix(ox, vec3(0.95, 0.82, 0.52), smoothstep(0.10, 0.25, t));
+      ox = mix(ox, vec3(0.92, 0.66, 0.30), smoothstep(0.25, 0.40, t));
+      ox = mix(ox, vec3(0.72, 0.42, 0.40), smoothstep(0.40, 0.55, t));
+      ox = mix(ox, vec3(0.50, 0.30, 0.75), smoothstep(0.55, 0.70, t));
+      ox = mix(ox, vec3(0.25, 0.45, 0.95), smoothstep(0.70, 0.88, t));
+      color = vec3(min(pvLit, 2.5)) * ox * 0.85;   // the livery is ignored, like GOLD PLATE
+    } else if (finishId == 85) {   // ultrablack: ~1% reflectance, only a faint hint of shape survives; livery ignored
+      color = vec3(0.010, 0.010, 0.011) * (1.0 + 0.6 * min(pvLit, 1.6)) + uAmbSky * (0.010 * pvG);
+    }
+  }
 
   // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,
   // tinted by the horizon sky colour. Gives edges a little 'air' without
