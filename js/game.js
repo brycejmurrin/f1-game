@@ -8261,6 +8261,7 @@ function render(dt) {
   // GRAPHICS: MEDIUM, and rain with no mirror read as reflections broken. The governor still sheds it at 3.
   const _ssrTier = (frame.wetness || 0) > 0.01 ? 3 : 2;
   po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= _ssrTier ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  PostFxOpts.gate(po);   // GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS: the tier-4 exit, taken by choice
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone

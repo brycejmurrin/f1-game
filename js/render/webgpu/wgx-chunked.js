@@ -11,7 +11,10 @@ const WGXChunked = (function () {
     let _ciCursor = 0;
     let _ciSeg = new WeakMap();
     let _ciLive = 0;   // chunk arrays that hold a segment; the cursor rewinds when the last one is freed
-    let _lm0 = 0, _lm1 = 0, _lmGen = 0;
+    // Lamp-mask generation PER PASS (0 forward/env, 1 mirror): the mirror re-ranks its own lamp
+    // list, so one shared generation advanced twice a frame and every chunk missed in both passes.
+    let _lm0 = 0, _lm1 = 0;
+    const _lmGen = [0, 0];
     let _mrMaskL = null, _mrSlot = 0, _mrPass = null, _mrRoad = false;
 
     function _chunkFirstIndex(ch) {
@@ -382,7 +385,7 @@ const WGXChunked = (function () {
       // player moves, so masks are computed per call (visible chunks × nL
       // cheap AABB tests); small sets skip the machinery — the reject is
       // already cheap. Run overflow rebinds the base slot (all-ones mask).
-      const maskL = core.frameNL > 8 ? core.frameLights : null;
+      const maskL = core.frameNL > 8 ? core.frameLights : null, lp = core.lampPass;
       _mrMaskL = maskL; _mrSlot = slot; _mrPass = core.litPass; _mrRoad = o.surfaceId === 16;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
@@ -396,12 +399,12 @@ const WGXChunked = (function () {
           // set is stable for many frames at a time — while _lmGen holds, the
           // chunk's mask is a lookup, not nL AABB tests.
           let cm = _lmCache.get(ch);
-          if (cm && cm.gen === _lmGen) {
-            _lm0 = cm.m0; _lm1 = cm.m1;
+          if (!cm) _lmCache.set(ch, cm = { gen: [-1, -1], m0: [0, 0], m1: [0, 0] });
+          if (cm.gen[lp] === _lmGen[lp]) {
+            _lm0 = cm.m0[lp]; _lm1 = cm.m1[lp];
           } else {
             _chunkLampMask(ch.min, ch.max, maskL, core.frameNL);
-            if (cm) { cm.gen = _lmGen; cm.m0 = _lm0; cm.m1 = _lm1; }
-            else _lmCache.set(ch, { gen: _lmGen, m0: _lm0, m1: _lm1 });
+            cm.gen[lp] = _lmGen[lp]; cm.m0[lp] = _lm0; cm.m1[lp] = _lm1;
           }
         }
         const vbuf = ch.vbuf || mesh.vbuf;
@@ -469,13 +472,14 @@ const WGXChunked = (function () {
       _ciLive = 0;
       _ciSeg = new WeakMap();
     }
-    function bumpLampGen() { _lmGen++; }
+    function bumpLampGen(pass) { _lmGen[pass ? 1 : 0]++; }
 
     return {
       createChunkedMesh, freeChunkedMesh, drawChunked,
       chunkFirstIndex: _chunkFirstIndex,
       resetLampSeg, bumpLampGen,
-      get lmGen() { return _lmGen; },
+      get lmGen() { return _lmGen[0]; },
+      get lmGenMirror() { return _lmGen[1]; },
       get ciCursor() { return _ciCursor; },
       get ciSeg() { return _ciSeg; },
     };
