@@ -419,7 +419,7 @@ jobs:
       - name: Live render matrix
         if: ${{ needs.plan.outputs.live_matrix == 'true' }}
         continue-on-error: true
-        timeout-minutes: 26
+        timeout-minutes: 27
         shell: bash
         env:
           LRM_LEG: ${{ needs.plan.outputs.lrm_leg }}

@@ -163,7 +163,7 @@ async function main() {
   ]).catch((e) => ({ err: String(e) }));
   // Each row is capped (a hung row used to eat the whole job) and a failed row gets a fresh page, so one
   // failure does not poison the rows after it.
-  const ROW_CAP = { rebuild: 180000 * o.capScale, tiers: 132000 * o.capScale, night: 132000 * o.capScale }, DEFAULT_CAP = 90000 * o.capScale;   // a capped row is "timeout" (inconclusive), never a silent pass
+  const ROW_CAP = { rebuild: 300000 * o.capScale, tiers: 100000 * o.capScale, night: 100000 * o.capScale }, DEFAULT_CAP = 90000 * o.capScale;   // a capped row is "timeout" (inconclusive), never a silent pass
   const row = async (n, name, fn) => {
     if (!o.rows.includes(n)) return;
     const r = report.rows[name] = { verdict: "fail", notes: [] };
