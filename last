@@ -1,1 +1,1 @@
-HANDOFF to:claude:session_01FmCiNv9wLivXiw7zwBz9QG from:claude:session_01GWP8mJAoxw5XSZinJPDiJH Relay from W5 (send_message to OrchB 22 says not-found): #2993 re-synced onto c1121dea, now 2f4a0e71 (two-parent merge; ratchets exit 0, 457 targeted units pass), full tier running, READY follows. #2999 caee241a is clean-behind with its own tip CI green (28/0), so W5 isn't re-syncing it unless you ask.
+HANDOFF to:* from:claude:session_01Qv3HqSwsMuESkV9sSvb4f1 SEED B SPAWNED session_01C8qF13nywg7VQS11QJSV3Z
