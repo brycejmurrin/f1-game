@@ -1496,9 +1496,23 @@ const Car3D = (function () {
     const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     const exhMetal = [0.16, 0.16, 0.17], exhFlareC = [0.18, 0.18, 0.19];
     const glazeOf = (rgb) => rgb.map((value) => Math.min(value * 0.45, 0.65));
-    const exhDia = (cx, cy, z, r) => [
-      [cx, cy - r, z], [cx + r, cy, z], [cx, cy + r, z], [cx - r, cy, z],
-    ];
+    // Round exhaust pieces (Bryce 2026-10-19: no square plate on a round pipe). A
+    // CLOSED 12-sided frustum r0@z0 → r1@z1 (discs share the rim vertices, so no
+    // open edge); both windings; capCol paints the z1 disc (the glowing mouth).
+    // ONE winding, facing away from (cx, cy, zc) — the solid's centre — so the
+    // fit audit's inside test is not fooled by a double-sided shell.
+    const exhCone = (cx, cy, z0, r0, z1, r1, col, surf, zc) => { for (let k = 0; k < 12; k++) {
+      const a = k * Math.PI / 6, b = a + Math.PI / 6, P = (r, t, z) => [cx + r * Math.cos(t), cy + r * Math.sin(t), z];
+      const q = [P(r0, a, z0), P(r0, b, z0), P(r1, b, z1), P(r1, a, z1)], c = r1 ? q[3] : q[2];
+      const u = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]], v = [c[0] - q[0][0], c[1] - q[0][1], c[2] - q[0][2]];
+      const m = [(q[0][0] + q[2][0]) / 2 - cx, (q[0][1] + q[2][1]) / 2 - cy, (q[0][2] + q[2][2]) / 2 - zc];
+      const out1 = (u[1] * v[2] - u[2] * v[1]) * m[0] + (u[2] * v[0] - u[0] * v[2]) * m[1] + (u[0] * v[1] - u[1] * v[0]) * m[2] > 0;
+      // r1 = 0 is a disc: ONE triangle (a quad with q[2] = q[3] left a zero-area, zero-normal tri).
+      if (!r1) { if (out1) addTri(out, q[0], q[1], q[2], col, surf); else addTri(out, q[2], q[1], q[0], col, surf); }
+      else if (out1) addQuad(out, q[0], q[1], q[2], q[3], col, surf); else addQuad(out, q[3], q[2], q[1], q[0], col, surf); } };
+    const exhSolid = (cx, cy, z0, r0, z1, r1, col, surf, capCol) => { const zc = (z0 + z1) / 2;
+      exhCone(cx, cy, z0, r0, z1, r1, col, surf, zc);
+      exhCone(cx, cy, z0, r0, z0, 0, col, surf, zc); exhCone(cx, cy, z1, r1, z1, 0, capCol || col, surf, zc); };
     const EXH_OUT = 0.34;
     // Twins low beside the crash structure; single tip in the rain-light cavity.
     const EXH_Y = exhTwin ? 0.40 : 0.50;
@@ -1525,17 +1539,14 @@ const Car3D = (function () {
       const flame = exhTwin ? fTwin : fuelFlame, rPipe = tipRShow;
       addTube(out, [[cx, EXH_Y, tipZ + 0.10], [cx, EXH_Y, tipZ + 0.01]],
               rPipe * 1.08, 8, heatOf(flame), SURFACES.metal);
-      addStationLoft(out, [
-        exhDia(cx, EXH_Y, tipZ + 0.08, rPipe),
-        exhDia(cx, EXH_Y, tipZ, rPipe * 1.08),
-      ], exhMetal, null, SURFACES.metal);
-      addBox(out, cx, EXH_Y, tipZ + 0.008, rPipe * 1.55, rPipe * 1.55, 0.018,
-             [0.05, 0.04, 0.04], SURFACES.carbon);
-      addBox(out, cx, EXH_Y, tipZ - 0.004, rPipe * (exhTwin ? 1.25 : 1.05),
-             rPipe * (exhTwin ? 1.25 : 1.05), 0.014, glazeOf(flame), SURFACES.metal);
+      // Round tip: a chamfered lip from a ring 5 mm inside the heat sleeve's mouth (1.08 r — a 12-gon
+      // and the 8-gon share the 0/90/180/270° vertices, so it welds the sleeve; nearer the mouth its
+      // cap z-fought the rain-light housing and lamp faces at -2.570/-2.568) down to the 0.86 r face.
+      exhSolid(cx, EXH_Y, tipZ + 0.015, rPipe * 1.08, tipZ, rPipe * 0.86, exhMetal, SURFACES.metal, glazeOf(flame));
+      exhCone(cx, EXH_Y, tipZ - 0.002, rPipe * 0.86, tipZ - 0.002, rPipe * 0.68, [0.05, 0.04, 0.04], SURFACES.carbon, tipZ + 0.04);   // carbon rim on the tip face
     }
     if (exhTwin && (exhStyle.wastegate || 0) >= 1) {
-      addBox(out, 0, EXH_Y + exhR + 0.055, tipZ + 0.02, EXH_OUT * 2.05, 0.028, 0.045,
+      addBox(out, 0, EXH_Y + exhR * 1.08 + 0.014, tipZ + 0.02, EXH_OUT * 2.05, 0.028, 0.045,   // rests on both heat sleeves
              exhMetal, SURFACES.metal);
     }
     const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
@@ -1543,12 +1554,13 @@ const Car3D = (function () {
       // Megaphone open rim at the rear face (no solid tip — keeps the rain light).
       const flareMul = exhTwin ? 0.55 : 1.15;
       for (const cx of exits) {
-        const tip = tipRShow * (1 + flareMul * exhFlare);
+        // 0.8: a round flare of the old diamond's AREA, so it no longer swallows the rain light.
+        const tip = tipRShow * (1 + flareMul * exhFlare) * 0.8;
         const z0 = tipZ + 0.08, z1 = tipZ + 0.005;
-        addStationLoft(out, [exhDia(cx, EXH_Y, z0, tipRShow), exhDia(cx, EXH_Y, z1, tip)],
-                       exhFlareC, null, SURFACES.metal);
-        addStationLoft(out, [exhDia(cx, EXH_Y, z1, tip * 1.05), exhDia(cx, EXH_Y, z1 - 0.012, tip * 1.12)],
-                       [0.22, 0.22, 0.24], null, SURFACES.metal);
+        const mouth = glazeOf(exhTwin ? fTwin : fuelFlame).map((v) => v * 0.6);   // the bell's face glows like the plain tip's
+        exhSolid(cx, EXH_Y, z0, tipRShow * 1.08, z1, Math.max(tip, tipRShow * 1.08), exhFlareC, SURFACES.metal, mouth);
+        exhSolid(cx, EXH_Y, z1, tip * 1.05, z1 - 0.012, tip * 1.12, [0.22, 0.22, 0.24], SURFACES.metal);
+        exhCone(cx, EXH_Y, z1 - 0.013, tip * 0.92, z1 - 0.013, 0, mouth, SURFACES.metal, z1);   // glowing mouth inside the rim
       }
     }
     if (exhStyle.wrap) {
@@ -1569,11 +1581,12 @@ const Car3D = (function () {
     const exhTint = Math.max(0, Math.min(2, Math.round(exhStyle.heatTint || 0)));
     const tintBands = exhTint === 2 ? [[0.40, 0.24, 0.52], [0.22, 0.26, 0.62], [0.30, 0.22, 0.50], [0.18, 0.30, 0.66]]
       : [[0.80, 0.64, 0.30], [0.66, 0.42, 0.26], [0.44, 0.30, 0.56], [0.22, 0.34, 0.68]];
-    // gateStack (D6): wastegates stacked ABOVE the main tip on the centreline.
+    // gateStack (D6): wastegates stacked ABOVE the main tip on the centreline. Roots at ±0.024
+    // run inside the rear-wing pylon (±0.045): at ±0.03 their side faces z-fought its walls.
     const gateStack = !!exhStyle.gateStack && !exhTwin;
     for (let i = 0; i < exhGates; i++) {
       const s = i === 0 ? -1 : 1;
-      const gx = gateStack ? s * 0.03 : exhTwin ? s * (EXH_OUT * 0.55) : s * 0.075;
+      const gx = gateStack ? s * 0.024 : exhTwin ? s * (EXH_OUT * 0.55) : s * 0.075;
       const tipX = gateStack ? 0 : exhTwin ? s * EXH_OUT * 0.72 : s * 0.098;
       const gy = gateStack ? EXH_Y + tipRShow + 0.05 + i * 0.075 : 0.53;
       const gw = gateStack ? 0.050 : 0.030;
@@ -1621,9 +1634,16 @@ const Car3D = (function () {
     // D6 preview: heatTint = titanium temper bands behind the tip (1 straw→blue, 2 burnt
     // purple); hood = carbon visor overhanging a single exit, red-edged.
     const tintR = (exhTwin ? exhR : tipRShow * 0.85) * 1.08;   // one radius: a stepped run read as jagged rings
-    for (const cx of exhTint ? exits : []) { tintBands.forEach((c, i) => addTube(out, [[cx, EXH_Y, tipZ + 0.02 - i * 0.03],
-      [cx, EXH_Y, tipZ - 0.01 - i * 0.03]], tintR, 10, c, SURFACES.metal));
-      addBox(out, cx, EXH_Y, tipZ - 0.07, tintR * 1.2, tintR * 1.2, 0.004, [0.04, 0.04, 0.04], SURFACES.carbon); }
+    // ONE closed run of 12-gon sleeves (no open tube ends): it starts where the tip's chamfer
+    // (1.08 r → 0.86 r over 15 mm) reaches tintR, so its first ring sits on the tip; dark end cap = mouth.
+    for (const cx of exhTint ? exits : []) {
+      const zA = tipZ + 0.015 * Math.max(0, Math.min(1, (tintR - tipRShow * 0.86) / (tipRShow * 0.22)));
+      const zE = tipZ - 0.10, zc = (zA + zE) / 2;
+      let z = zA;
+      tintBands.forEach((c, i) => { const z1 = tipZ - 0.01 - i * 0.03; exhCone(cx, EXH_Y, z, tintR, z1, tintR, c, SURFACES.metal, zc); z = z1; });
+      exhCone(cx, EXH_Y, zA, tintR, zA, 0, tintBands[0], SURFACES.metal, zc);
+      exhCone(cx, EXH_Y, zE, tintR, zE, 0, [0.04, 0.04, 0.04], SURFACES.carbon, zc);
+    }
     if (exhStyle.hood && !exhTwin) {
       const hr = tipRShow * (1 + 1.15 * exhFlare) + 0.03;
       addBox(out, 0, EXH_Y + hr, tipZ - 0.02, hr * 2.4, 0.016, 0.30, CARBON, SURFACES.carbon);
@@ -2100,7 +2120,7 @@ const Car3D = (function () {
                    { z: -2.57, x: 0, y: lampY, w: 0.115, h: 0.13, t: 0.62 }, DARK);
       addBox(out, 0, lampY, -2.585, lampW * 1.15, lampH * 1.10, 0.034,
              [1.55, 0.16, 0.11], SURFACES.emissive);
-      addBox(out, 0, lampY, -2.60, lampW * 0.38, lampH * 0.36, 0.016,
+      addBox(out, 0, lampY, -2.6045, lampW * 0.38, lampH * 0.36, 0.008,
              [1.85, 0.18, 0.10], SURFACES.emissive);   // rain-light core (bloom-capped)
 
       const diffW  = (0.72 + aLvl * 0.145) * Math.max(0.78, Math.min(1.3, aeroStyle.floorEdge));
