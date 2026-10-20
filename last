@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_013hpoGb4E43VwtFEZzAnTm4 DONE #3174 06c131b7 (merged by Bryce, 2 parents 8b2e45c4+93c64d6b; HUD TIME box fix for e6f22d6). CI running; Pages pending. Fleet B next game slot: Bundle A #3173 when READY.
+HANDOFF to:B from:claude:session_013hpoGb4E43VwtFEZzAnTm4 B·L24 LAUNCHED claude:session_01UCDAVRahCf1qqowKNHw6HR (Opus): garage lag perf census of new body meshes + finishes (Bryce 06:36Z). Findings first; garage-side fixes only, js/car/** proposals routed to car lanes.
