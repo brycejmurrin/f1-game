@@ -956,10 +956,10 @@ const Car3D = (function () {
           0.030, 0.028, 0.038, [0.10, 0.10, 0.12], SURFACES.carbon);
         // Clamps sit on the cable line (coverFlankX under the shoulder), not at the loft's
         // widest x: concept covers left them 58-156 mm off the skin (B·H13 D1/D2).
-        const clamp = (c, dx, w, h, d) => { const y = coverProfile(c).shoulder - 0.02;
+        const cableClip = (c, dx, w, h, d) => { const y = coverProfile(c).shoulder - 0.02;
           addBox(out, side * (coverFlankX(c, y) + dx), y, c.z, w, h, d, [0.10, 0.10, 0.12], SURFACES.carbon); };
-        clamp(anchors.coverAt(c2e.z + 0.06), 0.014, 0.026, 0.032, 0.040);   // ahead of the rear suspension pickups
-        if (ersConduit >= 2) for (let i = 0; i < 2; i++) clamp(anchors.coverAt(-0.96 - i * 0.28), 0.016, 0.028, 0.036, 0.044);
+        cableClip(anchors.coverAt(c2e.z + 0.06), 0.014, 0.026, 0.032, 0.040);   // ahead of the rear suspension pickups
+        if (ersConduit >= 2) for (let i = 0; i < 2; i++) cableClip(anchors.coverAt(-0.96 - i * 0.28), 0.016, 0.028, 0.036, 0.044);
       }
     }
     // Pack cooling mouth on the pod shoulder ahead of the energy-cell strip:

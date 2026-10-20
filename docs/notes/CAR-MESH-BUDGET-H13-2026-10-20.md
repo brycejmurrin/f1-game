@@ -38,7 +38,7 @@ anteater "and a few more" have noses that are far too narrow. PR #3242.
   they read vertex ranges. `noWeld: true` opts out.
 - **Mac GPU A/B** (gpu-census.yml, macos-latest, montreal, chase cam, branch tip
   09fdaac7). Arm A was run 39510291428 with the weld on; arm B was run 39510306852
-  with `ls apex26.carWeld=0`. The like-for-like number is GLX's GPU timer at the
+  with `ls apex26.carWeld=0` (a temporary switch, removed after the A/B: a new writer-less store key is capped by store-registry.test). The like-for-like number is GLX's GPU timer at the
   same canvas (0.75 MP, scale 0.9): **11.1 ms welded vs 12.41 ms unwelded (−10.6 %)**,
   20 samples each. Frame times on that runner are not comparable between the two
   arms: the governor settled on a different tier per leg (GLX tier 4 vs 1;
