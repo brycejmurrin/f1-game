@@ -125,7 +125,7 @@ const LIV_ROW_HINT = {
   stripe: "BODY STRIPE — full spine, nose tip to engine cover. This row only.",
   noseStripe: "NOSE STRIPE — the nose crown only, tip to bulkhead. Layers on top of BODY STRIPE.",
   nose: "NOSE CAP — a painted nose cone. Unset = the bodywork colour.",
-  pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
+  pod: "SIDEPOD — the whole painted sidepod shell, both sides. Intake voids, carbon and separate trim keep their colours. Unset = the bodywork colour.",
   lower: "LOWER BODY — the bodywork below a line along the sidepods at the sponsor board's top edge, carried forward along the chassis side to the nose (pod flanks and undersides, lower chassis; the nose stays PRIMARY). Only bare PRIMARY paint changes: the accent band, board, stripes and caps keep theirs. Ignored under BODY SPLIT L/R. Unset = PRIMARY.",
   upper: "UPPER BODY — the bodywork ABOVE that same sidepod board line (upper chassis / pod flanks above the board; the nose stays PRIMARY). The W17's silver-over-black split. Only bare PRIMARY paint changes. Ignored under BODY SPLIT L/R. Unset = PRIMARY (today's single-colour body above the line).",
   cover: "ENGINE COVER — airbox, roll hoop, cover loft and snorkel. Unset = the bodywork colour. (AIRBOX had its own row and no longer does: it painted a strict subset of these surfaces.)",

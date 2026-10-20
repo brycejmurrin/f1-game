@@ -376,7 +376,7 @@ const Car3D = (function () {
     }
 
     part("sidepods");
-    const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors);
+    const podGeom = buildSidepodBodywork(out, podC || c1, engStyle, anchors);
     // TRAP: `proud` is measured off anchors.podAt(z).x, which is the LOFT
     // CONTROL width, NOT the rendered pod surface. Measured, the two diverge by
     // 18 mm at z 0.2 and 99 mm at z -0.4, so a thin line laid the default 8 mm
