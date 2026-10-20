@@ -132,7 +132,39 @@ test("Home photo retains its shot across rotation at 200%, captures, and returns
   expect(pageErrors).toEqual([]);
 });
 
+test("Garage photo offers the Team tab's room, crew and lighting at phone size and saves the pick", async ({ page, pageErrors }, info) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await boot(page);
+  await page.evaluate(() => AppearanceStudio.setScene("garage", "still"));
+  await page.waitForSelector('#overlay[data-home-ready="1"]', { timeout: BOOT_MS });
+  await clickLive(page, "mb-photo");
+  await expect(page.locator("#ps-look-mood-row")).toBeVisible();
+  await expect(page.locator("#ps-tod-row")).toBeHidden();
+  const looks = await page.evaluate(() => ["room", "crew", "mood"].map((k) => {
+    const sel = document.getElementById("ps-look-" + k);
+    return { k, value: sel.value, n: sel.options.length, label: document.getElementById("ps-look-" + k + "-row-label").textContent };
+  }));
+  expect(looks.map((l) => l.label)).toEqual(["Garage", "Crew", "Lighting"]);
+  for (const l of looks) expect(l.n, l.k + " lists the Team tab's options").toBeGreaterThan(1);
+  await page.locator("#ps-look-mood-row").scrollIntoViewIfNeeded();
+  const [box] = await controls(page, ["ps-look-mood"]);
+  const h = await page.evaluate(() => CssZoom.viewportRect(document.getElementById("ps-look-mood")).height);
+  expect(h, "LIGHTING select meets the 44 px tap floor").toBeGreaterThanOrEqual(44);
+  await page.selectOption("#ps-look-mood", "night");
+  expect(await page.evaluate(() => [GarageScene.mood(), localStorage.getItem("apex26.garageMood")])).toEqual(["night", "night"]);
+  await present(page);
+  await evidence(page, info, "garage-photo-looks-844x390");
+  expect(box.hit).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#photo-studio")).toBeHidden();
+  expect(await page.evaluate(() => GarageScene.mood()), "a garage look is a saved pick, not a preview").toBe("night");
+  expect(pageErrors).toEqual([]);
+});
 test("Paused race photo keeps controls reachable at 200% and isolates panel scrolling", async ({ page, pageErrors }, info) => {
+  // Race boot, two rotations at 200% each waiting for the sheet fit, a scroll
+  // and the portrait gate measured 119-128 s on SwiftShader (2026-10-20, 3
+  // runs); the default 120 s cut the lifecycle off after its last assertion.
+  test.setTimeout(210000);
   await boot(page);
   await page.evaluate(async () => {
     __apex.headless(true);
@@ -146,6 +178,16 @@ test("Paused race photo keeps controls reachable at 200% and isolates panel scro
   for (const [name, viewport] of [["race-landscape-200", LANDSCAPE], ["race-portrait-200", PORTRAIT]]) {
     await page.setViewportSize(viewport);
     await present(page);
+    // SheetShape caps the sheet's scale (--sheet-scale, data-fit="on") a few
+    // frames after the viewport/scale change — seconds under software GL. Until
+    // it lands the panel is laid out at the uncapped 200% (432 px painted in a
+    // 393 px viewport, CAPTURE at y370-435). Settled geometry is what a player
+    // sees, so wait for the fit before asserting reachability.
+    await expect(page.locator("#ps-panel")).toHaveAttribute("data-fit", "on", { timeout: 30000 });
+    await expect.poll(() => page.evaluate(() => {
+      const r = CssZoom.viewportRect(document.getElementById("ps-capture"));
+      return r.y >= -0.5 && r.y + r.height <= innerHeight + 0.5;
+    }), { timeout: 30000 }).toBe(true);
     await controls(page, ["ps-capture", "ps-close", "pc-move", "pc-look", "pc-up", "pc-down"]);
     await expect(page.locator("#pausemenu")).toBeHidden();
     await expect(page.locator("#rotate-device")).toBeHidden();

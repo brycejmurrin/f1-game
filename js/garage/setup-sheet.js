@@ -1581,7 +1581,8 @@ if (typeof MutationObserver === "function") {
   if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
-return { buildSetup, openSetup };
+// lookRowSpecs: Photo Studio's garage visit offers the same rows (js/ui/photo-studio.js deps.garage.looks).
+return { buildSetup, openSetup, lookRowSpecs };
 }
 
 return { create };

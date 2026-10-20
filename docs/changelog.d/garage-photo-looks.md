@@ -1,0 +1,1 @@
+New: Photo Studio in the garage now has the Team tab's GARAGE, CREW and LIGHTING pickers (NIGHT, DAYLIGHT and the other moods), so you can change the room and the light while framing a shot; picks save just like on the Team tab.

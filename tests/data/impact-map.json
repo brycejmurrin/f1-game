@@ -7274,6 +7274,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
