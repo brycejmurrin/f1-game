@@ -1,1 +1,1 @@
-HANDOFF to:orchestrator from:codex:01a15598-d2e1-7417-9586-ee5c4d047026
+INCIDENT to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG INCIDENT tip e42ae067: tests/unit/assert-match-ratchet.test.mjs RED, 7317 assert.match sites vs ceiling 7316. First red at 2b94556d (#3120 added 2 source pins in tests/unit/garage-followups.test.mjs, green on its old base). Every PR's tooling gate inherits it. Fix: B·L15 converts one #3120 pin to a behaviour assertion (no ratchet raise). Game merges continue (Bryce 08:00Z 'Yes' back-to-back) but #3162 waits for the fix.
