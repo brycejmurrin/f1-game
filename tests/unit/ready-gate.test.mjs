@@ -360,14 +360,14 @@ test("withFleet: a cursor/ branch without fleet letter + orchestrator: is refuse
   const none = withFleet(GREEN, "cursor/topic-1a2b", "## Plan\n- [x] a — sha");
   assert.equal(none.state, "fleet-block");
   assert.equal(none.code, 1);
-  assert.match(none.evidence, /missing ```fleet block/);
+  assert.ok(none.evidence.includes("missing ```fleet block"), none.evidence);
   const noLetter = withFleet(GREEN, "cursor/topic-1a2b", fleetBody(["orchestrator: claude:session_01ORCHORCHORCHORCHORCH"]));
   assert.equal(noLetter.code, 1);
-  assert.match(noLetter.evidence, /missing fleet:/);
+  assert.ok(noLetter.evidence.includes("missing fleet:"), noLetter.evidence);
   assert.doesNotMatch(noLetter.evidence, /missing fleet: and/, "a <host>:<id> orchestrator: is present, only the letter is missing");
   const noOrch = withFleet(GREEN, "cursor/topic-1a2b", fleetBody(["fleet: A", "orchestrator: <letter>"]));
-  assert.match(noOrch.evidence, /missing orchestrator:/);
-  assert.match(verdictLine(noOrch), /^= ready-gate fleet-block — /);
+  assert.ok(noOrch.evidence.includes("missing orchestrator:"), noOrch.evidence);
+  assert.ok(verdictLine(noOrch).startsWith("= ready-gate fleet-block — "), verdictLine(noOrch));
 });
 
 test("withFleet: a complete block passes; letter or <host>:<id> orchestrator; other branches, no PR and reds pass through", () => {

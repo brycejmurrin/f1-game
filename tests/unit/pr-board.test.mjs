@@ -536,7 +536,7 @@ test("fleet letter and slot: JSON fleetLetter/slot and the FL/SLOT columns come 
   assert.deepEqual(r.rows.map((x) => [x.fleetLetter, x.slot]), [["B", "B·W3"], ["A", "A·W7"], ["-", "-"], ["-", "-"]]);
   assert.equal(r.rows[3].fleet.state, "ready", "`fleet` stays the fleet-status report fleet-tick.mjs reads");
   const lines = render(r).split("\n");
-  assert.match(lines[1], /^#1\s+B\s+B·W3\s+/);
-  assert.match(lines[2], /^#2\s+A\s+A·W7\s+/);
-  assert.match(lines[3], /^#3\s+-\s+-\s+/);
+  assert.deepEqual(lines[1].split(/\s+/).slice(0, 3), ["#1", "B", "B·W3"]);
+  assert.deepEqual(lines[2].split(/\s+/).slice(0, 3), ["#2", "A", "A·W7"]);
+  assert.deepEqual(lines[3].split(/\s+/).slice(0, 3), ["#3", "-", "-"]);
 });

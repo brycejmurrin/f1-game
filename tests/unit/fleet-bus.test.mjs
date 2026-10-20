@@ -271,9 +271,9 @@ test("main who: prints one line for the fleet's newest LIVE line, exits 1 for a 
     assert.equal(main(["send", "HANDOFF", "--to", "*", "--as", A, "A·O1 ORCH A LIVE claude:session_01AAAAAAAAAAAAAAAAAAAAAA"], opts), 0);
     assert.equal(main(["send", "GREEN", "--to", "A", "--as", A, "#7 green"], opts), 0);
     assert.equal(main(["who", "A"], opts), 0);
-    assert.match(out.at(-1), /^A claude:session_01AAAAAAAAAAAAAAAAAAAAAA [0-9a-f]{7} \d+[mhd]$/);
+    { const [l, id, sha, age, ...rest] = out.at(-1).split(" "); assert.deepEqual([l, id, sha.length, rest.length], ["A", "claude:session_01AAAAAAAAAAAAAAAAAAAAAA", 7, 0]); assert.ok("mhd".includes(age.slice(-1)) && Number(age.slice(0, -1)) >= 0, age); }
     assert.equal(main(["who", "C"], opts), 1);
-    assert.match(out.at(-1), /^= who C: no ORCH C LIVE line/);
+    assert.ok(out.at(-1).startsWith("= who C: no ORCH C LIVE line"), out.at(-1));
     assert.equal(main(["who", "AB"], opts), 1, "one letter only");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
