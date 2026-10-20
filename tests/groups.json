@@ -905,6 +905,8 @@
     "tests/unit/real-replay-frame-fit.test.mjs",
     "tests/unit/real-replay-transport.test.mjs",
     "tests/unit/real-replay-vm.test.mjs",
+    "// Rear wing active aero to FIA 2026 C3.11.6: one rigid RW Flap, one aft pivot, Straight Mode flattens (never inverts). VM, ~1 s.",
+    "tests/unit/rear-wing-active-aero.test.mjs",
     "tests/unit/red-flag-fuel-vm.test.mjs",
     "// ...and its sibling over js/: a try/catch cannot swallow a promise",
     "// REJECTION, and index.html turns an unhandled one into a full-screen",

@@ -33,6 +33,9 @@ function fakeApi({ prs = [], fail = null, cap = {} } = {}) {
 const claim = (text, ageMin = 10, who = "Claude", slug = "x-1923dcd1d9ef874aad548d82") =>
   ({ slug, who, text, at: Math.floor(NOW / 1000) - ageMin * 60, ageMin, stale: false, released: false });
 
+/** Exact-line check: `line` must be one whole line of `out`, whitespace included. */
+const hasLine = (out, line) => assert.ok(out.split("\n").includes(line), `missing line ${JSON.stringify(line)} in:\n${out}`);
+
 function run(argv, deps) {
   const out = [], err = [];
   const code = main(argv, { git: null, now: NOW, env: {}, log: (s) => out.push(s), err: (s) => err.push(s), ...deps });
@@ -70,16 +73,18 @@ test("HELD beats CLAIMED: an open diff owns the path even when a claim names it"
   const { request } = fakeApi({ prs: [{ number: 3101, sha: SHA_A, body: BODY_A, files: ["tools/gfx/gpu-mem-census.mjs"] }] });
   const r = run(["tools/gfx/gpu-mem-census.mjs", "tools/gfx/other.mjs", "js/free.js"], { request, claims: [claim("OWNED tools/gfx/** for claude:session_01C")] });
   assert.equal(r.code, 0, r.err);
-  assert.match(r.out, /^tools\/gfx\/gpu-mem-census\.mjs\s+HELD #3101 aaaaaaa claude:session_01WORKER  \[fleet-status: ready \| green \| 2026-10-19T21:00:00\.000Z\]$/m);
-  assert.match(r.out, /^tools\/gfx\/other\.mjs\s+CLAIMED 10m Claude claude:session_01C$/m);
-  assert.match(r.out, /^js\/free\.js\s+FREE$/m);
-  assert.match(r.out, /^= fleet-owner 1 held, 1 claimed, 1 free$/m);
+  assert.deepEqual(r.out.split("\n"), [
+    "tools/gfx/gpu-mem-census.mjs  HELD #3101 aaaaaaa claude:session_01WORKER  [fleet-status: ready | green | 2026-10-19T21:00:00.000Z]",
+    "tools/gfx/other.mjs           CLAIMED 10m Claude claude:session_01C",
+    "js/free.js                    FREE",
+    "= fleet-owner 1 held, 1 claimed, 1 free",
+  ]);
 });
 
 test("an unaddressable claim says so; stdin paths are read", () => {
   const { request } = fakeApi();
   const r = run([], { request, stdin: "./js/render/three/tlx.js\n\n", claims: [claim("OWNED js/render/three/**", 30, "Bryce Murrin")] });
-  assert.match(r.out, /^js\/render\/three\/tlx\.js\s+CLAIMED 30m Bryce Murrin unaddressable$/m);
+  hasLine(r.out, "js/render/three/tlx.js  CLAIMED 30m Bryce Murrin unaddressable");
 });
 
 test("--json carries holders with fleet keys", () => {
@@ -96,7 +101,7 @@ test("--release-answer: RELEASED when every path is free or the caller's own cla
   const r = run(["--release-answer", "R7", "--as", "claude:session_01ME", "js/a.js", "js/b.js"],
     { request, claims: [claim("OWNED js/a.js claude:session_01ME")] });
   assert.equal(r.code, 0, r.err);
-  assert.match(r.out, /^RELEASED R7 js\/a\.js js\/b\.js$/m);
+  assert.equal(r.out.split("\n").at(-1), "RELEASED R7 js/a.js js/b.js", r.out);
   assert.doesNotMatch(r.out, /^HELD R7/m);
 });
 
@@ -106,10 +111,8 @@ test("--release-answer: HELD per holding PR, and the rest released", () => {
     { number: 15, sha: SHA_B, files: ["js/b.js", "js/a.js"] },
   ] });
   const r = run(["--release-answer", "R8", "--as", "claude:session_01ME", "js/a.js", "js/b.js", "js/c.js"], { request, claims: [] });
-  assert.match(r.out, /^HELD R8 until #12: js\/a\.js$/m);
-  assert.match(r.out, /^HELD R8 until #15: js\/b\.js$/m);
-  assert.match(r.out, /^RELEASED R8 js\/c\.js$/m);
-  assert.match(r.out, /^js\/a\.js\s+HELD #12 aaaaaaa gh:bryce  \(also #15\)$/m);
+  assert.deepEqual(r.out.split("\n").slice(-3), ["HELD R8 until #12: js/a.js", "HELD R8 until #15: js/b.js", "RELEASED R8 js/c.js"], r.out);
+  hasLine(r.out, "js/a.js  HELD #12 aaaaaaa gh:bryce  (also #15)");
 });
 
 test("--release-answer: another session's live claim is not the caller's to release", () => {
@@ -130,18 +133,18 @@ test("lapse rule: only with --requested-at >= 60 min ago, only claims > 60 min o
   assert.equal(lapsed.rows[2].lapsed, false, "a 30-min claim does not lapse");
   const { request } = fakeApi();
   const r = run(["--requested-at", old, "--release-answer", "R10", "js/a.js"], { request, claims });
-  assert.match(r.out, /^js\/a\.js\s+CLAIMED \(lapsed-after-release-request\) 90m Claude unaddressable$/m);
-  assert.match(r.out, /^RELEASED R10 js\/a\.js$/m);
+  hasLine(r.out, "js/a.js  CLAIMED (lapsed-after-release-request) 90m Claude unaddressable");
+  assert.equal(r.out.split("\n").at(-1), "RELEASED R10 js/a.js", r.out);
 });
 
 test("an incomplete files list fails closed: exit 3, no rows", () => {
   const files = Array.from({ length: 150 }, (_, i) => `f${i}.js`);
   const { request } = fakeApi({ prs: [{ number: 9, sha: SHA_A, files }], cap: { 9: 120 } });
-  assert.match(apiFiles(9, request).error, /incomplete files list: received 120 of 150/);
+  assert.equal(apiFiles(9, request).error, "PR #9: incomplete files list: received 120 of 150 changed files");
   const r = run(["f1.js"], { request, claims: [] });
   assert.equal(r.code, 3);
   assert.equal(r.out, "");
-  assert.match(r.err, /= fleet-owner unknown — PR #9: incomplete files list/);
+  assert.equal(r.err, "= fleet-owner unknown — PR #9: incomplete files list: received 120 of 150 changed files");
 });
 
 test("pagination reads every page; API errors and an unreadable board exit 3", () => {
@@ -159,8 +162,7 @@ test("--pr <n>: that PR's files, owners other than itself", () => {
     { number: 21, sha: SHA_B, files: ["js/b.js"] },
   ] });
   const r = run(["--pr", "20"], { request, claims: [] });
-  assert.match(r.out, /^js\/a\.js\s+FREE$/m);
-  assert.match(r.out, /^js\/b\.js\s+HELD #21 bbbbbbb gh:bryce$/m);
+  assert.deepEqual(r.out.split("\n"), ["js/a.js  FREE", "js/b.js  HELD #21 bbbbbbb gh:bryce", "= fleet-owner 1 held, 0 claimed, 1 free"]);
 });
 
 test("bad args exit 2", () => {

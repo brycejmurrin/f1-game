@@ -200,15 +200,11 @@ const CarBodyGeom = (function () {
   // envelope at the catalog's widest floor. Re-measured over every team crossed
   // with every single-option recipe, the widest point on the car is now 0.9476.
   const CAR_HALF = 0.95;
+  // FRONT WING ONLY — the rear is one rigid flap, solved by rearFlap() below.
   // Extra incidence the CLOSED (Z-mode) pose takes on top of the element's own
-  // baked angle. Without it the travel is only the element's natural 12-16 deg,
-  // which is accurate but barely reads; with it a downforce wing is visibly
-  // steeper AND has real angle to give back when it opens.
-  // Per wing, because the two do not do the same job. A 2026 rear wing runs
-  // 30-40 deg of flap in its downforce setting and gives essentially all of it
-  // back in X-mode — that is where the lap time is. The front wing only trims
-  // enough to keep the balance, and is boxed in by the nose above it besides.
-  // The front is ZERO, and that is a fix rather than a shrug. A front cascade is
+  // baked angle. The front wing only trims enough to keep the balance, and is
+  // boxed in by the nose above it besides.
+  // The front used to be ZERO, and that is a fix rather than a shrug. A front cascade is
   // designed to nest: each element's trailing edge passes ~12 mm under the
   // leading edge of the one above it. Adding bite rotates every element steeper
   // about a hinge near its nose, which swings that trailing edge UP — straight
@@ -220,19 +216,14 @@ const CarBodyGeom = (function () {
   // slot the cascade hides, so the garage silhouette did not change at all
   // between CORNER and STRAIGHT. Mid-chord hinge + a little bite makes the
   // trailing edge drop in X-mode — the cascade reads as two steps, not one
-  // plank. Rear bite is the DRS-style slot; a bit more of it so the crown
-  // line is obvious from wingRear.
-  const Z_BITE = { front: 0.12, rear: 0.55 };
+  // plank.
+  const Z_BITE = { front: 0.12 };
   // Where each element pivots, as a fraction of its own chord: 0 = leading edge,
   // 1 = trailing edge.
-  // wingRear looks at the TRAILING edge. A TE-near hinge (0.80) left that edge
-  // still, so CORNER vs STRAIGHT read as the same black slab plus a telltale
-  // strip. Mid-chord on BOTH wings drops the TE in X-mode (the flap goes
-  // flatter) and lifts the LE off the mainplane (the DRS slot). The front
-  // stays mid-chord for the same reason — a LE-near hinge hid the cascade
-  // under the nose.
-  const HINGE = { front: 0.52, rear: 0.45 };
-  const OPEN_FRAC = { front: 2.2, rear: 2.6 };
+  // Mid-chord drops the TE in X-mode, so the cascade reads from wingFront; a
+  // LE-near hinge (what C3.10.10 actually asks for) hid it under the nose.
+  const HINGE = { front: 0.52 };
+  const OPEN_FRAC = { front: 2.2 };
   // Underside of the NOSE where it overhangs the front wing, as (z, y) samples
   // measured off the built body. This is a hard ceiling: at max downforce the
   // baked top flap already passes within ~12 mm of it, so an unconditional bite
@@ -395,6 +386,60 @@ const CarBodyGeom = (function () {
       return { bite, open: open == null ? bite : open, pz: qz, py: qy };
     }
   }
+  // THE REAR WING'S "RW FLAP" (FIA 2026 Section C, C3.11.6). The main plane
+  // is fixed; EVERY element above it moves as one rigid body ("maintain the
+  // geometric relationship between all parts of RW Flap") about ONE axis on Y,
+  // between the flap's mid-point and its rearmost point in X, and Straight
+  // Mode is only a DECREASE in incidence. The rear used to go through hinged()
+  // like the front: each element on its own axis at 45 % chord (the FRONT
+  // half), opened by 2.6x its own angle, so the top flap went from +48 deg to
+  // -26 deg — leading edge above the trailing edge — and swung its nose up
+  // through the plane over it. docs/notes/REAR-WING-ACTIVE-AERO-2026-10-19.md.
+  // Incidence of the primary ("rear") element at each end, rad: a downforce
+  // 2026 flap in Corner Mode, flattened to just positive in Straight Mode.
+  const REAR_INC = Object.freeze({ corner: 0.56, straight: 0.035 });
+  // Pivot station over the flap's X extent, 0 = its front, 1 = its rearmost
+  // point. The regs allow 0.5..1; short of 1 the leading edge keeps the lever
+  // arm to open a DRS-sized (~85 mm) slot while the trailing edge barely moves.
+  const REAR_PIVOT = 0.72;
+  function rearFlap(stack, main) {
+    let front = -Infinity, back = Infinity;
+    for (const [, le, te] of stack) { front = Math.max(front, le[0]); back = Math.min(back, te[0]); }
+    const pz = front + (back - front) * REAR_PIVOT;
+    const [, ple, pte] = stack.find((el) => el[0] === "rear");
+    const t = Math.max(0, Math.min(1, (pz - ple[0]) / (pte[0] - ple[0])));
+    const py = ple[1] + (pte[1] - ple[1]) * t;   // on the primary's chord line
+    const natural = Math.atan2(pte[1] - ple[1], ple[0] - pte[0]);
+    // A design-pose point rotated about the pivot, exactly as drawAeroFlaps does.
+    const rot = (z, y, d) => {
+      const dy = y - py, dz = z - pz, c = Math.cos(d), s = Math.sin(d);
+      return [dy * s + dz * c + pz, dy * c - dz * s + py];
+    };
+    // The stack is rigid, so its own slots never change: only the LOWEST
+    // element can reach the fixed main plane, and only it is checked.
+    const low = elemRecord(stack[0][1], stack[0][2], stack[0][3], 0);
+    const clears = (d) => {
+      for (let k = 0; k <= 40; k++) {
+        const p = elemPoint(low, 0, k / 40), q = rot(p.z, p.bot, d);
+        const under = elemTopAt(main, 0, q[0]);
+        if (under != null && q[1] < under + SLOT_MIN) return false;
+      }
+      return true;
+    };
+    const relax = (from, dir) => {
+      for (let i = 0; i <= 60; i++) { const d = from + dir * 0.01 * i; if (clears(d)) return d; }
+      return null;
+    };
+    const zAngle = relax(REAR_INC.corner - natural, -1) ?? 0;
+    const xAngle = Math.min(zAngle, relax(REAR_INC.straight - natural, +1) ?? zAngle);
+    return stack.map(([id, le, te, thick, sweepMul, half, paint]) => ({
+      id, wing: "rear", z: pz, y: py, le, te, thick, half, sweepMul, paint: paint || null,
+      chord: Math.hypot(le[0] - te[0], te[1] - le[1]),
+      natural: Math.atan2(te[1] - le[1], le[0] - te[0]),
+      hinge: (pz - le[0]) / (te[0] - le[0]),   // the pivot's station on THIS chord; off-line for all but "rear"
+      zAngle, xAngle,
+    }));
+  }
   // SOLVED ONCE PER (level, recipe), NEVER PER FRAME.
   // aeroFlapsGeom is not a table lookup — hinged() SEARCHES for each element's
   // pivot: up to 9 candidate hinges, each solving two end poses, each backing
@@ -481,25 +526,16 @@ const CarBodyGeom = (function () {
     }
     const ep = endplateGeom(a, st), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
-    const rearMain = Object.assign(
-      elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0),
-      { zAngle: 0, xAngle: 0 });
-    let below = rearMain;
-    const addRear = (id, le, te, thick, sweepMul) => {
-      const el = hinged(id, "rear", le[0], le[1], te[0], te[1], {
-        half: id === "rearTop" ? 0.50 : 0.51, thick, taper: rearTaper,
-        sweep: rearSweep * sweepMul, attachHalf: 0.50, rise: 0,
-      }, below);
-      out.push(el);
-      below = Object.assign(elemRecord(le, te, thick, el.hinge),
-                            { zAngle: el.zAngle, xAngle: el.xAngle });
-    };
-    if (a >= 2) {
-      addRear("rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9);
-    }
-    addRear("rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1);
-    if (a >= 4 && !(st.drs || 0)) {
-      addRear("rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1);
+    const rearMain = elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0);
+    const stack = [];   // [id, le, te, thick, sweepMul, half, paint?] bottom-up
+    if (a >= 2) stack.push(["rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9, 0.51]);
+    stack.push(["rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1, 0.51]);
+    if (a >= 4 && !(st.drs || 0)) stack.push(["rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1, 0.50]);
+    // The drs plane car3d.js used to bake STATIC over this stack. It is part of
+    // the RW Flap too, so it flies with it, in the livery's rearWing colour.
+    if (st.drs || 0) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
+    for (const el of rearFlap(stack, rearMain)) {
+      out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 }));
     }
     return out;
   }
@@ -553,8 +589,8 @@ const CarBodyGeom = (function () {
   // separately with no atlas UVs of its own — so rest is the pose it is authored
   // for and it lifts off as the wing opens, as the sponsor does on the real
   // element; making it follow means giving buildFlapGeom a UV channel. The
-  // TOPMOST rear surface carries it (`rearTop` at max downforce, the baked DRS
-  // plane with that package); both would otherwise draw straight over it. Chord
+  // TOPMOST rear surface carries it (`rearTop` at max downforce, `rearDrs` with
+  // a DRS package); both would otherwise draw straight over it. Chord
   // fractions clear the leading curl and the trailing edge, HALF is inside the
   // element's own 0.51, the span is cut into addWingFoil's own five segments so
   // the band follows the sweep, `proud` is along the local normal, not +Y.
@@ -563,38 +599,18 @@ const CarBodyGeom = (function () {
     const a = aLvl == null ? 2 : aLvl;
     const st = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
     const W = WING_BAND;
-    let spec = null, pivot = null, ang = 0, elem = "";
-    if (st.drs) {
-      // A DRS package BAKES an extra plane over the whole moveable stack (see
-      // part("rearWing")). It never rotates, so it is both the surface the camera
-      // sees and the one that keeps the band attached at every wing angle.
-      const crownY = endplateGeom(a, st).rear.top - 0.018;
-      const rearSweep = Math.max(-0.06, Math.min(0.20, st.rearSweep));
-      const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
-      spec = { zLead: -2.44, yLead: crownY - 0.050, zTrail: -2.60, yTrail: crownY,
-               half: 0.49, thick: 0.016, taper: rearTaper, sweep: rearSweep * 1.15,
-               rise: 0, attachHalf: 0.50 };
-      elem = "drs";
-    } else {
-      const flaps = aeroFlapsGeom(a, st);
-      let fg = null;
-      for (const f of flaps) if (f.wing === "rear") fg = f;   // the TOPMOST one
-      if (!fg) return null;
-      // Exactly what buildFlapGeom hands addWingFoil, and exactly the pose
-      // drawAeroFlaps hangs it at with the wing closed.
-      spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
-               half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
-               rise: fg.rise, attachHalf: fg.attachHalf };
-      pivot = { y: fg.y, z: fg.z };
-      ang = fg.zAngle;
-      elem = fg.id;
-    }
-    const ca = Math.cos(ang), sa = Math.sin(ang);
+    let fg = null;
+    for (const f of aeroFlapsGeom(a, st)) if (f.wing === "rear") fg = f;   // the TOPMOST one
+    if (!fg) return null;
+    // Exactly what buildFlapGeom hands addWingFoil, and exactly the pose
+    // drawAeroFlaps hangs it at with the wing closed.
+    const spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
+                   half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
+                   rise: fg.rise, attachHalf: fg.attachHalf };
+    const elem = fg.id, ca = Math.cos(fg.zAngle), sa = Math.sin(fg.zAngle);
     const pose = (p) => {
-      const top = p.y + p.h;
-      if (!pivot) return { y: top, z: p.z };
-      const dy = top - pivot.y, dz = p.z - pivot.z;
-      return { y: dy * ca - dz * sa + pivot.y, z: dy * sa + dz * ca + pivot.z };
+      const dy = p.y + p.h - fg.y, dz = p.z - fg.z;
+      return { y: dy * ca - dz * sa + fg.y, z: dy * sa + dz * ca + fg.z };
     };
     const st8 = [];
     for (let i = 0; i <= W.seg; i++) {
