@@ -298,7 +298,7 @@ test("study nose, pod and spine skins are closed, consistently wound and sampled
       else assert.equal(zs.size, 9, `${bodyStyle}/${round}: longitudinal curve missing`);
       if (skin === "cover") assert.equal(count, 284, `${bodyStyle}/${round}: unexpected cover cost`);
       else if (skin === "nose") assert.ok(count >= 68 && count <= 300, `${bodyStyle}/${round}: unexpected nose cost ${count}`);
-      // Four extra roof edges on the two channel bodies add 80 triangles.
+      // Channel roof edges add 144 triangles to Caldra and 108 to Talven.
       else assert.ok(count <= (["caldra", "talven"].includes(bodyStyle) ? 480 : 400), `${bodyStyle}/${round}: unexpected pod cost ${count}`);
       assert.ok(volume6 > 0, `${bodyStyle}/${round}: inward skin`);
       assert.ok([...edges.values()].every((e) => e.count === 2 && e.direction === 0), `${bodyStyle}/${round}: open or inconsistent skin`);

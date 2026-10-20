@@ -1423,7 +1423,7 @@ const CarBodyGeom = (function () {
     delta: { span: [.98,1.05,1.20,1.15,.96,.82,.78,.79,.85], depth: [.012,.025,.045,.055,.07,.06,.04,.02,.012] },
     serpent: { span: [1,.98,1.18,1.04,.70,.66,.86,.88,.86], depth: [.012,.02,.04,.08,.11,.12,.07,.025,.012] },
     // Independent recipes: keep the shared reference-body profiles above intact.
-    // Roof relief is measured normal to the pod top; Caldra's broad hollow and
+    // Roof relief is a vertical depth below the pod top; Caldra's broad hollow and
     // Talven's narrow channel keep distinct sections, not merely different spans.
     caldra: { shape: "rift", span: [1.08,1.08,1.35,1.15,.70,.55,.55,.65,.80], depth: [.015,.035,.10,.14,.15,.12,.08,.03,.012], channel: [.35,.84,.062] },
     rovik: { shape: "keel", span: [1.10,1.12,1.15,1.10,1.06,1,1,.98,.95], roofDrop: .065 },
