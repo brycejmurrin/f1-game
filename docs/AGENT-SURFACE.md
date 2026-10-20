@@ -119,8 +119,11 @@ VM, not host MCP attachment. If `environment-info` shows an allowlist without
 `.cursor/environment.json`, then start a **new** agent with all five MCPs enabled.
 
 When the host catalog is empty, use the Fallback column below (and
-`./tools/mcp/apex-tools-mcp.sh call …`). Only add allowlist names that exist
-in `.mcp.json`; removed aliases stay absent.
+`./tools/mcp/apex-tools-mcp.sh call …`). Repo `mcpServerAllowlist` rows name only
+the five `.mcp.json` servers. Optional Cursor **plugin** MCPs (e.g. **browser-use**
+for `browser_exec` / `browser_screenshot` on the shared `debug-chrome` CDP browser)
+live in `mcpPluginServerAllowlist` — enable the plugin in Integrations and tick it
+at agent launch; **js-debugger** remains the in-repo source debugger.
 
 ## MCP servers
 

@@ -31,6 +31,11 @@ fi
 # Reuse the same executable as the harness and MCP wrapper, including system
 # Chromium on PATH. The installer chooses a writable cache if none is present.
 CHROMIUM="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
+PW_CACHE="$(node "$ROOT/tools/lib/chromium-path.mjs" --cache-path 2>/dev/null || true)"
+if [ -n "$PW_CACHE" ]; then
+  export PLAYWRIGHT_BROWSERS_PATH="$PW_CACHE"
+fi
+
 if [ -n "$CHROMIUM" ] && [ -f "$CHROMIUM" ] && [ -x "$CHROMIUM" ]; then
   status+=("Chromium: present ($CHROMIUM)")
 elif [ "${APEX_SKIP_BROWSER_INSTALL:-}" = "1" ]; then

@@ -78,6 +78,16 @@ export function smokePlan() {
       note: "status only — run launches Chromium",
     },
     {
+      server: "js-debugger",
+      argv: ["bash", path.join(ROOT, "tools/mcp/js-debugger-mcp.sh"), "list-tools"],
+      note: "list-tools only — no browser",
+    },
+    {
+      server: "apex-lsp",
+      argv: ["node", path.join(ROOT, "tools/mcp/lsp-mcp.mjs"), "--list-tools"],
+      note: "catalog only — no tsc spawn",
+    },
+    {
       server: "tinyfish",
       argv: ["bash", path.join(ROOT, "tools/mcp/tinyfish-mcp.sh"), "help"],
       note: "help only — ensure / deploy-check need a key (shell / gitignored .env; CLI only, not MCP-attached)",

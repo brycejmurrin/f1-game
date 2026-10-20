@@ -31,6 +31,34 @@ elif [[ -n "${1:-}" ]]; then
   exit 2
 fi
 
+ensure_chrome_devtools_clone() {
+  if [[ "${APEX_SKIP_CHROME_MCP_CLONE:-}" == "1" ]]; then
+    return 0
+  fi
+  local bin="$ROOT/scratch/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js"
+  if [[ -f "$bin" ]]; then
+    echo "chrome-devtools MCP clone: present"
+    return 0
+  fi
+  echo "chrome-devtools MCP clone: building (best-effort)…"
+  if bash "$ROOT/tools/mcp/chrome-devtools-mcp.sh" clone; then
+    echo "chrome-devtools MCP clone: OK"
+  else
+    echo "WARN: chrome-devtools clone failed; npx pin remains" >&2
+  fi
+}
+
+ensure_playwright_browser_cache_env() {
+  local cache=""
+  cache="$(node "$ROOT/tools/lib/chromium-path.mjs" --cache-path 2>/dev/null || true)"
+  if [[ -z "$cache" ]]; then
+    echo "WARN: no writable Playwright browser cache discovered" >&2
+    return 0
+  fi
+  export PLAYWRIGHT_BROWSERS_PATH="$cache"
+  echo "PLAYWRIGHT_BROWSERS_PATH=$cache"
+}
+
 ensure_google_chrome_channel() {
   local exe=""
   exe="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
@@ -83,6 +111,8 @@ run_mcp_smoke() {
 }
 
 mkdir -p "$ROOT/artifacts/logs"
+ensure_chrome_devtools_clone
+ensure_playwright_browser_cache_env
 ensure_google_chrome_channel
 
 fail=0
