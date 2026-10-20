@@ -32,7 +32,7 @@ const CATALOG = ["aero", "floor", "engine", "ers", "gearbox", "suspension", "bra
 
 export const WORKS = Object.freeze(Object.fromEntries(CATALOG.map((c) => [c.id, "w:" + c.id])));
 
-export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" }, career = null } = {}) {
+export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" }, career = null, livery = null } = {}) {
   const rec = { builds: [], wheels: 0, freed: 0, draws: [], flaps: [], mats: [] };
   const stored = { hudMirror: "on" };
   const classes = new Set();
@@ -85,7 +85,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       },
       buildWheelLayers: () => { rec.wheels++; return { rotating: { kind: "wheel" }, fixed: { kind: "wheelFixed" } }; },
       TYRE_BAND: [null, [1, 1, 0]], BRAKE_CALIPER: [null, [1, 0, 0]],
-      aeroLevelOf: () => 2, aeroStyleOf: () => null,
+      aeroLevelOf: () => 2, aeroStyleOf: () => null, appearanceParts: (p) => p,
     },
     CarWheels: { tints: () => ({ rim: null, cal: null, ink: null, key: "" }) },   // livery wheel tints: none set
     Parts: {
@@ -120,7 +120,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     getTeamParts: () => playerParts,
   };
   const carDraw = ctx.CarDraw.create(G, {
-    resolveLivery: () => ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
+    resolveLivery: () => livery || ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
     // drawAeroFlaps in game.js, recorded (field-lod.test.mjs drives the real one):
     // `still` = the static flap set, drawn whatever the car's distance.
     drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still) =>

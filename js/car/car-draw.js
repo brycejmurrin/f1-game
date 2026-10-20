@@ -581,17 +581,18 @@ const CarDraw = (function () {
     const AERO_CUSTOM_CACHE_MAX = 32;
     let _aeroCustomTick = 0;
     function teamDecalState(team, usePlayerSetup, setup, stamp) {
+      const liv = deps.resolveLivery(team), aeroShape = liv.aeroShape, floorShape = liv.floorShape;
       if (setup) {
         let byTeam = _aeroCustom.get(team.id);
         if (!byTeam) { byTeam = new Map(); _aeroCustom.set(team.id, byTeam); }
         const leg = Parts.legalityKey();
         const key = stamp || "";
         const c = byTeam.get(key);
-        if (c && c.leg === leg) { c.lastUse = ++_aeroCustomTick; return c; }
-        const parts = Parts.getVisualTiers(setup, team);
+        if (c && c.leg === leg && c.aeroShape === aeroShape && c.floorShape === floorShape) { c.lastUse = ++_aeroCustomTick; return c; }
+        const parts = Car3D.appearanceParts(Parts.getVisualTiers(setup, team), liv);
         const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                         aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                        parts, rev: -1, leg, fwKey: null, lastUse: ++_aeroCustomTick };
+                        parts, rev: -1, leg, aeroShape, floorShape, fwKey: null, lastUse: ++_aeroCustomTick };
         byTeam.set(key, state);
         // Career upgrades change the stamp for years of builds. Retain the
         // recent recipes, including both seats of every active team, rather
@@ -609,15 +610,15 @@ const CarDraw = (function () {
       // Factory: the ruleset (Parts.setLegality) is the only thing that moves it.
       const rev = usePlayerSetup ? G.store.rev : -1, leg = Parts.legalityKey();
       const c = cache.get(team.id);
-      if (c && c.rev === rev && c.leg === leg) return c;
+      if (c && c.rev === rev && c.leg === leg && c.aeroShape === aeroShape && c.floorShape === floorShape) return c;
       const resolved = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
-      const parts = Parts.getVisualTiers(resolved, team);
+      const parts = Car3D.appearanceParts(Parts.getVisualTiers(resolved, team), liv);
       // aero: the resolved RECIPE, resolved once here for every flap consumer.
       // parts.aero is the tier NUMBER — passing that to Car3D.aeroFlaps() NaN'd
       // every flap vertex and made the moveable wings invisible (see aeroStyleOf).
       const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                       aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                      parts, rev, leg, fwKey: null };
+                      parts, rev, leg, aeroShape, floorShape, fwKey: null };
       cache.set(team.id, state);
       return state;
     }
