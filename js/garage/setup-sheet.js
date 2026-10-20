@@ -1080,7 +1080,7 @@ function buildLiveryCreator(container, team) {
     prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
     prev.textContent = "";
     if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
-    const restorePaletteFocus = refreshPalettes();   // a slot's new colour becomes matchable from every other slot
+    const restorePaletteFocus = refreshPalettes(defer3d);   // a slot's new colour becomes matchable from every other slot
     syncDeps();
     if (restorePaletteFocus && !restorePaletteFocus.disabled) restorePaletteFocus.focus({ preventScroll: true });
     defer3d ? scheduleLivPreview(team, d) : livePreviewDraft(team, d);
@@ -1113,10 +1113,13 @@ function buildLiveryCreator(container, team) {
   };
   const palRows = [];   // the palette IS the other slots
   let paletteKey = null;
-  const refreshPalettes = () => {
+  // `drag`: a colour-picker `input` tick. ~23 rows of chips would be torn down
+  // and rebuilt per tick, so a drag only moves the .active marks; the change
+  // event (applyPreview without defer3d) rebuilds once.
+  const refreshPalettes = (drag) => {
     const cols = paletteColours();
     const key = cols.slice().sort().join(",");
-    if (key === paletteKey) {
+    if (key === paletteKey || (drag && paletteKey !== null)) {
       for (const pr of palRows) for (const chip of pr.el.children)
         chip.classList.toggle("active", (d[pr.key] || "").toLowerCase() === chip.dataset.csColour);
       return null;   // unchanged chips keep their handlers and keyboard focus
