@@ -629,11 +629,11 @@ const Parts = (function () {
     // D6 exhaust looks: temper-coloured titanium, the 2019+ stacked
     // wastegates above the main tip, and a hooded exit.
     ["exhaust", "sport_cat", "style_exhaust_titanium", "Burnt Titanium", "straw-to-blue heat-tempered tailpipe with a flared tip",
-      { pipes: 1, heatTint: 1, bore: 1.18, flare: 0.5, wrap: 0, lip: 0, shield: 0 }],
+      { pipes: 1, heatTint: 1, bore: 1.10, flare: 0.5, wrap: 0, lip: 0, shield: 0 }],
     ["exhaust", "twin_gate", "style_exhaust_stackgate", "Stacked Gates", "two wastegate pipes stacked over the main tip",
-      { pipes: 1, gateStack: 1, wastegate: 2, heatTint: 2, wrap: 0, lip: 1, shield: 0 }],
+      { pipes: 1, gateStack: 1, wastegate: 2, heatTint: 2, wrap: 0, lip: 1, shield: 0, bore: 1.04 }],
     ["exhaust", "free_flow", "style_exhaust_hooded", "Hooded Exit", "tip tucked under a carbon visor with a red edge",
-      { pipes: 1, hood: 1, heatTint: 1, wrap: 0, lip: 0, shield: 0, bore: 1.10 }],
+      { pipes: 1, hood: 1, heatTint: 1, wrap: 0, lip: 0, shield: 1, bore: 1.10 }],
     ["exhaust", "inconel", "style_exhaust_bluetri", "Blued Tri-Exit", "three purple-blue tempered pipes, bare and flareless",
       { pipes: 3, heatTint: 2, wrap: 0, lip: 0, shield: 0, flare: 0 }],
     ["floor", "fence_array", "style_floor_tallfence", "Tall Fences", "eight tall fences and a raised edge lip",
