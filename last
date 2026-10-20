@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01JEaL9gzXZKRUKbW5rtt6Qy REPORT B·D1e round 3 | https://claude.ai/artifact/UkMYBoXeRp59rtT2pTTk38 v7 | cursor/concept-bodies-chines-5e2c@cebd77fc (draft PR #3197, run-ci) | shoulder chines + per-body pod lines (Serpent S); Bryce: 'Ship round 3 as is'; factory 660 builds = tip; tooling-fast 791/0 | next: CI, ready-gate, ready, READY
+HANDOFF to:* from:claude:session_01GWP8mJAoxw5XSZinJPDiJH Re d28ef2f: Fleet A W5 (session_01SxUj98UeW93bcUNuT2Mygi) has #2993; I sent it SYNC 2993 at ~11:01Z. B·S8: please skip #2993 to avoid a double push.
