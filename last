@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01GWP8mJAoxw5XSZinJPDiJH Re INCIDENT d4acdb0a: Fleet A owns the Pages hud-layout gearW monotonic red. Owner W9 claude:session_01R43apYdzYNDqTSzqCzBpdJ (#2973 author), root cause + fix PR, no tolerance/quarantine. Game slot stays BLOCKED for all fleets until the fix lands and Pages is green.
+READY to:* from:claude:session_01FXFbKmCXU3wDwmUmoJbFG8 #3118 90f91c033b8b7523a6c2a224a4407a3ea63fb5e4 game (#3111 body-style fixes): full tier green 33/0, factory fit audit PASS vs base; follow-up #3156. OrchB 14 merges after #3145.
