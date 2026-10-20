@@ -27,7 +27,7 @@ exitIfHelp(argv, `usage: node tools/perf/garage-census.mjs [--root DIR] [--label
   triangles and programs per frame (TLX renderer.info / GLX draw wrap), JS heap, DOM nodes,
   the setup sheet's button count, and Car3D.build ms + tris for the team body and every
   Car3D.BODY_STYLE_IDS entry. --root serves another checkout (the baseline worktree).`);
-parseFlags(argv, ["--root", "--label", "--backend", "--team", "--frames", "--size", "--json"]);
+parseFlags(argv, ["--root", "--label", "--backend", "--team", "--frames", "--size", "--json", "--finishes", "--finish-frames"]);
 const flag = (n, d) => {
   const i = argv.indexOf(n);
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d;
@@ -39,6 +39,12 @@ const team = flag("--team", "mercedes");
 const frames = Math.max(20, +flag("--frames", "90") || 90);
 const [vw, vh] = flag("--size", "844x390").split("x").map((v) => +v);
 const jsonOut = flag("--json", null);
+// One finish per family by default: SwiftShader drains every frame under gl.finish(),
+// so sixteen finishes x 30 frames ran past a 15-minute cap.
+const finishList = flag("--finishes", "gloss,satin,chrome,carbon,flake,oilslick,frozen,truematte,xirallic").split(",");
+const finishFrames = Math.max(4, +flag("--finish-frames", "10") || 10);
+// Each phase prints its own line as it lands, so a run that times out keeps what it measured.
+const phase = (name, obj) => console.log(`- ${label} ${name} ` + JSON.stringify(obj));
 
 // Before any page script: time every rAF callback and count GL draws, so the
 // numbers cover the whole frame the game schedules, not a probe's own call.
@@ -129,7 +135,7 @@ async function census() {
       // Same view again, each rendered frame followed by gl.finish().
       window.__gcRendered.length = 0; window.__gcFinished.length = 0;
       window.__gcFinish = true; window.__gcOn = true;
-      await new Promise((res) => { const tick = () => (window.__gcFinished.length >= 30 ? res() : requestAnimationFrame(tick)); requestAnimationFrame(tick); });
+      await new Promise((res) => { const tick = () => (window.__gcFinished.length >= 12 ? res() : requestAnimationFrame(tick)); requestAnimationFrame(tick); });
       window.__gcOn = false; window.__gcFinish = false;
       const finishMs = [...window.__gcFinished];
       const info = window.renderer && window.renderer.info;
@@ -141,6 +147,9 @@ async function census() {
           programs: info.programs ? info.programs.length : null } : null,
       };
     }, frames);
+    phase("steady", { rendered: steady.rendered.length, rafMedian: pct(steady.rendered, 0.5), finishMedian: pct(steady.finishMs, 0.5),
+      draws: +steady.drawsPerFrame.toFixed(1), tris: Math.round(steady.trisPerFrame), programsOpen: opened.programs - glBoot.programs,
+      compileMsOpen: +(opened.compileMs - glBoot.compileMs).toFixed(1) });
     const heap = await cdp.send("Runtime.getHeapUsage").catch(() => null);
     const dom = await cdp.send("Memory.getDOMCounters").catch(() => null);
     const sheet = await page.evaluate(() => ({
@@ -179,6 +188,7 @@ async function census() {
         }));
       });
     });
+    phase("builds", builds);
     // A picker change through the shipped path: the hook's own ms (sheet rebuild)
     // and the next frame's rAF ms (Car3D.build + upload + hull), alternating two floors.
     const change = await page.evaluate(async () => {
@@ -202,10 +212,11 @@ async function census() {
       C.build = orig;
       return { hookMs, frameMs, buildMs, programs, compileMs };
     });
+    phase("change", change);
     // Per finish: the preview car rebuilt in that finish (Car3D.build sees the
-    // livery's `finish`), then 24 rendered frames with gl.finish() — the
+    // livery's `finish`), then --finish-frames rendered frames with gl.finish() — the
     // fragment-cost proxy above, per finish family. The ids a tree lacks are skipped.
-    const finishes = await page.evaluate(async (list) => {
+    const finishes = await page.evaluate(async ([list, nf]) => {
       const A = window.__apex, C = Car3D, out = [];
       const orig = C.build;
       let pick = null;
@@ -221,17 +232,17 @@ async function census() {
         A.garageParts({ floor: flip++ % 2 ? "venturi" : "sealed_edge" });
         window.__gcRendered.length = 0; window.__gcFinished.length = 0;
         window.__gcFinish = true; window.__gcOn = true;
-        await frames(6);   // the rebuild frame and any compile land here, then discard
+        await frames(3);   // the rebuild frame and any compile land here, then discard
         window.__gcFinished.length = 0;
-        await frames(24);
+        await frames(nf);
         window.__gcOn = false; window.__gcFinish = false;
         const a = [...window.__gcFinished].sort((x, y) => x - y);
         out.push({ finish: f, finishMedian: +a[a.length >> 1].toFixed(2) });
       }
       C.build = orig;
       return out;
-    }, ["gloss", "satin", "chrome", "carbon", "flake", "chameleon", "goldplate", "oilslick", "frozen", "flovis", "silverfade",
-      "truematte", "jpsgold", "xirallic", "mystichrome", "ultrablack"]);
+    }, [finishList, finishFrames]);
+    phase("finishes", finishes);
     const backendLive = await page.evaluate(() => { try { return window.__apex.diag({ download: false }).env.backend; } catch { return null; } });
     const s = steady;
     return {
