@@ -58,7 +58,10 @@ function cookieToken(req) {
   const raw = String(req.headers.cookie || "");
   for (const part of raw.split(";")) {
     const [name, ...value] = part.trim().split("=");
-    if (name === "apex26_report_token") return decodeURIComponent(value.join("="));
+    if (name === "apex26_report_token") {
+      try { return decodeURIComponent(value.join("=")); }
+      catch { return ""; } // A malformed cookie is an unauthenticated request.
+    }
   }
   return "";
 }
@@ -185,6 +188,16 @@ export function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_
       let rep;
       try { rep = JSON.parse(text); }
       catch (_) { releaseReservation(); res.writeHead(400).end("invalid JSON"); return; }
+      // JSON syntax alone admits null, scalars and arrays. Validate before
+      // committing evidence or quota: the asynchronous callback is outside the
+      // static server's request-handler catch, so a bad shape could kill it.
+      if (!rep || typeof rep !== "object" || Array.isArray(rep)
+          || (rep.verdict != null && (!Array.isArray(rep.verdict)
+            || !rep.verdict.every((line) => typeof line === "string")))) {
+        releaseReservation();
+        res.writeHead(400).end("report must be an object with an optional array of verdict strings");
+        return;
+      }
       try {
         mkdirSync(out, { recursive: true });
         // Never let a repeated or forged filename erase the evidence already
@@ -201,11 +214,14 @@ export function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_
       reservedBytes = Math.max(0, reservedBytes - reserved);
       reserved = 0;
       const kb = (bytes / 1024).toFixed(1);
+      // Metadata is diagnostic data, not a trusted JS string conversion hook.
+      // Preserve unfamiliar shapes in the saved JSON without coercing them.
+      const display = (value) => value !== null && typeof value === "object" ? "[non-scalar]" : String(value);
       console.log(`\n[report] ${name}  (${kb} KB)  -> artifacts/reports/${name}`);
-      console.log(`[report] build ${rep.build} · backend ${rep.backend} · state ${rep.state}`);
+      console.log(`[report] build ${display(rep.build)} · backend ${display(rep.backend)} · state ${display(rep.state)}`);
       const cc = rep.canvasContext || {};
-      console.log(`[report] canvas alpha: ${cc.webgl2 ? cc.alpha : cc.note || "n/a"}`);
-      if (rep.agent) console.log(`[report] ${rep.agent.ua}`);
+      console.log(`[report] canvas alpha: ${display(cc.webgl2 ? cc.alpha : cc.note || "n/a")}`);
+      if (rep.agent) console.log(`[report] ${display(rep.agent.ua)}`);
       for (const line of rep.verdict || []) console.log(`[report]   ${line}`);
       res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" })
         .end(JSON.stringify({ ok: true, saved: `artifacts/reports/${name}`, bytes }));

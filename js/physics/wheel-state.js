@@ -1,30 +1,36 @@
 /* Apex 26 — WHEEL STATE: torque-balanced per-axle rim speed and slip ratio.
  * Opt-in (default OFF). When OFF, PlayerForces never calls in and tip handling
- * stays byte-identical. When ON, heavy brake locks and hard throttle at low
- * speed spins; combined slip scales lateral grip from κ.
+ * stays byte-identical. When ON, an axle whose brake or drive demand exceeds
+ * its tyre's longitudinal capacity (wet, grass, kerb, light load, lateral slip
+ * already spending the circle) runs away into lock or spin; the sliding tyre
+ * then delivers less than was asked and PlayerForces hands that shortfall back
+ * to c.speed, so a lock-up stops LONGER and wheelspin accelerates SLOWER.
  *
- * Scoped first slice of #1628: state + κ + telemetry live here. game.js still
- * integrates longitudinal speed from the legacy axFrac path — wiring Fx into
- * c.speed is follow-up (see docs/notes/WHEEL-STATE-2026-10-19.md).
- *
- * Design: docs/notes/PLAYER-PHYSICS-PLAN-TIER2-2026-09.md §5.
+ * Demand and capacity come from the caller in accel units (PlayerForces bills
+ * the same grip circle the legacy axFrac path does: LONG_GRIP x weather), so a
+ * dry BB_REF stop (~0.64 of the circle) never locks. #1628;
+ * docs/notes/WHEEL-STATE-2026-10-19.md, plan Tier2 §5.
  */
 const WheelState = (function () {
   "use strict";
 
   const clamp = M4.clamp;
 
-  // Absolute long capacity (accel units), like LAT_MAX. Pedal torque sits above
-  // capacity at low/mid speed so a stamp can lock; WHEEL_J sets lock time.
-  const LONG_CAP = 26;
-  const BRAKE_PEDAL = 40;
   const KAPPA_PEAK = 0.10;
   const KAPPA_MAX = 1;
   const KAPPA_VMIN = 3;       // m/s floor in κ = (vw−vx)/max(|vx|,…)
   const KAPPA_RELAX_M = 0.4;  // metres of travel to relax toward κ*
   const WHEEL_J = 0.10;       // effective I/m·R² — ~100 ms lock at 40 m/s
-  const LOCK_KAPPA = 0.55;     // |κ|/KAPPA_PEAK above this → wheelLock telemetry
-  const SPIN_KAPPA = 0.55;     // +κ_R normalised → wheelSpin telemetry
+  // Lock / spin telemetry starts PAST the peak (|κ|/KAPPA_PEAK > 1): a tyre
+  // still under its peak is gripping, however hard it is worked, and is full
+  // at κ = 0.25. The first slice keyed this at 0.55 of peak, so every dry stop
+  // read as a lock-up.
+  const LOCK_KAPPA = 1;
+  const SPIN_KAPPA = 1;
+  const LOCK_SPAN = 1.5;
+  // A speed change no tyre can make in one tick (> 8 g) is a placement — jump(),
+  // a reset, a rescue — not dynamics: the rims re-sync to the new body speed.
+  const RESYNC_A = 80;
 
   let _enabled = false;
   let _resolved = false;
@@ -68,6 +74,15 @@ const WheelState = (function () {
     if (!Number.isFinite(c.wheelSpin)) c.wheelSpin = 0;
   }
 
+  /** ensure() plus a re-sync when c.speed jumped since the last step (placement). */
+  function sync(c, dt) {
+    const u = Number.isFinite(c.speed) ? c.speed : 0;
+    if (Number.isFinite(c._wsV) && Math.abs(u - c._wsV) > RESYNC_A * Math.max(dt, 1 / 240)) {
+      c.vwF = c.vwR = u; c.kappaF = c.kappaR = 0;
+    }
+    ensure(c);
+  }
+
   function kappaOf(vw, vx) {
     return (vw - vx) / Math.max(Math.abs(vx), KAPPA_VMIN);
   }
@@ -76,7 +91,7 @@ const WheelState = (function () {
    * One axle: demand aReq (accel units, +drive / −brake) vs tyre Fx; update vw.
    * Pure over numbers; writes into `out` { vw, kappa, fx, locked, spinning }.
    *
-   * @param {{ vw: number }} state
+   * @param {{ vw: number, kappa?: number }} state
    * @param {{ dt: number, vx: number, aReq: number, muLong: number, alphaN?: number }} params
    * @param {object} [out]
    */
@@ -95,6 +110,7 @@ const WheelState = (function () {
       o.fx = 0;
       o.locked = 0;
       o.spinning = 0;
+      o.ach = 0;
       return o;
     }
 
@@ -117,14 +133,23 @@ const WheelState = (function () {
     // Closed-form κ* for the torque-limited regime: Fx(κ*) ≈ aReq.
     // Linearised near peak: Fx ≈ muLong·(κ/KAPPA_PEAK) while |κ|≪peak and α≈0.
     const kStar = clamp((aReq / muLong) * KAPPA_PEAK, -KAPPA_MAX, KAPPA_MAX);
-    const demandOver = Math.abs(aReq) > muLong * 0.98;
+    // Longitudinal room left by the lateral slip (ellipse): an axle already at
+    // its cornering peak (|alphaN| ≥ 1) has almost none, so power on a corner
+    // exit spins the rear and a trail-brake at the limit locks the front.
+    const room = Math.sqrt(Math.max(0.0025, 1 - Math.min(1, alphaN * alphaN)));
+    const demandOver = Math.abs(aReq) > muLong * room * 0.98;
 
     if (!demandOver) {
-      // Relax vw toward the κ* that matches demand (no runaway).
+      // Relax the SLIP toward the κ* that matches demand (no runaway). Relaxing
+      // the rim speed instead left vw trailing an accelerating body by ~1 m/s
+      // at 3 m/s — a phantom lock under full throttle (measured κR −0.16).
       const travel = Math.max(Math.abs(vx), KAPPA_VMIN) * dt;
       const a = 1 - Math.exp(-travel / KAPPA_RELAX_M);
-      const vwStar = vx + kStar * Math.max(Math.abs(vx), KAPPA_VMIN);
-      vw = vw + (vwStar - vw) * a;
+      // The slip carried in is the last tick's κ (state.kappa) when known: a
+      // gripping wheel turns with the body, so the body's own acceleration
+      // must not read as slip.
+      const k0 = Number.isFinite(state.kappa) ? clamp(state.kappa, -KAPPA_MAX, KAPPA_MAX) : kappa;
+      vw = vx + (k0 + (kStar - k0) * a) * Math.max(Math.abs(vx), KAPPA_VMIN);
       // Recompute Fx at the relaxed state for telemetry.
       kappa = clamp(kappaOf(vw, vx), -KAPPA_MAX, KAPPA_MAX);
       const kn2 = kappa / KAPPA_PEAK;
@@ -150,27 +175,39 @@ const WheelState = (function () {
     o.vw = vw;
     o.kappa = kappa;
     o.fx = fx;
+    // What the tyre actually delivered toward the demand (accel units, ≥ 0):
+    // all of it while torque-limited, the sliding force once it ran away.
+    o.ach = demandOver ? Math.min(Math.abs(aReq), Math.abs(fx)) : Math.abs(aReq);
     const knAbs = Math.abs(kappa) / KAPPA_PEAK;
-    o.locked = kappa < 0 ? clamp((knAbs - LOCK_KAPPA) / (1 - LOCK_KAPPA), 0, 1) : 0;
-    o.spinning = kappa > 0 ? clamp((knAbs - SPIN_KAPPA) / (1 - SPIN_KAPPA), 0, 1) : 0;
-    // Lateral share of the friction ellipse (1 at free roll, →0 as |κn|→1).
-    o.latScale = Math.sqrt(Math.max(0, 1 - Math.min(1, knAbs * knAbs)));
-    if (o.latScale < 0.05) o.latScale = 0.05;
+    o.locked = kappa < 0 ? clamp((knAbs - LOCK_KAPPA) / LOCK_SPAN, 0, 1) : 0;
+    o.spinning = kappa > 0 ? clamp((knAbs - SPIN_KAPPA) / LOCK_SPAN, 0, 1) : 0;
+    // Lateral share of the combined force: the tyre makes F(ρ) along its slip
+    // direction, so its lateral part is F(ρ)·|αN|/ρ, against the pure-lateral
+    // F(|αN|) the Fy path already computes. Free roll is 1; a locked or
+    // spinning tyre keeps only the sliding force's sideways share. The first
+    // slice's √(1−κn²) hit its 0.05 floor the instant κ passed the peak.
+    const aN = Math.abs(alphaN), rhoL = Math.hypot(aN, knAbs);
+    const g = (x) => (typeof TyreModel !== "undefined" && TyreModel.lateralCurve)
+      ? Math.abs(TyreModel.lateralCurve(x * peakX)) : Math.min(1, x);
+    const per = (x) => (x > 1e-3 ? g(x) / x : g(1e-3) / 1e-3);   // F(x)/x, its slope at 0
+    o.latScale = clamp(per(rhoL) / per(aN), 0.05, 1);
     return o;
   }
 
   // Scratch bags — one step, no alloc.
   const _fOut = {};
   const _rOut = {};
-  const _results = { latScaleF: 1, latScaleR: 1, fxF: 0, fxR: 0 };
+  const _results = { latScaleF: 1, latScaleR: 1, fxF: 0, fxR: 0, shortfall: 0 };
 
   /**
    * PlayerForces hook. Mutates rim speeds, kappa, wheelLock, wheelSpin on `c`.
-   * Returns lateral grip scales for the Fy path. No-op contract when !enabled().
+   * Returns lateral grip scales for the Fy path and `shortfall` ∈ [0, 1]: the
+   * fraction of the longitudinal demand the tyres did NOT deliver this tick
+   * (0 while every axle is torque-limited). No-op contract when !enabled().
    *
-   * opts: { dt, loadF, loadR, braking, thrOn, throttleLvl, gearMult, deploy,
-   *         weatherGrip, surfaceMu, kerbGrip, aeroGrip, tyreMu, tyreAx,
-   *         slipF, slipR, csFront, csRear, muLatF, muLatR, brakeBias }
+   * opts: { dt, braking, thrOn, aReqF, aReqR (accel, +drive / −brake),
+   *         muLongF, muLongR (accel capacity), slipF, slipR, csFront, csRear,
+   *         muLatF, muLatR }
    */
   function stepPlayer(c, opts) {
     if (!enabled() || !c || !opts) {
@@ -178,44 +215,15 @@ const WheelState = (function () {
       _results.latScaleR = 1;
       _results.fxF = 0;
       _results.fxR = 0;
+      _results.shortfall = 0;
       return _results;
     }
-    ensure(c);
     const dt = opts.dt;
+    sync(c, dt);
     const vx = c.speed || 0;
-    const weatherGrip = opts.weatherGrip != null ? opts.weatherGrip : 1;
-    const surfaceMu = opts.surfaceMu != null ? opts.surfaceMu : 1;
-    const kerbGrip = opts.kerbGrip != null ? opts.kerbGrip : 1;
-    const aeroGrip = opts.aeroGrip != null ? opts.aeroGrip : 1;
-    const tyreMu = opts.tyreMu != null ? opts.tyreMu : 1;
-    const tyreAx = opts.tyreAx || { f: 1, r: 1 };
-    const loadF = Math.max(+opts.loadF || 0.5, 0.05);
-    const loadR = Math.max(+opts.loadR || 0.5, 0.05);
-
-    const grip = weatherGrip * surfaceMu * kerbGrip * aeroGrip * tyreMu;
-    const muLongF = Math.max(1e-3, LONG_CAP * loadF * grip * tyreAx.f);
-    const muLongR = Math.max(1e-3, LONG_CAP * loadR * grip * tyreAx.r);
-
-    // Brake demand: full pedal above capacity so a stamp locks at low grip.
-    let aBrakeF = 0, aBrakeR = 0;
-    if (opts.braking) {
-      const aBrake = -BRAKE_PEDAL;
-      // Bias: more front by default (BB_REF-ish 0.56).
-      const bb = (opts.brakeBias != null && Number.isFinite(opts.brakeBias))
-        ? clamp(opts.brakeBias, 0.3, 0.8) : 0.56;
-      aBrakeF = aBrake * bb;
-      aBrakeR = aBrake * (1 - bb);
-    }
-
-    // Drive + ERS on the rear only.
-    let aDriveR = 0;
-    if (opts.thrOn && !opts.braking) {
-      const thr = clamp(+opts.throttleLvl || 0, 0, 1.5);
-      const gear = opts.gearMult != null ? +opts.gearMult : 1;
-      const deploy = Math.max(0, +opts.deploy || 0);
-      // Low-speed surplus: demand above muLong → wheelspin.
-      aDriveR = (LONG_CAP * 1.35) * thr * gear + deploy;
-    }
+    const aReqF = +opts.aReqF || 0, aReqR = +opts.aReqR || 0;
+    const muLongF = Math.max(1e-3, +opts.muLongF || 0);
+    const muLongR = Math.max(1e-3, +opts.muLongR || 0);
 
     const csF = Math.max(+opts.csFront || 130, 1);
     const csR = Math.max(+opts.csRear || 160, 1);
@@ -226,17 +234,18 @@ const WheelState = (function () {
     const alphaNF = (opts.slipF || 0) * csF / muLatF / peakXF;
     const alphaNR = (opts.slipR || 0) * csR / muLatR / peakXR;
 
-    axleStep({ vw: c.vwF }, {
-      dt, vx, aReq: aBrakeF, muLong: muLongF, alphaN: alphaNF,
+    axleStep({ vw: c.vwF, kappa: c.kappaF }, {
+      dt, vx, aReq: aReqF, muLong: muLongF, alphaN: alphaNF,
     }, _fOut);
-    axleStep({ vw: c.vwR }, {
-      dt, vx, aReq: aBrakeR + aDriveR, muLong: muLongR, alphaN: alphaNR,
+    axleStep({ vw: c.vwR, kappa: c.kappaR }, {
+      dt, vx, aReq: aReqR, muLong: muLongR, alphaN: alphaNR,
     }, _rOut);
 
     c.vwF = _fOut.vw;
     c.vwR = _rOut.vw;
     c.kappaF = _fOut.kappa;
     c.kappaR = _rOut.kappa;
+    c._wsV = vx;
     c.wheelLock = opts.braking ? Math.max(_fOut.locked, _rOut.locked * 0.85) : 0;
     c.wheelSpin = (!opts.braking && opts.thrOn) ? _rOut.spinning : 0;
     // Keep axFrac* meaningful for coach / debris: |κn| capped at 1.
@@ -245,6 +254,8 @@ const WheelState = (function () {
     c.axFrac = Math.max(c.axFracF, c.axFracR);
     c.slipFactor = Math.sqrt(Math.max(0, 1 - c.axFracR * c.axFracR));
 
+    const want = Math.abs(aReqF) + Math.abs(aReqR);
+    _results.shortfall = want > 1e-6 ? clamp(1 - (_fOut.ach + _rOut.ach) / want, 0, 1) : 0;
     _results.latScaleF = clamp(_fOut.latScale != null ? _fOut.latScale : 1, 0.05, 1);
     _results.latScaleR = clamp(_rOut.latScale != null ? _rOut.latScale : 1, 0.05, 1);
     _results.fxF = _fOut.fx || 0;
@@ -253,8 +264,8 @@ const WheelState = (function () {
   }
 
   return Object.freeze({
-    enabled, setEnabled, ensure, kappaOf, axleStep, stepPlayer,
-    LONG_CAP, BRAKE_PEDAL, KAPPA_PEAK, KAPPA_MAX, KAPPA_VMIN,
-    KAPPA_RELAX_M, WHEEL_J, LOCK_KAPPA, SPIN_KAPPA,
+    enabled, setEnabled, ensure, sync, kappaOf, axleStep, stepPlayer,
+    KAPPA_PEAK, KAPPA_MAX, KAPPA_VMIN,
+    KAPPA_RELAX_M, WHEEL_J, LOCK_KAPPA, SPIN_KAPPA, LOCK_SPAN, RESYNC_A,
   });
 })();

@@ -1,0 +1,1 @@
+Fixed: Circuits build faster, most on hilly tracks (the Hungaroring and the Nürburgring in about half the time), and a track uses a few MB less memory. The first flyby after a track switch no longer stalls to rebuild the terrain lookup.

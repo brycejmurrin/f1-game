@@ -61,6 +61,10 @@ const _presentTune = { sunShaftMul: 0 };
 function garagePhone() {
   return typeof GLX !== "undefined" && !!(GLX && (GLX.isMobile || GLX.mobileTier));
 }
+// The shipped look when GarageScene carries no mood table (older stubs, headless VMs).
+const NO_MOOD = Object.freeze({ exposure: 1, bloom: 1, glare: 1, sun: null });
+const moodDef = () => (typeof GarageScene !== "undefined" && GarageScene.moodDef && GarageScene.moodDef()) || NO_MOOD;
+
 function presentOpts(tune) {
   const T = tune === undefined ? liveTune() : tune;
   const exposureMul = _tuneNum(T, "exposureMul", 1);
@@ -74,8 +78,11 @@ function presentOpts(tune) {
   // Prototype chain carries the rest of the image-grade knobs (no Object.create).
   Object.setPrototypeOf(_presentTune, T && typeof T === "object" ? T : null);
   _presentTune.sunShaftMul = 0;
-  _presentOpts.exposure = SP_EXPOSURE * exposureMul;
-  _presentOpts.bloom = shed ? 0 : SP_BLOOM * bloomMul;
+  // The garage lighting mood (identity when shipped). Inline, not moodDef():
+  // tests run this function sliced out of the file.
+  const md = (typeof GarageScene !== "undefined" && GarageScene.moodDef && GarageScene.moodDef()) || { exposure: 1, bloom: 1 };
+  _presentOpts.exposure = SP_EXPOSURE * exposureMul * md.exposure;
+  _presentOpts.bloom = shed ? 0 : SP_BLOOM * bloomMul * md.bloom;
   _presentOpts.threshold = threshold;
   _presentOpts.contact = 0;
   // A closed bay has no wet road and no env probe. Omitted carReflect is the
@@ -321,6 +328,9 @@ const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
 let setupPreviewMinDist = 0, setupPreviewFree = false;   // 0 = use the global SP_DIST_MIN; free = a dev shot may leave the player's range
+// lens (dev shot only, __apex.garageFrame fov/centre): { fov deg, centre } — a matched-lens
+// reference frame: its own vertical fov, no panel lens shift, no auto recentre. null = the player's camera.
+let setupPreviewLens = null;
 // The player's orbit floor is 0 (never under the car) and a view's minDist; a
 // survey tool asking to look UP at a wing from the floor needs neither, and
 // setSetupFree lifts both until the next preset. Nothing the player can reach.
@@ -360,6 +370,7 @@ function setSetupView(name) {
   setupPreviewView = name;
   GarageScene.spot(name);   // the work lamp wheels over to what the preset frames
   setupPreviewFree = false;   // a preset is the player's range again
+  setupPreviewLens = null;   // and its own lens
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
   // A preset is an absolute framing, so it also drops any pan the player had
   // walked in — otherwise "show me the rear wing" shows them the rear wing plus
@@ -607,7 +618,7 @@ function garageCtx(asSetup = false) {
   ctx.ambient = !reducedMotion() && (!h || home.moving);
   ctx.studio = !!(h && home.mode === "studio");
   ctx.unlimited = !!G.unlimitedBudget;   // the wall BUDGET board reads FREE BUILD, like the DOM sheet
-  return ctx;
+  return typeof GarageScene !== "undefined" && GarageScene.moodCtx ? GarageScene.moodCtx(ctx) : ctx;
 }
 function captureCamera() {
   return { az: setupPreviewAz, el: setupPreviewEl, dist: setupPreviewDist, spin: setupPreviewSpin,
@@ -781,7 +792,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   eye[0] = setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * spDist * spCe;
   eye[1] = setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe;
   eye[2] = setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe;
-  M4.perspectiveTo(_spProj, homeFov * Math.PI / 180, gfx.aspect, 0.1, 60);
+  const lens = setupPreviewLens;
+  M4.perspectiveTo(_spProj, (lens && lens.fov || homeFov) * Math.PI / 180, gfx.aspect, 0.1, 60);
   // An on-axis camera centers the car behind the panel, half-cropped. Shift the
   // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
   // region instead — sideways when the panel is docked to an edge, downwards
@@ -791,6 +803,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   _spProj[8] = panelFrac;
   _spProj[9] = panelFracY;
   if (homeFit) { _spProj[8] = homeFit.shiftX; _spProj[9] = homeFit.shiftY; }
+  if (lens && lens.centre) { _spProj[8] = 0; _spProj[9] = 0; }
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
@@ -801,7 +814,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   }
   M4.lookAtTo(_spView, eye, _spAim, _spUp);
   M4.mulTo(_spVP, _spProj, _spView);
-  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(arriving && arriving.active), _spHull);
+  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(lens && lens.centre) && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
@@ -820,7 +833,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     // as long as the sun stayed at full white it owned the picture and the bay's
     // ten fixtures were decoration. proj/invProj are what unlock SSAO in
     // present(), and an interior lives or dies on its corner darkening.
-    viewProj: _spVP, view: _spView, eye, sunDir: _spSun, sunColor: GarageScene.SKYLIGHT,
+    viewProj: _spVP, view: _spView, eye, sunDir: (GarageScene.moodDef && GarageScene.moodDef().sun) || _spSun, sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
     fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: lightsRig,
     proj: _spProj, invProj: _spInvProj,
@@ -865,7 +878,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale());
+  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale() * moodDef().glare);
   gfx.present(presentOpts());
   return !(gfx.warming && gfx.warming());
 }
@@ -1086,7 +1099,8 @@ return {
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },
-  setSetupFree(on) { setupPreviewFree = !!on; },
+  // on: boolean, or a lens {fov, centre} (a matched-lens dev shot, which is free too).
+  setSetupFree(on) { setupPreviewFree = !!on; setupPreviewLens = on && typeof on === "object" ? on : null; },
   get spin() { return setupPreviewSpin; },
   get az() { return setupPreviewAz; },
   get el() { return setupPreviewEl; },

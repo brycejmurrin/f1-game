@@ -39,10 +39,11 @@ test("lint binaries: a local green is only shader evidence when both are install
   assert.equal(naga.skip === false, !!resolveBin("naga"));
 });
 
-test("extraction finds the GLX programs, both stages, the PERSP variants and the inline occlusion pair", () => {
+test("extraction finds the GLX programs, both stages and the inline occlusion pair", () => {
   const ids = new Map(extractGlsl().map((s) => [s.id, s]));
   for (const id of ["SKY_VS", "SKY_FS", "LIT_VS", "LIT_FS", "COMPOSITE_FS", "SSAO_FS", "POST_VS", "FXAA_FS"]) assert.ok(ids.has(id), `${id} extracted`);
-  assert.ok(ids.has("COMPOSITE_FS+GLX_PERSP_SCALAR") && ids.has("SSAO_FS+GLX_PERSP_SCALAR"), "GLX_PERSP_SCALAR variants");
+  // The GLX_PERSP_SCALAR variants retired with apex26.glxPerspScalar (#3115).
+  assert.ok(!ids.has("COMPOSITE_FS+GLX_PERSP_SCALAR") && !ids.has("SSAO_FS+GLX_PERSP_SCALAR"), "no GLX_PERSP_SCALAR variants");
   assert.ok(ids.has("chunked.js:OCC_VS") && ids.has("chunked.js:OCC_FS"), "inline static programs");
   assert.ok(extractGlsl().length >= 33);
   for (const s of ids.values()) assert.ok(s.source.startsWith("#version 300 es"), `${s.id} is ES 3.00`);

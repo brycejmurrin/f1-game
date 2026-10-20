@@ -64,6 +64,16 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/car/car-fit-audit.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json"
+      ]
+    },
+    {
       "path": "tools/car/career-economy.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -110,6 +120,16 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/car/lib/fit-checks.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/car/lib/fit-geom.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/car/livery-contrast.mjs",
@@ -845,7 +865,8 @@
       "outputPolicy": "targeted-summary",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--json"
+        "--json",
+        "--summary"
       ]
     },
     {
@@ -1351,6 +1372,11 @@
       ]
     },
     {
+      "path": "tools/desktop/minify.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/desktop/pack-dry-run.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1543,7 +1569,10 @@
       "path": "tools/gen/gen-locales.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
-      "interpreter": "node"
+      "interpreter": "node",
+      "npmScripts": [
+        "gen:check"
+      ]
     },
     {
       "path": "tools/gen/gen-output-surface.mjs",
@@ -2589,9 +2618,27 @@
       ]
     },
     {
+      "path": "tools/perf/garage-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/perf/lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/live-render-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/perf/mesh-census-lib.mjs",
@@ -2724,6 +2771,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/design-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/export-history-evidence.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2828,6 +2884,11 @@
         "--json",
         "--out"
       ]
+    },
+    {
+      "path": "tools/shot/lib/design-matrix.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/shot/lib/garage-camera-catalog.mjs",
@@ -3354,7 +3415,7 @@
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check"
     },
     {
       "name": "gen:docs",
@@ -3446,7 +3507,7 @@
     },
     {
       "name": "test:docs-guards",
-      "command": "node --test tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/ci-gate-selection.test.mjs tests/unit/ci-gpu-census.test.mjs tests/unit/ci-pages-train.test.mjs tests/unit/ci-ship-filter-geometry.test.mjs tests/unit/ci-ship-smoke-renderer.test.mjs tests/unit/ci-workflow-triggers.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/pre-commit-guards.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs"
+      "command": "node --test tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/ci-gate-selection.test.mjs tests/unit/ci-gpu-census.test.mjs tests/unit/ci-pages-train.test.mjs tests/unit/ci-ship-filter-geometry.test.mjs tests/unit/ci-ship-smoke-renderer.test.mjs tests/unit/ci-workflow-triggers.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/pre-commit-guards.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs tests/unit/vendor-licences.test.mjs"
     },
     {
       "name": "test:float",
@@ -3478,7 +3539,7 @@
     },
     {
       "name": "test:garage-unit",
-      "command": "node tools/ci/run-node-group.mjs test:garage-unit tests/unit/body-split.test.mjs tests/unit/car-materials.test.mjs tests/unit/car-shade.test.mjs tests/unit/fill-gating.test.mjs tests/unit/fin-design.test.mjs tests/unit/front-wing-decal.test.mjs tests/unit/garage-followups.test.mjs tests/unit/garage-mesh.test.mjs tests/unit/garage-panel-side.test.mjs tests/unit/garage-sign-occlusion.test.mjs tests/unit/helmets.test.mjs tests/unit/livery-cover-graphics.test.mjs tests/unit/livery-decal-surfaces.test.mjs tests/unit/livery-finish-contract.test.mjs tests/unit/livery-paint-zones.test.mjs tests/unit/livery-sidewall.test.mjs tests/unit/livery-wheels.test.mjs tests/unit/livery-zone-finish.test.mjs tests/unit/parts-distinct-mesh.test.mjs tests/unit/parts-locked-equivalent.test.mjs tests/unit/setup-trial-session.test.mjs tests/unit/setup-tune.test.mjs tests/unit/team-livery.test.mjs tests/unit/team-style-relief.test.mjs tests/unit/tyre-recipes-open-rim.test.mjs --"
+      "command": "node tools/ci/run-node-group.mjs test:garage-unit tests/unit/aero-preview-fields.test.mjs tests/unit/aero-shapes-d3c.test.mjs tests/unit/body-split.test.mjs tests/unit/car-materials.test.mjs tests/unit/car-shade.test.mjs tests/unit/fill-gating.test.mjs tests/unit/fin-design.test.mjs tests/unit/front-wing-decal.test.mjs tests/unit/garage-followups.test.mjs tests/unit/garage-mesh.test.mjs tests/unit/garage-panel-side.test.mjs tests/unit/garage-sign-occlusion.test.mjs tests/unit/helmets.test.mjs tests/unit/livery-cover-graphics.test.mjs tests/unit/livery-decal-surfaces.test.mjs tests/unit/livery-finish-contract.test.mjs tests/unit/livery-paint-zones.test.mjs tests/unit/livery-sidewall.test.mjs tests/unit/livery-wheels.test.mjs tests/unit/livery-zone-finish.test.mjs tests/unit/parts-distinct-mesh.test.mjs tests/unit/parts-locked-equivalent.test.mjs tests/unit/setup-trial-session.test.mjs tests/unit/setup-tune.test.mjs tests/unit/team-livery.test.mjs tests/unit/team-style-relief.test.mjs tests/unit/tyre-recipes-open-rim.test.mjs --"
     },
     {
       "name": "test:gfx",
@@ -3542,7 +3603,7 @@
     },
     {
       "name": "test:physics-core",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/debris.spec.js tests/specs/longitudinal.spec.js tests/specs/offtrack.spec.js tests/specs/physics-*.spec.js tests/specs/pit-lane.spec.js tests/specs/projection.spec.js tests/specs/race-control.spec.js tests/specs/world-physics.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/debris.spec.js tests/specs/longitudinal.spec.js tests/specs/offtrack.spec.js tests/specs/physics-*.spec.js tests/specs/pit-lane.spec.js tests/specs/race-control.spec.js tests/specs/world-physics.spec.js"
     },
     {
       "name": "test:render",

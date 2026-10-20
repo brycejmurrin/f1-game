@@ -142,7 +142,7 @@ test("a Home photo uses manual distance and aim while the background retains aut
       home: { active: true, panel: null, lens: {} }, gfx: { aspect }, setupPreviewSpin: false,
       setupPreviewDist: 4.6, setupPreviewAz: 1, setupPreviewEl: .4, spCe: Math.cos(.4), spSe: Math.sin(.4),
       setupPreviewOrbit: [0, .45, .245], setupPreviewTgt: [0, .45, .245], setupPreviewPan: [.5, 0, -.4],
-      arriving: null, _spHull: [], getSetupPreviewMesh() {}, SP_FIT_DIST_MAX: 11, SP_FIT_HALF_W: 3.10, SP_DIST_MIN: 4.6, SP_DIST_MAX: 15,
+      arriving: null, setupPreviewLens: null, _spHull: [], getSetupPreviewMesh() {}, SP_FIT_DIST_MAX: 11, SP_FIT_HALF_W: 3.10, SP_DIST_MIN: 4.6, SP_DIST_MAX: 15,
       clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), _spAim: [], _spProj: [], _spView: [], _spVP: [], _spInvProj: [],
       _spEye: [0, 0, 0], _spUp: [0, 1, 0],
       M4: { perspectiveTo() {}, lookAtTo() {}, mulTo() {}, invertTo() {} },
