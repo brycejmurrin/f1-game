@@ -8,7 +8,11 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection, saveOutputArtifact, validateOutputLevel } from '../agent/output.mjs';
 
-const LEVEL = { type: 'string', enum: ['compact', 'diagnostic', 'full'], default: 'compact', description: 'Presentation only: compact (default), diagnostic, or original full result. The action executes once; use the saved-result retrieval tool for saved evidence.' };
+// Every wrapped tool carries LEVEL and the description hint below, and tools/list is the text every
+// schema-loading client pays (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md: this prose was 56-68 %
+// of each server's listing). The hint says it once per tool; LEVEL stays bare, and output_read keeps its prose.
+const LEVEL = { type: 'string', enum: ['compact', 'diagnostic', 'full'], default: 'compact' };
+const LEVEL_DOC = { ...LEVEL, description: 'Presentation only: compact (default), diagnostic, or original full result. The action executes once; use the saved-result retrieval tool for saved evidence.' };
 const ENVELOPE = { type: 'object', required: ['outputLevel', 'summary', 'artifact'], properties: { outputLevel: { enum: ['compact', 'diagnostic'] }, summary: {}, artifact: { type: 'object' } } };
 const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
@@ -65,10 +69,10 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
     remember(tool);
     const { parameter } = schemas.get(tool.name);
     const input = tool.inputSchema ?? { type: 'object' };
-    const description = `${tool.description ?? ''}\nOutput: ${parameter}=compact(default), diagnostic, full. Saved evidence: final-page retrieval tool; receipt in structuredContent.artifact.path or _meta["apex/agent-output"].artifact.path, when returned.${parameter !== 'outputLevel' ? ' Upstream outputLevel unchanged (collision).' : ''}`;
+    const description = `${tool.description ?? ''}\nOutput: ${parameter}=compact(default)|diagnostic|full. Saved evidence: final-page retrieval tool; path in structuredContent.artifact.path or _meta["apex/agent-output"].artifact.path.${parameter !== 'outputLevel' ? ' Upstream outputLevel unchanged (collision).' : ''}`;
     return { ...tool, description, inputSchema: inputWithLevel(input, parameter), ...(tool.outputSchema ? { outputSchema: resultSchema(tool.outputSchema) } : {}) };
   }
-  const retrieval = () => ({ name: retrievalName, description: 'Read saved evidence without repeating its action. format=page returns byte pages. format=collection with pointer selects exact JSON rows (limit 1..100, max 262144 bytes/page); nextOffset advances within retained rows, never upstream pagination. format=original with outputLevel=full restores original MCP blocks including images up to 8 MiB. Artifact receipt is in structuredContent.artifact or _meta["apex/agent-output"].artifact for small native answers.', inputSchema: { type: 'object', properties: { artifact: { type: 'string', description: 'artifact.path returned by a previous tool call' }, format: { type: 'string', enum: ['page', 'collection', 'original'], default: 'page' }, pointer: { type: 'string', description: 'RFC 6901 pointer to retained array; embedded JSON text is decoded while traversing' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 65536 }, outputLevel: LEVEL }, required: ['artifact'], additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false } });
+  const retrieval = () => ({ name: retrievalName, description: 'Read saved evidence without repeating its action. format=page returns byte pages. format=collection with pointer selects exact JSON rows (limit 1..100, max 262144 bytes/page); nextOffset advances within retained rows, never upstream pagination. format=original with outputLevel=full restores original MCP blocks including images up to 8 MiB. Artifact receipt is in structuredContent.artifact or _meta["apex/agent-output"].artifact for small native answers.', inputSchema: { type: 'object', properties: { artifact: { type: 'string', description: 'artifact.path returned by a previous tool call' }, format: { type: 'string', enum: ['page', 'collection', 'original'], default: 'page' }, pointer: { type: 'string', description: 'RFC 6901 pointer to retained array; embedded JSON text is decoded while traversing' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 65536 }, outputLevel: LEVEL_DOC }, required: ['artifact'], additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false } });
   function discover(cursor) {
     return new Promise((resolve, reject) => {
       const id = `output-gateway:${randomUUID()}`;

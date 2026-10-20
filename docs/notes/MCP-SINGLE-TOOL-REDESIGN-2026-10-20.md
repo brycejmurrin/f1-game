@@ -1,20 +1,22 @@
-# MCP single-tool redesign: measured, prototyped, not recommended as default (2026-10-20)
+# MCP context cost: measured; one-tool redesign rejected; gateway trimmed (2026-10-20)
 
 Bryce's question (2026-10-20, to OrchB 24): every agent loads every project MCP
-tool description; should each server expose ONE parameterized tool plus a
-pairing skill? Worker B·W11 measured it, read the current client docs, and
-prototyped the design on apex-tools behind an opt-in flag.
+tool description, so should each server expose ONE parameterized tool plus a
+pairing skill? Worker B·W11 measured the listings, read each client's current
+docs, and prototyped one tool on apex-tools. Bryce chose (21:49Z) to keep this
+note and the meter, drop the prototype, and fix the gateway overhead (§6).
 
-**Answer: no, not as the default, on any of the five servers.** Every client
-we ship config for (Claude Code, Cursor IDE and CLI, Codex at our tool count)
-now defers MCP schemas and puts only tool NAMES in the prompt. The cost a
-session pays at start is 1.3k tokens for all 139 tools, not 53k. A one-tool
-apex-tools saves about 330 tokens of that. It would break the subagent browser
-guard and per-tool subagent grants, and it would push Codex back under its
-deferral threshold, so Codex would load 33k tokens of schemas upfront. The
-cheaper win is the output-level wrapper's per-tool text (below).
+**Answer: no, on all five servers.** Every client we ship config for
+(Claude Code, Cursor IDE and CLI, and Codex at our tool count) defers MCP
+schemas. Only tool NAMES go in the prompt, so a session pays about 1.3k tokens
+at start for all 139 tools, not 53k. A one-tool apex-tools saves about 330 of
+those tokens. It would break the subagent browser guard and per-tool subagent
+grants. It would also drop us under Codex's deferral threshold, so Codex would
+load 33k tokens of schemas upfront. The lever worth pulling was the
+output-level gateway: it added 59 % to the listings. This branch cuts that to
+39 % (§6).
 
-## 1. What each server costs (measured)
+## 1. What each server costs (measured on the deploy tip, before §6)
 
 `node tools/mcp/mcp-listing-cost.mjs` spawns each `.mcp.json` entry exactly as
 configured (through `tools/mcp/output-level-mcp.sh`), runs `initialize` and
@@ -37,7 +39,7 @@ apex-lsp 341) load at start in every client. The largest entries are
 apex_shot_survey (4.0k chars), apex_hud_shot (3.3k), apex_job_start (3.3k),
 chrome-devtools emulate (2.1k) and debugger_node_test (3.7k).
 
-**The output-level wrapper adds 56–68 % to every listing.** It appends a fixed
+**The output-level wrapper added 56–68 % to every listing (§6 cuts it to 37–43 %).** It appends a fixed
 ~230-char "Output: outputLevel=…" sentence to every description, adds an
 `outputLevel` property to every input schema, and wraps every output schema.
 That costs about 30k chars on apex-tools alone, and it is paid again on every
@@ -94,11 +96,11 @@ others.
   PreToolUse matcher in `.claude/settings.json` match browser tools BY NAME
   (`apex-tools__apex_(eval|shot|…)`). A call to `mcp__apex-tools__apex` with
   `op:"shot"` passes both. The guard would have to parse `tool_input.op`. That
-  is a `.claude/**` edit, and `isBrowserOp()` in the prototype is the list it
-  would need. That list is not the catalog's `kind`: `apex_diagnostics` and
+  is a `.claude/**` edit, and the prototype's `isBrowserOp()` (commit
+  `27348d3b`) was the list it would need. That list is not the catalog's `kind`: `apex_diagnostics` and
   `apex_job_start` are kind "tree", but the guard refuses them because they can
-  boot Chromium. The prototype hard-codes the pair, and a test pins its list to
-  the guard's regex. `shellparse.py`'s `APEX_BROWSER` (the `apex-tools-mcp.sh call`
+  boot Chromium. The prototype hard-coded the pair, and its test pinned the
+  list to the guard's regex. `shellparse.py`'s `APEX_BROWSER` (the `apex-tools-mcp.sh call`
   path) already keys on the name as an argument, so it is unaffected.
 - **Per-tool subagent grants.** `.claude/agents/track-surveyor.md` grants five
   named apex tools (`apex_track_audit`, `apex_graph_parity`, …). One tool
@@ -111,7 +113,7 @@ others.
 - **Client-side schema validation and annotations.** The model sees
   `args: object`, so it guesses argument shapes from the skill or `help`. The
   server still validates every op against its full schema. The prototype test
-  proves an unknown argument is refused. `readOnlyHint`, `destructiveHint` and
+  proved an unknown argument is refused. `readOnlyHint`, `destructiveHint` and
   `openWorldHint` are per tool. One tool must claim the most permissive
   values, so clients that auto-approve read-only tools (Codex `writes` mode)
   would prompt on everything.
@@ -134,57 +136,83 @@ others.
 - **chrome-devtools**: same, gate it. Its 41 tools include 10 heap-snapshot
   tools that only perf-memory-census work uses. Upstream can hide groups of
   them; check its current `--categories`-style flags before trimming.
-- **The cheaper lever for every server:** cut the output-level wrapper's
-  per-tool suffix (about 230 chars × 139 tools) down to a pointer, and say it
-  once in the wrapper's server instructions, which load once. That saves about
-  30k chars for full-load clients and about 700 chars on every deferred tool
-  load. It is the most valuable follow-up, but it is outside this worker's
-  OWNED paths (`tools/mcp/output-level-mcp.mjs`).
+- **The cheaper lever for every server** is the output-level gateway's
+  per-tool text, which is first-party and applies to all five servers. §6.
 
-## 6. The prototype (apex-tools only, off by default)
+## 6. The gateway trim (shipped on this branch)
 
-`tools/mcp/apex-one-tool.mjs`. `APEX_MCP_ONE_TOOL=1` or `serve --one-tool`
-makes `tools/list` publish one tool, `apex`, with input `{op, args}`. `op` is
-an enum of the 41 apex_* names with the prefix removed, derived from `CATALOG`,
-so it cannot drift. `tools/call apex` routes to the same `dispatch()`, so
-validation, the browser lock and refusals are unchanged. Legacy `apex_*`
-names still route. `.mcp.json` is untouched; to try it, add a user-scope
-server: `claude mcp add apex-one -- bash tools/mcp/output-level-mcp.sh --server
-apex-tools -- bash tools/mcp/apex-tools-mcp.sh serve --one-tool`.
+`tools/mcp/output-level-mcp.mjs` decorates every tool. Before this change,
+every tool's `outputLevel` property carried a 190-char description that
+repeated the description hint. The property is now bare
+(`{type, enum, default}`), the hint is shorter, and `output_read` keeps the
+full prose once per server. Behaviour, names, the enum, `default: "compact"`,
+the collision rename and the anyOf output envelope are unchanged.
+`tests/unit/output-level-mcp.test.mjs` passes unedited.
+`tests/unit/mcp-listing-cost.test.mjs` bounds the per-tool addition.
 
-Before and after, measured through the wrapper:
+| server | raw (no gateway) | before: wrapped | gateway share | after: wrapped | gateway share |
+|---|---:|---:|---:|---:|---:|
+| apex-tools | 53,919 | 84,027 | +56 % | 75,249 | +40 % |
+| playwright-official | 18,502 | 31,096 | +68 % | 26,464 | +43 % |
+| chrome-devtools | 31,994 | 52,093 | +63 % | 44,373 | +39 % |
+| js-debugger | 19,598 | 31,253 | +59 % | 27,007 | +38 % |
+| apex-lsp | 8,882 | 13,505 | +52 % | 12,154 | +37 % |
+| **total** | **132,895** | **211,974** | **+59 %** | **185,247** | **+39 %** |
 
-| | tools | full chars | ~tokens | names-only chars |
-|---|---:|---:|---:|---:|
-| apex-tools today | 42 | 84,027 | 21.0k | 1,364 |
-| apex-tools `--one-tool` | 2 | 3,578 | 0.9k | 47 |
+That is −26.7k chars (about −6.7k tokens) for a client that loads every
+schema, and about −190 chars on each deferred tool load. The remaining
+overhead, about 52k chars, has three parts:
+
+- the per-tool hint, about 160 chars × 139;
+- `output_read`, about 1.3k per server;
+- the output envelope on apex-tools' 41 output schemas.
+
+The hint's wording is pinned per tool by `output-level-mcp.test.mjs` (it must
+name `compact`, `diagnostic`, `full`, `final-page`,
+`structuredContent.artifact.path` and `_meta["apex/agent-output"].artifact.path`).
+Moving it into the server instructions once would save about 22k chars more.
+It would also put the text in front of every Claude Code session at start,
+where descriptions cost nothing, so that is Bryce's call, not a bug.
 
 ```sh
-node tools/mcp/mcp-listing-cost.mjs --only=apex-tools,apex-one \
-  --entry 'apex-one=bash tools/mcp/output-level-mcp.sh --server apex-tools -- bash tools/mcp/apex-tools-mcp.sh serve --one-tool'
-node --test tests/unit/apex-one-tool.test.mjs
+node tools/mcp/mcp-listing-cost.mjs                                               # after, every server
+node tools/mcp/mcp-listing-cost.mjs --entry 'raw-apex=bash tools/mcp/apex-tools-mcp.sh serve'   # no gateway
+node --test tests/unit/mcp-listing-cost.test.mjs tests/unit/output-level-mcp.test.mjs
 ```
+
+### The one-tool prototype (built, measured, removed)
+
+`apex {op, args}` worked like this. `op` was an enum of the 41 apex_* names
+with the prefix removed, derived from `CATALOG`. `args` was validated
+server-side by the existing `dispatch()`. `op:"help"` returned one op's full
+schema. Behind `serve --one-tool` it cut apex-tools' listing from 84,027 to
+3,578 chars, and its names-only cost from 1,364 to 47. It was dropped from the
+branch (Bryce, 21:49Z) for the reasons in §2 to §4. It is commit `27348d3b` on
+`cursor/mcp-one-tool-w11a` if anyone revisits it. One more finding from
+building it: the browser guard's list is NOT the catalog's `kind`.
+`apex_diagnostics` and `apex_job_start` are kind "tree", but the guard refuses
+them in a subagent because they can boot Chromium.
 
 ## 7. Recommendation
 
 | server | do | why |
 |---|---|---|
-| apex-tools | keep 41 tools; keep the prototype opt-in | saves 330 tokens per session in deferred clients; costs the browser guard, subagent grants, annotations; flips Codex to upfront |
+| apex-tools | keep 41 tools | one tool saves about 330 tokens per session in deferred clients; it costs the browser guard, subagent grants and annotations, and it flips Codex to upfront loading |
 | playwright-official | gate per host; no redesign | third-party; already deferred |
-| chrome-devtools | gate per host; no redesign | third-party; heap tools are a candidate to hide |
+| chrome-devtools | gate per host; no redesign | third-party; its heap tools are candidates to hide |
 | js-debugger | don't | 207 tokens of names |
-| apex-lsp | don't | 56 tokens of names; `lsp_*` names are the search targets |
-| output-level wrapper | **do**: move the per-tool suffix to server instructions | −30k chars full-load, −700 chars per deferred load, on all five servers |
-| server instructions | do: name when to search each server (Claude Code docs: instructions "help Claude understand when to search for your tools") | instructions are the only per-server text a deferred client always sees |
+| apex-lsp | don't | 56 tokens of names; `lsp_*` names are what agents search for |
+| output-level gateway | **done** (§6); the next step is Bryce's call | −26.7k chars across all five servers |
+| server instructions | name when to search each server (the Claude Code docs say instructions "help Claude understand when to search for your tools") | instructions are the only per-server text a deferred client always sees |
 
 Revisit if a client we use stops deferring: Claude Code with
 `ENABLE_TOOL_SEARCH=false` or behind a gateway, or a Codex release that
-changes the threshold. Then the 53k column is what that client pays, and the
-prototype is the starting point. The guard change in §4 must land first.
+changes the threshold. That client then pays the full-schema column. Keep the
+total tool count above Codex's threshold, or trim schemas first.
 
-## 8. Pairing skill draft (not installed: `.claude/**` needs Bryce's grant)
+## 8. Pairing skill draft (not installed; kept for the record)
 
-Only useful if the one-tool surface is enabled. Draft for
+It would have been needed only with the one-tool surface. Draft for
 `.claude/skills/apex-ops/SKILL.md`:
 
 ```markdown
@@ -213,7 +241,5 @@ Browser-capable ops (never inside a subagent; status first):
 - eval / agent / ui_fit / ui_shot / ui_inspect / profile / diagnostics / job_start
 ```
 
-The pin `tests/unit/apex-one-tool.test.mjs` keeps the op enum equal to the
-catalog. A skill line that names an op the catalog drops goes stale silently.
-That is one more reason to keep the self-describing 41-tool surface as the
-default.
+A skill line that names an op the catalog drops goes stale silently. That is
+one more reason to keep the self-describing 41-tool surface.

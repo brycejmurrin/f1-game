@@ -9,7 +9,7 @@
  *
  *   node tools/mcp/mcp-listing-cost.mjs                 # table, every server
  *   node tools/mcp/mcp-listing-cost.mjs --only=apex-tools --json
- *   node tools/mcp/mcp-listing-cost.mjs --entry 'apex-one=bash tools/mcp/apex-tools-mcp.sh serve --one-tool'
+ *   node tools/mcp/mcp-listing-cost.mjs --entry 'raw-apex=bash tools/mcp/apex-tools-mcp.sh serve'   # without the gateway
  *
  * Read-only: it starts no browser (tools/list never launches one) and writes nothing.
  */

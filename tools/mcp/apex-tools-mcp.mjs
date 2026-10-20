@@ -35,7 +35,6 @@ import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } f
 import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
 import { GARAGE_PLAN_SCHEMA, createGaragePlanHandler } from "./garage-plan.mjs";
 import { DIAGNOSTICS_TOOL, createDiagnosticsHandler } from "./diagnostics-tools.mjs";
-import { ONE_TOOL, oneToolEnabled, oneToolListing, routeOneTool } from "./apex-one-tool.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
   expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets, filterOnly, bootGroups,
@@ -3094,23 +3093,16 @@ async function handleRpc(msg) {
     };
   }
   if (method === "tools/list") {
-    // Opt-in one-tool surface (apex-one-tool.mjs): one `apex {op, args}` entry instead of the catalog.
-    return { jsonrpc: "2.0", id: mid, result: { tools: oneToolEnabled() ? [oneToolListing(CATALOG, toolKind)] : listTools() } };
+    return { jsonrpc: "2.0", id: mid, result: { tools: listTools() } };
   }
   if (method === "tools/call") {
     const params = msg.params || {};
     if (typeof params.name !== "string" || !params.name) return rpcError(mid, -32602, "tools/call needs a string name");
     if (Object.hasOwn(params, "arguments") && !isObject(params.arguments)) return rpcError(mid, -32602, "tools/call arguments must be an object");
-    let { name, arguments: callArgs = {} } = params;
-    if (name === ONE_TOOL && oneToolEnabled()) {
-      const r = routeOneTool(callArgs, CATALOG);
-      if (r.error) return { jsonrpc: "2.0", id: mid, result: refuse(r.error, r.message, 'op:"help" args:{tool:"<op>"} shows one op\'s schema.') };
-      ({ name, args: callArgs } = r);
-    }
     const ctl = new AbortController();
     inflight.set(String(mid), ctl);
     try {
-      const result = syncStructured(await dispatch(name, callArgs, { signal: ctl.signal }));
+      const result = syncStructured(await dispatch(params.name, params.arguments ?? {}, { signal: ctl.signal }));
       return ctl.signal.aborted ? null : { jsonrpc: "2.0", id: mid, result };
     } catch (e) {
       return {
