@@ -4272,9 +4272,10 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
     "object disposal precedes reference clearing and owned geometry disposal");
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
-  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 2, "releaseGeometry and prunePool drop shared wrappers through the helper");
+  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 1, "prunePool drops idle shared wrappers through the helper");
+  assert.equal((tlxSrc.match(/dropWrapper\(m, null, true\);/g) || []).length, 1, "releaseGeometry too, held until the next scene render (pipeline keep-alive)");
   assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
-  assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh\)/, "coalesced owned views use the same warm-aware lifecycle");
+  assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh, null, later\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
   assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
     "warm probes dispose before clearing references, after pending compilation settles");
