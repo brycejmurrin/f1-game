@@ -98,12 +98,12 @@ const Car3D = (function () {
     lowline:  Object.freeze({ fitSeat: 1, noseTipZ: 0.20, noseSlim: 1.00, noseDroop: -0.028, airbox: 0.40, fin: 0, mirror: 0, inlet: -0.080, inletH: -0.200, inletW:  0.200, undercutD:  0.000, waist:  0.200, floorStep:  0.000, coverCrown:  0.000, coverLift: -0.160, wingStyle: W({ flaps: 2, arch: 0.30, twist: 0.10, teCurve: 0.04, chordTaper: 0.20, foot: 0.85, tipRise: 0.010 }) }),
     // Stepnose: 2012 Caterham CT01 / Ferrari F2012 — tall tub crown stepping down to a low cone.
     stepnose: Object.freeze({ fitSeat: 1, noseTipZ: 0.28, noseSlim: 1.00, noseDroop: -0.028, noseStep: 0.20, airbox: 1.30, fin: 1, mirror: 2, inlet:  0.040, inletH:  0.100, inletW:  0.060, undercutD:  0.060, waist: -0.060, floorStep:  0.030, coverCrown:  0.080, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.75, twist: 0.30, teCurve: 0.14, chordTaper: 0.40, canard: 2, tipRise: 0.040 }) }),
-    // B·D1d concept bodies (Bryce's 2026-10-20 sheet; sizes inside the shipped p75; wings: aero lane D3c, style_aero_*). Rift: pointed nose, flank scoop.
-    rift:    Object.freeze({ fitSeat: 1, podShape: { top: [0.14, 0.13, 0.13, 0.12, 0.07, 0.03, 0.00], out: [0.03, 0.00, 0.01, 0.06, 0.05, 0.02, 0.00], bot: [0.03, 0.06, 0.08, 0.07, 0.04, 0.02, 0.00] }, flank: [0.30, -0.80, 0.58, 0.62, 0.48, 0.16], noseTipZ:  0.00, noseSlim: 0.88, noseDroop: -0.010, airbox: 1.00, fin: 0, mirror: 2, inlet: -0.030, inletH:   0.000, inletW: -0.040, undercutD:   0.080, waist: -0.040, floorStep:  0.040, coverCrown:   0.000, coverLift:  0.000, wingStyle: W({ arch: 0.85, twist: 0.30, teCurve: 0.14, chordTaper: 0.38, foot: 1.30, canard: 2, tipRise: 0.042 }) }),
+    // B·D1d concept bodies (Bryce's 2026-10-20 sheet; sizes inside the shipped p75 but pod top, his one allowed overrun; wings: aero lane D3c, style_aero_*). Rift: pointed nose, flank scoop.
+    rift:    Object.freeze({ fitSeat: 1, airScoop: 1, flankLip: 0.05, podShape: { top: [0.14, 0.13, 0.13, 0.12, 0.07, 0.03, 0.00], out: [0.03, 0.00, 0.01, 0.06, 0.05, 0.02, 0.00], bot: [0.03, 0.06, 0.08, 0.07, 0.04, 0.02, 0.00] }, flank: [0.30, -0.80, 0.58, 0.62, 0.48, 0.16], noseTipZ:  0.00, noseSlim: 0.88, noseDroop: -0.010, airbox: 1.00, fin: 0, mirror: 2, inlet: -0.030, inletH:   0.000, inletW: -0.040, undercutD:   0.080, waist: -0.040, floorStep:  0.040, coverCrown:   0.000, coverLift:  0.000, wingStyle: W({ arch: 0.85, twist: 0.30, teCurve: 0.14, chordTaper: 0.38, foot: 1.30, canard: 2, tipRise: 0.042 }) }),
     // Keel: long low flat nose, slab sides tapering straight back. Delta: chined nose, triangle cut-in. Serpent: S-curve waist and band.
-    keel:    Object.freeze({ fitSeat: 1, podShape: { top: [0.12, 0.11, 0.11, 0.13, 0.10, 0.05, 0.01], out: [0.06, 0.07, 0.10, 0.11, 0.09, 0.04, 0.00], bot: [-0.02, -0.03, -0.04, -0.03, -0.02, -0.01, 0.00] }, noseTipZ:  0.06, noseSlim: 0.86, noseDroop: -0.012, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.010, inletH: 0.000, inletW:  -0.045, undercutD: 0.080, waist:   0.000, floorStep:  0.000, coverCrown:  0.000, coverLift:  0.000, wingStyle: W({ arch: 0.45, twist: 0.12, teCurve: 0.020, chordTaper: 0.10, foot: 0.90, canard: 1, tipRise: 0.004 }) }),
-    delta:   Object.freeze({ fitSeat: 1, facet: 1, podShape: { top: [0.16, 0.14, 0.12, 0.08, 0.03, 0.00, 0.00], out: [0.06, 0.07, 0.10, 0.07, 0.05, 0.02, 0.00], bot: [0.07, 0.07, 0.05, 0.01, 0.00, 0.00, 0.00] }, flank: [0.26, -0.70, 0.40, 0.58, 0.66, 0.06], noseChine: 1, noseTipZ:  -0.04, noseSlim: 0.96, noseDroop: -0.016, airbox: 1.00, fin: 1, mirror: 0, inlet:  0.040, inletH: 0.000, inletW:   -0.045, undercutD:   0.080, waist: -0.030, floorStep:   0.020, coverCrown:   0.000, coverLift:  0.000, wingStyle: W({ arch: 1.10, twist: 0.34, teCurve: 0.16, chordTaper: 0.42, foot: 1.45, canard: 2, tipRise: 0.075 }) }),
-    serpent: Object.freeze({ fitSeat: 1, podShape: { top: [0.13, 0.12, 0.09, 0.05, -0.01, -0.02, 0.00], out: [0.03, 0.03, 0.08, 0.06, 0.05, 0.04, 0.01], bot: [0.02, 0.04, 0.05, 0.02, 0.00, 0.00, 0.00] }, flank: [0.36, -0.85, 0.30, 0.70, 0.22, 0.14], noseTipZ:  0.00, noseSlim: 0.92, noseDroop: -0.010, airbox: 1.00, fin: 0, mirror: 1, inlet: -0.020, inletH: 0.000, inletW:  -0.045, undercutD:   0.080, waist: -0.040, floorStep:  0.030, coverCrown:   0.020, coverLift:   0.000, wingStyle: W({ arch: 0.95, twist: 0.40, teCurve: 0.20, chordTaper: 0.46, foot: 1.25, canard: 1, tipRise: 0.060 }) }),
+    keel:    Object.freeze({ fitSeat: 1, airScoop: 1, flankLip: 0.04, flank: [0.40, -0.30, 0.56, 0.54, 0.34, 0.22], podShape: { top: [0.12, 0.11, 0.11, 0.13, 0.10, 0.05, 0.01], out: [0.06, 0.07, 0.074, 0.064, 0.05, 0.03, 0.00], bot: [-0.02, -0.03, -0.04, -0.03, -0.02, -0.01, 0.00] }, noseTipZ:  0.06, noseSlim: 0.86, noseDroop: -0.012, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.010, inletH: 0.000, inletW:  -0.045, undercutD: 0.080, waist:   0.000, floorStep:  0.000, coverCrown:  0.000, coverLift:  0.000, wingStyle: W({ arch: 0.45, twist: 0.12, teCurve: 0.020, chordTaper: 0.10, foot: 0.90, canard: 1, tipRise: 0.004 }) }),
+    delta:   Object.freeze({ fitSeat: 1, airScoop: 1, flankLip: 0.045, facet: 1, podShape: { top: [0.16, 0.14, 0.12, 0.08, 0.03, 0.00, 0.00], out: [0.06, 0.07, 0.074, 0.06, 0.05, 0.02, 0.00], bot: [0.07, 0.07, 0.05, 0.01, 0.00, 0.00, 0.00] }, flank: [0.26, -0.70, 0.40, 0.58, 0.66, 0.06], noseChine: 1, noseTipZ:  -0.04, noseSlim: 0.96, noseDroop: -0.016, airbox: 1.00, fin: 1, mirror: 0, inlet:  0.040, inletH: 0.000, inletW:   -0.045, undercutD:   0.080, waist: -0.030, floorStep:   0.020, coverCrown:   0.000, coverLift:  0.000, wingStyle: W({ arch: 1.10, twist: 0.34, teCurve: 0.16, chordTaper: 0.42, foot: 1.45, canard: 2, tipRise: 0.075 }) }),
+    serpent: Object.freeze({ fitSeat: 1, airScoop: 1, flankLip: 0.04, podShape: { top: [0.13, 0.12, 0.09, 0.05, -0.01, -0.02, 0.00], out: [0.03, 0.03, 0.08, 0.06, 0.05, 0.04, 0.01], bot: [0.02, 0.04, 0.05, 0.02, 0.00, 0.00, 0.00] }, flank: [0.36, -0.85, 0.30, 0.70, 0.22, 0.14], noseTipZ:  0.00, noseSlim: 0.92, noseDroop: -0.010, airbox: 1.00, fin: 0, mirror: 1, inlet: -0.020, inletH: 0.000, inletW:  -0.045, undercutD:   0.080, waist: -0.040, floorStep:  0.030, coverCrown:   0.020, coverLift:   0.000, wingStyle: W({ arch: 0.95, twist: 0.40, teCurve: 0.20, chordTaper: 0.46, foot: 1.25, canard: 1, tipRise: 0.060 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -498,6 +498,19 @@ const Car3D = (function () {
                  0.045, 0.055, 0.055, CARBON);
         }
       }
+      // airScoop (B·D1d concept bodies, opt-in): a tall framed mouth — cheeks run back past the
+      // hoop blade (they read either side of it from the chase cam), a top bar, and a dark
+      // recessed panel filling the opening up to the bar (above the halo, as on the sheet).
+      if (teamStyle.airScoop && !engSnork) {
+        const aw = 0.30 * inScale / 2, top = 0.952, bot = 0.70, cw = 0.026;
+        for (const s of [-1, 1]) {
+          const x = s * (aw + cw / 2 - 0.006);
+          addSpan(out, { z: -0.255, x, y: (top + bot) / 2, w: cw, h: top - bot, t: 0.9 },
+                       { z: -0.46, x: x * 0.92, y: 0.80, w: cw * 0.8, h: 0.06, t: 0.9 }, airboxC);
+        }
+        addBox(out, 0, top - 0.014, -0.272, (aw + cw) * 2 - 0.020, 0.028, 0.040, airboxC);
+        addBox(out, 0, (0.86 + top - 0.028) / 2, -0.300, aw * 2 - 0.004, top - 0.028 - 0.855, 0.030, INTAKE, SURFACES.carbon);
+      }
       if (engSnork) {
         const sk = 0.78 + inScale * 0.32;
         const mouth = { z: -0.12, y: 0.96, w: 0.15 * sk, h: 0.10 * sk, t: 0.62 };
@@ -799,6 +812,19 @@ const Car3D = (function () {
       const at = (z, sd) => { const p = anchors.podAt(z), k = (zF - z) / (zF - zR), ph = p.top - p.bottom;
         return { z, x: sd * (p.x + 0.024), y: p.bottom + ph * (y0 + (y1 - y0) * k), w: 0.016, h: ph * (h0 + (h1 - h0) * k) }; };
       for (const sd of [-1, 1]) for (let i = 0; i < stops.length - 1; i++) addSpan(out, at(stops[i], sd), at(stops[i + 1], sd), INTAKE, null, SURFACES.carbon);
+      // flankLip (opt-in, metres proud): a body-colour brow along the panel's top edge and a thinner sill
+      // along its bottom (both inside the panel's height), so the dark panel reads as a recessed pocket.
+      const lip = teamStyle.flankLip || 0;
+      if (lip > 0) {
+        const edge = (q, up, th) => ({ z: q.z, x: q.x + Math.sign(q.x) * (lip / 2 - 0.004), y: q.y + up * (q.h / 2 - th / 2 + 0.004), w: lip + 0.012, h: th });
+        for (const sd of [-1, 1]) for (let i = 0; i < stops.length - 1; i++) {
+          // lip stations sit off the panel's stop planes (+2 mm fore, -6 mm aft) and overlap their neighbour,
+          // so no lip end cap is coplanar with a panel cap or another lip cap
+          const a = at(stops[i] + 0.002, sd), b = at(stops[i + 1] - 0.006, sd);
+          addSpan(out, edge(a, 1, 0.026), edge(b, 1, 0.026), c1);
+          addSpan(out, edge(a, -1, 0.014), edge(b, -1, 0.014), c1);
+        }
+      }
     }
     const ersBlister = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.blister) || 0)));
     if (ersBlister > 0 && !ckpt) {
