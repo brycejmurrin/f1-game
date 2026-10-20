@@ -15,6 +15,7 @@ const PHONE = { viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, has
 const DESK = { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, hasTouch: false };
 const HI = { "apex26.forceMobileTier": "1", "apex26.gfxHigh": "1" };
 const ALL = {
+  soft: { v: DESK, ls: { ...HI, "apex26.dbgSoft": "1" } },
   gov: { v: DESK, ls: HI, gov: true },
   noRR: { v: DESK, ls: { ...HI, "apex26.renderRate": "off" } },
   base: { v: DESK, ls: HI },
@@ -29,7 +30,7 @@ const ALL = {
   control: { v: DESK, ls: {} },
   controlPhone: { v: PHONE, ls: {} },
 };
-const ARMS = (process.env.MDL_ARMS || "base,gov,noRR,control").split(",").filter((a) => ALL[a]);
+const ARMS = (process.env.MDL_ARMS || "base,soft,mobile,control").split(",").filter((a) => ALL[a]);
 const report = { started: new Date().toISOString(), watchS: WATCH_S, track: TRACK, rows: [] };
 const save = () => writeFileSync(OUT, JSON.stringify(report, null, 2));
 const log = (m) => console.log("[mdl] " + m);

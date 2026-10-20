@@ -315,7 +315,7 @@ const TLX = (function () {
             // read (measured in-container: byte-identical captures across a
             // camera move, awaitSoftPresent never resolving again). Content
             // gates key off this flag too. Never on a mobile UA.
-            _softAdapter = !isMobile && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
+            _softAdapter = (!isMobile || _dbg("Soft")) && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
