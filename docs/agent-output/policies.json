@@ -606,6 +606,11 @@
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
     },
+    "tools/ci/lane-preamble.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "the TOOLING block text and its exact commands; ERROR line with the nearest valid name and exit 2 for a bad screen, viewport or scale"
+    },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",
       "presentation": "native",

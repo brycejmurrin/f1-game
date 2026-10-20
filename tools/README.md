@@ -117,6 +117,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
 | **ci/guards-verdict.mjs** | Commit-gate verdict cache for test:guards (#2889 slice 1). | check-changes |
 | **ci/handback.mjs** | Verifies a PR head's CI + ready-gate, prints one SWEEP and one DONE line, lists check-ins to delete. | agent-fleet |
+| **ci/lane-preamble.mjs** | Prints the TOOLING block for a UI-survey launch prompt: exact audit commands with names checked against the catalog. | agent-fleet |
 | **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
 | **ci/measure-guard-commit.mjs** | Measure commit-guard wall time vs a direct test:guards run (#2647). | check-changes |
 | **ci/measure-pr-ci-after-close.mjs** | 24 h scan: PR ci.yml job-minutes starting after close + peak-hour PR wall median (#2213, epic #1949). | steward |

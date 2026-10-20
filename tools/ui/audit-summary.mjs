@@ -5,13 +5,17 @@
 //
 // Why: a survey agent that wanted the worst cells of a 240-cell grid wrote its own `node -e` over audit.json and printed
 // 64,000 characters, after piping the runner's one-line-per-cell log (42,000 characters) through `tee` into its context
-// (measured 2026-10-20 on nine live Cursor runs). Run the audit with its output redirected, then read THIS:
+// (measured 2026-10-20 on nine live Cursor runs). Run the audit with its output redirected, then read THIS.
 //
-//   node tools/ui/layout-audit.mjs --screens=… --viewports=… --out=artifacts/x > artifacts/x/run.log 2>&1; tail -n 3 artifacts/x/run.log
-//   node tools/ui/audit-summary.mjs artifacts/x                    # totals, top 12 cells, per-screen rollup
-//   node tools/ui/audit-summary.mjs artifacts/x --top 30 --screen settings --viewport iphone
-//   node tools/ui/audit-summary.mjs artifacts/x --cell title@ios-iphone-portrait    # that one cell's findings, capped
-//   node tools/ui/audit-summary.mjs artifacts/x --json             # the same summary as one JSON object
+// The geometry run (the default) always writes artifacts/layout-audit/audit.json (--out only moves the --gallery output)
+// and MERGES with the rows already there, so a filtered run tops up the grid: use --screen / --viewport to look at just
+// what you ran.
+//
+//   node tools/ui/layout-audit.mjs --screens=title,settings --viewports=ios-iphone-portrait > artifacts/layout-audit/run.log 2>&1; tail -n 3 artifacts/layout-audit/run.log
+//   node tools/ui/audit-summary.mjs                                # artifacts/layout-audit: totals, top 12 cells, rollup
+//   node tools/ui/audit-summary.mjs --top 30 --screen settings --viewport iphone
+//   node tools/ui/audit-summary.mjs --cell title@ios-iphone-portrait    # that one cell's findings, capped, repeats counted
+//   node tools/ui/audit-summary.mjs some/other/dir --json          # another folder or an audit.json; one JSON object
 //
 // It uses layout-audit's own definitions: "bad" = clipped, offscreen, document x-overflow, errors, tiny taps, under the
 // hardware inset or starved; a SKIPPED cell is counted apart (nothing was measured, so it is neither a pass nor a finding);
@@ -21,6 +25,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// layout-audit's geometry run writes here whatever --out says.
+export const DEFAULT_DIR = "artifacts/layout-audit";
 const HARD = ["clipped", "offscreen", "tinyTaps", "underHardware", "starved", "errors"];
 const SOFT = ["smallTaps", "truncated", "deepScroll"];
 const LABEL = { clipped: "clipped", offscreen: "offscreen", tinyTaps: "tapUnder24", underHardware: "underHW", starved: "starved", errors: "err", smallTaps: "tapSoft", truncated: "trunc", deepScroll: "deepScroll" };
@@ -137,8 +143,7 @@ function main() {
     const i = argv.indexOf(name);
     return i >= 0 ? argv[i + 1] : d;
   };
-  const target = argv.find((a, i) => !a.startsWith("--") && !["--top", "--screen", "--viewport", "--cell"].includes(argv[i - 1]));
-  if (!target) throw new Error("usage: audit-summary.mjs <audit dir | audit.json> [--top N] [--screen S] [--viewport V] [--cell screen@viewport] [--json]");
+  const target = argv.find((a, i) => !a.startsWith("--") && !["--top", "--screen", "--viewport", "--cell"].includes(argv[i - 1])) || DEFAULT_DIR;
   const top = Number(flag("--top", 12));
   if (!Number.isInteger(top) || top < 1 || top > 200) throw new Error("--top must be 1..200");
   const r = summarize(readAudit(target), { top, screen: flag("--screen"), viewport: flag("--viewport"), cell: flag("--cell") });
