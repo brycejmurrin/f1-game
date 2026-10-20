@@ -1,0 +1,140 @@
+// Garage livery-edit census: ~30 scripted edits on TLX/WebGPU vs TLX/WebGL2 (B·P1, 2026-10-20).
+// Run by gpu-census.yml leg `garage-livery-perf` on macos-latest; `--software` is a local smoke only.
+// Per edit: dispatch ms, next-frame ms, rAF intervals over a fixed window, long tasks, and deltas of
+// WebGPU createRenderPipeline/createShaderModule/writeTexture/copyExternalImageToTexture, WebGL2
+// compileShader/linkProgram/tex*Image*, Car3D.build/buildComplete, LiveryTex.buildAtlas, renderer.info.memory.
+// APIs: https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipeline
+//       https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/copyExternalImageToTexture
+//       https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming
+import {chromium} from 'playwright';
+import {writeFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {launchChromium,startStaticServer,shutdown,chromiumLaunchInfo,WEBGPU_LAVAPE_CHROMIUM_ARGS} from '../tools/lib/harness.mjs';
+import {installProbeInit,gotoGame} from '../tools/shot/probe-page.mjs';
+import {installGarageGpuAllocationProbe} from './garage-webgpu-allocation-init.mjs';
+const soft=process.argv.includes('--software');
+const EDITS=soft?6:30,WINDOW_MS=soft?1500:2500,IDLE_MS=soft?1500:5000;
+const ONLY=(process.argv.find(a=>a.startsWith('--arm='))||'').slice(6);
+const ARMS=[{arm:'tlx-webgpu',forceGL:'0'},{arm:'tlx-webgl2',forceGL:'1'}].filter(a=>!ONLY||a.arm===ONLY);
+const report={schema:'garage-livery-census/v1',request:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),software:soft,edits:EDITS,windowMs:WINDOW_MS,viewport:{width:844,height:390},arms:[],started:new Date().toISOString()};
+const save=()=>writeFileSync('game-livery-census.json',JSON.stringify(report,null,2));
+const log=x=>console.log(new Date().toISOString(),x);
+
+// Init script: WebGL2 + WebGPU call counters and a buffered long-task list. Counts only; nothing retained.
+function installCounters(){
+  if(window.__livCount)return;
+  const c={};const bump=k=>{c[k]=(c[k]||0)+1;};
+  const wrap=(proto,names,prefix)=>{if(!proto)return;for(const n of names){const f=proto[n];if(typeof f!=='function')continue;proto[n]=function(){bump(prefix+n);return f.apply(this,arguments);};}};
+  wrap(window.WebGL2RenderingContext?.prototype,['compileShader','linkProgram','texImage2D','texSubImage2D','texImage3D','texSubImage3D','texStorage2D','texStorage3D','generateMipmap','bufferData','bufferSubData'],'gl.');
+  wrap(window.GPUQueue?.prototype,['writeTexture','copyExternalImageToTexture','writeBuffer'],'gpu.');
+  wrap(window.GPUDevice?.prototype,['createBindGroup','createSampler'],'gpu.');
+  const longs=[];
+  try{new PerformanceObserver(l=>{for(const e of l.getEntries())longs.push([e.startTime,e.duration]);}).observe({type:'longtask',buffered:true});}catch(_){}
+  window.__livCount={read:()=>({...c}),longs};
+}
+// Page script after boot: wrap the global Car3D / LiveryTex entry points (callers that captured the
+// function at eval time are NOT seen — the counts are a floor) and a rAF interval recorder.
+function installPageCounters(){
+  const poll=setInterval(()=>{if(!window.__livCount||typeof Car3D==='undefined'||typeof LiveryTex==='undefined')return;clearInterval(poll);wrapAll();},50);
+  function wrapAll(){
+  const c=window.__livCount,k={};c.boot=performance.timeOrigin;const bump=n=>{k[n]=(k[n]||0)+1;};
+  for(const [obj,names] of [[Car3D,['build','buildComplete']],[LiveryTex,['buildAtlas','drawCrest']]]){
+    if(!obj)continue;for(const n of names){const f=obj[n];if(typeof f!=='function')continue;
+      obj[n]=function(){const t=performance.now();try{return f.apply(this,arguments);}finally{bump(n);k[n+'Ms']=(k[n+'Ms']||0)+performance.now()-t;}};}}
+  const frames=[];let last=null;const tick=t=>{if(last!==null)frames.push([t,t-last]);last=t;requestAnimationFrame(tick);};requestAnimationFrame(tick);
+  c.page=()=>({...k});c.frames=frames;
+  }
+}
+async function snapshot(page){return page.evaluate(()=>{const r=window.renderer;return {doc:performance.timeOrigin,wrapped:!!__livCount.page,calls:{...__livCount.read(),...(__livCount.page?__livCount.page():{})},
+  alloc:window.__garageGpuAlloc?__garageGpuAlloc.read():null,memory:r?.info?.memory?JSON.parse(JSON.stringify(r.info.memory)):null,
+  programs:r?.info?.programs?.length??null,gpuErrors:window.GLX?.gpuErrors?.()??null,t:performance.now(),
+  heapMB:performance.memory?Math.round(performance.memory.usedJSHeapSize/1048576):null};});}
+const delta=(a,b)=>{const o={};for(const k of new Set([...Object.keys(a||{}),...Object.keys(b||{})])){const d=(b?.[k]||0)-(a?.[k]||0);if(typeof d==='number'&&d)o[k]=+d.toFixed(2);}return o;};
+async function windowStats(page,t0,t1){return page.evaluate(([t0,t1])=>{const f=(__livCount.frames||[]).filter(([t])=>t>t0&&t<=t1).map(x=>x[1]);
+  const l=__livCount.longs.filter(([s,d])=>s+d>t0&&s<t1);const s=f.slice().sort((a,b)=>a-b);const q=p=>s.length?+s[Math.min(s.length-1,Math.floor(s.length*p))].toFixed(1):null;
+  return {frames:f.length,meanMs:f.length?+(f.reduce((a,b)=>a+b,0)/f.length).toFixed(1):null,p50Ms:q(.5),p95Ms:q(.95),maxMs:s.length?+s[s.length-1].toFixed(1):null,
+    longTasks:l.length,longTaskMs:+l.reduce((a,[,d])=>a+d,0).toFixed(1),longestTaskMs:l.length?+Math.max(...l.map(x=>x[1])).toFixed(1):0};},[t0,t1]);}
+
+// The edit plan, discovered from the live editor DOM: each entry is {kind, sel, value?}.
+function planEdits(n){
+  const root=document.querySelector('#cs-options')||document;const plan=[];
+  const colours=[...root.querySelectorAll('input[type="color"][data-liv-field]')].map(i=>i.dataset.livField);
+  const pills={};for(const b of root.querySelectorAll('[data-cs-pill]')){const [f,v]=b.dataset.csPill.split(':');(pills[f]||(pills[f]=[])).push(v);}
+  const finishes=[...root.querySelectorAll('[data-cs-finish]')].map(b=>b.dataset.csFinish);
+  const pick=(f,i)=>pills[f]?.length?{kind:/^crest/.test(f)?'crest':/^decal/.test(f)?'decal':f==='bodyStyle'?'body':/^pattern/.test(f)?'pattern':/Finish$/.test(f)?'part-finish':'pill',field:f,value:pills[f][(i+1)%pills[f].length]}:null;
+  const pal=['#d01020','#1040e0','#20a040','#f0c000','#ffffff','#101010','#ff6000','#8020c0'];
+  const rota=[i=>colours.length&&{kind:'colour',field:colours[i%Math.min(colours.length,4)],value:pal[i%pal.length]},
+    i=>finishes.length&&{kind:'finish',value:finishes[(i+1)%finishes.length]},
+    i=>pick(['crestStyle','crestTone','crestFrame'][i%3],i),
+    i=>pick(['decalNoseTip','decalCockpit','decalHalo'][i%3],i),
+    i=>pick('bodyStyle',i),
+    i=>pick(['patternRepeat','patternWidth','patternOpacity'][i%3],i)];
+  for(let i=0;plan.length<n&&i<n*3;i++){const e=rota[i%rota.length](Math.floor(i/rota.length));if(e)plan.push(e);}
+  return {plan,available:{colours,finishes,pills:Object.fromEntries(Object.entries(pills).map(([k,v])=>[k,v.length]))}};
+}
+function applyEdit(e){
+  const root=document.querySelector('#cs-options')||document;const t=performance.now();
+  if(e.kind==='colour'){const i=root.querySelector(`input[data-liv-field="${e.field}"]`);if(!i)return {missing:true};i.value=e.value;i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}));}
+  else if(e.kind==='finish'){const b=root.querySelector(`[data-cs-finish="${e.value}"]`);if(!b)return {missing:true};b.click();}
+  else if(e.kind==='part'){const b=document.querySelector(`[data-cs-opt="${e.value}"]`);if(!b)return {missing:true};b.click();}
+  else{const b=root.querySelector(`[data-cs-pill="${e.field}:${e.value}"]`);if(!b)return {missing:true};b.click();}
+  return {t0:t,dispatchMs:+(performance.now()-t).toFixed(2)};
+}
+const nextFrame=(page,t0)=>page.evaluate(t0=>new Promise(r=>{const go=()=>requestAnimationFrame(t=>t>t0?requestAnimationFrame(t2=>r(+(t2-t0).toFixed(1))):go());go();}),t0);
+
+try{
+  const server=await startStaticServer(process.cwd());
+  const browser=await launchChromium({...(soft?{}:{executablePath:chromium.executablePath()}),args:soft?[...WEBGPU_LAVAPE_CHROMIUM_ARGS,'--headless=new']:['--enable-unsafe-webgpu','--disable-background-timer-throttling','--enable-precise-memory-info']});
+  report.browser=chromiumLaunchInfo(browser);report.browserVersion=browser.version();save();
+  for(const {arm,forceGL} of ARMS){
+    const row={arm,pageErrors:[],consoleErrors:[],gfxLog:[],edits:[]};report.arms.push(row);save();log(`${arm} boot`);
+    const ctx=await browser.newContext({viewport:report.viewport,deviceScaleFactor:1,hasTouch:true,reducedMotion:'reduce'});
+    try{
+      const page=await ctx.newPage();page.on('pageerror',e=>row.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')row.consoleErrors.push(m.text().slice(0,300));else if(/gfx|TLX|WebGPU|reload|device/i.test(m.text())&&row.gfxLog.length<80)row.gfxLog.push(m.type()+' '+m.text().slice(0,240));});
+      await installProbeInit(page,{backend:'three',team:2,tlxForceGL:forceGL==='1'});
+      await page.addInitScript(fgl=>{window.__TEST_MODE=true;localStorage.setItem('apex26.tlxForceGL',fgl);localStorage.setItem('apex26.wgxCapture','0');sessionStorage.setItem('apex26.wgxCapture','0');localStorage.setItem('apex26.gfxBootStepMs','45000');},forceGL);
+      await page.addInitScript(installGarageGpuAllocationProbe);await page.addInitScript(installCounters);await page.addInitScript(installPageCounters);
+      page.on('framenavigated',f=>{if(f===page.mainFrame())row.navigations=(row.navigations||0)+1;(row.navLog||(row.navLog=[])).push({at:new Date().toISOString(),phase:row.phase||'boot'});});
+      await gotoGame(page,server.url+'?three-devtools=1',120000);
+      // A boot may reload once (renderer-boot claim latch): settle, then re-wait on the reloaded page.
+      for(let i=0;i<3;i++){await page.waitForTimeout(4000);try{await page.waitForFunction(()=>window.__apex&&__apex.race&&window.__livCount&&__livCount.page&&document.querySelector('#mb-garage'),null,{polling:250,timeout:120000});break;}catch(e){if(i===2)throw e;}}
+      row.adapter=await page.evaluate(async()=>{const a=navigator.gpu&&await navigator.gpu.requestAdapter();return a?{vendor:a.info.vendor,architecture:a.info.architecture,description:a.info.description}:null;});
+      await page.evaluate(()=>{__apex.agentHelp();__apex.govHold(true);__apex.renderScale(1);});
+            row.phase='garage';const s0=await snapshot(page);const tIn=s0.t;
+      await page.locator('#mb-garage').click();
+      await page.waitForFunction(()=>!document.querySelector('#carsetup').hasAttribute('aria-busy')&&document.querySelector('#cs-tabs [data-cs-cat="livery"]'),null,{polling:100,timeout:120000});
+      const s1=await snapshot(page);row.entry={ms:+(s1.t-tIn).toFixed(0),delta:delta(s0.calls,s1.calls),alloc:delta(s0.alloc,s1.alloc),memory:s1.memory,programs:s1.programs};
+      row.backend=await page.evaluate(()=>__apex.diag({download:false}).env.backendState);log(`${arm} garage open ${JSON.stringify(row.backend)}`);
+      await page.waitForTimeout(3000);
+      const i0=await snapshot(page);await page.waitForTimeout(IDLE_MS);const i1=await snapshot(page);
+      row.idleGarage={...await windowStats(page,i0.t,i1.t),delta:delta(i0.calls,i1.calls)};
+      row.phase='editor';await page.evaluate(()=>document.querySelector('#cs-tabs [data-cs-cat="livery"]').click());
+      await page.waitForSelector('.cs-liv-create',{timeout:soft?180000:60000});
+      const o0=await snapshot(page);await page.evaluate(()=>document.querySelector('.cs-liv-create').click());
+      await page.waitForSelector('input[data-liv-field]',{timeout:soft?180000:60000});await page.waitForTimeout(WINDOW_MS);
+      const o1=await snapshot(page);row.openEditor={...await windowStats(page,o0.t,o1.t),delta:delta(o0.calls,o1.calls),alloc:delta(o0.alloc,o1.alloc)};
+      const {plan,available}=await page.evaluate(planEdits,EDITS);row.available=available;
+      const parts=await page.evaluate(()=>{const t=[...document.querySelectorAll('#cs-tabs [data-cs-cat]')].map(b=>b.dataset.csCat).find(c=>!['team','tune','livery'].includes(c));return t||null;});
+      row.phase='edits';row.before=await snapshot(page);
+      for(const e of plan){
+        const a=await snapshot(page);const d=await page.evaluate(applyEdit,e);
+        if(d.missing){row.edits.push({...e,missing:true});continue;}
+        const nf=await nextFrame(page,d.t0);await page.waitForTimeout(WINDOW_MS);const b=await snapshot(page);
+        row.edits.push({...e,doc:b.doc,wrapped:b.wrapped,dispatchMs:d.dispatchMs,nextFrameMs:nf,...await windowStats(page,d.t0,b.t),delta:delta(a.calls,b.calls),alloc:delta(a.alloc,b.alloc),programs:b.programs,memory:b.memory,heapMB:b.heapMB});
+        log(`${arm} ${e.kind} ${e.field||''}=${e.value} next=${nf}ms`);save();
+      }
+      if(parts){ // three part swaps through the parts tab, the same click a player makes
+        await page.evaluate(c=>document.querySelector(`#cs-tabs [data-cs-cat="${c}"]`).click(),parts);await page.waitForTimeout(1500);
+        const ids=await page.evaluate(()=>[...document.querySelectorAll('[data-cs-opt]')].filter(b=>!b.classList.contains('active')&&!b.disabled).map(b=>b.dataset.csOpt).slice(0,3));
+        for(const id of ids){const e={kind:'part',field:parts,value:id};const a=await snapshot(page);const d=await page.evaluate(applyEdit,e);if(d.missing)continue;
+          const nf=await nextFrame(page,d.t0);await page.waitForTimeout(WINDOW_MS);const b=await snapshot(page);
+          row.edits.push({...e,doc:b.doc,wrapped:b.wrapped,dispatchMs:d.dispatchMs,nextFrameMs:nf,...await windowStats(page,d.t0,b.t),delta:delta(a.calls,b.calls),alloc:delta(a.alloc,b.alloc),programs:b.programs,memory:b.memory,heapMB:b.heapMB});log(`${arm} part ${id} next=${nf}ms`);save();}
+      }
+      row.after=await snapshot(page);row.total=delta(row.before.calls,row.after.calls);row.totalAlloc=delta(row.before.alloc,row.after.alloc);
+      const p0=await snapshot(page);await page.waitForTimeout(IDLE_MS);const p1=await snapshot(page);row.idleAfter={...await windowStats(page,p0.t,p1.t),delta:delta(p0.calls,p1.calls)};
+      await page.screenshot({path:`game-livery-${arm}.png`,timeout:60000}).catch(()=>{});
+      row.ok=!row.pageErrors.length;save();log(`${arm} done`);
+    }catch(e){row.error=String(e.stack||e);save();log(`${arm} FAILED ${row.error}`);}finally{await ctx.close();}
+  }
+  report.ok=report.arms.every(r=>r.ok);report.finished=new Date().toISOString();save();
+}catch(e){report.ok=false;report.error=String(e.stack||e);save();console.error(report.error);process.exitCode=1;}finally{await shutdown();}
