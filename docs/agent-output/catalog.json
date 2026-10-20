@@ -1569,7 +1569,10 @@
       "path": "tools/gen/gen-locales.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
-      "interpreter": "node"
+      "interpreter": "node",
+      "npmScripts": [
+        "gen:check"
+      ]
     },
     {
       "path": "tools/gen/gen-output-surface.mjs",
@@ -3403,7 +3406,7 @@
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check"
     },
     {
       "name": "gen:docs",
