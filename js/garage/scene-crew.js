@@ -38,9 +38,8 @@ const GarageCrew = (function () {
     block(out, 0, 1.62, 0, 0.13, 0.14, 0.14, scale(c2, 0.9));           // helmet
     block(out, 0, 1.62, 0.135, 0.10, 0.045, 0.01, VISOR);
   }
-  /* DESIGN PREVIEW LOOKS (B·G2, 2026-10-19): alternative crews behind a dev
-   * switch — GarageCrew.setLook(id) or localStorage apex26.crewLook — so a
-   * gallery can set them side by side. "classic" is the shipped crew above and
+  /* Crew LOOKS (B·G2, 2026-10-19): alternative crews, picked on the setup
+   * sheet's CREW row (GarageCrew.setLook(id), saved as apex26.crewLook). "classic" is the shipped crew above and
    * stays the default; every other look is an articulated figure (tubes between
    * joints, so a kneel or a lean is a joint table, not new geometry) baked with
    * the props it holds into ONE static mesh in bay metres, plus the lollipop. */
@@ -292,9 +291,12 @@ const GarageCrew = (function () {
     if (g !== gfx) { free(); gfx = g; }
     try { const v = typeof localStorage !== "undefined" && localStorage.getItem("apex26.crewLook"); if (v && LOOKS.includes(v)) look = v; } catch (_) { /* no storage */ }
   }
-  /** Dev switch for the design preview: one of LOOKS; returns the look in force. */
+  /** The garage CREW picker (and the dev hook): one of LOOKS, saved; returns the look in force. */
   function setLook(id) {
-    if (LOOKS.includes(id) && id !== look) { look = id; free(); }
+    if (LOOKS.includes(id) && id !== look) {
+      look = id; free();
+      try { localStorage.setItem("apex26.crewLook", id); } catch (_) { /* private mode */ }
+    }
     return look;
   }
   // teamId (optional): the car's team, so the pit-stop jack seats on its nose.

@@ -486,7 +486,7 @@ function buildDress(SIDES) {
   return g;
 }
 
-// ── room LOOKS (design preview, B·G1; table in GaragePrims.LOOKS) ─────────────
+// ── room LOOKS (B·G1; table in GaragePrims.LOOKS) ─────────────────────────────
 // What a look changes, by surface. The shell (walls, ceiling) and the floor
 // stay vertex colour in their own meshes; anything mounted ON a wall goes in
 // that wall's per-side group so it culls with it, and lit parts go in the LED

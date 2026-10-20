@@ -635,10 +635,10 @@ function litRig(src) {
   }
   return _lit;
 }
-// ── lighting MOODS (design preview behind a dev switch) ─────────────────────
+// ── lighting MOODS (the setup sheet's LIGHTING row) ─────────────────────────
 // "shipped" is the identity — every factor 1, nothing overridden — so the
-// switch is inert unless a mood is chosen: GarageScene.mood(id), the URL
-// ?garageMood=<id>, or localStorage apex26.garageMood. Gains scale the rig
+// rig is the shipped one unless a mood is chosen: GarageScene.setMood(id) (the
+// picker; saves apex26.garageMood), mood(id), or the URL ?garageMood=<id>. Gains scale the rig
 // GROUPS of FIXTURES (key 0-1, fill 2-5, wash 6-9), the team dado uplights
 // and the night gantry; sky/amb/ambG (a number or per-channel rgb) scale the skylight and hemisphere ambient
 // IN PLACE (setup-camera reads the arrays per frame); exposure, bloom and
@@ -685,6 +685,12 @@ function mood(id) {
     AMB_SKY[k] = AMB_SKY_BASE[k] * am; AMB_GROUND[k] = AMB_GROUND_BASE[k] * (MD.ambG === null ? am : ch(MD.ambG));
   }
   return moodId;
+}
+// The garage LIGHTING picker: apply a mood and remember it (mood() alone never writes).
+function setMood(id) {
+  const m = mood(id);
+  try { localStorage.setItem("apex26.garageMood", m); } catch (_) { /* private mode */ }
+  return m;
 }
 function moodDef() { return MD; }
 // The hour outside is part of the mood: garageCtx() hands its ctx through here.
@@ -1507,7 +1513,7 @@ function debug() {
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
-  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, mood, moodDef, moodCtx, MOODS, hangerSpan, FIXTURES, LED_DROP, CEIL_Y, draw, framingHull, recentre,
+  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, mood, setMood, moodDef, moodCtx, MOODS, hangerSpan, FIXTURES, LED_DROP, CEIL_Y, draw, framingHull, recentre,
            previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, release };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

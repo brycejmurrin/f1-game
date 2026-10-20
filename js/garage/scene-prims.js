@@ -198,8 +198,8 @@ function tile(out, x0, x1, z0, z1, col, y, mid) {
   out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
 }
 
-// ── room LOOKS (design preview, B·G1) ───────────────────────────────────────
-// A dev switch over the SETUP-SCREEN bay's architecture: walls, floor, ceiling,
+// ── room LOOKS (B·G1) ───────────────────────────────────────────────────────
+// The setup sheet's GARAGE row picks the SETUP-SCREEN bay's architecture: walls, floor, ceiling,
 // back-wall branding. `stock` (null) is the shipped room; every other id is a
 // data record GarageDress.look* reads. Trackside pit rows (buildStatic) never
 // see a look. Pick one with ?garageLook=<id>, localStorage apex26.garageLook,

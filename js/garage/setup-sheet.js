@@ -362,6 +362,52 @@ function csLabel(text) {
   return h;
 }
 
+// GARAGE / CREW / LIGHTING — the room around the car. One chip row per look
+// table: GaragePrims.LOOKS (room), GarageCrew.LOOKS (crew that meets the car),
+// GarageScene.MOODS (light rig). The scene modules apply and save the pick
+// (apex26.garageLook / crewLook / garageMood); a row whose module is absent is
+// skipped. Crew and mood tables are bare ids, so their names live here.
+const CREW_NAMES = { classic: "CLASSIC", sculpted: "SCULPTED", pitstop: "PIT STOP", workshop: "WORKSHOP", welcome: "WELCOME" };
+const MOOD_NAMES = { shipped: "STANDARD", broadcast: "BROADCAST", night: "NIGHT", showroom: "SHOWROOM", daylight: "DAYLIGHT" };
+function lookRowSpecs() {
+  const out = [];
+  if (typeof GaragePrims !== "undefined" && GaragePrims.LOOK_IDS)
+    out.push({ label: "GARAGE", key: "room", ids: GaragePrims.LOOK_IDS, cur: GaragePrims.lookId(),
+      name: (id) => (GaragePrims.LOOKS[id] ? GaragePrims.LOOKS[id].label.toUpperCase() : "TEAM BAY"),
+      apply: (id) => { GaragePrims.setLook(id); } });
+  if (typeof GarageCrew !== "undefined" && GarageCrew.LOOKS)
+    out.push({ label: "CREW", key: "crew", ids: GarageCrew.LOOKS, cur: GarageCrew.look(),
+      name: (id) => CREW_NAMES[id] || id.toUpperCase(), apply: (id) => { GarageCrew.setLook(id); } });
+  if (typeof GarageScene !== "undefined" && GarageScene.MOODS && GarageScene.setMood)
+    out.push({ label: "LIGHTING", key: "mood", ids: Object.keys(GarageScene.MOODS), cur: GarageScene.mood(),
+      name: (id) => MOOD_NAMES[id] || id.toUpperCase(), apply: (id) => { GarageScene.setMood(id); } });
+  return out;
+}
+function buildLookRows(optsEl) {
+  for (const { label, key, ids, cur, name, apply } of lookRowSpecs()) {
+    optsEl.appendChild(csLabel(label));
+    const row = document.createElement("div");
+    row.className = "chip-row"; row.id = "cs-look-" + key;
+    row.setAttribute("role", "group"); row.setAttribute("aria-label", "Garage " + label.toLowerCase());
+    for (const id of ids) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "sel-chip" + (id === cur ? " active" : "");
+      b.setAttribute("aria-pressed", id === cur ? "true" : "false");
+      b.dataset.csLook = key + ":" + id;
+      b.textContent = name(id);
+      b.onclick = () => {
+        if (id === cur) return;
+        apply(id);
+        if (G.soundOn) GameAudio.uiTick();
+        buildSetup();
+        $("cs-options")?.querySelector(`[data-cs-look="${key}:${id}"]`)?.focus({ preventScroll: true });
+      };
+      row.appendChild(b);
+    }
+    optsEl.appendChild(row);
+  }
+}
+
 // TEAM & DRIVER — who the car belongs to.
 //
 // The garage owns this, so the title-screen GARAGE route can say whose car it
@@ -431,6 +477,7 @@ function buildTeamOptions(optsEl, team) {
   edit.onclick = () => { if (pitLocked()) return; if (G.soundOn) GameAudio.uiSelect(); G.openCustomize(); };
   editRow.appendChild(edit);
   optsEl.appendChild(editRow);
+  buildLookRows(optsEl);
 
   // THE GARAGE FILE — parts, liveries, setup sheets and an invented team, for
   // every team, saved out and read back in. It lives HERE rather than beside

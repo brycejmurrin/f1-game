@@ -1,4 +1,4 @@
-// Garage room LOOKS (design preview, GaragePrims.LOOKS): every look must build
+// Garage room LOOKS (GaragePrims.LOOKS) and the setup-sheet look pickers: every look must build
 // a valid bay — one material id per vertex, in-range indices, finite
 // positions inside the room — and must actually change the room's colours.
 // A look that silently falls back to the shipped room is the failure this
@@ -121,4 +121,70 @@ test("fit: every look's roof structure is hung from the ceiling", () => {
     assert.ok(Math.abs(top - CEIL_Y) < 1e-3, `${id}: roof reaches the ceiling (top ${top.toFixed(3)})`);
     if (id === "workshop") assert.ok(xmin <= -HALF_W + 1e-3 && xmax >= HALF_W - 1e-3, `${id}: trusses bear on both walls`);
   }
+});
+
+// THE PICKERS (Bryce 2026-10-20: "Add pickers for all"). The setup sheet's TEAM
+// tab draws one chip row per look table — GARAGE (GaragePrims.LOOKS), CREW
+// (GarageCrew.LOOKS), LIGHTING (GarageScene.MOODS) — and a click must reach the
+// scene module, which applies and saves it. Runs the real lookRowSpecs /
+// buildLookRows source against stub tables and a minimal DOM.
+function pickerHarness() {
+  const src = read("js/garage/setup-sheet.js");
+  const start = src.indexOf("const CREW_NAMES"), end = src.indexOf("// TEAM & DRIVER");
+  assert.ok(start > 0 && end > start, "picker source found in setup-sheet.js");
+  const calls = [], focused = [];
+  let rebuilds = 0;
+  const el = (tag) => ({
+    tag, children: [], dataset: {}, attrs: {}, className: "", id: "", textContent: "",
+    appendChild(c) { this.children.push(c); return c; },
+    setAttribute(k, v) { this.attrs[k] = v; },
+  });
+  const opts = el("div");
+  const ctx = vm.createContext({
+    document: { createElement: el },
+    csLabel: (t) => Object.assign(el("label"), { textContent: t }),
+    buildSetup: () => { rebuilds++; },
+    $: () => ({ querySelector: (sel) => ({ focus: () => focused.push(sel) }) }),
+    G: { soundOn: false }, GameAudio: { uiTick() {} },
+    GaragePrims: { LOOK_IDS: ["stock", "studio"], LOOKS: { stock: null, studio: { label: "Silver studio" } },
+      lookId: () => "stock", setLook: (id) => calls.push(["room", id]) },
+    GarageCrew: { LOOKS: ["classic", "pitstop"], look: () => "classic", setLook: (id) => calls.push(["crew", id]) },
+    GarageScene: { MOODS: { shipped: {}, night: {} }, mood: () => "shipped", setMood: (id) => calls.push(["mood", id]) },
+  });
+  vm.runInContext(src.slice(start, end), ctx);
+  vm.runInContext("buildLookRows", ctx)(opts);
+  return { opts, calls, focused, rebuilds: () => rebuilds };
+}
+
+test("pickers: GARAGE, CREW and LIGHTING rows, current look pressed", () => {
+  const h = pickerHarness();
+  const labels = h.opts.children.filter((c) => c.tag === "label").map((c) => c.textContent);
+  assert.deepEqual(labels, ["GARAGE", "CREW", "LIGHTING"]);
+  const rows = h.opts.children.filter((c) => c.tag === "div");
+  assert.deepEqual(rows.map((r) => r.id), ["cs-look-room", "cs-look-crew", "cs-look-mood"]);
+  assert.deepEqual(rows[0].children.map((b) => b.textContent), ["TEAM BAY", "SILVER STUDIO"]);
+  assert.deepEqual(rows[1].children.map((b) => b.textContent), ["CLASSIC", "PIT STOP"]);
+  assert.deepEqual(rows[2].children.map((b) => b.textContent), ["STANDARD", "NIGHT"]);
+  for (const r of rows) {
+    assert.equal(r.attrs.role, "group");
+    assert.equal(r.children[0].attrs["aria-pressed"], "true");
+    assert.equal(r.children[1].attrs["aria-pressed"], "false");
+  }
+});
+
+test("pickers: a click applies through the scene module, rebuilds and keeps focus", () => {
+  const h = pickerHarness();
+  const rows = h.opts.children.filter((c) => c.tag === "div");
+  rows[0].children[0].onclick();                       // already current: no-op
+  assert.equal(h.calls.length, 0);
+  rows[0].children[1].onclick(); rows[1].children[1].onclick(); rows[2].children[1].onclick();
+  assert.deepEqual(h.calls, [["room", "studio"], ["crew", "pitstop"], ["mood", "night"]]);
+  assert.equal(h.rebuilds(), 3);
+  assert.deepEqual(h.focused, ['[data-cs-look="room:studio"]', '[data-cs-look="crew:pitstop"]', '[data-cs-look="mood:night"]']);
+});
+
+test("pickers: the crew and mood picks are saved by their scene modules", () => {
+  const crew = read("js/garage/scene-crew.js"), scene = read("js/garage/scene.js");
+  assert.match(crew, /function setLook\(id\) \{[\s\S]{0,200}localStorage\.setItem\("apex26\.crewLook", id\)/);
+  assert.match(scene, /function setMood\(id\) \{[\s\S]{0,120}localStorage\.setItem\("apex26\.garageMood", m\)/);
 });

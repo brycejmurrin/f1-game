@@ -6801,14 +6801,17 @@
     },
     "js/garage/scene-crew.js": {
       "build": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "draw": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "init": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "layout": [
@@ -6818,7 +6821,8 @@
         "tests/unit/garage-crew.test.mjs"
       ],
       "setLook": [
-        "tests/unit/garage-crew.test.mjs"
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs"
       ]
     },
     "js/garage/scene-dress.js": {
@@ -7155,6 +7159,7 @@
         "tests/unit/car-materials.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
