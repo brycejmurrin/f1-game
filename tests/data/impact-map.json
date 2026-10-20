@@ -6677,6 +6677,7 @@
         "tests/unit/damage.test.mjs",
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/design-matrix.test.mjs",
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/fleet-board-snapshot.test.mjs",
