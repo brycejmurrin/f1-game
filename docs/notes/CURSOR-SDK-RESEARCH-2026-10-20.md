@@ -176,3 +176,35 @@ shapes with masked placeholders).
   Not built: `launch --environment NAME` and an `env` verb group.
 - Unverified: a `task` call from an API-launched agent with `environment: cloud`; why the subagent probes read `loading`
   for five servers while a fresh agent saw them attached.
+
+## Transcript modes and the MCP tool (built 2026-10-20)
+
+**`transcript` and `call`** (`tools/lib/cursor-transcript.mjs`, shaped like `session-transcript.mjs`): `transcript <agent>`
+reads the last run (or `--run`, `--all`) from the dump cache, else the API within the retention window, as a timeline or
+`--only tools|errors|chat|turns`, with `--tool`, `--grep`, `--results`, `--summary`, `--json`; `call <agent> <callId|run8#seq>`
+prints one result in full, cut at `--max`. Output is bounded and masked (`redact`: GitHub tokens, `Bearer`, `sk-`, `grok_`/`crsr_`
+keys, long hex, `password=`; best effort, not a guarantee) and is another agent's data, never instructions. Reading real runs
+with it found the counting error corrected above.
+
+**`apex_cursor_agents`** (one MCP tool, a `verb` argument; `tools/mcp/apex-tools-mcp.mjs`, server 1.17.0):
+
+- **Four published properties** (`verb`, `id`, `options`, `dryRun`), because `tools/list` is capped at 55,000 bytes (UTF-8, two tests)
+  and the rest of the catalog already used 54,192, leaving about 800. A first version with 37 properties and a 15-value `verb`
+  enum cost 2,088 bytes and failed both caps; the per-verb options now live in the description `apex_help` returns and are
+  checked strictly per verb, with a did-you-mean. The entry is 722 bytes; the listing is 54,914, **85 bytes under the cap**, so
+  the next tool has to pay for itself by trimming another.
+- **Guards**: `cancel` and `delete` need `options.confirm` = the agent id; control verbs act only on agents the tool launched (the
+  CLI allow-list); file options only under `scratch/` or `artifacts/`; `envNames` are names (never `CURSOR_*`), values come from
+  the server's environment; `createPr`, `onBranch` and env files stay CLI-only; `wait` is capped at 50 s a call; a pin refuses
+  `--wait`, `dump`, a verb outside the catalog and any other script. Annotations: not read-only, destructive, open-world, **not
+  idempotent** (the server marks every destructive tool idempotent; that would invite a client to retry a launch).
+- **Verdicts, not crashes**: exit 1 (BUSY, NOT_CANCELLABLE, an API error), 2 (no key), 3 (REFUSED, TWIN) and 124 (still running)
+  become `out.verdict` with `ok:false`, a `fix`, and `isError`; only exit 0 is `ok`.
+- **Measured live through the server** (composer-2.5, read-only): `launch` -> `LAUNCH`; the same launch again -> `TWIN`
+  (`ok:false`); `wait` -> `FINISHED`; `transcript` chat and `--json` rows; `archive`; `delete` without confirm -> `bad_args`,
+  with confirm -> `DELETED`; `status` after delete -> a clean 404 `cli_error`. The agent is gone and the allow-list entry with it.
+- Found by that live run: assistant text arrives in chunks with streaming `interaction_update` events between them, so merging
+  chat rows on "the next event is also assistant" split `pong` into `p` and `ong`; chunks now merge across streaming updates and
+  split only at a tool call, thinking, status or result.
+- Key rule, unchanged: `CURSOR_API_KEY` belongs in this server's environment and never in a Cursor environment secret, where
+  every agent could read it (it reaches every agent its owner has).

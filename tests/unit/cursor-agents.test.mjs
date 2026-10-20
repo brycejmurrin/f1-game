@@ -936,3 +936,20 @@ test("transcript and call: summary, json, validation, and one result in full wit
     after();
   }
 });
+
+test("parseRun merges assistant chunks across streaming updates and starts a new message only at a boundary", () => {
+  const rows = parseRun(
+    sse([
+      ["assistant", { text: "p" }],
+      ["interaction_update", { type: "text-delta" }],
+      ["interaction_update", { type: "text-delta" }],
+      ["assistant", { text: "ong" }],
+      ["tool_call", { callId: "k1", name: "read_file", args: { path: "a.js" }, result: { success: { path: "a.js" } } }],
+      ["assistant", { text: "after the tool" }],
+      ["thinking", { text: "..." }],
+      ["assistant", { text: "after thinking" }],
+    ]),
+    { id: RUN1 },
+  ).rows;
+  assert.deepEqual(rows.filter((r) => r.kind === "chat").map((r) => r.text), ["pong", "after the tool", "after thinking"]);
+});

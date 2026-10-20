@@ -147,13 +147,17 @@ export function groupCalls(events) {
  * Rows for one run, in stream order. kinds: status, chat (consecutive assistant chunks merged), thinking (chars only),
  * tool, result, error. A tool row merges the events that share a callId.
  */
+const CHAT_BREAKS = new Set(["tool_call", "thinking", "status", "result", "error"]);
+
 export function parseRun(sseText, run = {}) {
   const rows = [];
   const calls = new Map();
   let chat = null;
   let toolSeq = 0;
   for (const { event, data } of parseSse(sseText)) {
-    if (event !== "assistant") chat = null;
+    // Assistant text arrives in chunks with streaming `interaction_update` events between them (25,214 of 25,269 gaps
+    // measured); only a visible boundary starts a new message.
+    if (CHAT_BREAKS.has(event)) chat = null;
     if (event === "assistant") {
       const t = typeof data.text === "string" ? data.text : "";
       if (!chat) rows.push((chat = { kind: "chat", text: "" }));

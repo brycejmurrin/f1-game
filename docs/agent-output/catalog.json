@@ -2300,7 +2300,9 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json",
-        "--out"
+        "--limit",
+        "--out",
+        "--summary"
       ]
     },
     {

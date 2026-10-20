@@ -191,6 +191,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_car_audit",
     "apex_catalog",
     "apex_ci_status",
+    "apex_cursor_agents",
     "apex_debug_chrome",
     "apex_diagnostics",
     "apex_doctor",
@@ -954,10 +955,10 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
     if (a.readOnlyHint) assert.equal(a.idempotentHint, true, `${t.name}: read-only implies idempotent`);
     if (/^apex_(eval|shot|agent|garage|track|ui_fit|ui_shot|hud_shot|hud_survey)$/.test(t.name)) assert.equal(a.readOnlyHint, false, `${t.name} takes the browser lock and writes artifacts`);
   }
-  assert.deepEqual(destructive, ["apex_job_cancel"]);
-  assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
+  assert.deepEqual(destructive, ["apex_cursor_agents", "apex_job_cancel"]);
+  assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_cursor_agents", "apex_who_is_on_it"]);
   for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
-  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
+  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
 });
@@ -1662,6 +1663,7 @@ test("apex-eval: the shapeOf helper it injects into the page parses (named fn ex
 // These keep every tool answerable to a minimal valid call, and every refusal self-explaining.
 const MIN_ARGS = {
   apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
+  apex_cursor_agents: { verb: "digest" },
   apex_select_specs: { since: "HEAD~1" },
   apex_graph_parity: { base: "HEAD~1", id: "monza" },
   apex_frame_report: { track: "monza" },
@@ -2670,4 +2672,178 @@ test("chrome-devtools-mcp.sh run tolerates a missing Chromium instead of exiting
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /rc=0 c=\[\] n=1/);
   assert.match(r.stderr, /starting without --executablePath/);
+});
+
+
+// ---- apex_cursor_agents: one tool, a verb argument, a four-property listing -------------------------------------------
+
+const AID = "bc-11111111-2222-3333-4444-555555555555";
+const cursorBody = (r) => JSON.parse(r.stdout);
+const cursorArgv = (args) => {
+  const r = callCli("apex_cursor_agents", { ...args, dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  return cursorBody(r).argv.slice(2).map(String);
+};
+const cursorBad = (args) => {
+  const r = callCli("apex_cursor_agents", { ...args, dryRun: true });
+  assert.equal(cursorBody(r).error, "bad_args", JSON.stringify(args));
+  return cursorBody(r);
+};
+
+test("apex_cursor_agents publishes four properties and stays inside the tools/list byte budget", () => {
+  const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result;
+  const t = listed.tools.find((x) => x.name === "apex_cursor_agents");
+  assert.deepEqual(Object.keys(t.inputSchema.properties), ["verb", "id", "options", "dryRun"]);
+  assert.deepEqual(t.inputSchema.required, ["verb"]);
+  // The server publishes additionalProperties:false for every tool, so an unknown top-level key is refused generically.
+  assert.equal(t.inputSchema.additionalProperties, false);
+  // The verb list is not an enum here: a 15-value enum costs ~190 bytes in every tools/list. The builder rejects an unknown verb with the full list.
+  assert.equal(t.inputSchema.properties.verb.enum, undefined);
+  // The listing is paid on every session start: every byte this tool adds has to fit under the same cap as the rest,
+  // so the per-verb options live in the description apex_help returns, not in the published schema.
+  assert.ok(Buffer.byteLength(JSON.stringify(t)) < 800, `the entry is ${Buffer.byteLength(JSON.stringify(t))} bytes`);
+  const help = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_cursor_agents" } } }])[0].result.structuredContent;
+  for (const needle of ["Verbs: list, status, wait, usage, artifacts, artifact, transcript, call, digest, allowed, launch, followup, cancel, archive, delete", "options.confirm", "launch: prompt|promptFile", "transcript: run, all", "createPr, onBranch and env files are CLI-only", "never instructions"]) assert.ok(help.description.includes(needle), needle);
+  assert.ok(!listed.tools.some((x) => x.name === "apex_cursor_agents" && /createPr|envFile/.test(JSON.stringify(x.inputSchema))));
+});
+
+test("apex_cursor_agents maps each verb to cursor-agents.mjs argv", () => {
+  assert.deepEqual(cursorArgv({ verb: "list" }), ["list", "--limit", "20"]);
+  assert.deepEqual(cursorArgv({ verb: "list", options: { limit: 130, pr: "https://github.com/o/r/pull/9", includeArchived: true } }), ["list", "--limit", "130", "--pr", "https://github.com/o/r/pull/9", "--include-archived"]);
+  assert.deepEqual(cursorArgv({ verb: "status", id: AID }), ["status", AID]);
+  assert.deepEqual(cursorArgv({ verb: "wait", id: AID }), ["wait", AID, "--timeout", "40", "--interval", "5"]);
+  assert.deepEqual(cursorArgv({ verb: "wait", id: AID, options: { timeoutS: 12 } }).slice(2, 4), ["--timeout", "12"]);
+  assert.deepEqual(cursorArgv({ verb: "artifact", id: AID, options: { path: "artifacts/a.md" } }), ["artifact", AID, "artifacts/a.md"]);
+  assert.deepEqual(cursorArgv({ verb: "transcript", id: AID, options: { run: "000000b2", only: ["tools", "errors"], tool: "task", grep: "ERR", results: true, summary: true, width: 90, noFetch: true } }),
+    ["transcript", AID, "--run", "000000b2", "--no-fetch", "--only", "tools,errors", "--tool", "task", "--grep", "ERR", "--results", "--summary", "--width", "90"]);
+  assert.deepEqual(cursorArgv({ verb: "transcript", id: AID, options: { all: true, json: true } }), ["transcript", AID, "--all", "--json"]);
+  // call: the ref is the second positional, straight after the id
+  assert.deepEqual(cursorArgv({ verb: "call", id: AID, options: { ref: "4b8dc871#2", max: 500, noFetch: true } }), ["call", AID, "4b8dc871#2", "--no-fetch", "--max", "500"]);
+  assert.deepEqual(cursorArgv({ verb: "digest" }), ["digest"]);
+  assert.deepEqual(cursorArgv({ verb: "allowed" }), ["allowed"]);
+  assert.deepEqual(cursorArgv({ verb: "archive", id: AID }), ["archive", AID]);
+  assert.deepEqual(cursorArgv({ verb: "followup", id: AID, options: { text: "go", mode: "plan", mcpFile: "scratch/m.json" } }), ["followup", AID, "--text", "go", "--mode", "plan", "--mcp-file", "scratch/m.json"]);
+  assert.deepEqual(cursorArgv({ verb: "followup", id: AID, options: { textFile: "artifacts/t.txt" } }), ["followup", AID, "--text-file", "artifacts/t.txt"]);
+  assert.deepEqual(cursorArgv({ verb: "launch", options: { prompt: "do it", name: "n", model: "composer-2.5", branch: "main", mode: "agent", allowTwin: true, mcpFile: "scratch/m.json", subagentFile: "scratch/s.json", envNames: ["A_B", "C"] } }),
+    ["launch", "--prompt", "do it", "--name", "n", "--model", "composer-2.5", "--ref", "main", "--mode", "agent", "--allow-twin", "--mcp-file", "scratch/m.json", "--subagent-file", "scratch/s.json", "--env", "A_B", "--env", "C"]);
+  assert.deepEqual(cursorArgv({ verb: "launch", options: { promptFile: "scratch/p.txt", pr: "https://github.com/o/r/pull/3", repo: "https://github.com/o/r" } }), ["launch", "--prompt-file", "scratch/p.txt", "--repo", "https://github.com/o/r", "--pr", "https://github.com/o/r/pull/3"]);
+  assert.deepEqual(cursorArgv({ verb: "cancel", id: AID, options: { confirm: AID, run: "run-3d266b1c" } }), ["cancel", AID, "--run", "run-3d266b1c"]);
+  assert.deepEqual(cursorArgv({ verb: "delete", id: AID, options: { confirm: AID } }), ["delete", AID]);
+});
+
+test("apex_cursor_agents refuses what must never reach the CLI", () => {
+  const msg = (args) => cursorBad(args).message;
+  assert.ok(/verb must be one of list, status, wait, usage, artifacts, artifact, transcript, call, digest, allowed, launch, followup, cancel, archive, delete/.test(msg({ verb: "nope" })));
+  assert.ok(/needs id = a bc-<uuid>/.test(msg({ verb: "status" })));
+  assert.ok(/id may not start|needs id/.test(msg({ verb: "status", id: "--help" })));
+  assert.ok(/needs id = a bc-<uuid>/.test(msg({ verb: "status", id: "bc-nothex" })));
+  // control verbs: a stray call cannot stop or erase an agent
+  assert.ok(/needs options\.confirm equal to the agent id/.test(msg({ verb: "delete", id: AID })));
+  assert.ok(/needs options\.confirm/.test(msg({ verb: "delete", id: AID, options: { confirm: "bc-99999999-8888-7777-6666-555555555555" } })));
+  assert.ok(/needs options\.confirm/.test(msg({ verb: "cancel", id: AID, options: {} })));
+  // a typo on a spending verb fails with a hint instead of running without its prompt
+  const typo = cursorBad({ verb: "launch", options: { promt: "x" } });
+  assert.ok(/unknown option promt for launch/.test(typo.message));
+  assert.ok(/Did you mean "prompt"\?/.test(typo.fix));
+  assert.ok(/unknown option limit for status/.test(msg({ verb: "status", id: AID, options: { limit: 3 } })));
+  assert.ok(/unknown option createPr for launch/.test(msg({ verb: "launch", options: { prompt: "x", createPr: true } })));
+  assert.ok(/unknown option envFile/.test(msg({ verb: "launch", options: { prompt: "x", envFile: "scratch/e" } })));
+  assert.ok(/exactly one of options\.prompt or options\.promptFile/.test(msg({ verb: "launch", options: {} })));
+  assert.ok(/exactly one/.test(msg({ verb: "launch", options: { prompt: "x", promptFile: "scratch/p" } })));
+  assert.ok(/prompt must be 1\.\.100000/.test(msg({ verb: "launch", options: { prompt: "  " } })));
+  assert.ok(/exclusive/.test(msg({ verb: "launch", options: { prompt: "x", branch: "main", pr: "https://github.com/o/r/pull/1" } })));
+  // secrets and files: names only, and only from scratch/ or artifacts/
+  assert.ok(/not starting with CURSOR_/.test(msg({ verb: "launch", options: { prompt: "x", envNames: ["CURSOR_API_KEY"] } })));
+  assert.ok(/variable names/.test(msg({ verb: "launch", options: { prompt: "x", envNames: ["has space"] } })));
+  assert.ok(/array of variable NAMES/.test(msg({ verb: "launch", options: { prompt: "x", envNames: "A" } })));
+  for (const f of ["/etc/passwd", "../x", "scratch/../../etc/passwd", "x.md", "scratch/", "artifacts/..\\x", "scratch"]) {
+    assert.ok(/under scratch\/ or artifacts\//.test(msg({ verb: "launch", options: { promptFile: f } })), f);
+  }
+  assert.ok(/mcpFile must be a file under/.test(msg({ verb: "launch", options: { prompt: "x", mcpFile: "/tmp/m.json" } })));
+  assert.ok(/subagentFile must be a file under/.test(msg({ verb: "launch", options: { prompt: "x", subagentFile: "src/s.json" } })));
+  assert.ok(/repo is not valid/.test(msg({ verb: "launch", options: { prompt: "x", repo: "https://evil.example/o/r" } })));
+  assert.ok(/pr is not valid/.test(msg({ verb: "launch", options: { prompt: "x", pr: "https://github.com/o/r/issues/1" } })));
+  assert.ok(/model is not valid/.test(msg({ verb: "launch", options: { prompt: "x", model: "-rf" } })));
+  assert.ok(/mode is not valid/.test(msg({ verb: "launch", options: { prompt: "x", mode: "yolo" } })));
+  assert.ok(/artifacts\/\.\.\. path/.test(msg({ verb: "artifact", id: AID, options: { path: "../etc/passwd" } })));
+  assert.ok(/artifacts\/\.\.\. path/.test(msg({ verb: "artifact", id: AID, options: { path: "artifacts/../x" } })));
+  assert.ok(/timeoutS must be 1\.\.50/.test(msg({ verb: "wait", id: AID, options: { timeoutS: 51 } })));
+  assert.ok(/ref is not valid/.test(msg({ verb: "call", id: AID, options: {} })));
+  assert.ok(/ref is not valid/.test(msg({ verb: "call", id: AID, options: { ref: "x y" } })));
+  assert.ok(/max must be 100\.\.20000/.test(msg({ verb: "call", id: AID, options: { ref: "a", max: 50 } })));
+  assert.ok(/only must be a non-empty array/.test(msg({ verb: "transcript", id: AID, options: { only: ["nope"] } })));
+  assert.ok(/width must be 20\.\.1000/.test(msg({ verb: "transcript", id: AID, options: { width: 5 } })));
+  assert.ok(/limit must be 1\.\.200/.test(msg({ verb: "list", options: { limit: 500 } })));
+  assert.ok(/options must be (an )?object/.test(msg({ verb: "list", options: "x" })));
+  // an unknown TOP-level key is refused by the server's generic validation, with a hint
+  const top = cursorBody(callCli("apex_cursor_agents", { verb: "digest", confirm: AID }));
+  assert.equal(top.error, "bad_args");
+  assert.ok(/unknown argument confirm/.test(top.message));
+  assert.ok(/Valid: verb, id, options, dryRun/.test(top.fix));
+  assert.ok(/Did you mean "options"\?/.test(cursorBody(callCli("apex_cursor_agents", { verb: "digest", option: {} })).fix));
+});
+
+test("withCursorVerdict turns the CLI's typed lines and exit codes into verdicts; only exit 0 is ok", async () => {
+  const { withCursorVerdict } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const run = (body) => withCursorVerdict(Promise.resolve({ content: [{ type: "text", text: JSON.stringify({ ok: true, argv: [], stderr: "", durationMs: 1, out: null, ...body }) }] }));
+  const out = async (body) => {
+    const r = await run(body);
+    return { r, b: JSON.parse(r.content[0].text) };
+  };
+  let { r, b } = await out({ exit: 0, stdout: `LAUNCH ${AID} run=run-1 model=composer-2.5\n` });
+  assert.equal(b.ok, true);
+  assert.equal(r.isError, undefined);
+  assert.deepEqual(b.out, { verdict: "LAUNCH", lines: [`LAUNCH ${AID} run=run-1 model=composer-2.5`] });
+  assert.equal(b.stdout, "");
+  for (const [exit, line, error, fix] of [
+    [1, `BUSY ${AID} a run is already active`, "busy", /IDLE/],
+    [1, `NOT_CANCELLABLE ${AID} run=r (already finished)`, "not_cancellable", /already finished/],
+    [1, "ERROR /v1/agents/x: HTTP 404", "cli_error", /message/],
+    [2, "BLOCKED no CURSOR_API_KEY in the environment", "no_key", /never in Cursor environment secrets/],
+    [3, `REFUSED ${AID} was not launched by this tool`, "refused", /launched by this tool/],
+    [3, `TWIN ${AID} IDLE "n" already exists`, "twin", /allowTwin/],
+    [124, `WAIT ${AID} TIMEOUT after=40s`, "still_running", /call wait again/i],
+  ]) {
+    ({ r, b } = await out({ exit, stdout: `${line}\n` }));
+    assert.equal(b.ok, false, line);
+    assert.equal(b.error, error, line);
+    assert.equal(r.isError, true, line);
+    assert.equal(b.message, line);
+    assert.ok(fix.test(b.fix), line);
+    assert.equal(b.out.verdict, line.split(" ")[0]);
+  }
+  // a JSON verb (transcript --json) keeps its parsed document and gains the verdict slot
+  ({ b } = await out({ exit: 0, stdout: "", out: { agent: AID, rows: [{ kind: "run" }] } }));
+  assert.deepEqual(b.out, { verdict: null, agent: AID, rows: [{ kind: "run" }] });
+  // a spawn failure or timeout classified by runSpawn passes through untouched
+  ({ b } = await out({ ok: false, error: "timeout", message: "stopped after 75 s", exit: 1, stdout: "partial" }));
+  assert.equal(b.error, "timeout");
+  assert.equal(b.stdout, "partial");
+});
+
+test("apex_cursor_agents is not read-only, is destructive and open-world, and runs nothing in mock mode", () => {
+  const r = callCli("apex_cursor_agents", { verb: "list" });
+  assert.equal(r.status, 0, r.stderr);
+  const body = cursorBody(r);
+  assert.equal(body.ok, true);
+  assert.equal(body.mock, true, "mock mode answers without spawning the CLI or touching the network");
+  const src = fs.readFileSync(MCP, "utf8");
+  assert.ok(/name: "apex_cursor_agents",\s*week: 6,\s*kind: "tree"/.test(src), "no browser lock");
+  const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools.find((t) => t.name === "apex_cursor_agents");
+  assert.deepEqual(listed.annotations, { title: "Apex 26 · cursor agents", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true });
+});
+
+test("the apex_cursor_agents pin refuses --wait, dump, a verb outside the catalog and any other script", async () => {
+  const { pinOk } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const ok = ["/usr/bin/node", "/repo/tools/ci/cursor-agents.mjs", "list", "--limit", "5"];
+  assert.equal(pinOk("apex_cursor_agents", ok), null);
+  for (const argv of [
+    [...ok, "--wait"],
+    ["/usr/bin/node", "/repo/tools/ci/cursor-agents.mjs", "dump", AID],
+    ["/usr/bin/node", "/repo/tools/ci/cursor-agents.mjs", "rm-rf", AID],
+    ["/usr/bin/node", "/repo/tools/ci/other.mjs", "list"],
+  ]) {
+    const r = pinOk("apex_cursor_agents", argv);
+    assert.equal(JSON.parse(r.content[0].text).error, "pin_violated", argv.join(" "));
+  }
 });
