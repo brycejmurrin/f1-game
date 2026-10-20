@@ -16,3 +16,11 @@ Living gallery: https://claude.ai/artifact/EkspVdVKpht3wDjn4C81MS. Republish eve
 - `identical.mjs` hashes all 11 factory cars and the 6 shipped bodies on every chassis (square, rounded,
   field LOD): `HEAD_REF=<ref> node design-preview/bodies/identical.mjs` vs plain; equal digests mean
   only the preview bodies changed.
+- `measure.mjs` (round 4) prints each body's part sizes in mm (nose depth, width and top at three
+  stations, pod outer x and shoulder, cover/fin top), with the shipped envelope (team + six shipped)
+  as the last row: `node design-preview/bodies/measure.mjs [team] [--json]`.
+- `size-sheet.mjs` + `size-sheet-compose.mjs` (round 4) render identical-framing offline frames (ortho
+  side/front/top + the garage 3/4) and write before/after JPGs with the old outline traced in red:
+  `HEAD_REF=<ref> node design-preview/bodies/size-sheet.mjs artifacts/body-designs/r4/before <ids>`,
+  the same without HEAD_REF into `…/after` (plus `team` and the shipped ids), then
+  `node design-preview/bodies/size-sheet-compose.mjs artifacts/body-designs/r4 artifacts/body-designs/gallery/img <ids>`.
