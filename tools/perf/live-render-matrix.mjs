@@ -163,7 +163,7 @@ async function main() {
   ]).catch((e) => ({ err: String(e) }));
   // Each row is capped (a hung row used to eat the whole job) and a failed row gets a fresh page, so one
   // failure does not poison the rows after it.
-  const ROW_CAP = { rebuild: 300000 * o.capScale, tiers: 100000 * o.capScale, night: 100000 * o.capScale }, DEFAULT_CAP = 90000 * o.capScale;   // a capped row is "timeout" (inconclusive), never a silent pass
+  const ROW_CAP = { rebuild: 200000 * o.capScale, ctxloss: 150000 * o.capScale, visibility: 120000 * o.capScale, tiers: 100000 * o.capScale, night: 100000 * o.capScale }, DEFAULT_CAP = 90000 * o.capScale;   // a capped row is "timeout" (inconclusive), never a silent pass
   const row = async (n, name, fn) => {
     if (!o.rows.includes(n)) return;
     const r = report.rows[name] = { verdict: "fail", notes: [] };
@@ -260,33 +260,68 @@ async function main() {
     });
 
     await row(4, "visibility", async () => {
+      // The game pauses itself on a hidden tab (platform-session.js "hidden-tab") and does not render while the
+      // pause card is up, so: hide -> show -> expect the pause card -> RESUME -> expect GL uploads again. Then rotate
+      // while PAUSED and look at the canvas (2 screenshots in all): a resize clears the drawing buffer.
       const out = { cycles: [] };
+      const hide = () => page.evaluate(() => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      const show = () => page.evaluate(() => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+        document.dispatchEvent(new Event("visibilitychange"));
+        window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      });
+      const paused = () => page.evaluate(() => { const d = document.getElementById("pausemenu"); return !!d && !d.hidden; });
+      const resume = () => page.evaluate(() => { const b = document.getElementById("pm-resume"); if (b) b.click(); });
+      const luma = async () => {   // mean luminance (0-255) of the #game canvas, with the pause card hidden for the shot
+        await page.addStyleTag({ content: "#pausemenu{visibility:hidden !important}" });
+        const png = await page.locator("#game").screenshot({ timeout: 90000 }).catch(() => null);
+        await page.evaluate(() => { for (const t of [...document.querySelectorAll("style")]) if (/#pausemenu\{visibility:hidden/.test(t.textContent)) t.remove(); });
+        if (!png) return null;
+        return page.evaluate(async (b64) => {
+          const bmp = await createImageBitmap(await (await fetch("data:image/png;base64," + b64)).blob());
+          const c = document.createElement("canvas"); c.width = 32; c.height = 32;
+          const x = c.getContext("2d"); x.drawImage(bmp, 0, 0, 32, 32);
+          const d = x.getImageData(0, 0, 32, 32).data; let s = 0;
+          for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+          return Math.round(s / (32 * 32) * 10) / 10;
+        }, png.toString("base64"));
+      };
       await raceTo(page, A);
       for (let i = 0; i < 3; i++) {
-        await page.evaluate(() => {
-          Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
-          Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
-          document.dispatchEvent(new Event("visibilitychange"));
-        });
-        await sleep(1500);
-        await page.evaluate(() => {
-          Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
-          Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
-          document.dispatchEvent(new Event("visibilitychange"));
-          window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
-        });
-        const adv = await framesAdvance(page, 20, 60000);
-        out.cycles.push({ i, framesAdvance: adv, drawing: await notBlack(page).catch(() => false), ...(await page.evaluate(readState)) });
+        tr("visibility: cycle " + i + " hide");
+        await hide(); await sleep(1500); await show(); await sleep(500);
+        const pausedAfterShow = await paused();
+        await resume();
+        const adv = await framesAdvance(page, 4, 90000);
+        out.cycles.push({ i, pausedAfterShow, framesAdvance: adv, drawingAfterResume: await notBlack(page).catch(() => false), ...(await page.evaluate(readState)) });
       }
-      out.resize = [];
+      tr("visibility: rotate while paused");
+      await hide(); await sleep(1000); await show();
+      out.resizePaused = [];
+      for (const [w, h] of [[844, 390], [390, 844]]) {
+        const u0 = await page.evaluate(() => window.__lrm.uploads);
+        await page.setViewportSize({ width: w, height: h });
+        await sleep(2500);
+        const u1 = await page.evaluate(() => window.__lrm.uploads);
+        out.resizePaused.push({ w, h, paused: await paused(), uploadsDuringResize: u1 - u0, canvasLuma: w === 390 ? await luma() : undefined });
+      }
+      await resume();
+      out.resizeResume = [];
       for (const [w, h] of [[844, 390], [390, 844], [844, 390]]) {
         await page.setViewportSize({ width: w, height: h });
-        const adv = await framesAdvance(page, 20, 60000);
-        out.resize.push({ w, h, framesAdvance: adv, drawing: await notBlack(page).catch(() => false), ...(await page.evaluate(readState)) });
+        const adv = await framesAdvance(page, 4, 90000);
+        out.resizeResume.push({ w, h, framesAdvance: adv, drawing: await notBlack(page).catch(() => false), ...(await page.evaluate(readState)) });
       }
-      const all = [...out.cycles, ...out.resize];
-      const ok = all.every((c) => c.framesAdvance && c.drawing && !c.lost.some(Boolean) && none(c.gpuErrors));
-      return { ...out, verdict: ok ? "pass" : "fail" };
+      out.canvasLumaAfterResume = await luma();
+      const ok = out.cycles.every((c) => c.pausedAfterShow && c.framesAdvance && c.drawingAfterResume && !c.lost.some(Boolean) && none(c.gpuErrors))
+        && out.resizeResume.every((c) => c.framesAdvance && c.drawing && !c.lost.some(Boolean) && none(c.gpuErrors));
+      const blackWhilePaused = out.resizePaused.some((r) => r.canvasLuma != null && r.canvasLuma < 3);
+      return { ...out, blackWhilePaused, verdict: ok ? "pass" : "fail" };
     });
 
     await row(5, "night", async () => {
