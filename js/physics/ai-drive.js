@@ -850,14 +850,20 @@ const AiDrive = (function () {
   const TRAIL_YIELD_T = 8;
   function trailYield(trailT, street) { return !street && trailT > TRAIL_YIELD_T; }
   // The car-side step (game.js, at letPass): `behind` is the car directly
-  // behind in rank. Sets c._trYT (its trail time, 0 = no yield) and c._trYS,
-  // the side to step to: AWAY from the move — the latched pass side when it
-  // has one, else away from where it sits — never just our freer side, which
-  // was the attacker's own side often enough to put it in the run-off
-  // (silverstone BEA<PER, 8-10 m wide).
+  // behind in rank. Sets c._trYT (its trail time scaled by how close it is,
+  // 0 = no yield) and c._trYS, the side to step to: AWAY from the move — the
+  // latched pass side when it has one, else away from where it sits — never
+  // just our freer side, which was the attacker's own side often enough to put
+  // it in the run-off (silverstone BEA<PER, 8-10 m wide).
+  // The yield is full with the trailer within TRAIL_NEAR_S and gone past
+  // TRAIL_FAR_S: lifting for a car 1.2 s back cost the yielder 4-7 s a lap and
+  // slowed the train behind it, with no pass on offer (quali-pace-parity,
+  // monza PER for GAS 53-75 m back); the trailer's push closes that gap.
+  const TRAIL_NEAR_S = 0.6, TRAIL_FAR_S = 1.2;
   function trailYieldStep(c, behind, street) {
-    if (!(behind && behind._trOf === c && trailYield(behind.trailT, street))) { c._trYT = 0; return false; }
-    c._trYT = behind.trailT;
+    const near = behind ? clamp((TRAIL_FAR_S - (c.prog - behind.prog) / Math.max(behind.speed || 0, 1)) / (TRAIL_FAR_S - TRAIL_NEAR_S), 0, 1) : 0;
+    if (!(behind && behind._trOf === c && trailYield(behind.trailT, street) && near > 0)) { c._trYT = 0; return false; }
+    c._trYT = behind.trailT * near;
     c._trYS = behind.passOf === c ? -behind.passSide : (c.x >= behind.x ? 1 : -1);
     return true;
   }
@@ -867,6 +873,7 @@ const AiDrive = (function () {
   // 6 % over TRAIL_YIELD_RAMP s so the move completes on one straight.
   const TRAIL_YIELD_RAMP = 6, TRAIL_YIELD_EASE = 0.90;
   function trailYieldEase(trailT, t) {
+    if (trailT < TRAIL_YIELD_T) return lerp(1, letPassEase(t), clamp(trailT / TRAIL_YIELD_T, 0, 1));   // a far trailer: part of the blue-flag ease
     return lerp(letPassEase(t), TRAIL_YIELD_EASE, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1)) * trailYieldDeep(trailT, TRAIL_DEEP_EASE);
   }
   // The lift is a vmax cap, so it only binds on the straights; the corners were

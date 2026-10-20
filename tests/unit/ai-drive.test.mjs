@@ -924,6 +924,25 @@ test("trailYield: past its patience the slower car lifts and lets the trailing c
   assert.ok(A.trailYieldCorner(60) > 0.92 && A.trailYieldCorner(60) < A.trailYieldCorner(16), "the corner deepens too, still mild");
 });
 
+test("trailYieldStep: the yield scales with how close the trailer is, and is gone past 1 s (#2356)", () => {
+  const mk = (gap) => { const c = { prog: 1000, x: 0 }; const b = { prog: 1000 - gap, x: 0, speed: 50, trailT: 20, _trOf: c, passOf: null }; return [c, b]; };
+  let [c, b] = mk(20);   // 0.4 s back: full
+  assert.equal(A.trailYieldStep(c, b, false), true);
+  assert.equal(c._trYT, 20, "within 0.5 s the whole trail time drives the lift");
+  [c, b] = mk(37.5);     // 0.75 s back: half
+  assert.equal(A.trailYieldStep(c, b, false), true);
+  assert.ok(Math.abs(c._trYT - 10) < 1e-9, "half way to 1 s: half the trail time");
+  [c, b] = mk(55);       // 1.1 s back: inside the trail window, but no yield
+  assert.equal(A.trailYieldStep(c, b, false), false);
+  assert.equal(c._trYT, 0);
+  [c, b] = mk(20);
+  assert.equal(A.trailYieldStep(c, b, true), false, "streets never yield");
+  // a far trailer costs only part of the blue-flag ease
+  const t = { experience: 1 };
+  assert.equal(A.trailYieldEase(0, t), 1, "no proximity, no lift");
+  assert.ok(A.trailYieldEase(4, t) < 1 && A.trailYieldEase(4, t) > A.letPassEase(t), "part of the blue-flag ease");
+});
+
 test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an obstacle", () => {
   const base = { street: false, speed: 3, freeSpeed: 55, vTop: 60, blockerVmax: 60, blockerSpeed: 4 };
   assert.equal(A.otWant({ ...base, blockerAccel: 0 }), true, "parked: pass it");

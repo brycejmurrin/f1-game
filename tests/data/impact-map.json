@@ -9628,6 +9628,9 @@
       "trailYieldEase": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "trailYieldStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "traits": [
         "tests/unit/ai-drive.test.mjs"
       ],
