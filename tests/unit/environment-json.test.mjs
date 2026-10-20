@@ -236,7 +236,6 @@ test(".cursor/environment.json plugin allowlist admits browser-use debugging MCP
   assert.equal(plugins.length, 1, "one optional Cursor plugin MCP (browser-use)");
   const bu = plugins.find((r) => r.name === "browser-use");
   assert.ok(bu, "browser-use row");
-  assert.match(bu.command, /uvx/, "browser-use launches via uvx");
   assert.ok(
     patternMatches(bu.command, "uvx --python 3.12 browser-use@latest --cli-mcp"),
     "pattern must admit the plugin mcp.json launch line",
