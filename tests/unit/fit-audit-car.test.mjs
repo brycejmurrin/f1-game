@@ -126,3 +126,23 @@ test("real car: its shark fin lifted off the body reads as a NEW GAP (fix-proof:
   // every intact-car row carries a section pair the report can name
   for (const r of base.rows) assert.ok(r.a && r.b && Number.isFinite(r.value), JSON.stringify(r));
 });
+
+test("visibility frame: 1 mm on the car's top does not re-raster the rest (B·L25 ZFIGHT jitter)", () => {
+  // racingbulls Twin Plane read a 6 cm2 ZFIGHT "WORSE" on byte-identical brake-duct and
+  // wheel triangles because the DRS pod, the car's top, sat 1 mm lower and the bbox-centred
+  // rasters moved under them. The 5 cm frame snap keeps every untouched face's vis.
+  const M = loadCar(ROOT);
+  const car = buildCar(M, "racingbulls", { aero: "style_aero_twinplane" });
+  let top = 0;
+  for (let v = 1; v < car.pos.length / 3; v++) if (car.pos[v * 3 + 1] > car.pos[top * 3 + 1]) top = v;
+  const y = car.pos[top * 3 + 1], moved = { ...car, pos: car.pos.slice() };
+  const near = (v) => Math.abs(car.pos[v * 3 + 1] - y) < 1e-9 && Math.abs(car.pos[v * 3] - car.pos[top * 3]) < 1e-9 && Math.abs(car.pos[v * 3 + 2] - car.pos[top * 3 + 2]) < 1e-9;
+  for (let v = 0; v < car.pos.length / 3; v++) if (near(v)) moved.pos[v * 3 + 1] = y + 0.001;
+  const a = analyse(car), b = analyse(moved);
+  let flips = 0;
+  for (let t = 0; t < a.T.n; t++) {
+    if ([0, 1, 2].some((k) => near(car.idx[t * 3 + k]))) continue;
+    if (a.vis[t] !== b.vis[t]) flips++;
+  }
+  assert.equal(flips, 0, `${flips} untouched face(s) changed visibility`);
+});
