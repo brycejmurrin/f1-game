@@ -82,11 +82,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/aero-flap-travel.test.mjs",
   // B·D3 design-preview aero/floor fields: reach the mesh, default off.
   "tests/unit/aero-preview-fields.test.mjs",
+  // B·D3c concept-sheet wing shapes: registered, reach the mesh, default off.
+  "tests/unit/aero-shapes-d3c.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
   // gen-cursor-rules, the hooks — asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
+  "tests/unit/agent-experiment.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
   "tests/unit/agent-output-config.test.mjs",
@@ -277,6 +280,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // but-unapplied. This is the mirror — a class the markup wears that no rule
   // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
   "tests/unit/class-usage.test.mjs",
+  // tools/ci/claude-usage.mjs: requestId dedupe, unknown-vs-zero usage, turn triggers, sidechains, teleport copies; synthetic fixture.
+  "tests/unit/claude-usage.test.mjs",
   // tools/lib/cli-args.mjs: unknown flag is an error with the near miss, =/space forms agree, --help (#1697).
   "tests/unit/cli-args.test.mjs",
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
@@ -565,12 +570,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
   "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
+  "tests/unit/garage-finish-remap.test.mjs",
   "tests/unit/garage-followups.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   // Garage room LOOKS (design preview): every look builds a valid bay and changes the room.
   "tests/unit/garage-looks.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
+  "tests/unit/garage-perf-mesh-free.test.mjs",
   // The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.
   "tests/unit/garage-personality.test.mjs",
   // The garage pre-built while the title idles (js/garage/prebuild.js): the gate,
@@ -1028,6 +1035,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/screen-looks.test.mjs",
+  "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",

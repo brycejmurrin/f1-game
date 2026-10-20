@@ -688,6 +688,28 @@ const Parts = (function () {
       {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}],
     ["aero", "medium", "style_aero_bridge", "Bridge Wing", "2008 bridge wing over the nose (McLaren MP4-23)",
       {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }],
+    // B·D3c concept-sheet wings (2026-10-20), shown as Terrace / Flatline / Updraft /
+    // Swell (Bryce: names of their own); ids keep the sheet's rift/keel/delta/serpent
+    // so each pairs with the body shell of that id. Opt-in shape fields
+    // (car-body-geom.js shapeLift / EP_SHAPES): absent = shipped mesh.
+    ["aero", "high", "style_aero_rift", "Terrace Wing", "stepped front flaps, raked endplates with accent tips, swan-neck rear wing with kicked-up tips",
+      { rwPlanes: 1, epChord: 0.74, fwStep: 0.065, epShape: 1, epTip: 2, rwCurve: 0.04, frontRise: 0.02, frontSweep: 0.06, swan: 1 }],
+    ["aero", "medium", "style_aero_keel", "Flatline Wing", "straight three-element front, square accent-tipped endplates and a flat, straight rear wing",
+      { rwPlanes: 1, epChord: 0.74, wsFlat: 1, epShape: 4, epTip: 3, rwGap: 0.06, fwGap: 0.03, frontTaper: 1.0, rearTaper: 1.0, casc: 0, gill: 0 }],
+    ["aero", "diffuser", "style_aero_delta", "Updraft Wing", "flaps sweeping sharply up into tall endplates, rear wing with strongly upturned delta tips",
+      { rwPlanes: 1, epChord: 0.74, lvl: 2, fwCurve: 0.05, frontRise: 0.15, epShape: 2, epTip: 2, rwRise: 0.055, rwCurve: 0.055 }],
+    ["aero", "rake_setup", "style_aero_serpent", "Swell Wing", "flaps curling up to rolled endplates, deep dipped-centre spoon rear wing",
+      { rwPlanes: 1, epChord: 0.74, lvl: 2, fwCurve: 0.10, epShape: 3, epTip: 2, rwRise: 0.02, rwCurve: 0.09, rearTaper: 0.86 }],
+    // B·D3c concept-sheet diffusers (2026-10-20): lower, lighter tunnels with thin
+    // fences (car3d.js diffShape; absent = shipped tunnels).
+    ["floor", "standard", "style_floor_tray", "Shallow Tray", "low diffuser tray with four thin fences",
+      { diffShape: 1 }],
+    ["floor", "sealed_edge", "style_floor_opentray", "Open Tray", "low, open diffuser with two thin fences",
+      { diffShape: 2 }],
+    ["floor", "fence_array", "style_floor_fencefan", "Fence Fan", "six thin diffuser fences fanning outward at the exit",
+      { diffShape: 3 }],
+    ["floor", "gurney_edge", "style_floor_swepttray", "Swept Tray", "mid-height diffuser with three fences sweeping outboard",
+      { diffShape: 4 }],
     ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",
       {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }],
   ];
@@ -718,7 +740,9 @@ const Parts = (function () {
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin",
         // B·D3 period aero opt-in fields: absent = shipped mesh.
-        "rwSpoon", "beam2", "fwBridge"]),
+        "rwSpoon", "beam2", "fwBridge",
+        // B·D3c concept-sheet shape fields: absent = shipped mesh.
+        "fwCurve", "fwStep", "epShape", "epTip", "wsFlat", "rwRise", "rwCurve", "rwPlanes", "epChord", "rwGap", "fwGap"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
         "pullAt", "antiDive", "upright"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),
@@ -734,7 +758,7 @@ const Parts = (function () {
       fuel: Object.freeze(["filler", "hatch", "vent", "breather", "capBig"]),
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap",
         "lip", "shield", "stack", "heatTint", "gateStack", "hood"]),
-      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt", "ddiff"]),
+      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt", "ddiff", "diffShape"]),
       cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror", "mirrorMount", "mirrorFrame"]),
       // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.
       // coverVanes: wheel-owned vane count on a covered face (0 = sealed Full Disc).

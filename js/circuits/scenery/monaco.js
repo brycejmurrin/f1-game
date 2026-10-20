@@ -1071,19 +1071,20 @@
       // the slope and clipped the re-seated landmarks. Harbour already has
       // pastelStreetRow(0.595, 0.655); no replacement row.
       {
-        // Harbour-side Racing Kit at the old kenney_ footprint/scale (#1617).
-        // ×1.15 matches the synthetic suburban boxes so clip stays at baseline 8.
-        const houses = [
-          ["k_pitsoffice", 0.605, 1, 28, 1.15],
-          ["k_pitsgarage", 0.635, 1, 30, 1.15],
-          ["k_tentclosed", 0.665, 1, 29, 1.15],
-          ["k_pitsofficecorner", 0.620, -1, 22, 1.15],
-        ];
-        for (const [id, s, side, dist, sc] of houses) {
-          if (!bakedModel(id, K(s), side, dist, { scale: sc }))
-            building(K(s), side, dist, 12, 10, 10,
-              { kind: "slab", wall: CREAM, window: WIN, floor: 3 });
-        }
+        // Harbour houses on the shore lip (dist 28-30 lands where the quay
+        // shelf drops to the harbour floor, y -5.3). The Racing Kit has no
+        // house: its 4 m pits office / garage / tent at x1.15 topped out at
+        // -1.3 m, under the quay at -0.7, so the slots read empty (#3044). A
+        // 10 m procedural house stands from the floor to 5 m over the quay,
+        // as the retired kenney_sub houses did. 0.655, not 0.665: there the
+        // house clipped a motorhome (clip-audit severe 8 -> 9).
+        for (const [s, dist] of [[0.605, 28], [0.635, 30], [0.655, 29]])
+          building(K(s), 1, dist, 12, 10, 10,
+            { kind: "slab", wall: CREAM, window: WIN, floor: 3 });
+        // Inland the corner office sits on the hillside terrace (y 4.5), grounded.
+        if (!bakedModel("k_pitsofficecorner", K(0.620), -1, 22, { scale: 1.15 }))
+          building(K(0.620), -1, 22, 12, 10, 10,
+            { kind: "slab", wall: CREAM, window: WIN, floor: 3 });
         bakedModel("k_billboardlow", K(0.90), 1, 7, { scale: 1.2 });
       }
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
