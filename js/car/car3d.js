@@ -1577,11 +1577,8 @@ const Car3D = (function () {
                 exhMetal, SURFACES.metal);
         // Its root, 1 cm inside the engine cover, is capped on addTube's own ring (x = r sin, y = r cos),
         // so the rim welds shut instead of reading as an open edge where the pylon no longer seals it.
-        for (let k = 0; k < 8; k++) {
-          const ring = (j) => { const a = (j % 8) / 8 * Math.PI * 2, r = tipRShow * 0.85;
-            return [r * Math.sin(a), EXH_Y + r * Math.cos(a), -1.99]; };
-          addTri(out, [0, EXH_Y, -1.99], ring(k + 1), ring(k), exhMetal, SURFACES.metal);
-        }
+        const capR = tipRShow * 0.85, ring = (j) => [capR * Math.sin(j / 4 * Math.PI), EXH_Y + capR * Math.cos(j / 4 * Math.PI), -1.99];
+        for (let k = 0; k < 8; k++) addTri(out, [0, EXH_Y, -1.99], ring((k + 1) % 8), ring(k), exhMetal, SURFACES.metal);
       }
       const flame = exhTwin ? fTwin : fuelFlame, rPipe = tipRShow;
       addTube(out, [[cx, EXH_Y, tipZ + 0.10], [cx, EXH_Y, tipZ + 0.01]],
@@ -1704,10 +1701,8 @@ const Car3D = (function () {
       addBox(out, 0, (postLo + postHi) / 2, tipZ + 0.05, 0.03, postHi - postLo, 0.04, CARBON, SURFACES.carbon);
     }
     exhTipRForLamp = tipRShow * (exhFlare > 0 && !exhTwin ? (1 + 1.15 * exhFlare) : 1);
-    if (!exhTwin) {
-      const rimR = Math.max(tipRShow * 1.08, exhFlare > 0 ? tipRShow * (1 + 1.15 * exhFlare) * 0.8 * 1.12 : 0);
-      exhTipLowY = EXH_Y - rimR; exhSleeveTopY = EXH_Y + tipRShow * 1.08;
-    }
+    if (!exhTwin) exhTipLowY = EXH_Y - tipRShow * Math.max(1.08, exhFlare > 0 ? (1 + 1.15 * exhFlare) * 0.8 * 1.12 : 0);
+    if (!exhTwin) exhSleeveTopY = EXH_Y + tipRShow * 1.08;
     // STACK (STYLE parts, 2026-10-18): an upswept tail-pipe stack over the crash
     // structure, 1 single / 2 twin, so an exhaust option reads from behind.
     const exhStack = Math.max(0, Math.min(2, Math.round(exhStyle.stack || 0)));
@@ -2167,9 +2162,8 @@ const Car3D = (function () {
       // from wingRear. Both ride the flap stack's crown (crownY), not the endplate centre: a
       // lower wing's crown sits closer to its centre, so epCY offsets left them floating up
       // to 12 cm over every wing below lvl ~3.6. These are the lvl-4 positions, unchanged there.
-      // A tip whose heat sleeve stands above the pod's floor at z -2.50 (Cadillac's Trumpet: 0.69 m
-      // under a 0.654 m floor) runs its bell through the pod's tail: the pod then stops 1 cm ahead of
-      // the bell (z -2.49), cut on its own taper. Every factory tip clears it and keeps the full pod.
+      // A heat sleeve above the pod's floor at z -2.50 (Cadillac Trumpet: 0.69 m vs 0.654 m) runs its bell through
+      // the pod's tail: the pod then stops at z -2.49, cut on its own taper. Every factory tip keeps the full pod.
       const podF = (2.49 - 2.40) / 0.22, f50 = 0.10 / 0.22;
     addSpan(out, { z: -2.40, x: 0, y: crownY + 0.035, w: drsSX, h: 0.070, t: 0.70 },
                  exhSleeveTopY > crownY + 0.035 + 0.024 * f50 - (0.070 - 0.022 * f50) / 2
