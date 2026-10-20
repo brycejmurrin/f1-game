@@ -15,6 +15,8 @@ const PHONE = { viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, has
 const DESK = { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, hasTouch: false };
 const HI = { "apex26.forceMobileTier": "1", "apex26.gfxHigh": "1" };
 const ALL = {
+  gov: { v: DESK, ls: HI, gov: true },
+  noRR: { v: DESK, ls: { ...HI, "apex26.renderRate": "off" } },
   base: { v: DESK, ls: HI },
   U8off: { v: DESK, ls: { ...HI, "apex26.dbgU8off": "1" } },
   ShadowFull: { v: DESK, ls: { ...HI, "apex26.dbgShadowFull": "1" } },
@@ -27,18 +29,28 @@ const ALL = {
   control: { v: DESK, ls: {} },
   controlPhone: { v: PHONE, ls: {} },
 };
-const ARMS = (process.env.MDL_ARMS || "base,U8off,ShadowFull,PostFull,InstPass,all").split(",").filter((a) => ALL[a]);
+const ARMS = (process.env.MDL_ARMS || "base,gov,noRR,control").split(",").filter((a) => ALL[a]);
 const report = { started: new Date().toISOString(), watchS: WATCH_S, track: TRACK, rows: [] };
 const save = () => writeFileSync(OUT, JSON.stringify(report, null, 2));
 const log = (m) => console.log("[mdl] " + m);
 
 function hook() {
-  window.__mdl = { lost: [], uncaptured: [], devices: 0 };
+  window.__mdl = { lost: [], uncaptured: [], devices: 0, texFails: [], cfg: [], texN: 0 };
   try {
     const orig = GPUAdapter.prototype.requestDevice;
     GPUAdapter.prototype.requestDevice = async function (d) {
       const dev = await orig.call(this, d);
       const n = ++window.__mdl.devices, t0 = performance.now();
+      try {
+        const ct = dev.createTexture.bind(dev);
+        dev.createTexture = function (d) {
+          dev.pushErrorScope("validation");
+          let t = ct(d); window.__mdl.texN++;
+          const desc = { l: d.label, s: d.size, f: d.format, u: d.usage, sc: d.sampleCount, mip: d.mipLevelCount, at: +(performance.now() / 1000).toFixed(1) };
+          dev.popErrorScope().then((e) => { if (e && window.__mdl.texFails.length < 12) window.__mdl.texFails.push({ desc, msg: String(e.message).slice(0, 300), stack: new Error().stack.split("\n").slice(2, 5).join("|").slice(0, 300) }); });
+          return t;
+        };
+      } catch (_) {}
       dev.lost.then((i) => window.__mdl.lost.push({ n, atSincePageS: +(performance.now() / 1000).toFixed(1), reason: i.reason, message: String(i.message).slice(0, 400) }));
       dev.addEventListener("uncapturederror", (e) => { if (window.__mdl.uncaptured.length < 20) window.__mdl.uncaptured.push(String(e.error && e.error.message).slice(0, 400)); });
       return dev;
@@ -64,10 +76,17 @@ async function runArm(browser, server, name) {
     for (const k of Object.keys(ls)) localStorage.setItem(k, ls[k]);
   }, A.ls);
   await page.addInitScript(hook);
+  await page.addInitScript(() => {
+    try {
+      const cf = GPUCanvasContext.prototype.configure;
+      GPUCanvasContext.prototype.configure = function (c) { try { window.__mdl.cfg.push({ f: c.format, u: c.usage, a: c.alphaMode, cs: c.colorSpace, w: this.canvas && this.canvas.width, h: this.canvas && this.canvas.height, at: +(performance.now() / 1000).toFixed(1) }); } catch (_) {} return cf.call(this, c); };
+    } catch (_) {}
+  });
   await gotoGame(page, server.url, 180000);
   await page.evaluate(async (t) => { await window.__apex.race(t); window.__apex.go(); }, TRACK);
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   row.gateAtS = T();
+  if (A.gov) await page.evaluate(() => { try { window.__apex.govHold(true); } catch (_) {} });
   for (let s = 0; s < WATCH_S; s += 5) {
     await page.waitForTimeout(5000);
     const st = await page.evaluate(() => {
@@ -86,13 +105,14 @@ async function runArm(browser, server, name) {
 }
 
 const server = await startStaticServer(process.cwd());
-const browser = await launchChromium(SOFT ? { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"], env: { ...process.env, ...(WEBGPU_LAVAPE_ENV || {}) } }
+const newBrowser = () => launchChromium(SOFT ? { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"], env: { ...process.env, ...(WEBGPU_LAVAPE_ENV || {}) } }
   : { args: ["--enable-unsafe-webgpu", "--disable-background-timer-throttling"] });
+let browser = null;
 try {
-  for (const a of ARMS) { try { await runArm(browser, server, a); } catch (e) { report.rows.push({ arm: a, error: String((e && e.stack) || e).slice(0, 500) }); log("FAILED " + a + " " + String(e).slice(0, 300)); save(); } }
+  for (const a of ARMS) { try { browser = await newBrowser(); await runArm(browser, server, a); if (browser) { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]); browser = null; } } catch (e) { report.rows.push({ arm: a, error: String((e && e.stack) || e).slice(0, 500) }); log("FAILED " + a + " " + String(e).slice(0, 300)); save(); } }
 } finally {
   save();
-  await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]);
+  if (browser) await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]);
   server.close && server.close();
   process.exit(0);
 }
