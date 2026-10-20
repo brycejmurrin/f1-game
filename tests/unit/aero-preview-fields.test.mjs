@@ -58,7 +58,7 @@ test("an explicit 0 builds the shipped car bit-for-bit (default off)", () => {
 });
 
 
-test("livery aero and floor shapes reproduce catalog meshes without mutating fitted parts or performance", () => {
+test("all livery part styles reproduce catalog meshes without mutating fitted parts or performance", () => {
   const setup = { ...M.Parts.DEFAULTS };
   const fitted = M.Parts.getVisualTiers(setup, team);
   const snapshot = JSON.stringify(fitted);
@@ -66,15 +66,16 @@ test("livery aero and floor shapes reproduce catalog meshes without mutating fit
   const cost = M.Parts.getCost(setup, team), load = M.Parts.aeroLoad(setup, team);
   const preview = (livery) => hash(M.Car3D.build(team.color, team.color2, { teamId: team.id, num: 4, parts: fitted, livery }));
   const original = preview({});
-  for (const [key, category] of [["aeroShape", "aero"], ["floorShape", "floor"]]) {
+  for (const [key, category] of Object.entries(M.Car3D.PART_STYLE_FIELDS)) {
     const styles = M.Parts.CATALOG.find((c) => c.id === category).options.filter((o) => o.tag === "STYLE");
-    assert.ok(styles.length >= 5);
+    assert.ok(styles.length >= 2);
     for (const o of styles) {
       const actual = preview({ [key]: o.id });
       assert.equal(actual, build(tiersFor(category, o.id)), o.id + " uses the full catalog recipe");
       assert.notEqual(actual, original, o.id + " visibly changes geometry");
     }
-    for (const id of ["fitted", "missing", "constructor", "medium", "style_engine_zeropod"])
+    for (const id of ["fitted", "missing", "constructor", M.Parts.DEFAULTS[category],
+      M.Parts.CATALOG.find(c => c.id !== category).options.find(o => o.tag === "STYLE").id])
       assert.equal(preview({ [key]: id }), original, key + " ignores invalid or non-STYLE choices");
   }
   assert.equal(preview({ aeroShape: "style_aero_rift", floorShape: "style_floor_ddiff" }),
@@ -104,6 +105,49 @@ test("runtime flap/decal recipes follow shape edits, undo and cancel without a s
     delete liv.aeroShape; delete liv.floorShape;
     assert.deepEqual(state().aero, original.aero, "undo/cancel restores fitted flap and decal recipe");
   }
+});
+
+test("runtime part recipes follow every style without invalidating for paint edits", () => {
+  const liv = {}, v = carDrawVm({ livery: liv });
+  v.ctx.Parts = M.Parts; v.ctx.Car3D = M.Car3D;
+  const t = v.teams.find(t => t.id === team.id), setup = { ...M.Parts.DEFAULTS };
+  for (const custom of [false, true]) {
+    const state = () => v.carDraw.teamDecalState(t, true, custom ? setup : null, "same-stamp");
+    for (const [field, category] of Object.entries(M.Car3D.PART_STYLE_FIELDS)) {
+      const original = state();
+      liv[field] = M.Parts.CATALOG.find(c => c.id === category).options.find(o => o.tag === "STYLE").id;
+      const changed = state();
+      assert.notEqual(changed, original, field + " invalidates cached recipes");
+      assert.equal(changed.parts._ids[category], liv[field]);
+      assert.equal(state(), changed, "unchanged styles hit cache");
+      liv.finish = "chrome";
+      assert.equal(state(), changed, "paint alone keeps the same geometry recipe");
+      delete liv[field];
+      assert.equal(state().parts._ids[category], original.parts._ids[category], field + " restores fitted");
+    }
+  }
+});
+
+test("moving player wheels use livery tyre, brake and rim recipes and restore FITTED", () => {
+  const liv = { tyresShape: "style_tyres_retroletter", brakesShape: "style_brakes_drum", wheelsShape: "style_wheels_blownaxle" };
+  const v = carDrawVm({ livery: liv }), calls = [];
+  v.ctx.Parts = M.Parts;
+  v.ctx.Car3D = { ...M.Car3D, buildWheelLayers: (...args) => {
+    calls.push(args); return { rotating: {}, fixed: {} };
+  } };
+  v.G.teamIdx = v.teams.findIndex(t => t.id === team.id);
+  const fitted = tiersFor("wheels", M.Parts.DEFAULTS.wheels), snapshot = JSON.stringify(fitted);
+  const c = { team: v.teams[v.G.teamIdx], isPlayer: true, human: true, speed: 0 };
+  const draw = () => v.carDraw.drawPlayerWheels(c, v.ctx.M4.ident(), 1 / 60, {}, false, 0, 1, true);
+  v.carDraw.setPlayerParts(fitted, "same-key"); draw();
+  const expected = M.Parts.getVisualTiers({ ...M.Parts.DEFAULTS, tyres: liv.tyresShape, brakes: liv.brakesShape, wheels: liv.wheelsShape }, team);
+  for (const [i, category] of [[5, "tyres"], [6, "brakes"], [7, "wheels"]])
+    assert.deepEqual(calls[0][i], expected._visual[category], category + " reaches moving wheel mesh");
+  assert.equal(calls.length, 2, "front and rear variants are built");
+  liv.wheelsShape = "fitted";
+  v.carDraw.setPlayerParts(fitted, "same-key"); draw();
+  assert.deepEqual(calls[2][7], fitted._visual.wheels, "FITTED rebuilds the installed wheel");
+  assert.equal(JSON.stringify(fitted), snapshot, "shared fitted recipes are unchanged");
 });
 
 test("concept wing decals cannot reuse fitted wing geometry at the same aero level", () => {

@@ -57,7 +57,7 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
   assert.match(src, /MULTI_TEAM/, "the walk has to be distinguishable from a single-team run");
   // Team is the OUTER loop and only re-set when it CHANGES: CARVIEW.set({team})
   // rebuilds the car, so re-sending it every shot pays that per camera move.
-  assert.match(src, /s\.team !== renderedTeam \? \{ team: s\.team \}/,
+  assert.match(src, /s\.team !== renderedTeam \? \{ team: s\.team, livery:/,
     "team must be sent only on change, not on every shot");
   assert.match(src, /s\.team !== renderedTeam/, "team swaps must be included in the scene mutation");
   assert.match(src, /assertSafePathToken\(t, 'team'\)/, "every id in the list is still a path token");
@@ -571,4 +571,50 @@ test("garage discovery finds equipment by purpose without opening/resetting outp
   assert.equal(override.shotCount, 2, "an explicit station replaces the four-shot preset, then its axes sweep");
   assert.ok(override.cams.every(c => c.station === "toolWall"));
   assert.deepEqual(cli("--list-cameras=no-such-camera").stations, []);
+});
+
+test('customization audit plans every part, body and finish without a browser', async () => {
+  const { customizationCatalog, planCustomization } = await import('../../tools/car/lib/customization-plan.mjs');
+  const M = customizationCatalog();
+  const p = planCustomization({ M, bodies: true, finishes: true });
+  assert.equal(p.counts.parts, M.Parts.CATALOG.reduce((n, c) => n + c.options.length, 0));
+  assert.equal(p.jobs.filter(j => j.kind === 'bodies').length, (M.Car3D.BODY_STYLE_IDS.length + 1) * 2);
+  assert.equal(p.jobs.filter(j => j.kind === 'teams').length, M.Teams.LIST.length * 2);
+  assert.equal(p.jobs.filter(j => j.kind === 'finishes').length, Object.keys(M.Car3D.FINISH_SURFACE).length + 1);
+  for (const j of p.jobs.filter(j => j.kind === 'parts')) {
+    const t = M.Teams.LIST.find(t => t.id === j.team);
+    assert.equal(M.Parts.resolveSetup(j.state.parts, t).ids[j.category], j.optionId || j.id);
+  }
+  assert.throws(() => planCustomization({ M, bodyStyle: 'typo' }), /Unknown body/);
+  assert.throws(() => planCustomization({ M, finish: 'typo' }), /Unknown finish/);
+  assert.throws(() => planCustomization({ M, parts: { aero: 'sig_redbull_concept' } }), /Unavailable/);
+});
+
+test('customization audit carries fixed body, finish and part selections through category sweeps', async () => {
+  const { customizationCatalog, planCustomization } = await import('../../tools/car/lib/customization-plan.mjs');
+  const M = customizationCatalog();
+  const p = planCustomization({ M, categories: ['wheels'], bodyStyle: 'needle', finish: 'pearl', parts: { aero: 'style_aero_spoon' }, stylesOnly: true });
+  assert.ok(p.jobs.length > 0);
+  for (const j of p.jobs) {
+    assert.equal(j.state.livery.bodyStyle, 'needle');
+    assert.equal(j.state.livery.finish, 'pearl');
+    assert.equal(j.state.parts.aero, 'style_aero_spoon');
+    assert.ok(j.id.startsWith('style_'));
+  }
+});
+
+test('every cosmetic style field is enumerable, validated and carried by capture plans', async () => {
+  const cli = (...args) => JSON.parse(execFileSync(process.execPath, ['tools/shot/garage-angles.mjs', ...args], { cwd: ROOT, encoding: 'utf8', timeout: 30000 }));
+  const { customizationCatalog, customizationEnums, planCustomization } = await import('../../tools/car/lib/customization-plan.mjs');
+  const M = customizationCatalog(), enums = customizationEnums(M);
+  assert.equal(Object.keys(M.Car3D.PART_STYLE_FIELDS).length, M.Parts.CATALOG.length);
+  for (const [field, category] of Object.entries(M.Car3D.PART_STYLE_FIELDS)) {
+    const ids = Array.from(M.Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === 'STYLE'), o => o.id);
+    assert.deepEqual(enums[field], ['fitted', ...ids]);
+    const p = planCustomization({ M, categories: ['engine'], stylesOnly: true, livery: { [field]: ids[0] } });
+    assert.ok(p.jobs.every(j => j.state.livery[field] === ids[0]));
+    assert.throws(() => planCustomization({ M, livery: { [field]: 'missing-style' } }), /Unknown/);
+  }
+  for (const [field, count] of [['aeroShape', 10], ['wheelsShape', 5]])
+    assert.equal(cli('--plan', `--${field}=all`, '--views=hero').shotCount, count);
 });

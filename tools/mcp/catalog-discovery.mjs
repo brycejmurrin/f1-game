@@ -1,6 +1,7 @@
 // @doc Bounded browser-free canonical parts, livery and garage camera discovery; validated audit filters.
 // @skill garage-parts-livery
 import { loadParts } from "../car/parts-sweep.mjs";
+import { customizationEnums } from "../car/lib/customization-plan.mjs";
 import { loadAtlas } from "../car/livery-contrast.mjs";
 import { TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS } from "../shot/lib/garage-camera-catalog.mjs";
 
@@ -88,6 +89,8 @@ function liveryRows(args) {
     finShape: Car3D.FIN_SHAPE_IDS, tcam: Car3D.TCAM_IDS, coverVents: Car3D.COVER_VENT_IDS,
     spineHeight: Car3D.SPINE_HEIGHT_IDS, bodyStyle: ["team", ...Car3D.BODY_STYLE_IDS],
     finish: ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)] };
+  for (const field of Car3D.FINISH_FIELDS || []) if (field !== 'finish') enums[field] = ['inherit', ...enums.finish];
+  Object.assign(enums, customizationEnums(mods()));
   for (const id of Liveries.FIELDS) rows.push({ kind: "field", id, ...(enums[id] ? { values: enums[id] } : {}), stations: FIELD_STATIONS[id] || [] });
   return { rows, limitation: "Canonical universal/team catalog only; optional Legends runtime additions, custom player liveries and saved selections are not loaded. Fields without values have no enum exposed by the canonical loader." };
 }

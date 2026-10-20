@@ -500,7 +500,7 @@ let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null;
 // is the one non-colour entry: it picks the shark fin's outline (or no fin).
 // coverVents and spineHeight are the other enums that move a vertex, and
 // spineSide moves the service panels aft of its flank band.
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle", "aeroShape", "floorShape"];
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle", "aeroShape", "floorShape", "engineShape", "suspensionShape", "brakesShape", "tyresShape", "ersShape", "gearboxShape", "fuelShape", "exhaustShape", "cockpitShape", "wheelsShape"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
 // keyed on colour and finish: the old paint job's flaps go too, or a session of

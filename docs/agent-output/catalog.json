@@ -61,7 +61,10 @@
       "path": "tools/car/audit-parts.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
-      "interpreter": "node"
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
     },
     {
       "path": "tools/car/car-fit-audit.mjs",
@@ -120,6 +123,16 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/car/lib/carview-capture.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/car/lib/customization-plan.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/car/lib/fit-checks.mjs",

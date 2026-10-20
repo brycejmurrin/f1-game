@@ -70,6 +70,10 @@ export const STATIONS = {
 };
 
 export const FIELD_STATIONS = {
+  bodyStyle: ["sidepod", "noseFlash"],
+  engineShape: ["sidepod"], aeroShape: ["fwSide", "rwSide"], floorShape: ["podFloor"],
+  suspensionShape: ["wheelF"], brakesShape: ["wheelF"], tyresShape: ["wheelF"], wheelsShape: ["wheelF"],
+  ersShape: ["sidepod"], gearboxShape: ["cover"], fuelShape: ["spineTop"], exhaustShape: ["rwRear"], cockpitShape: ["haloBehind"],
   spineLogo: ["spineTop"], spineTint: ["spineTop"], bandTint2: ["spineTop"], sunTint: ["spineTop", "spineSide"],
   spineHeight: ["spineTop", "spineSide"], cover: ["spineTop", "spineSide"], coverVents: ["spineTop"],
   coverBind: ["spineTop", "spineSide"], halo: ["spineTop"], tcam: ["spineTop"],

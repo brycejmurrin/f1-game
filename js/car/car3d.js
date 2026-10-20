@@ -196,9 +196,14 @@ const Car3D = (function () {
   const { PH_HALO, PH_HOOP, PH_MIRROR, PH_RIM, FINISH_FIELDS, finishPass, refinish } = CarMaterials;   // finish stand-ins
   // One appearance recipe for baked geometry, moving flaps and decal anchors.
   // Fitted parts remain authoritative for performance, budget and ownership.
+  const PART_STYLE_FIELDS = Object.freeze({
+    engineShape: "engine", aeroShape: "aero", suspensionShape: "suspension", brakesShape: "brakes",
+    tyresShape: "tyres", ersShape: "ers", gearboxShape: "gearbox", fuelShape: "fuel",
+    exhaustShape: "exhaust", floorShape: "floor", cockpitShape: "cockpit", wheelsShape: "wheels",
+  });
   function appearanceParts(fitted, liv) {
     let out = fitted;
-    if (typeof Parts !== "undefined") for (const [key, category] of [["aeroShape", "aero"], ["floorShape", "floor"]]) {
+    if (typeof Parts !== "undefined") for (const [key, category] of Object.entries(PART_STYLE_FIELDS)) {
       if (!liv[key] || liv[key] === "fitted") continue;
       const cat = Parts.CATALOG.find((c) => c.id === category);
       const option = cat && cat.options.find((o) => o.tag === "STYLE" && o.id === liv[key]);
@@ -2801,7 +2806,7 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildComplete, refinish, FINISH_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  return { build, buildComplete, refinish, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,

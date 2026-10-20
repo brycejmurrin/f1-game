@@ -491,8 +491,11 @@ function designRegistries() {
     finShape: ids(C3.FIN_SHAPES, "none"), tcam: ids(C3.TCAM_IDS), coverVents: ids(C3.COVER_VENT_IDS),
     spineHeight: ids(C3.SPINE_HEIGHT_IDS), coverBind: ["independent", "saddleWrap", "spineOnly"],
     finHandoff: ["match", "contrast", "hardCut"], wingCarbon: ["paint", "carbon"], bodySplit: ["off", "lr"],
-    finish: ["gloss"].concat(ids(C3.FINISH_SURFACE)), driver: ["0", "1"],
+    finish: ["gloss"].concat(ids(C3.FINISH_SURFACE)), bodyStyle: ["team", ...ids(C3.BODY_STYLE_IDS)], driver: ["0", "1"],
   };
+  for (const field of C3.FINISH_FIELDS || []) if (field !== "finish") ENUMS[field] = ["inherit", "gloss", ...ids(C3.FINISH_SURFACE)];
+  for (const [field, category] of Object.entries(C3.PART_STYLE_FIELDS || {}))
+    ENUMS[field] = ["fitted", ...M.Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === "STYLE").map(o => o.id)];
   return { M, ENUMS };
 }
 function expandAllValues() {
@@ -1412,6 +1415,8 @@ async function applyDesign(page, teamId, fields, base) {
       coverVents: ids(C3 && C3.COVER_VENT_IDS),
       spineHeight: ids(C3 && C3.SPINE_HEIGHT_IDS),
     };
+    for (const [field, category] of Object.entries(C3 && C3.PART_STYLE_FIELDS || {}))
+      ENUMS[field] = ["fitted", ...Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === "STYLE").map(o => o.id)];
     const liv = Object.assign({}, def);
     const parts = [];
     // `part.<category>` keys are catalog PARTS, fitted through the same hook the
