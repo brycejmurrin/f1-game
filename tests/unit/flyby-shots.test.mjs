@@ -96,7 +96,7 @@ async function flybyCli(...args) {
 
 test("flyby CLI advertises and validates condition and variation flags before browser boot", async () => {
   const { stdout } = await flybyCli("--help");
-  for (const flag of ["--tod", "--weather", "--seed"]) assert.match(stdout, new RegExp(flag), `${flag} is documented`);
+  for (const flag of ["--tod", "--weather", "--seed"]) assert.ok(stdout.includes(flag), `${flag} is documented`);
   const source = fs.readFileSync(path.join(ROOT, "tools/shot/flyby.mjs"), "utf8");
   assert.doesNotMatch(source, /addScriptTag[\s\S]{0,100}flyby-overrides/,
     "the registered data script is not reinjected inline (the shell CSP blocks that)");
