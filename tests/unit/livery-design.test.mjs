@@ -180,7 +180,7 @@ function editorFixture() {
   const insertBefore = root.insertBefore;
   root.insertBefore = (node, before) => { if (node.parentNode === root) node.remove(); return insertBefore(node, before); };
   const bodyRow = dom.document.createElement("label"); root.appendChild(bodyRow);
-  const spineRow = pillRow("SPINE TOP", "spineLogo", ["stripe", ...D.PATTERNS], "stripe");
+  const spineRow = pillRow("SPINE TOP", "spineLogo", ["stripe", "tricolour", ...D.PATTERNS], "stripe");
   const nextRow = pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
   pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
   pillRow("FIN SHAPE", "finShape", ["standard", "none"], "standard");

@@ -107,8 +107,8 @@ const LiveryStations = (function () {
       }
     }
 
-    // HALO TOP: a strip on the crown bar, through the tube's own ring vertices (addTube's frame),
-    // 3 mm proud. No strip under a blade fairing or between the fenced hoop's vanes.
+    // HALO TOP: a strip on top of the crown bar, through the tube's own ring vertices (addTube's
+    // frame), 3 mm proud. No strip under a blade fairing or between the fenced hoop's vanes.
     const H = ctx.halo;
     if (R.haloTop && H && H.path && H.path.length > 2) {
       const u = uvOf(R.haloTop), path = H.path, sides = H.sides, r = H.r + 0.003;
@@ -124,17 +124,24 @@ const LiveryStations = (function () {
         if (ul < 1e-5) { ux = -tz; uy = 0; uz = tx; ul = Math.hypot(ux, uy, uz) || 1; }
         ux /= ul; uy /= ul; uz /= ul;
         const vx = ty * uz - tz * uy, vy = tz * ux - tx * uz, vz = tx * uy - ty * ux, p = path[i];
-        const ring = [];
-        for (let k = -K; k <= K; k++) {
-          const c = Math.cos(k * step), s = Math.sin(k * step);
-          const nx = ux * c + vx * s, ny = uy * c + vy * s, nz = uz * c + vz * s;
-          ring.push({ p: [p[0] + nx * r, p[1] + ny * r, p[2] + nz * r], n: [nx, ny, nz] });
-        }
-        rings.push(ring);
+        rings.push({ p, u: [ux, uy, uz], v: [vx, vy, vz] });
       }
       const crown = [];
       for (let i = 0; i < path.length; i++) if (path[i][2] >= H.midZ - 1e-4) crown.push(i);
       if (crown.length > 1) {
+        // The transported frame has turned by the time it reaches the crown, so its `u` no longer
+        // points up: centre the strip on the tube vertex facing most nearly +Y (measured at the crown's
+        // middle; the crown arc is near-planar, so the same vertex index faces up along all of it).
+        const mid = rings[crown[crown.length >> 1]], k0 = Math.round(Math.atan2(mid.v[1], mid.u[1]) / step);
+        for (const i of crown) {
+          const { p, u: a, v: b } = rings[i], ring = [];
+          for (let k = -K; k <= K; k++) {
+            const c = Math.cos((k0 + k) * step), s = Math.sin((k0 + k) * step);
+            const nx = a[0] * c + b[0] * s, ny = a[1] * c + b[1] * s, nz = a[2] * c + b[2] * s;
+            ring.push({ p: [p[0] + nx * r, p[1] + ny * r, p[2] + nz * r], n: [nx, ny, nz] });
+          }
+          rings[i] = ring;
+        }
         const len = [0];
         for (let j = 1; j < crown.length; j++) {
           const a = path[crown[j - 1]], b = path[crown[j]];
@@ -145,7 +152,8 @@ const LiveryStations = (function () {
         for (let j = 0; j < crown.length - 1; j++) {
           const A = rings[crown[j]], B = rings[crown[j + 1]];
           for (let k = 0; k < 2 * K; k++) {
-            quadUv([A[k].p, B[k].p, B[k + 1].p, A[k + 1].p], A[k].n,
+            const m = [A[k].n[0] + A[k + 1].n[0], A[k].n[1] + A[k + 1].n[1], A[k].n[2] + A[k + 1].n[2]], ml = Math.hypot(...m) || 1;
+            quadUv([A[k].p, B[k].p, B[k + 1].p, A[k + 1].p], [m[0] / ml, m[1] / ml, m[2] / ml],
                    [[uu(len[j]), vv(k - K)], [uu(len[j + 1]), vv(k - K)], [uu(len[j + 1]), vv(k + 1 - K)], [uu(len[j]), vv(k + 1 - K)]]);
           }
         }

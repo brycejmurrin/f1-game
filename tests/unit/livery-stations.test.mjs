@@ -83,6 +83,9 @@ test("halo strip lies 0-4 mm proud of the tube, on the crown bar only", () => {
       assert.ok(d > H.r - 0.002 && d < H.r + 0.004, `round=${round} halo=${halo}: ${(d * 1000).toFixed(1)} mm from centreline (r ${H.r * 1000})`);
       assert.ok(p[2] >= H.midZ - 0.03, "on the crown bar, not down a leg");
     }
+    // ON TOP of the bar: a strip on the tube's flank or underside is hidden inside the hoop (D5b
+    // 2026-10-20: the transported frame had turned, so the "top" strip faced the cockpit).
+    for (const { n } of q) assert.ok(n[1] > 0.5, `round=${round} halo=${halo}: strip normal y ${n[1].toFixed(2)} faces up`);
   }
 });
 

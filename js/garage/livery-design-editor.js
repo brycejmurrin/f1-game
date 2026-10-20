@@ -168,7 +168,10 @@ const GarageLiveryDesignEditor = (function () {
     section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
     section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
     // One SPINE TOP selection, divided by purpose rather than a wall of pills.
-    const group = api.spineRow.querySelector(".cs-liv-ed-finish"), choices = Array.from(group.querySelectorAll("button"));
+    // `tricolour` is both a fixed graphic id and an adjustable pattern, so the sheet builds its
+    // pill twice: keep one button per choice.
+    const group = api.spineRow.querySelector(".cs-liv-ed-finish"), seen = new Set();
+    const choices = Array.from(group.querySelectorAll("button")).filter((b) => !seen.has(b.dataset.csPill) && seen.add(b.dataset.csPill));
     const marks = ["logo", "none", "bigmark", "wordmark", "number"];
     group.replaceChildren();
     for (const [label, accepts] of [
