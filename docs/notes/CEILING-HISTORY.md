@@ -3650,3 +3650,9 @@ and the deploy tip went red on `ratchets.test.mjs`. Raised on Bryce's in-session
 the +6 is the overlap of the two merges, not new geometry. No extraction here: both sets of lines
 sit inside `build`'s emit closures beside the parts they shape. The same `--update` also records
 the tree's `dynamicIdReads` falling 74 → 73 (a measured lowering, not a raise).
+
+## 2026-10-20 — dynamicIdReads double-lowering corrected (ratchet-double-lower-b2s2)
+`ratchets.d/cursor--car3d-ceiling-5e2a.json` and `ratchets.d/sync-pr-cursor-design-aero-d3c-7e2a.json`
+each recorded `dynamicIdReads: -1`, both measured from the same base of 74, so the folded ceiling
+read 72 while the tree measures 73. This branch's fragment carries `+1` to restore the true 73. A
+correction of a double-counted lowering, not growth: no code changed.
