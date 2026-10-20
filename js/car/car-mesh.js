@@ -388,7 +388,9 @@ function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, roun
   // moves the front endplate the decal is drawn on (frontPlateGeom). They
   // join the key or a style change paints the previous wing.
   const aSt = Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null;
-  const drsK = aSt ? [aSt.drs ? 1 : 0, aSt.rearSweep, aSt.rearTaper, aSt.plate].map((v) => +v || 0).join(",")
+  // Concept curvature and flap gaps also move the decal surface. Key the full
+  // normalized recipe, once per parts object through _decalKeyMemo above.
+  const drsK = aSt ? JSON.stringify(aSt)
                    : ((parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0);
   // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
   const shapeK = finShape || "standard";

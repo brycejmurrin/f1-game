@@ -11,6 +11,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const M = loadParts();
@@ -54,4 +55,64 @@ test("an explicit 0 builds the shipped car bit-for-bit (default off)", () => {
     const off = { ...shipped, _visual: { ...shipped._visual, [cat]: { ...shipped._visual[cat], [field]: 0 } } };
     assert.equal(build(off), build(shipped), `${field}: 0 changes nothing`);
   }
+});
+
+
+test("livery aero and floor shapes reproduce catalog meshes without mutating fitted parts or performance", () => {
+  const setup = { ...M.Parts.DEFAULTS };
+  const fitted = M.Parts.getVisualTiers(setup, team);
+  const snapshot = JSON.stringify(fitted);
+  const stats = JSON.stringify(M.Parts.getMods(setup, team));
+  const cost = M.Parts.getCost(setup, team), load = M.Parts.aeroLoad(setup, team);
+  const preview = (livery) => hash(M.Car3D.build(team.color, team.color2, { teamId: team.id, num: 4, parts: fitted, livery }));
+  const original = preview({});
+  for (const [key, category] of [["aeroShape", "aero"], ["floorShape", "floor"]]) {
+    const styles = M.Parts.CATALOG.find((c) => c.id === category).options.filter((o) => o.tag === "STYLE");
+    assert.ok(styles.length >= 5);
+    for (const o of styles) {
+      const actual = preview({ [key]: o.id });
+      assert.equal(actual, build(tiersFor(category, o.id)), o.id + " uses the full catalog recipe");
+      assert.notEqual(actual, original, o.id + " visibly changes geometry");
+    }
+    for (const id of ["fitted", "missing", "constructor", "medium", "style_engine_zeropod"])
+      assert.equal(preview({ [key]: id }), original, key + " ignores invalid or non-STYLE choices");
+  }
+  assert.equal(preview({ aeroShape: "style_aero_rift", floorShape: "style_floor_ddiff" }),
+    build(M.Parts.getVisualTiers({ ...setup, aero: "style_aero_rift", floor: "style_floor_ddiff" }, team)));
+  assert.equal(JSON.stringify(fitted), snapshot, "shared fitted recipes stay untouched");
+  assert.equal(JSON.stringify(M.Parts.getMods(setup, team)), stats);
+  assert.equal(M.Parts.getCost(setup, team), cost);
+  assert.equal(M.Parts.aeroLoad(setup, team), load);
+});
+
+
+test("runtime flap/decal recipes follow shape edits, undo and cancel without a store revision", () => {
+  const liv = {};
+  const v = carDrawVm({ livery: liv });
+  v.ctx.Parts = M.Parts; v.ctx.Car3D = M.Car3D;
+  const t = v.teams.find((t) => t.id === team.id), setup = { ...M.Parts.DEFAULTS };
+  for (const custom of [false, true]) {
+    const state = () => v.carDraw.teamDecalState(t, true, custom ? setup : null, "same-stamp");
+    const original = state();
+    liv.aeroShape = "style_aero_rift"; liv.floorShape = "style_floor_ddiff";
+    const changed = state(), expected = M.Parts.getVisualTiers({ ...setup, aero: liv.aeroShape }, t);
+    assert.notEqual(changed, original);
+    assert.equal(state(), changed, "unchanged shape hits cache");
+    assert.deepEqual(changed.aero, M.Car3D.aeroStyleOf(expected));
+    assert.deepEqual(M.Car3D.aeroFlaps(changed.val, changed.aero),
+      M.Car3D.aeroFlaps(M.Car3D.aeroLevelOf(expected), M.Car3D.aeroStyleOf(expected)));
+    delete liv.aeroShape; delete liv.floorShape;
+    assert.deepEqual(state().aero, original.aero, "undo/cancel restores fitted flap and decal recipe");
+  }
+});
+
+test("concept wing decals cannot reuse fitted wing geometry at the same aero level", () => {
+  const created = [];
+  M.CarMesh.init({ createTexMesh: (m) => { created.push(m); return m; }, freeMesh() {} });
+  const fitted = tiersFor("aero", "high"), changed = M.Car3D.appearanceParts(fitted, { aeroShape: "style_aero_rift" });
+  const get = (p) => M.CarMesh.getCarDecalMesh(M.Car3D.aeroLevelOf(p), p, false, team.id, "standard", "standard", "team");
+  const original = get(fitted), altered = get(changed);
+  assert.notEqual(altered, original);
+  assert.notDeepEqual(altered.pos, original.pos, "the projection actually follows different wing surfaces");
+  assert.equal(get(changed), altered, "repeat shape reuses its own decal mesh");
 });

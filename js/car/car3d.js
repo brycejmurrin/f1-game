@@ -190,6 +190,21 @@ const Car3D = (function () {
   } = body;
 
   const { PH_HALO, PH_HOOP, PH_MIRROR, PH_RIM, FINISH_FIELDS, finishPass, refinish } = CarMaterials;   // finish stand-ins
+  // One appearance recipe for baked geometry, moving flaps and decal anchors.
+  // Fitted parts remain authoritative for performance, budget and ownership.
+  function appearanceParts(fitted, liv) {
+    let out = fitted;
+    if (typeof Parts !== "undefined") for (const [key, category] of [["aeroShape", "aero"], ["floorShape", "floor"]]) {
+      if (!liv[key] || liv[key] === "fitted") continue;
+      const cat = Parts.CATALOG.find((c) => c.id === category);
+      const option = cat && cat.options.find((o) => o.tag === "STYLE" && o.id === liv[key]);
+      if (!option) continue;
+      if (out === fitted) out = Object.assign({}, fitted, { _visual: Object.assign({}, fitted._visual), _ids: Object.assign({}, fitted._ids) });
+      out[category] = option.visualTier != null ? option.visualTier : 1;
+      out._visual[category] = Object.assign({ id: option.id, tier: out[category] }, option.visual); out._ids[category] = option.id;
+    }
+    return out;
+  }
 
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
@@ -260,7 +275,7 @@ const Car3D = (function () {
     const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
     const endplateC = _ckAcc(liv.endplate) || null, haloMetal = PH_HALO;   // ENDPLATES (front else c2, rear else DARK); an explicit HALO FINISH lands on the titanium (#2796 1)
-    const T = (opts && opts.parts) || {};
+    const T = appearanceParts((opts && opts.parts) || {}, liv);
     const tier = (id) => T[id] != null ? T[id] : 1;
     const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
     const design = buildPartRecipes(T, ersC2);
@@ -2749,7 +2764,7 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildComplete, refinish, FINISH_FIELDS, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  return { build, buildComplete, refinish, FINISH_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,
