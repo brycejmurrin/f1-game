@@ -1263,6 +1263,46 @@ test("the lit-variant warm compiles through createRenderPipelineAsync, and first
   assert.ok(s.pipelineDescs.filter((d) => d && d.vertex && d.vertex.entryPoint === "vs_main" && d.fragment?.targets?.[0]?.blend).length >= 2);
 });
 
+// The boot warm had drifted from the draws a race frame makes: floor / terrain / start-line biases and the car
+// FX, ring and glass flag sets were all missing, so the first race frame minted 12 lit pipelines synchronously
+// (6 keys x mirror samples 1 + main samples 4) plus the mirror's SCENE_FORMAT mip pipeline. A sync
+// createRenderPipeline returns at once and the GPU process compiles it ahead of that frame's submit: on the
+// macOS census the race-start frame waited ~4.9 s with the main thread idle.
+test("a race-like frame after the boot warm compiles no pipeline synchronously (mirror + main)", async () => {
+  const GAME = await readFile(new URL("js/game.js", ROOT), "utf8");
+  const bias = (re) => { const m = GAME.match(re); assert.ok(m, "game.js still declares " + re); return [+m[1], +m[2]]; };
+  const floor = bias(/_wmFloorD = \{[^}]*depthBias: \[(-?\d+), (-?\d+)\]/);
+  const terrain = bias(/const _terrainBias = \[(-?\d+), (-?\d+)\]/);
+  const start = bias(/const _startBias = \[(-?\d+), (-?\d+)\]/);
+  const h = makeGpuHarness({ asyncPipelines: true, reflectTextures: true });
+  const gfx = await h.create();
+  gfx.resize();
+  await new Promise((r) => setTimeout(r, 30));   // the warm's setTimeout(0), then its promises
+  const mesh = gfx.createMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
+  const M = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const RACE = [
+    { depthBias: floor, buryRibbon: true }, { depthBias: terrain, buryRibbon: true }, { depthBias: start, detail: 0 },
+    { surfaceId: 16 }, { detail: 0.5 }, { buryRibbon: true }, {},
+    { alpha: 1, noAlphaWrite: true },                                  // car-draw wheel rings, car-mesh FX quads
+    { doubleSided: true, noAlphaWrite: true },                         // car-draw _rigFx
+    { alpha: 0.16, doubleSided: true, noAlphaWrite: true },            // car-draw cockpit glass
+    { alpha: 0.35 },                                                   // ghost / fading cars
+  ];
+  const before = h.pipelineDescs.length;
+  assert.equal(gfx.mirrorBegin({}, 256, 128), true);
+  for (const o of RACE) gfx.draw(mesh, M, o);
+  gfx.mirrorEnd();
+  assert.equal(gfx.begin({}), true);
+  for (const o of RACE) gfx.draw(mesh, M, o);
+  gfx.present({});
+  const minted = h.pipelineDescs.slice(before).map((d) => (d.fragment && d.fragment.entryPoint) + (d.depthStencil ? " bias " + d.depthStencil.depthBias + "/" + d.depthStencil.depthBiasSlopeScale : "") + " x" + (d.multisample ? d.multisample.count : 1));
+  assert.deepEqual(minted, [], "the race frame compiled synchronously: " + minted.join(", "));
+  // No duplicate warm requests: blend implies noAlphaWrite, so { alpha, noAlphaWrite } is the { alpha } key.
+  const keys = h.asyncDescs.filter((d) => d.vertex && d.vertex.entryPoint === "vs_main").map((d) => JSON.stringify([d.depthStencil, d.fragment.targets, d.primitive, d.multisample]));
+  assert.equal(new Set(keys).size, keys.length, "every warm entry is a distinct pipeline");
+});
+
 test("WGX source keeps the proven parity fixes", () => {
   assert.match(WGX_SOURCE, /SHD\.lampArmed = false/);
   assert.match(WGX_SOURCE, /mapState === "unmapped"/);

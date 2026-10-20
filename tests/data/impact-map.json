@@ -6722,7 +6722,8 @@
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
-        "tests/unit/vm-filename-lint.test.mjs"
+        "tests/unit/vm-filename-lint.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ]
     },
     "js/garage/arrival.js": {

@@ -5756,12 +5756,24 @@ const WGX = (function () {
     try {
       setTimeout(function () {
         if (_lost || !_runtimeReady) return;
+        // One entry per (bias, flags) key that _litPipeline builds — blend
+        // already implies noAlphaWrite, so { alpha, noAlphaWrite } was a
+        // duplicate. The race frame's own keys were missing (game.js floor
+        // [4, 16], terrain [2, 10], start line [-2, -4]; car-draw.js wheel
+        // rings / FX quads noAlphaWrite, rig FX doubleSided + noAlphaWrite,
+        // cockpit glass blend + doubleSided): 12 sync compiles at MSAA 4 that
+        // the GPU process ran ahead of the first race submit.
         const warm = [
-          { alpha: 0.5 }, { alpha: 0.5, noAlphaWrite: true },
-          { doubleSided: true }, { depthBias: [3, 6] }, { depthBias: [5, 10] },
+          { alpha: 0.5 }, { alpha: 0.5, doubleSided: true },
+          { doubleSided: true }, { noAlphaWrite: true }, { doubleSided: true, noAlphaWrite: true },
+          { depthBias: [3, 6] }, { depthBias: [5, 10] },
+          { depthBias: [4, 16] }, { depthBias: [2, 10] }, { depthBias: [-2, -4] },
           { depthBias: [-1, -2] }, { decal: true },
           { alpha: 0.26, noDepthTest: true },
         ];
+        // The mirror target's mip ladder: SCENE_FORMAT was prewarmed only with
+        // the env cube (off by default), so the first mirrorEnd compiled it sync.
+        if (!WGX_MINIMAL) _mipPrewarm(SCENE_FORMAT);
         const save = _passSamples;
         const counts = MSAA_COUNT > 1 ? [1, MSAA_COUNT] : [1];
         try {
