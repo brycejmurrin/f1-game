@@ -436,7 +436,7 @@ test("empty .hud-gaps collapses — no junk chip when both gap lines are empty",
   const src = read("css/hud.css");
   const rule = src.match(/\.hud-gaps\[data-empty\]\s*\{([^}]*)\}/);
   assert.ok(rule, "a [data-empty] collapse rule owns empty .hud-gaps");
-  assert.match(read("js/ui/hud.js"), /hData\(plate, "empty"/, "hud.js keeps the flag");
+  // hud.js keeping the flag is behaviour-pinned: tests/unit/hud-pins.test.mjs (gap plate empty flag).
   assert.match(rule[1], /display:\s*none/, "fully hide — not a zero-opacity plate");
   // Still keep the one-line ahead pin for the half-empty (P1) case.
   assert.equal(decl(cssRules(src), ".hud-gaps > div:first-child", "min-height"), "1.3em");
