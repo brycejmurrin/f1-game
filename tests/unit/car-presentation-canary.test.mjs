@@ -120,6 +120,12 @@ test("MY TEAM foreign-tab sync and the customize preview keep the structural liv
     "bare {c1,c2} override regrows the shark fin while customize is open");
 });
 
+test("customize preview busts the mesh only on a changed draft, debounced (#3108)", () => {
+  const custom = gameAndCustom();
+  assert.match(custom, /if \(key !== czPreviewKey\) \{[^}]*spMeshBust\(\)/, "spMeshBust lives inside the key-changed branch");
+  assert.match(custom, /setTimeout\(czPreview3d, 75\)/, "input ticks debounce the 3D half");
+});
+
 test("agent error strings (misfiled pins)", () => {
   assert.match(read("js/agent/apex-net.js"), /error: "no_wire"/);
   assert.match(read("js/agent/apex.js"), /error: "invalid_repro"/);

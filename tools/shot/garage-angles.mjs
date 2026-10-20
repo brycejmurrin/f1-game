@@ -11,7 +11,7 @@ import { TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS } from "./lib/garage-camer
 //     [--oracle] [--baseline=dir] [--budget=10m]
 //     [--station=spineTop,spineSide,finBadge,…] [--pair=spineLogo:wrap|saddle] [--flat]
 //     [--eye=x,y,z;…] [--look=x,y,z] [--clamp=0] [--path=@keyframes.json] [--path-steps=6]
-//     [--serve] [--watch[=js/car/liverytex.js,…]]
+//     [--list-cameras[=literal-search]] [--serve] [--watch[=js/car/liverytex.js,…]]
 //     [--preset=wall|fin|flank|mark|quick|sweep|closeup|none] [--plan] [--fast] [--settle=8] [--view-settle=4]
 //     [--name='{team}-{tag}-{cam}'] [--out=dir] [--label=0] [--sheet=0] [--cols=3] [--cell=420] [--json]
 //     [--team=all+custom] [--rollup-only|--full-views] [--rollup-view=wingRear]
@@ -145,7 +145,7 @@ const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom"
   "--cols", "--json", "--base", "--design", "--zip", "--logos", "--site", "--cdn",
   "--lamp", "--aero", "--target", "--dpr", "--budget", "--baseline",
   "--station", "--pair", "--flat", "--eye", "--look", "--path", "--path-steps", "--clamp",
-  "--serve", "--watch", "--overlay", "--backend"]);
+  "--serve", "--watch", "--overlay", "--backend", "--list-cameras"]);
 
 // Bare `--help` used to be silently ignored (OWN_FLAGS only catches `--k=v`
 // unknowns as livery axes) and launch a multi-minute Chromium shoot. Exit
@@ -157,6 +157,8 @@ const GA_USAGE = `garage-angles — garage shots, ONE Chromium (soft #game-soft 
     [--backend=webgl2|three] [--livery=default|shipped] [--preset=wall|fin|flank|mark|quick|sweep|none]
     [--out=artifacts/garage-angles] [--fast] [--viewport=1280x720]
 
+  --list-cameras[=text]  browse canonical stations, aliases and targets (no browser)
+  --preset=workshop      four equipment/desk inspections; --preset=room: two opposite room views
   --plan     print the cartesian product and exit (no browser)
   --preset=list   list named framing presets
   spine      expands to hero,top,rear,side
@@ -197,6 +199,8 @@ const argvHas = (name) => argv.some((a) => a === name || a.startsWith(name + "="
  *  is the flank framing swung to a new azimuth. CLI flags override; `none` is
  *  the default (no preset). */
 const PRESETS = {
+  workshop: { station: "toolWall,serviceCorner,safetyStation,engineerDesk" },
+  room: { station: "roomBack,roomDoor" },
   wall:  { views: "front", zoom: 4 },
   fin:   { views: "rear", zoom: 4 },
   flank: { views: "side", zoom: 8, pan: "5,0" },
@@ -214,6 +218,22 @@ const PRESETS = {
     station: "fwLow,fwSide,noseTip,endplate,rwRear,rwSide,rwTop,podInlet,podFloor,wheelF,wheelR,haloBehind,mirror,cover",
   },
 };
+// Discovery must exit before output reset, plan products or browser ownership.
+// The same station objects are exposed by apex_catalog section=garage; there
+// is no separate host-specific camera list to drift.
+if (argvHas("--list-cameras")) {
+  const needle = flag("--list-cameras", "").toLowerCase();
+  const rows = (table) => Object.entries(table).map(([id, value]) => ({ id, ...value }));
+  const matches = (row) => !needle || JSON.stringify(row).toLowerCase().includes(needle);
+  console.log(JSON.stringify({ browser: false, readOnly: true,
+    units: "az/el radians; dist and target metres in car space (+Y up, +Z nose)",
+    stations: rows(STATIONS).filter(matches),
+    aliases: Object.entries(CAM_ALIAS).map(([id, camera]) => ({ id, camera })).filter(matches),
+    targets: Object.entries(TARGETS).map(([id, target]) => ({ id, target })).filter(matches),
+    presets: rows(PRESETS).filter(matches),
+  }, null, 2));
+  process.exit(0);
+}
 const presetRaw = flag("--preset", "").trim();
 if (presetRaw === "list") {
   console.log("Presets (every key is a CLI flag; CLI flags override):");
@@ -520,7 +540,7 @@ const designs = explicitDesigns(flag("--design", ""))
 // The stations the DESIGN asks for: every field named by an axis or an
 // explicit design, through FIELD_STATIONS, in first-seen order. They become the
 // cameras only when nothing else names one — a `--views`, `--cam`, `--station`
-// or a preset with views wins, because the user said where to look.
+// or a preset with views/stations wins, because the user said where to look.
 const fieldStations = (() => {
   const fields = [];
   for (const ax of axes) if (!fields.includes(ax.field)) fields.push(ax.field);
@@ -533,7 +553,7 @@ const fieldStations = (() => {
   return out;
 })();
 const autoStations = (fieldStations.length && !argvHas("--views") && !argvHas("--cam") && !argvHas("--station")
-  && !argvHas("--path") && !argvHas("--eye") && !(preset && preset.views)) ? fieldStations.map((o) => o.station) : [];
+  && !argvHas("--path") && !argvHas("--eye") && !(preset && (preset.views || preset.station))) ? fieldStations.map((o) => o.station) : [];
 camAliasNames.push(...autoStations);
 
 // Roster order == store.team index (game.js boot). EVALUATED, not regexed: a
