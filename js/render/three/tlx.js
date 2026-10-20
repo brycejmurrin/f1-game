@@ -3351,6 +3351,69 @@ const TLX = (function () {
           }
         })().finally(() => { _warmPending = null; });
       }
+      // THE DRAWS NO WARM FRAME HELD (hunt 6 B·H6): the cockpit rig. The scene warm compiles what its frame drew,
+      // and a chase start draws no rig — the menu path does not even run that warm (its world was warmed in the
+      // menu). So the first onboard frame built the rig's programs and pipelines synchronously: switching
+      // chase->cockpit froze TLX-WebGPU 1109 ms and TLX-WebGL2 1013 ms, then idled the GPU another 2012 / 1111 ms
+      // (macos census 39449331814; locally 14 links on SwiftShader). warmDraws(fn) runs fn with draw() CAPTURING
+      // its records — not drawn, coalesced runs skipped (they share the exterior wheels' program) — and the next
+      // present compiles exactly those (geometry, material, winding) pairs under the scene pass's target and MRT,
+      // owned like startMirrorWarm. Resolves true once compiled (or already compiled), false when nothing ran.
+      let _capture = null, _rigWarm = null;   // the capture in progress; { recs, done } waiting for its present
+      const _rigDone = new WeakMap();         // geometry -> Set of the material ids (+0.5 mirrored) already compiled
+      const _rigKey = (r) => r.mat.id + (r.sx < 0 ? 0.5 : 0);
+      function warmDraws(fn) {
+        if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function" || _rigWarm) return Promise.resolve(false);
+        const recs = [];
+        _capture = recs;
+        try { fn(); } catch (e) { try { Log.warn("gfx", "TLX warmDraws capture failed", String(e)); } catch (_) { /* optional */ } }
+        finally { _capture = null; }
+        const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
+        if (!todo.length) return Promise.resolve(recs.length > 0);
+        return new Promise((resolve) => {
+          const job = _rigWarm = { recs: todo, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
+          job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
+        });
+      }
+      function _captureRec(mesh, model, opts) {
+        if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
+        const w = model;
+        const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false), sx: neg ? -1 : 1 });
+      }
+      function startRigWarm() {
+        const job = _rigWarm;
+        if (!job || job.started) return;
+        job.started = true;
+        const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
+        const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
+        const useTag = usePost && (!post.tagOn || post.tagOn());
+        let ok = false;
+        _warmPending = (async () => {
+          try {
+            // The materials were minted at capture, so the tag stamps them now, as the scene warm stamps its own.
+            if (lit.setSsrMrt) lit.setSsrMrt(useTag);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
+            renderer.setMRT(useTag ? _ssrMrtNode() : null);
+            renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+            _gpuLastOperation = "compile-rig";
+            for (const r of job.recs) {
+              await compileWarmProbe(r.geo, r.mat, r.sx);
+              let s = _rigDone.get(r.geo);
+              if (!s) _rigDone.set(r.geo, s = new Set());
+              s.add(_rigKey(r));
+            }
+            await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
+            ok = true;
+          } catch (e) {
+            try { Log.warn("gfx", "TLX rig warm failed", String(e)); } catch (_) { /* logging is optional */ }
+          } finally {
+            if (lit.setSsrMrt) lit.setSsrMrt(false);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+            renderer.setMRT(mrt); renderer.setRenderTarget(target);
+          }
+        })().finally(() => { _warmPending = null; job.done(ok); });
+      }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -5193,6 +5256,7 @@ const TLX = (function () {
           if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
+        warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
         // NOT three.xr / setAnimationLoop / ArrayCamera: those overwrite the
@@ -5420,6 +5484,7 @@ const TLX = (function () {
           armSkyMesh(!!(softContent("sky") && sky.fallbackNode));
         },
         draw(mesh, model, opts) {
+          if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
           if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
@@ -5730,7 +5795,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
-          if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); }
+          if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
           // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a
           // different configuration). A boot that is ALREADY three WebGL2 (forceWebGL / _autoStayGL) or an explicit pin
