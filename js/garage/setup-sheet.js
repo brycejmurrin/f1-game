@@ -107,7 +107,8 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           decalNoseTip: "on", decalCockpit: "on", decalPodTop: "on", decalHalo: "on",
                           coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit",
                           podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team", crestTone: "team", crestFrame: "none",
-                          floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit" };
+                          floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit",
+                          ductFinish: "inherit", deflectorFinish: "inherit", cockpitFinish: "inherit", boardFinish: "inherit" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -178,6 +179,10 @@ const LIV_ROW_HINT = {
   floorFinish: "FLOOR FINISH — the floor edge, fences and bargeboards; INHERIT uses FINISH on a painted floor, bare carbon otherwise.",
   suspTint: "SUSPENSION — the wishbones, pushrods and rockers. Unset = the suspension part's dark carbon.",
   suspFinish: "SUSPENSION FINISH — the suspension arms; INHERIT uses FINISH on painted arms, bare carbon otherwise.",
+  ductFinish: "BRAKE DUCT FINISH — the duct bodies and scoops; inlet mouths stay dark. INHERIT keeps bare carbon unless BRAKE DUCTS has a colour, then uses FINISH.",
+  deflectorFinish: "DEFLECTOR FINISH — over-wheel planes and stalks on wheel parts that fit them. INHERIT keeps bare carbon unless DEFLECTORS has a colour, then uses FINISH.",
+  cockpitFinish: "COCKPIT SURROUND FINISH — headrest and painted bolsters. Harness, instruments and metal controls stay unchanged. INHERIT uses FINISH on paint and keeps bare carbon.",
+  boardFinish: "NUMBER BOARD FINISH — the rear-wing number board; INHERIT uses FINISH. The number keeps its inked patch.",
   ductTint: "BRAKE DUCTS — the brake duct bodies and scoops; the inlet mouths stay dark. Unset = carbon.",
   deflectorTint: "DEFLECTORS — the over-wheel deflector planes and stalks (when the WHEELS part fits them). Unset = carbon.",
   cockpitTint: "COCKPIT SURROUND — the headrest pad and the cockpit-side bolsters. Unset = dark pad, PRIMARY bolsters.",
@@ -1060,6 +1065,8 @@ function buildLiveryCreator(container, team) {
   let designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
+  const wheelDeflector = Parts.getVisualTiers(getTeamParts(team.id), team)._visual?.wheels?.deflector || 0;
+  const needDeflectors = () => Math.round(wheelDeflector) > 0;
   const finArtLive = () => needFin() && ((d.finStyle || "team") !== "none" || d.finBadge === "number" || d.finBadge === "code");
   const NO_ART = "Nothing to colour — TAIL STYLE is NONE and FIN BADGE is not a number or code";
   const haveNames = () => (d.sponsors || "default") !== "clean";
@@ -1309,8 +1316,13 @@ function buildLiveryCreator(container, team) {
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
   for (const [label, key] of [["COVER FINISH", "coverFinish"], ["WING FINISH", "wingFinish"], ["HALO FINISH", "haloFinish"],
     ["SIDEPOD FINISH", "podFinish"], ["FIN FINISH", "finFinish"], ["MIRROR FINISH", "mirrorFinish"],
-    ["NOSE FINISH", "noseFinish"], ["FLOOR FINISH", "floorFinish"], ["SUSPENSION FINISH", "suspFinish"], ["RIM FINISH", "rimFinish"]])
-    pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
+    ["NOSE FINISH", "noseFinish"], ["FLOOR FINISH", "floorFinish"], ["SUSPENSION FINISH", "suspFinish"], ["RIM FINISH", "rimFinish"],
+    ["BRAKE DUCT FINISH", "ductFinish"], ["DEFLECTOR FINISH", "deflectorFinish"],
+    ["COCKPIT SURROUND FINISH", "cockpitFinish"], ["NUMBER BOARD FINISH", "boardFinish"]]) {
+    const r = pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
+    if (key === "finFinish") deps.push({ row: r, when: needFin, why: NO_FIN });
+    if (key === "deflectorFinish") deps.push({ row: r, when: needDeflectors, why: "Needs wheel deflectors — choose a WHEELS part that includes them" });
+  }
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
