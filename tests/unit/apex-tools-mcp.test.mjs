@@ -936,16 +936,21 @@ test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () =>
 
 // Regression evidence from the tool survey: malformed callers must fail at
 // the seam, before any tree command, browser occupancy check or VM boot.
-test("every tool carries title, honest MCP annotations and an outputSchema; results mirror structuredContent", () => {
+test("every tool carries title and honest MCP annotations; tool-specific outputSchemas only; results mirror structuredContent", () => {
   // MCP 2025-06-18 ToolAnnotations default to destructiveHint: true and
   // openWorldHint: true — wrong for 25 of these 26 wraps. The hints derive from
   // the catalog's kind (docs/notes/AGENT-SURFACE-SURVEY-2026-10-05.md §4).
   const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
-  const readOnly = [], destructive = [], openWorld = [];
+  const readOnly = [], destructive = [], openWorld = [], withSchema = [];
   for (const t of listed) {
     assert.match(t.title, /^Apex 26 · /, t.name);
-    assert.equal(t.outputSchema.type, "object", t.name);
-    assert.equal(typeof t.outputSchema.properties.ok, "object", t.name);
+    // The generic CLI envelope is not published (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md §6);
+    // a tool with a measured shape still advertises it.
+    if (t.outputSchema) {
+      withSchema.push(t.name);
+      assert.equal(t.outputSchema.type, "object", t.name);
+      assert.equal(typeof t.outputSchema.properties.ok, "object", t.name);
+    }
     const a = t.annotations;
     for (const k of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) assert.equal(typeof a[k], "boolean", `${t.name}.${k}`);
     if (a.readOnlyHint) readOnly.push(t.name);
@@ -954,6 +959,9 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
     if (a.readOnlyHint) assert.equal(a.idempotentHint, true, `${t.name}: read-only implies idempotent`);
     if (/^apex_(eval|shot|agent|garage|track|ui_fit|ui_shot|hud_shot|hud_survey)$/.test(t.name)) assert.equal(a.readOnlyHint, false, `${t.name} takes the browser lock and writes artifacts`);
   }
+  assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_car_audit", "apex_catalog", "apex_doctor", "apex_help", "apex_hud_mock",
+    "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_locations", "apex_pick_tests", "apex_select_specs", "apex_session_status",
+    "apex_status", "apex_track_audit", "apex_viewer", "apex_who_is_on_it"], "exactly the tools with a measured result shape");
   assert.deepEqual(destructive, ["apex_job_cancel"]);
   assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
   for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
@@ -992,7 +1000,7 @@ test("real results of the fast tree tools conform to their advertised outputSche
     assert.ok(r.structuredContent && typeof r.structuredContent === "object", `${name}: structuredContent present`);
     assert.deepEqual(validate(r.structuredContent, schemaOf(name), name, []), [], `${name} conforms to its outputSchema`);
   }
-  for (const t of listed) {
+  for (const t of listed.filter((x) => x.outputSchema)) {
     assert.equal(t.outputSchema.additionalProperties, true, `${t.name}: a CLI may grow a key before the schema does`);
     assert.equal(t.outputSchema.required, undefined, `${t.name}: refusal and dryRun bodies share the tool, so nothing is required`);
   }
@@ -1687,12 +1695,16 @@ const callTools = (calls) => {
 };
 
 test("every tool answers a minimal valid call (mock): ok, not a bad_args refusal", () => {
-  const tools = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }]).find((m) => m.id === 1).result.tools;
+  const out = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }, { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_catalog", arguments: {} } }]);
+  const tools = out.find((m) => m.id === 1).result.tools;
   assert.ok(tools.length >= 28, `catalog has ${tools.length} tools`);
+  // A schema-aware client: an enum gives the value; a `track` that points at apex_catalog takes its first id there.
+  const firstTrack = out.find((m) => m.id === 2).result.structuredContent.tracks[0];
+  const valueFor = (spec) => spec.enum?.[0] ?? (/apex_catalog/.test(spec.description || "") && firstTrack ? (firstTrack.id ?? firstTrack) : "x");
   const skip = new Set(["apex_job_cancel", "apex_garage", "apex_track"]);   // need a prior job / a live session
   const calls = tools.filter((t) => !skip.has(t.name)).map((t) => {
     const args = { ...(MIN_ARGS[t.name] || {}) };
-    for (const k of t.inputSchema.required || []) if (!(k in args)) args[k] = t.inputSchema.properties[k].enum?.[0] ?? "x";
+    for (const k of t.inputSchema.required || []) if (!(k in args)) args[k] = valueFor(t.inputSchema.properties[k]);
     return [t.name, args];
   });
   const res = callTools(calls);
@@ -2303,6 +2315,14 @@ test("tools/list stays compact and apex_help returns the full text it shortens",
   assert.match(short.description, /apex_help/);
   assert.ok(Object.keys(full.inputSchema.properties.camera.properties).includes("fov"), "nested object bodies live in apex_help");
   for (const t of listed.tools) for (const k of t.inputSchema.required || []) assert.ok(t.inputSchema.properties[k], `${t.name} keeps required ${k}`);
+  // Bryce 2026-10-20 ("All five"): the required circuit-id enum points at apex_catalog instead of listing 52 ids;
+  // a shorter required enum (apex_job_start kind) stays inline, and the server still rejects an unknown id.
+  for (const name of ["apex_frame_report", "apex_track_audit"]) {
+    const track = listed.tools.find((t) => t.name === name).inputSchema.properties.track;
+    assert.equal(track.enum, undefined, `${name}.track lists no ids`);
+    assert.ok(track.description.includes("apex_catalog"), `${name}.track points at apex_catalog`);
+  }
+  assert.ok(Array.isArray(listed.tools.find((t) => t.name === "apex_job_start").inputSchema.properties.kind.enum));
   const miss = out.find((m) => m.id === 3).result;
   assert.equal(miss.isError, true);
 });
