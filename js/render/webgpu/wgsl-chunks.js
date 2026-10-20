@@ -1849,14 +1849,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     } else if (finishId == 61) {
       let frC = floor(in.objPos * 90.0);
       let frF = clamp(0.5 / (90.0 * fnPx) - 0.5, 0.0, 1.0);
-      color = min((mix(color, vec3<f32>(pvL), vec3<f32>(0.55)) * vec3<f32>(0.80, 0.82, 0.86) + vec3<f32>(0.025))
-        * (1.0 + (hash21(frC.xy + frC.z * 19.7) - 0.5) * 0.24 * frF), vec3<f32>(0.78));
-      color = color + F.sunColor.xyz * mix(pvHue, vec3<f32>(1.0), vec3<f32>(0.6)) * ((pvA * 0.9 + 0.05) * pow(pvNH, 1.5) * pvSun);
-      color = color + (F.ambSky.xyz + F.sunColor.xyz * 0.25) * vec3<f32>(0.78, 0.80, 0.86) * (smoothstep(0.15, 0.8, pvG) * 0.55 * pvEdge);
+      color = min((mix(color, vec3<f32>(pvL), vec3<f32>(0.6)) * vec3<f32>(0.80, 0.82, 0.86) + vec3<f32>(0.02))
+        * (1.0 + (hash21(frC.xy + frC.z * 19.7) - 0.5) * 0.35 * frF), vec3<f32>(0.26)) * vec3<f32>(0.90, 0.94, 1.0);
+      color = color + F.sunColor.xyz * mix(pvHue, vec3<f32>(1.0), vec3<f32>(0.6)) * ((pvA * 0.25 + 0.03) * pow(pvNH, 2.0) * pvSun);
+      color = color + (F.ambSky.xyz + F.sunColor.xyz * 0.25) * vec3<f32>(0.78, 0.80, 0.86) * (smoothstep(0.15, 0.8, pvG) * 0.40 * pvEdge);
     } else if (finishId == 62) {
       let flS = max(pvHue.r, max(pvHue.g, pvHue.b)) - min(pvHue.r, min(pvHue.g, pvHue.b));
       let flH = mix(vec3<f32>(0.80, 1.0, 0.06), pow(pvHue, vec3<f32>(2.6)), vec3<f32>(smoothstep(0.20, 0.50, flS)));
-      color = color * mix(vec3<f32>(1.0), flH, vec3<f32>(0.6)) + flH * (F.ambSky.xyz * 1.6 + F.sunColor.xyz * (0.55 * pvSun) + vec3<f32>(0.22));
+      let flK = smoothstep(0.05, 0.14, pvA);
+      color = color * mix(vec3<f32>(1.0), flH, vec3<f32>(0.6 * flK)) + flH * (F.ambSky.xyz * 1.6 + F.sunColor.xyz * (0.55 * pvSun) + vec3<f32>(0.22)) * flK;
     } else if (finishId == 63) {
       let t = clamp(0.5 - in.objPos.z * 0.30 + pvG * 0.10, 0.0, 1.0);
       var ox = vec3<f32>(0.85, 0.86, 0.88);
@@ -1879,10 +1880,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let fvN = abs(Ngeo);
       let fvC = select(in.objPos.y, in.objPos.x, fvN.y > max(fvN.x, fvN.z));
       let fvS = 0.5 + 0.5 * sin(fvC * 70.0 + sin(in.objPos.z * 1.7 + fvC * 9.0) * 1.2);
-      let fvBr = smoothstep(-0.2, 0.4, sin(in.objPos.z * 4.0 + fvC * 37.0));
+      let fvBr = smoothstep(-0.6, 0.2, sin(in.objPos.z * 4.0 + fvC * 37.0));
       let fvPer = 0.090 / fnPx;
-      let fv = mix(smoothstep(0.80, 0.95, fvS) * fvBr, 0.12, 1.0 - smoothstep(1.5, 3.0, fvPer)) * (1.0 - smoothstep(0.2, 1.4, in.objPos.z));
-      let fvGlow = mix(vec3<f32>(0.78, 1.0, 0.30), vec3<f32>(0.20, 0.30, 0.02), vec3<f32>(smoothstep(0.35, 0.75, pvA)))
+      let fv = mix(smoothstep(0.62, 0.85, fvS) * fvBr, 0.22, 1.0 - smoothstep(1.5, 3.0, fvPer)) * (1.0 - smoothstep(0.2, 1.4, in.objPos.z));
+      let fvGlow = mix(vec3<f32>(0.78, 1.0, 0.30), vec3<f32>(0.10, 0.22, 0.0), vec3<f32>(smoothstep(0.35, 0.75, pvA)))
         * (F.ambSky.xyz * 2.5 + F.sunColor.xyz * (0.6 * pvSun) + vec3<f32>(0.15));
       color = mix(color, fvGlow, vec3<f32>(fv * 0.95));
     } else if (finishId == 68) {
@@ -1906,13 +1907,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let sfS = max(sfDot, 1.0 - smoothstep(0.08, 0.18, sfT));
       color = mix(vec3<f32>(min(pvLit, 3.0) * 0.035), vec3<f32>(pvLit) * vec3<f32>(0.70, 0.72, 0.76), vec3<f32>(sfS));
     } else if (finishId == 70) {
-      let mfF = smoothstep(0.05, 0.55, pvG) * pvEdge;
-      let mfFace = max(mix(vec3<f32>(pvL), color, vec3<f32>(1.3)), vec3<f32>(0.0)) * 1.55;
-      let mfFlop = mix(color * 0.16, vec3<f32>(pvL * 0.22) * vec3<f32>(0.80, 0.84, 0.92), vec3<f32>(smoothstep(0.40, 0.80, pvA)));
+      let mfF = smoothstep(0.04, 0.30, pvG) * pvEdge;
+      let mfFace = max(mix(vec3<f32>(pvL), color, vec3<f32>(1.4)), vec3<f32>(0.0)) * 1.7;
+      let mfFlop = mix(color * 0.08, vec3<f32>(pvL * 0.12) * vec3<f32>(0.80, 0.84, 0.92), vec3<f32>(smoothstep(0.40, 0.80, pvA)));
       let mfC = floor(in.objPos * 150.0);
       let mfH = hash21(mfC.xy + mfC.z * 17.3);
       let mfSp = step(0.80, mfH) * smoothstep(0.6, 1.0, fract(mfH * 41.0 + pvNH * 3.0));
-      color = mix(mfFace, mfFlop, vec3<f32>(mfF)) + F.sunColor.xyz * (pvSun * 0.6 * mix(0.03, mfSp, clamp(0.5 / (150.0 * fnPx) - 0.5, 0.0, 1.0)));
+      color = mix(mfFace, mfFlop, vec3<f32>(mfF)) + F.sunColor.xyz * (pvSun * 1.2 * mix(0.03, mfSp, clamp(0.5 / (150.0 * fnPx) - 0.5, 0.0, 1.0)));
     } else if (finishId >= 81 && finishId <= 85) {
       // tint group B (81-85)
       let bL = pvA;
@@ -1942,8 +1943,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         color = vec3<f32>(min(pvLit, 1.3)) * mc * 0.95 + F.sunColor.xyz * (0.35 * pow(bNH, 24.0) * bSun);
       } else if (finishId == 84) {   // midnightpurple
         let mpH = pow(bNH, 16.0);
-        color = color + F.sunColor.xyz * vec3<f32>(0.40, 0.20, 1.0) * (mpH * 0.7 + bSun * 0.025)
-          + (F.ambSky.xyz + F.sunColor.xyz * 0.3) * vec3<f32>(0.60, 0.36, 0.12) * (smoothstep(0.50, 0.92, pvG) * 0.30 * pvEdge);
+        color = color + F.sunColor.xyz * vec3<f32>(0.40, 0.20, 1.0) * (mpH * 0.35 + bSun * 0.006)
+          + (F.ambSky.xyz + F.sunColor.xyz * 0.3) * vec3<f32>(0.60, 0.36, 0.12) * (smoothstep(0.50, 0.92, pvG) * 0.45 * pvEdge);
       } else {   // ultrablack
         color = vec3<f32>(0.010, 0.010, 0.011) * (1.0 + 0.6 * bLit) + F.ambSky.xyz * (0.010 * pvG);
       }
