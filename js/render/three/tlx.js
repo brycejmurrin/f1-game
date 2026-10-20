@@ -244,6 +244,10 @@ const TLX = (function () {
       // gpu-census 207 spent its whole window inside the warm and no row said so.
       const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
         mirrorDeferred: false, mirrorLazy: null };   // B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
+      // EVERY warm's stages, newest last (cap 6): the menu prep runs a world warm then the garage's, and
+      // _warmStages keeps only the last, so the census read the garage's 3.7 s as "the warm" while the
+      // world's ran 11-15 s on Metal (B·H8 prep timeline, gpu-census 39499541077).
+      const _warmHistory = [];
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -3308,6 +3312,9 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
+            _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
+              mirror: _warmStages.mirror, draw: _warmStages.draw, total: _warmStages.total, failed: _warmStages.failed });
+            if (_warmHistory.length > 6) _warmHistory.shift();
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
@@ -6224,7 +6231,7 @@ const TLX = (function () {
                        draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
-                       pending: !!_warmPending, done: _warmDone };
+                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice() };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the

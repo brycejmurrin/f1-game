@@ -295,6 +295,7 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
     const warmPlusOn = () => true, softOutRT = () => null;
     const I = new THREE.Matrix4().toArray();
     const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1] };
+    const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
     const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
       mirrorDeferred: false, mirrorLazy: null };
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "", _deviceLost = false;

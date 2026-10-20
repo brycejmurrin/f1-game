@@ -742,6 +742,10 @@ try {
       } catch (_) { m.garageNote = "garage prewarm still running after 30 s"; }
       m.prepWaitMs = Date.now() - tw;
       m.prepTimeline = await page.evaluate(prepTimelineRead).catch(() => null);
+      m.warmHistory = await page.evaluate(() => {
+        const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null, w = t && t.memState ? t.memState().warm : null;
+        return w && w.history ? w.history : null;
+      }).catch(() => null);
       step("prepared");
       m.atGo = await prep();
       m.garage = await page.evaluate(() => { const g = window.__apex.garagePrebuild && window.__apex.garagePrebuild();
