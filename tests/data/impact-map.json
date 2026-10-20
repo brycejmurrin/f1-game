@@ -7120,6 +7120,7 @@
       "*": [
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
+        "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs"
@@ -7222,6 +7223,7 @@
         "tests/specs/career.spec.js",
         "tests/unit/car-materials.test.mjs",
         "tests/unit/garage-before.test.mjs",
+        "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
