@@ -414,6 +414,9 @@ test("carFinish: every car-paint source sets it, and GLX / WGX hand it to the sh
   assert.ok(at > 0, "MIRROR_RESOLVE moved — re-point this check");
   const lit = scene.slice(at + "const MIRROR_RESOLVE = ".length, scene.indexOf(";", at));
   assert.equal(vm.runInNewContext("(" + lit + ")", { MIRROR_BIAS: [0, 0] }).carFinish, true, "the garage floor reflection");
+  // tools/carview.html (the dev car viewer) paints with its own bag, at every reflectivity.
+  const paintFromRefl = vm.runInNewContext("(" + fnSource(read("tools/carview.html"), "function paintFromRefl(") + ")", {});
+  for (const refl of [0, 0.5, 1]) assert.equal(paintFromRefl(refl).carFinish, true, `carview paintFromRefl(${refl})`);
 
   const h = bootGlx();
   const mesh = h.GLX.createMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });

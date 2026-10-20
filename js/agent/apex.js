@@ -50,7 +50,7 @@ function settled(promise, out) {
 // is the guard that keeps it honest.
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
-  "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
+  "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
@@ -2361,11 +2361,16 @@ const api = {
   diag(opts) {
     const o = opts || {};
     const safe = (fn, fallback) => { try { return fn(); } catch (e) { return fallback !== undefined ? fallback : { error: String((e && e.message) || e) }; } };
-    let glInfo = { error: "no canvas" };
+    let glInfo = { error: "no canvas" }, glProbe = null;
     safe(() => {
-      const cv = document.querySelector("canvas");
-      const gl = cv && (cv.getContext("webgl2") || cv.getContext("webgl"));
+      // A canvas keeps its first context type for life: a GL sniff on a #game that TLX/WGX
+      // has not configured for WebGPU yet binds it to WebGL2 and the next present reloads.
+      // Only a live WebGL2 bind is read in place; anything else probes a throwaway canvas.
+      const api = safe(() => GLX.backendState().api, null);
+      const cv = api === "webgl2" ? document.querySelector("canvas") : document.createElement("canvas");
+      const gl = glProbe = cv && (cv.getContext("webgl2") || cv.getContext("webgl"));
       if (!gl) return;
+      if (api !== "webgl2") safe(() => { const lose = gl.getExtension("WEBGL_lose_context"); setTimeout(() => lose && lose.loseContext(), 0); });
       const dbg = gl.getExtension("WEBGL_debug_renderer_info");
       glInfo = {
         vendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
@@ -2425,8 +2430,7 @@ const api = {
       // a missing float colour buffer sheds the whole HDR post chain, and a
       // LOST context explains a black screen that looks like a shader bug.
       glCaps: safe(() => {
-        const cv = document.querySelector("canvas");
-        const gl = cv && (cv.getContext("webgl2") || cv.getContext("webgl"));
+        const gl = glProbe;   // the same context glInfo read: never a second sniff on #game
         if (!gl) return null;
         return {
           maxFragUnif: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),

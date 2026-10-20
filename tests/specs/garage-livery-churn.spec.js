@@ -21,7 +21,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const WARM = 3, EDITS = 6;
-// The page's own clock, polled on a timer (wait-polling-lint): past the garage's flap idle window.
+// The page's own clock, polled on a timer (wait-polling-lint).
 const pause = async (page, ms) => {
   const t0 = await page.evaluate(() => performance.now());
   await page.waitForFunction(([t, d]) => performance.now() - t > d, [t0, ms], { polling: 100, timeout: ms + 60000 });
@@ -96,85 +96,99 @@ const settleGeo = async (page, cdp, label) => {
   throw new Error("settleGeo timed out (" + label + ")");
 };
 
-test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, textures and settled geoLive flat (TLX)", async ({ page }) => {
-  test.setTimeout(480000);   // ~10 s an edit on SwiftShader, plus boot
-  await page.setViewportSize({ width: 844, height: 390 });
-  await page.addInitScript(() => {
-    try { localStorage.setItem("apex26.gfxBackend", "three"); localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}
-  });
-  await page.goto("/?three-devtools=1");   // TLX exposes window.renderer only behind this flag
-  await page.waitForFunction(() => window.__apex != null && typeof Teams !== "undefined", null, { polling: 100, timeout: BOOT_MS });
-  expect(await page.evaluate(() => (typeof GLX !== "undefined" ? GLX.backend : null)), "this spec measures the shipped TLX backend").toBe("three");
-  // Same entry as livery-sidewall.spec.js: McLaren, no saved customs, START, CAR, LIVERY, create.
-  await page.evaluate(() => { const S = GameStore.store; S.set("team", 2); S.set("driver", 0); S.set("livery.custom." + Teams.LIST[2].id, []); });
-  await page.locator("#mb-race").click();
-  await page.locator("#select").waitFor({ state: "visible" });
-  // Land the menu/flyby track (Bahrain) before the garage — otherwise ensureScenery can
-  // finish after warm and step geoLive mid-edits (#2897 flake: warm=35, end=50).
-  await awaitMenuTrackBuilt(page);
-  await page.locator("#sel-car").click();
-  await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-  await page.locator(".cs-liv-create").click();
-  await expect(page.locator('input[data-liv-field="c2"]')).toHaveCount(1);
-  // GPU textures three actually allocates (not render targets): the backend's own create/destroy.
-  await page.evaluate(() => {
-    const b = window.renderer.backend, C = window.__churn = { made: 0, destroyed: 0 };
-    const c = b.createTexture.bind(b), d = b.destroyTexture.bind(b);
-    b.createTexture = function (t, o) { if (!t.isRenderTargetTexture && !t.isDepthTexture) C.made++; return c(t, o); };
-    b.destroyTexture = function (t, ...a) { if (!t.isRenderTargetTexture && !t.isDepthTexture) C.destroyed++; return d(t, ...a); };
-  });
-  const cdp = await page.context().newCDPSession(page);
-  const read = async () => {
-    for (let i = 0; i < 2; i++) await cdp.send("HeapProfiler.collectGarbage");   // the second pass collects what the first released
-    return page.evaluate(() => {
-      const r = window.renderer, co = GLX.__tlx.coState(), f = CarMesh.flapState ? CarMesh.flapState() : null;
-      const ms = GLX.__tlx.memState();
-      return {
-        gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures,
-        geoLive: ms.geoLive, geoKinds: ms.geoKinds, geoRegLen: ms.geoRegLen,
-      };
+// A describe block so flaky-quarantine.json can name this exact test ("suite › title").
+test.describe("Garage livery churn", () => {
+  test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, textures and settled geoLive flat (TLX)", async ({ page }) => {
+    test.setTimeout(480000);   // ~10 s an edit on SwiftShader, plus boot
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.addInitScript(() => {
+      try { localStorage.setItem("apex26.gfxBackend", "three"); localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}
     });
-  };
-  let n = 0;
-  const edit = async () => {
-    n++;
-    await page.evaluate((i) => {
-      const inp = /** @type {HTMLInputElement} */ (document.querySelector('input[data-liv-field="c2"]'));
-      inp.value = "#" + (0x204060 + i * 0x0b0503).toString(16).slice(-6);   // a colour never seen before
-      inp.dispatchEvent(new Event("input", { bubbles: true }));
-      inp.dispatchEvent(new Event("change", { bubbles: true }));   // change flushes the 75 ms preview debounce
-    }, n);
-    await frames(page, 4);   // the car, its atlas and the bay repaint, and the hi-res swap's idle slot runs
-  };
-  for (let i = 0; i < WARM; i++) await edit();
-  await pause(page, 2500);   // past the garage's flap idle window (setup-camera.js FLAP_IDLE_MS)
-  await edit();
-  // Turntable flaps must exist before the leak baseline (menu warm can delay the first garage frame).
-  await page.waitForFunction(() => {
-    try {
-      const f = typeof CarMesh !== "undefined" && CarMesh.flapState && CarMesh.flapState();
-      return !!(f && f.sets > 0);
-    } catch (_) { return false; }
-  }, null, { polling: 100, timeout: 120000 });
-  const warm = await settleGeo(page, cdp, "warm");   // post-GC stable baseline (#2897)
-  const rows = [warm];
-  for (let i = 0; i < EDITS; i++) { await edit(); rows.push(await read()); }
-  await pause(page, 2500);
-  await edit();
-  const end = await settleGeo(page, cdp, "end");
-  rows.push(end);
-  test.info().annotations.push({ type: "churn", description: JSON.stringify(rows) });
-  expect(end.gpuTex - warm.gpuTex, `GPU textures created by ${EDITS + 1} edits after the warm-up (each edit used to make new ones): ${JSON.stringify(rows)}`).toBe(0);
-  expect(end.runs, `coalesced flap runs: ${rows.map((r) => r.runs).join(" → ")}`).toBeLessThanOrEqual(warm.runs);
-  expect(warm.flaps && warm.flaps.sets, "the turntable's wings come from the flap-set cache (CarMesh.flapState)").toBeGreaterThan(0);
-  expect(end.flaps.sets, `flap sets held: ${rows.map((r) => r.flaps.sets).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.sets);
-  expect(end.flaps.elements, `flap elements held: ${rows.map((r) => r.flaps.elements).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.elements);
-  expect(end.tex, `textures: ${rows.map((r) => r.tex).join(" → ")}`).toBeLessThanOrEqual(warm.tex);
-  // Sticky geos: track chunks + car shadows + tex geos. Bay rebuild mesh oscillates ~56↔71 and is not a leak meter.
-  const sticky = (r) => {
-    const k = r.geoKinds || {};
-    return (k.chunk || 0) + (k.carSh || 0) + (k.tex || 0);
-  };
-  expect(sticky(end), `sticky geo (chunk+carSh+tex): ${rows.map(sticky).join(" → ")} geoLive=${rows.map((r) => r.geoLive).join(" → ")} kinds=${JSON.stringify(end.geoKinds)}`).toBeLessThanOrEqual(sticky(warm));
+    await page.goto("/?three-devtools=1");   // TLX exposes window.renderer only behind this flag
+    await page.waitForFunction(() => window.__apex != null && typeof Teams !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => (typeof GLX !== "undefined" ? GLX.backend : null)), "this spec measures the shipped TLX backend").toBe("three");
+    // Same entry as livery-sidewall.spec.js: McLaren, no saved customs, START, CAR, LIVERY, create.
+    await page.evaluate(() => { const S = GameStore.store; S.set("team", 2); S.set("driver", 0); S.set("livery.custom." + Teams.LIST[2].id, []); });
+    await page.locator("#mb-race").click();
+    await page.locator("#select").waitFor({ state: "visible" });
+    // Land the menu/flyby track (Bahrain) before the garage — otherwise ensureScenery can
+    // finish after warm and step geoLive mid-edits (#2897 flake: warm=35, end=50).
+    await awaitMenuTrackBuilt(page);
+    await page.locator("#sel-car").click();
+    await page.locator("#carsetup").waitFor({ state: "visible" });
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+    await expect(page.locator('input[data-liv-field="c2"]')).toHaveCount(1);
+    // GPU textures three actually allocates (not render targets): the backend's own create/destroy.
+    await page.evaluate(() => {
+      const b = window.renderer.backend, C = window.__churn = { made: 0, destroyed: 0 };
+      const c = b.createTexture.bind(b), d = b.destroyTexture.bind(b);
+      // Each creation is logged (name, size, stack) so a failure names the texture it counted.
+      C.log = [];
+      b.createTexture = function (t, o) {
+        if (!t.isRenderTargetTexture && !t.isDepthTexture) {
+          C.made++;
+          const im = t.image || {};
+          C.log.push({ n: C.made, name: t.name, w: im.width, h: im.height,
+            stack: (new Error().stack || "").split("\n").slice(2, 10).map((l) => l.trim().replace(/https?:\/\/[^/]+\//, "")).join(" | ") });
+        }
+        return c(t, o);
+      };
+      b.destroyTexture = function (t, ...a) { if (!t.isRenderTargetTexture && !t.isDepthTexture) C.destroyed++; return d(t, ...a); };
+    });
+    const cdp = await page.context().newCDPSession(page);
+    const read = async () => {
+      for (let i = 0; i < 2; i++) await cdp.send("HeapProfiler.collectGarbage");   // the second pass collects what the first released
+      return page.evaluate(() => {
+        const r = window.renderer, co = GLX.__tlx.coState(), f = CarMesh.flapState ? CarMesh.flapState() : null;
+        const ms = GLX.__tlx.memState();
+        return {
+          gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures,
+          geoLive: ms.geoLive, geoKinds: ms.geoKinds, geoRegLen: ms.geoRegLen,
+        };
+      });
+    };
+    let n = 0;
+    const edit = async () => {
+      n++;
+      await page.evaluate((i) => {
+        const inp = /** @type {HTMLInputElement} */ (document.querySelector('input[data-liv-field="c2"]'));
+        inp.value = "#" + (0x204060 + i * 0x0b0503).toString(16).slice(-6);   // a colour never seen before
+        inp.dispatchEvent(new Event("input", { bubbles: true }));
+        inp.dispatchEvent(new Event("change", { bubbles: true }));   // change flushes the 75 ms preview debounce
+      }, n);
+      await frames(page, 4);   // the car, its atlas and the bay repaint, and the hi-res swap's idle slot runs
+    };
+    for (let i = 0; i < WARM; i++) await edit();
+    await pause(page, 2500);   // a pause between edits (the garage releases stale flaps the frame after each bust)
+    await edit();
+    // Turntable flaps must exist before the leak baseline (menu warm can delay the first garage frame).
+    await page.waitForFunction(() => {
+      try {
+        const f = typeof CarMesh !== "undefined" && CarMesh.flapState && CarMesh.flapState();
+        return !!(f && f.sets > 0);
+      } catch (_) { return false; }
+    }, null, { polling: 100, timeout: 120000 });
+    const warm = await settleGeo(page, cdp, "warm");   // post-GC stable baseline (#2897)
+    const rows = [warm];
+    for (let i = 0; i < EDITS; i++) { await edit(); rows.push(await read()); }
+    await pause(page, 2500);
+    await edit();
+    const end = await settleGeo(page, cdp, "end");
+    rows.push(end);
+    test.info().annotations.push({ type: "churn", description: JSON.stringify(rows) });
+    const made = await page.evaluate((w) => window.__churn.log.filter((e) => e.n > w), warm.gpuTex);
+    expect(end.gpuTex - warm.gpuTex, `GPU textures created by ${EDITS + 1} edits after the warm-up (each edit used to make new ones): ${JSON.stringify(rows)} created: ${JSON.stringify(made)}`).toBe(0);
+    expect(end.runs, `coalesced flap runs: ${rows.map((r) => r.runs).join(" → ")}`).toBeLessThanOrEqual(warm.runs);
+    expect(warm.flaps && warm.flaps.sets, "the turntable's wings come from the flap-set cache (CarMesh.flapState)").toBeGreaterThan(0);
+    expect(end.flaps.sets, `flap sets held: ${rows.map((r) => r.flaps.sets).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.sets);
+    expect(end.flaps.elements, `flap elements held: ${rows.map((r) => r.flaps.elements).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.elements);
+    expect(end.tex, `textures: ${rows.map((r) => r.tex).join(" → ")}`).toBeLessThanOrEqual(warm.tex);
+    // Sticky geos: track chunks + car shadows + tex geos. Bay rebuild mesh oscillates ~56↔71 and is not a leak meter.
+    const sticky = (r) => {
+      const k = r.geoKinds || {};
+      return (k.chunk || 0) + (k.carSh || 0) + (k.tex || 0);
+    };
+    expect(sticky(end), `sticky geo (chunk+carSh+tex): ${rows.map(sticky).join(" → ")} geoLive=${rows.map((r) => r.geoLive).join(" → ")} kinds=${JSON.stringify(end.geoKinds)}`).toBeLessThanOrEqual(sticky(warm));
+  });
 });
