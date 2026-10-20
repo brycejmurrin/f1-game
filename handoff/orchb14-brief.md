@@ -177,3 +177,17 @@ UPDATE FROM OrchB 20 session_015Sq1M8dE8o4DwBbh1NWdXE (06:02–06:11Z, FINAL —
   Codex sets #3151/#3172/set3/set4 stay separate (MERGE-HOLD). Game slot after INCIDENT lift: Fleet A #3078, then Bundle A, alternate.
 - Bryce mentioned the car-shape list "was also sent to train" — no session/bus line named train found; asked Bryce which session, no answer yet.
 - OrchB 20 deletes its pending tick at handoff. No PR subscriptions held.
+
+UPDATE FROM OrchB 21 session_013hpoGb4E43VwtFEZzAnTm4 (06:13–06:57Z, FINAL — read this LAST; supersedes everything above). Successor = OrchB 22.
+- CONTEXT: OrchB 21 hit 231k by 06:56Z (list_sessions / list_pull_requests dumps are huge — summarise them with python from the saved file, never read raw). Successor: read ONLY FIRST ACTS + MERGE + this note, bus --last 15; skip AskUserQuestion, post LIVE, message D1e + D3d only, tell Bryce. Hand off at 150k.
+- MERGED (by Bryce, 2 parents, bus DONE): #3174 HUD fix → 06c131b7 (INCIDENT e6f22d6 LIFTED by Bryce 'Lift now', bus 088355a; live apex-sha was 06c131b7); Bundle A #3173 → 9b2ec47d (carries #3118 d7e66080 + #3146 c1103113, both show merged). Tip 9b2ec47d: CI running 0 failed at 06:56Z; Pages pending — check `ci-watch --sha 9b2ec47d --pages --once`.
+- FLEET A HOLDS ALL GAME MERGES (Bryce 06:26Z 'cancel A and just do this work'; ORCH21 ack bus 23a4b28). Fleet A resumes (#3078 first) only when Bryce or OrchB releases it on the bus.
+- Bryce 06:56Z (AskUserQuestion): Bundle B SPLIT — 'Bodies now, wings next' (bus cf14404).
+  1. #3162 bodies ALONE (D1e session_01JEaL9gzXZKRUKbW5rtt6Qy): head 220f1a8c red only on hud-layout (pre-#3174 flake); trial merge onto 9b2ec47d CLEAN. D1e told: sync-pr --push onto tip, tooling-fast, run-ci, full tier, ready-gate, READY. NEXT GAME SLOT.
+  2. #3164 wings own PR (D3d session_012WRqok7xSepCrYJnAPgbDj): 783db141 CONFLICTS with tip in js/car/car3d.js (Bundle A DRS pod/slot rail on crownY, attached every wing — keep Bundle A's); full tier red: Structural guards tooling B (shard 2/2) + Selected specs garage-first-frame (run 39381962859); Flatline >=5% px still open. Merges after #3162.
+  3. L25 session_017HiHoXyqx8AZnUjy6WdL79 (Opus, launched 06:51Z): 7 post-Bundle-A fit rows (cadillac rwspoon/gearbox smooth/trumpet/hooded + wrap ring, racingbulls twinplane/beamtwin z-fight, alpine spoon); off car-body-geom.js; merges after #3162 (and #3164).
+  4. L24 session_01UCDAVRahCf1qqowKNHw6HR (Opus, launched 06:39Z): Bryce 'garage pretty laggy' — perf census of new body meshes + finishes vs pre-wave-1, ranked REPORT + phone Artifact, garage-side fix PR (no js/car/**; car patches proposed to OrchB for routing). Relay its REPORT/Artifact to Bryce.
+  5. Then Fleet B perf PRs #3120 #3099 #3122 #3123 #3128 #3126 (ready).
+- ARCHIVED by OrchB 21 (Bryce 'You archive the old ones'): HUD-TIME, D1c, D5c, D6b, D7b, D9b, D3c, D1d, OrchB 19, OrchB 20, L12, L21, L22. Still idle/kept: D2c, L13–L16, seed.
+- Open for Bryce: which session is 'train'; one naming scheme across body/aero drafts (D1d ask). MERGE-HOLD (Bryce's): codex #3151 #3172 #3175 + set 4 local, #3105, #3127, #3163, #3171.
+- OrchB 21 pending tick deleted at handoff. No PR subscriptions held.
