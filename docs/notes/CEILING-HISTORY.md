@@ -3614,3 +3614,14 @@ selected-mode help visible. These are intentional UI additions, not extra slack;
 records the measured sizes without folding another branch's fragment or changing
 the shared baseline. Native browser tests
 cover all three throttle modes and opening/closing the disclosure.
+
+## 2026-10-20 — design integration wave 2 (#3169)
+
+`js/car/car3d.js` lines 2548 → **2618** (+70). Deliberate raise past the 40-line absorb: wave 2
+merges six design lanes Bryce approved one by one, each under the absorb on its own branch, and the
+union crosses it. Net lines per lane in car3d.js: D6b rounded exhaust tip +20, D9b floor rail
+smoothing and vertical fence ends +17, D1c body styles via #3160 +23, D8b shrunk rounded nose camera
++16, D7b flush fuel hatch −7, D5c livery stations ±0 (its geometry lives in
+`js/car/livery-stations.js`). Extraction was weighed and not done here: each is a few lines of
+geometry inside `build`'s own emit closure, and a new car module needs a `tools/manifest.cjs` entry,
+which is a shared contract outside this integration PR's scope.
