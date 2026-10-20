@@ -6,7 +6,7 @@ const j = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const BASE = process.env.BASE || "factory";   // e.g. BASE=body:probe0 with BASE_JSON=<its audit json>
 if (process.env.BASE_JSON) j.cars.push(...JSON.parse(fs.readFileSync(process.env.BASE_JSON, "utf8")).cars.filter((c) => c.style === BASE));
 const TH = { GAP: 3, PENETRATION: 20, ZFIGHT: 1, OPEN: 50 }, NOISE = { GAP: 1, PENETRATION: 1, ZFIGHT: 0.5, OPEN: 10 };
-const key = (r) => `${r.check}|${r.a}|${r.b}`;
+const key = (r) => `${r.check}|${[r.a, r.b].sort().join("|")}`;   // unordered: the audit names a pair either way round
 const fac = {}; for (const c of j.cars) if (c.style === BASE) fac[c.team] = new Map(c.rows.filter((r) => r.fail).map((r) => [key(r), r]));
 const out = {};
 for (const c of j.cars) { if (c.style === BASE || c.style === "factory" || c.style.startsWith("body:probe")) continue;

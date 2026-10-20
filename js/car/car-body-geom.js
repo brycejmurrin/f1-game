@@ -21,7 +21,7 @@ const CarBodyGeom = (function () {
     const tip = CHASSIS.nose[0], mid = CHASSIS.nose[1], root = CHASSIS.nose[2];
     // Concept bodies (coverLift set): push the WHOLE cone in Z and scale mid/root
     // height hard so a side silhouette moves, not only a tip past the front wing.
-    const sil = Math.abs(s.coverLift || 0) > 1e-6;
+    const sil = Math.abs(s.coverLift || 0) > 1e-6 || !!s.fitSeat;   // fitSeat: a concept body with a flat cover
     const midSlim = 1 + (s.noseSlim - 1) * (sil ? 0.85 : 0.55);
     const midZ = mid.z + (s.noseTipZ || 0) * (sil ? 0.72 : 0.45);
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
@@ -1259,7 +1259,7 @@ const CarBodyGeom = (function () {
     // Concept bodies set coverLift ≠ 0: push inletH onto the pod TOP line so
     // tall/low inlets read in side view (DAD #2924: need ≥ SUBTLE_PCT in side).
     // TEAM_STYLE has no coverLift — keep the old mild shoulder coupling.
-    const sil = style && Math.abs(style.coverLift || 0) > 1e-6;
+    const sil = style && (Math.abs(style.coverLift || 0) > 1e-6 || !!style.fitSeat);
     const shoulderTop = 0.49 + 0.23 * (shoulder - 1) + inletH * (sil ? 0.95 : 0);
     const inletBias = style ? (style.inlet || 0) : 0;
     // THE UNDERCUT. The pod section is a quad from [inner, innerBottom] to
@@ -1311,7 +1311,16 @@ const CarBodyGeom = (function () {
         outerBottom: 0.134,
         innerTop: 0.30 + 0.05 * (shoulder - 1) + (sil ? inletH * 0.08 : 0),
         outerTop: 0.27 + (sil ? inletH * 0.05 : 0) },
-    ].map(clampPodStation);
+    ].map(podShaped(style && style.podShape)).map(clampPodStation);
+  }
+  // podShape (B·D1d concept bodies, opt-in; absent = shipped): per-station metre offsets on the
+  // seven pod stations, front to rear — top (both tops), out (outer half-width), bot (outer belly;
+  // + raises it = deeper undercut). The validity clamp below still runs after it.
+  function podShaped(ps) {
+    if (!ps) return (p) => p;
+    return (p, i) => Object.assign(p, {
+      innerTop: p.innerTop + (ps.top ? ps.top[i] : 0), outerTop: p.outerTop + (ps.top ? ps.top[i] : 0),
+      outer: p.outer + (ps.out ? ps.out[i] : 0), outerBottom: p.outerBottom + (ps.bot ? ps.bot[i] : 0) });
   }
   // Post-styling validity pass (#3111). The style offsets are raw metres and
   // BODY_STYLES carries 4-10x the TEAM_STYLE ranges, so on a narrow or low-
