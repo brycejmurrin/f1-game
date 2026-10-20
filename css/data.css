@@ -181,7 +181,8 @@ body[data-density="compact"] .dh-card .sheet-head h2 { font-size: var(--fs-4); }
 body[data-density="compact"] .dh-close {
   width: var(--tap-paint); height: var(--tap-paint); min-height: var(--tap-paint);
 }
-body[data-density="compact"] .dh-tabs { gap: var(--gap); padding: 0 var(--gap); }
+/* Trim space between destinations before sacrificing any touch-target height. */
+body[data-density="compact"] .dh-tabs { gap: calc(var(--gap) * 0.5); padding: 0 var(--gap); }
 body[data-density="compact"] .dh-tab {
   min-height: var(--tap-paint); padding: 0 var(--gap); font-size: var(--fs-micro);
   /* A one-word tab is a square at least: LIVE measured 48x52 at UI SIZE 100 %
@@ -344,6 +345,10 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
    ~4.1–4.4:1 on --panel composites). --dim (#9a9aa8) clears 4.5:1 — same
    migration as --steel (steel-role.test.mjs). */
 .dh-footnote { margin-top: calc(var(--gap) * 4 / 3); padding-top: calc(var(--gap) * 2 / 3); border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: var(--dim); text-align: right; }
+body[data-density="compact"] .dh-footnote {
+  margin-top: calc(var(--gap) / 3);
+  padding-top: calc(var(--gap) / 3);
+}
 
 /* schedule */
 [data-nextgp="tile"] {
@@ -362,9 +367,11 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
   grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: calc(var(--gap) / 3); margin-top: calc(var(--gap) * 0.5);
 }
-[data-nextgp="session"] { display: flex; flex-direction: column; gap: calc(var(--gap) / 6); padding-top: calc(var(--gap) / 3); border-top: 1px solid var(--plate-line); }
+[data-nextgp="session"] { display: flex; flex-direction: column; min-width: 0; gap: calc(var(--gap) / 6); padding-top: calc(var(--gap) / 3); border-top: 1px solid var(--plate-line); }
 [data-nextgp="session-label"] { color: var(--steel); font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3); }
-[data-nextgp="session-time"] { color: var(--text); font-size: var(--fs-1); white-space: nowrap; }
+/* Localized date/time + timezone can exceed a five-column phone cell. Wrap
+   within that session instead of painting across the next session's time. */
+[data-nextgp="session-time"] { color: var(--text); font-size: var(--fs-1); white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
 body[data-width="narrow"] [data-nextgp="tile"] { grid-template-columns: 1fr; }
 body[data-width="narrow"] [data-nextgp="countdown"] { grid-column: 1; grid-row: auto; }
 

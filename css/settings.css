@@ -61,7 +61,17 @@
 #pm-files-save[hidden], #pm-files-restore[hidden], #pm-files-share[hidden] { display: none; }
 #pm-share-code-in { width: 100%; min-width: 0; box-sizing: border-box; }
 #pm-throttle-compare, #pm-files-included { min-width: 0; }
-#pm-throttle-compare > summary, #pm-files-included > summary { min-height: var(--tap); display: list-item; cursor: pointer; padding-block: 0.5em; box-sizing: border-box; }
+/* Settings disclosures already draw their state with ::before. Suppress the
+   native marker so closed folds do not show two conflicting arrows. */
+#pm-throttle-compare > summary, #pm-files-included > summary { min-height: var(--tap); display: block; list-style: none; cursor: pointer; padding-block: 0.5em; box-sizing: border-box; }
+#pm-throttle-compare > summary::-webkit-details-marker,
+#pm-files-included > summary::-webkit-details-marker { display: none; }
+/* Reserve the label's text width before fitting the control cluster. The
+   shared 5rem basis lets RESOLUTION paint over its previous-value button. */
+#pm-panel-graphics .set-row > .tune-label {
+  flex-basis: max-content;
+  overflow-wrap: anywhere;
+}
 /* Every interactive settings row is exactly --tap tall. The label overlays
    the top of the track (pointer-events: none) so the grab target stays the
    full row. */
