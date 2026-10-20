@@ -681,7 +681,7 @@ const Parts = (function () {
       { upright: 0.8, antiDive: 0.8 }],
     // B·D3 period aero (2026-10-19): one opt-in mesh field each (rwSpoon, beam2,
     // fwBridge, ddiff) on top of the equivalent's full recipe. monkey / xwing
-    // (registered below) get their rows in a later fit pass.
+    // (car3d.js) get their rows and registry keys in a later fit pass.
     ["aero", "low", "style_aero_rwspoon", "F1-75 Spoon", "2022 spoon rear wing (Ferrari F1-75, RB18 low-drag)",
       {rwSpoon: 1, lvl: 1, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.03, frontTaper: 0.96, frontRise: 0.02, rearSweep: 0.04, rearTaper: 0.94, floorEdge: 0.88, floorCut: 0.06, diffuserRise: 0.82, fin: 0.8}],
     ["aero", "high", "style_aero_beamtwin", "Twin Beam Wing", "2022-25 two-element beam wing (RB19)",
@@ -712,13 +712,13 @@ const Parts = (function () {
     geometry: Object.freeze({
       engine: Object.freeze(["in", "snork", "twin", "inlet", "outlet",
         "podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight",
-        "servicePanel", "heatShield", "chimney", "scoopLip", "louvre"]),
+        "servicePanel", "heatShield", "chimney", "scoopLip"]),
       aero: Object.freeze(["lvl", "beam", "drs", "vane", "plate", "casc", "swan", "tvane",
         "arch", "gill", "duct", "board", "slot",
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin",
         // B·D3 period aero opt-in fields: absent = shipped mesh.
-        "rwSpoon", "beam2", "monkey", "fwBridge", "xwing"]),
+        "rwSpoon", "beam2", "fwBridge"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
         "pullAt", "antiDive", "upright"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),
