@@ -16,6 +16,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { auditMesh } from "../../tools/car/car-fit-audit.mjs";
 
 const M = loadParts();
 const { Car3D, Parts, Teams } = M;
@@ -225,13 +226,13 @@ test("Blender bodies emit short broad noses with a curved descending crown", () 
   }
 });
 
-test("Blender spine skins are closed, consistently wound and sampled by their anchors", () => {
+test("Blender nose and spine skins are closed, consistently wound and sampled by their anchors", () => {
   for (const round of [false, true]) {
     const X = round ? Shaded : Car3D;
     for (const bodyStyle of BLENDER_BODIES) {
       const m = X.build(team.color, team.color2, { noWheels: true, measure: true, smooth: round, teamId: team.id, livery: { bodyStyle } });
-      const range = m.coverSkin;
-      assert.ok(range && range.to > range.from, `${bodyStyle}: no emitted cover skin`);
+      for (const [skin, range] of [["cover", m.coverSkin], ["nose", m.noseSkin]]) {
+      assert.ok(range && range.to > range.from, `${bodyStyle}: no emitted ${skin} skin`);
       const edges = new Map(), zs = new Set(); let volume6 = 0, count = 0;
       const key = (p) => p.map((x) => Math.round(x * 1e8)).join(",");
       for (let i = 0; i < m.idx.length; i += 3) {
@@ -248,14 +249,39 @@ test("Blender spine skins are closed, consistently wound and sampled by their an
         }
       }
       assert.equal(zs.size, 9, `${bodyStyle}/${round}: longitudinal curve missing`);
-      assert.equal(count, 284, `${bodyStyle}/${round}: unexpected skin cost`);
+      if (skin === "cover") assert.equal(count, 284, `${bodyStyle}/${round}: unexpected cover cost`);
+      else assert.ok(count >= 68 && count <= 300, `${bodyStyle}/${round}: unexpected nose cost ${count}`);
       assert.ok(volume6 > 0, `${bodyStyle}/${round}: inward skin`);
       assert.ok([...edges.values()].every((e) => e.count === 2 && e.direction === 0), `${bodyStyle}/${round}: open or inconsistent skin`);
       const anchors = X.bodyAnchors(null, bodyStyle, undefined, round);
-      for (const z of [-0.73125,-1.09375,-1.45625,-1.81875]) {
+      if (skin === "cover") for (const z of [...zs].sort((a,b) => b-a).filter((_,i) => i%2 === 1).map(z => z/1e8)) {
         const actual = Math.max(...verticalHits(m, range, 0, z));
         assert.ok(Math.abs(actual - anchors.coverAt(z).top) < 1e-8, `${bodyStyle}/${round}: roof datum detached`);
       }
+      }
     }
   }
+});
+
+test("thin study pods keep the accent flash above the sponsor board", () => {
+  const accent = [0.123,0.456,0.789];
+  for (const bodyStyle of BLENDER_BODIES) {
+    const m = Car3D.build(team.color,team.color2,{noWheels:true,measure:true,livery:{bodyStyle,accent}});
+    const sec = m.parts.find(p=>p.name==="livery"), a = Car3D.bodyAnchors(null,bodyStyle);
+    let count = 0;
+    for (let v=sec.from;v<sec.to;v++) {
+      const i=v*3,[x,y,z]=m.pos.slice(i,i+3);
+      if (Math.abs(x)<0.35 || z<-.026 || z>.426 || !accent.every((c,k)=>Math.abs(c-m.col[i+k])<1e-8)) continue;
+      const p=a.podAt(z);count++;
+      assert.ok(y>=p.bottom+(p.top-p.bottom)*.82,`${bodyStyle}: flash overlaps sponsor band`);
+    }
+    assert.ok(count>0,`${bodyStyle}: flash missing`);
+  }
+});
+
+test("the short Rovik nose retains seated wing mounts", () => {
+  const t=Teams.LIST.find(t=>t.id==="mercedes"), parts=Parts.getVisualTiers(Parts.getFactorySetup(t),t);
+  const m=Car3D.buildComplete([.8,.1,.1],[.1,.2,.85],{teamId:t.id,num:44,parts,measure:true,livery:{bodyStyle:"rovik"}});
+  const {rows}=auditMesh(m,["GAP","PENETRATION"]);
+  assert.deepEqual(rows.filter(r=>r.fail && r.a==="frontWing" && ["chassis","aeroFlaps"].includes(r.b)),[],"Main wing must connect without excessive nose penetration");
 });

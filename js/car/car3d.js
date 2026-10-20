@@ -172,7 +172,7 @@ const Car3D = (function () {
     geometry, shadeFlags,
   });
   const {
-    styledNoseStations, bodySpan, haloHoopPath,
+    styledNoseStations, noseFlankX, bodySpan, haloHoopPath,
     endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
     noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
     buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard,
@@ -303,7 +303,7 @@ const Car3D = (function () {
     shadeFlags.round = shade;
     const bodySplitFrom = out.pos.length / 3;
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
-    buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt, floorEdgeAt);
+    buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt, floorEdgeAt, opts && opts.measure);
 
     part("hood");
     // Driver-eye deck and shoulders (official F1 / Sky visor cams).
@@ -592,7 +592,12 @@ const Car3D = (function () {
         // No wider than the flat crown, or its edges hang over the shoulders,
         // and no taller than COVER_STACK.shield — the livery drape goes over it.
         const sh = 0.014;
-        addBox(out, 0, p.top + COVER_STACK.shield - sh / 2, -1.58,
+        if (anchors.curvedCover) {
+          const at = (z) => { const c = anchors.coverAt(z), q = coverProfile(c).pts;
+            return { z, y: c.top + COVER_STACK.shield - sh / 2,
+              w: Math.min(0.18 * engStyle.heatShield, 1.9 * q[q.length - 1][0]), h: sh }; };
+          addSpan(out, at(-1.43), at(-1.73), [0.30,0.28,0.26], null, SURFACES.metal);
+        } else addBox(out, 0, p.top + COVER_STACK.shield - sh / 2, -1.58,
           Math.min(0.18 * engStyle.heatShield, 1.9 * COVER_CROWN * p.x),
           sh, 0.30, [0.30,0.28,0.26], SURFACES.metal);
       }
@@ -1058,7 +1063,16 @@ const Car3D = (function () {
 
     for (const s of [-1, 1]) {
       const nf = anchors.noseAt(styledTipZ - 0.12), nr = anchors.noseAt(2.025);
-      addSpan(out,
+      if (teamStyle.noseCurve) {
+        // A broad curved flank needs short, seated paint strips rather than
+        // a chord hung off its maximum bottom width.
+        const n = Math.ceil((nf.z - nr.z) / 0.10), at = (z) => {
+          const p = anchors.noseAt(z), x = noseFlankX(p, (p.bottom + p.top) / 2, shadeFlags.round);
+          return { z, x: s * (x + 0.002), y: (p.bottom + p.top) / 2, w: 0.008, h: 0.018 };
+        };
+        for (let i = 0; i < n; i++) addSpan(out,
+          at(nr.z + (nf.z - nr.z) * i / n), at(nr.z + (nf.z - nr.z) * (i + 1) / n), accentC);
+      } else addSpan(out,
         { z: nf.z, x: s*(nf.side + 0.006), y: (nf.bottom + nf.top) * 0.5, w: 0.012, h: 0.040 },
         { z: nr.z, x: s*(nr.side + 0.006), y: (nr.bottom + nr.top) * 0.5, w: 0.012, h: 0.040 },
         accentC);
@@ -1081,13 +1095,15 @@ const Car3D = (function () {
       const drlC = [2.4, 2.4, 2.7];
       for (const s of [-1, 1]) {
         const n = anchors.noseAt(styledTipZ - 0.14);
-        addBox(out, s * (n.side + 0.005), n.bottom + (n.top - n.bottom) * 0.42, n.z,
+        const y = n.bottom + (n.top - n.bottom) * 0.42;
+        const x = teamStyle.noseCurve ? noseFlankX(n, y, shadeFlags.round) + 0.003 : n.side + 0.005;
+        addBox(out, s * x, y, n.z,
                0.014, 0.026, 0.028, drlC, SURFACES.glass);
       }
       const drlBar = anchors.noseAt(styledTipZ - 0.05);
       addBox(out, 0, drlBar.top + 0.005, drlBar.z, 0.13, 0.010, 0.020, drlC, SURFACES.glass);
     }
-    if (!ckpt) zone("sidepods", () => addPodFlankSpan(0.425, -0.025, 0.88, 0.035, accentC, SURFACES.paint, 0.012));
+    if (!ckpt) zone("sidepods", () => addPodFlankSpan(0.425, -0.025, 0.88, teamStyle.noseCurve ? 0.10 : 0.035, accentC, SURFACES.paint, 0.012, !!teamStyle.noseCurve));
 
     const stripeC = _ckAcc(liv.stripe) || null;   // monocoque crest runs z 0.05..1.05 — right under the eye
     const stripeTipZ = styledTipZ - 0.04;
@@ -1769,16 +1785,22 @@ const Car3D = (function () {
     const fwHalf = frontHalf(aLvl);               // half-span (endplate sits just outside)
     const fwElems = frontCascade(aLvl);
     const fwBaked = frontBakedCount(aLvl);
+    const fwMounts = [];
     for (let i = 0; i < fwBaked; i++) {
       const e = fwElems[i], half = fwHalf * e[4], extra = wingFoilOf(ws, i);
-      addWingFoil(out, {
+      const spec = {
         zLead: e[0], yLead: e[1], zTrail: e[2], yTrail: e[3],
         half, thick: e[5], taper: frontTaper,
         sweep: frontSweep * (0.75 + i * 0.10),
         rise: frontRise * (0.65 + i * 0.12) + extra.tipRise,
         attachHalf: fwHalf + 0.03,
         twist: extra.twist, teCurve: extra.teCurve, chordTaper: extra.chordTaper,
-      }, i === 0 ? c1 : wingCol, i === 0 ? SURFACES.paint : wingSurf);
+      };
+      addWingFoil(out, spec, i === 0 ? c1 : wingCol, i === 0 ? SURFACES.paint : wingSurf);
+      if (i === 0 && teamStyle.noseCurve) for (const s of [-1, 1]) {
+        const p = foilAt(spec, s * 0.09, 0.55);
+        fwMounts.push([p.x, p.y + p.h - 0.004, p.z]);
+      }
     }
     const aPlate = Math.max(0, Math.min(3, Math.round(
       aeroStyle.plate != null ? aeroStyle.plate : 1)));
@@ -1861,7 +1883,7 @@ const Car3D = (function () {
       }
       // Canard / dive-plane: first element is a horizontal strake on the
       // outer face (the 2026 flick); extras stay as the older cascade vanes.
-      const nCan = Math.max(aCasc, ws.canard || 0);
+      const nCan = ws.clean ? 0 : Math.max(aCasc, ws.canard || 0);
       for (let i = 0; i < nCan; i++) {
         if (i === 0) {
           addBeveledSpan(out,
@@ -1883,11 +1905,12 @@ const Car3D = (function () {
       // 0.275 top buried 33-43 mm of arm in the cone. A short arm leans its 16 cm chord,
       // so its top rides ~40 mm over the end point: end 25 mm under the skin, top ~15 mm in.
       const armNose = (teamStyle.noseDroop || 0) > 0.06 || teamStyle.fitSeat ? anchors.noseAt(2.40) : null;
-      const armLow = !!(teamStyle.fitSeat && armNose.bottom < 0.195);
-      const armOff = armLow ? -0.025 : (teamStyle.noseDroop || 0) > 0.06 ? 0.045 : null;
+      const armLow = !!(teamStyle.fitSeat && (armNose.bottom < 0.195 || teamStyle.noseCurve));
+      const armOff = teamStyle.noseCurve ? -0.020 : armLow ? -0.025 : (teamStyle.noseDroop || 0) > 0.06 ? 0.045 : null;
       const armX = armOff != null ? Math.min(0.09, armNose.side - 0.03) : 0.09, armY = armOff != null ? armNose.bottom + armOff : 0.275;
-      if (shadeFlags.round) CarShade.strut(out, [s*0.09, 0.085, 2.54], [s*armX, armY, 2.40], 0.16, 0.040, c1, addTri, null, { n: 10, taper: 0.72 });
-      else addFairedArm(out, [s*armX, armY, 2.40], [s*0.09, 0.085, 2.54], 0.040, c1, SURFACES.paint);
+      const foot = teamStyle.noseCurve ? fwMounts[s < 0 ? 0 : 1] : [s*0.09, 0.085, 2.54];
+      if (shadeFlags.round) CarShade.strut(out, foot, [s*armX, armY, 2.40], 0.16, 0.040, c1, addTri, null, { n: 10, taper: 0.72 });
+      else addFairedArm(out, [s*armX, armY, 2.40], foot, 0.040, c1, SURFACES.paint);
     }
 
     // fwBridge (opt-in): the 2008 BRIDGE WING (McLaren MP4-23, Renault R28):

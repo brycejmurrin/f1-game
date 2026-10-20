@@ -53,13 +53,37 @@ const CarBodyGeom = (function () {
     const topR = root.y + root.h / 2, bottomR = root.y - root.h / 2;
     const topT = tip.y + s.noseDroop + tip.h / 2;
     const bottomT = Math.max(tip.y + s.noseDroop - tip.h / 2, bottomR + 0.030);
-    return Array.from({ length: 9 }, (_, i) => {
+    return Object.assign(Array.from({ length: 9 }, (_, i) => {
       const f = 1 - i / 8, top = topR + (topT - topR) * Math.pow(f, s.noseCurve);
       const bottom = bottomR + (bottomT - bottomR) * f;
       return { z: root.z + (zTip - root.z) * f, y: (top + bottom) / 2,
         w: wTip + (root.w - wTip) * Math.pow(1 - f, 0.75),
         h: top - bottom, t: root.t + (tip.t - root.t) * f };
-    });
+    }), { curve: true });
+  }
+
+  // Continuous closed skin; interior stations carry no overlapping caps.
+  function closedSkin(out, rings, col) {
+    for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < rings[i].length; j++) {
+      const k = (j + 1) % rings[i].length, a = rings[i][j], b = rings[i][k];
+      const c = rings[i + 1][j], d = rings[i + 1][k];
+      addTri(out, a, c, b, col); addTri(out, b, c, d, col);
+    }
+    for (const [ring, reverse] of [[rings[0], false], [rings[rings.length - 1], true]])
+      for (let j = 1; j < ring.length - 1; j++)
+        addTri(out, ring[0], ring[reverse ? j + 1 : j], ring[reverse ? j : j + 1], col);
+  }
+  function noseFlankX(p, y, round) {
+    if (!round) return p.side + (p.topSide - p.side) * Math.max(0, Math.min(1, (y - p.bottom) / (p.top - p.bottom)));
+    const ring = CarShade.ring({ z: p.z, y: (p.top + p.bottom) / 2,
+      h: p.top - p.bottom, w: p.side * 2, t: p.topSide / p.side }, 16);
+    let x = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      if ((y - a[1]) * (y - b[1]) <= 0 && Math.abs(b[1] - a[1]) > 1e-9)
+        x = Math.max(x, a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]));
+    }
+    return x;
   }
   // A concept nose (#3111) keeps its tip and mid, the stations that carry its
   // silhouette, under two seams the old recipe broke:
@@ -1117,12 +1141,19 @@ const CarBodyGeom = (function () {
   // and method: docs/notes/OCCLUSION-PROBE.md §4. The cockpit span (z 0.05..-0.55) is
 
   const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.32, w: 0.552, h: 0.16, t: 0.752 });
-  function buildSharedChassis(out, c1, rideDY, noseStations, ckpt, edgeAt) {
+  function buildSharedChassis(out, c1, rideDY, noseStations, ckpt, edgeAt, measure) {
     const floor = CHASSIS.floor;
     if (shadeFlags.round) CarShade.floor(out, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
     const nose = noseStations || CHASSIS.nose;
-    for (let i = 0; i < nose.length - 1; i++) bodySpan(out, nose[i], nose[i + 1], c1, i ? 0.028 : 0.022);
+    if (nose.curve) {
+      const from = out.pos.length / 3;
+      closedSkin(out, nose.map((p) => shadeFlags.round ? CarShade.ring(p, 16) : [
+        [p.w / 2, p.y - p.h / 2, p.z], [p.w * p.t / 2, p.y + p.h / 2, p.z],
+        [-p.w * p.t / 2, p.y + p.h / 2, p.z], [-p.w / 2, p.y - p.h / 2, p.z],
+      ]), c1);
+      if (measure) out.noseSkin = { from, to: out.pos.length / 3 };
+    } else for (let i = 0; i < nose.length - 1; i++) bodySpan(out, nose[i], nose[i + 1], c1, i ? 0.028 : 0.022);
     const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];
     // COCKPIT: this span is the tub the driver sits IN — the deck under the
     // wheel and the rear wall above it, 0.65 m from the eye. In body paint it
@@ -1667,7 +1698,7 @@ const CarBodyGeom = (function () {
     // y - h/2 is unchanged). The two must agree or the crest decal floats.
     const front = { z: -0.55, y: 0.52 + 0.08 * (coverHeight - 1) + rise / 2,
                     w: 0.56 * eng.tailWidth, h: 0.62 * coverHeight + rise, t: 0.72 };
-    const rear = { z: -2.00, y: 0.42 + rise * SPINE_TAIL / 2, w: 0.26 * eng.tailWidth,
+    const rear = { z: anchors.curvedCover ? -1.96 : -2.00, y: 0.42 + rise * SPINE_TAIL / 2, w: 0.26 * eng.tailWidth,
                    h: 0.34 * coverHeight + rise * SPINE_TAIL, t: 0.70 };
     // The loft is three stacked blocks over coverProfile — flank, lower facet,
     // upper facet + crown — at the two anchor stations (the same numbers as
@@ -1686,14 +1717,7 @@ const CarBodyGeom = (function () {
         const p = coverProfile(anchors.coverAt(z)).pts;
         return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
       });
-      for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < rings[i].length; j++) {
-        const k = (j + 1) % rings[i].length, a = rings[i][j], b = rings[i][k];
-        const c = rings[i + 1][j], d = rings[i + 1][k];
-        addTri(out, a, c, b, c1); addTri(out, b, c, d, c1);
-      }
-      for (const [ring, reverse] of [[rings[0], false], [rings[rings.length - 1], true]])
-        for (let j = 1; j < ring.length - 1; j++)
-          addTri(out, ring[0], ring[reverse ? j + 1 : j], ring[reverse ? j : j + 1], c1);
+      closedSkin(out, rings, c1);
     } else if (shadeFlags.round) {
       CarShade.coverLoft(out, anchors, shadeFlags.coverHi ? ((c) => coverProfile(c, true)) : loftKeys,
         front.z, rear.z, c1, addTri);
@@ -1732,7 +1756,7 @@ const CarBodyGeom = (function () {
   }
 
     return {
-      styledNoseStations, bodySpan, haloHoopPath,
+      styledNoseStations, noseFlankX, bodySpan, haloHoopPath,
       endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
       noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
       buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard,
