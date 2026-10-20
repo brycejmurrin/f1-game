@@ -139,6 +139,8 @@ def cmd_html():
         head = '<div class="r4g"><span></span>' + "".join(f'<span class="r4h">{a}</span>' for _, a in ANGLES)
         rows = ""
         for t, tl in TEAMS:
+            if not any(os.path.exists(jpg_path(light, key, t, a)) for a, _ in ANGLES):
+                continue   # a row not shot in this light (garage: no Haas row)
             rows += f'<span class="r4h r4row">{tl}</span>' + "".join(
                 img(light, key, t, a, f"{name} · {tl} · {al} · {light}") for a, al in ANGLES)
         return head + rows + "</div>"
@@ -176,8 +178,8 @@ def cmd_html():
                    'detail such as grain, weave and glints does show.</div>')
     sec = f"""<!-- R4 -->
   <section id="r4">
-    <h2>Round 4 · close-up matrix <small>{shot} of {total} cells shot · 1600×900 · TLX</small></h2>
-    <p class="note">Every kept finish, close up, on three paint colours (Williams navy, Ferrari red, Haas white) from three angles: straight side-on, a 45° grazing angle low to the ground, and a high angle where the sun (or the garage lamp) reflects off the top panels. Each still shows how much of the car changed against plain gloss on the same car, angle and light, so a finish that looks like gloss shows a low number. Tap any still to zoom to full size.</p>
+    <h2>Round 4 · close-up matrix <small>{shot} cells · 1600×900 · TLX</small></h2>
+    <p class="note">Every kept finish, close up, on three paint colours (Williams navy, Ferrari red, Haas white) from three angles: straight side-on, a 45° grazing angle low to the ground, and a high angle where the sun (or the garage lamp) reflects off the top panels. Each still shows how much of the car changed against plain gloss on the same car, angle and light, so a finish that looks like gloss shows a low number. Tap any still to zoom to full size. The garage column covers the Williams and Ferrari cars only: the Haas row was left out to stay inside the 400-shot budget (Bryce, 2026-10-20). In the garage, the percentage is measured over the paint area of those cars.</p>
     <style>
       .r4card h4 {{ font: 600 16px var(--display); text-transform: uppercase; margin: 6px 0 0; color: var(--mute); }}
       .r4g {{ display: grid; grid-template-columns: 7.5em repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; }}
