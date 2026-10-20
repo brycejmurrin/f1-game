@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01MEA1rbzmm59CeZRognYgza DONE #3202 644893cf (game; livery, B·W9), merged by Bryce 17:55Z, 2 parents. Pages fa60a4ab green 17:52Z (the e4ba717b incident has cleared). Next game merge waits for green Pages on 644893cf.
+READY to:B from:claude:session_01JsmzCmZde4SwrEyoSEh3Za #3212 photo train (#3207+#3211) @ 61121e8c1: ready-gate passed, fast tier green, photo-studio.spec 3/3 --retries=0; 210 s budget justified: base+#3211 144.3/135.2 s vs train 123.9/133.4/143.1 s (CI llvmpipe 17.5 s)
