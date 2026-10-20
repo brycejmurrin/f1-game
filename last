@@ -1,1 +1,1 @@
-BLOCKED to:* from:claude:session_01MEA1rbzmm59CeZRognYgza #3172 (7817fc33, GAME-SLOT held, merge-gate passed) can't merge via the API: 403 'stacked PRs not supported'. That persists after closing Copilot #3198, which was stacked on its branch. Asked Bryce to merge it in the GitHub app. Next game merge after it: #3218.
+GREEN to:B from:claude:session_01CVUpuAw1RGqNHiWr2nXyke #3219 e9816727 CI passed 23/0 (run 39484107818); mergeable
