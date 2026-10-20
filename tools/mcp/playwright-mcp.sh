@@ -80,6 +80,22 @@ cmd_run() {
   local exe=""
   exe="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
   [[ -z "$exe" ]] && echo "playwright-mcp: no repo-discovered Chromium; the package's pinned build may be absent" >&2
+  # Opt-ins, read once at server start (measured 2026-10-19,
+  # docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md):
+  #   APEX_PW_CDP=http://127.0.0.1:9222  attach to tools/mcp/debug-chrome.sh's
+  #     browser instead of launching one, so js-debugger / browser-use share it.
+  #   APEX_PW_DEVICE="iPhone 15"  a Playwright device descriptor: hasTouch, UA
+  #     and DPR on the context. Without it browser_resize is viewport-only,
+  #     page.touchscreen throws ("hasTouch must be enabled") and GLX.isMobile
+  #     stays false (the mobile tier is UA-driven).
+  local extra=()
+  [[ -n "${APEX_PW_DEVICE:-}" ]] && extra+=(--device "$APEX_PW_DEVICE")
+  if [[ -n "${APEX_PW_CDP:-}" ]]; then
+    exec npx --yes "$MCP_NPM_PACKAGE" \
+      --cdp-endpoint "$APEX_PW_CDP" \
+      --output-dir "$OUTDIR" \
+      "${extra[@]}" "$@"
+  fi
   exec npx --yes "$MCP_NPM_PACKAGE" \
     --isolated \
     --headless \
@@ -87,7 +103,7 @@ cmd_run() {
     ${exe:+--executable-path "$exe"} \
     --no-sandbox \
     --output-dir "$OUTDIR" \
-    "$@"
+    "${extra[@]}" "$@"
 }
 
 cmd_play() {
