@@ -174,6 +174,16 @@ test("Paused race photo keeps controls reachable at 200% and isolates panel scro
   for (const [name, viewport] of [["race-landscape-200", LANDSCAPE], ["race-portrait-200", PORTRAIT]]) {
     await page.setViewportSize(viewport);
     await present(page);
+    // SheetShape caps the sheet's scale (--sheet-scale, data-fit="on") a few
+    // frames after the viewport/scale change — seconds under software GL. Until
+    // it lands the panel is laid out at the uncapped 200% (432 px painted in a
+    // 393 px viewport, CAPTURE at y370-435). Settled geometry is what a player
+    // sees, so wait for the fit before asserting reachability.
+    await expect(page.locator("#ps-panel")).toHaveAttribute("data-fit", "on", { timeout: 30000 });
+    await expect.poll(() => page.evaluate(() => {
+      const r = CssZoom.viewportRect(document.getElementById("ps-capture"));
+      return r.y >= -0.5 && r.y + r.height <= innerHeight + 0.5;
+    }), { timeout: 30000 }).toBe(true);
     await controls(page, ["ps-capture", "ps-close", "pc-move", "pc-look", "pc-up", "pc-down"]);
     await expect(page.locator("#pausemenu")).toBeHidden();
     await expect(page.locator("#rotate-device")).toBeHidden();
