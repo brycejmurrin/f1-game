@@ -13,6 +13,20 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  foldCallEvent,
+  groupCalls,
+  parseRun,
+  redact,
+  squash,
+  argsSummary,
+  resultBody,
+  renderLines,
+  summaryLine,
+  findCall,
+  jsonRows,
+  errorStreak,
+} from "../../tools/lib/cursor-transcript.mjs";
+import {
   parseSse,
   digestRun,
   mergeDigests,
@@ -34,6 +48,9 @@ import {
   buildEnvVars,
   maskBody,
   interpolate,
+  loadRuns,
+  transcript,
+  transcriptCall,
   clock,
   retryAfterMs,
   listAgents,
@@ -55,7 +72,8 @@ test("parseSse keeps typed rows and skips a partial one", () => {
 });
 
 test("digestRun counts edit echo, repeat reads, discovery dups and terminal classes", () => {
-  const call = (name, args, result) => ["tool_call", { name, args, result, callId: "c", status: "ok" }];
+  let callN = 0; // real streams give every call its own callId
+  const call = (name, args, result) => ["tool_call", { name, args, result, callId: `c${++callN}`, status: "completed" }];
   const rows = parseSse(
     sse([
       call("edit_file", { path: "a.js", streamContent: "x" }, { success: { beforeFullFileContent: "a".repeat(100), afterFullFileContent: "b".repeat(120) } }),
@@ -470,7 +488,7 @@ test("errorHead groups tool failures by tool and masks ids and paths; success is
   const mcp = { success: { content: [{ text: { text: JSON.stringify({ ok: false, error: "endpoint is required: pass endpoint" }) } }] } };
   assert.equal(errorHead("mcp", mcp), "mcp: ok:false endpoint is required: pass endpoint");
   assert.equal(errorHead("mcp", { success: { content: [{ text: { text: JSON.stringify({ ok: true }) } }] } }), null);
-  const masked = errorHead("read_file", { error: { message: "no file /workspace/js/a.js run-3d266b1c-15ea-4cd7-a549-b64a34435823" } });
+  const masked = errorHead("read_file", { error: { message: "no file /workspace/a.js run-3d266b1c-15ea-4cd7-a549-b64a34435823" } });
   assert.equal(masked, "read_file: no file <path> run-<uuid>");
   assert.ok(errorHead("x", { error: { message: "y".repeat(500) } }).length <= 94);
 });
@@ -712,6 +730,209 @@ test("launch with envVars resolves a dropped connection (a thrown fetch) by name
     };
     await assert.rejects(launchAgent({ prompt: "dropped", name, envVars: { A: "1" } }, { file: tmpAllow() }), /fetch failed/);
   } finally {
+    after();
+  }
+});
+
+// ---- transcript reading: one call = several events, modes, masking, cache and retention ---------------------------------
+
+const RUN1 = "run-aaaaaaaa-0000-4000-8000-0000000000a1";
+const RUN2 = "run-bbbbbbbb-0000-4000-8000-0000000000b2";
+const GROK = `grok_${"a1".repeat(16)}_${"b2".repeat(32)}`;
+const mcpText = (o) => ({ success: { content: [{ text: { text: JSON.stringify(o) } }] } });
+const FIX = [
+  ["status", { status: "RUNNING" }],
+  ["assistant", { text: "Looking " }],
+  ["assistant", { text: "at the files." }],
+  ["thinking", { text: "hmm" }],
+  // t1: starts as an `mcp` placeholder with empty args, becomes `task`, completes (the real stream does this)
+  ["tool_call", { callId: "t1-aaaa", name: "mcp", status: "running", args: {} }],
+  ["tool_call", { callId: "t1-aaaa", name: "task", status: "running", args: { description: "probe", prompt: "p", environment: "SUBAGENT_EXECUTION_ENVIRONMENT_CLOUD" } }],
+  ["tool_call", { callId: "t1-aaaa", name: "task", status: "completed", args: { description: "probe", prompt: "p", environment: "SUBAGENT_EXECUTION_ENVIRONMENT_CLOUD" }, result: { success: { conversationSteps: [{ assistantMessage: { text: "child says hi" } }] } } }],
+  // t2: a transient error on a running event that the completed event replaces with a success
+  ["tool_call", { callId: "t2-bbbb", name: "get_mcp_tools", status: "running", args: { toolCallId: "x" }, result: { error: { error: "Invalid arguments" } } }],
+  ["tool_call", { callId: "t2-bbbb", name: "get_mcp_tools", status: "completed", args: { server: "apex-tools", toolName: "apex_help", toolCallId: "x" }, result: { success: { text: "ok" } } }],
+  ["tool_call", { callId: "t3-cccc", name: "read_file", status: "completed", args: { path: "a.js", limit: 5 }, result: { success: { path: "a.js", totalLines: 10, readRange: { startLine: 1, endLine: 5 }, content: "x".repeat(5000) } } }],
+  ["tool_call", { callId: "t4-dddd", name: "run_terminal_cmd", status: "completed", args: { command: "node x.mjs" }, result: { spawnError: { message: "ENOENT /workspace/js/x" } } }],
+  ["tool_call", { callId: "t5-eeee", name: "mcp", status: "completed", args: {}, result: mcpText({ ok: false, error: "endpoint is required" }) }],
+  ["tool_call", { callId: "t6-ffff", name: "run_terminal_cmd", status: "completed", args: { command: "curl -H 'Authorization: Bearer tok_SECRETVALUE_12345abcdef' x" }, result: { success: { stdout: `${GROK} ghp_SECRETVALUE_99aaaaaaaaaaaaaaaaaaaa password=hunter2hunter2` } } }],
+  ["result", { runId: RUN1, status: "FINISHED", text: "All done. See above.", durationMs: 12345 }],
+  ["done", {}],
+];
+const FIX_TEXT = sse(FIX);
+const noSecret = (s) => !/SECRETVALUE|hunter2|a1a1a1a1/.test(String(s));
+
+test("one call is several events: groupCalls folds them (latest name, richest args, last result) and digest counts calls", () => {
+  const calls = groupCalls(parseSse(FIX_TEXT));
+  assert.equal(parseSse(FIX_TEXT).filter((e) => e.event === "tool_call").length, 9);
+  assert.equal(calls.length, 6);
+  const t1 = calls.find((c) => c.callId === "t1-aaaa");
+  assert.equal(t1.name, "task");
+  assert.equal(t1.args.environment, "SUBAGENT_EXECUTION_ENVIRONMENT_CLOUD");
+  assert.equal(calls.find((c) => c.callId === "t2-bbbb").result.error, undefined);
+  assert.deepEqual(foldCallEvent({ name: "a", args: null }, { name: "b", args: { x: 1 }, result: 7, status: "completed" }), { name: "b", args: { x: 1 }, result: 7, status: "completed" });
+  // The richest args win: a later event with fewer args (only toolCallId) must not erase them; an equal-size one replaces.
+  const rich = { name: "t", args: { path: "a.js", limit: 5 } };
+  foldCallEvent(rich, { name: "t", args: { toolCallId: "x" } });
+  assert.deepEqual(rich.args, { path: "a.js", limit: 5 });
+  foldCallEvent(rich, { name: "t", args: { path: "b.js", limit: 9 } });
+  assert.deepEqual(rich.args, { path: "b.js", limit: 9 });
+  // digest: 6 calls, not 9 events; the transient `Invalid arguments` is not a failure; spawnError and mcp ok:false are
+  const m = digestRun(parseSse(FIX_TEXT));
+  assert.equal(Object.values(m.calls).reduce((a, b) => a + b, 0), 6);
+  assert.equal(m.errCalls, 2);
+  assert.ok(!Object.keys(m.errHeads).some((h) => h.includes("Invalid arguments")));
+  assert.equal(m.mcpDiscovery, 1);
+});
+
+test("parseRun gives rows in stream order with merged chat, call stats and the final result", () => {
+  const p = parseRun(FIX_TEXT, { id: RUN1, createdAt: "2026-10-20T20:00:00Z" });
+  assert.deepEqual(p.rows.map((r) => r.kind), ["status", "chat", "thinking", "tool", "tool", "tool", "tool", "tool", "tool", "result"]);
+  assert.equal(p.rows[1].text, "Looking at the files.");
+  assert.equal(p.status, "FINISHED");
+  assert.equal(p.durationMs, 12345);
+  assert.equal(p.run8, RUN1.slice(-8));
+  assert.deepEqual(p.stats, { calls: 6, errors: 2, elidedArgs: 1 });
+  assert.deepEqual(p.rows.filter((r) => r.kind === "tool").map((r) => r.name), ["task", "get_mcp_tools", "read_file", "run_terminal_cmd", "mcp", "run_terminal_cmd"]);
+});
+
+test("renderLines: modes, tool filter, grep, results, width, and no secret ever printed", () => {
+  const p = [parseRun(FIX_TEXT, { id: RUN1 })];
+  const all = renderLines(p);
+  assert.ok(all[0].startsWith(`RUN ${RUN1.slice(-8)} FINISHED`));
+  assert.equal(all.filter((l) => l.startsWith("TOOL ")).length, 6);
+  assert.ok(all.some((l) => l.startsWith('CHAT ') && l.includes("Looking at the files.")));
+  assert.ok(all.some((l) => l.startsWith("RESULT ") && l.includes("FINISHED")));
+  const errs = renderLines(p, { only: ["errors"] });
+  assert.equal(errs.length, 2);
+  assert.ok(errs.every((l) => l.includes(" ERR ") && l.includes(" !! ")));
+  assert.ok(errs.some((l) => l.includes("spawnError ENOENT <path>")));
+  const task = renderLines(p, { only: ["tools"], tool: "task", results: true });
+  assert.equal(task.length, 1);
+  assert.ok(task[0].includes("probe") && task[0].includes("-> child says hi"));
+  assert.equal(renderLines(p, { only: ["tools"], grep: "read_file" }).length, 1);
+  assert.equal(renderLines(p, { only: ["tools"] }).find((l) => l.includes("mcp ERR")).includes("(elided)"), true);
+  assert.ok(renderLines(p, { only: ["chat"] }).every((l) => /^(CHAT|RESULT) /.test(l)));
+  assert.ok(renderLines(p, { only: ["tools"], results: true, width: 40 }).every((l) => l.length < 40 * 3 + 80));
+  assert.ok(noSecret(renderLines(p, { results: true }).join("\n")) && noSecret(renderLines(p, { only: ["tools"], results: true, width: 400 }).join("\n")));
+});
+
+test("redact and squash mask credentials, ids and workspace paths, and cut with an ellipsis", () => {
+  const dirty = `Bearer lin_api_abcdefghij-klmnop1234 Bearer tok_SECRETVALUE_12345abcdef ghp_SECRETVALUE_99aaaaaaaaaaaaaaaaaaaa ${GROK} ghp_aaaaaaaaaaaaaaaaaaaaaaaa sk-abcdefghijklmnopqrstu AKIAABCDEFGHIJKLMNOP ${"f".repeat(40)} password=hunter2hunter2 api_key: "secretsecretsecret"`;
+  const out = redact(dirty);
+  for (const bad of ["lin_api_abcdefghij", "SECRETVALUE", "abcdefghij-klmnop1234", GROK, "ghp_aaaa", "sk-abcdef", "AKIAABCD", "f".repeat(40), "hunter2", "secretsecretsecret"]) assert.ok(!out.includes(bad), bad);
+  assert.equal(squash("a   b\n/workspace/js/x.js run-3d266b1c-15ea-4cd7-a549-b64a34435823", 100), "a b <path> run-<uuid>");
+  assert.equal(squash("x".repeat(50), 10), `${"x".repeat(9)}…`);
+  assert.equal(squash(null), "");
+});
+
+test("argsSummary and resultBody read each tool by shape and fall back to the longest string", () => {
+  assert.equal(argsSummary("read_file", { toolCallId: "x" }), "(elided)");
+  assert.equal(argsSummary("read_file", null), "(elided)");
+  assert.equal(argsSummary("mcp", { serverIdentifier: "apex-tools", toolName: "apex_help", toolCallId: "x" }), "apex-tools/apex_help");
+  assert.equal(argsSummary("run_terminal_cmd", { command: "ls -la", timeout: 5 }), "ls -la");
+  assert.equal(argsSummary("zzz", { a: 1 }), '{"a":1}');
+  assert.equal(resultBody("edit_file", { success: { path: "a.js", linesAdded: 2, linesRemoved: 1, message: "ok", afterFullFileContent: "y".repeat(900) } }).text, "a.js +2 -1 ok");
+  assert.equal(resultBody("read_file", { success: { path: "a.js", totalLines: 9, readRange: { startLine: 3, endLine: 5 }, content: "z".repeat(900) } }).text, "a.js lines 3-5 of 9");
+  assert.equal(resultBody("run_terminal_cmd", { success: { stdout: "hello" } }).text, "hello");
+  assert.equal(resultBody("web_fetch", { success: { url: "https://x.io", markdown: "m".repeat(12) } }).text, "https://x.io 12 chars");
+  assert.equal(resultBody("whatever", { success: { a: "short", b: { c: "the longest string here" } } }).text, "the longest string here");
+  assert.deepEqual(resultBody("x", undefined), { size: 0, text: "" });
+});
+
+test("findCall finds one result by callId prefix or run#seq, masks it, and cuts at max", () => {
+  const p = [parseRun(FIX_TEXT, { id: RUN1 })];
+  const byId = findCall(p, "t6-ff", { max: 4000 });
+  assert.equal(byId.name, "run_terminal_cmd");
+  assert.ok(noSecret(byId.text) && noSecret(byId.args));
+  const bySeq = findCall(p, `${p[0].run8}#3`, { max: 60 });
+  assert.equal(bySeq.name, "read_file");
+  assert.equal(bySeq.truncated, true);
+  assert.equal(bySeq.text.length, 60);
+  assert.ok(bySeq.chars > 5000);
+  assert.equal(findCall(p, "nope"), null);
+});
+
+test("jsonRows are bounded and masked, never the raw result; errorStreak counts identical failures only", () => {
+  const p = [parseRun(FIX_TEXT, { id: RUN1 })];
+  const rows = jsonRows(p, { width: 50 });
+  assert.equal(rows[0].kind, "run");
+  assert.deepEqual([rows[0].calls, rows[0].errors], [6, 2]);
+  const tools = rows.filter((r) => r.kind === "tool");
+  assert.equal(tools.length, 6);
+  assert.ok(tools.every((r) => !("result" in r) && r.resultHead.length <= 50));
+  assert.equal(tools.find((r) => r.name === "task").ok, true);
+  assert.ok(noSecret(JSON.stringify(rows)));
+  assert.equal(jsonRows(p, { only: ["errors"] }).filter((r) => r.kind === "tool").length, 2);
+  const row = (error) => ({ kind: "tool", error });
+  assert.equal(errorStreak([row("a"), row("a"), row("b"), row("a")]), 2);
+  assert.equal(errorStreak([row("a"), row(null), row("a")]), 1);
+});
+
+test("loadRuns reads the cache first, skips runs past retention without a request, counts a 410, and caches what it fetches", async () => {
+  const dir = tmpDir();
+  const t = fakeClock();
+  t.now = Date.parse("2026-10-20T20:00:00Z");
+  const ago = (h) => new Date(t.now - h * 3600e3).toISOString();
+  const list = { items: [{ id: RUN2, status: "FINISHED", createdAt: ago(1) }, { id: RUN1, status: "FINISHED", createdAt: ago(40) }] };
+  let calls = stub([200, list], [200, FIX_TEXT]);
+  try {
+    const first = await loadRuns(ID, { dir, sel: "all" });
+    assert.deepEqual([first.parsed.length, first.expired, first.notCached], [1, 1, 0]);
+    assert.equal(calls.filter((c) => c.url.includes("/stream")).length, 1);
+    assert.ok(calls[1].url.includes(RUN2));
+    assert.equal(fs.readdirSync(dir).length, 1);
+    // second read: from the cache, no stream request
+    calls = stub([200, list]);
+    const second = await loadRuns(ID, { dir, sel: "all", fetchMissing: false });
+    assert.deepEqual([second.parsed.length, second.expired, second.notCached], [1, 0, 1]);
+    assert.equal(calls.length, 1);
+    // last = the newest run; a run id suffix selects; no match throws
+    stub([200, list]);
+    assert.equal((await loadRuns(ID, { dir, sel: "last", fetchMissing: false })).parsed[0].runId, RUN2);
+    stub([200, list]);
+    assert.equal((await loadRuns(ID, { dir, sel: RUN2.slice(-8), fetchMissing: false })).parsed.length, 1);
+    stub([200, list]);
+    await assert.rejects(loadRuns(ID, { dir, sel: "zzzz" }), /no run matches zzzz/);
+    // a 410 inside the window is counted, not thrown
+    const dir2 = tmpDir();
+    stub([200, { items: [{ id: RUN2, status: "FINISHED", createdAt: ago(1) }] }], [410, err("stream_expired")]);
+    const gone = await loadRuns(ID, { dir: dir2, sel: "last" });
+    assert.deepEqual([gone.parsed.length, gone.expired], [0, 1]);
+  } finally {
+    t.restore();
+    after();
+  }
+});
+
+test("transcript and call: summary, json, validation, and one result in full with a | prefix", async () => {
+  const dir = tmpDir();
+  const t = fakeClock();
+  t.now = Date.parse("2026-10-20T20:00:00Z");
+  const list = { items: [{ id: RUN1, status: "FINISHED", createdAt: new Date(t.now - 3600e3).toISOString() }] };
+  stub([200, list], [200, FIX_TEXT]);
+  try {
+    const sum = await transcript(ID, { sel: "all", summary: true, dir });
+    assert.equal(sum.length, 2);
+    assert.ok(sum[0].startsWith("RUN ") && sum[0].includes("calls=6 err=2"));
+    assert.equal(sum[1], `TRANSCRIPT ${ID} runs=1 expired=0 notCached=0`);
+    stub([200, list]);
+    const js = JSON.parse((await transcript(ID, { json: true, only: ["errors"], dir }))[0]);
+    assert.equal(js.agent, ID);
+    assert.equal(js.rows.filter((r) => r.kind === "tool").length, 2);
+    assert.ok(noSecret(JSON.stringify(js)));
+    stub([200, list]);
+    await assert.rejects(transcript(ID, { only: ["nope"], dir }), /--only takes tools, errors, chat, turns/);
+    await assert.rejects(transcript(ID, { grep: "(", dir }), /not a valid regular expression/);
+    stub([200, list]);
+    const call = await transcriptCall(ID, "t6-ff", { dir, max: 4000 });
+    assert.ok(call[0].startsWith("CALL ") && call[0].includes("run_terminal_cmd ok"));
+    assert.ok(call.slice(1).every((l) => l.startsWith("| ")));
+    assert.ok(noSecret(call.join("\n")));
+    stub([200, list]);
+    await assert.rejects(transcriptCall(ID, "missing", { dir }), /not found in 1 run/);
+  } finally {
+    t.restore();
     after();
   }
 });

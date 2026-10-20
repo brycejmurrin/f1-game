@@ -97,26 +97,32 @@ stays open on purpose, and gap 8 is a caller convention (`--name`).
    without the Authorization header into `artifacts/cursor-artifacts/<last8>/`.
 6. `usage <id>`: token counts, not spend (plan-included agents report zeros); 403 `feature_unavailable` prints `UNAVAILABLE`.
 
-## Transcript findings, 2026-10-20 (read with the tool itself)
+## Transcript findings, 2026-10-20 (read with the tool itself; CORRECTED)
 
-`cursor-agents.mjs dump` + `digest` over 47 retrievable runs (2,031 tool calls; typed counts only, no bodies read).
+`cursor-agents.mjs dump` + `digest` over 56 retrievable runs (typed counts only, no bodies read).
 
-- **The retrievable sample is almost all MCP-survey agents** (`Mcp tools listing`, `Mcps list view`, ...): they are the
-  runs the fleet made today. Hunters and PR owners are mostly gone: **43 of 45 of their runs were 410 expired**, all
-  37-50 h old; none younger than 24 h was. The 2 old runs that answered 200 were cancelled and held only status, result
-  and done (394 bytes). So a client-side skip of runs older than the retention window loses nothing (`dump` now does
-  it, with a 5 min margin) and **a worker's transcript has to be dumped at hand-back, within a day**.
-- **Failures: 225 of 2,031 calls (11 %).** 172 of them are one error, `get_mcp_tools: Invalid arguments`, spread over
-  about 9 survey agents; `namespace "X" not found` for servers listed in `.mcp.json` but not attached in the VM
-  (`Github`, `chrome-devtools`, `playwright-official`, `Browser-use`, in some runs `apex-tools`) is next. The cause of
-  the invalid calls cannot be read from the stream: it elides args on 36 % of calls.
-- **Retry storms:** the same failure repeated back to back in 8 runs, worst 16 in a row. `digest` now prints
-  `ERRORS calls= share= stormRuns= worstStreak=` and the top `ERR xN <tool>: <head>` lines (ids and paths masked).
-- **Duplicate discovery:** 344 `get_mcp_tools` calls, 236 exact repeats; five or six agents with the same
-  "Mcp ... listing" name ran about 600 calls on one question. `launch` now refuses a twin (same name, not archived)
-  with `TWIN <id> ...` (exit 3) unless `--allow-twin` is passed.
-- Not shown by this sample: how hunters and owners use tools, which is where the real cost is. That needs dumps taken
-  at hand-back.
+**Correction.** The first version of this section, and the PR text that quoted it, counted `tool_call` *events*. One
+call is several events with the same `callId` (running, running, completed), the tool name can change between them (an
+`mcp` placeholder with empty args becomes `task`), and a transient error on a running event is replaced by the completed
+one. Measured on these runs: 2,156 events but 678 distinct calls (3.2x). The figures from the event count were wrong:
+"225 of 2,031 calls failed (11 %)", "172 `get_mcp_tools: Invalid arguments`", "retry storms in 8 runs, worst 16",
+"344 discovery calls, 236 repeats" and "args elided on 36 % of calls". `digest` now folds events into calls
+(`groupCalls`), and `transcript` reads the same way.
+
+- **Failures, per call: 53 of 678 (8 %).** Most are `namespace "X" not found` for servers listed in `.mcp.json` but not
+  attached in the VM (`Github`, `chrome-devtools`, `playwright-official`, `Browser-use`) and `mcp: ok:false endpoint is
+  required` from `js-debugger` with no Chrome. Same failure back to back: worst streak 2, no run with 3 or more.
+- **MCP discovery:** 92 `get_mcp_tools` calls, no exact repeat; args are elided on 3 % of calls once events are folded.
+- **The retrievable sample is almost all MCP-survey agents**: 8 agents, 48 of the 56 runs and 637 of the 678 calls, all
+  on the same question ("list the MCP servers"). That, not retries, is the case for the launch twin guard.
+- **Edit results echo whole files**: `edit_file` results are 20 % of all stored result characters (435K of 2,147K),
+  18 results over 20K; reads are repeated rarely (3).
+- Hunters and PR owners are mostly gone: **43 of 45 of their runs were 410 expired**, all 37-50 h old; none younger than
+  24 h was. The 2 old runs that answered 200 were cancelled and held only status, result and done (394 bytes). A client-side
+  skip of runs older than the retention window loses nothing (`dump` does it, 5 min margin), and **a worker's transcript
+  has to be dumped at hand-back, within a day**. This part came from run statuses and file sizes, not event counts.
+- Not shown by this sample: how hunters and owners use tools, which is where the real cost is. That needs dumps taken at
+  hand-back.
 
 ## Launch-time options built (gap 7), 2026-10-20
 

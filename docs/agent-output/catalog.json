@@ -771,8 +771,10 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
+        "--json",
         "--limit",
-        "--out"
+        "--out",
+        "--summary"
       ]
     },
     {
@@ -1977,6 +1979,10 @@
       "path": "tools/lib/css-source.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/cursor-transcript.mjs",
+      "classification": "library"
     },
     {
       "path": "tools/lib/custom-survey-locations.mjs",

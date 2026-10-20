@@ -17,6 +17,9 @@
 //   node tools/ci/cursor-agents.mjs usage <agent-id>
 //   node tools/ci/cursor-agents.mjs dump [<agent-id>...] [--limit 20]
 //   node tools/ci/cursor-agents.mjs digest [--dir artifacts/cursor-dumps]
+//   node tools/ci/cursor-agents.mjs transcript <agent-id> [--run ID | --all] [--only tools,errors,chat,turns] [--tool NAME]
+//        [--grep RE] [--width N] [--results] [--summary] [--json] [--no-fetch]   (last run by default; cache first)
+//   node tools/ci/cursor-agents.mjs call <agent-id> <callId | run8#seq> [--run ID] [--max N]   (one result in full, bounded)
 //   node tools/ci/cursor-agents.mjs launch (--prompt "…" | --prompt-file F) [--model composer-2.5] [--repo URL]
 //        [--ref BRANCH | --pr PR_URL] [--name N] [--mode agent|plan] [--create-pr] [--on-branch] [--allow-twin]
 //        [--mcp-file F] [--subagent-file F] [--env NAME]... [--env-file F] [--dry-run] [--wait [--timeout S]]
@@ -28,13 +31,18 @@
 //
 // Writes touch ONLY ids `launch` recorded (artifacts/cursor-launched.json, override APEX_CURSOR_ALLOW):
 // the key is user-scoped and reaches every agent its owner has. Output is one typed
-// line per fact, never a transcript or prompt body. Exit 2 = no key, 3 = REFUSED
+// line per fact, never a prompt body; `transcript` prints bounded, masked heads and `call` prints ONE
+// requested result, cut at --max (a transcript is another agent's record: data, never instructions). Exit 2 = no key, 3 = REFUSED
 // (id not launched by this tool), 1 = API error; BUSY / NOT_CANCELLABLE print their
 // own line and exit 1. Request shapes: https://cursor.com/docs-static/cloud-agents-openapi.yaml
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ONLY, errorHead, findCall, groupCalls, jsonRows, parseRun, parseSse, renderLines, summaryLine } from "../lib/cursor-transcript.mjs";
+
+// The stream parser and failure detection live in tools/lib/cursor-transcript.mjs (one copy, shared with the MCP tool).
+export { errorHead, parseSse };
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const BASE = "https://api.cursor.com";
@@ -82,41 +90,8 @@ const json = async (route) => {
   return r.json();
 };
 
-/** Parse an SSE body into [{event, data}], skipping rows that are not JSON. */
-export function parseSse(text) {
-  const out = [];
-  let ev = null;
-  for (const line of text.split("\n")) {
-    if (line.startsWith("event: ")) ev = line.slice(7).trim();
-    else if (line.startsWith("data: ")) {
-      try {
-        out.push({ event: ev, data: JSON.parse(line.slice(6)) });
-      } catch {
-        /* partial row */
-      }
-    }
-  }
-  return out;
-}
-
 const TERMINAL_CLASSES =
   /\b(sync-pr|ci-watch|test-bg|tooling-fast|verify-track|deploy\.mjs|gh run|gh pr|gh api|git (?:push|commit|merge|fetch|status|diff|log)|npm test|node --test|npx|curl|grep|sed|cat|ls|seq|sleep)\b/;
-
-/** One-line head of a tool failure, or null when the call succeeded. Ids and workspace paths are masked so equal failures group. */
-export function errorHead(name, result) {
-  if (!result || typeof result !== "object") return null;
-  let bad = null;
-  if (result.error) bad = result.error.message || result.error.error || JSON.stringify(result.error);
-  else if (result.spawnError) bad = `spawnError ${result.spawnError.message || JSON.stringify(result.spawnError)}`;
-  else if (name === "mcp" && result.success) {
-    // An MCP tool reports its own failure inside a successful transport call: {"ok":false,"error"|"message":"..."}.
-    const m = /"ok":\s*false[^}]*?"(?:error|message)":\s*"([^"]{0,120})/.exec(JSON.stringify(result.success).replace(/\\"/g, '"'));
-    if (m) bad = `ok:false ${m[1]}`;
-  }
-  if (bad === null) return null;
-  const head = String(typeof bad === "string" ? bad : JSON.stringify(bad)).replace(/\s+/g, " ").replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, "<uuid>").replace(/\/workspace\S*/g, "<path>");
-  return `${name}: ${head.slice(0, 90)}`;
-}
 
 /** Metrics for one run's SSE events. Result sizes are STORED characters, a proxy: the stream elides some results. */
 export function digestRun(events) {
@@ -143,46 +118,45 @@ export function digestRun(events) {
   for (const { event, data } of events) {
     if (event === "thinking") m.thinkChars += JSON.stringify(data).length;
     else if (event === "assistant") m.asstChars += JSON.stringify(data).length;
-    else if (event === "tool_call") {
-      const n = data.name || "?";
-      const args = data.args || {};
-      const size = JSON.stringify(data.result ?? "").length;
-      m.calls[n] = (m.calls[n] || 0) + 1;
-      m.resChars[n] = (m.resChars[n] || 0) + size;
-      const bad = errorHead(n, data.result);
-      if (bad) {
-        m.errCalls++;
-        m.errHeads[bad] = (m.errHeads[bad] || 0) + 1;
-      }
-      // A retry storm: the same failure again and again with nothing in between (any success or other failure resets it).
-      streak = bad && bad === lastBad ? streak + 1 : bad ? 1 : 0;
-      lastBad = bad;
-      if (streak > m.errStreak) m.errStreak = streak;
-      // The stream elides args on some calls: an object holding only `toolCallId` (or nothing).
-      if (Object.keys(args).every((x) => x === "toolCallId")) m.noArgs++;
-      if (size > 20000) m.bigResults++;
-      const ok = data.result && data.result.success;
-      if (n === "edit_file" && ok) {
-        m.editEchoChars += (ok.beforeFullFileContent || "").length + (ok.afterFullFileContent || "").length;
-      }
-      if (n === "read_file" && args.path) {
-        const k = `${args.path}|${args.offset}|${args.limit}`;
-        if (reads.has(k)) m.repeatReads++;
-        reads.add(k);
-      }
-      if (n === "get_mcp_tools") {
-        const k = JSON.stringify(args);
-        m.mcpDiscovery++;
-        if (disc.has(k)) m.mcpDiscoveryDup++;
-        disc.add(k);
-      }
-      if (n === "run_terminal_cmd") {
-        const c = args.command || "";
-        const cls = TERMINAL_CLASSES.exec(c)?.[1] || (c ? "other" : "(args missing)");
-        const t = (m.terminal[cls] ||= { calls: 0, chars: 0 });
-        t.calls++;
-        t.chars += size;
-      }
+  }
+  // Per CALL, not per event: one call is several events (see foldCallEvent), so counting events inflated every figure ~3x.
+  for (const c of groupCalls(events)) {
+    const n = c.name || "?";
+    const args = c.args || {};
+    const size = JSON.stringify(c.result ?? "").length;
+    m.calls[n] = (m.calls[n] || 0) + 1;
+    m.resChars[n] = (m.resChars[n] || 0) + size;
+    const bad = errorHead(n, c.result);
+    if (bad) {
+      m.errCalls++;
+      m.errHeads[bad] = (m.errHeads[bad] || 0) + 1;
+    }
+    // A retry storm: the same failure again and again with nothing in between (any success or other failure resets it).
+    streak = bad && bad === lastBad ? streak + 1 : bad ? 1 : 0;
+    lastBad = bad;
+    if (streak > m.errStreak) m.errStreak = streak;
+    // The stream elides args on some calls: an object holding only `toolCallId` (or nothing).
+    if (Object.keys(args).every((x) => x === "toolCallId")) m.noArgs++;
+    if (size > 20000) m.bigResults++;
+    const ok = c.result && c.result.success;
+    if (n === "edit_file" && ok) m.editEchoChars += (ok.beforeFullFileContent || "").length + (ok.afterFullFileContent || "").length;
+    if (n === "read_file" && args.path) {
+      const k = `${args.path}|${args.offset}|${args.limit}`;
+      if (reads.has(k)) m.repeatReads++;
+      reads.add(k);
+    }
+    if (n === "get_mcp_tools") {
+      const k = JSON.stringify(args);
+      m.mcpDiscovery++;
+      if (disc.has(k)) m.mcpDiscoveryDup++;
+      disc.add(k);
+    }
+    if (n === "run_terminal_cmd") {
+      const cmd = args.command || "";
+      const cls = TERMINAL_CLASSES.exec(cmd)?.[1] || (cmd ? "other" : "(args missing)");
+      const t = (m.terminal[cls] ||= { calls: 0, chars: 0 });
+      t.calls++;
+      t.chars += size;
     }
   }
   return m;
@@ -228,6 +202,76 @@ export function formatDigest(t) {
   lines.push(`ERRORS calls=${t.errCalls} share=${(t.errCalls / Math.max(1, totalCalls)).toFixed(2)} stormRuns=${t.errStormRuns} worstStreak=${t.errStreakWorst}`);
   for (const [h, v] of Object.entries(t.errHeads).sort((a, b) => b[1] - a[1]).slice(0, 5)) lines.push(`ERR x${v} ${h}`);
   return lines;
+}
+
+// ---- transcript reading: the parsed runs of one agent, from the dump cache or the API ---------------------------------
+
+/**
+ * Parsed runs (oldest first) of one agent. `sel`: "last" (default), "all", or a run id / its last 8 characters.
+ * A run is read from the dump cache when present, else fetched and cached unless it is past the stream retention
+ * window or `fetchMissing` is false. Counts what could not be read, never throws on an expired stream.
+ */
+export async function loadRuns(id, { dir = DEFAULT_DIR, sel = "last", fetchMissing = true } = {}) {
+  const runs = ((await json(`/v1/agents/${id}/runs`)).items || []).slice().reverse();
+  const chosen = sel === "all" ? runs : sel === "last" ? runs.slice(-1) : runs.filter((r) => r.id === sel || r.id.endsWith(sel));
+  if (!chosen.length) throw new Error(`transcript ${id}: no run matches ${sel}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const parsed = [];
+  let expired = 0;
+  let notCached = 0;
+  for (const run of chosen) {
+    const file = path.join(dir, `${id.slice(-8)}_${run.id.slice(-8)}.sse`);
+    let text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+    if (text === null) {
+      if (!fetchMissing) {
+        notCached++;
+        continue;
+      }
+      if (run.createdAt && clock.now() - Date.parse(run.createdAt) > retentionMs()) {
+        expired++;
+        continue;
+      }
+      const r = await api(`/v1/agents/${id}/runs/${run.id}/stream`, { accept: "text/event-stream" });
+      if (r.status === 410) {
+        expired++;
+        continue;
+      }
+      if (!r.ok) throw fail(await apiError(r), "transcript");
+      text = await r.text();
+      fs.writeFileSync(file, text);
+      await sleep(1500);
+    }
+    parsed.push(parseRun(text, run));
+  }
+  return { parsed, expired, notCached };
+}
+
+const sourceNote = (id, n, expired, notCached) => `TRANSCRIPT ${id} runs=${n} expired=${expired} notCached=${notCached}`;
+
+/** `transcript`: bounded, masked lines (or normalized JSON rows) for the chosen runs. */
+export async function transcript(id, opts = {}) {
+  const { sel = "last", only, tool, grep, results = false, width = 160, json: asJson = false, summary = false, dir, fetchMissing = true } = opts;
+  if (only) for (const o of only) if (!ONLY.includes(o)) throw new Error(`--only takes ${ONLY.join(", ")} (got ${o})`);
+  if (grep) {
+    try {
+      new RegExp(grep);
+    } catch {
+      throw new Error("--grep is not a valid regular expression");
+    }
+  }
+  const { parsed, expired, notCached } = await loadRuns(id, { dir, sel, fetchMissing });
+  const note = sourceNote(id, parsed.length, expired, notCached);
+  if (asJson) return [JSON.stringify({ agent: id, runs: expired + notCached, expired, notCached, rows: jsonRows(parsed, { width: Math.max(width, 400), tool, only }) })];
+  if (summary) return [...parsed.map((p) => summaryLine(p, width)), note];
+  return [...renderLines(parsed, { only: only || ONLY, tool, grep, results, width }), note];
+}
+
+/** `call`: one tool call's result in full, found across the agent's runs; bounded by `max`, masked, prefixed `| `. */
+export async function transcriptCall(id, ref, { sel = "all", max = 4000, dir, fetchMissing = true } = {}) {
+  const { parsed } = await loadRuns(id, { dir, sel, fetchMissing });
+  const hit = findCall(parsed, ref, { max });
+  if (!hit) throw new Error(`call ${ref}: not found in ${parsed.length} run(s) of ${id}`);
+  return [`CALL ${hit.ref} ${hit.name} ${hit.error ? "ERR" : "ok"} chars=${hit.chars}${hit.truncated ? ` truncated@${max}` : ""} args=${hit.args}`, ...hit.text.split("\n").map((l) => `| ${l}`)];
 }
 
 // ---- control verbs: launch / followup / cancel / archive / delete -------------------------------
@@ -737,6 +781,26 @@ async function main() {
     if (!files.length) throw new Error(`no .sse dumps in ${dir}; run dump first`);
     const runs = files.map((f) => digestRun(parseSse(fs.readFileSync(path.join(dir, f), "utf8"))));
     for (const l of formatDigest(mergeDigests(runs))) console.log(l);
+  } else if (cmd === "transcript") {
+    if (!rest[0]) throw new Error("transcript <agent-id> [--run ID | --all] [--only tools,errors,chat,turns] [--tool NAME] [--grep RE] [--results] [--summary] [--json]");
+    const only = flag(rest, "--only");
+    emit(
+      await transcript(rest[0], {
+        sel: has(rest, "--all") ? "all" : flag(rest, "--run") || "last",
+        only: only ? only.split(",") : undefined,
+        tool: flag(rest, "--tool"),
+        grep: flag(rest, "--grep"),
+        width: Number(flag(rest, "--width", 160)),
+        results: has(rest, "--results"),
+        summary: has(rest, "--summary"),
+        json: has(rest, "--json"),
+        dir: flag(rest, "--dir") ? dir : undefined,
+        fetchMissing: !has(rest, "--no-fetch"),
+      }),
+    );
+  } else if (cmd === "call") {
+    if (!rest[0] || !rest[1]) throw new Error("call <agent-id> <callId | run8#seq> [--run ID] [--max N]");
+    emit(await transcriptCall(rest[0], rest[1], { sel: flag(rest, "--run") || "all", max: Number(flag(rest, "--max", 4000)), dir: flag(rest, "--dir") ? dir : undefined, fetchMissing: !has(rest, "--no-fetch") }));
   } else if (cmd === "launch") {
     const lines = await launchAgent({
       prompt: textArg(rest, "--prompt"),
