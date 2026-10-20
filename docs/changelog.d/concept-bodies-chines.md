@@ -1,0 +1,1 @@
+Improved: RIFT, KEEL and DELTA bodies have sharp shoulder chines, and all four concept bodies have their own pod line in profile: SERPENT's S-curve, RIFT's shoulder hump, KEEL's level shoulder and DELTA's falling wedge. Looks only.

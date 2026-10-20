@@ -4,6 +4,16 @@
  */
 "use strict";
 const CarBodyGeom = (function () {
+  // chine (B·D1e concept bodies, opt-in per pod station via podShape.chine, metres): the outer-top
+  // corner becomes a sloped band with a crisp crease at the top, one that reads in the mesh itself. Shared with
+  // CarShade.podRing, so the flat and rounded builds cut the same facet. 4 mm floor keeps the
+  // ring count fixed along a body that fades its chine out.
+  function chineCut(ch, w, h) {
+    // A steep tumblehome band (24 deg off the flank, under smooth()'s 55 deg crease, so it
+    // shades soft) meeting the top at 66 deg, a crisp line: a 45 deg chamfer would smooth away.
+    const d = Math.max(0.004, Math.min(ch, 0.56 * w, 0.25 * h));
+    return { x: d * 0.8, y: d * 1.8 };
+  }
   function create(context) {
     const {
       SURFACES, CARBON, DARK, INTAKE, PANEL,
@@ -1283,10 +1293,12 @@ const CarBodyGeom = (function () {
     bodySpan(out, ckMid, CK_B, c1, 0.028);
   }
 
-  function sidepodStation(side, z, inner, outer, innerBottom, outerBottom, innerTop, outerTop) {
+  function sidepodStation(side, z, inner, outer, innerBottom, outerBottom, innerTop, outerTop, chine) {
+    const c = chine == null ? null : chineCut(chine, outer - inner, outerTop - outerBottom);
     return [
       [side * inner, innerBottom, z], [side * outer, outerBottom, z],
-      [side * outer, outerTop, z], [side * inner, innerTop, z],
+      ...(c ? [[side * outer, outerTop - c.y, z], [side * (outer - c.x), outerTop, z]] : [[side * outer, outerTop, z]]),
+      [side * inner, innerTop, z],
     ];
   }
 
@@ -1397,12 +1409,13 @@ const CarBodyGeom = (function () {
   }
   // podShape (B·D1d concept bodies, opt-in; absent = shipped): per-station metre offsets on the
   // seven pod stations, front to rear — top (both tops), out (outer half-width), bot (outer belly;
-  // + raises it = deeper undercut). The validity clamp below still runs after it.
+  // + raises it = deeper undercut), chine (outer-top chamfer depth, see chineCut). The validity clamp below still runs after it.
   function podShaped(ps) {
     if (!ps) return (p) => p;
     return (p, i) => Object.assign(p, {
       innerTop: p.innerTop + (ps.top ? ps.top[i] : 0), outerTop: p.outerTop + (ps.top ? ps.top[i] : 0),
-      outer: p.outer + (ps.out ? ps.out[i] : 0), outerBottom: p.outerBottom + (ps.bot ? ps.bot[i] : 0) });
+      outer: p.outer + (ps.out ? ps.out[i] : 0), outerBottom: p.outerBottom + (ps.bot ? ps.bot[i] : 0) },
+      ps.chine ? { chine: ps.chine[i] } : null);
   }
   // Post-styling validity pass (#3111). The style offsets are raw metres and
   // BODY_STYLES carries 4-10x the TEAM_STYLE ranges, so on a narrow or low-
@@ -1677,11 +1690,19 @@ const CarBodyGeom = (function () {
   function buildSidepodBodywork(out, c1, eng, anchors, facet) {   // facet (B·D1d Delta): flat-panel pods inside a rounded build
     const data = anchors || bodyAnchors({ engine: 1, _visual: { engine: eng } });
     const stations = data.podStations;
+    const chined = stations.some((p) => p.chine != null);   // one point count for every station
     if (data.podProfile) buildConceptPods(out, stations, data.podProfile, c1);
     else if (shadeFlags.round && !facet) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
     else for (const side of [-1, 1]) {
-      addStationLoft(out, stations.map((p) => sidepodStation(side, p.z, p.inner, p.outer,
-        p.innerBottom, p.outerBottom, p.innerTop, p.outerTop)), c1, INTAKE);
+      addStationLoft(out, stations.map((p) => sidepodStation(side, p.z, p.inner, p.outer,   // chined: five-corner sections
+        p.innerBottom, p.outerBottom, p.innerTop, p.outerTop, chined ? (p.chine || 0) : null)), c1, INTAKE);
+    }
+    // The chine's crease line: a dark seam 2 mm proud ON the crease (the ring's own corner, so it
+    // sits on the built skin), so the crease reads on a pale body where the two faces both blow out.
+    if (chined) for (const side of [-1, 1]) for (let i = 0; i < stations.length - 1; i++) {
+      const seam = (p) => { const c = chineCut(p.chine || 0, p.outer - p.inner, p.outerTop - p.outerBottom);
+        return { z: p.z, x: side * (p.outer - c.x), y: p.outerTop + 0.003, w: 0.018, h: 0.010 }; };
+      if ((stations[i].chine || 0) > 0.008) addSpan(out, seam(stations[i]), seam(stations[i + 1]), INTAKE, null, SURFACES.carbon);
     }
     const inletP = data.podAt(0.62);
     const shoulderP = data.podAt(0.18);
@@ -1785,6 +1806,6 @@ const CarBodyGeom = (function () {
       CAR_HALF, COVER_CROWN, COVER_SHOULDER, COVER_DROP,
     };
   }
-  return { create };
+  return { create, chineCut };
 })();
 Object.freeze(CarBodyGeom);

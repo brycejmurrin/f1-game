@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { refsIn, closesIn, holders, labelPlan, renderBoard, readLabels, BOARD_MARKER } from "../../tools/ci/fleet-board.mjs";
+import { refsIn, closesIn, holders, labelPlan, renderBoard, readLabels, coverageOf, readCoverage, BOARD_MARKER } from "../../tools/ci/fleet-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const issue = (number, labels, title = `issue ${number}`) => ({ number, title, labels: labels.map((name) => ({ name })) });
@@ -36,13 +36,13 @@ test("an issue is held by a live claim or an open PR; expired and released claim
   assert.equal(held.get(4).draft, true);
 });
 
-test("label writes: claim adds `claimed`; release removes it and restores `ready` unless blocked", () => {
+test("label writes: claim adds `claimed`; release removes it without inventing readiness", () => {
   const held = holders([claim("#1 mine")], []);
   const plan = labelPlan([issue(1, ["ready"]), issue(2, ["claimed"]), issue(3, ["claimed", "blocked"]), issue(4, ["claimed", "ready"]), issue(5, ["ready"])], held);
   const by = Object.fromEntries(plan.map((p) => [p.number, p]));
   assert.deepEqual(by[1].add, ["claimed"]);
   assert.match(by[1].comment, /Claimed — Claude: #1 mine/);
-  assert.deepEqual([by[2].add, by[2].remove], [["ready"], ["claimed"]]);
+  assert.deepEqual([by[2].add, by[2].remove], [[], ["claimed"]]);
   assert.deepEqual([by[3].add, by[3].remove], [[], ["claimed"]], "a blocked issue does not become ready");
   assert.deepEqual(by[4].add, [], "ready is not added twice");
   assert.equal(by[5], undefined, "an unclaimed ready issue needs no write");
@@ -96,3 +96,74 @@ for (const [field, max] of [["name", 50], ["description", 100]]) {
     });
   });
 }
+
+
+const link = (number, state = "OPEN", closing = false, isDraft = false, scoped = false) => ({ number, state, closing, isDraft, scoped });
+const event = (number, state = "OPEN", closing = false, repo = "owner/repo") => ({
+  willCloseTarget: closing, source: { number, state, isDraft: false, repository: { nameWithOwner: repo } }
+});
+const timeline = (number, nodes, truncated = false) => ({ number, timelineItems: { nodes, pageInfo: { hasNextPage: truncated } } });
+
+test("current ownership expires at two hours; mere PR references never claim work", () => {
+  const coverage = new Map([[2, [link(20)]], [3, [link(30, "MERGED")]], [4, [link(40, "CLOSED")]], [5, [link(50, "OPEN", true)]], [6, [link(60, "OPEN", false, true, true)]]]);
+  const held = holders([claim("#1 current", 120), claim("#2 stale", 121), claim("#3 stale", 800)], [], undefined, coverage);
+  assert.equal(held.get(1).kind, "claim");
+  assert.equal(held.has(2), false, "a cleanup/context/partial reference is not ownership");
+  assert.equal(held.get(5).pr, 50, "an explicit closing link retains the compatibility guard");
+  assert.equal(held.has(3), false, "merged progress must not retain ownership");
+  assert.equal(held.has(4), false, "abandoned PR must not hold work");
+  assert.equal(held.get(6).pr, 60, "an explicitly titled partial slice retains duplicate-work protection");
+  assert.equal(held.get(6).referenceOnly, true);
+  const plan = labelPlan([issue(2, ["claimed"]), issue(3, ["claimed", "blocked"])], held);
+  assert.deepEqual(plan.map((p) => [p.number, p.add, p.remove]), [[2, [], ["claimed"]], [3, [], ["claimed"]]]);
+});
+
+test("coverage ignores other-repo and non-PR references, deduplicates, preserves closing intent, and refuses truncated evidence", () => {
+  const result = coverageOf([timeline(1, [event(11, "MERGED"), event(12), event(12, "OPEN", true), event(12), event(13, "OPEN", true, "elsewhere/repo"), { source: {} }])], "owner/repo");
+  assert.deepEqual(result.get(1), [link(12, "OPEN", true), link(11, "MERGED")]);
+  assert.throws(() => coverageOf([timeline(1, [], true)], "owner/repo"), /incomplete.*refusing writes/);
+});
+
+test("board keeps ownership, stale evidence and merged progress separate, escaping table cells", () => {
+  const issues = [issue(1, ["claimed"], "partial | work"), issue(2, ["ready"]), issue(3, ["blocked"])];
+  const coverage = new Map([[1, [link(10, "OPEN", false, true)]], [2, [link(20, "MERGED")]]]);
+  const claims = [claim("#1 stale", 800, "old|owner"), claim("#3 current", 5, "new")];
+  const body = renderBoard({ issues, prs: [], claims, coverage, held: holders(claims, [], undefined, coverage) });
+  assert.ok(body.includes("| #1 partial   work | none | #10 open draft (reference; scope unverified) | old owner 13 h |"), body);
+  assert.ok(body.includes("| #2 issue 2 | none | #20 merged"), body);
+  assert.ok(body.includes("| #3 issue 3 | new | none found"), body);
+  assert.ok(body.includes("Close only against the issue acceptance evidence"), body);
+});
+
+test("reader paginates issues and PRs and merges canonical closing links (including URL/manual links)", () => {
+  const cursors = [];
+  const response = (nodes, next = null) => ({ nodes, pageInfo: { hasNextPage: !!next, endCursor: next } });
+  const request = (query, vars) => {
+    cursors.push(vars.cursor || null);
+    if (query.includes("issues(first")) return { repository: { issues: vars.cursor ? response([timeline(2, [])]) : response([timeline(1, [event(11)])], "issue-page2") } };
+    const pr = { number: 11, isDraft: true, closingIssuesReferences: response([{ number: 1, repository: { nameWithOwner: "owner/repo" } }, { number: 2, repository: { nameWithOwner: "other/repo" } }]) };
+    return { repository: { pullRequests: vars.cursor ? response([]) : response([pr], "pr-page2") } };
+  };
+  const result = readCoverage("owner/repo", request);
+  assert.deepEqual(cursors, [null, "issue-page2", null, "pr-page2"]);
+  assert.deepEqual(result.get(1), [link(11, "OPEN", true, true)]);
+  assert.deepEqual(result.get(2), []);
+});
+
+test("reader refuses missing pages or truncated closing-reference lists", () => {
+  assert.throws(() => readCoverage("owner/repo", () => ({ repository: { issues: { nodes: [], pageInfo: { hasNextPage: true } } } })), /incomplete issue pagination/);
+  assert.throws(() => readCoverage("owner/repo", (query) => query.includes("issues(first")
+    ? { repository: { issues: { nodes: [], pageInfo: { hasNextPage: false } } } }
+    : { repository: { pullRequests: { nodes: [{ number: 5, closingIssuesReferences: { pageInfo: { hasNextPage: true } } }], pageInfo: { hasNextPage: false } } } }), /incomplete closing links/);
+});
+
+
+test("a cleanup PR mentioning an issue does not claim it, but an explicitly issue-titled partial PR remains guarded", () => {
+  const cleanup = event(90); cleanup.source.title = "docs: reconcile issue/PR references";
+  const partial = event(91); partial.source.title = "fix(ai): faster attack (#2356 partial)";
+  const coverage = coverageOf([timeline(2889, [cleanup]), timeline(2356, [partial])], "owner/repo");
+  const held = holders([], [], undefined, coverage);
+  assert.equal(held.has(2889), false);
+  assert.equal(held.get(2356).pr, 91);
+  assert.equal(coverage.get(2889)[0].number, 90, "context link remains visible without asserting ownership");
+});

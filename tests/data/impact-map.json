@@ -1565,7 +1565,13 @@
       "insideProp": [
         "tests/unit/flyby-shots.test.mjs"
       ],
+      "isNight": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
       "isSolid": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "isWet": [
         "tests/unit/flyby-shots.test.mjs"
       ],
       "landmarkFallback": [
@@ -1603,6 +1609,9 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
+      "select": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
       "setDuration": [
         "tests/unit/flyby-shots.test.mjs"
       ],
@@ -1612,6 +1621,9 @@
       "setPlayerSlot": [
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/loading-card.test.mjs"
+      ],
+      "setSession": [
+        "tests/unit/flyby-shots.test.mjs"
       ],
       "shotAt": [
         "tests/unit/flyby-shots.test.mjs",
@@ -1644,6 +1656,9 @@
         "tests/unit/flyby-shots.test.mjs"
       ],
       "warmProgress": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "whenMatch": [
         "tests/unit/flyby-shots.test.mjs"
       ],
       "*": [
@@ -2416,6 +2431,9 @@
       ],
       "drawWheelExtras": [
         "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "flapState": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
       "flushTailGlows": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
@@ -4898,6 +4916,9 @@
       ]
     },
     "js/data/flyby-overrides.js": {
+      "catalog": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
       "patches": [
         "tests/unit/flyby-shots.test.mjs"
       ],
@@ -7078,9 +7099,6 @@
       "garageNow": [
         "tests/unit/garage-arrival.test.mjs"
       ],
-      "garageSeat": [
-        "tests/unit/car-mesh-crew-cache.test.mjs"
-      ],
       "getSetupPreviewMesh": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -7108,9 +7126,6 @@
       "setSetupSpin": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
-      "spMeshBust": [
-        "tests/unit/car-mesh-crew-cache.test.mjs"
-      ],
       "startArrivalPreview": [
         "tests/unit/garage-arrival.test.mjs"
       ],
@@ -7127,6 +7142,7 @@
       ],
       "*": [
         "tests/unit/body-styles.test.mjs",
+        "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -7186,6 +7202,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "create": [
@@ -7200,8 +7217,15 @@
       "csTabId": [
         "tests/unit/livery-design.test.mjs"
       ],
+      "discardLivDraft": [
+        "tests/unit/team-livery.test.mjs"
+      ],
       "endLivPreview": [
-        "tests/unit/livery-draft-mesh-cache.test.mjs"
+        "tests/unit/livery-draft-mesh-cache.test.mjs",
+        "tests/unit/team-livery.test.mjs"
+      ],
+      "flushLivPreview": [
+        "tests/unit/livery-design.test.mjs"
       ],
       "framePreset": [
         "tests/unit/ui-improve-pass.test.mjs"
@@ -9720,6 +9744,30 @@
       "towGain": [
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
+      ],
+      "trailCase": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailPush": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailYield": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailYieldCorner": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailYieldEase": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailYieldStep": [
+        "tests/unit/ai-drive.test.mjs"
       ],
       "traits": [
         "tests/unit/ai-drive.test.mjs"
