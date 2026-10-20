@@ -4,6 +4,7 @@
 // @skill renderer-debug
 //
 //   node tools/perf/live-render-matrix.mjs --backend three|webgl2 [--gl-fallback 1|0]
+//        [--leg glx|tlx-gl|tlx-native] [--cap-scale N] [--min-frames N]
 //        [--tracks bahrain,monaco] [--cycles 3] [--rows 1,2,3,4,5] [--json PATH]
 //
 // Rows (issue #2572 "Done when"):
@@ -29,10 +30,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const KINDS = ["VertexArray", "Program", "Shader", "Buffer", "Texture", "Framebuffer", "Renderbuffer"];
 
 function parseArgs(argv) {
-  const o = { backend: "three", glFallback: null, tracks: ["bahrain", "monaco"], cycles: 3, rows: [1, 2, 3, 4, 5], json: null };
+  const o = { backend: "three", glFallback: null, leg: "", capScale: 1, minFrames: 20, tracks: ["bahrain", "monaco"], cycles: 3, rows: [1, 2, 3, 4, 5], json: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => argv[++i];
     if (a === "--backend") o.backend = next();
+    else if (a === "--leg") o.leg = next();
+    else if (a === "--cap-scale") o.capScale = Math.max(0.5, +next() || 1);
+    else if (a === "--min-frames") o.minFrames = Math.max(2, +next() | 0);
     else if (a === "--gl-fallback") o.glFallback = next() !== "0";
     else if (a === "--tracks") o.tracks = next().split(",").map((s) => s.trim()).filter(Boolean);
     else if (a === "--cycles") o.cycles = Math.max(2, +next() | 0);
@@ -40,6 +44,11 @@ function parseArgs(argv) {
     else if (a === "--json") o.json = next();
     else if (a === "-h" || a === "--help") { console.log("usage: node tools/perf/live-render-matrix.mjs --backend three|webgl2 [--gl-fallback 1|0] [--tracks a,b] [--cycles N] [--rows 1,2,3,4,5] [--json PATH]"); process.exit(0); }
     else throw new Error("unknown argument " + a);
+  }
+  if (o.leg) {
+    const L = { glx: ["webgl2", false], "tlx-gl": ["three", true], "tlx-native": ["three", false] }[o.leg];
+    if (!L) throw new Error("--leg must be glx, tlx-gl or tlx-native");
+    [o.backend, o.glFallback] = L;
   }
   if (!["three", "webgl2"].includes(o.backend)) throw new Error("--backend must be three or webgl2");
   if (o.tracks.length < 2) throw new Error("--tracks needs two circuits");
@@ -104,6 +113,7 @@ async function main() {
   const save = () => { if (o.json) { mkdirSync(dirname(o.json), { recursive: true }); writeFileSync(o.json, JSON.stringify(report, null, 2)); } };
   const frames = (page) => page.evaluate(() => window.__lrm.frames);
   const framesAdvance = async (page, n = 20, ms = 90000) => {
+    n = Math.min(n, o.minFrames); ms *= o.capScale;
     const f0 = await frames(page);
     try { await page.waitForFunction(([f, k]) => window.__lrm.frames >= f + k, [f0, n], { polling: 100, timeout: ms }); return true; } catch (_) { return false; }
   };
@@ -159,7 +169,7 @@ async function main() {
   ]).catch((e) => ({ err: String(e) }));
   // Each row is capped (a hung row used to eat the whole job) and a failed row gets a fresh page, so one
   // failure does not poison the rows after it.
-  const ROW_CAP = { rebuild: 180000 }, DEFAULT_CAP = 90000;   // a capped row is "timeout" (inconclusive), never a silent pass
+  const ROW_CAP = { rebuild: 180000 * o.capScale }, DEFAULT_CAP = 90000 * o.capScale;   // a capped row is "timeout" (inconclusive), never a silent pass
   const row = async (n, name, fn) => {
     if (!o.rows.includes(n)) return;
     const r = report.rows[name] = { verdict: "fail", notes: [] };
@@ -313,7 +323,7 @@ async function main() {
     shutdown();
   }
   const verdicts = Object.fromEntries(Object.entries(report.rows).map(([k, v]) => [k, v.verdict]));
-  report.summary = { backend: o.backend, glFallback: o.glFallback, verdicts, pageErrors: report.errors.length, fatal: !!report.fatal };
+  report.summary = { backend: o.backend, glFallback: o.glFallback, verdicts, leg: o.leg, pageErrors: report.errors.length, fatal: !!report.fatal };
   save();
   console.log("= live-render-matrix " + JSON.stringify(report.summary));
   process.exit(report.fatal ? 2 : 0);
