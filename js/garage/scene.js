@@ -1180,7 +1180,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // the lamp wherever the preset put it; the pit-lane pass every half minute.
   if (inside.back && fanMesh) _gfx.draw(fanMesh, mk(_mFan, FAN[0], FAN[1], Z_BACK + 0.17, 0, now * 0.0065), SHELL_OPTS);
   // The crew (js/garage/scene-crew.js), only while an arrival or drive-out plays.
-  if (arrival && typeof GarageCrew !== "undefined") GarageCrew.draw(liv, eye, arrival, SHELL_OPTS);
+  if (arrival && typeof GarageCrew !== "undefined") GarageCrew.draw(liv, eye, arrival, SHELL_OPTS, team && team.id);
   if (lampMesh) {
     mk(_mLamp, lampAim[0], 0, lampAim[1], lampAim[2], 0);
     _gfx.draw(lampMesh, _mLamp, SHELL_OPTS);

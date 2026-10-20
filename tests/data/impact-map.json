@@ -6813,6 +6813,12 @@
       ],
       "layout": [
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "noseTip": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "setLook": [
+        "tests/unit/garage-crew.test.mjs"
       ]
     },
     "js/garage/scene-dress.js": {
@@ -6855,10 +6861,10 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "setLook": [
+        "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs"
       ],
       "*": [
-        "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
