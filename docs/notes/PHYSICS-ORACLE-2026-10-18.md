@@ -39,8 +39,8 @@ Because the field is retired, these traces are NOT the characterization
 baseline's numbers (that spec races a full field). They are their own golden.
 
 ## Inputs
-1. The four physics-characterization recipes, parsed from the `SCENARIOS`
-   literal of `tests/specs/physics-characterization.spec.js` (one copy). Stages
+1. The physics-characterization recipes from the immutable `SCENARIOS` in
+   `tests/helpers/physics-scenarios.mjs`, shared with the browser and VM gates. Stages
    play in order and the last stage's input is held until `--steps` (default
    600); a smaller `--steps` truncates.
 2. `--ghost <file>`: an InputGhost v3 envelope (unpacked, `packedV3` as stored

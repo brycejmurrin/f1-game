@@ -57,6 +57,21 @@ test("encodeNumber keeps what JSON drops", () => {
   assert.equal(s, '["-0",0,"NaN","Infinity","-Infinity",0.30000000000000004]');
 });
 
+test("oracle recipes keep their IDs and independent mutable stage inputs", () => {
+  const first = recipes();
+  assert.equal(first.length, 9);
+  assert.equal(first[0].id, "straight-line-accel");
+  assert.deepEqual(first[2].steps, [
+    { n: 45, in: { brake: true, steer: 0.5 } },
+    { n: 45, in: { throttle: true, steer: 0.3 } },
+  ]);
+  first[2].steps[0].in.steer = -1;
+  first[0].id = "changed";
+  const next = recipes();
+  assert.equal(next[2].steps[0].in.steer, 0.5);
+  assert.equal(next[0].id, "straight-line-accel");
+});
+
 test("unpackGhost decodes every packedV3 channel form", () => {
   const g = unpackGhost(GHOST);
   assert.equal(g.rawSteer.length, N);

@@ -10,15 +10,14 @@
  * read-only on the game and writes only under artifacts/.
  * Why and how the gate uses it: docs/notes/PHYSICS-ORACLE-2026-10-18.md.
  *
- *   node tools/check/physics-oracle.mjs                       # monza, the 4 recipes, 600 steps each
+ *   node tools/check/physics-oracle.mjs                       # monza, all shared recipes, 600 steps each
  *   node tools/check/physics-oracle.mjs --track spa --steps 120
  *   node tools/check/physics-oracle.mjs --trace straight-line-accel,off-track-recovery
  *   node tools/check/physics-oracle.mjs --ghost lap.json      # + an InputGhost v3 envelope (--steps 0 = all of it)
  *   node tools/check/physics-oracle.mjs --ghost lap.json --no-recipes --out scratch/oracle
  *
- * RECIPES are read from tests/specs/physics-characterization.spec.js (the
- * SCENARIOS literal, the same parse tests/unit/physics-characterization-vm
- * .test.mjs pins), so there is one copy. Their stages play in order and the
+ * RECIPES use tests/helpers/physics-scenarios.mjs, the immutable inputs shared
+ * by the browser and VM characterization gates. Their stages play in order and the
  * LAST stage's input is held until --steps; fewer steps truncate.
  *
  * PINNED WORLD: factory seat (game-vm "pin"), tyre wear / wind / reliability
@@ -36,13 +35,12 @@ import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import * as espree from "espree";
+import { SCENARIOS } from "../../tests/helpers/physics-scenarios.mjs";
 import { parseFlags } from "../lib/cli-args.mjs";
 const require = createRequire(import.meta.url);
 const { createGame, settle, ROOT } = require("../lib/game-vm.cjs");
 
 export const SCHEMA = "apex-physics-oracle/1";
-const SPEC = path.join(ROOT, "tests", "specs", "physics-characterization.spec.js");
 
 /** Every assist off and every non-driving-model seam pinned (game-vm adds tyreWear/wind off). */
 export const PINNED_STORAGE = Object.freeze({
@@ -61,20 +59,9 @@ export function encodeNumber(_k, v) {
 }
 export const stringify = (o) => JSON.stringify(o, encodeNumber) + "\n";
 
-/** The characterization recipes, read as literal data from the browser spec. */
+/** Fresh mutable recipes, preserving the oracle's independent per-call records. */
 export function recipes() {
-  const ast = espree.parse(fs.readFileSync(SPEC, "utf8"), { ecmaVersion: "latest", sourceType: "module" });
-  const literal = (n) => {
-    if (n.type === "Literal") return n.value;
-    if (n.type === "UnaryExpression" && n.operator === "-") return -literal(n.argument);
-    if (n.type === "ArrayExpression") return n.elements.map(literal);
-    if (n.type === "ObjectExpression") return Object.fromEntries(n.properties.map((p) => [p.key.name ?? p.key.value, literal(p.value)]));
-    throw new Error(`physics-oracle: unsupported recipe node ${n.type} in ${path.relative(ROOT, SPEC)}`);
-  };
-  const decl = ast.body.filter((n) => n.type === "VariableDeclaration").flatMap((n) => n.declarations)
-    .find((d) => d.id.name === "SCENARIOS");
-  if (!decl) throw new Error("physics-oracle: SCENARIOS not found in " + path.relative(ROOT, SPEC));
-  return literal(decl.init).map((s) => ({ ...s, id: slug(s.name) }));
+  return structuredClone(SCENARIOS).map((s) => ({ ...s, id: slug(s.name) }));
 }
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
