@@ -147,11 +147,7 @@ test("the shadow passes and the race warm share one caster gate and key", () => 
   assert.match(sp, /deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\)/, "the pass fetches casters by (team, car, true)");
   assert.match(sp, /G\.gfx\.carShadowBegin && LT\.carShadow && PerfGov\.tier\(\) < 3/);
   assert.match(sp, /G\.gfx\.lampShadowBegin && LT\.lampShadow && PerfGov\.tier\(\) < 2/);
-  // ...and the map gates in front of them: a Begin hook with no map behind it (phones) casts nothing.
-  assert.match(sp, /const _carMapWanted = G\.gfx\.carShadowEnabled !== false && !\(LT\.shadowStr <= 0\)/);
-  assert.match(sp, /G\.gfx\.lampShadowEnabled !== false && G\.gfx\.lampShadowBegin/);
-  assert.match(cd, /const carMap = gfx\.carShadowEnabled !== false && !\(LT\.shadowStr <= 0\)/);
-  assert.match(cd, /const lampMap = gfx\.lampShadowEnabled !== false/);
+  // The map gates in front (no map behind a Begin hook = a phone: nothing casts) are driven in car-presentation-vm.test.mjs.
   assert.match(cd, /\(carMap && gfx\.carShadowBegin && LT\.carShadow && tier < 3\) \|\| \(lampMap && gfx\.lampShadowBegin && LT\.lampShadow && tier < 2\)/);
 });
 
