@@ -30,6 +30,7 @@ test("title 2-up rows share equal flex cells and fill them", () => {
 
 test("compact landscape title doors fit without a nested scroller", () => {
   const menus = readCssSource("css/menus.css");
+  const destinations = readCssSource("css/menu-destinations.css");
   assert.match(
     menus,
     /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-buttons \{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.35\)/,
@@ -37,18 +38,27 @@ test("compact landscape title doors fit without a nested scroller", () => {
   );
   assert.match(
     menus,
-    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-buttons \.bigbtn \{[^}]*min-height:\s*max\(32px, var\(--tap-min\)\)/,
-    "play doors drop from --tap (52 on touch) so CAREER + 2×2 + rooms clear 343px",
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-buttons \.bigbtn \{[^}]*min-height:\s*max\(var\(--tap-min\), var\(--tap-paint\)\)/,
+    "compact-wide play doors floor at --tap-paint (painted 52 on touch), not sub-44px literals",
   );
   assert.match(
     menus,
-    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-secondary \.minibtn \{[^}]*min-height:\s*max\(26px, var\(--tap-min\)\)/,
-    "rooms sit one step below the play doors",
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-secondary \.minibtn \{[^}]*min-height:\s*max\(var\(--tap-min\), var\(--tap-paint\)\)/,
+    "compact-wide utility chips share the same painted tap floor as play doors",
   );
   assert.match(
     menus,
     /body\[data-shape="wide"\]\[data-density="compact"\]\) :is\(#menu-primary, #menu-explore, #menu-secondary\) \{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.45\)/,
     "2-up rows also tighten on the short landscape column",
+  );
+  assert.doesNotMatch(
+    destinations,
+    /max-height:\s*460px\)[\s\S]*?min-height:\s*40px/,
+    "short landscape phones must not cap the destination grid at a 40px literal",
+  );
+  assert.ok(
+    /#overlay #menu-secondary > \.bigbtn \{[^}]*min-height:\s*max\(var\(--tap-min\), var\(--tap-paint\)\)/.test(destinations),
+    "compact-wide utility row floors at --tap-paint in menu-destinations.css",
   );
 });
 

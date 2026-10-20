@@ -44,7 +44,7 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn > span { align-items: center; }
 @media (max-height: 460px) {
   #overlay #menu-buttons #menu-retention .mb-sub { display: none; }
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { min-height: 40px; font-size: max(calc(min(var(--fs-4)*.84, 15.5px)*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1))); }
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { min-height: max(var(--tap-min), var(--tap-paint)); font-size: max(calc(min(var(--fs-4)*.84, 15.5px)*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1))); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn { white-space: nowrap; font-size: max(calc(min(var(--fs-4)*.74, var(--fs-micro))*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1))); }
 }
 @media (max-height: 400px) { #overlay #menu-buttons #menu-hero .mb-sub { display: none; } }
@@ -58,7 +58,7 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
   display: inline-flex; justify-content: center; align-items: center; gap: calc(var(--gap)/8);
   font-size: clamp(.7rem, calc(1.6*var(--vwz)), var(--fs-micro)); line-height: 1.05; text-align: center; font-style: normal; font-weight: 700;
-  padding: calc(var(--gap)/10) calc(var(--gap)/8); min-height: 32px; box-sizing: border-box;
+  padding: calc(var(--gap)/10) calc(var(--gap)/8); min-height: max(var(--tap-min), var(--tap-paint)); box-sizing: border-box;
   height: auto; max-height: none; min-width: 0; letter-spacing: 0; white-space: normal; text-wrap: balance; overflow-wrap: normal; overflow: hidden;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn .btn-ico { width: .85em; height: .85em; flex: none; margin: 0; }
