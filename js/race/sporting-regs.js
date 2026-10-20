@@ -130,7 +130,8 @@ const SportingRegs = (function () {
       if (!p) { reset(); return null; }
       now.clear();
       const finishPass = p.finished && !finished;
-      for (const o of field || []) {
+      for (let i = 0, f = field || []; i < f.length; i++) {   // indexed: tick runs every step
+        const o = f[i];
         if (!o || o === p || o.retired) continue;
         const aheadNow = finishPass && o.finished && (o.lap || 0) === (p.lap || 0)
           && Number.isFinite(p.finishT) && Number.isFinite(o.finishT)
