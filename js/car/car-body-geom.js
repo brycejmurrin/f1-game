@@ -1237,12 +1237,12 @@ const CarBodyGeom = (function () {
     ];
     // Ease the undercut's lower line: an inner station whose outerBottom creases
     // more than 3° (5-9° at z 0.50 on every car) moves part-way onto its
-    // neighbours' chord (two passes; the ends and the undercut gap stay). The
+    // neighbours' chord (up to four passes; the ends and the undercut gap stay). The
     // gentler aft stations stay put: the flank details are pinned to them.
     const crease = (a, b, c) => Math.abs(Math.atan2(a.outerBottom - b.outerBottom, a.z - b.z) - Math.atan2(b.outerBottom - c.outerBottom, b.z - c.z));
-    const ease = st.map((p, i) => i > 0 && i < st.length - 1 && crease(st[i - 1], p, st[i + 1]) > 0.0524);
-    for (let pass = 0; pass < 2; pass++) {
+    for (let pass = 0; pass < 4; pass++) {
       const ob = st.map((p) => p.outerBottom);
+      const ease = st.map((p, i) => i > 0 && i < st.length - 1 && crease(st[i - 1], p, st[i + 1]) > 0.0524);
       for (let i = 1; i < st.length - 1; i++) {
         if (!ease[i]) continue;
         const a = st[i - 1], b = st[i + 1], k = (a.z - st[i].z) / (a.z - b.z);
