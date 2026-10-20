@@ -693,6 +693,9 @@ test("workshop models keep their geometry budgets and parking envelopes", async 
   const { ctx } = harness();
   const kit = vm.runInContext("GarageEquipment", ctx);
   for (const [name, build, budget, halfX, halfZ, top, floor] of [
+    ["noseTrolley", out => kit.noseTrolley(out, 0, 0, LIV.c1), 900, 0.47, 0.64, 0.98, true],
+    ["wheelGunDock", out => kit.wheelGunDock(out, 0, 0, LIV.c1), 430, 0.23, 0.29, 1.02, true],
+    ["radioRack", out => kit.radioRack(out, 0, 0, LIV.c1, 0), 500, 0.18, 0.39, 0.50, true],
     ["toolChest", out => kit.toolChest(out, 0, 0, LIV.c1), 500, 0.42, 0.85, 1.26, true],
     ["rearJack", out => kit.rearJack(out, 0, 0, LIV.c1), 300, 0.95, 1.08, 0.68, true],
     ["wheelGun", out => kit.wheelGun(out, 0, 0, 1, 1, LIV.c1), 150, 0.14, 0.32, 0.20, false],
@@ -725,7 +728,7 @@ test("workshop models keep their geometry budgets and parking envelopes", async 
 
 test("full workshop routes detailed models to the existing wall batches and leaves tyre access clear", () => {
   const { ctx, GarageScene } = harness(), kit = vm.runInContext("GarageEquipment", ctx), calls = [];
-  for (const name of ["toolChest", "wingRack", "extinguisher", "rollingStool", "floorFan", "serviceRig", "wheelDolly", "wheelGun", "hoseReel"]) {
+  for (const name of ["toolChest", "noseTrolley", "wheelGunDock", "radioRack", "wingRack", "extinguisher", "rollingStool", "floorFan", "serviceRig", "wheelDolly", "wheelGun", "hoseReel"]) {
     const build = kit[name];
     kit[name] = (out, ...args) => {
       const start = out.pos.length; build(out, ...args);
@@ -736,8 +739,8 @@ test("full workshop routes detailed models to the existing wall batches and leav
   }
   const bay = GarageScene.buildStatic(LIV, { props: true, equipment: true });
   assert.ok(bay.idx.length / 3 <= 18000, "full static bay geometry budget");
-  assert.equal(calls.filter(c => c.name === "toolChest").length, 4);
-  assert.equal(calls.filter(c => c.name === "wheelGun").length, 3, "mounted guns share the detailed model");
+  assert.equal(calls.filter(c => c.name === "toolChest").length, 1, "repeated storage pays for distinct stations");
+  assert.equal(calls.filter(c => c.name === "wheelGun").length, 2, "two mounted spares complement the service dock");
   assert.equal(calls.filter(c => c.name === "hoseReel").length, 2, "mounted reels share the detailed model");
   const chestTop = Math.max(...calls.filter(c => c.name === "toolChest").map(c => c.max[1]));
   assert.ok(calls.filter(c => c.name === "wheelGun").every(c => c.min[1] > chestTop + 0.08), "wall guns clear worktops");
@@ -748,4 +751,17 @@ test("full workshop routes detailed models to the existing wall batches and leav
   assert.ok(dolly.max[2] <= 4.24 - 0.025, "dolly clears the spare-tyre envelope");
   assert.ok(fan.max[1] <= 0.64 + 1e-6, "vertical fan stays below the information-board sill");
   assert.ok(fan.min[0] < -3.6 && rig.min[0] > 3.6, "workshop stays outboard of car framing");
+  for (const name of ["noseTrolley", "wheelGunDock", "radioRack"])
+    assert.equal(calls.filter(c => c.name === name).length, 1, `${name} is present in the actual detailed bay`);
+  const nose = calls.find(c => c.name === "noseTrolley"), dock = calls.find(c => c.name === "wheelGunDock");
+  const radios = calls.find(c => c.name === "radioRack"), chest = calls.find(c => c.name === "toolChest");
+  assert.equal(nose.out, rack.out); assert.equal(dock.out, rack.out);
+  assert.ok(nose.min[0] > 4 && dock.min[0] > 4, "new floor stations leave the car corridor clear");
+  assert.ok(rack.min[2] - nose.max[2] > 0.5, "nose trolley clears wing-rack feet");
+  assert.ok(nose.min[2] - dock.max[2] > 0.5, "service stations do not clip each other");
+  assert.equal(radios.out, chest.out, "radio rack shares its supporting chest's wall batch");
+  assert.ok(Math.abs(radios.min[1] - 1.19) < 1e-6, "radio rack rests on the chest's worktop");
+  for (const axis of [0, 2]) {
+    assert.ok(radios.min[axis] > chest.min[axis] && radios.max[axis] < chest.max[axis], "rack remains inside its support footprint");
+  }
 });

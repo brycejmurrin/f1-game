@@ -16,6 +16,69 @@ function caster(out, x, z, radius) {
   tube(out, [x - 0.048, radius, z], [x + 0.048, radius, z], radius * 0.36, STEEL, 8, MAT.METAL);
   for (const sx of [-1, 1]) block(out, x + sx * 0.043, radius + 0.05, z, 0.008, 0.06, 0.018, STEEL, MAT.METAL);
 }
+// Blender study coordinates (X right, Y back, Z up) → game Y-up metres.
+// turn is a quarter turn: +1 faces +X, -1 faces -X, 0 faces +Z.
+// Ported from the editable three-prop study; use existing runtime materials.
+function workshopFrame(out, x, z, c1, baseY, turn) {
+  const point = (p) => [x + (turn ? -turn * p[1] : p[0]), (baseY || 0) + p[2], z + (turn ? -turn * p[0] : -p[1])];
+  const box = (p, size, color) => {
+    const q = point(p), sx = turn ? size[1] : size[0], sz = turn ? size[0] : size[1];
+    block(out, q[0], q[1], q[2], sx / 2, size[2] / 2, sz / 2, color, color === STEEL ? MAT.METAL : MAT.FLAT);
+  };
+  const rod = (a, b, r, color, segments) => tube(out, point(a), point(b), r, color, segments || 10, color === STEEL ? MAT.METAL : MAT.FLAT);
+  return { box, rod, paint: scale(c1, 0.85) };
+}
+function noseTrolley(out, x, z, c1) {
+  const { box, rod, paint } = workshopFrame(out, x, z, c1, 0, 0);
+  for (const sx of [-0.4, 0.4]) {
+    box([sx, 0, 0.18], [0.065, 1.2, 0.065], STEEL);
+    for (const y of [-0.46, 0.46]) {
+      rod([sx - 0.025, y, 0.07], [sx + 0.025, y, 0.07], 0.07, RUBBER, 12);
+      rod([sx - 0.04, y, 0.07], [sx + 0.04, y, 0.07], 0.018, STEEL);
+      box([sx, y, 0.135], [0.085, 0.035, 0.08], STEEL);
+    }
+    for (const y of [-0.37, 0.37]) {
+      rod([sx, y, 0.2], [sx, y, 0.59], 0.025, STEEL);
+      rod([sx, y + 0.16, 0.2], [sx, y, 0.5], 0.018, STEEL);
+    }
+    box([sx, 0, 0.62], [0.11, 0.96, 0.07], RUBBER);
+    for (const y of [-0.48, 0.48]) box([sx, y, 0.66], [0.12, 0.035, 0.12], paint);
+    rod([sx, 0.52, 0.2], [sx, 0.6, 0.95], 0.022, STEEL);
+  }
+  for (const y of [-0.48, 0.48]) box([0, y, 0.18], [0.8, 0.055, 0.065], paint);
+  rod([-0.4, 0.6, 0.95], [0.4, 0.6, 0.95], 0.025, RUBBER);
+}
+function wheelGunDock(out, x, z, c1) {
+  const { box, rod, paint } = workshopFrame(out, x, z, c1, 0, -1);
+  box([0, 0, 0.025], [0.48, 0.43, 0.05], STEEL);
+  rod([0, 0, 0.05], [0, 0, 0.78], 0.04, STEEL);
+  box([0, 0, 0.8], [0.54, 0.39, 0.05], paint);
+  for (const sx of [-0.25, 0.25]) box([sx, 0, 0.85], [0.025, 0.39, 0.08], STEEL);
+  box([0, 0.18, 0.85], [0.54, 0.025, 0.08], STEEL);
+  for (const sx of [-0.14, 0.14]) box([sx, -0.04, 0.855], [0.055, 0.17, 0.06], RUBBER);
+  rod([-0.19, -0.04, 0.94], [0.16, -0.04, 0.94], 0.07, paint, 12);
+  rod([-0.28, -0.04, 0.94], [-0.19, -0.04, 0.94], 0.039, STEEL);
+  rod([0.08, -0.04, 0.93], [0.08, -0.04, 0.84], 0.026, RUBBER);
+  for (const sx of [-0.12, 0]) rod([sx, 0.11, 0.825], [sx, 0.11, 0.9], 0.03, STEEL);
+  rod([0.16, 0.11, 0.825], [0.16, 0.11, 0.89], 0.018, STEEL);
+  rod([0.035, 0, 0.5], [0.18, 0, 0.5], 0.012, STEEL);
+  rod([0.18, 0, 0.5], [0.18, 0, 0.55], 0.012, STEEL);
+}
+function radioRack(out, x, z, c1, baseY) {
+  const { box, rod, paint } = workshopFrame(out, x, z, c1, baseY, 1);
+  box([0, 0, 0.03], [0.7, 0.34, 0.06], STEEL);
+  box([0, 0.14, 0.26], [0.7, 0.035, 0.46], STEEL);
+  for (const sx of [-0.255, -0.085, 0.085, 0.255]) {
+    box([sx, 0, 0.09], [0.13, 0.19, 0.06], paint);
+    box([sx, 0, 0.22], [0.09, 0.065, 0.23], RUBBER);
+    box([sx, -0.034, 0.26], [0.06, 0.008, 0.065], STEEL);
+    rod([sx + 0.025, 0, 0.33], [sx + 0.025, 0, 0.49], 0.006, RUBBER, 8);
+    rod([sx - 0.025, 0, 0.335], [sx - 0.025, 0, 0.35], 0.009, STEEL, 8);
+    box([sx, -0.098, 0.1], [0.018, 0.008, 0.008], [0.08, 0.8, 0.3]);
+  }
+  box([0, 0.118, 0.1], [0.58, 0.05, 0.05], RUBBER);
+  rod([0.35, 0.1, 0.1], [0.385, 0.1, 0.1], 0.012, STEEL);
+}
 function starterCart(out, cx, cz, c1) {
   block(out, cx, 0.40, cz, 0.30, 0.24, 0.24, scale(c1, 0.55));
   block(out, cx, 0.66, cz, 0.31, 0.02, 0.25, STEEL);
@@ -306,6 +369,6 @@ function buildEquipment(g, liv, ctx) {
 }
 
 
-  return { RUBBER, HOSE, FAN, SCREEN, COMPOUND, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, wheelDolly, build: buildEquipment };
+  return { RUBBER, HOSE, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, wheelDolly, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;

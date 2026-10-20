@@ -196,6 +196,8 @@ function buildProps(g, liv) {
   const toolbox = (out, x, z) => GarageEquipment.toolChest(out, x, z, c1);
   // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
   toolbox(g.nx, -4.92, 3.6);
+  // The charging rack sits on the actual chest top (1.16 + 0.03 m).
+  GarageEquipment.radioRack(g.nx, -4.92, 3.6, c1, 1.19);
   // The -X stacks stand in the DOOR corner, not the deep bay: at z -5.4 and
   // -3.1 they were 0.46 m in front of the BUDGET board (y 0.69-1.44, z
   // -5.4..-2.4) at exactly its height, and the SIDE preset read the board
@@ -207,7 +209,9 @@ function buildProps(g, liv) {
   block(g.nx, -5.02, 0.86, 0.6, 0.30, 0.03, 1.30, scale(STEEL, 0.9));
   for (let s = -1; s <= 1; s += 2) cyl(g.nx, -5.02, 0, 0.6 + s * 1.15, 0.04, 0.86, STEEL, 6);
   // +X wall: the tool trolleys.
-  toolbox(g.px, 4.92, -3.4); toolbox(g.px, 4.92, -1.5); toolbox(g.px, 4.92, 0.4);
+  // Trade repeated storage for distinct service stations within the same budget.
+  GarageEquipment.wheelGunDock(g.px, 4.85, -1.5, c1);
+  GarageEquipment.noseTrolley(g.px, 4.65, 0.4, c1);
   stack(g.px, 4.55, -5.4, 1); stack(g.px, 4.55, 4.6, 2);
   // Back wall: the pit board.
   cyl(g.back, 4.70, 0, -6.15, 0.03, 1.80, STEEL, 6);
@@ -269,7 +273,7 @@ function buildProps(g, liv) {
   GarageEquipment.wingRack(g.nx, -4.30, 1.2, 1, c1);
   GarageEquipment.wingRack(g.px, 4.30, 2.6, -1, c1);
   // Wall kit shares the floor guns/reels, mounted clear of the chest worktops.
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     const z = -1.9 + i * 0.55;
     GarageEquipment.wheelGun(g.px, 5.16, z, 1, -1, c1, 1.34);
     block(g.px, 5.28, 1.52, z, 0.03, 0.15, 0.06, STEEL, MAT.METAL);

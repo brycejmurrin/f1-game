@@ -6829,6 +6829,12 @@
       "hoseReel": [
         "tests/unit/garage-mesh.test.mjs"
       ],
+      "noseTrolley": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "radioRack": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "rearJack": [
         "tests/unit/garage-mesh.test.mjs"
       ],
@@ -6851,6 +6857,9 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "wheelGun": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wheelGunDock": [
         "tests/unit/garage-mesh.test.mjs"
       ],
       "wingRack": [
