@@ -70,6 +70,41 @@ function driver() {
   }
 }
 
+function slowCalls() {
+  // Every GL / WebGPU call that takes > 20 ms, with the bound program's SHADER_NAME and a short stack; plus
+  // program links and pipeline creations counted per phase (window on = after the gate).
+  const S = window.__h10s = { on: false, slow: [], links: { pre: 0, win: 0 }, pipes: { pre: 0, win: 0 }, linkNames: [], cur: "", srcs: new WeakMap() };
+  const stack = () => (new Error().stack || "").split("\n").slice(3, 7).map((l) => l.trim().replace(/^at /, "").replace(/https?:\/\/[^/]+\//, "").replace(/\?v=[^:]+/, "")).join(" < ");
+  const wrap = (proto, name, tag) => {
+    const o = proto && proto[name]; if (typeof o !== "function") return;
+    proto[name] = function () {
+      const a = performance.now();
+      try { return o.apply(this, arguments); } finally {
+        const d = performance.now() - a;
+        if (d > 20 && S.slow.length < 60) S.slow.push({ fn: tag + "." + name, ms: +d.toFixed(1), win: S.on, prog: S.cur, at: Math.round(a), stack: stack() });
+      }
+    };
+  };
+  try {
+    const P = WebGL2RenderingContext.prototype;
+    const ss = P.shaderSource; P.shaderSource = function (sh, src) { S.srcs.set(sh, src); return ss.call(this, sh, src); };
+    const at = P.attachShader; P.attachShader = function (pr, sh) { const m = String(S.srcs.get(sh) || "").match(/#define SHADER_NAME\s+(.+)/); if (m) pr.__n = m[1]; return at.call(this, pr, sh); };
+    const lk = P.linkProgram; P.linkProgram = function (pr) { S.links[S.on ? "win" : "pre"]++; if (S.on && S.linkNames.length < 40) S.linkNames.push((pr.__n || "?") + "@" + Math.round(performance.now())); return lk.call(this, pr); };
+    const up = P.useProgram; P.useProgram = function (pr) { S.cur = (pr && pr.__n) || ""; return up.call(this, pr); };
+    for (const n of ["linkProgram", "getProgramParameter", "getShaderParameter", "compileShader", "drawElements", "drawArrays", "drawElementsInstanced", "drawArraysInstanced",
+      "drawBuffers", "readPixels", "getError", "texImage2D", "texSubImage2D", "texImage3D", "texSubImage3D", "texStorage2D", "texStorage3D", "bufferData", "bufferSubData", "clientWaitSync", "finish",
+      "flush", "generateMipmap", "blitFramebuffer", "clear", "uniform4fv", "uniformMatrix4fv", "getUniformLocation", "getActiveUniform", "vertexAttribPointer", "bindVertexArray", "checkFramebufferStatus", "invalidateFramebuffer", "framebufferTexture2D", "framebufferTextureLayer"]) wrap(P, n, "gl");
+  } catch (_) {}
+  try {
+    const D = GPUDevice.prototype;
+    const cp = D.createRenderPipeline; D.createRenderPipeline = function () { S.pipes[S.on ? "win" : "pre"]++; return cp.apply(this, arguments); };
+    for (const n of ["createRenderPipeline", "createShaderModule", "createBindGroup", "createBuffer", "createTexture", "createComputePipeline"]) wrap(D, n, "gpu");
+    for (const n of ["submit", "writeBuffer", "writeTexture", "copyExternalImageToTexture"]) wrap(GPUQueue.prototype, n, "queue");
+    wrap(GPUCanvasContext.prototype, "getCurrentTexture", "ctx");
+    wrap(GPUCommandEncoder.prototype, "finish", "enc");
+  } catch (_) {}
+}
+
 const pct = (a, q) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y); return +s[Math.min(s.length - 1, Math.ceil(q * s.length) - 1)].toFixed(2); };
 function dist(a) { return { n: a.length, p50: pct(a, 0.5), p95: pct(a, 0.95), p99: pct(a, 0.99), max: a.length ? +Math.max(...a).toFixed(2) : null, mean: a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null }; }
 
@@ -121,6 +156,7 @@ async function runRow(browser, server, backend, track) {
   }, [backend === "tlx-gl" ? "1" : "0", EXTRA]);
   await page.addInitScript(recorder);
   await page.addInitScript(driver);
+  await page.addInitScript(slowCalls);
   await gotoGame(page, server.url, 180000);
   await page.evaluate(async (t) => { const A = window.__apex; await A.race(t); A.go(); }, track);
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
@@ -133,7 +169,7 @@ async function runRow(browser, server, backend, track) {
       present: t && t.renderer && [t.renderer.domElement.width, t.renderer.domElement.height], gov: A.renderScale(), state: A.info().state,
       gpuErrors: bs && bs.gpuErrors, preset: localStorage.getItem("apex26.gfxPreset"), gpuTimer: (() => { try { return A.gpuTimer(true); } catch (_) { return null; } })() };
   });
-  await page.evaluate(() => { window.__apex.perf({ on: true, reset: true }); const H = window.__h10; H.ts = []; H.cb = []; H.lastT = -1; H.on = true; });
+  await page.evaluate(() => { window.__apex.perf({ on: true, reset: true }); const H = window.__h10; H.ts = []; H.cb = []; H.lastT = -1; H.on = true; window.__h10s.on = true; });
   // Trace the middle TRACE s of the window.
   const pre = Math.max(0, (WIN - TRACE) / 2);
   await page.waitForTimeout(pre * 1000);
@@ -148,18 +184,18 @@ async function runRow(browser, server, backend, track) {
   await cdp.send("Tracing.end"); await Promise.race([done, new Promise((r) => setTimeout(r, 60000))]);
   await page.waitForTimeout(Math.max(0, WIN - pre - TRACE) * 1000);
   const got = await page.evaluate(() => {
-    const H = window.__h10; H.on = false; window.__h10d.stop();
+    const H = window.__h10; H.on = false; window.__h10d.stop(); const SC = window.__h10s; SC.on = false;
     const A = window.__apex, p = A.perf();
     const iv = []; for (let i = 1; i < H.ts.length; i++) iv.push(H.ts[i] - H.ts[i - 1]);
     let gpuMs = null; try { gpuMs = A.gpuTimer().ms; } catch (_) {}
     return { iv, cb: H.cb, spans: p.spans, loaf: p.loaf, drive: { frames: window.__h10d.frames, dist: Math.round(window.__h10d.dist), off: window.__h10d.off, err: window.__h10d.err },
-      gpuMs, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
+      gpuMs, slow: { calls: SC.slow, links: SC.links, pipes: SC.pipes, linkNames: SC.linkNames }, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
   });
   const over = (ms) => +(got.iv.filter((x) => x > ms).length / Math.max(1, got.iv.length) * 100).toFixed(1);
   const loafE = (got.loaf && got.loaf.entries) || [];
   const row = {
     env, frame: Object.assign(dist(got.iv), { over33: over(33.4), over50: over(50), over100: over(100), fps: +(1000 * got.iv.length / Math.max(1, got.iv.reduce((a, b) => a + b, 0))).toFixed(1) }),
-    cpu: dist(got.cb), spans: got.spans, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
+    cpu: dist(got.cb), spans: got.spans, slow: got.slow, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
     loaf: { supported: got.loaf && got.loaf.supported, n: loafE.length, top: loafE.slice().sort((a, b) => (b.duration || 0) - (a.duration || 0)).slice(0, 6) },
     trace: analyseTrace(events, f1 - f0), console: cons,
   };
@@ -180,6 +216,7 @@ try {
       log(`  frame p50 ${f.p50} p95 ${f.p95} p99 ${f.p99} max ${f.max} fps ${f.fps} >33 ${f.over33}% >50 ${f.over50}% | cpu p50 ${c.p50} p95 ${c.p95} max ${c.max} | drive ${JSON.stringify(row.drive)}`);
       log(`  spans ${JSON.stringify(row.spans)}`);
       log(`  trace ${JSON.stringify(row.trace)}`);
+      log(`  slow ${JSON.stringify(row.slow).slice(0, 2500)}`);
       log(`  loaf ${JSON.stringify(row.loaf).slice(0, 1500)}`);
     } catch (e) { row.error = String((e && e.stack) || e).slice(0, 600); log(`${backend} ${track} FAILED ${row.error}`); }
     finally { row.ms = Date.now() - t0; save(); if (browser) await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]); }
