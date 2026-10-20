@@ -83,3 +83,16 @@ test("Keel flown flaps have no ears in either cache warm-up order (track style v
     assert.equal(JSON.stringify([first, second]), "[[],[]]", garageFirst ? "garage first" : "track first");
   }
 });
+
+test("each concept diffuser row reaches the mesh and an explicit 0 is the shipped floor", () => {
+  const F = [["style_floor_tray", "standard"], ["style_floor_opentray", "sealed_edge"],
+             ["style_floor_fencefan", "fence_array"], ["style_floor_swepttray", "gurney_edge"]];
+  assert.ok(M.Parts.VISUAL_FIELD_REGISTRY.geometry.floor.includes("diffShape"));
+  const fl = (id) => M.Parts.getVisualTiers({ ...M.Parts.DEFAULTS, floor: id }, team);
+  for (const [id, base] of F) {
+    assert.notEqual(build(fl(id)), build(fl(base)), `${id} reaches the mesh`);
+    const shipped = fl(base);
+    const off = { ...shipped, _visual: { ...shipped._visual, floor: { ...shipped._visual.floor, diffShape: 0 } } };
+    assert.equal(build(off), build(shipped), `${base}: diffShape 0 changes nothing`);
+  }
+});

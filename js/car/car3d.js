@@ -2131,7 +2131,16 @@ const Car3D = (function () {
       const dThr  = 0.46 * diffW;                    // half-width at the throat
       const dKeel = 0.12;                            // crash structure half-width
       const dFloor = 0.105;
-      const dRise = 0.30 * Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise));
+      // diffShape (floor, B·D3c, opt-in; 0/absent = the shipped tunnels): lower,
+      // lighter diffusers after the concept sheet. rise scales the exit ceiling, n thin
+      // fences of width w at h of the tunnel height, fan spreads them outward at the exit.
+      const DS = [null,
+        { rise: 0.55, n: 4, w: 0.012, h: 0.80, fan: 0 },      // 1 Shallow Tray
+        { rise: 0.55, n: 2, w: 0.012, h: 0.85, fan: 0 },      // 2 Open Tray
+        { rise: 0.80, n: 6, w: 0.010, h: 0.92, fan: 0.25 },   // 3 Fence Fan
+        { rise: 0.65, n: 3, w: 0.014, h: 0.85, fan: 0.12 },   // 4 Swept Tray
+      ][floorStyle && floorStyle.diffShape ? Math.max(1, Math.min(4, Math.round(floorStyle.diffShape))) : 0];
+      const dRise = 0.30 * Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise)) * (DS ? DS.rise : 1);
       const yCE = dFloor + dRise, yCT = dFloor + 0.055 * diffH1 / 0.4;
       const DIFF_IN = [0.045, 0.045, 0.055];
       for (const s of [-1, 1]) {
@@ -2143,7 +2152,13 @@ const Car3D = (function () {
                      -1.95, s * dThr,  (dFloor + yCT) / 2, 0.030, yCT - dFloor,
                 CARBON, SURFACES.carbon);                               // outer wall
         addBox(out, cxE, dFloor, -2.235, wE, 0.028, 0.57, CARBON, SURFACES.carbon);
-        for (let k = 0; k < 3; k++) {
+        if (DS) for (let k = 0; k < DS.n; k++) {
+          const f = (k + 1) / (DS.n + 1), fE = Math.min(0.94, f * (1 + DS.fan * f));
+          addLoft(out, -2.50, s * (dKeel + wE * fE), (dFloor + yCE) / 2, DS.w, (yCE - dFloor) * DS.h,
+                       -2.02, s * (dKeel + wT * f), (dFloor + yCT) / 2, DS.w * 0.8, (yCT - dFloor) * DS.h,
+                  DIFF_IN, SURFACES.carbon);                            // thin fence
+        }
+        else for (let k = 0; k < 3; k++) {
           const f = 0.22 + k * 0.28;
           addLoft(out, -2.50, s * (dKeel + wE * f), (dFloor + yCE) / 2, 0.028, (yCE - dFloor) * 0.90,
                        -2.02, s * (dKeel + wT * f), (dFloor + yCT) / 2, 0.022, (yCT - dFloor) * 0.90,

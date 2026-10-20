@@ -700,6 +700,16 @@ const Parts = (function () {
       { rwPlanes: 1, epChord: 0.74, lvl: 2, fwCurve: 0.05, frontRise: 0.15, epShape: 2, epTip: 2, rwRise: 0.055, rwCurve: 0.055 }],
     ["aero", "rake_setup", "style_aero_serpent", "Swell Wing", "flaps curling up to rolled endplates, deep dipped-centre spoon rear wing",
       { rwPlanes: 1, epChord: 0.74, lvl: 2, fwCurve: 0.10, epShape: 3, epTip: 2, rwRise: 0.02, rwCurve: 0.09, rearTaper: 0.86 }],
+    // B·D3c concept-sheet diffusers (2026-10-20): lower, lighter tunnels with thin
+    // fences (car3d.js diffShape; absent = shipped tunnels).
+    ["floor", "standard", "style_floor_tray", "Shallow Tray", "low diffuser tray with four thin fences",
+      { diffShape: 1 }],
+    ["floor", "sealed_edge", "style_floor_opentray", "Open Tray", "low, open diffuser with two thin fences",
+      { diffShape: 2 }],
+    ["floor", "fence_array", "style_floor_fencefan", "Fence Fan", "six thin diffuser fences fanning outward at the exit",
+      { diffShape: 3 }],
+    ["floor", "gurney_edge", "style_floor_swepttray", "Swept Tray", "mid-height diffuser with three fences sweeping outboard",
+      { diffShape: 4 }],
     ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",
       {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }],
   ];
@@ -748,7 +758,7 @@ const Parts = (function () {
       fuel: Object.freeze(["filler", "hatch", "vent", "breather", "capBig"]),
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap",
         "lip", "shield", "stack", "heatTint", "gateStack", "hood"]),
-      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt", "ddiff"]),
+      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt", "ddiff", "diffShape"]),
       cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror", "mirrorMount", "mirrorFrame"]),
       // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.
       // coverVanes: wheel-owned vane count on a covered face (0 = sealed Full Disc).
