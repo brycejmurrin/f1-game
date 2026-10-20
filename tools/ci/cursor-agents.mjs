@@ -15,6 +15,7 @@
 //   node tools/ci/cursor-agents.mjs artifacts <agent-id>
 //   node tools/ci/cursor-agents.mjs artifact <agent-id> <artifacts/path> [--out DIR]
 //   node tools/ci/cursor-agents.mjs usage <agent-id>
+//   node tools/ci/cursor-agents.mjs handback <agent-id> [--timeout 600] [--interval 5]   (wait, cache every run while the 24 h stream lasts, bounded digest; exit as wait)
 //   node tools/ci/cursor-agents.mjs dump [<agent-id>...] [--limit 20]
 //   node tools/ci/cursor-agents.mjs digest [--dir artifacts/cursor-dumps]
 //   node tools/ci/cursor-agents.mjs transcript <agent-id> [--run ID | --all] [--only tools,errors,chat,turns] [--tool NAME]
@@ -686,6 +687,33 @@ export async function waitAgent(id, { timeoutS = 600, intervalS = 5 } = {}) {
   }
 }
 
+/**
+ * Hand-back: wait for an agent to finish, then read and cache EVERY retrievable run while the stream is still there
+ * (retention is 24 h, so a transcript not read at hand-back is gone by the next day), and return a bounded digest:
+ * a header, one line per run, at most five failure lines, the artifact count. Read-only, so any agent id is allowed.
+ * A timeout returns code 124 with no dump (the agent is still working).
+ */
+export async function handback(id, { timeoutS = 600, intervalS = 5, dir, errors = 5, width = 120 } = {}) {
+  const w = await waitAgent(id, { timeoutS, intervalS });
+  if (w.code === 124) return { code: 124, lines: [w.line] };
+  const { parsed, expired, notCached } = await loadRuns(id, { dir, sel: "all" });
+  const calls = parsed.reduce((t, p) => t + p.stats.calls, 0);
+  const errs = parsed.reduce((t, p) => t + p.stats.errors, 0);
+  const lines = [`${w.line} HANDBACK runs=${parsed.length} expired=${expired} notCached=${notCached} calls=${calls} err=${errs}`];
+  for (const p of parsed) lines.push(summaryLine(p, width));
+  const failing = renderLines(parsed, { only: ["errors"], width }).slice(0, errors);
+  lines.push(...failing);
+  if (errs > failing.length) lines.push(`… ${errs - failing.length} more failures (transcript ${id} --only errors)`);
+  let arts = 0;
+  try {
+    arts = ((await json(`/v1/agents/${id}/artifacts`)).items || []).length;
+  } catch {
+    arts = -1;
+  }
+  lines.push(`ARTIFACTS ${arts < 0 ? "unreadable" : arts}${arts > 0 ? ` (artifacts ${id})` : ""}`);
+  return { code: w.code, lines };
+}
+
 /** Reject anything but a plain relative `artifacts/...` path before a request is made. */
 export function checkArtifactPath(p) {
   const segs = typeof p === "string" ? p.split("/") : [];
@@ -833,6 +861,11 @@ async function main() {
     const w = await waitAgent(rest[0], { timeoutS: Number(flag(rest, "--timeout", 600)), intervalS: Number(flag(rest, "--interval", 5)) });
     console.log(w.line);
     process.exitCode = w.code;
+  } else if (cmd === "handback") {
+    if (!rest[0]) throw new Error("handback <agent-id> [--timeout S] [--interval S]");
+    const r = await handback(rest[0], { timeoutS: Number(flag(rest, "--timeout", 600)), intervalS: Number(flag(rest, "--interval", 5)), dir: flag(rest, "--dir") ? dir : undefined });
+    for (const l of r.lines) console.log(l);
+    process.exitCode = r.code;
   } else if (cmd === "artifacts") {
     for (const l of await listArtifacts(rest[0])) console.log(l);
   } else if (cmd === "artifact") {
