@@ -943,6 +943,22 @@ test("trailYieldStep: the yield scales with how close the trailer is, and is gon
   assert.ok(A.trailYieldEase(4, t) < 1 && A.trailYieldEase(4, t) > A.letPassEase(t), "part of the blue-flag ease");
 });
 
+test("trailStep: a closed gate or a pitting car ahead ends the trail at once, no bleed (#2356)", () => {
+  const mk = () => { const ahead = { prog: 1030, speed: 50, tierV: 1, skill: 0.99, pitState: "none" }; const c = { prog: 1000, speed: 50, tierV: 1, skill: 1, trailT: 32, _trOf: ahead }; return [c, ahead]; };
+  let [c, ahead] = mk();
+  assert.ok(A.trailStep(c, ahead, true, false, 1 / 60) > 1.019, "an open gate: a 32 s trail pushes");
+  [c, ahead] = mk();
+  assert.equal(A.trailStep(c, ahead, false, false, 1 / 60), 1, "a caution closes the gate: no push");
+  assert.equal(c.trailT, 0); assert.equal(c._trOf, null);
+  assert.equal(A.trailYieldStep(ahead, c, false), false, "and the car ahead stops yielding the same frame");
+  [c, ahead] = mk(); ahead.pitState = "entry";
+  assert.equal(A.trailStep(c, ahead, true, false, 1 / 60), 1, "the car ahead pits: no push");
+  assert.equal(c.trailT, 0);
+  [c, ahead] = mk(); ahead.prog = 1000 + 70;   // 1.4 s: a gap break still bleeds
+  A.trailStep(c, ahead, true, false, 0.5);
+  assert.ok(Math.abs(c.trailT - 30.5) < 1e-9 && c._trOf === ahead, "a gap break bleeds, keeping the pair");
+});
+
 test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an obstacle", () => {
   const base = { street: false, speed: 3, freeSpeed: 55, vTop: 60, blockerVmax: 60, blockerSpeed: 4 };
   assert.equal(A.otWant({ ...base, blockerAccel: 0 }), true, "parked: pass it");

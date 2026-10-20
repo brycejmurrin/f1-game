@@ -847,8 +847,12 @@ const AiDrive = (function () {
   // same car must stay ahead or the timer restarts — and returns the push.
   function scriptPaceOf(o) { return o && o.tierV > 0 && o.skill > 0 ? o.tierV * o.skill : 0; }
   function trailStep(c, ahead, open, street, dt) {
-    const on = !!ahead && !!open && !ahead.finished && !(ahead.pitState && ahead.pitState !== "none")
-      && trailCase(street, scriptPaceOf(c), scriptPaceOf(ahead), ahead.prog - c.prog, c.speed, !!ahead.human);
+    // A closed gate (caution, pit lane, flag) or a car ahead that is pitting
+    // or done ends the trail at once: a bleed there kept a 32 s trail pushing,
+    // and its yielder lifting under the caution cap, for ~8 s. Only a break in
+    // the gap bleeds.
+    if (!ahead || !open || ahead.finished || (ahead.pitState && ahead.pitState !== "none")) { c.trailT = 0; c._trOf = null; return 1; }
+    const on = trailCase(street, scriptPaceOf(c), scriptPaceOf(ahead), ahead.prog - c.prog, c.speed, !!ahead.human);
     c.trailT = trailTime(ahead === c._trOf ? c.trailT : 0, on, dt);
     if (on || !c.trailT) c._trOf = on ? ahead : null;
     return trailPush(c.trailT, street);

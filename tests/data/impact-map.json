@@ -9717,6 +9717,9 @@
       "trailPush": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "trailStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "trailTime": [
         "tests/unit/ai-drive.test.mjs"
       ],
