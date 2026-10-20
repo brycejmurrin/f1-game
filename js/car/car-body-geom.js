@@ -1763,6 +1763,7 @@ const CarBodyGeom = (function () {
       podStops, podSculpt: sculpt,
       coverStops,
       podRing(z, side) { return sculptPodRing(podSample(z), side, sculpt); },
+      podRoof: sculpt ? (z, u) => sculptPodRoof(podSample(z), u, sculpt) : null,
       podFlank(z, fraction) {
         const p = podSample(z), y = p.outerBottom + (p.outerTop - p.outerBottom) * fraction;
         if (!sculpt) return [p.outer, y, z];
@@ -1808,17 +1809,19 @@ const CarBodyGeom = (function () {
 
   // One continuous skin. The belly rolls into the shoulder rather than leaving
   // a vertical slab; podFlank drapes graphics over these same cross sections.
+  // The roof from the inner edge (u 0) to the outer top (u 1): a channel dips it, a crown lifts it.
+  function sculptPodRoof(p, u, sculpt) {
+    const height = p.outerTop - p.outerBottom;
+    const linear = p.innerTop + (p.outerTop - p.innerTop) * u;
+    const depth = Math.min(Math.max(0, sculpt?.channel || 0), height * 0.42);
+    return [p.inner + (p.outer - p.inner) * u, linear - depth * Math.pow(Math.sin(Math.PI * u), 2)
+      + (sculpt?.crown || 0) * Math.sin(Math.PI * u)];
+  }
   function sculptPodRing(p, side, sculpt) {
     const span = p.outer - p.inner, height = p.outerTop - p.outerBottom;
     const t = Math.max(0, Math.min(1, (0.50 - p.z) / 1.55));
     const waist = (sculpt?.waist || 0) * Math.pow(Math.sin(Math.PI * t), 2);
-    const roof = (u) => {
-      const linear = p.innerTop + (p.outerTop - p.innerTop) * u;
-      const depth = Math.min(Math.max(0, sculpt?.channel || 0), height * 0.42);
-      const y = linear - depth * Math.pow(Math.sin(Math.PI * u), 2)
-        + (sculpt?.crown || 0) * Math.sin(Math.PI * u);
-      return [side * (p.inner + span * u), y, p.z];
-    };
+    const roof = (u) => { const r = sculptPodRoof(p, u, sculpt); return [side * r[0], r[1], p.z]; };
     const q = [[side * p.inner, p.innerBottom, p.z],
       [side * (p.outer - span * (sculpt?.belly || 0)), p.outerBottom, p.z],
       [side * (p.outer - span * (0.14 + waist)), p.outerBottom + height * 0.22, p.z],

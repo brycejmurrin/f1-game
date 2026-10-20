@@ -1246,7 +1246,7 @@ const Car3D = (function () {
     // applied over the paint, not buried by it. At 0.016 the panel sat proud of
     // the board and covered it, so on every pod-set livery the sidepod wordmark
     // was actually sitting on the pod colour while being inked for the board.
-    if (podC) zone("sidepods", () => addPodFlankSpan(0.45, 0.11, 0.60, 0.22, podC, SURFACES.paint, 0.006));
+    if (podC && !anchors.podSculpt) zone("sidepods", () => addPodFlankSpan(0.45, 0.11, 0.60, 0.22, podC, SURFACES.paint, 0.006));   // a sculpted shell already wears podC
 
     const deckF = anchors.noseAt(2.15), deckR = anchors.noseAt(1.69), deckW = (a) => Math.min(0.28, a.topSide*1.75);
     const deckY = (a) => a.top + 0.010 - (shadeFlags.round ? CarShade.sink(a, deckW(a) / 2) : 0);   // rounded nose: edges seat on the skin
@@ -2280,7 +2280,7 @@ const Car3D = (function () {
                        { z: -2.34, x: s*0.14, y: pyTop, w: 0.042, h: 0.10 }, DARK);
         }
       }
-      if (shadeFlags.round) CarShade.strut(out, [0, 0.44, -1.96], [0, aeroStyle.rwGap ? (rm[1] + rm[3]) * 0.5 - 0.0075 : upperTrailY - 0.255, -2.40], 0.14, 0.06, DARK, addTri, null, { taper: 0.75, n: 10 }); else addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
+      if (shadeFlags.round) CarShade.strut(out, [0, 0.44, -1.96], [0, (aeroStyle.rwGap ? (rm[1] + rm[3]) * 0.5 - 0.0075 : upperTrailY - 0.255) - (aeroStyle.rwBowl || 0), -2.40], 0.14, 0.06, DARK, addTri, null, { taper: 0.75, n: 10 }); else addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
                    { z: -2.36, x: 0, y: epCY, w: 0.07, h: 0.10 }, DARK);   // central spine mount (rounded: a lens pylon ending in the main plane)
       const aTvane = aeroStyle && aeroStyle.tvane != null
         ? (aeroStyle.tvane ? 1 : 0) : (aLvl >= 4 && !aDrs ? 1 : 0);
