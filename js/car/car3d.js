@@ -77,11 +77,11 @@ const Car3D = (function () {
   })));
   const BODY_STYLES = withConceptDefaults({
     // Needle: spike nose past the wing, pencil tip+waist, tower inlet, sunken flat cover.
-    needle:  Object.freeze({ noseTipZ:  0.55, noseSlim: 0.16, noseDroop: -0.028, airbox: 0.22, fin: 0, mirror: 0, inlet: -0.100, inletH:  0.280, inletW: -0.240, undercutD:  0.200, waist: -0.260, floorStep:  0.100, coverCrown: -0.080, coverLift: -0.140, wingStyle: W({ arch: 0.22, twist: 0.06, teCurve: 0.020, chordTaper: 0.12, foot: 0.70, tipRise: 0.004 }) }),
+    needle:  Object.freeze({ noseTipZ:  0.55, noseSlim: 0.72, noseLow: true, noseTipH: 0.50, noseMidH: 0.50, noseDroop: -0.028, airbox: 0.22, fin: 0, mirror: 0, inlet: -0.100, inletH:  0.280, inletW: -0.240, undercutD:  0.200, waist: -0.260, floorStep:  0.100, coverCrown: -0.080, coverLift: -0.140, wingStyle: W({ arch: 0.22, twist: 0.06, teCurve: 0.020, chordTaper: 0.12, foot: 0.70, tipRise: 0.004 }) }),
     // Brick (reads): blunt fat nose, slab pods, tall airbox, raised box cover.
     brick:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.40, noseDroop:  0,     airbox: 2.00, fin: 1, mirror: 1, inlet:  0.120, inletH:  0.220, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep:  0.100, coverCrown: -0.080, coverLift:  0.100, wingStyle: W({ flaps: 2, arch: 0.28, twist: 0.06, teCurve: 0.025, chordTaper: 0.12, foot: 0.75, canard: 0, tipRise: 0.006 }) }),
     // Anteater: long low snout (mid cone drops), flat low pods, humped cover.
-    anteater: Object.freeze({ noseTipZ: 0.52, noseSlim: 0.48, noseDroop: -0.028, airbox: 0.70, fin: 0, mirror: 2, inlet: -0.050, inletH: -0.240, inletW:  0.180, undercutD:  0.060, waist:  0.050, floorStep: -0.100, coverCrown:  0.260, coverLift:  0.180, wingStyle: W({ arch: 0.95, twist: 0.42, teCurve: 0.190, chordTaper: 0.48, canard: 2, tipRise: 0.065 }) }),
+    anteater: Object.freeze({ noseTipZ: 0.52, noseSlim: 0.82, noseLow: true, noseTipH: 0.48, noseMidH: 0.56, noseDroop: -0.028, airbox: 0.70, fin: 0, mirror: 2, inlet: -0.050, inletH: -0.240, inletW:  0.180, undercutD:  0.060, waist:  0.050, floorStep: -0.100, coverCrown:  0.260, coverLift:  0.180, wingStyle: W({ arch: 0.95, twist: 0.42, teCurve: 0.190, chordTaper: 0.48, canard: 2, tipRise: 0.065 }) }),
     // Arched: short stock nose, tower airbox + high cover crown, tall pods.
     arched:  Object.freeze({ noseTipZ:  0.02, noseSlim: 0.90, noseDroop: -0.022, airbox: 2.40, fin: 1, mirror: 0, inlet:  0.040, inletH:  0.280, inletW: -0.040, undercutD:  0.180, waist: -0.100, floorStep:  0.040, coverCrown:  0.280, coverLift:  0.200, wingStyle: W({ arch: 1.15, twist: 0.36, teCurve: 0.170, foot: 1.55, tipRise: 0.065 }) }),
     // Wedge: long low tip, scooped low inlet, rising high cover, tiny airbox.
@@ -91,21 +91,21 @@ const Car3D = (function () {
     // Hammerhead: thin shovel tip on a narrow neck; broad low cooling shoulders.
     hammerhead: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.34, noseSlim: 4.10, noseDroop: 0.015, noseTipH: 0.55, noseMidSlim: 0.70, noseMidH: 0.65, airbox: 0.42, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.180, undercutD: 0.050, waist: 0.080, floorStep: -0.060, coverCrown: -0.040, coverLift: -0.120, wingStyle: W({ flaps: 2, arch: 0.24, twist: 0.08, foot: 0.78, canard: 0 }) }),
     // Swan: raised slim nose bridge over low pods and a sunken cover.
-    swan: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.18, noseSlim: 0.50, noseDroop: 0.200, noseTipH: 1.20, noseMidSlim: 0.60, noseMidH: 0.75, airbox: 0.38, fin: 0, mirror: 0, inlet: -0.030, inletH: -0.110, inletW: -0.100, undercutD: 0.060, waist: -0.080, floorStep: 0.030, coverCrown: 0.060, coverLift: -0.150, wingStyle: W({ arch: 1.08, twist: 0.32, foot: 1.40, tipRise: 0.050 }) }),
+    swan: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.18, noseSlim: 0.84, noseLow: true, noseDroop: 0.200, noseTipH: 1.20, noseMidSlim: 0.86, noseMidH: 0.75, airbox: 0.38, fin: 0, mirror: 0, inlet: -0.030, inletH: -0.110, inletW: -0.100, undercutD: 0.060, waist: -0.080, floorStep: 0.030, coverCrown: 0.060, coverLift: -0.150, wingStyle: W({ arch: 1.08, twist: 0.32, foot: 1.40, tipRise: 0.050 }) }),
     // Manta: flat broad shoulders sweeping into a sharply pinched rear waist.
     manta: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.12, noseSlim: 1.80, noseDroop: 0.035, noseTipH: 0.70, noseMidSlim: 1.20, noseMidH: 0.80, airbox: 0.28, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.240, undercutD: 0.060, waist: -0.220, floorStep: -0.080, coverCrown: -0.060, coverLift: -0.140, wingStyle: W({ flaps: 2, arch: 0.32, twist: 0.10, chordTaper: 0.18, foot: 0.85 }) }),
-    wasp: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.28, noseSlim: 0.55, noseDroop: 0.040, airbox: 1.00, fin: 1, mirror: 1, inlet: -0.020, inletH: -0.080, inletW: -0.200, undercutD: 0.080, waist: 0.220, waistH: 0.230, floorStep: 0.070, coverCrown: 0.180, coverLift: 0.000, wingStyle: W({ arch: 0.80, twist: 0.26, chordTaper: 0.42, canard: 2 }) }),
+    wasp: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.28, noseSlim: 0.86, noseTipH: 0.55, noseMidH: 0.62, noseLow: true, noseDroop: 0.040, airbox: 1.00, fin: 1, mirror: 1, inlet: -0.020, inletH: -0.080, inletW: -0.200, undercutD: 0.080, waist: 0.220, waistH: 0.230, floorStep: 0.070, coverCrown: 0.180, coverLift: 0.000, wingStyle: W({ arch: 0.80, twist: 0.26, chordTaper: 0.42, canard: 2 }) }),
     // Scorpion: low snout and front cover with a conspicuously rising tail crown.
-    scorpion: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.40, noseSlim: 0.78, noseDroop: -0.020, noseTipH: 0.65, noseMidH: 0.75, airbox: 0.55, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.040, inletW: -0.040, undercutD: 0.040, waist: -0.060, floorStep: 0.040, coverCrown: 0.140, coverLift: -0.150, coverTailLift: 0.390, wingStyle: W({ flaps: 2, arch: 0.95, twist: 0.34, foot: 1.40, tipRise: 0.045 }) }),
+    scorpion: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.40, noseSlim: 0.95, noseDroop: -0.020, noseTipH: 0.65, noseMidH: 0.75, airbox: 0.55, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.040, inletW: -0.040, undercutD: 0.040, waist: -0.060, floorStep: 0.040, coverCrown: 0.140, coverLift: -0.150, coverTailLift: 0.390, wingStyle: W({ flaps: 2, arch: 0.95, twist: 0.34, foot: 1.40, tipRise: 0.045 }) }),
     // Blade: tall knife nose and upright radiator towers above a low flat cover.
-    blade: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.10, noseSlim: 0.38, noseDroop: 0.100, noseTipH: 2.60, noseMidSlim: 0.50, noseMidH: 1.70, airbox: 0.35, fin: 0, mirror: 0, inlet: 0.020, inletH: 0.260, inletW: -0.210, undercutD: 0.180, waist: -0.160, floorStep: 0.110, coverCrown: -0.080, coverLift: -0.130, wingStyle: W({ arch: 0.38, twist: 0.12, foot: 0.90, canard: 0 }) }),
+    blade: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.10, noseSlim: 0.70, noseLow: true, noseDroop: 0.100, noseTipH: 2.60, noseMidSlim: 0.62, noseMidH: 1.70, airbox: 0.35, fin: 0, mirror: 0, inlet: 0.020, inletH: 0.260, inletW: -0.210, undercutD: 0.180, waist: -0.160, floorStep: 0.110, coverCrown: -0.080, coverLift: -0.130, wingStyle: W({ arch: 0.38, twist: 0.12, foot: 0.90, canard: 0 }) }),
     // B·D1 period bodies (Bryce's resized pick, 2026-10-20). fitSeat seats nose details
     // on the measured skin; sizes are cut to the shipped bodies' envelope (fin under
     // the roll hoop, noses within ~4 % of the tallest shipped one).
     // Highnose: 1990 Tyrrell 019 / Benetton B191 raised nose, slim cone, anhedral-ish wing.
-    highnose: Object.freeze({ fitSeat: 1, noseTipZ: 0.16, noseSlim: 0.62, noseDroop:  0.215, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.020, inletH:  0.000, inletW:  0.020, undercutD:  0.040, waist: -0.040, floorStep:  0.020, coverCrown:  0.040, coverLift:  0.040, wingStyle: W({ arch: 1.10, twist: 0.30, teCurve: 0.14, foot: 1.40, tipRise: 0.060 }) }),
+    highnose: Object.freeze({ fitSeat: 1, noseTipZ: 0.16, noseSlim: 0.88, noseTipH: 0.62, noseMidH: 0.68, noseLow: true, noseDroop:  0.215, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.020, inletH:  0.000, inletW:  0.020, undercutD:  0.040, waist: -0.040, floorStep:  0.020, coverCrown:  0.040, coverLift:  0.040, wingStyle: W({ arch: 1.10, twist: 0.30, teCurve: 0.14, foot: 1.40, tipRise: 0.060 }) }),
     // Sharkfin: 2008-11 / 2017 tall dorsal fin over a long raised cover, clutter wing.
-    sharkfin: Object.freeze({ fitSeat: 1, noseTipZ: 0.25, noseSlim: 0.70, noseDroop: -0.020, airbox: 0.80, fin: 2, finH: 0.13, finRear: 2.0, finW: 0.018, mirror: 2, inlet: -0.020, inletH: -0.060, inletW:  0.160, undercutD:  0.080, waist: -0.060, floorStep:  0.040, coverCrown:  0.060, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.90, twist: 0.38, teCurve: 0.18, chordTaper: 0.44, canard: 2, tipRise: 0.050 }) }),
+    sharkfin: Object.freeze({ fitSeat: 1, noseTipZ: 0.25, noseSlim: 0.92, noseTipH: 0.70, noseMidH: 0.745, noseDroop: -0.020, airbox: 0.80, fin: 2, finH: 0.13, finRear: 2.0, finW: 0.018, mirror: 2, inlet: -0.020, inletH: -0.060, inletW:  0.160, undercutD:  0.080, waist: -0.060, floorStep:  0.040, coverCrown:  0.060, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.90, twist: 0.38, teCurve: 0.18, chordTaper: 0.44, canard: 2, tipRise: 0.050 }) }),
     // Downwash: 2023 RB19 — high wide mouth ramping steeply down to a low tail.
     lowline:  Object.freeze({ fitSeat: 1, noseTipZ: 0.20, noseSlim: 1.00, noseDroop: -0.028, airbox: 0.40, fin: 0, mirror: 0, inlet: -0.080, inletH: -0.200, inletW:  0.200, undercutD:  0.000, waist:  0.200, floorStep:  0.000, coverCrown:  0.000, coverLift: -0.160, wingStyle: W({ flaps: 2, arch: 0.30, twist: 0.10, teCurve: 0.04, chordTaper: 0.20, foot: 0.85, tipRise: 0.010 }) }),
     // Stepnose: 2012 Caterham CT01 / Ferrari F2012 — tall tub crown stepping down to a low cone.
@@ -557,16 +557,12 @@ const Car3D = (function () {
       if (opts && opts.measure) out.coverSkin = coverGeom.skin;
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
-      if (scoopLip >= 1) {
-        addBox(out, 0, 0.855, -0.265,
-               0.27 * inScale, 0.032, 0.030, INTAKE);
-      }
-      if (scoopLip >= 2) {
-        for (const s of [-1, 1]) {
-          addBox(out, s * (0.115 * inScale), 0.835, -0.295,
-                 0.045, 0.055, 0.055, CARBON);
-        }
-      }
+      // Seated on the mouth loft above (top 0.76 + 0.10*inScale, trapezoid t 0.55), not
+      // literals: a 0.2-1.78 airbox scale left the lip 28-57 mm off its mouth (B·H13 D3).
+      const mouthTop = 0.76 + 0.10 * inScale, mouthHW = (y) => 0.15 * inScale * (1 - 0.45 * (y - mouthTop + 0.20 * inScale) / (0.20 * inScale));
+      if (scoopLip >= 1) addBox(out, 0, mouthTop - 0.016, -0.265, 2 * mouthHW(mouthTop - 0.016), 0.032, 0.030, INTAKE);
+      if (scoopLip >= 2) for (const s of [-1, 1])
+        addBox(out, s * Math.min(0.115 * inScale, mouthHW(mouthTop - 0.036) - 0.012), mouthTop - 0.036, -0.295, 0.045, 0.055, 0.055, CARBON);
       // airScoop (B·D1d concept bodies, opt-in): a framed mouth — cheeks running back either side of
       // the airbox / snorkel (they read from the chase cam), a top bar, and a dark recessed panel
       // filling the opening, so the intake reads as a cut-out as on the sheet. Both airbox paths.
@@ -758,7 +754,8 @@ const Car3D = (function () {
       const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60]);
       const fuelDisplay = fuelColor.map((value) => Math.min(value, 1));
       const fuelX = 0.12, fuelZ = -0.50;
-      const fy = coverSurfaceY(anchors.coverAt(fuelZ), fuelX);
+      // Not under the tub rim (CHASSIS.cockpit top 0.675): lowline's low cover buried it 33-55 mm (B·H13 D7).
+      const fy = Math.max(coverSurfaceY(anchors.coverAt(fuelZ), fuelX), CHASSIS.cockpit[1].y + CHASSIS.cockpit[1].h / 2);
       addBox(out, fuelX, fy - 0.018, fuelZ, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12], SURFACES.carbon);   // housing
       const fuelSurface = SURFACES.metal;
       addBox(out, fuelX, fy + 0.015, fuelZ, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
@@ -955,31 +952,34 @@ const Car3D = (function () {
         }
         addBox(out, side * (pod.x + 0.028), pod.top + 0.014, -0.62,
           0.030, 0.028, 0.038, [0.10, 0.10, 0.12], SURFACES.carbon);
-        addBox(out, side * (c2e.x + 0.018), c2e.top - 0.038, c2e.z,
-          0.026, 0.032, 0.040, [0.10, 0.10, 0.12], SURFACES.carbon);
-        if (ersConduit >= 2) {
-          for (let i = 0; i < 2; i++) {
-            const z = -0.96 - i * 0.28;
-            const p = anchors.coverAt(z);
-            addBox(out, side * (p.x + 0.022), p.top - 0.050, z,
-              0.028, 0.036, 0.044, [0.10, 0.10, 0.12], SURFACES.carbon);
-          }
-        }
+        // Clamps sit on the cable line (coverFlankX under the shoulder), not at the loft's
+        // widest x: concept covers left them 58-156 mm off the skin (B·H13 D1/D2).
+        const clamp = (c, dx, w, h, d) => { const y = coverProfile(c).shoulder - 0.02;
+          addBox(out, side * (coverFlankX(c, y) + dx), y, c.z, w, h, d, [0.10, 0.10, 0.12], SURFACES.carbon); };
+        clamp(c2e, 0.014, 0.026, 0.032, 0.040);
+        if (ersConduit >= 2) for (let i = 0; i < 2; i++) clamp(anchors.coverAt(-0.96 - i * 0.28), 0.016, 0.028, 0.036, 0.044);
       }
     }
     // Pack cooling mouth on the pod shoulder ahead of the energy-cell strip:
     // 0 none / 1 low NACA lip / 2 lip + louvre grille behind it.
     const ersIntake = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.coolerIntake) || 0)));
     if (ersIntake > 0 && !ckpt) {
+      // A sculpted pod's roof (podRoof: channel, crown) is not the control top: seat on
+      // the highest skin under the part's width, or it buried 22-44 mm (B·H13 D4).
+      const roofY = (z, x, hw) => { const p = anchors.podAt(z);
+        if (!anchors.podRoof) return p.top;
+        let y = -Infinity;
+        for (let u = 0; u <= 1.0001; u += 0.05) { const r = anchors.podRoof(z, u); if (Math.abs(r[0] - x) <= hw) y = Math.max(y, r[1]); }
+        return y > -Infinity ? y : p.top; };
       for (const side of [-1, 1]) {
-        const p = anchors.podAt(-0.30);
-        addBox(out, side * (p.x - 0.02), p.top + 0.008, -0.30, 0.11, 0.016, 0.14, INTAKE);
-        addBox(out, side * (p.x - 0.02), p.top + 0.020, -0.38, 0.12, 0.010, 0.030,
+        const p = anchors.podAt(-0.30), x = p.x - 0.02;
+        addBox(out, side * x, roofY(-0.30, x, 0.055) + 0.008, -0.30, 0.11, 0.016, 0.14, INTAKE);
+        addBox(out, side * x, roofY(-0.38, x, 0.06) + 0.020, -0.38, 0.12, 0.010, 0.030,
                CARBON, SURFACES.carbon);
         if (ersIntake >= 2) {
           for (let i = 0; i < 3; i++) {
-            const z = -0.46 - i * 0.05, pl = anchors.podAt(z);
-            addBox(out, side * (pl.x - 0.02), pl.top + 0.012, z, 0.10, 0.008, 0.028,
+            const z = -0.46 - i * 0.05, xl = anchors.podAt(z).x - 0.02;
+            addBox(out, side * xl, roofY(z, xl, 0.05) + 0.012, z, 0.10, 0.008, 0.028,
                    CARBON, SURFACES.carbon);
           }
         }
@@ -2107,10 +2107,11 @@ const Car3D = (function () {
             { z: 2.30, x: epX + s * 0.058, y: 0.172, w: 0.115, h: 0.013, t: 0.62 },
             0.004, CARBON);
         } else {
-          const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058;
-          addBeveledSpan(out,
-            { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.018, h: 0.12, t: 0.55 },
-            { z: cz - 0.22, x: epX + s*0.012,       y: cy + 0.070, w: 0.018, h: 0.18, t: 0.70 },
+          // Ends on the endplate, never behind it: a short plate left it in clear air (B·H13 D6).
+          const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058, cr = Math.max(cz - 0.22, _fp.rear.z + 0.02);
+          if (cr < cz - 0.06) addBeveledSpan(out,
+            { z: cz, x: s * (fwHalf - 0.03), y: cy,                              w: 0.018, h: 0.12, t: 0.55 },
+            { z: cr, x: epX + s*0.012,       y: cy + 0.070 * (cz - cr) / 0.22, w: 0.018, h: 0.12 + 0.06 * (cz - cr) / 0.22, t: 0.70 },
             0.008, c1);
         }
       }
@@ -2185,9 +2186,12 @@ const Car3D = (function () {
           { z: 1.15, x: s*0.725, y: 0.196, w: 0.135, h: 0.016, t: 0.74 },
           { z: 0.81, x: s*0.735, y: 0.204, w: 0.115, h: 0.014, t: 0.82 },
           0.005, CARBON);
+        // Stops at the pod mouth when the pod is wider than the vane line: wide inlets
+        // (brick, barge, lowline, sharkfin) buried 26-60 mm of it (B·H13 D5).
+        const vRear = anchors.podAt(0.62).x > 0.65 ? 0.63 : 0.57;
         if (aVane >= 2) addBeveledSpan(out,
           { z: 0.87, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
-          { z: 0.57, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
+          { z: vRear, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
           0.006, CARBON);
         if (aVane >= 3) {
           // Curved triple cascade: a swept forward vane + a canted footplate vane.
@@ -2854,6 +2858,8 @@ const Car3D = (function () {
                centreM: [r2((x0 + x1) / 2), r2((y0 + y1) / 2), r2((z0 + z1) / 2)],
                boundsZ: [r2(z0), r2(z1)] };
     });
+    // Half the vertices are exact repeats; measure/refinish read vertex ranges (CarGeometry.weld).
+    else if (!(opts && (opts.refinish || opts.noWeld))) CarGeometry.weld(out);
     return out;
   }
 

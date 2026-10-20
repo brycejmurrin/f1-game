@@ -13,11 +13,11 @@
 //   flaps    buildComplete − build: the active-aero flap set (drawn separately)
 //   far      sharedRivalBodyMesh: one grey body for every rival past NO_DECAL_M
 //
-//   node tools/car/car-tri-census.mjs                    every body on ferrari's factory parts
-//   node tools/car/car-tri-census.mjs --aero             + every aero STYLE shape on each body (player tier)
-//   node tools/car/car-tri-census.mjs --flat             flat-shaded builds (apex26.carSmooth=0) as well
-//   node tools/car/car-tri-census.mjs --root=<dir>       measure another checkout (git worktree) for a before/after
-//   node tools/car/car-tri-census.mjs --json             machine output
+//   node tools/car/tri-census.mjs                    every body on ferrari's factory parts
+//   node tools/car/tri-census.mjs --aero             + every aero STYLE shape on each body (player tier)
+//   node tools/car/tri-census.mjs --flat             flat-shaded builds (apex26.carSmooth=0) as well
+//   node tools/car/tri-census.mjs --root=<dir>       measure another checkout (git worktree) for a before/after
+//   node tools/car/tri-census.mjs --json             machine output
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";

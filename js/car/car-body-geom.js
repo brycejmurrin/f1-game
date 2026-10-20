@@ -37,7 +37,7 @@ const CarBodyGeom = (function () {
     const midZ = mid.z + (s.noseTipZ || 0) * (sil ? 0.72 : 0.45);
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
     const midY = mid.y + (s.noseDroop || 0) * (sil ? 0.85 : 0.45)
-      + (sil ? (s.noseSlim < 0.7 ? -0.04 : 0) + (s.noseSlim > 1.2 ? 0.03 : 0) : 0);
+      + (sil ? (s.noseSlim < 0.7 || s.noseLow ? -0.04 : 0) + (s.noseSlim > 1.2 ? 0.03 : 0) : 0);   // noseLow: a widened low snout keeps its drop
     // Every concept body, fitBodyDetails included, roots on CHASSIS.nose[2] (#3111 tip rule).
     if (sil || s.fitSeat) return conceptNose(s, [   // fitted bodies keep this seam even with a level cover
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
@@ -50,7 +50,7 @@ const CarBodyGeom = (function () {
       { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * (s.noseMidH == null ? midSlim : s.noseMidH), t: mid.t },
       { z: root.z + (s.noseTipZ || 0) * (sil ? 0.28 : 0.12),
         y: root.y + (s.noseDroop || 0) * (sil ? 0.35 : 0.15)
-          + (sil ? (s.noseSlim < 0.7 ? -0.025 : 0) : 0),
+          + (sil ? (s.noseSlim < 0.7 || s.noseLow ? -0.025 : 0) : 0),
         w: root.w * (s.noseRootSlim == null ? 1 + (s.noseSlim - 1) * (sil ? 0.45 : 0.2) : s.noseRootSlim),
         h: root.h * (s.noseRootH == null ? 1 + (s.noseSlim - 1) * (sil ? 0.55 : 0.25) : s.noseRootH), t: root.t },
     ];
@@ -776,7 +776,7 @@ const CarBodyGeom = (function () {
       // Upsweep spans also belong to the flap; keep every vertex bare weave.
       for (let i = 0; i < out.mat.length; i++) out.mat[i] = SURFACES.carbon;
     } else CarMaterials.applyFinish(out, finish);
-    return out;
+    return CarGeometry.weld(out);
   }
   function aeroFlapAim(aLvl, wing, style) {
     const els = aeroFlapsGeom(aLvl, style).filter((e) => e.wing === wing);
