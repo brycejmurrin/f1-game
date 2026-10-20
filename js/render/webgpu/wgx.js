@@ -963,6 +963,10 @@ const WGX = (function () {
     let _tlFullPack = null, _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
+    // Lamp-mask generation keys, per pass kind (0 forward/env, 1 mirror): each pass's last
+    // pos.xyz + radius per ranked slot, and its light count.
+    const _lmSnap = [new Float32Array(MAX_LIGHTS * 4), new Float32Array(MAX_LIGHTS * 4)], _lmSnapN = [0, 0];
+    let _lmPass = 0;
     // Post-chain + FX frame extras.
     // frameVPGpu is the Z01-remapped
     // view-proj the depth buffer was rasterised with — every FX embeds it so its
@@ -1194,6 +1198,7 @@ const WGX = (function () {
         get frameAllLights() { return frameAllLights; },
         get frameRoadChunkLamps() { return frameRoadChunkLamps; },
         get frameNL() { return frameNL; },
+        get lampPass() { return _lmPass; },
         get frameLights() { return frameLights; },
         get drawRing() { return drawRing; },
         get drawBindGroup() { return drawBindGroup; },
@@ -3349,16 +3354,23 @@ const WGX = (function () {
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).
       // Piggyback the lamp-mask generation on this pack: the chunk masks
       // depend only on pos.xyz + radius per ranked slot (flicker scales rgb),
-      // and those lanes are compared against last frame's pack right before
-      // being overwritten — 4 compares × nL, vs the visibleChunks × nL AABB
-      // tests the generation lets drawChunked's cache skip.
-      let _lmMoved = nL !== frameNL;
+      // and those lanes are compared against the same pass kind's last pack
+      // (_lmSnap) — 4 compares × nL, vs the visibleChunks × nL AABB tests the
+      // generation lets drawChunked's cache skip. Per pass kind because the
+      // mirror ranks its own list: one shared snapshot (lightData, whichever
+      // pass packed last) moved the generation twice a frame at night.
+      _lmPass = mirror ? 1 : 0;
+      const snap = _lmSnap[_lmPass];
+      let _lmMoved = nL !== _lmSnapN[_lmPass];
+      _lmSnapN[_lmPass] = nL;
       const _hasLB = typeof LampBake !== "undefined";
       if (nL > 0) {
         const ld = lightData;
         for (let i = 0; i < nL; i++) {
-          const o = i * 15, b = i * 16;
-          if (!_lmMoved && (ld[b] !== L[o] || ld[b+1] !== L[o+1] || ld[b+2] !== L[o+2] || ld[b+3] !== L[o+6])) _lmMoved = true;
+          const o = i * 15, b = i * 16, q = i * 4;
+          if (snap[q] !== L[o] || snap[q+1] !== L[o+1] || snap[q+2] !== L[o+2] || snap[q+3] !== L[o+6]) {
+            _lmMoved = true; snap[q] = L[o]; snap[q+1] = L[o+1]; snap[q+2] = L[o+2]; snap[q+3] = L[o+6];
+          }
           ld[b]    = L[o];    ld[b+1]  = L[o+1];  ld[b+2]  = L[o+2];  ld[b+3]  = L[o+6];  // pos.xyz, rad
           ld[b+4]  = L[o+3];  ld[b+5]  = L[o+4];  ld[b+6]  = L[o+5];  ld[b+7]  = L[o+12]; // col.rgb, bleed
           ld[b+8]  = L[o+7];  ld[b+9]  = L[o+8];  ld[b+10] = L[o+9];  ld[b+11] = L[o+13]; // dir.xyz, volW
@@ -3367,7 +3379,7 @@ const WGX = (function () {
         }
         device.queue.writeBuffer(lightSBO, 0, lightData, 0, nL * 16);
       }
-      if (_lmMoved) CHK.bumpLampGen();
+      if (_lmMoved) CHK.bumpLampGen(_lmPass);
 
       frameViewProj = f.viewProj || null;
       frameEye = f.eye || null;
