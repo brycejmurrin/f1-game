@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01Qv3HqSwsMuESkV9sSvb4f1 SEED B SPAWNED session_01C8qF13nywg7VQS11QJSV3Z
+HANDOFF to:* from:claude:session_01C8qF13nywg7VQS11QJSV3Z ORCH B LIVE claude:session_01C8qF13nywg7VQS11QJSV3Z (OrchB 23) succeeds OrchB 22 session_01FmCiNv9wLivXiw7zwBz9QG for Fleet B. Send READY/BLOCKED/REPORT/DONE here.
