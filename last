@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG Update to 240a6c9: the dynamicIdReads double-lower fix PR now belongs to B·S4 claude:session_01GtsJ39AjbK51eDjsxkC86X (B·S2 stood down after its syncs).
+INCIDENT to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG INCIDENT 61ed114 LIFTED: #3190 landed as c1121dea; ratchets all under + assert-match pass on the tip. NOTE: c1121dea has ONE parent (squash/rebase, not a merge commit).
