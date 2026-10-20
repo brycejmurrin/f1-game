@@ -80,3 +80,13 @@ BRYCE 02:05Z (typed in OrchB 13) — TOP PRIORITY, supersedes the game queue ord
 - Fleet B game slots go FIRST to design / lighting / garage PRs: #3145 (wave 1), then the wave-2 integration PR (bodies r5, D2c finishes, D5c liveries, D6b, D7b, D9b r2 vertical fence ends), and any lighting or garage PR. The perf/game PRs (#3120 #3099 #3118 #3122 #3123 #3128 #3146) wait behind them.
 - L21 told (get #3145 READY fast, start wave 2 right after). D1c told. D9b granted 6 more captures (36 total) for round 2.
 - D9b round 2 DONE @bf4109a0 (cursor/floor-smooth-d9a3): upright fence ends per Bryce; 0 NEW / 6 WORSE pre-existing; 36/36 captures; L21 has the sha (regenerate car-wing-foil-tris.json on merge). Gallery WwvxwbrWob9SCnT8kiRrop v2. D9b idle; archive after wave 2 merges.
+
+UPDATE FROM OrchB 14 session_01E8DgNfYqJ4wqcFFQYFed1C (02:10–02:46Z) — supersedes the above where they differ. Successor = OrchB 15.
+- CONTEXT: OrchB 14 hit 163k by 02:45Z with ~4k/tick. Successor: skip AskUserQuestion, post LIVE on the bus, message L21 only, and tell Bryce. Do NOT run fleet-tick.mjs on the first tick (its full board dump costs ~6k).
+- PAGES 39356511794 on 19bb85e (#3097) RED: hud-layout.spec.js "monotonic HUD SIZE 100->200" gearW 86.2 < 87.16 (2nd time; INCIDENT d4acdb0). GAME SLOT BLOCKED for all fleets. Bryce 02:37Z typed "Get it fixed". Owner = Fleet A L26 claude:session_017SN5nYMZiypK4yaruJ7KT1 (not reachable by send_message; use the bus), PR #3159 (cursor/hud-gearw-settle-e543 @ebd4b297, draft). Root cause: the TIME box is sized to its 10 Hz clock text, giving a 1 px gap; the test now pins the TIME text. ORCH21 merges it. After #3159 merges and Pages goes green, the game slot reopens. Push L26/ORCH21 if it stalls.
+- #3118 decision (OrchB 14, option a): merge on the factory gate. L12 READY 90f91c03 (full tier 33/0, factory fit 0 NEW/0 WORSE, follow-up issue #3156). Queue it behind #3145.
+- #3145 (L21): head 42dbbf57; ui 4/4 + car 4/4 passed; tooling-fast running, then gate-only, run-ci, full tier, ready-gate. L21 ETA for READY was ~03:30–03:45Z. FIRST Fleet B game slot once Pages is green.
+- D1c DONE @a8adec8b (= 274e6ee8 + gallery). The 3 inherited reds pass on #3145 (bodyStyleKey fix from #3118). L21 has it for wave 2. Not archived (Bryce may iterate).
+- D2c r4 batch 2 @443eb686: KEEP burnt/oilslick/ultrablack; FIX 15 (tint retunes). Garage G3-broadcast column re-shooting now.
+- ORCH21 session_01GWP8mJAoxw5XSZinJPDiJH returns "not found" to send_message; use the bus.
+- OrchB 14 pending tick deleted at handoff. No PR subscriptions held.
