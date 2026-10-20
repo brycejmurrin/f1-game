@@ -113,6 +113,11 @@
    page has no two-column grid and no one-line budget to protect, so the row can
    simply have the two pixels. */
 #pm-padbrand > div > select { flex-basis: 8.5rem; width: 8.5rem; }
+/* This single goal picker need not align with other value columns. Let the
+   native select measure all its options (FREE PRACTICE / TRAIL BRAKING), in
+   the shipped font with its own padding, rather than clipping them to 8rem.
+   The shared shrink floor and wrapping control cluster still handle zoom. */
+#pm-drill > div > select { flex-basis: auto; width: auto; }
 /* MUSIC & SOUND voice pickers (js/audio/panel.js voiceRow): no chevrons to line
    up, and the values are voice NAMES — at the row's 8rem even the default read
    "SYSTEM DEFAL…". Wider, and it shrinks back toward 8rem on a narrow phone.
