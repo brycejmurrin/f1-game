@@ -686,7 +686,8 @@
         "tests/unit/skill-smoke.test.mjs",
         "tests/unit/subagent-contract-hook.test.mjs",
         "tests/unit/test-groups.test.mjs",
-        "tests/unit/ui-improve-pass.test.mjs"
+        "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/vendor-licences.test.mjs"
       ],
       "twinned": false
     },
@@ -1307,7 +1308,6 @@
         "tests/specs/offtrack.spec.js",
         "tests/specs/physics-*.spec.js",
         "tests/specs/pit-lane.spec.js",
-        "tests/specs/projection.spec.js",
         "tests/specs/race-control.spec.js",
         "tests/specs/world-physics.spec.js"
       ],
@@ -1571,7 +1571,6 @@
         "tests/specs/albert-park-foundation.spec.js",
         "tests/specs/autopilot.spec.js",
         "tests/specs/logging.spec.js",
-        "tests/specs/projection.spec.js",
         "tests/unit/adapted-specs.test.mjs"
       ],
       "twinned": true
