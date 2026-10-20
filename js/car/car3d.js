@@ -192,6 +192,8 @@ const Car3D = (function () {
     REAR_TYRE_CROWN, REAR_WING_TOP, FW_SPAN, CAR_HALF,
   } = body;
 
+  const { PH_HALO, PH_HOOP, PH_MIRROR, PH_RIM, FINISH_FIELDS, finishPass, refinish } = CarMaterials;   // finish stand-ins
+
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
     const teamId = opts && opts.teamId;
@@ -260,7 +262,7 @@ const Car3D = (function () {
     // over `lower` / `upper` (CarShade.lowerZone / upperZone).
     const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
-    const endplateC = _ckAcc(liv.endplate) || null, haloOn = liv.haloFinish && liv.haloFinish !== "inherit", haloMetal = haloOn ? (Object.hasOwn(FINISH_SURFACE, liv.haloFinish) && FINISH_SURFACE[liv.haloFinish]) || SURFACES.paint : SURFACES.metal;   // ENDPLATES (front else c2, rear else DARK); an explicit HALO FINISH lands on the titanium (#2796 1)
+    const endplateC = _ckAcc(liv.endplate) || null, haloMetal = PH_HALO;   // ENDPLATES (front else c2, rear else DARK); an explicit HALO FINISH lands on the titanium (#2796 1)
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
     const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
@@ -1368,9 +1370,7 @@ const Car3D = (function () {
     // today, which applyFinish never touches, so a tint or an explicit finish makes the housing
     // and stalk PAINT (the finish remap only rewrites paint ids). Both unset = today's mesh.
     const mTint = _ckAcc(liv.mirrorTint) || null;
-    const mFin = liv.mirrorFinish;
-    const mPaint = !!mTint || (!!mFin && (mFin === "gloss" || Object.hasOwn(CarMaterials.FINISH_SURFACE, mFin)));
-    const mHouseC = mTint || [0.09, 0.09, 0.11], mHouseS = mPaint ? SURFACES.paint : SURFACES.carbon;
+    const mHouseC = mTint || [0.09, 0.09, 0.11], mHouseS = mTint ? SURFACES.paint : PH_MIRROR;
     const mStalkC = mTint || DARK;
     // B·D4 (opt-in, default off): mirrorMount 1 hangs the housings off
     // the halo's crown corners (Ferrari SF71H, 2018) instead of the tub shoulder.
@@ -1526,7 +1526,7 @@ const Car3D = (function () {
 
     part("halo");
     if (exHalo) {
-      const haloC = haloTint || HALO, haloS = haloOn || haloTint && Math.max(...haloTint) - Math.min(...haloTint) > 0.15 ? SURFACES.paint : SURFACES.metal;   // a COLOURED livery hoop is paint (Alpine pink: the metal env mirror washed it white); grey stays metal (titanium, Cadillac chrome)
+      const haloC = haloTint || HALO, haloS = haloTint && Math.max(...haloTint) - Math.min(...haloTint) > 0.15 ? SURFACES.paint : PH_HOOP;   // a COLOURED livery hoop is paint (Alpine pink: the metal env mirror washed it white); grey stays metal (titanium, Cadillac chrome)
       // Round titanium hoop with a LEVEL, gently arched top bar: one
       // continuous tube, collars (±0.235, 0.505, -0.46) rising to a crown
       // that holds y 0.845 (+HALO_RISE shallow arch) from mid to mid while
@@ -2672,9 +2672,9 @@ const Car3D = (function () {
       const rimColor = wt.rim || (wheelStyle && wheelStyle.rim) || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
-          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink, wt.surf);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink, PH_RIM);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
-          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink, wt.surf);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink, PH_RIM);
       }
     }
     // Fixed deflectors belong to the chassis, including the split race body.
@@ -2701,12 +2701,12 @@ const Car3D = (function () {
       }
     });
 
-    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3; CarMaterials.applyZones(out, zoneRanges, sections, liv, _ckAcc);   // PAINT ZONES (unset = no-op)
-    CarMaterials.applyFinish(out, liv.finish, sections, liv, zoneRanges);
-
+    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
+    const fin = { sections, zoneRanges, dim: _ckAcc, smooth: shade && !sil };
+    if (opts && opts.refinish) out._refinish = Object.assign(fin, { mat: out.mat.slice(), col: out.col.slice(), nrm: out.nrm.slice(), keep: {} });
     shadeFlags.round = false;
     shadeFlags.coverHi = true;
-    if (shade && !sil) CarShade.smooth(out, { skip: [SURFACES.emissive] });   // a shadow caster keeps the shape; depth never reads normals
+    finishPass(out, liv, fin);
     // Measure each closed section from the vertices it emitted.
     if (sil) out._releaseCpuMirror = true;   // TLX: car shadow casters only (plan M-2)
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
@@ -2749,7 +2749,7 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildComplete, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  return { build, buildComplete, refinish, FINISH_FIELDS, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,
