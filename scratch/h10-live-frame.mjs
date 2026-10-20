@@ -174,6 +174,7 @@ async function runRow(browser, server, backend, track) {
   await page.addInitScript(recorder);
   await page.addInitScript(driver);
   await page.addInitScript(slowCalls);
+  await page.addInitScript(() => { const L = window.__h10tier = []; let last = null; setInterval(() => { try { const t = PerfGov.tier(); if (t !== last) { L.push([Math.round(performance.now()), t, window.__apex && window.__apex.info ? window.__apex.info().state : ""]); last = t; } } catch (_) {} }, 250); });
   await gotoGame(page, server.url, 180000);
   await page.evaluate(() => {
     // Name every render pipeline three builds after boot (the WebGL2 backend links its program here, synchronously).
@@ -192,6 +193,7 @@ async function runRow(browser, server, backend, track) {
           if (S.pipeNames.length < 80) S.pipeNames.push({ win: S.on, at: Math.round(a), ms: +(performance.now() - a).toFixed(1), async: !!promises,
             mat: (m.type || "") + ":" + (m.name || ""), obj: (ob.type || "") + ":" + (ob.name || "") + (ob.isInstancedMesh ? ":inst" + ob.count : ""), ud, parents: chain.join("<"),
             attrs: Object.keys(g.attributes || {}).join(","), rt: ro.context && ro.context.renderTarget ? (ro.context.renderTarget.texture && ro.context.renderTarget.texture.name || "rt") + ":" + ro.context.width + "x" + ro.context.height : "canvas",
+            tier: (() => { try { return PerfGov.tier(); } catch (_) { return null; } })(),
             pos: (() => { try { const p = window.__apex.probe(); return p ? +(p.s).toFixed(0) : null; } catch (_) { return null; } })() });
         } catch (_) {}
       }
@@ -236,13 +238,13 @@ async function runRow(browser, server, backend, track) {
     const iv = []; for (let i = 1; i < H.ts.length; i++) iv.push(H.ts[i] - H.ts[i - 1]);
     let gpuMs = null; try { gpuMs = A.gpuTimer().ms; } catch (_) {}
     return { iv, cb: H.cb, spans: p.spans, loaf: p.loaf, drive: { frames: window.__h10d.frames, dist: Math.round(window.__h10d.dist), off: window.__h10d.off, err: window.__h10d.err },
-      gpuMs, slow: { calls: SC.slow, links: SC.links, pipes: SC.pipes, linkNames: SC.linkNames, pipeNames: SC.pipeNames }, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
+      tierLog: window.__h10tier, warm: (() => { try { const m = GLX.__tlx.memState(); return m && m.warm; } catch (_) { return null; } })(), gpuMs, slow: { calls: SC.slow, links: SC.links, pipes: SC.pipes, linkNames: SC.linkNames, pipeNames: SC.pipeNames }, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
   });
   const over = (ms) => +(got.iv.filter((x) => x > ms).length / Math.max(1, got.iv.length) * 100).toFixed(1);
   const loafE = (got.loaf && got.loaf.entries) || [];
   const row = {
     env, frame: Object.assign(dist(got.iv), { over33: over(33.4), over50: over(50), over100: over(100), fps: +(1000 * got.iv.length / Math.max(1, got.iv.reduce((a, b) => a + b, 0))).toFixed(1) }),
-    cpu: dist(got.cb), spans: got.spans, slow: got.slow, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
+    cpu: dist(got.cb), spans: got.spans, slow: got.slow, tierLog: got.tierLog, warm: got.warm, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
     loaf: { supported: got.loaf && got.loaf.supported, n: loafE.length, top: loafE.slice().sort((a, b) => (b.duration || 0) - (a.duration || 0)).slice(0, 6) },
     trace: analyseTrace(events, f1 - f0), prof: cpuProf, console: cons,
   };
