@@ -51,6 +51,7 @@ async function rig(t, { soft = false } = {}) {
     const post = { enabled: () => true }, fx = null, vizMat = null, _drawMatMode = false, _postF = {};
     const _warmFx = true, _mirDead = false, softGpu = () => SOFT, softwareGL = SOFT;
     let mirrorStages = 0, unswaps = 0;
+    const _warmStages = { rig: null };
     async function warmMirrorStage() { mirrorStages++; }
     function _mirWarmUnswap() { unswaps++; }
     let _coOn = true;
@@ -70,7 +71,7 @@ async function rig(t, { soft = false } = {}) {
       return !_warmPending;
     }
     return { warmDraws, draw, present, pending: () => _warmPending, drawn: () => drawList.n, mats,
-      mirror: () => ({ stages: mirrorStages, unswaps }) };`);
+      mirror: () => ({ stages: mirrorStages, unswaps }), stages: _warmStages };`);
   const R = mk(THREE, renderer, scene, camera, lit, globalThis.Log, soft);
   renderer.render(scene, camera);   // three's own first-render programs (the output pass), so a count isolates ours
   const compiles = [];
@@ -106,6 +107,8 @@ test("warmDraws captures without painting, then the next present compiles each p
   assert.deepEqual(h.compiles.map((c) => [c.geo === cab.geo ? "cab" : c.geo === wheel.geo ? "wheel" : "?", c.sx]), [["cab", 1], ["wheel", -1]],
     "one compile per pair, the mirrored draw on a mirrored probe (three keys the pipeline on the determinant); a coalesced draw is skipped");
   assert.equal(h.renderer.getRenderTarget(), null, "target restored");
+  const rs = h.R.stages.rig;
+  assert.ok(rs && rs.ok === true && rs.pairs === 2 && rs.mirror === false && rs.ms >= 0, `memState().warm.rig ${JSON.stringify(rs)}`);
 });
 
 test("after the warm, drawing the rig links nothing; without it the same draw links its program (the mid-race switch)", async (t) => {
