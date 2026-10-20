@@ -452,6 +452,9 @@ const CarDraw = (function () {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
       if (_hiResDone.has(key) || _hiResPending.has(key) || (_hiResFail.get(key) || 0) >= HIRES_TRIES) return;
+      // A live garage paint draft gives every edit a new key: the preview only, or each edit the idle slot
+      // reached paid a 2048 paint and a ~26.7 MB upload. Save / cancel / leave clear it: the next draw upgrades once.
+      if (G.livDraftOverride) return;
       // The livery is resolved NOW, with the key (decalKeyFor embeds its id): the idle
       // slot can fire after the garage moved on, and building from the livery selected
       // THEN stored another livery's pixels under this key (A -> B -> A).
@@ -492,7 +495,7 @@ const CarDraw = (function () {
       };
       const kick = function () {
         try {
-          if (!owns()) { done(); return; }
+          if (!owns() || G.livDraftOverride) { done(); return; }   // a kick queued before the draft opened
           if (!G.gfx || !G.gfx.createTexture) { done(); return; }
           const canvas = LiveryTex.buildAtlas(team.id, livery, num, true, true);
           const bmp = liveryBitmap(canvas);

@@ -57,9 +57,14 @@ ensure_browsers_dir() {
 npm_ready() {
   # Directories alone are not enough: the failed-build snapshot left hollow
   # node_modules/<pkg> folders with no package.json (measured 2026-08-17).
+  # Validate ALL direct tooling, including pinned versions, rather than just
+  # the browser sentinels. Include dev even under NODE_ENV=production; offline
+  # npm ls inspects the installed tree without fetching or running scripts.
+  # https://docs.npmjs.com/cli/v11/commands/npm-ls
   [[ -f node_modules/playwright/package.json \
     && -f node_modules/sharp/package.json \
-    && -f node_modules/@playwright/test/package.json ]]
+    && -f node_modules/@playwright/test/package.json ]] \
+    && npm ls --depth=0 --include=dev --offline >/dev/null 2>&1
 }
 
 npm_install_once() {
@@ -67,7 +72,7 @@ npm_install_once() {
   if [[ "${1:-}" == "prefer-offline" ]]; then
     extra+=(--prefer-offline)
   fi
-  npm install --ignore-scripts --no-audit \
+  npm install --include=dev --ignore-scripts --no-audit \
     --fetch-retries=5 --fetch-retry-mintimeout=2000 --fetch-retry-maxtimeout=15000 \
     "${extra[@]}"
 }
@@ -94,6 +99,9 @@ ensure_npm() {
     echo "WARN: npm reported failure but node_modules is usable"
     return 0
   fi
+  # Keep the package names/version errors in the bootstrap log, rather than
+  # making a later test run rediscover why this snapshot was rejected.
+  npm ls --depth=0 --include=dev --offline >&2 || true
   echo "ERROR: npm install failed and node_modules is incomplete" >&2
   return 1
 }

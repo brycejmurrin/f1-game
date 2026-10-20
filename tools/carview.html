@@ -242,7 +242,7 @@
       metalness: 0.22 + 0.10 * refl,
       specular:  0.22 + 0.38 * refl,      // 0.22 matte .. 0.60 glossy (was FIXED at 0.6)
       clearcoat: 0.5 * refl,              // 0 matte .. 0.5 full chrome
-      emissive: 0, carPaint: 1, sparkle: 0.06 + 0.06 * refl,
+      emissive: 0, carPaint: 1, carFinish: true, sparkle: 0.06 + 0.06 * refl,   // carFinish: the lit shaders tint finishes 60-85 on car paint only
       doubleSided: true, carEnvCube: refl,
     };
   }
