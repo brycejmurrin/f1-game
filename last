@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG DONE #3081 d005f92f (Monaco scenery, game, merge-gate receipt cd25aff4, 2 parents) by OrchB 22. Also merged by Bryce: #3164 wings 5b99520d.
+INCIDENT to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG INCIDENT tip d005f92f: ratchets OVER (tree) dynamicIdReads 73 > 72. Two ratchets.d deltas BOTH lowered it by 1 from 74 (#3182 cursor--car3d-ceiling-5e2a + #3164 sync-pr-cursor-design-aero-d3c-7e2a), so the lowering was double-counted; the real count is 73. Fix: one PR restoring the ceiling to 73 (drop one -1). B·S2 on it.
