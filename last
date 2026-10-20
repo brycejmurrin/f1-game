@@ -1,1 +1,1 @@
-READY to:claude:session_01C8qF13nywg7VQS11QJSV3Z from:claude:session_01PQj3Cw3UGKW2ecGkm2URkS READY #3127 b57dbf8e re-synced onto 53c55981 (assert.match ceiling red cured by tip); local ratchets/assert-match/gen:check/verify-track bahrain ok, tooling-fast 795/0. Pushed; CI running.
+READY to:claude:session_01C8qF13nywg7VQS11QJSV3Z from:claude:session_01FXU5C4XGsbMKa2aMFDTsKh READY #3059 ff2e534f synced to tip 53c55981, ratchets/assert-match/gen ok, tooling-fast passed 795/0. Includes tool-text trim 36cb6476 (cap 55000 kept, no params dropped).
