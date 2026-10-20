@@ -1458,6 +1458,7 @@ jobs:
           retention-days: 7
       - name: Failure artifacts
         if: failure() || cancelled()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # Shard-scoped name: same-named artifacts from parallel matrix jobs
@@ -1570,6 +1571,7 @@ jobs:
           retention-days: 7
       - name: Failure artifacts
         if: failure() || cancelled()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-driving-model
@@ -1677,6 +1679,7 @@ jobs:
       # image-grade "shadows" compares, the retry's diag — unretrievable. Run
       # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
       - name: Run artifacts (report, traces, attached frames)
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1715,6 +1718,7 @@ jobs:
         run: npm run test:xr -- --timeout=600000
       - name: Failure artifacts
         if: failure() || cancelled()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-xr
@@ -2482,6 +2486,7 @@ jobs:
       # kills); `always() && !success()` reaches exactly failure + cancel.
       - name: Failure artifacts
         if: ${{ always() && !success() }}
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-selected-${{ matrix.name }}-${{ strategy.job-index }}
@@ -2678,6 +2683,7 @@ jobs:
       # rendered, because "it passed here once" is the evidence step (b) needs.
       - name: The rendered goldens, and any diff
         if: always()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: golden-menus-runner
@@ -2757,6 +2763,7 @@ jobs:
           npm run test:smoke -- --timeout=900000
       - name: Failure artifacts
         if: failure() || cancelled()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-staged-boot
