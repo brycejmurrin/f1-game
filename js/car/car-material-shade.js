@@ -169,6 +169,30 @@ const CarMaterialShade = (function () {
     envTint: 0.88,
   });
 
-  return { CARBON, GLOSS, MATTE, METAL, TINTED, CHAMELEON, FLAKE, CANDY, FORGED, GUNMETAL, GOLDPLATE };
+  // HOLOGRAPHIC (41): continuous multi-hue interference over a smooth coat.
+  // Blend the lit colour toward a spectrum bounded by its existing light peak.
+  // This transfers light between hue channels without emitting or raising that peak.
+  const HOLOGRAPHIC = Object.freeze({ clearcoat: 0.80, metalness: 0.35, specular: 0.90, roughness: 0.18,
+    cycles: 1.65, phase: Object.freeze([0.0, 0.33, 0.67]), hueFloor: 0.25, hueSpan: 0.75,
+    fresLo: 0.05, fresHi: 0.60, minWeight: 0.28, tintWeight: 0.85 });
+
+  // VELVET (42): dark diffuse face with a soft grazing sheen. Multiplying the
+  // already-lit result preserves lamp/shadow response and adds no emission.
+  const VELVET = Object.freeze({ clearcoat: 0.0, metalness: 0.0, specular: 0.08, roughFloor: 0.96,
+    darken: 0.65, sheenGain: 1.50 });
+
+  // HAMMERED (43): rounded, irregular dimple normals in object space. The warped
+  // sinus field is smooth (no cell edges), glued to the car and gone by 22 m.
+  const HAMMERED = Object.freeze({ clearcoatMax: 0.15, metalness: 0.90, specular: 0.90,
+    roughLo: 0.24, roughHi: 0.36, frequency: 90.0, projectY: Object.freeze([0.73, -0.61]),
+    warpFrequency: 0.73, warpGain: 0.80, normalAmp: 0.42, fadeStartM: 8.0, fadeSpanM: 14.0 });
+
+  // ANODIZED (44): bright coloured satin metal. Unlike gunmetal's dark substrate,
+  // the base keeps the selected hue at high luminance; the lit tint keeps metal reflections coloured.
+  const ANODIZED = Object.freeze({ clearcoatMax: 0.08, metalness: 0.90, specular: 0.90,
+    roughLo: 0.30, roughHi: 0.42, hueWeight: 0.78, baseWeight: 0.22, tintWeight: 0.72, chromaFloor: 0.04 });
+
+  return { CARBON, GLOSS, MATTE, METAL, TINTED, CHAMELEON, FLAKE, CANDY, FORGED, GUNMETAL, GOLDPLATE,
+    HOLOGRAPHIC, VELVET, HAMMERED, ANODIZED };
 })();
 Object.freeze(CarMaterialShade);

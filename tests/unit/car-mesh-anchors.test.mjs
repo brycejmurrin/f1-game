@@ -30,6 +30,28 @@ const S = loadParts({ shade: true });
 const ACCENT = [0.123, 0.456, 0.789];   // sentinel livery accent, as in the spec
 const DRL = [2.4, 2.4, 2.7];            // drlC in js/car/car3d.js — nose running lights
 
+test("nose paint and the crown light fit every team and concept body's crown", () => {
+  const c2 = [0.21, 0.43, 0.65], stripe = [0.83, 0.19, 0.57], noseStripe = [0.17, 0.73, 0.39];
+  for (const X of [M, S]) for (const body of [...Object.keys(X.Car3D.TEAM_STYLE), ...X.Car3D.BODY_STYLE_IDS]) {
+    const anchors = X.Car3D.bodyAnchors(null, body);
+    const mesh = X.Car3D.build([0.7, 0.05, 0.05], c2, { teamId: "ferrari", noWheels: true,
+      livery: { bodyStyle: body, stripe, noseStripe, accent: ACCENT } });
+    for (const ink of [c2, stripe, noseStripe]) {
+      const paint = verticesFor(mesh, ink).filter((p) => Math.abs(p[0]) < 0.3 && p[2] >= 1.55 && p[1] >= anchors.noseAt(p[2]).top - 0.03);
+      assert.ok(paint.length > 0, `${body}: nose ink missing`);
+      for (const p of paint) assert.ok(Math.abs(p[0]) <= anchors.noseAt(p[2]).topSide + 1e-6,
+        `${body}: nose paint x=${p[0]} overhangs crown at z=${p[2]}`);
+    }
+    const tip = X.Car3D.CHASSIS.nose[0].z + X.Car3D.teamStyleOf(body).noseTipZ;
+    const bar = verticesFor(mesh, DRL).filter((p) => p[2] > tip - 0.07);
+    assert.ok(bar.length > 0, `${body}: crown light missing`);
+    for (const p of bar) assert.ok(Math.abs(p[0]) <= anchors.noseAt(p[2]).topSide + 1e-6,
+      `${body}: crown light x=${p[0]} overhangs crown at z=${p[2]}`);
+    if (body === "brick") assert.equal(Math.max(...bar.map((p) => Math.abs(p[0]))) * 2, 0.13,
+      "a wide nose keeps its existing light width");
+  }
+});
+
 function verticesFor(mesh, color) {
   const points = [];
   for (let i = 0; i < mesh.pos.length; i += 3) {

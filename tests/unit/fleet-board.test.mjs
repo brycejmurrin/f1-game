@@ -129,10 +129,10 @@ test("board keeps ownership, stale evidence and merged progress separate, escapi
   const coverage = new Map([[1, [link(10, "OPEN", false, true)]], [2, [link(20, "MERGED")]]]);
   const claims = [claim("#1 stale", 800, "old|owner"), claim("#3 current", 5, "new")];
   const body = renderBoard({ issues, prs: [], claims, coverage, held: holders(claims, [], undefined, coverage) });
-  assert.match(body, /\| #1 partial   work \| none \| #10 open draft \(reference; scope unverified\) \| old owner 13 h \|/);
-  assert.match(body, /\| #2 issue 2 \| none \| #20 merged/);
-  assert.match(body, /\| #3 issue 3 \| new \| none found/);
-  assert.match(body, /Close only against the issue acceptance evidence/);
+  assert.ok(body.includes("| #1 partial   work | none | #10 open draft (reference; scope unverified) | old owner 13 h |"), body);
+  assert.ok(body.includes("| #2 issue 2 | none | #20 merged"), body);
+  assert.ok(body.includes("| #3 issue 3 | new | none found"), body);
+  assert.ok(body.includes("Close only against the issue acceptance evidence"), body);
 });
 
 test("reader paginates issues and PRs and merges canonical closing links (including URL/manual links)", () => {

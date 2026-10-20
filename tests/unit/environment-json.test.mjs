@@ -68,7 +68,7 @@ test("browser bootstrap reuses a complete dependency tree without installing or 
   const f = installFixture(t);
   const r = f.run();
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /skipping npm install/);
+  assert.ok(r.stdout.includes("skipping npm install"), r.stdout);
   assert.equal(f.installs(), 0);
 });
 
@@ -81,8 +81,8 @@ for (const defect of ["missing", "hollow", "incompatible"]) {
     if (defect === "incompatible") f.put("node_modules/espree/package.json", '{"name":"espree","version":"2.0.0"}');
     const r = f.run();
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.match(r.stderr, /node_modules is incomplete/);
-    assert.match(r.stderr, /espree/, "retain the rejected dependency in failure diagnostics");
+    assert.ok(r.stderr.includes("node_modules is incomplete"), r.stderr);
+    assert.ok(r.stderr.includes("espree"), "retain the rejected dependency in failure diagnostics:\n" + r.stderr);
     assert.equal(f.installs(), 4, "preserve bounded retry policy");
     assert.doesNotMatch(r.stdout, /Chromium ready/);
   });
@@ -95,8 +95,8 @@ test("browser bootstrap validates recovery, including npm reporting failure afte
     const r = f.run("install-browsers.sh", { APEX_TEST_REPAIR: "1", APEX_TEST_INSTALL_EXIT: exit });
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.ok(f.installs() > 0);
-    assert.match(r.stdout, /Chromium ready/);
-    if (exit === "1") assert.match(r.stdout, /npm reported failure/);
+    assert.ok(r.stdout.includes("Chromium ready"), r.stdout);
+    if (exit === "1") assert.ok(r.stdout.includes("npm reported failure"), r.stdout);
   }
 });
 
@@ -110,7 +110,7 @@ test("cloud bootstrap cannot accept partial dependencies through its browser fal
   f.put("node_modules/espree/package.json", '{"name":"espree","version":"1.0.0"}');
   r = f.run("cloud-agent-install.sh");
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /npm ready, browsers deferred/);
+  assert.ok(r.stdout.includes("npm ready, browsers deferred"), r.stdout);
 });
 
 test("browser bootstrap plan does not install even with missing dependencies", (t) => {
@@ -118,7 +118,7 @@ test("browser bootstrap plan does not install even with missing dependencies", (
   fs.rmSync(path.join(f.dir, "node_modules"), { recursive: true });
   const r = f.run("install-browsers.sh", {}, ["--plan"]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /cache:/);
+  assert.ok(r.stdout.includes("cache:"), r.stdout);
   assert.equal(f.installs(), 0);
 });
 
