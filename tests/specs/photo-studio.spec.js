@@ -161,6 +161,10 @@ test("Garage photo offers the Team tab's room, crew and lighting at phone size a
   expect(pageErrors).toEqual([]);
 });
 test("Paused race photo keeps controls reachable at 200% and isolates panel scrolling", async ({ page, pageErrors }, info) => {
+  // Race boot, two rotations at 200% each waiting for the sheet fit, a scroll
+  // and the portrait gate measured 119-128 s on SwiftShader (2026-10-20, 3
+  // runs); the default 120 s cut the lifecycle off after its last assertion.
+  test.setTimeout(210000);
   await boot(page);
   await page.evaluate(async () => {
     __apex.headless(true);
