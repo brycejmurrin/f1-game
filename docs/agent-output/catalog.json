@@ -1372,6 +1372,11 @@
       ]
     },
     {
+      "path": "tools/desktop/minify.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/desktop/pack-dry-run.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2615,6 +2620,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/perf/live-render-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/perf/mesh-census-lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2745,6 +2759,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/design-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/export-history-evidence.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2849,6 +2872,11 @@
         "--json",
         "--out"
       ]
+    },
+    {
+      "path": "tools/shot/lib/design-matrix.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/shot/lib/garage-camera-catalog.mjs",

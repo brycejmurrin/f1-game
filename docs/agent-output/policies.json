@@ -861,6 +861,11 @@
       "presentation": "shared-levels",
       "preserve": "Fetch failed means nothing read; stale claims hidden count; never suppress conflicting work"
     },
+    "tools/desktop/minify.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
     "tools/desktop/pack-dry-run.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1766,6 +1771,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/live-render-matrix.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-row `= row <name> <verdict>` lines, the final `= live-render-matrix` summary and the checkpointed --json report."
+    },
     "tools/perf/diagnostics.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -1866,6 +1876,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/design-matrix.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
     "tools/shot/export-history-evidence.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1930,6 +1945,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/shot/lib/design-matrix.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/shot/lib/garage-camera-catalog.mjs": {
       "action": "no-direct-output",

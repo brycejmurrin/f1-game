@@ -962,7 +962,18 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
           const r = el.getBoundingClientRect();
           return [id, [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 2) / 2)];
         })), CONTROL_IDS);
-        gearW[hud] = await page.evaluate(() => document.getElementById("hud-box-time").getBoundingClientRect().width);
+        // The TIME box is content-sized (min-width 3.09em) and the clock ticks at 10 Hz, so its width
+        // follows the digits on screen, not HUD SIZE: 1.0 px short at 200 vs 100 on Pages (runs
+        // 39352687412, 39356511794) with --hud-z-top equal. Pin the same widest string inside one
+        // evaluate (the tick cannot interleave), read, restore.
+        gearW[hud] = await page.evaluate(() => {
+          const box = document.getElementById("hud-box-time"), val = document.getElementById("hud-time");
+          const was = val.textContent;
+          val.textContent = "8:88.888";
+          const w = box.getBoundingClientRect().width;
+          val.textContent = was;
+          return w;
+        });
         // The fit publishes --hud-z-top only while the top cap binds (it is removed when the cap is >= HUD SIZE).
         zTop[hud] = await page.evaluate(() => document.documentElement.style.getPropertyValue("--hud-z-top").trim());
       }

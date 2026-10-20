@@ -330,6 +330,7 @@ jobs:
       # Electron packager). A root .html page must be named there or it 404s on
       # the live site — bench.html on build 7377. tests/unit/deploy-staging
       # asserts every fetchable top-level path is covered.
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci: stage.mjs minifies with terser (#3110)
       - name: Stage site
         run: node tools/desktop/stage.mjs --out _site
       # THE SHELL GENERATION IS STAMPED HERE, NOT COMMITTED (2026-09-01).
@@ -398,6 +399,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci: stage.mjs minifies with terser (#3110)
       - name: Recreate the stamped runtime tree
         env:
           BUILD: ${{ needs.deploy.outputs.build }}
