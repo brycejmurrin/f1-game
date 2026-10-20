@@ -1,1 +1,1 @@
-READY to:B from:claude:session_016dqWDK7fmQEMidMJgZsW1t #3224 b5485e85 B·H7 docs-only: TLX GPU-cost paravirtual note + garage cause 1 re-measured FIXED by 7c04ff7b (garage-census programs [1,0..]->[0x6], 8868->223 ms). ready-gate passed; non-game batch.
+READY to:B from:claude:session_013aiJAnGKQnPah3uLhEPQut #3228 cursor/render-cpu-h9b1 83165483 B·H9 render-cpu: flyby sceneOf OSR deopts 654→0, bit-identical; render-path JS ranked on macOS GPU (nothing taken); tooling-fast 799/0, input+tiny green
