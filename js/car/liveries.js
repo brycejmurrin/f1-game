@@ -612,7 +612,7 @@ const Liveries = (function () {
     "saddleTint", "coverBind", "finHandoff",
     "rearWing", "wingCarbon", "bodySplit", "lower", "upper",
     "patternTint", "patternSecond", "patternPlacement", "patternSide", "patternWidth", "patternRepeat",
-    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "patternKey", "coverFinish", "wingFinish", "haloFinish",
+    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "patternKey", "decalNoseTip", "decalCockpit", "decalPodTop", "decalHalo", "coverFinish", "wingFinish", "haloFinish",
     // GARAGE FINISHES/PARTS contract (docs/notes/GARAGE-FINISHES-PARTS-2026-10-17.md): one row per field, owned by the slice named there.
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
     "podFinish", "finFinish", "mirrorFinish", "helmetStyle",

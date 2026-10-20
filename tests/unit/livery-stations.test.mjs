@@ -156,3 +156,20 @@ test("driver code comes from the race number, else the team short name", () => {
   assert.equal(M.S.driverCode("ferrari", 44), "HAM");
   assert.ok(/^[A-Z]{3}$/.test(M.S.driverCode("ferrari", 999)), "falls back to a 3-letter short name");
 });
+
+test("each station has a livery ON / OFF, and OFF paints nothing in its region", () => {
+  const R = { noseTip: { id: "noseTip" }, cockpitSide: { id: "cockpitSide" }, podTop: { id: "podTop" }, haloTop: { id: "haloTop" } };
+  const painted = (colors) => {
+    const hit = [];
+    const h = { teamId: "mclaren", colors, c1: [1, 0.5, 0], accent: [0, 0, 0], names: ["A", "B", "C", "D", "E", "F"], num: 4,
+      fillRegion: (_, r) => hit.push(r.id), drawWordmark: (_, __, r) => hit.push(r.id), inkOn: () => [1, 1, 1], haloIf: () => null };
+    M.S.paint(null, R, h); return hit.sort();
+  };
+  assert.deepEqual(painted({}), ["cockpitSide", "haloTop", "noseTip", "podTop"], "on by default");
+  for (const [id, field] of Object.entries(M.S.TOGGLES)) {
+    assert.ok(painted({ [field]: "off" }).indexOf(id) < 0, field + " off");
+    assert.equal(painted({ [field]: "off" }).length, 3, field + " leaves the other three");
+  }
+  const src = fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8");
+  for (const field of Object.values(M.S.TOGGLES)) assert.ok(src.includes(field + ': "on"'), field + " persists through LIV_DRAFT_PILLS");
+});

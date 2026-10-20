@@ -67,6 +67,9 @@ const GarageLiveryDesignEditor = (function () {
       const when = { patternSide: () => draft.patternPlacement === "wrap", patternKey: () => LiveryDesign.KEY_PATTERNS.includes(draft.spineLogo) }[key];
       patternRows.push({ row: r, when: when || (() => true) });
     }
+    // DECAL SPOTS (LiveryStations): one ON / OFF per station, in TEAM MARKS & NUMBERS.
+    for (const [label, key] of [["NOSE TIP", "decalNoseTip"], ["COCKPIT SIDE", "decalCockpit"], ["SIDEPOD TOP", "decalPodTop"], ["HALO TOP", "decalHalo"]])
+      insert(api.pillRow(label, key, ["on", "off"], "on"));
     const rangeLabels = { patternWidth: "DESIGN WIDTH", patternRepeat: "REPEATS", patternOffset: "SIDE OFFSET", patternTaper: "TAIL TAPER", patternOpacity: "OPACITY", patternRotation: "ROTATION", patternStretch: "LENGTH STRETCH", patternWeight: "LINE WEIGHT" };
     for (const [key, limits] of Object.entries(LiveryDesign.RANGES)) {
       const r = document.createElement("label"); r.className = "tune-row";
@@ -157,7 +160,7 @@ const GarageLiveryDesignEditor = (function () {
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
-      ["crestStyle", "logo", "logo2", "logo3", "numFont", "sponsors", "boardTint"], [api.markNote]);
+      ["crestStyle", "logo", "logo2", "logo3", "numFont", "sponsors", "boardTint", "decalNoseTip", "decalCockpit", "decalPodTop", "decalHalo"], [api.markNote]);
     section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "cockpitTint", "gripTint", "tcam"]);
     section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk", "rimFinish"]);
     section("FLOOR, SUSPENSION & RUNNING GEAR", "Parts that are bare carbon by default: floor edge and bargeboards, suspension arms, brake ducts, wheel deflectors, plus the exhaust tip's heat colour. Unset keeps them carbon.",

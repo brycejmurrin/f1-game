@@ -2903,14 +2903,14 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "paint": [
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-stations.test.mjs"
       ],
       "value": [
         "tests/unit/livery-design.test.mjs"
       ],
       "*": [
-        "tests/unit/garage-followups.test.mjs",
-        "tests/unit/livery-stations.test.mjs"
+        "tests/unit/garage-followups.test.mjs"
       ]
     },
     "js/car/livery-graphics.js": {
@@ -2939,6 +2939,9 @@
         "tests/unit/livery-stations.test.mjs"
       ],
       "haloOf": [
+        "tests/unit/livery-stations.test.mjs"
+      ],
+      "paint": [
         "tests/unit/livery-stations.test.mjs"
       ]
     },
@@ -7173,6 +7176,7 @@
         "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"

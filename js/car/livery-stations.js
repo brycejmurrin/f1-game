@@ -6,6 +6,10 @@
 const LiveryStations = (function () {
   const IDS = Object.freeze(["noseTip", "cockpitSide", "podTop", "haloTop"]);
   const HALO_GREY = [0.22, 0.225, 0.245];   // CarMaterials HALO: the untinted titanium hoop
+  // Livery field per station: "off" leaves its atlas region clear, so the quad shows the body
+  // underneath. Paint-only — the geometry stays, and a toggle never rebuilds the car mesh.
+  const TOGGLES = Object.freeze({ noseTip: "decalNoseTip", cockpitSide: "decalCockpit", podTop: "decalPodTop", haloTop: "decalHalo" });
+  const on = (colors, id) => !colors || colors[TOGGLES[id]] !== "off";
 
   // Driver code for the car's race number (Teams.LIST), else the team's short name.
   function driverCode(teamId, num) {
@@ -17,17 +21,17 @@ const LiveryStations = (function () {
   // Atlas art. `h` carries liverytex's own painters so ink rules stay in one place.
   function paint(ctx, R, h) {
     const { teamId, colors, c1, accent, names, num } = h;
-    if (R.noseTip) h.fillRegion(ctx, R.noseTip, colors.noseTip || accent);
-    if (R.cockpitSide) {
+    if (R.noseTip && on(colors, "noseTip")) h.fillRegion(ctx, R.noseTip, colors.noseTip || accent);
+    if (R.cockpitSide && on(colors, "cockpitSide")) {
       const ink = h.inkOn([c1]);
       h.drawWordmark(ctx, driverCode(teamId, num), R.cockpitSide, ink, { align: "center", spacing: 0.12, halo: h.haloIf(ink) });
     }
     if (!names.length) return;   // `clean`: no sponsor text
-    if (R.podTop) {
+    if (R.podTop && on(colors, "podTop")) {
       const ink = h.inkOn([c1]);
       h.drawWordmark(ctx, names[0], R.podTop, ink, { align: "center", spacing: 0.05, halo: h.haloIf(ink) });
     }
-    if (R.haloTop) {
+    if (R.haloTop && on(colors, "haloTop")) {
       const ink = h.inkOn([colors.halo || HALO_GREY]);
       h.drawWordmark(ctx, names[5] || names[1], R.haloTop, ink, { align: "center", spacing: 0.08, halo: h.haloIf(ink) });
     }
@@ -163,5 +167,5 @@ const LiveryStations = (function () {
     return { path, r: sty === 1 ? 0.024 : 0.028, sides: round ? 12 : 6, midZ: a[4] };
   }
 
-  return Object.freeze({ IDS, paint, emit, haloOf, driverCode, HALO_ARGS });
+  return Object.freeze({ IDS, TOGGLES, paint, emit, haloOf, driverCode, HALO_ARGS });
 })();
