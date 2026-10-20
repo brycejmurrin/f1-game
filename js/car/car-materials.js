@@ -190,6 +190,7 @@ const CarMaterials = (function () {
   // A Car3D.build({ refinish: true }) keeps its pre-finish arrays: re-finish a copy for `liv`, which may differ from
   // the build's livery in FINISH_FIELDS only — exactly a full build (tests/unit/garage-finish-remap.test.mjs).
   function refinish(base, liv) {
+    Log.info("car", "refinish");   // the repaint signal a finish tap leaves instead of "[car] build"
     const f = base._refinish, out = Object.assign({}, base, { mat: f.mat.slice(), col: f.col.slice(), nrm: f.nrm.slice() });
     if (out.flapInfo) out.flapInfo = Object.assign({}, out.flapInfo, { finish: finishOf(liv, "wingFinish") });
     finishPass(out, liv, f);
