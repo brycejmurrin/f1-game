@@ -4159,6 +4159,7 @@
       "*": [
         "tests/unit/changed-files.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/pick-tests.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },

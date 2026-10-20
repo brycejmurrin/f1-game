@@ -5,10 +5,12 @@ import { load as loadRatchets } from "../../tools/check/ratchets.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, RULES, SPEC_OWNER_REASON, blanketOnly, pick, specOwners, stripSpecOwner } from "../../tools/ci/pick-tests.mjs";
+import { changedPaths } from "../../tools/lib/changed-files.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -59,6 +61,25 @@ test("a file no rule claims reports 'unmatched', not an empty success", () => {
   assert.deepEqual(r.groups, []);
 });
 
+test("a rename lists its source so directory rules still fire", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-pick-rename-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  try {
+    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.mkdirSync(path.join(dir, "js/circuits"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "js/circuits/cota.js"), "// circuit body for rename detection\n".repeat(20));
+    g("add", "-A"); g("commit", "-qm", "base");
+    g("mv", "js/circuits/cota.js", "docs/PHYSICS.md");
+    g("commit", "-qam", "moved out of js/circuits");
+    const paths = changedPaths(["HEAD~1"], { cwd: dir });
+    assert.deepEqual(paths.sort(), ["docs/PHYSICS.md", "js/circuits/cota.js"]);
+    const groups = new Set([...pick(paths).keys()]);
+    assert.ok(groups.has("circuits"), `rename source must route circuits, got ${[...groups].join(",")}`);
+    assert.ok(!pick(["docs/PHYSICS.md"]).has("circuits"), "destination alone must not claim circuits");
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+});
+
 test("--since takes a REF, and does not read it as a path", () => {
   // The regression this pins. Before the fix `files` was ["HEAD"] — the ref
   // itself — and `reason` was "unmatched", i.e. "nothing to run" for a diff
@@ -71,10 +92,8 @@ test("--since takes a REF, and does not read it as a path", () => {
   // ref must not end up in the FILE list.
   const r = json("--since", "HEAD");
   assert.ok(!r.files.includes("HEAD"), "the ref leaked into the file list");
-  const real = execFileSync("git", ["diff", "--name-only", "HEAD"],
-                            { cwd: ROOT, encoding: "utf8" }).trim();
-  const expected = real ? real.split("\n").filter(Boolean) : [];
-  assert.deepEqual(r.files.slice().sort(), expected.slice().sort());
+  const expected = changedPaths(["HEAD"], { cwd: ROOT }).slice().sort();
+  assert.deepEqual(r.files.slice().sort(), expected);
 });
 
 test("explicit paths still win over every other mode", () => {
