@@ -27,7 +27,7 @@ const CarBodyGeom = (function () {
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
     const midY = mid.y + (s.noseDroop || 0) * (sil ? 0.85 : 0.45)
       + (sil ? (s.noseSlim < 0.7 ? -0.04 : 0) + (s.noseSlim > 1.2 ? 0.03 : 0) : 0);
-    if (sil) return conceptNose(s, [
+    if (sil || s.fitSeat) return conceptNose(s, [   // fitted bodies keep this seam even with a level cover
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
         w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
       { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * midSlim, t: mid.t },
@@ -1378,6 +1378,130 @@ const CarBodyGeom = (function () {
     return p;
   }
 
+  const CONCEPT_POD_Z = [0.62, 0.50, 0.22, -0.10, -0.38, -0.62, -0.90, -1.15, -1.48];
+  const CONCEPT_PODS = Object.freeze({
+    rift: { span: [1,.98,1.15,1.08,.85,.72,.69,.75,.82], depth: [.012,.025,.09,.12,.13,.11,.07,.025,.012] },
+    keel: { span: [.84,.86,.90,.92,.92,.94,.96,.98,.98] },
+    delta: { span: [.98,1.05,1.20,1.15,.96,.82,.78,.79,.85], depth: [.012,.025,.045,.055,.07,.06,.04,.02,.012] },
+    serpent: { span: [1,.98,1.18,1.04,.70,.66,.86,.88,.86], depth: [.012,.02,.04,.08,.11,.12,.07,.025,.012] },
+  });
+  // Shape only opt-in bodies, AFTER supplier downwash. Interpolate the original
+  // station floors explicitly: the legacy clamp's tables have only seven Z keys.
+  function conceptPodStations(stations, profile) {
+    const recipe = CONCEPT_PODS[profile];
+    const floors = Object.keys(POD_MIN_W).map(Number).sort((a, b) => b - a)
+      .map((z) => ({ z, width: POD_MIN_W[String(z)], height: POD_MIN_H[String(z)] }));
+    const shaped = CONCEPT_POD_Z.map((z, i) => {
+      const p = sampleStations(stations, z), f = sampleStations(floors, z);
+      p.outer = Math.min(0.88, p.inner + Math.max(f.width, (p.outer - p.inner) * recipe.span[i]));
+      const roofDrop = profile === "keel" ? 0.018 : profile === "delta" || profile === "serpent" ? 0.006 : 0;
+      p.innerTop -= roofDrop; p.outerTop -= roofDrop;
+      for (const edge of ["inner", "outer"]) {
+        const b = edge + "Bottom", t = edge + "Top";
+        p[t] = Math.min(POD_TOP_MAX, p[t]);
+        p[b] = Math.max(0.13, Math.min(POD_TOP_MAX - f.height, p[b], p[t] - f.height));
+        p[t] = Math.min(POD_TOP_MAX, Math.max(p[t], p[b] + f.height));
+      }
+      p.outerBottom = Math.max(p.outerBottom, p.innerBottom + POD_UNDERCUT_MIN);
+      p.outerTop = Math.min(POD_TOP_MAX, Math.max(p.outerTop, p.outerBottom + f.height));
+      return p;
+    });
+    if (profile === "serpent") {
+      // Supplier taper can overwhelm a factor-only recovery. Pin a real outer
+      // bulge behind the waist, then return continuously to the supplier tail.
+      shaped[6].outer = Math.min(.88, Math.max(shaped[6].outer, shaped[5].outer + .025, shaped[8].outer + .025));
+      shaped[7].outer = (shaped[6].outer + shaped[8].outer) * .5;
+    }
+    return shaped;
+  }
+  function conceptPodRing(p, profile, index) {
+    const x = p.outer, w = x - p.inner, b = p.outerBottom, h = p.outerTop - b;
+    if (profile === "keel") return [[p.inner,p.innerBottom], [x-w*.06,b], [x,b+h*.12],
+      [x,b+h*.90], [x-w*.12,p.outerTop], [p.inner,p.innerTop]];
+    const depth = Math.min(CONCEPT_PODS[profile].depth[index], w * 0.55);
+    // The forward channel stays BELOW the original 32..88% sponsor landing.
+    // Behind its rear edge it climbs, exposing a tall inset wall and silver lip.
+    const aft = Math.max(0, Math.min(1, (-p.z - .34) / .45));
+    const roof = .25 + aft * (profile === "serpent" ? .43 : .36);
+    const ring = [[p.inner,p.innerBottom], [x-w*.06,b], [x,b+h*.045],
+      [x-depth,b+h*.105], [x-depth,b+h*roof], [x,b+h*(roof+.035)],
+      [x,b+h*.94], [x-w*(profile === "delta" ? .28 : .10),p.outerTop],
+      [p.inner+w*.25,p.innerTop], [p.inner,p.innerTop]];
+    if (profile === "rift") ring.splice(8,1);   // one continuous silver inner-roof facet
+    return ring;
+  }
+  // Ear clipping, rather than a centre fan: the recessed ring is concave.
+  function conceptPodCap(points) {
+    const cross = (a,b,c) => (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+    const ids = points.map((_,i) => i), triangles = [];
+    while (ids.length > 3) {
+      let found = false;
+      for (let j=0;j<ids.length;j++) {
+        const a=ids[(j+ids.length-1)%ids.length], b=ids[j], c=ids[(j+1)%ids.length];
+        if (cross(points[a],points[b],points[c]) <= 1e-12) continue;
+        const inside = ids.some((k) => k!==a && k!==b && k!==c &&
+          cross(points[a],points[b],points[k]) >= -1e-12 && cross(points[b],points[c],points[k]) >= -1e-12 &&
+          cross(points[c],points[a],points[k]) >= -1e-12);
+        if (inside) continue;
+        triangles.push([a,b,c]); ids.splice(j,1); found=true; break;
+      }
+      if (!found) throw new Error("Invalid concept pod section");
+    }
+    triangles.push(ids.slice()); return triangles;
+  }
+  // Average along each longitudinal strip only. Separate cross-section edges
+  // never share a group, even where their positions coincide at a hard lip.
+  function smoothConceptPodStrips(out, strips) {
+    const groups = new Map();
+    for (const strip of strips) for (let v=strip.start;v<strip.end;v+=3) {
+      const key=strip.edge+"|"+out.pos[v]+","+out.pos[v+1]+","+out.pos[v+2];
+      let g=groups.get(key);
+      if (!g) { g={sum:[0,0,0],vertices:[]}; groups.set(key,g); }
+      for (let k=0;k<3;k++) g.sum[k]+=out.nrm[v+k];
+      g.vertices.push(v);
+    }
+    for (const g of groups.values()) {
+      const length=Math.hypot(...g.sum);
+      if (length<1e-12) continue;
+      for (const v of g.vertices) for (let k=0;k<3;k++) out.nrm[v+k]=g.sum[k]/length;
+    }
+  }
+  function buildConceptPods(out, stations, profile, c1) {
+    for (const side of [-1,1]) {
+      const rings = stations.map((p,i) => conceptPodRing(p,profile,i));
+      const strips = shadeFlags.round && (profile==="rift" || profile==="serpent") ? [] : null;
+      const xyz = (p,z) => [side*p[0],p[1],z];
+      const tri = (a,b,c,col,surface) => side > 0 ? addTri(out,a,b,c,col,surface) : addTri(out,a,c,b,col,surface);
+      for (let r=0;r<rings.length-1;r++) for (let e=0;e<rings[r].length;e++) {
+        const start=out.pos.length;
+        const j=(e+1)%rings[r].length, A=rings[r], B=rings[r+1];
+        const dark=profile!=="keel" && e>=1 && e<=4, col=dark?INTAKE:c1, sf=dark?SURFACES.carbon:SURFACES.paint;
+        tri(xyz(A[e],stations[r].z),xyz(B[e],stations[r+1].z),xyz(B[j],stations[r+1].z),col,sf);
+        tri(xyz(A[e],stations[r].z),xyz(B[j],stations[r+1].z),xyz(A[j],stations[r].z),col,sf);
+        if (strips) strips.push({edge:e,start,end:out.pos.length});
+      }
+      if (strips) smoothConceptPodStrips(out,strips);
+      for (const front of [true,false]) {
+        const r=front?0:rings.length-1, ring=rings[r], caps=conceptPodCap(ring), z=stations[r].z;
+        const area = (t) => { const [a,b,c]=t.map((i)=>ring[i]); return Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])); };
+        const opening=front && profile==="delta" ? caps.reduce((best,t)=>area(t)>area(best)?t:best,caps[0]) : null;
+        for (const t of caps) {
+          const v=t.map((i)=>xyz(ring[i],z));
+          if (t!==opening) { if (front) tri(v[0],v[1],v[2],c1,SURFACES.paint); else tri(v[0],v[2],v[1],c1,SURFACES.paint); continue; }
+          const centre=v[0].map((_,k)=>(v[0][k]+v[1][k]+v[2][k])/3);
+          const lip=v.map((p)=>p.map((n,k)=>centre[k]+(n-centre[k])*.82));
+          const throat=lip.map((p)=>[centre[0]+(p[0]-centre[0])*.78,centre[1]+(p[1]-centre[1])*.78,z-.065]);
+          for (let k=0;k<3;k++) {
+            const j=(k+1)%3;
+            tri(v[k],v[j],lip[j],c1,SURFACES.paint); tri(v[k],lip[j],lip[k],c1,SURFACES.paint);
+            tri(lip[k],lip[j],throat[j],INTAKE,SURFACES.carbon); tri(lip[k],throat[j],throat[k],INTAKE,SURFACES.carbon);
+          }
+          tri(throat[0],throat[1],throat[2],INTAKE,SURFACES.carbon);
+        }
+      }
+    }
+  }
+
   const COVER_LIFT_TOP = 0.92;   // a concept coverLift ends under the hoop crown (0.946 at z -0.55)
   const _anchorCache = new WeakMap();
   const _anchorNullKey = {};   // stand-in for a null/undefined parts (legacy bodies)
@@ -1431,7 +1555,9 @@ const CarBodyGeom = (function () {
         bottom: 0.42 - 0.17 * coverHeight,
         top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL + lift * SPINE_TAIL, k: crown * 0.45 },
     ];
-    const podStations = round ? CarShade.downwash(sidepodStations(eng, style), (z) => sampleStations(coverStations, z).bottom, eng.coke) : sidepodStations(eng, style);   // rounded: the downwash ramp
+    let podStations = round ? CarShade.downwash(sidepodStations(eng, style), (z) => sampleStations(coverStations, z).bottom, eng.coke) : sidepodStations(eng, style);   // rounded: the downwash ramp
+    const podProfile = CONCEPT_PODS[style.podProfile] ? style.podProfile : null;
+    if (podProfile) podStations = conceptPodStations(podStations, podProfile);
     const noseStations = styledNoseStations(style).map((station) => ({
       z: station.z, side: station.w * 0.5, topSide: station.w * station.t * 0.5,
       bottom: station.y - station.h * 0.5, top: station.y + station.h * 0.5,
@@ -1447,6 +1573,7 @@ const CarBodyGeom = (function () {
       },
       coverAt(z) { const c = sampleStations(coverStations, z); return round ? CarShade.cokeFoot(c, coverStations, eng.coke) : c; },   // rounded: the pinched foot, c.xb
       noseAt(z) { return sampleStations(noseStations, z); },
+      podProfile,
       podStations: podStations.map((p) => Object.freeze(Object.assign({}, p))),
     };
   }
@@ -1484,7 +1611,8 @@ const CarBodyGeom = (function () {
   function buildSidepodBodywork(out, c1, eng, anchors, facet) {   // facet (B·D1d Delta): flat-panel pods inside a rounded build
     const data = anchors || bodyAnchors({ engine: 1, _visual: { engine: eng } });
     const stations = data.podStations;
-    if (shadeFlags.round && !facet) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
+    if (data.podProfile) buildConceptPods(out, stations, data.podProfile, c1);
+    else if (shadeFlags.round && !facet) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
     else for (const side of [-1, 1]) {
       addStationLoft(out, stations.map((p) => sidepodStation(side, p.z, p.inner, p.outer,
         p.innerBottom, p.outerBottom, p.innerTop, p.outerTop)), c1, INTAKE);
@@ -1496,6 +1624,7 @@ const CarBodyGeom = (function () {
     const conduitP = data.podAt(-0.65);
     const tailP = data.podAt(-1.48);
     return {
+      conceptInlet: data.podProfile === "delta",
       inlet: { z: 0.625, x: (inletP.inner + inletP.x) * 0.5,
                y: (inletP.innerBottom + inletP.innerTop) * 0.5,
                width: inletP.x - inletP.inner, height: inletP.innerTop - inletP.innerBottom },

@@ -104,6 +104,17 @@ const Car3D = (function () {
     keel:    Object.freeze({ fitSeat: 1, airScoop: 1, flankLip: 0.04, flank: [0.40, -0.30, 0.56, 0.54, 0.34, 0.22], podShape: { top: [0.12, 0.11, 0.11, 0.13, 0.10, 0.05, 0.01], out: [0.06, 0.07, 0.074, 0.064, 0.05, 0.03, 0.00], bot: [-0.02, -0.03, -0.04, -0.03, -0.02, -0.01, 0.00] }, noseTipZ:  0.06, noseSlim: 0.86, noseDroop: -0.012, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.010, inletH: 0.000, inletW:  -0.045, undercutD: 0.080, waist:   0.000, floorStep:  0.000, coverCrown:  0.000, coverLift:  0.000, wingStyle: W({ arch: 0.45, twist: 0.12, teCurve: 0.020, chordTaper: 0.10, foot: 0.90, canard: 1, tipRise: 0.004 }) }),
     delta:   Object.freeze({ fitSeat: 1, airScoop: 1, flankLip: 0.045, facet: 1, podShape: { top: [0.16, 0.14, 0.12, 0.08, 0.03, 0.00, 0.00], out: [0.06, 0.07, 0.074, 0.06, 0.05, 0.02, 0.00], bot: [0.07, 0.07, 0.05, 0.01, 0.00, 0.00, 0.00] }, flank: [0.26, -0.70, 0.40, 0.58, 0.66, 0.06], noseChine: 1, noseTipZ:  -0.04, noseSlim: 0.96, noseDroop: -0.016, airbox: 1.00, fin: 1, mirror: 0, inlet:  0.040, inletH: 0.000, inletW:   -0.045, undercutD:   0.080, waist: -0.030, floorStep:   0.020, coverCrown:   0.000, coverLift:  0.000, wingStyle: W({ arch: 1.10, twist: 0.34, teCurve: 0.16, chordTaper: 0.42, foot: 1.45, canard: 2, tipRise: 0.075 }) }),
     serpent: Object.freeze({ fitSeat: 1, airScoop: 1, flankLip: 0.04, podShape: { top: [0.13, 0.12, 0.09, 0.05, -0.01, -0.02, 0.00], out: [0.03, 0.03, 0.08, 0.06, 0.05, 0.04, 0.01], bot: [0.02, 0.04, 0.05, 0.02, 0.00, 0.00, 0.00] }, flank: [0.36, -0.85, 0.30, 0.70, 0.22, 0.14], noseTipZ:  0.00, noseSlim: 0.92, noseDroop: -0.010, airbox: 1.00, fin: 0, mirror: 1, inlet: -0.020, inletH: 0.000, inletW:  -0.045, undercutD:   0.080, waist: -0.040, floorStep:  0.030, coverCrown:   0.020, coverLift:   0.000, wingStyle: W({ arch: 0.95, twist: 0.40, teCurve: 0.20, chordTaper: 0.46, foot: 1.25, canard: 1, tipRise: 0.060 }) }),
+    // Blender-derived studies: independent IDs from the Rift/Keel/Delta/Serpent
+    // campaign. fitSeat keeps nose attachments on the measured skin; the existing
+    // body anchors own pod/cover clearances and decal placement for these too.
+    // Caldra: raised cooling shoulder, a pinched waist and a scalloped front cascade.
+    caldra: Object.freeze({ fitSeat: 1, podProfile: "rift", noseTipZ: 0.16, noseSlim: 0.68, noseDroop: -0.018, airbox: 0.88, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.000, inletW: -0.040, undercutD: 0.120, waist: -0.100, floorStep: 0.035, coverCrown: 0.045, coverLift: 0.065, wingStyle: W({ arch: 0.72, twist: 0.32, teCurve: 0.14, chordTaper: 0.35, foot: 1.05, tipRise: 0.025 }) }),
+    // Rovik: low, narrow cooling shelf and long slim nose with almost flat wings.
+    rovik: Object.freeze({ fitSeat: 1, podProfile: "keel", noseTipZ: 0.32, noseSlim: 0.46, noseDroop: -0.012, airbox: 0.68, fin: 0, mirror: 0, inlet: -0.040, inletH: -0.100, inletW: -0.080, undercutD: 0.065, waist: -0.130, floorStep: -0.015, coverCrown: 0.005, coverLift: -0.060, wingStyle: W({ arch: 0.20, twist: 0.08, teCurve: 0.02, chordTaper: 0.10, foot: 0.75, tipRise: 0.006 }) }),
+    // Senzo: broad cooling shoulders and swept wing tips.
+    senzo: Object.freeze({ fitSeat: 1, podProfile: "delta", noseTipZ: 0.06, noseSlim: 0.80, noseDroop: -0.020, airbox: 1.05, fin: 0, mirror: 2, inlet: 0.060, inletH: -0.005, inletW: -0.050, undercutD: -0.020, waist: 0.025, floorStep: 0.025, coverCrown: 0.000, coverLift: -0.075, wingStyle: W({ arch: 0.85, twist: 0.40, teCurve: 0.16, chordTaper: 0.42, foot: 1.20, canard: 2, tipRise: 0.035 }) }),
+    // Talven: a rising shoulder/cover arc, deep undercut and bowed wing cascade.
+    talven: Object.freeze({ fitSeat: 1, podProfile: "serpent", noseTipZ: 0.10, noseSlim: 0.82, noseDroop: 0.008, airbox: 0.90, fin: 0, mirror: 0, inlet: -0.020, inletH: -0.005, inletW: -0.035, undercutD: 0.100, waist: -0.080, floorStep: 0.040, coverCrown: 0.070, coverLift: 0.060, wingStyle: W({ arch: 1.08, twist: 0.30, teCurve: 0.18, chordTaper: 0.40, foot: 1.25, tipRise: 0.045 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -375,7 +386,9 @@ const Car3D = (function () {
     }
 
     part("sidepods");
+    const podSkinFrom = out.pos.length / 3;
     const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors, !!teamStyle.facet);
+    if (opts && opts.measure) out.podSkin = { from: podSkinFrom, to: out.pos.length / 3 };
     // TRAP: `proud` is measured off anchors.podAt(z).x, which is the LOFT
     // CONTROL width, NOT the rendered pod surface. Measured, the two diverge by
     // 18 mm at z 0.2 and 99 mm at z -0.4, so a thin line laid the default 8 mm
@@ -917,26 +930,28 @@ const Car3D = (function () {
                    : (tier("engine") === 2 ? 2 : tier("engine") === 0 ? 0 : 1);
     for (const s of [-1, 1]) {
       const inlet = podGeom.inlet;
-      if (engInlet === 0) {
-        // Letterbox: the shallowest duct on the grid, and no lip at all.
-        addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
-                      inlet.width * 0.75, inlet.height * 0.38, c1, 0.034, 0);
-      } else if (engInlet === 2) {
-        addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
-                      inlet.width * 0.92, inlet.height * 0.82, c1, 0.075, 0.016);
-        // Splitter bar across the throat — a wide mouth needs one or it reads
-        // as a missing panel rather than a radiator.
-        addBox(out, s * inlet.x, inlet.y, inlet.z - 0.030,
-               inlet.width * 0.86, 0.012, 0.014, CARBON, SURFACES.carbon);
-      } else if (engInlet === 3) {
-        for (const dx of [-1, 1])
-          addInletMouth(out, s * (inlet.x + dx * inlet.width * 0.22), inlet.y, inlet.z,
-                        inlet.width * 0.34, inlet.height * 0.88, c1, 0.060, 0.010);
-      } else {
-        // Reverse-P (2026 field majority): tall inboard stem, not a square scoop.
-        addInletMouth(out, s * (inlet.x - inlet.width * 0.12),
-                      inlet.y + inlet.height * 0.08, inlet.z,
-                      inlet.width * 0.48, inlet.height * 0.88, c1, 0.055, 0.012);
+      if (!podGeom.conceptInlet) {
+        if (engInlet === 0) {
+          // Letterbox: the shallowest duct on the grid, and no lip at all.
+          addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
+                        inlet.width * 0.75, inlet.height * 0.38, c1, 0.034, 0);
+        } else if (engInlet === 2) {
+          addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
+                        inlet.width * 0.92, inlet.height * 0.82, c1, 0.075, 0.016);
+          // Splitter bar across the throat — a wide mouth needs one or it reads
+          // as a missing panel rather than a radiator.
+          addBox(out, s * inlet.x, inlet.y, inlet.z - 0.030,
+                 inlet.width * 0.86, 0.012, 0.014, CARBON, SURFACES.carbon);
+        } else if (engInlet === 3) {
+          for (const dx of [-1, 1])
+            addInletMouth(out, s * (inlet.x + dx * inlet.width * 0.22), inlet.y, inlet.z,
+                          inlet.width * 0.34, inlet.height * 0.88, c1, 0.060, 0.010);
+        } else {
+          // Reverse-P (2026 field majority): tall inboard stem, not a square scoop.
+          addInletMouth(out, s * (inlet.x - inlet.width * 0.12),
+                        inlet.y + inlet.height * 0.08, inlet.z,
+                        inlet.width * 0.48, inlet.height * 0.88, c1, 0.055, 0.012);
+        }
       }
       const fenceN = Math.max(0, Math.min(10, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(2.25, floorStyle.fenceH));
@@ -1546,7 +1561,7 @@ const Car3D = (function () {
         // outermost vanes (hoop[4]/[10]) instead of floating at ±0.21 (#3111 F12).
         const bL = hoop[4], bR = hoop[10];
         if (bL && bR) addBox(out, 0, (bL[1] + bR[1]) / 2 + hr + 0.055, (bL[2] + bR[2]) / 2,
-                             bR[0] - bL[0] + 0.030, 0.022, 0.10, accentC, SURFACES.paint);
+                             bR[0] - bL[0], 0.022, 0.10, accentC, SURFACES.paint);   // ends inside the vanes: no coplanar face
       }
     }
 
@@ -2180,11 +2195,13 @@ const Car3D = (function () {
       // DRS actuator pod + the slot-gap rail it sits on. The pod used to be a
       // 5 cm brick lost on the crown; a taller raked housing and a carbon
       // strip under the top flap make the mechanism (and the open slot) read
-      // from wingRear.
-    addSpan(out, { z: -2.40, x: 0, y: epCY + 0.268, w: drsSX, h: 0.070, t: 0.70 },
-                 { z: -2.62, x: 0, y: epCY + 0.292, w: drsSX * 0.72, h: 0.048, t: 0.50 },
+      // from wingRear. Both ride the flap stack's crown (crownY), not the endplate centre: a
+      // lower wing's crown sits closer to its centre, so epCY offsets left them floating up
+      // to 12 cm over every wing below lvl ~3.6. These are the lvl-4 positions, unchanged there.
+    addSpan(out, { z: -2.40, x: 0, y: crownY + 0.035, w: drsSX, h: 0.070, t: 0.70 },
+                 { z: -2.62, x: 0, y: crownY + 0.059, w: drsSX * 0.72, h: 0.048, t: 0.50 },
             DARK);
-    addBox(out, 0, epCY + 0.236, -2.50, 0.42, 0.010, 0.20, CARBON, SURFACES.carbon);
+    addBox(out, 0, crownY + 0.003, -2.50, 0.42, 0.010, 0.20, CARBON, SURFACES.carbon);
 
       // Lamp above tip centreline so stock/megaphone mouth rim stays visible.
       const tipR = exhTipRForLamp, lampY = 0.545;

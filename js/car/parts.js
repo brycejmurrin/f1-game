@@ -448,7 +448,7 @@ const Parts = (function () {
         { id: "sig_astonmartin_exh", label: "Silverstone Exhaust", cost: 120, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "inconel",
           desc: "Aston Martin signature exhaust — Inconel Race performance with a three-pipe exit", speed: 1.04, accel: 1.05, braking: 1.01, visual: { pipes: 3, bore: 1.04, flare: 1, wastegate: 0, wrap: 0 }, visualTier: 2 },
         { id: "sig_cadillac_exh", label: "Detroit Exhaust", cost: 200, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "hyper_scav",
-          desc: "Cadillac signature exhaust — Hyper Scavenge performance with a flared megaphone tip", speed: 1.05, accel: 1.08, braking: 1.04, visual: { pipes: 1, bore: 1.378, flare: 0.5, wastegate: 2, wrap: 1 }, visualTier: 2 },
+          desc: "Cadillac signature exhaust — Hyper Scavenge performance with a flared megaphone tip", speed: 1.05, accel: 1.08, braking: 1.04, visual: { pipes: 1, bore: 1.05, flare: 0.5, wastegate: 2, wrap: 1 }, visualTier: 2 },
       ],
     },
     {
