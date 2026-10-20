@@ -6,7 +6,9 @@
 #   ln -s ../../node_modules scratch/wt-g3/node_modules
 # plus two local-only patches there: garage-angles appends $APEX_GA_QUERY to the game url, and probe-page's gotoGame
 # pins renderScale(1) + govHold when APEX_GA_PIN is set (not renderClock: frozen, a design switch never presents
-# and CDP capture times out; the garage has no time-of-day drift to freeze).
+# and CDP capture times out; the garage has no time-of-day drift to freeze). Third patch: capture timeouts raised
+# (probe-page 60/30 s -> 180/120 s, garage-angles awaitCaptureReady 60 -> 240 s): a broadcast-lit 1600x900 garage
+# frame takes ~50-60 s in SwiftShader. Commit nothing while it runs: the guard suite load stalls captures.
 # Garage --cam is radians: side az 1.57; graze az 2.45 el 0.10; spec = high over the car under the key lights.
 # Usage: fd-r4m-garage.sh <wt dir> <finish> [finish...]   (frames land as <team>-finish-<f>-hero_az<deg>_el<deg>_d<m>.png)
 WT=$1; shift
