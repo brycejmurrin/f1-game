@@ -27,21 +27,21 @@ const CarBodyGeom = (function () {
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
     const midY = mid.y + (s.noseDroop || 0) * (sil ? 0.85 : 0.45)
       + (sil ? (s.noseSlim < 0.7 ? -0.04 : 0) + (s.noseSlim > 1.2 ? 0.03 : 0) : 0);
-    // fitBodyDetails bodies seam their own root onto the tub (CHASSIS.monocoque[0]) below.
-    if (!s.fitBodyDetails && (sil || s.fitSeat)) return conceptNose(s, [   // fitted bodies keep this seam even with a level cover
-      { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
-        w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
-      { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * midSlim, t: mid.t },
-    ]);
-    return [
+    // Every concept body, fitBodyDetails included, roots on CHASSIS.nose[2] (#3111 tip rule).
+    if (sil || s.fitSeat) return conceptNose(s, [   // fitted bodies keep this seam even with a level cover
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
         w: tip.w * s.noseSlim, h: tip.h * (s.noseTipH == null ? s.noseSlim : s.noseTipH), t: tip.t },
       { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * (s.noseMidH == null ? midSlim : s.noseMidH), t: mid.t },
-      s.fitBodyDetails ? { ...CHASSIS.monocoque[0] } : { z: root.z + (s.noseTipZ || 0) * (sil ? 0.28 : 0.12),
+    ]);
+    return [
+      { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
+        w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
+      { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * midSlim, t: mid.t },
+      { z: root.z + (s.noseTipZ || 0) * (sil ? 0.28 : 0.12),
         y: root.y + (s.noseDroop || 0) * (sil ? 0.35 : 0.15)
           + (sil ? (s.noseSlim < 0.7 ? -0.025 : 0) : 0),
-        w: root.w * (s.noseRootSlim == null ? 1 + (s.noseSlim - 1) * (sil ? 0.45 : 0.2) : s.noseRootSlim),
-        h: root.h * (s.noseRootH == null ? 1 + (s.noseSlim - 1) * (sil ? 0.55 : 0.25) : s.noseRootH), t: root.t },
+        w: root.w * (1 + (s.noseSlim - 1) * (sil ? 0.45 : 0.2)),
+        h: root.h * (1 + (s.noseSlim - 1) * (sil ? 0.55 : 0.25)), t: root.t },
     ];
   }
   // A concept nose (#3111) keeps its tip and mid, the stations that carry its

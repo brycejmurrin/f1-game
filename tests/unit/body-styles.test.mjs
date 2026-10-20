@@ -417,20 +417,21 @@ test("scorpion cover clears actual factory T-wings and their supports bridge the
 });
 
 
-test("expanded nose roots meet the canonical tub without moving their tip or mid sections", () => {
-  const tub = Car3D.CHASSIS.monocoque[0];
+test("expanded nose roots meet the chassis nose root without moving their tip or mid sections", () => {
+  // #3111 tip rule (Bryce 2026-10-20): every concept nose roots on CHASSIS.nose[2], where the tub starts.
+  const root0 = Car3D.CHASSIS.nose[2];
   for (const t of Teams.LIST) {
     const parts = Parts.getVisualTiers(Parts.getFactorySetup(t), t);
     for (const id of expansionIds) for (const [name, X] of [["flat", M], ["rounded", R]]) {
-      const a = X.Car3D.bodyAnchors(parts, id, "dorsal", name === "rounded"), root = a.noseAt(tub.z);
+      const a = X.Car3D.bodyAnchors(parts, id, "dorsal", name === "rounded"), root = a.noseAt(root0.z);
       const label = `${t.id}/${id}/${name}`;
-      assert.equal(root.side, tub.w / 2, `${label}: nose/tub width seam`);
-      assert.equal(root.topSide, tub.w * tub.t / 2, `${label}: nose/tub crown seam`);
-      assert.equal(root.top, tub.y + tub.h / 2, `${label}: nose/tub upper seam`);
-      assert.equal(root.bottom, tub.y - tub.h / 2, `${label}: nose/tub underside seam`);
-      const forward = a.noseAt(tub.z + 0.0001);
+      assert.equal(root.side, root0.w / 2, `${label}: nose root width seam`);
+      assert.equal(root.topSide, root0.w * root0.t / 2, `${label}: nose root crown seam`);
+      assert.equal(root.top, root0.y + root0.h / 2, `${label}: nose root upper seam`);
+      assert.equal(root.bottom, root0.y - root0.h / 2, `${label}: nose root underside seam`);
+      const forward = a.noseAt(root0.z + 0.0001);
       assert.ok(Math.abs(forward.top - root.top) < 0.0001 && Math.abs(forward.bottom - root.bottom) < 0.0001,
-        `${label}: continuous nose immediately ahead of tub`);
+        `${label}: continuous nose immediately ahead of the root`);
     }
   }
   const wasp = Car3D.bodyAnchors(tiers, "wasp").noseAt(2.2016);
@@ -482,21 +483,21 @@ test("low concept floor fences clear the emitted tray with every engine and lowe
       const chassis = mesh.parts.find((p) => p.name === "chassis");
       let trayBottom = Infinity;
       for (let i = 1; i < chassis.vertices * 3; i += 3) trayBottom = Math.min(trayBottom, mesh.pos[i]);
-      const aero = parts._visual.aero, edge = Math.max(0.72, Math.min(1.35, aero.floorEdge ?? 1));
-      const cut = Math.max(0, Math.min(0.24, aero.floorCut ?? 0.04));
-      const width = (k) => Math.min(0.95 - 0.055, k * edge); // existing 1900 mm assembly envelope
-      const stations = [[0.78, width(0.69), 0.031], [-0.42 - cut, width(0.72), 0.026],
-        [-0.48 + cut, width(0.70), 0.024], [-1.58, width(0.54 + cut * 0.35), 0.020],
-        [-0.479, width(0.71), 0.019], [-0.421, width(0.71), 0.019]];
-      for (const [z, centre, half] of stations) {
-        const fence = [];
+      // The edge rail is one loft along floorEdgeAt (13 rings, z 0.78 to -1.58): at each ring
+      // the outermost carbon on each side is the rail's outer face. It must exist inside the
+      // 1900 mm car and clear both the emitted tray and the road.
+      for (let r = 0; r < 13; r++) for (const side of [-1, 1]) {
+        const z = 0.78 - r * 2.36 / 12, carbon = [];
         for (let i = 0; i < mesh.mat.length; i++) if (mesh.mat[i] === X.Car3D.SURFACES.carbon) {
           const p = mesh.pos.slice(i * 3, i * 3 + 3);
-          if (Math.abs(p[2] - z) < 1e-9 && Math.abs(Math.abs(Math.abs(p[0]) - centre) - half) < 1e-9) fence.push(p);
+          if (Math.abs(p[2] - z) < 1e-9 && p[0] * side > 0) carbon.push(p);
         }
-        const tag = `${label}/${id}/${name}/${z}`;
-        assert.ok(fence.length >= 8, `${tag}: original-width fence endpoint emitted`);
-        assert.ok(fence.every((p) => p[1] >= trayBottom - 1e-9 && p[1] >= 0), `${tag}: fence clears tray and road`);
+        const tag = `${label}/${id}/${name}/${z.toFixed(3)}/${side}`;
+        assert.ok(carbon.length >= 2, `${tag}: rail ring emitted`);
+        const outer = Math.max(...carbon.map((p) => Math.abs(p[0])));
+        const rail = carbon.filter((p) => outer - Math.abs(p[0]) < 1e-9);
+        assert.ok(rail.length >= 2 && outer <= 0.95, `${tag}: rail outer face inside the car`);
+        assert.ok(rail.every((p) => p[1] >= trayBottom - 1e-9 && p[1] >= 0), `${tag}: rail clears tray and road`);
       }
     }
 });
