@@ -584,8 +584,7 @@ var RadioVoice = (function () {
     /** Start fetching the pack of every channel that will speak, so the first
      *  line of each is not lost to the download. Idempotent and cheap: ensure()
      *  is a state check once a voice is loading or ready. */
-    function ensureVoices() {
-      if (!pack) return;
+    function packsInUse() {
       const ann = !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
       const lap1 = [];
       const rest = [];
@@ -594,8 +593,18 @@ var RadioVoice = (function () {
         if (!on) continue;
         (sp === "radio" ? lap1 : rest).push(recordedPack(sp));
       }
+      return [lap1, rest];
+    }
+    function ensureVoices() {
+      if (!pack) return;
+      const [lap1, rest] = packsInUse();
       if (pack.ensureStaged) pack.ensureStaged([lap1, rest]);
       else for (const id of lap1.concat(rest)) pack.ensure(id);
+    }
+    /** Free the packs no live channel speaks from (a voice picked over, the
+     *  recorded radio switched off). Callers stop() first (#3110). */
+    function releaseUnused() {
+      if (pack && pack.releaseExcept) pack.releaseExcept([].concat(...packsInUse()));
     }
     /** EVERY channel, the spotter's too: the race stopped (pause card, hidden
      *  tab, the pit garage). stop() alone spares a spotter call mid-word.
@@ -909,7 +918,10 @@ var RadioVoice = (function () {
         if (speaker === "announcer") tune[speaker].source = "recorded";
         G.store.set("voiceTune", tune);
         if (speaker !== "announcer") { packOn = true; G.store.set("radioPack", true); }
-        if (pack) pack.ensure(id);
+        // Fetch the pack this channel SPEAKS from (bella on the radio is
+        // "bella-radio"), not the voice's own-channel pack (#3110).
+        if (pack) pack.ensure(recordedPack(speaker));
+        releaseUnused();
         return true;
       },
       /** The stored tune, or the shipped default for a channel with none. */
@@ -931,6 +943,7 @@ var RadioVoice = (function () {
           stop();
         }
         packOn = !!b; G.store.set("radioPack", packOn); ensureVoices();
+        if (!packOn) releaseUnused();
       },
       /** Fetch the recorded voices now (a race is about to start). */
       prepare: ensureVoices,

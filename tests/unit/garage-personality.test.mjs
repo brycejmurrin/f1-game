@@ -155,3 +155,36 @@ test("one team radio line as the car rolls out, with the radio sting, through th
   s.screen.building(info);
   assert.equal(s.timers.find((x) => x.ms === 2600).live, false, "leaving the garage cancels it");
 });
+
+test("lighting moods: shipped is the identity, every mood finite and distinct, the switch restores", () => {
+  const S = sceneHarness();
+  const sum = (rig) => { let e = 0; for (let i = 0; i + 14 < rig.length; i += 15) e += rig[i + 3] + rig[i + 4] + rig[i + 5]; return e; };
+  const base = sum(S.live(LIV, 0, { night: false, ambient: false }).slice()), sky = Array.from(S.SKYLIGHT);
+  assert.equal(S.mood(), "shipped");
+  const seen = new Set();
+  for (const id of Object.keys(S.MOODS)) {
+    assert.equal(S.mood(id), id);
+    const ctx = S.moodCtx({ night: false, ambient: false }), rig = S.live(LIV, 0, ctx).slice(), md = S.moodDef();
+    for (const v of rig) assert.ok(Number.isFinite(v), `${id}: finite rig`);
+    for (const a of [S.SKYLIGHT, S.AMB_SKY, S.AMB_GROUND, S.BACKDROP]) for (const v of a) assert.ok(Number.isFinite(v) && v >= 0, `${id}: finite sky`);
+    for (const k of ["exposure", "bloom", "glare", "sheen"]) assert.ok(md[k] > 0 && md[k] < 4, `${id}: ${k} in range`);
+    if (md.sun) assert.ok(Math.abs(Math.hypot(...md.sun) - 1) < 0.01 && md.sun[0] === 0, `${id}: unit sun, no sideways component`);
+    const sig = sum(rig).toFixed(3) + "|" + Array.from(S.SKYLIGHT).join();
+    assert.ok(!seen.has(sig), `${id}: differs from every other mood`); seen.add(sig);
+  }
+  S.mood("nope");
+  assert.equal(S.mood(), "shipped", "an unknown id falls back to shipped");
+  assert.ok(Math.abs(sum(S.live(LIV, 0, { night: false, ambient: false }).slice()) - base) < 1e-9, "shipped rig restored");
+  assert.deepEqual(Array.from(S.SKYLIGHT), sky, "skylight restored");
+});
+
+test("fit: every ceiling fixture's hangers reach from its housing to the ceiling, never short or through it", () => {
+  const S = sceneHarness();
+  for (const F of S.FIXTURES) {
+    const y = F[1] + S.LED_DROP, [lo, hi] = S.hangerSpan(y);
+    assert.ok(Math.abs(lo - (y + 0.11)) < 1e-9, "rod starts on the housing's top face");
+    assert.ok(Math.abs(hi - S.CEIL_Y) < 1e-9, "rod ends at the ceiling");
+    assert.ok(hi - lo > 0.2, `a real drop (${(hi - lo).toFixed(2)} m)`);
+  }
+  assert.match(read("js/garage/scene.js"), /\bh = hangerSpan\(y\)/, "buildLed builds its rods from hangerSpan");
+});

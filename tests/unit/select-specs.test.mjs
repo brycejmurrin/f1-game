@@ -801,7 +801,7 @@ test("every race-fixture spec the gate has starved DECLARES a budget above it", 
   // budgeted cut — the declaration still sets the kill timer. Specs that are
   // NOT measuredCheap must still land in the over-budget pool.
   //
-  // projection.spec.js was the third row until 2026-09-22: it is ADAPTED now
+  // the projection spec was the third row until 2026-09-22: it is ADAPTED now
   // (runs under the vm-page adapter, 13 s), so fit() files it as
   // coveredByVmTwin before budgeting and never as over budget. Its 300 s
   // declaration still stands in the file for the day it leaves ADAPTED.

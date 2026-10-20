@@ -141,8 +141,8 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   G.hudProfile = "standard";
   R.tick(G, p);
   assert.equal(rows[1].children[2].textContent, "-12.6");
-  // Both sides round to 995 hundredths, but crossing 9.95 changes precision.
-  for (const [sec, expected] of [[9.949, "-9.95"], [9.951, "-10.0"]]) {
+  // 9.949 and 9.951 both round to 995 hundredths; precision only drops at 9.995.
+  for (const [sec, expected] of [[9.949, "-9.95"], [9.951, "-9.95"], [9.996, "-10.0"]]) {
     p.speed = 60 / sec;
     for (let i = 0; i < 60; i++) R.tick(G, p);
     assert.equal(rows[1].children[2].textContent, expected);

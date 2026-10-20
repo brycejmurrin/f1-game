@@ -188,6 +188,8 @@ export async function runNodeFile(file, opts = {}, { spawnNode = spawn, open = C
   // the entry script, where node:test runs its tests in-process.
   const args = runner === "test"
     ? ["--test", "--test-reporter=tap", ...(testNamePattern ? [`--test-name-pattern=${testNamePattern}`] : []), abs]
+    // Node 24 defaults to spec even without a TTY; tapSummary needs TAP in
+    // both modes. https://nodejs.org/docs/latest-v24.x/api/test.html#test-reporters
     : ["--inspect-brk=127.0.0.1:0", "--test-reporter=tap", ...(testNamePattern ? [`--test-name-pattern=${testNamePattern}`] : []), abs];
   const env = { ...process.env };
   // Spawned from inside a node --test run (an MCP server under test, a test calling this), the
