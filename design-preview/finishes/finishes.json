@@ -10,7 +10,9 @@
   "base": "Gunmetal (39)",
   "status": "reserved",
   "verdict": "realistic as a custom flip wrap",
-  "fit": "fixed: bands halved and driven by the geometric normal (orange peel had made them jagged), withheld on panel creases"
+  "fit": "fixed: bands halved and driven by the geometric normal (orange peel had made them jagged), withheld on panel creases",
+  "r4_verdict": "keep",
+  "r4_note": "Reads instantly as thin-film rainbow over dark metal on every colour and angle; no seams or broken logos visible, convincing oil-film look."
  },
  {
   "id": 61,
@@ -23,7 +25,9 @@
   "base": "Matte (28)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "rebased gloss-metal 29 -> matte 28 so it finally loses the clearcoat mirror; broad metallic sheen; grain fades by pixel footprint"
+  "fit": "rebased gloss-metal 29 -> matte 28 so it finally loses the clearcoat mirror; broad metallic sheen; grain fades by pixel footprint",
+  "r4_verdict": "fix",
+  "r4_note": "Only slightly duller than gloss; white unchanged, no visible grain or satin sheen. Fix: stronger desaturation and lift, kill sharp reflections, visible grain, broader silver rim."
  },
  {
   "id": 62,
@@ -36,7 +40,9 @@
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "no pattern, no seam risk"
+  "fit": "no pattern, no seam risk",
+  "r4_verdict": "fix",
+  "r4_note": "High pixel diff but only a slight saturation lift; white is unchanged and red barely glows. Fix: raise the emissive floor so shadowed faces stay bright, boost saturation further."
  },
  {
   "id": 63,
@@ -49,7 +55,9 @@
   "base": "Brushed metal (29)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "rebased chrome 27 -> satin metal 29: the mirror no longer magnifies jagged panel joins; livery divided out"
+  "fit": "rebased chrome 27 -> satin metal 29: the mirror no longer magnifies jagged panel joins; livery divided out",
+  "r4_verdict": "keep",
+  "r4_note": "This is the most distinct finish. The blue-to-purple-to-gold gradient reads at every angle, with no seams. The gold tail is slightly pastel, so a touch more metallic straw would help."
  },
  {
   "id": 64,
@@ -74,7 +82,9 @@
   "base": "Brushed metal (29)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "no pattern"
+  "fit": "no pattern",
+  "r4_verdict": "fix",
+  "r4_note": "Clear silver on blue/red, but on Haas white it is near-identical to gloss. Fix: darker, warmer grey base, stronger env reflection contrast, faint brushed anisotropic streaks."
  },
  {
   "id": 66,
@@ -87,7 +97,9 @@
   "base": "Carbon (31)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "weave is the shipped carbon weave"
+  "fit": "weave is the shipped carbon weave",
+  "r4_verdict": "fix",
+  "r4_note": "At 1:1 the weave and satin sheen are there and it separates from ultra black; at a glance it reads as a black car. Fix: lift the base toward graphite grey and widen the satin sheen so the weave reads at distance."
  },
  {
   "id": 67,
@@ -100,7 +112,9 @@
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic (test-day paint)",
-  "fit": "thin streak lines that fade to their mean coverage under ~3 px per period, so no crawl in motion"
+  "fit": "thin streak lines that fade to their mean coverage under ~3 px per period, so no crawl in motion",
+  "r4_verdict": "fix",
+  "r4_note": "The streaks read as contour loops, not flow lines running back along the body, and they nearly vanish on the white Haas. Fix: make the streaks run nose to tail and darken them on light bases."
  },
  {
   "id": 68,
@@ -113,7 +127,9 @@
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "neutral weave (was livery-tinted), torn edge from smooth noise not hash blocks, raised to the sidepod line; weave fades by footprint"
+  "fit": "neutral weave (was livery-tinted), torn edge from smooth noise not hash blocks, raised to the sidepod line; weave fades by footprint",
+  "r4_verdict": "fix",
+  "r4_note": "The split between livery and dark lower body reads, but the lower half is flat black with no visible weave or ragged edge, so it looks like rawcarbon or ultrablack. Fix: add weave contrast and a sheen, and roughen the edge."
  },
  {
   "id": 69,
@@ -126,7 +142,9 @@
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "dot screen printed per panel plane (top panels had stripes), anti-aliased dot edges, neutral black tail (was dark red)"
+  "fit": "dot screen printed per panel plane (top panels had stripes), anti-aliased dot edges, neutral black tail (was dark red)",
+  "r4_verdict": "fix",
+  "r4_note": "Silver-to-black fade reads clearly on all three liveries and angles, but the halftone dot band is invisible at race distance. Fix: enlarge the dots and widen the transition band."
  },
  {
   "id": 70,
@@ -139,7 +157,9 @@
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "flop from the geometric normal, withheld on creases: no outline round every panel"
+  "fit": "flop from the geometric normal, withheld on creases: no outline round every panel",
+  "r4_verdict": "fix",
+  "r4_note": "Indistinguishable from gloss at a glance on all three colours. Fix: much darker flop toward silhouettes, brighter face, add fine metallic sparkle; white base needs a grey flop."
  },
  {
   "id": 71,
@@ -152,7 +172,9 @@
   "base": "Matte (28)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "fixes shipped matte ~ gloss: capped below any highlight, greyed, shadows lifted"
+  "fit": "fixes shipped matte ~ gloss: capped below any highlight, greyed, shadows lifted",
+  "r4_verdict": "fix",
+  "r4_note": "It is barely distinguishable from gloss at any angle, so the owner would say they look the same. Fix: remove the specular highlight fully and strengthen the chalky grey lift toward the edges."
  },
  {
   "id": 72,
@@ -165,7 +187,9 @@
   "base": "Metallic flake (34)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "no pattern"
+  "fit": "no pattern",
+  "r4_verdict": "fix",
+  "r4_note": "It turns the blue and red cars white, but on the white Haas it is nearly identical to gloss, and the warm-face/cool-edge flop is not visible. Fix: raise the warm/cool flop contrast."
  },
  {
   "id": 73,
@@ -190,7 +214,9 @@
   "base": "Gloss (20), black albedo",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "base is now true gloss black set before lighting (was the livery dimmed: dark red); flake fades by footprint"
+  "fit": "base is now true gloss black set before lighting (was the livery dimmed: dark red); flake fades by footprint",
+  "r4_verdict": "fix",
+  "r4_note": "Clearly different, but reads as an all-over bronze-brown wash, not gloss black with sparse flake. Fix: deep black base, far sparser, smaller, brighter gold flakes."
  },
  {
   "id": 75,
@@ -208,7 +234,7 @@
   "id": 76,
   "key": "goldfoil",
   "name": "Gold Foil",
-  "round": "Lane A \u00b7 metals",
+  "round": "Lane A · metals",
   "pitch": "Crinkled gold heat-shield foil; the glints move as the view moves.",
   "reference": "McLaren F1 engine bay; F1 exhaust and floor heat shielding. No photo in the library.",
   "reference_url": null,
@@ -220,7 +246,7 @@
   "id": 77,
   "key": "anodblue",
   "name": "Anodised Blue",
-  "round": "Lane A \u00b7 metals",
+  "round": "Lane A · metals",
   "pitch": "Dyed electric-blue anodised aluminium; highlights stay blue, with a pale grazing sheen.",
   "reference": "Dyed anodised aluminium parts. No photo in the library.",
   "reference_url": null,
@@ -232,7 +258,7 @@
   "id": 78,
   "key": "cerabronze",
   "name": "Ceramic Bronze",
-  "round": "Lane A \u00b7 metals",
+  "round": "Lane A · metals",
   "pitch": "Warm satin brown with a fine ceramic speckle and a broad soft sheen.",
   "reference": "Cerakote H-148 Burnt Bronze coating. No photo in the library.",
   "reference_url": null,
@@ -244,7 +270,7 @@
   "id": 79,
   "key": "engineturn",
   "name": "Engine-Turned",
-  "round": "Lane A \u00b7 metals",
+  "round": "Lane A · metals",
   "pitch": "Jewelled aluminium: offset rows of polished discs, each with a bright bow-tie.",
   "reference": "Pre-war GP dash panels; the Spirit of St. Louis cowl. No photo in the library.",
   "reference_url": null,
@@ -256,7 +282,7 @@
   "id": 80,
   "key": "magchrom",
   "name": "Chromated Magnesium",
-  "round": "Lane A \u00b7 metals",
+  "round": "Lane A · metals",
   "pitch": "Blotchy brown, olive-gold and green-grey cast metal with grain.",
   "reference": "Dow 7 chromated magnesium castings. No photo in the library.",
   "reference_url": null,
@@ -268,72 +294,82 @@
   "id": 81,
   "key": "ghostpearl",
   "name": "Ghost Pearl",
-  "round": "Lane B \u00b7 paint FX",
+  "round": "Lane B · paint FX",
   "pitch": "Livery colour on the face; a complementary pearl tint shows only at sunlit edges.",
   "reference": "House of Kolor ice / ghost pearls. No photo in the library.",
   "reference_url": null,
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "pearl moved off the silhouette onto the sheen skirt and mid flop, withheld on creases"
+  "fit": "pearl moved off the silhouette onto the sheen skirt and mid flop, withheld on creases",
+  "r4_verdict": "fix",
+  "r4_note": "Only a faint purple tint on wing edges; face and side-on look identical to gloss. Fix: stronger complementary pearl tint over a wider sunlit-edge band, visible on white too."
  },
  {
   "id": 82,
   "key": "xirallic",
   "name": "Xirallic",
-  "round": "Lane B \u00b7 paint FX",
+  "round": "Lane B · paint FX",
   "pitch": "Dense, sharp white crystal glints that twinkle as the view moves.",
   "reference": "Merck Xirallic aluminium-oxide platelets. No photo in the library.",
   "reference_url": null,
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "glints fade by footprint (no shimmer at 10-26 m); a crisp white lustre carries it at hero distance"
+  "fit": "glints fade by footprint (no shimmer at 10-26 m); a crisp white lustre carries it at hero distance",
+  "r4_verdict": "fix",
+  "r4_note": "A few glints on the blue graze cell only; red and white look like gloss. Fix: denser, larger, brighter white crystal glints, visible on light bases too."
  },
  {
   "id": 83,
   "key": "mystichrome",
   "name": "Mystichrome",
-  "round": "Lane B \u00b7 paint FX",
+  "round": "Lane B · paint FX",
   "pitch": "Green to cobalt to purple to black across viewing angles; livery colour ignored.",
   "reference": "2004 Ford SVT Cobra Mystichrome; ChromaFlair pigment. No photo in the library.",
   "reference_url": null,
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "angle from the geometric normal"
+  "fit": "angle from the geometric normal",
+  "r4_verdict": "fix",
+  "r4_note": "Unmistakable on all colours, but hues sit as flat per-panel pastel blocks with no black flop. Fix: smooth per-pixel angle ramp, deepen saturation, add black at grazing."
  },
  {
   "id": 84,
   "key": "midnightpurple",
   "name": "Midnight Purple",
-  "round": "Lane B \u00b7 paint FX",
+  "round": "Lane B · paint FX",
   "pitch": "Near-black purple with a violet sun bloom that turns bronze at the edges.",
   "reference": "Nissan R34 GT-R Midnight Purple III. No photo in the library.",
   "reference_url": null,
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "angle from the geometric normal"
+  "fit": "angle from the geometric normal",
+  "r4_verdict": "fix",
+  "r4_note": "In sun it reads as bright magenta or pink, not near-black purple, and the bronze edge flip is not visible. Fix: darken the base, shift the bloom to violet, and add a bronze tint at the edges."
  },
  {
   "id": 85,
   "key": "ultrablack",
   "name": "Ultra Black",
-  "round": "Lane B \u00b7 paint FX",
+  "round": "Lane B · paint FX",
   "pitch": "About 1% reflectance: the car reads as a silhouette; livery colour ignored.",
   "reference": "BMW VBX6 in Vantablack VBx2 (Surrey NanoSystems). No photo in the library.",
   "reference_url": null,
   "base": "Matte (28)",
   "status": "reserved",
   "verdict": "realistic",
-  "fit": "no pattern"
+  "fit": "no pattern",
+  "r4_verdict": "keep",
+  "r4_note": "It reads as a near-black silhouette on all three liveries, with logos intact. The top-panel highlights could be flattened further so it separates more from rawcarbon."
  },
  {
   "id": 86,
   "key": "rainsoak",
   "name": "Rain Soaked",
-  "round": "Lane C \u00b7 race condition",
+  "round": "Lane C · race condition",
   "pitch": "Wet paint goes deep and dark, a water sheet mirrors the sky on top, beads glint.",
   "reference": "Wet-race paint. No photo in the library.",
   "reference_url": null,
@@ -345,7 +381,7 @@
   "id": 87,
   "key": "stealth",
   "name": "Stealth Stripes",
-  "round": "Lane C \u00b7 race condition",
+  "round": "Lane C · race condition",
   "pitch": "Matte body with gloss twin stripes and a gloss flank band.",
   "reference": "Red Bull matte years against its gloss RB22.",
   "reference_url": "https://www.planetf1.com/news/red-bull-rb22-f1-2026-livery-revealed",
@@ -357,7 +393,7 @@
   "id": 88,
   "key": "primer",
   "name": "Test Primer",
-  "round": "Lane C \u00b7 race condition",
+  "round": "Lane C · race condition",
   "pitch": "New engine cover, sidepods and front wing in flat test-part grey.",
   "reference": "Unpainted new parts on test cars (Aston Martin AMR26, Barcelona shakedown, January 2026). No photo in the library.",
   "reference_url": null,
@@ -369,7 +405,7 @@
   "id": 89,
   "key": "heatrear",
   "name": "Heat-Stained Rear",
-  "round": "Lane C \u00b7 race condition",
+  "round": "Lane C · race condition",
   "pitch": "Paint scorched to straw, purple and blue around the exhaust exit only.",
   "reference": "Engine-cover heat staining on McLaren MCL33 and Sauber C32 (f1technical.net threads). No photo in the library.",
   "reference_url": null,
@@ -381,7 +417,7 @@
   "id": 90,
   "key": "sunfaded",
   "name": "Sun Faded",
-  "round": "Lane C \u00b7 race condition",
+  "round": "Lane C · race condition",
   "pitch": "Oxidised single-stage paint: pastel and chalky, the sun-facing top faded most.",
   "reference": "Oxidised single-stage paint (Mike Phillips). No photo in the library.",
   "reference_url": null,

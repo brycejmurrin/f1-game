@@ -147,6 +147,16 @@ def cmd_html():
                          f'<h3>{html.escape(name)}</h3><span class="chip {cls}">{html.escape(chip)}</span></div>'
                          f'<p class="pitch">{html.escape(pitch)}</p>{note}{body}</article>')
     total = 18 * 3 * 3 * 2
+    byv = {}
+    for k, v in verdicts.items():
+        byv.setdefault(v["verdict"], []).append(k)
+    summary = ""
+    if verdicts:
+        summary = ('<div class="callout"><strong>Round 4 verdicts (from the race-daylight cells).</strong> '
+                   f'Keep as is: {", ".join(sorted(byv.get("keep", [])))}. '
+                   f'Need a fix before they ship (too close to gloss at a glance, or the wrong colour): {", ".join(sorted(byv.get("fix", [])))}. '
+                   'The note on each card says what to change. Judged from contact sheets, then spot-checked at 1:1, where fine '
+                   'detail such as grain, weave and glints does show.</div>')
     sec = f"""<!-- R4 -->
   <section id="r4">
     <h2>Round 4 · close-up matrix <small>{shot} of {total} cells shot · 1600×900 · TLX</small></h2>
@@ -162,6 +172,7 @@ def cmd_html():
       #r4 .finishes {{ grid-template-columns: 1fr; }}
       @media (max-width: 720px) {{ .r4g {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} .r4row {{ grid-column: 1 / -1; }} .r4g > span:first-child {{ display: none; }} }}
     </style>
+    {summary}
     {f'<p class="note">Still shooting: {", ".join(pending)}.</p>' if pending else ""}
     <div class="finishes">
 {chr(10).join(parts)}

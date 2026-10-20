@@ -1,0 +1,74 @@
+{
+ "alubare": {
+  "note": "Clear silver on blue/red, but on Haas white it is near-identical to gloss. Fix: darker, warmer grey base, stronger env reflection contrast, faint brushed anisotropic streaks.",
+  "verdict": "fix"
+ },
+ "burnt": {
+  "note": "This is the most distinct finish. The blue-to-purple-to-gold gradient reads at every angle, with no seams. The gold tail is slightly pastel, so a touch more metallic straw would help.",
+  "verdict": "keep"
+ },
+ "carbonfade": {
+  "note": "The split between livery and dark lower body reads, but the lower half is flat black with no visible weave or ragged edge, so it looks like rawcarbon or ultrablack. Fix: add weave contrast and a sheen, and roughen the edge.",
+  "verdict": "fix"
+ },
+ "flovis": {
+  "note": "The streaks read as contour loops, not flow lines running back along the body, and they nearly vanish on the white Haas. Fix: make the streaks run nose to tail and darken them on light bases.",
+  "verdict": "fix"
+ },
+ "fluoro": {
+  "note": "High pixel diff but only a slight saturation lift; white is unchanged and red barely glows. Fix: raise the emissive floor so shadowed faces stay bright, boost saturation further.",
+  "verdict": "fix"
+ },
+ "frozen": {
+  "note": "Only slightly duller than gloss; white unchanged, no visible grain or satin sheen. Fix: stronger desaturation and lift, kill sharp reflections, visible grain, broader silver rim.",
+  "verdict": "fix"
+ },
+ "ghostpearl": {
+  "note": "Only a faint purple tint on wing edges; face and side-on look identical to gloss. Fix: stronger complementary pearl tint over a wider sunlit-edge band, visible on white too.",
+  "verdict": "fix"
+ },
+ "jpsgold": {
+  "note": "Clearly different, but reads as an all-over bronze-brown wash, not gloss black with sparse flake. Fix: deep black base, far sparser, smaller, brighter gold flakes.",
+  "verdict": "fix"
+ },
+ "metalflop": {
+  "note": "Indistinguishable from gloss at a glance on all three colours. Fix: much darker flop toward silhouettes, brighter face, add fine metallic sparkle; white base needs a grey flop.",
+  "verdict": "fix"
+ },
+ "midnightpurple": {
+  "note": "In sun it reads as bright magenta or pink, not near-black purple, and the bronze edge flip is not visible. Fix: darken the base, shift the bloom to violet, and add a bronze tint at the edges.",
+  "verdict": "fix"
+ },
+ "mystichrome": {
+  "note": "Unmistakable on all colours, but hues sit as flat per-panel pastel blocks with no black flop. Fix: smooth per-pixel angle ramp, deepen saturation, add black at grazing.",
+  "verdict": "fix"
+ },
+ "oilslick": {
+  "note": "Reads instantly as thin-film rainbow over dark metal on every colour and angle; no seams or broken logos visible, convincing oil-film look.",
+  "verdict": "keep"
+ },
+ "pearlwhite": {
+  "note": "It turns the blue and red cars white, but on the white Haas it is nearly identical to gloss, and the warm-face/cool-edge flop is not visible. Fix: raise the warm/cool flop contrast.",
+  "verdict": "fix"
+ },
+ "rawcarbon": {
+  "note": "At 1:1 the weave and satin sheen are there and it separates from ultra black; at a glance it reads as a black car. Fix: lift the base toward graphite grey and widen the satin sheen so the weave reads at distance.",
+  "verdict": "fix"
+ },
+ "silverfade": {
+  "note": "Silver-to-black fade reads clearly on all three liveries and angles, but the halftone dot band is invisible at race distance. Fix: enlarge the dots and widen the transition band.",
+  "verdict": "fix"
+ },
+ "truematte": {
+  "note": "It is barely distinguishable from gloss at any angle, so the owner would say they look the same. Fix: remove the specular highlight fully and strengthen the chalky grey lift toward the edges.",
+  "verdict": "fix"
+ },
+ "ultrablack": {
+  "note": "It reads as a near-black silhouette on all three liveries, with logos intact. The top-panel highlights could be flattened further so it separates more from rawcarbon.",
+  "verdict": "keep"
+ },
+ "xirallic": {
+  "note": "A few glints on the blue graze cell only; red and white look like gloss. Fix: denser, larger, brighter white crystal glints, visible on light bases too.",
+  "verdict": "fix"
+ }
+}
