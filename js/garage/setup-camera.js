@@ -415,24 +415,10 @@ function stepSetupAero(dt) {
                             Math.min(setupPreviewAeroX, want), Math.max(setupPreviewAeroX, want));
 }
 function setSetupAero(on, opts) {
-  const was = setupPreviewXOn;
   setupPreviewXOn = !!on;
-  // Switching X-mode ON from the untouched turntable AIMS at the rear wing.
-  // The flaps rotate about the car's X axis, so the turntable's own three-quarter
-  // sweep and the FRONT/REAR presets all look very nearly along that axis, where
-  // a 36-degree sweep projects to almost nothing. Pressing the button and seeing
-  // the car not move is the single most common way to conclude this feature is
-  // broken — and it is what happened. `spin` is the "I have not aimed anything"
-  // state, so a player who HAS chosen an angle keeps it.
-  // The threshold is DISTANCE, not just the turntable. At the whole-car framing
-  // (8.5 m) the rear wing's 135 mm of travel projects to about TEN PIXELS on a
-  // landscape phone — the motion is real and simply cannot be seen, which is
-  // indistinguishable from a broken feature and was reported as one. The wing
-  // preset sits at 4.6 m, where the travel is still readable and both endplates
-  // stay in the visible half. A player already close in on something has aimed
-  // deliberately, so they keep their shot. `keepCam` (garageAero opts) skips
-  // the snap so a test can toggle flaps without stealing the camera.
-  if (!(opts && opts.keepCam) && setupPreviewXOn && !was && (setupPreviewSpin || setupPreviewDist > 5)) setSetupView("wingRear");
+  // The button changes the flaps ONLY. It used to snap the view to wingRear;
+  // the player's camera (turntable, preset, zoom, pan) stays where they left it
+  // (Bryce 2026-10-20). `opts` stays for callers that still pass keepCam.
   const b = $("cs-aero");
   if (b) {
     // `active` drives the lit style (and is what AriaState reads); the attribute
