@@ -298,32 +298,58 @@ const CarWheels = (function () {
       };
       const outerB = 0.96 * edgeRm, innerB = Math.max(0.76 * edgeRm, outerB - bandWidth);
       const GLYPH = [0.95, 0.95, 0.96];
+      // D6 decals are CLOSED slabs (fit pass): a single-faced sheet 4 mm off the wall is an
+      // open, floating piece. Front quad f → back quad b; every face winds away from the
+      // slab's centroid; skipAD / skipBC drop the side shared with a welded neighbour.
+      const slab = (f, b, col, skipAD, skipBC) => {
+        const ref = [0, 1, 2].map((k) => (f[0][k] + f[1][k] + f[2][k] + f[3][k] + b[0][k] + b[1][k] + b[2][k] + b[3][k]) / 8);
+        const face = (q) => {
+          const u = [0, 1, 2].map((k) => q[1][k] - q[0][k]), v = [0, 1, 2].map((k) => q[3][k] - q[0][k]);
+          const m = [0, 1, 2].map((k) => (q[0][k] + q[2][k]) / 2 - ref[k]);
+          const d = (u[1] * v[2] - u[2] * v[1]) * m[0] + (u[2] * v[0] - u[0] * v[2]) * m[1] + (u[0] * v[1] - u[1] * v[0]) * m[2];
+          if (d > 0) addQuad(out, q[0], q[1], q[2], q[3], col, SURFACES.rubber);
+          else addQuad(out, q[3], q[2], q[1], q[0], col, SURFACES.rubber);
+        };
+        face(f); face(b); face([f[0], f[1], b[1], b[0]]); face([f[2], f[3], b[3], b[2]]);
+        if (!skipBC) face([f[1], f[2], b[2], b[1]]);
+        if (!skipAD) face([f[3], f[0], b[0], b[3]]);
+      };
+      // An annular sector on a sidewall: proud face at xF, rooted at xB inside the rubber.
+      const sector = (xF, xB, r0, r1, a0, a1, col, skipAD, skipBC) => {
+        const Q = (x) => [[x, cy + r1 * Math.cos(a0), cz + r1 * Math.sin(a0)], [x, cy + r1 * Math.cos(a1), cz + r1 * Math.sin(a1)],
+          [x, cy + r0 * Math.cos(a1), cz + r0 * Math.sin(a1)], [x, cy + r0 * Math.cos(a0), cz + r0 * Math.sin(a0)]];
+        slab(Q(xF), Q(xB), col, skipAD, skipBC);
+      };
       // A row of glyph blocks along an arc: alternating widths read as a word.
-      const glyphRow = (xb, aMid, span, r0, r1, n) => {
+      const glyphRow = (xF, xB, aMid, span, r0, r1, n) => {
         for (let g = 0; g < n; g++) {
           const t0 = aMid - span / 2 + (g / n) * span, w = (span / n) * (g % 3 === 1 ? 0.45 : 0.72);
-          const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-          addQuad(out, P(r * r1, t0), P(r * r1, t0 + w), P(r * r0, t0 + w), P(r * r0, t0), GLYPH, SURFACES.rubber);
+          sector(xF, xB, r * r0, r * r1, t0, t0 + w, GLYPH);
         }
       };
       for (const bs of [[x0, -1], [x1, 1]]) {
         const xb = bs[0] + bs[1] * 0.004;
+        // Split band: closed arc slabs 2.5 mm proud (a sheet at 4 mm floated); full ring unchanged.
+        const xF = bs[0] + bs[1] * 0.0025, xB = bs[0] - bs[1] * 0.002;
+        const segIn = (i) => !inGap(((i + 0.5) / SEG) * Math.PI * 2);
         for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
-          if (inGap((a0 + a1) / 2)) continue;
+          if (bandArcs) {
+            if (segIn(i)) sector(xF, xB, r * innerB, r * outerB, a0, a1, BAND, segIn((i + SEG - 1) % SEG), segIn((i + 1) % SEG));
+            continue;
+          }
           const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
           const A = P(r * outerB, a0), B = P(r * outerB, a1), C = P(r * innerB, a1), D = P(r * innerB, a0);
           addQuad(out, A, B, C, D, BAND, SURFACES.rubber);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
         }
-        const xg = bs[0] + bs[1] * 0.005;
         if (letters === 1 && bandArcs) {
           for (let k = 0; k < bandArcs; k++) {
-            glyphRow(xg, Math.PI / 2 + k * (Math.PI * 2) / bandArcs, gapHalf * 1.5,
+            glyphRow(xF, xB, Math.PI / 2 + k * (Math.PI * 2) / bandArcs, gapHalf * 1.5,
                      (outerB + innerB) / 2 - 0.03, (outerB + innerB) / 2 + 0.03, 5);
           }
         } else if (letters === 2) {
           for (let k = 0; k < 4; k++) {
-            glyphRow(xg, k * Math.PI / 2 + Math.PI / 4, 0.95, innerB - 0.085, innerB - 0.015, 7);
+            glyphRow(xF, xB, k * Math.PI / 2 + Math.PI / 4, 0.95, innerB - 0.085, innerB - 0.015, 7);
           }
         }
       }
@@ -331,11 +357,9 @@ const CarWheels = (function () {
       // meets the rim, just outboard of the rim lip so the two never overlap.
       if (tyreStyle && tyreStyle.rimGuard) {
         for (const bs of [[x0, -1], [x1, 1]]) {
-          const xb = bs[0] + bs[1] * 0.007;
-          for (let i = 0; i < SEG; i++) {
+          for (let i = 0; i < SEG; i++) {   // a closed ring: no side faces between segments
             const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
-            const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-            addQuad(out, P(r * 0.735, a0), P(r * 0.735, a1), P(r * 0.705, a1), P(r * 0.705, a0), BAND, SURFACES.rubber);
+            sector(bs[0] + bs[1] * 0.007, bs[0] + bs[1] * 0.002, r * 0.705, r * 0.735, a0, a1, BAND, true, true);
           }
         }
       }
@@ -345,9 +369,10 @@ const CarWheels = (function () {
         const SIPE = [0.30, 0.30, 0.32], N = 18, xm = (x0 + x1) / 2;
         for (let k = 0; k < N; k++) {
           const a = (k / N) * Math.PI * 2, rr = r * 1.004, hw = 0.022;
-          const P = (x, t) => [x, cy + rr * Math.cos(t), cz + rr * Math.sin(t)];
+          const P = (x, t, R) => [x, cy + R * Math.cos(t), cz + R * Math.sin(t)];
+          const Q = (xa, xb2, R) => [P(xa, a, R), P(xb2, a + 0.12, R), P(xb2, a + 0.12 + hw * 3, R), P(xa, a + hw * 3, R)];
           for (const [xa, xb2] of [[x0 + (x1 - x0) * SH2_W, xm], [x1 - (x1 - x0) * SH2_W, xm]]) {   // flat crown only: past the shoulder a sipe floats
-            addQuad(out, P(xa, a), P(xb2, a + 0.12), P(xb2, a + 0.12 + hw * 3), P(xa, a + hw * 3), SIPE, SURFACES.rubber);
+            slab(Q(xa, xb2, rr), Q(xa, xb2, r * 0.996), SIPE);   // closed: rooted 1.4 mm into the tread
           }
         }
       }

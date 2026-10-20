@@ -6,7 +6,9 @@ const GarageLiveryDesignEditor = (function () {
     honeycomb: "Honeycomb", segments: "Segmented panels", gradient: "Gradient", twoTone: "Two-tone sweep",
     checker: "Checkered flag", diamonds: "Diamond tiles", slashes: "Diagonal slashes",
     pinstripes: "Pinstripes", dots: "Rivet dots", lightning: "Lightning bolts", waves: "Wave bands", sunburst: "Sunburst rays", scallops: "Scallop scales",
-    herringbone: "Herringbone weave", circuit: "Circuit traces", shards: "Angular shards", pixelFade: "Pixel fade", speedlines: "Speed lines" };
+    herringbone: "Herringbone weave", circuit: "Circuit traces", shards: "Angular shards", pixelFade: "Pixel fade", speedlines: "Speed lines",
+    // KEYLINE colour slots (LiveryDesign.KEY_SLOTS); "second" stays SECOND.
+    design: "Design", body: "Body" };
   function attach(root, draft, api) {
     let h = sessions.get(draft);
     if (!h) { h = LiveryDesign.history(draft); sessions.set(draft, h); }
@@ -59,10 +61,15 @@ const GarageLiveryDesignEditor = (function () {
     for (const [label, key, values, fallback] of [
       ["DESIGN AREA", "patternPlacement", ["crown", "wrap"], "crown"],
       ["WRAP SIDES", "patternSide", ["both", "left", "right"], "both"],
+      ["KEYLINE", "patternKey", LiveryDesign.KEY_SLOTS, "auto"],
     ]) {
       const r = insert(api.pillRow(label, key, values, fallback));
-      patternRows.push({ row: r, when: () => key !== "patternSide" || draft.patternPlacement === "wrap" });
+      const when = { patternSide: () => draft.patternPlacement === "wrap", patternKey: () => LiveryDesign.KEY_PATTERNS.includes(draft.spineLogo) }[key];
+      patternRows.push({ row: r, when: when || (() => true) });
     }
+    // DECAL SPOTS (LiveryStations): one ON / OFF per station, in TEAM MARKS & NUMBERS.
+    for (const [label, key] of [["NOSE TIP", "decalNoseTip"], ["COCKPIT SIDE", "decalCockpit"], ["SIDEPOD TOP", "decalPodTop"], ["HALO TOP", "decalHalo"]])
+      insert(api.pillRow(label, key, ["on", "off"], "on"));
     const rangeLabels = { patternWidth: "DESIGN WIDTH", patternRepeat: "REPEATS", patternOffset: "SIDE OFFSET", patternTaper: "TAIL TAPER", patternOpacity: "OPACITY", patternRotation: "ROTATION", patternStretch: "LENGTH STRETCH", patternWeight: "LINE WEIGHT" };
     for (const [key, limits] of Object.entries(LiveryDesign.RANGES)) {
       const r = document.createElement("label"); r.className = "tune-row";
@@ -74,7 +81,7 @@ const GarageLiveryDesignEditor = (function () {
       input.oninput = () => { draft[key] = input.value; api.changed(true); };
       input.onchange = () => { api.changed(); api.flush(); };
       r.append(label, input); insert(r);
-      patternRows.push({ row: r, when: () => key === "patternWeight" ? LiveryDesign.LINE_PATTERNS.includes(draft.spineLogo) : key !== "patternRepeat" || !["ribbon", "gradient", "twoTone"].includes(draft.spineLogo) });
+      patternRows.push({ row: r, when: () => key === "patternWeight" ? LiveryDesign.LINE_PATTERNS.includes(draft.spineLogo) : key !== "patternRepeat" || !LiveryDesign.NO_REPEAT.includes(draft.spineLogo) });
       bindings.push(() => { input.value = LiveryDesign.value(draft, key); output.textContent = input.value + (key === "patternRepeat" ? "" : key === "patternRotation" ? "°" : "%"); });
     }
     bindings.push(() => {
@@ -143,7 +150,7 @@ const GarageLiveryDesignEditor = (function () {
     section("ENGINE COVER — SHAPE & PAINT", "The raised cover behind the cockpit. Shape, vents, base colour and finish.",
       ["cover", "coverFinish", "spineHeight", "coverVents"]);
     section("SPINE TOP — ARTWORK & COLOURS", "Artwork along the top of the engine cover. Select one design; only the colour controls it uses are enabled.",
-      ["spineLogo", "patternTint", "patternSecond", "spineTint", "saddleTint", "sunTint", "bandTint2"]);
+      ["spineLogo", "patternTint", "patternSecond", "patternKey", "spineTint", "saddleTint", "sunTint", "bandTint2"]);
     section("SPINE PATTERN — SIZE & PLACEMENT", "Rotate or stretch adjustable artwork and tune its coverage. LINE WEIGHT applies to stroked designs. CROWN paints the top and tail; WRAP extends onto the selected cover sides.",
       ["patternPlacement", "patternSide", ...Object.keys(LiveryDesign.RANGES)], [actionRow]);
     section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
@@ -153,7 +160,7 @@ const GarageLiveryDesignEditor = (function () {
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
-      ["crestStyle", "crestTone", "crestFrame", "logo", "logo2", "logo3", "numFont", "sponsors", "boardTint"], [api.markNote]);
+      ["crestStyle", "crestTone", "crestFrame", "logo", "logo2", "logo3", "numFont", "sponsors", "boardTint", "decalNoseTip", "decalCockpit", "decalPodTop", "decalHalo"], [api.markNote]);
     section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "cockpitTint", "gripTint", "tcam"]);
     section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk", "rimFinish"]);
     section("FLOOR, SUSPENSION & RUNNING GEAR", "Parts that are bare carbon by default: floor edge and bargeboards, suspension arms, brake ducts, wheel deflectors, plus the exhaust tip's heat colour. Unset keeps them carbon.",
@@ -161,7 +168,10 @@ const GarageLiveryDesignEditor = (function () {
     section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
     section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
     // One SPINE TOP selection, divided by purpose rather than a wall of pills.
-    const group = api.spineRow.querySelector(".cs-liv-ed-finish"), choices = Array.from(group.querySelectorAll("button"));
+    // `tricolour` is both a fixed graphic id and an adjustable pattern, so the sheet builds its
+    // pill twice: keep one button per choice.
+    const group = api.spineRow.querySelector(".cs-liv-ed-finish"), seen = new Set();
+    const choices = Array.from(group.querySelectorAll("button")).filter((b) => !seen.has(b.dataset.csPill) && seen.add(b.dataset.csPill));
     const marks = ["logo", "none", "bigmark", "wordmark", "number"];
     group.replaceChildren();
     for (const [label, accepts] of [
