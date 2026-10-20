@@ -47,8 +47,8 @@ quote_style, comments). terser 5.51.2 was already an exact devDependency.
   source and minified and asserts each closure names the same model ids.
 - **Top-level names / HARD_EDGES**: the unit test parses every target before
   and after (terser AST) and asserts identical top-level declarations.
-- **Directives**: every file whose first statement was `"use strict"` still
-  starts with it.
+- **Directives**: each file's leading `"use strict"` directive is unchanged
+  (compared by equality, not a regex pin).
 - **`fn.name` / `Function.prototype.toString`**: keep_fnames; no other
   `toString()` of a function in js/ (grep, 2026-10-19).
 - **Boot**: the `staged-boot` job (smoke.spec.js against the stamped `_site`).
@@ -64,11 +64,11 @@ be resolved the stage ships source bytes with a `::warning::` and
 parent node_modules: exit 0, skipped). ci.yml `staged-boot` fails unless its
 stage reports `minified.files > 0`.
 
-**So Pages ships minified only once its deploy and verify-live jobs install
-root dependencies before "Stage site"** (two `uses: ./.github/actions/setup-apex`
-steps). That edit is pages.yml publish-path logic, outside this lane's grant:
-raised as NEEDS-DECISION to the orchestrator. Until then this PR changes no
-shipped byte; it lands the stage code, the test and the boot gate.
+**So Pages ships minified only because its deploy and verify-live jobs install
+root dependencies before "Stage site"**: two `uses: ./.github/actions/setup-apex`
+steps, Bryce's choice "A: add the 2 Pages steps" (2aa8d138, pushed by the
+orchestrator, merged into this branch). Desktop/Android packages stay
+unminified: desktop.yml installs no root deps (not asked).
 
 ## Determinism
 
