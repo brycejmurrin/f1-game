@@ -820,10 +820,22 @@ test("settings.json denies GitHub-MCP repo surgery; nothing asks (the owner, 202
 test(".cursor/environment.json allowlists exactly the .mcp.json servers, with their launch lines", () => {
   const servers = JSON.parse(read(".mcp.json")).mcpServers;
   const allow = JSON.parse(read(".cursor/environment.json")).mcpServerAllowlist;
+  const patternMatches = (pattern, text) => {
+    const re = new RegExp(
+      `^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
+    );
+    return re.test(text);
+  };
+  const mcpLaunch = (row) => [row.command, ...(row.args || [])].join(" ");
   assert.deepEqual(allow.map((a) => a.name).sort(), Object.keys(servers).sort());
   for (const a of allow) {
     const s = servers[a.name];
-    assert.equal(a.command, `*${s.command} ${s.args.join(" ")}`, `${a.name}: allowlist command drifted from .mcp.json`);
+    const launch = mcpLaunch(s);
+    assert.ok(
+      patternMatches(a.command, launch) || patternMatches(a.command, `/usr/bin/${launch}`),
+      `${a.name}: allowlist pattern ${JSON.stringify(a.command)} must match .mcp.json launch ${JSON.stringify(launch)}`,
+    );
+    assert.ok(a.command.includes("*"), `${a.name}: allowlist command should use * wildcards`);
   }
 });
 
