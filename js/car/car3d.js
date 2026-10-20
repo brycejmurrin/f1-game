@@ -2009,11 +2009,14 @@ const Car3D = (function () {
         const zM = -2.22, f = (zM - _ep.front.z) / (_ep.rear.z - _ep.front.z);
         const topM = _ep.front.top + (_ep.rear.top - _ep.front.top) * f, ov = 0.012;
         const fin = (z, top, h) => ({ z, x: s * 0.50, y: top - ov + (h + ov) / 2, w: 0.036, h: h + ov });
-        addSpan(out, fin(_ep.front.z - 0.02, _ep.front.top + (topM - _ep.front.top) * 0.08, 0.004), fin(zM, topM, rTip * 0.80), endplateC || DARK);
-        addSpan(out, fin(zM, topM, rTip * 0.80), fin(_ep.rear.z + 0.006, _ep.rear.top, rTip + 0.024), endplateC || DARK);
+        // Starts on the plate crown 12 cm ahead of the wing, and stands 8 mm
+        // proud of the plate's trailing face so a swept tip never overhangs it.
+        const z0 = zM + 0.12, top0 = _ep.front.top + (_ep.rear.top - _ep.front.top) * (z0 - _ep.front.z) / (_ep.rear.z - _ep.front.z);
+        addSpan(out, fin(z0, top0, 0.004), fin(zM, topM, rTip * 0.80), endplateC || DARK);
+        addSpan(out, fin(zM, topM, rTip * 0.80), fin(_ep.rear.z - 0.008, _ep.rear.top, rTip + 0.024), endplateC || DARK);
         if ((aeroStyle.epTip || 0) >= 2) addSpan(out,
           { z: -2.50, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 },
-          { z: _ep.rear.z + 0.002, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 }, accentC);
+          { z: _ep.rear.z - 0.012, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 }, accentC);
       }
       // Preview sharkfin (2017 style): the fin runs on as a sail whose foot ends
       // 8 mm into the main plane, instead of a 30 cm cut face 0.45 m short of the

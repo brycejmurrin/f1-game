@@ -245,7 +245,7 @@ const CarBodyGeom = (function () {
   const EP_SHAPES = [null,
     { hF: 0.14, hR: 0.46, kick: 0.040, footW: 0.12, footZ: 0.54, arch: 0 },
     { hF: 0.28, hR: 0.54, kick: 0.050, footW: 0.13, footZ: 0.56, arch: 1 },
-    { hF: 0.22, hR: 0.48, kick: 0.080, footW: 0.14, footZ: 0.58, arch: 1, roll: 1 },
+    { hF: 0.22, hR: 0.48, kick: 0.080, footW: 0.14, footZ: 0.58, arch: 0, roll: 1 },
     { hF: 0.18, hR: 0.30, kick: 0.020, footW: 0.10, footZ: 0.50, arch: 0 },
   ];
   function frontPlateGeom(aLvl, aero) {
