@@ -74,6 +74,8 @@ test("historical garage A/B only runs for its explicit full push request; normal
     const reanalysis = output("push", { leg: "garage-reanalysis-367dc", census_only: true });
     assert.equal(reanalysis.garage_ab, "false");
     assert.equal(reanalysis.reanalysis, "true", "preserved-capture reanalysis remains independent");
+    assert.equal(output("push", { leg: "garage-livery-perf", census_only: true }).livery, "true", "the livery census opts in by leg");
+    assert.equal(output("workflow_dispatch", { leg: "garage-livery-perf" }).livery, "false", "dispatch and nightly never run it");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
