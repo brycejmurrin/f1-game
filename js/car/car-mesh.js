@@ -252,15 +252,8 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
         [nR.topSide*0.84, nR.top+0.020, 1.72], [-nR.topSide*0.84, nR.top+0.020, 1.72]], [0, 1, 0.05], R.num);
   const nsR = anchors ? anchors.noseAt(1.16) : { top: 0.54, topSide: 0.15 };
   const nsF = anchors ? anchors.noseAt(1.66) : { top: 0.48, topSide: 0.14 };
-  // The nose-top wordmark runs ALONG the nose: the region's long (u) axis maps
-  // to the half-metre length and its short axis across the ~0.23 m top. Mapped
-  // the other way (u across), 968 px landed on 0.23 m and 260 px on 0.5 m — an
-  // 8:1 texel anisotropy that drew 0.4 m-tall letters with ~2 mm texels along
-  // the nose, magnified into the stair-stepped halo of B·D8's fit check.
-  const tb = uvOf(R.titleB);
-  quadUv([[-nsF.topSide*0.82, nsF.top+0.014, 1.66], [nsF.topSide*0.82, nsF.top+0.014, 1.66],
-          [nsR.topSide*0.82, nsR.top+0.014, 1.16], [-nsR.topSide*0.82, nsR.top+0.014, 1.16]], [0, 1, 0.10],
-         [[tb.uL, tb.vB], [tb.uL, tb.vT], [tb.uR, tb.vT], [tb.uR, tb.vB]]);
+  quad([[-nsF.topSide*0.82, nsF.top+0.014, 1.66], [nsF.topSide*0.82, nsF.top+0.014, 1.66],
+        [nsR.topSide*0.82, nsR.top+0.014, 1.16], [-nsR.topSide*0.82, nsR.top+0.014, 1.16]], [0, 1, 0.10], R.titleB);
   // Sidepod lower flank → long sponsor strip.
   podDecal(R.strip, 0.08, 0.30, 0.020);   // sits wholly on the c2 accent band
   // Rear-wing endplate number boards → the driver number plus the team lockup
