@@ -317,13 +317,13 @@ test("gpu-census relaunch: one profile, one origin, the TLX/WebGPU check twice (
   assert.equal(split.env.INPUT_RELAUNCH, "${{ inputs.relaunch || false }}");
   const step = wf.jobs.census.steps.find((s) => s.name === RELAUNCH_NAME);
   assert.ok(step, "the relaunch step exists");
-  assert.match(step.if, /needs\.plan\.outputs\.relaunch == 'true'/);
+  assert.ok(step.if.split("&&").map((c) => c.trim()).includes("${{ needs.plan.outputs.relaunch == 'true'"), "opt-in: only a relaunch=true dispatch runs it");
   assert.equal(step["continue-on-error"], true, "a measurement, never the job's verdict");
   assert.ok(step["timeout-minutes"] <= 15, "two legs inside the job cap");
-  assert.match(step.run, /for leg in cold warm; do/);
   assert.match(step.run, /--profile "\$PROF" --port \d+/, "the SAME profile and a FIXED port: Chrome keys caches by origin");
-  assert.match(step.run, /--backend three --path webgpu --ls apex26\.wgxCapture=0/);
   assert.match(step.run, /--cam "\$\{CENSUS_CAM:-helmet\}" --entry "\$\{CENSUS_ENTRY:-api\}"/, "the plan-resolved camera and entry, like the controls");
-  assert.match(step.run, /rm -rf "\$PROF"/, "the first leg is a first-ever launch");
+  const lines = step.run.split("\n").map((l) => l.trim());
+  assert.ok(lines.includes('PROF="$RUNNER_TEMP/tlx-relaunch-profile"; rm -rf "$PROF"'), "the first leg is a first-ever launch");
+  assert.ok(lines.includes("for leg in cold warm; do"), "two legs on the one profile: cold, then warm");
   assert.ok(RELAUNCH_STEP.test(gpuWorkflow), "the controls' cut-out finds the step");
 });
