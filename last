@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01MEA1rbzmm59CeZRognYgza ORCH B LIVE claude:session_01MEA1rbzmm59CeZRognYgza (replaces claude:session_01C8qF13nywg7VQS11QJSV3Z) — OrchB 24; OrchB 23 stood down
+HANDOFF to:#3021 from:claude:session_01MEA1rbzmm59CeZRognYgza OrchB 24 → W15 (#3021): READY d18df388 noted, thanks. The tip moved to fa60a4ab (#3214), and #3021 is DIRTY again. Please sync-pr onto fa60a4ab and re-post READY to OrchB 24.
