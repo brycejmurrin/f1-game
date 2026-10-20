@@ -3084,6 +3084,7 @@
         "tests/unit/career-regulations.test.mjs"
       ],
       "aeroLoad": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/setup-tune.test.mjs"
@@ -3099,6 +3100,7 @@
         "tests/unit/legends-team.test.mjs"
       ],
       "getCost": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -3119,6 +3121,7 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "getMods": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-tune.test.mjs"
@@ -5197,6 +5200,7 @@
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/i18n.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
         "tests/unit/tools-runnable.test.mjs"
@@ -6698,6 +6702,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
@@ -6727,7 +6732,8 @@
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
-        "tests/unit/vm-filename-lint.test.mjs"
+        "tests/unit/vm-filename-lint.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ]
     },
     "js/garage/arrival.js": {
@@ -7180,10 +7186,14 @@
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "setSetupAero": [
+        "tests/unit/garage-aero-no-camera.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "setSetupSpin": [
         "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "setupZoom": [
+        "tests/unit/garage-aero-no-camera.test.mjs"
       ],
       "startArrivalPreview": [
         "tests/unit/garage-arrival.test.mjs"
@@ -7269,6 +7279,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -13332,7 +13343,8 @@
         "tests/unit/tlx-round2.test.mjs"
       ],
       "releaseGeoMirrors": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ],
       "releaseTexSource": [
         "tests/unit/tlx-texture-release.test.mjs"
@@ -13420,8 +13432,7 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/tlx-car-shadow-cpu.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {
@@ -14046,6 +14057,7 @@
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs",
+        "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/scene-live.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs"
@@ -15522,6 +15534,14 @@
       "*": [
         "tests/unit/followup-platform.test.mjs",
         "tests/unit/pause-key-tools.test.mjs"
+      ]
+    },
+    "js/ui/post-fx-opts.js": {
+      "gate": [
+        "tests/unit/post-fx-opts.test.mjs"
+      ],
+      "read": [
+        "tests/unit/post-fx-opts.test.mjs"
       ]
     },
     "js/ui/quali-sheet.js": {

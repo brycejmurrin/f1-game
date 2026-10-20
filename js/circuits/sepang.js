@@ -30,6 +30,9 @@
     // pit-straight stand, so the engine's generic 7-box one would stand inside
     // it. The Monza and Portimao precedent.
     ownPitStraight: true,
+    // Operator: 16 m minimum racing width (22 m at the widest sections).
+    // https://www.sepangcircuit.com/architecture
+    // Keep the sourced minimum until local widening locations are surveyed.
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 120,
@@ -56,9 +59,10 @@
       { s: 0.74, halfM: 460, rise: -4.0 },
     ],
     hwZones: [
-      { s0: 0.145, s1: 0.185, hw: 6.8, ease: 0.014 },  // T3-T4
-      { s0: 0.6837, s1: 0.7639, hw: 6.9, ease: 0.014 },  // T9 hairpin (index; arc 0.560-0.600)
-      { s0: 0.9459, s1: 0.9838, hw: 6.6, ease: 0.012 },  // T15 final hairpin (index; arc 0.865-0.905)
+      // Temporary T15 geometry constraint, not a sourced racing width: removing
+      // this zone exposes two centreline nodes tighter than an 8 m half-width.
+      // Correct the trace before restoring the operator's 16 m minimum here.
+      { s0: 0.9459, s1: 0.9838, hw: 6.6, ease: 0.012 },
     ],
     bankZones: [
       { turn: 1, angleDeg: 3.5, widthM: 140 },   // T1-T2 loop; re-seated frac 0.045 (was 144 m off any apex)

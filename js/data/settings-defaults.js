@@ -65,6 +65,8 @@ const SettingsDefaults = (function () {
     "spotter": false,
     // DISPLAY / METRICS (raw lane — bare strings, not JSON)
     "debris": "0",
+    "gfxSsao": "1",      // js/ui/post-fx-opts.js — only "0" is off
+    "gfxGodrays": "1",
     "metricsPos": "left",
     // CAMERA
     "camMode": 19,

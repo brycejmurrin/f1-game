@@ -3757,22 +3757,30 @@ const TLX = (function () {
       // M-2: shadow-caster meshes (:sh / silhouette) — release CPU mirrors on every
       // tier including phones. The static mirror sweep stays off mobile; car casters
       // are frustumCulled=false depth-only geometry with cached bounds.
+      // Walks only the car-caster refs (_carShReg), not the whole ~4000-ref _geoReg: this runs on every
+      // tier, phones included, and a freed or collected caster leaves the list for good.
+      const _carShReg = [];
       function sweepCarShadowMirrors(now) {
         if (now - _carMirrorAt < 2000) return;
         _carMirrorAt = now;
-        for (let i = 0; i < _geoReg.length; i++) {
-          const ref = _geoReg[i];
-          const g = ref && ref.deref ? ref.deref() : null;
-          if (!g || g.__tlxKind !== "carSh" || g.__tlxFreed) continue;
-          if (g.__tlxDrawnBatch === undefined) continue;
-          const n = releaseGeoMirrors(g);
-          if (n) { _mirrorStat.carSh++; _mirrorStat.freedMB = +(_mirrorStat.freedMB + n / 1048576).toFixed(2); }
+        let w = 0;
+        for (let i = 0; i < _carShReg.length; i++) {
+          const ref = _carShReg[i];
+          const g = ref.deref();
+          if (!g || g.__tlxFreed) continue;
+          if (g.__tlxDrawnBatch !== undefined) {
+            const n = releaseGeoMirrors(g);
+            if (n) { _mirrorStat.carSh++; _mirrorStat.freedMB = +(_mirrorStat.freedMB + n / 1048576).toFixed(2); }
+          }
+          if (!g.__tlxFreed) _carShReg[w++] = ref;
         }
+        _carShReg.length = w;
       }
 
       function _regGeo(g, kind) {
         try {
           g.__tlxKind = kind;   // always: createMesh upgrades after buildGeometry
+          if (kind === "carSh" && !g.__tlxCarShReg) { g.__tlxCarShReg = true; _carShReg.push(new WeakRef(g)); }
           if (_geoSeen) {
             if (_geoSeen.has(g)) return g;
             _geoSeen.add(g);
@@ -5782,7 +5790,10 @@ const TLX = (function () {
                 if (post.depthEnd) post.depthEnd();
                 _gpuLastOperation = "render-post";
                 post.present(opts, _postF);
-                _postHealth = { state: "healthy", attempts: _postStrikes, maxAttempts: 3, reason: "" };
+                // Replaced only when it changes: a fresh object per healthy frame was GC churn for a debug getter.
+                if (_postHealth.state !== "healthy" || _postHealth.attempts !== _postStrikes) {
+                  _postHealth = { state: "healthy", attempts: _postStrikes, maxAttempts: 3, reason: "" };
+                }
               } finally {
                 if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
                 if (fx && fx.setSsrMrt) fx.setSsrMrt(false);

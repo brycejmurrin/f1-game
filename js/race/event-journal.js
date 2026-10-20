@@ -81,7 +81,8 @@ var EventJournal = (function () {
         reset();
         lastCars = G.cars;
       }
-      for (const c of G.cars) {
+      for (let i = 0; i < G.cars.length; i++) {   // indexed: sampleEdges runs every step
+        const c = G.cars[i];
         if (!c) continue;
         const pPen = pen.get(c) || 0;
         const nPen = c.penalty || 0;

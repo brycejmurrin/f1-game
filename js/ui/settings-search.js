@@ -52,6 +52,8 @@ const SettingsSearch = (function () {
     ["upscale", "Upscaling", "graphics", "pm-upscale-sel", "resolution sharpness performance"],
     ["occlusion", "Occlusion culling", "graphics", "pm-occlusion-sel", "hidden objects performance"],
     ["debris", "Debris", "graphics", "pm-debris-sel", "damage pieces performance"],
+    ["ssao", "Ambient occlusion", "graphics", "pm-ssao-sel", "ssao ao contact shadows performance"],
+    ["godrays", "God-rays", "graphics", "pm-godrays-sel", "sun shafts volumetric light beams performance"],
     ["background-build", "Background build", "graphics", "pm-buildworker-sel", "worker loading performance"],
     ["renderer", "Renderer backend", "graphics", "pm-renderer", "webgl webgpu graphics troubleshooting"],
     ["lighting-tuner", "Lighting tuner", "visual", "pm-lighting", "sun shadows exposure visual studio"],

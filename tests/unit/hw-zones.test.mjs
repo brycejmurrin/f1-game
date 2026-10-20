@@ -63,8 +63,7 @@ const REKEYED = [
   ["hockenheim", 0, 0.435, 0.480],     // Spitzkehre hairpin
   ["nurburgring", 1, 0.610, 0.670],    // Dunlop-Kehre
   ["catalunya", 2, 0.905, 0.955],      // final chicane complex
-  ["sepang", 1, 0.560, 0.600],         // T9 hairpin
-  ["sepang", 2, 0.865, 0.905],         // T15 final hairpin
+  ["sepang", 0, 0.865, 0.905],         // T15 final hairpin
   ["istanbul", 1, 0.590, 0.640],       // Turn 9-10
   ["portimao", 2, 0.820, 0.870],
   ["sochi", 1, 0.520, 0.565],

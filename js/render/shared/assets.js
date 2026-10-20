@@ -582,11 +582,14 @@ const Assets = (function () {
 
   // ── baked models ───────────────────────────────────────────────────────────
 
-  // Two on-disk layouts, both written by tools/gen/assets.mjs writeAX26():
+  // Three on-disk layouts. v1/v2 are written by tools/gen/assets.mjs writeAX26();
+  // v3 (trees) is written by tools/lib/pack-assets.cjs writeAX26v3():
   //
   //   v1  pos/nrm/col f32x3, mat f32, idx u32       — 40 B a vertex + 4 B an index
   //   v2  pos f32x3, nrm i16x3, col u8x3, mat u8,
   //       idx u16                                    — 22 B a vertex + 2 B an index
+  //   v3  v2 body + trailing u8 sway (w×255)         — 23 B a vertex + 2 B an index
+  //       decoded as mat = id + (sway/255)×SWAY_FRAC  (FOLIAGE wind; nature.js)
   //
   // v2 is what the shipped pack uses: the 36 baked models went from 2.95 MB to
   // 1.60 MB (each circuit's own set is fetched before its build: modelsReady
@@ -600,12 +603,14 @@ const Assets = (function () {
   // v1 is still READ, and the writer still falls back to it for anything that
   // does not fit (an emissive colour past 1.0, a non-integer or >255 material,
   // more than 65535 vertices) — an imported CC0 pack is not bound by what the
-  // procedural catalogue happens to contain. Both decode to the same
+  // procedural catalogue happens to contain. All three decode to the same
   // {pos,nrm,col,mat,idx} Float32Arrays, so nothing downstream can tell.
   //
-  // v2 COPIES where v1 returned views onto the fetched buffer. That is the
+  // v2/v3 COPY where v1 returned views onto the fetched buffer. That is the
   // trade: the 1.35 MB saving is on the wire and the decoded arrays are the
   // same size either way, since the consumers need float32.
+  // Keep in lockstep with TrackGeom.SWAY_FRAC (js/track/core/geom.js).
+  const SWAY_FRAC = 0.45;
   function _parseModel(buf) {
     const dv = new DataView(buf);
     if (dv.byteLength < 20) return null;
@@ -613,7 +618,7 @@ const Assets = (function () {
     if (dv.getUint8(0) !== 0x41 || dv.getUint8(1) !== 0x58 ||
         dv.getUint8(2) !== 0x32 || dv.getUint8(3) !== 0x36) return null;
     const ver = dv.getUint32(4, true);
-    if (ver !== 1 && ver !== 2) return null;
+    if (ver !== 1 && ver !== 2 && ver !== 3) return null;
     const nv = dv.getUint32(8, true), ni = dv.getUint32(12, true);
     if (!nv || !ni) return null;
     let o = 20;
@@ -627,17 +632,22 @@ const Assets = (function () {
       const idx = new Uint32Array(buf, o, ni);
       return { pos, nrm, col, mat, idx };
     }
-    const need = o + nv * 12 + nv * 6 + nv * 3 + nv + ni * 2;
+    const need = o + nv * 12 + nv * 6 + nv * 3 + nv + ni * 2 + (ver === 3 ? nv : 0);
     if (dv.byteLength < need) return null;
     const pos = new Float32Array(buf, o, nv * 3); o += nv * 12;
     const qn = new Int16Array(buf, o, nv * 3);     o += nv * 6;
     const qc = new Uint8Array(buf, o, nv * 3);     o += nv * 3;
     const qm = new Uint8Array(buf, o, nv);         o += nv;
-    const idx = new Uint16Array(buf, o, ni);
+    const idx = new Uint16Array(buf, o, ni);       o += ni * 2;
     const nrm = new Float32Array(nv * 3), col = new Float32Array(nv * 3);
     const mat = new Float32Array(nv);
     for (let i = 0; i < nv * 3; i++) { nrm[i] = qn[i] / 32767; col[i] = qc[i] / 255; }
-    for (let i = 0; i < nv; i++) mat[i] = qm[i];
+    if (ver === 3) {
+      const sway = new Uint8Array(buf, o, nv);
+      for (let i = 0; i < nv; i++) mat[i] = qm[i] + (sway[i] / 255) * SWAY_FRAC;
+    } else {
+      for (let i = 0; i < nv; i++) mat[i] = qm[i];
+    }
     return { pos, nrm, col, mat, idx };
   }
 

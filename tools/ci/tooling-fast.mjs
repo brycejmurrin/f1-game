@@ -563,6 +563,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the
   // driving-model gate runs here in seconds rather than in a browser job.
   "tests/unit/game-vm.test.mjs",
+  // Garage AERO button toggles flaps only: setSetupAero never moves the camera (VM).
+  "tests/unit/garage-aero-no-camera.test.mjs",
   "tests/unit/garage-arrival.test.mjs",
   // Garage before GitHub API: retry on 5xx/429/network + ?name= filter (mocked fetch).
   "tests/unit/garage-before-api.test.mjs",
@@ -826,6 +828,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mobile-native-download.test.mjs",
   "tests/unit/mobile-sync-web.test.mjs",
   "tests/unit/model-pack-format.test.mjs",
+  "tests/unit/model-sway-parity.test.mjs",
   "tests/unit/move-tree.test.mjs",
   // needs-sync: the sync predicate (conflict | stale-red | no) that sync-pr and pr-board run first.
   "tests/unit/needs-sync.test.mjs",

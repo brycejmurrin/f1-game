@@ -621,10 +621,11 @@ const Liveries = (function () {
     // Crest customisation (B·D8 round 5): tone and frame dress an original emblem.
     "crestTone", "crestFrame",
     // BODY (2026-10-18): the chassis shape, Car3D.bodyStyleKey — geometry, like finShape.
-    "bodyStyle",
+    "bodyStyle", "aeroShape", "floorShape",
     // PAINT ZONES (CarMaterials.PAINT_ZONES; header above): new surfaces, each optional.
     "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
-    "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint"];
+    "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint",
+    "ductFinish", "deflectorFinish", "cockpitFinish", "boardFinish"];
 
   // One-shot paint migrate: fold ridge→BAND, airbox→COVER; drop lettering overrides.
   // Idempotent. Mutates and returns `liv` (or a shallow copy when null-safe).

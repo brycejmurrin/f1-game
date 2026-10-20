@@ -2330,6 +2330,21 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
+    },
+    "tools/gen/trees/bake-trees.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
+    "tools/gen/trees/caps.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/gen/trees/measure-tree-budget.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
     }
   }
 }

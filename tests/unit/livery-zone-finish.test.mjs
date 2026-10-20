@@ -95,6 +95,44 @@ test("SIDEPOD FINISH reaches the pod colour panel painted in the livery section 
   for (const i of panel) assert.equal(m.mat[i], FS.chrome, `pod panel vertex ${i}`);
 });
 
+test("SIDEPOD colour paints the whole pod shell reached by its finish, not just the flank panel", () => {
+  for (const shade of [false, true]) {
+    const model = shade ? loadParts({ shade: true }) : M;
+    const C = model.Car3D, POD = [1, 0, 1];
+    for (const bodyStyle of [...Object.keys(C.TEAM_STYLE), ...C.BODY_STYLE_IDS]) {
+      const make = (pod, podFinish) => C.build(team.color, team.color2, {
+        teamId: team.id, parts, noWheels: true, measure: true,
+        livery: { bodyStyle, pod, podFinish },
+      });
+      const b = make(team.color), m = make(POD), f = make(POD, "chrome");
+      const label = `${bodyStyle}, shade=${shade}`;
+      assert.deepEqual(m.pos, b.pos, `${label}: colour must not change geometry`);
+      assert.deepEqual(m.mat, b.mat, `${label}: colour must not change materials`);
+      let from = 0, painted = 0, dark = 0, left = 0, right = 0;
+      for (const section of b.parts) {
+        const to = from + section.vertices;
+        if (section.name === "sidepods") for (let i = from; i < to; i++) {
+          if (b.mat[i] === S.paint) {
+            painted++;
+            if (m.pos[i * 3] < 0) left++; else right++;
+            assert.ok(m.col[i * 3] > 0 && m.col[i * 3 + 1] === 0
+              && m.col[i * 3] === m.col[i * 3 + 2], `${label}: shell vertex ${i} missed SIDEPOD colour`);
+            assert.equal(f.mat[i], FS.chrome, `${label}: colour and finish share the shell`);
+          } else {
+            dark++;
+            assert.deepEqual(m.col.slice(i * 3, i * 3 + 3), b.col.slice(i * 3, i * 3 + 3), `${label}: keep intake/carbon`);
+            assert.equal(f.mat[i], b.mat[i], `${label}: finish keeps intake/carbon`);
+          }
+        }
+        if (!["sidepods", "livery"].includes(section.name))
+          assert.deepEqual(m.col.slice(from * 3, to * 3), b.col.slice(from * 3, to * 3), `${label}: keep ${section.name}`);
+        from = to;
+      }
+      assert.ok(painted > 30 && dark > 0 && left > 0 && right > 0, `${label}: both full shells and unpainted surfaces covered`);
+    }
+  }
+});
+
 test("COVER FINISH reaches the stripe runs over the engine cover, not the nose run (#2796 3)", () => {
   const STRIPE = [0.9, 0.1, 0.6], m = build({ stripe: STRIPE, coverFinish: "satin" }), run = ofColour(m, STRIPE);
   const cover = run.filter((i) => m.pos[i * 3 + 2] < -0.25), nose = run.filter((i) => m.pos[i * 3 + 2] > 1.2);

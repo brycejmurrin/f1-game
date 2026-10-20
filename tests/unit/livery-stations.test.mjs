@@ -181,3 +181,28 @@ test("each station has a livery ON / OFF, and OFF paints nothing in its region",
   const src = fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8");
   for (const field of Object.values(M.S.TOGGLES)) assert.ok(src.includes(field + ': "on"'), field + " persists through LIV_DRAFT_PILLS");
 });
+
+test("the sidepod-top sponsor is inked against the SIDEPOD colour, not the primary", () => {
+  const seen = [];
+  const h = { teamId: "mclaren", colors: { pod: [0, 0, 0] }, c1: [1, 1, 1], accent: [0, 0, 0], names: ["A", "B", "C", "D", "E", "F"], num: 4,
+    fillRegion: () => {}, drawWordmark: (_, __, r) => seen.push(r.id), haloIf: () => null,
+    inkOn: (bg) => { seen.push(bg); return [1, 1, 1]; } };
+  M.S.paint(null, { podTop: { id: "podTop" } }, h);
+  assert.equal(JSON.stringify(seen), '[[[0,0,0]],"podTop"]', "a black sidepod on a white car picks its ink for black");
+  seen.length = 0; h.colors = {};
+  M.S.paint(null, { podTop: { id: "podTop" } }, h);
+  assert.equal(JSON.stringify(seen), '[[[1,1,1]],"podTop"]', "no SIDEPOD colour: the pod wears c1");
+});
+
+test("on sculpted bodies the sidepod-top band drapes the roof's channel and crown", () => {
+  for (const id of ["auralis", "cevora", "vantrel", "orynth"]) for (const round of [false, true]) {
+    const anchors = M.Car3D.bodyAnchors({}, id, undefined, round), c = stationCtx("ferrari", null, round);
+    assert.equal(typeof anchors.podRoof, "function", id + ": sculpted anchors expose the roof");
+    const pod = capture({ podTop: M.T.REGIONS.podTop }, anchors, c);
+    assert.ok(pod.length >= 16, id + ": the band is laid in strips across the curved roof");
+    for (const { c: cs } of pod) for (const p of cs) {
+      const s = anchors.podAt(p[2]), roof = anchors.podRoof(p[2], (Math.abs(p[0]) - s.inner) / (s.x - s.inner));
+      assert.ok(p[1] - roof[1] > 0.004 && p[1] - roof[1] < 0.012, id + ` pod top ${((p[1] - roof[1]) * 1000).toFixed(1)} mm off the roof`);
+    }
+  }
+});

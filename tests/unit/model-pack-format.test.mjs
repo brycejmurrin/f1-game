@@ -29,6 +29,10 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { readAX26, ax26Version } from "../helpers/ax26.mjs";
 import { writeAX26 } from "../../tools/gen/assets.mjs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { writeAX26v3 } = require("../../tools/lib/pack-assets.cjs");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PACK = path.join(ROOT, "assets", "pack");
@@ -188,3 +192,28 @@ test("the manifest's md5 matches the bytes on disk",
       assert.equal(md5, rec.md5, `${id}: manifest md5 is stale`);
     }
   });
+
+test("the reader admits AX26 v3 (v2 body + u8 sway) and v2 files stay unchanged", async () => {
+  const mesh = tidyMesh(6);
+  // Put a FOLIAGE-style fractional weight on half the verts — v2 would fall
+  // back to v1; v3 keeps the packed body and a sway stream.
+  for (let i = 0; i < 6; i++) mesh.mat[i] = 6 + (i / 5) * 0.45;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-ax26v3-"));
+  try {
+    const p = path.join(dir, "v3.bin");
+    fs.writeFileSync(p, writeAX26v3(mesh));
+    const head = ax26Version(p);
+    assert.equal(head.version, 3, "writeAX26v3 must emit version 3");
+    const geo = await readAX26(p);
+    assert.ok(geo, "shipped reader must accept v3");
+    assert.equal(geo.pos.length, 18);
+    assert.equal(Math.floor(geo.mat[5] + 1e-6), 6);
+    assert.ok(geo.mat[5] > 6, "tip vert keeps a non-zero sway fraction");
+
+    // v2 path (shared writer) still packs tidy integer mats as version 2.
+    const v2 = await roundTrip(tidyMesh(4));
+    assert.equal(v2.head.version, 2);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

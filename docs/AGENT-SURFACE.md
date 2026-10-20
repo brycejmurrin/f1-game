@@ -77,44 +77,19 @@ does not discover, install or validate hosted tools.
 3. **MCP (required for `apex_*` / `browser_*` / `chrome_*` / `debugger_*` in Cloud):** the host
    does **not** attach project `.mcp.json` by itself ([capabilities](https://cursor.com/docs/cloud-agent/capabilities)).
    In [Cloud Agents → Integrations & MCP](https://cursor.com/agents) (team-shared:
-   Dashboard → Plugins & MCPs) register these five **stdio** servers — same names /
-   `bash` wrappers as root `.mcp.json`. Pasteable catalog (keep `command: bash`;
-   do **not** use bare `npx @playwright/mcp`):
-
-```json
-{
-  "apex-tools": {
-    "type": "stdio",
-    "command": "bash",
-    "args": ["tools/mcp/apex-tools-mcp.sh", "serve"],
-    "timeout": 900000
-  },
-  "chrome-devtools": {
-    "type": "stdio",
-    "command": "bash",
-    "args": ["tools/mcp/chrome-devtools-mcp.sh", "run"]
-  },
-  "playwright-official": {
-    "type": "stdio",
-    "command": "bash",
-    "args": ["tools/mcp/playwright-mcp.sh", "run"]
-  },
-  "js-debugger": {
-    "type": "stdio",
-    "command": "bash",
-    "args": ["tools/mcp/js-debugger-mcp.sh", "serve"]
-  },
-  "apex-lsp": {
-    "type": "stdio",
-    "command": "bash",
-    "args": ["tools/mcp/lsp-mcp.sh", "serve"]
-  }
-}
-```
+   Dashboard → Plugins & MCPs) register these five **stdio** servers — copy
+   **`mcpServers` from root `.mcp.json`** (lockstep with `.cursor/mcp.json`) so
+   compact output runs through `output-level-mcp.sh`. The environment allowlist
+   glob also admits a shorter dashboard line (`bash tools/mcp/<wrapper>.sh …`);
+   that works for attach but skips the gateway unless you paste the full args.
+   Keep `command: bash`; do **not** use bare `npx @playwright/mcp`.
 
    After editing ship `.cursor/environment.json`, **Save** the environment so the
    dashboard allowlist matches git. Each `mcpServerAllowlist` row keeps its
-   `name` and a **full launch pattern** (`*bash tools/mcp/<wrapper>.sh …`) —
+   `name` and a **glob** (`*bash*tools/mcp/<wrapper>.sh …`) that admits both
+   the committed **output-level gateway** launch (`.mcp.json`) and the shorter
+   native-wrapper line the Integrations dashboard shows — compact MCP output
+   stays on the gateway; the allowlist must not pin only the short form.
    Cursor matches `command` + `args` joined, with `*` wildcards
    ([enterprise MCP allowlist](https://cursor.com/docs/enterprise/model-and-integration-management);
    `tests/unit/environment-json.test.mjs`). A stale save shows three nameless

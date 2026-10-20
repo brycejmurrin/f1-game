@@ -847,9 +847,9 @@ test("profile-gameloop.mjs: page-ready waits come from APEX_PROFILE_WAIT_MS, nev
   assert.equal((src.match(/timeout:\s*WAIT_MS/g) || []).length, 2, "both waitForFunction calls use WAIT_MS");
 });
 
-test("profile.mjs: page-ready waits (spans/hitch/trace) honour APEX_PROFILE_WAIT_MS, never below 30 s", () => {
+test("profile.mjs: page-ready waits (spans/hitch/trace/step) honour APEX_PROFILE_WAIT_MS, never below 30 s", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/perf/profile.mjs"), "utf8");
   assert.match(src, /APEX_PROFILE_WAIT_MS/);
   assert.doesNotMatch(src, /timeout:\s*30000/, "a literal 30 s wait would ignore the env override");
-  assert.equal((src.match(/timeout:\s*WAIT_MS/g) || []).length, 4, "every waitForFunction uses WAIT_MS");
+  assert.equal((src.match(/timeout:\s*WAIT_MS/g) || []).length, 6, "every waitForFunction uses WAIT_MS");
 });

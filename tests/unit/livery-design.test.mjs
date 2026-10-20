@@ -155,13 +155,22 @@ test("design fields survive draft, stored livery and live resolver round-trips",
   const liv = { id: "test", name: "Ribbon", c1: [0, 0, 0], c2: [1, 1, 1], spineLogo: "segments",
     patternTint: [1, 0, 0], patternSecond: [0, 1, 0], patternPlacement: "wrap", patternSide: "left",
     patternWidth: "80", patternRepeat: "9", patternOffset: "-12", patternTaper: "40", patternOpacity: "60", patternRotation: "-37", patternStretch: "140", patternWeight: "180",
-    coverFinish: "matte", wingFinish: "chrome", haloFinish: "gloss" };
+    coverFinish: "matte", wingFinish: "chrome", haloFinish: "gloss",
+    ductFinish: "chrome", deflectorFinish: "satin", cockpitFinish: "matte", boardFinish: "gloss" };
   ctx.input = liv;
   const result = vm.runInContext('Object.assign({ id: input.id, c1: input.c1, c2: input.c2 }, livDraftTo(livDraftFrom(input, input.name), false))', ctx);
   for (const key of Object.keys(liv).filter((key) => key !== "name")) assert.deepEqual(plain(result[key]), liv[key], key);
   ctx.saved = result;
   const resolved = vm.runInContext('CustomLiveries.create({ store: {} }).pickLivery(saved)', ctx);
   for (const key of Object.keys(result)) assert.deepEqual(plain(resolved[key]), plain(result[key]), key);
+  const details = ["ductFinish", "deflectorFinish", "cockpitFinish", "boardFinish"];
+  ctx.input = Object.assign({}, liv, Object.fromEntries(details.map((key) => [key, "inherit"])));
+  const sparse = vm.runInContext('livDraftTo(livDraftFrom(input, input.name), false)', ctx);
+  const preview = vm.runInContext('livDraftTo(livDraftFrom(input, input.name), true)', ctx);
+  for (const key of details) {
+    assert.equal(Object.hasOwn(sparse, key), false, key + " inherit is absent in storage");
+    assert.equal(preview[key], null, key + " preview explicitly clears a previous override");
+  }
 });
 
 function editorFixture() {

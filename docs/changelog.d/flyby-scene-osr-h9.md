@@ -1,0 +1,1 @@
+Improved: The intro flyby's first shot plans without a stall: building the track's camera sight index no longer trips the browser's optimizer hundreds of times (Monaco: worst cases 111–125 ms down to ~33–62 ms). Shots are unchanged.

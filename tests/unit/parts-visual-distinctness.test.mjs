@@ -53,11 +53,12 @@ test("the catalog census is what the rest of this file assumes", () => {
   // 321 → 340 on 2026-10-19 (design integration): 5 D4 STYLE rows (wheels/brakes/cockpit),
   // 8 D6 STYLE rows (4 tyres, 4 exhaust), 4 D3 STYLE rows (3 aero, 1 floor) and
   // 7 D7 suspension-layout STYLE rows.
+  // Four named Contour aero reskins added with the complete concept bodies (349 → 357 combined).
   // 345 → 349 on 2026-10-20: 4 B·D3c concept-sheet wing STYLE rows (rift/keel/delta/serpent).
-  // 349 → 353 the same day: 4 B·D3c concept-sheet diffuser STYLE rows (floor).
-  assert.equal(all.length, 353);
+  // 349 → 357 the same day: 4 B·D3c concept-sheet diffuser STYLE rows (floor).
+  assert.equal(all.length, 357);
   assert.equal(all.filter((o) => o.tag === "SIGNATURE").length, 128);
-  assert.equal(all.filter((o) => o.tag === "STYLE").length, 56);
+  assert.equal(all.filter((o) => o.tag === "STYLE").length, 60);
 });
 
 test("a SIGNATURE or STYLE option is a pure reskin: same cost, same four stat multipliers", () => {

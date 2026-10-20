@@ -1,0 +1,1 @@
+Fixed: Cloud Agent MCP allowlist globs admit both the output-level gateway launch (`.mcp.json`) and short Integrations dashboard wrapper lines; chrome-devtools install pins scratch clone to v1.7.0 and falls back to npm when the clone version drifts.

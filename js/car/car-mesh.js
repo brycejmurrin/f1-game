@@ -85,7 +85,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
       top: 0.41 + 0.07 * (z - zR) / (zF - zR) };
   const podStops = (front, rear) => {
     const internal = anchors && anchors.podStations ?
-      anchors.podStations.map((p) => p.z) : [0.22, -0.62];
+      (anchors.podStops || anchors.podStations).map((p) => p.z) : [0.22, -0.62];
     return [front, ...internal.filter((z) => z < front && z > rear), rear]
       .sort((a, b) => b - a);
   };
@@ -96,6 +96,20 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
       const ta = (zF - aZ) / (zF - zR), tb = (zF - bZ) / (zF - zR);
       const rU = (t) => u.uR + (u.uL - u.uR) * t;
       const lU = (t) => u.uL + (u.uR - u.uL) * t;
+      if (anchors && anchors.podSculpt) {
+        const cuts = [yBottom, ...[0.22, 0.65].filter(f => f > yBottom && f < yTop), yTop];
+        const point = (z, f, side) => { const p = anchors.podFlank(z, f); return [side * (p[0] + 0.004), p[1], z]; };
+        const vAt = f => u.vB + (u.vT - u.vB) * (f - yBottom) / (yTop - yBottom);
+        for (let k = 0; k < cuts.length - 1; k++) {
+          const lo = cuts[k], hi = cuts[k + 1];
+          const p = point(aZ, lo, 1), q = point(aZ, hi, 1), dx = q[0] - p[0], dy = q[1] - p[1], n = Math.hypot(dx, dy);
+          quadUv([p, point(bZ, lo, 1), point(bZ, hi, 1), q], [dy / n, -dx / n, 0],
+            [[rU(ta),vAt(lo)], [rU(tb),vAt(lo)], [rU(tb),vAt(hi)], [rU(ta),vAt(hi)]]);
+          quadUv([point(bZ, lo, -1), point(aZ, lo, -1), point(aZ, hi, -1), point(bZ, hi, -1)], [-dy / n, -dx / n, 0],
+            [[lU(tb),vAt(lo)], [lU(ta),vAt(lo)], [lU(ta),vAt(hi)], [lU(tb),vAt(hi)]]);
+        }
+        continue;
+      }
       quadUv([[a.x+proud, pY(a,yBottom), aZ], [b.x+proud, pY(b,yBottom), bZ],
               [b.x+proud, pY(b,yTop), bZ], [a.x+proud, pY(a,yTop), aZ]], [1, 0, 0],
              [[rU(ta),u.vB], [rU(tb),u.vB], [rU(tb),u.vT], [rU(ta),u.vT]]);
@@ -126,16 +140,29 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
     const PROUD = (Car3D.COVER_STACK && Car3D.COVER_STACK.decal) || 0.022;
     // Drape one region over the crown between two stations, shoulder to shoulder.
     const drape = (region, zF, zR, pF, pR) => {
-      const uv = uvOf(region), L = across(pF), Rr = across(pR), W = pF.pts[1][0] * 2;
+      const uv = uvOf(region), W = pF.pts[1][0] * 2;
+      const stops = anchors?.coverStops ? [zF, ...anchors.coverStops.filter(z => z < zF && z > zR), zR] : [zF, zR];
+      for (let s = 0; s < stops.length - 1; s++) {
+      const za = stops[s], zb = stops[s + 1];
+      const L = across(s ? Car3D.coverProfile(anchors.coverAt(za)) : pF);
+      const Rr = across(s === stops.length - 2 ? pR : Car3D.coverProfile(anchors.coverAt(zb)));
+      const vv = z => uv.vB + (uv.vT - uv.vB) * (zF - z) / (zF - zR);
       for (let i = 0; i < L.length - 1; i++) {
         const [xa, ya] = L[i], [xb, yb] = L[i + 1], [xc, yc] = Rr[i], [xd, yd] = Rr[i + 1];
         // outward normal of this facet (right-handed: +x when the surface drops to the right)
         const dx = xb - xa, dy = yb - ya, nl = Math.hypot(dx, dy) || 1, nx = -dy / nl, ny = dx / nl;
-        const fa = (xa + W / 2) / W, fb = (xb + W / 2) / W;
+        // Normalize each complete-body ring by its own shoulder width: shared
+        // edges agree and a bulged mid-ring stays inside the atlas region.
+        const wl = anchors?.coverStops ? Math.abs(L[0][0]) * 2 : W;
+        const wr = anchors?.coverStops ? Math.abs(Rr[0][0]) * 2 : W;
+        const fa = (xa + wl / 2) / wl, fb = (xb + wl / 2) / wl;
+        const fc = anchors?.coverStops ? (xc + wr / 2) / wr : fa;
+        const fd = anchors?.coverStops ? (xd + wr / 2) / wr : fb;
         const uu = (f) => uv.uR + (uv.uL - uv.uR) * f;
-        quadUv([[xa + nx * PROUD, ya + ny * PROUD, zF], [xb + nx * PROUD, yb + ny * PROUD, zF],
-                [xd + nx * PROUD, yd + ny * PROUD, zR], [xc + nx * PROUD, yc + ny * PROUD, zR]],
-               [nx, ny, 0.06], [[uu(fa), uv.vB], [uu(fb), uv.vB], [uu(fb), uv.vT], [uu(fa), uv.vT]]);
+        quadUv([[xa + nx * PROUD, ya + ny * PROUD, za], [xb + nx * PROUD, yb + ny * PROUD, za],
+                [xd + nx * PROUD, yd + ny * PROUD, zb], [xc + nx * PROUD, yc + ny * PROUD, zb]],
+               [nx, ny, 0.06], [[uu(fa), vv(za)], [uu(fb), vv(za)], [uu(fd), vv(zb)], [uu(fc), vv(zb)]]);
+      }
       }
     };
     drape(R.crest, -0.62, -1.28, pf, pr);
@@ -173,23 +200,25 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
     const PROUD = (Car3D.COVER_STACK && Car3D.COVER_STACK.flankDecal) || 0.014;
     // The rounded car's flank runs from its pinched FOOT (coverProfile pts[0],
     // the coke-bottle xb) to the shoulder (pts[1]); the flat car's is 0.28x lean.
-    const foot = (p) => (round && p.pts ? p.pts[0][0] : p.x);
+    const profiled = round || !!anchors?.coverStops;
+    const foot = (p) => (profiled && p.pts ? p.pts[0][0] : p.x);
     const flank = (z) => {
       const c = anchors ? anchors.coverAt(z) : (z > -1 ? { x: 0.27, bottom: 0.20, top: 0.81 } : { x: 0.20, bottom: 0.23, top: 0.69 });
       const p = Car3D.coverProfile ? Car3D.coverProfile(c) : { x: c.x, bottom: c.bottom, shoulder: c.top };
-      const lean = round && p.pts ? p.pts[0][0] - p.pts[1][0] : 0.28 * p.x;
+      const lean = profiled && p.pts ? p.pts[0][0] - p.pts[1][0] : 0.28 * p.x;
       const h = p.shoulder - p.bottom, nl = Math.hypot(h, lean), nx = h / nl, ny = lean / nl;
-      const at = (v) => [(round && p.pts ? foot(p) - lean * v : p.x * (1 - 0.28 * v)) + nx * PROUD, p.bottom + h * v + ny * PROUD];
+      const at = (v) => [(profiled && p.pts ? foot(p) - lean * v : p.x * (1 - 0.28 * v)) + nx * PROUD, p.bottom + h * v + ny * PROUD];
       return { b: at(V_BOT), t: at(V_TOP), nx, ny };
     };
-    if (round && typeof CarShade !== "undefined" && CarShade.COVER_Z) {
+    if (anchors?.coverStops || (round && typeof CarShade !== "undefined" && CarShade.COVER_Z)) {
       // ROUNDED: the coke pinch curves the foot between stations, and one
       // straight quad edge from -0.66 to -1.90 is a chord across that curve:
       // measured, up to 40 mm off the skin at the waist (coke 1.38) against
       // 14 mm at its ends, so the band floats free. So the band is a strip of
       // sub-quads at the rings the cover is lofted at (CarShade.COVER_Z), u by
       // z and a normal per corner, which keeps it its PROUD off the skin.
-      const zs = [sZ[0]].concat(CarShade.COVER_Z.filter((z) => z < sZ[0] && z > sZ[1]), [sZ[1]]);
+      const table = anchors?.coverStops || CarShade.COVER_Z;
+      const zs = [sZ[0]].concat(table.filter((z) => z < sZ[0] && z > sZ[1]), [sZ[1]]);
       const F = zs.map(flank), f = (z) => (sZ[0] - z) / (sZ[0] - sZ[1]);   // 0 at the front, 1 at the rear
       const uR = uvOf(R.spineSide), uL = uvOf(R.spineSideL || R.spineSide);
       const uRight = (z) => uR.uR + (uR.uL - uR.uR) * f(z), uLeft = (z) => uL.uL + (uL.uR - uL.uL) * f(z);
@@ -246,13 +275,25 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
     face(fp, R.fin);
     if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(null, finS, fShape, fRoot), R.finBadge);
   }
+  const noseLabel = (region, zF, zR, width, proud, nz) => {
+    const u = uvOf(region), zs = [zF, ...anchors.noseStops.filter(z => z < zF && z > zR), zR];
+    const v = z => u.vB + (u.vT - u.vB) * (zF - z) / (zF - zR);
+    for (let i = 0; i < zs.length - 1; i++) {
+      const a = anchors.noseAt(zs[i]), b = anchors.noseAt(zs[i + 1]);
+      quadUv([[-a.topSide*width,a.top+proud,a.z],[a.topSide*width,a.top+proud,a.z],
+        [b.topSide*width,b.top+proud,b.z],[-b.topSide*width,b.top+proud,b.z]], [0,1,nz],
+        [[u.uR,v(a.z)],[u.uL,v(a.z)],[u.uL,v(b.z)],[u.uR,v(b.z)]]);
+    }
+  };
   const nR = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
   const nF = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
-  quad([[-nF.topSide*0.84, nF.top+0.020, 2.10], [nF.topSide*0.84, nF.top+0.020, 2.10],
+  if (anchors?.noseStops) noseLabel(R.num,2.10,1.72,0.84,0.020,0.05);
+  else quad([[-nF.topSide*0.84, nF.top+0.020, 2.10], [nF.topSide*0.84, nF.top+0.020, 2.10],
         [nR.topSide*0.84, nR.top+0.020, 1.72], [-nR.topSide*0.84, nR.top+0.020, 1.72]], [0, 1, 0.05], R.num);
   const nsR = anchors ? anchors.noseAt(1.16) : { top: 0.54, topSide: 0.15 };
   const nsF = anchors ? anchors.noseAt(1.66) : { top: 0.48, topSide: 0.14 };
-  quad([[-nsF.topSide*0.82, nsF.top+0.014, 1.66], [nsF.topSide*0.82, nsF.top+0.014, 1.66],
+  if (anchors?.noseStops) noseLabel(R.titleB,1.66,1.16,0.82,0.014,0.10);
+  else quad([[-nsF.topSide*0.82, nsF.top+0.014, 1.66], [nsF.topSide*0.82, nsF.top+0.014, 1.66],
         [nsR.topSide*0.82, nsR.top+0.014, 1.16], [-nsR.topSide*0.82, nsR.top+0.014, 1.16]], [0, 1, 0.10], R.titleB);
   // Sidepod lower flank → long sponsor strip.
   podDecal(R.strip, 0.08, 0.30, 0.020);   // sits wholly on the c2 accent band
@@ -324,8 +365,10 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
   // fin move the endplate), so the digit must be too (#3111 F15).
   const nb = (Car3D.numberBoard ? Car3D.numberBoard(aLvl == null ? 2 : aLvl, Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : undefined) : { cy: 0.62, h: 0.20 });
   const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
+  if (!anchors?.podSculpt) {
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
+  }
   if (typeof LiveryStations !== "undefined" && !legacyBody) LiveryStations.emit(quadUv, uvOf, R, anchors, stationCtx(parts, teamId, bodyStyle, round));
   return out;
 }
@@ -388,7 +431,9 @@ function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, roun
   // moves the front endplate the decal is drawn on (frontPlateGeom). They
   // join the key or a style change paints the previous wing.
   const aSt = Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null;
-  const drsK = aSt ? [aSt.drs ? 1 : 0, aSt.rearSweep, aSt.rearTaper, aSt.plate].map((v) => +v || 0).join(",")
+  // Concept curvature and flap gaps also move the decal surface. Key the full
+  // normalized recipe, once per parts object through _decalKeyMemo above.
+  const drsK = aSt ? JSON.stringify(aSt)
                    : ((parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0);
   // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
   const shapeK = finShape || "standard";
