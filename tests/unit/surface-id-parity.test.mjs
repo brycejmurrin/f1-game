@@ -20,6 +20,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { bootGlx } from "../helpers/glx-mock.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -398,21 +400,37 @@ test("no material pack means no baked mix on WGX, as on GLX", () => {
     "WGX: the hoisted baked-albedo path must require matScale(mid) > 0, as GLX/TLX do");
 });
 
-test("the finish 60-85 block runs on car-paint draws only, in all three languages", () => {
-  // garage-perf-2026-10-20 finding 2: the finish AA derivatives and tint switch ran for every lit fragment.
-  // A per-draw uniform gates them (no new program); the car-paint sources must set it or finishes vanish.
-  const glx = code("js/render/glx/shaders/glsl-lit.js");
-  assert.match(glx, /if \(uCarFinish > 0\.5\) \{\s*\n\s*vec3 fnDx = dFdx\(Ngeo\)/, "GLX: fnDx/fnPx under uCarFinish");
-  assert.match(glx, /if \(uCarFinish > 0\.5 && finishId >= 60 && finishId <= 85\)/, "GLX: the tint switch under uCarFinish");
-  assert.match(code("js/render/glx/glx.js"), /opts && opts\.carFinish \? 1 : 0/, "GLX: uCarFinish from opts.carFinish");
-  const wgsl = code("js/render/webgpu/wgsl-chunks.js");
-  assert.match(wgsl, /if \(D\.mat3\.z > 0\.5 && finishId >= 60 && finishId <= 85\)/, "WGX: the tint switch under mat3.z");
-  assert.match(code("js/render/webgpu/wgx.js"), /d\[base \+ 30\] = o\.carFinish \? 1 : 0;/, "WGX: lane 30 from opts.carFinish");
-  const tsl = code("js/render/three/tsl-lit.js");
-  assert.match(tsl, /If\(matU\.carFinish\.greaterThan\(0\.5\), \(\) => \{\s*\n\s*const fnDx = dFdx\(Ngeo\)/, "TLX: fnDx/fnPx under matU.carFinish");
-  assert.match(tsl, /If\(matU\.carFinish\.greaterThan\(0\.5\)\.and\(finishId\.greaterThanEqual\(60\.0\)\)/, "TLX: the tint switch under carFinish");
-  assert.match(tsl, /tlxPackB = new THREE\.Vector4\([^;]*o\.carFinish \? 1 : 0\)/, "TLX: packB.w from opts.carFinish");
-  assert.match(code("js/render/three/tlx.js"), /o\.carFinish \? "\|cf" : ""/, "TLX: carFinish is in the material key");
-  assert.match(code("js/fx/grade-tint.js"), /m\.carFinish = true;/, "every car paint bag (race, mirror, garage) sets carFinish");
-  assert.match(code("js/garage/scene.js"), /MIRROR_RESOLVE = \{[^}]*carFinish: true/, "the garage floor reflection keeps the finish tints");
+// garage-perf-2026-10-20 finding 2: the finish 60-85 AA inputs + tint switch run on car-paint draws only, behind a
+// per-draw flag (GLX uCarFinish, WGX DrawU.mat3.z, TLX packB.w; the TLX half is in tlx-hunt3). These run the real code.
+test("carFinish: every car-paint source sets it, and GLX / WGX hand it to the shader per draw", () => {
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) } });
+  vm.runInContext(read("js/fx/grade-tint.js") + "\n;this.GradeTint = GradeTint;", ctx, { filename: absSrc("js/fx/grade-tint.js") });
+  const LT = { carGloss: 1, carMetal: 1, carSpecular: 1, carClearcoat: 1, carGlow: 1 };
+  const GT = ctx.GradeTint;
+  for (const k of ["PAINT_WET_NIGHT", "PAINT_WET_DAY", "PAINT_DRY_NIGHT", "PAINT_DRY_DAY"])
+    assert.equal(GT.carPaint(GT[k], LT).carFinish, true, `${k}: the race / mirror / garage turntable car paint bag`);
+  // The garage floor reflection draws the car with its own bag: it keeps the finish tints too.
+  const scene = read("js/garage/scene.js"), at = scene.indexOf("const MIRROR_RESOLVE = ");
+  assert.ok(at > 0, "MIRROR_RESOLVE moved — re-point this check");
+  const lit = scene.slice(at + "const MIRROR_RESOLVE = ".length, scene.indexOf(";", at));
+  assert.equal(vm.runInNewContext("(" + lit + ")", { MIRROR_BIAS: [0, 0] }).carFinish, true, "the garage floor reflection");
+
+  const h = bootGlx();
+  const mesh = h.GLX.createMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
+  const model = new Float32Array(16); model[0] = model[5] = model[10] = model[15] = 1;
+  const flag = () => h.calls.filter((c) => c[0] === "uniform1f" && c[1][0] && c[1][0].name === "uCarFinish").map((c) => c[1][1]);
+  h.GLX.begin(h.frame());
+  h.reset(); h.GLX.draw(mesh, model, { carPaint: 1, carFinish: true });
+  assert.deepEqual(flag(), [1], "GLX: a car-paint draw uploads uCarFinish = 1");
+  h.reset(); h.GLX.draw(mesh, model, { roughness: 0.6 });
+  assert.deepEqual(flag(), [0], "GLX: a non-car draw turns it off");
+
+  const wgx = read("js/render/webgpu/wgx.js");
+  const ring = new Float32Array(64 * 2);
+  const writeDraw = vm.runInNewContext("(" + fnSource(wgx, "function _writeDraw(") + ")", {
+    DRAW_F32_STRIDE: 64, drawRing: ring, IDENT: new Float32Array(16), LAMP_MASK_ALL: 16777215 });
+  writeDraw(0, null, { carPaint: 1, carFinish: true });
+  writeDraw(1, null, { roughness: 0.6 });
+  assert.equal(ring[30], 1, "WGX: DrawU.mat3.z (lane 30) is 1 on a car-paint draw");
+  assert.equal(ring[64 + 30], 0, "WGX: 0 on every other draw (ring slots are reused)");
 });
