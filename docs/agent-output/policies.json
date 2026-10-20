@@ -2301,6 +2301,11 @@
       "presentation": "shared-levels",
       "preserve": "@c5"
     },
+    "tools/ui/audit-summary.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "AUDIT / TOTALS / SKIPPED / CELL / BYSCREEN / CLEAN lines and exit status (2 bad argument or missing file); output is bounded by --top and a per-cell cap, so it is already compact"
+    },
     "tools/ui/layout-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",

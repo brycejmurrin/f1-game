@@ -3312,6 +3312,16 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/audit-summary.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/ui/circuit-axis.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
