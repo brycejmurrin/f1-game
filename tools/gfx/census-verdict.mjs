@@ -286,6 +286,15 @@ function detailRows(path3, g, { tlxLeg }) {
   } else if (_win && _win.note) {
     rows.push(`${IND}window: ${_win.note}`);
   }
+  // THE GPU QUEUE (hunt 6): how long after a frame's callback the GPU drained it,
+  // and how many frames were still queued when the next one began.
+  const _gq = g.gpuQueue;
+  if (_gq && _gq.n != null) {
+    rows.push(`${IND}queue: ${_gq.n} frames  done-after p50=${_gq.latP50} p95=${_gq.latP95} p99=${_gq.latP99} max=${_gq.latMax} ms` +
+      (_gq.depthMax != null ? `  in-flight p50=${_gq.depthP50} max=${_gq.depthMax} (>=2 on ${(_gq.depth2Share * 100).toFixed(1)}%)` : ""));
+  } else if (_gq && _gq.note) {
+    rows.push(`${IND}queue: ${_gq.note}`);
+  }
   // THE DEPTH-DISCARD ROW (hunt 4 A-P1): TLX only; a TLX leg that lost it says why.
   const _dd = g.depth;
   if (_dd && _dd.supported) rows.push(`${IND}depth: ${_dd.summary}`);

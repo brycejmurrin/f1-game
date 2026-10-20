@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseQueue, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -491,4 +491,21 @@ test("the census sizes WebGL2 uploads from the call's own arguments (hunt 4 §A 
   assert.equal(GL.texSubImage2D([0, 0, 0, 0, 8, 8, 0, 0, new Uint8Array(256)]), 256);
   assert.equal(GL.texImage3D([0, 0, 0, 4, 4, 2, 0, 0, 0, new Uint8Array(128)]), 128);
   assert.equal(GL.texSubImage3D([0, 0, 0, 0, 0, 4, 4, 3, 0, 0, { width: 4, height: 4 }]), 4 * 4 * 3 * 4, "image source per layer at 4 B/texel");
+});
+
+test("analyseQueue reports GPU drain latency and in-flight depth, and a note (not zeros) without samples (hunt 6)", () => {
+  // 100 frames: 90 drained 5 ms after their callback, 10 at 60 ms; depth 0 on
+  // 80 callbacks, 1 on 12, 2 on 6, 3 on 2.
+  const lat = [...Array(90).fill(5), ...Array(10).fill(60)];
+  const depth = [...Array(80).fill(0), ...Array(12).fill(1), ...Array(6).fill(2), ...Array(2).fill(3)];
+  const q = analyseQueue(lat, depth);
+  assert.equal(q.n, 100);
+  assert.equal(q.latP50, 5);
+  assert.equal(q.latP95, 60);
+  assert.equal(q.latMax, 60);
+  assert.equal(q.depthP50, 0);
+  assert.equal(q.depthMax, 3);
+  assert.equal(q.depth2Share, 0.08);
+  assert.ok(analyseQueue([], []).note, "a WebGL2 leg reads as a note");
+  assert.ok(analyseQueue(undefined, undefined).note);
 });

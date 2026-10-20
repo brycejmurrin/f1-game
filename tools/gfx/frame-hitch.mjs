@@ -355,6 +355,26 @@ export function analyseWindow(win, gameFrameT, callbacks) {
   return r;
 }
 
+// THE GPU QUEUE'S SHARE OF INPUT-TO-PHOTON (hunt 6). gpu-game-check records,
+// per rAF callback that submitted, the ms from the callback's end until
+// onSubmittedWorkDone() resolved (`lat`), and at each callback's start how many
+// earlier callbacks were still on the GPU (`depth`). A frame drained before the
+// next callback starts has depth 0 there; depth >= 2 means the steering the
+// player just gave waits behind two unshown frames. Absent (WebGL2 legs, no
+// onSubmittedWorkDone) reports a note, never zeros.
+export function analyseQueue(lat, depth) {
+  const L = Array.isArray(lat) ? lat.filter((x) => Number.isFinite(x)) : [];
+  const D = Array.isArray(depth) ? depth.filter((x) => Number.isFinite(x)) : [];
+  if (!L.length) return { note: "no queue samples — no WebGPU submits in the window (a WebGL2 leg) or no onSubmittedWorkDone" };
+  const pct = (a, p) => { const s = a.slice().sort((x, y) => x - y); return +s[Math.min(s.length - 1, Math.floor(p * s.length))].toFixed(1); };
+  const r = { n: L.length, latP50: pct(L, 0.5), latP95: pct(L, 0.95), latP99: pct(L, 0.99), latMax: +Math.max(...L).toFixed(1) };
+  if (D.length) {
+    let deep = 0; for (const d of D) if (d >= 2) deep++;
+    r.depthP50 = pct(D, 0.5); r.depthMax = Math.max(...D); r.depth2Share = +(deep / D.length).toFixed(3);
+  }
+  return r;
+}
+
 // THE GAP VIEW (hunt 4 §A gap ii). analyseSpikeWork keys on callbacks of
 // >= thresholdMs, so a 4 s first-draw stall in which NO callback ran is
 // invisible to it. gpu-game-check records, from page load, every rendering

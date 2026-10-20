@@ -42,7 +42,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { analyse, analyseQueue, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate } from "../lib/census-entry.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
@@ -225,6 +225,10 @@ try {
     const _hP = new Int16Array(_hCAP);
     let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [];
     const _hSig = [];
+    // Queue latency (the GQ.submit note below): the queue a callback submitted
+    // to, its frames still on the GPU, and per-frame samples of both.
+    let _qlQueue = null, _qlInFlight = 0;
+    const _qlLat = [], _qlDepth = [];
     // THE PASS CENSUS, and the reason it belongs HERE rather than only in the
     // container. tlx-shadow.js sizes its maps by `softwareGL`: SUN_SIZE is 512
     // on a software adapter and 2048 on a real desktop, CAR_SIZE 256 against
@@ -357,6 +361,18 @@ try {
         };
       }
       wrapCall(GQ, "submit", "gpu.submit");
+      // THE GPU QUEUE'S SHARE OF INPUT-TO-PHOTON (hunt 6 B·H6). A frame's
+      // wall cost says when the CPU let go of it, not when the GPU finished
+      // it: on a GPU-bound leg the submits of two or three frames can wait in
+      // the queue, and every one of them is a frame of steering the screen has
+      // not shown yet. The rAF wrapper below asks onSubmittedWorkDone() once
+      // per callback that submitted and records how long after the callback
+      // ended the GPU drained it, and how many such frames were still in
+      // flight when the next callback began.
+      if (GQ && typeof GQ.submit === "function" && typeof GQ.onSubmittedWorkDone === "function") {
+        const origSub = GQ.submit;
+        GQ.submit = function () { if (_hArmed) _qlQueue = this; return origSub.apply(this, arguments); };
+      }
       wrapCall(GQ, "writeTexture", "gpu.writeTexture");
       wrapCall(GQ, "copyExternalImageToTexture", "gpu.copyExternalImageToTexture");
       wrapCall(GD, "createTexture", "gpu.createTexture");
@@ -561,8 +577,18 @@ try {
           }
           _gFrameCb++;
           _gInCb = true;
+          if (_hArmed && _qlDepth.length < _hCAP) _qlDepth.push(_qlInFlight);
+          _qlQueue = null;
           try { return cb(ts); } finally {
             _gInCb = false; _gFrameDur += performance.now() - a;
+            if (_qlQueue && _qlLat.length < _hCAP) {
+              const q = _qlQueue, tEnd = performance.now();
+              _qlQueue = null; _qlInFlight++;
+              try {
+                q.onSubmittedWorkDone().then(() => { _qlInFlight--; if (_qlLat.length < _hCAP) _qlLat.push(performance.now() - tEnd); },
+                  () => { _qlInFlight--; });
+              } catch (_) { _qlInFlight--; }
+            }
             if (_hArmed && _hN < _hCAP) {
               _hT[_hN] = a; _hD[_hN] = performance.now() - a;
               _hP[_hN] = _hPass > 32767 ? 32767 : _hPass;
@@ -577,7 +603,7 @@ try {
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+        arm() { _qlLat.length = 0; _qlDepth.length = 0; _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
           _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
         // Close the window where the DRIVING stops, so the A/B phases that
         // follow never enter the per-frame series or the spike analysis.
@@ -588,7 +614,7 @@ try {
                        t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
                        passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
-                       workFrames: _hWorkFrames,
+                       workFrames: _hWorkFrames, queueLat: _qlLat.slice(), queueDepth: _qlDepth.slice(),
                        stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30) }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
@@ -1128,7 +1154,8 @@ try {
     const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
     // READ THE WINDOW, NOT THE GOVERNOR'S END STATE (hunt 4 I4): frames, fps
     // and frame-interval percentiles over the driven window only.
-    out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };    // THE GAPS: every rAF interval >= 500 ms since page load, keyed to the
+    out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };
+    out.gpuQueue = d ? analyseQueue(d.queueLat, d.queueDepth) : { note: "no recorder on this leg" };    // THE GAPS: every rAF interval >= 500 ms since page load, keyed to the
     // work of the step before it (hunt 4 §A gap ii), whether or not armed.
     out.gapWork = d ? analyseGapWork(d.gaps || [], { marks: d.marks, win: d.win, longTasks: d.longTasks })
       : { note: "no recorder on this leg" };
