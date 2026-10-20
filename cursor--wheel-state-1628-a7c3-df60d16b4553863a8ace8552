@@ -1,1 +1,0 @@
-1792449884	Claude	[A·W6·L22] #1628 torque-balanced wheel state: OWNED js/physics/{wheel-state,player-forces,tyre-model,consts}.js js/game.js tests/unit/wheel-*.test.mjs tests/unit/player-dyn*.test.mjs docs/PHYSICS.md  [cursor/wheel-state-1628-a7c3; session df60d16b4553863a8ace8552]
