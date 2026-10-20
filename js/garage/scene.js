@@ -270,10 +270,10 @@ function buildProps(g, liv) {
 
   // Spare front wings on a rack — the most recognisable thing in a real bay
   // after the tyres, and the reason a garage reads as a WORKSHOP.
-  GarageEquipment.wingRack(g.nx, -4.30, 1.2, 1, c1);
+  // One rack retains spare-wing storage; its former duplicate pays for career trophies.
   GarageEquipment.wingRack(g.px, 4.30, 2.6, -1, c1);
   // Wall kit shares the floor guns/reels, mounted clear of the chest worktops.
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 1; i++) {
     const z = -1.9 + i * 0.55;
     GarageEquipment.wheelGun(g.px, 5.16, z, 1, -1, c1, 1.34);
     block(g.px, 5.28, 1.52, z, 0.03, 0.15, 0.06, STEEL, MAT.METAL);

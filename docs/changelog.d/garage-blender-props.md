@@ -1,1 +1,1 @@
-New: A padded front-nose trolley, wheel-gun service dock and four-radio charging rack in the garage. The new equipment replaces repeated storage and a spare wall-mounted gun to stay within the existing detailed-bay geometry budget; trackside garages keep their lightweight mesh.
+New: A padded front-nose trolley, wheel-gun service dock and four-radio charging rack in the garage. Replacing duplicated storage and spare equipment keeps the bay within its existing geometry budget, including earned trophies in dry and wet conditions; trackside garages keep their lightweight mesh.

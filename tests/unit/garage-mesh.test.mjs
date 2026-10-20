@@ -740,7 +740,7 @@ test("full workshop routes detailed models to the existing wall batches and leav
   const bay = GarageScene.buildStatic(LIV, { props: true, equipment: true });
   assert.ok(bay.idx.length / 3 <= 18000, "full static bay geometry budget");
   assert.equal(calls.filter(c => c.name === "toolChest").length, 1, "repeated storage pays for distinct stations");
-  assert.equal(calls.filter(c => c.name === "wheelGun").length, 2, "two mounted spares complement the service dock");
+  assert.equal(calls.filter(c => c.name === "wheelGun").length, 1, "a mounted spare complements the service dock");
   assert.equal(calls.filter(c => c.name === "hoseReel").length, 2, "mounted reels share the detailed model");
   const chestTop = Math.max(...calls.filter(c => c.name === "toolChest").map(c => c.max[1]));
   assert.ok(calls.filter(c => c.name === "wheelGun").every(c => c.min[1] > chestTop + 0.08), "wall guns clear worktops");
@@ -763,5 +763,14 @@ test("full workshop routes detailed models to the existing wall batches and leav
   assert.ok(Math.abs(radios.min[1] - 1.19) < 1e-6, "radio rack rests on the chest's worktop");
   for (const axis of [0, 2]) {
     assert.ok(radios.min[axis] > chest.min[axis] && radios.max[axis] < chest.max[axis], "rack remains inside its support footprint");
+  }
+});
+
+test("workshop budget includes earned trophies and dry/wet equipment", () => {
+  const { GarageScene } = harness();
+  for (const weather of ["dry", "wet", "rain"]) for (let wins = 0; wins <= 8; wins++) {
+    const bay = GarageScene.buildStatic(LIV, { props: true, equipment: true, ctx: { weather, wins } });
+    assert.ok(bay.idx.length / 3 <= 18000, `${weather}, ${wins} trophies stay within the detailed bay budget`);
+    assert.equal(bay.mat.length, bay.pos.length / 3);
   }
 });
