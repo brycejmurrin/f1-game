@@ -397,3 +397,23 @@ test("no material pack means no baked mix on WGX, as on GLX", () => {
   assert.match(fn[0], /let hoisted = packOn && [^;]*matScale\(mid\) > 0\.0;/,
     "WGX: the hoisted baked-albedo path must require matScale(mid) > 0, as GLX/TLX do");
 });
+
+test("the finish 60-85 block runs on car-paint draws only, in all three languages", () => {
+  // garage-perf-2026-10-20 finding 2: the finish AA derivatives and tint switch ran for every lit fragment.
+  // A per-draw uniform gates them (no new program); the car-paint sources must set it or finishes vanish.
+  const glx = code("js/render/glx/shaders/glsl-lit.js");
+  assert.match(glx, /if \(uCarFinish > 0\.5\) \{\s*\n\s*vec3 fnDx = dFdx\(Ngeo\)/, "GLX: fnDx/fnPx under uCarFinish");
+  assert.match(glx, /if \(uCarFinish > 0\.5 && finishId >= 60 && finishId <= 85\)/, "GLX: the tint switch under uCarFinish");
+  assert.match(code("js/render/glx/glx.js"), /opts && opts\.carFinish \? 1 : 0/, "GLX: uCarFinish from opts.carFinish");
+  const wgsl = code("js/render/webgpu/wgsl-chunks.js");
+  assert.match(wgsl, /if \(D\.mat3\.z > 0\.5\) \{\s*\n\s*fnPx = /, "WGX: fnPx under DrawU.mat3.z");
+  assert.match(wgsl, /if \(D\.mat3\.z > 0\.5 && finishId >= 60 && finishId <= 85\)/, "WGX: the tint switch under mat3.z");
+  assert.match(code("js/render/webgpu/wgx.js"), /d\[base \+ 30\] = o\.carFinish \? 1 : 0;/, "WGX: lane 30 from opts.carFinish");
+  const tsl = code("js/render/three/tsl-lit.js");
+  assert.match(tsl, /If\(matU\.carFinish\.greaterThan\(0\.5\), \(\) => \{\s*\n\s*const fnDx = dFdx\(Ngeo\)/, "TLX: fnDx/fnPx under matU.carFinish");
+  assert.match(tsl, /If\(matU\.carFinish\.greaterThan\(0\.5\)\.and\(finishId\.greaterThanEqual\(60\.0\)\)/, "TLX: the tint switch under carFinish");
+  assert.match(tsl, /tlxPackB = new THREE\.Vector4\([^;]*o\.carFinish \? 1 : 0\)/, "TLX: packB.w from opts.carFinish");
+  assert.match(code("js/render/three/tlx.js"), /o\.carFinish \? "\|cf" : ""/, "TLX: carFinish is in the material key");
+  assert.match(code("js/fx/grade-tint.js"), /m\.carFinish = true;/, "every car paint bag (race, mirror, garage) sets carFinish");
+  assert.match(code("js/garage/scene.js"), /MIRROR_RESOLVE = \{[^}]*carFinish: true/, "the garage floor reflection keeps the finish tints");
+});

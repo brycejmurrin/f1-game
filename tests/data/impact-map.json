@@ -5954,7 +5954,8 @@
     },
     "js/fx/grade-tint.js": {
       "*": [
-        "tests/unit/carve-a-modules.test.mjs"
+        "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs"
       ]
     },
     "js/fx/particles.js": {
@@ -7035,6 +7036,7 @@
       "*": [
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
     },
@@ -13159,6 +13161,7 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
