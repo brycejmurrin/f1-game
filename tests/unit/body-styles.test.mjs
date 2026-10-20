@@ -298,7 +298,8 @@ test("study nose, pod and spine skins are closed, consistently wound and sampled
       else assert.equal(zs.size, 9, `${bodyStyle}/${round}: longitudinal curve missing`);
       if (skin === "cover") assert.equal(count, 284, `${bodyStyle}/${round}: unexpected cover cost`);
       else if (skin === "nose") assert.ok(count >= 68 && count <= 300, `${bodyStyle}/${round}: unexpected nose cost ${count}`);
-      else assert.ok(count <= 400, `${bodyStyle}/${round}: unexpected pod cost ${count}`);
+      // Four extra roof edges on the two channel bodies add 80 triangles.
+      else assert.ok(count <= (["caldra", "talven"].includes(bodyStyle) ? 480 : 400), `${bodyStyle}/${round}: unexpected pod cost ${count}`);
       assert.ok(volume6 > 0, `${bodyStyle}/${round}: inward skin`);
       assert.ok([...edges.values()].every((e) => e.count === 2 && e.direction === 0), `${bodyStyle}/${round}: open or inconsistent skin`);
       const anchors = X.bodyAnchors(null, bodyStyle, undefined, round);
@@ -335,5 +336,21 @@ test("Blender noses retain seated wing mounts and suspension roots", () => {
     assert.deepEqual(rows.filter(r=>r.fail && r.a==="frontWing" && ["chassis","aeroFlaps"].includes(r.b)),[],`${bodyStyle}: main wing attachment`);
     assert.deepEqual(rows.filter(r=>r.fail && r.check==="PENETRATION" && r.a==="suspension" && r.b==="chassis"),[],`${bodyStyle}: suspension roots buried in the nose`);
     if (bodyStyle === "senzo") assert.deepEqual(rows.filter(r=>r.fail && r.check==="PENETRATION" && r.a==="bodyDetail" && r.b==="sidepods"),[],"Senzo must not stack the supplier duct inside its triangular inlet");
+  }
+});
+
+test("Caldra bathtub and Talven waterslide are recessed emitted roofs with different widths and depths", () => {
+  for (const smooth of [false, true]) for (const [bodyStyle, minimumDepth, shoulderU] of [
+    ["caldra", .035, .91], ["talven", .070, .78],
+  ]) {
+    const X = smooth ? Shaded : Car3D;
+    const m = X.build(team.color, team.color2, { noWheels: true, measure: true, smooth, teamId: team.id, livery: { bodyStyle } });
+    const p = X.bodyAnchors(null, bodyStyle, undefined, smooth).podAt(-.38);
+    const roof = u => Math.max(...verticalHits(m, m.podSkin, p.inner + (p.x - p.inner) * u, -.38));
+    const datum = u => p.innerTop + (p.top - p.innerTop) * u;
+    assert.ok(datum(.50) - roof(.50) > minimumDepth, `${bodyStyle}/${smooth}: roof is flat instead of recessed`);
+    assert.ok(roof(shoulderU) > roof(.50) + .015, `${bodyStyle}/${smooth}: outer roof shoulder lost`);
+    if (bodyStyle === "caldra") assert.ok(datum(.75) - roof(.75) > .03, "Caldra needs a broad hollow");
+    else assert.ok(datum(.30) - roof(.30) < .07, "Talven must keep its narrower channel");
   }
 });

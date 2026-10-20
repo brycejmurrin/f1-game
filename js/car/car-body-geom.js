@@ -1423,12 +1423,14 @@ const CarBodyGeom = (function () {
     delta: { span: [.98,1.05,1.20,1.15,.96,.82,.78,.79,.85], depth: [.012,.025,.045,.055,.07,.06,.04,.02,.012] },
     serpent: { span: [1,.98,1.18,1.04,.70,.66,.86,.88,.86], depth: [.012,.02,.04,.08,.11,.12,.07,.025,.012] },
     // Independent recipes: keep the shared reference-body profiles above intact.
-    caldra: { shape: "rift", span: [1.08,1.08,1.35,1.15,.70,.55,.55,.65,.80], depth: [.015,.035,.10,.14,.15,.12,.08,.03,.012] },
-    rovik: { shape: "keel", span: [1.10,1.12,1.15,1.10,1.06,1,1,.98,.95], roofDrop: .04 },
-    senzo: { shape: "delta", span: [.98,1.05,1.40,1.40,1.20,1,.78,.60,.65], depth: [.012,.025,.04,.06,.075,.07,.04,.02,.012] },
-    talven: { shape: "serpent", span: [.95,1,1.16,1.04,.66,.55,1.10,1.02,.80], depth: [.012,.025,.05,.10,.14,.14,.08,.03,.012] },
-    orvex: { shape: "keel", span: [.80,.80,.86,.84,.78,.76,.75,.80,.85] },
-    nacrel: { shape: "rift", span: [1.20,1.30,1.30,1.25,1.15,1.10,1,.90,.90], depth: [.012,.015,.025,.035,.05,.045,.03,.02,.012] },
+    // Roof relief is measured normal to the pod top; Caldra's broad hollow and
+    // Talven's narrow channel keep distinct sections, not merely different spans.
+    caldra: { shape: "rift", span: [1.08,1.08,1.35,1.15,.70,.55,.55,.65,.80], depth: [.015,.035,.10,.14,.15,.12,.08,.03,.012], channel: [.35,.84,.062] },
+    rovik: { shape: "keel", span: [1.10,1.12,1.15,1.10,1.06,1,1,.98,.95], roofDrop: .065 },
+    senzo: { shape: "delta", span: [1.02,1.10,1.40,1.36,1.12,.88,.72,.66,.65], depth: [.012,.025,.04,.06,.075,.07,.04,.02,.012], roof: [.045,.06,.055,.02,-.035,-.08,-.10,-.065,0] },
+    talven: { shape: "serpent", span: [.95,1,1.16,1.04,.66,.55,1.10,1.02,.80], depth: [.012,.025,.05,.10,.14,.14,.08,.03,.012], channel: [.38,.66,.105], roof: [0,0,0,0,0,.015,.02,.01,0] },
+    orvex: { shape: "keel", span: [.66,.68,.72,.70,.64,.65,.70,.76,.85], roofDrop: .012 },
+    nacrel: { shape: "rift", span: [1.20,1.30,1.30,1.25,1.15,1.10,1,.90,.90], depth: [.012,.015,.025,.035,.05,.045,.03,.02,.012], roofDrop: .105 },
   });
   // Shape only opt-in bodies, AFTER supplier downwash. Interpolate the original
   // station floors explicitly: the legacy clamp's tables have only seven Z keys.
@@ -1441,7 +1443,8 @@ const CarBodyGeom = (function () {
       const p = sampleStations(stations, z), f = sampleStations(floors, z);
       p.outer = Math.min(0.88, p.inner + Math.max(f.width, (p.outer - p.inner) * recipe.span[i]));
       const roofDrop = recipe.roofDrop || (shape === "keel" ? 0.018 : shape === "delta" || shape === "serpent" ? 0.006 : 0);
-      p.innerTop -= roofDrop; p.outerTop -= roofDrop;
+      p.innerTop += (recipe.roof ? recipe.roof[i] : 0) - roofDrop;
+      p.outerTop += (recipe.roof ? recipe.roof[i] : 0) - roofDrop;
       for (const edge of ["inner", "outer"]) {
         const b = edge + "Bottom", t = edge + "Top";
         p[t] = Math.min(POD_TOP_MAX, p[t]);
@@ -1476,6 +1479,14 @@ const CarBodyGeom = (function () {
       [x,b+h*.94], [x-w*(profile === "delta" ? .28 : .10),p.outerTop],
       [p.inner+w*.25,p.innerTop], [p.inner,p.innerTop]];
     if (profile === "rift") ring.splice(8,1);   // one continuous silver inner-roof facet
+    if (recipe.channel) {
+      const [lo,hi,d] = recipe.channel, fade = Math.sin(Math.PI * index / 8);
+      const roofAt = (u) => p.innerTop + (p.outerTop - p.innerTop) * u;
+      // Keep a finite shoulder at either side and a closed, recessed roof.
+      const y = (u) => Math.max(p.innerBottom + .08, roofAt(u) - d * fade);
+      ring.splice(8, ring.length - 9, [p.inner+w*(hi+.05),roofAt(hi+.05)],
+        [p.inner+w*hi,y(hi)], [p.inner+w*lo,y(lo)], [p.inner+w*(lo-.05),roofAt(lo-.05)]);
+    }
     return ring;
   }
   // Ear clipping, rather than a centre fan: the recessed ring is concave.
