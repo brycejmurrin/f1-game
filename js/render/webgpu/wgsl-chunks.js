@@ -578,7 +578,8 @@ struct DrawU {
                               //         lamp cull, bit-exact (see the lamp loop); each mask
                               //         float holds a 24-bit integer exactly. All-ones
                               //         (16777215) = unmasked, the default for every draw.
-  lampRange : vec4<f32>,      // off 128 (chunkLampIdx offset, count, per-chunk-active flag, pad)
+  lampRange : vec4<f32>,      // off 128 (chunkLampIdx offset, count, per-chunk-active flag,
+                              //          packDraw: 0 = no fragment can take a pack material)
 };                            // size 144
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
@@ -963,17 +964,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // same aniso, same quad divergence at material seams (GLX ships it).
   // matUvLit(16) is the road UV (road is not wall-like, same wpos.xz/sc),
   // so the road folds into the same lookup. Identity layers (0/3/15) still
-  // sample — the result is select()ed away, keeping the call unconditional.
+  // sample — the result is select()ed away. The whole tap pair (below the
+  // derivatives) is skipped on a UNIFORM gate (GLX matTexUV's early return): pack off, or a draw whose
+  // mesh holds no pack material (cars 20-40, identity-only props — wgx.js
+  // _packDraw). Both readers ignore the pack then (hoisted needs packOn and
+  // a 1..16 mid), so the gate is pixel-identical.
   let topNgeo = normalize(in.nrm);
   let identPack = vec4<f32>(0.5, 0.5, 0.5, 0.5);
   let packOn = F.params8.w > 0.001;
   let midClamp = clamp(i32(vMatId + 0.5), 0, 16);
   let isIdentMat = midClamp == 0 || midClamp == 3 || midClamp == 15;
   let uvSel = matUvLit(midClamp, topNgeo, in.wpos);
-  let sampAlbedo = textureSample(matAlbedoTex, matSamp, uvSel, midClamp);
-  let sampNormal = textureSample(matNormalTex, matSamp, uvSel, midClamp);
-  let litPack = select(sampAlbedo, identPack, isIdentMat);
-  let litNrm = select(sampNormal, identPack, isIdentMat);
   // GLX takes dFdx(N) AFTER orange-peel + applyMaterialNormal. The matId
   // bump is non-uniform — a dpdx after that branch is the NaN-white-road
   // class. Peel is a function of interpolators only, so hoist it here
@@ -997,6 +998,16 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let Npeel = paintPeelN(topNgeo, in.objPos, vDist, peelAmt);
   let saaDxPeel = dpdx(Npeel);
   let saaDyPeel = dpdy(Npeel);
+  // The gated pack taps sit AFTER every derivative (the first branch of
+  // fs_main must follow the last dpdx) and before any non-uniform branch.
+  var sampAlbedo = identPack;
+  var sampNormal = identPack;
+  if (packOn && D.lampRange.w > 0.5) {
+    sampAlbedo = textureSample(matAlbedoTex, matSamp, uvSel, midClamp);
+    sampNormal = textureSample(matNormalTex, matSamp, uvSel, midClamp);
+  }
+  let litPack = select(sampAlbedo, identPack, isIdentMat);
+  let litNrm = select(sampNormal, identPack, isIdentMat);
   // Floor + terrain only. The 1600 m scenery slab is skipped on WGX
   // (G.roadLutReady); a screen-footprint "slab" test also punched long
   // barrier / grandstand faces that sit on the ribbon.
@@ -1564,12 +1575,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Tile atlas: the indirection names this tile's slot (empty -> live loop);
   // the slot's gutter holds the neighbours, so the bilinear tap matches the
   // full grid and never crosses slots. Bounce = the same slot + 0.5 v.
+  // Taps gated like GLX (glsl-lit.js): no bake, a non-upward normal or an
+  // out-of-grid fragment skips the load and both samples. Outside the gate
+  // bSlot stays -1, so bIn is false and bakeW 0; at N.y <= 0.55 the weight
+  // was smoothstep(0.55, ...) == 0 anyway, so the colour adds are unchanged.
   let bG = bUv * F.bakeD.xy;
   let bTile = clamp(floor(bG), vec2<f32>(0.0), max(F.bakeD.xy - 1.0, vec2<f32>(0.0)));
-  let bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
-  let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
-  let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
-  let bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
+  var bSlot = vec2<f32>(-1.0);
+  var bT = vec4<f32>(0.0);
+  var bB = vec3<f32>(0.0);
+  if (F.bakeB.w > 0.5 && N.y > 0.55 && all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0))) {
+    bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
+    if (bSlot.x >= 0.0) {
+      let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
+      bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
+      bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
+    }
+  }
   let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0)) && bSlot.x >= 0.0;
   let bakeW = select(0.0, smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(in.wpos.y - bT.a))),
                      F.bakeB.w > 0.5 && bIn);
