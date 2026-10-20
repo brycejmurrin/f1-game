@@ -688,6 +688,17 @@ const Parts = (function () {
       {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}],
     ["aero", "medium", "style_aero_bridge", "Bridge Wing", "2008 bridge wing over the nose (McLaren MP4-23)",
       {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }],
+    // B·D3c concept-sheet wings (2026-10-20): RIFT / KEEL / DELTA / SERPENT, each
+    // pairing with the body shell of the same name. Opt-in shape fields
+    // (car-body-geom.js shapeLift / EP_SHAPES): absent = shipped mesh.
+    ["aero", "high", "style_aero_rift", "Rift Wing", "stepped front flaps, raked endplates with accent tips, kicked-up rear tips",
+      { fwStep: 0.05, epShape: 1, epTip: 2, rwCurve: 0.035, frontRise: 0.02, frontSweep: 0.06 }],
+    ["aero", "medium", "style_aero_keel", "Keel Wing", "straight three-element front and a flat, straight rear wing",
+      { wsFlat: 1, epShape: 4, frontSweep: 0, frontRise: 0, frontTaper: 1.0, rearSweep: 0, rearTaper: 1.0, casc: 0, gill: 0 }],
+    ["aero", "diffuser", "style_aero_delta", "Delta Wing", "flaps sweeping up into tall endplates, delta-tipped rear wing",
+      { fwCurve: 0.06, frontRise: 0.10, epShape: 2, rwRise: 0.035, rwCurve: 0.045, rearSweep: 0.06 }],
+    ["aero", "rake_setup", "style_aero_serpent", "Serpent Wing", "flaps curling up to the endplates, dipped-centre spoon rear wing",
+      { fwCurve: 0.09, frontRise: 0.03, epShape: 3, rwRise: 0.02, rwCurve: 0.06, rearSweep: 0.10, rearTaper: 0.86 }],
     ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",
       {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }],
   ];
@@ -718,7 +729,9 @@ const Parts = (function () {
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin",
         // B·D3 period aero opt-in fields: absent = shipped mesh.
-        "rwSpoon", "beam2", "fwBridge"]),
+        "rwSpoon", "beam2", "fwBridge",
+        // B·D3c concept-sheet shape fields: absent = shipped mesh.
+        "fwCurve", "fwStep", "epShape", "epTip", "wsFlat", "rwRise", "rwCurve"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
         "pullAt", "antiDive", "upright"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),

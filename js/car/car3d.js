@@ -155,7 +155,7 @@ const Car3D = (function () {
     styledNoseStations, bodySpan, haloHoopPath,
     endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
     noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
-    buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard,
+    buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift,
     FIN_SHAPES, FIN_SHAPE_IDS, FIN, sharkFinRoot, sharkFinPanel, sharkFinBadge, finOf, finTop,
     COVER_VENT_IDS, SPINE_HEIGHT_IDS, spineRise, COVER_STACK,
     coverProfile, coverFlankX, coverSurfaceY, COVER_CROWN,
@@ -1698,7 +1698,11 @@ const Car3D = (function () {
     const aeroT = tier("aero");
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
-    const ws = wingOf(teamStyle);
+    // wsFlat (B·D3c KEEL, opt-in): drop the team's twist / curl / ears so the
+    // cascade reads as straight planks.
+    const ws = aeroStyle && aeroStyle.wsFlat
+      ? Object.assign({}, wingOf(teamStyle), { twist: 0, teCurve: 0, chordTaper: 0, tipRise: 0, flaps: 2, canard: 0 })
+      : wingOf(teamStyle);
     out.flapInfo = { aLvl, style: Object.assign({}, aeroStyle, { wingStyle: ws }), col: wingCol,
       finish: CarMaterials.finishOf(liv, "wingFinish"), surface: wingCarbon ? "carbon" : "paint" };
 
@@ -1744,6 +1748,7 @@ const Car3D = (function () {
         rise: frontRise * (0.65 + i * 0.12) + extra.tipRise,
         attachHalf: fwHalf + 0.03,
         twist: extra.twist, teCurve: extra.teCurve, chordTaper: extra.chordTaper,
+        ...shapeLift(aeroStyle, "front"),
       }, i === 0 ? c1 : wingCol, i === 0 ? SURFACES.paint : wingSurf);
     }
     const aPlate = Math.max(0, Math.min(3, Math.round(
@@ -1824,6 +1829,14 @@ const Car3D = (function () {
           { z: 2.58, x: epX + s * 0.012, y: 0.135 + PLATE.hF * 0.5 + 0.006, w: 0.040, h: 0.014, t: 0.45 },
           { z: 2.02, x: epX + s * epKick, y: 0.245 + PLATE.hR * 0.5 - 0.004, w: 0.044, h: 0.012, t: 0.40 },
           0.006, c2);
+      }
+      // epTip (B·D3c RIFT, opt-in): an accent cap sleeved over the plate's
+      // trailing top corner, 3 mm proud each side so it never z-fights the plate.
+      if (aeroStyle.epTip) {
+        const topR = 0.245 + PLATE.hR * 0.5, topM = 0.190 + archN * 0.008 + ((PLATE.hF + PLATE.hR) * 0.5 + archN * 0.038) * 0.5;
+        const k = (2.12 - 1.98) / (2.30 - 1.98), topK = topR + (topM - topR) * k;
+        addSpan(out, { z: 2.12, x: epX + s * epKick * (0.42 + 0.58 * (1 - k)), y: topK - 0.040, w: epW * 0.88 + 0.006, h: 0.080 },
+                     { z: 1.975, x: epX + s * epKick, y: topR - 0.050, w: epW * 0.88 + 0.006, h: 0.100 }, accentC);
       }
       // Canard / dive-plane: first element is a horizontal strake on the
       // outer face (the 2026 flick); extras stay as the older cascade vanes.
@@ -1967,12 +1980,16 @@ const Car3D = (function () {
       const rearTaper = Math.max(0.72, Math.min(1.08, aeroStyle.rearTaper));
       const crownY = _ep.rear.top - 0.018;
       const upperTrailY = crownY - (aLvl >= 4 || aDrs ? 0.075 : 0);
-      const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale) =>
+      const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale, lift) =>
         addWingFoil(out, {
           zLead, yLead, zTrail, yTrail, half, thick,
           taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: 0,
-          attachHalf: 0.50,
+          attachHalf: 0.50, ...lift,
         }, col, wingSurf);
+      // B·D3c rear tip lift (rwRise + rwCurve): the main plane takes the same
+      // lift as the flown RW Flap (solveFlapsGeom), and each endplate grows a
+      // tip fin over the wing's chord to meet the raised tips.
+      const rLift = shapeLift(aeroStyle, "rear"), rTip = (rLift.rise || 0) + (rLift.rise2 || 0);
       // rwSpoon (opt-in, 0 = shipped): the 2022 SPOON main plane (Ferrari
       // F1-75, Red Bull RB18 low-drag): deep chord at the centre, scooped-down
       // narrow tips. Absent keeps the shipped call exactly.
@@ -1984,7 +2001,17 @@ const Car3D = (function () {
         teCurve: 0.05 * aSpoon, attachHalf: 0.50,
       }, c1, wingSurf);
       else rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
-        0.51, 0.024, c1, 0.8);
+        0.51, 0.024, c1, 0.8, rLift);
+      if (rTip > 0) for (const s of [-1, 1]) {
+        const zM = -2.22, f = (zM - _ep.front.z) / (_ep.rear.z - _ep.front.z);
+        const topM = _ep.front.top + (_ep.rear.top - _ep.front.top) * f, ov = 0.012;
+        const fin = (z, top, h) => ({ z, x: s * 0.50, y: top - ov + (h + ov) / 2, w: 0.036, h: h + ov });
+        addSpan(out, fin(_ep.front.z - 0.02, _ep.front.top + (topM - _ep.front.top) * 0.08, 0.004), fin(zM, topM, rTip * 0.80), endplateC || DARK);
+        addSpan(out, fin(zM, topM, rTip * 0.80), fin(_ep.rear.z, _ep.rear.top, rTip + 0.006), endplateC || DARK);
+        if ((aeroStyle.epTip || 0) >= 2) addSpan(out,
+          { z: -2.50, x: s * 0.50, y: _ep.rear.top + rTip - 0.030, w: 0.042, h: 0.064 },
+          { z: _ep.rear.z - 0.004, x: s * 0.50, y: _ep.rear.top + rTip - 0.030, w: 0.042, h: 0.064 }, accentC);
+      }
       // Preview sharkfin (2017 style): the fin runs on as a sail whose foot ends
       // 8 mm into the main plane, instead of a 30 cm cut face 0.45 m short of the
       // wing. foilAt is the main plane's own section (same spec as rearWing above),

@@ -238,10 +238,21 @@ const CarBodyGeom = (function () {
     // adds the curled lip below), the 2026 field's signature endplate.
     { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
   ];
+  // B·D3c concept-sheet endplates (aero `epShape`, opt-in; absent = the
+  // `plate` table above). Heights stay inside FRONT_PLATE's own range.
+  // 1 RIFT: low nose, raked-up tail. 2 DELTA: tall, for up-swept flaps.
+  // 3 SERPENT: rolled crown over curled flaps. 4 KEEL: short square plate.
+  const EP_SHAPES = [null,
+    { hF: 0.14, hR: 0.46, kick: 0.040, footW: 0.12, footZ: 0.54, arch: 0 },
+    { hF: 0.28, hR: 0.54, kick: 0.050, footW: 0.13, footZ: 0.56, arch: 1 },
+    { hF: 0.22, hR: 0.48, kick: 0.080, footW: 0.14, footZ: 0.58, arch: 1, roll: 1 },
+    { hF: 0.18, hR: 0.30, kick: 0.020, footW: 0.10, footZ: 0.50, arch: 0 },
+  ];
   function frontPlateGeom(aLvl, aero) {
     const lvl = aLvl == null ? 2 : aLvl;
     const pick = aero && aero.plate != null ? aero.plate : 1;
-    const P = FRONT_PLATE[Math.max(0, Math.min(3, Math.round(pick)))];
+    const shape = aero && aero.epShape ? EP_SHAPES[Math.max(1, Math.min(4, Math.round(aero.epShape)))] : null;
+    const P = shape || FRONT_PLATE[Math.max(0, Math.min(3, Math.round(pick)))];
     const half = frontHalf(lvl);
     const w = lvl >= 4 ? 0.060 : (lvl <= 0 ? 0.028 : 0.044);
     const x = half + 0.03;
@@ -530,6 +541,9 @@ const CarBodyGeom = (function () {
              st0.rearSweep, st0.rearTaper, st0.drs || 0,
              w.twist || 0, w.teCurve || 0, w.chordTaper || 0, w.tipRise || 0]
         .map((v) => +v || 0).join(",");
+      // B·D3c shape fields join the key only when set, so shipped keys keep their text.
+      const ext = [st0.fwCurve, st0.fwStep, st0.rwRise, st0.rwCurve].map((v) => +v || 0);
+      if (ext.some((v) => v)) sig += "|" + ext.join(",");
       _flapSig.set(st0, sig);
     }
     return sig;
@@ -549,6 +563,16 @@ const CarBodyGeom = (function () {
     }
     if (!byLvl) _flapByStyle.set(st0, byLvl = new Map());
     byLvl.set(aLvl, hit); return hit;
+  }
+  // B·D3c tip lift, applied to EVERY element of a wing alike so the slots
+  // between elements keep their gap at every span station. Front: fwCurve
+  // (quadratic curl) + fwStep (stepped flaps). Rear: rwRise (linear) +
+  // rwCurve (quadratic). Returns {} when unset, so shipped specs stay as they were.
+  function shapeLift(st, wing) {
+    const c = Math.max(0, Math.min(0.14, +(wing === "front" ? st.fwCurve : st.rwCurve) || 0));
+    const r = Math.max(0, Math.min(0.10, +(wing === "front" ? st.fwStep : st.rwRise) || 0));
+    if (!c && !r) return {};
+    return wing === "front" ? { rise2: c, riseStep: r } : { rise: r, rise2: c };
   }
   function solveFlapsGeom(aLvl, style) {
     // A style must be a RECIPE OBJECT (see aeroStyleOf). Anything else — most
@@ -577,14 +601,14 @@ const CarBodyGeom = (function () {
                                           xAngle: out[out.length - 1].xAngle })
         : null;
       const extra = wingFoilOf(st, i);
-      out.push(hinged("front" + i, "front", e[0], e[1], e[2], e[3], {
+      out.push(hinged("front" + i, "front", e[0], e[1], e[2], e[3], Object.assign({
         half: fwHalf * e[4], thick: e[5], taper: frontTaper,
         sweep: frontSweep * (0.75 + i * 0.10),
         rise: frontRise * (0.65 + i * 0.12) + extra.tipRise,
         attachHalf: fwHalf + 0.03,
         upsweep: i === els.length - 1 && (wingOf(st).flaps || 3) >= 3 ? { fwHalf, e } : null,
         twist: extra.twist, teCurve: extra.teCurve, chordTaper: extra.chordTaper,
-      }, prev));
+      }, shapeLift(st, "front")), prev));
     }
     const ep = endplateGeom(a, st), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
@@ -597,7 +621,8 @@ const CarBodyGeom = (function () {
     // the RW Flap too, so it flies with it, in the livery's rearWing colour.
     if (st.drs || 0) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
     for (const el of rearFlap(stack, rearMain)) {
-      out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 }));
+      out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 },
+        shapeLift(st, "rear")));
     }
     return out;
   }
@@ -610,12 +635,20 @@ const CarBodyGeom = (function () {
       half: el.half, thick: el.thick, taper: el.taper,
       sweep: el.sweep, rise: el.rise, attachHalf: el.attachHalf,
       twist: el.twist, teCurve: el.teCurve, chordTaper: el.chordTaper,
+      rise2: el.rise2, riseStep: el.riseStep,
     }, col, surface === "carbon" ? SURFACES.carbon : SURFACES.paint);
     if (el.upsweep) {
       const { fwHalf, e } = el.upsweep;
+      // The ears ride the B·D3c tip lift (0 when unset) at their own span station.
+      const half = fwHalf * e[4], inner = half * 0.34, r2 = el.rise2 || 0, rs = el.riseStep || 0;
+      const lift = (x) => {
+        const g = Math.min(1, Math.max(0, (x - inner) / (half - inner)));
+        return r2 * g * g + rs * Math.min(1, g * 2);
+      };
+      const l0 = r2 || rs ? lift(half - 0.05) : 0, l1 = r2 || rs ? lift(half) : 0;
       for (const sgn of [-1, 1]) {
-        addSpan(out, { z: e[2], x: sgn * (fwHalf * e[4] - 0.05), y: e[3], w: 0.16, h: e[5] * 1.5 },
-                     { z: e[2] - 0.04, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085, w: 0.09, h: e[5] * 1.6 }, col);
+        addSpan(out, { z: e[2], x: sgn * (fwHalf * e[4] - 0.05), y: e[3] + l0, w: 0.16, h: e[5] * 1.5 },
+                     { z: e[2] - 0.04, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085 + l1, w: 0.09, h: e[5] * 1.6 }, col);
       }
     }
     for (let i = 0; i < out.pos.length; i += 3) {
@@ -668,7 +701,7 @@ const CarBodyGeom = (function () {
     // drawAeroFlaps hangs it at with the wing closed.
     const spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
                    half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
-                   rise: fg.rise, attachHalf: fg.attachHalf };
+                   rise: fg.rise, attachHalf: fg.attachHalf, rise2: fg.rise2, riseStep: fg.riseStep };
     const elem = fg.id, ca = Math.cos(fg.zAngle), sa = Math.sin(fg.zAngle);
     const pose = (p) => {
       const dy = p.y + p.h - fg.y, dz = p.z - fg.z;
@@ -1552,7 +1585,7 @@ const CarBodyGeom = (function () {
       styledNoseStations, bodySpan, haloHoopPath,
       endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
       noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
-      buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard,
+      buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift,
       FIN_SHAPES, FIN_SHAPE_IDS, FIN, sharkFinRoot, sharkFinPanel, sharkFinBadge, finOf, finTop,
       COVER_VENT_IDS, SPINE_HEIGHT_IDS, spineRise, COVER_STACK,
       coverProfile, coverFlankX, coverSurfaceY,
