@@ -134,7 +134,7 @@ const CustomLiveries = (function () {
       "sunTint", "bandTint2", "plateTint",
       "saddleTint", "coverBind", "finHandoff", "bodySplit", "lower", "upper",
     "patternTint", "patternSecond", "patternPlacement", "patternSide", "patternWidth", "patternRepeat",
-    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "coverFinish", "wingFinish", "haloFinish",
+    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "patternKey", "decalNoseTip", "decalCockpit", "decalPodTop", "decalHalo", "coverFinish", "wingFinish", "haloFinish",
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
     "podFinish", "finFinish", "mirrorFinish", "helmetStyle", "endplate", "crestStyle",
     "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
