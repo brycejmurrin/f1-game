@@ -400,6 +400,14 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/trace-car.mjs** | Trace the ISOLATED car into SVG: carview beauty + empty-stage plate -> exact matte -> contours + interior edges. | garage-parts-livery |
 | **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
 
+### `tools/garage/`
+
+Blender authoring and deterministic runtime motion exports for the garage crew.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **garage/author-crew-motion.py** | Authors editable Blender garage guide actions and exports deterministic runtime motion curves. | — |
+
 ### `tools/ui/`
 
 Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) they share.

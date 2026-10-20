@@ -132,7 +132,7 @@ const GarageArrival = (function () {
     const back = ease((t - DOOR_S - IN_LANE - IN_PAUSE) / IN_BACK);
     const p = back > 0 ? pathAt(OUT_PATH * (1 - back), side)
       : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
-    return shot({ active: t < DURATION, crew: config.enterCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+    return shot({ active: t < DURATION, seconds: t, direction: "in", calm, crewClear: 1 - ease((t - (DURATION - .6)) / .3), crew: config.enterCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
       label: t < DOOR_S ? "OPENING GARAGE" : t < DURATION - 0.3 ? "BRINGING CAR IN" : "READY FOR WORK" },
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
@@ -177,7 +177,7 @@ const GarageArrival = (function () {
       e = [eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, eye[2] + HOLD_PUSH * k];
       aim[0] -= side * 2.2 * k;
     }
-    return shot({ active: t < OUT_DURATION, crew: config.leaveCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+    return shot({ active: t < OUT_DURATION, seconds: t, direction: "out", calm, crewClear: ease((t - (DOOR_S + OUT_HOLD - .3)) / .3), crew: config.leaveCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
       label: opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
   }
   function create($, reducedMotion, readSettings = () => DEFAULT) {

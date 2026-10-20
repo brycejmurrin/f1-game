@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -23,11 +24,11 @@ function load() {
   const draws = [], meshes = [], freed = [];
   const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length, d }; meshes.push(mesh); return mesh; }, freeMesh: (mesh) => freed.push(mesh), draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
-  return { Crew, Arrival, draws, meshes, freed };
+  return { Crew, Arrival, draws, meshes, freed, Motion: vm.runInContext("GarageCrewMotion", ctx) };
 }
 const LIV = { c1: [1, 0.5, 0], c2: [0.1, 0.1, 0.1] };
 
@@ -86,7 +87,7 @@ test("design-preview crew looks: each builds valid, distinct geometry; classic s
   const meshes = [];
   const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
@@ -120,7 +121,7 @@ test("pit-stop front jack: saddle seated on each chassis' nose underside, clear 
   const STYLES = { base: {}, droop: { noseDroop: -0.03, noseSlim: 0.84 }, long: { noseTipZ: 0.55 }, short: { noseTipZ: -0.32, noseDroop: 0.04 } };
   const Car3D = { CHASSIS: { nose: [{ z: 2.60, y: 0.245, h: 0.072 }, { z: 2.00, y: 0.315, h: 0.235 }] }, teamStyleOf: (id) => STYLES[id] || {}, bodyStyleKey: (t, b) => b || t };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Car3D, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx); Crew.setLook("pitstop");
@@ -209,7 +210,7 @@ test("animation crew overrides do not overwrite the garage crew selection", () =
   Crew.setLook("workshop");
   const pose = Arrival.poseOut(1.8, Arrival.settings({ leaveCrew: "guides" }), true);
   Crew.draw(LIV, [-3, 2, -4], pose);
-  assert.equal(draws.length, 4, "two guides, lollipop marshal and pole");
+  assert.equal(draws.length, 26, "two articulated guides, lollipop marshal and pole");
   assert.equal(Crew.look(), "workshop", "Team-tab preference is unchanged");
   draws.length = 0;
   Crew.draw(LIV, [-3, 2, -4], { ...pose, crew: "welcome" });
@@ -229,7 +230,7 @@ test("service crews hand over to already-built guides while the car moves", () =
     const service = draws[0].mesh, count = meshes.length;
     for (const pose of [Arrival.pose(4, Arrival.DEFAULT, true), Arrival.poseOut(4, Arrival.DEFAULT, true)]) {
       draws.length = 0; Crew.draw(LIV, [-3, 2, -4], pose);
-      assert.equal(draws.length, 4, look + ": guiding crew during motion");
+      assert.equal(draws.length, 26, look + ": articulated guiding crew during motion");
       assert.ok(draws.every((d) => d.mesh !== service), look + ": no jack or cockpit worker in the car path");
       assert.equal(meshes.length, count, look + ": handover creates no meshes per frame");
     }
@@ -237,4 +238,77 @@ test("service crews hand over to already-built guides while the car moves", () =
     Crew.draw(LIV, [-3, 2, -4], Arrival.pose(Arrival.DURATION, Arrival.DEFAULT, true));
     assert.equal(draws[0].mesh, service, look + ": service crew returns when parked");
   }
+});
+
+test('Blender motion keeps contact feet planted and returns both feet to rest', () => {
+  const { Motion } = load(), a = new Float32Array(7), b = new Float32Array(7);
+  assert.equal(Motion.sampleCount, 25);
+  Motion.sample(0, a); Motion.sample(1, b);
+  for (let i = 0; i < 4; i++) assert.ok(Math.abs(a[i] - b[i]) < 1e-6);
+  let plants = 0, lift = 0;
+  const back = u => u * u * (3 - 2 * u);
+  for (let k = 0; k < 24; k++) {
+    const u = k / 24, v = (k + 1) / 24; Motion.sample(u, a); Motion.sample(v, b);
+    for (let f = 0; f < 4; f += 2) {
+      lift = Math.max(lift, a[f] - .08);
+      if (Math.abs(a[f] - .08) < 1e-5 && Math.abs(b[f] - .08) < 1e-5) {
+        assert.ok(Math.abs((a[f + 1] - 1.35 * back(u)) - (b[f + 1] - 1.35 * back(v))) < .001, 'planted foot stays in world space'); plants++;
+      }
+    }
+  }
+  assert.ok(plants >= 5); assert.ok(lift > .06);
+});
+
+test('articulated guide playback reuses meshes, clears the car and keeps boots on the floor', () => {
+  const { Crew, Arrival, draws, meshes, freed } = load(); Crew.setLook('workshop');
+  const config = Arrival.settings({ enterCrew: 'guides', leaveCrew: 'guides' });
+  Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(0, config, false)); const built = meshes.length;
+  let first = null, changed = false;
+  for (let t = 0; t < 9; t += .1) {
+    draws.length = 0; Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(t, config, false));
+    assert.equal(draws.length, 26, 'bounded rigid-part draw count'); assert.equal(meshes.length, built, 'no per-frame mesh generation');
+    for (const d of draws) assert.ok(d.m.every(Number.isFinite));
+    const leg = draws[2].m; if (!first) first = leg; else changed ||= leg.some((v,i) => Math.abs(v-first[i]) > .01);
+    for (const d of draws.slice(0, 24)) for (let i = 0; i < d.mesh.d.pos.length; i += 3) {
+      const p = d.mesh.d.pos, m = d.m, x = m[0]*p[i]+m[4]*p[i+1]+m[8]*p[i+2]+m[12];
+      assert.ok(Math.abs(x) > 1.1, 'guide mesh stays outside the car corridor');
+    }
+    for (const d of [draws[4], draws[9], draws[16], draws[21]]) {
+      // Flat boot meshes: the lower face touches ground during contact and lifts only during a swing.
+      const y = d.m[13] - .08; assert.ok(y > -1e-5 && y < .1);
+    }
+  }
+  assert.ok(changed, 'limb transforms actually move'); assert.equal(Crew.look(), 'workshop');
+  Crew.free(); assert.equal(freed.length, built, 'all cached articulated parts released once');
+});
+
+test('reduced motion holds guide gestures while marshal raises smoothly before departure', () => {
+  const { Crew, Arrival, draws } = load(), cfg = Arrival.settings({ leaveCrew: 'guides' });
+  const frames = [];
+  for (const t of [4, 5]) { draws.length = 0; Crew.draw(LIV, [-3,2,-4], Arrival.poseOut(t,cfg,true)); frames.push(draws.slice(0,24).map(d=>d.m)); }
+  assert.deepEqual(frames[0], frames[1], 'decorative cue loop and bob are held under reduced motion');
+  const angle = t => Crew.layout(Arrival.poseOut(t,cfg,false),-1).lollipop.raise;
+  assert.equal(angle(2.5),Crew.LOWERED); assert.ok(angle(2.75)>Crew.LOWERED && angle(2.75)<Crew.RAISED);
+  assert.ok(Math.abs(angle(2.9)-Crew.RAISED)<1e-6, 'board clears before the car starts rolling');
+});
+
+test('runtime motion export matches the current Blender authoring source', () => {
+  const digest = createHash('sha256').update(read('tools/garage/author-crew-motion.py')).digest('hex');
+  assert.ok(read('js/garage/crew-motion.js').includes('Source SHA256: ' + digest), 'regenerate Blender curves after authoring edits');
+});
+
+test('actual articulated boot transforms plant in both world axes during retreat', () => {
+  const { Crew, Arrival, Motion, draws } = load();
+  const cfg = Arrival.settings({ leaveCrew: 'guides' }), a = new Float32Array(7); let prev = null, contacts = 0;
+  for (let k = 0; k <= 24; k++) {
+    const u = k / 24; draws.length = 0;
+    Crew.draw(LIV, [-3,2,-4], { ...Arrival.poseOut(u*1.8,cfg,true), door:u });
+    Motion.sample(u,a);
+    const feet = [draws[4],draws[9],draws[16],draws[21]].map(d=>[d.m[12],d.m[13],d.m[14]]);
+    if (prev) for (let i=0;i<4;i++) if (Math.abs(feet[i][1]-.08)<1e-5 && Math.abs(prev[i][1]-.08)<1e-5) {
+      assert.ok(Math.hypot(feet[i][0]-prev[i][0],feet[i][2]-prev[i][2])<.001,'ground contact cannot slide sideways or forward');contacts++;
+    }
+    prev=feet;
+  }
+  assert.ok(contacts>=10);
 });

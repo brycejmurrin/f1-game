@@ -13,7 +13,7 @@ const GarageCrew = (function () {
   const OPTS = { roughness: 0.9, metalness: 0.02, specular: 0.12, clearcoat: 0 };
   const BOOT = [0.06, 0.06, 0.07], VISOR = [0.05, 0.06, 0.08];
   // WHERE THEY STAND (bay metres: x right, z toward the door at 6.4).
-  const MECH_X0 = 1.55, MECH_X1 = 2.9, MECH_Z0 = 2.6, MECH_Z1 = 3.0;   // beside the nose → stepped back
+  const MECH_X0 = 1.55, MECH_X1 = 2.9, MECH_Z0 = 2.6;   // beside the nose → stepped back
   const LOLLI_X = 2.2, LOLLI_Z = 8.6;                                 // working lane, camera side
   const RAISED = 1.35, LOWERED = 0.05;                                // board pole angle above horizontal
 
@@ -68,7 +68,7 @@ const GarageCrew = (function () {
   const LOOKS = ["classic", "sculpted", "pitstop", "workshop", "welcome"];
   const GLOVE = [0.07, 0.07, 0.08], RUBBER = [0.035, 0.035, 0.04], ALLOY = [0.62, 0.63, 0.66];
   const GUN = [0.10, 0.10, 0.11], HOSE = [0.08, 0.08, 0.09], JACK = [0.72, 0.12, 0.08], BLANKET = [0.16, 0.16, 0.18];
-  let look = "classic", lookMesh = null;
+  let look = "classic", lookMesh = null, motionRig = null;
   const J0 = { foot: [0.11, 0.05, 0.03], knee: [0.11, 0.50, 0.02], hip: [0.10, 0.92, 0], pelvis: [0, 0.95, 0],
     chest: [0, 1.32, 0], neck: [0, 1.46, 0], head: [0, 1.62, 0], shoulder: [0.22, 1.38, 0],
     elbow: [0.26, 1.10, 0], hand: [0.27, 0.84, 0.03] };
@@ -272,11 +272,15 @@ const GarageCrew = (function () {
     tube(p, [1.95, 0, -0.012], [1.95, 0, 0.012], 0.24, [0.95, 0.95, 0.96], 16);   // board
     tube(p, [1.95, 0, -0.016], [1.95, 0, 0.016], 0.17, [0.86, 0.10, 0.08], 16);   // its red face
     poleMesh = gfx.createMesh(p);
+    if (style !== "classic" && style !== "welcome" && typeof GarageCrewMotion !== "undefined")
+      motionRig = GarageCrewMotion.create(gfx, c1, c2, helmet);
   }
   function free() {
     if (!gfx || !gfx.freeMesh) return 0;
     let n = 0;
     for (const mesh of [mechMesh, bodyMesh, poleMesh, lookMesh]) if (mesh) { gfx.freeMesh(mesh); n++; }
+    if (motionRig && typeof GarageCrewMotion !== "undefined") n += GarageCrewMotion.free(motionRig, gfx);
+    motionRig = null;
     mechMesh = bodyMesh = poleMesh = lookMesh = null; key = null;
     return n;
   }
@@ -295,10 +299,10 @@ const GarageCrew = (function () {
    *  side of the bay the camera stands on (sign of the eye's x). */
   function layout(pose, cam) {
     const back = ease(pose.door), out = pose.z > 0.3 || Math.abs(pose.x || 0) > 0.3;
-    const mx = MECH_X0 + (MECH_X1 - MECH_X0) * back, mz = MECH_Z0 + (MECH_Z1 - MECH_Z0) * back;
+    const mx = MECH_X0 + (MECH_X1 - MECH_X0) * back, mz = MECH_Z0;
     return {
       mechanics: [[-mx, mz, Math.PI / 2], [mx, mz, -Math.PI / 2]],      // [x, z, yaw]: facing the car
-      lollipop: { x: cam * LOLLI_X, z: LOLLI_Z, yaw: cam > 0 ? Math.PI : 0, raise: out ? RAISED : LOWERED },
+      lollipop: { x: cam * LOLLI_X, z: LOLLI_Z, yaw: cam > 0 ? Math.PI : 0, raise: Number.isFinite(pose.crewClear) ? LOWERED + (RAISED - LOWERED) * pose.crewClear : out ? RAISED : LOWERED },
     };
   }
   function init(g) {
@@ -325,7 +329,11 @@ const GarageCrew = (function () {
     // car. The already-built guides take over while it enters or leaves.
     const guides = style === "classic" || style === "sculpted" || (moving && (style === "pitstop" || style === "workshop"));
     if (guides)
-      for (const [x, z, yaw] of L.mechanics) gfx.draw(mechMesh, mk(x, 0, z, yaw, 0), opts || OPTS);
+      for (let i = 0; i < L.mechanics.length; i++) {
+        const p = L.mechanics[i];
+        if (motionRig) GarageCrewMotion.draw(motionRig, gfx, p[0], p[1], p[2], pose, i, opts || OPTS);
+        else gfx.draw(mechMesh, mk(p[0], 0, p[1], p[2], 0), opts || OPTS);
+      }
     if (lookMesh && !guides) gfx.draw(lookMesh, mk(0, 0, 0, 0, 0), opts || OPTS);
     const lp = L.lollipop;
     gfx.draw(bodyMesh, mk(lp.x, 0, lp.z, lp.yaw + Math.PI, 0), opts || OPTS);   // facing the garage

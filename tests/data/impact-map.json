@@ -6769,6 +6769,17 @@
         "tests/unit/garage-arrival.test.mjs"
       ]
     },
+    "js/garage/crew-motion.js": {
+      "draw": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "free": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "sample": [
+        "tests/unit/garage-crew.test.mjs"
+      ]
+    },
     "js/garage/experience.js": {
       "buildFacility": [
         "tests/unit/garage-mesh.test.mjs"
@@ -6912,6 +6923,9 @@
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "free": [
+        "tests/unit/garage-crew.test.mjs"
       ],
       "init": [
         "tests/unit/garage-crew.test.mjs",

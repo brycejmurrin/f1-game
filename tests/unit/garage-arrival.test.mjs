@@ -257,7 +257,7 @@ test('the first presented garage frame takes over its preparation cover, then ha
     else assert.ok(!events.some((e) => e.startsWith('fly')) && events.includes('stop'), 'a quit mid-drive-out lowers the screen and flies nothing');
   }
 });
-test('GARAGE ARRIVAL TUNER is an ADVANCED VISUALS tool: opens over the settings page, DONE gives it back', () => {
+test('GARAGE ENTER & LEAVE is an ADVANCED VISUALS tool: opens over the settings page, DONE gives it back', () => {
   const { $ } = harness();
   $('pmsettings').hidden = false; $('pm-panel-display').hidden = false;
   Arrival.bindSettings($, { get: () => null, set() {} });
@@ -272,7 +272,7 @@ test('GARAGE ARRIVAL TUNER is an ADVANCED VISUALS tool: opens over the settings 
   assert.equal($('pm-panel-display').hidden, false);
   assert.equal($('pm-garrival').focused, true, 'focus returns to the tool button');
   const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
-  assert.match(shell, /<button id="pm-garrival"[^>]*>GARAGE ARRIVAL TUNER&hellip;<\/button>/);
+  assert.match(shell, /<button id="pm-garrival"[^>]*>GARAGE ENTER &amp; LEAVE&hellip;<\/button>/);
   assert.match(shell, /id="garrival" role="region"[^>]*data-esc-close="ga-close"/);
   assert.ok(!shell.includes('id="ga-settings"'), 'no inline fold left in the tools list');
 });
