@@ -13,9 +13,15 @@ import { presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutp
 // server's listing). So LEVEL stays bare, the hint goes once into initialize's instructions, and only
 // output_read keeps the level prose.
 const LEVEL = { type: 'string', enum: ['compact', 'diagnostic', 'full'], default: 'compact' };
-const LEVEL_DOC = { ...LEVEL, description: 'Presentation only: compact (default), diagnostic, or original full result. The action executes once; use the saved-result retrieval tool for saved evidence.' };
+const LEVEL_DOC = { ...LEVEL, description: 'Presentation only: compact (default), diagnostic, or the original full result.' };
 const ENVELOPE = { type: 'object', required: ['outputLevel', 'summary', 'artifact'], properties: { outputLevel: { enum: ['compact', 'diagnostic'] }, summary: {}, artifact: { type: 'object' } } };
 const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+// Third-party servers that send no instructions of their own: a deferring client sees only tool names and
+// instructions before it searches, so say when each server is the right one (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md).
+export const SERVER_PREFACES = {
+  'playwright-official': 'Host browser (browser_*): drive menus, HUD and UI flows like a player (phone landscape 844x390, touch first). browser_close before any apex_* browser tool; never while a Playwright test run or chrome-devtools is live.',
+  'chrome-devtools': 'Live working-tree canvas over Chrome DevTools: evaluate __apex hooks, console, network, performance traces, heap snapshots. One browser at a time: never while a Playwright test run or the host browser_* is live.',
+};
 export const GATEWAY_INSTRUCTIONS = 'Output gateway: every tool takes outputLevel=compact(default)|diagnostic|full, presentation only (the action runs once). Saved evidence: the final-page retrieval tool (output_read; underscore-prefixed on a name collision) reads structuredContent.artifact.path or _meta["apex/agent-output"].artifact.path.';
 // MCP 2025-06-18 ToolAnnotations defaults; a hint equal to its default says nothing.
 const HINT_DEFAULTS = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
@@ -84,7 +90,7 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
     const annotations = tool.annotations ? { annotations: withoutDefaultHints(tool.annotations, tool.title) } : {};
     return { ...tool, ...collision, ...annotations, inputSchema: inputWithLevel(input, parameter), ...(tool.outputSchema ? { outputSchema: resultSchema(tool.outputSchema) } : {}) };
   }
-  const retrieval = () => ({ name: retrievalName, description: 'Read saved evidence without repeating its action. format=page returns byte pages. format=collection with pointer selects exact JSON rows (limit 1..100, max 262144 bytes/page); nextOffset advances within retained rows, never upstream pagination. format=original with outputLevel=full restores original MCP blocks including images up to 8 MiB. Artifact receipt is in structuredContent.artifact or _meta["apex/agent-output"].artifact for small native answers.', inputSchema: { type: 'object', properties: { artifact: { type: 'string', description: 'artifact.path returned by a previous tool call' }, format: { type: 'string', enum: ['page', 'collection', 'original'], default: 'page' }, pointer: { type: 'string', description: 'RFC 6901 pointer to retained array; embedded JSON text is decoded while traversing' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 65536 }, outputLevel: LEVEL_DOC }, required: ['artifact'], additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false } });
+  const retrieval = () => ({ name: retrievalName, description: 'Read saved evidence without repeating its action. format=page: byte pages. format=collection + pointer: exact JSON rows (limit 1..100, max 262144 bytes/page; nextOffset pages retained rows only). format=original + outputLevel=full: the original MCP blocks, images up to 8 MiB.', inputSchema: { type: 'object', properties: { artifact: { type: 'string', description: 'artifact.path returned by a previous tool call' }, format: { type: 'string', enum: ['page', 'collection', 'original'], default: 'page' }, pointer: { type: 'string', description: 'RFC 6901 pointer to retained array; embedded JSON text is decoded while traversing' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 65536 }, outputLevel: LEVEL_DOC }, required: ['artifact'], additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false } });
   function discover(cursor) {
     return new Promise((resolve, reject) => {
       const id = `output-gateway:${randomUUID()}`;
@@ -150,7 +156,7 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
       pending.delete(key(message.id)); cancelled.delete(key(message.id));
       if (request && own(message, 'result')) {
         if (request.method === 'initialize') {
-          const upstreamText = typeof message.result?.instructions === 'string' ? message.result.instructions : '';
+          const upstreamText = typeof message.result?.instructions === 'string' && message.result.instructions ? message.result.instructions : SERVER_PREFACES[server] ?? '';
           message = { ...message, result: { ...message.result, instructions: upstreamText ? `${upstreamText}\n\n${GATEWAY_INSTRUCTIONS}` : GATEWAY_INSTRUCTIONS } };
         } else if (request.method === 'tools/list') {
           // Cache the whole page before descriptions are generated (including reserved-name collisions).
