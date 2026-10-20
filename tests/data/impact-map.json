@@ -3085,6 +3085,7 @@
         "tests/unit/career-regulations.test.mjs"
       ],
       "aeroLoad": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/setup-tune.test.mjs"
@@ -3100,6 +3101,7 @@
         "tests/unit/legends-team.test.mjs"
       ],
       "getCost": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -3120,6 +3122,7 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "getMods": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-tune.test.mjs"
@@ -7273,6 +7276,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -14080,6 +14084,7 @@
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs",
+        "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/scene-live.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs"
