@@ -1854,6 +1854,14 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gfx/live-frame-census.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/gfx/mem-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

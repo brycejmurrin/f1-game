@@ -672,6 +672,8 @@
     "// gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is",
     "// under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);",
     "// livery-contrast (9.7 s) stays CI-only; cover-legibility is in test:node-slow (159 s measured).",
+    "// live-frame-census.mjs pure helpers (args, percentiles, sun-rebuild correlation, trace/profile reducers). ~0.2 s.",
+    "tests/unit/live-frame-census.test.mjs",
     "tests/unit/live-run-check.test.mjs",
     "tests/unit/livery-decal-surfaces.test.mjs",
     "// Pure artwork and paint-editor VM regression; selected for all source edits.",
