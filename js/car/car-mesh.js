@@ -657,6 +657,10 @@ function _flapKey(g, aLvl, style, c, finish, surface) {
 // node VM): nothing is idle.
 const _flapNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
 function _flapUse(m) { if (m) m.__flapT = _flapNow(); return m; }
+function _flapLast(cache, order, t) {
+  for (let i = 0; i < order.length; i++) { const m = cache[order[i]]; if (m && m.__flapT > t) t = m.__flapT; }
+  return t;
+}
 function _flapEvictIdle(cache, order, idleMs, now) {
   let w = 0, n = 0;
   for (let i = 0; i < order.length; i++) {
@@ -674,9 +678,13 @@ function _flapEvictIdle(cache, order, idleMs, now) {
 }
 // How many flap meshes the caches hold (__apex/specs: garage-livery-churn.spec.js bounds them).
 function flapState() { return { sets: _flapSetOrder.length, elements: _flapOrder.length }; }
+// IDLE IS MEASURED FROM THE NEWEST FLAP DRAW, NOT THE WALL CLOCK. A frame longer than `ms` (SwiftShader
+// draws the garage at ~3 s a frame; a phone stalled on a rebuild) left the set drawn on the LAST frame
+// "idle", so an edit freed the live wings and their coalesced run, three's last holder of the instanced
+// lit program, and the next frame relinked it: a 2.7 s frame on a part pick (garage-perf-2026-10-20.md).
 function releaseIdleFlaps(idleMs) {
-  const now = _flapNow();
-  if (!now || !_gfx) return 0;
+  if (!_flapNow() || !_gfx) return 0;
+  const now = _flapLast(_flapSets, _flapSetOrder, _flapLast(_flapMeshes, _flapOrder, 0));
   const n = _flapEvictIdle(_flapMeshes, _flapOrder, idleMs, now);
   const sets = _flapEvictIdle(_flapSets, _flapSetOrder, idleMs, now);
   if (sets) _flapSetMemo.clear();   // it may still point at a freed set

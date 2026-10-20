@@ -533,6 +533,7 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
   const proc = spawn(process.execPath,
     [tool("report-server.mjs"), "--port", "0", "--host", "127.0.0.1", "--root", dir],
     { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+  const closed = new Promise((ok) => proc.once("close", (code, signal) => ok({ code, signal })));
   try {
     // Take the port from what it PRINTS: the URLs are the tool's actual output
     // contract (they are what you type into a phone), and --port 0 keeps
@@ -593,9 +594,70 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
     assert.deepEqual(landed, ["apex-report-1-three-x.json", "pwned.json"]);
     assert.equal(fs.existsSync(path.join(dir, "index.html")), true);
   } finally {
-    proc.kill("SIGKILL");
-    fs.rmSync(dir, { recursive: true, force: true });
+    // Exercise the CLI's actual stop path and allow V8 coverage to flush.
+    proc.kill("SIGTERM");
+    let timer;
+    try {
+      const outcome = await Promise.race([closed, new Promise((_, fail) => {
+        timer = setTimeout(() => { proc.kill("SIGKILL"); fail(new Error("report-server did not stop in 5s")); }, 5000);
+      })]);
+      assert.deepEqual(outcome, { code: 0, signal: null });
+    } finally { clearTimeout(timer); await closed; fs.rmSync(dir, { recursive: true, force: true }); }
   }
+});
+
+test("report-server: rejects malformed bundles without saving or consuming session quota", async () => {
+  const { startReportServer, safeName } = await import("../../tools/mcp/report-server.mjs");
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch/report-validation-"));
+  fs.writeFileSync(path.join(dir, "index.html"), "<body>fixture</body>");
+  const body = JSON.stringify({ build: 1, verdict: ["ok"] });
+  const srv = await startReportServer({ root: dir, host: "127.0.0.1", port: 0, maxTotalBytes: Buffer.byteLength(body) * 2 });
+  const post = (name, text) => {
+    const url = new URL("apex-report", srv.url);
+    url.searchParams.set("token", srv.token); url.searchParams.set("file", name);
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: text });
+  };
+  try {
+    assert.equal(safeName("../../report.json"), "report.json");
+    const badCookie = await fetch(srv.url, { headers: { Cookie: "apex26_report_token=%ZZ" } });
+    assert.equal(badCookie.status, 403);
+    await badCookie.text();
+    for (const text of ["{", "null", "[]", "1", "true", '"report"', '{"verdict":{}}', '{"verdict":[null]}']) {
+      const res = await post("rejected.json", text);
+      assert.equal(res.status, 400, text);
+      await res.text();
+      assert.equal(fs.existsSync(path.join(srv.out, "rejected.json")), false);
+    }
+    const good = await post("one.json", body);
+    assert.equal(good.status, 200); assert.equal((await good.json()).bytes, Buffer.byteLength(body));
+    const duplicate = await post("one.json", body);
+    assert.equal(duplicate.status, 409); await duplicate.text();
+    // Rejected uploads and EEXIST must both release their reservations.
+    const next = await post("two.json", body);
+    assert.equal(next.status, 200); await next.json();
+    const over = await post("over-quota.json", body);
+    assert.equal(over.status, 413); assert.match(await over.text(), /quota/);
+    assert.deepEqual(fs.readdirSync(srv.out).sort(), ["one.json", "two.json"]);
+    assert.equal(fs.readFileSync(path.join(srv.out, "one.json"), "utf8"), body);
+  } finally { await srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("report-server: unfamiliar metadata is retained without unsafe coercion", async () => {
+  const { startReportServer } = await import("../../tools/mcp/report-server.mjs");
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch/report-metadata-"));
+  fs.writeFileSync(path.join(dir, "index.html"), "<body>fixture</body>");
+  const srv = await startReportServer({ root: dir, host: "127.0.0.1", port: 0 });
+  try {
+    const value = { toString: null };
+    const report = { build: value, backend: value, state: value, agent: { ua: value }, canvasContext: { note: value } };
+    const url = new URL("apex-report", srv.url);
+    url.searchParams.set("token", srv.token); url.searchParams.set("file", "metadata.json");
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
+    assert.equal(response.status, 200); await response.json();
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(srv.out, "metadata.json"), "utf8")), report);
+  } finally { await srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("apex-report never serializes credentials or URL capabilities", () => {

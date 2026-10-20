@@ -1,0 +1,1 @@
+Improved: on permanent circuits a faster AI car stuck behind a slower one no longer sits there for minutes. After a few seconds it pushes, deploys ERS and pulls fully out of the wake. If it still has not got by, the slower car lifts and steps aside so the move completes, normally within a minute. Street circuits and cars racing the player are unchanged (#2356).

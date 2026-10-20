@@ -355,7 +355,7 @@ function decalRunHarness() {
   return new Function('THREE', `
     const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
     const shadowSys = null, BLOB_CAP = 8, window = {}, renderer = {};
-    let _warmPending = false;
+    let _warmPending = false, _sceneRenders = 0;
     const skipBatches = () => false, _coDrop = () => {};
     const drawList = []; drawList.n = 0;
     const setRange0 = () => {}, pushRec = () => { drawList.n++; };
@@ -363,7 +363,8 @@ function decalRunHarness() {
     ${TLX.slice(start, end)}
     ${TLX.slice(dropStart, dropEnd)}
     return { append: _decalAppend, free: disposeGeometry, scene, registry: _instRegistry,
-      size: () => _decalRuns.size, warm: on => { _warmPending = on; }, flush: flushDropped };
+      size: () => _decalRuns.size, warm: on => { _warmPending = on; },
+      flush: flushDropped };
   `)(CORE);
 }
 for (const warming of [false, true]) {

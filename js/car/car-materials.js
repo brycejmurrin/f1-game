@@ -7,7 +7,7 @@ const CarMaterials = (function () {
     emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27, sidewall: 33,   // 33: satin tyre sidewall (glsl-lit.js)
   });
   // A livery FINISH is a surface-id remap on painted vertices, not a material
-  // uniform: the shaders classify car surfaces 20-40 and branch per id, so a new
+  // uniform: the shaders classify car surfaces 20-44 and 60-85 and branch per id, so a new
   // finish costs an id in that chain (js/render/glx/shaders/glsl-lit.js and its WGSL/TSL
   // mirrors) and one row here. `carbon` gets id 31 rather than reusing
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
@@ -23,6 +23,7 @@ const CarMaterials = (function () {
     satin: 26, chrome: 27, matte: 28, carbon: 31, brushed: 29, pearl: 30,
     flake: 34, candy: 35, tinted: 36, chameleon: 37,   // shader branches exist in GLX/TLX/WGX (surface-id-parity.test.mjs)
     forged: 38, gunmetal: 39, goldplate: 40,
+    holographic: 41, velvet: 42, hammered: 43, anodized: 44,
     // FINISHES 60+ (design lane D2, round 4 close-up matrix): each rides a base branch above and adds one tint after the
     // metal block, in GLX / TLX / WGX alike, tuned against a real-car or real-paint reference.
     oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, alubare: 65, rawcarbon: 66, flovis: 67, carbonfade: 68,
@@ -34,6 +35,7 @@ const CarMaterials = (function () {
   // the id is fixed here first so the slices cannot take the same one. tests/unit/livery-finish-contract.test.mjs
   // pins that no id repeats and that every FINISH_SURFACE id is either shipped (<= 33) or reserved.
   const FINISH_RESERVED = Object.freeze({ flake: 34, candy: 35, tinted: 36, chameleon: 37, forged: 38, gunmetal: 39, goldplate: 40,
+    holographic: 41, velvet: 42, hammered: 43, anodized: 44,
     oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, alubare: 65, rawcarbon: 66, flovis: 67, carbonfade: 68, silverfade: 69,
     metalflop: 70, truematte: 71, pearlwhite: 72, jpsgold: 74, ghostpearl: 81, xirallic: 82, mystichrome: 83,
     midnightpurple: 84, ultrablack: 85 });
@@ -172,6 +174,31 @@ const CarMaterials = (function () {
     }
   }
 
+  // FINISH STAND-INS (garage-perf finding 4): Car3D's halo, mirror-housing and rim reads of a finish emit a
+  // stand-in surface id that finishPass maps after the geometry, so refinish() swaps any finish without a rebuild.
+  const PH_HALO = 200, PH_HOOP = 201, PH_MIRROR = 202, PH_RIM = 203;
+  const FINISH_FIELDS = Object.freeze(["finish", ...new Set(Object.values(ZONE_FINISH)), "noseFinish", "rimFinish"]);
+  // Stand-ins -> surfaces, PAINT ZONES, FINISH, then smoothing: CarShade.smooth welds by surface id, so it follows the remap.
+  function finishPass(out, liv, f) {
+    const hf = liv.haloFinish, haloOn = !!hf && hf !== "inherit", mf = liv.mirrorFinish, M = out.mat;
+    const map = [haloOn ? (Object.hasOwn(FINISH_SURFACE, hf) && FINISH_SURFACE[hf]) || SURFACES.paint : SURFACES.metal,
+      haloOn ? SURFACES.paint : SURFACES.metal, mf && (mf === "gloss" || Object.hasOwn(FINISH_SURFACE, mf)) ? SURFACES.paint : SURFACES.carbon,
+      CarWheels.tints(liv).surf || SURFACES.metal];
+    for (let i = 0; i < M.length; i++) if (M[i] >= PH_HALO && M[i] <= PH_RIM) M[i] = map[M[i] - PH_HALO];
+    applyZones(out, f.zoneRanges, f.sections, liv, f.dim);
+    applyFinish(out, liv.finish, f.sections, liv, f.zoneRanges);
+    if (f.smooth) CarShade.smooth(out, { skip: [SURFACES.emissive], keep: f.keep });   // a shadow caster keeps the shape; depth never reads normals
+  }
+  // A Car3D.build({ refinish: true }) keeps its pre-finish arrays: re-finish a copy for `liv`, which may differ from
+  // the build's livery in FINISH_FIELDS only — exactly a full build (tests/unit/garage-finish-remap.test.mjs).
+  function refinish(base, liv) {
+    Log.info("car", "refinish");   // the repaint signal a finish tap leaves instead of "[car] build"
+    const f = base._refinish, out = Object.assign({}, base, { mat: f.mat.slice(), col: f.col.slice(), nrm: f.nrm.slice() });
+    if (out.flapInfo) out.flapInfo = Object.assign({}, out.flapInfo, { finish: finishOf(liv, "wingFinish") });
+    finishPass(out, liv, f);
+    return out;
+  }
+
   // Shade contract (carbon / gloss / matte / metal) — see car-material-shade.js.
   // Re-exported so Car3D and tests reach one table; shaders stay hand-ported.
   const SHADE = (typeof CarMaterialShade !== "undefined") ? CarMaterialShade : null;
@@ -182,6 +209,7 @@ const CarMaterials = (function () {
     TYRE_BAND, BRAKE_CALIPER,
     TCAM_IDS, tcamColour,
     smoothSkin, applyBodySplit, applyFinish, applyZones, PAINT_ZONES, ZONE_FINISH, zoneColour,
+    PH_HALO, PH_HOOP, PH_MIRROR, PH_RIM, FINISH_FIELDS, finishPass, refinish,
   };
 })();
 Object.freeze(CarMaterials);

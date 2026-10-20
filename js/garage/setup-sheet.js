@@ -190,13 +190,13 @@ const LIV_ROW_HINT = {
   helmetBase: "HELMET BASE — the helmet shell colour. Unset = the driver's own design.",
   helmetAccent: "HELMET ACCENT — the helmet's stripe and cap colour. Unset = the driver's own design.",
   helmetStyle: "HELMET — TEAM keeps the driver's own design; other styles repaint it from HELMET BASE and ACCENT.",
-  finish: "FINISH — the paint surface: gloss, satin, matte, chrome, brushed, pearl, carbon, flake (metallic sparkle), candy (deep saturated), tinted (chrome that keeps the livery hue), chameleon (a strong colour-shift pearl), forged (chopped carbon), gunmetal (dark anodised metal) goldplate (a gold mirror that ignores the livery colour), oilslick (a thin-film rainbow over dark metal), frozen (matte metallic), fluoro (day-glo), burnt (heat-tinted titanium, silver nose to blue tail), alubare (bare aluminium), rawcarbon (unlacquered weave), flovis (aero test paint streaks), carbonfade (bare weave below the sidepods), silverfade (silver nose dotting into a black tail), metalflop (bright face, dark edges), truematte (chalky, no shine), pearlwhite (warm white, cool edges), jpsgold (gloss black, gold flake), ghostpearl (a pearl tint at the lit edges), xirallic (crystal glints), mystichrome (green to blue to purple with the angle), midnightpurple (near-black violet) or ultrablack (a near-black silhouette).",
+  finish: "FINISH — the whole-car paint surface. Choose a sheen, texture or colour-shifting effect; regional INHERIT buttons follow this choice.",
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
   sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also greys every spine design that writes a sponsor name (TOP wordmark, SIDE wordmark/duo/title).",
   aeroShape: "AERO SHAPE — front/rear wing and aero package appearance. FITTED follows your installed AERO part. Looks only; performance and fitted parts stay unchanged.",
   floorShape: "FLOOR SHAPE — floor and diffuser appearance. FITTED follows your installed FLOOR part. Looks only; performance and fitted parts stay unchanged.",
-  bodyStyle: "BODY — the chassis shape: TEAM keeps this car's own; NEEDLE, BRICK, ANTEATER, ARCHED, WEDGE and BARGE are concept bodies with distinct outlines; RIFT, KEEL, DELTA and SERPENT follow the 2026 concept sheet. Team-body swaps (another constructor's chassis) stay off the picker until Car3D.ALLOW_TEAM_BODY_SWAP is on. Looks only — it never changes performance.",
+  bodyStyle: "BODY — the chassis silhouette. TEAM keeps this car's own shape; concept bodies reshape the nose, sidepods and engine cover. Looks only — performance stays the same.",
   finShape: "FIN SHAPE — the shark-fin blade. NONE removes it, and with it the fin's paint, graphic, style and badge. Every 2026 team car runs NONE.",
   finStyle: "TAIL STYLE — the motif painted on the fin.",
   finBadge: "FIN BADGE — what the fin carries: the mark, the race number, the driver code, or nothing.",
@@ -399,6 +399,7 @@ function buildLookRows(optsEl) {
     const row = document.createElement("div");
     row.className = "chip-row"; row.id = "cs-look-" + key;
     row.setAttribute("role", "group"); row.setAttribute("aria-label", "Garage " + label.toLowerCase());
+    let selected = cur;
     for (const id of ids) {
       const b = document.createElement("button");
       b.type = "button"; b.className = "sel-chip" + (id === cur ? " active" : "");
@@ -406,9 +407,21 @@ function buildLookRows(optsEl) {
       b.dataset.csLook = key + ":" + id;
       b.textContent = name(id);
       b.onclick = () => {
-        if (id === cur) return;
+        if (id === selected) return;
         apply(id);
         if (G.soundOn) GameAudio.uiTick();
+        // Lighting is read live by the scene. Keep the controls and focused
+        // button instead of rebuilding the whole setup sheet for a mood pick.
+        if (key === "mood") {
+          selected = id;
+          for (const peer of row.children) {
+            const active = peer === b;
+            peer.classList.toggle("active", active);
+            peer.setAttribute("aria-pressed", String(active));
+          }
+          b.focus({ preventScroll: true });
+          return;
+        }
         buildSetup();
         $("cs-options")?.querySelector(`[data-cs-look="${key}:${id}"]`)?.focus({ preventScroll: true });
       };
@@ -1119,11 +1132,14 @@ function buildLiveryCreator(container, team) {
   // and rebuilt per tick, so a drag only moves the .active marks; the change
   // event (applyPreview without defer3d) rebuilds once.
   const refreshPalettes = (drag) => {
+    for (const pr of palRows) pr.sync();
     const cols = paletteColours();
     const key = cols.slice().sort().join(",");
     if (key === paletteKey || (drag && paletteKey !== null)) {
-      for (const pr of palRows) for (const chip of pr.el.children)
-        chip.classList.toggle("active", (d[pr.key] || "").toLowerCase() === chip.dataset.csColour);
+      for (const pr of palRows) for (const chip of pr.el.children) {
+        const on = (d[pr.key] || "").toLowerCase() === chip.dataset.csColour;
+        chip.classList.toggle("active", on); chip.setAttribute("aria-pressed", String(on));
+      }
       return null;   // unchanged chips keep their handlers and keyboard focus
     }
     const focused = document.activeElement;
@@ -1142,6 +1158,7 @@ function buildLiveryCreator(container, team) {
         chip.title = "Use " + cols[c];
         chip.setAttribute("aria-label", "Use colour " + cols[c] + " for " + pr.label);
         if ((d[pr.key] || "").toLowerCase() === cols[c]) chip.classList.add("active");
+        chip.setAttribute("aria-pressed", String((d[pr.key] || "").toLowerCase() === cols[c]));
         chip.onclick = () => { pr.set(cols[c]); };
         pr.el.appendChild(chip);
         if (ownedFocus && (cols[c] === focusColour || (!cols.includes(focusColour) && cols[c] === (d[pr.key] || "").toLowerCase()))) replacement = chip;
@@ -1163,13 +1180,21 @@ function buildLiveryCreator(container, team) {
     inp.oninput = () => { d[key] = inp.value; inp.classList.remove("cs-liv-off"); applyPreview(true); };
     inp.onchange = () => { applyPreview(); flushLivPreview(); };
     r.appendChild(inp);
+    let off = null;
     if (allowNone) {
-      const off = document.createElement("button"); off.type = "button"; off.className = "cs-liv-ed-none"; off.textContent = "NONE";
+      off = document.createElement("button"); off.type = "button"; off.className = "cs-liv-ed-none"; off.textContent = "NONE";
+      off.setAttribute("aria-label", "Use inherited colour for " + label);
       off.onclick = () => { d[key] = ""; inp.classList.add("cs-liv-off"); applyPreview(); };
       r.appendChild(off);
     }
     const pal = document.createElement("span"); pal.className = "cs-liv-pal";
-    palRows.push({ el: pal, key, label,
+    const sync = () => {
+      const inherited = allowNone && !d[key];
+      inp.setAttribute("aria-description", inherited ? "Inherited colour" : "Custom colour " + inp.value);
+      if (off) off.setAttribute("aria-pressed", String(inherited));
+    };
+    sync();
+    palRows.push({ el: pal, key, label, sync,
       set: (hex) => { d[key] = hex; inp.value = hex; inp.classList.remove("cs-liv-off"); applyPreview(); } });
     r.appendChild(pal);
     if (surfaceControls) surfaceControls.row(r, label, key);
@@ -1367,8 +1392,13 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(nameRow);
 
   const btns = document.createElement("div"); btns.className = "cs-liv-ed-btns";
+  const focusFitted = () => {
+    const id = getLiveryId(team.id);
+    const fitted = Array.from(container.querySelectorAll("[data-cs-livery]")).find((b) => b.dataset.csLivery === id);
+    (fitted || container.querySelector(".cs-liv-create"))?.focus();
+  };
   const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "cs-liv-ed-cancel"; cancel.textContent = "CANCEL";
-  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); };
+  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); focusFitted(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
   save.onclick = () => {
     const now = Teams.LIST[G.teamIdx];
@@ -1382,22 +1412,27 @@ function buildLiveryCreator(container, team) {
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     Object.assign(liv, livDraftTo(d, false));
     const existing = getCustomLiveries(team.id);
-    // Edit-in-place replaces the entry that carried the OLD id; create appends.
-    setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
+    // Another tab may already have replaced/deleted the old id. Keep its work
+    // and save this draft as a new copy rather than fitting an unstored id.
+    const replacing = csLivEditId && existing.some((l) => l.id === csLivEditId);
+    setCustomLiveries(team.id, replacing ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
     saveLiveryId(team.id, id);
     csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();
     buildSetup();
+    focusFitted();
   };
   btns.append(cancel, save);
   wrap.appendChild(btns);
 
   if (typeof GarageLiveryDesignEditor !== "undefined") designTools = GarageLiveryDesignEditor.attach(wrap, d, {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
-    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id,
+    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id, scrollRoot: container,
   });
   container.appendChild(wrap);
   applyPreview();
+  container.scrollTop = 0;
+  (wrap.querySelector('[role="tab"][aria-selected="true"]') || name).focus();
   // Spine / logo edits need the crown in the car gap the sheet leaves — the
   // default front az puts the nose toward camera and the cover under the
   // panel. Hero is the rear three-quarter the CAMERA presets already use.
@@ -1413,7 +1448,10 @@ let _livPrevDraft = null;
 // it must not also throw away the preview mesh (a full car rebuild on a phone).
 const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1, patternTint: 1, patternSecond: 1, patternPlacement: 1, patternSide: 1,
   patternWidth: 1, patternRepeat: 1, patternOffset: 1, patternTaper: 1, patternOpacity: 1, patternRotation: 1, patternStretch: 1, patternWeight: 1, patternKey: 1,
-  decalNoseTip: 1, decalCockpit: 1, decalPodTop: 1, decalHalo: 1 };
+  decalNoseTip: 1, decalCockpit: 1, decalPodTop: 1, decalHalo: 1,
+  // Atlas-only too (wave 1/2 crest + tail fields, the grips colour): each crest pill tap paid a whole Car3D.build
+  // (B·L24, docs/notes/garage-perf-2026-10-20.md); tests/unit/garage-perf-mesh-free.test.mjs builds the car both ways.
+  crestStyle: 1, crestTone: 1, crestFrame: 1, coverBind: 1, finArt: 1, finHandoff: 1, gripTint: 1 };
 function draftSkipsMesh(prev, next) {
   if (!prev) return false;
   const seen = Object.create(null);

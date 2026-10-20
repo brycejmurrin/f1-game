@@ -473,7 +473,7 @@ const CarShade = (function () {
   // its edge (ERS intakes, chimneys, ducts: 8-18 mm proud) see the surface
   // drop by under 1 cm. CCW seen from +Z for either side.
   const POD_ARC = 4;
-  function podRing(st, side) {
+  function podRing(st, side, chine) {   // chine: the pod has one (every ring then cuts it: same point count)
     const w = st.outer - st.inner, hO = st.outerTop - st.outerBottom;
     const rxT = Math.min(0.07, 0.25 * w), ryT = Math.min(0.05, 0.12 * hO);
     const rxB = Math.min(0.06, 0.22 * w), ryB = Math.min(0.035, 0.10 * hO);
@@ -482,7 +482,10 @@ const CarShade = (function () {
       const a = -Math.PI / 2 + (k / POD_ARC) * Math.PI / 2;
       pts.push([st.outer - rxB + rxB * Math.cos(a), st.outerBottom + ryB + ryB * Math.sin(a)]);
     }
-    for (let k = 0; k <= POD_ARC; k++) {   // flank -> top
+    if (chine != null && typeof CarBodyGeom !== "undefined") {   // chine: a sharp chamfer, not the arc
+      const c = CarBodyGeom.chineCut(st.chine || chine, w, hO);
+      pts.push([st.outer, st.outerTop - c.y], [st.outer - c.x, st.outerTop]);
+    } else for (let k = 0; k <= POD_ARC; k++) {   // flank -> top
       const a = (k / POD_ARC) * Math.PI / 2;
       pts.push([st.outer - rxT + rxT * Math.cos(a), st.outerTop - ryT + ryT * Math.sin(a)]);
     }
@@ -515,7 +518,8 @@ const CarShade = (function () {
   }
   /** Both sidepods from car3d's station list, rounded. */
   function podLoft(out, stations, col, frontCol, tri) {
-    for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side)), col, frontCol, tri);
+    const chine = stations.some((st) => st.chine != null) ? 0.004 : null;
+    for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side, chine)), col, frontCol, tri);
   }
 
   // ---- COKE BOTTLE + DOWNWASH (rounded builds, 2026-10-03) ----
@@ -790,58 +794,82 @@ const CarShade = (function () {
    *  (emissive lights). Returns the number of vertices whose normal moved. */
   function smooth(out, opts) {
     const crease = Math.cos(((opts && opts.creaseDeg) || 55) * Math.PI / 180);
-    const skip = new Set((opts && opts.skip) || []);
+    const skip = new Set((opts && opts.skip) || []), keep = opts && opts.keep;
     const P = out.pos, N = out.nrm, M = out.mat, I = out.idx, nv = P.length / 3, nt = Math.floor(I.length / 3);
     if (!nv || N.length !== P.length || !nt) return 0;
-    const fx = new Float64Array(nt), fy = new Float64Array(nt), fz = new Float64Array(nt), fa = new Float64Array(nt);
-    // Triangles per vertex as a CSR table (counts, then offsets): no per-vertex arrays.
-    const cnt = new Uint32Array(nv + 1);
-    for (let t = 0; t < nt; t++) {
-      const a = I[t * 3] * 3, b = I[t * 3 + 1] * 3, c = I[t * 3 + 2] * 3;
-      const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
-      const wx = P[c] - P[a], wy = P[c + 1] - P[a + 1], wz = P[c + 2] - P[a + 2];
-      const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx, l = Math.hypot(nx, ny, nz);
-      if (!(l > 0)) continue;
-      fx[t] = nx / l; fy[t] = ny / l; fz[t] = nz / l; fa[t] = l / 2;
-      cnt[I[t * 3] + 1]++; cnt[I[t * 3 + 1] + 1]++; cnt[I[t * 3 + 2] + 1]++;
-    }
-    for (let v = 0; v < nv; v++) cnt[v + 1] += cnt[v];
-    const vt = new Uint32Array(cnt[nv]), fill = cnt.slice(0, nv);
-    for (let t = 0; t < nt; t++) if (fa[t] > 0) for (let k = 0; k < 3; k++) vt[fill[I[t * 3 + k]]++] = t;
-    // Vertices SORTED by quantised position + surface, so each weld group is a
-    // contiguous run; a group's triangles are gathered once (stamped, no Set).
-    const qx = new Int32Array(nv), qy = new Int32Array(nv), qz = new Int32Array(nv);
-    const order = [];
-    for (let v = 0; v < nv; v++) {
-      if (skip.has(M[v]) || cnt[v + 1] === cnt[v]) continue;
-      qx[v] = Math.round(P[v * 3] * 1e4); qy[v] = Math.round(P[v * 3 + 1] * 1e4); qz[v] = Math.round(P[v * 3 + 2] * 1e4);
-      order.push(v);
-    }
-    order.sort((u, v) => (qx[u] - qx[v]) || (qy[u] - qy[v]) || (qz[u] - qz[v]) || (M[u] - M[v]));
-    const stamp = new Int32Array(nt).fill(-1), tris = [];
-    let moved = 0;
-    for (let i = 0; i < order.length;) {
-      const u0 = order[i];
-      let j = i + 1;
-      while (j < order.length) {
-        const w = order[j];
-        if (qx[w] !== qx[u0] || qy[w] !== qy[u0] || qz[w] !== qz[u0] || M[w] !== M[u0]) break;
-        j++;
+    // `keep` ({} on the first call, then the same object): the finish-free prep below is kept, and a later call
+    // over the same geometry with remapped surface ids re-welds only the position runs whose surface PARTITION
+    // changed; every other run takes the first call's normals, which a fresh weld reproduces bit for bit.
+    const k = keep && keep.vt ? keep : null;
+    let fx, fy, fz, fa, cnt, vt, order, runs;
+    if (k) ({ fx, fy, fz, fa, cnt, vt, order, runs } = k);
+    else {
+      fx = new Float64Array(nt); fy = new Float64Array(nt); fz = new Float64Array(nt); fa = new Float64Array(nt);
+      // Triangles per vertex as a CSR table (counts, then offsets): no per-vertex arrays.
+      cnt = new Uint32Array(nv + 1);
+      for (let t = 0; t < nt; t++) {
+        const a = I[t * 3] * 3, b = I[t * 3 + 1] * 3, c = I[t * 3 + 2] * 3;
+        const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+        const wx = P[c] - P[a], wy = P[c + 1] - P[a + 1], wz = P[c + 2] - P[a + 2];
+        const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx, l = Math.hypot(nx, ny, nz);
+        if (!(l > 0)) continue;
+        fx[t] = nx / l; fy[t] = ny / l; fz[t] = nz / l; fa[t] = l / 2;
+        cnt[I[t * 3] + 1]++; cnt[I[t * 3 + 1] + 1]++; cnt[I[t * 3 + 2] + 1]++;
       }
-      if (j - i > 1) {
-        tris.length = 0;
-        for (let r = i; r < j; r++) {
-          const u = order[r];
-          for (let k = cnt[u]; k < cnt[u + 1]; k++) if (stamp[vt[k]] !== i) { stamp[vt[k]] = i; tris.push(vt[k]); }
+      for (let v = 0; v < nv; v++) cnt[v + 1] += cnt[v];
+      vt = new Uint32Array(cnt[nv]); const fill = cnt.slice(0, nv);
+      for (let t = 0; t < nt; t++) if (fa[t] > 0) for (let j = 0; j < 3; j++) vt[fill[I[t * 3 + j]]++] = t;
+      // Vertices SORTED by quantised position (stable: index order within), so each position run is contiguous;
+      // a weld group is a run's vertices on one surface.
+      const qx = new Int32Array(nv), qy = new Int32Array(nv), qz = new Int32Array(nv);
+      order = [];
+      for (let v = 0; v < nv; v++) {
+        if (skip.has(M[v]) || cnt[v + 1] === cnt[v]) continue;
+        qx[v] = Math.round(P[v * 3] * 1e4); qy[v] = Math.round(P[v * 3 + 1] * 1e4); qz[v] = Math.round(P[v * 3 + 2] * 1e4);
+        order.push(v);
+      }
+      order.sort((u, v) => (qx[u] - qx[v]) || (qy[u] - qy[v]) || (qz[u] - qz[v]));
+      runs = [];   // [start, end) pairs of runs with two or more vertices
+      for (let i = 0; i < order.length;) {
+        const u0 = order[i];
+        let j = i + 1;
+        while (j < order.length && qx[order[j]] === qx[u0] && qy[order[j]] === qy[u0] && qz[order[j]] === qz[u0]) j++;
+        if (j - i > 1) runs.push(i, j);
+        i = j;
+      }
+      if (keep) Object.assign(keep, { fx, fy, fz, fa, cnt, vt, order, runs });
+    }
+    const stamp = new Int32Array(nt).fill(-1), tris = [], grp = [], M0 = k && k.mat, N0 = k && k.nrm;
+    let moved = 0, gid = 0;
+    for (let r = 0; r < runs.length; r += 2) {
+      const i = runs[r], j = runs[r + 1];
+      if (M0) {   // same partition (equal ids <=> equal first-call ids, pairwise) = same groups = same normals
+        let same = true;
+        for (let a = i; a < j && same; a++) for (let b = a + 1; b < j; b++)
+          if ((M[order[a]] === M[order[b]]) !== (M0[order[a]] === M0[order[b]])) { same = false; break; }
+        if (same) {
+          for (let a = i; a < j; a++) { const v = order[a] * 3; N[v] = N0[v]; N[v + 1] = N0[v + 1]; N[v + 2] = N0[v + 2]; }
+          continue;
         }
-        for (let r = i; r < j; r++) {
-          const v = order[r], ax = N[v * 3], ay = N[v * 3 + 1], az = N[v * 3 + 2];
+      }
+      for (let a = i; a < j; a++) {   // each surface's group, in index order
+        const m = M[order[a]];
+        let first = true;
+        for (let b = i; b < a; b++) if (M[order[b]] === m) { first = false; break; }
+        if (!first) continue;
+        grp.length = 0;
+        for (let b = a; b < j; b++) if (M[order[b]] === m) grp.push(order[b]);
+        if (grp.length < 2) continue;
+        tris.length = 0; gid++;
+        for (const u of grp) for (let q = cnt[u]; q < cnt[u + 1]; q++) if (stamp[vt[q]] !== gid) { stamp[vt[q]] = gid; tris.push(vt[q]); }
+        for (const v of grp) {
+          const ax = N[v * 3], ay = N[v * 3 + 1], az = N[v * 3 + 2];
           let sx = 0, sy = 0, sz = 0, foreign = 0;
           for (const t of tris) {
             if (ax * fx[t] + ay * fy[t] + az * fz[t] < crease) continue;
             sx += fx[t] * fa[t]; sy += fy[t] * fa[t]; sz += fz[t] * fa[t];
             let mine = false;
-            for (let k = cnt[v]; k < cnt[v + 1]; k++) if (vt[k] === t) { mine = true; break; }
+            for (let q = cnt[v]; q < cnt[v + 1]; q++) if (vt[q] === t) { mine = true; break; }
             if (!mine) foreign++;
           }
           const l = Math.hypot(sx, sy, sz);
@@ -851,8 +879,8 @@ const CarShade = (function () {
           N[v * 3] = sx; N[v * 3 + 1] = sy; N[v * 3 + 2] = sz;
         }
       }
-      i = j;
     }
+    if (keep && !k) { keep.mat = M.slice(); keep.nrm = N.slice(); }
     return moved;
   }
 

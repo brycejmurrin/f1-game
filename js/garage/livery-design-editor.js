@@ -234,6 +234,7 @@ const GarageLiveryDesignEditor = (function () {
         p.pane.hidden = !on; p.tab.setAttribute("aria-selected", String(on)); p.tab.tabIndex = on ? 0 : -1;
         p.tab.classList.toggle("active", on);
       });
+      if (api.scrollRoot) api.scrollRoot.scrollTop = 0;
       try { sessionStorage.setItem(TAB_KEY, panes[i].id); } catch (_) { /* private mode: the tab just resets */ }
       if (focus) panes[i].tab.focus();
     }

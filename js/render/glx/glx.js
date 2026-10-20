@@ -222,7 +222,7 @@ const GLXBackend = (function () {
   // change; a typed-array slot stores the double unboxed. Index order: emissive, alpha, rough, metal, spec, detail,
   // clearcoat, carPaint, sparkle. Like _luNL below it is PROGRAM state — a WebGL uniform survives every unbind, and
   // litMaterial is the only writer — so only a relink invalidates it (reset beside _luNL), not begin().
-  const _matC = new Float64Array(9).fill(-1);
+  const _matC = new Float64Array(10).fill(-1);
   // uNumLights, last value written to the LIT program. Unlike the _mat* caches
   // above this is NOT cleared per frame: a WebGL uniform is per-PROGRAM state
   // and survives every unbind, so the only thing that can invalidate it is a
@@ -874,7 +874,7 @@ const GLXBackend = (function () {
     // floor does not, and until now the only symptom was init() returning
     // false with a 100 KB shader dumped to the console. Say the two numbers
     // side by side so a "no WebGL" report on a phone names its cause.
-    const LIT_FS_ROWS = 287;   // +uRain, +uSpecKnee (2026-10-01)
+    const LIT_FS_ROWS = 288;   // +uRain, +uSpecKnee (2026-10-01), +uCarFinish (2026-10-20)
     try {
       const rows = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) | 0;
       if (rows && rows < LIT_FS_ROWS) {
@@ -999,7 +999,7 @@ const GLXBackend = (function () {
     _envUnitSet = false;   // uEnvCube's sampler unit is program state: re-point it once after this link
     litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uRain", "uSpecKnee", "uEnvCube", "uEnvStr",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uCarFinish", "uSparkle", "uWetness", "uRain", "uSpecKnee", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
       "uCarShadowMap", "uCarLightVP", "uCarShadowOn", "uCarBiasScale",
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
@@ -2182,6 +2182,8 @@ const GLXBackend = (function () {
     if (clearcoat !== _matC[6]) { gl.uniform1f(litU.uClearcoat, clearcoat); _matC[6] = clearcoat; }
     if (carPaint !== _matC[7]) { gl.uniform1f(litU.uCarPaint, carPaint); _matC[7] = carPaint; }
     if (sparkle !== _matC[8]) { gl.uniform1f(litU.uSparkle, sparkle); _matC[8] = sparkle; }
+    const carFinish = opts && opts.carFinish ? 1 : 0;
+    if (carFinish !== _matC[9]) { gl.uniform1f(litU.uCarFinish, carFinish); _matC[9] = carFinish; }
     return alpha;
   }
 
@@ -2511,20 +2513,13 @@ const GLXBackend = (function () {
   function draw(mesh, modelMat, opts) {
     if (ctxGone() || !mesh) return;
     const alpha = litMaterial(modelMat, opts);
-    // Each draw declares the full render state it needs (no restores afterwards),
-    // so runs of same-state draws collapse to a single real toggle via the cache.
-    // Translucent draws (ghost car, boost flame, pulsing rain light) must NOT
-    // write depth: a 35%-alpha ghost that lands in the depth buffer culls the
-    // cars/props drawn after it (they pop invisible "through" the ghost) and
-    // registers in sceneDepth as a solid wall for SSAO/SSR/god-rays.
+    // Declare depth/blend state per draw; translucent FX must not occlude later
+    // geometry or register as solid walls in sceneDepth for SSAO/SSR/god-rays.
     setDepthMask(alpha >= 1);
     setBlend(alpha < 1);
     bindVAO(mesh.vao);
-    // Scene alpha is the SSR car-paint tag (see LIT_FS outColor), written only
-    // by OPAQUE draws — so ANY blended draw masks alpha writes automatically
-    // (default blending blends the alpha channel too, dragging a stored 0.35
-    // tag across the composite's 0.42-0.55 threshold). noAlphaWrite remains as
-    // an explicit opt-out for opaque FX quads.
+    // Only opaque draws write the SSR car-paint alpha tag; blended FX would
+    // drag it across the composite threshold. Opaque FX can opt out explicitly.
     const noAW = (opts && opts.noAlphaWrite) || alpha < 1;
     if (noAW) setAlphaWrite(false);
     // doubleSided: render back faces too (cull off) — for the wheels + car body,
@@ -2532,12 +2527,9 @@ const GLXBackend = (function () {
     // coincident duplicate to z-fight.
     const dbl = opts && opts.doubleSided;
     if (dbl) setCull(false);
-    // Depth bias for DECAL geometry (start line, road markings): nudge the
-    // fragment's depth toward the camera instead of lifting the mesh in Y.
-    // A geometric lift is resolution-dependent — it holds up close and
-    // z-fights at distance, where depth precision collapses under a 0.3 m
-    // near plane. polygonOffset scales with the local depth slope, so a
-    // decal wins at every distance and grazing angle without moving it.
+    // Bias decal depth toward the camera without moving geometry. Unlike a Y
+    // lift, polygonOffset follows depth slope and works at distance/grazing
+    // angles despite the 0.3 m near plane.
     const _db = opts && opts.depthBias;
     // Pass the caller's pair — no per-draw [f,u] literal (was ~alloc/draw).
     if (_db) { setPolyOffset(_db); }
@@ -2546,7 +2538,17 @@ const GLXBackend = (function () {
     // no depth (alpha < 1), and everything opaque after it overwrites it.
     const _ndt = opts && opts.noDepthTest;
     if (_ndt) gl.disable(gl.DEPTH_TEST);
-    gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    // Reflections reverse winding even without culling. Restore CCW for later
+    // passes; mutable model matrices cannot be cached by identity.
+    const m = modelMat;
+    const reflected = m[0] * (m[5] * m[10] - m[6] * m[9])
+      - m[4] * (m[1] * m[10] - m[2] * m[9])
+      + m[8] * (m[1] * m[6] - m[2] * m[5]) < 0;
+    if (reflected) {
+      gl.frontFace(gl.CW);
+      try { gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); }
+      finally { gl.frontFace(gl.CCW); }
+    } else gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     if (_ndt) gl.enable(gl.DEPTH_TEST);
     if (_db) { setPolyOffset(null); }
     if (dbl) setCull(true);
