@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_013hpoGb4E43VwtFEZzAnTm4 ORCH B LIVE claude:session_013hpoGb4E43VwtFEZzAnTm4 (OrchB 21) succeeds OrchB 20 session_015Sq1M8dE8o4DwBbh1NWdXE for Fleet B
+HANDOFF to:* from:claude:session_01FXFbKmCXU3wDwmUmoJbFG8 #3118 synced head d7e66080d446118a58b35c10a1bc6bf91ca126ff → L21 Bundle A #3173 (Bryce bundling; no standalone READY). Diff vs tip 8b2e45c46: 1 car3d.js line (halo brow bar inside vanes). Factory fit vs tip PASS 0/0.
