@@ -4475,7 +4475,7 @@ function update(dt) {
   // the overtake target walks past it — all of which would otherwise need their
   // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
-  for (const c of cars) if (!c.retired) ranked.push(c);
+  for (let i = 0; i < cars.length; i++) if (!cars[i].retired) ranked.push(cars[i]);   // indexed, not for-of: update() runs unoptimized enough that each for-of allocated its iterator results (PERF-SCENE-CPU-2026-10-20)
   ranked.sort(byProgDesc);
   let nFin = 0;
   for (let i = 0; i < ranked.length; i++) {
@@ -4495,7 +4495,7 @@ function update(dt) {
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
   _leadHuman = null;
   // !finished: a flagged human coasts on advancing prog — don't band toward it.
-  for (const c of cars) if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
+  for (let i = 0; i < cars.length; i++) { const c = cars[i]; if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c; }
 
   // Traffic scans read last step's poses. Writing prog/x/speed inside
   // updateCar and then scanning the next car made a side-by-side look like a
@@ -4510,8 +4510,8 @@ function update(dt) {
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars); pits.stepBegin();
   parked.length = 0;
-  for (const c of cars) if (c.retired && c.parkedOnRoad) parked.push(c);
-  PerfSpans.begin("ai"); for (const c of cars) updateCar(c, dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
+  for (let i = 0; i < cars.length; i++) if (cars[i].retired && cars[i].parkedOnRoad) parked.push(cars[i]);
+  PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
   if (jumpStartPenalty.reactWindowOpen()) {
     for (const c of cars) jumpStartPenalty.tickReaction(c);

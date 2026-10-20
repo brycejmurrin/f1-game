@@ -1,0 +1,1 @@
+Improved: The race step allocates a little less every frame — the per-car loops in the race step, the race-facts timing loop, the event journal and the safety-car pass watch walk the field by index instead of building iterators. Driving behaviour is unchanged.
