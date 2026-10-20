@@ -2019,6 +2019,82 @@ const FlybySeq = (function () {
     return best;
   }
 
+  /* SESSION VARIANTS. Shots may carry `when: { night?, wet? }`. select() keeps
+     one shot per id: an unconditional DEFAULT entry, or the matching variant
+     with the most when-keys when the session qualifies. Night variants sit
+     closer and lower so trackside lamps near the camera light the frame
+     (Phase 3.1). Catalog extras live in FlybyOverrides.WHEN so DEFAULT's
+     duration sum stays 1 for the bake. */
+  const WHEN_KEYS = ["night", "wet"];
+  function isNight(info) {
+    const tod = info && info.tod, track = info && (info.track || info.def);
+    return tod === "night" || (tod === "default" && !!(track && track.night));
+  }
+  function isWet(info) {
+    const w = info && info.weather;
+    return w === "wet" || w === "rain" || w === "storm";
+  }
+  function whenMatch(when, info) {
+    if (when == null) return true;
+    if (typeof when !== "object" || Array.isArray(when)) return false;
+    if (when.night != null && !!when.night !== isNight(info)) return false;
+    if (when.wet != null && !!when.wet !== isWet(info)) return false;
+    return true;
+  }
+  function whenScore(when) {
+    if (!when || typeof when !== "object") return 0;
+    let n = 0;
+    for (let i = 0; i < WHEN_KEYS.length; i++) if (when[WHEN_KEYS[i]] != null) n++;
+    return n;
+  }
+  /** True when `shot` still matches the shipped DEFAULT framing for its id —
+   *  a circuit signature (FlybyOverrides patch) must not be displaced by a
+   *  generic night/wet variant. */
+  function isStockShot(shot) {
+    if (!shot || !shot.id) return false;
+    const stock = DEFAULT.find((s) => s && s.id === shot.id);
+    if (!stock) return false;
+    const key = (s) => JSON.stringify({ eye: s.eye, look: s.look, fov: s.fov, dur: s.dur, ease: s.ease });
+    return key(shot) === key(stock);
+  }
+  /** Pick the playable list for this session. Pure: never mutates `list`.
+   *  `list` may already be a catalog (DEFAULT + when: entries) or a patched
+   *  DEFAULT; FlybyOverrides.WHEN is folded in when absent. */
+  function select(list, info) {
+    if (!Array.isArray(list) || !list.length) return list || [];
+    const session = info || {};
+    let extras = null;
+    try {
+      if (typeof FlybyOverrides !== "undefined" && FlybyOverrides && Array.isArray(FlybyOverrides.WHEN))
+        extras = FlybyOverrides.WHEN;
+    } catch (_) { extras = null; }
+    const catalog = list.slice();
+    if (extras && extras.length && !list.some((s) => s && s.when)) {
+      for (let i = 0; i < extras.length; i++) catalog.push(extras[i]);
+    }
+    const order = [], best = new Map();
+    for (let i = 0; i < catalog.length; i++) {
+      const shot = catalog[i];
+      if (!shot || typeof shot !== "object") continue;
+      if (!whenMatch(shot.when, session)) continue;
+      const id = shot.id || ("#" + i);
+      if (!best.has(id)) order.push(id);
+      const prev = best.get(id);
+      if (!prev) { best.set(id, shot); continue; }
+      // A circuit signature (non-stock, no when) keeps the frame; session
+      // variants only replace the shipped DEFAULT language.
+      if (!prev.when && !isStockShot(prev) && shot.when) continue;
+      if (whenScore(shot.when) > whenScore(prev.when)) best.set(id, shot);
+    }
+    return order.map((id) => best.get(id));
+  }
+  /* Session for select() when vary() is called with no info. raceIntro /
+     menuFinish cannot pass tod/weather without a game.js edit (wave OWNED
+     boundary), so callers that know the session — flyby.mjs, tests, and a
+     future one-line raceIntro hook — call setSession(info) first. */
+  let _session = null;
+  function setSession(info) { _session = info && typeof info === "object" ? info : null; }
+  function sessionInfo() { return _session || {}; }
   /* A DIFFERENT FLYBY EACH LOAD. The same nine shots on the fifth load of a
      circuit is a loading screen; the same LANGUAGE redrawn is a broadcast.
      vary() jitters the establishing bearings, sometimes films the second
@@ -2028,6 +2104,10 @@ const FlybySeq = (function () {
      seed is the same flyby, which is what the test holds it to. */
   const VARY_ROLES = ["first", "lore", "slowest", "fastest", "mid", "late"];
   function vary(list, seed, fit) {
+    // Fold night/wet variants in, then pick for this session — raceIntro and
+    // menuFinish only call vary(DEFAULT), so select() has to live here to reach
+    // the loading flyby without a game.js edit (wave OWNED boundary).
+    list = select(list || DEFAULT, sessionInfo());
     if (fit !== false) list = list.filter(fitsGrid);   // durations renormalise in solve(); the menu passes false (the race's grid is not known yet)
     let h = (seed >>> 0) || 1;
     const rnd = () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
@@ -2056,7 +2136,7 @@ const FlybySeq = (function () {
     solve, shotAt, warmProgress, airCorner, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
+    poseFromWorld, shotFromView, nearestCorner, select, setSession, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
     boundaries, presentation, swayAt, setHeroCars, driveHero, gridProgress,
     DEFAULT, GRID_SHOTS, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,

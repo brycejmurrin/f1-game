@@ -60,6 +60,26 @@ const CarGeometry = (function () {
       addLoft(out, cz-sz/2, cx, cy, sx, sy, cz+sz/2, cx, cy, sx, sy, col, surface);
     }
 
+    // Any n-corner section (a chined pod has five), front to rear, capped: CarShade.loftRings'
+    // faces and winding (CCW from +Z, fixed by signed area so either side's mirror lofts outward).
+    function addSectionLoft(out, secs, col, frontCol, surface, frontSurface) {
+      const area = (r) => r.reduce((a, p, i) => { const q = r[(i + 1) % r.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0);
+      const rings = secs.map((r) => (area(r) < 0 ? r.slice().reverse() : r)), n = rings[0].length;
+      for (let r = 0; r < rings.length - 1; r++) {
+        const F = rings[r], R = rings[r + 1];
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          addTri(out, F[i], R[i], R[j], col, surface);
+          addTri(out, F[i], R[j], F[j], col, surface);
+        }
+      }
+      const cap = (ring, c, sf, flip) => {
+        const m = [0, 1, 2].map((k) => ring.reduce((a, p) => a + p[k], 0) / n);
+        for (let i = 0; i < n; i++) { const j = (i + 1) % n; if (flip) addTri(out, m, ring[j], ring[i], c, sf); else addTri(out, m, ring[i], ring[j], c, sf); }
+      };
+      cap(rings[0], frontCol || col, frontSurface || surface, false);
+      cap(rings[rings.length - 1], col, surface, true);
+    }
     function addBlock(out, q, col, colFront, surface, frontSurface, capFront, capRear) {
       {
         const ax = q[1][0]-q[0][0], ay = q[1][1]-q[0][1], az = q[1][2]-q[0][2];
@@ -159,6 +179,7 @@ const CarGeometry = (function () {
       }
     }
     function addStationLoft(out, stations, col, frontCol, surface, frontSurface) {
+      if (stations[0].length !== 4) return addSectionLoft(out, stations, col, frontCol, surface, frontSurface);
       for (let i = 0; i < stations.length - 1; i++) {
         addBlock(out, stations[i].concat(stations[i + 1]), col,
                  i === 0 ? frontCol : null, surface,

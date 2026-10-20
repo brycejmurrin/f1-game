@@ -246,6 +246,27 @@ test('small MCP answers retain native schema and avoid duplicate summary payload
   assert.ok(JSON.stringify(result).length < 600);
 });
 
+test('a mid-size answer the summary cannot shrink stays native; one it can shrink is summarized', t => {
+  const root = fixture(t);
+  // apex_doctor-shaped, ~1.7 KB: the envelope as sent (text mirror + structuredContent) is no smaller.
+  const flat = { ok: true, summary: { pass: 3, warn: 0, fail: 0 }, checks: ['node', 'chromium', 'lsp'].map(name => ({ name, status: 'pass', detail: name.padEnd(200, '.') })) };
+  const small = { content: [{ type: 'text', text: JSON.stringify(flat) }], structuredContent: flat, isError: false };
+  const kept = presentMcpResult(small, { root });
+  assert.deepEqual(kept.structuredContent, flat);
+  assert.equal(kept.isError, false);
+  assert.ok(kept._meta['apex/agent-output'].artifact.bytes > 1024);
+  // A bounded LSP body (~2 KB text): excerpting it would save little and force a re-read.
+  const body = Array.from({ length: 30 }, (_, i) => `    ${10 + i}  const line${i} = compute(${i}); // ${'x'.repeat(30)}`).join('\n');
+  const lsp = { content: [{ type: 'text', text: `1 definition\n${body}` }] };
+  assert.equal(presentMcpResult(lsp, { root }).content[0].text, lsp.content[0].text);
+  // Many long rows: the summary is far smaller, so the envelope still wins.
+  const rows = Array.from({ length: 200 }, (_, id) => ({ id, detail: 'x'.repeat(200) }));
+  const big = { content: [{ type: 'text', text: JSON.stringify({ rows }) }], structuredContent: { rows } };
+  const summarized = presentMcpResult(big, { root });
+  assert.equal(summarized.structuredContent.outputLevel, 'compact');
+  assert.ok(JSON.stringify(summarized).length < JSON.stringify(big).length / 4);
+});
+
 test('exact collection pages recover all omitted rows without advancing upstream cursors', t => {
   const root = fixture(t);
   const rows = Array.from({ length: 40 }, (_, id) => ({ id, value: `é${id}` }));
@@ -325,6 +346,52 @@ test('status-bearing collections prioritize late issues independently of their n
   const plain = summarizeOutput({ rows: Array.from({ length: 20 }, (_, value) => ({ value })) }).rows;
   assert.deepEqual(plain.slice(0, 3), [{ value: 0 }, { value: 1 }, { value: 2 }]);
 });
+test('successful rows with structured warnings retain warning priority and source status counts', () => {
+  const rows = Array.from({ length: 160 }, (_, id) => ({ id, status: 'PASS', detail: 'healthy '.repeat(30) }));
+  rows[130].warning = 'stale sensor receipt';
+  rows[159] = { id: 159, status: 'FAIL', error: 'missing result' };
+  const before = JSON.stringify(rows);
+  for (const level of ['compact', 'diagnostic']) {
+    const result = summarizeOutput({ rows }, { level }).rows;
+    assert.equal(result[0].id, 159);
+    assert.equal(result[1].id, 130);
+    assert.equal(result[1].warning, 'stale sensor receipt');
+    assert.equal(result.at(-1).warningFieldCount, 1);
+    assert.deepEqual(result.at(-1).statusCounts, { PASS: 159, FAIL: 1 });
+  }
+  assert.equal(JSON.stringify(rows), before);
+  assert.deepEqual(summarizeOutput({ rows }, { level: 'full' }).rows, rows);
+});
+
+test('warning-only rows are actionable while empty warning fields and passing names are not', () => {
+  for (const empty of [0, false, '', '0 warnings', [], {}]) {
+    const rows = Array.from({ length: 30 }, (_, id) => ({ id, name: 'a warning is expected', warnings: empty }));
+    rows[28] = { id: 28, warnings: ['camera preference was restored'] };
+    const result = summarizeOutput({ rows }).rows;
+    assert.equal(result[0].id, 28);
+    assert.equal(result.at(-1).warningFieldCount, 1);
+  }
+});
+
+test('status-less rows that list problems (car_audit dead parts) outrank clean rows; empty lists do not', () => {
+  // Measured 2026-10-19: apex_car_audit ladder at compact showed engine/aero/suspension and omitted
+  // tyres, the one category with dead parts, because no row carried a status field.
+  const rows = ['engine', 'aero', 'suspension', 'brakes', 'tyres', 'ers'].map(cat => ({ cat, live: 10, dead: [], traps: [] }));
+  rows[4].dead = [{ id: 'intermediate' }, { id: 'wet' }];
+  for (const level of ['compact', 'diagnostic']) {
+    const result = summarizeOutput({ out: rows }, { level }).out;
+    assert.equal(result[0].cat, 'tyres', level);
+    assert.equal(result.at(-1).issueFieldCount, 1);
+    assert.equal(result.at(-1).warningFieldCount, undefined);
+  }
+  const clean = summarizeOutput({ out: rows.map(r => ({ ...r, dead: [] })) }).out;
+  assert.equal(clean[0].cat, 'engine');
+  for (const empty of ['none', '0 failures', [], {}, 0]) {
+    const out = summarizeOutput({ out: Array.from({ length: 6 }, (_, id) => ({ id, failures: empty })) }).out;
+    assert.equal(out[0].id, 0, JSON.stringify(empty));
+  }
+});
+
 test('MCP summaries deduplicate identical transport text and structured data', () => {
   const data = { verdict: 'failed', cause: 'missing file', checks: [{ status: 'warning' }] };
   const summary = summarizeOutput({ content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data });
