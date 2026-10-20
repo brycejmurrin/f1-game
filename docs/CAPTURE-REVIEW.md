@@ -39,6 +39,11 @@ installs a browser or replaces game frames with geometry projections.
 
 ## Export a portable site collection
 
+The authored, styled Design Lab frontend is versioned under
+[`sites/design-lab/`](../sites/design-lab/README.md). Its README
+explains how to pair the exact site HTML/CSS/JS with the existing capture data
+and assets. The portable exporter below remains a separate generated view.
+
 The gallery exporter accepts matrix `gallery.json` or an existing Design Lab
 `captures.json`. It validates every file against its recorded SHA-256, decodes
 image dimensions, preserves each source revision, design recipe and historical
