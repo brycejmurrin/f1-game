@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
+import { absSrc } from "../helpers/abs-src.mjs";
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const copy = (v) => JSON.parse(JSON.stringify(v));
@@ -12,7 +13,7 @@ function careerHarness() {
   store.write = (k, v) => ({ ok: store.set(k, v), durable: true });
   const ctx = vm.createContext({ console, Log: { info() {}, warn() {}, debug() {} }, GameStore: { store, CAREER_V: 2, seasonDriverId: (t, i) => t + ':' + i, migrateCareer: (c) => c }, Tracks: { LIST: [{ id: 'a' }], SEASON: [{ id: 'a' }] } });
   ctx.window = ctx;
-  for (const f of ['js/core/mat4.js', 'js/core/hash32.js', 'js/physics/consts.js', 'js/data/teams.js', 'js/data/driver-ratings.js', 'js/car/parts.js', 'js/career/team-identity.js', 'js/career/regulations.js', 'js/career/career.js']) vm.runInContext(read(f), ctx, { filename: f });
+  for (const f of ['js/core/mat4.js', 'js/core/hash32.js', 'js/physics/consts.js', 'js/data/teams.js', 'js/data/driver-ratings.js', 'js/car/parts.js', 'js/career/team-identity.js', 'js/career/regulations.js', 'js/career/career.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   vm.runInContext('Teams.LIST.push(Teams.sanitizeCustom(Teams.DEFAULT_CUSTOM))', ctx);
   return { C: vm.runInContext('Career', ctx), ctx, store, disk, Teams: vm.runInContext('Teams', ctx) };
 }

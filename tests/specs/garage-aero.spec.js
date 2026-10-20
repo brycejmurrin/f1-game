@@ -90,6 +90,19 @@ async function openGarage(page) {
 test.describe("garage active aero", () => {
   test.use({ viewport: LANDSCAPE });
 
+  // P2-32: a call made with the garage shut used to answer a bare null.
+  test("with the garage closed, garageAero and garageStep say so", async ({ page }) => {
+    await toMenu(page);
+    const r = await page.evaluate(() => ({
+      on: window.__apex.garageCam().on,
+      aero: window.__apex.garageAero(true),
+      step: window.__apex.garageStep(1 / 60, 2),
+    }));
+    expect(r.on, "the title has no garage preview up").toBe(false);
+    expect(r.aero).toEqual({ ok: false, error: "garage_closed" });
+    expect(r.step).toEqual({ ok: false, error: "garage_closed" });
+  });
+
   test("the demo starts shut", async ({ page }) => {
     await openGarage(page);
     const a = await page.evaluate(() => window.__apex.garageAero());
@@ -123,9 +136,11 @@ test.describe("garage active aero", () => {
     const moved = await page.evaluate(() => {
       // Where each element's leading edge sits at the two ends of the travel —
       // the same rotation-about-the-pivot the draw applies.
+      // The rear stack shares one pivot, off most elements' chord lines (FIA
+      // C3.11.6), so rotate the design-pose LE about it.
       const at = (e, d) => {
-        const a = e.natural + d, u = (0 - e.hinge) * e.chord;
-        return [e.z - u * Math.cos(a), e.y + u * Math.sin(a)];
+        const dy = e.le[1] - e.y, dz = e.le[0] - e.z, c = Math.cos(d), s = Math.sin(d);
+        return [dy * s + dz * c + e.z, dy * c - dz * s + e.y];
       };
       return Car3D.aeroFlaps(2, null).map((e) => {
         const c = at(e, e.zAngle), o = at(e, e.xAngle);
@@ -138,6 +153,29 @@ test.describe("garage active aero", () => {
     const rear = moved.filter((m) => m.wing === "rear");
     expect(rear.length).toBeGreaterThan(0);
     for (const m of rear) expect(m.mm, `${m.id} leading edge travel`).toBeGreaterThan(80);
+  });
+
+  // P2-32: the button's own branch (setup-camera.js setSetupAero: lit class,
+  // aria-pressed, the CORNER/STRAIGHT label) is reachable only by clicking it —
+  // garageAero() sets the same state without proving the control shows it.
+  test("the AERO button drives the flap and shows its state", async ({ page }) => {
+    await openGarage(page);
+    const read = () => page.evaluate(() => {
+      const b = document.getElementById("cs-aero");
+      const v = b.querySelector(".cs-aero-val");
+      return { pressed: b.getAttribute("aria-pressed"), lit: b.classList.contains("active"),
+               label: v ? v.textContent : null, xOn: window.__apex.garageAero().xOn };
+    });
+    expect(await read()).toEqual({ pressed: "false", lit: false, label: "CORNER MODE", xOn: false });
+    await clickId(page, "cs-aero");
+    expect(await read()).toEqual({ pressed: "true", lit: true, label: "STRAIGHT MODE", xOn: true });
+    // The click starts the real ease, not a snap.
+    const opened = await page.evaluate(() => window.__apex.garageStep(1 / 60, 60));
+    expect(opened.aeroX).toBe(1);
+    await clickId(page, "cs-aero");
+    expect(await read()).toEqual({ pressed: "false", lit: false, label: "CORNER MODE", xOn: false });
+    const shut = await page.evaluate(() => window.__apex.garageStep(1 / 60, 120));
+    expect(shut).toEqual({ xOn: false, aeroX: 0, mode: "Z" });
   });
 
   test("switching X on from the turntable AIMS at the rear wing", async ({ page }) => {

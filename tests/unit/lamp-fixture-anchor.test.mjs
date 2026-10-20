@@ -48,6 +48,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -79,7 +80,7 @@ const LightTune = () => (_LT || (_LT = loadLightTune()));
 const StartLights = () => (_SL || (_SL = (() => {
   const sb = { Math, WeakMap };
   vm.createContext(sb);
-  return vm.runInContext(readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8") + ";StartLights", sb);
+  return vm.runInContext(readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8") + ";StartLights", sb, { filename: absSrc("js/race/start-lights.js") });
 })()));
 // A start lamp row and a start gantry both belong OVER THE GRID: the scenery
 // gantry nearest the line within this many metres of it (arc), the lamps

@@ -31,7 +31,10 @@ const HudReadouts = (function () {
   // the chip / REL / tower share two decimals; above that, standard and
   // minimal drop to one (same character count as "9.94" → "10.4") while
   // broadcast keeps TV-style hundredths. Lap-down spells "-1L" (lapGapText).
-  const GAP_FINE_LT = 9.95;
+  // 9.995, not 9.95: two decimals hold until the value would ROUND to 10.00, so
+  // 9.949 / 9.95 / 9.951 all read "9.95" and the next step is "10.0" — monotonic,
+  // four characters either side (a 9.95 cut-off printed 9.95 then "9.9").
+  const GAP_FINE_LT = 9.995;
   /** Decimal places for a gap of `sec` seconds on HUD profile `profile`. */
   function gapDecimals(profile, sec) {
     const p = profile || "standard";

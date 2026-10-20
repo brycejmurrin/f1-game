@@ -96,7 +96,7 @@ export const RULES = [
   // in `test:scenery` (now `test:circuits`).
   // Routing it to circuit+physics+sweeps+foundation ran everything except the
   // two specs that actually report the class of bug the file produces.
-  [/^js\/track\/core\/space\.js/, ["physics-core"], "world<->track projection (projection.spec.js)"],
+  [/^js\/track\/core\/space\.js/, ["physics-core"], "world<->track projection (tests/unit/track-project-hints.test.mjs)"],
   [/^js\/track\/build-(client|worker)\.js/, ["sweeps"], "the build Worker (apex26.buildWorker): build-worker.test.mjs replays it byte-identically"],
   [/^js\/workers\//, ["tooling"], "bitmap-decode worker + client (tests/unit/bitmap-decode-worker.test.mjs)"],
   [/^js\/track\/(core\/|tracks\.js)/,
@@ -293,7 +293,9 @@ export const RULES = [
   [/^js\/ui\/settings-export\.js/, ["steering-unit"], "settings-export.test.mjs"],
 
   // ── core and the agent surface ──────────────────────────────────────────
+  [/^js\/agent\/apex-gpu-capture/, ["hooks", "agent-contract"], "Spector/webgl-lint GPU capture toggle (#2964); gpu-capture.spec.js"],
   [/^js\/agent\//, ["hooks", "agent-contract"], "the __apex contract and the agent view"],
+  [/^js\/render\/webgpu\/wgx-debug-labels\.js$/, ["gfx", "tooling-fast"], "WGX GPU object labels + pass debug groups; wgx-labels.test.mjs"],
   [/^js\/core\/store\.js/, ["hooks", "modes", "state-unit"], ""],
   [/^js\/core\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
   [/^js\/core\/native/, ["mobile-unit", "hooks"], "Native detect + NativeDownload; test:mobile-unit"],

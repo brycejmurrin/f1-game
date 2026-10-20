@@ -11,20 +11,25 @@ from `tools/lib/webgpu-chrome-args.cjs`). `tools/mcp/probe-mcp.py` is a CLI (not
 MCP-attached since 2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
 The deployed site, `version.json` and the public web are **deploy-research** (table below).
 
-**Pick one client:** the session lists attached `chrome_*` tools → use them and start
-no daemon; it does not → `probe-mcp.py chrome-start` then `call` (a bare `call` without
-it spawns a fresh Chromium each time, so navigate → evaluate → screenshot breaks).
+**Pick one client:** use attached `chrome_*` tools when the session lists them;
+otherwise use one persistent CLI daemon, then `call`. `chrome-start` requires
+`tmux`; on a host without it, use the owned foreground-daemon procedure in
+[offline preflight](references/offline.md). A bare `call` without a daemon
+spawns a fresh Chromium each time, so navigate → evaluate → screenshot breaks.
 
 ## Entry
 
 ```sh
-python3 tools/mcp/probe-mcp.py status                # no browser: clone/bin/Chrome path + daemon UP/DOWN. Run FIRST
-#   "Bin: missing" -> tools/mcp/chrome-devtools-mcp.sh clone  (needs egress; no egress = use the attached chrome_* tools, no daemon)
+python3 tools/mcp/probe-mcp.py status                # no browser: local bin/Chrome path + daemon UP/DOWN. Run FIRST
+bash tools/mcp/apex-tools-mcp.sh call apex_status '{}' # no browser: follow next.action/reason; prerequisites can pass while occupancy says wait
+# "Bin: missing" alone is not a blocker: the wrapper uses its pinned npm fallback.
+# Checkout dependencies and Chromium are required; an uncached npm fallback needs egress.
+# Clone/build is optional server-development work, not routine probe setup.
 # Everything below launches Chromium (browser-only) except help/status/mcp-cli --dry-run:
 python3 tools/mcp/probe-mcp.py list-tools
-python3 tools/mcp/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome; refused while a Playwright run is live
+python3 tools/mcp/probe-mcp.py chrome-start          # tmux path; refused while a Playwright run is live
 python3 tools/mcp/probe-mcp.py call chrome_...
-python3 tools/mcp/probe-mcp.py chrome-stop           # while the daemon is up, `test-bg.mjs` refuses a browser group
+python3 tools/mcp/probe-mcp.py chrome-stop           # stop a daemon started with chrome-start; foreground mode: see offline.md
 node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 

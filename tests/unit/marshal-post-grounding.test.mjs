@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -19,7 +20,7 @@ function recordStyles(styles) {
   vm.createContext(sb);
   seedLog(sb);
   for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/scenery/data.js", "js/track/scenery/structures.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   const TG = sb.TrackGeom, n = 40;
   const out = { pos: [], nrm: [], col: [], idx: [], mat: [] };
   const hw = new Float32Array(n).fill(6), px = new Float32Array(n), py = new Float32Array(n), pz = new Float32Array(n);

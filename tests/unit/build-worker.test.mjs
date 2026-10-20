@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
+import { absSrc } from "../helpers/abs-src.mjs";
 const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/track/verify-track.cjs");
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -37,10 +38,10 @@ function spawnWorker() {
   ctx.importScripts = (...files) => {
     for (const f of files) {
       const rel = f.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
-      vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), ctx, { filename: rel });
+      vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), ctx, { filename: absSrc(rel) });
     }
   };
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), ctx, { filename: absSrc("js/track/build-worker.js") });
   // onmessage is async (a build awaits the model pack): send() returns it.
   return { send: (m) => ctx.onmessage({ data: m }), posted, transferred };
 }
@@ -71,7 +72,7 @@ function recorder() {
 const PHYS = ["px", "py", "pz", "hw", "barL", "barR", "lineX", "lineK"];
 const physics = (t) => PHYS.filter((k) => t[k]).map((k) => k + ":" + createHash("sha1").update(Buffer.from(Float64Array.from(t[k]).buffer)).digest("hex").slice(0, 16));
 
-vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8").replace(/^const\b/gm, "var"), main);
+vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/track/build-client.js") });
 const worker = spawnWorker();
 worker.send({ type: "init", files: vmFiles.map((f) => "http://x/" + f + "?v=1") });
 
@@ -203,7 +204,7 @@ test("turning BUILD IN BACKGROUND off terminates the worker; on spawns a fresh o
     ApexRoster: { TRACK_VM: ["js/track/core/geom.js"], TRACK_WORKER_EXTRA: [] },
     Worker: class { constructor() { this.terminated = 0; this.posted = []; made.push(this); }
       postMessage(m) { this.posted.push(m.type); } terminate() { this.terminated++; } } });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx, { filename: "build-client.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx, { filename: absSrc("js/track/build-client.js") });
   const C = vm.runInContext("TrackBuildClient", ctx);
   C.set(true);
   assert.equal(made.length, 1, "on: the worker spawns and parses the build modules now");
@@ -263,7 +264,7 @@ function pageWithWorker({ workerPack = true, workerRefuses = () => false } = {})
     localStorage: { getItem: (k) => (k === "apex26.buildWorker" ? "1" : null), setItem() {} },
     ApexRoster: { TRACK_VM: vmFiles, TRACK_WORKER_EXTRA: MANIFEST.TRACK_WORKER_EXTRA } });
   for (const f of ["js/render/shared/assets.js", "js/track/build-client.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), page, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), page, { filename: absSrc(f) });
   const posts = [], workerFetched = [], workers = [];
   page.Worker = class {
     constructor() {
@@ -276,10 +277,10 @@ function pageWithWorker({ workerPack = true, workerRefuses = () => false } = {})
       wctx.importScripts = (...files) => {
         for (const f of files) {
           const rel = f.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
-          vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), wctx, { filename: rel });
+          vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), wctx, { filename: absSrc(rel) });
         }
       };
-      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), wctx);
+      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), wctx, { filename: absSrc("js/track/build-worker.js") });
       this.wctx = wctx;
       workers.push(this);
     }
@@ -331,14 +332,21 @@ test("worker world == main-thread world WITH baked models, pit signs and MY TEAM
   assert.notDeepEqual(c.log, a.log, "premise: the baked models change the uploads");
 });
 
-test("the worker's reply carries no terrain lookup cache (bug-hunt 6.7)", async () => {
+test("the worker's reply carries the terrain lookup grid as flat typed arrays (perf hunt #3113 F3)", async () => {
   const { T, page } = pageWithWorker();
   const id = "monza", def = T.LIST.find((d) => d.id === id);
   await page.Assets.loadModels();
   const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf(id), def, { chunkRibbons: true, retainGraph: false }, recorder().gfx, MANIFEST.sceneryPath(id));
   assert.ok(msg, "the worker answered a world");
-  // terrainGrid() (tracks.js) rebuilds this on first use: the cell lists were structured-cloned for nothing.
-  assert.ok(!msg.track._terrGrid, "no _terrGrid in the post");
+  // Bug-hunt 6.7 dropped the grid when it was arrays of arrays (structured-cloned
+  // element by element); the CSR form transfers, and the page must not rebuild it.
+  const grid = msg.track._terrGrid, tp = msg.track.terrainGeo.pos;
+  assert.ok(grid, "_terrGrid rides along in the post");
+  for (const k of ["start", "list", "lo"]) assert.ok(ArrayBuffer.isView(grid[k]), k + " is a typed array (transferable)");
+  assert.equal(grid.geo, msg.track.terrainGeo, "the clone keeps grid.geo === terrainGeo, so terrainGrid() reuses it");
+  const y = page.Tracks.terrainY(msg.track, tp[0], tp[2]);
+  assert.ok(Number.isFinite(y), "terrainY answers at a terrain vertex");
+  assert.equal(msg.track._terrGrid, grid, "the first page-side terrainY did not rebuild the grid");
   console.log("props.list size on " + id + ": " + (msg.track.props && msg.track.props.list ? msg.track.props.list.length : "n/a"));
 });
 
@@ -406,7 +414,7 @@ function smallClient(extra = {}) {
     localStorage: { getItem: () => "1" }, ApexRoster: { TRACK_VM: ["missing.js"] },
     Log: { info() {}, warn() {} }, TrackSurface: { profile: () => ({}) }, ...extra });
   ctx.window = ctx;
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx, { filename: absSrc("js/track/build-client.js") });
   return ctx.TrackBuildClient;
 }
 
@@ -421,7 +429,7 @@ test("caught worker import failure settles the build, drops the worker and allow
         postMessage(data) { queueMicrotask(() => me.onmessage({ data })); },
       });
       this.ctx.self = this.ctx;
-      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), this.ctx);
+      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), this.ctx, { filename: absSrc("js/track/build-worker.js") });
     }
     postMessage(data) { void this.ctx.onmessage({ data }); }
     terminate() { this.terminated = true; }
@@ -519,3 +527,107 @@ for (const failure of ["fallback", "surface", null]) {
     }
   });
 }
+
+
+test("opt-in liveness cancels obsolete init/model waits without canceling independent owners", async () => {
+  let bridge;
+  const gates = new Map(), built = [], posts = [];
+  class Bridge {
+    constructor() {
+      bridge = this;
+      const me = this;
+      this.ctx = vm.createContext({ performance, importScripts() {},
+        Tracks: { LIST: ["a", "b", "c"].map(id => ({ id })),
+          build(def) { built.push(def.id); return {}; } },
+        Assets: { modelsReady() { return new Promise(resolve => gates.set(me.currentId, resolve)); } },
+        postMessage(data) { queueMicrotask(() => me.onmessage({ data })); },
+      });
+      this.ctx.self = this.ctx;
+      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), this.ctx);
+    }
+    postMessage(data) {
+      posts.push(data);
+      if (data.type === "init") { this.init = data; return; }
+      this.currentId = data.id;
+      this.ctx.onmessage({ data });
+    }
+    ready() { return this.ctx.onmessage({ data: this.init }); }
+    terminate() { this.terminated = true; }
+  }
+  const client = smallClient({ Worker: Bridge });
+  let owner = "a";
+  const request = (id, live) => client.build(["a", "b", "c"].indexOf(id), { id }, {}, {}, null, live);
+  const a = request("a", () => owner === "a");
+  owner = "b"; const b = request("b", () => owner === "b");
+  owner = "c"; const cLive = () => owner === "c";
+  const c = request("c", cLive), duplicateC = request("c", cLive);
+  await bridge.ready(); await tick();
+  assert.equal(await a, null); assert.equal(await b, null);
+  assert.deepEqual(posts.filter(p => p.type === "build").map(p => p.id), ["c"], "obsolete requests never post after init");
+  gates.get("c")(); assert.equal((await c).id, "c");
+  assert.equal((await duplicateC).id, "c", "same owner/key callers share the request");
+  assert.deepEqual(built, ["c"]);
+  owner = "a"; const stale = request("a", () => owner === "a"); await tick();
+  owner = "b"; const current = request("b", () => owner === "b"); await tick();
+  assert.equal(await stale, null);
+  gates.get("a")(); gates.get("b")();
+  assert.equal((await current).id, "b");
+  assert.deepEqual(built, ["c", "b"], "canceled model wait does not build");
+  owner = "a"; const backedOut = request("a", () => owner === "a"); await tick();
+  owner = "none"; gates.get("a")();
+  assert.equal(await backedOut, null, "post-readiness permit refuses a caller that backed out without a newer request");
+  const independent = ["a", "b", "c"].map(id => request(id)); await tick();
+  gates.get("b")(); gates.get("c")(); gates.get("a")();
+  assert.deepEqual((await Promise.all(independent)).map(m => m.id), ["a", "b", "c"]);
+  assert.equal(client.busy(), false); assert.equal(bridge.terminated, undefined);
+});
+
+
+test("a rejected liveness permit send settles its owner and permits worker recovery", async () => {
+  const workers = [];
+  class Bridge {
+    constructor() { workers.push(this); }
+    postMessage(data) {
+      if (data.type === "init") queueMicrotask(() => this.onmessage({ data: { type: "ready" } }));
+      if (data.type === "build") {
+        queueMicrotask(() => this.onmessage({ data: workers.length === 1
+          ? { type: "buildReady", seq: data.seq }
+          : { type: "built", seq: data.seq, id: data.id, models: [] } }));
+      }
+      if (data.type === "buildPermit") throw new Error("permit transport rejected");
+    }
+    terminate() { this.terminated = true; }
+  }
+  const c = smallClient({ Worker: Bridge });
+  assert.equal(await c.build(0, { id: "a" }, {}, {}, null, () => true), null);
+  assert.equal(c.busy(), false); assert.equal(workers[0].terminated, true);
+  const fresh = c.build(0, { id: "b" }, {}, {}, null, () => true);
+  workers[0].onmessage({ data: { type: "buildReady", seq: 1 } });
+  assert.equal((await fresh).id, "b");
+  assert.equal(workers[1].terminated, undefined, "retired worker cannot affect replacement permits");
+});
+
+
+test("a ready result cannot post an old request to a same-turn replacement worker", async () => {
+  const workers = [], posts = [];
+  class Bridge {
+    constructor() { workers.push(this); }
+    postMessage(data) {
+      posts.push({ worker: this, data });
+      if (data.type === "build") queueMicrotask(() => this.onmessage({ data: { type: "built", seq: data.seq, id: data.id, models: [] } }));
+    }
+    terminate() { this.terminated = true; }
+  }
+  const c = smallClient({ Worker: Bridge });
+  const old = c.build(0, { id: "old" }, {}, {}, null);
+  workers[0].onmessage({ data: { type: "ready" } });
+  c.set(false); c.set(true); // retire and replace before the old await continuation
+  const fresh = c.build(1, { id: "fresh" }, {}, {}, null);
+  await tick();
+  assert.equal(await old, null);
+  assert.equal(posts.filter(p => p.data.type === "build").length, 0, "replacement must finish its own init first");
+  workers[1].onmessage({ data: { type: "ready" } });
+  assert.equal((await fresh).id, "fresh");
+  assert.deepEqual(posts.filter(p => p.data.type === "build").map(p => p.data.id), ["fresh"]);
+  assert.equal(c.busy(), false);
+});

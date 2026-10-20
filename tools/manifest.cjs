@@ -243,6 +243,7 @@ const FULL = [
   "js/car/crest-paths.js",
   "js/car/livery-design.js",
   "js/car/livery-graphics.js",
+  "js/car/livery-stations.js",
   "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
@@ -560,6 +561,7 @@ const CARVIEW = [
   "js/car/crest-paths.js",
   "js/car/livery-design.js",
   "js/car/livery-graphics.js",
+  "js/car/livery-stations.js",
   "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
@@ -939,6 +941,7 @@ const DEFERRED = {
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
     "js/render/webgpu/wgx-roadlut.js",
+    "js/render/webgpu/wgx-debug-labels.js",
     "js/render/webgpu/wgx.js",
   ],
   three: [
@@ -972,6 +975,7 @@ const LAZY_AGENT = [
   "js/agent/apex-cam.js",
   "js/agent/apex-track.js",
   "js/agent/apex-lobby.js",
+  "js/agent/apex-gpu-capture.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
@@ -980,6 +984,7 @@ const LAZY_EDGES = [
   ["js/agent/apex-cam.js", "js/agent/apex.js"],
   ["js/agent/apex-track.js", "js/agent/apex.js"],
   ["js/agent/apex-lobby.js", "js/agent/apex.js"],
+  ["js/agent/apex-gpu-capture.js", "js/agent/apex.js"], // __apex.gpuCapture one-line registration
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
@@ -1335,6 +1340,7 @@ const DEFERRED_EDGES = [
   ["js/render/webgpu/wgx-chunked.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-post.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-roadlut.js", "js/render/webgpu/wgx.js"],   // wgx.js destructures WGXRoadLut at eval
+  ["js/render/webgpu/wgx-debug-labels.js", "js/render/webgpu/wgx.js"], // WGXDebugLabels.install(device) after requestDevice
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
@@ -1366,7 +1372,9 @@ const PATHS = {
   WGX_CHUNKED: "js/render/webgpu/wgx-chunked.js",
   WGX_POST: "js/render/webgpu/wgx-post.js",
   WGX_ROADLUT: "js/render/webgpu/wgx-roadlut.js",
+  WGX_DEBUG_LABELS: "js/render/webgpu/wgx-debug-labels.js",
   WGX: "js/render/webgpu/wgx.js",
+  APEX_GPU_CAPTURE: "js/agent/apex-gpu-capture.js",
   INST_CELLS: "js/render/shared/inst-cells.js",
   GLTF: "js/render/shared/gltf.js",
   ASSETS: "js/render/shared/assets.js",

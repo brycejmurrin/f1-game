@@ -8,7 +8,7 @@ Every run resolves a commit, creates one detached Git worktree, and records the 
 
 This follows Git's documented detached-worktree form, `git worktree add --detach <path> <commit>`: <https://git-scm.com/docs/git-worktree>. Shutdown drains worker queues, stops each LSP child, removes the linked worktree, and writes `stopped.json`. The source manifest and transcripts remain as evidence.
 
-The probe uses Node's `vm.runInContext` with explicit timeouts and an intentionally small context. Node states that `node:vm` “is not a security mechanism”; this probe is only for trusted agent-authored source experiments: <https://nodejs.org/api/vm.html>. It does not expose `process`, `require`, or network APIs, but those omissions must not be described as a sandbox.
+The probe uses Node's `vm.runInContext` with explicit timeouts and an intentionally small context. Context-created Promise callbacks run with `microtaskMode: "afterEvaluate"`, within the VM timeout; result serialization also runs inside a timed evaluation because getters and `toJSON` can execute code. See Node's [timeout and Promise documentation](https://nodejs.org/docs/latest-v24.x/api/vm.html#timeout-interactions-with-asynchronous-tasks-and-promises). Node states that `node:vm` “is not a security mechanism”; this probe is only for trusted agent-authored source experiments: <https://nodejs.org/api/vm.html>. It does not expose `process`, `require`, or network APIs, but those omissions must not be described as a sandbox.
 
 ## Starting a run
 
@@ -53,7 +53,7 @@ node tools/mcp/workflow-harness-client.mjs \
 
 `node tools/mcp/workflow-harness.mjs --help` prints the actual local and imported production LSP JSON Schemas used for request validation.
 
-`probe.test` is evaluated as a script completion value. Use an expression or an IIFE such as `(() => { return GameAudio.context(); })()`. A top-level `return` is invalid. `--quiet` suppresses successful output while still printing semantic errors and exiting nonzero. Without `--quiet`, the worker sees only `{seq,error,errorCode,clipped,fullChars,output}`. Full arguments, output, RPC timings, condition, queue time, byte counts, and clipping state stay in append-only per-worker `transcript.jsonl` files. Calls rejected after a worker cap go to `rejected.jsonl` without extending its sequence.
+`probe.test` is evaluated as a synchronous script completion value. Use an expression or an IIFE such as `(() => { return GameAudio.context(); })()`. A top-level `return` is invalid. Promise completion values are unsupported and return an explicit semantic error; they are never reported as a successful empty object. Return a synchronous JSON value. `--quiet` suppresses successful output while still printing semantic errors and exiting nonzero. Without `--quiet`, the worker sees only `{seq,error,errorCode,clipped,fullChars,output}`. Full arguments, returned output (possibly clipped), RPC timings, condition, queue time, byte counts, and clipping state stay in append-only per-worker `transcript.jsonl` files. Calls rejected after a worker cap go to `rejected.jsonl` without extending its sequence.
 
 Read windows are at most 120 lines and name the displayed range. Ripgrep reports its 25-matches-per-file bound. Returned output is clipped at 24,000 characters while `fullChars` preserves the pre-clip size. Missing and unknown arguments report the accepted schema. Failed calls within the budget are transcript rows and consume sequence numbers.
 

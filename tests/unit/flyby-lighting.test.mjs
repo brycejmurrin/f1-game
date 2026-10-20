@@ -31,6 +31,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const SRC = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
 
@@ -109,7 +110,7 @@ test("the cinematic's render numbers live in one place, as numbers", () => {
   sb.window = sb;
   vm.runInNewContext(
     fs.readFileSync(new URL("../../js/camera/flyby-seq.js", import.meta.url), "utf8")
-      .replace(/^const\b/gm, "var"), sb, { filename: "js/camera/flyby-seq.js" });
+      .replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/camera/flyby-seq.js") });
   const FS = sb.FlybySeq;
   assert.ok(FS, "js/camera/flyby-seq.js assigns the FlybySeq global");
   assert.equal(typeof FS.FAR, "number", "FlybySeq.FAR is the flyby's far plane, and it must be exported");

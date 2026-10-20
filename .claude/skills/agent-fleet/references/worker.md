@@ -58,10 +58,11 @@ your only escalation path besides the user; ask it instead of guessing.
    <current head> --once` — `= ci running (0 failed)` is **not** stale; only
    `= ci passed` on that head dismisses. Re-read the head SHA before every
    push; merge the base in, never rebase or force-push. Mark ready only after
-   `ready-gate.mjs` exits 0. Arming is the designated merge desk's, if any; the
-   PR's own orchestrator merges only at the level in role-merge-holder.md; always
-   a merge commit pinned to head sha. Never write "do not merge" lines in the PR
-   body; the only hold is a line starting `MERGE-HOLD:`.
+   `ready-gate.mjs --pr <n>` exits 0 (the hook needs its receipt), then send
+   `READY <PR> <head sha>` to your orchestrator: it merges through
+   `merge-gate.mjs` (role-merge-holder.md), always a merge commit pinned to the
+   head sha. Never write "do not merge" lines in the PR body; the only hold is a
+   line starting `MERGE-HOLD:`.
 8. **Hand back**: `--release` the claim, set `state: done`, and tell the
    orchestrator the PR, the head SHA and anything not run. A Cursor `Task`
    worker's final message IS its hand-back to the orchestrator: end with
@@ -96,7 +97,8 @@ Keep working on anything the blocker does not touch while you wait.
   `node tools/ci/who-is-on-it.mjs` and the PR's state (open? superseded?). A
   `STAND DOWN <old PR> superseded by <new PR>` (Merge Desk, #2388) or a
   `Superseded by #<n>` body line means stop: no push, release the claim, say so.
-- After `SWEEP <PR#>` hand the PR to Merge Desk and stop watching it.
+- After `READY <PR>` keep watching until `DONE` (the orchestrator merges); a
+  red or a conflict after READY is still yours.
 - Idle-wake discipline: a duplicate or no-change event gets no tool call and at most one line;
   keep the ~1 h timer (it fits the 1 h cache TTL, so the wake reads a warm cache).
 - STOP AT 150k context at a verified checkpoint (docs-only 100k). At every wake measure your live context (`/context` or the statusline, not `get_session` `used_tokens`, which updates only at turn end); at the soft STOP AT finish the current unit, push everything, post a WIP note, send HANDOFF; at soft + 50k (hard) hand off now (launch-policy.md §Size stop). Hand off (PR body current, new

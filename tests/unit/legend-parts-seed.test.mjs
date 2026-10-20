@@ -22,15 +22,16 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const P = loadParts();
 
 function boot(sel = { teamIdx: 0, driverIdx: 0 }, over = {}) {
-  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON,
+  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON, setTimeout: () => 1, clearTimeout() {},
     document: { querySelectorAll: () => [] } });
   ctx.globalThis = ctx;
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"]) {
-    vm.runInContext(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: absSrc(f) });
   }
   const Legends = vm.runInContext("Legends", ctx);
   const CustomTeam = vm.runInContext("CustomTeam", ctx);
@@ -192,12 +193,12 @@ test("MY TEAM preview invalidates the decal atlas as the livery changes, not onl
   // LOGO TINT row: a colour is chosen -> the draft's livery changes -> atlas dropped.
   const tint = d.el("cz-logo");
   tint.value = "#ff0000";
-  tint.listeners.input();
+  tint.listeners.input(); tint.listeners.change();   // input debounces the 3D half; change flushes it
   assert.equal(draft.liv.logo, "#ff0000");
   assert.ok(invalidated.filter((x) => x === "custom").length > n0, "LOGO TINT change invalidates the atlas");
   // An identical event (a drag repeating the same value) does not thrash the atlas.
   const n1 = invalidated.filter((x) => x === "custom").length;
-  tint.listeners.input();
+  tint.listeners.input(); tint.listeners.change();   // input debounces the 3D half; change flushes it
   assert.equal(invalidated.filter((x) => x === "custom").length, n1, "an unchanged preview is deduped");
   // CANCEL drops the draft atlas so the saved look comes back.
   d.el("cz-cancel").onclick();
@@ -219,10 +220,10 @@ test("a fresh install's Legends seat 0 builds the period car, not the shipped sh
   seedSaveMigrate(ctx);
   ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
   const read = (f) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
-  vm.runInContext(read("js/data/garage-defaults.js") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx);
-  vm.runInContext(read("js/core/store.js") + "\n;globalThis.GameStore = GameStore;", ctx);
+  vm.runInContext(read("js/data/garage-defaults.js") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx, { filename: absSrc("js/data/garage-defaults.js") });
+  vm.runInContext(read("js/core/store.js") + "\n;globalThis.GameStore = GameStore;", ctx, { filename: absSrc("js/core/store.js") });
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const { store } = vm.runInContext("GameStore", ctx);
   const Legends = vm.runInContext("Legends", ctx), CustomTeam = vm.runInContext("CustomTeam", ctx);
   assert.ok(store.get("parts.legends", null), "precondition: the shipped sheet answers on a miss");

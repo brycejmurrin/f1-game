@@ -486,12 +486,159 @@ function buildDress(SIDES) {
   return g;
 }
 
+// ── room LOOKS (B·G1; table in GaragePrims.LOOKS) ─────────────────────────────
+// What a look changes, by surface. The shell (walls, ceiling) and the floor
+// stay vertex colour in their own meshes; anything mounted ON a wall goes in
+// that wall's per-side group so it culls with it, and lit parts go in the LED
+// groups (emissive) exactly like the stock fixtures. Nothing here moves a
+// light record: the rig is the lighting lane's.
+const { block, cyl, tube, tile, lookCol, CEIL_Y, MAT } = GaragePrims;
+const livCols = (liv) => [rgb(liv && liv.c1, [0.30, 0.32, 0.36]), rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62])];
+// The shell's wall bands and colours under a look: { bands, wallAt(y, back), seamed, ceil }.
+function lookWall(L, liv) {
+  const [c1, c2] = livCols(liv), W = L.wall;
+  const dado = lookCol(W.dado, c1, c2), stripe = lookCol(W.stripe, c1, c2), panel = lookCol(W.panel, c1, c2);
+  const back = W.back ? lookCol(W.back, c1, c2) : null;
+  const bands = [[0, 0.12, 1, W.skirt], [0.12, 1.50, 2], [1.50, 1.62, 1]];
+  if (W.seam === "block") {
+    // Block courses as real bands: a 2 cm mortar line every 20 cm, so the
+    // course reads as a line at any distance instead of a vertex-colour ramp.
+    const mortar = scale(panel, 0.62);
+    for (let y = 1.62; y < CEIL_Y - 0.01; y += 0.20) {
+      const y1 = Math.min(CEIL_Y, y + 0.18);
+      bands.push([y, y1, 1]);
+      if (y1 < CEIL_Y) bands.push([y1, Math.min(CEIL_Y, y1 + 0.02), 1, mortar]);
+    }
+  } else bands.push([1.62, CEIL_Y, 4]);
+  const wallAt = (y, isBack) => (isBack && back ? (y < 0.12 ? W.skirt : back) : y < 1.4995 ? dado : y < 1.6205 ? stripe : panel);
+  // Stock battens only on the stock room; a look draws its own joints.
+  const seamed = (col) => col;
+  // FLAT, not CONCRETE: the pack's concrete layer multiplies albedo by a dark
+  // texel (albedo * tex * 2), which pinned every look's walls to the same
+  // ~7% grey whatever colour they were given (round 1 captures, all ~18/255).
+  return { bands, wallAt, seamed, ceil: L.ceil, mat: L.wall.mat != null ? L.wall.mat : MAT.FLAT };
+}
+// Floor colour overrides for buildBayFloor: { SLAB, IN, PAINT, WALK, band, key }.
+function lookFloorCols(L, liv) {
+  const [c1, c2] = livCols(liv), F = L.floor;
+  return { SLAB: lookCol(F.slab, c1, c2), IN: lookCol(F.inner, c1, c2), PAINT: lookCol(F.paint, c1, c2),
+           WALK: lookCol(F.walk, c1, c2), band: lookCol(F.band, c1, c2), key: lookCol(F.key, c1, c2) };
+}
+// Floor extras: the car's own outline and its four wheel stations, painted
+// where the crew stand — real geometry at +3 mm (the joints are +2 mm, the
+// keyline +1 mm), clear of the floor wordmarks at |z| > 4.1.
+function lookFloor(out, liv, L) {
+  const [c1, c2] = livCols(liv), F = L.floor;
+  const oc = F.outline ? lookCol(F.outline, c1, c2) : null;
+  const Y = 0.003, M = MAT.ASPHALT, T = 0.05;
+  if (oc) {
+    const X0 = -1.15, X1 = 1.15, Z0 = -3.05, Z1 = 3.55;
+    tile(out, X0, X1, Z0, Z0 + T, oc, Y, M); tile(out, X0, X1, Z1 - T, Z1, oc, Y, M);
+    tile(out, X0, X0 + T, Z0, Z1, oc, Y, M); tile(out, X1 - T, X1, Z0, Z1, oc, Y, M);
+    // Wheel stations: an L at each corner, outboard of the tyre.
+    for (const [wx, wz] of [[1.62, 1.7], [-1.62, 1.7], [1.62, -1.6], [-1.62, -1.6]]) {
+      tile(out, wx - 0.30, wx + 0.30, wz - 0.03, wz + 0.03, oc, Y, M);
+      tile(out, wx - 0.03, wx + 0.03, wz - 0.30, wz + 0.30, oc, Y, M);
+    }
+  }
+  if (L.ceilLed === "pendants") {
+    // Hazard chevrons along the door threshold: the bare-workshop tell.
+    const yel = [0.85, 0.66, 0.06], blk = [0.05, 0.05, 0.05];
+    for (let i = 0; i < 18; i++) {
+      const x = -2.7 + i * 0.30;
+      tile(out, x, x + 0.30, Z_DOOR - 0.75, Z_DOOR - 0.30, i % 2 ? yel : blk, Y, M);
+    }
+  }
+}
+// The roof structure under a look. Returns false for "stock" (the caller
+// builds the shipped truss).
+function lookTruss(out, L) {
+  if (!L || L.truss === "stock") return false;
+  if (L.truss === "rails") {
+    // Slim anodised light rails only: the studio ceiling is the panels.
+    for (const s of [-1, 1]) {
+      block(out, s * 2.6, CEIL_Y - 0.12, 0, 0.035, 0.035, (Z_DOOR - Z_BACK) / 2 - 0.3, GREY_RAIL);
+      // Hangers, so a rail is hung from the ceiling rather than floating under it.
+      for (let z = -5.0; z <= 5.01; z += 2.5) block(out, s * 2.6, CEIL_Y - 0.0425, z, 0.008, 0.0425, 0.008, GREY_RAIL);
+    }
+    return true;
+  }
+  // "heavy": four deep Warren trusses spanning the bay plus purlins.
+  const ST = [0.20, 0.21, 0.23], lo = CEIL_Y - 0.95, hi = CEIL_Y - 0.12;
+  for (const z of [-4.8, -1.6, 1.6, 4.8]) {
+    // Chords run wall to wall (they bear on the walls), the top chord to the
+    // ceiling's underside: hi + 0.05 = CEIL_Y - 0.07, closed by the purlins.
+    block(out, 0, lo, z, HALF_W, 0.05, 0.07, ST, MAT.METAL);
+    block(out, 0, hi, z, HALF_W, 0.05, 0.07, ST, MAT.METAL);
+    for (let i = 0; i < 10; i++) {
+      const xa = -HALF_W + 0.05 + i * ((HALF_W * 2 - 0.1) / 10), xb = xa + (HALF_W * 2 - 0.1) / 10;
+      tube(out, [xa, i % 2 ? hi : lo, z], [xb, i % 2 ? lo : hi, z], 0.035, ST, 6, MAT.METAL);
+    }
+  }
+  // Purlins sit on the top chords and carry the roof: wall to wall in z, top face at CEIL_Y.
+  for (const x of [-3.6, -1.2, 1.2, 3.6]) block(out, x, (hi + 0.05 + CEIL_Y) / 2, 0, 0.05, (CEIL_Y - hi - 0.05) / 2, (Z_DOOR - Z_BACK) / 2, ST, MAT.METAL);
+  return true;
+}
+const GREY_RAIL = [0.55, 0.56, 0.60];
+// Wall-mounted, LIT geometry: panel joints (studio). Per-side groups.
+function lookProps(g, liv, L) {
+  if (L.wall.seam !== "joint") return;
+  const J = [0.10, 0.105, 0.115], p = L.wall.jointPitch || 1.35;
+  const d = 0.006, h = (CEIL_Y - 0.12) / 2, cy = 0.12 + h;
+  for (let z = Z_BACK + p; z < Z_DOOR - 0.2; z += p)
+    for (const s of [-1, 1]) block(s < 0 ? g.nx : g.px, s * (HALF_W - d), cy, z, d, h, 0.008, J);
+  for (let x = -HALF_W + p; x < HALF_W - 0.2; x += p) block(g.back, x, cy, Z_BACK + d, 0.008, h, d, J);
+  // A horizontal joint at 2 m panel height, and the shadow-gap over the dado.
+  for (const y of [1.66, 2.70]) {
+    for (const s of [-1, 1]) block(s < 0 ? g.nx : g.px, s * (HALF_W - d), y, 0, d, 0.008, HALF_W + 1.0, J);
+    block(g.back, 0, y, Z_BACK + d, HALF_W, 0.008, d, J);
+  }
+}
+// Emissive geometry: ceiling lighting, lit wall slats, back-wall frames and header bands.
+function lookLed(g, liv, L) {
+  const [c1, c2] = livCols(liv), zb = Z_BACK + 0.008;   // half-depth 0.008: back face on the wall
+  if (L.ceilLed === "grid") {
+    for (const x of [-2.0, 2.0]) for (let i = -2; i <= 2; i++) {
+      const z = i * 2.4;
+      block(g.mid, x, CEIL_Y - 0.02, z, 0.34, 0.02, 0.34, GREY(0.30));     // trim, top at CEIL_Y
+      block(g.mid, x, CEIL_Y - 0.045, z, 0.30, 0.005, 0.30, [1.12, 1.12, 1.16]);   // lens, against the trim
+    }
+  } else if (L.ceilLed === "strips") {
+    for (const x of [-1.4, 1.4]) {
+      block(g.mid, x, CEIL_Y - 0.02, 0, 0.07, 0.02, (Z_DOOR - Z_BACK) / 2, GREY(0.03));    // channel, wall to wall
+      block(g.mid, x, CEIL_Y - 0.045, 0, 0.035, 0.005, (Z_DOOR - Z_BACK) / 2 - 0.05, [0.95, 1.05, 1.20]);
+    }
+  } else if (L.ceilLed === "pendants") {
+    for (const x of [-2.2, 2.2]) for (const z of [-4.0, 0, 4.0]) {
+      cyl(g.mid, x, 3.95, z, 0.012, CEIL_Y - 3.95, GREY(0.05), 4);           // drop cable
+      cyl(g.mid, x, 3.80, z, 0.30, 0.16, [0.10, 0.16, 0.12], 12);             // enamel shade
+      block(g.mid, x, 3.79, z, 0.20, 0.01, 0.20, [1.18, 1.05, 0.80]);         // lamp face
+    }
+  }
+  if (L.wall.seam === "slat") {
+    // Lit accent slats up the side walls, in the gaps between the boards.
+    for (const s of [-1, 1]) for (const z of [-6.0, -1.7, 3.0, 5.9])
+      block(s < 0 ? g.nx : g.px, s * (HALF_W - 0.015), 1.55, z, 0.015, 1.40, 0.035, scale(c2, 1.3));   // back face on the wall
+  }
+  if (L.backWall === "frame") {
+    const fc = scale(c2, 1.25), X = HALF_W - 0.25;
+    for (const y of [0.18, 4.55]) block(g.back, 0, y, zb, X, 0.03, 0.008, fc);
+    for (const sx of [-1, 1]) block(g.back, sx * X, 2.365, zb, 0.03, 2.215, 0.008, fc);
+  } else if (L.backWall === "header") {
+    // Wall to wall: a header band that stops 2 cm short of each corner reads as a stuck-on strip.
+    block(g.back, 0, 3.92, zb, HALF_W, 0.20, 0.008, scale(c1, 1.05));
+    block(g.back, 0, 3.70, zb, HALF_W, 0.015, 0.008, scale(c2, 1.2));
+  }
+}
+const GREY = (v) => [v, v * 1.01, v * 1.05];
+
   // The boards repaint a changed spec line in a highlight: scene.js forgets the previous spec on a rebuild (resetSpec) and
   // drops the stamped boardInfo cache too when the room is released.
   function resetSpec() { lastSpec = null; }
   function releaseDress() { lastSpec = null; _boardInfo = null; _boardInfoKey = ""; }
 
-  return { seatDriverAt, boardInfo, boardKey, paintDress, paintBoards, buildDress, resetSpec, releaseDress };
+  return { seatDriverAt, boardInfo, boardKey, paintDress, paintBoards, buildDress, resetSpec, releaseDress,
+    lookWall, lookFloorCols, lookFloor, lookTruss, lookProps, lookLed };
 })();
 
 Object.freeze(GarageDress);

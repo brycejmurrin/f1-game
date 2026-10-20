@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  fullTierPassed, DEPLOY, MAX_LIVE, MAX_ARMED, SUGGESTIONS, hasMergeHold, parseFleetStatus, fleetStatus, ageLabel, ciState, decide, suggest, evaluate, render, measure,
+  fullTierPassed, DEPLOY, MAX_ARMED, SUGGESTIONS, hasMergeHold, parseFleetStatus, fleetStatus, ageLabel, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -16,11 +16,10 @@ const base = {
   draft: false, armed: false, mergeMethod: null, mergeableState: "clean", ci: "success", gate: "passed", fullTier: true,
 };
 const fullJobs = () => ["CI", "Selected specs (verdict)", "Per-circuit geometry sweeps", "Smoke (page boots, __apex responds)"].map((name) => ({ name, conclusion: "success" }));
-const ctx = (count = 0) => ({ cap: { cap: 3, count } });
+const ctx = () => ({});
 
-test("defaults come from ready-full-cap", () => {
+test("defaults come from github-api", () => {
   assert.equal(DEPLOY, "claude/f1-game-project-26h3ng");
-  assert.equal(MAX_LIVE, 8);
   assert.deepEqual([...SUGGESTIONS].sort(), ["ARM", "FIX", "FOREIGN-ARM", "NONE", "READY", "SYNC", "WAIT"]);
 });
 
@@ -42,11 +41,11 @@ test("suggest: ARM needs the gate; a pending or absent gate waits", () => {
   assert.equal(suggest({ ...base, gate: "none" }, ctx()), "WAIT");
 });
 
-test("suggest: READY — draft, green, gate passed; the cap is reported, never a WAIT (2026-10-16)", () => {
+test("suggest: READY — draft, green, gate passed; there is no ready cap (2026-10-16)", () => {
   const d = { ...base, draft: true };
   assert.equal(suggest(d, ctx(0)), "READY");
   assert.equal(suggest(d, ctx(2)), "READY");
-  assert.equal(suggest(d, ctx(3)), "READY", "a full cap no longer holds a green draft");
+  assert.equal(suggest(d, ctx()), "READY", "no cap holds a green draft");
   assert.equal(suggest(d, { room: 0 }), "READY");
   assert.equal(suggest(d, { room: 1 }), "READY");
 });
@@ -135,7 +134,7 @@ const prObj = (n, extra = {}) => ({
   base: { ref: DEPLOY }, ...extra,
 });
 
-test("evaluate: sorts, derives ci/gate/failing jobs, and READY flips consume the cap", () => {
+test("evaluate: sorts, derives ci/gate/failing jobs, and every green draft is READY", () => {
   const items = [
     { pr: prObj(9, { draft: true }), runs: [{ id: 9, status: "completed", conclusion: "success" }], checkRuns: guard() },
     { pr: prObj(3, { draft: true }), runs: [{ id: 3, status: "completed", conclusion: "success" }], checkRuns: guard() },
@@ -144,23 +143,22 @@ test("evaluate: sorts, derives ci/gate/failing jobs, and READY flips consume the
       checkRuns: guard("failure") },
     { pr: prObj(7), runs: [], checkRuns: guard() },
   ];
-  const r = evaluate(items, { cap: { cap: 3, count: 2, ok: true } });
+  const r = evaluate(items);
   assert.deepEqual(r.rows.map((x) => x.number), [3, 5, 7, 9]);
-  assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "WAIT", "READY"], "every green draft is READY; the cap is only reported");
+  assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "WAIT", "READY"], "every green draft is READY");
   assert.deepEqual(r.rows[1].failing, ["Smoke (2)"]);
   assert.equal(r.rows[1].gate, "failed");
   assert.equal(r.rows[1].mergeMethod, "merge");
-  assert.equal(r.cap.room, 1, "the cap is still measured and reported");
 });
 
 test("render: header, one line per PR, a footer; empty board says so", () => {
-  const r = evaluate([{ pr: prObj(1, { title: "x".repeat(80) }), runs: [], checkRuns: guard() }], { cap: { cap: 3, count: 0 } });
-  const out = render(r, { capLine: "ready-full-cap: 0/3" });
+  const r = evaluate([{ pr: prObj(1, { title: "x".repeat(80) }), runs: [], checkRuns: guard() }]);
+  const out = render(r);
   const lines = out.split("\n");
-  assert.match(lines[0], /^PR\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+FLEET\s+SUGGEST$/);
-  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+-\s+WAIT$/);
-  assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\); ready-full-cap: 0\/3$/);
-  const empty = render(evaluate([], { cap: { cap: 3, count: 0 } }));
+  assert.match(lines[0], /^PR\s+FL\s+SLOT\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+FLEET\s+SUGGEST$/);
+  assert.match(lines[1], /^#1\s+-\s+-\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+-\s+WAIT$/);
+  assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\)$/);
+  const empty = render(evaluate([]));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);
 });
 
@@ -198,7 +196,7 @@ test("measure pages the open PR list (101 PRs) and reads every PR", () => {
   assert.ok(calls.includes("pulls/101"));
 });
 
-test("measure: failing jobs come from the failed run; --pr reads one PR but still measures the cap", () => {
+test("measure: failing jobs come from the failed run; --pr reads one PR", () => {
   const prs = [prObj(1, { auto_merge: { merge_method: "squash" } }), prObj(2)];
   const { request, calls } = fakeApi({
     prs,
@@ -209,11 +207,9 @@ test("measure: failing jobs come from the failed run; --pr reads one PR but stil
   const all = measure({ request });
   assert.deepEqual(all.rows.map((r) => [r.number, r.suggest]), [[1, "FOREIGN-ARM"], [2, "WAIT"]]);
   assert.deepEqual(all.rows[0].failing, ["page"]);
-  assert.match(all.capLine, /ready-full-cap:/);
   calls.length = 0;
   const one = measure({ request, only: 2 });
   assert.deepEqual(one.rows.map((r) => r.number), [2]);
-  assert.ok(calls.some((c) => c.startsWith("actions/workflows/ci.yml/runs?event=pull_request")), "cap still measured");
   assert.ok(!calls.includes("pulls/1"));
 });
 
@@ -264,7 +260,7 @@ test("measure --pr on a PR that is closed or targets another base is a bad-args 
 
 test("measure: any API error fails the whole board with the error text", () => {
   const prs = [prObj(1)];
-  for (const where of ["pulls?", "pulls/1", "head_sha=", "check-runs", "event=pull_request"]) {
+  for (const where of ["pulls?", "pulls/1", "head_sha=", "check-runs"]) {
     const v = measure({ request: fakeApi({ prs, fail: where }).request });
     assert.equal(v.ok, false, where);
     assert.match(v.error, /HTTP 500/);
@@ -294,7 +290,7 @@ test("only GET requests are ever issued: every curl the default transport spawns
   };
   const v = measure({ run, env: { GH_TOKEN: "t0k3n" } });
   assert.equal(v.ok, true);
-  assert.ok(spawned.length > 8);
+  assert.ok(spawned.length > 4);
   for (const { cmd, args, opts } of spawned) {
     assert.equal(cmd, "curl");
     for (const bad of ["-X", "--request", "-d", "--data", "--data-raw", "--data-binary", "--data-urlencode", "-F", "--form", "-T", "--upload-file", "--json", "-G"]) {
@@ -368,7 +364,6 @@ test("steward ownership reference (ex pr-owner) pins the loop's gates and carrie
   assert.match(t, /sync-pr\.mjs/);
   assert.match(t, /remote-group\.mjs/);
   assert.match(t, /ready-gate\.mjs/);
-  assert.doesNotMatch(t, /ready-full-cap\.mjs exit 0/, "no cap gate in the ready flow since 2026-10-16");
   assert.match(t, /Do not enable auto-merge or merge/);
   assert.match(t, /\.github\/pull_request_template\.md/);
 });
@@ -391,7 +386,7 @@ test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sw
     { pr: prObj(4), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
     { pr: prObj(5), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
   ];
-  const r = evaluate(items, { cap: { cap: 3, count: 0 } });
+  const r = evaluate(items);
   assert.deepEqual(r.rows.map((x) => x.suggest), ["NONE", "WAIT", "WAIT", "ARM", "WAIT"],
     "an open Plan and the hold wait; 1 armed + 1 ARM = MAX_ARMED");
   assert.match(r.rows[1].why, /1 Plan item\(s\) are open/);
@@ -463,7 +458,7 @@ test("fleet-status: ageLabel and the FLEET column", () => {
   assert.equal(ageLabel("2026-10-14T20:00:00Z", now), "3d");
   assert.equal(ageLabel(null, now), "?");
   const pr = prObj(1, { body: "fleet-status: blocked | quota until 21:00Z | 2026-10-17T19:00:00Z" });
-  const out = render(evaluate([{ pr, runs: [] }], { cap: { cap: 3, count: 0 } }), { now });
+  const out = render(evaluate([{ pr, runs: [] }]), { now });
   assert.match(out.split("\n")[1], /\sblocked 1h: quota until 21:00Z\s/);
 });
 
@@ -527,4 +522,21 @@ test("suggest: ci.yml pending on the head never yields ARM or READY, even with f
     }
   }
   assert.equal(evaluate([{ pr: prObj(1), runs: [{ id: 1, status: "completed", conclusion: null }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() }]).rows[0].suggest, "WAIT");
+});
+
+test("fleet letter and slot: JSON fleetLetter/slot and the FL/SLOT columns come from the body's fleet block", () => {
+  const block = (lines) => "## Goal\nx\n\n```fleet\n" + lines.join("\n") + "\n```\n";
+  const items = [
+    { pr: prObj(1, { body: block(["worker: claude:session_01W", "fleet: B", "slot: B·W3", "orchestrator: B"]) }), runs: [] },
+    { pr: prObj(2, { body: block(["orchestrator: A", "title: [Worker] A·W7 · tools · Opus"]) }), runs: [] },
+    { pr: prObj(3, { body: block(["orchestrator: claude:session_01ORCH"]) }), runs: [] },
+    { pr: prObj(4, { body: "no block\nfleet-status: ready | green | 2026-10-17T19:00:00Z" }), runs: [] },
+  ];
+  const r = evaluate(items);
+  assert.deepEqual(r.rows.map((x) => [x.fleetLetter, x.slot]), [["B", "B·W3"], ["A", "A·W7"], ["-", "-"], ["-", "-"]]);
+  assert.equal(r.rows[3].fleet.state, "ready", "`fleet` stays the fleet-status report fleet-tick.mjs reads");
+  const lines = render(r).split("\n");
+  assert.deepEqual(lines[1].split(/\s+/).slice(0, 3), ["#1", "B", "B·W3"]);
+  assert.deepEqual(lines[2].split(/\s+/).slice(0, 3), ["#2", "A", "A·W7"]);
+  assert.deepEqual(lines[3].split(/\s+/).slice(0, 3), ["#3", "-", "-"]);
 });

@@ -1,0 +1,13 @@
+{
+  "_comment": "Size/word budgets for the always-on agent surface, read by tests/unit/agent-config.test.mjs. Raise a number WITH the reason, like tests/data/ratchets.json. Evidence: docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md, docs/notes/AGENT-GUARDS-2026-10-14.md.",
+  "agentsMdLines": 200,
+  "agentsMdRuleLines": 75,
+  "fleetCoreLines": 30,
+  "fleetCoreBytes": 2048,
+  "memoryIndexLines": 200,
+  "skillDescriptionWords": 1700,
+  "skillDescriptionChars": 12800,
+  "skillDescriptionCharsEach": 1024,
+  "agentsMdBytes": 28500,
+  "agentsChainBytes": 31000
+}

@@ -32,6 +32,7 @@ const TrackBuildClient = (function () {
 
   // Explicit "1"/"0" wins; unset → ON when a Worker exists and there is a spare
   // core (MULTITHREADING-PLAN §3: single-core phones can lose on worker parse).
+  function isLive(live) { try { return !live || !!live(); } catch (_) { return false; } }
   function defaultOn() {
     if (typeof Worker === "undefined") return false;
     try {
@@ -126,7 +127,19 @@ const TrackBuildClient = (function () {
       // seq. Settle readiness too, so the caller can fall back to paced builds.
       if (m.type === "error" && m.seq == null) { failed("init " + m.message); return; }
       const p = _pending.get(m.seq);
-      if (!p) return;
+      if (!p) {
+        // A cancellation may have settled the page owner before its readiness
+        // message arrived. Release that worker-side permit waiter as well.
+        if (m.type === "buildReady") try { worker.postMessage({ type: "buildPermit", seq: m.seq, live: false }); } catch (_) { /* worker transport unavailable */ }
+        return;
+      }
+      if (m.type === "buildReady") {
+        const live = isLive(p.live);
+        try { worker.postMessage({ type: "buildPermit", seq: m.seq, live }); }
+        catch (err) { failed("permit send " + err.message); return; }
+        if (!live) { _pending.delete(m.seq); p.resolve(null); }
+        return;
+      }
       _pending.delete(m.seq);
       // The entry is already out of _pending, so neither drop() nor the answer
       // timer can reach it any more: whatever happens below, THIS handler must
@@ -136,7 +149,7 @@ const TrackBuildClient = (function () {
       try {
         const lack = m.type === "built" ? missingModels(p.def, m.models) : [];
         if (lack.length) Log.warn("track", `build worker: ${m.id} built without ${lack.length} of its baked models the page holds (${lack.join(", ")}) — building in steps instead`);
-        else if (m.type === "built") answer = m;
+        else if (m.type === "built" && (isLive(p.live))) answer = m;
         else Log.warn("track", "build worker failed: " + m.message);
       } catch (err) { Log.warn("track", "build worker: reply unusable (" + (err && err.message) + ") — building in steps instead"); }
       p.resolve(answer);
@@ -155,10 +168,16 @@ const TrackBuildClient = (function () {
   // (its nodes carry methods), so a build that asked to retain it for the agent
   // surface (__apex.trackGraph) arrives without one — said once, since every
   // probe and the gpu-census A/B run with that surface on.
-  // One worker, one build at a time: the menu's idle build and RACE!'s build of
-  // the same world share one request instead of queueing a second behind it.
+  // Equal-key requests share work only when they share the same liveness
+  // owner (or both omit it). Distinct independent requests still all resolve.
   let _graphNoted = false, _inflight = 0, _last = null;
-  async function build(idx, def, opts, gfx, sceneryFile) {
+  async function build(idx, def, opts, gfx, sceneryFile, live) {
+    // Cancellation is opt-in per caller, never global newest-request-wins.
+    for (const [seq, p] of _pending) if (p.live && !isLive(p.live)) {
+      _pending.delete(seq); p.resolve(null);
+      try { if (_w) _w.postMessage({ type: "buildPermit", seq, live: false }); } catch (_) { /* reply path still checks liveness */ }
+    }
+    if (!isLive(live)) return null;
     // A custom circuit is not in the worker's list (it would only answer
     // "worker track list differs" after a round-trip): build it in steps.
     if (!enabled() || (def && def.custom)) return null;
@@ -166,12 +185,15 @@ const TrackBuildClient = (function () {
     // Drop the memo so restoring defaults cannot reuse a diagnostic-era request.
     if (typeof Tracks !== "undefined" && Tracks.diagnosticBuild && Tracks.diagnosticBuild()) { _last = null; return null; }
     const key = [def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier].join("|");
-    if (!_last || _last.key !== key) _last = { key, p: post(idx, def, opts, gfx, sceneryFile) };
+    // A live caller owns its own permit; unrelated equal-key callers retain
+    // their shared request without inheriting another caller's cancellation.
+    if (!_last || _last.key !== key || _last.live !== live) _last = { key, live, p: post(idx, def, opts, gfx, sceneryFile, live) };
     const mine = _last;
     _inflight++;
     try { return await mine.p; } finally { _inflight--; if (_last === mine) _last = null; }
   }
-  async function post(idx, def, opts, gfx, sceneryFile) {
+  async function post(idx, def, opts, gfx, sceneryFile, live) {
+    if (!isLive(live)) return null;
     if (opts && opts.retainGraph && !_graphNoted) { _graphNoted = true; Log.info("track", "build worker: scenery graph not retained (__apex.trackGraph is null)"); }
     const r = spawn();
     if (!r) return null;
@@ -181,7 +203,7 @@ const TrackBuildClient = (function () {
     })]);
     if (initTimer != null) clearTimeout(initTimer);
     if (timedOut && _ready === r) drop("worker init gave no answer in " + ANSWER_MS / 1000 + " s");
-    if (!up || !_w) return null;
+    if (!up || !_w || _ready !== r || !isLive(live)) return null;
     const seq = ++_seq, worker = _w;
     return new Promise((resolve) => {
       let timer = null;
@@ -190,9 +212,9 @@ const TrackBuildClient = (function () {
         resolve(null);
         if (_w === worker) drop("no answer for " + def.id + " in " + ANSWER_MS / 1000 + " s");
       }, ANSWER_MS);
-      _pending.set(seq, { resolve: (m) => { if (timer != null) clearTimeout(timer); resolve(m); }, def });
+      _pending.set(seq, { resolve: (m) => { if (timer != null) clearTimeout(timer); resolve(m); }, def, live });
       try { worker.postMessage({
-        type: "build", seq, idx, id: def.id,
+        type: "build", seq, idx, id: def.id, checkLive: !!live,
         opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false,
           // The graph cannot cross; the CPU geometry only when the dev surface will read it.
           retainGeometry: !!(opts.retainGraph || (typeof Tracks !== "undefined" && Tracks.keepGeometry && Tracks.keepGeometry())) },
@@ -253,7 +275,7 @@ const TrackBuildClient = (function () {
       return args;
     };
     const canceled = {};
-    const checkLive = () => { if (live && !live()) throw canceled; };
+    const checkLive = () => { if (!isLive(live)) throw canceled; };
     try {
       checkLive();
       for (let i = 0; i < recs.length;) {

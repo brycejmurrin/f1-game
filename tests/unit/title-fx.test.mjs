@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/title-fx.js";
@@ -113,7 +114,7 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
     };
     return o;
   };
-  vm.runInContext(SRC, ctx, { filename: FILE });
+  vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   return {
     M: vm.runInContext("TitleFx", ctx),
     html, written, wired, ids, overlay, document, timers, frames, buzz, observers,

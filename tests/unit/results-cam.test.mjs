@@ -10,6 +10,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -24,9 +25,9 @@ function boot(globals = {}, perfTier = 0) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/camera/results-cam.js"), ctx, { filename: "results-cam.js" });
-  vm.runInContext(src("js/camera/replay-buf.js"), ctx);
-  vm.runInContext(src("js/core/mat4.js"), ctx);
+  vm.runInContext(src("js/camera/results-cam.js"), ctx, { filename: absSrc("js/camera/results-cam.js") });
+  vm.runInContext(src("js/camera/replay-buf.js"), ctx, { filename: absSrc("js/camera/replay-buf.js") });
+  vm.runInContext(src("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   const R = vm.runInContext("ResultsCam", ctx);
   return { ...R, ReplayBuf: vm.runInContext("ReplayBuf", ctx), M4: vm.runInContext("M4", ctx) };
 }
@@ -307,7 +308,7 @@ function bootAudio() {
   const vctx = vm.createContext(sb);
   const SRC = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"]
     .map(src).join("\n");
-  vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
+  vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const real = vm.runInContext("GameAudio", vctx);
   real.init();
   // Count the one-shot: feedReplayScrub's exit branch calls stopEngine through its
@@ -324,8 +325,8 @@ function highlightsRig({ sound = true } = {}) {
     Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } }, PerfGov: { tier: () => 0 } };
   sb.window = sb;
   const camCtx = vm.createContext(sb);
-  vm.runInContext(src("js/camera/results-cam.js"), camCtx);
-  vm.runInContext(src("js/camera/replay-buf.js"), camCtx);
+  vm.runInContext(src("js/camera/results-cam.js"), camCtx, { filename: absSrc("js/camera/results-cam.js") });
+  vm.runInContext(src("js/camera/replay-buf.js"), camCtx, { filename: absSrc("js/camera/replay-buf.js") });
   const ResultsCam = vm.runInContext("ResultsCam", camCtx), ReplayBuf = vm.runInContext("ReplayBuf", camCtx);
 
   const player = { s: 0, x: 0, head: 0, speed: 60, px: 0, py: 0, pz: 0, steer: 0, yawVis: 0, rpm: 5000, energy: 1, offroad: false, finPos: 1 };
@@ -357,7 +358,7 @@ function highlightsRig({ sound = true } = {}) {
     banner: { tick() {}, clear() {}, announce() {}, get t() { return 0; } }, feel: { shake: 0, camRoll: 0, hitStop: 0 },
     renderAlpha: 0, clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), updateHud: noop, render: noop, update: noop, updatePhotoCam: noop,
   });
-  vm.runInContext(TICK, tickCtx, { filename: "js/game.js#tickBody" });
+  vm.runInContext(TICK, tickCtx, { filename: absSrc("js/game.js#tickBody") });
   let now = 0;
   const frame = (n = 1) => { for (let i = 0; i < n; i++) { now += 1000 / 60; tickCtx.tickBody(now); } };
   return { tickCtx, frame, resultsCam, replayBuf, audio, field, player, rival };

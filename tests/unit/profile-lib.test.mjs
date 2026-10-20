@@ -64,7 +64,7 @@ test("incomparable: arms with different capture modes never read as noise/WIN/RE
 
 
 import { profileScenario, profileScenarioSignature, profileComparability } from "../../tools/perf/lib.mjs";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -117,5 +117,61 @@ test("query CLI never awards a win to incompatible or unknown saved profiles; ma
     const slower = { ...candidate, head: aggregate([run(20), run(20), run(20)]) };
     assert.equal(query(baseline, slower).rows[0].verdict, "REGRESS");
     assert.equal(query(baseline, { ...slower, scenario: null }).rows[0].verdict, "incomparable");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test("CPU summaries preserve full source and column identity, including pipe characters", () => {
+  const cf = (url, columnNumber = 0) => ({ functionName: "up|date", url, scriptId: "7", lineNumber: 10, columnNumber });
+  const profile = { nodes: [
+    { id: 1, callFrame: { functionName: "root", url: "", lineNumber: -1 }, children: [2, 3, 4] },
+    { id: 2, callFrame: cf("http://localhost/js/circuits/monza.js") },
+    { id: 3, callFrame: cf("http://localhost/js/circuits/scenery/monza.js") },
+    { id: 4, callFrame: cf("http://localhost/js/circuits/scenery/monza.js", 20) },
+  ], samples: [2, 3, 3, 4] };
+  const rows = summariseCpu(profile, { fn: "up\\|date" }).bySelf;
+  assert.equal(rows.length, 3);
+  assert.equal(rows.find(r => r.loc.endsWith("/circuits/monza.js:11:1")).selfPct, 25);
+  assert.equal(rows.find(r => r.loc.endsWith("/scenery/monza.js:11:1")).selfPct, 50);
+  assert.equal(rows.find(r => r.loc.endsWith("/scenery/monza.js:11:21")).selfPct, 25);
+  assert.equal(summariseCpu(profile, { file: "scenery" }).bySelf.length, 2);
+  assert.equal(summariseCpu({ nodes: [] }).samples, 0, "empty profile has no observed samples");
+});
+
+test("CPU summaries reject cyclic and ambiguous saved trees instead of hanging or misattributing samples", () => {
+  const node = (id, children = []) => ({ id, callFrame: { functionName: "update", url: "game.js", lineNumber: 0 }, children });
+  for (const nodes of [
+    [node(1, [1])], [node(1, [2]), node(2, [1])],
+    [node(1), node(2, [3]), node(3, [2])], // unreachable cycle also invalid
+    [node(1, [3]), node(2, [3]), node(3)],
+    [node(1, [99])], [node(1), node(1)],
+  ]) assert.throws(() => summariseCpu({ nodes, samples: [1] }), /invalid CPU profile/);
+  assert.throws(() => summariseCpu({ nodes: [node(1)], samples: [99] }), /unknown sample/);
+  const deep = Array.from({ length: 10000 }, (_, i) => node(i, i < 9999 ? [i + 1] : []));
+  assert.equal(summariseCpu({ nodes: deep, samples: [9999] }).bySelf[0].totalPct, 100, "iterative validation handles deep stacks");
+});
+
+test("query CLI handles shared flag spellings and rejects invalid limits, cyclic artifacts and symlink escapes", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+  const parent = join(root, "scratch"); mkdirSync(parent, { recursive: true });
+  const dir = mkdtempSync(join(parent, "profile-query-unit-"));
+  const file = join(dir, "cpu.cpuprofile");
+  const cf = functionName => ({ functionName, url: "http://localhost/js/game.js", lineNumber: 0 });
+  writeFileSync(file, JSON.stringify({ nodes: [{ id: 1, callFrame: cf("root"), children: [2] }, { id: 2, callFrame: cf("update") }], samples: [2] }));
+  const query = (...args) => spawnSync(process.execPath, [join(root, "tools/perf/query.mjs"), ...args], { encoding: "utf8", timeout: 3000 });
+  try {
+    for (const args of [["--top=1"], ["--top", "1"]]) {
+      const r = query(file, "--json", ...args);
+      assert.equal(r.status, 0, r.stderr); assert.equal(JSON.parse(r.stdout).bySelf.length, 1);
+    }
+    const filtered = query(file, "--json", "--fn=^update$", "--file=js/game");
+    assert.equal(filtered.status, 0, filtered.stderr); assert.equal(JSON.parse(filtered.stdout).bySelf[0].fn, "update");
+    for (const args of [["--top"], ["--top=0"], ["--top=-1"], ["--top=1.5"], ["--top=101"], ["--top=Infinity"], ["--fn"], ["--file"]]) {
+      const r = query(file, ...args); assert.equal(r.status, 1, args.join(" ")); assert.match(r.stderr, /must be|requires/); assert.equal(r.stdout, "");
+    }
+    const link = join(dir, "outside.json"); symlinkSync(join(root, "package.json"), link);
+    const escaped = query(link, "--json"); assert.equal(escaped.status, 1); assert.match(escaped.stderr, /must be under/); assert.equal(escaped.stdout, "");
+    writeFileSync(file, JSON.stringify({ nodes: [{ id: 1, callFrame: cf("root"), children: [1] }], samples: [1] }));
+    const cycle = query(file, "--json"); assert.equal(cycle.status, 1, cycle.error?.message); assert.match(cycle.stderr, /cycle/); assert.equal(cycle.stdout, "");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

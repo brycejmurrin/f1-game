@@ -6,6 +6,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
 import vm from "vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
@@ -130,7 +131,7 @@ test("the title's idle prefetch spawns no build worker on a multi-core device (3
       head: { appendChild(node) { queueMicrotask(() => node.onload && node.onload()); } },
     },
   });
-  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/track/build-client.js") });
   assert.equal(ctx.TrackBuildClient.enabled(), true, "the worker is default ON here, as on every multi-core phone");
   vm.runInContext(read("js/core/script-loader.js") + "\n" + read("js/core/lazy-bundles.js") + `
     const lb = LazyBundles.create({
@@ -167,7 +168,7 @@ test("TrackBuildClient.idleWarm is agent-gated; spawn() no-ops when build worker
     setTimeout() {},
     URL,
   });
-  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), main);
+  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/track/build-client.js") });
   assert.equal(typeof main.TrackBuildClient.idleWarm, "function");
   assert.equal(main.TrackBuildClient.idleWarm(true), null, "off: idleWarm reports nothing and does not spawn");
   assert.equal(main.TrackBuildClient.spawn(), null);
@@ -193,7 +194,7 @@ function adapterProbe({ requestAdapter, withTimers = true }) {
   }
   const ctx = vm.createContext(sandbox);
   vm.runInContext(boot.slice(at, i + 1) + "\nthis.probe = async () => ({ ok: await gpuAdapterAvailable(), slow: _adapterSlow, why: _adapterWhy });", ctx,
-    { filename: "js/render/renderer-boot.js" });
+    { filename: absSrc("js/render/renderer-boot.js") });
   return { probe: ctx.probe, timers, cleared };
 }
 
@@ -246,7 +247,7 @@ test("Assets strip decode gives a future task a turn between successive layers",
         : { ok: true, blob: async () => ({ size: 3 }) },
       createImageBitmap: async (_, x, y) => { decoded.push(y); return { close() { closed.push(y); } }; },
     });
-    const assets = vm.runInContext(read("js/render/shared/assets.js") + ";Assets", ctx);
+    const assets = vm.runInContext(read("js/render/shared/assets.js") + ";Assets", ctx, { filename: absSrc("js/render/shared/assets.js") });
     assets.init({ createTextureArray() { uploads++; return {}; }, setMaterialMaps() { installed++; } });
     const pending = assets.load();
     const settle = () => new Promise(setImmediate);
@@ -267,4 +268,61 @@ test("Assets strip decode gives a future task a turn between successive layers",
     assert.deepEqual(closed, [1, 2, 3], "decoded owners close exactly once after the completed upload");
     assert.equal(turns.length, 0);
   }
+});
+
+// #3110: Save-Data or a 2G link skips the title's idle race-session and audio
+// prefetches (startRace awaits both); the lights (re-asked only after a FAILED
+// fetch) and the selected circuit's scenery still load. A normal link keeps all.
+test("raceAssets skips the race-session and audio prefetches under Save-Data or 2G, keeps them otherwise (#3110)", async () => {
+  const loader = read("js/core/script-loader.js");
+  const bundles = read("js/core/lazy-bundles.js");
+  const run = async (connection) => {
+    const idles = [];
+    let sceneryKicks = 0;
+    const ctx = vm.createContext({
+      ApexRoster: {
+        DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+        LAZY_RACE: [], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+        LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
+        LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
+        SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
+        LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
+      },
+      navigator: connection === undefined ? { userAgent: "test" } : { userAgent: "test", connection },
+      window: { __APEX_BUILD: "test", LightPresets: null },
+      PitLane: { _stub: true },
+      Tracks: {
+        LIST: [{ id: "monza", custom: true, scenery: () => {} }],
+        circuitPayloadResident: () => { sceneryKicks++; return true; },
+        hydrate: () => true,
+      },
+      TrackScenery: { monza: () => {} },
+      TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
+      Assets: { modelsReady: () => Promise.resolve(0) },
+      Log: { warn() {}, info() {} },
+      els: { datahub: {} },
+      queueMicrotask: (fn) => queueMicrotask(fn),
+      requestIdleCallback(fn, opts) { idles.push(opts && opts.timeout); return idles.length; },
+      setTimeout() { throw new Error("setTimeout fallback must not run when rIC exists"); },
+      document: { createElement() { return { dataset: {}, remove() {} }; }, head: { appendChild() {} } },
+    });
+    vm.runInContext(loader + "\n" + bundles + `
+      globalThis.__lb = LazyBundles.create({
+        els, loadBackendScripts: ScriptLoader.create().load,
+        getContext: () => ({ trackIdx: 0 }),
+        applyLightTuneIfReady() {}, bindAgent() {}, createNetwork() { return { wire() {} }; }, onAudioReady() {},
+      });
+    `, ctx);
+    ctx.__lb.raceAssets();
+    await new Promise((r) => setTimeout(r, 0));
+    return { idles: idles.sort(), sceneryKicks };
+  };
+  assert.deepEqual((await run(undefined)).idles, [2500, 2800, 4500], "no Network Information API: unchanged");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "4g" })).idles, [2500, 2800, 4500], "a normal link prefetches");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "3g" })).idles, [2500, 2800, 4500], "3G still prefetches");
+  const sd = await run({ saveData: true, effectiveType: "4g" });
+  assert.deepEqual(sd.idles, [2500], "Save-Data: only the lights prefetch");
+  assert.ok(sd.sceneryKicks > 0, "the selected circuit's scenery still kicks under Save-Data");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "slow-2g" })).idles, [2500], "slow-2g: only the lights prefetch");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "2g" })).idles, [2500], "2g: only the lights prefetch");
 });

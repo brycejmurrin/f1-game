@@ -767,7 +767,11 @@ const AgentView = (function () {
       }
       const setup = o.parts || G.getTeamParts(team.id);
       const res = Parts.resolveSetup(setup, team);
-      const style = Car3D.teamStyleOf(team.id);
+      // bodyStyle (a livery chassis id, Car3D.BODY_STYLE_IDS) goes through the
+      // same bodyStyleKey every geometry caller uses, so the report measures the
+      // body the car is built from, not always the team's own (#3111 F16).
+      const bodyKey = Car3D.bodyStyleKey ? Car3D.bodyStyleKey(team.id, o.bodyStyle) : team.id;
+      const style = Car3D.teamStyleOf(bodyKey);
 
       // Build the real mesh and measure it — the dimensions an agent would
       // otherwise read off a screenshot with a ruler.
@@ -787,7 +791,8 @@ const AgentView = (function () {
         // gating it takes ~1.4 ms off the race-start hitch — the same beat
         // DebrisWorld.prime() stays out of.
         const mesh = Car3D.build(team.color, team.color2,
-                                 { parts: res.visual, teamId: team.id, measure: true });
+                                 { parts: res.visual, teamId: team.id, measure: true,
+                                   livery: o.bodyStyle ? { bodyStyle: o.bodyStyle } : undefined });
         meshRef = mesh;
         const pos = mesh.pos;
         let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
@@ -845,7 +850,7 @@ const AgentView = (function () {
           mods: res.mods,
         },
         chassis: {
-          style,
+          style, bodyStyle: bodyKey,
           bespokeSilhouette: Object.prototype.hasOwnProperty.call(
             Car3D.TEAM_STYLE, team.id),
           axles: Car3D.AXLES,
@@ -1887,7 +1892,7 @@ const AgentView = (function () {
             "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners "
             + "carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no "
             + "line), plus bankingDeg/camber, gradientPct/elevation and kerbs",
-          "carView({team,parts,detail})":
+          "carView({team,parts,bodyStyle,detail})":
             "WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, "
             + 'measured geometry; detail:"parts" adds per-part boxes',
           "survey({stations,lats,reachM,limit,profile})":

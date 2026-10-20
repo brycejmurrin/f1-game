@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -17,8 +18,8 @@ function loadMaterials() {
   };
   cx.globalThis = cx;
   vm.createContext(cx);
-  vm.runInContext(read("js/car/car-material-shade.js"), cx, { filename: "car-material-shade.js" });
-  vm.runInContext(read("js/car/car-materials.js"), cx, { filename: "car-materials.js" });
+  vm.runInContext(read("js/car/car-material-shade.js"), cx, { filename: absSrc("js/car/car-material-shade.js") });
+  vm.runInContext(read("js/car/car-materials.js"), cx, { filename: absSrc("js/car/car-materials.js") });
   const grab = (n) => vm.runInContext(n, cx);
   return { CarMaterials: grab("CarMaterials"), CarMaterialShade: grab("CarMaterialShade") };
 }
@@ -200,7 +201,7 @@ test("Teams.liveryEnumOk accepts the new finish names (derived from FINISH_SURFA
   const { CarMaterials } = loadMaterials();
   const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
   cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
-  vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: absSrc("js/data/teams.js") });
   const Teams = vm.runInContext("Teams", cx);
   for (const f of ["gloss", "pearl", "tinted", "chameleon"]) assert.equal(Teams.liveryEnumOk("finish", f), true, f);
   for (const f of ["constructor", "tintedd"]) assert.equal(Teams.liveryEnumOk("finish", f), false, f);
@@ -265,10 +266,13 @@ test("FINISH_SURFACE rows flake 34 and candy 35 exist, are accepted by Teams.liv
   assert.equal(CarMaterials.FINISH_SURFACE.flake, 34);
   assert.equal(CarMaterials.FINISH_SURFACE.candy, 35);
   const chips = ["gloss", ...Object.keys(CarMaterials.FINISH_SURFACE)];
-  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon", "forged", "gunmetal", "goldplate"]);
+  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon", "forged", "gunmetal", "goldplate",
+    // finishes 60+ (design lane D2): round 4 close-up matrix
+    "oilslick", "frozen", "fluoro", "burnt", "alubare", "rawcarbon", "flovis", "carbonfade", "silverfade", "metalflop",
+    "truematte", "pearlwhite", "jpsgold", "ghostpearl", "xirallic", "mystichrome", "midnightpurple", "ultrablack"]);
   const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
   cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
-  vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: absSrc("js/data/teams.js") });
   const Teams = vm.runInContext("Teams", cx);
   for (const f of ["flake", "candy"]) assert.equal(Teams.liveryEnumOk("finish", f), true, f);
   const { SURFACES, applyFinish } = CarMaterials;
@@ -370,7 +374,7 @@ test("FINISH_SURFACE rows forged 38, gunmetal 39, goldplate 40 exist in the rese
   }
   const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
   cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
-  vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: absSrc("js/data/teams.js") });
   const Teams = vm.runInContext("Teams", cx);
   for (const f of ["forged", "gunmetal", "goldplate"]) assert.equal(Teams.liveryEnumOk("finish", f), true, f);
   assert.match(read("js/garage/setup-sheet.js"), /\n  finish: "[^"]*forged[^"]*gunmetal[^"]*goldplate[^"]*",/, "LIV_ROW_HINT names the new finishes");

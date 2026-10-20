@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const host = (v) => JSON.parse(JSON.stringify(v));
@@ -46,7 +47,7 @@ function load(init, { throwing = false } = {}) {
   });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/career/badges.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/badges.js"), "utf8"), ctx, { filename: absSrc("js/career/badges.js") });
   const B = vm.runInContext("Badges", ctx);
   const toasts = [];
   B.setNotifier((labels) => toasts.push([...labels]));
@@ -155,7 +156,7 @@ test("seven consecutive daily-challenge days unlock DAILY DEVOTION through Daily
   const { B, ctx, toasts } = load();
   seedHash32(ctx);
   ctx.Tracks.SEASON = ctx.Tracks.LIST;
-  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx, { filename: absSrc("js/race/daily-challenge.js") });
   const D = vm.runInContext("DailyChallenge", ctx);
   const stored = new Map();
   const G = {

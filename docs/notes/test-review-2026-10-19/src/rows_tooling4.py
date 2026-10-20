@@ -139,7 +139,7 @@ NEW = [
  "wall-clock < 2000 ms assert on real 30/120 ms timers; same in subagent-contract-hook",
  "flake risk under load (the box this suite runs on is often loaded)",
  "use a fake clock or a generous bound tied to the timers","S","loading",R,None,"hygiene",[],None),
-("T4-29","tooling-4","tests/unit/ready-full-cap.test.mjs","","hygiene","low","high",
+("T4-29","tooling-4","ready-full-cap (deleted, #3013)","","hygiene","low","high",
  "covers a retired tool (full-tier cap retired 2026-10-16) and pins AGENTS.md prose with a loose alternation",
  "test cost for a tool nothing uses",
  "retire the tool and its test together","S","ci",R,None,"hygiene",["source-scan"],None),

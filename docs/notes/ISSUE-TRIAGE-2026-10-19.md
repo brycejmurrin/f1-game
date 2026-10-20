@@ -35,7 +35,7 @@ Checked on the tree and still open:
 - #1602: no pseudo-locale module; #1610: no calendar-export module; #1606: no `radio.*` keys in `locales/en.json`.
 - #2881: `.claude/settings.json` still allows `mcp__plugin_browser-use_browser-use` top-level; the guard has no match for it.
 - #2944: `latestPerWorkflow` still breaks a created_at tie to the higher run id (`tools/ci/ci-watch.mjs:20-21`).
-- #3013: `tools/ci/ready-full-cap.mjs` and its test still exist.
+- #3013: `ready-full-cap (deleted, #3013)` and its test still exist.
 - #3024: `preflight()` in `tools/ci/deploy.mjs:112` still takes no `cwd`.
 - #2977: the `todo` pin is still in `tests/unit/hud-pins.test.mjs:199`; the fix branch `cursor/hud-band-allocator-5e2c` is not on origin.
 - #2994: `memory: local` is absent from `.claude/agents/track-surveyor.md`.

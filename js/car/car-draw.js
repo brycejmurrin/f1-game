@@ -946,7 +946,11 @@ const CarDraw = (function () {
       // is always this team's key — no per-frame partsVisualKey() rebuild.
       const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick, 4 faired
       // BODY: the cockpit style plus the livery's chassis (Car3D.bodyStyleKey), one _cbBody input.
-      const bs = deps.resolveLivery(team).bodyStyle, body = CockpitOpts.body() + (bs ? ":S" + bs : "");
+      // Keyed on the RESOLVED body: "team" and unknown ids are the team's own
+      // geometry and share its key instead of each costing a rebuild (#3111 F17).
+      const rawBs = deps.resolveLivery(team).bodyStyle;
+      const bk = Car3D.bodyStyleKey ? Car3D.bodyStyleKey(team.id, rawBs) : rawBs, bs = bk && bk !== team.id ? bk : "";
+      const body = CockpitOpts.body() + (bs ? ":S" + bs : "");
       if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum) {
         _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + (bs ? ":S" + bs : "") + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
         _cbShKey = _cbKey + ":FP";   // the first-person caster: same cache (and wipes), its own key

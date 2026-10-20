@@ -1,6 +1,6 @@
 # CI clog survey, 2026-10-15 (00:00 to 05:30 UTC)
 
-Measured from the Actions REST API through the repo's own `tools/ci/ready-full-cap.mjs` `api()` helper
+Measured from the Actions REST API through the repo's own `ready-full-cap (deleted, #3013)` `api()` helper
 (300 newest ci.yml runs, the jobs of 30 of them, per-day `created=` counts for 8 days, the last 100 runs of
 every other workflow, check-run annotations on three cancelled runs), plus `.github/workflows/*.yml`,
 `tools/ci/`, `docs/notes/ACTIONS-AUDIT-2026-10-14.md`, `CI-CAPACITY-2026-09-29.md`,

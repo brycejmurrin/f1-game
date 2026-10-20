@@ -17,6 +17,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -30,15 +31,15 @@ const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
   "js/render/three/tlx-shadow.js"])
-  vm.runInThisContext(read(f), { filename: f });
+  vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 // ── A-W2 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 // The real module, loaded with a given apex26.* store (the knob is read once, at load, like apex26.tlxPack).
-function packer(ls = {}) {
+function packer(ls = {}, constructors = {}) {
   const sb = { window: {}, localStorage: { getItem: (k) => (k in ls ? ls[k] : null) }, Frustum: {},
-    Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Math };
+    Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Math, ...constructors };
   vm.createContext(sb);
-  vm.runInContext(CHUNKED, sb, { filename: "tlx-chunked.js" });
+  vm.runInContext(CHUNKED, sb, { filename: absSrc("js/render/three/tlx-chunked.js") });
   return sb.window.TLXShaders;
 }
 function decodeHalf(h) {
@@ -73,6 +74,40 @@ const SRC = {
 const CASES = [["normal", "nrm", 3, "unit", 0], ["color", "col", 3, "unorm", 1], ["color (HDR)", "hdr", 3, "unorm", 1],
   ["mat", "mat", 1, "id", null], ["mat (> 255)", "mat300", 1, "id", null], ["trk", "trk", 3, null, null]];
 
+test("WebGPU normal packing allocates only final storage and preserves the padded Float32 fetch", () => {
+  const allocations = [];
+  const constructors = Object.fromEntries([Float32Array, Int16Array].map(Type => [Type.name, new Proxy(Type, {
+    construct(target, args) { const a = Reflect.construct(target, args); allocations.push(a.byteLength); return a; },
+  })]));
+  // Include values either side of a quantisation midpoint, float noise at
+  // the admission edge, negative zero and ordinary non-Float32 JS inputs.
+  const mid = 0.5 / 32767;
+  const values = [mid - 1e-13, mid + 1e-13, -0, 1.00009, -1.00009, 0.3, -0.8, 0.6, 1];
+  for (const src of [values, new Float32Array(values)]) for (const off of [false, true]) {
+    const ls = off ? { "apex26.tlxPack": "0" } : {};
+    const p = packer(ls, constructors), reference = packer(ls);
+    const padded = new Float32Array(src.length / 3 * 4);
+    for (let v = 0; v < src.length / 3; v++) padded.set(src.slice(v * 3, v * 3 + 3), v * 4);
+    const expected = reference.packAttr(THREE, padded, padded.length, 4, "unit", true);
+    allocations.length = 0;
+    const actual = p.packAttr(THREE, src, src.length, 3, "unit", true);
+    assert.deepEqual(allocations, [actual.array.byteLength], "one allocation: the final attribute, with no full-size temporary");
+    assert.equal(actual.itemSize, expected.itemSize);
+    assert.equal(actual.count, expected.count);
+    assert.equal(actual.normalized, expected.normalized);
+    assert.equal(actual.array.constructor.name, expected.array.constructor.name);
+    assert.deepEqual(Array.from(actual.array), Array.from(expected.array));
+    assert.equal(p.packStats.savedMB, reference.packStats.savedMB);
+  }
+  for (const invalid of [1.0001, -1.1, NaN, Infinity, -Infinity]) {
+    const p = packer();
+    const actual = p.packAttr(THREE, [invalid, 0, 1], 3, 3, "unit", true);
+    assert.ok(actual.array instanceof Float32Array, "out-of-range / nonfinite normals retain the wide fallback");
+    assert.deepEqual(Array.from(actual.array), [Math.fround(invalid), 0, 1, 0]);
+    assert.equal(actual.itemSize, 4);
+  }
+});
+
 test("A-W2: on WebGL2 every packed attribute has a 4-byte stride and fetches the same values; w is 0 (normal) / 1 (colour)", () => {
   const on = packer(), off = packer({ "apex26.tlxPad4": "0" });
   assert.equal(on.packStats.pad4On, true, "default ON");
@@ -97,6 +132,41 @@ test("A-W2: on WebGL2 every packed attribute has a 4-byte stride and fetches the
   }
   assert.equal(narrowMisses, 5, "control: normal, colour, HDR colour and both mats miss 4 bytes without the pad (trk does not)");
   assert.ok(on.packStats.pad4 >= 4 && on.packStats.pad4MB > 0, "packStats counts the widened attributes");
+});
+
+test("A-W2: padded WebGL2 normals allocate only final storage and preserve narrow quantization", () => {
+  const mid = 0.5 / 32767;
+  const values = [mid - 1e-13, mid + 1e-13, -0, 1.00009, -1.00009, 0.3, -0.8, 0.6, 1];
+  for (const src of [values, new Float32Array(values), new Float64Array(values)]) {
+    const allocations = [];
+    class CountedInt16Array extends Int16Array {
+      constructor(...args) { super(...args); allocations.push(this.byteLength); }
+    }
+    const sb = { window: {}, localStorage: { getItem: () => null }, Frustum: {},
+      Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array: CountedInt16Array, Int32Array, Math };
+    vm.runInNewContext(CHUNKED, sb, { filename: absSrc("js/render/three/tlx-chunked.js") });
+    const p = sb.window.TLXShaders;
+    const narrow = packer({ "apex26.tlxPad4": "0" }).packAttr(THREE, src, src.length, 3, "unit", false);
+    const actual = p.packAttr(THREE, src, src.length, 3, "unit", false);
+    assert.deepEqual(allocations, [actual.array.byteLength], "no Int16x3 temporary before widening");
+    assert.equal(actual.itemSize, 4); assert.equal(actual.count, src.length / 3); assert.equal(actual.normalized, true);
+    for (let v = 0; v < actual.count; v++) {
+      assert.deepEqual(fetch(actual, v), [...fetch(narrow, v), 0], "same quantization, with a zero fourth lane");
+    }
+    assert.equal(p.packStats.small, 1); assert.equal(p.packStats.pad4, 1);
+    assert.equal(p.packStats.savedMB, src.length * 2 / 1048576);
+    assert.equal(p.packStats.pad4MB, src.length / 3 * 2 / 1048576);
+  }
+  for (const invalid of [1.00011, -1.1, NaN, Infinity, -Infinity]) {
+    const p = packer(), src = [invalid, 0, 1];
+    const actual = p.packAttr(THREE, src, src.length, 3, "unit", false);
+    assert.ok(actual.array instanceof Float32Array, "invalid normals retain the original wide fallback");
+    assert.equal(actual.itemSize, 3); assert.equal(actual.normalized, false);
+    assert.deepEqual(Array.from(actual.array), Array.from(new Float32Array(src)));
+    assert.equal(p.packStats.pad4, 0);
+  }
+  const unpacked = packer({ "apex26.tlxPack": "0" }).packAttr(THREE, values, values.length, 3, "unit", false);
+  assert.equal(unpacked.itemSize, 3); assert.ok(unpacked.array instanceof Float32Array);
 });
 
 test("A-W2: WebGPU (fmt24) and the tools' raw pack (no fmt24) are untouched by the knob", () => {

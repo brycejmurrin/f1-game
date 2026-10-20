@@ -3,21 +3,24 @@
 // any car. Pins that every picker body builds and moves nose/cover/pod anchors,
 // that an unknown or "team" value falls back to the team's own, that decal
 // anchors key on the SAME body the mesh is built from, that team ids still
-// resolve when the picker hides them, and that no concept body lowers
+// resolve when the picker hides them, that no concept body lowers
 // CarBodyGeom's NOSE_DROOP_FLOOR — the flap solver's floor is derived over every
-// style, so a deeper droop would move every car's wing.
+// style, so a deeper droop would move every car's wing — and (#3111) that every
+// body is a valid chassis on every engine: pods not inside out, nose joined to
+// the tub and clear of the wing, cover under the roll hoop, mirrors unburied.
 //
-// Run: node --test tests/unit/body-styles.test.mjs   (npm run test:tooling-fast; ~3 s, no browser)
+// Run: node --test tests/unit/body-styles.test.mjs   (npm run test:tooling-fast; ~5 s, no browser)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const M = loadParts();
 const { Car3D, Parts, Teams } = M;
 const Liveries = (() => { const ctx = { console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set };
-  vm.createContext(ctx); vm.runInContext(fs.readFileSync("js/car/liveries.js", "utf8"), ctx);
+  vm.createContext(ctx); vm.runInContext(fs.readFileSync("js/car/liveries.js", "utf8"), ctx, { filename: absSrc("js/car/liveries.js") });
   return vm.runInContext("Liveries", ctx); })();
 const team = Teams.LIST.find((t) => t.id === "ferrari");
 const tiers = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
@@ -73,22 +76,110 @@ test("decal anchors follow the body the mesh is built from", () => {
 });
 
 test("no concept body lowers the flap solver's nose-droop floor", () => {
-  // The CarBodyGeom NOSE_DROOP_FLOOR formula, over the team bodies alone vs all.
-  const zMid = Car3D.CHASSIS.nose[1].z, zTip = Car3D.CHASSIS.nose[0].z;
-  const floor = (styles) => {
-    let worst = 0;
-    for (const st of styles) {
-      const d = st.noseDroop || 0;
-      if (d >= 0) continue;
-      for (const z of [2.00, 2.16]) {
-        const t = Math.max(0, Math.min(1, (z - zMid) / (zTip + (st.noseTipZ || 0) - zMid)));
-        worst = Math.min(worst, d * (0.4 + 0.6 * t));
-      }
-    }
-    return worst;
-  };
+  // NOSE_DROOP_FLOOR is derived over every style's noseDroop; concept bodies
+  // stay at or above the team worst so it (and every car's wing) is unchanged.
+  const worst = (styles) => Math.min(0, ...styles.map((st) => st.noseDroop || 0));
   const teams = Object.values(Car3D.TEAM_STYLE);
-  assert.equal(floor([...teams, ...Object.values(Car3D.BODY_STYLES)]), floor(teams));
+  assert.ok(worst(Object.values(Car3D.BODY_STYLES)) >= worst(teams));
+});
+
+// ── #3111: every body is a valid chassis on EVERY engine ─────────────────────
+// The style offsets are raw metres, so a body tuned on the Ferrari pod (1.06)
+// turned inside out on the narrow Honda/Audi/Aston pods. One matrix: every
+// style (team + concept) x every team's factory setup AND every catalog engine,
+// square and rounded (CarShade) anchors.
+const ENGINES = [
+  ...Teams.LIST.map((t) => ({ id: "factory:" + t.id, T: Parts.getVisualTiers(Parts.getFactorySetup(t), t) })),
+  ...Parts.CATALOG.find((c) => c.id === "engine").options.filter((o) => o.visual)
+    .map((o) => ({ id: o.id, T: { engine: o.visualTier, _visual: { engine: o.visual } } })),
+];
+const BODIES = Object.keys(Car3D.BODY_STYLES), TEAMS = Object.keys(Car3D.TEAM_STYLE);
+const Shaded = loadParts({ shade: true }).Car3D;   // round anchors need CarShade (a second realm)
+const each = (styles, fn) => { for (const st of styles) for (const e of ENGINES) for (const round of [false, true])
+  fn(st, e, (round ? Shaded : Car3D).bodyAnchors(e.T, st, undefined, round), round); };
+
+test("every body x engine: pod top above bottom, outer edge outboard, undercut in the team envelope", () => {
+  const bad = [];
+  each([...TEAMS, ...BODIES], (st, e, a, round) => {
+    for (const p of a.podStations) {
+      const at = `${st}/${e.id}${round ? "/round" : ""} z${p.z}`;
+      // Floors: the thinnest grid section at the tail (2 cm wide, ~3 cm tall
+      // after the rounded downwash ramp) — no body may go under a team car.
+      if (!(p.outer - p.inner >= 0.0195)) bad.push(`${at} width ${(p.outer - p.inner).toFixed(3)}`);
+      if (!(p.innerTop - p.innerBottom >= 0.08)) bad.push(`${at} inner height ${(p.innerTop - p.innerBottom).toFixed(3)}`);
+      if (!(p.outerTop - p.outerBottom >= (round ? 0.025 : 0.06))) bad.push(`${at} outer height ${(p.outerTop - p.outerBottom).toFixed(3)}`);
+      if (!(p.outerBottom >= p.innerBottom - 0.0401)) bad.push(`${at} belly ${(p.outerBottom - p.innerBottom).toFixed(3)} under the inboard edge`);
+      // 0.12: the quali-engine grid car's tail belly (z -0.62), the lowest shipped.
+      if (!(Math.min(p.innerBottom, p.outerBottom) >= 0.12)) bad.push(`${at} belly under the floor rail`);
+    }
+  });
+  assert.deepEqual(bad.slice(0, 12), [], `${bad.length} invalid pod stations`);
+});
+
+test("the pod clamp never binds on a grid car (team stations clear every floor)", () => {
+  // Mirror of POD_MIN_W / POD_MIN_H / POD_TOP_MAX in car-body-geom.js
+  // clampPodStation: every TEAM_STYLE x engine station must clear them, so the
+  // clamp leaves the shipped grid bit-identical and moves only concept bodies.
+  const MIN_W = { "0.62": 0.10, "0.5": 0.10, "0.22": 0.12, "-0.38": 0.10, "-0.62": 0.06, "-1.05": 0.04, "-1.48": 0.02 };
+  const MIN_H = { "0.62": 0.10, "0.5": 0.10, "0.22": 0.12, "-0.38": 0.12, "-0.62": 0.12, "-1.05": 0.10, "-1.48": 0.08 };
+  const bad = [];
+  each([undefined, ...TEAMS], (st, e, a, round) => {
+    if (round) return;   // the clamp runs before the rounded downwash ramp
+    for (const p of a.podStations) {
+      const k = String(p.z), at = `${st || "default"}/${e.id} z${k}`;
+      if (p.outer - p.inner < MIN_W[k]) bad.push(`${at} width`);
+      if (p.innerTop - p.innerBottom < MIN_H[k] || p.outerTop - p.outerBottom < MIN_H[k]) bad.push(`${at} height`);
+      if (Math.max(p.innerTop, p.outerTop) > 0.65) bad.push(`${at} top`);
+      if (p.outerBottom < p.innerBottom - 0.04 - 1e-9 || p.outerBottom < Math.min(p.innerBottom, 0.13)) bad.push(`${at} belly`);
+    }
+  });
+  assert.deepEqual(bad.slice(0, 12), [], `${bad.length} team stations the clamp would move`);
+});
+
+test("every body x engine: the pod shoulder stays under the mirror housings", () => {
+  const bad = [];
+  for (const st of BODIES) {
+    const housingBottom = Math.min(...Car3D.mirrorLightAnchors(st, 1).map((m) => m.y)) - 0.0375;
+    for (const e of ENGINES) {
+      const p = Car3D.bodyAnchors(e.T, st).podAt(0.24);
+      const top = Math.max(p.top, p.innerTop);
+      if (top > housingBottom - 0.01) bad.push(`${st}/${e.id} pod top ${top.toFixed(3)} vs housing ${housingBottom.toFixed(3)}`);
+    }
+  }
+  assert.deepEqual(bad.slice(0, 12), [], `${bad.length} buried mirrors`);
+});
+
+test("every body: the nose meets the tub and clears the front-wing flap ceiling", () => {
+  const root = Car3D.CHASSIS.nose[2], tub = Car3D.CHASSIS.monocoque[0];
+  // The lowest TEAM nose underside over the NOSE_UNDER window (z 1.96-2.16):
+  // the flap solver's ceiling is derived from the team noses, so a concept nose
+  // must never hang under it.
+  const zs = [1.96, 2.00, 2.05, 2.10, 2.16];
+  const floor = zs.map((z) => Math.min(...[undefined, ...TEAMS].map((st) => Car3D.bodyAnchors(null, st).noseAt(z).bottom)));
+  for (const st of BODIES) {
+    const n = Car3D.bodyAnchors(null, st);
+    const last = n.noseAt(-9);   // sampleStations clamps to the root station
+    assert.ok(Math.abs(last.z - -9) < 1e-9 && Math.abs(n.noseAt(tub.z).bottom - (root.y - root.h / 2)) < 1e-9
+      && Math.abs(n.noseAt(tub.z).top - (root.y + root.h / 2)) < 1e-9, `${st}: nose root is not the chassis root at z ${tub.z}`);
+    assert.ok(n.noseAt(tub.z).side * 2 <= tub.w + 1e-9, `${st}: nose root wider than the tub`);
+    zs.forEach((z, i) => assert.ok(n.noseAt(z).bottom >= floor[i] - 1e-9,
+      `${st}: nose underside ${n.noseAt(z).bottom.toFixed(3)} under the team floor ${floor[i].toFixed(3)} at z ${z}`));
+  }
+});
+
+test("every body x engine x spine: the engine cover stays under the roll hoop", () => {
+  // The hoop crown is 0.968 at z -0.33 and 0.938 at -0.63 (car3d PRINCIPAL ROLL
+  // STRUCTURE). A concept body's coverLift may not lift the cover past the team
+  // car on the same engine and spine, and on a standard spine stays under 0.93.
+  const bad = [];
+  for (const sp of ["standard", "raised", "high", "dorsal"]) for (const e of ENGINES) {
+    const team = Car3D.bodyAnchors(e.T, undefined, sp).coverAt(-0.55).top;
+    for (const st of BODIES) {
+      const top = Car3D.bodyAnchors(e.T, st, sp).coverAt(-0.55).top;
+      if (top > Math.max(team, 0.92) + 1e-9) bad.push(`${st}/${e.id}/${sp} cover ${top.toFixed(3)} (team ${team.toFixed(3)})`);
+    }
+  }
+  assert.deepEqual(bad.slice(0, 12), [], `${bad.length} covers through the hoop`);
 });
 
 test("bodyStyle is a published livery field and the garage's copy list carries it", () => {

@@ -6,6 +6,7 @@ import vm from "node:vm";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bootEditor, design, plain, ellipse, read } from "../helpers/editor-vm.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("KINDS / CAPS / sanitize: known kinds only, per-kind and total caps", () => {
   const { P } = bootEditor();
@@ -222,7 +223,7 @@ test("effective clearance preserves imported stored gaps and uses every kind flo
 
 test("mixed recipes give exact immutable proposals and refuse kind/total limits atomically", () => {
   const b = bootEditor();
-  vm.runInContext(read("js/editor/followup-tools.js").replace(/^const\b/gm, "var"), b.ctx);
+  vm.runInContext(read("js/editor/followup-tools.js").replace(/^const\b/gm, "var"), b.ctx, { filename: absSrc("js/editor/followup-tools.js") });
   const R = b.ctx.DesignerFollowup.recipe, state = { design: design(), sel: 2, span: 6 };
   const before = JSON.stringify(state), corner = R(state, "corner"), hedge = R(state, "hedge");
   assert.equal(corner.ok, true); assert.deepEqual(plain(corner.added.map(p => p.kind)), ["marshal", "camera"]);
@@ -329,7 +330,7 @@ test("landscape footprints reject another road section before native or preview 
 
 test("landscapes reach the real engine and overhead preview without failed dressers", () => {
   const b = bootEditor();
-  vm.runInContext(read("js/editor/scenery-preview.js").replace(/^const\b/gm, "var"), b.ctx);
+  vm.runInContext(read("js/editor/scenery-preview.js").replace(/^const\b/gm, "var"), b.ctx, { filename: absSrc("js/editor/scenery-preview.js") });
   for (const kind of b.P.KINDS.slice(15)) {
     const d = b.C.sanitize(design({ props: [{ kind, s: 0, side: -1, gap: 100 }] }));
     const def = b.ctx.TrackDef.fromRaw(b.C.toRaw(d));

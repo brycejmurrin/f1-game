@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -27,8 +28,8 @@ function load() {
     PerfGov: { tier: () => 0 },
   };
   vm.createContext(ctx);
-  vm.runInContext(read("js/render/shared/light-budget.js") + "\n;globalThis.LightBudget = LightBudget;", ctx);
-  vm.runInContext(read("js/lighting/frame-lights.js") + "\n;globalThis.FrameLights = FrameLights;", ctx);
+  vm.runInContext(read("js/render/shared/light-budget.js") + "\n;globalThis.LightBudget = LightBudget;", ctx, { filename: absSrc("js/render/shared/light-budget.js") });
+  vm.runInContext(read("js/lighting/frame-lights.js") + "\n;globalThis.FrameLights = FrameLights;", ctx, { filename: absSrc("js/lighting/frame-lights.js") });
   return { FL: ctx.FrameLights, clock };
 }
 
@@ -53,6 +54,36 @@ test("at 60 m/s the forward rank reuses most frames (distance/time budget)", () 
     `reuse should dominate at speed (reuses ${s.mainReuses} rebuilds ${s.mainRebuilds})`);
   // Old 0.5 m eps: ~600 rebuilds. New 5 m / 100 ms: ≤ ~120.
   assert.ok(s.mainRebuilds <= 150, `expected <<600 rebuilds, got ${s.mainRebuilds}`);
+});
+
+test("cornering at 60 m/s: a long, yawing forward vector still reuses the rank (unit-direction yaw budget)", () => {
+  const { FL, clock } = load();
+  FL.resetRankStats();
+  const track = { _lights: street(12) }, cars = new Array(10).fill({}), frame = {};
+  for (let f = 0; f < 600; f++) {
+    clock.now = f * 1000 / 60;
+    const yaw = f * 0.3 * Math.PI / 180;               // 0.3°/frame, a long corner
+    const eye = [0, 1.2, 500 + f];
+    FL.setFrameLights(frame, track, cars, eye, 1, [8 * Math.sin(yaw), 0, 8 * Math.cos(yaw)], 0);   // game.js: camTgt - camEye, ~8 m
+  }
+  const s = FL.rankStats();
+  // The raw-vector eps failed at ~0.07° of yaw: 600 rebuilds in 600 frames.
+  assert.ok(s.mainReuses > s.mainRebuilds, `reuse should dominate in a corner (reuses ${s.mainReuses} rebuilds ${s.mainRebuilds})`);
+  assert.ok(s.mainRebuilds <= 200, `expected far fewer than 600 rebuilds, got ${s.mainRebuilds}`);
+});
+
+test("a yaw past the budget re-ranks at once, whatever the vector's length", () => {
+  const { FL, clock } = load();
+  const track = { _lights: street(12) }, cars = new Array(10).fill({}), frame = {}, eye = [0, 1.2, 500];
+  for (const len of [1, 8, 40]) {
+    FL.resetRankStats();
+    clock.now += 1;
+    FL.setFrameLights(frame, track, cars, eye, 1, [0, 0, len], 0);
+    clock.now += 1 / 60;
+    const yaw = 3 * Math.PI / 180;
+    FL.setFrameLights(frame, track, cars, eye, 1, [len * Math.sin(yaw), 0, len * Math.cos(yaw)], 0);
+    assert.equal(FL.rankStats().mainRebuilds, 2, `len ${len}: a 3° turn rebuilds the next frame`);
+  }
 });
 
 test("mirror viewLights shares the view heap — far fewer rebuilds than frames", () => {

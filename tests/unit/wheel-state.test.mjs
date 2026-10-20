@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
@@ -28,7 +29,7 @@ function load() {
     "js/physics/tyre-model.js",
     "js/physics/wheel-state.js",
   ]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return {
     WheelState: vm.runInContext("WheelState", ctx),
@@ -44,76 +45,120 @@ test("WheelState defaults OFF and exposes axleStep / stepPlayer", () => {
   assert.equal(typeof WheelState.setEnabled, "function");
 });
 
-test("hard brake at low grip locks the front (κ → negative, wheelLock > 0)", () => {
+// Demand / capacity are accel units, billed by PlayerForces on the legacy
+// LONG_GRIP circle. A dry BB_REF stop sits at ~0.64 of capacity.
+const opts = (o) => Object.assign({
+  dt: DT, braking: false, thrOn: false, aReqF: 0, aReqR: 0, muLongF: 34, muLongR: 34,
+  slipF: 0, slipR: 0, csFront: 130, csRear: 160, muLatF: 14, muLatR: 12,
+}, o);
+
+test("a brake demand above the front's capacity locks it (κ → −, wheelLock > 0, shortfall > 0)", () => {
   const { WheelState } = load();
   WheelState.setEnabled(true);
-  const c = {
-    speed: 28, vwF: 28, vwR: 28, kappaF: 0, kappaR: 0,
-    brakeBias: 0.62, human: true,
-  };
-  let maxLock = 0, minKappaF = 0;
-  for (let i = 0; i < 90; i++) {
-    WheelState.stepPlayer(c, {
-      dt: DT, loadF: 0.55, loadR: 0.45, braking: true, thrOn: false,
-      throttleLvl: 0, gearMult: 1, deploy: 0,
-      weatherGrip: 0.55, surfaceMu: 0.7, kerbGrip: 1, aeroGrip: 1, tyreMu: 1,
-      tyreAx: { f: 1, r: 1 }, slipF: 0.02, slipR: 0.01,
-      csFront: 130, csRear: 160, muLatF: 12, muLatR: 11,
-      brakeBias: 0.62,
-    });
+  const c = { speed: 28, vwF: 28, vwR: 28, kappaF: 0, kappaR: 0 };
+  let maxLock = 0, minKappaF = 0, short = 0;
+  for (let i = 0; i < 30; i++) {
+    const r = WheelState.stepPlayer(c, opts({ braking: true, aReqF: -14, aReqR: -8, muLongF: 9, muLongR: 20 }));
     maxLock = Math.max(maxLock, c.wheelLock || 0);
     minKappaF = Math.min(minKappaF, c.kappaF || 0);
+    short = r.shortfall;
   }
-  assert.ok(minKappaF < -0.08, `expected lockup κF < -0.08, got ${minKappaF}`);
-  assert.ok(maxLock > 0.25, `expected wheelLock > 0.25, got ${maxLock}`);
-  assert.ok(c.vwF < c.speed - 1, `locked rim slower than body: vwF=${c.vwF} speed=${c.speed}`);
+  assert.ok(minKappaF < -0.2, `expected lockup κF < -0.2, got ${minKappaF}`);
+  assert.ok(maxLock > 0.5, `expected wheelLock > 0.5, got ${maxLock}`);
+  assert.ok(c.vwF < c.speed - 5, `locked rim slower than body: vwF=${c.vwF} speed=${c.speed}`);
+  assert.ok(short > 0.05 && short < 1, `a sliding tyre delivers less than asked: shortfall ${short}`);
 });
 
-test("hard throttle at low speed spins the rear (κ → positive, wheelSpin > 0)", () => {
+test("the same demand inside capacity never locks: κ settles at demand/capacity × peak", () => {
   const { WheelState } = load();
   WheelState.setEnabled(true);
-  const c = {
-    speed: 8, vwF: 8, vwR: 8, kappaF: 0, kappaR: 0,
-    brakeBias: 0.56, human: true,
-  };
-  let maxSpin = 0, maxKappaR = 0;
-  for (let i = 0; i < 90; i++) {
-    WheelState.stepPlayer(c, {
-      dt: DT, loadF: 0.4, loadR: 0.35, braking: false, thrOn: true,
-      throttleLvl: 1, gearMult: 1.1, deploy: 4,
-      weatherGrip: 0.7, surfaceMu: 0.85, kerbGrip: 1, aeroGrip: 1, tyreMu: 1,
-      tyreAx: { f: 1, r: 1 }, slipF: 0.05, slipR: 0.08,
-      csFront: 130, csRear: 160, muLatF: 14, muLatR: 12,
-      brakeBias: 0.56,
-    });
+  const c = { speed: 55, vwF: 55, vwR: 55, kappaF: 0, kappaR: 0 };
+  let r;
+  for (let i = 0; i < 60; i++) {
+    r = WheelState.stepPlayer(c, opts({ braking: true, aReqF: -0.64 * 34, aReqR: -0.3 * 34 }));
+    c.speed -= 20 * DT;   // the body decelerates; the rim must follow it, not lag
+  }
+  assert.equal(c.wheelLock, 0);
+  assert.equal(r.shortfall, 0);
+  assert.ok(Math.abs(c.kappaF + 0.064) < 0.004, `κF ${c.kappaF} ≈ −0.064`);
+});
+
+test("drive demand above the rear's capacity spins it (κR → +, wheelSpin > 0)", () => {
+  const { WheelState } = load();
+  WheelState.setEnabled(true);
+  const c = { speed: 4, vwF: 4, vwR: 4, kappaF: 0, kappaR: 0 };
+  let maxSpin = 0, maxKappaR = 0, short = 0;
+  for (let i = 0; i < 30; i++) {
+    const r = WheelState.stepPlayer(c, opts({ thrOn: true, aReqR: 21, muLongR: 14 }));
     maxSpin = Math.max(maxSpin, c.wheelSpin || 0);
     maxKappaR = Math.max(maxKappaR, c.kappaR || 0);
+    short = r.shortfall;
   }
-  assert.ok(maxKappaR > 0.08, `expected wheelspin κR > 0.08, got ${maxKappaR}`);
-  assert.ok(maxSpin > 0.2, `expected wheelSpin > 0.2, got ${maxSpin}`);
+  assert.ok(maxKappaR > 0.3, `expected wheelspin κR > 0.3, got ${maxKappaR}`);
+  assert.ok(maxSpin > 0.5, `expected wheelSpin > 0.5, got ${maxSpin}`);
   assert.ok(c.vwR > c.speed + 1, `spinning rim faster than body: vwR=${c.vwR} speed=${c.speed}`);
+  assert.ok(short > 0.2, `shortfall ${short}`);
+});
+
+test("an accelerating body under a gripping throttle reads no phantom lock (κR stays +)", () => {
+  const { WheelState } = load();
+  WheelState.setEnabled(true);
+  const c = { speed: 0.5, vwF: 0.5, vwR: 0.5, kappaF: 0, kappaR: 0 };
+  let minK = 1;
+  for (let i = 0; i < 60; i++) {
+    WheelState.stepPlayer(c, opts({ thrOn: true, aReqR: 21 }));
+    c.speed += 7 * DT;
+    if (i > 5) minK = Math.min(minK, c.kappaR);
+  }
+  assert.ok(minK > 0, `κR ${minK} went negative while driving`);
+  assert.equal(c.wheelSpin, 0);
+});
+
+test("combined slip: a cornering rear pays for the same drive with more κ and less lateral grip", () => {
+  const { WheelState } = load();
+  WheelState.setEnabled(true);
+  const run = (slipR) => {
+    const c = { speed: 25, vwF: 25, vwR: 25, kappaF: 0, kappaR: 0 };
+    let r;
+    for (let i = 0; i < 30; i++) r = WheelState.stepPlayer(c, opts({ thrOn: true, aReqR: 21, slipR }));
+    return { k: c.kappaR, lat: r.latScaleR, short: r.shortfall };
+  };
+  const straight = run(0), cornering = run(0.11);
+  assert.ok(cornering.k > straight.k + 0.01, `κR straight ${straight.k} cornering ${cornering.k}`);
+  assert.ok(cornering.lat < straight.lat - 0.03, `latScaleR straight ${straight.lat} cornering ${cornering.lat}`);
+  assert.equal(cornering.short, 0, "still under the combined peak: the drive is delivered");
+});
+
+test("a placement (speed step > RESYNC_A·dt) re-syncs the rims instead of reading slip", () => {
+  const { WheelState } = load();
+  WheelState.setEnabled(true);
+  const c = { speed: 60, vwF: 60, vwR: 60, kappaF: 0, kappaR: 0 };
+  WheelState.stepPlayer(c, opts({}));
+  c.speed = 10;   // jump()
+  WheelState.stepPlayer(c, opts({}));
+  assert.ok(Math.abs(c.kappaF) < 0.01 && Math.abs(c.kappaR) < 0.01, `κ ${c.kappaF}/${c.kappaR}`);
+  assert.equal(c.wheelLock, 0);
 });
 
 test("coast / free-roll keeps |κ| small and latScale ≈ 1", () => {
   const { WheelState } = load();
   WheelState.setEnabled(true);
-  const c = {
-    speed: 40, vwF: 40, vwR: 40, kappaF: 0, kappaR: 0,
-    brakeBias: 0.56, human: true,
-  };
-  const out = WheelState.stepPlayer(c, {
-    dt: DT, loadF: 0.45, loadR: 0.55, braking: false, thrOn: false,
-    throttleLvl: 0, gearMult: 1, deploy: 0,
-    weatherGrip: 1, surfaceMu: 1, kerbGrip: 1, aeroGrip: 1, tyreMu: 1,
-    tyreAx: { f: 1, r: 1 }, slipF: 0, slipR: 0,
-    csFront: 130, csRear: 160, muLatF: 18, muLatR: 16,
-    brakeBias: 0.56,
-  });
+  const c = { speed: 40, vwF: 40, vwR: 40, kappaF: 0, kappaR: 0 };
+  const out = WheelState.stepPlayer(c, opts({}));
   assert.ok(Math.abs(c.kappaF) < 0.02, `κF coast ${c.kappaF}`);
   assert.ok(Math.abs(c.kappaR) < 0.02, `κR coast ${c.kappaR}`);
   assert.equal(c.wheelLock, 0);
   assert.equal(c.wheelSpin, 0);
+  assert.equal(out.shortfall, 0);
   assert.ok(out.latScaleF > 0.95 && out.latScaleR > 0.95, `latScale ${out.latScaleF}/${out.latScaleR}`);
+});
+
+test("past the peak the lateral share is the sliding force's direction, not a 0.05 cliff", () => {
+  const { WheelState } = load();
+  const part = WheelState.axleStep({ vw: 21 }, { dt: DT, vx: 30, aReq: -30, muLong: 10, alphaN: 0.5 }, {});
+  const full = WheelState.axleStep({ vw: 0 }, { dt: DT, vx: 30, aReq: -30, muLong: 10, alphaN: 0.5 }, {});
+  assert.ok(part.kappa < -0.25 && part.latScale > 0.1 && part.latScale < 0.5, `κ ${part.kappa} latScale ${part.latScale}`);
+  assert.ok(full.kappa <= -0.9 && full.latScale <= 0.08, `a fully locked front does not steer: ${full.latScale}`);
 });
 
 test("axleStep runaway brake drives κ negative within ~100 ms", () => {
@@ -122,7 +167,7 @@ test("axleStep runaway brake drives κ negative within ~100 ms", () => {
   const out = {};
   for (let i = 0; i < 12; i++) {
     WheelState.axleStep(state, {
-      dt: DT, vx: 40, aReq: -WheelState.BRAKE_PEDAL,
+      dt: DT, vx: 40, aReq: -20,
       muLong: 8, alphaN: 0,
     }, out);
     state.vw = out.vw;

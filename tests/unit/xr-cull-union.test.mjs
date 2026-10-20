@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -23,7 +24,7 @@ function load() {
   const ctx = vm.createContext({ Math, Float32Array, Float64Array, Array, Number, Object, Infinity });
   seedLog(ctx);
   for (const f of ["js/core/mat4.js", "js/render/shared/frustum.js", "js/xr/xr-rig.js", "js/xr/xr-boot.js"])
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   ctx.XrSession = { isPresenting: () => ctx.presenting !== false, setAnchor() {}, eyeFrames: () => ctx.eyes };
   return ctx;
 }

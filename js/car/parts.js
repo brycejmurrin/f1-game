@@ -448,7 +448,7 @@ const Parts = (function () {
         { id: "sig_astonmartin_exh", label: "Silverstone Exhaust", cost: 120, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "inconel",
           desc: "Aston Martin signature exhaust — Inconel Race performance with a three-pipe exit", speed: 1.04, accel: 1.05, braking: 1.01, visual: { pipes: 3, bore: 1.04, flare: 1, wastegate: 0, wrap: 0 }, visualTier: 2 },
         { id: "sig_cadillac_exh", label: "Detroit Exhaust", cost: 200, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "hyper_scav",
-          desc: "Cadillac signature exhaust — Hyper Scavenge performance with a flared megaphone tip", speed: 1.05, accel: 1.08, braking: 1.04, visual: { pipes: 1, bore: 1.378, flare: 0.5, wastegate: 2, wrap: 1 }, visualTier: 2 },
+          desc: "Cadillac signature exhaust — Hyper Scavenge performance with a flared megaphone tip", speed: 1.05, accel: 1.08, braking: 1.04, visual: { pipes: 1, bore: 1.05, flare: 0.5, wastegate: 2, wrap: 1 }, visualTier: 2 },
       ],
     },
     {
@@ -597,6 +597,17 @@ const Parts = (function () {
       { band: [0.96, 0.96, 0.98], bandWidth: 0.132, grooves: 4, grooveDepth: 0.075, sidewall: 2, shoulder: 2 }],
     ["tyres", "compound_c4", "style_tyres_classic", "Classic Grooved", "four-groove tread on a plain dark wall",
       { band: [0.20, 0.20, 0.22], bandWidth: 0.045, grooves: 4, grooveDepth: 0.075, shoulder: 0, spokes: 8 }],
+    // B·D6 (2026-10-19): sidewall branding, bead guard and wet
+    // sipes. Pirelli's 2019+ wall splits the band into two arcs with the
+    // P ZERO / PIRELLI wordmark in the gaps.
+    ["tyres", "medium", "style_tyres_arcscript", "Arc Script", "band split into two arcs with white lettering in the gaps",
+      { bandArcs: 2, letters: 1, bandWidth: 0.10, sidewall: 0, shoulder: 2 }],
+    ["tyres", "hard", "style_tyres_quadarc", "Quad Arc Guard", "four short band arcs over a coloured rim-guard lip",
+      { bandArcs: 4, letters: 1, rimGuard: 1, bandWidth: 0.09, shoulder: 1 }],
+    ["tyres", "intermediate", "style_tyres_chevron", "Chevron Wet", "directional chevron sipes over a split wet band",
+      { sipes: 1, grooves: 2, grooveDepth: 0.06, bandArcs: 2, letters: 0, shoulder: 2 }],
+    ["tyres", "soft", "style_tyres_retroletter", "Raised Letters", "no band ring — a big white lettering ring all the way round",
+      { letters: 2, bandArcs: 4, bandWidth: 0.035, sidewall: 0, shoulder: 0 }],
     ["ers", "deploy", "style_ers_neon", "Neon Cells", "eight-cell pack under a glowing blister",
       { cells: 8, pack: 1.35, blister: 2, conduit: 2, coolerIntake: 2, led: [1.9, 0.35, 1.7], ledStrip: 1 }],
     ["ers", "harvest", "style_ers_slim", "Slim Pack", "thin, flush pack with no blister",
@@ -615,6 +626,16 @@ const Parts = (function () {
       { bore: 1.45, flare: 1, wastegate: 2, wrap: 1, lip: 2, stack: 2, shield: 1 }],
     ["exhaust", "free_flow", "style_exhaust_tripipe", "Tri-Pipe", "three narrow outlets, no flare",
       { pipes: 3, bore: 0.92, flare: 0, wastegate: 0, wrap: 0, lip: 0, shield: 0, stack: 2 }],
+    // D6 exhaust looks: temper-coloured titanium, the 2019+ stacked
+    // wastegates above the main tip, and a hooded exit.
+    ["exhaust", "sport_cat", "style_exhaust_titanium", "Burnt Titanium", "straw-to-blue heat-tempered tailpipe with a flared tip",
+      { pipes: 1, heatTint: 1, bore: 1.10, flare: 0.5, wrap: 0, lip: 0, shield: 0 }],
+    ["exhaust", "twin_gate", "style_exhaust_stackgate", "Stacked Gates", "two wastegate pipes stacked over the main tip",
+      { pipes: 1, gateStack: 1, wastegate: 2, heatTint: 2, wrap: 0, lip: 1, shield: 0, bore: 1.04 }],
+    ["exhaust", "free_flow", "style_exhaust_hooded", "Hooded Exit", "tip tucked under a carbon visor with a red edge",
+      { pipes: 1, hood: 1, heatTint: 1, wrap: 0, lip: 0, shield: 1, bore: 1.10 }],
+    ["exhaust", "inconel", "style_exhaust_bluetri", "Blued Tri-Exit", "three purple-blue tempered pipes, bare and flareless",
+      { pipes: 3, heatTint: 2, wrap: 0, lip: 0, shield: 0, flare: 0 }],
     ["floor", "fence_array", "style_floor_tallfence", "Tall Fences", "eight tall fences and a raised edge lip",
       { fences: 8, fenceH: 2.20, edgeLip: 2, skid: 2, skirt: 2, plank: 0, gurney: 0, scroll: 0 }],
     ["floor", "step_plank", "style_floor_flat", "Flat Board", "fenceless flat floor with a plain painted edge",
@@ -629,6 +650,46 @@ const Parts = (function () {
     // so Full Disc does not inherit dished's floating over-wheel winglets.
     ["wheels", "dished", "style_wheels_fulldisc", "Full Disc", "closed disc cover with a deep dish and a bright rim",
       { cover: 1, coverVanes: 0, spokes: 0, dish: 2, tape: 1, deflector: 0, gunNut: 1, nut: [0.85, 0.12, 0.10], rim: [0.92, 0.92, 0.94] }],
+    // B·D4 wheels/brakes/mirrors (2026-10-19): each turns on one opt-in field
+    // the shipped grid never sets.
+    ["wheels", "mag_forged", "style_wheels_ysplit", "Y-Split Mag", "five Y-split spokes, ten tips at the lip (BBS 18-inch mag, 2022+)",
+      { spokes: 5, spokeSplit: 1, dish: 1, tape: 0, deflector: 0, gunNut: 1, nut: [0.85, 0.72, 0.10] }],
+    ["wheels", "open_spoke", "style_wheels_blownaxle", "Blown Axle", "hollow axle bore instead of a nut (Mercedes W11, 2020)",
+      { spokes: 6, blownAxle: 1, dish: 1, tape: 0, deflector: 0, gunNut: 0, nut: [0.95, 0.42, 0.05] }],
+    ["brakes", "carbon", "style_brakes_drum", "Cake-Tin Drum", "vented carbon drum round the disc (2017–21 front corners)",
+      { drum: 1, coverOpen: 1, scoop: 1 }],
+    ["cockpit", "faired_halo", "style_cockpit_halomirror", "Halo Mirrors", "mirrors hung off the halo crown (Ferrari SF71H, 2018)",
+      { mirrorMount: 1, mirror: 1 }],
+    ["cockpit", "deflector", "style_cockpit_mirrorframe", "Framed Mirrors", "boxed aero frame round each mirror (Ferrari SF90 / Red Bull RB16)",
+      { mirrorFrame: 1, mirror: 1.1 }],
+    // B·D7 suspension layouts (2026-10-19): the pullAt / antiDive / upright knobs
+    // (car3d.js; 0 = shipped geometry) as extra picks, each on the option whose
+    // stats the real car's layout shares. Shipped options keep their look.
+    ["suspension", "active", "style_susp_upright", "Extended Upright", "extended upright, anti-dive and a front pullrod (Red Bull RB19-style)",
+      { ride: -0.043, arm: 1.28, push: 1, pull: 1, rocker: 0, upright: 1, antiDive: 1.2, pullAt: 1, heave: 1 }],
+    ["suspension", "low_ride", "style_susp_splitpull", "Split Pullrod", "pullrod front, pushrod rear on slim carbon arms (Williams FW46-style)",
+      { ride: -0.037, arm: 0.924, push: 1, pull: 1, pullAt: 1, wishbone: 1.12, toe: 0.88, rocker: 0, heave: 1 }],
+    ["suspension", "kerb_spec", "style_susp_doublepull", "Double Pullrod", "pullrod at both ends on heavy-gauge arms (Alpine A524-style)",
+      { ride: 0.012, arm: 1.144, push: 1, pull: 1, wishbone: 0.96, toe: 1.04, rocker: 1 }],
+    ["suspension", "interlinked", "style_susp_antidive", "Anti-Dive Pushrod", "pushrod with steeply raked anti-dive front arms (Mercedes W15-style)",
+      { ride: -0.024, arm: 1.053, push: 1, antiDive: 1, wishbone: 1.06, toe: 0.94, rocker: 2, heave: 1 }],
+    ["suspension", "track", "style_susp_tallupright", "Tall Upright", "tall uprights lifting the upper wishbone clear of the airflow",
+      { upright: 1.2 }],
+    ["suspension", "heave_spring", "style_susp_rearpull", "Rear Pullrod", "pullrod rear with a pushrod front and a heave spring",
+      { pullAt: 2 }],
+    ["suspension", "active", "style_susp_activedive", "Active Anti-Dive", "active layout with short uprights and anti-dive geometry",
+      { upright: 0.8, antiDive: 0.8 }],
+    // B·D3 period aero (2026-10-19): one opt-in mesh field each (rwSpoon, beam2,
+    // fwBridge, ddiff) on top of the equivalent's full recipe. monkey / xwing
+    // (car3d.js) get their rows and registry keys in a later fit pass.
+    ["aero", "low", "style_aero_rwspoon", "F1-75 Spoon", "2022 spoon rear wing (Ferrari F1-75, RB18 low-drag)",
+      {rwSpoon: 1, lvl: 1, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.03, frontTaper: 0.96, frontRise: 0.02, rearSweep: 0.04, rearTaper: 0.94, floorEdge: 0.88, floorCut: 0.06, diffuserRise: 0.82, fin: 0.8}],
+    ["aero", "high", "style_aero_beamtwin", "Twin Beam Wing", "2022-25 two-element beam wing (RB19)",
+      {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}],
+    ["aero", "medium", "style_aero_bridge", "Bridge Wing", "2008 bridge wing over the nose (McLaren MP4-23)",
+      {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }],
+    ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",
+      {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }],
   ];
   for (const [catId, eqId, id, label, look, visual] of STYLES) {
     const cat = CATALOG.find((c) => c.id === catId);
@@ -655,25 +716,29 @@ const Parts = (function () {
       aero: Object.freeze(["lvl", "beam", "drs", "vane", "plate", "casc", "swan", "tvane",
         "arch", "gill", "duct", "board", "slot",
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
-        "floorEdge", "floorCut", "diffuserRise", "fin"]),
-      suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave"]),
-      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop"]),
+        "floorEdge", "floorCut", "diffuserRise", "fin",
+        // B·D3 period aero opt-in fields: absent = shipped mesh.
+        "rwSpoon", "beam2", "fwBridge"]),
+      suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
+        "pullAt", "antiDive", "upright"]),
+      brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),
       // cover + coverVanes: opt-in covered face only (open rim is the default).
       // spokes / dish / gunNut: open-rim identity consumed by car-wheels when the
       // wheel part leaves them unset (wheel recipe still wins when set).
       tyres: Object.freeze(["grooves", "grooveDepth", "bandWidth", "coverVanes", "cover",
-        "shoulder", "sidewall", "spokes", "dish", "gunNut"]),
+        "shoulder", "sidewall", "spokes", "dish", "gunNut",
+        "bandArcs", "letters", "rimGuard", "sipes"]),
       ers: Object.freeze(["pack", "cells", "conduit", "blister", "coolerIntake", "ledStrip"]),
       gearbox: Object.freeze(["strakes", "fin", "strakeH", "finSY", "finSZ",
         "casing", "louvres", "heat", "caseWidth", "heatFins", "ribs", "rearFins"]),
       fuel: Object.freeze(["filler", "hatch", "vent", "breather", "capBig"]),
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap",
-        "lip", "shield", "stack"]),
-      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt"]),
-      cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror"]),
+        "lip", "shield", "stack", "heatTint", "gateStack", "hood"]),
+      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt", "ddiff"]),
+      cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror", "mirrorMount", "mirrorFrame"]),
       // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.
       // coverVanes: wheel-owned vane count on a covered face (0 = sealed Full Disc).
-      wheels: Object.freeze(["spokes", "tape", "dish", "gunNut", "deflector", "cover", "coverVanes"]),
+      wheels: Object.freeze(["spokes", "tape", "dish", "gunNut", "deflector", "cover", "coverVanes", "spokeSplit", "blownAxle"]),
     }),
     material: Object.freeze({
       wheels: Object.freeze(["nut", "rim"]),

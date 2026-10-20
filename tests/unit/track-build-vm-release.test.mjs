@@ -198,7 +198,11 @@ const STRIP = {
   //   256198 → 254325.
   // → #2204 curved tiered stands (2026-10-19, merged over #1617): emission
   //   273889 → 273709, strip-after 254317 → 254112.
-  monaco: { before: 273709, after: 254112 },
+  // → garage fixture hangers end at the ceiling (2026-10-20, design integration
+  //   #3145 / B·G3): the pit bays' rods no longer run 22 cm through the roof, so
+  //   faces the strip used to bury now survive. Emission unchanged; strip-after
+  //   254112 → 254772.
+  monaco: { before: 273709, after: 254772 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -238,7 +242,9 @@ const STRIP = {
   //   fallback. Emission 325396 → 320558, strip-after 294760 → 290837.
   // → #2204 curved tiered stands (2026-10-19, merged over #1617): emission
   //   320558 → 320414, strip-after 290837 → 290722.
-  monza: { before: 320414, after: 290722 },
+  // → garage fixture hangers end at the ceiling (2026-10-20, #3145 / B·G3):
+  //   emission unchanged, strip-after 290722 → 291390.
+  monza: { before: 320414, after: 291390 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

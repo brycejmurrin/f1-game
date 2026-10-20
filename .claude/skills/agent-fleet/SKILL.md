@@ -27,6 +27,8 @@ Read your role's reference before acting:
   merged: subscribe, CI watch, check-in, fix reds and conflicts unasked); merge
   holder → [`references/role-merge-holder.md`](references/role-merge-holder.md)
   (each orchestrator merges its own fleet's PRs at the user's level; Merge Desk is dormant unless designated);
+  seed → [`references/role-seed.md`](references/role-seed.md) (one tiny depth-0 session per
+  fleet that Bryce starts once; it only launches orchestrators on `SPAWN ORCH`);
   reviewer → [`references/role-reviewer.md`](references/role-reviewer.md)
   (one pass, findings only, STOP AT 120k);
   fleet watch → [`references/role-fleet-watch.md`](references/role-fleet-watch.md)
@@ -40,6 +42,9 @@ Read your role's reference before acting:
 - **In-session worker subagent** (the Agent tool inside ONE session, not a
   sibling session) → agent `worker` (`.claude/agents/worker.md`): all tools,
   its own worktree, `SendMessage` to `main` or a named peer mid-task.
+- **Many hosts at once** (Claude on two accounts, Codex, Cursor: fleet letters, computed
+  path ownership, RELEASE?, the PR-comment mirror, who merges a PR whose host cannot) →
+  [`references/multi-host.md`](references/multi-host.md).
 - **Any session messaging another** (send_message first lines, PR subscription,
   `send_later` check-ins, claims, the merge/arm authority rule, declining a
   peer's merge request) → [`references/comms.md`](references/comms.md); the decline
@@ -60,12 +65,21 @@ this block for state. Put it under **Next step / handoff** of
 
 ```fleet
 worker: <host>:<session or agent id>     # e.g. claude:session_01ABC…, cursor:bc-…
-orchestrator: <host>:<session id>        # who to escalate to
+fleet: <letter>                          # A, B, C, D… (references/multi-host.md); optional `slot: A·W3`
+orchestrator: <letter>                   # who to escalate to: `fleet-bus.mjs who <letter>` names the live one
 owned: <globs from the launch prompt>
 state: planning | implementing | verifying | pr-open | fixing | blocked | done
 blocker: <one line, or none>
 needs-orchestrator: yes | no
 ```
+
+`orchestrator:` takes the fleet letter, because orchestrators rotate and a
+letter outlives every id: resolve the live one with
+`node tools/ci/fleet-bus.mjs who <letter>` (newest `ORCH <letter> LIVE` bus
+line; `references/comms.md` §Fleet bus). An older body's
+`orchestrator: <host>:<session id>` still parses. `ready-gate.mjs --pr`
+refuses a `cursor/` branch whose body lacks the block's `fleet:` (or a letter
+`orchestrator:`) and `orchestrator:`; `pr-board.mjs` shows FLEET and SLOT.
 
 A cloud worker also keeps one report line in the PR body, under the block
 rather than inside it, and posts the same line as a PR comment on every change
@@ -83,14 +97,15 @@ reference §Escalate).
 
 ## Rules that bind both roles
 
-- Nobody in the fleet merges or arms auto-merge on their own initiative. When a
-  **merge desk** session is live it may arm MERGE (merge commit only, ≤ 2 armed).
-  Each **orchestrator** (a peer; one per fleet) merges its own fleet's PRs only at the level in
-  references/role-merge-holder.md — Level 3 merges directly with head-sha pin,
-  one merge per green Pages run, `gen:check` on the merge result first. With
-  no live desk, each orchestrator merges its own PRs (game pacing read from the bus). A hold
-  is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
-  Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0.
+- Authority is standing, not per session (AGENTS.md §Concurrent PRs,
+  `references/authority.md`): each **orchestrator** (a peer; one per fleet)
+  merges its own fleet's PRs when `node tools/ci/merge-gate.mjs --pr <n>`
+  exits 0 (references/role-merge-holder.md: the hooks require that receipt,
+  pinned to the gated head; game PRs take the bus `GAME-SLOT` first), archives
+  by `fleet-archive.mjs`, and never re-asks any of it at a hand-off. Workers
+  never merge or arm (their brief says so). A hold is a PR-body line starting
+  `MERGE-HOLD:`, never "do not merge" wording. Draft → ready only after
+  `node tools/ci/ready-gate.mjs --pr <n>` exits 0 (its receipt, too).
 - One owner per path: OWNED / FORBIDDEN globs in the launch prompt, a
   `who-is-on-it.mjs --claim` before editing, and stand down on overlap.
   A claim's age is the only liveness signal today; a branch pushed in the last

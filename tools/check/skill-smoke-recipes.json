@@ -4,7 +4,7 @@
     {
       "skill": "agent-fleet",
       "task": "Exercise the fleet block keys",
-      "fixture": "tests/unit/agent-fleet.test.mjs",
+      "fixture": "tests/unit/agent-config.test.mjs",
       "pattern": "the\\ fleet\\ block\\ keys",
       "expected": {
         "minPass": 1,
@@ -1084,8 +1084,8 @@
     {
       "skill": "code-nav",
       "task": "Resolve definitions, references, callers, outlines and new-since-HEAD diagnostics through apex-lsp on hermetic fixtures",
-      "fixture": "tests/unit/lsp-mcp.test.mjs",
-      "pattern": "argument errors come back|classify tags a row|lsp-hint.py|fixture workspace: freshness|fixture workspace: callers",
+      "fixture": "tests/unit/lsp-mcp-fixture.test.mjs",
+      "pattern": "^fixture(?: workspace)?:",
       "expected": {
         "minPass": 5,
         "maxFail": 0
@@ -1098,7 +1098,7 @@
         {
           "kind": "browser",
           "status": "unverified",
-          "prerequisites": "None needed: apex-lsp reads source through tsc --lsp and never opens a page; the real-tree MCP smoke is the rest of tests/unit/lsp-mcp.test.mjs"
+          "prerequisites": "None needed: apex-lsp reads source through tsc --lsp and never opens a page; the separate real-tree MCP suite is tests/unit/lsp-mcp.test.mjs"
         },
         {
           "kind": "hardware",

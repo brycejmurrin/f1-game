@@ -7,6 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -16,7 +17,7 @@ function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-band.js"), "utf8"), ctx,
-    { filename: "js/physics/ai-band.js" });
+    { filename: absSrc("js/physics/ai-band.js") });
   return vm.runInContext("AiBand", ctx);
 }
 

@@ -23,15 +23,15 @@ this agent reports the fast rung and never substitutes for the pre-push gate.
 2. Always `node tools/ci/verify-change.mjs --fast --json` (no browsers).
    Do NOT pass `--wait`. Do NOT start batch 1. Name every group in
    `batches` as **notRun** — the parent starts those. Its flags are only
-   `--staged --json --plan --fast --wait --keep-going --since <ref>`: there
+   `[paths…] --staged --json --plan --fast --wait --keep-going --since <ref>`: there
    is no `--jobs` (it picks 3 or 2 parallel files from the 1-min loadavg).
    With `--json` the verdict is ONE pretty-printed object on STDOUT at the
    end; progress lines are suppressed. It takes minutes: never poll it turn
    by turn (a run hit `maxTurns: 8` doing that on 2026-10-18). Either run
    it in the foreground with a 600000 ms Bash timeout, or start it in the
-   background with stdout redirected to `artifacts/logs/verify-agent-fast.json`
+   background with stdout redirected to a unique `artifacts/logs/verify-agent-fast-<run-id>.json`
    and block ONCE, in the foreground with a 600000 ms Bash timeout, on
-   `node tools/ci/wait-for.mjs --log-matches artifacts/logs/verify-agent-fast.json '^}' --timeout 9`
+   `node tools/ci/wait-for.mjs --log-matches artifacts/logs/verify-agent-fast-<run-id>.json '^}' --timeout 9`
    (minutes; exit 124 = still running: say so and return, do not loop).
 3. Report the JSON verdict VERBATIM. If a fast-gate phase failed, include
    the last 30 log lines for that phase.
@@ -51,29 +51,38 @@ this agent reports the fast rung and never substitutes for the pre-push gate.
 When the parent passes `--base <ref>` (the session SHA, or
 `origin/claude/f1-game-project-26h3ng` for the deploy tip):
 
-1. Record the current tree's SHA and the compare ref.
-2. `git worktree add scratch/verify-base <ref>` (a fresh checkout; it needs
+1. Record the current SHA, resolved compare SHA and the current plan's explicit
+   changed-path list. Freeze that scope for BOTH trees; a clean baseline's
+   default diff selects nothing and cannot establish a base verdict.
+2. Choose a unique owned path, e.g. `scratch/verify-base-<sha7>-<run-id>`, then
+   `git worktree add --detach scratch/verify-base-<sha7>-<run-id> <ref>`.
+   Record successful creation before any cleanup. A fresh checkout needs
    its own `npm install --ignore-scripts` only when the fast gate says
-   "Cannot find module").
-3. In BOTH trees run only `node tools/ci/verify-change.mjs --fast --json`
+   "Cannot find module".
+3. In BOTH trees run `node tools/ci/verify-change.mjs --fast --json <same-paths…>`
    (plus `wgx-validate.mjs --static` when the plan names WGX).
-4. Return both JSON verdicts and the delta as one line of exactly this shape,
-   with one of the three tokens and nothing else after the colon:
-   `DELTA: same-red` / `DELTA: new-on-session` / `DELTA: already-red-on-ref`.
+4. Compare actual selected phases/tests and failures, not just exit codes.
+   Return both JSON verdicts and one `DELTA:` line: `same-red` for the same
+   failure in both; `new-on-session` for a failure only in the current tree;
+   `already-red-on-ref` for a failure only on the ref; `no-red` when both
+   comparable scoped runs are green. Use `DELTA: unknown` for missing/no-op,
+   unread, interrupted or incomparable coverage; explain the gap separately.
    Leftover `batches` are **notRun** in both.
-5. `git worktree remove --force scratch/verify-base`. Never move
+5. `git worktree remove scratch/verify-base-<sha7>-<run-id>` only for the worktree
+   this run successfully created. If removal refuses, report cleanup pending;
+   never remove a pre-existing checkout or discard its work. Never move
    `tools/*-baseline.json`; a baseline delta is a finding, not an edit.
 
 Project memory (`.claude/agent-memory/verify-agent/MEMORY.md`, tracked): one
 line per known-red spec — `<spec> — red at <SHA> — <reason>`. Read it before
 building a `--base` worktree; an entry older than the merge-base is re-verified,
-not trusted. Add a line when a `--base` run proves a red pre-existing.
+not trusted. Return a proposed memory entry for the parent when a scoped
+`--base` run proves a red pre-existing; do not edit tracked memory yourself.
 
-Unless `.claude/settings.json` sets `worktree.baseRef: "head"` (a subagent
-worktree then branches from the session HEAD), a worktree starts STALE: first
-`git checkout -B <branch> <the session SHA>` and verify a session-known file
-from the parent prompt exists — a stale base measures the wrong tree. If it is
-missing, STOP.
+Verify each checkout's SHA and a task-known file before using it. The current
+tree must match the requested session state; an explicit baseline must stay at
+the resolved compare SHA, not the session SHA. If a checkout is wrong, STOP
+and report it rather than rewriting a pre-existing branch to make it fit.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call

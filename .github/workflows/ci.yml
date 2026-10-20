@@ -1115,10 +1115,11 @@ jobs:
           echo "targeted shard ${SHARD}of4: ${MINE:-"(none on this shard)"}"
           [ -z "$MINE" ] && exit 0
           node --test --test-concurrency=1 $MINE
-      # Once per matrix, not once per shard — shard 1 only (same work as the
-      # old single job's trailing step).
+      # Once per matrix, not once per shard — shard 3 only (same work as the
+      # old single job's trailing step). Shard 3 is the lightest (#3117 F2:
+      # sweeps 276 s vs 374 s on shard 1), so the +77 s lands off the critical path.
       - name: Every circuit still builds headlessly
-        if: needs.select.outputs.geometry != 'false' && matrix.shard == 1
+        if: needs.select.outputs.geometry != 'false' && matrix.shard == 3
         run: node tools/track/verify-track.cjs --all
 
   # Un-suffixed check name for pages-reuse-verdict.sh (exact match on
@@ -1448,6 +1449,7 @@ jobs:
       # above was skipped, so there is no junit and nothing to say.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always() && needs.select.outputs.ships != 'false'
+        continue-on-error: true  # telemetry only (#3117 F1): an upload ETIMEDOUT must not redden a green job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spec-timings-junit-smoke-${{ matrix.shard }}
@@ -1456,6 +1458,7 @@ jobs:
           retention-days: 7
       - name: Failure artifacts
         if: failure() || cancelled()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # Shard-scoped name: same-named artifacts from parallel matrix jobs
@@ -1559,6 +1562,7 @@ jobs:
       # were all skipped (the ship filter) legitimately produces none.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always()
+        continue-on-error: true  # telemetry only (#3117 F1): an upload ETIMEDOUT must not redden a green job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spec-timings-junit-driving-model
@@ -1567,6 +1571,7 @@ jobs:
           retention-days: 7
       - name: Failure artifacts
         if: failure() || cancelled()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-driving-model
@@ -1674,6 +1679,7 @@ jobs:
       # image-grade "shadows" compares, the retry's diag — unretrievable. Run
       # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
       - name: Run artifacts (report, traces, attached frames)
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1712,6 +1718,7 @@ jobs:
         run: npm run test:xr -- --timeout=600000
       - name: Failure artifacts
         if: failure() || cancelled()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-xr
@@ -2461,6 +2468,7 @@ jobs:
       # were all skipped (the ship filter) legitimately produces none.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always()
+        continue-on-error: true  # telemetry only (#3117 F1): an upload ETIMEDOUT must not redden a green job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # matrix.name is unique per plan (select-specs shards()); the job
@@ -2478,6 +2486,7 @@ jobs:
       # kills); `always() && !success()` reaches exactly failure + cancel.
       - name: Failure artifacts
         if: ${{ always() && !success() }}
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-selected-${{ matrix.name }}-${{ strategy.job-index }}
@@ -2674,6 +2683,7 @@ jobs:
       # rendered, because "it passed here once" is the evidence step (b) needs.
       - name: The rendered goldens, and any diff
         if: always()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: golden-menus-runner
@@ -2695,6 +2705,73 @@ jobs:
             echo "artifact and compare -actual/-diff against the committed PNGs:"
             echo "the IMAGES are the problem to solve before any routing change."
           fi
+
+  # THE STAGED BUILD BOOTS (#3110, 2026-10-19). Every other browser job serves
+  # the REPO ROOT, but players get _site: tools/desktop/stage.mjs copies the
+  # allow-list, MINIFIES js/ (tools/desktop/minify.mjs) and stamps ?v= hashes
+  # and SRI over the minified bytes. A minifier or stamp fault (a mangled
+  # global, a dropped quote a String(fn) scan needs, an SRI over the wrong
+  # bytes) would boot fine everywhere here and fail only on the live site. So
+  # this job stages exactly as pages.yml's deploy job does (stage, then
+  # --stamp-only with this commit), serves _site alone and runs smoke.spec.js
+  # against it. No ship filter: a tools/desktop/ change ships nothing by the
+  # filter's list yet changes every shipped byte. One shard, same tiers and
+  # env as smoke; pages.yml's gate calls this workflow, so the train runs it too.
+  staged-boot:
+    name: Staged build boots (minified _site, as Pages ships it)
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
+    timeout-minutes: 20
+    steps:
+      # fetch-depth: 0 because the stamp's build is 2000 + the commit count
+      # (stage.mjs pagesBuild refuses a shallow clone), as in pages.yml deploy.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci (terser comes from here)
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
+      - name: Mesa llvmpipe + Xvfb
+        if: inputs.gl != 'swiftshader'
+        uses: ./.github/actions/mesa-xvfb
+      # The same two commands as pages.yml "Stage site" + "Stamp the shell generation".
+      - name: Stage and stamp _site as the deploy does
+        run: |
+          set -eu
+          OUT=$(node tools/desktop/stage.mjs --out _site)
+          # A stage with no terser ships source bytes (minify.mjs); this gate must boot the minified tree.
+          node -e 'const m = JSON.parse(process.argv[1]).minified; if (!m || !(m.files > 0)) { console.error("staged-boot: the stage did not minify:", JSON.stringify(m)); process.exit(1); } console.log("minified", JSON.stringify(m));' "$OUT"
+          node tools/desktop/stage.mjs --out _site --stamp-only --sha "$GITHUB_SHA"
+          grep -q "<meta name=\"apex-sha\" content=\"$GITHUB_SHA\">" _site/index.html
+      # APEX_PORT + APEX_REUSE_SERVER: run-playwright starts no server of its own
+      # and playwright.config.js reuses this one, so the page and every lazy
+      # script, worker and asset come from _site, never the checkout.
+      - name: Smoke against the staged site
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+          APEX_GL: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
+          APEX_PORT: 3460
+          APEX_REUSE_SERVER: 1
+        run: |
+          set -eu
+          python3 -m http.server 3460 --bind 127.0.0.1 --directory _site >/dev/null 2>&1 &
+          for _ in $(seq 1 50); do curl -sf -o /dev/null http://127.0.0.1:3460/index.html && break; sleep 0.2; done
+          npm run test:smoke -- --timeout=900000
+      - name: Failure artifacts
+        if: failure() || cancelled()
+        continue-on-error: true  # diagnostics only (#3117 F1): a failed upload must not create or mask a verdict
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-artifacts-staged-boot
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
 
   # ONE STABLE REQUIRED CHECK. A job skipped by its own `if:` reports
   # SUCCESS to branch protection; only a WORKFLOW skipped by a path, branch or
@@ -2734,6 +2811,7 @@ jobs:
       - sweeps
       - sweeps-roll-up
       - smoke
+      - staged-boot
       - driving-model
       - renderer-macos
       - xr
@@ -2752,5 +2830,5 @@ jobs:
           # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow
           # run would otherwise read green). Measured on recent full-tier runs: they never skip there, unlike
           # driving-model / sweeps / the macOS leg, which the change-aware selection skips legitimately.
-          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards,select,smoke' || '' }}
+          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards,select,smoke,staged-boot' || '' }}
         run: node tools/ci/ci-verdict.mjs

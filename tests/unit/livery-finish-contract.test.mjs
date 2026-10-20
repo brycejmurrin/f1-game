@@ -8,18 +8,19 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const cx = { console, Math, Object, Array, Map, Set, JSON, Number, String, Boolean };
 cx.globalThis = cx;
 vm.createContext(cx);
-vm.runInContext(read("js/car/car-material-shade.js"), cx);
-vm.runInContext(read("js/car/car-materials.js"), cx);
+vm.runInContext(read("js/car/car-material-shade.js"), cx, { filename: absSrc("js/car/car-material-shade.js") });
+vm.runInContext(read("js/car/car-materials.js"), cx, { filename: absSrc("js/car/car-materials.js") });
 const CM = vm.runInContext("CarMaterials", cx);
 
 const COLOURS = ["mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent"];
-const PILLS = ["podFinish", "finFinish", "mirrorFinish", "helmetStyle"];
+const PILLS = ["podFinish", "finFinish", "mirrorFinish", "helmetStyle", "crestTone", "crestFrame"];
 
 test("reserved finish ids are unique, past the shipped chain, and disjoint from FINISH_SURFACE", () => {
   const reserved = Object.values(CM.FINISH_RESERVED);

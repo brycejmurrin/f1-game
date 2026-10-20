@@ -26,9 +26,13 @@ node tools/shot/apex-eval.mjs vegas "a.lightState()"
 ```
 
 **No browser (Node VM, verified 2026-09-30):** the same loop runs in `tools/lib/game-vm.cjs`
-(~70 s of wall time per 120 s of sim; write the script under `scratch/`, end with `process.exit(0)`):
-`const g=await createGame({track:"suzuka"}); const a=g.apex; a.seed(1); a.headless(true); let o=a.reset(0.97,30,0);`
+(~70 s of wall time per 120 s of sim; write the script under `scratch/`).
+Use `createGame({track:"suzuka",search:"?seed=1"})`, then
+`const a=g.apex; a.headless(true); let o=a.reset(0.97,30,0);`
 then `a.world({detail:"brief"})` → `a.act(input,1/60,6)` → `a.terminal()`. `createGame` already calls `race()`.
+Close `g` in `finally` and catch outer rejections with a nonzero exit code;
+use the lifecycle template in [track-geometry.md](track-geometry.md). Do not
+force process exit as a substitute for releasing VM resources.
 Gotchas: **`sectorState().last`/`lapHistory().best` fill only once `lap>=1`** (game.js `c.lap >= 1 && sectorValid`), so
 `reset(0.0…)` (lap 0) records no splits — reset at ~0.97, cross the line, then drive S1→S3.
 `obs()` carries `s` (metres), not `frac`; log `o.s` for where the car left the track (`|lateralM| > halfWidthM`).

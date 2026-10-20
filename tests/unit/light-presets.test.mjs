@@ -30,6 +30,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -43,7 +44,7 @@ function tuneIds() {
 /** The presets file assigns `window.LightPresets`; run it against a stub window. */
 function presets() {
   const ctx = vm.createContext({ window: {}, Math, JSON, Object, Array });
-  vm.runInContext(read("js/lighting/presets.js"), ctx, { filename: "js/lighting/presets.js" });
+  vm.runInContext(read("js/lighting/presets.js"), ctx, { filename: absSrc("js/lighting/presets.js") });
   const P = vm.runInContext("window.LightPresets", ctx);
   assert.ok(P && typeof P === "object", "light-presets.js did not assign window.LightPresets");
   return P;
@@ -207,7 +208,7 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
  *  apply(), so a layering bug in LightStore fails the tests built on it. */
 function resolveLive(trackId, tod, wx, extra = {}) {
   const defs = vm.createContext({ GLX: { isMobile: false }, Math, Object });
-  vm.runInContext(read("js/lighting/knobs.js"), defs, { filename: "js/lighting/knobs.js" });
+  vm.runInContext(read("js/lighting/knobs.js"), defs, { filename: absSrc("js/lighting/knobs.js") });
   const TUNE_DEFS = vm.runInContext("LightKnobs.TUNE_DEFS", defs);
   const ctx = vm.createContext({
     window: { LightPresets: presets() },
@@ -216,7 +217,7 @@ function resolveLive(trackId, tod, wx, extra = {}) {
     Log: { info() {}, debug() {}, warn() {}, enabled: () => false, DEBUG: 0 },
     Math, JSON, Object, Array, Number, isFinite,
   });
-  vm.runInContext(read("js/lighting/profiles.js"), ctx, { filename: "js/lighting/profiles.js" });
+  vm.runInContext(read("js/lighting/profiles.js"), ctx, { filename: absSrc("js/lighting/profiles.js") });
   const stored = { lightTune: extra.saved || null };
   const G = {
     store: { get: (k, d) => (stored[k] == null ? d : stored[k]), set: (k, v) => { stored[k] = v; } },

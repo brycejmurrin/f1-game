@@ -27,6 +27,11 @@ const CarBodyGeom = (function () {
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
     const midY = mid.y + (s.noseDroop || 0) * (sil ? 0.85 : 0.45)
       + (sil ? (s.noseSlim < 0.7 ? -0.04 : 0) + (s.noseSlim > 1.2 ? 0.03 : 0) : 0);
+    if (sil || s.fitSeat) return conceptNose(s, [   // fitted bodies keep this seam even with a level cover
+      { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
+        w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
+      { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * midSlim, t: mid.t },
+    ]);
     return [
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
         w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
@@ -37,6 +42,63 @@ const CarBodyGeom = (function () {
         w: root.w * (1 + (s.noseSlim - 1) * (sil ? 0.45 : 0.2)),
         h: root.h * (1 + (s.noseSlim - 1) * (sil ? 0.55 : 0.25)), t: root.t },
     ];
+  }
+  // A concept nose (#3111) keeps its tip and mid, the stations that carry its
+  // silhouette, under two seams the old recipe broke:
+  //  - ROOT: pinned to CHASSIS.nose[2], the section the monocoque starts from.
+  //    Moving it with noseTipZ opened a ~150 mm gap to the tub on the long
+  //    noses (no triangle crossed z 1.12) and on brick/barge put a .78 x .64
+  //    root over a .48 x .38 tub, its bottom at y 0.03 through the tea-tray.
+  //  - UNDERSIDE over the front wing (z 1.96-2.16, the flap solver's NOSE_UNDER
+  //    window): never lower than the lowest TEAM nose there. The flap ceiling
+  //    is derived from the team noses; a fat or drooped concept cone (brick
+  //    -78 mm) sat below it, so a flap solved against it could enter the nose.
+  //    The tip and mid rise together by the deficit, so the cone keeps its
+  //    depth and simply rides higher.
+  const NOSE_WING_Z = [1.96, 2.00, 2.10, 2.16];
+  let _teamNoseFloor = null;
+  function noseBottomAt(st, z) {
+    const n = st.length;
+    if (z >= st[0].z) return st[0].y - st[0].h * 0.5;
+    for (let i = 0; i < n - 1; i++) {
+      const a = st[i], b = st[i + 1];
+      if (z <= a.z && z >= b.z) {
+        const t = (a.z - z) / (a.z - b.z);
+        return (a.y - a.h * 0.5) + ((b.y - b.h * 0.5) - (a.y - a.h * 0.5)) * t;
+      }
+    }
+    return st[n - 1].y - st[n - 1].h * 0.5;
+  }
+  function teamNoseFloor() {
+    if (_teamNoseFloor) return _teamNoseFloor;
+    const styles = [DEFAULT_STYLE, ...Object.values(TEAM_STYLE)];
+    _teamNoseFloor = NOSE_WING_Z.map((z) => Math.min(...styles.map((st) => noseBottomAt(styledNoseStations(st), z))));
+    return _teamNoseFloor;
+  }
+  function conceptNose(s, cone) {
+    const root = CHASSIS.nose[2];
+    const st = [...cone, { z: root.z, y: root.y, w: root.w, h: root.h, t: root.t }];
+    if (st[1].z < root.z + 0.15) st[1].z = root.z + 0.15;    // keep the mid ahead of the pinned root
+    // noseStep (preview bodies only): the 2012 "platypus" step — the tub's crown
+    // runs on to z root+0.14, past the hood's front (1.15; a step at root+0.06
+    // left the hood hanging 15 cm over the lowered cone), then drops by noseStep
+    // in 5 cm, bottom unchanged, and the cone runs on lower.
+    const step = Math.max(0, Math.min(0.22, s.noseStep || 0));
+    if (step) {
+      st.splice(2, 0, { z: root.z + 0.19, y: root.y - step * 0.5, w: root.w * 0.93, h: root.h - step, t: root.t },
+                      { z: root.z + 0.14, y: root.y, w: root.w * 0.96, h: root.h, t: root.t });
+      if (st[1].z < root.z + 0.34) st[1].z = root.z + 0.34;   // keep the mid ahead of the step
+    }
+    // The underside is linear in the tip/mid lift; behind the mid only the
+    // mid's share of the root-to-mid blend moves, so divide by that share.
+    const floor = teamNoseFloor(), up = st.map((p, i) => (i < 2 ? Object.assign({}, p, { y: p.y + 1 }) : p));
+    let lift = 0;
+    NOSE_WING_Z.forEach((z, i) => {
+      const d = floor[i] - noseBottomAt(st, z), gain = noseBottomAt(up, z) - noseBottomAt(st, z);
+      if (d > 0 && gain > 1e-6) lift = Math.max(lift, d / gain);
+    });
+    if (lift > 0) { st[0].y += lift; st[1].y += lift; }
+    return st;
   }
 
   // A BODY span: rounded when CarShade is on for this build (js/car/car-shade.js), else trapezoid + crease.
@@ -200,15 +262,11 @@ const CarBodyGeom = (function () {
   // envelope at the catalog's widest floor. Re-measured over every team crossed
   // with every single-option recipe, the widest point on the car is now 0.9476.
   const CAR_HALF = 0.95;
+  // FRONT WING ONLY — the rear is one rigid flap, solved by rearFlap() below.
   // Extra incidence the CLOSED (Z-mode) pose takes on top of the element's own
-  // baked angle. Without it the travel is only the element's natural 12-16 deg,
-  // which is accurate but barely reads; with it a downforce wing is visibly
-  // steeper AND has real angle to give back when it opens.
-  // Per wing, because the two do not do the same job. A 2026 rear wing runs
-  // 30-40 deg of flap in its downforce setting and gives essentially all of it
-  // back in X-mode — that is where the lap time is. The front wing only trims
-  // enough to keep the balance, and is boxed in by the nose above it besides.
-  // The front is ZERO, and that is a fix rather than a shrug. A front cascade is
+  // baked angle. The front wing only trims enough to keep the balance, and is
+  // boxed in by the nose above it besides.
+  // The front used to be ZERO, and that is a fix rather than a shrug. A front cascade is
   // designed to nest: each element's trailing edge passes ~12 mm under the
   // leading edge of the one above it. Adding bite rotates every element steeper
   // about a hinge near its nose, which swings that trailing edge UP — straight
@@ -220,19 +278,14 @@ const CarBodyGeom = (function () {
   // slot the cascade hides, so the garage silhouette did not change at all
   // between CORNER and STRAIGHT. Mid-chord hinge + a little bite makes the
   // trailing edge drop in X-mode — the cascade reads as two steps, not one
-  // plank. Rear bite is the DRS-style slot; a bit more of it so the crown
-  // line is obvious from wingRear.
-  const Z_BITE = { front: 0.12, rear: 0.55 };
+  // plank.
+  const Z_BITE = { front: 0.12 };
   // Where each element pivots, as a fraction of its own chord: 0 = leading edge,
   // 1 = trailing edge.
-  // wingRear looks at the TRAILING edge. A TE-near hinge (0.80) left that edge
-  // still, so CORNER vs STRAIGHT read as the same black slab plus a telltale
-  // strip. Mid-chord on BOTH wings drops the TE in X-mode (the flap goes
-  // flatter) and lifts the LE off the mainplane (the DRS slot). The front
-  // stays mid-chord for the same reason — a LE-near hinge hid the cascade
-  // under the nose.
-  const HINGE = { front: 0.52, rear: 0.45 };
-  const OPEN_FRAC = { front: 2.2, rear: 2.6 };
+  // Mid-chord drops the TE in X-mode, so the cascade reads from wingFront; a
+  // LE-near hinge (what C3.10.10 actually asks for) hid it under the nose.
+  const HINGE = { front: 0.52 };
+  const OPEN_FRAC = { front: 2.2 };
   // Underside of the NOSE where it overhangs the front wing, as (z, y) samples
   // measured off the built body. This is a hard ceiling: at max downforce the
   // baked top flap already passes within ~12 mm of it, so an unconditional bite
@@ -395,6 +448,60 @@ const CarBodyGeom = (function () {
       return { bite, open: open == null ? bite : open, pz: qz, py: qy };
     }
   }
+  // THE REAR WING'S "RW FLAP" (FIA 2026 Section C, C3.11.6). The main plane
+  // is fixed; EVERY element above it moves as one rigid body ("maintain the
+  // geometric relationship between all parts of RW Flap") about ONE axis on Y,
+  // between the flap's mid-point and its rearmost point in X, and Straight
+  // Mode is only a DECREASE in incidence. The rear used to go through hinged()
+  // like the front: each element on its own axis at 45 % chord (the FRONT
+  // half), opened by 2.6x its own angle, so the top flap went from +48 deg to
+  // -26 deg — leading edge above the trailing edge — and swung its nose up
+  // through the plane over it. docs/notes/REAR-WING-ACTIVE-AERO-2026-10-19.md.
+  // Incidence of the primary ("rear") element at each end, rad: a downforce
+  // 2026 flap in Corner Mode, flattened to just positive in Straight Mode.
+  const REAR_INC = Object.freeze({ corner: 0.56, straight: 0.035 });
+  // Pivot station over the flap's X extent, 0 = its front, 1 = its rearmost
+  // point. The regs allow 0.5..1; short of 1 the leading edge keeps the lever
+  // arm to open a DRS-sized (~85 mm) slot while the trailing edge barely moves.
+  const REAR_PIVOT = 0.72;
+  function rearFlap(stack, main) {
+    let front = -Infinity, back = Infinity;
+    for (const [, le, te] of stack) { front = Math.max(front, le[0]); back = Math.min(back, te[0]); }
+    const pz = front + (back - front) * REAR_PIVOT;
+    const [, ple, pte] = stack.find((el) => el[0] === "rear");
+    const t = Math.max(0, Math.min(1, (pz - ple[0]) / (pte[0] - ple[0])));
+    const py = ple[1] + (pte[1] - ple[1]) * t;   // on the primary's chord line
+    const natural = Math.atan2(pte[1] - ple[1], ple[0] - pte[0]);
+    // A design-pose point rotated about the pivot, exactly as drawAeroFlaps does.
+    const rot = (z, y, d) => {
+      const dy = y - py, dz = z - pz, c = Math.cos(d), s = Math.sin(d);
+      return [dy * s + dz * c + pz, dy * c - dz * s + py];
+    };
+    // The stack is rigid, so its own slots never change: only the LOWEST
+    // element can reach the fixed main plane, and only it is checked.
+    const low = elemRecord(stack[0][1], stack[0][2], stack[0][3], 0);
+    const clears = (d) => {
+      for (let k = 0; k <= 40; k++) {
+        const p = elemPoint(low, 0, k / 40), q = rot(p.z, p.bot, d);
+        const under = elemTopAt(main, 0, q[0]);
+        if (under != null && q[1] < under + SLOT_MIN) return false;
+      }
+      return true;
+    };
+    const relax = (from, dir) => {
+      for (let i = 0; i <= 60; i++) { const d = from + dir * 0.01 * i; if (clears(d)) return d; }
+      return null;
+    };
+    const zAngle = relax(REAR_INC.corner - natural, -1) ?? 0;
+    const xAngle = Math.min(zAngle, relax(REAR_INC.straight - natural, +1) ?? zAngle);
+    return stack.map(([id, le, te, thick, sweepMul, half, paint]) => ({
+      id, wing: "rear", z: pz, y: py, le, te, thick, half, sweepMul, paint: paint || null,
+      chord: Math.hypot(le[0] - te[0], te[1] - le[1]),
+      natural: Math.atan2(te[1] - le[1], le[0] - te[0]),
+      hinge: (pz - le[0]) / (te[0] - le[0]),   // the pivot's station on THIS chord; off-line for all but "rear"
+      zAngle, xAngle,
+    }));
+  }
   // SOLVED ONCE PER (level, recipe), NEVER PER FRAME.
   // aeroFlapsGeom is not a table lookup — hinged() SEARCHES for each element's
   // pivot: up to 9 candidate hinges, each solving two end poses, each backing
@@ -481,25 +588,16 @@ const CarBodyGeom = (function () {
     }
     const ep = endplateGeom(a, st), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
-    const rearMain = Object.assign(
-      elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0),
-      { zAngle: 0, xAngle: 0 });
-    let below = rearMain;
-    const addRear = (id, le, te, thick, sweepMul) => {
-      const el = hinged(id, "rear", le[0], le[1], te[0], te[1], {
-        half: id === "rearTop" ? 0.50 : 0.51, thick, taper: rearTaper,
-        sweep: rearSweep * sweepMul, attachHalf: 0.50, rise: 0,
-      }, below);
-      out.push(el);
-      below = Object.assign(elemRecord(le, te, thick, el.hinge),
-                            { zAngle: el.zAngle, xAngle: el.xAngle });
-    };
-    if (a >= 2) {
-      addRear("rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9);
-    }
-    addRear("rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1);
-    if (a >= 4 && !(st.drs || 0)) {
-      addRear("rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1);
+    const rearMain = elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0);
+    const stack = [];   // [id, le, te, thick, sweepMul, half, paint?] bottom-up
+    if (a >= 2) stack.push(["rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9, 0.51]);
+    stack.push(["rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1, 0.51]);
+    if (a >= 4 && !(st.drs || 0)) stack.push(["rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1, 0.50]);
+    // The drs plane car3d.js used to bake STATIC over this stack. It is part of
+    // the RW Flap too, so it flies with it, in the livery's rearWing colour.
+    if (st.drs || 0) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
+    for (const el of rearFlap(stack, rearMain)) {
+      out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 }));
     }
     return out;
   }
@@ -553,8 +651,8 @@ const CarBodyGeom = (function () {
   // separately with no atlas UVs of its own — so rest is the pose it is authored
   // for and it lifts off as the wing opens, as the sponsor does on the real
   // element; making it follow means giving buildFlapGeom a UV channel. The
-  // TOPMOST rear surface carries it (`rearTop` at max downforce, the baked DRS
-  // plane with that package); both would otherwise draw straight over it. Chord
+  // TOPMOST rear surface carries it (`rearTop` at max downforce, `rearDrs` with
+  // a DRS package); both would otherwise draw straight over it. Chord
   // fractions clear the leading curl and the trailing edge, HALF is inside the
   // element's own 0.51, the span is cut into addWingFoil's own five segments so
   // the band follows the sweep, `proud` is along the local normal, not +Y.
@@ -563,38 +661,18 @@ const CarBodyGeom = (function () {
     const a = aLvl == null ? 2 : aLvl;
     const st = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
     const W = WING_BAND;
-    let spec = null, pivot = null, ang = 0, elem = "";
-    if (st.drs) {
-      // A DRS package BAKES an extra plane over the whole moveable stack (see
-      // part("rearWing")). It never rotates, so it is both the surface the camera
-      // sees and the one that keeps the band attached at every wing angle.
-      const crownY = endplateGeom(a, st).rear.top - 0.018;
-      const rearSweep = Math.max(-0.06, Math.min(0.20, st.rearSweep));
-      const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
-      spec = { zLead: -2.44, yLead: crownY - 0.050, zTrail: -2.60, yTrail: crownY,
-               half: 0.49, thick: 0.016, taper: rearTaper, sweep: rearSweep * 1.15,
-               rise: 0, attachHalf: 0.50 };
-      elem = "drs";
-    } else {
-      const flaps = aeroFlapsGeom(a, st);
-      let fg = null;
-      for (const f of flaps) if (f.wing === "rear") fg = f;   // the TOPMOST one
-      if (!fg) return null;
-      // Exactly what buildFlapGeom hands addWingFoil, and exactly the pose
-      // drawAeroFlaps hangs it at with the wing closed.
-      spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
-               half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
-               rise: fg.rise, attachHalf: fg.attachHalf };
-      pivot = { y: fg.y, z: fg.z };
-      ang = fg.zAngle;
-      elem = fg.id;
-    }
-    const ca = Math.cos(ang), sa = Math.sin(ang);
+    let fg = null;
+    for (const f of aeroFlapsGeom(a, st)) if (f.wing === "rear") fg = f;   // the TOPMOST one
+    if (!fg) return null;
+    // Exactly what buildFlapGeom hands addWingFoil, and exactly the pose
+    // drawAeroFlaps hangs it at with the wing closed.
+    const spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
+                   half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
+                   rise: fg.rise, attachHalf: fg.attachHalf };
+    const elem = fg.id, ca = Math.cos(fg.zAngle), sa = Math.sin(fg.zAngle);
     const pose = (p) => {
-      const top = p.y + p.h;
-      if (!pivot) return { y: top, z: p.z };
-      const dy = top - pivot.y, dz = p.z - pivot.z;
-      return { y: dy * ca - dz * sa + pivot.y, z: dy * sa + dz * ca + pivot.z };
+      const dy = p.y + p.h - fg.y, dz = p.z - fg.z;
+      return { y: dy * ca - dz * sa + fg.y, z: dy * sa + dz * ca + fg.z };
     };
     const st8 = [];
     for (let i = 0; i <= W.seg; i++) {
@@ -1017,8 +1095,7 @@ const CarBodyGeom = (function () {
     if (shadeFlags.round) CarShade.floor(out, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
     const nose = noseStations || CHASSIS.nose;
-    bodySpan(out, nose[0], nose[1], c1, 0.022);
-    bodySpan(out, nose[1], nose[2], c1, 0.028);
+    for (let i = 0; i < nose.length - 1; i++) bodySpan(out, nose[i], nose[i + 1], c1, i ? 0.028 : 0.022);
     const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];
     // COCKPIT: this span is the tub the driver sits IN — the deck under the
     // wheel and the rear wall above it, 0.65 m from the eye. In body paint it
@@ -1203,7 +1280,7 @@ const CarBodyGeom = (function () {
     // decal are both sized in pod fractions, so they track it together.
     const waistTop = 0.42 + 0.10 * (shoulder - 1) + (sil ? inletH * 0.70 : 0);
     const waistOuterTop = 0.38 + 0.08 * (shoulder - 1) + (sil ? inletH * 0.55 : 0);
-    return [
+    const st = [
       { z: 0.62, inner: 0.30, outer: outerFront, innerBottom: inletFloor,
         outerBottom: 0.258 + 0.09 * (undercut - 1) + undercutD * 0.70,
         innerTop: 0.45 + inletBias + inletH, outerTop: 0.46 + inletBias * 0.6 + inletH * 0.85 },
@@ -1234,9 +1311,189 @@ const CarBodyGeom = (function () {
         outerBottom: 0.134,
         innerTop: 0.30 + 0.05 * (shoulder - 1) + (sil ? inletH * 0.08 : 0),
         outerTop: 0.27 + (sil ? inletH * 0.05 : 0) },
-    ];
+    ].map(clampPodStation);
+    // Ease the undercut's lower line: an inner station whose outerBottom creases
+    // more than 3° (5-9° at z 0.50 on every car) moves part-way onto its
+    // neighbours' chord (up to four passes; the ends and the undercut gap stay). The
+    // gentler aft stations stay put: the flank details are pinned to them.
+    const crease = (a, b, c) => Math.abs(Math.atan2(a.outerBottom - b.outerBottom, a.z - b.z) - Math.atan2(b.outerBottom - c.outerBottom, b.z - c.z));
+    for (let pass = 0; pass < 4; pass++) {
+      const ob = st.map((p) => p.outerBottom);
+      const ease = st.map((p, i) => i > 0 && i < st.length - 1 && crease(st[i - 1], p, st[i + 1]) > 0.0524);
+      for (let i = 1; i < st.length - 1; i++) {
+        if (!ease[i]) continue;
+        const a = st[i - 1], b = st[i + 1], k = (a.z - st[i].z) / (a.z - b.z);
+        const chord = ob[i - 1] + (ob[i + 1] - ob[i - 1]) * k;
+        st[i].outerBottom = Math.max(st[i].innerBottom + 0.004, ob[i] + (chord - ob[i]) * 0.6);
+      }
+    }
+    return st;
+  }
+  // Post-styling validity pass (#3111). The style offsets are raw metres and
+  // BODY_STYLES carries 4-10x the TEAM_STYLE ranges, so on a narrow or low-
+  // shouldered engine a concept body walked its pod inside out: wedge's
+  // inletH -0.26 put the top 18 cm under the bottom, needle's inletW -0.24
+  // put the outer edge inboard of the inner one on the Honda/Audi/Aston pods,
+  // brick/barge's undercutD -0.16 hung the belly 16 cm below the inboard edge,
+  // and inletH +0.28 lifted the shoulder through the mirror housings (y 0.698
+  // up). Each floor below sits UNDER the worst team x catalog-engine value at
+  // its station (body-styles.test.mjs pins that), so every grid car is
+  // bit-identical and only an out-of-envelope body is moved. Order matters:
+  // cap the top, widen, keep the belly in the team undercut envelope, then
+  // restore height by lowering the belly toward the floor rail before raising
+  // the top — a low concept pod stays low instead of turning tall.
+  const POD_MIN_W = { "0.62": 0.10, "0.5": 0.10, "0.22": 0.12, "-0.38": 0.10, "-0.62": 0.06, "-1.05": 0.04, "-1.48": 0.02 };
+  const POD_MIN_H = { "0.62": 0.10, "0.5": 0.10, "0.22": 0.12, "-0.38": 0.12, "-0.62": 0.12, "-1.05": 0.10, "-1.48": 0.08 };
+  const POD_TOP_MAX = 0.65;          // under every mirror housing (lowest bottom ~0.666)
+  const POD_BELLY_MIN = 0.13;        // floor-rail top: the belly never goes under it
+  const POD_UNDERCUT_MIN = -0.04;    // haas: the deepest reversed undercut on the grid
+  function clampPodStation(p) {
+    const minW = POD_MIN_W[String(p.z)], minH = POD_MIN_H[String(p.z)];
+    p.innerTop = Math.min(p.innerTop, POD_TOP_MAX);
+    p.outerTop = Math.min(p.outerTop, POD_TOP_MAX);
+    if (p.outer < p.inner + minW) p.outer = p.inner + minW;
+    if (p.outerBottom < p.innerBottom + POD_UNDERCUT_MIN - 1e-9) p.outerBottom = p.innerBottom + POD_UNDERCUT_MIN;
+    for (const e of ["inner", "outer"]) {
+      const bk = e + "Bottom", tk = e + "Top";
+      if (p[tk] - p[bk] >= minH) continue;
+      p[bk] = Math.max(POD_BELLY_MIN, Math.min(p[bk], p[tk] - minH));
+      if (p[tk] < p[bk] + minH) p[tk] = p[bk] + minH;
+    }
+    // Lowering the inner belly can leave the outer one under the envelope
+    // again; and a reversed undercut stops at the floor rail (or the inboard
+    // belly, when a grid car's already sits under the rail).
+    if (p.outerBottom < p.innerBottom + POD_UNDERCUT_MIN - 1e-9) p.outerBottom = p.innerBottom + POD_UNDERCUT_MIN;
+    const bellyFloor = Math.min(p.innerBottom, POD_BELLY_MIN);
+    if (p.outerBottom < bellyFloor) p.outerBottom = bellyFloor;
+    if (p.outerTop < p.outerBottom + minH) p.outerTop = p.outerBottom + minH;
+    return p;
   }
 
+  const CONCEPT_POD_Z = [0.62, 0.50, 0.22, -0.10, -0.38, -0.62, -0.90, -1.15, -1.48];
+  const CONCEPT_PODS = Object.freeze({
+    rift: { span: [1,.98,1.15,1.08,.85,.72,.69,.75,.82], depth: [.012,.025,.09,.12,.13,.11,.07,.025,.012] },
+    keel: { span: [.84,.86,.90,.92,.92,.94,.96,.98,.98] },
+    delta: { span: [.98,1.05,1.20,1.15,.96,.82,.78,.79,.85], depth: [.012,.025,.045,.055,.07,.06,.04,.02,.012] },
+    serpent: { span: [1,.98,1.18,1.04,.70,.66,.86,.88,.86], depth: [.012,.02,.04,.08,.11,.12,.07,.025,.012] },
+  });
+  // Shape only opt-in bodies, AFTER supplier downwash. Interpolate the original
+  // station floors explicitly: the legacy clamp's tables have only seven Z keys.
+  function conceptPodStations(stations, profile) {
+    const recipe = CONCEPT_PODS[profile];
+    const floors = Object.keys(POD_MIN_W).map(Number).sort((a, b) => b - a)
+      .map((z) => ({ z, width: POD_MIN_W[String(z)], height: POD_MIN_H[String(z)] }));
+    const shaped = CONCEPT_POD_Z.map((z, i) => {
+      const p = sampleStations(stations, z), f = sampleStations(floors, z);
+      p.outer = Math.min(0.88, p.inner + Math.max(f.width, (p.outer - p.inner) * recipe.span[i]));
+      const roofDrop = profile === "keel" ? 0.018 : profile === "delta" || profile === "serpent" ? 0.006 : 0;
+      p.innerTop -= roofDrop; p.outerTop -= roofDrop;
+      for (const edge of ["inner", "outer"]) {
+        const b = edge + "Bottom", t = edge + "Top";
+        p[t] = Math.min(POD_TOP_MAX, p[t]);
+        p[b] = Math.max(0.13, Math.min(POD_TOP_MAX - f.height, p[b], p[t] - f.height));
+        p[t] = Math.min(POD_TOP_MAX, Math.max(p[t], p[b] + f.height));
+      }
+      p.outerBottom = Math.max(p.outerBottom, p.innerBottom + POD_UNDERCUT_MIN);
+      p.outerTop = Math.min(POD_TOP_MAX, Math.max(p.outerTop, p.outerBottom + f.height));
+      return p;
+    });
+    if (profile === "serpent") {
+      // Supplier taper can overwhelm a factor-only recovery. Pin a real outer
+      // bulge behind the waist, then return continuously to the supplier tail.
+      shaped[6].outer = Math.min(.88, Math.max(shaped[6].outer, shaped[5].outer + .025, shaped[8].outer + .025));
+      shaped[7].outer = (shaped[6].outer + shaped[8].outer) * .5;
+    }
+    return shaped;
+  }
+  function conceptPodRing(p, profile, index) {
+    const x = p.outer, w = x - p.inner, b = p.outerBottom, h = p.outerTop - b;
+    if (profile === "keel") return [[p.inner,p.innerBottom], [x-w*.06,b], [x,b+h*.12],
+      [x,b+h*.90], [x-w*.12,p.outerTop], [p.inner,p.innerTop]];
+    const depth = Math.min(CONCEPT_PODS[profile].depth[index], w * 0.55);
+    // The forward channel stays BELOW the original 32..88% sponsor landing.
+    // Behind its rear edge it climbs, exposing a tall inset wall and silver lip.
+    const aft = Math.max(0, Math.min(1, (-p.z - .34) / .45));
+    const roof = .25 + aft * (profile === "serpent" ? .43 : .36);
+    const ring = [[p.inner,p.innerBottom], [x-w*.06,b], [x,b+h*.045],
+      [x-depth,b+h*.105], [x-depth,b+h*roof], [x,b+h*(roof+.035)],
+      [x,b+h*.94], [x-w*(profile === "delta" ? .28 : .10),p.outerTop],
+      [p.inner+w*.25,p.innerTop], [p.inner,p.innerTop]];
+    if (profile === "rift") ring.splice(8,1);   // one continuous silver inner-roof facet
+    return ring;
+  }
+  // Ear clipping, rather than a centre fan: the recessed ring is concave.
+  function conceptPodCap(points) {
+    const cross = (a,b,c) => (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+    const ids = points.map((_,i) => i), triangles = [];
+    while (ids.length > 3) {
+      let found = false;
+      for (let j=0;j<ids.length;j++) {
+        const a=ids[(j+ids.length-1)%ids.length], b=ids[j], c=ids[(j+1)%ids.length];
+        if (cross(points[a],points[b],points[c]) <= 1e-12) continue;
+        const inside = ids.some((k) => k!==a && k!==b && k!==c &&
+          cross(points[a],points[b],points[k]) >= -1e-12 && cross(points[b],points[c],points[k]) >= -1e-12 &&
+          cross(points[c],points[a],points[k]) >= -1e-12);
+        if (inside) continue;
+        triangles.push([a,b,c]); ids.splice(j,1); found=true; break;
+      }
+      if (!found) throw new Error("Invalid concept pod section");
+    }
+    triangles.push(ids.slice()); return triangles;
+  }
+  // Average along each longitudinal strip only. Separate cross-section edges
+  // never share a group, even where their positions coincide at a hard lip.
+  function smoothConceptPodStrips(out, strips) {
+    const groups = new Map();
+    for (const strip of strips) for (let v=strip.start;v<strip.end;v+=3) {
+      const key=strip.edge+"|"+out.pos[v]+","+out.pos[v+1]+","+out.pos[v+2];
+      let g=groups.get(key);
+      if (!g) { g={sum:[0,0,0],vertices:[]}; groups.set(key,g); }
+      for (let k=0;k<3;k++) g.sum[k]+=out.nrm[v+k];
+      g.vertices.push(v);
+    }
+    for (const g of groups.values()) {
+      const length=Math.hypot(...g.sum);
+      if (length<1e-12) continue;
+      for (const v of g.vertices) for (let k=0;k<3;k++) out.nrm[v+k]=g.sum[k]/length;
+    }
+  }
+  function buildConceptPods(out, stations, profile, c1) {
+    for (const side of [-1,1]) {
+      const rings = stations.map((p,i) => conceptPodRing(p,profile,i));
+      const strips = shadeFlags.round && (profile==="rift" || profile==="serpent") ? [] : null;
+      const xyz = (p,z) => [side*p[0],p[1],z];
+      const tri = (a,b,c,col,surface) => side > 0 ? addTri(out,a,b,c,col,surface) : addTri(out,a,c,b,col,surface);
+      for (let r=0;r<rings.length-1;r++) for (let e=0;e<rings[r].length;e++) {
+        const start=out.pos.length;
+        const j=(e+1)%rings[r].length, A=rings[r], B=rings[r+1];
+        const dark=profile!=="keel" && e>=1 && e<=4, col=dark?INTAKE:c1, sf=dark?SURFACES.carbon:SURFACES.paint;
+        tri(xyz(A[e],stations[r].z),xyz(B[e],stations[r+1].z),xyz(B[j],stations[r+1].z),col,sf);
+        tri(xyz(A[e],stations[r].z),xyz(B[j],stations[r+1].z),xyz(A[j],stations[r].z),col,sf);
+        if (strips) strips.push({edge:e,start,end:out.pos.length});
+      }
+      if (strips) smoothConceptPodStrips(out,strips);
+      for (const front of [true,false]) {
+        const r=front?0:rings.length-1, ring=rings[r], caps=conceptPodCap(ring), z=stations[r].z;
+        const area = (t) => { const [a,b,c]=t.map((i)=>ring[i]); return Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])); };
+        const opening=front && profile==="delta" ? caps.reduce((best,t)=>area(t)>area(best)?t:best,caps[0]) : null;
+        for (const t of caps) {
+          const v=t.map((i)=>xyz(ring[i],z));
+          if (t!==opening) { if (front) tri(v[0],v[1],v[2],c1,SURFACES.paint); else tri(v[0],v[2],v[1],c1,SURFACES.paint); continue; }
+          const centre=v[0].map((_,k)=>(v[0][k]+v[1][k]+v[2][k])/3);
+          const lip=v.map((p)=>p.map((n,k)=>centre[k]+(n-centre[k])*.82));
+          const throat=lip.map((p)=>[centre[0]+(p[0]-centre[0])*.78,centre[1]+(p[1]-centre[1])*.78,z-.065]);
+          for (let k=0;k<3;k++) {
+            const j=(k+1)%3;
+            tri(v[k],v[j],lip[j],c1,SURFACES.paint); tri(v[k],lip[j],lip[k],c1,SURFACES.paint);
+            tri(lip[k],lip[j],throat[j],INTAKE,SURFACES.carbon); tri(lip[k],throat[j],throat[k],INTAKE,SURFACES.carbon);
+          }
+          tri(throat[0],throat[1],throat[2],INTAKE,SURFACES.carbon);
+        }
+      }
+    }
+  }
+
+  const COVER_LIFT_TOP = 0.92;   // a concept coverLift ends under the hoop crown (0.946 at z -0.55)
   const _anchorCache = new WeakMap();
   const _anchorNullKey = {};   // stand-in for a null/undefined parts (legacy bodies)
   function bodyAnchors(parts, teamId, spineHeight, round) {
@@ -1267,6 +1524,14 @@ const CarBodyGeom = (function () {
     // Clamped so a concept body cannot walk the cover through the roll-hoop
     // cap the way an unclamped spineHeight would; TEAM_STYLE leaves it 0.
     const lift = Math.max(-0.16, Math.min(0.22, style.coverLift || 0));
+    // ...and the front crown, where the hoop blade stands (z -0.33..-0.63,
+    // crown 0.968..0.938), stops at COVER_LIFT_TOP: anteater/arched/wedge's
+    // +0.18..0.20 put it ~100 mm OVER the regulation hoop top on every factory
+    // engine (#3111). Only a positive lift is capped, so TEAM_STYLE (lift 0)
+    // and the sunken concept covers are unchanged; the tail keeps the full
+    // lift, which is what reads as a rising or humped cover in side view.
+    const crownBase = 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight;
+    const liftF = lift > 0 ? Math.min(lift, Math.max(0, COVER_LIFT_TOP - crownBase - rise)) : lift;   // a spine rise spends the budget first
     // Two stations only. A third (z -1.13) made coverAt non-linear and broke
     // car-shade: downwash gap vs cover.bottom, and cokeFoot xb<=x. coverCrown
     // pinches x and peaks the profile — it must NOT lift coverAt().top or
@@ -1276,12 +1541,14 @@ const CarBodyGeom = (function () {
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth * (1 - crown * 0.6),
         bottom: 0.52 + 0.08 * (coverHeight - 1) - 0.31 * coverHeight,
-        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise + lift, k: crown },
+        top: crownBase + rise + liftF, k: crown },
       { z: -2.00, x: 0.13 * eng.tailWidth,
         bottom: 0.42 - 0.17 * coverHeight,
         top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL + lift * SPINE_TAIL, k: crown * 0.45 },
     ];
-    const podStations = round ? CarShade.downwash(sidepodStations(eng, style), (z) => sampleStations(coverStations, z).bottom, eng.coke) : sidepodStations(eng, style);   // rounded: the downwash ramp
+    let podStations = round ? CarShade.downwash(sidepodStations(eng, style), (z) => sampleStations(coverStations, z).bottom, eng.coke) : sidepodStations(eng, style);   // rounded: the downwash ramp
+    const podProfile = CONCEPT_PODS[style.podProfile] ? style.podProfile : null;
+    if (podProfile) podStations = conceptPodStations(podStations, podProfile);
     const noseStations = styledNoseStations(style).map((station) => ({
       z: station.z, side: station.w * 0.5, topSide: station.w * station.t * 0.5,
       bottom: station.y - station.h * 0.5, top: station.y + station.h * 0.5,
@@ -1297,6 +1564,7 @@ const CarBodyGeom = (function () {
       },
       coverAt(z) { const c = sampleStations(coverStations, z); return round ? CarShade.cokeFoot(c, coverStations, eng.coke) : c; },   // rounded: the pinched foot, c.xb
       noseAt(z) { return sampleStations(noseStations, z); },
+      podProfile,
       podStations: podStations.map((p) => Object.freeze(Object.assign({}, p))),
     };
   }
@@ -1334,7 +1602,8 @@ const CarBodyGeom = (function () {
   function buildSidepodBodywork(out, c1, eng, anchors) {
     const data = anchors || bodyAnchors({ engine: 1, _visual: { engine: eng } });
     const stations = data.podStations;
-    if (shadeFlags.round) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
+    if (data.podProfile) buildConceptPods(out, stations, data.podProfile, c1);
+    else if (shadeFlags.round) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
     else for (const side of [-1, 1]) {
       addStationLoft(out, stations.map((p) => sidepodStation(side, p.z, p.inner, p.outer,
         p.innerBottom, p.outerBottom, p.innerTop, p.outerTop)), c1, INTAKE);
@@ -1346,6 +1615,7 @@ const CarBodyGeom = (function () {
     const conduitP = data.podAt(-0.65);
     const tailP = data.podAt(-1.48);
     return {
+      conceptInlet: data.podProfile === "delta",
       inlet: { z: 0.625, x: (inletP.inner + inletP.x) * 0.5,
                y: (inletP.innerBottom + inletP.innerTop) * 0.5,
                width: inletP.x - inletP.inner, height: inletP.innerTop - inletP.innerBottom },
