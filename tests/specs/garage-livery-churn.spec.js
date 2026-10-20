@@ -121,7 +121,11 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
   await page.evaluate(() => {
     const b = window.renderer.backend, C = window.__churn = { made: 0, destroyed: 0 };
     const c = b.createTexture.bind(b), d = b.destroyTexture.bind(b);
-    b.createTexture = function (t, o) { if (!t.isRenderTargetTexture && !t.isDepthTexture) C.made++; return c(t, o); };
+    C.log = [];
+    b.createTexture = function (t, o) { if (!t.isRenderTargetTexture && !t.isDepthTexture) { C.made++;
+      const im = t.image || {}; C.log.push({ n: C.made, name: t.name, type: t.constructor && t.constructor.name, w: im.width, h: im.height, at: performance.now() | 0,
+        stack: (new Error().stack || "").split("\n").slice(2, 16).map((l) => l.trim().replace(/https?:\/\/[^/]+\//, "")).join(" | ") }); }
+      return c(t, o); };
     b.destroyTexture = function (t, ...a) { if (!t.isRenderTargetTexture && !t.isDepthTexture) C.destroyed++; return d(t, ...a); };
   });
   const cdp = await page.context().newCDPSession(page);
@@ -165,7 +169,8 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
   const end = await settleGeo(page, cdp, "end");
   rows.push(end);
   test.info().annotations.push({ type: "churn", description: JSON.stringify(rows) });
-  expect(end.gpuTex - warm.gpuTex, `GPU textures created by ${EDITS + 1} edits after the warm-up (each edit used to make new ones): ${JSON.stringify(rows)}`).toBe(0);
+  const texLog = await page.evaluate((w) => window.__churn.log.filter((e) => e.n > w), warm.gpuTex);
+  expect(end.gpuTex - warm.gpuTex, `GPU textures created by ${EDITS + 1} edits after the warm-up (each edit used to make new ones): ${JSON.stringify(rows)} NEW: ${JSON.stringify(texLog)}`).toBe(0);
   expect(end.runs, `coalesced flap runs: ${rows.map((r) => r.runs).join(" → ")}`).toBeLessThanOrEqual(warm.runs);
   expect(warm.flaps && warm.flaps.sets, "the turntable's wings come from the flap-set cache (CarMesh.flapState)").toBeGreaterThan(0);
   expect(end.flaps.sets, `flap sets held: ${rows.map((r) => r.flaps.sets).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.sets);
