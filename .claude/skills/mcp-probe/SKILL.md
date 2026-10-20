@@ -21,6 +21,7 @@ spawns a fresh Chromium each time, so navigate → evaluate → screenshot break
 
 ```sh
 python3 tools/mcp/probe-mcp.py status                # no browser: local bin/Chrome path + daemon UP/DOWN. Run FIRST
+bash tools/mcp/apex-tools-mcp.sh call apex_status '{}' # no browser: follow next.action/reason; prerequisites can pass while occupancy says wait
 # "Bin: missing" alone is not a blocker: the wrapper uses its pinned npm fallback.
 # Checkout dependencies and Chromium are required; an uncached npm fallback needs egress.
 # Clone/build is optional server-development work, not routine probe setup.
