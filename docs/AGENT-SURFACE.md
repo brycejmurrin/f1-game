@@ -114,7 +114,10 @@ does not discover, install or validate hosted tools.
 
    After editing ship `.cursor/environment.json`, **Save** the environment so the
    dashboard allowlist matches git. Each `mcpServerAllowlist` row keeps its
-   `name` and a **full launch pattern** (`*bash tools/mcp/<wrapper>.sh …`) —
+   `name` and a **glob** (`*bash*tools/mcp/<wrapper>.sh …`) that admits both
+   the committed **output-level gateway** launch (`.mcp.json`) and the shorter
+   native-wrapper line the Integrations dashboard shows — compact MCP output
+   stays on the gateway; the allowlist must not pin only the short form.
    Cursor matches `command` + `args` joined, with `*` wildcards
    ([enterprise MCP allowlist](https://cursor.com/docs/enterprise/model-and-integration-management);
    `tests/unit/environment-json.test.mjs`). A stale save shows three nameless
