@@ -61,12 +61,13 @@ async function windowStats(page,t0,t1){return page.evaluate(([t0,t1])=>{const f=
     longTasks:l.length,longTaskMs:+l.reduce((a,[,d])=>a+d,0).toFixed(1),longestTaskMs:l.length?+Math.max(...l.map(x=>x[1])).toFixed(1):0};},[t0,t1]);}
 
 // The edit plan, discovered from the live editor DOM: each entry is {kind, sel, value?}.
-function planEdits(n){
+function planEdits([n,cycle]){
   const root=document.querySelector('#cs-options')||document;const plan=[];
   const colours=[...root.querySelectorAll('input[type="color"][data-liv-field]')].map(i=>i.dataset.livField);
   const pills={};for(const b of root.querySelectorAll('[data-cs-pill]')){const [f,v]=b.dataset.csPill.split(':');(pills[f]||(pills[f]=[])).push(v);}
   const finishes=[...root.querySelectorAll('[data-cs-finish]')].map(b=>b.dataset.csFinish);
-  const pick=(f,i)=>pills[f]?.length?{kind:/^crest/.test(f)?'crest':/^decal/.test(f)?'decal':f==='bodyStyle'?'body':/^pattern/.test(f)?'pattern':/Finish$/.test(f)?'part-finish':'pill',field:f,value:pills[f][(i+1)%pills[f].length]}:null;
+  const span=f=>Math.min(pills[f].length,cycle||pills[f].length); // cycle: revisit few values, so a cache plateaus and a leak keeps climbing
+  const pick=(f,i)=>pills[f]?.length?{kind:/^crest/.test(f)?'crest':/^decal/.test(f)?'decal':f==='bodyStyle'?'body':/^pattern/.test(f)?'pattern':/Finish$/.test(f)?'part-finish':'pill',field:f,value:pills[f][(i+1)%span(f)]}:null;
   const pal=['#d01020','#1040e0','#20a040','#f0c000','#ffffff','#101010','#ff6000','#8020c0'];
   const rota=[i=>colours.length&&{kind:'colour',field:colours[i%Math.min(colours.length,4)],value:pal[i%pal.length]},
     i=>finishes.length&&{kind:'finish',value:finishes[(i+1)%finishes.length]},
@@ -118,7 +119,7 @@ try{
       const o0=await snapshot(page);await page.evaluate(()=>document.querySelector('.cs-liv-create').click());
       await page.waitForSelector('input[data-liv-field]',{timeout:soft?180000:60000});await page.waitForTimeout(WINDOW_MS);
       const o1=await snapshot(page);row.openEditor={...await windowStats(page,o0.t,o1.t),delta:delta(o0.calls,o1.calls),alloc:delta(o0.alloc,o1.alloc)};
-      const {plan,available}=await page.evaluate(planEdits,EDITS);row.available=available;
+      const {plan,available}=await page.evaluate(planEdits,[EDITS,+REQ.livery_cycle||0]);row.available=available;
       const parts=await page.evaluate(()=>{const t=[...document.querySelectorAll('#cs-tabs [data-cs-cat]')].map(b=>b.dataset.csCat).find(c=>!['team','tune','livery'].includes(c));return t||null;});
       row.phase='edits';row.before=await snapshot(page);
       for(const e of plan){
