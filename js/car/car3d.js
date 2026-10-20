@@ -2049,18 +2049,24 @@ const Car3D = (function () {
       const aSwan = aeroStyle && aeroStyle.swan ? 1 : 0;
       if (aSwan) {
         const mainTopY = rm[3] + 0.016;
+        // rwPlanes 1 (B·D3c): the neck ends 8 mm into the main plane's own top skin
+        // there (foilAt, lift included); the shipped constant left it 2.5 cm above.
+        const seat = (aeroStyle.rwPlanes | 0) === 1 ? foilAt({ zLead: rm[0], yLead: rm[1], zTrail: rm[2], yTrail: rm[3],
+          half: 0.51, thick: 0.024, taper: rearTaper, sweep: rearSweep * 0.8, rise: 0, attachHalf: 0.50, ...rLift }, 0.16, 0.64) : null;
         for (const s of [-1, 1]) {
-          addSpan(out, { z: -1.98, x: s*0.16, y: 0.46, w: 0.048, h: 0.13 },
+          // ...and its foot starts as low as the spine mount's, on the engine cover.
+          addSpan(out, seat ? { z: -1.98, x: s*0.16, y: 0.435, w: 0.048, h: 0.16 } : { z: -1.98, x: s*0.16, y: 0.46, w: 0.048, h: 0.13 },
                        { z: -2.26, x: s*0.16, y: mainTopY + 0.075, w: 0.036, h: 0.095 }, DARK);
           addSpan(out, { z: -2.26, x: s*0.16, y: mainTopY + 0.075, w: 0.036, h: 0.060 },
-                       { z: -2.44, x: s*0.16, y: mainTopY + 0.012, w: 0.030, h: 0.048 }, DARK);
+                       seat ? { z: seat.z, x: s*0.16, y: seat.y + seat.h + 0.016, w: 0.030, h: 0.048 }
+                            : { z: -2.44, x: s*0.16, y: mainTopY + 0.012, w: 0.030, h: 0.048 }, DARK);
         }
       } else if (!shadeFlags.round) {   // rounded build: ONE central pylon (below) carries the wing
         for (const s of [-1, 1]) {
           // rwPlanes 1: no mid element at epCY, so the pylon climbs to the single flap's underside.
-          // rwGap: the lowered main plane is the static seat, so the pylon ends inside it.
-          const pyTop = aeroStyle.rwGap ? rm[1] + (rm[3] - rm[1]) * (0.04 / 0.22) - 0.045
-            : (aeroStyle.rwPlanes | 0) === 1 ? upperTrailY - 0.075 - 0.030 : epCY + 0.01;
+          // rwPlanes 1: no mid element at epCY, and the single flap's rest pose varies by
+          // recipe, so the pylon ends inside the static main plane instead.
+          const pyTop = (aeroStyle.rwPlanes | 0) === 1 ? rm[1] + (rm[3] - rm[1]) * (0.04 / 0.22) - 0.045 : epCY + 0.01;
           addSpan(out, { z: -1.98, x: s*0.14, y: 0.46, w: 0.05, h: 0.13 },
                        { z: -2.34, x: s*0.14, y: pyTop, w: 0.042, h: 0.10 }, DARK);
         }
