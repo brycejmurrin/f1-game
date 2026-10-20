@@ -61,6 +61,9 @@ test("GAP: a touching part joins the car; one 10 mm off floats and fails", () =>
   assert.ok(Math.abs(r.value - 10) < 0.2, `gap ${r.value}`); assert.equal(r.fail, true);
   const near = analyse(mesh([["chassis", [BODY]], ["sharkFin", [{ box: [-0.01, 0.302, 0, 0.01, 0.5, 0.2] }]]]));
   assert.deepEqual(gaps(near).rows, [], "a 2 mm seam is a joint (ATTACH_MM 3)");
+  // fully sunk 6 mm under the skin: no vertex near the surface, still attached (B·D1b's cam pod)
+  const sunk = analyse(mesh([["chassis", [BODY]], ["halo", [{ box: [-0.02, 0.27, 0, 0.02, 0.294, 0.04] }]]]));
+  assert.deepEqual(gaps(sunk).rows, []);
 });
 
 test("PENETRATION: 30 mm into a closed box fails, a 10 mm embed is a join", () => {

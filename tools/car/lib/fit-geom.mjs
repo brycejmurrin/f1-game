@@ -100,14 +100,17 @@ const C1 = [0.80, 0.10, 0.10], C2 = [0.10, 0.20, 0.85];
 // One factory car (setup = its FACTORY_PRESETS row) plus an optional style
 // overlay {cat: optionId}. buildComplete: the active-aero flaps are part of
 // the shipped silhouette.
-export function buildCar(M, teamId, overlay = {}) {
+// `bodyStyle` is a livery field (Car3D.bodyStyleKey): a BODY_STYLES look
+// (needle, brick, …) or another team's TEAM_STYLE body on this team's car.
+export function buildCar(M, teamId, overlay = {}, bodyStyle = null) {
   const team = M.Teams.LIST.find((t) => t.id === teamId);
   if (!team) throw new Error(`unknown team ${teamId}`);
   const setup = Object.assign({}, M.Parts.FACTORY_PRESETS[teamId] || {}, overlay);
   const tiers = M.Parts.getVisualTiers(setup, team);
   for (const [cat, id] of Object.entries(overlay))
     if (tiers._ids && tiers._ids[cat] !== id) throw new Error(`${cat}/${id} resolved to ${tiers._ids[cat]} for ${teamId}`);
-  return M.Car3D.buildComplete(C1, C2, { livery: {}, num: 44, parts: tiers, teamId, measure: true });
+  if (bodyStyle && M.Car3D.bodyStyleKey(teamId, bodyStyle) !== bodyStyle) throw new Error(`unknown body style ${bodyStyle}`);
+  return M.Car3D.buildComplete(C1, C2, { livery: bodyStyle ? { bodyStyle } : {}, num: 44, parts: tiers, teamId, measure: true });
 }
 
 // Section of every vertex. parts[] carries from/to since the fit-audit hook;

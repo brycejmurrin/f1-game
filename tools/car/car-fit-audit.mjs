@@ -24,6 +24,7 @@
 //   node tools/car/car-fit-audit.mjs --team=ferrari,haas     a subset
 //   node tools/car/car-fit-audit.mjs --styles=brakes/style_brakes_bigdisc,cockpit/style_cockpit_fenced
 //   node tools/car/car-fit-audit.mjs --all-styles            + every STYLE/PREVIEW option on every car it fits
+//   node tools/car/car-fit-audit.mjs --bodies=needle,brick   + body looks (livery bodyStyle); --all-bodies = every BODY_STYLES id
 //   node tools/car/car-fit-audit.mjs --checks=GAP,PENETRATION
 //   node tools/car/car-fit-audit.mjs --json                  machine output (rows + joints)
 //   node tools/car/car-fit-audit.mjs --base origin/claude/f1-game-project-26h3ng
@@ -70,16 +71,20 @@ function merge(rows) {
 
 // Every (team, style) the run covers. A style is "cat/optionId"; it only
 // builds on a team the option is available to (SIGNATURE gates).
-export function plan(M, { teams, styles, allStyles }) {
+export function plan(M, { teams, styles, allStyles, bodies, allBodies }) {
   const T = M.Teams.LIST.filter((t) => M.Parts.FACTORY_PRESETS[t.id] && (!teams || teams.includes(t.id)));
   if (teams) for (const id of teams) if (!T.some((t) => t.id === id)) throw new Error(`unknown team ${id}`);
   let S = styles ? styles.slice() : [];
   if (allStyles) for (const c of M.Parts.CATALOG) for (const o of c.options)
     if (o.tag === "STYLE" || o.tag === "PREVIEW") S.push(c.id + "/" + o.id);
   S = [...new Set(S)];
+  // Body looks (livery bodyStyle, Car3D BODY_STYLES): style "body:<id>".
+  const B = allBodies ? [...M.Car3D.BODY_STYLE_IDS] : (bodies || []);
+  for (const b of B) if (!M.Car3D.BODY_STYLES[b] && !M.Car3D.TEAM_STYLE[b]) throw new Error(`unknown body style ${b}`);
   const jobs = [];
   for (const t of T) {
     jobs.push({ team: t.id, style: "factory", overlay: {} });
+    for (const b of B) if (b !== t.id) jobs.push({ team: t.id, style: "body:" + b, overlay: {}, body: b });
     for (const s of S) {
       const [cat, id] = s.split("/");
       const c = M.Parts.CATALOG.find((x) => x.id === cat), o = c && c.options.find((x) => x.id === id);
@@ -94,7 +99,7 @@ export function plan(M, { teams, styles, allStyles }) {
 export function run(root, opts) {
   const M = loadCar(root), out = [];
   for (const j of plan(M, opts)) {
-    const r = auditMesh(buildCar(M, j.team, j.overlay), opts.checks || CHECKS);
+    const r = auditMesh(buildCar(M, j.team, j.overlay, j.body), opts.checks || CHECKS);
     out.push({ team: j.team, style: j.style, pieces: r.pieces, joints: r.joints, rows: r.rows });
   }
   return { root, fit: FIT, cars: out };
@@ -177,11 +182,12 @@ function main() {
     const i = args.indexOf("--" + n); return i >= 0 ? args[i + 1] : undefined; };
   const has = (n) => args.includes("--" + n);
   if (has("help") || has("h")) {
-    console.log("Usage: node tools/car/car-fit-audit.mjs [--team=a,b] [--styles=cat/opt,…] [--all-styles] [--checks=GAP,PENETRATION,ZFIGHT,OPEN] [--json] [--base <ref> | --baseline <file>] [--write-baseline <file>]\n\nDo Car3D parts connect? Exit 1 on any FAIL, or with a base on any NEW/WORSE failure.");
+    console.log("Usage: node tools/car/car-fit-audit.mjs [--team=a,b] [--styles=cat/opt,…] [--all-styles] [--bodies=a,b | --all-bodies] [--checks=GAP,PENETRATION,ZFIGHT,OPEN] [--json] [--base <ref> | --baseline <file>] [--write-baseline <file>]\n\nDo Car3D parts connect? Exit 1 on any FAIL, or with a base on any NEW/WORSE failure.");
     return;
   }
   const list = (s) => s ? s.split(",").filter(Boolean) : undefined;
-  const opts = { teams: list(val("team")), styles: list(val("styles")), allStyles: has("all-styles"), checks: list(val("checks")) || CHECKS };
+  const opts = { teams: list(val("team")), styles: list(val("styles")), allStyles: has("all-styles"),
+                 bodies: list(val("bodies")), allBodies: has("all-bodies"), checks: list(val("checks")) || CHECKS };
   for (const c of opts.checks) if (!CHECKS.includes(c)) throw new Error(`unknown check ${c}`);
   const t0 = Date.now();
   let res = run(ROOT, opts);

@@ -51,6 +51,24 @@ export function gaps(A) {
       });
     }
   }
+  // EMBEDDED is attached: a pylon foot sunk 6 mm into a wing has no vertex
+  // within ATTACH_MM of the wing's skin, so contact alone reads it as floating
+  // (B·D1b, 2026-10-20: a cam pod 5.6 mm deep reported as a 5 mm GAP). A
+  // cluster with any vertex INSIDE a closed piece outside it (the PENETRATION
+  // sign test) joins that piece. Repeated, so a chain of embeds resolves.
+  for (let pass = 0; pass < 4; pass++) {
+    let joined = 0;
+    for (const p of P) {
+      const V = verts[p.id];
+      for (let i = 0; i < V.length; i += 3) {
+        const q = insideOf(A, V[i], V[i + 1], V[i + 2], (t) => find(par, A.piece[t]) === find(par, p.id));
+        if (q < 0) continue;
+        par[find(par, q)] = find(par, p.id); joined++;
+        break;
+      }
+    }
+    if (!joined) break;
+  }
   const chassisIdx = A.S.names.indexOf("chassis");
   let main = -1, bestA = -1;
   for (const p of P) if (p.sec === chassisIdx && p.area > bestA) { bestA = p.area; main = p.id; }
@@ -92,6 +110,27 @@ export function gaps(A) {
   }
   const joints = [...contacts.entries()].map(([k, n]) => ({ pair: k, contacts: n })).sort((x, y) => x.pair < y.pair ? -1 : 1);
   return { rows, joints };
+}
+
+// The piece a point sits inside, or -1: nearest face (not excluded) within
+// PEN_SEARCH_MM belongs to a CLOSED piece and the point is behind it, using
+// the summed normals of every tied face at an edge or corner.
+function insideOf(A, x, y, z, exclude) {
+  const R = FIT.PEN_SEARCH_MM / 1000, cp = new Float64Array(4);
+  let best = R, bestT = -1, ties = [];
+  eachNear(A, x, y, z, R, (t) => {
+    if (exclude(t)) return;
+    const d = closestOnTri(A.T, t, x, y, z, cp);
+    if (d < best - 1e-7) { best = d; bestT = t; ties = [[t, cp[0], cp[1], cp[2]]]; }
+    else if (d <= best + 1e-7 && bestT >= 0) ties.push([t, cp[0], cp[1], cp[2]]);
+  });
+  if (bestT < 0 || best < 1e-6) return -1;
+  const q = A.pieces[A.piece[bestT]];
+  if (!q.closed) return -1;
+  let nx = 0, ny = 0, nz = 0;
+  for (const [t] of ties) if (A.piece[t] === q.id) { nx += A.nrm[t * 3]; ny += A.nrm[t * 3 + 1]; nz += A.nrm[t * 3 + 2]; }
+  const [, cx, cy, cz] = ties[0];
+  return (x - cx) * nx + (y - cy) * ny + (z - cz) * nz < 0 ? q.id : -1;
 }
 
 function bbox(A, members) {
