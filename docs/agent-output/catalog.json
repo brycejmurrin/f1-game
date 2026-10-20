@@ -2620,6 +2620,7 @@
     {
       "path": "tools/perf/garage-census.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
