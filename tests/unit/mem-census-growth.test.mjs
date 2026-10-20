@@ -175,11 +175,11 @@ test('diagnostics retain both surfaces and select visible WGX canvas over hidden
   }
 }));
 test('shipped TLX and GLX native waiters resolve literal frame from their actual present notifications', async () => {
-  for (const [name, path] of [['tlx', '../../js/render/three/tlx.js'], ['glx', '../../js/render/glx/glx.js']]) {
+  for (const [name, path] of [['tlx', '../../js/render/three/tlx.js'], ['glx', '../../js/render/glx/soft.js']]) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8');
     const helper = name === 'tlx'
       ? source.match(/const _awaitFrame = \(ms\) => new Promise\(\(resolve\) => \{[\s\S]*?\n      \}\);/)[0]
-      : source.match(/function _awaitFrame\(ms\) \{[\s\S]*?\n  \}/)[0];
+      : source.match(/function _awaitFrame\(ms\) \{[\s\S]*?\n    \}/)[0];
     const notification = source.match(/if \((?:painted && )?_frameWaiters.length\) _frameWaiters.splice\(0\).forEach\([^\n]+/)[0];
     if (name === 'tlx') assert.match(notification, /painted &&/, 'TLX notification requires successful painting');
     const context = { setTimeout, clearTimeout };
