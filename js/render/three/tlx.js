@@ -3674,10 +3674,25 @@ const TLX = (function () {
         if (!_bs || !(_bs.radius >= 0) || !_bs.center
             || !(Math.abs(_bs.center.x) >= 0) || !(Math.abs(_bs.center.y) >= 0)
             || !(Math.abs(_bs.center.z) >= 0)) return 0;
-        let freed = 0;
+        let freed = 0, kept = 0;
+        // three reads attribute.array only while it creates the attribute's GPU
+        // buffer (XB.createAttribute: `r.array` when `get(attr).buffer` is still
+        // undefined). A depth-only first draw (the car shadow casters) uploads
+        // POSITION alone, so freeing every array after it left normal / colour /
+        // MAT without a buffer, and the first lit RenderObject of that geometry
+        // threw "Cannot read properties of null (reading 'constructor')" in
+        // present. Free only what already has its GPU buffer.
+        const _be = renderer && renderer.backend;
+        const uploaded = (a) => {
+          try {
+            const d = _be && _be.get(a);
+            return !!d && (d.buffer !== undefined || d.bufferGPU !== undefined);
+          } catch (_) { return false; }
+        };
         const drop = (a) => {
           if (!a || !a.array || !a.array.length) return;
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
+          if (!uploaded(a)) { kept++; return; }
           freed += a.array.byteLength;
           // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
           // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
@@ -3695,7 +3710,7 @@ const TLX = (function () {
         // while the WebGL2 control leg reported 0 — WebGL2 tolerates it and
         // WebGPU does not, which is why a tlxForceGL=1 measurement here looked
         // clean. Vertex attributes are sized from count/itemSize and are fine.
-        g.__tlxFreed = true;
+        if (!kept) g.__tlxFreed = true;   // a kept array retries on the next sweep
         return freed;
       }
       const _chunkRelOptIn = (function () {
