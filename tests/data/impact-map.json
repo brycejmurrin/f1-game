@@ -2945,6 +2945,9 @@
       ],
       "paint": [
         "tests/unit/livery-stations.test.mjs"
+      ],
+      "*": [
+        "tests/specs/parts-livery-contrast.spec.js"
       ]
     },
     "js/car/liverytex.js": {
