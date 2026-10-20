@@ -89,13 +89,17 @@ if (argv.includes("--help") || argv.includes("-h")) {
                                   default drains once per beat via GLX.drainGpuErrors()
   --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
   --boot-timeout MS  --race-timeout MS
+  --profile DIR  --port N         a PERSISTENT browser profile and a fixed server port: run twice
+                                  with the same pair and the second run is a returning player's
+                                  launch (shader, HTTP and storage caches warm — Chrome keys them
+                                  by origin, so the port must not change). out.profile says which
 `);
   process.exit(0);
 }
 const flag = (n, d = null) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
 // The track is the first bare word that is not some flag's value.
 const VALUE_FLAGS = new Set(["--json", "--shot", "--backend", "--path", "--cam", "--tod", "--clock", "--beats", "--ls",
-  "--boot-timeout", "--race-timeout", "--entry", "--menu-timeout"]);
+  "--boot-timeout", "--race-timeout", "--entry", "--menu-timeout", "--profile", "--port"]);
 const track = argv.find((a, i) => !a.startsWith("--") && !VALUE_FLAGS.has(argv[i - 1])) || "montreal";
 // --cam ID (hunt 4 H5): the player camera, set right after boot so no frame of
 // race entry draws through another one. The default camera is helmet
@@ -155,7 +159,7 @@ function serve() {
     // Without this a bind failure is an unhandled 'error' event: the process
     // dies before any JSON is written and the gate reports "produced nothing".
     s.once("error", rej);
-    s.listen(0, "127.0.0.1", () => res({ server: s, port: s.address().port }));
+    s.listen(Number(flag("--port", 0)) || 0, "127.0.0.1", () => res({ server: s, port: s.address().port }));
   });
 }
 
@@ -176,10 +180,19 @@ const log = (m) => console.log(`[game-check] ${m}`);
 const out = { platform: process.platform, arch: process.arch, track, backend, path: path3,
   glErrDrain: glErrDrainEveryPresent ? "present" : "beat", entry };
 const { server, port } = await serve();
-const browser = await chromium.launch({
+const launchOpts = {
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
   args: ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
-});
+};
+// --profile: one persistent context in place of browser + newContext. `launch` says whether the
+// profile already held a run (a returning player's launch) or was empty (the first ever).
+const PROFILE = flag("--profile", null);
+let persistent = null, browser;
+if (PROFILE) {
+  out.profile = { dir: PROFILE, launch: existsSync(join(PROFILE, "Default")) ? "warm" : "cold", port };
+  persistent = await chromium.launchPersistentContext(PROFILE, { ...launchOpts, viewport: { width: 1280, height: 720 } });
+  browser = { close: () => persistent.close(), on: (ev, fn) => persistent.on(ev === "disconnected" ? "close" : ev, fn) };
+} else browser = await chromium.launch(launchOpts);
 checkpoint("browser-launched");
 // ABOVE the try, deliberately. This was `const console_ = []` INSIDE the try
 // while the finally below reads it — sibling scopes, so the finally threw
@@ -193,7 +206,7 @@ checkpoint("browser-launched");
 // written the JSON, so nothing ever looked wrong. docs/PERF-FINDINGS.md 2l.
 const console_ = [];
 try {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const ctx = persistent || await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
   page.on("console", (m) => { if (console_.length < 200) console_.push(`${m.type()}: ${m.text()}`.slice(0, 300)); });
   page.on("pageerror", (e) => console_.push("pageerror: " + String(e && e.message).slice(0, 300)));

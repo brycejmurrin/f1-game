@@ -5595,6 +5595,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   const drawWarmOn = () => false;   // the A-W1 draw stage (after the mirror stage) has its own rig: tlx-hunt4b.test.mjs
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
+  const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
   const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
   const shadowSys = { warm: async () => {
     shadowCalls++; await Promise.resolve();
