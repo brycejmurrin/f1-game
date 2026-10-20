@@ -2507,6 +2507,7 @@
     {
       "path": "tools/mcp/mcp-listing-cost.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
