@@ -1,11 +1,11 @@
 // tools/car/car-fit-audit.mjs: each fit check on synthetic box fixtures with a
-// known answer, the --base comparison, and one shipped-car fixture (the
-// Fenced Halo brow that floats over the cockpit). Node only, ~5 s.
+// known answer, the --base comparison, and a defect planted in a real car (its
+// shark fin lifted 0.30 m off the body). Node only, ~3 s.
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { FIT, analyse, loadCar, buildCar } from "../../tools/car/lib/fit-geom.mjs";
+import { FIT, analyse, loadCar, buildCar, sectionsOf } from "../../tools/car/lib/fit-geom.mjs";
 import { gaps, penetration, zfight, openEdges } from "../../tools/car/lib/fit-checks.mjs";
 import { auditMesh, compareRuns } from "../../tools/car/car-fit-audit.mjs";
 
@@ -107,14 +107,22 @@ test("compareRuns: NEW, WORSE and PRE-EXISTING; a branch-only style is charged a
   assert.deepEqual(jitter.cars[0].rows.map((r) => r.status), ["NEAR-LIMIT", "NEW"]);
 });
 
-test("shipped fixture: the Fenced Halo brow floats over the cockpit (a NEW GAP vs the factory car)", () => {
+test("real car: its shark fin lifted off the body reads as a NEW GAP (fix-proof: the defect is made here)", () => {
+  // A shipped-geometry fixture (the Fenced Halo brow) went stale the day #3118
+  // seated it, so the real-car check plants its own defect: lift mclaren's
+  // shark fin 0.30 m (it is 0.4 m tall and sunk into the cover, so a smaller
+  // lift stays attached) and compare against the intact car: ~134 mm GAP.
   const M = loadCar(ROOT);
-  const factory = auditMesh(buildCar(M, "mclaren"), ["GAP"]);
-  const fenced = auditMesh(buildCar(M, "mclaren", { cockpit: "style_cockpit_fenced" }), ["GAP"]);
-  const out = compareRuns({ cars: [{ team: "mclaren", style: "cockpit/style_cockpit_fenced", rows: fenced.rows }] },
-                          { cars: [{ team: "mclaren", style: "factory", rows: factory.rows }] });
-  const brow = out.cars[0].rows.find((r) => r.check === "GAP" && r.a === "halo");
-  assert.ok(brow && brow.status === "NEW" && brow.value > 20, JSON.stringify(brow));
-  // and every factory row carries a section pair the report can name
-  for (const r of factory.rows) assert.ok(r.a && r.b && Number.isFinite(r.value), JSON.stringify(r));
+  const intact = buildCar(M, "mclaren");
+  const S = sectionsOf(intact), fin = S.names.indexOf("sharkFin");
+  assert.ok(fin >= 0, "the car has a sharkFin section");
+  const lifted = { ...intact, pos: intact.pos.slice() };
+  for (let v = 0; v < S.of.length; v++) if (S.of[v] === fin) lifted.pos[v * 3 + 1] += 0.30;
+  const base = auditMesh(intact, ["GAP"]), head = auditMesh(lifted, ["GAP"]);
+  const out = compareRuns({ cars: [{ team: "mclaren", style: "factory", rows: head.rows }] },
+                          { cars: [{ team: "mclaren", style: "factory", rows: base.rows }] });
+  const row = out.cars[0].rows.find((r) => r.check === "GAP" && r.a === "sharkFin");
+  assert.ok(row && row.status === "NEW" && row.value > 100, JSON.stringify(row));
+  // every intact-car row carries a section pair the report can name
+  for (const r of base.rows) assert.ok(r.a && r.b && Number.isFinite(r.value), JSON.stringify(r));
 });
