@@ -9721,6 +9721,30 @@
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
       ],
+      "trailCase": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailPush": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailYield": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailYieldCorner": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailYieldEase": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "trailYieldStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "traits": [
         "tests/unit/ai-drive.test.mjs"
       ],
