@@ -33,7 +33,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { api, REPO } from "./ready-full-cap.mjs";   // import-safe GET (token on stdin, 64 MB buffer)
+import { api, REPO } from "./github-api.mjs";   // import-safe GET (token on stdin, 64 MB buffer)
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 

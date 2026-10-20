@@ -165,13 +165,92 @@ test("WGX car padding does not capture non-car material or FLAG fractional field
     assert.ok(Object.is(packed.attr[i * 4], data.mat[i]), "legacy storage material survives unchanged");
   });
   assert.ok(new Int16Array(pack({ ...data, mat: null }).vert.buffer).every((v, i) => i % 14 !== 9 || v === 0));
-  const shader = read("js/render/webgpu/wgsl-chunks.js"), backend = read("js/render/webgpu/wgx.js");
-  assert.match(shader, /@location\(1\) aNrm : vec4<f32>/);
-  assert.match(shader, /floor\(aNrm\.w \* \(32767\.0 \/ 256\.0\) \+ 0\.5\)/);
-  assert.match(shader, /o\.matId = select\(pulled\.x, packedCarId, packedCarId >= 20\.0 && packedCarId <= 85\.0\)/);
-  assert.match(shader, /o\.nrm\s*= nm \* aNrm\.xyz/);
-  assert.match(backend, /shaderLocation: 1, offset: 12, format: "snorm16x4"/);
-  assert.match(backend, /SHADOW_VERTEX_LAYOUT = \{\s*arrayStride: VERTEX_STRIDE,\s*attributes: \[\{ shaderLocation: 0, offset: 0, format: "float32x3" \}\]/);
+
+});
+
+
+
+// Evaluate the actual backend layout declarations and the small, pure vertex
+// expressions at this transport boundary. This is not a WGSL compiler/GPU test:
+// the independent f32 round-trip above and rendered checks cover those layers.
+function wgxVertexTransport() {
+  const backend = read("js/render/webgpu/wgx.js"), shader = read("js/render/webgpu/wgsl-chunks.js");
+  const declaration = (name) => {
+    const found = new RegExp(`const ${name} = ([\\s\\S]*?);`).exec(backend);
+    assert.ok(found, `backend declaration ${name} must exist`);
+    return found[1];
+  };
+  const stride = vm.runInNewContext(declaration("VERTEX_STRIDE"));
+  const layout = (name) => JSON.parse(JSON.stringify(vm.runInNewContext(`(${declaration(name)})`, { VERTEX_STRIDE: stride })));
+  const input = /@location\((\d+)\)\s+aNrm\s*:\s*vec(\d)<f32>/.exec(shader);
+  assert.ok(input, "vertex normal input must be declared");
+  const expression = (lhs) => {
+    const found = new RegExp(`\\b${lhs.replaceAll(".", "\\.")}\\s*=\\s*([^;]+);`).exec(shader);
+    assert.ok(found, `vertex expression ${lhs} must exist`);
+    return found[1];
+  };
+  // Both scalar expressions are valid JS arithmetic too. Execute their source,
+  // rather than recopying the decode scale, selection predicate or fallback.
+  const decode = new vm.Script(expression("packedCarId"));
+  const select = new vm.Script(expression("o.matId"));
+  const normal = expression("o.nrm").split("*").map((term) => term.trim());
+  const normalLayout = layout("VERTEX_POS_LAYOUT").attributes.find((a) => a.shaderLocation === Number(input[1]));
+  assert.ok(normalLayout, "vertex input must have a bound layout attribute");
+  const format = /^snorm(\d+)x(\d)$/.exec(normalLayout.format);
+  assert.ok(format, "normal fetch requires a signed normalized vector");
+  assert.equal(Number(format[1]), 16, "normal components consume two bytes");
+  assert.equal(Number(format[2]), Number(input[2]), "pipeline and shader must agree on the normal width");
+  const shadow = layout("SHADOW_VERTEX_LAYOUT");
+  const lit = layout("VERTEX_POS_LAYOUT");
+  assert.equal(lit.arrayStride, stride);
+  assert.equal(shadow.arrayStride, stride);
+  assert.deepEqual(shadow.attributes, [lit.attributes.find((a) => a.shaderLocation === 0)],
+    "shadow uses exactly the same position fetch, without consuming the packed normal lane");
+  return (packed, vertex, pulledId, matrix) => {
+    const bytes = new DataView(packed.vert.buffer, packed.vert.byteOffset, packed.vert.byteLength);
+    const values = Array.from({ length: Number(input[2]) }, (_, c) =>
+      Math.fround(Math.max(-1, bytes.getInt16(vertex * stride + normalLayout.offset + c * 2, true) / 32767)));
+    const aNrm = Object.fromEntries([..."xyzw"].map((name, c) => [name, values[c]]));
+    const context = vm.createContext({ aNrm, pulled: { x: pulledId }, floor: Math.floor,
+      select: (a, b, condition) => condition ? b : a });
+    context.packedCarId = decode.runInContext(context);
+    const matId = select.runInContext(context);
+    // Interpret matrix-vector multiplication with explicit dimensions. A vec4
+    // normal (including its material lane) cannot silently pass as a vec3.
+    assert.equal(normal.length, 2, "normal transform must remain one matrix-vector product");
+    const vector = (term) => {
+      if (term === "nm") return matrix;
+      const swizzle = /^aNrm\.([xyzw]+)$/.exec(term);
+      assert.ok(swizzle, `unsupported normal operand ${term}`);
+      return [...swizzle[1]].map((component) => aNrm[component]);
+    };
+    const left = vector(normal[0]), right = vector(normal[1]);
+    assert.equal(left.length, 3); assert.equal(right.length, 3);
+    const nrm = left.map((row) => row.reduce((sum, value, c) => sum + value * right[c], 0));
+    const position = shadow.attributes[0];
+    assert.equal(position.format, "float32x3");
+    const shadowPos = Array.from({ length: 3 }, (_, c) =>
+      bytes.getFloat32(vertex * shadow.arrayStride + position.offset + c * 4, true));
+    return { matId, nrm, shadowPos };
+  };
+}
+
+test("WGX vertex transport delivers classified ids and rotates normals independently of normal.w", () => {
+  const { pack } = wgxCarPacking(), transport = wgxVertexTransport();
+  const ids = Array.from({ length: 66 }, (_, i) => i + 20).concat([0, 15.4, 16, 19.5, 85.5, 86]);
+  const data = carIdMesh(ids), packed = pack(data);
+  const identity = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], yaw = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]];
+  const base = transport(packed, 0, 21, identity).nrm;
+  ids.forEach((id, i) => {
+    const pulled = i < 66 ? 21 : packed.attr[i * 4];
+    const result = transport(packed, i, pulled, yaw);
+    assert.equal(result.matId, i < 66 ? id : pulled,
+      `vertex ${i}: packed car classification must bypass stuck vertex_index, non-cars retain storage`);
+    assert.deepEqual(result.shadowPos, Array.from(data.pos.slice(i * 3, i * 3 + 3)),
+      `vertex ${i}: shadow fetch must preserve the authored position`);
+    assert.deepEqual(result.nrm, [base[2], base[1], -base[0]],
+      `vertex ${i}: material padding must not affect the transformed normal`);
+  });
 });
 
 

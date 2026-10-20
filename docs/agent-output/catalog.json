@@ -779,7 +779,32 @@
       ]
     },
     {
+      "path": "tools/ci/fleet-archive.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/fleet-board-snapshot.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-board.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/fleet-bus-mirror.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
       "interpreter": "node"
@@ -805,6 +830,16 @@
       ]
     },
     {
+      "path": "tools/ci/fleet-owner.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-tick.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -820,6 +855,11 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/ci/github-api.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/ci/github-token.mjs",
@@ -880,6 +920,17 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/merge-gate.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json",
+        "--quiet"
       ]
     },
     {
@@ -1009,15 +1060,6 @@
     },
     {
       "path": "tools/ci/queue-depth.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/ready-full-cap.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
@@ -1946,6 +1988,11 @@
       ]
     },
     {
+      "path": "tools/lib/gate-receipt.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/harness.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -1993,6 +2040,11 @@
     },
     {
       "path": "tools/lib/pack-assets.cjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/presentation.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },

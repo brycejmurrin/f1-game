@@ -1091,7 +1091,6 @@ test("the launch template carries every field the agent-fleet launch policy requ
     "ready-gate.mjs", "Do not enable auto-merge or merge."]) {
     assert.ok(tpl[1].includes(field), `launch template lost ${field}`);
   }
-  assert.ok(!tpl[1].includes("ready-full-cap"), "the ready cap was retired 2026-10-16");
   assert.ok(!tpl[1].includes("PUSH SLOT"), "paced push was retired 2026-10-16");
   // The policy moved from AGENTS.md §Concurrent PRs to the skill (2026-10-14 trim); the pin moved with it.
   const policy = read(".claude/skills/agent-fleet/references/launch-policy.md").split("## Launch policy")[1] || "";

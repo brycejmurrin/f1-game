@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   decide, leaseState, parseLease, leaseLine, formatLine, parseLine, parseLog, addressed, whoAmI,
   writeBus, readLease, readBus, fetchBus, BUS_BRANCH, MAX_TTL_MIN, DEFAULT_TTL_MIN,
+  addressProblem, ADDRESS_FORMS, ROLES, main,
 } from "../../tools/ci/fleet-bus.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -86,6 +87,60 @@ test("bus lines: typed, one address, round-trip; non-bus subjects are dropped", 
   assert.equal(parseLine("SWEEP to:x from:y"), null, "only the typed set");
   const log = `aaa\t${T}\tGREEN to:orchestrator from:${B} #1 green\nbbb\t${T + 1}\tinitial commit\n`;
   assert.deepEqual(parseLog(log).map((e) => e.sha), ["aaa"]);
+});
+
+test("recipients: send refuses an undeliverable --to and names the accepted forms", () => {
+  const ok = ["*", "#3099", "A", "B·O3", "C·W4·L12", "orchestrator", "merge-holder", "tools", "track-engine",
+    "claude:session_01VUPaKEF34eo9fQAj79ugGP", "claude:session_f075b3d5a84821cfffa13bb7", "claude:cse_01VUPaKEF34eo9fQAj79ugGP",
+    "codex:01a1558a-88d6-73d2-8904-13327d29f012", "codex:refactor-all-b71e", "codex:track-engine-8d41",
+    "cursor:bc-b5cd51dd-5056-5709-aaf7-6a320ff4ffd9", "grok:fleet-bot-a1b2"];
+  for (const to of ok) assert.equal(addressProblem(to), "", to);
+  for (const to of ok) assert.equal(parseLine(formatLine("BLOCKED", to, A, "x")).to, to);
+  const refused = {
+    "claude:1923dcd1d9ef874aad548d82": /claims-board hash/, "codex:75a8d0d2822ffc7d0c1393d0": /claims-board hash/,
+    "cursor:92332ab30177276994b63bc0": /claims-board hash/, "claude:session_short": /not a claude session id/,
+    "#PR": /not an address/, "#12a": /not an address/, "a": /not an address/, "AB": /not an address/, "random-role": /not an address/,
+    "codex:refactor-all": /not a codex session id/, "slack:abc-1234": /unknown host/, "": /one address/,
+  };
+  for (const [to, re] of Object.entries(refused)) {
+    assert.match(addressProblem(to), re, to);
+    assert.throws(() => formatLine("BLOCKED", to, A, "x"), (e) => e.message.includes(ADDRESS_FORMS), to);
+  }
+  for (const r of ["orchestrator", "merge-holder", "tools", "track-engine"]) assert.ok(ROLES.includes(r), `${r} is used on the bus`);
+});
+
+test("recipients: every historical address still READS, even ones send now refuses", () => {
+  for (const to of ["claude:1923dcd1d9ef874aad548d82", "#PR", "codex:75a8d0d2822ffc7d0c1393d0", "whatever"]) {
+    assert.deepEqual(parseLine(`BLOCKED to:${to} from:codex:refactor-all-b71e C·O1 release?`),
+      { type: "BLOCKED", to, from: "codex:refactor-all-b71e", text: "C·O1 release?" });
+  }
+});
+
+test("send to #<PR> dispatches the mirror once; other addresses and a failed dispatch never fail the send", () => {
+  const dir = path.join(ROOT, "artifacts", `fleet-bus-send-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    g(dir, "init", "-q", "--bare", "origin.git");
+    g(dir, "init", "-q", "h");
+    const h = path.join(dir, "h");
+    g(h, "remote", "add", "origin", path.join(dir, "origin.git"));
+    const out = [];
+    let calls = 0;
+    const opts = (dispatch) => ({ cwd: h, log: (l) => out.push(l), dispatch });
+    assert.equal(main(["send", "READY", "--to", "#7", "--as", A, "abc ready"], opts(() => { calls++; return "dispatched"; })), 0);
+    assert.equal(calls, 1);
+    assert.match(out.join("\n"), /= mirror dispatched/);
+    assert.equal(main(["send", "GREEN", "--to", "orchestrator", "--as", A, "#7 green"], opts(() => { calls++; return "x"; })), 0);
+    assert.equal(calls, 1, "only to:#<PR> dispatches");
+    assert.equal(main(["send", "READY", "--to", "#8", "--as", A, "x"], opts(() => { throw new Error("no gh"); })), 0, "dispatch failure is not a send failure");
+    assert.match(out.at(-1), /= mirror not dispatched \(no gh\)/);
+    assert.equal(main(["send", "BLOCKED", "--to", "claude:1923dcd1d9ef874aad548d82", "--as", A, "x"], opts(() => { calls++; })), 1, "refused before any write");
+    assert.deepEqual(readBus({ cwd: h, last: 10 }).entries.map((e) => e.to), ["#7", "orchestrator", "#8"]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("addressing: no filter reads all; * reaches everyone; otherwise exact role, PR or id", () => {

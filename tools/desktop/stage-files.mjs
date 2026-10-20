@@ -30,6 +30,7 @@ export const STAGE_DIRS = Object.freeze([
   "icons",
   "assets",
   "vendor",
+  "locales",
 ]);
 
 /** Every top-level name the stage writes (files + directories). */

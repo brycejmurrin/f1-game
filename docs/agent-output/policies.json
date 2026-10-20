@@ -511,10 +511,25 @@
       "presentation": "shared-levels",
       "preserve": "Download/parse notes; issue errors even in JSON; no failures inferred from absence"
     },
+    "tools/ci/fleet-archive.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "ARCHIVE versus KEEP per session with the reason; pr-unknown under --offline; never archives by itself"
+    },
+    "tools/ci/fleet-board-snapshot.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "One ok/ERR line per source with row counts; the final '= snapshot ok|partial' line; exit 1 when any source failed"
+    },
     "tools/ci/fleet-board.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Dry-run versus applied; pin failure; exact board issue number"
+    },
+    "tools/ci/fleet-bus-mirror.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Dry-run versus posted; each posted, skipped (with reason) and FAILED PR comment by bus sha; exit 1 on any failed post"
     },
     "tools/ci/fleet-bus.mjs": {
       "action": "page-results",
@@ -526,6 +541,11 @@
       "presentation": "shared-levels",
       "preserve": "Unknown served/configured metrics and stalled/disconnected evidence"
     },
+    "tools/ci/fleet-owner.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "HELD versus CLAIMED versus FREE per path with PR number and head sha; unaddressable claims; the exact RELEASED/HELD bus line; exit 3 with no guessed rows"
+    },
     "tools/ci/fleet-tick.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -535,6 +555,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Regex/suite strings are consumed by shell; unknown argument exit 2"
+    },
+    "tools/ci/github-api.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Import-only GET helper; no-token and HTTP error text unchanged"
     },
     "tools/ci/github-token.mjs": {
       "action": "no-direct-output",
@@ -575,6 +600,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Observation window/max-runs and API errors; no cancellation mutation"
+    },
+    "tools/ci/merge-gate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every row's verdict and evidence; the gated head and tip; passed/refused/unknown exit distinct; the receipt path"
     },
     "tools/ci/needs-sync.mjs": {
       "action": "keep-native",
@@ -660,11 +690,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Informational gauge versus historical hold policy; timeout 124 and API 3"
-    },
-    "tools/ci/ready-full-cap.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Cap/exclude flags and no-token/API failure; do not hide row identities"
     },
     "tools/ci/ready-gate.mjs": {
       "action": "keep-native",
@@ -1251,6 +1276,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/lib/gate-receipt.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/harness.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1292,6 +1322,11 @@
       "preserve": "@c3"
     },
     "tools/lib/pack-assets.cjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/presentation.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"

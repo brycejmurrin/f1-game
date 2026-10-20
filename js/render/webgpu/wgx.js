@@ -1072,6 +1072,7 @@ const WGX = (function () {
     let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
     let _gpuTimerEpoch = 0, _gpuFrameTimerEpoch = -1;
+    let _gpuSamples = 0, _gpuSampleAt = -1;
     let identInstanceBuf = null, zeroAttrBG = null, _roadLutBG = null, _roadLutReady = false;
     let pParticle = null, pParticleAdd = null, particleBGL = null;
     // Dual particle UBO/VBO/BG — smoke then sparks both writeBuffer before
@@ -4239,6 +4240,12 @@ const WGX = (function () {
       _retiredBufs.length = 0;
     }
     function _retireIdleFlush() { if (!(SHD && SHD.pendingEnc)) _retireFlush(); }
+    // Before submission the encoded readback still belongs to this frame.
+    // Leave request rejection to present's outer catch so its original error wins.
+    function _capAbort(cap) {
+      if (!cap) return;
+      try { cap.buf.destroy(); } catch (_) { /* device dying: preserve submit error */ }
+    }
     function _capFinish(cap) {
       if (!cap) return;
       const req = _capReq; _capReq = null;
@@ -4361,7 +4368,7 @@ const WGX = (function () {
         const disp = _softDisplayEncode();
         const cap = _capEncode();
         try { device.queue.submit(SHD.frameSubmitList(encoder)); }
-        catch (e) { _softDisplayAbort(disp); throw e; }
+        catch (e) { _capAbort(cap); _softDisplayAbort(disp); throw e; }
         _retireFlush();
         _capFinish(cap);
         _softDisplayFinish(disp);
@@ -4717,6 +4724,7 @@ const WGX = (function () {
 
       let timerRead = null;
       const timerEpoch = _gpuFrameTimerEpoch;
+      const timerSampleAt = _gpuTimerOn ? _nowMs() : -1;
       if (_gpuTimerOn && timerEpoch === _gpuTimerEpoch && _gpuQuerySet && _gpuResolveBuf && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped") {
         try {
           encoder.resolveQuerySet(_gpuQuerySet, 0, 2, _gpuResolveBuf, 0);
@@ -4728,7 +4736,7 @@ const WGX = (function () {
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
       try { device.queue.submit(SHD.frameSubmitList(encoder)); }
-      catch (e) { _softDisplayAbort(disp); throw e; }
+      catch (e) { _capAbort(_cap); _softDisplayAbort(disp); throw e; }
       _retireFlush();
       _capFinish(_cap);
       _softDisplayFinish(disp);
@@ -4740,6 +4748,7 @@ const WGX = (function () {
               if (_gpuTimerOn && timerEpoch === _gpuTimerEpoch) {
                 const t = new BigUint64Array(timerRead.getMappedRange());
                 _gpuMs = Number(t[1] - t[0]) / 1e6;
+                _gpuSampleAt = timerSampleAt; _gpuSamples++;
               }
             } catch (_) { /* keep last-good gpuMs */ }
             // ALWAYS unmap: a throw above would leave the buffer mapped for
@@ -4948,11 +4957,13 @@ const WGX = (function () {
     function gpuTimer(on) {
       if (on !== undefined) {
         const next = !!on && !!_timestampOk;
-        if (next !== _gpuTimerOn) _gpuTimerEpoch++;
+        if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuSamples = 0; _gpuSampleAt = -1; }
         _gpuTimerOn = next;
         if (!_gpuTimerOn) _gpuMs = -1;
       }
-      return { supported: !!_timestampOk, on: _gpuTimerOn };
+      // Timestamp writes bracket the main lit render pass, excluding shadows/post.
+      return { supported: !!_timestampOk, on: _gpuTimerOn, scope: "lit-pass",
+        samples: _gpuSamples, sampleAgeMs: _gpuSampleAt < 0 ? -1 : Math.max(0, _nowMs() - _gpuSampleAt) };
     }
     function gpuMs() { return _gpuMs; }
 
