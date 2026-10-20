@@ -517,12 +517,15 @@ let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null;
 const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
-// keyed on colour and finish: the old paint job's flaps go too once nothing has
-// drawn them for FLAP_IDLE_MS, or a session of edits kept every one (M1).
-const FLAP_IDLE_MS = 2000;
+// keyed on colour and finish: the old paint job's flaps go too, or a session of
+// edits kept every one (M1). Released on the first garage frame AFTER the bust,
+// right after drawAeroFlaps stamped the new paint job: every set not drawn since
+// the bust goes. Released at the bust itself, the old job (drawn a frame ago)
+// survived unless frames had stalled 2 s, so 1 or 2 sets stayed by frame timing.
+let _flapBustAt = 0;
 function spMeshBust() {
   _spMeshKey = ""; GarageScene.dropPreviewMeshes();
-  if (typeof CarMesh !== "undefined" && CarMesh.releaseIdleFlaps) CarMesh.releaseIdleFlaps(FLAP_IDLE_MS);
+  _flapBustAt = typeof performance !== "undefined" ? performance.now() : 0;
 }
 function garageSeat() {
   const team = Teams.LIST[G.teamIdx];
@@ -866,6 +869,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     const aSt = teamDecalState(team, true);
     drawAeroFlaps(team, aSt.val, setupPreviewAeroX, arrivalCar, spMat,
       aSt.aero);
+    if (_flapBustAt && typeof CarMesh !== "undefined" && CarMesh.releaseIdleFlaps) {
+      CarMesh.releaseIdleFlaps(Math.max(0, performance.now() - _flapBustAt));
+      _flapBustAt = 0;
+    }
   }
   // `night` here means "the sun is not the key" — which in a garage it is not.
   // The decal shader is sun + ambient + glow only, so without this the liveries'
