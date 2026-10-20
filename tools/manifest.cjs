@@ -243,6 +243,7 @@ const FULL = [
   "js/car/crest-paths.js",
   "js/car/livery-design.js",
   "js/car/livery-graphics.js",
+  "js/car/livery-stations.js",
   "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
@@ -286,6 +287,7 @@ const FULL = [
   // reliability / damage / engineer / radio stack → LAZY_RACE_SESSION
   "js/physics/tyre-model.js",
   "js/physics/grip-steer.js",
+  "js/physics/wheel-state.js", // opt-in torque-balanced κ / lockup / wheelspin (#1628); default OFF
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
@@ -559,6 +561,7 @@ const CARVIEW = [
   "js/car/crest-paths.js",
   "js/car/livery-design.js",
   "js/car/livery-graphics.js",
+  "js/car/livery-stations.js",
   "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
@@ -877,6 +880,9 @@ const HARD_EDGES = [
   ["js/race/wind.js", "js/game.js"],                     // game.js calls Wind.setLevel at eval
   ["js/core/mat4.js", "js/physics/grip-steer.js"],       // GripSteer binds M4.clamp/lerp at eval
   ["js/physics/grip-steer.js", "js/physics/player-forces.js"], // PlayerForces.step caps via GripSteer.forPlayer
+  ["js/core/mat4.js", "js/physics/wheel-state.js"],      // WheelState binds M4.clamp at eval
+  ["js/physics/tyre-model.js", "js/physics/wheel-state.js"], // lateralCurve for combined-slip force shape
+  ["js/physics/wheel-state.js", "js/physics/player-forces.js"], // opt-in κ path after slip angles
   ["js/core/mat4.js", "js/physics/player-forces.js"],    // PlayerForces binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/player-forces.js"], // …and reads PhysicsConsts at eval
   ["js/physics/tyre-model.js", "js/physics/player-forces.js"], // lateralCurve / brakeBeta
@@ -935,6 +941,7 @@ const DEFERRED = {
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
     "js/render/webgpu/wgx-roadlut.js",
+    "js/render/webgpu/wgx-debug-labels.js",
     "js/render/webgpu/wgx.js",
   ],
   three: [
@@ -968,6 +975,7 @@ const LAZY_AGENT = [
   "js/agent/apex-cam.js",
   "js/agent/apex-track.js",
   "js/agent/apex-lobby.js",
+  "js/agent/apex-gpu-capture.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
@@ -976,6 +984,7 @@ const LAZY_EDGES = [
   ["js/agent/apex-cam.js", "js/agent/apex.js"],
   ["js/agent/apex-track.js", "js/agent/apex.js"],
   ["js/agent/apex-lobby.js", "js/agent/apex.js"],
+  ["js/agent/apex-gpu-capture.js", "js/agent/apex.js"], // __apex.gpuCapture one-line registration
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
@@ -1331,6 +1340,7 @@ const DEFERRED_EDGES = [
   ["js/render/webgpu/wgx-chunked.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-post.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-roadlut.js", "js/render/webgpu/wgx.js"],   // wgx.js destructures WGXRoadLut at eval
+  ["js/render/webgpu/wgx-debug-labels.js", "js/render/webgpu/wgx.js"], // WGXDebugLabels.install(device) after requestDevice
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
@@ -1362,7 +1372,9 @@ const PATHS = {
   WGX_CHUNKED: "js/render/webgpu/wgx-chunked.js",
   WGX_POST: "js/render/webgpu/wgx-post.js",
   WGX_ROADLUT: "js/render/webgpu/wgx-roadlut.js",
+  WGX_DEBUG_LABELS: "js/render/webgpu/wgx-debug-labels.js",
   WGX: "js/render/webgpu/wgx.js",
+  APEX_GPU_CAPTURE: "js/agent/apex-gpu-capture.js",
   INST_CELLS: "js/render/shared/inst-cells.js",
   GLTF: "js/render/shared/gltf.js",
   ASSETS: "js/render/shared/assets.js",

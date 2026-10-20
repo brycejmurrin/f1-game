@@ -12,6 +12,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
@@ -31,9 +32,9 @@ function bootPanel() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
-  vm.runInContext(read("js/camera/offsets.js"), ctx, { filename: "js/camera/offsets.js" });
+  vm.runInContext(read("js/camera/offsets.js"), ctx, { filename: absSrc("js/camera/offsets.js") });
   ctx.CamModes = { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "cockpit", label: "COCKPIT" }] };
-  vm.runInContext(read("js/camera/tuner-panel.js") + "\n;globalThis.__panel = CamTunerEditor;", ctx, { filename: "js/camera/tuner-panel.js" });
+  vm.runInContext(read("js/camera/tuner-panel.js") + "\n;globalThis.__panel = CamTunerEditor;", ctx, { filename: absSrc("js/camera/tuner-panel.js") });
   const panel = ctx.__panel.create(G);
   panel.buildCamTunePanel();
   return { dom, panel };

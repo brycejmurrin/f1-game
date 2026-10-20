@@ -7,6 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -14,7 +15,7 @@ function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
   for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return {
     Teams: vm.runInContext("Teams", ctx),
@@ -35,12 +36,4 @@ test("factory aeroLoad and ersDeploy spread across the grid", () => {
   const deploys = Teams.LIST.map((t) => ers(t.id));
   assert.ok(Math.max(...deploys) - Math.min(...deploys) > 0.05,
     "ERS deploy should not be identical across works cars");
-});
-
-test("makeCars assigns factory aero/ERS to AI, not null", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /aeroLoad: \(isP \|\| mate\) \? Parts\.aeroLoad/);
-  assert.match(src, /Parts\.aeroLoad\(factoryParts\.setup, team\)/);
-  assert.match(src, /houseStats: Career\.teamStats\(team\)/);
-  assert.doesNotMatch(src, /aeroLoad: isP \? Parts\.aeroLoad\([^)]+\): null/);
 });

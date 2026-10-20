@@ -383,6 +383,17 @@ if [ "${APEX_PUSH_FAILED_OK:-}" != 1 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX
   fi
 fi
 
+# #1714: advisory only — a push over a live ci.yml run on this branch cancels it and loses its
+# failures. live-run-check.mjs does a 3 s API lookup and prints one WARN line or nothing; it never
+# blocks, and any failure (offline, no node) is silent. APEX_LIVE_RUN_CHECK points at a stub in tests.
+if printf '%s' "$SCAN" | grep -Eq "$PUSH_RX"; then
+  LRC="${APEX_LIVE_RUN_CHECK:-$HOOKDIR/../../tools/ci/live-run-check.mjs}"
+  if [ -f "$LRC" ] && command -v node >/dev/null 2>&1; then
+    LRC_OUT=$(cd "$ROOT" 2>/dev/null && timeout 5 node "$LRC" </dev/null 2>/dev/null | head -2 || true)
+    [ -z "$LRC_OUT" ] || echo "$LRC_OUT" >&2
+  fi
+fi
+
 # --- guards before git commit ---------------------------------------------------
 # WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
 # `git( -C dir)? commit` on the raw text, so `git -c k=v commit`, `git

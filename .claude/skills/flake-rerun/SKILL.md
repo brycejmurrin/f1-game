@@ -12,10 +12,13 @@ A single red shard on unrelated specs is **not** automatically infra.
 1. Name the exact test title and assertion from the log (`ci-red-triage`).
 2. Confirm **sibling shards** on the same `head_sha` are green.
 3. Check the **deploy branch** tip: same test already red there → base red, not your flake.
+   If that test was not selected or its result/log was unread, base status is
+   unknown; a green unrelated shard does not settle it.
 4. One re-run at most via `tools/ci/ci-rerun.mjs` after Bryce says yes.
 5. Record the request and outcome in GitHub issue **#2394** (flake log).
 
 Never widen tolerances, quarantine without listing in the PR, or cancel runs.
-A pass that needed a retry is a red (AGENTS.md rule 9) unless Bryce approves rerun.
+A pass that needed a retry is still reported as a red (AGENTS.md rule 9).
+Permission to re-run authorizes the attempt; it does not erase the first failure.
 
 Related: **check-changes** `references/triage.md`, **steward** §5.

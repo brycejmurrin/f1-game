@@ -243,6 +243,65 @@ test("a failed flush retains pending laps across a foreign write for a later ret
   assert.equal(reloaded.InputGhost.bestTime(), 21);
 });
 
+test("clear(track) removes all contexts and their pending writes but preserves other tracks", () => {
+  const h = createHarness({ deferWrites: true });
+  const save = (track, context, time) => {
+    h.InputGhost.setTrack(track, context);
+    assert.equal(driveLap(h.InputGhost, 40, time), true);
+  };
+  save("custom-a", "ctx1", 21);
+  save("custom-a", "ctx2", 20);
+  save("custom-a-long", "ctx1", 19);
+  assert.equal(h.InputGhost.beginReplay(), true);
+  h.InputGhost.next();
+
+  h.InputGhost.clear("custom-a");
+  assert.equal(h.InputGhost.hasGhost(), true, "the selected prefix-collision track stays active");
+  assert.equal(h.InputGhost.replayIndex(), 1, "unrelated active replay state stays intact");
+  h.InputGhost.flush();
+
+  const saved = JSON.parse(h.disk.get("apex26.inputGhost.v1"));
+  assert.equal(saved["v2:custom-a:ctx1"], undefined);
+  assert.equal(saved["v2:custom-a:ctx2"], undefined);
+  assert.equal(saved["v2:custom-a-long:ctx1"].time, 19,
+    "another track and its pending write survive track-wide cleanup");
+});
+
+test("clear supports exact context keys and resets a cleared active replay", () => {
+  const h = createHarness();
+  h.InputGhost.setTrack("monza", "wet");
+  assert.equal(driveLap(h.InputGhost, 40, 22), true);
+  h.InputGhost.flush();
+  h.InputGhost.setTrack("monza", "dry");
+  assert.equal(driveLap(h.InputGhost, 40, 20), true);
+  h.InputGhost.flush();
+  assert.equal(h.InputGhost.beginReplay(), true);
+  h.InputGhost.next();
+
+  h.InputGhost.clear("v2:monza:dry");
+  assert.equal(h.InputGhost.hasGhost(), false);
+  assert.equal(h.InputGhost.replayIndex(), 0);
+  assert.equal(h.InputGhost.next(), null);
+
+  const saved = JSON.parse(h.disk.get("apex26.inputGhost.v1"));
+  assert.equal(saved["v2:monza:dry"], undefined);
+  assert.equal(saved["v2:monza:wet"].time, 22);
+});
+
+test("clear() removes every pending input ghost and resets replay state", () => {
+  const h = createHarness({ deferWrites: true });
+  h.InputGhost.setTrack("monza", "dry");
+  assert.equal(driveLap(h.InputGhost, 40, 20), true);
+  assert.equal(h.InputGhost.beginReplay(), true);
+  h.InputGhost.next();
+
+  h.InputGhost.clear(null);
+  h.InputGhost.flush();
+  assert.equal(h.InputGhost.hasGhost(), false);
+  assert.equal(h.InputGhost.replayIndex(), 0);
+  assert.deepEqual(JSON.parse(h.disk.get("apex26.inputGhost.v1")), {});
+});
+
 test("quantizeSteer / packFlags are stable helpers", () => {
   const { InputGhost: IG } = createHarness();
   assert.equal(IG.quantizeSteer(1), 127);
@@ -370,4 +429,38 @@ test("150-second mixed analog lap keeps all channels exact with sparse braking/c
   const signed = createHarness({ store: disk }).InputGhost; signed.setTrack("monza", "signed-zero");
   assert.ok(Object.is(signed.atStep(0).steer, -0)); assert.ok(Object.is(signed.atStep(30).steer, 0));
   assert.ok(Object.is(signed.atStep(0).throttleLevel, -0));
+});
+
+test("a PB write waits for a long idle slot, and the cap still writes it (#3109)", () => {
+  const h = createHarness();
+  const queued = [];
+  h.sandbox.requestIdleCallback = (fn) => queued.push(fn);
+  const IG = h.InputGhost;
+  IG.setTrack("monza");
+  assert.equal(driveLap(IG, 60, 12.5), true);
+  const key = "apex26." + IG.STORE_KEY;
+  assert.equal(queued.length, 1);
+  queued.shift()({ timeRemaining: () => 4 });
+  assert.equal(h.disk.has(key), false, "a short idle tail must not take the write");
+  assert.equal(queued.length, 1, "the write re-queues for the next idle slot");
+  queued.shift()({ timeRemaining: () => 40 });
+  assert.equal(h.disk.has(key), true);
+  assert.equal(IG.persistence().reason, "saved");
+});
+
+test("the trimmed store on disk is byte-identical to a fresh whole-store pack (#3109)", () => {
+  const h = createHarness();
+  const IG = h.InputGhost;
+  for (let k = 0; k < 4; k++) { IG.setTrack("t" + k); assert.equal(driveLap(IG, 600, 30 - k), true); }
+  const key = "apex26." + IG.STORE_KEY;
+  const onDisk = h.disk.get(key);
+  // A second harness decodes the disk copy and re-packs it from scratch: the
+  // cached packing must have produced exactly those bytes.
+  const h2 = createHarness({ store: new Map(h.disk) });
+  h2.InputGhost.setTrack("t0");
+  h2.InputGhost.flush();
+  h2.InputGhost.clear("nope");
+  const repacked = h2.disk.get(key);
+  const strip = (s) => JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(s)).map(([id, g]) => [id, Object.assign({}, g, { _used: 0 })])));
+  assert.equal(strip(repacked), strip(onDisk));
 });

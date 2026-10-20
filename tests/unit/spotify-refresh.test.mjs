@@ -5,6 +5,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedStore } from "../helpers/seed-store.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/audio/spotify.js"), "utf8");
@@ -92,7 +93,7 @@ function load(fetchImpl, opts = {}) {
   Object.assign(sandbox, opts.globals || {});   // e.g. a fake GameAudio that records setMusicBackend
   const ctx = vm.createContext(sandbox);
   seedStore(ctx);   // spotify.js keeps its keys through GameStore.store's raw lane, over the fake localStorage above
-  vm.runInContext(SRC, ctx, { filename: "js/audio/spotify.js" });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/audio/spotify.js") });
   const flush = () => { const q = pending.splice(0); for (const fn of q) if (fn) fn(); };
   return { SpotifyMusic: sandbox.SpotifyMusic, disk, session, flush, element, scripts, window: sandbox };
 }
@@ -712,7 +713,7 @@ test("browser SDK next, previous and volume handle asynchronous and synchronous 
 
 function soundtrackAudio() {
   const ctx = vm.createContext({ Promise, Math });
-  vm.runInContext(readFileSync(join(ROOT, "js/audio/soundtrack.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/audio/soundtrack.js"), "utf8"), ctx, { filename: absSrc("js/audio/soundtrack.js") });
   return ctx.GameAudioSoundtrack.create({ context: () => null, enabled: () => false });
 }
 

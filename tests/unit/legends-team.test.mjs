@@ -10,10 +10,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
+import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 function load(files) {
   const ctx = vm.createContext({ console, Object, Math });
-  for (const f of files) vm.runInContext(fs.readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
+  for (const f of files) vm.runInContext(fs.readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: absSrc(f) });
   return (name) => vm.runInContext(name, ctx);
 }
 const get = load(["js/core/mat4.js", "js/data/legends.js"]);
@@ -69,15 +71,24 @@ test("every legend can field the team", () => {
   assert.equal(Legends.team("nobody"), null);
 });
 
-// The seat rule, as js/game.js seatsFor() implements it. Held here rather than
-// only in game.js because the number it produces feeds BOTH the grid and the
-// painted boxes — a disagreement is a car on bare tarmac.
-const seatsFor = (team, driverIdx) => {
-  if (!team || !team.legends) return team.drivers;
-  const d = team.drivers || [];
-  if (!d.length) return [];
-  return [d[Math.min(Math.max(driverIdx | 0, 0), d.length - 1)]];
-};
+// The seat rule: js/game.js's REAL seatsFor() (it was a hand copy here, and the
+// copy returned team.drivers where game.js asks Career.gridDrivers). The number
+// it produces feeds BOTH the grid and the painted boxes — a disagreement is a
+// car on bare tarmac. Career.gridDrivers is the career roster seam, recorded.
+const SEATS_SRC = symbolSource("function seatsFor(");
+const gridAsked = [];
+const seatsFor = (team, driverIdx) => new Function("Career", "driverIdx", SEATS_SRC + "\nreturn seatsFor;")(
+  { gridDrivers: (t) => { gridAsked.push(t.id); return t.drivers.slice(0, 2); } }, driverIdx)(team);
+
+test("a real team's seats come from Career.gridDrivers; LEGENDS never asks it", () => {
+  gridAsked.length = 0;
+  const mclaren = { id: "mclaren", drivers: [{ code: "NOR" }, { code: "PIA" }, { code: "RES" }] };
+  assert.deepEqual(seatsFor(mclaren, 0).map((d) => d.code), ["NOR", "PIA"], "the career roster, not team.drivers");
+  assert.deepEqual(gridAsked, ["mclaren"]);
+  gridAsked.length = 0;
+  seatsFor(Legends.team("senna"), 0);
+  assert.deepEqual(gridAsked, [], "the legends team grids its one picked seat itself");
+});
 
 test("the team grids exactly one car, whichever legend is picked", () => {
   const t = Legends.team("senna");

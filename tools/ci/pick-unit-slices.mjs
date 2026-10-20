@@ -165,6 +165,7 @@ export const RULES = [
   [/^tests\/helpers\//, ["guards", ...VM_A, ...VM_B, ...PAGE_SLOW], "helpers feed many twins"],
   [/^tests\/specs\/physics-characterization\.spec\.js$/, ["driving-model"], "the characterization job"],
   [/^tests\/specs\//, ["guards"], "browser specs: selected job covers them; guards for taxonomy"],
+  [/^tests\/data\/physics-baseline\.json$/, ["guards", "driving-model"], "the baseline is a Chromium measurement: its spec must run on the head that changes it (#3037)"],
   [/^tests\/data\//, ["guards"], "ratchets / timings / baselines"],
   [/^tests\/groups\.json$/, ["guards"], "group membership is a structural contract"],
   [/^tests\/unit\//, [], "handled in pick()"],
@@ -213,7 +214,7 @@ const PAGE_SOURCES = [
   /^js\/race\/pit-lane\.js$/, /^js\/race\/race-control\.js$/,
   // 15-F1 (2026-10-10): the other files the ADAPTED specs assert. The VM boots the
   // whole manifest, so these are the ones a spec reads by name: logging.spec ->
-  // core/log.js; projection.spec -> spline.js; pit-lane.spec -> pit.js / line.js /
+  // core/log.js; track-project-hints.test -> spline.js; pit-lane.spec -> pit.js / line.js /
   // space.js; physics-fixes + autopilot -> js/physics/**; agent-drive-bench -> js/agent/**.
   /^js\/core\/log\.js$/, /^js\/track\/core\/(space|spline|pit|line)\.js$/,
   /^js\/physics\//, /^js\/agent\//,

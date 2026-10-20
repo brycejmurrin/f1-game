@@ -1,5 +1,28 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
+
+`js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
+The growth is the opt-in consumers of the four concept-sheet aero rows (Terrace /
+Flatline / Updraft / Swell) and four diffuser floor rows: front endplate accent tips
+(epTip 2/3), the rear tip fins and Flatline's trailing-edge stripes, the rwPlanes 1
+single-flap wing (no DRS pod/rail where no DRS plane exists — a pod there floats
+73–84 mm), Flatline's rwGap main plane (`rearMainOf`) and the pylon / swan-neck seats
+that keep single-flap wings on their mounts (car-fit-audit: 11 floating-wing GAP rows
+gone), and the `diffShape` tunnel/fence variants. Every block is gated on a recipe key
+absent from shipped rows: 671 deploy-tip builds hash-identical. The geometry helpers
+live in `js/car/car-body-geom.js` (not ratcheted). Fragment delta:
+`ratchets.d/cursor--design-aero-d3c-7e2a.json` (+62 lines vs the merge base).
+
+## 2026-10-19 — PR #2924 (cursor/body-styles-r8n5): concept body silhouette pass
+
+`js/car/car3d.js` lines 2218 → **2259** (+41). Deliberate raise past the 40-line absorb.
+Growth is the BODY_STYLES table (`coverLift`, amplified needle/anteater/arched/wedge
+nose/pod/cover knobs so side and 3/4 clear DAD's SUBTLE_PCT), `ALLOW_TEAM_BODY_SWAP`
+gate (team chassis stay out of the picker until a dedicated pass), and the short
+comments that document the silhouette contract. Companion geometry lives in
+`js/car/car-body-geom.js` (not ratcheted). Fragment delta:
+`ratchets.d/cursor--body-styles-r8n5.json (folded)`.
 ## 2026-10-19 — PR #2839 (cursor/parts-style-m7q3): STYLE reskins readable after DAD review
 
 `js/car/car3d.js` lines 2218 → **2289** (+71). Deliberate raise past the 40-line absorb.
@@ -8,7 +31,7 @@ floor fences (fenceCap scales with fenceH; edgeLip to 2), sealed Full Disc path
 helpers live in `car-wheels.js`, painted gearbox strakes / Smooth Case belly plate,
 larger fuel `capBig`, Fenced Halo crest vanes + brow, thicker ERS LED strip, taller
 exhaust stacks, and skirt tiering. Fragment delta:
-`tests/data/ratchets.d/cursor--parts-style-m7q3.json` (+71 lines). No wholesale
+`ratchets.d/cursor--parts-style-m7q3.json (folded)` (+71 lines). No wholesale
 replacement — each block is gated on an existing STYLE recipe key.
 
 ## 2026-10-18 — PR #2856 (cursor/captions-comfort-d9e8): captions wave 1 (#1597)
@@ -17,7 +40,7 @@ replacement — each block is gated on an existing STYLE recipe key.
 40-line absorb. The growth is the `#captions` strip (position/size/background tokens, speaker tint,
 spotter line, reduced-motion), plus `index.html` shell nodes for the HUD caption root. Tree metrics
 `cssClasses` (+7), `dynamicIdReads` (+1), `rawColor` (+2), `shellNodes` (+7) move with the new markup
-and loading-card caption line. Fragment delta: `tests/data/ratchets.d/cursor--captions-comfort-d9e8.json`.
+and loading-card caption line. Fragment delta: `ratchets.d/cursor--captions-comfort-d9e8.json (folded)`.
 
 ## 2026-10-15 — PR #1922 (cursor/host-remove-guest-7951): host removes a guest from VS Friend
 
@@ -3605,3 +3628,27 @@ selected-mode help visible. These are intentional UI additions, not extra slack;
 records the measured sizes without folding another branch's fragment or changing
 the shared baseline. Native browser tests
 cover all three throttle modes and opening/closing the disclosure.
+
+## 2026-10-20 — design integration wave 2 (#3169)
+
+`js/car/car3d.js` lines 2548 → **2618** (+70). Deliberate raise past the 40-line absorb: wave 2
+merges six design lanes Bryce approved one by one, each under the absorb on its own branch, and the
+union crosses it. Net lines per lane in car3d.js: D6b rounded exhaust tip +20, D9b floor rail
+smoothing and vertical fence ends +17, D1c body styles via #3160 +23, D8b shrunk rounded nose camera
++16, D7b flush fuel hatch −7, D5c livery stations ±0 (its geometry lives in
+`js/car/livery-stations.js`). Extraction was weighed and not done here: each is a few lines of
+geometry inside `build`'s own emit closure, and a new car module needs a `tools/manifest.cjs` entry,
+which is a shared contract outside this integration PR's scope.
+
+## 2026-10-20 — #3162 + #3177 landed back to back: car3d.js +6 lines
+
+`js/car/car3d.js` lines 2686 → 2692. Each PR fit the ceiling on its own; merged one after the other
+(7165753a #3162 D1d concept bodies/aero, then e27a17a9 #3177 post-Bundle-A fit rows: single-pipe
+root cap, DRS pod tail cut, Smooth Case notch, Hooded Exit visor post) their deltas summed past it,
+and the deploy tip went red on `ratchets.test.mjs`. Raised on Bryce's in-session answer to L25
+("Raise ceiling", 2026-10-20); #3177's own hunks had already been compacted by 7 lines to fit, so
+the +6 is the overlap of the two merges, not new geometry. No extraction here: both sets of lines
+sit inside `build`'s emit closures beside the parts they shape. The same `--update` also records
+the tree's `dynamicIdReads` falling 74 → 73 (a measured lowering, not a raise).
+
+- 2026-10-20 `dynamicIdReads` 72 -> 73 (+1): double-counted auto-lower from two fragments measured off the same base 74; restoring the true count 73, no code growth.

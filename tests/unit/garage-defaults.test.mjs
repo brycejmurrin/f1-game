@@ -19,6 +19,7 @@ import { check, readDefaults, isGarageKey } from "../../tools/gen/garage-default
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
@@ -54,9 +55,12 @@ function load(diskSeed) {
     + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx);
   vm.runInContext(fs.readFileSync(STORE_SRC, "utf8")
     + "\n;globalThis.GameStore = GameStore;", ctx);
-  // SettingsExport needs Log + Teams.sanitizeCustom stubs for applyGarage.
+  // Garage imports share the real team/catalog/custom-paint normalization.
   ctx.Log = { info() {}, warn() {}, error() {} };
-  ctx.Teams = { sanitizeCustom: (v) => v };
+  for (const [file, name] of [["js/data/teams.js", "Teams"], ["js/car/liveries.js", "Liveries"], ["js/car/custom-liveries.js", "CustomLiveries"]]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8")
+      + "\n;globalThis." + name + " = " + name + ";", ctx);
+  }
   vm.runInContext(fs.readFileSync(EXPORT_SRC, "utf8")
     + "\n;globalThis.SettingsExport = SettingsExport;", ctx);
   return ctx;
@@ -205,11 +209,6 @@ test("part and livery ids match the source export verbatim", () => {
     assert.deepEqual(def[k], exp.garage[k], k);
   }
   assert.equal(Object.keys(def).length, Object.keys(exp.garage).length);
-  // Spot-check the ids the player-facing brief called out.
-  assert.equal(def.team, 3);
-  assert.equal(def["livery.haas"], "custom_17893761682261");
-  assert.equal(def["parts.mercedes"].engine, "sig_mercedes_zero");
-  assert.equal(def["parts.racingbulls"].tyres, "sig_rb_street");
 });
 
 test("garage-defaults.js loads before the store in the manifest", () => {
@@ -271,57 +270,48 @@ test("getStored answers what the player wrote, never a shipped default", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(store.getStored("parts.legends"))), { engine: "mine" });
 });
 
-// Parts + Teams in a VM (shared by the tripwire and the setup-sheet gate test).
+// Parts + Teams in a VM (used by the setup-sheet gate test).
 function loadPartsVm() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, String, JSON, isFinite, Map, Set });
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   return { ctx, ...vm.runInContext("({ Teams, Parts, M4 })", ctx) };
 }
-const overBudgetBuilds = (Teams, Parts, GarageDefaults) => {
-  const over = [];
-  let checked = 0;
-  for (const k of GarageDefaults.keys()) {
-    if (!k.startsWith("parts.")) continue;
-    const team = Teams.LIST.find((t) => t.id === k.slice("parts.".length));
-    if (!team) continue;
-    checked++;
-    const cost = Parts.getCost(GarageDefaults.get(k), team);
-    if (cost > Parts.BUDGET) over.push({ team, key: k, cost });
+// A build every swap of which still ends over cap: the most expensive available option in
+// every category. Built here, not read from the shipped defaults, so the gate test below does
+// not depend on what the shipped builds cost (FREE BUILD is the default, which made the old
+// "only while FREE BUILD ships on" tripwire unable to fail).
+function overCapBuild(Teams, Parts) {
+  const team = Teams.LIST.find((t) => t.id === "mclaren");
+  const build = {};
+  for (const cat of Parts.CATALOG) {
+    const avail = cat.options.filter((o) => Parts.isOptionAvailable(o, team));
+    build[cat.id] = avail.reduce((a, o) => (o.cost > a.cost ? o : a), avail[0]).id;
   }
-  return { over, checked };
-};
+  const cost = Parts.getCost(build, team);
+  let biggestSaving = 0;
+  for (const cat of Parts.CATALOG) for (const o of cat.options) {
+    if (!Parts.isOptionAvailable(o, team) || o.id === build[cat.id]) continue;
+    biggestSaving = Math.max(biggestSaving, cost - Parts.getCost(Object.assign({}, build, { [cat.id]: o.id }), team));
+  }
+  return { team, key: "parts." + team.id, build, cost, biggestSaving };
+}
 
-// TRIPWIRE, not a guard: it passes whenever FREE BUILD ships on (the current
-// default), so it only goes red if someone turns FREE BUILD off while the
-// shipped builds are still over cap. The gate that makes an over-cap build
-// usable (or not) is pinned by the setup-sheet test below.
-test("tripwire: shipped parts builds over Parts.BUDGET are only tolerated while FREE BUILD ships on", () => {
-  const { Teams, Parts } = loadPartsVm();
-  const { GameStore, GarageDefaults } = load();
-  const free = GameStore.store.get("unlimitedBudget", false) === true;
-  const { over, checked } = overBudgetBuilds(Teams, Parts, GarageDefaults);
-  assert.ok(checked >= 10, `expected a build per team, saw ${checked}`);
-  assert.ok(over.length === 0 || free,
-    "shipped builds over budget while FREE BUILD is off — no row would be clickable:\n"
-    + over.map((o) => `${o.team.id}: ${o.cost} > ${Parts.BUDGET}`).join("\n"));
-});
-
-test("setup sheet: a swap on an over-cap shipped build is accepted only while G.unlimitedBudget", () => {
+test("setup sheet: a swap on an over-cap build is accepted only while G.unlimitedBudget", () => {
   // js/garage/setup-sheet.js rejects any swap whose total ends over cap —
   // downgrades included — unless unlimited. With the shipped builds over cap,
   // FREE BUILD is what makes a single row clickable.
   const { ctx, Teams, Parts } = loadPartsVm();
-  const { GarageDefaults } = load();
-  const { over } = overBudgetBuilds(Teams, Parts, GarageDefaults);
-  assert.ok(over.length > 0, "the premise: at least one shipped build is over the cap");
-  const { team, key } = over[0];
+  const over = overCapBuild(Teams, Parts);
+  assert.ok(over.cost - over.biggestSaving > Parts.BUDGET,
+    `the premise: no single swap can bring the build (${over.cost}) back under the cap (${Parts.BUDGET}) — saving at most ${over.biggestSaving}`);
+  const { team } = over;
   const run = (unlimitedBudget) => {
     const dom = makeDom();
     const saved = [];
-    const build = JSON.parse(JSON.stringify(GarageDefaults.get(key)));
+    const build = Object.assign({}, over.build);
     const catId = Parts.CATALOG.find((c) => c.options.length > 1
       && c.options.some((o) => o.id !== build[c.id] && Parts.isOptionAvailable(o, team))).id;
     const cat = Parts.CATALOG.find((c) => c.id === catId);
@@ -350,9 +340,9 @@ test("setup sheet: a swap on an over-cap shipped build is accepted only while G.
     ctx.GameStore = { store: { get: (key, fallback) => tuneStore.has(key) ? tuneStore.get(key) : fallback,
       set: (key, value) => value === undefined ? tuneStore.delete(key) : tuneStore.set(key, value) } };
     for (const file of ["js/garage/setup-tune.js", "js/garage/setup-experiments.js"])
-      vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: file });
+      vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc(file) });
     const SetupUI = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8").replace(/^const\b/gm, "var")
-      + "\n;SetupUI", ctx, { filename: "js/garage/setup-sheet.js" });
+      + "\n;SetupUI", ctx, { filename: absSrc("js/garage/setup-sheet.js") });
     const ui = SetupUI.create(G);
     ui.openSetup();
     const rows = dom.byId("cs-options").querySelectorAll(".cs-opt")
@@ -389,7 +379,7 @@ test("a fresh garage preserves the uploaded setup sheet, including deliberate tu
   });
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/garage/setup-tune.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const S = vm.runInContext("SetupTune", ctx);
   const shipped = Object.keys(def).filter((k) => k.startsWith("setup."));
   assert.ok(shipped.length > 0);

@@ -65,8 +65,8 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
  *  so at most LANES selected legs run fleet-wide at once and the rest wait in
  *  FIFO order WITHOUT holding a runner or being cancelled (up to 100 pending per
  *  group; https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax,
- *  `concurrency.queue`). ready-full-cap.mjs still caps whole ready RUNS at the
- *  desk; this caps legs in GitHub.
+ *  `concurrency.queue`). No tool caps whole ready RUNS any more (#3013);
+ *  this caps legs in GitHub.
  *  24, measured 2026-10-15 22:43Z: 17 ready runs held 2–22 legs each (median
  *  ~9, not the ~4 the first value of 12 assumed), 55 legs sat pending in lanes
  *  while only 17–22 of the 40 Linux slots ran. 24 lanes + the train's own legs
@@ -102,6 +102,10 @@ export const FIXED_GATE_SPECS = new Set([
 // put them on a selected command.
 export const MANUAL_OPT_IN_SPECS = new Set([
   "tests/specs/material-shimmer.spec.js",
+  // WebKit iPhone-path proxy (#2705): only webkit-leg.yml / `npm run test:webkit`
+  // (APEX_WEBKIT=1 / --project=webkit). Chromium selected/oversize jobs cannot
+  // launch WebKit and must not schedule this file.
+  "tests/specs/webkit-boot.spec.js",
 ]);
 
 /** Fold a numeric constant expression: literals, `+ - * /`, unary `-`, and a

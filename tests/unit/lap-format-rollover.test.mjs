@@ -13,14 +13,15 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
 function model() {
   const ctx = vm.createContext({ Math, Number, String, Array, Object, isFinite });
-  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "mat4.js" });
-  vm.runInContext(read("js/data/telemetry-model.js"), ctx, { filename: "telemetry-model.js" });
+  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/data/telemetry-model.js"), ctx, { filename: absSrc("js/data/telemetry-model.js") });
   return vm.runInContext("DataTelemetryModel", ctx);
 }
 const evalFn = (src) => vm.runInContext("(" + src + "\n)", vm.createContext({ Math, isFinite }));

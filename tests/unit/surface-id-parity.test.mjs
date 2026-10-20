@@ -18,6 +18,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
+import { bootGlx } from "../helpers/glx-mock.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -32,8 +36,11 @@ const BACKENDS = {
          bound: /surfaceId\.lessThanEqual\((\d+)(?:\.0)?\)/ },
 };
 
+// Comments out first: a commented-out `surfaceId == 24` branch must not satisfy
+// the scan (shader text lives in template strings, which use the same // and /* */).
+const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'\\])\/\/[^\n]*/g, "$1");
 const idsIn = (b) => {
-  const src = read(b.file);
+  const src = stripComments(read(b.file));
   return { ids: new Set([...src.matchAll(b.re)].map((m) => Number(m[1]))),
            bound: Number((src.match(b.bound) || [])[1]) };
 };
@@ -65,13 +72,21 @@ test("classifiedCar's upper bound covers every id each backend branches on", () 
 });
 
 test("every id the shaders branch on is a real Car3D surface, and vice versa", () => {
-  // SURFACES / FINISH_SURFACE live in car-materials.js (pure-moved from car3d); Car3D re-exports them.
-  const mats = read("js/car/car-materials.js");
-  const block = mats.slice(mats.indexOf("const SURFACES = Object.freeze({"));
-  const declared = new Set([...block.slice(0, block.indexOf("});")).matchAll(/:\s*(\d+)/g)]
-    .map((m) => Number(m[1])).filter((n) => n >= 20));
-  const finish = mats.slice(mats.indexOf("const FINISH_SURFACE = Object.freeze({"));
-  for (const m of finish.slice(0, finish.indexOf("});")).matchAll(/:\s*(\d+)/g)) declared.add(Number(m[1]));
+  // SURFACES / FINISH_SURFACE live in car-materials.js (pure-moved from car3d); the
+  // REAL tables, evaluated, not a regex over them.
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/car/car-materials.js").replace(/^const CarMaterials\b/m, "var CarMaterials"), ctx, { filename: absSrc("js/car/car-materials.js") });
+  const { SURFACES, FINISH_SURFACE } = ctx.CarMaterials;
+  const all = new Set([...Object.values(SURFACES), ...Object.values(FINISH_SURFACE)]);
+  // The low ids are the unclassified path (custom: 0 takes the default shading):
+  // no shader may branch on one, and every one must sit below classifiedCar's 20.
+  const low = [...all].filter((id) => id < 20);
+  assert.deepEqual(low, [SURFACES.custom], "the only low surface id is `custom`, the default path");
+  for (const [name, b] of Object.entries(BACKENDS)) {
+    const lowBranch = [...idsIn(b).ids].filter((id) => id < 20);
+    assert.deepEqual(lowBranch, [], `${name} branches on low surface id ${lowBranch.join(", ")}: classifiedCar never reaches it`);
+  }
+  const declared = new Set([...all].filter((n) => n >= 20));
   assert.ok(declared.size >= 8, `only ${declared.size} car surfaces parsed — the scanner stopped matching`);
 
   const shader = idsIn(BACKENDS.GLX).ids;
@@ -383,4 +398,39 @@ test("no material pack means no baked mix on WGX, as on GLX", () => {
   assert.ok(fn, "WGX: fn applyMaterial not found");
   assert.match(fn[0], /let hoisted = packOn && [^;]*matScale\(mid\) > 0\.0;/,
     "WGX: the hoisted baked-albedo path must require matScale(mid) > 0, as GLX/TLX do");
+});
+
+// garage-perf-2026-10-20 finding 2: the finish 60-85 AA inputs + tint switch run on car-paint draws only, behind a
+// per-draw flag (GLX uCarFinish, WGX DrawU.mat3.z, TLX packB.w; the TLX half is in tlx-hunt3). These run the real code.
+test("carFinish: every car-paint source sets it, and GLX / WGX hand it to the shader per draw", () => {
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) } });
+  vm.runInContext(read("js/fx/grade-tint.js") + "\n;this.GradeTint = GradeTint;", ctx, { filename: absSrc("js/fx/grade-tint.js") });
+  const LT = { carGloss: 1, carMetal: 1, carSpecular: 1, carClearcoat: 1, carGlow: 1 };
+  const GT = ctx.GradeTint;
+  for (const k of ["PAINT_WET_NIGHT", "PAINT_WET_DAY", "PAINT_DRY_NIGHT", "PAINT_DRY_DAY"])
+    assert.equal(GT.carPaint(GT[k], LT).carFinish, true, `${k}: the race / mirror / garage turntable car paint bag`);
+  // The garage floor reflection draws the car with its own bag: it keeps the finish tints too.
+  const scene = read("js/garage/scene.js"), at = scene.indexOf("const MIRROR_RESOLVE = ");
+  assert.ok(at > 0, "MIRROR_RESOLVE moved — re-point this check");
+  const lit = scene.slice(at + "const MIRROR_RESOLVE = ".length, scene.indexOf(";", at));
+  assert.equal(vm.runInNewContext("(" + lit + ")", { MIRROR_BIAS: [0, 0] }).carFinish, true, "the garage floor reflection");
+
+  const h = bootGlx();
+  const mesh = h.GLX.createMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
+  const model = new Float32Array(16); model[0] = model[5] = model[10] = model[15] = 1;
+  const flag = () => h.calls.filter((c) => c[0] === "uniform1f" && c[1][0] && c[1][0].name === "uCarFinish").map((c) => c[1][1]);
+  h.GLX.begin(h.frame());
+  h.reset(); h.GLX.draw(mesh, model, { carPaint: 1, carFinish: true });
+  assert.deepEqual(flag(), [1], "GLX: a car-paint draw uploads uCarFinish = 1");
+  h.reset(); h.GLX.draw(mesh, model, { roughness: 0.6 });
+  assert.deepEqual(flag(), [0], "GLX: a non-car draw turns it off");
+
+  const wgx = read("js/render/webgpu/wgx.js");
+  const ring = new Float32Array(64 * 2);
+  const writeDraw = vm.runInNewContext("(" + fnSource(wgx, "function _writeDraw(") + ")", {
+    DRAW_F32_STRIDE: 64, drawRing: ring, IDENT: new Float32Array(16), LAMP_MASK_ALL: 16777215 });
+  writeDraw(0, null, { carPaint: 1, carFinish: true });
+  writeDraw(1, null, { roughness: 0.6 });
+  assert.equal(ring[30], 1, "WGX: DrawU.mat3.z (lane 30) is 1 on a car-paint draw");
+  assert.equal(ring[64 + 30], 0, "WGX: 0 on every other draw (ring slots are reused)");
 });

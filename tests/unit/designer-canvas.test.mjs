@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bootEditor, read, plain, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 /** The canvas module on the engine VM, a recording context and manual timers. */
 function boot(hooksExtra = {}, pts = null, wrapShape = null) {
@@ -29,8 +30,8 @@ function boot(hooksExtra = {}, pts = null, wrapShape = null) {
   ctx.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { fn, ms }); return id; };
   ctx.clearTimeout = (id) => { timers.delete(id); };
   const runTimers = () => { const due = [...timers.entries()]; timers.clear(); for (const [, t] of due) t.fn(); return due.length; };
-  vm.runInContext(read("js/editor/scenery-preview.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/editor/scenery-preview.js" });
-  vm.runInContext(read("js/editor/canvas.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/editor/canvas.js" });
+  vm.runInContext(read("js/editor/scenery-preview.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/editor/scenery-preview.js") });
+  vm.runInContext(read("js/editor/canvas.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/editor/canvas.js") });
   const DC = ctx.DesignerCanvas;
   const canvas = dom.document.createElement("canvas");
   canvas._rect = { left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400 };

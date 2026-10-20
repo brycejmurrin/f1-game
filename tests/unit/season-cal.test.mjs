@@ -24,6 +24,7 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -72,7 +73,7 @@ function load(stored0, tracks0) {
   });
   seedLog(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
-  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx, { filename: absSrc("js/career/season-cal.js") });
   return {
     S: vm.runInContext("SeasonCal", ctx), stored, tracks, store: ctx.GameStore.store,
     writes: (key) => revisions.get(key) || 0,   // how many times `key` was written (bumps count too)
@@ -1105,7 +1106,7 @@ test("the champion is the season.pts leader even when that seat is no longer on 
   };
   const ctx = vm.createContext({ document: { createElement: mk }, SeasonCal: S, Teams: { LIST: [], POINTS }, GameAudio: {} });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResults = GameResults;", ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResults = GameResults;", ctx, { filename: absSrc("js/ui/results-sheet.js") });
   ctx.GameResults.create(G).buildChampion();
   assert.deepEqual(said, ["YOU IS WORLD CHAMPION!"], "the table leader, not the best car on the final grid");
   const ranking = els.resultsTable.children.find((r) => r.getAttribute("role") === "list"

@@ -11,6 +11,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -27,7 +28,7 @@ function boot(document, extras = {}) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/camera/replay-buf.js"), ctx, { filename: "replay-buf.js" });
+  vm.runInContext(src("js/camera/replay-buf.js"), ctx, { filename: absSrc("js/camera/replay-buf.js") });
   return vm.runInContext("ReplayBuf", ctx);
 }
 
@@ -128,7 +129,7 @@ test("instant replay cuts the drone tether on entry, explicit seeks, LAST and ex
       }, curvature: () => 0,
     } });
   for (const file of ["js/core/mat4.js", "js/camera/extra-rigs.js", "js/camera/replay-buf.js"])
-    vm.runInContext(src(file), ctx, { filename: file });
+    vm.runInContext(src(file), ctx, { filename: absSrc(file) });
   const { ExtraRigs, ReplayBuf: R } = vm.runInContext("({ExtraRigs, ReplayBuf})", ctx);
   const c = { s: 0, x: 0, px: 0, py: 0, pz: 0, head: 0, speed: 60 };
   const G = { cars: [c], track: { total: 10000 }, raceT: 10 };
@@ -775,4 +776,24 @@ test("frame controls use adjacent recorded samples across gaps, discontinuities 
   assert.ok(cuts >= 3);
   api.endScrub();
   assert.deepEqual(field[0], before, "live pose and absent interpolation fields are restored exactly");
+});
+
+
+test("ring byte accounting includes Float64 timestamps and separates fixed typed-array state", () => {
+  const allocations = [];
+  const tracked = Type => class extends Type { constructor(...args) { super(...args); allocations.push(this); } };
+  const R = boot(undefined, { Float32Array: tracked(Float32Array), Float64Array: tracked(Float64Array), Uint8Array: tracked(Uint8Array) });
+  const G = { cars: cars(24), raceTime: 0 };
+  const r = R.create(G); r.reset(G.cars);
+  assert.equal(R.frameBytes(24), 8 + 24 * (9 * 4 + 1) + 1);
+  const info = r.window();
+  const capacity = R.capacityFor(24);
+  assert.equal(info.allocatedBytes, R.frameBytes(24) * capacity);
+  assert.equal(info.fixedBytes, 3 * 9 * 4 + 24);
+  assert.equal(info.allocatedBytes + info.fixedBytes, allocations.reduce((n, a) => n + a.byteLength, 0));
+  assert.equal(info.bytes, 0, "empty ring reports no populated frames but still reserves capacity");
+  assert.ok(info.allocatedBytes <= R.MAX_BYTES);
+  r.sample(0, G.cars); r.sample(1 / R.HZ, G.cars);
+  assert.equal(r.window().bytes, R.frameBytes(24) * r.window().frames);
+  assert.equal(r.window().allocatedBytes, info.allocatedBytes);
 });

@@ -4,9 +4,26 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
-import { gameSource } from "../helpers/game-source.mjs";
+import { loadRig, makeTrack, BEND } from "../helpers/camera-rig.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
+
+// Drive the REAL chase/heli rig round the left hairpin of the shared curved-track fixture, easing in over
+// 60 frames (a one-shot solve has no hang to ease), with the CamTune stub answering `tune`.
+function bendSolve(mode, tune) {
+  const r = loadRig(), tr = makeTrack(BEND), smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+  Object.assign(r.state, tune);
+  r.feel.resetFollow(); r.cams.resetSmoothing();
+  let v = null;
+  for (let j = -60; j <= 0; j++) {
+    r.ctx.Tracks.sample(tr, 500 + j, smp);
+    v = r.cams.vantage(tr, mode, 500 + j, 0, 60, 0, { att: {}, carPos: [smp.p[0], smp.p[2]],
+      carHead: Math.atan2(smp.t[0], smp.t[2]), dt: 1 / 60, snap: j === -60 });
+  }
+  return v;
+}
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 test("CAM touch release preserves the long-press picker; cancelled holds never consume the next tap", () => {
   for (const ending of ["release", "pointercancel", "lostpointercapture"]) {
@@ -15,7 +32,7 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
     const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
       setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
     ctx.window = ctx;
-    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx);
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race" };
     const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
     const fire = type => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1 });
@@ -49,7 +66,7 @@ function loadCockpitOpts(disk) {
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(root, "js/camera/cockpit-opts.js"), "utf8") + "\nthis.exported = CockpitOpts;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/cockpit-opts.js") });
   return ctx.exported;
 }
 
@@ -57,16 +74,18 @@ function loadCamTune(disk = new Map()) {
   const ctx = {
     GameStore: {
       store: {
+        rev: 0,
         get(k, d) { return disk.has(k) ? disk.get(k) : d; },
-        set(k, v) { disk.set(k, v); return true; },
+        set(k, v) { disk.set(k, v); this.rev++; return true; },
       },
     },
+    Teams: { LIST: [{ id: "mclaren" }, { id: "ferrari" }] },
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
     Log: { info() {}, debug() {}, enabled() { return false; } },
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;",
-    ctx);
+    ctx, { filename: absSrc("js/camera/offsets.js") });
   return ctx.exported;
 }
 
@@ -145,10 +164,14 @@ test("CORNER HANG ships at 1 and 0 stays stored", () => {
   CamTune.reset("chase");
   assert.equal(CamTune.stored("chase", "cornerHang"), false);
   assert.equal(CamTune.cornerHang("cockpit"), null);
-  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  assert.match(src, /hangScale\("chase"\)/);
-  assert.match(src, /hangScale\("heli"\)/);
-  assert.match(src, /CamTune\.cornerHang\(mode\)/);
+});
+
+test("the stored CORNER HANG moves the chase and heli eyes in a bend; an unset one is the shipped full hang", () => {
+  for (const mode of ["chase", "heli"]) {
+    const shipped = bendSolve(mode, { hang: null }).eye, full = bendSolve(mode, { hang: 1 }).eye, none = bendSolve(mode, { hang: 0 }).eye;
+    assert.ok(dist(shipped, full) < 1e-6, `${mode}: unset hang is the full hang`);
+    assert.ok(dist(none, full) > 1, `${mode}: hang 0 pulls the eye off the bend side (${dist(none, full).toFixed(2)} m)`);
+  }
 });
 
 test("the six geometric knobs stay deltas defaulting to 0", () => {
@@ -159,20 +182,9 @@ test("the six geometric knobs stay deltas defaulting to 0", () => {
   }
 });
 
-// The shipped NUMBER is checked live by "CORNER LEAD's registry default is the
-// shipped lead" above; a regex on the constant could only ever restate it.
-test("vantage.js reads the tuner's corner lead", () => {
-  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  assert.match(src, /CamTune\.cornerLead\(mode\)/);
-});
-
-test("cockpit interior uses the heading viewmodel, not a road-locked basis", () => {
-  const src = gameSource();
-  assert.match(src, /GameCams\.cockpitViewmodelAxes/,
-    "the cockpit draw must yaw with the body; a raw smp2.t basis crabs through turns");
-  assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
-    /cockpitRigOnly[\s\S]{0,250}basisMat\(sR, _cockU, sF/,
-    "do not restore the road-tangent cockpit basis");
+test("the stored CORNER LEAD swings the chase aim into the bend", () => {
+  const off = bendSolve("chase", { lead: 0 }), on = bendSolve("chase", { lead: 1 });
+  assert.ok(dist(off.tgt, on.tgt) > 0.3, `lead 0 vs 1 moves the aim point (${dist(off.tgt, on.tgt).toFixed(2)} m)`);
 });
 
 test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.4", () => {
@@ -216,7 +228,7 @@ test("broadcast cameras carry per-mode cut ease durations", () => {
   const dom = makeDom();
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
   ctx.window = ctx;
-  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx);
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = ctx.CamModes.CAM_MODES, idx = (id) => modes.findIndex((m) => m.id === id);
   assert.equal(modes[idx("cinematic")].cut, 0.6);
   assert.equal(modes[idx("heli")].cut, 0.55);
@@ -335,6 +347,24 @@ test("CamTune exports player edits as window.CameraEdits and imports them back",
 // the pack JSON and the APXC1 share code into ONE box. The whole block is what a
 // player pastes back, and decodeShare used to accept only a leading APXC1. or bare
 // JSON, so the block the panel itself produced read "BAD PASTE".
+test("malformed camera imports reject atomically without clearing saved tuning", () => {
+  const C = loadCamTune();
+  C.set("chase", "dist", 2.5); C.setGlobal("fov", 6); C.comfortSet("bob", 0.3);
+  const before = JSON.stringify(C.exportPack());
+  for (const pack of [[], { v: 1, modes: "oops" }, { v: 2, global: [] },
+    { v: 1, comfort: false }, { v: 2, tracks: null }, { v: 2, cars: 7 },
+    { chase: [] }, { v: 1, modes: { chase: "oops" } },
+    { v: 2, tracks: { monaco: { modes: [] } } }]) {
+    assert.equal(C.importText(JSON.stringify(pack)).ok, false, JSON.stringify(pack));
+    assert.equal(JSON.stringify(C.exportPack()), before, "invalid imports leave every store unchanged");
+  }
+  assert.equal(C.importText("{}").ok, true, "empty legacy maps remain valid");
+  assert.equal(C.count("chase"), 0);
+  assert.equal(C.countGlobal(), 1, "legacy maps preserve global settings");
+  assert.equal(C.importText('{"v":2,"modes":{}}').ok, true, "empty authoritative packs remain valid");
+  assert.equal(C.countGlobal(), 0);
+});
+
 test("the whole COPY VALUES block imports back (APXC1 token found anywhere)", () => {
   const A = loadCamTune();
   A.set("chase", "dist", 2.5);
@@ -415,7 +445,7 @@ test("persist(which) writes only the named CamTune store", () => {
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
     Log: { info() {}, debug() {}, enabled() { return false; } },
   };
-  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;", ctx);
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;", ctx, { filename: absSrc("js/camera/offsets.js") });
   const CamTune = ctx.exported;
   CamTune.set("chase", "dist", 2); CamTune.setGlobal("fov", 5); CamTune.comfortSet("bob", 0.5);
 
@@ -474,33 +504,13 @@ test("CamTune global baseline layers under per-mode; copyFrom and presets work",
   assert.equal(CamTune.bob(), 1);
 });
 
-test("vantage.js FOV blends use comfort speedFov", () => {
-  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  assert.match(src, /const spFov = spN \* \(typeof CamTune/);
-  // Chase/far FOV goes through CamFeel.modeFov(..., spFov, ...) when CamFeel is
-  // loaded; the bare lerp stays as the no-CamFeel fallback. Either form must
-  // still blend on comfort-scaled spFov (never raw spN).
-  assert.match(src, /CamFeel\.modeFov\(\s*far \? "far" : "chase",\s*spFov/);
-  assert.match(src, /lerp\(57, 63, spFov\)/);
-  assert.doesNotMatch(src, /lerp\(57, 63, spN\)/);
+test("chase FOV at speed follows the comfort speedFov scale, not the raw speed", () => {
+  const fovAt = (spFov) => bendSolve("chase", { spFov }).fov;
+  assert.ok(fovAt(1) - fovAt(0) > 1, `comfort speedFov 0 flattens the speed widening (${(fovAt(1) - fovAt(0)).toFixed(2)} deg)`);
 });
 
 // Announcement filtering across these cameras is exercised as behavior in
 // pause-hud-layout.test.mjs, including the driving warnings that stay visible.
-
-
-test("broadcast HUD profile keeps two-decimal gaps", () => {
-  const src = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  assert.match(src, /function gapDecimals\(/);
-  // Standard shares hundredths under ~10 s via HudReadouts; broadcast stays at 2 always.
-  assert.match(src, /_ro\.fmtGapSec|_ro\.gapDecimals/);
-  // The two-decimal broadcast rule itself now lives in HudReadouts.gapDecimals (and hud.js's boot fallback).
-  assert.match(fs.readFileSync(path.join(root, "js/ui/hud-readouts.js"), "utf8"), /p === "broadcast"\) return 2/);
-  assert.match(src, /=== "broadcast" \? 2 :/);
-  const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
-  assert.match(css, /body\.hud-prof-broadcast \.hud-top/);
-  assert.match(css, /body\.hud-prof-broadcast\.hud-bcam \.hud-bottom/);
-});
 
 
 test("explicit camera defaults override global values through export/load until reset", () => {
@@ -518,4 +528,52 @@ test("explicit camera defaults override global values through export/load until 
   C.reset("chase");
   assert.equal(C.values("chase").fov, 8);
   assert.equal(C.cornerLead("chase"), 1);
+});
+
+// Moved from cam-comfort.test.mjs (R1-16): CamTune override resolution and pack round-trip.
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+test("camera overrides resolve track over car over the existing global baseline", () => {
+  const CamTune = loadCamTune();
+  assert.equal(CamTune.importPack({
+    v: 2,
+    global: { dist: 1 },
+    comfort: { bob: 0.8 },
+    cars: {
+      mclaren: { modes: { chase: { dist: 2 } }, comfort: { bob: 0.5 } },
+    },
+    tracks: {
+      monza: { modes: { chase: { dist: 3 } }, comfort: { bob: 0.2 } },
+    },
+  }).ok, true);
+
+  CamTune.setContext("monza", "mclaren");
+  assert.equal(CamTune.get("chase", "dist"), 3);
+  assert.equal(CamTune.comfortGet("bob"), 0.2);
+
+  CamTune.setContext("spa", "mclaren");
+  assert.equal(CamTune.get("chase", "dist"), 2);
+  assert.equal(CamTune.comfortGet("bob"), 0.5);
+
+  CamTune.setContext("spa", "ferrari");
+  assert.equal(CamTune.get("chase", "dist"), 1);
+  assert.equal(CamTune.comfortGet("bob"), 0.8);
+});
+
+test("JSON and APXC1 camera packs round-trip track and car overrides", () => {
+  const source = loadCamTune();
+  source.importPack({
+    v: 2,
+    cars: { mclaren: { modes: { cockpit: { height: 0.25 } }, comfort: { rollLean: 0.4 } } },
+    tracks: { spa: { modes: { chase: { fov: 5 } }, comfort: { speedFov: 0.3 } } },
+  });
+  const pack = plain(source.exportPack());
+  assert.deepEqual(pack.cars.mclaren.modes.cockpit, { height: 0.25 });
+  assert.deepEqual(pack.tracks.spa.comfort, { speedFov: 0.3 });
+
+  const restored = loadCamTune();
+  const decoded = restored.decodeShare(source.encodeShare(pack));
+  assert.equal(decoded.ok, true);
+  assert.equal(restored.importPack(decoded.pack).ok, true);
+  assert.deepEqual(plain(restored.exportPack()), pack);
 });

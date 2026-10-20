@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -229,7 +230,7 @@ test("the row carries each team's code for the painter", () => {
 function loadPainter(sandbox) {
   const ctx = vm.createContext(Object.assign({ Math, Object, Array, Number, String, JSON, Error, Float32Array,
     console, Log: { warn() {}, info() {}, error() {}, debug() {} } }, sandbox));
-  for (const f of ["js/track/core/pit.js", "js/garage/pit-signs.js"]) vm.runInContext(read(f), ctx, { filename: f });
+  for (const f of ["js/track/core/pit.js", "js/garage/pit-signs.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   return vm.runInContext("PitSigns", ctx);
 }
 
@@ -264,9 +265,10 @@ test("with a canvas and the livery painter it paints twelve cells and uploads on
   // …and the entrance lamps' RED aspects as a SECOND mesh on the same
   // texture (track.pitSignal), drawn only while this car is called in.
   const sigMesh = up.filter((u) => u[0] === "mesh");
-  assert.equal(sigMesh.length, t.pitSignal ? 2 : 1, "the green aspects are their own mesh");
-  if (t.pitSignal) assert.equal(sigMesh[1][1].idx.length, t.pitSignal.idx.length);
-  up.splice(up.findIndex((u) => u[0] === "mesh" && u[1].idx.length === (t.pitSignal ? t.pitSignal.idx.length : -1)), t.pitSignal ? 1 : 0);
+  assert.ok(t.pitSignal, "the FULL fixture builds the entrance signal (the red-aspect mesh asserted below must exist)");
+  assert.equal(sigMesh.length, 2, "the green aspects are their own mesh");
+  assert.equal(sigMesh[1][1].idx.length, t.pitSignal.idx.length);
+  up.splice(up.findIndex((u) => u[0] === "mesh" && u[1].idx.length === t.pitSignal.idx.length), 1);
   // Array.from: the boxes live in the track VM's realm, and a strict deepEqual
   // compares prototypes across realms.
   const teams = Array.from(t.pit.row.boxes, (b) => b.team);

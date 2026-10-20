@@ -10,8 +10,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import { loadCar3D } from "../../tools/car/cockpit-pale-sweep.mjs";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -25,10 +27,10 @@ function loadOpts(disk, search = "", withCams = false) {
     location: { search },
     Tracks: {}, CamTune: { get: () => 0, cornerLead: () => 0, apply: (_, __, ___, fov) => fov },
   });
-  vm.runInContext(read("js/camera/cockpit-opts.js") + "\n;this.CockpitOpts = CockpitOpts;", ctx);
+  vm.runInContext(read("js/camera/cockpit-opts.js") + "\n;this.CockpitOpts = CockpitOpts;", ctx, { filename: absSrc("js/camera/cockpit-opts.js") });
   if (withCams) {
-    vm.runInContext(read("js/core/mat4.js"), ctx);
-    vm.runInContext(read("js/camera/vantage.js") + "\n;this.GameCams = GameCams;", ctx);
+    vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
+    vm.runInContext(read("js/camera/vantage.js") + "\n;this.GameCams = GameCams;", ctx, { filename: absSrc("js/camera/vantage.js") });
   }
   return { opts: ctx.CockpitOpts, cams: ctx.GameCams, store };
 }
@@ -38,9 +40,9 @@ function loadMesh(extra = {}, gfxExtra = {}) {
   const ctx = { Log: { info() {}, warn() {}, error() {} }, GaragePrims: { block() {} }, ...extra };
   ctx.window=ctx;
   vm.createContext(ctx);
-  vm.runInContext(read("js/core/mat4.js"),ctx);
-  vm.runInContext(read("js/physics/consts.js"),ctx);
-  vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: "car-mesh.js" });
+  vm.runInContext(read("js/core/mat4.js"),ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/physics/consts.js"),ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({
     createMesh(d) { const m = { d }; made.push(m); return m; },
     freeMesh(m) { freed.push(m); },
@@ -170,16 +172,60 @@ test("the interiors build inside the tub, keyed by livery, and only CLASSIC has 
   assert.ok(mx[1] < 0.90, "the screen's top stays under the HIGH seat's eye line");
 });
 
-test("the rig draws the chosen wheel, seat and interior; a screenless wheel gives the HUD back", () => {
+// THE RIG, RUN: the real CarDraw.drawCockpitRig (tests/helpers/car-draw-vm.mjs;
+// CarMesh's getters are recorded by name) under the REAL CockpitOpts, so the
+// chosen wheel, seat and interior are read from what it DRAWS, not its text.
+test("the rig draws the chosen wheel at the seat's mount and the interior; NONE and screenless wheels stop early", () => {
+  const v = carDrawVm({ cam: "cockpit" });
+  const { ctx, G } = v;
+  // The real CockpitOpts (layout, wheelHasScreen), from its own loader; the rig reads it as a global.
+  const real = loadOpts({}).opts;
+  ctx.CockpitOpts = Object.assign({}, real, { haloSize: () => 2, body: () => "standard" });
+  ctx.Car3D.cockpitMirrorGlass = () => [];
+  // The roll curve's two numbers (the helper's CarMesh records every getter by name).
+  ctx.CarMesh = new Proxy({}, { get: (_o, k) => k === "WHEEL_ROLL_LAMBDA" ? 12 : k === "cockpitWheelRoll" ? (x) => x
+    : () => ({ carMesh: String(k) }) });
+  Object.assign(G, { raceTimeOfDay: "day", track: { total: 5000, def: {} }, dashKph: (sp) => sp * 3.6, raceT: 0 });
+  v.field(() => 1000);
+  const c = Object.assign(G.player, { gear: 3, rpm: 9000, speed: 50, energy: 0.5 });
+  const drawn = [];
+  G.gfx.draw = (mesh, m) => drawn.push({ name: mesh && (mesh.carMesh || mesh.kind), m: Array.from(m) });
+  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const rig = (wheel, seat, cab, noWheel = false) => {
+    ctx.CockpitOpts.wheel = () => wheel; ctx.CockpitOpts.interior = () => cab;
+    const layout = ctx.CockpitOpts.layout;
+    ctx.CockpitOpts.layout = (w, s) => layout(w, s || seat);
+    drawn.length = 0;
+    v.carDraw.drawCockpitRig(c, base, 1 / 60, {}, noWheel);
+    ctx.CockpitOpts.layout = layout;
+    return drawn.map((d) => d.name);
+  };
+  for (const seat of ["std", "low", "high", "fwd"]) {
+    const names = rig("f1", seat, "carbon");
+    const lay = ctx.CockpitOpts.layout("f1", seat);
+    const w = drawn.find((d) => d.name === "getCockpitWheel");
+    assert.ok(w, `${seat}: the wheel draws`);
+    assert.ok(Math.abs(w.m[13] - lay.wheelY) < 1e-6 && Math.abs(w.m[14] - lay.wheelZ) < 1e-6, `${seat}: the wheel mount follows the seat`);
+    assert.ok(Math.abs(Math.hypot(w.m[0], w.m[1], w.m[2]) - lay.wheelS) < 1e-6, `${seat}: and its scale`);
+    assert.ok(names.includes("getCockpitCabin"), `${seat}: CARBON draws its trim too`);
+    for (const r of ["getGearDigit", "getLedStrip", "getSpeedDigit"]) assert.ok(names.includes(r), `${seat}: the f1 wheel shows ${r}`);
+  }
+  const none = rig("f1", "std", "team", true);
+  assert.ok(none.includes("getCockpitDash"), "NONE / VISOR draw the column and bulkhead");
+  for (const r of ["getCockpitWheel", "getGearDigit", "getLedStrip"]) assert.ok(!none.includes(r), "NONE draws no " + r);
+  const screenless = ["f1", "gt", "butterfly", "yoke", "endurance", "round"].filter((w) => !ctx.CockpitOpts.wheelHasScreen(w));
+  assert.ok(screenless.length >= 1, "some wheel has no screen");
+  for (const w of screenless) {
+    const names = rig(w, "std", "classic");
+    assert.ok(names.includes("getCockpitWheel"), w + ": the wheel draws");
+    for (const r of ["getGearDigit", "getLedStrip", "getSpeedDigit", "getErsBar"]) assert.ok(!names.includes(r), `${w}: no screen, no ${r}`);
+    assert.ok(names.includes("getCockpitGlass"), "CLASSIC adds its aeroscreen");
+  }
+});
+
+test("the rig's remaining wiring: roll damping, per-fascia LEDs, caches, and the HUD hand-back", () => {
   const draw = read("js/car/car-draw.js");
   const rig = draw.slice(draw.indexOf("function drawCockpitRig("), draw.indexOf("function playerBodyMesh("));
-  assert.match(rig, /const wheelStyle = noWheel \? "none" : CockpitOpts\.wheel\(\), lay = CockpitOpts\.layout\(wheelStyle, noWheel \? "std" : null\);/);
-  assert.match(rig, /_rigT\[0\] = _rigT\[5\] = _rigT\[10\] = lay\.wheelS; _rigT\[13\] = lay\.wheelY; _rigT\[14\] = lay\.wheelZ;/, "the wheel mount follows the seat");
-  assert.match(rig, /G\.gfx\.draw\(getCockpitCabin\(cab, deps\.resolveLivery\(c\.team\)\), base, opt\);/, "every interior draws its trim, including CARBON");
-  const none = rig.indexOf('if (wheelStyle === "none") {'), wheel = rig.indexOf("getCockpitWheel(deps.resolveLivery(c.team), wheelStyle)");
-  const gate = rig.indexOf("if (!CockpitOpts.wheelHasScreen(wheelStyle)) return;"), gear = rig.indexOf("getGearDigit(");
-  assert.ok(none > 0 && none < wheel, "NONE (and VISOR) return with the column and bulkhead before any wheel");
-  assert.ok(wheel < gate && gate < gear, "no screen, no gear/LED/speed/ERS/OT draws");
   // No forearm sleeves in the cockpit (removed 2026-10-04): the tubes from the
   // cuffs to the bottom of the frame read as pipes meeting the wheel. The
   // gloves stay on the grips; neither the race cockpit nor the preview draws arms.
@@ -329,7 +375,7 @@ test("the mirror fallback covers each cockpit lens just driver-side, and the lim
   const draw=read("js/car/car-draw.js");
   assert.match(draw,/getLedStrip\(rpmF > 0\.965 \? \(motionReduced\(\) \|\| [^)]*\? 9 : 8\)/,"limiter alternates SHIFT and full ramp, never 0");
   // The live glass is TRIED only while the pass draws; the fallback is drawn
-  // whenever it is not shown (car-presentation-canary runs the either/or).
+  // whenever it is not shown (car-presentation-vm runs the either/or).
   assert.match(draw,/mp && mp\.drawing\(\) && typeof gfx\.drawMirrorGlass === "function" \? getMirrorGlass\(quads\)/,
     "the live glass only while the mirror pass is drawing");
 });

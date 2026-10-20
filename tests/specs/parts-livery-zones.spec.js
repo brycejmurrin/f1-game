@@ -36,9 +36,10 @@ async function openLiveryEditor(page) {
 }
 
 const lastLogId = (page) => page.evaluate(() => (Log.records().at(-1) || { id: 0 }).id);
-// The garage repaints through a fresh Car3D build ("[car] build <team>"): a deterministic signal.
+// The garage repaints through a fresh Car3D build ("[car] build <team>"), or — a FINISH-only change —
+// through Car3D.refinish of the kept geometry ("[car] refinish", #3181): a deterministic signal either way.
 const rebuiltSince = (page, since) => expect.poll(() => page.evaluate((s) => Log.records({ ns: "car", since: s })
-  .some((r) => /build/.test(JSON.stringify(r))), since), { timeout: 30_000 }).toBe(true);
+  .some((r) => /build|refinish/.test(JSON.stringify(r))), since), { timeout: 30_000 }).toBe(true);
 
 test("zone finishes and ENDPLATES: tappable on a phone, and the saved car carries them", async ({ page }) => {
   await ensureLive(page);
@@ -67,20 +68,22 @@ test("zone finishes and ENDPLATES: tappable on a phone, and the saved car carrie
     const build = (liv) => Car3D.build(liv.c1, liv.c2, { livery: liv, teamId: team.id, noWheels: true });
     const m = build(saved), b = build(Object.assign({}, saved, { endplate: null, haloFinish: "inherit", podFinish: "inherit" }));
     const near = (i, c) => [0, 1, 2].every((j) => Math.abs(m.col[i * 3 + j] - c[j]) < 0.08);
-    let plate = 0, matte = 0, chrome = 0;
+    let plate = 0, matte = 0, chrome = 0, chromeBase = 0;
     for (let i = 0; i < m.mat.length; i++) {
       if (saved.endplate && near(i, saved.endplate) && Math.abs(m.pos[i * 3 + 2]) > 1.5) plate++;
       if (m.mat[i] === FS.matte && b.mat[i] !== FS.matte) matte++;
       if (m.mat[i] === FS.chrome) chrome++;
+      if (b.mat[i] === FS.chrome) chromeBase++;
     }
-    return { haloFinish: saved.haloFinish, podFinish: saved.podFinish, endplate: saved.endplate, plate, matte, chrome };
+    return { haloFinish: saved.haloFinish, podFinish: saved.podFinish, endplate: saved.endplate, plate, matte, chrome, chromeBase };
   }, key);
   expect(r.haloFinish).toBe("matte");
   expect(r.podFinish).toBe("chrome");
   expect(r.endplate).toBeTruthy();
   expect(r.plate, "endplate vertices take the picked colour").toBeGreaterThan(0);
   expect(r.matte, "the halo finish lands on paint").toBeGreaterThan(0);
-  expect(r.chrome, "the sidepod finish lands").toBeGreaterThan(0);
+  // differential: the baseline (podFinish inherit) may already carry chrome parts
+  expect(r.chrome, "the sidepod finish lands").toBeGreaterThan(r.chromeBase);
 });
 
 test("RUNNING GEAR: floor / suspension / duct tints are on that tab and land on the mesh", async ({ page }) => {

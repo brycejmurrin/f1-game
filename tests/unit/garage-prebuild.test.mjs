@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -23,7 +24,7 @@ function loadModule(extra = {}) {
     setTimeout: () => 0, clearTimeout() {},
     ...extra,
   });
-  vm.runInContext(read("js/garage/prebuild.js"), ctx, { filename: "js/garage/prebuild.js" });
+  vm.runInContext(read("js/garage/prebuild.js"), ctx, { filename: absSrc("js/garage/prebuild.js") });
   return { GP: vm.runInContext("GaragePrebuild", ctx), ctx, logs };
 }
 
@@ -337,7 +338,7 @@ test("GaragePrebuild.instance() is the page's one instance (for __apex.garagePre
 });
 
 // ── the real room: GarageScene.prepare() is the rebuild draw() runs first ──
-function sceneHarness(textures = false) {
+function sceneHarness(textures = false, { crew = false } = {}) {
   const made = [], live = new Set(), handles = [], freed = [];
   const mk = (kind, extra) => { made.push(kind); const h = { id: made.length, ...extra }; live.add(h); handles.push(h); return h; };
   const gfx = {
@@ -355,8 +356,9 @@ function sceneHarness(textures = false) {
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js",
+                   ...(crew ? ["js/garage/scene-crew.js"] : []), "js/garage/scene.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
   return { GarageScene, made, live, handles, freed, gfx };
@@ -469,6 +471,42 @@ test("GarageScene.release frees every garage handle; the next draw rebuilds the 
   assert.equal(live.size, 0);
 });
 
+test("garage release frees arrival crew meshes once and the next arrival rebuilds them", () => {
+  const h = sceneHarness(false, { crew: true }), garage = h.GarageScene;
+  const context = { ambient: false }, eye = [0, 1.6, 0];
+  const pose = { door: 0.5, x: 0, z: 0 };
+  garage.prepare(TEAM, LIV, null, 0, context);
+  const beforeArrival = h.handles.length;
+  garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
+  const crew = h.handles.slice(beforeArrival);
+  assert.equal(crew.length, 3, "the real arrival crew creates two figures and its pole");
+  for (const mesh of crew) assert.equal(h.live.has(mesh), true);
+  const afterArrival = h.handles.length;
+  garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
+  assert.equal(h.handles.length, afterArrival, "unchanged crew reuse their meshes");
+
+  const liveBeforeRelease = h.live.size;
+  assert.equal(garage.release(), liveBeforeRelease, "release reports room and crew handles");
+  assert.equal(h.live.size, 0, "crew ownership ends with the room at race start");
+  for (const mesh of crew) assert.equal(h.freed.filter((m) => m === mesh).length, 1);
+  const freed = h.freed.length;
+  assert.equal(garage.release(), 0);
+  assert.equal(h.freed.length, freed, "releasing twice does not double-free crew");
+
+  garage.prepare(TEAM, LIV, null, 0, context);
+  const beforeNextArrival = h.handles.length;
+  garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
+  const rebuiltCrew = h.handles.slice(beforeNextArrival);
+  assert.equal(rebuiltCrew.length, 3, "the same paint still rebuilds released crew on the next visit");
+  for (const mesh of rebuiltCrew) {
+    assert.equal(h.live.has(mesh), true);
+    assert.equal(crew.includes(mesh), false, "no disposed crew handle is reused");
+  }
+  garage.release();
+  assert.equal(h.live.size, 0);
+  for (const mesh of rebuiltCrew) assert.equal(h.freed.filter((m) => m === mesh).length, 1);
+});
+
 
 test("paint and context changes retain the invariant truss and dress meshes until release", () => {
   const h = sceneHarness(true), garage = h.GarageScene;
@@ -499,17 +537,26 @@ test("paint and context changes retain the invariant truss and dress meshes unti
 });
 
 test("renderer replacement releases garage resources through their original owner", () => {
-  const h = sceneHarness(true), garage = h.GarageScene;
+  const h = sceneHarness(true, { crew: true }), garage = h.GarageScene;
   garage.prepare(TEAM, LIV, null, 0, {});
   const prepared = h.live.size;
   garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {});
   assert.equal(h.live.size, prepared + 1, "drawing a car creates its floor-reflection fade mesh");
+  const beforeArrival = h.handles.length;
+  garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {}, { door: 0.5, x: 0, z: 0 });
+  const crew = h.handles.slice(beforeArrival);
+  assert.equal(crew.length, 3, "the arrival creates its two figure meshes and pole");
+  for (const mesh of crew) assert.equal(h.live.has(mesh), true);
   const held = h.live.size;
+  const freed = h.freed.length;
   garage.init(h.gfx);
   assert.equal(h.live.size, held, "reinitializing the same renderer retains its caches");
+  assert.equal(h.freed.length, freed, "same-renderer reinit frees neither room nor crew");
   const newCalls = [];
   garage.init({ freeMesh: (h) => newCalls.push(h), freeTexture: (h) => newCalls.push(h) });
   assert.equal(h.live.size, 0, "the old renderer freed every owned resource before replacement");
+  for (const mesh of crew) assert.equal(h.freed.filter((m) => m === mesh).length, 1,
+    "room release and crew reinit free each crew handle exactly once through its original renderer");
   assert.deepEqual(newCalls, [], "old handles never reach the new renderer");
   assert.equal(garage.prepared(TEAM, LIV, null, 0, {}), false);
 });

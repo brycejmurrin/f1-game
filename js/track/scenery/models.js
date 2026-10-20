@@ -69,7 +69,12 @@ const TrackModels = (function () {
     if (!geo) return geo;
     if (geo.pos && typeof geo.pos.seal === "function") geo.pos = geo.pos.seal();
     if (geo.nrm && typeof geo.nrm.seal === "function") geo.nrm = geo.nrm.seal();
-    if (geo.col && typeof geo.col.seal === "function") geo.col = geo.col.seal();
+    // col leaves as f32 (-3 to -6 MB per track posted and resident): every
+    // backend uploads it as f32, so this rounds exactly as that upload would.
+    // Accumulated f64 like the rest: a Float32Array accumulator made the shared
+    // push() polymorphic and cost ~50 ms of props:geo on spa/monza (Chromium A/B).
+    // mat stays f64: it holds non-integer ids compared with zero tolerance.
+    if (geo.col && typeof geo.col.seal === "function") geo.col = new Float32Array(geo.col.seal());
     if (geo.mat && typeof geo.mat.seal === "function") geo.mat = geo.mat.seal();
     if (geo.idx && typeof geo.idx.seal === "function") geo.idx = geo.idx.seal();
     return geo;
@@ -185,8 +190,11 @@ const TrackModels = (function () {
       return { ok: false, reason: "invalid or non-finite color" };
     const count = geo.pos.length / 3;
     if (!isNumList(geo.idx)) return { ok: false, reason: "invalid index" };
-    for (let i = 0; i < geo.idx.length; i++) {
-      const v = geo.idx[i];
+    const idx = geo.idx;
+    // A Uint32Array (the sealed props accumulator) holds only non-negative integers.
+    if (idx instanceof Uint32Array) { for (let i = 0; i < idx.length; i++) if (idx[i] >= count) return { ok: false, reason: "invalid index" }; }
+    else for (let i = 0; i < idx.length; i++) {
+      const v = idx[i];
       if (!__isInteger(v) || v < 0 || v >= count)
         return { ok: false, reason: "invalid index" };
     }

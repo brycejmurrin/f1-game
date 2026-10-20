@@ -35,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -45,17 +46,17 @@ function load() {
   // Tracks is only reached at call time (hwAt), and none of the pure geometry
   // below touches it — a stub keeps the VM honest about that.
   ctx.Tracks = { sample: () => { throw new Error("pure geometry must not sample the track"); } };
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   // The pit complex model (TrackPit) is what PitLane reads its pitch and, on
   // a built track, its window and row from — loaded beside it, as the game does.
-  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   return vm.runInContext("PitLane", ctx);
 }
 const P = load();
 const TP = (() => {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
-  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
   return vm.runInContext("TrackPit", ctx);
 })();
 
@@ -244,9 +245,9 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real 
   ctx.Teams = { LIST: ["mercedes", "ferrari", "mclaren", "redbull", "alpine",
                        "racingbulls", "haas", "williams", "audi", "astonmartin",
                        "cadillac", "custom"].map((id) => ({ id })) };
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  if (real) vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  if (real) vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   const track = real ? real.track : { total, n: 1346, def: {} };
   const said = [];
@@ -1073,8 +1074,8 @@ function laneOn(straightM, total = 5386) {
   const track = trackWithStraight(straightM, total);
   ctx.Tracks = { sample: () => { throw new Error("entry geometry must not sample"); },
                  curvature: curvatureStub(track) };
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   return { Pl, track, entry: Pl.entryRunM(track), zone: Pl.zoneOf(track) };
 }
@@ -1128,8 +1129,8 @@ test("a circuit may still override the entry by hand", () => {
   const track = trackWithStraight(600);
   track.def = { pitZone: { entryM: 275 } };
   ctx.Tracks = { sample: () => { throw new Error("no"); }, curvature: curvatureStub(track) };
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   assert.equal(Pl.zoneOf(track).lenM, 275 + P.EXIT_M, "an authored entryM was ignored");
 });
@@ -1290,8 +1291,8 @@ test("windowOf names a rival's window for the gap chips: P<lap> within three lap
 function strategySession(laps) {
   const s = commitSession();
   const { ctx, G } = s;
-  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8") + "\n;globalThis.AiDrive = AiDrive;", ctx, { filename: "ai-drive.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + "\n;globalThis.SportingRegs = SportingRegs;", ctx, { filename: "sporting-regs.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8") + "\n;globalThis.AiDrive = AiDrive;", ctx, { filename: absSrc("js/physics/ai-drive.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + "\n;globalThis.SportingRegs = SportingRegs;", ctx, { filename: absSrc("js/race/sporting-regs.js") });
   ctx.TyreModel.AI_CLASS = {
     soft: { code: "S", life: 0.48 }, medium: { code: "M", life: 0.74 }, hard: { code: "H", life: 1.05 }, wet: { code: "W", life: 0.72 },
   };
@@ -1586,17 +1587,17 @@ for (const id of ["jeddah", "jerez", "mont_tremblant"]) {
   });
 }
 
-test("bay circuits' working lane is untouched by the no-bay fix (byte-identical at() numbers)", () => {
-  // Golden values measured on the base (88f2b21a6) at the 6th box of each row.
-  const GOLD = {
-    bahrain: { side: 1, w: 1, v: 1, inner: 11, outer: 21, centre: 12.75, fastOut: 14.5, workIn: 15.5, workCentre: 18.25, width: 10 },
-    monaco: { side: 1, w: 1, v: 1, inner: 7.2, outer: 15.600000000000001, centre: 8.8, fastOut: 10.4, workIn: 11.4, workCentre: 13.5, width: 8.400000000000002 },
-  };
-  for (const [id, want] of Object.entries(GOLD)) {
+test("bay circuits' working lane keeps its band ordering and stays inside the corridor", () => {
+  // Relational (RC1-14): the old golden numbers were measured on one base commit, so a legitimate lane
+  // change failed them and a base bug was baked in. These are the invariants the no-bay fix must not break.
+  for (const id of ["bahrain", "monaco"]) {
     const track = BUILT.build(id);
     assert.equal(track.pit.hasBays, true, id);
-    const got = BUILT.Tracks.pitLaneAt(track, track.pit.row.boxes[5].s);
-    assert.deepEqual(JSON.parse(JSON.stringify(got)), want, `${id}: TrackPit.at() moved`);
+    const a = JSON.parse(JSON.stringify(BUILT.Tracks.pitLaneAt(track, track.pit.row.boxes[5].s)));
+    assert.ok(a.inner < a.centre && a.centre < a.fastOut && a.fastOut < a.workIn && a.workIn < a.workCentre && a.workCentre < a.outer,
+      `${id}: lane bands out of order ${JSON.stringify(a)}`);
+    assert.ok(Math.abs(a.width - (a.outer - a.inner)) < 1e-9, `${id}: width is outer - inner`);
+    assert.equal(a.w, 1); assert.equal(a.v, 1);
   }
 });
 
@@ -1638,16 +1639,31 @@ test("bay circuits' working lane is untouched by the no-bay fix (byte-identical 
     });
   }
 
-  test("bay circuits' pit-box paint is byte-identical (vertex count + hash pinned)", () => {
-    // Golden values measured on the base (0f8c88843) — the lane branch must not touch hasBays rows.
-    const GOLD = {
-      silverstone: { verts: 532, idx: 798, hash: 412361315 },
-      monaco: { verts: 536, idx: 804, hash: 2522254 },
-    };
-    for (const [id, want] of Object.entries(GOLD)) {
+    test("bay circuits' pit-box paint is quads for every box, inside the pit corridor", () => {
+    // Relational, not a golden hash pinned to a base commit: any legitimate geometry change used to fail
+    // the hash and a base bug was baked in (RC1-14). What matters for a bay circuit is that the lane
+    // branch did not touch it: the paint is quads, at least one per box, and stays inside the lane.
+    for (const id of ["silverstone", "monaco"]) {
       const { track, out } = paint(id);
-      assert.equal(track.pit.hasBays, true, id);
-      assert.deepEqual({ verts: out.pos.length / 3, idx: out.idx.length, hash: hashOf(out.pos) }, want, `${id}: pit-box paint moved`);
+      const p = track.pit, boxes = p.row.boxes;
+      assert.equal(p.hasBays, true, id);
+      assert.ok(out.pos.length > 0 && out.idx.length > 0, `${id}: no box paint at all`);
+      const verts = out.pos.length / 3;
+      assert.equal(out.idx.length * 2, verts * 3, `${id}: the paint is quads (6 indices per 4 vertices)`);
+      assert.ok(verts >= boxes.length * 4, `${id}: at least one quad per box (${verts} vertices, ${boxes.length} boxes)`);
+      const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+      const box = boxes[0];
+      sandbox.TrackSpline.sample(track, box.s, smp);
+      const rib = Tracks.pitLaneAt(track, box.s);
+      let lo = Infinity, hi = -Infinity;
+      for (let i = 0; i < out.pos.length; i += 3) {
+        const d = [out.pos[i] - smp.p[0], out.pos[i + 1] - smp.p[1], out.pos[i + 2] - smp.p[2]];
+        if (Math.abs(d[0] * smp.t[0] + d[1] * smp.t[1] + d[2] * smp.t[2]) > p.row.boxLen) continue;
+        const lat = p.side * (d[0] * smp.r[0] + d[1] * smp.r[1] + d[2] * smp.r[2]) - smp.hw;
+        lo = Math.min(lo, lat); hi = Math.max(hi, lat);
+      }
+      const inner = Math.abs(rib.inner) - smp.hw, outer = Math.abs(rib.outer) - smp.hw;
+      assert.ok(lo >= inner - 0.05 && hi <= outer + 0.05, `${id}: paint ${lo.toFixed(2)}..${hi.toFixed(2)} m outside the corridor ${inner.toFixed(2)}..${outer.toFixed(2)}`);
     }
   });
 }

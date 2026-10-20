@@ -167,6 +167,17 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
 #lighting, #camtune, #flyby, #freecam, #garrival { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
+/* Playback lowers the editor sheet; its touch exit must stay outside it. */
+#ga-preview-stop {
+  position: fixed;
+  top: calc(var(--sat) + 8px);
+  right: calc(var(--sar) + 8px);
+  width: auto;
+  max-width: calc(100vw - var(--sal) - var(--sar) - 16px);
+  margin: 0;
+  min-height: 44px;
+  pointer-events: auto;
+}
 #lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner {
   /* Docked, not centred: .sheet gives the head/body/foot shape and the query
      container, and these override the sheet's centred sizing. */
@@ -308,6 +319,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 3); margin: calc(var(--gap) * 0.25) 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); color: var(--dim); }
+/* The compact column is narrower than WEATHER and PRESET at shipped type size.
+   Reserve the full label before flex lays out the adjacent option buttons. */
+.lt-preview-row > .lt-preview-lbl { min-width: max-content; }
 /* min-width max(42px, --tap-min), not the bare literal: 42 local px is only
    42 PAINTED px at 100% — at UI SIZE 40% the five chips painted 21px wide
    (2026-08-21 sweep). The token arm wins only below 100%, so the dense
@@ -1458,7 +1472,9 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 .editor-workspace .ew-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * .7); flex: 0 0 auto; }
 .editor-workspace :is(#ct-head, #ga-head, #lt-head h2, #fb-head h2) { display: none; }
-.editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1; min-width: 0; }
+/* Keep the heading's intrinsic width so Preview wraps instead of covering it
+   when the flying dock narrows to 300px. */
+.editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1 0 auto; min-width: min-content; }
 .editor-workspace .ew-toolbar button, .editor-workspace .ew-tools > summary {
   min-height: var(--ew-tap); min-width: var(--ew-tap); touch-action: manipulation;
 }

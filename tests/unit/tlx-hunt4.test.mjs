@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -29,7 +30,7 @@ const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/t
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js",
   "js/render/three/tsl-lit.js", "js/render/three/tlx-shadow.js"])
-  vm.runInThisContext(read(f), { filename: f });
+  vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 const slice = (from, to) => {
   const a = TLX.indexOf(from), b = TLX.indexOf(to, a);

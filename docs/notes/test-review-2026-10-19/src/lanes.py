@@ -198,7 +198,7 @@ LANES[-1:-1] = [
   effort="S", model=SON, deps="none; T5-01's copies drop finished cars that collide.js keeps: the rewrite must show red against a copy that skips finished cars"),
  dict(id="L24", name="CI selection, gates and ratchets on fixtures", batches=["tooling-4"],
   goal="the selector's main entry select(), the ratchet auto-raise refusal and the gate tools run on fixtures and can fail; retired-tool tests and stale headers go",
-  owned=["tests/unit/select-specs.test.mjs","tests/unit/ratchets.test.mjs","tests/unit/poll-live-shell.test.mjs","tests/unit/sim-bytecode-budget.test.mjs","tests/unit/ratchet-merge-hotspot.test.mjs","tests/unit/queue-depth.test.mjs","tests/unit/select-budget.test.mjs","tests/unit/ready-full-cap.test.mjs","tests/unit/source-pin-hygiene.test.mjs"],
+  owned=["tests/unit/select-specs.test.mjs","tests/unit/ratchets.test.mjs","tests/unit/poll-live-shell.test.mjs","tests/unit/sim-bytecode-budget.test.mjs","tests/unit/ratchet-merge-hotspot.test.mjs","tests/unit/queue-depth.test.mjs","tests/unit/select-budget.test.mjs","ready-full-cap (deleted, #3013)","tests/unit/source-pin-hygiene.test.mjs"],
   ids=["T4-01","T4-03","T4-08","T4-16","T4-21","T4-22","T4-27","T4-29","T4-30"],
   verify="npm run test:tooling-fast", effort="M", model=SON,
   deps="T4-30 moves a ceiling into tests/data/ratchets.json: edit the source and `npm run gen`, never the generated file; no ratchet raise",
@@ -260,7 +260,7 @@ LANES[-1:-1] = [
   slices=["PR 1: TK1-01, TK1-02 (high)", "PR 2: TK1-05, TK1-07, TK1-08, TK1-12, TK1-25, TK2-03"]),
  dict(id="L29", name="Track designer tests on the real editor", batches=["tracks-1", "tracks-2"],
   goal="designer DOM, canvas, toolbar fit and fleet validation drive js/editor/ and assert what the player sees; the designer spec is green alone before any assert change",
-  owned=_files(["TK1-13", "TK1-24", "TK2-06", "TK2-13", "TK2-14"]),
+  owned=[f for f in _files(["TK1-13", "TK1-24", "TK2-06", "TK2-13", "TK2-14"]) if f != "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs"],  # deleted by L29 (c0599c40)
   ids=["TK1-13", "TK1-24", "TK2-06", "TK2-13", "TK2-14"],
   verify="node --test on the owned units; track-designer.spec.js alone via test-bg.mjs",
   effort="S", model=SON, deps="TK2-06 may be an environment timeout: re-run track-designer.spec.js alone at loadavg < 3 before changing it"),
@@ -415,3 +415,18 @@ for _L in LANES:
         _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
         _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
         _L["ids"] = _L["ids"] + _i
+
+# ---- late continuations 3: platform part 2/2 (final)
+_FOLD9 = {
+ "L35": (["platform"], ["PL-27", "PL-28", "PL-29"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD9:
+        _b, _i = _FOLD9[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i
+    if _L["id"] == "L35":
+        _L["deps"] = "none (platform final); ui-scale portrait @200% (PL-27) is red on a real assertion: debug it before changing ui-scale; ui-resize (PL-28) and ui-button-touch (PL-29) are red alone on this box, so take their verdict from CI shards (remote-group.mjs)"
+    if _L["id"] == "L36":
+        _L["deps"] = "none (platform final); smoke and dev-tools-dom time out alone on an idle box (SwiftShader cost, PL-01/PL-02): take their verdict from CI llvmpipe (remote-group.mjs), not a local run"

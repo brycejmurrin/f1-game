@@ -30,6 +30,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8");
@@ -44,7 +45,7 @@ function load(debris) {
   });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx,
-    { filename: "js/race/race-control.js" });
+    { filename: absSrc("js/race/race-control.js") });
   return vm.runInContext("RaceControl", ctx);
 }
 
@@ -903,6 +904,16 @@ test("classify(): a flagged finisher below 90 % of the winner's laps stays in th
   assert.equal(nc.classified, false);
   assert.deepEqual(order.map((c) => c.id), ["W", "NC", "NC2", "R", "O"],
     "unclassified follow by laps (flagged finishers first), then distance");
+});
+
+test("classify(): a retirement earns no future crossing ahead of the winner", () => {
+  const RC = load(null);
+  const winner = { id: "winner", lap: 11, prog: 10000, finished: true };
+  const retired = { id: "retired", lap: 11, prog: 10500, retired: true };
+  const runner = { id: "runner", lap: 10, prog: 9900 };
+  const order = RC.classify([winner, retired, runner], [winner], [runner], [retired]);
+  assert.deepEqual(Array.from(order, (c) => c.id), ["winner", "runner", "retired"]);
+  assert.equal(retired.classified, true, "retiring after ten laps still meets the distance cutoff");
 });
 
 test("all-DNF classification uses the retired leader's completed distance, excluding DSQ references", () => {

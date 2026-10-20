@@ -6,6 +6,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -20,7 +21,7 @@ test("js/track/circuit-meta.js exists and matches the generator", async () => {
 test("meta roster has one stub per CIRCUITS id with no path payload", () => {
   const src = readFileSync(join(ROOT, MANIFEST.CIRCUIT_META), "utf8");
   const sandbox = { window: { TrackDefs: [] } };
-  vm.runInNewContext(src, sandbox, { filename: MANIFEST.CIRCUIT_META });
+  vm.runInNewContext(src, sandbox, { filename: absSrc(MANIFEST.CIRCUIT_META) });
   const defs = sandbox.window.TrackDefs;
   assert.equal(defs.length, MANIFEST.CIRCUITS.length);
   const ids = new Set(defs.map((d) => d.id));

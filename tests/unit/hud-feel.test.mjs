@@ -32,6 +32,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -108,12 +109,12 @@ function boot(opts = {}) {
   };
   sb.window = sb;
   // #announce-live's one writer, as in the shell (it loads before hud.js).
-  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
-  vm.runInNewContext(src("js/ui/hud-skin.js"), sb, { filename: "js/ui/hud-skin.js" });
-  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: "js/ui/hud-minimap.js" });   // GameHud.create builds its HudMinimap (#1656)
-  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
+  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
+  vm.runInNewContext(src("js/ui/hud-skin.js"), sb, { filename: absSrc("js/ui/hud-skin.js") });
+  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   // The OVERTAKE chip converts the allowance to MJ through the real module.
-  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
+  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
 
   const $ = (id) => dom.byId(id);
   const minimap = $("minimap");
@@ -535,7 +536,7 @@ test("coach and practice keep their own channel and priority, and practice is it
   // WHO line), never a bigger or smaller card.
   assert.match(hud, /#announce\[data-kind="coach"\] #announce-who,\n#announce\[data-kind="practice"\] #announce-who \{ color: var\(--faster\); \}/);
   const g0 = read("js/race/announce-banner.js");
-  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\s*\}/)[0] + ")", { deps: { player: () => null } });
+  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\s*\}/)[0] + ")", { deps: { player: () => null } }, { filename: absSrc("js/audio/radio-voice.js") });
   for (const kind of ["coach", "practice"]) assert.equal(who(kind), "COACH", kind);
   for (const kind of ["penalty-hit", "penalty-warn", "warning", "warn"]) assert.equal(who(kind), "RACE CONTROL", kind);
   // …and the channel is ALL a kind may recolour. The number plate is the
@@ -808,7 +809,7 @@ test("minimap sector arcs are the podium metals from tokens — no purple, no re
   // Load the REAL TrackMaps.sectorColors against the sheet's own tokens, so the
   // map and CIRCUIT DETAIL are proven to read the same three.
   const tmCtx = { document: { documentElement: {} }, getComputedStyle: () => ({ getPropertyValue: (k) => ALL_TOKENS[k] || "" }) };
-  vm.runInNewContext(src("js/ui/track-maps.js"), tmCtx, { filename: "js/ui/track-maps.js" });
+  vm.runInNewContext(src("js/ui/track-maps.js"), tmCtx, { filename: absSrc("js/ui/track-maps.js") });
   const TM = tmCtx.TrackMaps;
   assert.deepEqual([...TM.SECTOR_TOKENS], ["--gold", "--silver", "--bronze"]);
   const want = [...TM.SECTOR_TOKENS].map((k) => ALL_TOKENS[k]);   // spread first: a VM-realm .map() fails deepStrictEqual

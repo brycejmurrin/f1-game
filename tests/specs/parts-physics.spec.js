@@ -12,7 +12,7 @@
 // One test stays on the per-test fixture (`freshTest`): "imported bodies keep
 // legacy decal anchors" swaps GLTF.toMesh, wraps Car3D.bodyAnchors and loads a
 // car model into the live game — state no later test on the page should
-// inherit. UNVERIFIED IN A BROWSER at conversion time.
+// inherit..
 import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { ensureLive, toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
@@ -481,9 +481,15 @@ test.describe("Parts module — visual recipes", () => {
         };
         const podDecals = [];
         const noseDecals = [];
+        // The sidepod-TOP station (LiveryStations) lies on the pod's upper face in
+        // this same |x| / z band; it is not a flank decal, and livery-stations.test.mjs
+        // measures its own fit. Selected out by its atlas region.
+        const top = LiveryTex.REGIONS.podTop, size = LiveryTex.SIZE, sizeH = LiveryTex.SIZE_H || size;
+        const onPodTop = (v) => top && decals.uv[v * 2] >= top.x / size - 1e-7 && decals.uv[v * 2] <= (top.x + top.w) / size + 1e-7 &&
+          decals.uv[v * 2 + 1] >= 1 - (top.y + top.h) / sizeH - 1e-7 && decals.uv[v * 2 + 1] <= 1 - top.y / sizeH + 1e-7;
         for (let i = 0; i < decals.pos.length; i += 3) {
           const p = [decals.pos[i], decals.pos[i + 1], decals.pos[i + 2]];
-          if (Math.abs(p[0]) > 0.35 && p[2] > -0.40 && p[2] < 0.50) podDecals.push(p);
+          if (Math.abs(p[0]) > 0.35 && p[2] > -0.40 && p[2] < 0.50 && !onPodTop(i / 3)) podDecals.push(p);
           if (Math.abs(p[0]) < 0.30 && p[2] > 1.10 && p[2] < 2.20) noseDecals.push(p);
         }
         const podGap = (p) => Math.abs(Math.abs(p[0]) - anchors.podAt(p[2]).x);
@@ -583,13 +589,18 @@ test.describe("Parts module — visual recipes", () => {
             titleVerts.push({ side: Math.sign(p[0]), z: p[2], u: uv[0] });
           }
         }
+        // The sidepod-TOP station shares this band on the pod's upper face; it is not
+        // the flank sponsor and livery-stations.test.mjs owns its fit.
+        const top = LiveryTex.REGIONS.podTop;
+        const onPodTop = (v) => top && data.uv[v * 2] >= top.x / size - 1e-7 && data.uv[v * 2] <= (top.x + top.w) / size + 1e-7 &&
+          data.uv[v * 2 + 1] >= 1 - (top.y + top.h) / sizeH - 1e-7 && data.uv[v * 2 + 1] <= 1 - top.y / sizeH + 1e-7;
         const triangles = [];
         for (let i = 0; i < data.idx.length; i += 3) {
           const points = [0, 1, 2].map((j) => {
             const k = data.idx[i + j] * 3;
             return [data.pos[k], data.pos[k + 1], data.pos[k + 2]];
           });
-          if (points.every((p) => Math.abs(p[0]) > 0.35 && p[2] >= -0.34 && p[2] <= 0.46)) {
+          if (!onPodTop(data.idx[i]) && points.every((p) => Math.abs(p[0]) > 0.35 && p[2] >= -0.34 && p[2] <= 0.46)) {
             triangles.push(points);
           }
         }
@@ -782,10 +793,14 @@ test.describe("Parts module — visual recipes", () => {
         const ep = Car3D.endplate(level, style);
         const sweep = Math.max(-0.06, Math.min(0.20, style.rearSweep));
         const crownY = ep.rear.top - 0.018;
+        // B·D3c tip lift (rwRise + rwCurve, 0 on every shipped row): the flown
+        // "rear" flap record carries it, and the tip vertex rises by exactly that.
+        const rf = Car3D.aeroFlaps(level, style).find((e) => e.id === "rear");
+        const lift = (rf.rise || 0) + (rf.rise2 || 0);
         // The trailing edge of the aerofoil section closes to zero thickness ON
         // the chord line, so the tip vertex sits exactly at yTrail — the old
         // flat sheet floated its single surface up by thick/2 instead.
-        const expectedY = crownY - (level >= 4 || style.drs ? 0.075 : 0);
+        const expectedY = crownY - (level >= 4 || style.drs ? 0.075 : 0) + lift;
         const expectedZ = -2.64 - sweep;
         // buildComplete, not build: the wing's top elements are ACTIVE AERO and are
         // drawn separately so they can rotate, so the render mesh no longer holds
@@ -824,7 +839,12 @@ test.describe("Parts module — visual recipes", () => {
             maxY = Math.max(maxY, y);
           }
         }
-        const crownTop = ep.rear.top + 0.012;
+        // A lifted tip (B·D3c rwRise/rwCurve) grows a tip fin on the plate up to
+        // rear.top + lift + 0.012, capped by an accent block 8 mm above that:
+        // the crown the tip must stay under. lift is 0 on every shipped row.
+        const rf = Car3D.aeroFlaps(option.visual.lvl, option.visual).find((e) => e.id === "rear");
+        const lift = (rf.rise || 0) + (rf.rise2 || 0);
+        const crownTop = ep.rear.top + 0.012 + (lift ? lift + 0.008 : 0);
         return maxY <= crownTop + 1e-6 ? [] : [`${option.id}:${(maxY - crownTop).toFixed(3)}`];
       });
     });
@@ -1310,7 +1330,16 @@ test.describe("Parts module — visual recipes", () => {
     // third, the same headroom rule as last time. The tier argument does not
     // affect the count (identical for tiers 0-3), so the 2 above is arbitrary
     // and harmless.
-    expect(triangles.decals).toBeLessThanOrEqual(93);
+    //
+    // 338, re-measured 2026-10-20 (design wave 2, #3169): the sheet was 90 on the
+    // tip and is 254 with the four LiveryStations decals, which ship default ON:
+    //
+    //     144 haloTop   8 noseTip   8 podTop   4 cockpitSide
+    //
+    // haloTop is a strip laid through the crown tube's own ring vertices (fine
+    // path x 4 quads across at round build) so it sits 3 mm proud everywhere
+    // instead of chording through the hoop. 338 is the measured 254 plus a third.
+    expect(triangles.decals).toBeLessThanOrEqual(338);
   });
 
   test("every recipe has primary and secondary visual parameters", async ({ page }) => {

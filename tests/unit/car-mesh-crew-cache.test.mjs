@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8");
@@ -22,7 +23,7 @@ function load() {
     GaragePrims: { block(out) { out.pos.push(0, 0, 0); out.idx.push(out.idx.length); } },
   };
   vm.createContext(ctx);
-  vm.runInContext(SRC + "\n;this.CarMesh = CarMesh;", ctx, { filename: "car-mesh.js" });
+  vm.runInContext(SRC + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   const gfx = {
     createMesh(d) { const m = { id: made.length, verts: d.pos.length / 3, d }; made.push(m); return m; },
     freeMesh(m) { freed.push(m); },
@@ -240,7 +241,21 @@ test("aero flap elements (the opening wings): idle colours are released too", ()
     clk.advance(3000);
     P.CarMesh.releaseIdleFlaps(2000);
   }
-  assert.equal(firsts.filter((m) => !P.freed.includes(m)).length, 0);
+  assert.equal(firsts.slice(0, -1).filter((m) => !P.freed.includes(m)).length, 0);
+  assert.ok(!P.freed.includes(firsts[firsts.length - 1]), "the colour drawn last is the live one");
+});
+
+test("a frame longer than the idle window never frees the set it just drew (no relink on a part pick)", () => {
+  const P = loadReal(), clk = clockOf(P);
+  const set = (col) => P.CarMesh.getAeroFlapSet(2, col, null, null, false);
+  const live = set([0.4, 0.4, 0.4]);
+  clk.advance(3000);   // one SwiftShader garage frame
+  assert.equal(P.CarMesh.releaseIdleFlaps(2000), 0, "drawn on the last frame, so not idle");
+  assert.ok(!P.freed.includes(live));
+  const old = live, next = set([0.5, 0.4, 0.4]);   // the edit's new paint job, drawn on the next frames
+  clk.advance(3000); set([0.5, 0.4, 0.4]);
+  P.CarMesh.releaseIdleFlaps(2000);
+  assert.ok(P.freed.includes(old) && !P.freed.includes(next), "the old paint job goes once a newer draw is 2 s past it");
 });
 
 test("the race path never releases: without a releaseIdleFlaps call (or without a clock) the FIFO cap alone applies", () => {

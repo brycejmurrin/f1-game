@@ -21,13 +21,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
+
+const P = loadParts();
 
 function boot(sel = { teamIdx: 0, driverIdx: 0 }, over = {}) {
-  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON,
+  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON, setTimeout: () => 1, clearTimeout() {},
     document: { querySelectorAll: () => [] } });
   ctx.globalThis = ctx;
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"]) {
-    vm.runInContext(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: absSrc(f) });
   }
   const Legends = vm.runInContext("Legends", ctx);
   const CustomTeam = vm.runInContext("CustomTeam", ctx);
@@ -100,6 +104,10 @@ test("every legend's seeded sheet fits the garage budget", () => {
     const sheet = store.get("parts.legends", null);
     assert.ok(sheet, `${Legends.LIST[i].id}: a sheet must be written`);
     assert.deepEqual(sheet, Legends.parts(Legends.LIST[i].id));
+    // …and the budget the title claims: the real Parts.getCost of that sheet.
+    const team = Legends.team(Legends.LIST[i].id);
+    const cost = P.Parts.getCost(sheet, team);
+    assert.ok(Number.isFinite(cost) && cost <= P.Parts.BUDGET, `${Legends.LIST[i].id}: sheet costs ${cost} > budget ${P.Parts.BUDGET}`);
   }
 });
 
@@ -185,16 +193,48 @@ test("MY TEAM preview invalidates the decal atlas as the livery changes, not onl
   // LOGO TINT row: a colour is chosen -> the draft's livery changes -> atlas dropped.
   const tint = d.el("cz-logo");
   tint.value = "#ff0000";
-  tint.listeners.input();
+  tint.listeners.input(); tint.listeners.change();   // input debounces the 3D half; change flushes it
   assert.equal(draft.liv.logo, "#ff0000");
   assert.ok(invalidated.filter((x) => x === "custom").length > n0, "LOGO TINT change invalidates the atlas");
   // An identical event (a drag repeating the same value) does not thrash the atlas.
   const n1 = invalidated.filter((x) => x === "custom").length;
-  tint.listeners.input();
+  tint.listeners.input(); tint.listeners.change();   // input debounces the 3D half; change flushes it
   assert.equal(invalidated.filter((x) => x === "custom").length, n1, "an unchanged preview is deduped");
   // CANCEL drops the draft atlas so the saved look comes back.
   d.el("cz-cancel").onclick();
   assert.ok(invalidated.filter((x) => x === "custom").length > n1, "closing the preview restores the saved atlas");
+});
+
+test("MY TEAM preview busts the mesh only for a changed draft, and debounces the 3D half (#3108)", () => {
+  const d = fakeDialog();
+  let busts = 0;
+  const { ct, ctx } = boot({ teamIdx: 0, driverIdx: 0 }, {
+    $: d.el, hexToRgb: (h) => h, rgbToHex: (a) => a, hexToArr: (h) => h,
+    DEFAULT_CUSTOM: { id: "custom", name: "My Team", short: "YOU", color: "#111111", color2: "#222222",
+      drivers: [{ name: "N", code: "YOU", num: 7 }], livery: {} },
+    getEls: () => ({ customize: {} }), spMeshBust: () => { busts++; },
+  });
+  const timers = [];
+  ctx.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return timers.length; };
+  ctx.clearTimeout = (id) => { if (timers[id - 1]) timers[id - 1].fn = null; };
+  const flush = () => { for (const t of timers.splice(0)) if (t.fn) t.fn(); };
+  ct.openCustomize();                                   // flushes synchronously
+  ct.init();                                            // wireDialog
+  const b0 = busts;
+  assert.ok(b0 >= 1, "opening the dialog paints the draft once");
+  // Typing in NAME never reaches the mesh: no timer-driven bust.
+  for (let i = 0; i < 10; i++) d.el("cz-name").listeners.input();
+  flush();
+  assert.equal(busts, b0, "10 NAME keystrokes bust the mesh 0 times");
+  // A colour drag: every tick schedules the 3D half (<= 150 ms), only the last one runs.
+  for (let i = 0; i < 10; i++) { d.el("cz-color").value = "#1000" + (10 + i); d.el("cz-color").listeners.input(); }
+  assert.equal(busts, b0, "nothing busts while the drag is still debouncing");
+  assert.ok(timers.filter((t) => t.fn).every((t) => t.ms <= 150), "the debounce is at most 150 ms");
+  flush();
+  assert.equal(busts, b0 + 1, "10 colour ticks bust the mesh once");
+  // `change` flushes immediately.
+  d.el("cz-color").value = "#202020"; d.el("cz-color").listeners.input(); d.el("cz-color").listeners.change();
+  assert.equal(busts, b0 + 2, "change applies the draft without waiting for the timer");
 });
 
 // D2 — the FRESH-INSTALL case. js/data/garage-defaults.js ships `parts.legends`
@@ -212,10 +252,10 @@ test("a fresh install's Legends seat 0 builds the period car, not the shipped sh
   seedSaveMigrate(ctx);
   ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
   const read = (f) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
-  vm.runInContext(read("js/data/garage-defaults.js") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx);
-  vm.runInContext(read("js/core/store.js") + "\n;globalThis.GameStore = GameStore;", ctx);
+  vm.runInContext(read("js/data/garage-defaults.js") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx, { filename: absSrc("js/data/garage-defaults.js") });
+  vm.runInContext(read("js/core/store.js") + "\n;globalThis.GameStore = GameStore;", ctx, { filename: absSrc("js/core/store.js") });
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"])
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const { store } = vm.runInContext("GameStore", ctx);
   const Legends = vm.runInContext("Legends", ctx), CustomTeam = vm.runInContext("CustomTeam", ctx);
   assert.ok(store.get("parts.legends", null), "precondition: the shipped sheet answers on a miss");

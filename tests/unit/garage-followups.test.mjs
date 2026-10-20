@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { makeDom } from '../helpers/mini-dom.mjs';
+import { absSrc } from "../helpers/abs-src.mjs";
 const read = p => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 const sheet = read('js/garage/setup-sheet.js');
 const plain = v => JSON.parse(JSON.stringify(v));
@@ -15,8 +16,8 @@ function tuneFixture() {
     renderStatBars() {}, csTabId: x => x, getTeamParts: () => ({}), GameAudio: {},
     Parts: { RH_GAIN: .06, aeroLoad: (_p, _t, tune) => Math.min(1, Math.max(0, 1 + .06 * (tune?.rake || 0))) }, G: { soundOn: false, $: id => dom.byId(id), getTeamParts: () => ({}) },
   });
-  vm.runInContext(read('js/garage/setup-tune.js') + '; globalThis.S = SetupTune;', context);
-  vm.runInContext(read("js/garage/setup-experiments.js") + ";globalThis.experiments = SetupExperiments.create(G, () => {});", context);
+  vm.runInContext(read('js/garage/setup-tune.js') + '; globalThis.S = SetupTune;', context, { filename: absSrc("js/garage/setup-tune.js") });
+  vm.runInContext(read("js/garage/setup-experiments.js") + ";globalThis.experiments = SetupExperiments.create(G, () => {});", context, { filename: absSrc("js/garage/setup-experiments.js") });
   const team = { id: 'haas', short: 'HAA' }, container = dom.byId('fixture');
   const build = () => { container.replaceChildren(); context.experiments.build(container, team); };
   const button = text => container.querySelectorAll('button').find(b => b.textContent === text);
@@ -70,7 +71,7 @@ test('live atlas retries same-key failures with bounded backoff and skips unsupp
   const c = vm.createContext({ roomKeys: () => ({ geom: 'g', live: 'l', dressId: 'd', key: 'k' }), performance: { now: () => now },
     cacheKey: 'k', shellMesh: {}, geomKey: 'g', liveKey: 'l', liveTex: null, liveCanvas: {}, liveMesh: { mid: {} },
     liveFail: 0, liveRetryAt: 0, dressTex: {}, dressFail: 0, dressRetryAt: 0, dressIdKey: 'd', dressFullKey: 'd|b',
-    boardKey: () => 'b', paintLive() {}, GarageExperience: { paintCareer() {} }, LiveryTex: {},
+    boardKey: () => 'b', paintLive() {}, paintTrace() {}, traceFail: 0, lastTrace: -1e9, GarageExperience: { paintCareer() {} }, LiveryTex: {},
     _gfx: { createTexMesh() {}, createTexture() { attempts++; if (attempts === 1) throw Error('injected'); return {}; } },
     Log: { warn() {} },
   });
@@ -116,12 +117,18 @@ test('deferred garage builds cannot run after hide or clear a newer visit busy s
 });
 test('palette rebuild preserves only palette-owned focus, including repeated matches and a new colour', () => {
   const dom = makeDom(), document = dom.document, saved = new Map();
+  let buttonsMade = 0;
   // Exercise the complete editor with its actual inserted surface controls.
   // The minimal DOM omits native textContent detachment; model that operation
   // for all created nodes so an old focused palette chip really leaves the tree.
   const create = document.createElement;
   document.createElement = tag => {
+    if (tag === 'button') buttonsMade++;
     const el = create(tag); let text = '';
+    const append = el.appendChild, insert = el.insertBefore;
+    el.appendChild = child => { if (child.parentNode) child.remove(); return append(child); };
+    el.insertBefore = (child, before) => { if (child.parentNode) child.remove(); return insert(child, before); };
+    Object.defineProperty(el, 'nextSibling', { get: () => el.parentNode?.children[el.parentNode.children.indexOf(el) + 1] || null });
     Object.defineProperty(el, 'textContent', { get: () => text, set(value) {
       text = String(value);
       if (el.contains(document.activeElement)) document.activeElement = document.body;
@@ -134,12 +141,13 @@ test('palette rebuild preserves only palette-owned focus, including repeated mat
   const context = vm.createContext({ document, Log: { info() {}, warn() {} }, setTimeout: () => 0, clearTimeout() {},
     GameStore: { store }, addEventListener() {}, removeEventListener() {},
     GameAudio: {}, ScrollFade: { refresh() {} }, Car3D: { FINISH_SURFACE: {} },
-    LiveryTex: { NUM_FONT_IDS: ['default'], SPONSOR_PACK_IDS: ['default'], FILL_SURFACES: [] },
+    LiveryTex: { NUM_FONT_IDS: ['default'], SPONSOR_PACK_IDS: ['default'], SPINE_LOGO_IDS: ['stripe', 'contours'], FILL_SURFACES: [] },
   });
   context.window = context;
-  const run = path => vm.runInContext(read(path), context, { filename: path });
+  const run = path => vm.runInContext(read(path), context, { filename: absSrc(path) });
   for (const path of ['js/core/mat4.js', 'js/physics/consts.js', 'js/car/parts.js', 'js/data/teams.js',
-    'js/garage/experience.js', 'js/garage/setup-tune.js', 'js/garage/setup-experiments.js', 'js/garage/surface-inspection.js']) run(path);
+    'js/garage/experience.js', 'js/garage/setup-tune.js', 'js/garage/setup-experiments.js', 'js/garage/surface-inspection.js',
+    'js/car/livery-design.js', 'js/garage/livery-design-editor.js']) run(path);
   const team = vm.runInContext('Teams.LIST[1]', context); team.color = [1, 0, 0]; team.color2 = [0, 0, 1];
   const G = { $: id => dom.byId(id), els: { select: dom.byId('select'), overlay: dom.byId('overlay') }, store,
     cssCol: () => '#fff', arrToHex: rgb => '#' + rgb.map(n => Math.round(n * 255).toString(16).padStart(2, '0')).join(''),
@@ -155,12 +163,31 @@ test('palette rebuild preserves only palette-owned focus, including repeated mat
   assert.ok(editor.querySelector('.cs-liv-ed-inspect'), 'actual inserted surface helper participates in the full editor');
   const row = editor.querySelectorAll('.cs-liv-ed-row').find(r => r.querySelector('.cs-liv-ed-lbl')?.textContent === 'PRIMARY');
   const palette = row.querySelector('.cs-liv-pal');
+  const initialChips = [...palette.children], initialHandlers = initialChips.map(b => b.onclick);
+  const afterBuild = buttonsMade;
+  editor.querySelectorAll('button').find(b => b.dataset.csPill === 'spineLogo:contours').onclick();
   let chip = palette.children[0]; chip.focus(); chip.onclick();
-  assert.equal(document.activeElement.dataset.csColour, '#ff0000'); assert.equal(chip.isConnected, false);
+  assert.ok(document.activeElement === chip, 'an unchanged palette retains the focused chip itself'); assert.equal(chip.isConnected, true);
   chip = palette.children[1]; chip.focus(); chip.onclick(); assert.equal(document.activeElement.dataset.csColour, '#0000ff');
-  const colour = row.querySelector('input'); colour.value = '#00ff00'; colour.oninput(); colour.onchange();
+  assert.equal(palette.children[1].classList.contains('active'), true, 'matching an existing colour updates selection in place');
+  assert.equal(palette.children[0].classList.contains('active'), false);
+  for (const [field, value] of [['patternWidth', '80'], ['patternRotation', '25'], ['patternRepeat', '8']]) {
+    const input = editor.querySelectorAll('input').find(n => n.dataset.livField === field);
+    assert.ok(input, field + ' uses the real integrated design control');
+    assert.equal(input.disabled, false, field + ' is available for the selected pattern');
+    input.value = value; input.oninput(); input.onchange();
+  }
+  assert.equal(buttonsMade, afterBuild, 'matching colours and pattern adjustments create zero replacement palette buttons');
+  assert.deepEqual(palette.children, initialChips);
+  assert.deepEqual(palette.children.map(b => b.onclick), initialHandlers, 'unchanged palette handlers remain installed');
+  assert.ok(document.activeElement === chip, 'pattern edits leave palette-owned focus untouched');
+  const colour = row.querySelector('input'); colour.value = '#00ff00'; const beforeDrag = buttonsMade;
+  for (const hex of ['#00fe00', '#00fd00', '#00ff00']) { colour.value = hex; colour.oninput(); }
+  assert.equal(buttonsMade, beforeDrag, 'a colour drag (input ticks) rebuilds no palette chips');
+  colour.onchange();
   assert.equal(document.activeElement.dataset.csColour, '#0000ff', 'the same matching colour retains focus when another colour appears');
   assert.ok(palette.children.some(b => b.dataset.csColour === '#00ff00'), 'the newly edited colour becomes matchable');
+  assert.ok(buttonsMade > afterBuild, 'a changed colour palette rebuilds its choices');
   const native = document.createElement('input'); document.body.appendChild(native); native.focus();
   colour.value = '#ff00ff'; colour.oninput(); colour.onchange(); assert.equal(document.activeElement, native);
 });

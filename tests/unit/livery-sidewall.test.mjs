@@ -8,13 +8,14 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, WeakMap, Map, Set };
 ctx.globalThis = ctx; vm.createContext(ctx);
 for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"])
-  vm.runInContext(read(f), ctx, { filename: f });
+  vm.runInContext(read(f), ctx, { filename: absSrc(f) });
 const { Car3D, CarWheels, Parts, Teams } = vm.runInContext("({ Car3D, CarWheels, Parts, Teams })", ctx);
 const team = Teams.LIST ? Teams.LIST[0] : Teams[0];
 const parts = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
@@ -121,9 +122,10 @@ test("Car3D.build: no ink = byte-identical car; ink changes only wheel-vertex co
 
 test("wheel mesh call sites pass the ink and the editor has the row (source pins)", () => {
   const draw = read("js/car/car-draw.js");
-  // `, wt.surf` is the RIM FINISH surface (livery-paint-zones.test.mjs), passed after the ink.
+  // `, wt.surf` is the RIM FINISH surface (livery-paint-zones.test.mjs), passed after the ink; car3d passes its
+  // PH_RIM stand-in, which CarMaterials.finishPass resolves to that surface (garage-finish-remap.test.mjs).
   assert.equal((draw.match(/wt\.ink(, wt\.surf)?\)/g) || []).length, 4, "car-draw: player + field, front + rear");
-  assert.equal((read("js/car/car3d.js").match(/wheelStyle, wt\.ink(, wt\.surf)?\)/g) || []).length, 2);
+  assert.equal((read("js/car/car3d.js").match(/wheelStyle, wt\.ink(, wt\.surf|, PH_RIM)?\)/g) || []).length, 2);
   assert.match(read("js/camera/cockpit-preview.js"), /visual\.wheels,wt\.ink(,wt\.surf)?\)/);
   assert.match(read("js/garage/livery-design-editor.js"), /section\("WHEELS & BRAKES"[^\n]*"sidewallInk"/);
   assert.match(read("js/garage/setup-sheet.js"), /colorRow\("SIDEWALL INK", "sidewallInk", true\)/);

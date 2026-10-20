@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -77,7 +78,7 @@ function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js"];
-  for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+  for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const M = vm.runInContext("ScreenLooks", ctx);
   const P = withPause ? vm.runInContext("PauseOpts", ctx) : null;
   /** Fire a window CAPTURE listener the way the browser would, with spies. */

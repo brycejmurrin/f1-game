@@ -352,8 +352,7 @@ From the round-2 tooling hunt (`15-tooling-ci`, tip `0f8c88843`). F1-F11 are fix
   `Bash(git * push *claude/f1-game-project-26h3ng*)` and `Bash(git push)`. · medium, needs Bryce
 - 15-F10 (narrowed) `ratchets --base` now blocks a loosened explicit slack and a deleted entry whose file still exists. A NEW entry
   with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low
-- 15-F11 (residual) `ready-full-cap` is still check-then-act: two agents running the check in the same minute both see 2/3 and
-  both flip. The flip itself should re-check after marking ready (CI Watch owns the flip). · low
+- 15-F11 closed: the ready cap it described was retired 2026-10-16 and its tool deleted in #3013.
 - Observation: `tools/ci/spec-timings.mjs` `parseJunit` feeds the time of FAILED testcases into the rolling record and
   `spec-timings.yml` has no `conclusion == 'success'` filter, so a test that timed out at 180 s is billed at 180 s until the
   samples roll off, which can push its spec over the selected-gate budget (a self-reinforcing drop). · low

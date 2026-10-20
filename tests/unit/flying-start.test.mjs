@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -26,7 +27,7 @@ function rig({ session = "quali", timeTrial = false, practice = false, real = fa
     RealRace: { dropSpeed: () => dropV, seatOnRoad: (tr, c) => { seated.push(c.s); c.head = 0; } },
   };
   vm.createContext(ctx);
-  vm.runInContext(read("js/race/flying-start.js") + "\n;globalThis.FlyingStart = FlyingStart;", ctx);
+  vm.runInContext(read("js/race/flying-start.js") + "\n;globalThis.FlyingStart = FlyingStart;", ctx, { filename: absSrc("js/race/flying-start.js") });
   const player = { s: 4990, x: 2, speed: 0, lap: 0, prog: -14, human: true, local: true, isPlayer: true, launchOn: true, launch: {} };
   const G = {
     state: "menu", session, timeTrial, practice, player, track: { total },

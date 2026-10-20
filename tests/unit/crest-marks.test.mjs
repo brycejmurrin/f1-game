@@ -15,16 +15,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadCrests, replay, cssOf } from "../../tools/car/crest-sweep.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { LiveryTex: LT, Teams, Liveries, RecCtx } = loadCrests();
 
-// The ONLY colours a crest may paint that do not come from the palette, each
-// with a reason. A national flag is not a livery colour: re-tinting it from the
-// paint job would make it a different flag.
-const HARDCODED_OK = new Set([
-  cssOf([0.00, 0.55, 0.25]), cssOf([0.95, 0.95, 0.96]), cssOf([0.80, 0.10, 0.12]),
-]);
+// No crest paints a colour outside its palette. (This once allowed three national-flag
+// colours for EVERY crest; measured against the shipped roster none paints one, so the
+// allowance only hid a stray red/white/green fill. A crest that needs a fixed colour
+// has to name its team here.)
+const HARDCODED_OK = new Map();   // team id -> Set of css colours that team's crest may hardcode
 
 const SIZES = [
   ["cover", LT.REGIONS.crest, false],
@@ -50,15 +50,21 @@ function paletteFor(id, liv, bare) {
   const field = fieldsFor(liv, bare);
   return { P: LT.markPalette(id, liv, field, bare), field };
 }
-function every(fn) {
+// The replay is the cost (every team x 2 sizes), and seven tests walk it: run it once.
+let CASES = null;
+function cases() {
+  if (CASES) return CASES;
+  CASES = [];
   for (const team of Teams.LIST) {
     const liv = Liveries.forTeam(team)[0];      // the team's own livery
     for (const [name, R, bare] of SIZES) {
       const { P } = paletteFor(team.id, liv, bare);
-      fn({ team, liv, name, R, bare, P, m: replay(LT, team.id, R, P, bare) });
+      CASES.push({ team, liv, name, R, bare, P, m: replay(LT, team.id, R, P, bare) });
     }
   }
+  return CASES;
 }
+function every(fn) { for (const c of cases()) fn(c); }
 
 test("every team on the roster has a vector crest", () => {
   // Not `>= 11`, which passes vacuously when a team is renamed. "custom" is the
@@ -132,7 +138,7 @@ test("a crest paints only palette colours", () => {
   // livery could recolour some of a crest and silently skip the rest.
   every(({ team, name, P, m }) => {
     const ok = new Set([cssOf(P.mark), cssOf(P.alt), cssOf(P.plate), cssOf(P.part),
-                        cssOf(P.halo), ...HARDCODED_OK]);
+                        cssOf(P.halo), ...(HARDCODED_OK.get(team.id) || [])]);
     for (const c of m.colours)
       assert.ok(ok.has(c), `${team.id} ${name} paints ${c}, which is not in its palette`);
   });
@@ -733,7 +739,7 @@ test("a legend's car wears its marque crest; a wordmark marque is lettered with 
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/data/legends.js", "js/car/liveries.js",
                    "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: absSrc(f) });
   const L = vm.runInContext("LiveryTex", sb), Lg = vm.runInContext("Legends", sb), T = vm.runInContext("Teams", sb);
   const R = L.REGIONS.crest;
   const draw = (id, P) => { const c = new Rec(); L.drawCrest(c, id, R, { palette: P, bare: false }); return c.ops; };
@@ -764,7 +770,7 @@ test("a legend's car wears its marque crest; a wordmark marque is lettered with 
 
 /* ── CREST STYLE (LD logos slice): original emblems replace the team mark at every station ── */
 test("crestStyle: each original emblem draws distinct, bounded, legible art; team/unset/unknown keep the team mark", () => {
-  assert.deepEqual(Array.from(LT.CREST_STYLE_IDS), ["team", "shield", "roundel", "wings", "arrow", "star"]);
+  assert.deepEqual(Array.from(LT.CREST_STYLE_IDS), ["team", "shield", "roundel", "wings", "arrow", "star", "bolt", "laurel", "chevrons", "diamond", "gear", "crown", "flag", "flame"]);
   const R = { x: 0, y: 0, w: 200, h: 200 };
   const ops = (liv) => { const ctx = new RecCtx(); LT.drawCrest(ctx, "ferrari", R, { liv, bare: false }); return JSON.stringify(ctx.ops); };
   const team = ops({});
@@ -783,4 +789,30 @@ test("crestStyle: each original emblem draws distinct, bounded, legible art; tea
 
 test("crestStyle is a livery field (garage file round-trip, forTeam copy)", () => {
   assert.ok(Liveries.FIELDS.includes("crestStyle"));
+  for (const k of ["crestTone", "crestFrame"]) assert.ok(Liveries.FIELDS.includes(k), k);
+});
+
+/* ── CREST TONE / CREST FRAME (B·D8 round 5): dress an emblem from the resolved palette only ── */
+test("crestTone/crestFrame: defaults are op-identical, every combo is distinct, the team mark ignores them", () => {
+  assert.deepEqual(Array.from(LT.CREST_TONE_IDS), ["team", "swap", "mono"]);
+  assert.deepEqual(Array.from(LT.CREST_FRAME_IDS), ["none", "disc", "shield", "badge", "ring"]);
+  const R = { x: 0, y: 0, w: 200, h: 200 };
+  const P = LT.markPalette("ferrari", { id: "x", crestStyle: "gear" }, [[0.9, 0.1, 0.1]], false);
+  const run = (liv, team = "ferrari") => { const ctx = new RecCtx(); LT.drawCrest(ctx, team, R, { liv, palette: P, bare: false }); return ctx; };
+  const ops = (liv, team) => JSON.stringify(run(liv, team).ops);
+  // defaults (and junk) leave the shipped emblem untouched
+  for (const [t, f] of [[undefined, undefined], ["team", "none"], ["bogus", "constructor"]])
+    assert.equal(ops({ crestStyle: "gear", crestTone: t, crestFrame: f }), ops({ crestStyle: "gear" }), `${t}/${f}`);
+  // the team's own mark ignores both rows
+  assert.equal(ops({ crestTone: "swap", crestFrame: "disc" }), ops({}));
+  const seen = new Set();
+  for (const tone of LT.CREST_TONE_IDS) for (const frame of LT.CREST_FRAME_IDS) {
+    const ctx = run({ crestStyle: "gear", crestTone: tone, crestFrame: frame });
+    const k = JSON.stringify(ctx.ops);
+    assert.ok(!seen.has(k), `${tone}/${frame} duplicates another combo`);
+    seen.add(k);
+    for (const op of ctx.ops) if (op.kind === "stroke") assert.ok(op.lw >= LT.STROKE_MIN, `${tone}/${frame} stroke floor`);
+    assert.ok(ctx.ops.length < 600, `${tone}/${frame} bounded`);
+  }
+  assert.equal(seen.size, 15);
 });

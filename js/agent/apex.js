@@ -415,9 +415,9 @@ const api = {
   // the rAF render, and a headless page composites no frames at all, so the
   // whole garage animation was unobservable from a test — which is exactly how
   // "the wings do not move" reached a player instead of a spec. No argument
-  // reads the state; garageStep(dt) advances the ease by dt seconds.
+  // reads the state; garageStep(dt) advances the ease by dt seconds. Shut: garage_closed.
   garageAero(on, opts) {
-    if (!G.setupPreviewOn) return null;
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (on !== undefined) G.setSetupAero(!!on, opts);
     return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
              mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
@@ -433,7 +433,7 @@ const api = {
     try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
   },
   garageStep(dt, n) {
-    if (!G.setupPreviewOn) return null;
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     const [step, count] = stepArgs(dt, n);
     for (let i = 0; i < count; i++) G.stepSetupAero(step);
     return this.garageAero();
@@ -467,7 +467,7 @@ const api = {
     G.tickUi();
     return { ok: true, switched: true, label, seat };
   },
-  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; eye+look [x,y,z] place the eye itself (implies clamp:false); clamp:false lifts the player's el ≥ 0 / minDist floors for this framing; view "free" keeps the current camera.
+  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; eye+look [x,y,z] place the eye itself (implies clamp:false); fov (deg) / centre:true a matched-lens reference shot (look-at centred, no panel shift); clamp:false lifts the player's el ≥ 0 / minDist floors for this framing; view "free" keeps the current camera.
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
@@ -484,7 +484,11 @@ const api = {
       o = Object.assign({}, o, { target: o.look.map(Number), az: Math.atan2(dx, dz),
         el: Math.asin(Math.max(-1, Math.min(1, dy / d))), dist: d, clamp: false });
     }
+    // fov (deg) / centre: a matched-lens reference shot — its own vertical fov, the look-at in the
+    // middle of the frame (no panel lens shift, no auto recentre). Absent = the player's camera.
+    const lens = num(o.fov) > 0 || o.centre ? { fov: num(o.fov) > 0 ? Math.max(5, Math.min(90, o.fov)) : null, centre: !!o.centre } : null;
     G.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
+    if (lens) G.setSetupFree(/** @type {any} */ (lens));   // a matched lens is a free dev shot too (setup-camera reads the object)
     if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
     if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
     if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
@@ -1481,6 +1485,8 @@ const api = {
   inspector: (on) => typeof ThreeInspector === "undefined"
     ? { on: false, supported: false, reason: "three-inspector.js not loaded", loading: false }
     : ThreeInspector.set(gfx, on),
+  // gpuCapture — one-line registration of ApexGpuCapture (#2964); Spector / webgl-lint, off by default.
+  gpuCapture: (a) => typeof ApexGpuCapture === "undefined" ? { on: false, supported: false, reason: "apex-gpu-capture.js not loaded" } : ApexGpuCapture.api(a),
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
   // tunable. With an object: merges valid entries (clamped to each slider's
@@ -1668,7 +1674,7 @@ const api = {
   // frame budget from js/perf/spans.js: on:true starts the span recorder (off = one bool per call),
   // reset:true clears the rings, measure:true also emits performance.measure() for traces. While
   // recording, `spans` holds p50/p95/p99/max ms per phase (frame input physics ai collide camera
-  // render hud), `loaf` the long-animation-frame ring, `gpu` gpuTimer().
+  // audio render hud), `loaf` the long-animation-frame ring, `gpu` gpuTimer().
   perf(o) {
     if (typeof PerfSpans !== "undefined") {
       if (o && o.reset) PerfSpans.reset();
@@ -2256,7 +2262,7 @@ const api = {
     const s = GameStore.store;
     // `foreign` = cross-tab invalidations applied (store.js onForeignWrite): non-zero means a second tab is in play.
     const m = s.mirror || {};
-    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0, mirror: { supported: !!m.supported, restored: m.restored | 0, flushed: m.flushed | 0, failed: m.failed | 0, pending: m.pending | 0 } };
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0, mirror: { supported: !!m.supported, restored: m.restored | 0, flushed: m.flushed | 0, failed: m.failed | 0, pending: m.pending | 0, inFlight: m.inFlight | 0 } };
   },
 
   // settingsFile(mode) — the SETTINGS FILE object (js/ui/settings-export.js):

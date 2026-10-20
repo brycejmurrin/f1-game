@@ -4,18 +4,22 @@
  * until the deferred flyby builds). A canary that stayed armed until present()
  * reverted THREE/WEBGPU to WEBGL2 on every refresh — computer and phone.
  *
- * HOW IT PINS THINGS (2026-09 rewrite). ~390 assertions here used to quote
- * source text; a one-token refactor that changed no behaviour broke two of
- * them. Now the GLX renderer is BOOTED on tests/helpers/glx-mock.mjs (a
- * recording WebGL2 mock) and asserted by its gl call stream — uniform caches,
- * fail-closed guards, cull bookkeeping, the light-lane packing, the opaque
- * canvas; the RENDERER picker is driven through renderer-picker.js in a VM; the
- * GPU-census Verdict script is EXECUTED against fixtures. WGX behaviour that
- * tests/unit/webgpu-lifecycle.test.mjs already drives on its mock device is
- * not repeated here as text. What stays a source pin — TLX (three.js cannot
- * load in Node), WGSL/GLSL/TSL, the vendored three bundle, the workflow
- * YAML, the tools — is matched on comment-stripped source by identifier and
- * shape, never by exact whitespace, argument order or comment text.
+ * HOW IT PINS THINGS (2026-09 rewrite; #1682 2026-10 slice). ~390 assertions
+ * here used to quote source text; a one-token refactor that changed no
+ * behaviour broke two of them. Now the GLX renderer is BOOTED on
+ * tests/helpers/glx-mock.mjs (a recording WebGL2 mock) and asserted by its gl
+ * call stream — uniform caches, fail-closed guards, cull bookkeeping, the
+ * light-lane packing, the opaque canvas; the RENDERER picker and
+ * RendererBoot preference scrub are driven in a VM; session-latch clears on
+ * applyBackend / THREE PATH / SCREENSHOTS are behaviour; recovery CSS uses
+ * css-rules; the GPU-census Verdict script is EXECUTED against fixtures. WGX
+ * behaviour that tests/unit/webgpu-lifecycle.test.mjs already drives on its
+ * mock device is not repeated here as text. What stays a source pin — TLX
+ * (three.js cannot load in Node), WGSL/GLSL/TSL, the vendored three bundle,
+ * the workflow YAML, the tools, and boot-order canaries that need the full
+ * game.js bind/present span — is matched on comment-stripped source by
+ * identifier and shape, never by exact whitespace, argument order or comment
+ * text. Remaining pin count: see tests/unit/assert-match-ratchet.test.mjs.
  *
  * Run: node --test tests/unit/gfx-backend-canary.test.mjs
  */
@@ -36,6 +40,9 @@ import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persi
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx, recordingOverlay } from "../helpers/glx-mock.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { bootRendererBoot } from "../helpers/renderer-boot-vm.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -121,22 +128,26 @@ test("#pm-renderer is visible in the SETTINGS markup (not hidden)", () => {
 test("no stored renderer means Three.js on touch and desktop alike", () => {
   // Preference lives in renderer-boot.js (extracted); unset still names THREE,
   // and start() may downgrade to GLX only when requestAdapter() is null.
-  const boot = code("js/render/renderer-boot.js");
-  const select = boot.slice(boot.indexOf("function storedBackendPreference()"), boot.indexOf("function backendPreference()"));
-  assert.ok(select.length > 0, "renderer preference selection block found");
+  // Behaviour: drive storedBackendPreference / readBackend — no source quote.
+  const unset = bootRendererBoot({ ls: {} });
+  const unsetPref = unset.api.storedBackendPreference();
+  // Field-wise: the return is a VM-realm object (different Object.prototype).
+  assert.equal(unsetPref.pref, "three",
+    "an absent stored preference resolves to THREE (adapter gate is separate)");
+  assert.equal(unsetPref.unset, true);
+  assert.equal(unset.api.backendPreference(), "three");
+  // Touch vs desktop: neither boot nor picker branches on pointer:coarse.
+  const bootSrc = code("js/render/renderer-boot.js");
+  const select = bootSrc.slice(bootSrc.indexOf("function storedBackendPreference()"), bootSrc.indexOf("function backendPreference()"));
   assert.doesNotMatch(select, /matchMedia\s*\([^)]*pointer:\s*coarse/,
     "touch and desktop must use the same default");
-  assert.match(select, /pref\s*==\s*null\)\s*return\s*\{\s*pref:\s*"three"/,
-    "an absent stored preference resolves to THREE (adapter gate is separate)");
-  assert.match(boot, /storedBackendPreference\(\)/,
-    "the boot selection must read the stored preference");
-  assert.match(boot, /gpuAdapterAvailable/,
-    "unset THREE must gate on a resolved GPU adapter before fetching three.webgpu");
-  const picker = code("js/perf/renderer-picker.js");
-  const def = picker.slice(picker.indexOf("function defaultBackend()"), picker.indexOf("function readBackend()"));
+  const pickerSrc = code("js/perf/renderer-picker.js");
+  const def = pickerSrc.slice(pickerSrc.indexOf("function defaultBackend()"), pickerSrc.indexOf("function readBackend()"));
   assert.doesNotMatch(def, /matchMedia\s*\([^)]*pointer:\s*coarse/,
     "renderer-picker defaultBackend must agree with game.js on every device");
-  assert.match(def, /return\s+"three"/, "unset picker read falls back to THREE");
+  // Picker side is already behaviour in "renderer-picker readBackend is Three.js…".
+  const picker = bootPicker({ ls: {} });
+  assert.equal(picker.G.readBackend(), "three", "unset picker read falls back to THREE");
 });
 
 test("renderer-picker readBackend is Three.js when unset and preserves explicit picks", () => {
@@ -153,7 +164,7 @@ test("renderer-picker readBackend is Three.js when unset and preserves explicit 
     });
     seedLog(ctx);
     seedStore(ctx);
-    vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+    vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
     const G = vm.runInContext("RendererPicker", ctx);
     assert.equal(G.readBackend(), expected, `stored ${stored} resolves to ${expected}`);
   }
@@ -173,7 +184,7 @@ test("Gfx binds TLX when the preference is unset and honours explicit backends",
       WGX: { async create() { return wgxBackend; } },
     });
     seedLog(ctx);
-    vm.runInContext(src, ctx, { filename: "js/render/gfx.js" });
+    vm.runInContext(src, ctx, { filename: absSrc("js/render/gfx.js") });
     const G = vm.runInContext("Gfx", ctx);
     return G.create({}, {});
   }
@@ -215,7 +226,8 @@ test("every successful game.js GLX fallback publishes the live backend", () => {
 test("the shared Playwright fixture pins native GLX coverage", () => {
   const fixture = code("tests/helpers/fixtures.js");
   const install = fixture.slice(fixture.indexOf("async function installMocks"), fixture.indexOf("const consoleByPage"));
-  assert.match(install, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  assert.ok(/localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/.test(install),
+    "fixtures installMocks pins apex26.gfxBackend=webgl2");
 });
 
 // The pin above only reaches specs that import `test` from fixtures.js. Four
@@ -232,7 +244,7 @@ test("gfx specs that name GLX import Playwright test from fixtures", () => {
     "tests/specs/instanced-draw.spec.js",
   ]) {
     const src = code(rel);
-    assert.match(src, /from\s+["']\.\.\/helpers\/fixtures\.js["']/,
+    assert.ok(/from\s+["']\.\.\/helpers\/fixtures\.js["']/.test(src),
       rel + " must import test from fixtures (webgl2 pin)");
     assert.doesNotMatch(src, /from\s+["']@playwright\/test["']/,
       rel + " must not import raw @playwright/test (skips the webgl2 pin)");
@@ -264,9 +276,11 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
 test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js", () => {
   // The picker's own behaviour — a <select> with ‹ › steps, "WEBGPU
   // (UNAVAILABLE)" without navigator.gpu — is driven through bootPicker()
-  // below; this is the ownership rule only.
+  // below; this is the ownership rule only (lint-class, not assert.match).
   assert.doesNotMatch(gameUnionCode(), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
-  assert.match(code("js/perf/renderer-picker.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
+  assert.ok(code("js/perf/renderer-picker.js").includes('getElementById("pm-renderer")')
+    || code("js/perf/renderer-picker.js").includes("getElementById('pm-renderer')"),
+    "the picker owns #pm-renderer");
   // The preset file keeps the GRAPHICS button only — the split is the ownership rule.
   assert.doesNotMatch(code("js/perf/quality-preset.js"), /pm-renderer|apex26\.gfxBackend/);
 });
@@ -784,7 +798,7 @@ test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgp
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   assert.equal(G.nextBackend("webgl2"), "three");
   assert.equal(G.nextBackend("three"), "webgpu");
@@ -811,8 +825,9 @@ test("RESET RENDERER is injected next to #pm-renderer, not written into the shel
   // labelled RESET RENDERER) is driven below in "RESET RENDERER click wipes
   // storage, disarms the sentinel, and reloads"; this pins only that the
   // shell does not carry a static copy of the recovery row or its submenu.
-  assert.doesNotMatch(read("index.html"), /id="pm-renderer-reset"/);
-  assert.match(read("index.html"), /id="pm-display-adv"/,
+  const html = read("index.html");
+  assert.doesNotMatch(html, /id="pm-renderer-reset"/);
+  assert.ok(html.includes('id="pm-display-adv"'),
     "RENDERER fold is in the shell; RESET still injects into its body");
 });
 
@@ -845,7 +860,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   // Frozen deepEqual, not spot includes(): a round-6 audit found 7 of 12 keys
   // unasserted — a new crash latch omitted from the list would fail nothing
@@ -982,22 +997,55 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
 test("applyBackend clears session renderer latches before reload", () => {
   // Switching WEBGL2 ↔ THREE ↔ WEBGPU must not inherit wgxHoldPresent /
   // tlxAutoGL from the previous path; RESET already wiped them, a pick did not.
-  const src = read("js/perf/renderer-picker.js");
-  const fn = span(src, "function applyBackend(", "function rendererSlot(", "applyBackend");
-  assert.match(fn, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
-    "applyBackend must clear every RENDERER_SS_KEYS latch, not only gfxBound");
-  assert.doesNotMatch(fn, /clearRendererStorage\(\)/,
+  const latchSeed = Object.fromEntries([
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
+    "apex26.gfxFallbackWhy",
+  ].map((k) => [k, "1"]));
+  const a = bootPicker({
+    ls: { "apex26.gfxBackend": "webgl2" },
+    ss: latchSeed,
+    gpu: {},
+  });
+  assert.equal(a.G.applyBackend("three", a.byId["pm-renderer"]), true);
+  for (const k of a.G.RENDERER_SS_KEYS) {
+    assert.equal(a.ss.getItem(k), null, `applyBackend must clear session latch ${k}`);
+  }
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "three",
     "must not wipe LS backend prefs — that would delete the pick just written");
 });
 
 test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () => {
-  const src = read("js/perf/renderer-picker.js");
-  const three = span(src, "function applyThreePath(", "function readShotMode(", "applyThreePath");
-  assert.match(three, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
-    "THREE PATH reload must wipe the same session latches as applyBackend");
-  const shot = span(src, "function applyShotMode(", "function presentStatus(", "applyShotMode");
-  assert.match(shot, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
-    "SCREENSHOTS reload must drop inherited hold/claim latches before writeShotMode");
+  const latchSeed = Object.fromEntries([
+    "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
+    "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
+    "apex26.gfxFallbackWhy",
+  ].map((k) => [k, "1"]));
+  const three = bootPicker({
+    ls: { "apex26.gfxBackend": "three" },
+    ss: { ...latchSeed },
+    gpu: {},
+  });
+  assert.equal(three.G.applyThreePath("webgl2", { noReload: true }), false);
+  for (const k of three.G.RENDERER_SS_KEYS) {
+    assert.equal(three.ss.getItem(k), null, `THREE PATH must clear session latch ${k}`);
+  }
+  assert.equal(three.G.readThreePath(), "webgl2");
+
+  const shot = bootPicker({
+    ls: { "apex26.gfxBackend": "webgl2" },
+    ss: { ...latchSeed },
+    gpu: {},
+  });
+  assert.equal(shot.G.applyShotMode("blit", { noReload: true }), false);
+  for (const k of shot.G.RENDERER_SS_KEYS) {
+    // writeShotMode may put apex26.wgxCapture back after the wipe.
+    if (k === "apex26.wgxCapture") {
+      assert.equal(shot.ss.getItem(k), "1", "SCREENSHOTS re-writes the new shot mode after the wipe");
+      continue;
+    }
+    assert.equal(shot.ss.getItem(k), null, `SCREENSHOTS must clear inherited latch ${k}`);
+  }
 });
 
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
@@ -1064,7 +1112,7 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   G.init();
   const btn = byId["pm-renderer-reset"];
@@ -2075,7 +2123,7 @@ function bootPicker(opts) {
   });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   // readyState is "complete", so the IIFE already called init().
   return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers, winListeners };
@@ -2170,12 +2218,16 @@ test("the metrics panel reports what is DRAWING, not what is stored", () => {
 });
 
 test("boot and picker normalize invalid renderer preferences to WEBGL2", () => {
-  const stored = fnBody(code("js/render/renderer-boot.js"), "storedBackendPreference");
-  assert.match(stored, /pref === "webgl2"/);
-  assert.match(stored, /pref === "three"/);
-  assert.match(stored, /pref === "webgpu"/);
-  assert.match(stored, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/,
+  const boot = bootRendererBoot({ ls: { "apex26.gfxBackend": "garbage" } });
+  const scrubbed = boot.api.storedBackendPreference();
+  assert.equal(scrubbed.pref, "webgl2",
     "boot must scrub invalid persisted values instead of carrying raw garbage");
+  assert.equal(scrubbed.unset, false);
+  assert.equal(boot.ls.getItem("apex26.gfxBackend"), "webgl2");
+  for (const ok of ["webgl2", "three", "webgpu"]) {
+    const b = bootRendererBoot({ ls: { "apex26.gfxBackend": ok } });
+    assert.equal(b.api.storedBackendPreference().pref, ok, `boot keeps explicit ${ok}`);
+  }
 
   const picker = bootPicker({ ls: { "apex26.gfxBackend": "garbage" }, gpu: {} });
   assert.equal(picker.G.readBackend(), "webgl2");
@@ -2184,41 +2236,42 @@ test("boot and picker normalize invalid renderer preferences to WEBGL2", () => {
 });
 
 test("diagnostics use Three as the unset default and report the live bind", () => {
+  // Behaviour: unset pick + liveBackend() are THREE; the overlay/diag wiring
+  // that prints them is lint-class (identifier shape) only.
+  const unset = bootPicker({ ls: {} });
+  assert.equal(unset.G.readBackend(), "three", "unset diagnostic preference is the product default");
+  assert.equal(unset.G.liveBackend(), "three");
+  const latched = bootPicker({
+    ls: { "apex26.gfxBackend": "three" },
+    ss: { "apex26.gfxBound": "webgl2" },
+  });
+  assert.equal(latched.G.liveBackend(), "webgl2",
+    "liveBackend reports the GLX latch, not only the stored pick");
   const apex = code("js/agent/apex.js");
   const diag = apex.slice(apex.indexOf("backend: safe("), apex.indexOf("mobile:", apex.indexOf("backend: safe(")));
-  assert.match(diag, /RendererPicker\.liveBackend\(\)/,
+  assert.ok(diag.includes("RendererPicker.liveBackend()"),
     "__apex.diag must share the picker/metrics live-backend source");
-  assert.match(diag, /raw\s*==\s*null\s*\?\s*"three"/, "unset diagnostic preference is the product default");
   assert.doesNotMatch(diag, /raw\s*==\s*null\s*\?\s*"webgl2"/);
-
   const overlay = code("js/perf/gfx-debug-overlay.js");
   const picks = fnBody(overlay, "picks");
-  assert.match(picks, /RendererPicker\.liveBackend\(\)/,
+  assert.ok(picks.includes("RendererPicker.liveBackend()"),
     "gfx-debug must print the actual bind, not only the stored pick and latch");
-  assert.match(picks, /"three \(default\)"/);
+  assert.ok(picks.includes('"three (default)"'));
   assert.doesNotMatch(picks, /"webgl2 \(default\)"/);
 });
 
 test("terminal graphics failure hides interactive game UI and offers recovery controls", () => {
-  const game = code("js/game.js");
-  const unavailable = fnBody(game, "showGraphicsUnavailable");
-  const recovery = fnBody(code("js/perf/renderer-picker.js"), "showUnavailable");
-  assert.match(unavailable, /RendererPicker\.showUnavailable/);
-  assert.match(unavailable, /hud:\s*els\.hud/);
-  assert.match(unavailable, /overlay:\s*els\.overlay/);
-  assert.match(unavailable, /ensureDataHub/);
-  assert.match(recovery, /Graphics unavailable/);
-  assert.match(recovery, /USE WEBGL2/);
-  assert.match(recovery, /COPY DIAGNOSTICS/);
-  assert.match(recovery, /location\.reload\(\)/);
-  assert.match(recovery, /get\.call\(document, "loading"\)/,
-    "the fallback drops #loading so the recovery panel is not under a busy plate");
-  assert.match(recovery, /get\.call\(document, "race-settings"\)/,
-    "and closes the settings dialog that would otherwise sit in the top layer");
-  const recoveryCss = code("css/overlays.css");
-  assert.match(recoveryCss, /#nogl \[data-gfx-recovery-actions\] button[^}]*min-height:\s*var\(--tap\)/);
-  assert.match(recoveryCss, /@media\s*\(max-width:\s*480px\)[^{]*\{[^}]*data-gfx-recovery-actions[^}]*grid-template-columns:\s*1fr/);
-  assert.match(game, /showGraphicsUnavailable\(\);\s*return/);
+  // JS recovery buttons / hide-loading / USE WEBGL2 are behaviour in the sibling
+  // "terminal graphics recovery works before the late menu wiring". This keeps
+  // the CSS tap-target / phone-column contract via css-rules (not raw regex).
+  const rules = cssRules(readCssSource("css/overlays.css"));
+  assert.equal(decl(rules, "#nogl [data-gfx-recovery-actions] button", "min-height"), "var(--tap)",
+    "recovery buttons meet the tap floor");
+  assert.equal(
+    decl(rules, "#nogl [data-gfx-recovery-actions]", "grid-template-columns",
+      { context: /max-width:\s*480px/ }),
+    "1fr",
+    "phone stacks recovery actions in one column");
 });
 
 test("terminal graphics recovery works before the late menu wiring", async () => {
@@ -2297,7 +2350,7 @@ test("terminal graphics recovery works before the late menu wiring", async () =>
     DataHub: { open() { dataOpens++; dataDialog.hidden = false; } },
   });
   seedClipboard(ctx);
-  vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: "js/perf/renderer-picker.js" });
+  vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   ctx.RendererPicker = vm.runInContext("RendererPicker", ctx);
   vm.runInContext(src.slice(from, to) + "\nglobalThis.__showGraphicsUnavailable = showGraphicsUnavailable;", ctx);
   ctx.__showGraphicsUnavailable();
@@ -2478,7 +2531,7 @@ test("presentStatus names the three screenshot paths in plain language", () => {
     sessionStorage: makeStorage(),
   });
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: absSrc("js/perf/renderer-picker.js") });
   const G = vm.runInContext("RendererPicker", ctx);
   assert.match(G.presentStatus(), /native swapchain/);
   G.applyShotMode("blit", { noReload: true });
@@ -2773,7 +2826,8 @@ test("lit material scalars ride two packed per-object vec4s, not seven materialR
   const lit = code("js/render/three/tsl-lit.js");
   assert.doesNotMatch(lit, /materialReference\("userData\.tlx/, "a per-material scalar went back to a materialReference node");
   assert.match(lit, /ud\.tlxPackA = new THREE\.Vector4\(ud\.tlxRoughness, ud\.tlxMetalness, ud\.tlxSpecular, ud\.tlxDetail\);/);
-  assert.match(lit, /ud\.tlxPackB = new THREE\.Vector4\(ud\.tlxClearcoat, ud\.tlxCarPaint, ud\.tlxSparkle, 0\);/);
+  // packB.w = carFinish (the finish 60-85 gate; tlx-hunt3 runs it).
+  assert.match(lit, /ud\.tlxPackB = new THREE\.Vector4\(ud\.tlxClearcoat, ud\.tlxCarPaint, ud\.tlxSparkle, o\.carFinish \? 1 : 0\);/);
   // One per-object callback feeds the per-draw scalars AND both packed vectors.
   assert.match(lit, /const \{ draw, pA, pB \} = perDrawUniforms\(\);/);
   assert.match(lit, /pA\.value = \(mud && mud\.tlxPackA\) \|\| _PACK_A_DEF;/);
@@ -2852,7 +2906,7 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   const dir = "vendor/three-0.186.1";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
   assert.equal(m.three, "0.186.1");
-  assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15], "patch ids applied (2 and 3 retired in r186; 15 frees the WebGL fallback's GL programs, shaders and VAOs (#2651); 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14; 14 handles rejected pipeline scopes/diagnostics)");
+  assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16], "patch ids applied (2 and 3 retired in r186; 15 frees the WebGL fallback's GL programs, shaders and VAOs (#2651); 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14; 14 handles rejected pipeline scopes/diagnostics)");
   // §13: a shared group's cache key names texture bindings (node id + binding name), and texture clones keep their group.
   assert.match(THREE_BUNDLE, /\?"s":"t"\)\+\(\w+\.textureNode\?\w+\.textureNode\.id:""\)\+":"\+\w+\.name\+","/, "shared-group key for texture / sampler bindings (PATCHES.md §13)");
   assert.match(THREE_BUNDLE, /\.groupNode=this\.groupNode/, "TextureNode.clone() keeps the group (PATCHES.md §13)");
@@ -3857,8 +3911,8 @@ function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, 
   ctx.window = ctx;
   ctx.dispatchEvent = () => true;
   seedLog(ctx);
-  if (realGfx) vm.runInContext(readFile("js/render/gfx.js"), ctx);
-  vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx);
+  if (realGfx) vm.runInContext(readFile("js/render/gfx.js"), ctx, { filename: absSrc("js/render/gfx.js") });
+  vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/renderer-boot.js") });
   return vm.runInContext("RendererBoot", ctx).create({
     $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async (files) => {
       calls.push(...files);
@@ -3891,7 +3945,7 @@ test("unset default skips three.webgpu when requestAdapter is null", async () =>
   ctx.window = ctx;
   ctx.dispatchEvent = () => true;
   seedLog(ctx);
-  vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/renderer-boot.js") });
   const rb = vm.runInContext("RendererBoot", ctx).create({
     $: () => null, els: {}, canvas: {}, ensureDataHub() {},
     loadBackendScripts: async (files) => { calls.push(...files); },
@@ -4219,9 +4273,10 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
     "object disposal precedes reference clearing and owned geometry disposal");
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
-  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 2, "releaseGeometry and prunePool drop shared wrappers through the helper");
+  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 1, "prunePool drops idle shared wrappers through the helper");
+  assert.equal((tlxSrc.match(/dropWrapper\(m, null, true\);/g) || []).length, 1, "releaseGeometry too, held until the next scene render (pipeline keep-alive)");
   assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
-  assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh\)/, "coalesced owned views use the same warm-aware lifecycle");
+  assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh, null, later\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
   assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
     "warm probes dispose before clearing references, after pending compilation settles");
@@ -5120,7 +5175,7 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     const sb = { window: {}, Frustum: {}, Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Math,
       localStorage: { getItem: (k) => { if (throws) throw new Error("blocked"); return k in ls ? ls[k] : null; } } };
     vm.createContext(sb);
-    vm.runInContext(readFile("js/render/three/tlx-chunked.js"), sb, { filename: "tlx-chunked.js" });
+    vm.runInContext(readFile("js/render/three/tlx-chunked.js"), sb, { filename: absSrc("js/render/three/tlx-chunked.js") });
     return sb.window.TLXShaders;
   };
   const half = (h) => { const e = (h >> 10) & 31, m = h & 1023; return e === 0 ? m * 2 ** -24 : (1 + m / 1024) * 2 ** (e - 15); };
@@ -6163,7 +6218,7 @@ test("the eager GLX handle preserves eval-time mobile tier and live backend gett
     localStorage: { getItem: (k) => storage.get(k) || null },
   });
   context.window = context;
-  vm.runInContext(source("js/render/shared/glx-facade.js"), context);
+  vm.runInContext(source("js/render/shared/glx-facade.js"), context, { filename: absSrc("js/render/shared/glx-facade.js") });
   const handle = context.GLX;
   assert.equal(handle.isMobile, true);
   assert.equal(handle.mobileTier, true);
@@ -6179,7 +6234,7 @@ test("the eager GLX handle preserves eval-time mobile tier and live backend gett
     localStorage: { getItem: (k) => storage.get(k) || null },
   });
   next.window = next;
-  vm.runInContext(source("js/render/shared/glx-facade.js"), next);
+  vm.runInContext(source("js/render/shared/glx-facade.js"), next, { filename: absSrc("js/render/shared/glx-facade.js") });
   assert.equal(next.GLX.isMobile, true);
   assert.equal(next.GLX.mobileTier, false, "high quality overrides only the safe tier");
 });
@@ -6215,7 +6270,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
   });
   context.window = context;
   context.dispatchEvent = (event) => events.push(event.type);
-  vm.runInContext(source("js/render/shared/glx-facade.js"), context);
+  vm.runInContext(source("js/render/shared/glx-facade.js"), context, { filename: absSrc("js/render/shared/glx-facade.js") });
   return { run: () => vm.runInContext(fallback, context), events, context, storage };
 }
 

@@ -80,14 +80,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 2026 aero defaults for catalog options that omit beam/drs/board (item 4).
   "tests/unit/aero-defaults-2026.test.mjs",
   "tests/unit/aero-flap-travel.test.mjs",
+  // B·D3 design-preview aero/floor fields: reach the mesh, default off.
+  "tests/unit/aero-preview-fields.test.mjs",
+  // B·D3c concept-sheet wing shapes: registered, reach the mesh, default off.
+  "tests/unit/aero-shapes-d3c.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
   // gen-cursor-rules, the hooks — asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
-  // The orchestrator/worker contract (skill agent-fleet): host-correct PR
-  // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
-  "tests/unit/agent-fleet.test.mjs",
   // Generated agent index, hook page, coverage page and per-hook help. No browser.
   "tests/unit/agent-indexes.test.mjs",
   "tests/unit/agent-output-config.test.mjs",
@@ -96,8 +97,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
-  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras. Permanent
-  // only; streets stay at the prior baselines. No VM. < 0.1 s.
+  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras, plus the
+  // #2356 attack-zone soft pull. Permanent only; streets stay prior baselines. No VM.
   "tests/unit/ai-pass-complete.test.mjs",
   // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
   // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
@@ -133,6 +134,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // falls through to ZONE_COUNT — silently, which is how monza shipped a
   // table nobody read. Node-side via verify-track.cjs, so it is cheap.
   "tests/unit/assert-audit.test.mjs",
+  // #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).
+  "tests/unit/assert-match-ratchet.test.mjs",
   "tests/unit/assets-pack.test.mjs",
   "tests/unit/audio-mix-improvements.test.mjs",
   // Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.
@@ -163,6 +166,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
   "tests/unit/body-split.test.mjs",
+  // Livery BODY styles: concept chassis builds, nose/cover/pod anchors move, flap floor holds. ~3 s.
+  "tests/unit/body-styles.test.mjs",
   // ...and the DIFF[difficulty] family, one door further out: three readers
   // that took a stored index or object on trust. Executes the shipped source
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
@@ -203,16 +208,20 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // flare / spray-plume discipline, in a VM with seeded Math.random; ~0.2 s.
   // Round-2: decal LRU trims by bytes, the hi-res grave is reaped on the garage path, failed hi-res builds stop retrying.
   "tests/unit/car-draw-decal-budget.test.mjs",
+  "tests/unit/car-front-wing-width.test.mjs",
   "tests/unit/car-fx.test.mjs",
   "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
+  "tests/unit/car-presentation-vm.test.mjs",
   "tests/unit/car-shade.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
+  // Slot protection, rollback and cross-tab writes: the pre-push floor must catch them (L18 C1-11).
+  "tests/unit/career-cross-tab.test.mjs",
   "tests/unit/career-data-audio-improvements.test.mjs",
   // js/career/*.js never consumes simRnd and uses Math.random only at two allowlisted non-draw sites; source scan, < 50 ms.
   "tests/unit/career-determinism.test.mjs",
@@ -363,6 +372,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/deploy-tool.test.mjs",
+  // Design-review matrix (tools/shot/design-matrix.mjs): expansion, framing math, diff labels, batch + resume. Pure, no browser.
+  "tests/unit/design-matrix.test.mjs",
+  // B·D4 preview fields (wheels/brakes/cockpit): default off, each candidate visible vs its equivalent. ~10 s.
+  "tests/unit/design-preview-wheels.test.mjs",
   // The track designer's drawing surface (js/editor/canvas.js) alone: long-press
   // → onContext, the stamp tool's ghost polyline, the drag / span measurement
   // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
@@ -448,6 +461,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
   "tests/unit/finish-coast-rev-vm.test.mjs",
+  // Car part fit (tools/car/car-fit-audit.mjs): GAP / PENETRATION / ZFIGHT / OPEN on box
+  // fixtures, the --base comparison, and the Fenced Halo brow fixture. VM, ~2 s.
+  "tests/unit/fit-audit-car.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/flags.test.mjs",
   // Nightly flake tally (tools/ci/flake-tally.mjs): report.json / live-reporter
@@ -456,12 +472,21 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
   // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
   "tests/unit/flaky-quarantine.test.mjs",
+  // fleet-archive: the archive rule over a saved list_sessions page (role tag, agent-created, idle, PR merged or
+  // closed, no human turn in the last hour); pure fixtures; < 0.5 s.
+  "tests/unit/fleet-archive.test.mjs",
+  // Fleet Board snapshot (tools/ci/fleet-board-snapshot.mjs): dashboard datasets from fixtures, no network. < 1 s.
+  "tests/unit/fleet-board-snapshot.test.mjs",
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
-  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break) and the bus cursor read; a real-git race on a local bare origin; < 2 s.
+  // fleet-bus-mirror: which bus lines become PR comments (to:#<n> only), the comment body, dedupe by bus sha and the closed/merged skip; gh injected, pure; < 0.2 s.
+  "tests/unit/fleet-bus-mirror.test.mjs",
+  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break), the bus cursor read, the deliverable-recipient rule and `who <letter>` (ORCH LIVE lines, explicit and free text); a real-git race on a local bare origin; < 2 s.
   "tests/unit/fleet-bus.test.mjs",
   "tests/unit/fleet-flags.test.mjs",
+  // fleet-owner: HELD (open PR diff) beats CLAIMED (board glob) beats FREE, RELEASE? answers, the 60-min lapse, fail-closed file lists; fake API, < 0.2 s.
+  "tests/unit/fleet-owner.test.mjs",
   // fleet-tick: the diff of two watcher states into changed rows, pure fixtures; < 0.1 s.
   "tests/unit/fleet-tick.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
@@ -542,10 +567,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
   "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
+  "tests/unit/garage-finish-remap.test.mjs",
   "tests/unit/garage-followups.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
+  // Garage room LOOKS (design preview): every look builds a valid bay and changes the room.
+  "tests/unit/garage-looks.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
+  "tests/unit/garage-perf-mesh-free.test.mjs",
   // The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.
   "tests/unit/garage-personality.test.mjs",
   // The garage pre-built while the title idles (js/garage/prebuild.js): the gate,
@@ -568,6 +597,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
   // repo stays untouched; every fixture-repo test imports the scrub first). ~2.5 s.
   "tests/unit/git-fixture-env.test.mjs",
+  // Shared GET-only GitHub REST helper (#3013).
+  "tests/unit/github-api.test.mjs",
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
@@ -579,6 +610,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-resize-hysteresis.test.mjs",
   "tests/unit/glx-resource-balance.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
+  "tests/unit/gpu-allocation-estimator.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
   "tests/unit/harness-display.test.mjs",
@@ -633,10 +665,18 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
+  // #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.
+  "tests/unit/inputs-hash.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
   "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/js-debugger-node.test.mjs",
   "tests/unit/js-debugger-trace.test.mjs",
+  "tests/unit/js-debugger-tracks.test.mjs",
+  "tests/unit/js-debugger-transport.test.mjs",
+  "tests/unit/key-binds-calibration.test.mjs",
+  "tests/unit/key-binds-hunt.test.mjs",
+  "tests/unit/key-binds-pad-menu.test.mjs",
+  "tests/unit/key-binds-ui.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
   // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
@@ -681,7 +721,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // files below sat in test:garage-unit / test:steering-unit, which ran in NO
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
-  // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
+  // livery-contrast (9.7 s) stays CI-only; cover-legibility is in test:node-slow (159 s measured).
+  "tests/unit/live-run-check.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
@@ -692,6 +733,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-paint-zones.test.mjs",
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
+  "tests/unit/livery-stations.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
@@ -722,6 +764,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lsp-caller-fixes.test.mjs",
   "tests/unit/lsp-config-freshness.test.mjs",
   // apex-lsp as an MCP client: shared warmed child for definition / references / callers / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). Pipelined alias fan-out; test:mcp runs --test-concurrency=1 (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md).
+  "tests/unit/lsp-mcp-fixture.test.mjs",
   "tests/unit/lsp-mcp.test.mjs",
   "tests/unit/lsp-navigation-efficiency.test.mjs",
   "tests/unit/lsp-reference-fixes.test.mjs",
@@ -749,12 +792,20 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
   "tests/unit/menu-sentinel-resize.test.mjs",
+  // merge-gate: the merge gate's pure rows (open, required CI check, game paths, bus GAME-SLOT pacing), the receipt
+  // github-mcp-guard.sh reads, and merge_policy.py agreeing with gate-receipt.mjs on every receipt case; < 2 s.
+  "tests/unit/merge-gate.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
+  // tools/perf/mesh-census-lib.mjs: pass/source/distance banding + #2657/#2631 recommend (no browser). ~0.1 s.
+  "tests/unit/mesh-census.test.mjs",
   "tests/unit/metrics.test.mjs",
   // Night sky-tint fallback on the cockpit mirror glass: dim env bands + matte
   // material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.
   "tests/unit/mirror-glass-night.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
+  "tests/unit/mirror-pass-carbuild.test.mjs",
+  "tests/unit/mirror-pass-prepare.test.mjs",
+  "tests/unit/mirror-pass-watch.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",
@@ -798,6 +849,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
   "tests/unit/parts-distinct-mesh.test.mjs",
+  "tests/unit/parts-factory-key.test.mjs",
   // Both node-only and both under half a second: the catalog LADDER (no paid
   // option dominated by a cheaper one, no row that is never optimal) and the
   // garage's per-vertex MATERIAL column. Neither was in the edit loop, which
@@ -850,12 +902,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
   "tests/unit/poll-live-shell.test.mjs",
-  // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
+  // CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.
   "tests/unit/pr-board.test.mjs",
   // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.
   "tests/unit/pr-body.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
   // answers the question that actually bites, "does the pre-push gate RUN it" —
+  // #2889 slice 1: commit-gate verdict cache (artifacts/pre-commit-guards.ok),
+  // git-config timeout through .githooks/pre-commit. Throwaway repos, ~2 s.
+  "tests/unit/pre-commit-guards.test.mjs",
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
@@ -903,8 +958,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ratchet-reason.test.mjs",
   "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
-  // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
-  "tests/unit/ready-full-cap.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
   // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
   // director lays it over a stub field — grid, plans, the pace loop, the
@@ -914,12 +967,19 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WATCH recording-gap cache (#2465): explicit refresh replaces a stale interior hole and keeps a pit stop and a red flag. VM, under a second.
   "tests/unit/real-race-tab-gap-refresh.test.mjs",
   "tests/unit/real-race.test.mjs",
-  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
-  "tests/unit/real-replay-captions.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
   // centreline, the highlights list, the field as puppets (follow, speed, a car
-  // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
+  // whose data ends, the flag) and the exact JUMP IN. Split by concern (frame-fit,
+  // broadcast, transport, audio-focus; shared fixtures tests/helpers/real-replay-fixtures.mjs).
+  "tests/unit/real-replay-audio-focus.test.mjs",
+  "tests/unit/real-replay-broadcast.test.mjs",
+  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
+  "tests/unit/real-replay-captions.test.mjs",
+  "tests/unit/real-replay-frame-fit.test.mjs",
+  "tests/unit/real-replay-transport.test.mjs",
   "tests/unit/real-replay-vm.test.mjs",
+  // Rear wing active aero to FIA 2026 C3.11.6: one rigid RW Flap, one aft pivot, Straight Mode flattens (never inverts). VM, ~1 s.
+  "tests/unit/rear-wing-active-aero.test.mjs",
   "tests/unit/red-flag-fuel-vm.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
   // REJECTION, and index.html turns an unhandled one into a full-screen
@@ -972,6 +1032,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/screen-looks.test.mjs",
+  "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
@@ -982,6 +1043,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/selected-gate-verdict.test.mjs",
   "tests/unit/session-contracts.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
+  "tests/unit/session-ledger.test.mjs",
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/session-transcript.test.mjs",
@@ -1028,8 +1090,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
-  // 2026-10-18 skill-surface retest pins (gameplay + render/UI prose), < 1 s.
-  "tests/unit/skill-gameplay-surface.test.mjs",
   "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
@@ -1055,7 +1115,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 track engine: surfaceFolds / centreline diagnostics, running-surface fold clamp, opt-in splineAlpha (unset = byte-identical path).
   "tests/unit/spline-fold-diagnostics.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
+  "tests/unit/spotify-native.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
+  // The deploy-only minify (#3110): ~20 s, it minifies every js/ file twice
+  // (once to check top-level names and directives, once for the scenery scans).
+  "tests/unit/stage-minify.test.mjs",
+  // #2204: terrace / spectatorHill / vaultStand curve follow — outside-of-bend
+  // gap ≤ 0.5 m on moderate bends, no severe terrace self-pairs on jerez.
+  "tests/unit/stand-curve-gap.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
   // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
   "tests/unit/start-lights.test.mjs",
@@ -1103,6 +1170,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/terrain-y.test.mjs",
   "tests/unit/test-bg-outcome.test.mjs",
+  "tests/unit/test-bg-waste.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
   "tests/unit/test-groups.test.mjs",
@@ -1202,6 +1270,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-maps-corners.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   "tests/unit/track-preview-plan.test.mjs",
+  // Tracks.project() hints over six circuits (perturbed, seam, wrong-lap), real track build in a VM, ~13 s.
+  "tests/unit/track-project-hints.test.mjs",
   // RANDOMISE builds clockwise (Σk < 0 through the engine) with the grid side
   // of the start straight ≥ the exit side, over 30 seeds; ~3 s.
   "tests/unit/track-randomise.test.mjs",
@@ -1231,6 +1301,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tyre-peak-slip.test.mjs",
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
+  // #2975: race skidIntensity onset → GameAudio.skidLevel via game-vm + fake-audio.
+  "tests/unit/tyre-squeal-race-vm.test.mjs",
   // Job 4: slip-driven tyre squeal — threshold, lat/long monotonic gain+pitch,
   // setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.
   "tests/unit/tyre-squeal-slip.test.mjs",
@@ -1281,6 +1353,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/uilayers-modal-order.test.mjs",
   "tests/unit/validation-cli.test.mjs",
+  // Vendored licence files: every vendor/ package has one and a declared SPDX licence matches its text (#3092). < 0.1 s.
+  "tests/unit/vendor-licences.test.mjs",
   "tests/unit/verify-live.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
   // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
@@ -1288,6 +1362,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/visual-oracle.test.mjs",
   // #2960: opt-in vm-debug-preload turns a no-filename brake-cue load into a file:// URL.
   "tests/unit/vm-debug-preload.test.mjs",
+  // #2961: vm source loads in tests/unit and tests/helpers name absolute filenames (vm-filename-lint).
+  "tests/unit/vm-filename-lint.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
@@ -1314,6 +1390,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // guard the two tools a session reaches for at push time.
   // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
   "tests/unit/wgx-free-retire.test.mjs",
+  // WGX debug labels + pass debug groups; validation-shaped messages name the label; Spector/webgl-lint vendor pin (#2964). VM, < 0.2 s.
+  "tests/unit/wgx-labels.test.mjs",
+  // Opt-in torque-balanced wheel state (#1628): lockup / wheelspin VM pins; default OFF.
+  "tests/unit/wheel-state.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
   // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
   // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.
@@ -1321,6 +1401,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
   // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
   "tests/unit/wind.test.mjs",
+  "tests/unit/workflow-harness.test.mjs",
+  // ci.yml structure read from the PARSED YAML (job → step by name): base-green plan, geometry filter, behind-ship step. ~0.3 s.
+  "tests/unit/workflow-lint-ci-plan.test.mjs",
   // tools/check/workflow-lint.mjs: actionlint + zizmor (offline) over .github/workflows; fails a planted bad workflow, passes the tree.
   // Skips loudly when a binary is absent; the CI `lints` job fails a SKIP. ~3 s.
   "tests/unit/workflow-lint.test.mjs",
@@ -1746,7 +1829,7 @@ const TOOLING_FAST_CHANGED_RUN_ALL = [
 
 const PATH_PIN_RE = /["'`]((?:js|css|tools|types|desktop|docs|tests\/|index\.html|AGENTS\.md|CLAUDE\.md|README\.md|\.claude\/|\.cursor\/|sw\.js|version\.json)[^"'`]+)["'`]/g;
 
-const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|environment-json|comment-citations|agent-surface|agent-fleet)\.test\.mjs$/;
+const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|environment-json|comment-citations|agent-surface)\.test\.mjs$/;
 
 let _pinIndex = null;
 
@@ -1803,19 +1886,188 @@ function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
   }
 }
 
+/**
+ * #2890 — TRACKED / RUN_ALL paths that may stay narrow when their DIFF content
+ * is benign (script-tag-only index.html, scripts/version-only package.json,
+ * cache-version-only sw.js). select-specs TRACKED is unchanged: CI browser
+ * selection still fail-safes on the path alone.
+ */
+export const NARROWABLE_INFRA = Object.freeze(["index.html", "package.json", "sw.js"]);
+
+/** Unit tests seeded when a narrowable infra path is benign (#2890). */
+export const NARROW_INFRA_TESTS = Object.freeze({
+  "index.html": Object.freeze([
+    "tests/unit/load-order.test.mjs",
+    "tests/unit/shell-ids.test.mjs",
+    "tests/unit/circuit-count-shell.test.mjs",
+  ]),
+  "package.json": Object.freeze([
+    "tests/unit/change-driver-tools.test.mjs",
+    "tests/unit/docs-integrity.test.mjs",
+    "tests/unit/generated-docs.test.mjs",
+  ]),
+  "sw.js": Object.freeze([
+    "tests/unit/service-worker.test.mjs",
+    "tests/unit/a11y-pwa-pass.test.mjs",
+    "tests/unit/load-order.test.mjs",
+  ]),
+});
+
+/** Wall-time estimate above which --changed prints the background-with-log hint. */
+export const LONG_RUN_MS = 120_000;
+export const LONG_RUN_HINT =
+  "Long run: run in the background with a log, e.g. nohup npm run test:tooling-fast -- --changed > artifacts/logs/tooling-fast.log 2>&1 & (tool cap is 600 s)";
+
+/** Content lines of a unified diff (added/removed only; ignores ---/+++ headers). */
+export function unifiedDiffContentLines(diffText) {
+  const out = [];
+  for (const line of String(diffText || "").split(/\r?\n/)) {
+    if (!line.length) continue;
+    if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff ") ||
+        line.startsWith("index ") || line.startsWith("@@") || line.startsWith("\\")) continue;
+    if (line[0] === "+" || line[0] === "-") out.push(line.slice(1));
+  }
+  return out;
+}
+
+/** True when every changed line is a single-line `<script …></script>` (or blank / gen-shell scripts marker). */
+export function isScriptTagOnlyIndexHtmlDiff(diffText) {
+  const lines = unifiedDiffContentLines(diffText);
+  if (!lines.length) return false;
+  return lines.every((raw) => {
+    const t = raw.trim();
+    if (!t) return true;
+    if (/^<!--\s*\/?@gen-shell:scripts\s*-->$/.test(t)) return true;
+    if (/^<!--\s*@gen-shell:\/scripts\s*-->$/.test(t)) return true;
+    if (/^<script\b[^>]*>\s*<\/script>$/i.test(t)) return true;
+    if (/^<script\b[^>]*\/>$/i.test(t)) return true;
+    return false;
+  });
+}
+
+/** True when only top-level `scripts` and/or `version` differ between two package.json texts. */
+export function isScriptsOnlyPackageJsonDiff(beforeText, afterText) {
+  let before, after;
+  try {
+    before = JSON.parse(beforeText);
+    after = JSON.parse(afterText);
+  } catch (_) {
+    return false;
+  }
+  if (!before || !after || typeof before !== "object" || typeof after !== "object") return false;
+  const keysB = Object.keys(before).sort();
+  const keysA = Object.keys(after).sort();
+  if (keysB.join("\0") !== keysA.join("\0")) return false;
+  for (const k of keysB) {
+    if (k === "scripts" || k === "version") continue;
+    if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) return false;
+  }
+  return true;
+}
+
+/** True when every changed sw.js line is a cache/version constant assignment or a comment. */
+export function isVersionOnlySwJsDiff(diffText) {
+  const lines = unifiedDiffContentLines(diffText);
+  if (!lines.length) return false;
+  return lines.every((raw) => {
+    const t = raw.trim();
+    if (!t) return true;
+    if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t.startsWith("*/")) return true;
+    return /^(?:const|let|var)\s+\w*(?:VERSION|CACHE|BUILD|PREFIX|STAMP)\w*\s*=/.test(t);
+  });
+}
+
+/** Human reason fragment for a WIDENED line when a narrowable path is NOT benign. */
+function narrowWidenReason(file) {
+  if (file === "index.html") return "index.html non-script change";
+  if (file === "package.json") return "package.json non-scripts change";
+  if (file === "sw.js") return "sw.js non-version change";
+  return `${file} infra change`;
+}
+
+/** Read a file's unified diff vs opts.diffBase (or origin/DEPLOY); opts.fileDiffs overrides. */
+function readNarrowDiff(file, opts = {}) {
+  if (opts.fileDiffs && Object.prototype.hasOwnProperty.call(opts.fileDiffs, file)) {
+    return opts.fileDiffs[file];
+  }
+  const root = opts.root || ROOT;
+  const ref = opts.diffBase || `origin/${DEPLOY_BRANCH}`;
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
+    return execFileSync("git", ["diff", "-U0", base, "--", file], {
+      cwd: root, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
+/** before/after text for package.json; opts.filePairs overrides. */
+function readPackagePair(opts = {}) {
+  if (opts.filePairs && opts.filePairs["package.json"]) return opts.filePairs["package.json"];
+  const root = opts.root || ROOT;
+  const ref = opts.diffBase || `origin/${DEPLOY_BRANCH}`;
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
+    const before = execFileSync("git", ["show", `${base}:package.json`], { cwd: root, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
+    const after = fs.readFileSync(path.join(root, "package.json"), "utf8");
+    return { before, after };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Classify a narrowable infra path. Returns { benign, widenReason } — benign
+ * false (and widenReason set) when the diff cannot be proven narrow (fail-safe).
+ */
+export function classifyNarrowableInfra(file, opts = {}) {
+  const norm = String(file || "").replace(/\\/g, "/");
+  if (norm === "index.html") {
+    const diff = readNarrowDiff(norm, opts);
+    if (diff == null) return { benign: false, widenReason: narrowWidenReason(norm) };
+    return isScriptTagOnlyIndexHtmlDiff(diff)
+      ? { benign: true, widenReason: null }
+      : { benign: false, widenReason: narrowWidenReason(norm) };
+  }
+  if (norm === "package.json") {
+    const pair = readPackagePair(opts);
+    if (!pair) return { benign: false, widenReason: narrowWidenReason(norm) };
+    return isScriptsOnlyPackageJsonDiff(pair.before, pair.after)
+      ? { benign: true, widenReason: null }
+      : { benign: false, widenReason: narrowWidenReason(norm) };
+  }
+  if (norm === "sw.js") {
+    const diff = readNarrowDiff(norm, opts);
+    if (diff == null) return { benign: false, widenReason: narrowWidenReason(norm) };
+    return isVersionOnlySwJsDiff(diff)
+      ? { benign: true, widenReason: null }
+      : { benign: false, widenReason: narrowWidenReason(norm) };
+  }
+  return { benign: false, widenReason: `${norm} infra change` };
+}
+
 /** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
 export function selectToolingFastChanged(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
   const tfSet = new Set(allFiles);
   // `changed` is the real diff size on EVERY path (it used to exist only on `empty`/`matched`, so a whole-floor
   // fallback printed `changed=0`); `because` names the first path that forced the fallback (#2663 follow-up).
-  const full = (reason, extra = {}) => ({
-    files: [...allFiles],
-    reason,
-    shards: shardsCoveringFiles(allFiles, allFiles),
-    changed: changed.length,
-    ...extra,
-  });
+  // `widened` is the human fragment for the first-line `WIDENED:` notice (#2890).
+  const full = (reason, extra = {}) => {
+    const because = extra.because;
+    const widened = extra.widened || (because ? (
+      NARROWABLE_INFRA.includes(because) ? narrowWidenReason(because) : `${because} forces full suite`
+    ) : reason);
+    return {
+      files: [...allFiles],
+      reason,
+      shards: shardsCoveringFiles(allFiles, allFiles),
+      changed: changed.length,
+      widened,
+      ...extra,
+    };
+  };
 
   if (!changed.length) return { files: [], reason: "empty", shards: [], changed: 0 };
 
@@ -1826,11 +2078,41 @@ export function selectToolingFastChanged(changed, opts = {}) {
   }
 
   const circ = circuitsTouched(changed, opts.ref || "");
-  const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
+  const narrowSeeds = new Set();
+  const benignNarrow = new Set();
+  const classifyOnce = (norm) => {
+    const r = classifyNarrowableInfra(norm, opts);
+    if (r.benign) {
+      benignNarrow.add(norm);
+      for (const t of (NARROW_INFRA_TESTS[norm] || [])) narrowSeeds.add(t);
+    }
+    return r;
+  };
+
+  const trackedRaw = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
+  const tracked = [];
+  for (const f of trackedRaw) {
+    const norm = f.replace(/\\/g, "/");
+    if (NARROWABLE_INFRA.includes(norm)) {
+      const { benign, widenReason } = classifyOnce(norm);
+      if (benign) continue;
+      return full("tracked", { tracked: trackedRaw, because: norm, widened: widenReason });
+    }
+    tracked.push(f);
+  }
   if (tracked.length) return full("tracked", { tracked, because: tracked[0] });
 
-  const runAll = changed.find((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)));
-  if (runAll) return full("run-all-path", { because: runAll });
+  const runAllCand = changed.filter((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)));
+  for (const f of runAllCand) {
+    const norm = f.replace(/\\/g, "/");
+    if (NARROWABLE_INFRA.includes(norm)) {
+      if (benignNarrow.has(norm)) continue;
+      const { benign, widenReason } = classifyOnce(norm);
+      if (benign) continue;
+      return full("run-all-path", { because: norm, widened: widenReason });
+    }
+    return full("run-all-path", { because: norm });
+  }
 
   let scripts = opts.scripts;
   if (!scripts) {
@@ -1840,14 +2122,19 @@ export function selectToolingFastChanged(changed, opts = {}) {
       return full("no-package-json");
     }
   }
-  const receipt = selectionReceipt(changed, scripts);
-  if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed, because: (receipt.unclaimed || [])[0] });
+  // Benign narrowable infra must not count as "unmatched" against pick-tests RULES.
+  const receiptChanged = changed.filter((f) => !benignNarrow.has(f.replace(/\\/g, "/")));
+  if (receiptChanged.length) {
+    const receipt = selectionReceipt(receiptChanged, scripts);
+    if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed, because: (receipt.unclaimed || [])[0] });
+  }
 
-  const selected = new Set();
+  const selected = new Set(narrowSeeds);
   const index = opts.pinIndex || pinIndex();
 
   for (const f of changed) {
     const norm = f.replace(/\\/g, "/");
+    if (benignNarrow.has(norm)) continue;
     if (tfSet.has(norm)) selected.add(norm);
     // A file edit has a precise dependency key and may also inherit its
     // nearest directory pins. Do not fall through to the bare top-level
@@ -1872,7 +2159,15 @@ export function selectToolingFastChanged(changed, opts = {}) {
 
   const files = allFiles.filter((f) => selected.has(f));
   if (!files.length) return full("no-listed-match");
-  return { files, reason: "matched", shards: shardsCoveringFiles(files, allFiles), changed: changed.length };
+  return { files, reason: narrowSeeds.size && files.every((f) => narrowSeeds.has(f)) ? "narrow-infra" : "matched",
+    shards: shardsCoveringFiles(files, allFiles), changed: changed.length,
+    ...(narrowSeeds.size ? { narrow: [...narrowSeeds].filter((t) => tfSet.has(t)) } : {}) };
+}
+
+/** First output line when --changed falls back to the full suite (#2890). */
+export function widenedLine(meta, fileCount) {
+  if (!meta || !meta.widened) return null;
+  return `WIDENED: ${meta.widened} (${fileCount} files)`;
 }
 
 /** The `--changed` header line: reason, the REAL diff size, the files chosen, and the path that forced a fallback. */
@@ -1965,6 +2260,8 @@ if (isMain) {
   if (parsed.changed) {
     changedMeta = selectToolingFastChanged(changedVsDeploy());
     files0 = changedMeta.files;
+    const wide = widenedLine(changedMeta, files0.length);
+    if (wide) console.log(wide);
     console.log(changedHeader(changedMeta, files0.length));
     if (changedMeta.reason === "empty") {
       // An empty diff selects zero files and the runner printed `= run passed (0 passed, 0 failed)` with exit 0: a
@@ -1972,6 +2269,11 @@ if (isMain) {
       console.error(EMPTY_DIFF_MESSAGE);
       process.exit(3);
     }
+    // #2890: selections estimated over ~2 min print the background-with-log hint (edit-loop jobs=3).
+    try {
+      const est = estimateToolingFast(files0, loadTimings(), Math.max(parsed.jobs || DEFAULT_JOBS, 3));
+      if ((est.criticalPathMs || 0) >= LONG_RUN_MS) console.log(LONG_RUN_HINT);
+    } catch (_) { /* timings absent: no hint */ }
   } else if (!files0) {
     files0 = [...TOOLING_FAST_FILES];
   }

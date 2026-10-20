@@ -36,6 +36,16 @@
       "presentation": "shared-levels",
       "preserve": "Literal argv, no command-argument persistence, no implicit timeout, child cancellation ownership, separate stream retention, --read cursor/limits, full-mode compatibility."
     },
+    "tools/agent/output.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Original content and isError, private artifact path/bytes, presentation failures, safe containment, bounded page cursor."
+    },
+    "tools/agent/process.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Child stdio choice and original exit/signal, timeout and cleanup outcomes."
+    },
     "tools/car/audit-aero.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -45,6 +55,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "All screenshots and contact sheets; distinguish successful captures from blank/error renders."
+    },
+    "tools/car/car-fit-audit.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Every failing row with its NEW/WORSE/PRE-EXISTING status, section pair, worst value and position, the final = car-fit-audit verdict line and the failed exit; JSON retains every row and joint."
     },
     "tools/car/career-economy.mjs": {
       "action": "keep-native",
@@ -80,6 +95,16 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Generated fitted-zone/source output when requested, original photo provenance and exact mappings."
+    },
+    "tools/car/lib/fit-checks.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/car/lib/fit-geom.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/car/livery-contrast.mjs": {
       "action": "keep-native",
@@ -376,6 +401,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/check/vm-filename-lint.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Native exit status (1 when a relative vm filename or an unparsed file is found), stdout/stderr distinction and the path:line of every finding; do not reinterpret a failing lint as a pass."
+    },
     "tools/check/vm-portable.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -496,45 +526,85 @@
       "presentation": "shared-levels",
       "preserve": "Download/parse notes; issue errors even in JSON; no failures inferred from absence"
     },
+    "tools/ci/fleet-archive.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "ARCHIVE versus KEEP per session with the reason; pr-unknown under --offline; never archives by itself"
+    },
+    "tools/ci/fleet-board-snapshot.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "One ok/ERR line per source with row counts; the final '= snapshot ok|partial' line; exit 1 when any source failed"
+    },
     "tools/ci/fleet-board.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Dry-run versus applied; pin failure; exact board issue number"
     },
+    "tools/ci/fleet-bus-mirror.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Dry-run versus posted; each posted, skipped (with reason) and FAILED PR comment by bus sha; exit 1 on any failed post"
+    },
     "tools/ci/fleet-bus.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
-      "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha"
+      "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha; who: the one `<letter> <host:id> <sha7> <age>` line or exit 1 none"
     },
     "tools/ci/fleet-flags.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Unknown served/configured metrics and stalled/disconnected evidence"
     },
+    "tools/ci/fleet-owner.mjs": {
+      "action": "page-results",
+      "presentation": "shared-levels",
+      "preserve": "HELD versus CLAIMED versus FREE per path with PR number and head sha; unaddressable claims; the exact RELEASED/HELD bus line; exit 3 with no guessed rows"
+    },
     "tools/ci/fleet-tick.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
-      "preserve": "Changed-only rows versus first tick; ship/Pages red; dry-run state not saved"
+      "preserve": "Changed-only rows versus first tick; ship/Pages red; dry-run state not saved; --summary appends Markdown to a file and leaves stdout unchanged"
     },
     "tools/ci/geometry-paths.mjs": {
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Regex/suite strings are consumed by shell; unknown argument exit 2"
     },
+    "tools/ci/github-api.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Import-only GET helper; no-token and HTTP error text unchanged"
+    },
     "tools/ci/github-token.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "Never reveal token or child auth stdout"
+    },
+    "tools/ci/guards-verdict.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "check exit code (0 hit / non-zero miss) and run's guard suite exit status; cache file path and format shared with bash-guard"
     },
     "tools/ci/handback.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "No SWEEP when pending/red/open Plan; trigger IDs; gate/CI exits"
     },
+    "tools/ci/inputs-hash.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Hash/key output consumed by ci.yml cache lookups; exit status and the printed key must stay byte-stable"
+    },
     "tools/ci/junit-failed.mjs": {
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
+    },
+    "tools/ci/live-run-check.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Advisory WARN line when a push would cancel a live ci.yml run; exit 0 always, never blocks"
     },
     "tools/ci/measure-guard-commit.mjs": {
       "action": "keep-native",
@@ -545,6 +615,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Observation window/max-runs and API errors; no cancellation mutation"
+    },
+    "tools/ci/merge-gate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every row's verdict and evidence; the gated head and tip; passed/refused/unknown exit distinct; the receipt path"
     },
     "tools/ci/needs-sync.mjs": {
       "action": "keep-native",
@@ -604,7 +679,7 @@
     "tools/ci/pr-board.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
-      "preserve": "ARM/READY/SYNC blockers; CI unknown; open Plan and repository-wide cap"
+      "preserve": "ARM/READY/SYNC blockers; CI unknown; open Plan and repository-wide cap; fleet letter and slot per row"
     },
     "tools/ci/pr-body.mjs": {
       "action": "keep-native",
@@ -631,15 +706,10 @@
       "presentation": "native",
       "preserve": "Informational gauge versus historical hold policy; timeout 124 and API 3"
     },
-    "tools/ci/ready-full-cap.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Cap/exclude flags and no-token/API failure; do not hide row identities"
-    },
     "tools/ci/ready-gate.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan"
+      "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan; missing fleet-block field on a cursor/ branch"
     },
     "tools/ci/release-provenance.mjs": {
       "action": "keep-native",
@@ -695,6 +765,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Missing evidence, infra-retry and partial drops; failure exits 1"
+    },
+    "tools/ci/session-ledger.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-family minutes, timeouts and repeats summary line; secrets, emails and out-of-repo paths stay redacted"
     },
     "tools/ci/session-status.mjs": {
       "action": "keep-native",
@@ -776,10 +851,20 @@
       "presentation": "native",
       "preserve": "Timeout versus success and condition identity; no polling spam"
     },
+    "tools/ci/webkit-leg-summary.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Markdown job-summary text for webkit-leg.yml; the no-report.json message and exit 0 when the boot step wrote nothing"
+    },
     "tools/ci/who-is-on-it.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Fetch failed means nothing read; stale claims hidden count; never suppress conflicting work"
+    },
+    "tools/desktop/minify.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
     },
     "tools/desktop/pack-dry-run.mjs": {
       "action": "keep-native",
@@ -1211,6 +1296,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/lib/gate-receipt.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/harness.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1252,6 +1342,11 @@
       "preserve": "@c3"
     },
     "tools/lib/pack-assets.cjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/lib/presentation.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1631,6 +1726,21 @@
       "presentation": "shared-levels",
       "preserve": "Unknown bindings, setup-versus-navigation limitation, truncation totals"
     },
+    "tools/mcp/workflow-harness-client.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Exact call envelope, semantic exit status, quiet-mode failures, source/path limits and endpoint authentication."
+    },
+    "tools/mcp/workflow-harness-core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/mcp/workflow-harness.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Authenticated HTTP request/response envelopes, endpoint identity, budgets, transcript records and shutdown cleanup."
+    },
     "tools/net/nostr-local.cjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1661,6 +1771,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/live-render-matrix.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-row `= row <name> <verdict>` lines, the final `= live-render-matrix` summary and the checkpointed --json report."
+    },
     "tools/perf/diagnostics.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -1670,6 +1785,21 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
+    },
+    "tools/perf/mesh-census-lib.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/perf/mesh-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
+    },
+    "tools/perf/garage-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-phase `- <label> <phase>` lines, the `= garage-census` summary JSON line and the --json artifact."
     },
     "tools/perf/profile.mjs": {
       "action": "artifact-first",
@@ -1751,6 +1881,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/design-matrix.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
     "tools/shot/export-history-evidence.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1815,6 +1950,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/shot/lib/design-matrix.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/shot/lib/garage-camera-catalog.mjs": {
       "action": "no-direct-output",
@@ -2185,16 +2325,6 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
-    },
-    "tools/agent/output.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "Original content and isError, private artifact path/bytes, presentation failures, safe containment, bounded page cursor."
-    },
-    "tools/agent/process.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "Child stdio choice and original exit/signal, timeout and cleanup outcomes."
     }
   }
 }

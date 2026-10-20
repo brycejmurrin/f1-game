@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
@@ -76,8 +77,8 @@ function boot() {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const ctxTime = (dt) => { ctx.currentTime += dt; };
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
@@ -124,15 +125,18 @@ test("squeal gain and pitch rise monotonically with lat and long slip", () => {
 });
 
 test("setSkid follows the slip map, glides, and lands an exact 0", async () => {
-  const { GameAudio: A, ctx } = await sampleEngine();
-  const gains = [];
-  const mk = ctx.createGain;
-  // Nodes already exist (built once in startEngine). Find the live skid gain after driving it.
+  const { GameAudio: A } = await sampleEngine();
+  // Scalar path: race-normalised intensity (no second SQUEAL_THRESH). Raw axes
+  // still go through squealFromSlip — see the {lat,long} checks below.
   A.setSkid(0.6, false);
-  assert.ok(A.skidLevel() > 0, "a slide past the threshold is audible");
-  assert.equal(A.squealFromSlip(0.6, 0, false).gain, A.skidLevel(), "setSkid gain is the dry map");
+  assert.ok(A.skidLevel() > 0, "a race intensity past 0 is audible");
+  assert.equal(A.skidLevel(), 0.6 * 0.16, "scalar setSkid gain is over * dry gain");
   A.setSkid(0.08, false);
-  assert.equal(A.skidLevel(), 0, "below the threshold the layer is silent");
+  assert.ok(A.skidLevel() > 0, "small positive race intensity still squeals (onset at 0.10 rad)");
+  A.setSkid(0, false);
+  assert.equal(A.skidLevel(), 0, "intensity 0 is silent");
+  A.setSkid({ lat: 0.08, long: 0, wet: false });
+  assert.equal(A.skidLevel(), 0, "raw axes still honour SQUEAL_THRESH");
   A.setSkid({ lat: 0.2, long: 0.5, wet: false });
   const mid = A.skidLevel();
   A.setSkid({ lat: 0.2, long: 0.8, wet: false });
@@ -141,7 +145,16 @@ test("setSkid follows the slip map, glides, and lands an exact 0", async () => {
   assert.ok(pitch > 760, `pitch ${pitch} should sit above the dry rest`);
   A.setSkid(0, false);
   assert.equal(A.skidLevel(), 0, "release lands an exact 0");
-  void mk; void gains;
+});
+
+test("scalar setSkid lifts pitch from carSfx lock without {lat,long}", async () => {
+  const { GameAudio: A } = await sampleEngine();
+  A.setSkid(0.5, false);
+  const base = A.skidPitch();
+  A.setCarSfx({ scrub: 0, lock: 1, surface: 0, pitLim: 0, wet: false });
+  A.setSkid(0.5, false);
+  assert.ok(A.skidPitch() > base + 50, "lock from setCarSfx adds the long-slip pitch voice");
+  A.setSkid(0, false);
 });
 
 test("setSkid ramps via setTargetAtTime and creates no nodes per frame", async () => {

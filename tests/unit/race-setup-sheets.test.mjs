@@ -21,6 +21,7 @@ import vm from "node:vm";
 import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 import { readCssSource } from "../helpers/css-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const raceCss = () => cssRules(fs.readFileSync(path.join(ROOT, "css/race-setup.css"), "utf8"));
@@ -32,7 +33,7 @@ function RaceSettings() {
   vm.runInContext(
     fs.readFileSync(path.join(ROOT, "js/race/race-settings.js"), "utf8")
       .replace(/^const RaceSettings\b/m, "var RaceSettings"),
-    ctx,
+    ctx, { filename: absSrc("js/race/race-settings.js") },
   );
   return ctx.RaceSettings;
 }
@@ -49,7 +50,7 @@ function sheet(o = {}) {
   vm.runInContext(
     fs.readFileSync(path.join(ROOT, "js/race/race-settings.js"), "utf8")
       .replace(/^const RaceSettings\b/m, "var RaceSettings"),
-    ctx,
+    ctx, { filename: absSrc("js/race/race-settings.js") },
   );
   const disk = new Map();
   const store = {

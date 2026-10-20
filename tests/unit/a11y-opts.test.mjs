@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/a11y-opts.js";
@@ -99,8 +100,8 @@ function load({ stored = {}, osReduce = false, readyState = "complete" } = {}) {
     addEventListener() {},
   });
   const ctx = vm.createContext(sb);
-  vm.runInContext(TITLE, ctx, { filename: "js/ui/title-fx.js" });
-  vm.runInContext(SRC, ctx, { filename: FILE });
+  vm.runInContext(TITLE, ctx, { filename: absSrc("js/ui/title-fx.js") });
+  vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   return {
     A: vm.runInContext("A11yOpts", ctx),
     T: vm.runInContext("TitleFx", ctx),

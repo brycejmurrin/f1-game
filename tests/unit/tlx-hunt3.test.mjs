@@ -21,6 +21,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -32,7 +33,7 @@ const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/t
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
-  vm.runInThisContext(read(f), { filename: f });
+  vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 // Compile one lit mesh on a fresh renderer and return every shader source three handed GL.
 async function litGLSL(ctxOver = {}, matOpts = { clearcoat: 0.8, carPaint: 1 }) {
@@ -336,7 +337,7 @@ test("R5: apex26.tlxSkyCache512 is off by default, '1' = mobileTier only, 'all' 
   assert.equal(size("all", false), 512, "'all' is the desktop A/B lever");
   assert.match(TLX, /TLXShaders\.sky\(THREE, TSL, \{ chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize, vp: vport, sceneView \}\)/);
   // The real sky factory honours the size (its NUMBERS block derives W and the texel from S).
-  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: "tsl-sky.js" });
+  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: absSrc("js/render/three/tsl-sky.js") });
   for (const [cacheSize, want] of [[512, 512], [0, 768]]) {
     const sky = globalThis.TLXShaders.sky(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), cache: true, cacheSize });
     assert.equal(sky.cacheState().size, want);
@@ -478,7 +479,7 @@ test("R1: the AI material is the lit instanced fragment on its own program key; 
   assert.equal(ai.customProgramCacheKey(), "ai-" + inst.customProgramCacheKey());
   assert.match(TLX, /draw\(mesh, model, opts\) \{\s*if \(opts && opts\.coalesce && mesh && mesh\.geo && _coAppend\(mesh\.geo, model, opts\)\) return;/);
   assert.match(fnSource(TLX, "async function warmFxPrograms() {"), /await _coWarm\(\);/);
-  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo\);/);
+  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo, true\);/);
   assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
   assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
   assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);
@@ -708,4 +709,98 @@ test("R1: owned run retirement uses the real warm-aware wrapper queue and preser
   R.warming(false);R.flush();R.flush();R.drop(geo);
   for(const v of views){assert.equal(v.objects,1);assert.equal(v.geometries,1);assert.equal(v.mesh.geometry,null);assert.equal(v.mesh.material,null);}
   assert.equal(sourceDisposals,0,"the source geometry is borrowed; only each owned run view retires");
+});
+
+test("shared bind groups: last-owner eviction, context isolation and robust keys", async (t) => {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const manager = renderer._bindings;
+  const uniforms = (...ids) => [{ isNodeUniformsGroup: true, uniforms: ids.map(id => ({ nodeUniform: { node: { id } } })) }];
+  const shared = (bindings) => manager.getSharedBindGroup("render", bindings);
+  assert.notEqual(shared(uniforms(1, 23)), shared(uniforms(12, 3)), "uniform IDs have delimiters");
+  assert.notEqual(shared([{nodeUniform: {id: 123}}]), shared(uniforms(123)), "standalone uniforms have their own prefix");
+  const tex = name => [{ isSampler: true, isSampledTexture: true, texture: null, textureNode: {id: 7}, name, release() {} }];
+  assert.notEqual(shared(tex("a")), shared(tex("b")), "sampler names distinguish program layouts without nodeUniform");
+  assert.notEqual(shared(tex("a")), shared([{ ...tex("a")[0], isSampler: false }]), "texture and sampler keys differ");
+  const binding = tex("lifecycle");
+  binding[0].texture = new THREE.Texture();
+  const group = shared(binding);
+  const context = renderer;
+  let creates = 0, destroys = 0, releases = 0;
+  binding[0].release = () => { releases++; };
+  const oldCreate = renderer.backend.createBindings, oldDelete = renderer.backend.deleteBindGroupData;
+  renderer.backend.createBindings = () => { creates++; };
+  renderer.backend.deleteBindGroupData = () => { destroys++; };
+  t.after(() => { renderer.backend.createBindings = oldCreate; renderer.backend.deleteBindGroupData = oldDelete; });
+  manager._createBindings([group]); manager._createBindings([group]);
+  assert.equal(manager.get(group).usedTimes, 2);
+  binding[0].texture = null; // texture disposal may clear this before its group retires
+  manager._destroyBindings([group]);
+  assert.equal(shared(tex("lifecycle")), group, "first owner leaves shared group usable");
+  assert.equal(destroys, 0); assert.equal(releases, 0);
+  const key = manager.get(group).cacheKey;
+  manager._destroyBindings([group]);
+  assert.equal(manager._sharedBindGroups.get(context).has(key), false, "null texture cannot prevent eviction");
+  assert.equal(manager.has(group), false);
+  assert.equal(creates, 1); assert.equal(destroys, 1); assert.equal(releases, 1);
+  const fresh = shared(tex("lifecycle"));
+  assert.notEqual(fresh, group, "same key creates fresh bindings after last release");
+  renderer._currentRenderContext = {};
+  const renderBinding = tex("lifecycle");
+  renderBinding[0].texture = new THREE.Texture();
+  const renderGroup = shared(renderBinding);
+  assert.notEqual(renderGroup, fresh, "render and compute fallback contexts are isolated");
+  manager._createBindings([renderGroup]); renderBinding[0].texture = null; manager._destroyBindings([renderGroup]);
+  assert.equal(manager._sharedBindGroups.get(renderer._currentRenderContext).size, 0);
+  renderer._currentRenderContext = null;
+  assert.equal(shared(tex("lifecycle")), fresh);
+  let uboCreates = 0, uboDestroys = 0, uboReleases = 0;
+  const oldUboCreate = renderer.backend.createUniformBuffer, oldUboDestroy = renderer.backend.destroyUniformBuffer;
+  renderer.backend.createUniformBuffer = () => { uboCreates++; };
+  renderer.backend.destroyUniformBuffer = () => { uboDestroys++; };
+  t.after(() => { renderer.backend.createUniformBuffer = oldUboCreate; renderer.backend.destroyUniformBuffer = oldUboDestroy; });
+  const uboCount = renderer.info.memory.uniformBuffers;
+  const ubo = shared([{isUniformBuffer: true, nodeUniform: {id: 999}, byteLength: 16, release() { uboReleases++; }}]);
+  manager._createBindings([ubo]); manager._createBindings([ubo]);
+  assert.equal(renderer.info.memory.uniformBuffers, uboCount + 1);
+  manager._destroyBindings([ubo]);
+  assert.equal(uboDestroys, 0);
+  manager._destroyBindings([ubo]);
+  assert.deepEqual([uboCreates, uboDestroys, uboReleases], [1, 1, 1]);
+  assert.equal(renderer.info.memory.uniformBuffers, uboCount);
+  const builder = new THREE.GLSLNodeBuilder(null, {});
+  const unshared = [{groupNode: {shared: false}}];
+  assert.notEqual(builder._getBindGroup("object", unshared), builder._getBindGroup("object", unshared));
+  const eligible = [{groupNode: {shared: true}}];
+  assert.notEqual(builder._getBindGroup("render", eligible), builder._getBindGroup("render", eligible), "lightweight renderer fallback is uncached");
+});
+
+test("memState reports the renderer's primitive resource counts and byte sizes", () => {
+  const start = TLX.indexOf("const inf = renderer && renderer.info;", TLX.indexOf("memState()"));
+  const end = TLX.indexOf("if (inf.render)", start);
+  assert.ok(start >= 0 && end > start);
+  const report = new Function("renderer", "o", TLX.slice(start, end) + "} return o;");
+  const memory = { programs: 7, textures: 3, texturesSize: 4097, attributes: 9, attributesSize: 17,
+    uniformBuffers: 2, uniformBuffersSize: 1024, total: 5138, unusedObject: {} };
+  const result = report({info: {memory, programs: new Array(99)}}, {});
+  assert.equal(result.progs, 7);
+  assert.equal(result.resources.texturesSize, 4097, "bytes stay exact, without KB rounding");
+  assert.equal(result.resources.attributes, 9);
+  assert.equal(result.resources.total, 5138);
+  assert.equal(result.resources.uniformBuffersSize, 1024);
+  assert.equal("unusedObject" in result.resources, false);
+  assert.equal("readbackBuffers" in result.resources, false, "missing telemetry is absent, rather than a fabricated zero");
+  assert.equal(report({info: {}}, {}).progs, null);
+});
+
+test("carFinish rides the material's packB.w and its cache key (finish 60-85 block on car paint only)", async () => {
+  // garage-perf-2026-10-20 finding 2: the per-draw uniform that gates the finish AA inputs + tint switch.
+  const { lit } = await litGLSL();
+  assert.equal(lit.makeMaterial({ carPaint: 1, carFinish: true }).userData.tlxPackB.w, 1, "a car-paint material sets packB.w");
+  assert.equal(lit.makeMaterial({ carPaint: 1 }).userData.tlxPackB.w, 0, "anything else leaves it 0");
+  const key = vm.runInNewContext("(" + fnSource(TLX, "function buildMatKey(") + ")", {});
+  assert.notEqual(key({ carPaint: 1, carFinish: true }, false, 2), key({ carPaint: 1 }, false, 2),
+    "matCache never hands a car-paint draw a material minted without the flag");
 });

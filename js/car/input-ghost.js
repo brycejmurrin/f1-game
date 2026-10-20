@@ -16,6 +16,7 @@ const InputGhost = (function () {
   // past it the lap is dropped, as an invalid one is.
   const MAX_LAP_S = 600;
   const DEFAULT_DT = 1 / 60;
+  const IDLE_CAP_MS = 5000;             // the PB write waits this long for a long idle slot
 
   let trackId = null, context = null, storageId = null;
   let best = null;               // finished envelope for current track/class
@@ -120,8 +121,13 @@ const InputGhost = (function () {
     return st.every((v, i) => Number.isFinite(v) && Number.isInteger(fl[i])
       && v >= -127 && v <= 127 && fl[i] >= 0 && fl[i] <= (g.v === 3 ? 255 : 3));
   }
+  // Snapshots this module committed (a finished lap, a decoded disk entry) are
+  // immutable, so their O(steps) valid() runs once: compatible(best) ran it on
+  // every finishLap and every atStep (#3109).
+  const _validSnaps = new WeakSet();
+  function committed(g) { _validSnaps.add(g); return g; }
   function compatible(g) {
-    if (!valid(g)) return false;
+    if (!(g && _validSnaps.has(g)) && !valid(g)) return false;
     if (g.physRev !== currentPhysRev()) return false;
     // Build 0 means "dev / unknown" on either side — accept so VM harnesses and
     // unstamped shells still round-trip. A stamped recording refuses a different
@@ -193,19 +199,37 @@ const InputGhost = (function () {
     const bytes = decodeBytes(value, count * (flags ? 1 : 8)), view = new DataView(bytes.buffer);
     return Array.from({ length: count }, (_, i) => flags ? bytes[i] : view.getFloat64(i * 8, true));
   }
+  // A finished ghost's channels never change after finishLap / load (only
+  // `_used` does), so each snapshot packs once: the idle write packed the whole
+  // store twice per save (#3109).
+  const _packed = new WeakMap();
+  const DROP_V2 = ["steer", "flags", "throttle", "brake"];
+  const DROP_V3 = ["steer", "flags", "throttle", "brake", "rawSteer", "rawThrottle", "rawBrake"];
   function packedGhost(g) {
+    if (!g || typeof g !== "object") return g;
+    const hit = _packed.get(g);
+    if (!hit) {
+      const out = packGhost(g);
+      if (out !== g) _packed.set(g, out.packedV3 ? { payload: { packedV3: out.packedV3 }, drop: DROP_V3 } : { payload: { packedV2: out.packedV2 }, drop: DROP_V2 });
+      return out;
+    }
+    const out = Object.assign({}, g, hit.payload);
+    for (const k of hit.drop) delete out[k];
+    return out;
+  }
+  function packGhost(g) {
     if (!g || !valid(g)) return g;
     if (g.v === 2 && g.steer.every(Number.isInteger)) {
       const out = Object.assign({}, g, { packedV2: { count: g.steer.length,
         steer: packChannel(g.steer.map(v => v & 255), true), flags: packChannel(g.flags, true),
         throttle: packChannel(g.throttle, true), brake: packChannel(g.brake, true) } });
-      for (const k of ["steer", "flags", "throttle", "brake"]) delete out[k];
+      for (const k of DROP_V2) delete out[k];
       return out;
     }
     if (g.v !== 3) return g;
     const out = Object.assign({}, g, { packedV3: { count: g.steer.length,
       steer: packChannel(g.rawSteer), throttle: packChannel(g.rawThrottle), brake: packChannel(g.rawBrake), flags: packChannel(g.flags, true) } });
-    for (const k of ["steer", "flags", "throttle", "brake", "rawSteer", "rawThrottle", "rawBrake"]) delete out[k];
+    for (const k of DROP_V3) delete out[k];
     return out;
   }
   function unpackedGhost(g) {
@@ -217,7 +241,7 @@ const InputGhost = (function () {
         const out = Object.assign({}, g, { steer: unpackChannel(p.steer, n, true).map(v => v > 127 ? v - 256 : v),
           flags: unpackChannel(p.flags, n, true), throttle: unpackChannel(p.throttle, n, true), brake: unpackChannel(p.brake, n, true) });
         delete out.packedV2;
-        return valid(out) ? out : null;
+        return valid(out) ? committed(out) : null;
       } catch (_) { return null; }
     }
     try {
@@ -228,8 +252,22 @@ const InputGhost = (function () {
       out.steer = out.rawSteer.map(quantizeSteer);
       out.throttle = out.rawThrottle.map((v, i) => quantizePedal(v, out.flags[i] & 1));
       out.brake = out.rawBrake.map((v, i) => quantizePedal(v, out.flags[i] & 2));
-      return valid(out) ? out : null;
+      return valid(out) ? committed(out) : null;
     } catch (_) { return null; }
+  }
+  // Upper bound on byteLength(JSON.stringify({ [id]: packedGhost(g) })) with no
+  // encode: a packed channel's JSON is at most its dense base64 plus quotes
+  // (packChannel keeps sparse runs only when shorter; a constant is a short
+  // number), and all of it is ASCII. The "" placeholders carry the quotes.
+  function packedBytesBound(id, g) {
+    const n = g.steer.length, v3 = g.v === 3;
+    if (!v3 && !(g.v === 2 && g.steer.every(Number.isInteger))) return Infinity;
+    const dense = (width) => Math.ceil(n * width / 3) * 4;
+    const skel = Object.assign({}, g, v3
+      ? { packedV3: { count: n, steer: "", throttle: "", brake: "", flags: "" } }
+      : { packedV2: { count: n, steer: "", flags: "", throttle: "", brake: "" } });
+    for (const k of v3 ? DROP_V3 : DROP_V2) delete skel[k];
+    return byteLength(JSON.stringify({ [id]: skel })) + (v3 ? 3 * dense(8) + dense(1) : 4 * dense(1));
   }
   const packedStore = store => Object.fromEntries(Object.entries(store).map(([id, g]) => [id, packedGhost(g)]));
 
@@ -256,23 +294,43 @@ const InputGhost = (function () {
     accessClock = Math.max(accessClock + 1, Date.now());
     g._used = accessClock;
   }
+  // UTF-8 bytes of one `"id":packed` member, memoised per snapshot while its
+  // `_used` stamp holds. The store's JSON is "{" + members.join(",") + "}", so
+  // the sum below is byte-for-byte JSON.stringify(packedStore(store)) without
+  // building the whole-store string twice per save (#3109).
+  const _entryBytes = new WeakMap();
+  function entryBytes(id, g) {
+    const hit = g && typeof g === "object" ? _entryBytes.get(g) : null;
+    if (hit && hit.id === id && hit.used === g._used) return hit.bytes;
+    const json = JSON.stringify(packedGhost(g));
+    const bytes = json === undefined ? -1 : byteLength(JSON.stringify(id) + ":" + json);
+    if (g && typeof g === "object") _entryBytes.set(g, { id, used: g._used, bytes });
+    return bytes;
+  }
+  function storeBytes(store) {
+    let size = 2, members = 0;
+    for (const id of Object.keys(store)) {
+      const b = entryBytes(id, store[id]);
+      if (b >= 0) { size += b; members++; }
+    }
+    return size + Math.max(0, members - 1);
+  }
   function trimStore(store) {
-    let json = JSON.stringify(packedStore(store));
-    if (byteLength(json) <= MAX_STORE_BYTES) return { changed: false };
+    if (storeBytes(store) <= MAX_STORE_BYTES) return { changed: false };
     let changed = false;
     for (const id of Object.keys(store)) {
-      if (!valid(store[id])) { delete store[id]; changed = true; }
+      const g = store[id];
+      if (!(g && _validSnaps.has(g)) && !valid(g)) { delete store[id]; changed = true; }
     }
-    json = JSON.stringify(packedStore(store));
     const oldest = Object.keys(store).sort((a, b) => {
       const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
       const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
       return at - bt;
     });
-    let size = byteLength(json);
+    let size = storeBytes(store);
     while (oldest.length > 0 && size > MAX_STORE_BYTES) {
       const id = oldest.shift();
-      size -= byteLength(JSON.stringify(id) + ":" + JSON.stringify(packedGhost(store[id])) + ",");
+      size -= entryBytes(id, store[id]) + 1;
       delete store[id];
       changed = true;
     }
@@ -343,7 +401,18 @@ const InputGhost = (function () {
         if (typeof Log !== "undefined") Log.warn("car", "input-ghost save fail");
       }
     };
-    if (typeof requestIdleCallback === "function") requestIdleCallback(() => write());
+    if (typeof requestIdleCallback === "function") {
+      // A long idle slot only, as Ghost's save (js/car/ghost.js): the write is a
+      // multi-ms job on a phone and a frame's idle tail is < 16 ms. Capped so a
+      // Time Trial driven lap after lap still writes; flush() covers pause/quit.
+      const since = Date.now();
+      const idle = (dl) => {
+        if (pending.get(id) !== snap) return;
+        if (dl && typeof dl.timeRemaining === "function" && dl.timeRemaining() < 25 && Date.now() - since < IDLE_CAP_MS) { requestIdleCallback(idle); return; }
+        write();
+      };
+      requestIdleCallback(idle);
+    }
     else if (typeof setTimeout === "function") setTimeout(write, 0);
     else write();
   }
@@ -418,14 +487,19 @@ const InputGhost = (function () {
     if (context != null) snap.context = context;
     if (extraMeta && typeof extraMeta === "object") snap.meta = Object.assign({}, extraMeta);
     if (!valid(snap)) return false;
-    const diskBytes = byteLength(JSON.stringify({ [storageId || "recording"]: packedGhost(snap) })) + 64;
+    const diskKey = storageId || "recording";
+    // The analytic bound settles the common case without packing on the lap
+    // line; only a lap near the budget pays the exact encode (#3109).
+    const bound = packedBytesBound(diskKey, snap);
+    const diskBytes = bound + 64 <= MAX_STORE_BYTES ? bound + 64
+      : byteLength(JSON.stringify({ [diskKey]: packedGhost(snap) })) + 64;
     if (diskBytes > MAX_STORE_BYTES) {
       lastSave = { durable: false, reason: "recording exceeds storage budget", bytes: diskBytes };
       if (typeof Log !== "undefined") Log.warn("car", "input-ghost recording exceeds storage budget; previous best retained");
       return false;
     }
     lastSave = { durable: false, reason: "pending" };
-    best = snap;
+    best = committed(snap);
     if (storageId != null) scheduleSave(storageId, best);
     return true;
   }
@@ -478,13 +552,22 @@ const InputGhost = (function () {
     const store = loadStore();
     if (id == null) {
       for (const k of Object.keys(store)) delete store[k];
+      pending.clear();
       best = null;
+      replayStep = 0;
+      replayNative = false;
     } else {
-      delete store[id];
-      if (storageId === id) best = null;
+      const contextPrefix = id.startsWith("v2:") ? null : "v2:" + id + ":";
+      const matches = key => key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+      for (const key of pending.keys()) if (matches(key)) pending.delete(key);
+      for (const key of Object.keys(store)) if (matches(key)) delete store[key];
+      if (storageId != null && matches(storageId)) {
+        best = null;
+        replayStep = 0;
+        replayNative = false;
+      }
     }
     saveStore(store);
-    pending.clear();
   }
 
   function flush() {

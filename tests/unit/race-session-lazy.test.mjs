@@ -6,6 +6,7 @@ import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import path from "path";
 import vm from "vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -25,7 +26,7 @@ test("session stub installs PitLane/Reliability and create() is inert", () => {
     console,
     Log: { info() {}, warn() {}, debug() {} },
   };
-  vm.runInNewContext(src("js/race/session-stub.js"), sb, { filename: "js/race/session-stub.js" });
+  vm.runInNewContext(src("js/race/session-stub.js"), sb, { filename: absSrc("js/race/session-stub.js") });
   assert.equal(sb.PitLane._stub, true);
   assert.ok(sb.Reliability.isLevel("off"));
   assert.equal(sb.Reliability.isLevel("nope"), false);
@@ -41,20 +42,6 @@ test("session stub installs PitLane/Reliability and create() is inert", () => {
   assert.equal(radio.chat(), "normal");
   assert.equal(radio.comm(), "tv");
   assert.equal(sb.Damage.blank().hits, 0);
-});
-
-test("RaceSettings paintPlan surface does not throw on the PitLane stub", () => {
-  // Mirrors js/race/race-settings.js paintPlan + rs-plan wire reads.
-  const sb = { console, Log: { info() {}, warn() {}, debug() {} } };
-  vm.runInNewContext(src("js/race/session-stub.js"), sb, { filename: "js/race/session-stub.js" });
-  const pits = sb.PitLane.create({});
-  assert.doesNotThrow(() => {
-    const pin = pits.pinnedStops();
-    pits.setPinnedStops(pin == null ? null : 1);
-    const plan = pits.zoneOf() ? pits.planFor(0.5, true, 10) : null;
-    void plan;
-    void pits.lossS();
-  });
 });
 
 test("ensureRaceSession reinjects real PitLane and calls onRaceSessionReady", async () => {

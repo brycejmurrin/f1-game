@@ -7,6 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
@@ -44,7 +45,7 @@ function boot(opts = {}) {
   sb.window = sb;
   if (opts.clock) sb.Date = { now: opts.clock };
   const v = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(SRC, v);
   const blipFires = () => vm.runInContext("GameAudioSignal.blipFireTotal()", v);
   const deviceListeners = {};
@@ -117,7 +118,7 @@ test("audition samples and cleanup cannot alter a later race engine claim, inclu
   const { A, sandbox } = boot(); A.init(); await flush(); A.stopMusic();
   let timerId = 0; const timers = new Map();
   const ctx = vm.createContext({ setTimeout: (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout: (id) => timers.delete(id) });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/race-mix-audition.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/race-mix-audition.js"), "utf8"), ctx, { filename: absSrc("js/audio/race-mix-audition.js") });
   const audition = vm.runInContext("RaceMixAudition", ctx);
   const store = { get: (key, d) => key === "music" || key === "radioVoice" ? false : d };
   assert.equal(audition.start({ audio: A, store }), true); const before = A.enginePlaybackGeneration();

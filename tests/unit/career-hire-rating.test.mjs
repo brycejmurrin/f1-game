@@ -18,22 +18,30 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { DOM_SOURCE } from "../helpers/seed-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// The REAL predicate from js/data/teams.js (not a hand copy that can drift from it).
+const realIsReal = (() => {
+  const c = vm.createContext({ console, Math, Object, Array, Number, String, JSON });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: absSrc("js/data/teams.js") });
+  return vm.runInContext("Teams.isReal", c);
+})();
 
 function load() {
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
     GameStore: { CAREER_V: 1, store: { get: (k, d) => d, set() {} },
       seasonDriverId: (t, i) => t + ":" + i, migrateCareer: (c) => c },
-    Teams: { POINTS: [25], isReal: (t) => !!t && !t.custom, LIST: [] },
+    Teams: { POINTS: [25], isReal: realIsReal, LIST: [] },
     Parts: { getFactorySetup: () => ({}) },
     Tracks: { LIST: [], SEASON: [] },
   });
   seedLog(ctx);
   seedHash32(ctx);
   for (const f of ["js/core/mat4.js", "js/data/driver-ratings.js", "js/career/career.js"])
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   return vm.runInContext("({ Career, DriverRatings })", ctx);
 }
 
@@ -89,9 +97,9 @@ test("the tile asks the way the race asks: with the custom team's tier, not the 
   };
   sb.window = sb;
   const read = (f) => readFileSync(join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
-  vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });
-  vm.runInNewContext(read("js/career/experience.js"), sb, { filename: "js/career/experience.js" });
-  vm.runInNewContext(read("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
+  vm.runInNewContext(DOM_SOURCE, sb, { filename: absSrc("js/ui/dom.js") });
+  vm.runInNewContext(read("js/career/experience.js"), sb, { filename: absSrc("js/career/experience.js") });
+  vm.runInNewContext(read("js/career/career-ui.js"), sb, { filename: absSrc("js/career/career-ui.js") });
   const G = { $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") }, soundOn: false, flow: "gp", session: "race", season: null,
     store: { get: (k, d) => d, set() {} }, cssCol: () => "#fff", openCareer() {}, openGarage() {}, openRaceSettings() {},
     refreshCareerButton() {}, qualiClear() {}, armConfirm: (btn, txt, act) => { act(); return true; } };

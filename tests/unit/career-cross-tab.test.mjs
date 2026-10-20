@@ -5,8 +5,16 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// The REAL predicate from js/data/teams.js (not a hand copy that can drift from it).
+const realIsReal = (() => {
+  const c = vm.createContext({ console, Math, Object, Array, Number, String, JSON });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/teams.js"), "utf8"), c, { filename: absSrc("js/data/teams.js") });
+  return vm.runInContext("Teams.isReal", c);
+})();
 
 function save(round, money) {
   return {
@@ -85,21 +93,20 @@ function load(options = {}) {
     },
     window: { addEventListener: (name, fn) => listeners.set(name, fn) },
     Log: { warn() {}, info() {} },
-    // isReal mirrors js/data/teams.js; a beatRival goal walks the grid through it.
+    // the real isReal from js/data/teams.js; a beatRival goal walks the grid through it.
     Teams: { POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1], LIST: [team],
-             isReal: (t) => !!t && !t.custom && !t.legends },
+             isReal: realIsReal },
     Tracks: options.tracks || { LIST: [{ id: "a" }], SEASON: [{ id: "a" }], seasonIndex: () => 0 },
     Parts: { CATALOG: [], getFactorySetup: () => ({}), getCost: () => 0 },
-    DriverRatings: { get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }),
-                     overall: () => 50 },
   });
-  vm.runInContext(readFileSync(join(ROOT, "js/core/hash32.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/career/save-migrate.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/hash32.js"), "utf8"), ctx, { filename: absSrc("js/core/hash32.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx, { filename: absSrc("js/data/driver-ratings.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/save-migrate.js"), "utf8"), ctx, { filename: absSrc("js/career/save-migrate.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8"), ctx, { filename: absSrc("js/core/store.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx, { filename: absSrc("js/career/career.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx, { filename: absSrc("js/career/season-cal.js") });
   return {
     Career: vm.runInContext("Career", ctx), disk, ctx,
     SeasonCal: vm.runInContext("SeasonCal", ctx),
@@ -608,7 +615,7 @@ function planningUiFixture({ protectedSave = false, conflict = false, locked = f
     URL: { createObjectURL: (blob) => { const id = "blob:" + blobs.size; blobs.set(id, blob); return id; }, revokeObjectURL: (id) => revoked.push(id) },
     setTimeout: (fn) => { fn(); return 0; },
   });
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning-ui.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning-ui.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning-ui.js") });
   const UI = vm.runInContext("CareerPlanningUI", ctx);
   const left = new Node("div"), objective = new Node("div"), factory = new Node("button");
   const row = (label, value) => el("div", "", label + ": " + value);
@@ -684,8 +691,8 @@ test("real CareerScreen creates and opens hub and slots with planning helper pre
   vm.runInContext('Teams.LIST[0].name = "Haas"; Tracks.LIST[0].name = "Test Circuit"; Tracks.SEASON[0].name = "Test Circuit";', ctx);
   Career.load(); Career.engage(true);
   const G = { $: dom.byId, els: { overlay: dom.byId("overlay") }, cssCol: () => "#fff", soundOn: false };
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning-ui.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning-ui.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning-ui.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8"), ctx, { filename: absSrc("js/career/career-ui.js") });
   const screen = vm.runInContext("CareerScreen", ctx).create(G);
   assert.doesNotThrow(() => screen.openHub());
   assert.equal(dom.byId("cr-title").textContent, "CAREER 2026");

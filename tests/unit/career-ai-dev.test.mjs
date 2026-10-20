@@ -10,6 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -22,7 +23,7 @@ function boot() {
     "js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js",
     "js/career/regulations.js", "js/career/ai-dev.js",
   ]) {
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
   // budgetCap stand-in: sum of dearest legal options minus one (mirrors Career).
   let cap = 2105;
@@ -81,7 +82,7 @@ test("an era ban prevents fitting a banned option", () => {
   const expect = new Map([["ferrari", 8]]);
   CareerAiDev.developWinter(career, tStand, expect, () => 0);
   const fitted = CareerAiDev.fittedOf(career, team);
-  if (!fitted) return; // no step found under the ban — fine
+  assert.ok(fitted, "ferrari expected P8 and finished P1 with rnd 0: a step is fitted even under the ban");
   const banned = Regulations.bannedIds(era.id);
   // The bag is seeded with the WORKS build (a banned works part stays owned and
   // resolves to its fallback at race time); the STEP itself is never banned,
@@ -103,7 +104,8 @@ test("pickStep never exceeds the team cap", () => {
   const cap = CareerAiDev.teamCap(team, {});
   assert.ok(cap <= 800);
   const step = CareerAiDev.pickStep(team, fitted, cap);
-  if (step) assert.ok(Parts.getCost(step.trial, team) <= cap);
+  assert.ok(step, "haas at an 800 cap with a factory bag still has an affordable step");
+  assert.ok(Parts.getCost(step.trial, team) <= cap);
 });
 
 test("scrubFitted fits the best legal OWNED part over a banned one, shelves it, and restores it after the era", () => {
@@ -226,7 +228,7 @@ function makeCarsBoot() {
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/core/hash32.js", "js/physics/consts.js",
     "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js"]) {
-    vm.runInContext(read(f), ctx, { filename: f });
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
   vm.runInContext(`
     var career={year:2027,aiParts:{}}, active=true, tdev=1, draws=0, saved=null;

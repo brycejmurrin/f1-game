@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -31,7 +32,7 @@ function bootShadow(warming = { on: false }) {
     render(scene) { rendered.push(scene); } };
   const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
     Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
-  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx);
+  vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   const sys = ctx.window.TLXShaders.shadowSys(THREE, mk(), { renderer, isMobile: false, softwareGL: false,
     isWarming: () => warming.on });
   return { sys, rendered, warming };
@@ -188,7 +189,7 @@ test("TLX-10: window.scene/camera/renderer/THREE only behind ?three-devtools=1",
 // { value } holders so updateFrame's uploads can be read back. The shadow subsystem is a lamp-armed stub.
 function bootLit({ lampIdx = 2 } = {}) {
   const ctx = vm.createContext({ window: {}, Log: { warn() {} }, Float32Array, Math, Array, Object, Number });
-  vm.runInContext(read("js/render/three/tsl-lit.js"), ctx);
+  vm.runInContext(read("js/render/three/tsl-lit.js"), ctx, { filename: absSrc("js/render/three/tsl-lit.js") });
   const holder = (value) => ({ value, setGroup() { return this; } });
   const TSL = new Proxy({}, { get: (t, k) => (k === "uniform" || k === "uniformArray" ? holder : mk()) });
   const S = { enabled: true, carEnabled: false, lampEnabled: true, lampArmed: true, lampIdx, pcssEnabled: false,
@@ -354,7 +355,7 @@ function decalRunHarness() {
   return new Function('THREE', `
     const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
     const shadowSys = null, BLOB_CAP = 8, window = {}, renderer = {};
-    let _warmPending = false;
+    let _warmPending = false, _sceneRenders = 0;
     const skipBatches = () => false, _coDrop = () => {};
     const drawList = []; drawList.n = 0;
     const setRange0 = () => {}, pushRec = () => { drawList.n++; };
@@ -362,7 +363,8 @@ function decalRunHarness() {
     ${TLX.slice(start, end)}
     ${TLX.slice(dropStart, dropEnd)}
     return { append: _decalAppend, free: disposeGeometry, scene, registry: _instRegistry,
-      size: () => _decalRuns.size, warm: on => { _warmPending = on; }, flush: flushDropped };
+      size: () => _decalRuns.size, warm: on => { _warmPending = on; },
+      flush: flushDropped };
   `)(CORE);
 }
 for (const warming of [false, true]) {

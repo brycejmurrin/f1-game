@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/car/livery-graphics.js"), "utf8");
@@ -23,7 +24,7 @@ function loadGraphics() {
   const sb = { console, Math, Object, Array, String, Number, JSON, isNaN, isFinite };
   sb.globalThis = sb;
   vm.createContext(sb);
-  vm.runInContext(SRC, sb, { filename: "js/car/livery-graphics.js" });
+  vm.runInContext(SRC, sb, { filename: absSrc("js/car/livery-graphics.js") });
   return vm.runInContext("LiveryGraphics", sb);
 }
 
@@ -91,10 +92,6 @@ function paintFade(W, H) {
 }
 
 test("fade is an ordered halftone: regular grid, radius ramps, no hash clumps", () => {
-  // Pin the regression: hash-skip at fixed radius must stay gone.
-  assert.doesNotMatch(SRC, /73856093/, "fade must not hash-skip cells");
-  assert.match(SRC, /id === "fade"[\s\S]*?rMax/, "fade sizes dots from a cell max");
-
   for (const W of [1024, 2048]) {
     const H = Math.round(W * 1.9);
     const { arcs, R } = paintFade(W, H);
@@ -151,11 +148,6 @@ test("fade is an ordered halftone: regular grid, radius ramps, no hash clumps", 
 });
 
 test("cap rear cut uses a feathered gradient, not a hard fillRect edge", () => {
-  assert.match(SRC, /id === "cap"[\s\S]*?createLinearGradient/,
-    "cap softens its rear cut with a linear gradient");
-  assert.match(SRC, /id === "cap"[\s\S]*?feather/,
-    "cap names the feather width");
-
   const { drawSpineTop } = painters();
   const ctx = makeRecorder();
   const R = { x: 0, y: 0, w: 400, h: 800 };
@@ -172,15 +164,10 @@ test("cap rear cut uses a feathered gradient, not a hard fillRect edge", () => {
   assert.ok(band.h >= 2, "feather has measurable height");
 });
 
-test("painters: Mercedes fade and Ferrari cap are the owned crown arms", () => {
-  // Source pins so a rename cannot silently orphan the close-up defects.
-  assert.match(SRC, /else if \(id === "fade"\)/);
-  assert.match(SRC, /else if \(id === "cap"\)/);
-  assert.match(SRC, /Ordered halftone|ordered halftone|rMax/);
-});
-
+// The two arms below live inside LiveryTex.buildAtlas's canvas closure, which
+// needs a browser to run; these scans stay their only guard (the crown arms
+// above run for real and lost their pins, test review 2026-10-19 TK1-04).
 test("Mercedes mid-cover starfield is an ordered grid, not a hashed skip", () => {
-  assert.doesNotMatch(SRC, /73856093/, "crown fade must stay hash-free");
   assert.doesNotMatch(TEX, /73856093/, "starfield must not hash-skip cells");
   const star = TEX.match(/spineSide === "starfield"[\s\S]*?(?=else if \(spineSide ===)/);
   assert.ok(star, "buildAtlas still has a starfield flank arm");
@@ -233,7 +220,7 @@ test("inspection probes do not mutate the draft, survive scratch canvas reuse, a
   const doc = { createElement: () => { const cv = {width:0,height:0}; cv.getContext = () => ({
     getImageData: () => ({data:new Uint8ClampedArray(cv.width*cv.height*4)}), putImageData(image) { cv.pixels=Uint8ClampedArray.from(image.data); },
   }); return cv; } };
-  const outline = vm.runInNewContext(fs.readFileSync(path.join(ROOT,"js/car/surface-outline.js"),"utf8")+";GarageSurfaceOutline",{LiveryTex:atlas,document:doc});
+  const outline = vm.runInNewContext(fs.readFileSync(path.join(ROOT,"js/car/surface-outline.js"),"utf8")+";GarageSurfaceOutline",{LiveryTex:atlas,document:doc}, { filename: absSrc("js/car/surface-outline.js") });
   const api = outline.create({ createTexture(cv) { const tex={pixels:cv.pixels};textures.push(tex);return tex; },freeTexture:(t)=>freed.push(t),drawDecal:(...args)=>draws.push(args) });
   const liv=Object.freeze({spineLogo:"stripe",spineTint:Object.freeze([1,0,0])}), before=JSON.stringify(liv), team={id:"test"};
   assert.equal(api.set("spineTint",team,liv,7),true);

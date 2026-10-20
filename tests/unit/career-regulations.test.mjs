@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -30,7 +31,7 @@ function load() {
   vm.createContext(ctx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js",
                    "js/car/parts.js", "js/career/regulations.js", "js/career/career-planning.js"])
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const grab = (n) => vm.runInContext(n, ctx);
   return { Parts: grab("Parts"), Teams: grab("Teams"), Regulations: grab("Regulations"), Planning: grab("CareerPlanning") };
 }
@@ -204,6 +205,7 @@ test("next-era impact preview preserves inventory and active legality with resol
   assert.equal(JSON.stringify(data), before); assert.equal(Parts.legality(), null);
   Parts.setLegality(Regulations.legalityFor("powertrain"), "powertrain");
   const resolved = Parts.resolveSetup(fitted, team);
+  assert.ok(preview.changes.length > 0, "banned fitted parts must produce replacement changes");
   for (const change of preview.changes) {
     const cat = Parts.CATALOG.find((x) => (x.label || x.id) === change.category);
     assert.equal(change.replacement, resolved.setup[cat.id]); assert.equal(change.cost, 0);

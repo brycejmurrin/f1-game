@@ -391,6 +391,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
 | `livery-design.js` | `LiveryDesign` | tag | Optional, bounded cover artwork. |
 | `livery-graphics.js` | `LiveryGraphics` | tag | cover crown/tail and fin graphic painters; create receives atlas drawing and paint-selection helpers. |
+| `livery-stations.js` | `LiveryStations` | tag | extra livery decal stations (nose tip cap, cockpit-side driver code, sidepod top, halo top). |
 | `crest-draw.js` | `LiveryCrests` | tag | LiveryCrests: the team-mark painters of LiveryTex (traced, Mercedes, Haas, Audi, generic) and the CRESTS table. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
@@ -448,6 +449,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `body-attitude.js` | `BodyAttitude` | tag | C2 visual suspension: cosmetic body attitude (pitch / roll / heave). |
 | `tyre-model.js` | `TyreModel` | tag | TYRE MODEL: wear, the grip it costs, and the fuel burn that argues with it. |
 | `grip-steer.js` | `GripSteer` | tag | GripSteer: own-state steering cap at the front's peak slip. |
+| `wheel-state.js` | `WheelState` | tag | WHEEL STATE: torque-balanced per-axle rim speed and slip ratio. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | @ts-check |
@@ -618,6 +620,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `wgx-chunked.js` | `WGXChunked` | DEFERRED:webgpu | WGX chunked-mesh subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx-post.js` | `WGXPost` | DEFERRED:webgpu | WGX post-processing subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx-roadlut.js` | `WGXRoadLut` | DEFERRED:webgpu | WGXRoadLut: the pure, device-free half of WGX's road LUT (the packed (s, lateral x, half-width) table) and the toF32 coercion it shares with the mesh packer. |
+| `wgx-debug-labels.js` | `WGXDebugLabels` | DEFERRED:webgpu | WGX debug labels (#2964). install(device) wraps GPUDevice create* so every buffer / texture / sampler / pipeline / bind group / query set carries a `label`,… |
 | `wgx.js` | `WGX` | DEFERRED:webgpu | WebGPU renderer backend (WGX). |
 
 **`js/render/three/`**
@@ -646,6 +649,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `apex-cam.js` | `ApexCam` | LAZY_AGENT | ApexCam: camera hooks of window.__apex (camera, flyby, free-cam, orbit). |
 | `apex-track.js` | `ApexTrack` | LAZY_AGENT | ApexTrack: track-geometry hooks of window.__apex. |
 | `apex-lobby.js` | `ApexLobby` | LAZY_AGENT | ApexLobby: session and field hooks of window.__apex. |
+| `apex-gpu-capture.js` | `ApexGpuCapture` | LAZY_AGENT | ApexGpuCapture (#2964): dev-only __apex.gpuCapture toggle that injects vendored Spector.js (captureCanvas) or webgl-lint into the page for GLX / TLX WebGL… |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 
 **`js/circuits/`**
