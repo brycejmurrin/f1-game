@@ -18,6 +18,8 @@
 // template's live checklist) must be closed too: an item neither ticked nor
 // struck is work the PR says is not done, so a green tip still reads
 // `plan-open`. A body with no Plan section (opened before #1451) only warns.
+// A `cursor/` head branch must also carry the ```fleet block's fleet letter and
+// `orchestrator:` (`fleet-block`; fleet redesign plan §4B item 7).
 //
 // Exit: 0 green, 1 red / pending / no evidence / Plan open, 3 no token / API
 // error (unless --local). Prints one `= ready-gate <state>` line.
@@ -28,6 +30,7 @@ import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { commitTreeId } from "../lib/work-tree-id.mjs";
+import { writeReceipt } from "../lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -213,6 +216,7 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
     const labels = (one.json?.labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
     return {
       sha: head, error: null, pr: n,
+      branch: one.json?.head?.ref || "",
       body: one.json?.body || "",
       title: one.json?.title || "",
       labels,
@@ -363,6 +367,57 @@ export function withMemory(v, files, meta = {}) {
   return { ...v, memory: m };
 }
 
+/**
+ * The PR body's ```fleet block as key/values (agent-fleet SKILL.md §The fleet block): `#` comments and `<placeholder>`
+ * values dropped, first value of a key wins. Outside HTML comments, else inside Cursor's agent slice. {} when absent. Pure.
+ */
+export function fleetBlock(body) {
+  const raw = String(body || "");
+  const agent = /<!--\s*CURSOR_AGENT_PR_BODY_BEGIN\s*-->([\s\S]*?)<!--\s*CURSOR_AGENT_PR_BODY_END\s*-->/i.exec(raw);
+  const find = (t) => /```fleet[ \t]*\r?\n([\s\S]*?)```/.exec(t);
+  const m = find(raw.replace(/<!--[\s\S]*?-->/g, "")) || (agent && find(agent[1]));
+  const out = {};
+  if (!m) return out;
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^\s*([a-z][a-z-]*)\s*:\s*(.*?)\s*(?:#.*)?$/.exec(line);
+    if (kv && kv[2] && !kv[2].startsWith("<") && out[kv[1]] == null) out[kv[1]] = kv[2];
+  }
+  return out;
+}
+
+/** A fleet letter from a value: `A`, `A·W3` -> "A"; anything else (a `<host>:<id>`) -> "". Pure. */
+const letterOf = (v) => (/^([A-Z])(?:·\S*)?$/.exec(String(v || "").trim()) || [])[1] || "";
+
+/**
+ * Who a PR body says it belongs to: { block, letter, orchestrator, slot }. `letter` comes from `fleet:`, else a letter
+ * `orchestrator:`, else a `slot:`; `slot` from `slot:`, else a `<letter>·<slot>` token in the block's `title:`/`session:`. Pure.
+ */
+export function fleetIdentity(body) {
+  const b = fleetBlock(body);
+  const tok = /\b([A-Z]·[A-Z]+\d+(?:·[A-Za-z0-9]+)*)/;
+  const slot = b.slot || (tok.exec(b.title || "") || tok.exec(b.session || "") || [])[1] || "";
+  return {
+    block: Object.keys(b).length > 0,
+    letter: letterOf(b.fleet) || letterOf(b.orchestrator) || letterOf(slot),
+    orchestrator: b.orchestrator || "",
+    slot,
+  };
+}
+
+/**
+ * A `cursor/` branch's PR must say which fleet it belongs to (fleet redesign §4B item 7): a ```fleet block with
+ * `fleet:` (or a letter `orchestrator:`) and `orchestrator:`. Folds onto a green verdict like withPlan; a red one,
+ * a non-`cursor/` branch and a run without a PR (`branch` null) pass through. Pure.
+ */
+export function withFleet(v, branch, body) {
+  if (!v || v.code !== 0 || branch == null || !/^cursor\//.test(String(branch))) return v;
+  const f = fleetIdentity(body);
+  const missing = !f.block ? ["```fleet block"] : [...(f.letter ? [] : ["fleet:"]), ...(f.orchestrator ? [] : ["orchestrator:"])];
+  if (!missing.length) return { ...v, fleet: f };
+  return { ...v, state: "fleet-block", code: 1, fleet: f,
+    evidence: `${branch} PR body is missing ${missing.join(" and ")} — add the agent-fleet fleet block (\`fleet: <letter>\`, \`orchestrator: <letter>\`; skill agent-fleet §The fleet block)` };
+}
+
 /** Write LOCAL_STAMP after a green full suite (called from tooling-fast): the
  *  head the run STARTED on, plus `tree` — the hash of the tree it measured. */
 export function stampReadySha(sha, { tree = "", stampPath = LOCAL_STAMP, write = fs.writeFileSync, mkdir = fs.mkdirSync } = {}) {
@@ -379,6 +434,8 @@ const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] 
   and .claude/memory/ edits carry an explicit intent marker: a body line
   \`memory-change: <reason>\` or the \`memory-change\` label (docs/notes/AGENT-MEMORY.md).
   A failed PR-files fetch fails closed (never "no memory edits"). Evidence: #1111.
+  A cursor/ head branch also needs the body's \`\`\`fleet block with \`fleet:\` (or a letter
+  \`orchestrator:\`) and \`orchestrator:\` (state fleet-block; skill agent-fleet §The fleet block).
   --local uses artifacts/logs/tooling-fast-ready.sha + tooling-fast-suite.log only (no GitHub API).`;
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -396,7 +453,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     say(`= ready-gate unknown — ${resolved.error}`);
     process.exit(3);
   }
-  const planned = withPlan(evaluate({ sha: resolved.sha, localOnly }), resolved.body);
+  const planned = withFleet(withPlan(evaluate({ sha: resolved.sha, localOnly }), resolved.body),
+    resolved.pr ? resolved.branch || "" : null, resolved.body);
   const v = withMemory(planned, resolved.files, {
     title: resolved.title || "",
     body: resolved.body || "",
@@ -404,6 +462,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     filesError: resolved.filesError || null,
   });
   const line = verdictLine(v);
+  // The receipt github-mcp-guard.sh requires before a draft→ready flip (tools/lib/gate-receipt.mjs):
+  // written for a --pr run only, pass or refuse, so the hook can say WHY the last gate run refused.
+  if (resolved.pr) {
+    try { writeReceipt(ROOT, "ready", { pr: resolved.pr, head: v.sha, ok: v.code === 0, evidence: v.code === 0 ? "" : `${v.state}: ${v.evidence}` }); }
+    catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); }
+  }
   if (asJson) console.log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
   else {
     if (v.planWarning) say(`warning: ${v.planWarning}`);

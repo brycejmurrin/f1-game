@@ -111,7 +111,6 @@ export const ADAPTED_PAGE_GROUPS = Object.freeze({
     "tests/specs/albert-park-foundation.spec.js",
     "tests/specs/autopilot.spec.js",
     "tests/specs/logging.spec.js",
-    "tests/specs/projection.spec.js",
   ]),
   b: Object.freeze([
     "tests/specs/agent-drive-bench.spec.js",
@@ -138,8 +137,6 @@ export const ADAPTED = {
     "pure __apex physics reads (wall scrub, lap-distance continuity); 2/2 under the adapter in 27 s vs 110 s of browser; mutant m-wall-scrub-flat proves it bites",
   "tests/specs/logging.spec.js":
     "js/core/log.js's ring and console thresholds through __apex.logs(); 6/6 in 6 s; m-log-ring-lags-console proves the ring-vs-console max() is watched",
-  "tests/specs/projection.spec.js":
-    "Tracks.project() round-trips and the +right lateral sign, pure geometry; 3/3 in 15 s; m-project-lat-sign proves a flipped sign is caught",
   "tests/specs/race-control.spec.js":
     "the caution layer's state through __apex.caution(); 3/3 in 12 s; m-caution-two-sectors (and m-caution-label-drift) prove the per-sector/label contract is watched",
   "tests/specs/parts-livery-contrast.spec.js":

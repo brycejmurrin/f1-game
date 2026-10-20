@@ -77,6 +77,11 @@ const LiveryTex = (function () {
     spineSideL: { x: 80, y: 2080, w: 608, h: 320 },  // the same for the LEFT flank, authored in its own outside-view frame
     fwEnd: { x: 760, y: 2080, w: 680, h: 280 },  // front-wing endplate, outer face (both sides); in the extra rows beside spineSideL
     tail: { x: 1000, y: 840, w: 360, h: 160 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
+    // LiveryStations (js/car/livery-stations.js): nose-tip cap, driver code, sidepod top, halo crown.
+    podTop: { x: 1480, y: 2080, w: 488, h: 160 },
+    cockpitSide: { x: 1480, y: 2260, w: 488, h: 130 },
+    haloTop: { x: 80, y: 2420, w: 1240, h: 120 },
+    noseTip: { x: 1360, y: 2420, w: 608, h: 120 },
   };
 
   // Primary driver number per team.
@@ -117,8 +122,12 @@ const LiveryTex = (function () {
     tech:   ["QUBITWARE", "NEURALIX", "CLOUDFORGE", "SYNAPSE", "VECTORA", "LATTICE"],
     energy: ["VOLTSHOT", "FUSIONFUEL", "RAPTORADE", "KINETIQ", "SURGE", "IONBLAST"],
     clean:  [],
+    // B·D8 (2026-10-19). Invented names, checked against no real sponsor.
+    garage: ["TORQSMITH", "BOLTWORKS", "HEXDRIVE", "SPANNERCO", "RATCHETA", "GRIDFORGE"],
+    aero:   ["SKYWARDO", "AIRFOILX", "STRATOLUX", "VORTEXA", "JETSTRIDE", "ALTIMERA"],
+    coast:  ["SOLMARE", "DUNEWAVE", "PALMERA", "RIVIERO", "SALTLINE", "AZURIO"],
   };
-  const SPONSOR_PACK_IDS = ["default", "retro", "tech", "energy", "clean"];
+  const SPONSOR_PACK_IDS = ["default", "retro", "tech", "energy", "clean", "garage", "aero", "coast"];
   // NUMBER FONTS. Real numbers are the driver's own design — most are a bold
   // italic — so the default stays today's italic Arial Narrow. Each recipe
   // gives the CSS font for a size and how the glyph is layered.
@@ -129,6 +138,12 @@ const LiveryTex = (function () {
     narrow:  { font: (px) => "800 " + px + "px 'Arial Narrow', 'Liberation Sans Narrow', Arial, sans-serif", style: "layered" },
     rounded: { font: (px) => "900 " + px + "px Verdana, 'DejaVu Sans', Arial, sans-serif", style: "rounded" },
     outline: { font: (px) => "italic 900 " + px + "px 'Arial Narrow', Arial, sans-serif", style: "outline" },
+    // B·D8 (2026-10-19): a slab serif, a typewriter mono and a
+    // heavy italic stencil — three shapes the six above do not cover. Each falls
+    // back to a face every platform ships.
+    slab:    { font: (px) => "900 " + px + "px Rockwell, 'Roboto Slab', 'DejaVu Serif', Georgia, serif", style: "layered" },
+    mono:    { font: (px) => "700 " + px + "px 'Courier New', 'DejaVu Sans Mono', 'Liberation Mono', monospace", style: "layered" },
+    rally:   { font: (px) => "italic 900 " + px + "px 'Arial Black', Impact, Arial, sans-serif", style: "stencil" },
   };
   const NUM_FONT_IDS = Object.keys(NUM_FONTS);
 
@@ -341,13 +356,18 @@ const LiveryTex = (function () {
       ctx.strokeText(text, cx, cy);
     }
     if (recipe.style === "outline") {
-      // Hollow: a wide accent stroke with an ink core line and NO fill — the
-      // base paint shows through the counters.
-      ctx.lineWidth = Math.max(8, size * 0.11);
-      ctx.strokeStyle = css(accent);
-      ctx.strokeText(text, cx, cy);
-      ctx.lineWidth = Math.max(3, size * 0.035);
+      // Hollow: one wide stroke and NO fill — the base paint shows through the
+      // counters — keylined along both edges by a thin second colour. The keyline was a
+      // core line down the middle of the stroke, which split the glyph into two
+      // hairlines: Red Bull's yellow-on-racing-blue outline read thinnest in the
+      // B·D8 gallery although yellow is the stronger colour there (4.9:1 against
+      // the board vs the dark ink's 2.8:1).
+      const body = Math.max(8, size * 0.11), rim = Math.max(3, size * 0.03);
+      ctx.lineWidth = body + rim * 2;
       ctx.strokeStyle = css(ink);
+      ctx.strokeText(text, cx, cy);
+      ctx.lineWidth = body;
+      ctx.strokeStyle = css(accent);
       ctx.strokeText(text, cx, cy);
       ctx.restore();
       return;
@@ -825,7 +845,7 @@ const LiveryTex = (function () {
     };
   }
 
-  const { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS } = LiveryCrests.create({ css, fit, drawWordmark, teamShort, crestSpecFor, crestKey, legendOf,
+  const { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS, CREST_TONE_IDS, CREST_FRAME_IDS, dressEmblem } = LiveryCrests.create({ css, fit, drawWordmark, teamShort, crestSpecFor, crestKey, legendOf,
     CREST_DISC, CREST_MARGIN, STROKE_MIN, TEXT_MIN });
 
   // ── the custom team's uploaded emblem ──────────────────────────────────────
@@ -1010,7 +1030,9 @@ const LiveryTex = (function () {
     const P = o.palette || markPalette(teamId, o.liv, o.field, !!o.bare);
     // CREST STYLE (liv.crestStyle): an original emblem in place of the team's mark, at every station.
     const style = o.liv && o.liv.crestStyle;
-    const fn = (style && Object.hasOwn(EMBLEMS, style) && EMBLEMS[style]) || CRESTS[crestKey(teamId)] || crestGeneric;
+    // CREST TONE / CREST FRAME dress an emblem only; the team's own mark ignores them.
+    const emblem = style && Object.hasOwn(EMBLEMS, style) && dressEmblem(EMBLEMS[style], o.liv.crestTone, o.liv.crestFrame);
+    const fn = emblem || CRESTS[crestKey(teamId)] || crestGeneric;
     // The halo is generic on purpose: the same repeated-draw-under-shadow trick
     // drawLogoImage uses, so a mark that cannot reach INK_TARGET gets separated
     // without every crest having to grow its own outline pass.
@@ -2515,6 +2537,8 @@ const LiveryTex = (function () {
     }
 
     const num = resolveRaceNumber(numberOverride, teamId);
+    if (typeof LiveryStations !== "undefined")
+      LiveryStations.paint(ctx, REGIONS, { teamId, colors, c1, accent, names, num, fillRegion, drawWordmark, inkOn, haloIf });
     drawNumber(ctx, num, REGIONS.num, ink, accent, c1, colors.numFont, NUM_CREST_HEAD);
     // Same lockup as the spine / fin, on the nose and both rear endplates.
     const numBadge = numCrestBox(REGIONS.num);
@@ -2592,7 +2616,7 @@ const LiveryTex = (function () {
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
-           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
+           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, CREST_TONE_IDS, CREST_FRAME_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            FILL_SURFACES, fillInert,
            airboxMeshColour, resolveFinPaint,
            hasFlankBull: (teamId) => !!bullPath(teamId) };

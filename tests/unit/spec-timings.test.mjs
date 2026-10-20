@@ -200,8 +200,8 @@ test("the GROWTH FLAG fires on 2x, inside one bucket, and never on thin history"
   // is how a move to a different GPU stack gets reported as a slow test.
   const mixed = emptyDb();
   for (const d of [1, 2, 3]) mergeRows(mixed,
-    [{ ts: `2026-09-0${d}T00:00:00Z`, spec: "tests/specs/projection.spec.js", title: "a", sec: 10 }], { env: "swiftshader" });
-  mergeRows(mixed, [{ ts: "2026-09-04T00:00:00Z", spec: "tests/specs/projection.spec.js", title: "a", sec: 90 }],
+    [{ ts: `2026-09-0${d}T00:00:00Z`, spec: "tests/specs/longitudinal.spec.js", title: "a", sec: 10 }], { env: "swiftshader" });
+  mergeRows(mixed, [{ ts: "2026-09-04T00:00:00Z", spec: "tests/specs/longitudinal.spec.js", title: "a", sec: 90 }],
     { env: "llvmpipe" });
   assert.deepEqual(growth(mixed), [],
     "the 90 s llvmpipe run has no llvmpipe median to be 2x of — it is a new machine, not a regression");
@@ -232,9 +232,9 @@ test("small helpers: isoSecond, median, normaliseSpec", () => {
   assert.equal(median([3, 1, 2]), 2);
   assert.equal(median([4, 1, 2, 3]), 2.5);
   assert.equal(median([]), null);
-  assert.equal(normaliseSpec("specs/projection.spec.js"), "tests/specs/projection.spec.js");
-  assert.equal(normaliseSpec("./tests/specs/projection.spec.js"), "tests/specs/projection.spec.js");
-  assert.equal(normaliseSpec("tests/specs/projection.spec.js one two"), "tests/specs/projection.spec.js");
+  assert.equal(normaliseSpec("specs/longitudinal.spec.js"), "tests/specs/longitudinal.spec.js");
+  assert.equal(normaliseSpec("./tests/specs/longitudinal.spec.js"), "tests/specs/longitudinal.spec.js");
+  assert.equal(normaliseSpec("tests/specs/longitudinal.spec.js one two"), "tests/specs/longitudinal.spec.js");
 });
 
 test("defaultSources finds both junit layouts and invents nothing", () => {

@@ -96,7 +96,7 @@ export const RULES = [
   // in `test:scenery` (now `test:circuits`).
   // Routing it to circuit+physics+sweeps+foundation ran everything except the
   // two specs that actually report the class of bug the file produces.
-  [/^js\/track\/core\/space\.js/, ["physics-core"], "world<->track projection (projection.spec.js)"],
+  [/^js\/track\/core\/space\.js/, ["physics-core"], "world<->track projection (tests/unit/track-project-hints.test.mjs)"],
   [/^js\/track\/build-(client|worker)\.js/, ["sweeps"], "the build Worker (apex26.buildWorker): build-worker.test.mjs replays it byte-identically"],
   [/^js\/workers\//, ["tooling"], "bitmap-decode worker + client (tests/unit/bitmap-decode-worker.test.mjs)"],
   [/^js\/track\/(core\/|tracks\.js)/,

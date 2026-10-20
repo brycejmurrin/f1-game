@@ -893,7 +893,7 @@ return {
   tierFloor: () => _perfTierFloor,
   userTier: () => _userTier,
   // Clamped to the ladder's own range so a bad preset id can't invent a tier 7
-  // that every `tier() >= N` gate would satisfy. Drops a pending TIER verify for
+  // that every `tier() >= N` gate would satisfy. Drops any pending verify for
   // the same reason setAutoRes drops a pending SCALE one: _pendingVerify
   // attributes the next EMA delta to the governor's own last provisional step,
   // so a user changing quality one evaluation later would make the governor
@@ -926,7 +926,10 @@ return {
     // redundant-step problem that motivated the pull-up is solved where it
     // actually lives, in the degrade branch, which skips rungs the floor
     // already covers.
-    if (_pendingVerify && _pendingVerify.kind === "tier") _pendingVerify = null;
+    // Both feature and resolution attribution expire when the preset changes
+    // frame cost. Keep the current provisional scale: restoring its old value
+    // here would override a potentially necessary cut without new evidence.
+    _pendingVerify = null;
     if (_live) _govCoolMs = Math.max(_govCoolMs, VERIFY_COOL);   // see _live: never before the first race tick
   },
   strikes: () => _crashStrikes,

@@ -249,29 +249,41 @@ const TrackBuildProps = (function () {
     // coarse XZ grid so each lookup is ~O(1); huge distant triangles are skipped
     // (props are never that far out — those fall back to groundYAt).
     const _tg = track.terrainGeo;
-    const _CELL = 6, _GOFF = 2048, _GSTR = 4096;
-    const _gkey = (cx, cz) => (cx + _GOFF) * _GSTR + (cz + _GOFF);
+    // A flat CSR (start/list) over the cell bbox, filled in triangle order: a Map
+    // of ~40k arrays cost a Map.get per lookup and the GC that followed.
+    const _CELL = 6;
     let _grid = null;
     const _buildGrid = () => {
-      _grid = new Map(); const pos = _tg.pos, idx = _tg.idx;
-      for (let t = 0; t < idx.length; t += 3) {
+      const pos = _tg.pos, idx = _tg.idx, rng = new Int32Array(idx.length / 3 * 4);   // per triangle cx0 cx1 cz0 cz1; cx1 < cx0 = skipped
+      let cx0 = Infinity, cz0 = Infinity, cx1 = -Infinity, cz1 = -Infinity;
+      for (let t = 0, r = 0; t < idx.length; t += 3, r += 4) {
         const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
         const mnx = __M.min(pos[a], pos[b], pos[c]), mxx = __M.max(pos[a], pos[b], pos[c]);
         const mnz = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]), mxz = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]);
-        if (mxx - mnx > 30 || mxz - mnz > 30) continue;
-        for (let cx = __M.floor(mnx / _CELL); cx <= __M.floor(mxx / _CELL); cx++)
-          for (let cz = __M.floor(mnz / _CELL); cz <= __M.floor(mxz / _CELL); cz++) {
-            const key = _gkey(cx, cz); let arr = _grid.get(key); if (!arr) { arr = []; _grid.set(key, arr); } arr.push(t);
-          }
+        if (mxx - mnx > 30 || mxz - mnz > 30) { rng[r] = 1; rng[r + 1] = 0; continue; }
+        const i0 = rng[r] = __M.floor(mnx / _CELL), i1 = rng[r + 1] = __M.floor(mxx / _CELL);
+        const j0 = rng[r + 2] = __M.floor(mnz / _CELL), j1 = rng[r + 3] = __M.floor(mxz / _CELL);
+        if (i0 < cx0) cx0 = i0; if (i1 > cx1) cx1 = i1; if (j0 < cz0) cz0 = j0; if (j1 > cz1) cz1 = j1;
       }
+      const nx = cx1 >= cx0 ? cx1 - cx0 + 1 : 0, nz = cz1 >= cz0 ? cz1 - cz0 + 1 : 0, nc = nx * nz;
+      const start = new Int32Array(nc + 1);
+      for (let r = 0; r < rng.length; r += 4)
+        for (let i = rng[r]; i <= rng[r + 1]; i++) for (let j = rng[r + 2]; j <= rng[r + 3]; j++) start[(i - cx0) * nz + (j - cz0) + 1]++;
+      for (let k = 0; k < nc; k++) start[k + 1] += start[k];
+      const list = new Uint32Array(start[nc]), fill = start.slice(0, nc);
+      for (let r = 0; r < rng.length; r += 4)
+        for (let i = rng[r]; i <= rng[r + 1]; i++) for (let j = rng[r + 2]; j <= rng[r + 3]; j++) list[fill[(i - cx0) * nz + (j - cz0)]++] = r / 4 * 3;
+      _grid = { cx0, cz0, nx, nz, start, list };
     };
     const terrainYAt = (x, z) => {
       if (!_tg || !_tg.idx) return null;
       if (!_grid) _buildGrid();
-      const arr = _grid.get(_gkey(__M.floor(x / _CELL), __M.floor(z / _CELL)));
-      if (!arr) return null;
+      const i = __M.floor(x / _CELL) - _grid.cx0, j = __M.floor(z / _CELL) - _grid.cz0;
+      if (!(i >= 0 && i < _grid.nx && j >= 0 && j < _grid.nz)) return null;
+      const k = i * _grid.nz + j, list = _grid.list, e = _grid.start[k + 1];
       const pos = _tg.pos; let best = null;
-      for (const t of arr) {
+      for (let n = _grid.start[k]; n < e; n++) {
+        const t = list[n];
         const ia = _tg.idx[t] * 3, ib = _tg.idx[t + 1] * 3, ic = _tg.idx[t + 2] * 3;
         const ax = pos[ia], az = pos[ia + 2], bx = pos[ib], bz = pos[ib + 2], cx = pos[ic], cz = pos[ic + 2];
         const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = x - ax, v2z = z - az;
