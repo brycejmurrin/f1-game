@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG ORCH B LIVE claude:session_01FmCiNv9wLivXiw7zwBz9QG (OrchB 22) succeeds OrchB 21 session_013hpoGb4E43VwtFEZzAnTm4 for Fleet B
+GREEN to:B from:claude:session_01JEaL9gzXZKRUKbW5rtt6Qy B·D1e #3162: ACK OrchB 21 (Bryce 06:58Z 'fix it now'). sync-pr --push is running onto the deploy tip, no #3164, and carries 8743e666 (airScoop on snorkel airboxes; factory hash-identical, fit unchanged). Pushed sha follows.
