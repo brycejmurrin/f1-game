@@ -178,49 +178,24 @@ test.describe("garage active aero", () => {
     expect(shut).toEqual({ xOn: false, aeroX: 0, mode: "Z" });
   });
 
-  test("switching X on from the turntable AIMS at the rear wing", async ({ page }) => {
+  // Bryce 2026-10-20: the AERO button used to snap the view to the rear wing.
+  // It now changes the flaps only; the camera stays wherever the player left it.
+  test("the AERO button never moves the camera (turntable and whole-car preset)", async ({ page }) => {
     await openGarage(page);
-    const before = await page.evaluate(() => window.__apex.garageCam());
+    const pose = () => page.evaluate(() => { const c = window.__apex.garageCam(); return { az: c.az, el: c.el, dist: c.dist, spin: c.spin }; });
+    const before = await pose();
     expect(before.spin, "the garage opens on the turntable").toBe(true);
-
     await clickId(page, "cs-aero");
-    const after = await page.evaluate(() => window.__apex.garageCam());
-    // The flaps rotate about the car's X axis; the turntable looks very nearly
-    // ALONG it, where the sweep projects to almost nothing. Pressing the button
-    // has to put the player somewhere they can see it work.
-    expect(after.spin, "aiming stops the turntable").toBe(false);
-    // REAR-WING is 4.6 m / el 0.50 so both endplates and the beam wing fit.
-    // Whole-car is ~8.5 m, where the same 135 mm travel is ~10 px on a
-    // landscape phone — the aim still has to leave that framing.
-    expect(after.az, "rear-wing three-quarter").toBeCloseTo(Math.PI * 0.72, 5);
-    expect(after.el, "slightly above the wing").toBeCloseTo(0.50, 5);
-    expect(after.dist, "and frames the whole rear wing").toBeCloseTo(4.6, 5);
-  });
-
-  test("it also aims when a WHOLE-CAR preset is showing, not just the turntable", async ({ page }) => {
-    await openGarage(page);
+    const turntable = await pose();
+    expect(turntable.spin, "the turntable keeps running").toBe(true);
+    expect(turntable.dist).toBeCloseTo(before.dist, 5);
+    await clickId(page, "cs-aero");
     await clickId(page, "cs-cam");
     await page.evaluate(() => document.querySelector('[data-cs-view="rear"]').click());
-    const wide = await page.evaluate(() => window.__apex.garageCam());
-    expect(wide.spin).toBe(false);
-    expect(wide.dist).toBeGreaterThan(5);
+    const chosen = await pose();
+    expect(chosen.dist).toBeGreaterThan(5);
     await clickId(page, "cs-aero");
-    const aimed = await page.evaluate(() => window.__apex.garageCam());
-    expect(aimed.az, "rear-wing three-quarter").toBeCloseTo(Math.PI * 0.72, 5);
-    expect(aimed.dist, "and frames the whole rear wing").toBeCloseTo(4.6, 5);
-  });
-
-  test("a player who has aimed the camera keeps their angle", async ({ page }) => {
-    await openGarage(page);
-    await clickId(page, "cs-cam");
-    await page.evaluate(() => document.querySelector('[data-cs-view="side"]').click());
-    // ...then move in close, which is the "I have aimed this deliberately" signal.
-    await page.evaluate(() => { for (let i = 0; i < 24; i++) document.getElementById("cs-view-in").click(); });
-    const chosen = await page.evaluate(() => window.__apex.garageCam());
-    await clickId(page, "cs-aero");
-    const after = await page.evaluate(() => window.__apex.garageCam());
-    expect(after.az).toBeCloseTo(chosen.az, 5);
-    expect(after.dist).toBeCloseTo(chosen.dist, 5);
+    expect(await pose()).toEqual(chosen);
   });
 
   // Screen sun-shafts from the bay sky fill washed liveries white/sky-blue after

@@ -19,7 +19,7 @@ async function reveal(page, sel) {
   return page.locator(sel);
 }
 
-async function openLiveryEditor(page) {
+async function openLiveryEditor(page, wheels) {
   const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
   await forgetStored(page, [key]);
   await page.evaluate((k) => GameStore.store.set(k, []), key);
@@ -29,6 +29,10 @@ async function openLiveryEditor(page) {
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
+  if (wheels) {
+    await page.locator('#cs-tabs [data-cs-cat="wheels"]').click();
+    await page.locator(`#cs-options [data-cs-opt="${wheels}"]`).click();
+  }
   await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
   await page.locator(".cs-liv-create").click();
   await expect(page.locator(".cs-liv-editor")).toBeVisible();
@@ -40,6 +44,51 @@ const lastLogId = (page) => page.evaluate(() => (Log.records().at(-1) || { id: 0
 // through Car3D.refinish of the kept geometry ("[car] refinish", #3181): a deterministic signal either way.
 const rebuiltSince = (page, since) => expect.poll(() => page.evaluate((s) => Log.records({ ns: "car", since: s })
   .some((r) => /build|refinish/.test(JSON.stringify(r))), since), { timeout: 30_000 }).toBe(true);
+
+test("detail finishes: phone controls refinish the fitted parts and save all four choices", async ({ page }) => {
+  await ensureLive(page);
+  const key = await openLiveryEditor(page, "works_rim");
+  const choices = { ductFinish: "chrome", deflectorFinish: "brushed", cockpitFinish: "satin", boardFinish: "chrome" };
+  for (const [field, value] of Object.entries(choices)) {
+    const pill = await reveal(page, `[data-cs-pill="${field}:${value}"]`);
+    await pill.scrollIntoViewIfNeeded();
+    await page.evaluate(() => __apex.awaitPresent(8000));
+    const mark = await lastLogId(page);
+    await pill.tap();
+    await expect(pill).toHaveAttribute("aria-pressed", "true");
+    await rebuiltSince(page, mark);
+    const events = await page.evaluate((s) => Log.records({ ns: "car", since: s }).map((r) => JSON.stringify(r)), mark);
+    expect(events.some((s) => /refinish/.test(s)), field + " uses the finish cache").toBe(true);
+    expect(events.some((s) => /build/.test(s)), field + " avoids a full car rebuild").toBe(false);
+  }
+  const save = await reveal(page, ".cs-liv-ed-save");
+  await save.scrollIntoViewIfNeeded();
+  await save.tap();
+  const saved = await page.evaluate((k) => (GameStore.store.get(k) || []).at(-1), key);
+  for (const [field, value] of Object.entries(choices)) expect(saved[field], field).toBe(value);
+});
+
+test("finish controls explain absent fins and deflectors without discarding the fin choice", async ({ page }) => {
+  await ensureLive(page);
+  await openLiveryEditor(page, "standard");
+  const deflector = await reveal(page, '[data-cs-pill="deflectorFinish:chrome"]');
+  await expect(deflector).toBeDisabled();
+  await expect(deflector.locator("xpath=../..")).toContainText("Needs wheel deflectors");
+  for (const id of ["standard", "none", "standard"]) {
+    const shape = await reveal(page, `[data-cs-pill="finShape:${id}"]`);
+    await shape.scrollIntoViewIfNeeded();
+    await shape.tap();
+    const finish = await reveal(page, '[data-cs-pill="finFinish:chrome"]');
+    if (id === "none") {
+      await expect(finish).toBeDisabled();
+      await expect(finish.locator("xpath=../..")).toContainText("Needs a tail fin");
+    } else {
+      await expect(finish).toBeEnabled();
+      if (await finish.getAttribute("aria-pressed") !== "true") { await finish.scrollIntoViewIfNeeded(); await finish.tap(); }
+      await expect(finish).toHaveAttribute("aria-pressed", "true");
+    }
+  }
+});
 
 test("zone finishes and ENDPLATES: tappable on a phone, and the saved car carries them", async ({ page }) => {
   await ensureLive(page);

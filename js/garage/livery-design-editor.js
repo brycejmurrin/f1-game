@@ -160,11 +160,11 @@ const GarageLiveryDesignEditor = (function () {
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
-      ["crestStyle", "crestTone", "crestFrame", "logo", "logo2", "logo3", "numFont", "sponsors", "boardTint", "decalNoseTip", "decalCockpit", "decalPodTop", "decalHalo"], [api.markNote]);
-    section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "cockpitTint", "gripTint", "tcam"]);
+      ["crestStyle", "crestTone", "crestFrame", "logo", "logo2", "logo3", "numFont", "sponsors", "boardTint", "boardFinish", "decalNoseTip", "decalCockpit", "decalPodTop", "decalHalo"], [api.markNote]);
+    section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "cockpitTint", "cockpitFinish", "gripTint", "tcam"]);
     section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk", "rimFinish"]);
     section("FLOOR, SUSPENSION & RUNNING GEAR", "Parts that are bare carbon by default: floor edge and bargeboards, suspension arms, brake ducts, wheel deflectors, plus the exhaust tip's heat colour. Unset keeps them carbon.",
-      ["floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "deflectorTint", "exhaustTint"]);
+      ["floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "ductFinish", "deflectorTint", "deflectorFinish", "exhaustTint"]);
     section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
     section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
     // One SPINE TOP selection, divided by purpose rather than a wall of pills.

@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { readDefaults } from "../../tools/gen/settings-defaults.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -1557,4 +1558,74 @@ test("a livery carrying every Liveries.FIELDS key survives import, with room for
   const kept = garageLiveries(b, [sound("custom_1", every)]);
   assert.equal(kept.length, 1);
   for (const f of Object.keys(every)) assert.equal(kept[0][f], "x", f + " survives cleanLivery");
+});
+
+const REGIONAL_FINISH_FIELDS = [
+  "coverFinish", "wingFinish", "haloFinish", "podFinish", "finFinish", "mirrorFinish",
+  "noseFinish", "floorFinish", "suspFinish", "rimFinish",
+  "ductFinish", "deflectorFinish", "cockpitFinish", "boardFinish",
+];
+const finishImportModel = loadParts();
+
+test("garage import validates all regional finishes against the real current registry", () => {
+  const b = boot({ teams: true, globals: { Car3D: finishImportModel.Car3D } });
+  const values = ["inherit", "gloss", ...Object.keys(finishImportModel.Car3D.FINISH_SURFACE)];
+  const rows = values.map((value, i) => sound("finish_registry_" + i,
+    Object.fromEntries(REGIONAL_FINISH_FIELDS.map(field => [field, value]))));
+  const kept = garageLiveries(b, rows);
+  assert.equal(kept.length, values.length);
+  for (let i = 0; i < values.length; i++) {
+    assert.equal(kept[i].id, rows[i].id);
+    for (const field of REGIONAL_FINISH_FIELDS) assert.equal(kept[i][field], values[i], field + " keeps " + values[i]);
+  }
+});
+
+test("invalid or absent regional finishes are omitted without dropping sound livery data", () => {
+  const b = boot({ teams: true, globals: { Car3D: finishImportModel.Car3D } });
+  const invalid = ["no-such-finish", "constructor", "__proto__", "toString", null, undefined];
+  const rows = invalid.map((value, i) => sound("invalid_finish_" + i, {
+    stripe: [0.2, 0.4, 0.6],
+    ...Object.fromEntries(REGIONAL_FINISH_FIELDS.map(field => [field, value])),
+  }));
+  const kept = garageLiveries(b, rows);
+  assert.equal(kept.length, rows.length, "bad optional finishes do not discard otherwise sound paint jobs");
+  for (let i = 0; i < kept.length; i++) {
+    assert.equal(kept[i].id, rows[i].id);
+    assert.deepEqual(kept[i].stripe, rows[i].stripe, "unrelated authored paint is retained");
+    for (const field of REGIONAL_FINISH_FIELDS) assert.equal(Object.hasOwn(kept[i], field), false,
+      field + " omits " + String(invalid[i]));
+  }
+});
+
+test("garage export and reimport retain new regional finishes alongside sound and invalid siblings", () => {
+  const options = { teams: true, globals: { Car3D: finishImportModel.Car3D } };
+  const b = boot(options);
+  const finishes = { ductFinish: "chrome", deflectorFinish: "satin", cockpitFinish: "matte", boardFinish: "gloss" };
+  const selected = sound("finish_editor_roundtrip", finishes);
+  const sibling = sound("sound_finish_sibling", { finish: "satin", coverFinish: "pearl", stripe: [0.3, 0.5, 0.7] });
+  const invalidFields = sound("invalid_finish_sibling", {
+    ductFinish: "unknown-duct-finish", deflectorFinish: "constructor", cockpitFinish: null, boardFinish: "unknown-board-finish",
+  });
+  const result = b.loadGarage({ format: "apex26-garage-v1", garage: {
+    "livery.mclaren": selected.id,
+    "livery.custom.mclaren": [selected, sibling, invalidFields, { id: "broken_finish_sibling", c1: [1, 0], c2: [0, 0, 1] }],
+  } });
+  assert.equal(result.ok, true);
+  assert.equal(result.droppedLiveries, 1, "only the structurally invalid sibling is discarded");
+  const exported = b.garage();
+  const restored = boot(options);
+  assert.equal(restored.loadGarage(exported).ok, true);
+  const rows = JSON.parse(restored.disk.get("apex26.livery.custom.mclaren"));
+  assert.deepEqual(rows.map(row => row.id), [selected.id, sibling.id, invalidFields.id]);
+  assert.equal(JSON.parse(restored.disk.get("apex26.livery.mclaren")), selected.id, "the selected paint job remains fitted");
+  const chosen = rows.find(row => row.id === selected.id);
+  for (const [field, value] of Object.entries(finishes)) assert.equal(chosen[field], value, field + " survives the file round-trip");
+  const soundSibling = rows.find(row => row.id === sibling.id);
+  assert.equal(soundSibling.finish, sibling.finish);
+  assert.equal(soundSibling.coverFinish, sibling.coverFinish);
+  assert.deepEqual(soundSibling.stripe, sibling.stripe);
+  const cleanedSibling = rows.find(row => row.id === invalidFields.id);
+  for (const field of Object.keys(finishes)) assert.equal(Object.hasOwn(cleanedSibling, field), false, field + " stays omitted");
+  assert.deepEqual(restored.garage().garage["livery.custom.mclaren"], exported.garage["livery.custom.mclaren"],
+    "a second export preserves the cleaned optional fields exactly");
 });

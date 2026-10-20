@@ -624,7 +624,8 @@ const Liveries = (function () {
     "bodyStyle",
     // PAINT ZONES (CarMaterials.PAINT_ZONES; header above): new surfaces, each optional.
     "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
-    "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint"];
+    "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint",
+    "ductFinish", "deflectorFinish", "cockpitFinish", "boardFinish"];
 
   // One-shot paint migrate: fold ridge→BAND, airbox→COVER; drop lettering overrides.
   // Idempotent. Mutates and returns `liv` (or a shallow copy when null-safe).
