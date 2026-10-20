@@ -2,7 +2,8 @@
 // @doc Persist vm.Script cachedData for game-vm manifest eval (content-hash keyed).
 
 // vm.Script cachedData persistence for game-vm / track harnesses.
-// Keyed by sha256(source) so a stale cache cannot outlive an edit.
+// Keyed by format + sha256(source) so stale or legacy non-atomic entries are
+// never handed back to V8 after this cache format changes.
 
 const crypto = require("crypto");
 const fs = require("fs");
@@ -26,7 +27,7 @@ function runScriptCached(src, ctx, { filename, root }) {
     return vm.runInContext(src, ctx, { filename });
   }
   const dir = cacheDir(rootDir);
-  const hash = crypto.createHash("sha256").update(src).digest("hex");
+  const hash = crypto.createHash("sha256").update("atomic-v1:").update(src).digest("hex");
   const file = cacheFile(dir, hash);
   let cachedData;
   if (fs.existsSync(file)) {
@@ -41,7 +42,15 @@ function runScriptCached(src, ctx, { filename, root }) {
     const fresh = script.createCachedData();
     if (fresh && fresh.length && (!cachedData || !fresh.equals(cachedData))) {
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(file, fresh);
+      // Parallel VM suites read the same source key. Never expose a partially
+      // written blob to V8: malformed cachedData can abort outside JS recovery.
+      const temp = `${file}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+      try {
+        fs.writeFileSync(temp, fresh);
+        fs.renameSync(temp, file);
+      } finally {
+        try { fs.unlinkSync(temp); } catch (_) { /* renamed or never created */ }
+      }
     }
   } catch (_) { /* createCachedData unavailable — run without persisting */ }
   return result;
