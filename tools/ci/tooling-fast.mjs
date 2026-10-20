@@ -847,7 +847,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/overtake-mode.test.mjs",
   // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
   "tests/unit/pace-math.test.mjs",
-  // Perf hunt 6 (B·H6): the material strips decode to their stored bytes (DecompressionStream + PNG unfilter) with no GPU readback; every shipped layer is byte-identical to sharp's decode; the knob, a missing DecompressionStream, a tagged/palette/corrupt PNG fall back to createImageBitmap.
+  // Perf hunt 6 (B·H6): the material strips decode to their stored bytes (DecompressionStream + PNG unfilter) with no GPU readback; every shipped layer is byte-identical to sharp's decode; a missing DecompressionStream or a tagged/palette/corrupt PNG falls back to createImageBitmap.
   "tests/unit/pack-png-bytes.test.mjs",
   "tests/unit/pad-haptics.test.mjs",
   // particles.js dirty latch: parked rain skips expand/upload until eye cell moves.

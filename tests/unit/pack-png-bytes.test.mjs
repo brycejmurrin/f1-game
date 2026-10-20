@@ -9,7 +9,7 @@
 //
 // The bytes must be the ones the readback produced: straight (un-premultiplied), not colour-managed. sharp
 // (libvips/libspng, an independent decoder) decodes the same shipped PNG here, and every layer must match it
-// byte for byte, for both tiers and both strips. The fallbacks keep today's path: the knob, a missing
+// byte for byte, for both tiers and both strips. The fallbacks keep today's path: a missing
 // DecompressionStream, a PNG this reader does not take (a colour tag, a palette).
 //
 // Run: node --test tests/unit/pack-png-bytes.test.mjs
@@ -145,7 +145,6 @@ test("every PNG filter type (none/sub/up/average/paeth), split IDATs and an anci
 });
 
 for (const [why, opts, mkPng] of [
-  ["apex26.packBytes=0 (the A/B knob)", { ls: { "apex26.packBytes": "0" } }, () => makePng(8, MAT_N).png],
   ["no DecompressionStream", { decompress: false }, () => makePng(8, MAT_N).png],
   ["a colour-tagged strip (sRGB chunk: the browser would honour it)", {}, () => makePng(8, MAT_N, { extra: [["sRGB", Buffer.from([0])]] }).png],
   ["a non-RGBA strip (palette colour type)", {}, () => makePng(8, MAT_N, { colorType: 3 }).png],

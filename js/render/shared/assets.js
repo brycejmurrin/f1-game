@@ -123,12 +123,8 @@ const Assets = (function () {
   // takes (GLX texSubImage3D, readLayerBytes*, WGX writeTexture) — or null for
   // anything else (another PNG format, no DecompressionStream, a blob without
   // arrayBuffer), and the caller decodes ImageBitmaps as before.
-  // apex26.packBytes=0 restores the ImageBitmap path.
   //   https://www.w3.org/TR/png-3/#9Filters
   //   https://developer.mozilla.org/en-US/docs/Web/API/DecompressionStream
-  function _packBytesOn() {
-    try { return typeof localStorage === "undefined" || localStorage.getItem("apex26.packBytes") !== "0"; } catch (_) { return true; }
-  }
   async function _inflate(parts) {
     const ds = new DecompressionStream("deflate");   // zlib-wrapped, as PNG IDAT is
     const w = ds.writable.getWriter();
@@ -172,7 +168,7 @@ const Assets = (function () {
     }
   }
   async function _decodeStripBytes(blob, size, present, check) {
-    if (typeof DecompressionStream !== "function" || !blob || typeof blob.arrayBuffer !== "function" || !_packBytesOn()) return null;
+    if (typeof DecompressionStream !== "function" || !blob || typeof blob.arrayBuffer !== "function") return null;
     const png = new Uint8Array(await blob.arrayBuffer());
     check();
     const SIG = [137, 80, 78, 71, 13, 10, 26, 10];
