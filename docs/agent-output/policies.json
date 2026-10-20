@@ -846,6 +846,11 @@
       "presentation": "shared-levels",
       "preserve": "Fetch failed means nothing read; stale claims hidden count; never suppress conflicting work"
     },
+    "tools/desktop/minify.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
     "tools/desktop/pack-dry-run.mjs": {
       "action": "keep-native",
       "presentation": "native",

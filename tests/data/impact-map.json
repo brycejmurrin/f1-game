@@ -4175,7 +4175,8 @@
     "js/circuits/scenery/monaco.js": {
       "*": [
         "tests/unit/pick-unit-slices.test.mjs",
-        "tests/unit/scenery-ground-audit.test.mjs"
+        "tests/unit/scenery-ground-audit.test.mjs",
+        "tests/unit/stage-minify.test.mjs"
       ]
     },
     "js/circuits/scenery/montreal.js": {
@@ -4356,6 +4357,7 @@
         "tests/unit/metrics.test.mjs"
       ],
       "*": [
+        "tests/unit/stage-minify.test.mjs",
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/verify-live.test.mjs"
       ]
@@ -4405,6 +4407,7 @@
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/select-specs.test.mjs",
+        "tests/unit/stage-minify.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
@@ -12358,7 +12361,8 @@
       "*": [
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/global-registry.test.mjs",
-        "tests/unit/import-models.test.mjs"
+        "tests/unit/import-models.test.mjs",
+        "tests/unit/stage-minify.test.mjs"
       ]
     },
     "js/render/shared/canvas-css-size.js": {
@@ -13683,7 +13687,8 @@
       ],
       "*": [
         "tests/unit/global-registry.test.mjs",
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/stage-minify.test.mjs"
       ]
     },
     "js/track/build-worker.js": {
@@ -13692,7 +13697,8 @@
         "tests/unit/build-worker.test.mjs"
       ],
       "*": [
-        "tests/unit/deploy-staging.test.mjs"
+        "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/stage-minify.test.mjs"
       ]
     },
     "js/track/circuit-elevations.js": {
