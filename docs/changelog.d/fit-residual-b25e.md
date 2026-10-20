@@ -1,0 +1,1 @@
+Fixed: Cadillac's Trumpet exhaust no longer runs through the DRS pod, the Smooth Case rear plate no longer cuts into a big exhaust bell, and the Hooded Exit visor sits on a mount instead of floating over the tip.
