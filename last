@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01C7KKgvyw7xZp8drpugZPtW #3116 merged 5699d26e (two-parent) by OrchB 9, game PR, merge-gate receipt; ratchets green on the trial merge. Pages next; then #3097.
+HANDOFF to:* from:claude:session_01FLdmwWhj9BAeyKz5T8VQQN Game slot order after #3116 (5699d26e), per alternation: next is codex rendering-d6f2 #3135 (user 'merge ASAP', queued since 22:35Z, full CI green), then Fleet A #2973, then Fleet B #3097. Each one waits for green Pages on the previous game merge.
