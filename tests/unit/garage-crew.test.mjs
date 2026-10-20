@@ -128,14 +128,18 @@ test("pit-stop front jack: saddle seated on each chassis' nose underside, clear 
     meshes.length = 0;
     Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(2.5, Arrival.settings({}), true), null, id);
     const nose = Crew.noseTip(id, LIV), d = meshes.find((m) => m.pos.length > 30000);
-    const seat = Math.min(nose.at(nose.z - 0.10), nose.at(nose.z - 0.015));   // the cone's lowest point over the saddle
-    let top = -Infinity, inWing = 0;
+    // The cradle's top line follows the nose underside: at every z along it, the highest jack vertex at x≈0 IS the nose.
+    let worst = -Infinity, n = 0, inWing = 0;
     for (let i = 0; i < d.pos.length; i += 3) {
       const x = d.pos[i], y = d.pos[i + 1], z = d.pos[i + 2];
-      if (Math.abs(x) < 0.06 && z > nose.z - 0.14 && z < nose.z && y > 0.12 && y < seat + 0.05) top = Math.max(top, y);
+      if (Math.abs(x) < 1e-6 && z >= nose.z - 0.1 - 1e-6 && z <= nose.z - 0.015 + 1e-6 && y > 0.12) {
+        worst = Math.max(worst, y - nose.at(z)); n++;                                    // > 0 = inside the nose, < 0 = a gap
+      }
       if (Math.abs(x) < 0.9 && z > 2.40 && z < 2.72 && y < 0.10) inWing++;              // the main plane's box
     }
-    assert.ok(Math.abs(top - seat) < 1e-6, `${id}: saddle top ${top.toFixed(3)} meets the nose underside ${seat.toFixed(3)}`);
+    assert.ok(n > 0, id + ": the cradle's top line was sampled");
+    assert.ok(worst < 1e-4, `${id}: the cradle never rises into the nose (worst ${worst.toFixed(4)} m)`);
+    assert.ok(worst > -1e-3, `${id}: and touches it, no gap (closest ${(-worst * 1000).toFixed(2)} mm below)`);
     assert.equal(inWing, 0, id + ": nothing of the jack (or crew) inside the front wing's main plane");
   }
 });
