@@ -98,6 +98,17 @@ const Car3D = (function () {
     lowline:  Object.freeze({ fitSeat: 1, noseTipZ: 0.20, noseSlim: 1.00, noseDroop: -0.028, airbox: 0.40, fin: 0, mirror: 0, inlet: -0.080, inletH: -0.200, inletW:  0.200, undercutD:  0.000, waist:  0.200, floorStep:  0.000, coverCrown:  0.000, coverLift: -0.160, wingStyle: W({ flaps: 2, arch: 0.30, twist: 0.10, teCurve: 0.04, chordTaper: 0.20, foot: 0.85, tipRise: 0.010 }) }),
     // Stepnose: 2012 Caterham CT01 / Ferrari F2012 — tall tub crown stepping down to a low cone.
     stepnose: Object.freeze({ fitSeat: 1, noseTipZ: 0.28, noseSlim: 1.00, noseDroop: -0.028, noseStep: 0.20, airbox: 1.30, fin: 1, mirror: 2, inlet:  0.040, inletH:  0.100, inletW:  0.060, undercutD:  0.060, waist: -0.060, floorStep:  0.030, coverCrown:  0.080, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.75, twist: 0.30, teCurve: 0.14, chordTaper: 0.40, canard: 2, tipRise: 0.040 }) }),
+    // Blender-derived studies: independent IDs from the Rift/Keel/Delta/Serpent
+    // campaign. fitSeat keeps nose attachments on the measured skin; the existing
+    // body anchors own pod/cover clearances and decal placement for these too.
+    // Caldra: raised cooling shoulder, a pinched waist and a scalloped front cascade.
+    caldra: Object.freeze({ fitSeat: 1, podProfile: "rift", noseTipZ: 0.16, noseSlim: 0.68, noseDroop: -0.018, airbox: 0.88, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.000, inletW: -0.040, undercutD: 0.120, waist: -0.100, floorStep: 0.035, coverCrown: 0.045, coverLift: 0.065, wingStyle: W({ arch: 0.72, twist: 0.32, teCurve: 0.14, chordTaper: 0.35, foot: 1.05, tipRise: 0.025 }) }),
+    // Rovik: low, narrow cooling shelf and long slim nose with almost flat wings.
+    rovik: Object.freeze({ fitSeat: 1, podProfile: "keel", noseTipZ: 0.32, noseSlim: 0.46, noseDroop: -0.012, airbox: 0.68, fin: 0, mirror: 0, inlet: -0.040, inletH: -0.100, inletW: -0.080, undercutD: 0.065, waist: -0.130, floorStep: -0.015, coverCrown: 0.005, coverLift: -0.060, wingStyle: W({ arch: 0.20, twist: 0.08, teCurve: 0.02, chordTaper: 0.10, foot: 0.75, tipRise: 0.006 }) }),
+    // Senzo: broad cooling shoulders and swept wing tips.
+    senzo: Object.freeze({ fitSeat: 1, podProfile: "delta", noseTipZ: 0.06, noseSlim: 0.80, noseDroop: -0.020, airbox: 1.05, fin: 0, mirror: 2, inlet: 0.060, inletH: -0.005, inletW: -0.050, undercutD: -0.020, waist: 0.025, floorStep: 0.025, coverCrown: 0.000, coverLift: -0.075, wingStyle: W({ arch: 0.85, twist: 0.40, teCurve: 0.16, chordTaper: 0.42, foot: 1.20, canard: 2, tipRise: 0.035 }) }),
+    // Talven: a rising shoulder/cover arc, deep undercut and bowed wing cascade.
+    talven: Object.freeze({ fitSeat: 1, podProfile: "serpent", noseTipZ: 0.10, noseSlim: 0.82, noseDroop: 0.008, airbox: 0.90, fin: 0, mirror: 0, inlet: -0.020, inletH: -0.005, inletW: -0.035, undercutD: 0.100, waist: -0.080, floorStep: 0.040, coverCrown: 0.070, coverLift: 0.060, wingStyle: W({ arch: 1.08, twist: 0.30, teCurve: 0.18, chordTaper: 0.40, foot: 1.25, tipRise: 0.045 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -369,7 +380,9 @@ const Car3D = (function () {
     }
 
     part("sidepods");
+    const podSkinFrom = out.pos.length / 3;
     const podGeom = buildSidepodBodywork(out, c1, engStyle, anchors);
+    if (opts && opts.measure) out.podSkin = { from: podSkinFrom, to: out.pos.length / 3 };
     // TRAP: `proud` is measured off anchors.podAt(z).x, which is the LOFT
     // CONTROL width, NOT the rendered pod surface. Measured, the two diverge by
     // 18 mm at z 0.2 and 99 mm at z -0.4, so a thin line laid the default 8 mm
@@ -874,26 +887,28 @@ const Car3D = (function () {
                    : (tier("engine") === 2 ? 2 : tier("engine") === 0 ? 0 : 1);
     for (const s of [-1, 1]) {
       const inlet = podGeom.inlet;
-      if (engInlet === 0) {
-        // Letterbox: the shallowest duct on the grid, and no lip at all.
-        addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
-                      inlet.width * 0.75, inlet.height * 0.38, c1, 0.034, 0);
-      } else if (engInlet === 2) {
-        addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
-                      inlet.width * 0.92, inlet.height * 0.82, c1, 0.075, 0.016);
-        // Splitter bar across the throat — a wide mouth needs one or it reads
-        // as a missing panel rather than a radiator.
-        addBox(out, s * inlet.x, inlet.y, inlet.z - 0.030,
-               inlet.width * 0.86, 0.012, 0.014, CARBON, SURFACES.carbon);
-      } else if (engInlet === 3) {
-        for (const dx of [-1, 1])
-          addInletMouth(out, s * (inlet.x + dx * inlet.width * 0.22), inlet.y, inlet.z,
-                        inlet.width * 0.34, inlet.height * 0.88, c1, 0.060, 0.010);
-      } else {
-        // Reverse-P (2026 field majority): tall inboard stem, not a square scoop.
-        addInletMouth(out, s * (inlet.x - inlet.width * 0.12),
-                      inlet.y + inlet.height * 0.08, inlet.z,
-                      inlet.width * 0.48, inlet.height * 0.88, c1, 0.055, 0.012);
+      if (!podGeom.conceptInlet) {
+        if (engInlet === 0) {
+          // Letterbox: the shallowest duct on the grid, and no lip at all.
+          addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
+                        inlet.width * 0.75, inlet.height * 0.38, c1, 0.034, 0);
+        } else if (engInlet === 2) {
+          addInletMouth(out, s * inlet.x, inlet.y, inlet.z,
+                        inlet.width * 0.92, inlet.height * 0.82, c1, 0.075, 0.016);
+          // Splitter bar across the throat — a wide mouth needs one or it reads
+          // as a missing panel rather than a radiator.
+          addBox(out, s * inlet.x, inlet.y, inlet.z - 0.030,
+                 inlet.width * 0.86, 0.012, 0.014, CARBON, SURFACES.carbon);
+        } else if (engInlet === 3) {
+          for (const dx of [-1, 1])
+            addInletMouth(out, s * (inlet.x + dx * inlet.width * 0.22), inlet.y, inlet.z,
+                          inlet.width * 0.34, inlet.height * 0.88, c1, 0.060, 0.010);
+        } else {
+          // Reverse-P (2026 field majority): tall inboard stem, not a square scoop.
+          addInletMouth(out, s * (inlet.x - inlet.width * 0.12),
+                        inlet.y + inlet.height * 0.08, inlet.z,
+                        inlet.width * 0.48, inlet.height * 0.88, c1, 0.055, 0.012);
+        }
       }
       const fenceN = Math.max(0, Math.min(10, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(2.25, floorStyle.fenceH));
