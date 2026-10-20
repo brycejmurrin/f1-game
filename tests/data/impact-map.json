@@ -1565,7 +1565,13 @@
       "insideProp": [
         "tests/unit/flyby-shots.test.mjs"
       ],
+      "isNight": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
       "isSolid": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "isWet": [
         "tests/unit/flyby-shots.test.mjs"
       ],
       "landmarkFallback": [
@@ -1603,6 +1609,9 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/loading-card.test.mjs"
       ],
+      "select": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
       "setDuration": [
         "tests/unit/flyby-shots.test.mjs"
       ],
@@ -1612,6 +1621,9 @@
       "setPlayerSlot": [
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/loading-card.test.mjs"
+      ],
+      "setSession": [
+        "tests/unit/flyby-shots.test.mjs"
       ],
       "shotAt": [
         "tests/unit/flyby-shots.test.mjs",
@@ -1644,6 +1656,9 @@
         "tests/unit/flyby-shots.test.mjs"
       ],
       "warmProgress": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "whenMatch": [
         "tests/unit/flyby-shots.test.mjs"
       ],
       "*": [
@@ -4898,6 +4913,9 @@
       ]
     },
     "js/data/flyby-overrides.js": {
+      "catalog": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
       "patches": [
         "tests/unit/flyby-shots.test.mjs"
       ],
