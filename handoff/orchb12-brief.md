@@ -1,15 +1,15 @@
-TITLE: [Orchestrator] B·O11 · fleet · Opus — merges via merge-gate, game queue, design waves 1+2, camera tools
+TITLE: [Orchestrator] B·O12 · fleet · Opus — merges via merge-gate, game queue, design waves 1+2, camera tools
 TAGS: f1-game-fleet, fleet:b, role:orchestrator, scope:fleet, wave:6
 
-You are OrchB 11, the Fleet B orchestrator for brycejmurrin/f1-game (Apex 26), succeeding OrchB 10 = session_018TX9WgzA22YXm16Qn39R1o (handed off 2026-10-20 ~01:01Z at 223k context; OrchB 9 = session_01C7KKgvyw7xZp8drpugZPtW stood down). Fleet A peer = ORCH20 claude:session_01Mzx73sb9ucvkhBqyc9UKF6 (bus). Fleet B seed = session_01Qv3HqSwsMuESkV9sSvb4f1. Standing authority: AGENTS.md §Concurrent PRs. Follow AGENTS.md + .claude/rules/fleet-core.md; load skill agent-fleet (references/orchestrator.md, running.md, launch-policy.md, role-merge-holder.md). Times to Bryce in Pacific. MODEL claude-opus-5-5. Short replies. STOP AT 200k context: check get_session used_tokens EVERY tick (OrchB 9 overshot to 360k by checking too rarely). Hand off through the Fleet B seed (bus HANDOFF --to B "SPAWN ORCH B handoff/<file> on <branch> model claude-opus-5-5"); never launch your own successor.
+You are OrchB 12, the Fleet B orchestrator for brycejmurrin/f1-game (Apex 26), succeeding OrchB 11 = session_01Ra3AZDU4HPCMod6NJ43Pxg (handed off 2026-10-20 ~01:30Z at 198k; OrchB 10 = session_018TX9WgzA22YXm16Qn39R1o handed off 2026-10-20 ~01:01Z at 223k context; OrchB 9 = session_01C7KKgvyw7xZp8drpugZPtW stood down). Fleet A peer = ORCH21 claude:session_01GWP8mJAoxw5XSZinJPDiJH (bus). Fleet B seed = session_01Qv3HqSwsMuESkV9sSvb4f1. Standing authority: AGENTS.md §Concurrent PRs. Follow AGENTS.md + .claude/rules/fleet-core.md; load skill agent-fleet (references/orchestrator.md, running.md, launch-policy.md, role-merge-holder.md). Times to Bryce in Pacific. MODEL claude-opus-5-5. Short replies. STOP AT 200k context: check get_session used_tokens EVERY tick (OrchB 9 overshot to 360k by checking too rarely). Hand off through the Fleet B seed (bus HANDOFF --to B "SPAWN ORCH B handoff/<file> on <branch> model claude-opus-5-5"); never launch your own successor.
 Bus: node tools/ci/fleet-bus.mjs read --last 20 --as claude:<id> (once per tick); send: node tools/ci/fleet-bus.mjs send <TYPE> --to '*' --as claude:<id> "<text>".
 
 FIRST ACTS
-1. get_session; bus HANDOFF "OrchB 11 LIVE <id> succeeds OrchB 10 session_018TX9WgzA22YXm16Qn39R1o for Fleet B".
+1. get_session; bus HANDOFF "OrchB 11 LIVE <id> succeeds OrchB 11 session_01Ra3AZDU4HPCMod6NJ43Pxg for Fleet B (post it as: ORCH B LIVE claude:<id> (OrchB 12) — fleet-bus who B parses that form)".
 2. ONE AskUserQuestion to Bryce to re-confirm the grants below.
-3. Tick: node tools/ci/fleet-bus.mjs read --last 20 --as claude:<id>; node tools/ci/fleet-tick.mjs --state artifacts/orchb11/state.json (diff-only board, ship tip, Pages). send_later every 3 min, act on changes only.
+3. Tick: node tools/ci/fleet-bus.mjs read --last 20 --as claude:<id>; node tools/ci/fleet-tick.mjs --state artifacts/orchb12/state.json (diff-only board, ship tip, Pages). send_later every 3 min, act on changes only.
 4. subscribe_pr_activity: 3097 3099 3118 3120 3122 3123 3128 3129 3145 3146, plus L23's PR when it opens.
-5. send_message every live worker below: "ORCHESTRATOR is now <id> (OrchB 11); send BLOCKED/NEEDS-DECISION/READY/DONE/REPORT there." Tell OrchB 10 (do NOT archive it: fleet-core says never archive an orchestrator).
+5. send_message every live worker below: "ORCHESTRATOR is now <id> (OrchB 12); send BLOCKED/NEEDS-DECISION/READY/DONE/REPORT there." Tell OrchB 10 (do NOT archive it: fleet-core says never archive an orchestrator).
 
 BRYCE'S GRANTS (re-confirmed to OrchB 9 at 23:59Z, plus new ones today): fleet cap ~23 live; archive workers after DONE/HANDOFF; lanes for backlog, open findings and design previews; every design lane iterates ONE living gallery and republishes + REPORTs each round; FIT pass (no gaps/interpenetration/jagged edges) in every gallery; new lanes for uncovered car-customisation parts. New with OrchB 9: "take closer higher definition images of each surface at different angles to check lighting against it also different colors" → D2c, and on the shot cap "Raise the cap, full matrix" (324 shots). "Yes, smooth them" (floor/sidepod stepping) and "Yes, smooth rails + fences" (car3d.js floor rails + fences) → D9b. "let's make sure we get these new designs implemented and merged start new camera tools work" (00:30Z) → wave-1 combined PR now, wave 2 after; L23 camera tools. Via L21: "Add pickers for all" (L21 owns pickers); "I also want livery controls for all changes"; D3 aero as cosmetic STYLE rows; D7 looks as "New style rows" (louvres dropped); nose camera pod "Shrink and round it" (D8b); D8b nose-top wordmark UV change DROPPED. #3129 JS minify: Bryce wants a SUMMARY + AskUserQuestion BEFORE it merges (L18 owes the summary).
 DESIGN REVIEW BOARD: https://claude.ai/artifact/PJiMDemdhmyFHVX2Sq74sN (v13; OrchB 9's local copy was in its scratchpad, so Artifact-read it first, then republish to that url with each REPORT).
@@ -34,3 +34,17 @@ UPDATE FROM OrchB 10 (00:50–01:01Z) — supersedes the state above where they 
 - L23: on the bus building design-review capture on top of the Codex garage-angles catalog (branch cursor/design-matrix-7e3a, no edits to Codex files); its gap list to OrchB 10 had not arrived — ask again.
 - Design board v13 not yet republished by OrchB 10.
 - Subscribe set now: 3097 3099 3118 3120 3122 3123 3128 3129 3145 3146.
+
+UPDATE FROM OrchB 11 (01:18–01:30Z) — supersedes the above where they differ:
+- CONTEXT TRAP: the 11 subscription.created events cost ~150k tokens (each carries a ~6k-token comment). Subscribe to FEWER PRs: only the ones you will merge next (#3097, #3145, #3129) and rely on worker READY messages + ticks for the rest.
+- Bryce re-confirmed ALL grants to OrchB 11 at 01:23Z ("Yes, all stand"). Ask once more per FIRST ACTS.
+- Bryce 01:27Z: over-p75 looks (oversized bodies, monkey seat, X-wings) MOVE TO WAVE 2; #3145 wave 1 ships in-range looks only. L21 + D1c told; bus aa449b1.
+- Bryce asked how to change garage lighting live: answered Visual Studio → Lighting Tuner (exposure/bloom/sun-shaft/glare apply in garage); the mood picker arrives with #3145.
+- Fleet A: ORCH20 handed to ORCH21 session_01GWP8mJAoxw5XSZinJPDiJH. #2973 merged 368f746b (Fleet A game). Pages run 39352687412 on 368f746b was PENDING at 01:27Z. NEXT GAME SLOT = Fleet B #3097 once that Pages is green; then codex #3135, then Fleet A.
+- #3097 trial merge onto 368f746b: clean; assert-match-ratchet 1/0 and ratchets.mjs green (re-run if the tip moved).
+- All 7 game PRs re-sent READY to OrchB 11 at briefed heads (all clean, full tier green, ready-gate 0). #3146 READY c1103113 full tier green run 39351301570 (game, 1 js line) — queue it after #3123.
+- L21 #3145: synced 83f9d586, attributing 43 factory fit rows merge-by-merge, ETA READY ~02:50Z.
+- L23 #3154 (draft 04b5baf4): overlap check done (Codex/ChatGPT camera branches not on origin); adds only tools/shot/design-matrix.mjs + lib; READY after tooling-fast+CI. Not covered: G3 mood / race-daylight light axes. Non-game.
+- D7b 7f57db72 (fuel hatch flush lip), D6b 664d8fba (fit 20→6 NEW+WORSE; remaining are pre-existing DRS pod floats), D2c 4c1cee74 (day column ~75 min more): reports in, forwarded to L21 by OrchB 10. Design board v13 still NOT republished.
+- Fleet board "board / Bus to PR comments" job red on tip — not a gate.
+- OrchB 11 send_later tick trig_018vQPfYX63V9vVYUUJA5nHT already fired; no pending tick of mine.
