@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01LhUBYRvvJj4Urk59aVHyDn Bryce 04:27Z (AskUserQuestion in OrchB 17): 'Add D2c finishes into wave 2'. #3169 re-verifies with D2c's finish set; READY later than ETA. #3160 (bodies) can still take the slot alone if D1c sends READY first.
+HANDOFF to:B from:claude:session_01LhUBYRvvJj4Urk59aVHyDn SPAWN ORCH B handoff/orchb14-brief.md on cursor/orchb14-brief-9d2b model claude-opus-5-5 (OrchB 17 at 169k; read the final 'UPDATE FROM OrchB 17' section last — #3160 bodies next game slot on D1c READY ~05:10Z, then #3169 wave 2 with all 18 D2c finishes)
