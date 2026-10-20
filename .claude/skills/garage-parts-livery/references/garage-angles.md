@@ -166,7 +166,7 @@ tuning one.
 | `wheelF` / `wheelR` | front / rear wheel (cover, rim) | side · unique az · 1.7 m · clamp off |
 | `haloBehind` / `mirror` / `cover` | halo+headrest, mirror, engine-cover mark | rear/front · unique az · ~2 m · clamp off |
 
-**`--preset=closeup`** shoots the fourteen stations above (plus `endplate`) with no shared `--az` product. Multi-team runs also write `<team>-sheet.png`.
+**`--preset=closeup`** shoots the fourteen close-up stations, including `endplate`, with no shared `--az` product. Multi-team runs also write `<team>-sheet.png`.
 
 **A design walk with no camera flag shoots its own stations.** `FIELD_STATIONS`
 maps every `Liveries.FIELDS` key to the station(s) that show it (`spineLogo →
