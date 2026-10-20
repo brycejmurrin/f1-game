@@ -487,7 +487,7 @@ const Car3D = (function () {
           const under = (z) => { const r = z > crest.z, A = r ? mouth : crest, B = r ? crest : merge, t = (A.z - z) / (A.z - B.z);
             const lo = A.y - A.h / 2 + (B.y - B.h / 2 - (A.y - A.h / 2)) * t + 0.012, c = anchors.coverAt(z).top - 0.015;
             return { z, y: (lo + c) / 2, w: (A.w + (B.w - A.w) * t) * 0.86, h: Math.max(0.02, lo - c) }; };
-          addSpan(out, under(-0.28), under(crest.z), airboxC);
+          addSpan(out, under(-0.31), under(crest.z), airboxC);   // front 3 cm behind the airbox mouth plane (z -0.28): no coplanar faces
           addSpan(out, under(crest.z), under(-0.64), airboxC);
         }
         addBox(out, 0, mouth.y + 0.01, mouth.z + 0.01,
@@ -1094,7 +1094,7 @@ const Car3D = (function () {
     const camPod = anchors.noseAt(1.55);
     // fitSeat: sit on the LOWER skin under the pod's 15 cm, not the top at its centre
     // (a stepped cone climbs under it and the rear floated 13 mm).
-    const camY = teamStyle.fitSeat ? Math.min(anchors.noseAt(1.475).top, anchors.noseAt(1.625).top) + 0.035 : camPod.top + 0.045;
+    const camY = teamStyle.fitSeat ? Math.min(anchors.noseAt(1.475).top, anchors.noseAt(1.625).top) + 0.038 : camPod.top + 0.045;   // 2 mm in at the high end
     addBox(out, 0, camY, 1.55, 0.06, 0.08, 0.15, DARK);
 
     // Two-tone body (CarShade): `lower` below the sidepod board line, `upper`
