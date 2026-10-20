@@ -167,7 +167,9 @@ test("gallery export verifies real image bytes, preserves source/status, escapes
   const native={id:"native",title:'<script>bad</script>',src:"frame.png",sha256:digest(image),sourceRevision:"old",status:"archive",backend:"three",readiness:{mode:"fixture"},via:"test-only",design:{podFinish:"satin"}};
   const data={items:[native,{...native,id:"geometry",geometryOnly:true,backend:"CPU projection"}]},input=path.join(dir,"input.json");fs.writeFileSync(input,JSON.stringify(data));
   const pack=await prepareGallery(input,dir);assert.equal(pack.files.size,1);assert.equal(pack.data.export.counts["native-screenshot"],1);assert.equal(pack.data.export.counts["geometry-preview"],1);assert.equal(pack.data.items[0].sourceRevision,"old");assert.equal(pack.data.items[0].status,"archive");assert.equal(pack.data.items[0].width,8);
-  assert.match(galleryHtml(pack.data),/&lt;script&gt;bad/);assert.doesNotMatch(galleryHtml(pack.data),/<script>bad/);
+  const html=galleryHtml(pack.data),scriptTags=h=>h.split(/<script\b/i).length-1;
+  assert.equal(scriptTags(html),scriptTags(galleryHtml({...pack.data,items:[]})),"an item title must add no <script> element");
+  assert.equal(html.includes("&lt;script&gt;bad"),true);
   fs.writeFileSync(path.join(dir,"frame.png"),"corrupt");await assert.rejects(prepareGallery(input,dir),/hash/);
   fs.writeFileSync(path.join(dir,"frame.png"),image);data.items[0].src="../escape.png";fs.writeFileSync(input,JSON.stringify(data));await assert.rejects(prepareGallery(input,dir),/escapes/);
 });
@@ -176,7 +178,7 @@ test("real CLI plan is read-only and missing browser fails before output creatio
   const dir=temp(t),out=path.join(dir,"output"),args=["tools/shot/design-matrix.mjs","--part=sidepod","--angles=headOn","--colours=dark","--run=fixture",`--out=${out}`];
   const env={...process.env,PW_CHROMIUM:path.join(dir,"missing-chromium")};
   const plan=spawnSync(process.execPath,[...args,"--plan"],{env,encoding:"utf8",timeout:10000});assert.equal(plan.status,0,plan.stderr);assert.equal(JSON.parse(plan.stdout).browser.available,false);assert.equal(fs.existsSync(out),false);
-  const capture=spawnSync(process.execPath,args,{env,encoding:"utf8",timeout:10000});assert.equal(capture.status,1);assert.match(capture.stderr,/no executable Chromium/);assert.equal(fs.existsSync(out),false);
+  const capture=spawnSync(process.execPath,args,{env,encoding:"utf8",timeout:10000});assert.equal(capture.status,1);assert.equal(capture.stderr.split(". ")[0],"design-matrix: native screenshots unavailable: no executable Chromium discovered");assert.equal(fs.existsSync(out),false);
 });
 
 test("source fingerprints detect tracked and untracked changes", t => {
@@ -195,7 +197,7 @@ test("real CLI gallery export packages image assets and rejects output reuse", a
   const args=["tools/shot/capture-gallery.mjs",`--input=${input}`,`--assets=${dir}`,`--out=${out}`];
   const run=()=>spawnSync(process.execPath,args,{encoding:"utf8",timeout:10000});
   const r=run();assert.equal(r.status,0,r.stderr);const data=JSON.parse(fs.readFileSync(path.join(out,"gallery.json")));assert.equal(data.items[0].kind,"geometry-preview");assert.equal(digest(fs.readFileSync(path.join(out,data.items[0].src))),digest(image));assert.ok(fs.existsSync(path.join(out,"index.html")));
-  assert.match(run().stderr,/new or empty/);
+  assert.equal(run().stderr.trim(),"capture-gallery: export output must be new or empty");
 });
 
 test("CI requests bound work, reject output/command injection and retain mixed recipes as one argument", () => {
