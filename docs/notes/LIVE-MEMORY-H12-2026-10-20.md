@@ -25,7 +25,7 @@ rendered window runs 1–2 fps: the per-frame allocation rows below are indicati
 |---|---|---|---|---|---|
 | 1 | Every finished race's cars, and through `car._lk.track` the whole track (scenery placement records, model instances, ~12 MB of Float buffers), stayed reachable for the session | +12 MB heap and +12 MB ArrayBuffer per cycle, unbounded | `Collide._arcBuckets` → bucket → old car → `_lk.track` → `props.list`. `fillArcBuckets` left entries past `_arcN[b]` stale on purpose (to keep the backing store); a bucket a later race never refilled kept an earlier race's car | `js/physics/collide.js` `_arcClear` | **fixed** (`_arcClear` nulls the slots it drops) |
 | 2 | The last field (and its track) stayed in step scratch until the next race overwrote it | 1 track, ≈ 6–16 MB, one generation | `G` context → `_finRanked` (and `ranked`, `parked`) → old car → `_lk.track` | `js/game.js` `rankFinishers` | **fixed** (`releaseFieldScratch()` in `quitToMenu` and `makeCars`) |
-| 3 | The previous track is still alive for the first lap of the next race | ≈ 6 MB heap + 6 MB buffers, transient | not yet traced | — | open |
+| 3 | The previous track was still alive through the first laps of the next race | ≈ 6–11 MB heap + 6–12 MB buffers, transient | one-generation scratch → old car → `_lk.track`: Collide `_ot {c, ahead}`, game.js `_aiOtFire.other` | `js/physics/collide.js`, `js/game.js` | **fixed** (teardown nulls the old field's `_lk.track`, a cache that rebuilds on a track change, and Collide's `_ot`) |
 | 4 | The menu holds ~11 MB more than a race: it appears a few seconds after the flag (idle garage prebuild, `js/garage/prebuild.js`) and is released at the next race start | ≈ 11 MB, transient | not traced | — | open, by design? |
 | 5 | Physics step allocation ~65 KB/step (boxed doubles in `updateCar*`) | ≈ 4 MB/s at 60 Hz, young-gen only | — | `js/game.js` `updateCar*` | PR #3218 (B·H9) owns it |
 
@@ -42,6 +42,12 @@ garage → spa → menu.
 | cycle 2 menu | 57.7 / 55.4 | 49.6 / 49.1 |
 | cycle 3 menu | 69.8 / 67.6 | 49.9 / 49.1 |
 | cycle 3 monza race end | 52.5 / 60.9 | 32.5 / 42.4 |
+
+Final head (768a9690, with item 3): menu after each cycle 39.6 / 40.0 / 40.6 MB heap, 37.2 / 37.2 / 37.2 MB buffers;
+monza race start 24.5 / 28.6 / 29.1 MB (cycle 2 was 38.0 before item 3).
+
+Bit-identity (base 2eda36c6 vs head, monza → spa → suzuka, 3000 steps each, seed 42): VM raw-field digest
+`e2c9ad68 / f8204361 / c370997e` and browser `fieldState` digest `2d1456ae / f60ebb2d / 88860332` on both.
 
 Growth from cycle 2 to cycle 3 at the menu: +12.1 MB heap and +12.2 MB buffers before, against +0.3 / 0.0 after.
 
@@ -72,6 +78,5 @@ CPU side only); about a dozen races would reach the growth that crashed the iPho
 - Garage prebuild at the idle title (`js/garage/prebuild.js`): ~11 MB post-GC at the menu, released at race start.
   By design (it removes the GARAGE tap freeze); a candidate for B·H8's warm path is to skip the speculative title
   prebuild on low-memory phones.
-- `resolveLivery` (`js/car/custom-liveries.js`) is memoised on `store.rev`, yet the race-frame allocation sample shows
-  its slow path (`pickLivery`, `Liveries.forTeam`, `store.js cloneDef`): something bumps the key or bypasses the cache
-  during a race. Needs a miss counter in a rendered race to confirm.
+- `resolveLivery` (`js/car/custom-liveries.js`) is memoised on the GLOBAL `store.rev`, so any `store.set` re-resolves
+  all 22 teams (~30 KB). Measured: ~1 store write per race (`onboarded`), 2–3 at the menu. Negligible; not changed.
