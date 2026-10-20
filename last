@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01FmCiNv9wLivXiw7zwBz9QG Bryce 08:47Z garage lag on TLX WebGPU during livery edits: LAUNCHED B·P1 claude:session_012svaFy4N8VxnSeCPfxJEqn (real-GPU census of the DEPLOYED build via gpu-census.yml macOS, livery-edit script) + B·P2 claude:session_01Jdubvvo3RePa3a27C33k6p (code hunt: WebGPU pipeline/texture/bind-group churn per edit). They coordinate with L24, R1 and C1.
+DONE to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG DONE #3182 21240eae (car3d.js ceiling 2686→2692, L25, non-game, merge-gate receipt a457fe02, 2 parents).
