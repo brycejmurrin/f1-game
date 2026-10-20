@@ -61,10 +61,24 @@ export async function stop(name, { dir = RUN_DIR, graceMs = 3000, deps = {} } = 
   try { rec = JSON.parse(fs.readFileSync(file, "utf8")); } catch { return { state: "none" }; }
   const script = path.basename(String(rec.cmd).split(" ")[0] || "");
   if (!d.alive(rec.pid) || !d.cmdline(rec.pid).includes(script)) { try { fs.unlinkSync(file); } catch { /* gone */ } return { state: "stale", pid: rec.pid }; }
-  const tree = descendants(d.table(), rec.pid);
-  for (const p of tree) d.kill(p, "SIGTERM");
+  const table = d.table(), tree = descendants(table, rec.pid);
+  const pending = new Set(tree), signalled = new Set();
+  const children = new Map(tree.map((p) => [p, []]));
+  for (const [pid, parent] of table) if (pending.has(pid) && children.has(parent)) children.get(parent).push(pid);
   const deadline = Date.now() + graceMs;
-  while (Date.now() < deadline && tree.some((p) => d.alive(p))) await d.sleep(100);
+  // Let each parent reap its children before terminating it. Sending the whole
+  // tree SIGTERM in one tick leaves zombies with container PID 1 on hosts
+  // without an init reaper. All waves share the original grace deadline.
+  while (Date.now() < deadline && pending.size) {
+    for (const p of pending) if (!d.alive(p)) pending.delete(p);
+    for (const p of pending) if (!signalled.has(p) && !children.get(p).some((c) => pending.has(c))) {
+      d.kill(p, "SIGTERM"); signalled.add(p);
+    }
+    if (pending.size) await d.sleep(20);
+  }
+  // Zero grace, or an unresponsive descendant: still signal every registered
+  // ancestor before escalating, without extending the caller's grace period.
+  for (const p of tree) if (!signalled.has(p) && d.alive(p)) d.kill(p, "SIGTERM");
   const left = tree.filter((p) => d.alive(p));
   for (const p of left) d.kill(p, "SIGKILL");
   try { fs.unlinkSync(file); } catch { /* gone */ }
