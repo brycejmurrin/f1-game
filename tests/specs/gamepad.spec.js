@@ -544,22 +544,36 @@ test.describe("Gamepad menu navigation", () => {
     await page.evaluate(() => document.activeElement.blur());
 
     // First poll: the "first press" behaviour — seeds focus onto the current
-    // selection, same as a real key (see MenuNav.currentItem()).
-    await poll(page, { buttons: { 13: 1 } }, () => true);
-    const seeded = await page.evaluate(() => document.activeElement.textContent);
+    // selection, same as a real key (see MenuNav.currentItem()). Then poll
+    // again with the SAME held direction in the SAME task: no real time has
+    // passed, so this must NOT move focus — the repeat guard under test.
+    // One evaluate, not two: poll() leaves the fake pad installed and the
+    // game's own frame loop polls it every rAF, so on a slow runner the gap
+    // between two round trips crossed the 450 ms delay and a repeat fired
+    // "immediately" (CI run 39510411238, input 4/4: both attempts red, on
+    // opposite sides of the gate).
+    const { seeded, again } = await page.evaluate(() => {
+      const btns = [];
+      for (let i = 0; i < 17; i++) btns.push({ pressed: i === 13, value: i === 13 ? 1 : 0, touched: i === 13 });
+      const pad = { connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons: btns };
+      navigator.getGamepads = () => [pad, null, null, null];
+      window.dispatchEvent(new Event("gamepadconnected"));
+      Input.poll();
+      const seeded = document.activeElement.textContent;
+      Input.poll();
+      return { seeded, again: document.activeElement.textContent };
+    });
     expect(seeded).toBeTruthy();
+    expect(again).toBe(seeded);
 
-    // Poll again immediately with the SAME held direction: negligible real
-    // time has passed (well under the ~450ms initial delay), so this must
-    // NOT move focus again — that is the repeat guard under test.
-    await poll(page, { buttons: { 13: 1 } }, () => true);
-    expect(await page.evaluate(() => document.activeElement.textContent)).toBe(seeded);
-
-    // Wait past the initial delay and poll again: now a repeat should fire.
+    // Held past the initial delay, a repeat fires. The frame loop keeps
+    // polling the held pad, so repeats may already have run (130 ms apart):
+    // wait for focus to leave the seed rather than sampling once.
     await page.waitForTimeout(600);
-    await poll(page, { buttons: { 13: 1 } }, () => true);
-    const moved = await page.evaluate(() => document.activeElement.textContent);
-    expect(moved).not.toBe(seeded);
+    await expect.poll(async () => {
+      await poll(page, { buttons: { 13: 1 } }, () => true);
+      return page.evaluate(() => document.activeElement.textContent);
+    }, { timeout: 5000 }).not.toBe(seeded);
 
     // Releasing the direction (neutral) clears the repeat state instantly.
     await poll(page, { buttons: {} }, () => true);
