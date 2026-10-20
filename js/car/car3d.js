@@ -89,6 +89,12 @@ const Car3D = (function () {
     barge:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.10, noseDroop: -0.006, airbox: 1.55, fin: 1, mirror: 2, inlet:  0.100, inletH: -0.060, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep: -0.120, coverCrown: -0.080, coverLift: -0.100, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
     // B·D1 period bodies (highnose, sharkfin, lowline, stepnose) land in a later pass;
     // the fitSeat / noseStep / finRear / finW paths below stay inert until their rows do.
+    // B·D1d concept bodies (Bryce's 2026-10-20 sheet; sizes inside the shipped p75; wings: parts.js style_aero_*). Rift: pointed nose, flank scoop.
+    rift:    Object.freeze({ fitSeat: 1, flank: [0.30, -0.50, 0.42, 0.46, 0.62, 0.40], noseTipZ:  0.10, noseSlim: 0.72, noseDroop: -0.020, airbox: 1.05, fin: 0, mirror: 2, inlet: -0.030, inletH:  0.030, inletW: -0.040, undercutD:  0.110, waist: -0.110, floorStep:  0.040, coverCrown:  0.030, coverLift:  0.000, wingStyle: W({ arch: 0.85, twist: 0.30, teCurve: 0.14, chordTaper: 0.38, foot: 1.30, canard: 2, tipRise: 0.042 }) }),
+    // Keel: long low flat nose, slab sides tapering straight back. Delta: chined nose, triangle cut-in. Serpent: S-curve waist and band.
+    keel:    Object.freeze({ fitSeat: 1, noseTipZ:  0.14, noseSlim: 0.84, noseDroop: -0.024, airbox: 0.90, fin: 0, mirror: 1, inlet:  0.010, inletH: -0.040, inletW:  0.030, undercutD: -0.050, waist:  0.020, floorStep:  0.000, coverCrown:  0.000, coverLift: -0.040, wingStyle: W({ arch: 0.30, twist: 0.06, teCurve: 0.020, chordTaper: 0.10, foot: 0.90, canard: 1, tipRise: 0.004 }) }),
+    delta:   Object.freeze({ fitSeat: 1, flank: [0.26, -0.70, 0.40, 0.58, 0.66, 0.06], noseChine: 1, noseTipZ:  0.04, noseSlim: 0.96, noseDroop: -0.016, airbox: 1.10, fin: 1, mirror: 0, inlet:  0.040, inletH: -0.010, inletW:  0.050, undercutD:  0.080, waist: -0.050, floorStep:  0.050, coverCrown:  0.020, coverLift:  0.000, wingStyle: W({ arch: 1.10, twist: 0.34, teCurve: 0.16, chordTaper: 0.42, foot: 1.45, canard: 2, tipRise: 0.075 }) }),
+    serpent: Object.freeze({ fitSeat: 1, flank: [0.36, -0.95, 0.30, 0.74, 0.22, 0.14], noseTipZ:  0.08, noseSlim: 0.86, noseDroop: -0.022, airbox: 0.95, fin: 0, mirror: 1, inlet: -0.020, inletH: -0.015, inletW:  0.020, undercutD:  0.090, waist: -0.140, floorStep:  0.030, coverCrown:  0.070, coverLift:  0.040, wingStyle: W({ arch: 0.95, twist: 0.40, teCurve: 0.20, chordTaper: 0.46, foot: 1.25, canard: 1, tipRise: 0.060 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -767,6 +773,14 @@ const Car3D = (function () {
     }
     // LED STRIP (STYLE): a full-length lit strip down each pod shoulder in the pack's LED colour.
     if (!ckpt && ersStyle && ersStyle.ledStrip) addPodFlankSpan(0.45, -0.95, 0.99, 0.085, ersGlow, SURFACES.metal, 0.055);
+    // FLANK (B·D1d bodies, opt-in [zF, zR, y0, y1, h0, h1]): a dark flank panel, centre y0→y1 and height h0→h1 (pod-height shares) front to rear.
+    if (!ckpt && teamStyle.flank) {
+      const [zF, zR, y0, y1, h0, h1] = teamStyle.flank;
+      const stops = [zF, ...anchors.podStations.map((p) => p.z).filter((z) => z < zF && z > zR), zR].sort((a, b) => b - a);
+      const at = (z, sd) => { const p = anchors.podAt(z), k = (zF - z) / (zF - zR), ph = p.top - p.bottom;
+        return { z, x: sd * (p.x + 0.014), y: p.bottom + ph * (y0 + (y1 - y0) * k), w: 0.016, h: ph * (h0 + (h1 - h0) * k) }; };
+      for (const sd of [-1, 1]) for (let i = 0; i < stops.length - 1; i++) addSpan(out, at(stops[i], sd), at(stops[i + 1], sd), INTAKE, null, SURFACES.carbon);
+    }
     const ersBlister = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.blister) || 0)));
     if (ersBlister > 0 && !ckpt) {
       const bS = 0.92 + 0.18 * Math.max(0, ersPack - 1);
@@ -1022,6 +1036,9 @@ const Car3D = (function () {
     // fall for the same twelve triangles the box cost.
     zone("engineCover", () => addSpan(out, { z: -0.28, y: 0.972, w: 0.060, h: 0.030 }, { z: -0.66, y: 0.944, w: 0.050, h: 0.026 }, c2));
 
+    // noseChine (B·D1d Delta, opt-in): a ridge 4 mm proud along each upper edge of the cone (faceted read).
+    const chine = (n, s, w) => ({ z: n.z, x: s * (n.side * 0.4 + (n.topSide || n.side) * 0.6 + 0.004), y: n.top - (n.top - n.bottom) * 0.18, w, h: w * 1.1 });
+    if (teamStyle.noseChine) for (const s of [-1, 1]) addSpan(out, chine(anchors.noseAt(styledTipZ - 0.10), s, 0.014), chine(anchors.noseAt(1.20), s, 0.022), c1);
     for (const s of [-1, 1]) {
       const nf = anchors.noseAt(styledTipZ - 0.12), nr = anchors.noseAt(2.025);
       addSpan(out,
@@ -1965,12 +1982,13 @@ const Car3D = (function () {
       }
       const rearSweep = Math.max(-0.06, Math.min(0.20, aeroStyle.rearSweep));
       const rearTaper = Math.max(0.72, Math.min(1.08, aeroStyle.rearTaper));
-      const crownY = _ep.rear.top - 0.018;
+      const crownY = _ep.crown - 0.018;
+      const tipRise = _ep.rear.top - _ep.crown, tipPow = aeroStyle.rwTipPow || undefined;   // rwTip (opt-in): tips up, plate grows with them
       const upperTrailY = crownY - (aLvl >= 4 || aDrs ? 0.075 : 0);
-      const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale) =>
+      const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale, rise, risePow) =>
         addWingFoil(out, {
-          zLead, yLead, zTrail, yTrail, half, thick,
-          taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: 0,
+          zLead, yLead, zTrail, yTrail, half, thick, risePow,
+          taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: rise || 0,
           attachHalf: 0.50,
         }, col, wingSurf);
       // rwSpoon (opt-in, 0 = shipped): the 2022 SPOON main plane (Ferrari
@@ -1980,11 +1998,11 @@ const Car3D = (function () {
       if (aSpoon) addWingFoil(out, {
         zLead: -2.30 + 0.04 * aSpoon, yLead: upperTrailY - 0.270, zTrail: -2.52 - 0.03 * aSpoon,
         yTrail: upperTrailY - 0.225, half: 0.51, thick: 0.026, taper: rearTaper,
-        sweep: rearSweep * 0.8, rise: -0.070 * aSpoon, chordTaper: 0.55 * aSpoon,
+        sweep: rearSweep * 0.8, rise: -0.070 * aSpoon + tipRise, risePow: tipPow, chordTaper: 0.55 * aSpoon,
         teCurve: 0.05 * aSpoon, attachHalf: 0.50,
       }, c1, wingSurf);
       else rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
-        0.51, 0.024, c1, 0.8);
+        0.51, 0.024, c1, 0.8, tipRise, tipPow);
       // Preview sharkfin (2017 style): the fin runs on as a sail whose foot ends
       // 8 mm into the main plane, instead of a 30 cm cut face 0.45 m short of the
       // wing. foilAt is the main plane's own section (same spec as rearWing above),

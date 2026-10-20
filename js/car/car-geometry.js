@@ -114,7 +114,9 @@ const CarGeometry = (function () {
         : null;
       const xF = attachedX != null ? attachedX : x;
       const xR = attachedX != null ? attachedX : x * taper;
-      let yF = spec.yLead + rise * edge, yR = spec.yTrail + rise * edge;
+      // risePow (opt-in): shapes the rise along the span — >1 keeps the centre flat and kicks the tip.
+      const lift = rise * (spec.risePow ? Math.pow(edge, spec.risePow) : edge);
+      let yF = spec.yLead + lift, yR = spec.yTrail + lift;
       let zF = spec.zLead - sweep * edge, zR = spec.zTrail - sweep * edge;
       // teCurve: pull the TE toward the LE at the tip (quadratic) so the
       // trailing edge is an arc, not a straight plank. chordTaper shortens

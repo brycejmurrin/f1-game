@@ -688,6 +688,18 @@ const Parts = (function () {
       {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}],
     ["aero", "medium", "style_aero_bridge", "Bridge Wing", "2008 bridge wing over the nose (McLaren MP4-23)",
       {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }],
+    // B·D1d concept wings (2026-10-20, the Rift/Keel/Delta/Serpent sheet; wear them
+    // with the matching BODY). rwTip lifts the rear main plane's and flaps' tips by
+    // that many metres and the endplate top with them; rwTipPow > 1 keeps the
+    // centre flat and kicks only the tip (car-geometry foilAt risePow).
+    ["aero", "medium", "style_aero_rift", "Rift Wing", "stepped multi-flap front and a straight rear wing with a slight end kick-up",
+      { rwTip: 0.040, rwTipPow: 4, frontSweep: 0.06, frontRise: 0.06, rearSweep: 0.02, rearTaper: 0.98, plate: 2, casc: 2 }],
+    ["aero", "low", "style_aero_keel", "Keel Wing", "simple straight three-element front and a flat, straight rear wing",
+      { frontSweep: 0.00, frontTaper: 1.00, frontRise: 0.00, rearSweep: 0.00, rearTaper: 1.00, plate: 1, casc: 1, vane: 1 }],
+    ["aero", "medium", "style_aero_delta", "Delta Wing", "front flaps swept up into tall endplates and a rear wing with strongly upturned tips",
+      { rwTip: 0.100, rwTipPow: 2.5, frontSweep: 0.10, frontRise: 0.12, rearSweep: 0.08, rearTaper: 0.90, plate: 3, casc: 2 }],
+    ["aero", "low", "style_aero_serpent", "Serpent Wing", "curving front flaps and a spoon rear wing with a dipped centre and raised tips",
+      { rwTip: 0.090, rwTipPow: 1.2, frontSweep: 0.12, frontRise: 0.09, rearSweep: 0.10, rearTaper: 0.86, plate: 2, casc: 3 }],
     ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",
       {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }],
   ];
@@ -718,7 +730,7 @@ const Parts = (function () {
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin",
         // B·D3 period aero opt-in fields: absent = shipped mesh.
-        "rwSpoon", "beam2", "fwBridge"]),
+        "rwSpoon", "beam2", "fwBridge", "rwTip", "rwTipPow"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
         "pullAt", "antiDive", "upright"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),
