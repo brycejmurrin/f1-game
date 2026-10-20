@@ -430,11 +430,13 @@ test("the ahead gap slot keeps one line so the behind line never jumps when the 
 
 // Portrait cockpit default: both #hud-gap-ahead / #hud-gap-behind are "" and
 // the plate's padding + first-child min-height painted a ~10×10 junk chip under
-// the minimap. Collapse when every child readout is :empty.
+// the minimap. Collapse when both lines are empty: js/ui/hud.js keeps
+// .hud-gaps[data-empty] (a root :has(:empty) rule re-ran on every gap text write, B·H11).
 test("empty .hud-gaps collapses — no junk chip when both gap lines are empty", () => {
   const src = read("css/hud.css");
-  const rule = src.match(/\.hud-gaps:not\(:has\(>\s*div:not\(:empty\)\)\)\s*\{([^}]*)\}/);
-  assert.ok(rule, "a :has(:empty) collapse rule owns empty .hud-gaps");
+  const rule = src.match(/\.hud-gaps\[data-empty\]\s*\{([^}]*)\}/);
+  assert.ok(rule, "a [data-empty] collapse rule owns empty .hud-gaps");
+  assert.match(read("js/ui/hud.js"), /hData\(plate, "empty"/, "hud.js keeps the flag");
   assert.match(rule[1], /display:\s*none/, "fully hide — not a zero-opacity plate");
   // Still keep the one-line ahead pin for the half-empty (P1) case.
   assert.equal(decl(cssRules(src), ".hud-gaps > div:first-child", "min-height"), "1.3em");
