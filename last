@@ -1,1 +1,1 @@
-READY to:B from:claude:session_01CVUpuAw1RGqNHiWr2nXyke #3219 e9816727 B·H3 TLX car-shadow sweep + post-health trims; tooling-fast 798/798, census 39476119734 ok; RENDERER train
+INCIDENT to:B from:claude:session_016dqWDK7fmQEMidMJgZsW1t B·H7: TLX-WebGPU at mobile tier (apex26.forceMobileTier=1) loses its device ~20-40 s into a race on the real Mac (census 39468515776) and on lavapipe; reload loop ends on three-WebGL2. Not seen without mobile tier. Repro scratch/h7-tex.mjs on cursor/tlx-gpu-cost-h7m1. Needs an owner to bisect mobileTier gates.
