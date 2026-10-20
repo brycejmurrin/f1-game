@@ -7,16 +7,18 @@
 //       https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/copyExternalImageToTexture
 //       https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming
 import {chromium} from 'playwright';
-import {writeFileSync} from 'node:fs';
+import {writeFileSync,readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {launchChromium,startStaticServer,shutdown,chromiumLaunchInfo,WEBGPU_LAVAPE_CHROMIUM_ARGS} from '../tools/lib/harness.mjs';
 import {installProbeInit,gotoGame} from '../tools/shot/probe-page.mjs';
 import {installGarageGpuAllocationProbe} from './garage-webgpu-allocation-init.mjs';
 const soft=process.argv.includes('--software');
-const EDITS=soft?6:30,WINDOW_MS=soft?1500:2500,IDLE_MS=soft?1500:5000;
-const ONLY=(process.argv.find(a=>a.startsWith('--arm='))||'').slice(6);
+// Optional knobs from the pushed request (.github/gpu-census-request.json): livery_edits, livery_parts, livery_arm.
+let REQ={};try{REQ=JSON.parse(readFileSync('.github/gpu-census-request.json','utf8'));}catch(_){}
+const EDITS=soft?6:(+REQ.livery_edits||30),PARTS=+REQ.livery_parts||3,WINDOW_MS=soft?1500:(+REQ.livery_window_ms||2500),IDLE_MS=soft?1500:5000;
+const ONLY=(process.argv.find(a=>a.startsWith('--arm='))||'').slice(6)||REQ.livery_arm||'';
 const ARMS=[{arm:'tlx-webgpu',forceGL:'0'},{arm:'tlx-webgl2',forceGL:'1'}].filter(a=>!ONLY||a.arm===ONLY);
-const report={schema:'garage-livery-census/v1',request:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),software:soft,edits:EDITS,windowMs:WINDOW_MS,viewport:{width:844,height:390},arms:[],started:new Date().toISOString()};
+const report={schema:'garage-livery-census/v1',parts:PARTS,request:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),software:soft,edits:EDITS,windowMs:WINDOW_MS,viewport:{width:844,height:390},arms:[],started:new Date().toISOString()};
 const save=()=>writeFileSync('game-livery-census.json',JSON.stringify(report,null,2));
 const log=x=>console.log(new Date().toISOString(),x);
 
@@ -128,7 +130,8 @@ try{
       }
       if(parts){ // three part swaps through the parts tab, the same click a player makes
         await page.evaluate(c=>document.querySelector(`#cs-tabs [data-cs-cat="${c}"]`).click(),parts);await page.waitForTimeout(1500);
-        const ids=await page.evaluate(()=>[...document.querySelectorAll('[data-cs-opt]')].filter(b=>!b.classList.contains('active')&&!b.disabled).map(b=>b.dataset.csOpt).slice(0,3));
+        const pool=await page.evaluate(()=>[...document.querySelectorAll('[data-cs-opt]')].filter(b=>!b.disabled).map(b=>b.dataset.csOpt).slice(0,4));
+        const ids=Array.from({length:PARTS},(_,i)=>pool[i%pool.length]).filter(Boolean); // cycles the same few parts: a cache plateaus, a leak keeps climbing
         for(const id of ids){const e={kind:'part',field:parts,value:id};const a=await snapshot(page);const d=await page.evaluate(applyEdit,e);if(d.missing)continue;
           const nf=await nextFrame(page,d.t0);await page.waitForTimeout(WINDOW_MS);const b=await snapshot(page);
           row.edits.push({...e,doc:b.doc,wrapped:b.wrapped,dispatchMs:d.dispatchMs,nextFrameMs:nf,...await windowStats(page,d.t0,b.t),delta:delta(a.calls,b.calls),alloc:delta(a.alloc,b.alloc),programs:b.programs,memory:b.memory,heapMB:b.heapMB});log(`${arm} part ${id} next=${nf}ms`);save();}
