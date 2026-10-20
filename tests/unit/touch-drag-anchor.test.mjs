@@ -100,7 +100,7 @@ function boot({ dragAnchor = true } = {}) {
   });
   Input.init(canvas);
   const onCanvas = (t, e) => (canvasL[t] || []).forEach((f) => f(Object.assign({ preventDefault() {} }, e)));
-  return { Input, onCanvas, dragEl, classOn, sb };
+  return { Input, onCanvas, dragEl, classOn, sb, listeners };
 }
 
 function dragOff(dragEl) {
@@ -131,6 +131,28 @@ test("offset dot tracks horizontal drag and clamps at full lock", () => {
   onCanvas("touchmove", { changedTouches: [{ identifier: 2, clientX: pastLock, clientY: 200 }] });
   assert.equal(dragOff(dragEl), range + "px");
   assert.equal(Input.debugState().touchSteer, 1);
+});
+
+test("the drag range reads the viewport on resize, not on every touch (B·H11)", () => {
+  // innerWidth/innerHeight force a synchronous layout when the tree is dirty; touchRangePx ran on
+  // every touchmove. The long edge is cached until a resize (rotation fires one too).
+  const { Input, onCanvas, dragEl, sb, listeners } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  const lockAt = (id) => {
+    onCanvas("touchstart", { changedTouches: [{ identifier: id, clientX: 100, clientY: 200 }] });
+    onCanvas("touchmove", { changedTouches: [{ identifier: id, clientX: 100 + 2000, clientY: 200 }] });
+    const off = dragOff(dragEl);
+    onCanvas("touchend", { changedTouches: [{ identifier: id, clientX: 100, clientY: 200 }] });
+    return off;
+  };
+  const before = touchRangePx(sb);
+  assert.equal(lockAt(10), before + "px");
+  sb.innerWidth = 1200;                       // the viewport grew, no resize event yet
+  assert.equal(lockAt(11), before + "px", "no live viewport read per touch");
+  for (const f of listeners.resize || []) f({});
+  assert.equal(lockAt(12), touchRangePx(sb) + "px", "a resize re-reads the long edge");
+  assert.notEqual(touchRangePx(sb), before);
 });
 
 test("hides when the steering touch lifts", () => {

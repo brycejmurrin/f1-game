@@ -1122,10 +1122,20 @@ const Input = (function () {
     // Speed widens that range by 1/touchSpeedScale(), so the same finger
     // travel is less lock. At rest the scale is 1 and the range is the
     // static fraction, whatever the mixes.
-    const win = typeof window !== "undefined" ? window : null;
-    const long = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
-    return Math.max(40, long * touchRangeFrac) / touchSpeedScale();
+    return Math.max(40, viewLong() * touchRangeFrac) / touchSpeedScale();
   }
+  // innerWidth/innerHeight force a synchronous style + layout when the tree is dirty, and this ran on
+  // every touchmove (touchCmd and updateDragAnchor) before the frame (B·H11 trace). The long edge only
+  // changes on resize / rotation, so read it then.
+  let _viewLong = 0;
+  function viewLong() {
+    if (!_viewLong) {
+      const win = typeof window !== "undefined" ? window : null;
+      _viewLong = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
+    }
+    return _viewLong;
+  }
+  if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("resize", () => { _viewLong = 0; });
 
   function touchCmd(rec) {
     if (steerMode !== "touch") return 0;
