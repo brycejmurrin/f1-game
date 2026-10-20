@@ -47,35 +47,6 @@ function url(src) {
   const h = m && Object.prototype.hasOwnProperty.call(m, src) ? m[src] : null;
   return src + "?v=" + (typeof h === "string" && /^[0-9a-f]{12}$/.test(h) ? h : ((typeof window !== "undefined" && window.__APEX_BUILD) || 0));
 }
-// FETCH EVERY WAVE AT ONCE, EVALUATE IN ORDER (B·H8 load hunt, 2026-10-20). A file
-// is injected only after its edges' predecessors have EVALUATED, so a bundle of
-// depth N paid N network round trips back to back: cold GLX boot fetched its ten
-// files in three waves, 4255 -> 4957 ms after navigation start, the bandwidth idle
-// while each wave evaluated (4x CPU, Fast 4G). A <link rel=preload> under the
-// exact URL, CORS mode and SRI inject() will use starts every gated file's fetch
-// now; the <script> still runs only when its turn comes, so evaluation order,
-// strict failure and the deadline are unchanged. A file inject() would refuse
-// (integrity false) is not fetched. Returns how many links it added.
-function preload(files) {
-  if (typeof document === "undefined" || !document.createElement || !document.head) return 0;
-  let n = 0;
-  for (const src of files || []) {
-    const sri = integrity(src);
-    if (sri === false) continue;
-    const href = url(src);
-    try { if (document.querySelector && document.querySelector('link[rel="preload"][href="' + href + '"]')) continue; }
-    catch (_) { /* an odd href: add the link anyway */ }
-    const el = document.createElement("link");
-    el.rel = "preload";
-    el.as = "script";
-    el.href = href;
-    el.crossOrigin = "anonymous";
-    if (sri) el.integrity = sri;
-    document.head.appendChild(el);
-    n++;
-  }
-  return n;
-}
 // A hung lazy file (a stalled phone connection) never fires load OR error, so
 // the caller's loading card waited forever (#2582). After SLOW_MS `opts.onSlow`
 // fires (the UI may say "still loading"); after DEADLINE_MS of main-thread-responsive time the file counts as
@@ -158,9 +129,6 @@ function loadBackendScripts(files, edges, opts) {
     document.head.appendChild(el);
   });
   };
-  // Only files that WAIT for a predecessor: the first wave is injected below at once.
-  const blocked = typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad && UpdateCheck.blocksLazyLoad();
-  if (!blocked) preload([...pending].filter((f) => preds.get(f).some((p) => !done.has(p))));
   return new Promise((finish) => {
     let failed = false;
     const pump = () => {
@@ -191,6 +159,6 @@ function loadBackendScripts(files, edges, opts) {
 
 return { load: loadBackendScripts };
 }
-  return { create, url, preload };
+  return { create, url };
 })();
 Object.freeze(ScriptLoader);

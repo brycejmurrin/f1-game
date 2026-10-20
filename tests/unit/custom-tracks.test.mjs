@@ -522,7 +522,6 @@ test("a TRACK DESIGNER retry after a partial load failure injects only the files
   ctx.document = {
     createElement: () => ({ dataset: {}, remove() {} }),
     head: { appendChild(el) {
-      if (el.rel === "preload") return;   // ScriptLoader.preload: a fetch hint, not an inject
       const src = el.src.replace(/\?v=.*$/, "");
       attempts[attempt].push(src);
       setTimeout(() => {

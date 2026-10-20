@@ -31,7 +31,6 @@ test(`a failed ${failedFile} never evaluates hub; retry reuses evaluated sibling
     document: {
       createElement() { return { dataset: {}, remove() {} }; },
       head: { appendChild(node) {
-        if (node.rel === "preload") return;   // ScriptLoader.preload: a fetch hint, not an inject
         const file = node.src.split("?")[0];
         attempts.set(file, (attempts.get(file) || 0) + 1);
         queueMicrotask(() => {
@@ -82,7 +81,7 @@ test("the script loader injects nothing while UpdateCheck reports a newer active
     UpdateCheck: { blocksLazyLoad: () => blocked },
     document: {
       createElement() { return { dataset: {}, remove() {} }; },
-      head: { appendChild(node) { if (node.rel === "preload") return; appended++; assert.match(node.src, /\?v=100$/, "the booted build, always"); queueMicrotask(() => node.onload()); } },
+      head: { appendChild(node) { appended++; assert.match(node.src, /\?v=100$/, "the booted build, always"); queueMicrotask(() => node.onload()); } },
     },
   });
   vm.runInContext(loader + "\nglobalThis.__load = ScriptLoader.create().load;", ctx);
@@ -113,7 +112,6 @@ test("a failed lighting-presets fetch is retried at the next race start, then no
     document: {
       createElement() { return { dataset: {}, remove() {} }; },
       head: { appendChild(node) {
-        if (node.rel === "preload") return;   // ScriptLoader.preload: a fetch hint, not an inject
         attempts.push(node.src.split("?")[0]);
         const n = attempts.length;
         queueMicrotask(() => {
