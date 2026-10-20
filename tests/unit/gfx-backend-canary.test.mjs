@@ -5906,6 +5906,8 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
       }
       Promise.resolve().then(fn);
     };
+    // The prep's yield, the real one: no requestAnimationFrame in this scope, so it is the 32 ms timer above.
+    const menuStepYield = eval("(" + fnSource(read("js/car/car-draw.js"), "function menuStepYield(") + ")");
     const prepare = eval("(async function(current){" + fnBody(read("js/car/car-draw.js"), "prepareMenuCarAssets") + "})");
     await prepare(current);
     assert.deepEqual(calls.slice(0, 3), [["player", 99, "parts:a"], ["cockpit", 99, "parts:a"], ["atlas", 99, true]]);
