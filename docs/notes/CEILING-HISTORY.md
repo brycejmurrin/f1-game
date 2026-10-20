@@ -3669,3 +3669,11 @@ branch's lineage name). The PR's own geometry, +37 net on the tip after #3151: c
 carried into the shared chassis, seated nose strips, the noseCurve arm and its wing-mounted foot,
 and the clean-wing carbon gates for caldra/rovik/senzo/talven/orvex/nacrel. No extraction: each
 hunk sits in `build`'s emit closures beside the part it shapes.
+
+## 2026-10-20 — car-body train (#3172 + #3188): concept shaping on for every body
+
+`js/car/car3d.js` +9 (commit-hook absorb). `withConceptDefaults` gives every BODY_STYLES entry the
+fit/seat/sculpt/curved-nose/spine paths with one shared recipe (CONCEPT_SCULPT) where a body sets
+none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_STYLE is untouched.
+The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
+default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.

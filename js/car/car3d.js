@@ -62,7 +62,20 @@ const Car3D = (function () {
   // Livery silhouettes extend TEAM_STYLE with nose-section scales and metre-scale
   // waistH/coverLift/coverTailLift, reshaping the existing shared anchor stations.
   // Keep noseDroop >= the shipped floor; judge outlines in side and 3/4 views.
-  const BODY_STYLES = Object.freeze({
+  // Concept shaping is on for every body (Bryce 2026-10-20): a body keeps its own
+  // values and takes these where it set none. Designed pods (podProfile/podShape)
+  // keep their own loft, since a pod sculpt would replace it. TEAM_STYLE is untouched.
+  const CONCEPT_SCULPT = Object.freeze({ complete: true, sparse: true, coverArch: 0.035, coverBulge: 0.18, ductDepth: 0.12,
+    mouth: 0.72, exitDepth: 0.07, channel: 0, crown: 0.035, belly: 0.34 });
+  // A pod sculpt arches the cover itself, so the spine curve only fills in without one;
+  // a stepped or pow-curved nose is already its own nose recipe.
+  const withConceptDefaults = (styles) => Object.freeze(Object.fromEntries(Object.entries(styles).map(([id, s]) => {
+    const podSculpt = s.podSculpt || (s.podProfile || s.podShape ? undefined : CONCEPT_SCULPT);
+    return [id, Object.freeze(Object.assign({ fitSeat: 1, fitBodyDetails: true, minPodSpan: 0.08,
+      spineCurve: podSculpt ? 0 : 0.03, noseSculpt: s.noseCurve == null && !s.noseStep,
+      sculptSparse: s.podSculpt == null }, s, { podSculpt }))];   // authored sculpts keep full density
+  })));
+  const BODY_STYLES = withConceptDefaults({
     // Needle: spike nose past the wing, pencil tip+waist, tower inlet, sunken flat cover.
     needle:  Object.freeze({ noseTipZ:  0.55, noseSlim: 0.16, noseDroop: -0.028, airbox: 0.22, fin: 0, mirror: 0, inlet: -0.100, inletH:  0.280, inletW: -0.240, undercutD:  0.200, waist: -0.260, floorStep:  0.100, coverCrown: -0.080, coverLift: -0.140, wingStyle: W({ arch: 0.22, twist: 0.06, teCurve: 0.020, chordTaper: 0.12, foot: 0.70, tipRise: 0.004 }) }),
     // Brick (reads): blunt fat nose, slab pods, tall airbox, raised box cover.
@@ -2097,7 +2110,7 @@ const Car3D = (function () {
       const armOff = teamStyle.noseCurve ? -0.020 : armLow ? -0.025 : (teamStyle.noseDroop || 0) > 0.06 ? 0.045 : null;
       const armX = armOff != null ? Math.min(teamStyle.noseCurve ? 0.06 : 0.09, armNose.side - 0.03) : 0.09, armY = armOff != null ? armNose.bottom + armOff : 0.275;
       const foot = teamStyle.noseCurve ? fwMounts[s < 0 ? 0 : 1] : [s*0.09, 0.085, 2.54];
-      const noseMount = bodyDetails ? bodyDetails.noseMount(s) : [s*armX, armY, 2.40];
+      const noseMount = bodyDetails && !teamStyle.noseCurve ? bodyDetails.noseMount(s) : [s*armX, armY, 2.40];   // noseCurve seats its own arm
       // Short reference noses expose the old long white arms ahead of the tip.
       // Keep their feet on the structural main-plane chord; tuck them inboard
       // and use slim carbon supports rather than a painted projecting tusk.

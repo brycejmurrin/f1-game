@@ -149,7 +149,7 @@ const CarBodyGeom = (function () {
     }
     // The underside is linear in the tip/mid lift; behind the mid only the
     // mid's share of the root-to-mid blend moves, so divide by that share.
-    if (s.noseSculpt) st = curvedNose(st);
+    if (s.noseSculpt) st = curvedNose(st, s.sculptSparse ? 2 : 4);
     const free = s.noseSculpt ? st.length - 1 : 2;
     const floor = teamNoseFloor(), up = st.map((p, i) => (i < free ? Object.assign({}, p, { y: p.y + 1 }) : p));
     let lift = 0;
@@ -163,7 +163,7 @@ const CarBodyGeom = (function () {
 
   // Monotone Hermite sections make the four reference noses curved in profile,
   // not two straight wedges. The pinned tub seam and wing-clearance lift remain.
-  function curvedNose(st) {
+  function curvedNose(st, steps) {   // steps per segment: 2 = the shared default's triangle budget
     const h = [st[0].z - st[1].z, st[1].z - st[2].z];
     const sample = (key, segment, t) => {
       const values = st.map(p => key === "top" ? p.y + p.h / 2 : key === "bottom" ? p.y - p.h / 2 : p[key]);
@@ -174,8 +174,8 @@ const CarBodyGeom = (function () {
         + (-2*t*t*t + 3*t*t)*b + (t*t*t - t*t)*h[segment]*slopes[segment + 1];
     };
     const out = [];
-    for (let segment = 0; segment < 2; segment++) for (let i = 0; i < 4; i++) {
-      const t = i / 4, top = sample("top", segment, t), bottom = sample("bottom", segment, t);
+    for (let segment = 0; segment < 2; segment++) for (let i = 0; i < steps; i++) {
+      const t = i / steps, top = sample("top", segment, t), bottom = sample("bottom", segment, t);
       out.push({ z: st[segment].z - h[segment]*t, y: (top + bottom)/2, h: top - bottom,
         w: sample("w", segment, t), t: sample("t", segment, t) });
     }
@@ -1853,7 +1853,8 @@ const CarBodyGeom = (function () {
     ];
     const sculpt = style.podSculpt;
     const coverKnots = [-0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.70, -1.90, -2.00];
-    const coverStops = sculpt && sculpt.complete ? coverKnots.flatMap((z, i) => i < coverKnots.length - 1 ? [z, (z + coverKnots[i + 1]) / 2] : [z]) : null;
+    const coverStops = !(sculpt && sculpt.complete) ? null : sculpt.sparse ? coverKnots.filter((_, i) => i % 2 === 0)   // sparse: the shared default's triangle budget
+      : coverKnots.flatMap((z, i) => i < coverKnots.length - 1 ? [z, (z + coverKnots[i + 1]) / 2] : [z]);
     if (coverStops) {
       const ends = coverStations;
       coverStations = coverStops.map(z => {
@@ -1878,7 +1879,7 @@ const CarBodyGeom = (function () {
       return sampleStations(podStations, z);
     };
     // Thirds depart from the linear chord; a smoothstep midpoint does not.
-    const podStops = sculpt && round ? podStations.flatMap((p, i) => i === 0 || i >= podStations.length - 2 ? [p]
+    const podStops = sculpt && round && !style.sculptSparse ? podStations.flatMap((p, i) => i === 0 || i >= podStations.length - 2 ? [p]
       : [p, ...[1 / 3, 2 / 3].map(t => podSample(p.z + (podStations[i + 1].z - p.z) * t))]) : podStations;
     const noseStations = styledNoseStations(style).map((station) => ({
       z: station.z, side: station.w * 0.5, topSide: station.w * station.t * 0.5,
@@ -1975,7 +1976,7 @@ const CarBodyGeom = (function () {
       [side * (p.outer - span * (0.14 + waist)), p.outerBottom + height * 0.22, p.z],
       [side * p.outer, p.outerBottom + height * 0.65, p.z],
       [side * (p.outer - span * 0.06), p.outerTop, p.z],
-      roof(0.75), roof(0.5), roof(0.25), roof(0)];
+      ...(sculpt?.sparse ? [roof(0.5)] : [roof(0.75), roof(0.5), roof(0.25)]), roof(0)];
     return side < 0 ? q.reverse() : q;
   }
 

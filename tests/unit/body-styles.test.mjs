@@ -420,13 +420,14 @@ test("expanded profiles retain canonical station order, positive sections and bo
       assert.ok(p.outer > p.inner && p.outerTop > p.outerBottom && p.innerTop > p.innerBottom,
         `${id}: positive pod section at ${p.z}`);
     }
-    // Both regular and rounded builders sample the same two-station linear cover.
-    for (const round of [false, true]) {
+    // Both regular and rounded builders sample the same cover crown (sculpted or linear).
+    const crowns = [false, true].map((round) => {
       const b = (round ? R.Car3D : Car3D).bodyAnchors(tiers, id, "dorsal", round);
-      const f = b.coverAt(-0.55), r = b.coverAt(-2), m = b.coverAt(-1.275);
-      assert.ok(Math.abs(m.top - (f.top + r.top) / 2) < 1e-12, `${id}: linear cover crown`);
+      const f = b.coverAt(-0.55), r = b.coverAt(-2);
       assert.ok(f.top > f.bottom && r.top > r.bottom, `${id}: positive cover sections`);
-    }
+      return [-0.55, -0.9, -1.275, -1.7, -2].map((z) => b.coverAt(z).top);
+    });
+    crowns[0].forEach((top, i) => assert.ok(Math.abs(top - crowns[1][i]) < 1e-12, `${id}: one cover crown in both builders`));
     // Flat near bodies retain the declared fixed budget. Rounded meshes must fit
     // the existing rounded maximum under identical parts, including complete cars.
     for (const { name, body, complete, ceiling } of budgetModes) {
@@ -520,13 +521,15 @@ test("expanded wing supports penetrate the nose while retaining their lower wing
       const anchors = X.Car3D.bodyAnchors(parts, id, undefined, name === "rounded");
       for (const support of supports) {
         const side = support.reduce((n, p) => n + p[0], 0) < 0 ? -1 : 1;
-        const foot = [side * 0.09, 0.085, 2.54];
-        support.sort((a, b) => Math.hypot(...a.map((v, i) => v - foot[i])) - Math.hypot(...b.map((v, i) => v - foot[i])));
+        // The lower ring is the one on the main plane: shipped long arms root at
+        // (0.09, 0.085, 2.54), curved-nose arms tuck inboard on the same chord.
+        support.sort((a, b) => a[1] - b[1] || b[2] - a[2]);
         const half = support.length / 2;
         assert.equal(half, name === "rounded" ? 10 : 4, `${label}: unchanged ring topology`);
         const centre = (pts) => pts.reduce((p, q) => p.map((v, i) => v + q[i] / pts.length), [0, 0, 0]);
         const lower = centre(support.slice(0, half)), upper = centre(support.slice(half));
-        assert.ok(lower.every((v, i) => Math.abs(v - foot[i]) < 1e-9), `${label}: original lower root retained`);
+        assert.ok(Math.abs(lower[1] - 0.085) < 1e-9 && lower[2] >= 2.42 - 1e-9 && lower[2] <= 2.54 + 1e-9
+          && lower[0] * side > 0 && Math.abs(lower[0]) <= 0.09 + 1e-9, `${label}: lower root on the main-plane chord`);
         const n = anchors.noseAt(upper[2]);
         const hull = name === "rounded" ? X.CarShade.ring({ z: upper[2], w: n.side * 2,
           h: n.top - n.bottom, y: (n.top + n.bottom) / 2, t: n.topSide / n.side })
@@ -554,8 +557,11 @@ test("expanded cover stripes stay on the crown instead of bridging to the roll s
     const mesh = X.Car3D.build(team.color, team.color2, { noWheels: true, teamId: team.id, parts: tiers,
       livery: { c1: team.color, c2: team.color2, bodyStyle: id, stripe: DETAIL_INK, spineHeight: "dorsal" } });
     const anchors = X.Car3D.bodyAnchors(tiers, id, "dorsal", name === "rounded");
-    const points = detailPoints(mesh, DETAIL_INK, (p) => [-0.64, -0.94, -1.95].includes(p[2]));
-    assert.ok(points.length >= 48, `${id}/${name}: both cover stripe lofts emitted`);
+    // The ridge run from -0.64 to the tail; a sculpted cover lofts it on its own stations.
+    // z -0.67 is the end of the separate spine band over the roll structure, not the cover.
+    const points = detailPoints(mesh, DETAIL_INK, (p) => p[2] >= -1.95 - 1e-9 && p[2] <= -0.64 + 1e-9
+      && Math.abs(p[2] + 0.67) > 1e-9);
+    assert.ok(points.length >= 48, `${id}/${name}: cover stripe run emitted`);
     for (const p of points) {
       const c = anchors.coverAt(p[2]), profile = X.Car3D.coverProfile(c);
       assert.ok(Math.abs(p[0]) < profile.pts[profile.pts.length - 1][0], `${id}/${name}: stripe fits flat crown`);
