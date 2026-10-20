@@ -2,7 +2,7 @@
 // finite, nothing under the road, pods never wider than the widest shipped body on that
 // engine at that station (so they cannot reach the tyres), nose tip behind the wing LE.
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
-const NEW = (process.env.NEW || "highnose,sharkfin,zeropod,lowline,stepnose").split(",");
+const NEW = (process.env.NEW || "highnose,sharkfin,lowline,stepnose").split(",");
 const out = [];
 for (const shade of [false, true]) {
   const { Car3D, Parts, Teams } = loadParts(shade ? { shade: true } : undefined);

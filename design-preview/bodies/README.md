@@ -7,7 +7,12 @@ Living gallery: https://claude.ai/artifact/EkspVdVKpht3wDjn4C81MS. Republish eve
 - `sil.mjs` measures silhouette XOR between bodies:
   `R=40 NEW=highnose,sharkfin node design-preview/bodies/sil.mjs -`. Views are side, top, front and the phone 3/4 view, and R is px per metre (40 is about the phone scale).
 - `validity.mjs` builds each new body on all 11 team chassis, square and rounded:
-  `NEW=highnose node design-preview/bodies/validity.mjs`. It takes about 6 min for 5 bodies.
+  `NEW=highnose node design-preview/bodies/validity.mjs`. It takes about 5 min for 4 bodies.
 - Shots: `node tools/shot/garage-angles.mjs --fast --settle=8 --view-settle=4 --label=1 --team=mclaren --backend=three --bodyStyle=<ids> --cam="hero:0.72,0.24,5.4;side:1.571,0.06,8.5;top:1.15,0.95,5.4" --clamp=0`.
   The review's side camera at distance 6.0 cuts off the nose, so use 8.5. `--target` does not aim the camera; take close-ups as crops.
 - Real-car references: `artifacts/body-designs/refs/inspiration/manifest.jsonl` (CC photos, credited in the gallery).
+- `fit-probe.mjs` (round 3) ray-casts a build: `cast(build(id), axis, a, b)` lists each part section's
+  skin crossings on one line, so every join in the Fit check section is a pair of measured numbers.
+- `identical.mjs` hashes all 11 factory cars and the 6 shipped bodies on every chassis (square, rounded,
+  field LOD): `HEAD_REF=<ref> node design-preview/bodies/identical.mjs` vs plain; equal digests mean
+  only the preview bodies changed.

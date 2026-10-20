@@ -70,11 +70,59 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
 
 <div class="wrap">
 <header>
-  <div class="eyebrow">Design preview · Fleet B · B·D1 bodies · round 2 · 2026-10-19</div>
-  <h1>Five new <span>body styles</span>, beside the real cars</h1>
-  <p>Round 2 pushes each candidate toward its real car and away from the six shipped bodies. Each strip puts a real photo (orange frame) beside the game car at a similar framing, then adds a close-up and the 844×390 phone view. The shortlist is ranked by how well the shape reads at phone size.</p>
-  <div class="meta">branch cursor/design-preview-bodies-f0e0 @ 26a4b9b7 (round 1 90d91cd5, on #3118's clamp pass a9b5f889) · McLaren default livery · TLX · garage-angles.mjs --backend=three · front 3/4 az 0.72 el 0.24 d 5.4 · side az 1.571 el 0.06 d 8.5 · top az 1.15 el 0.95 d 5.4 · phone 844×390 default garage framing</div>
+  <div class="eyebrow">Design preview · Fleet B · B·D1 bodies · round 3 (fit first) · 2026-10-19</div>
+  <h1>Four new <span>body styles</span>, now seated</h1>
+  <p>Round 3 fixes fit before looks: every join the candidates own was measured, and parts that floated, poked through or ended in a cut face now seat (see <a href="#fit">Fit check</a>). Zeropod is dropped. Round 2 pushed each candidate toward its real car and away from the six shipped bodies. Each strip puts a real photo (orange frame) beside the game car at a similar framing, then adds a close-up and the 844×390 phone view. The shortlist is ranked by how well the shape reads at phone size.</p>
+  <div class="meta">branch cursor/design-preview-bodies-f0e0 @ __SHA__ (round 2 26a4b9b7, round 1 90d91cd5, on #3118's clamp pass a9b5f889) · McLaren default livery · TLX · garage-angles.mjs --backend=three · front 3/4 az 0.72 el 0.24 d 5.4 · side az 1.571 el 0.06 d 8.5 · top az 1.15 el 0.95 d 5.4 · phone 844×390 default garage framing</div>
 </header>
+
+<section id="fit">
+  <h2>Fit check (round 3)</h2>
+  <p>Each join the four bodies own, measured by ray-casting the built mesh (<code>design-preview/bodies/fit-probe.mjs</code>): a positive overlap means the two skins meet, and a gap means one part floats. <code>fit-check.mjs</code> repeats every join on all 11 team chassis, in both the square and the rounded build. The before and after close-ups are offline renders of the same <code>Car3D.buildComplete</code> mesh at HEAD and on this branch, so each pair is framed exactly on the join. The TLX garage frames (844×390) below them are the real renderer.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Join</th><th>Before (round 2)</th><th>After (round 3)</th><th>Across 22 builds</th></tr></thead>
+    <tbody>
+      <tr><td><b>highnose</b> · wing pylons to nose</td><td>The wing's own faired arms stop at y 0.275, <b>15 cm under</b> the raised nose (0.427). The added black pair was a duplicate: its foot floated 3–4 cm over the main plane, and its top poked out beside the slim nose ahead of z 2.62.</td><td>The duplicate pair is removed. The wing's arms climb to the nose underside and lean in to x ±0.054 under the slim cone.</td><td class="n">arm top 39–48 mm inside the nose</td></tr>
+      <tr><td><b>stepnose</b> · step vs hood</td><td>The step sat at z 1.11, but the hood runs to z 1.15, so its front end <b>hung 15 cm over</b> the lowered cone with an open underside.</td><td>The tub crown now runs on to z 1.19, past the hood, then drops 20 cm in 5 cm. The hood is buried under the crown.</td><td class="n">crown 42–49 mm over the hood top</td></tr>
+      <tr><td><b>stepnose</b> · camera pod</td><td>The pod was set from the nose top at its centre. On a climbing cone its rear end <b>floated 13 mm</b>.</td><td>It sits on the lower skin under its 15 cm length.</td><td class="n">5.6 mm (rear) / 24 mm (front) into the skin</td></tr>
+      <tr><td><b>sharkfin</b> · fin vs livery fin plate</td><td>The 45 mm blade's skin lay <b>0.4–4 mm</b> from the livery fin plate's skin, so they z-fought and the blade buried the plate's decals.</td><td>The blade is now 18 mm thick, at least 6 mm inside the plate's 32 mm, so the plate and its decals show.</td><td class="n">plate skin wins on every chassis</td></tr>
+      <tr><td><b>sharkfin</b> · fin tail vs rear wing</td><td>The tail ended at z −1.85 in a <b>30 cm flat cut face</b>, 0.45 m short of the wing.</td><td>A thin sail (10 mm at the wing) carries the fin back into the main plane, as on the 2017 cars. The plane's height is measured on the foil, so the sail also lands on the low-downforce wings (y 0.43).</td><td class="n">foot 7–8 mm into the 24 mm foil</td></tr>
+      <tr><td><b>lowline</b> · snorkel vs low cover</td><td>The snorkel stays at regulation height (y 0.96 / 1.02 / 0.88). Over lowline's small airbox and low cover it <b>floated 8–14 cm</b>, with the engine-spec dots hanging in the gap.</td><td>Its underside is faired down into the cover (12 mm overlap at each end), and the dots sit on the airbox lip, inside the fairing. The hoop already sat on the airbox (0.80 / 0.80).</td><td class="n">snorkel to cover: closed</td></tr>
+      <tr><td><b>zeropod</b> · inlet lip vs sliver pod</td><td colspan="3">Dropped rather than reworked. It ranked last in round 2 and does not read from the side. Its recipe row is removed, so it adds nothing for the merge.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="pair">
+    <figure><img src="img/fit-highnose-pylon-before.jpg" alt="Before: black duplicate pylons beside an orange wing arm that ends in mid-air under the nose"><figcaption>highnose · before · duplicate blades, the arm ends in the air</figcaption></figure>
+    <figure><img src="img/fit-highnose-pylon-after.jpg" alt="After: both orange faired arms run from the wing up into the nose underside"><figcaption>highnose · after · the arms seat in the nose</figcaption></figure>
+    <figure><img src="img/fit-stepnose-step-before.jpg" alt="Before: the dark hood box overhangs the step face in mid-air"><figcaption>stepnose · before · the hood overhangs the ledge</figcaption></figure>
+    <figure><img src="img/fit-stepnose-step-after.jpg" alt="After: the tub crown runs over the hood and ends in a clean ledge"><figcaption>stepnose · after · a clean ledge</figcaption></figure>
+    <figure><img src="img/fit-sharkfin-top-before.jpg" alt="Before: a thick orange fin ends in a flat cut face short of the rear wing"><figcaption>sharkfin · before · the cut face, 0.45 m short of the wing</figcaption></figure>
+    <figure><img src="img/fit-sharkfin-top-after.jpg" alt="After: the livery fin plate shows and a thin sail tapers back into the rear wing"><figcaption>sharkfin · after · plate shows, the sail meets the wing</figcaption></figure>
+    <figure><img src="img/fit-lowline-hoop-before.jpg" alt="Before: the snorkel floats over the low cover with red dots in the gap"><figcaption>lowline · before · the snorkel floats</figcaption></figure>
+    <figure><img src="img/fit-lowline-hoop-after.jpg" alt="After: the snorkel is faired down into the cover"><figcaption>lowline · after · faired into the cover</figcaption></figure>
+  </div>
+  <div class="trio">
+    <figure><img src="img/fit-sharkfin-side-haas.jpg" alt="Sharkfin on the Haas chassis: the sail drops to its low rear wing"><figcaption>sharkfin on haas · the sail finds the low wing (y 0.43)</figcaption></figure>
+    <figure><img src="img/fit-stepnose-campod-after.jpg" alt="Stepnose camera pod seated on the lowered cone"><figcaption>stepnose · camera pod seated</figcaption></figure>
+    <figure><img src="img/fit-lowline-hoop-team.jpg" alt="Team car at the same angle, for comparison"><figcaption>team car · same angle</figcaption></figure>
+  </div>
+  <p class="label">TLX garage, 844×390 · before → after</p>
+  <div class="pair">
+    <figure><img src="img/tlx-highnose-before.jpg" alt="TLX highnose before: wing arm stops under the nose"><figcaption>highnose · before</figcaption></figure>
+    <figure><img src="img/tlx-highnose-after.jpg" alt="TLX highnose after: arms reach the nose"><figcaption>highnose · after</figcaption></figure>
+    <figure><img src="img/tlx-stepnose-before.jpg" alt="TLX stepnose before"><figcaption>stepnose · before</figcaption></figure>
+    <figure><img src="img/tlx-stepnose-after.jpg" alt="TLX stepnose after"><figcaption>stepnose · after</figcaption></figure>
+    <figure><img src="img/tlx-lowline-before.jpg" alt="TLX lowline before: snorkel over the low cover"><figcaption>lowline · before</figcaption></figure>
+    <figure><img src="img/tlx-lowline-after.jpg" alt="TLX lowline after: snorkel faired into the cover"><figcaption>lowline · after</figcaption></figure>
+  </div>
+  <h3 style="font-size:22px">Inherited joins (reported, not in the bodies code)</h3>
+  <ul class="src">
+    <li><b>F10</b> Big Disc scoop inside the tyre: <code>js/car/car-wheels.js</code> (wheels lane D4).</li>
+    <li><b>F11</b> floor skirt into the rear tyre: the floor STYLE <code>skirt</code> strip in <code>car3d.js</code> (floor/aero lane).</li>
+    <li><b>F12</b> Fenced Halo brow floating: the halo hoop's fenced crown (halo lane).</li>
+    <li>Shipped and unchanged: <b>needle</b> has the same snorkel float as lowline did (airbox 0.22, coverLift −0.14). On every car the T-cam pod sits 1–2.7 cm over the hoop crown. The fixes here are gated to the preview bodies (<code>fitSeat</code>), so they can be widened to the shipped bodies in a separate change.</li>
+  </ul>
+</section>
 
 <section>
   <h2>Round 2: what changed and why</h2>
@@ -92,11 +140,11 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
 <section>
   <h2>Ranked shortlist</h2>
   <ol class="rankings">
-    <li><b>highnose</b>: the strongest. It differs most from every shipped body in side view (4.1 %), and the raised nose with its pylons shows at phone size.</li>
-    <li><b>sharkfin</b>: the tall fin reads as a plate from the side and as a spike at phone size. It is the only body that changes the car's top line behind the halo.</li>
+    <li><b>highnose</b>: the strongest. It differs most from every shipped body in side view (4.1 %), and the raised nose shows at phone size. In round 3 its pylons became the wing's own arms, run up into the nose.</li>
+    <li><b>sharkfin</b>: the tall fin reads as a plate from the side and as a spike at phone size. It is the only body that changes the car's top line behind the halo. Round 3 made the blade thin and ran it back into the rear wing.</li>
     <li><b>stepnose</b>: round 2 made the step deeper and the cone longer (side 2.4 → 3.8 %). Clear in the side and nose shots, subtle in the phone 3/4.</li>
     <li><b>lowline</b>: a low engine cover and wide, low pods. Clear in side view (3.7 %), but at phone size it is close to the team car.</li>
-    <li><b>zeropod</b>: does not hold up. Its side view stays at the floor of the shipped range (2.3 %) and it is hard to pick out at phone size. It differs only from above. Recommend dropping it, or keeping it as a top-view variant.</li>
+    <li><s><b>zeropod</b></s>: dropped in round 3. Its side view stayed at the floor of the shipped range (2.3 %) and it was hard to pick out at phone size. Round 2's frames are kept under Earlier rounds.</li>
   </ol>
 </section>
 
@@ -115,7 +163,7 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
         <dt>noseDroop</dt><dd>+0.240 (round 1: +0.170; every other body ≤ 0)</dd>
         <dt>noseTipZ / noseSlim</dt><dd>+0.16 / 0.62</dd>
         <dt>wing arch / foot</dt><dd>1.10 / 1.40</dd>
-        <dt>pylons</dt><dd class="new">new: twin blades when noseDroop &gt; 0.06</dd>
+        <dt>pylons</dt><dd class="new">round 3: the wing's own faired arms climb to the nose underside (noseDroop &gt; 0.06). The round-2 duplicate blades are removed.</dd>
         <dt>side, nearest shipped</dt><dd>4.1 % (team)</dd>
       </dl>
     </div>
@@ -136,13 +184,13 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
     <div class="head">
       <div class="info">
         <h3><span class="rank">#2</span> Sharkfin <code>sharkfin</code></h3>
-        <p class="pitch">A tall, thick dorsal fin that rakes up from the airbox to the rear wing.</p>
+        <p class="pitch">A tall dorsal fin that rakes up from the airbox and runs on into the rear wing.</p>
         <div class="pills"><span class="pill ok">Valid on all 11 chassis</span><span class="pill ok">Reads at phone size</span></div>
         <p class="note"><span class="label">Real car</span><br>Red Bull ran a full-height shark fin from 2008 (RB4, RB5), and the fin came back across the grid in 2017 (Ferrari SF70H).</p>
       </div>
       <dl class="recipe">
         <dt>fin</dt><dd>2 (tall blade)</dd>
-        <dt>finH / finRear / finW</dt><dd class="new">new: 0.30 m, 2.0× at the tail (capped at y 0.92), 45 mm thick</dd>
+        <dt>finH / finRear / finW</dt><dd class="new">0.30 m, 2.0× at the tail (capped at y 0.92), 18 mm thick (round 2: 45 mm), plus a sail into the main plane</dd>
         <dt>noseTipZ / noseSlim</dt><dd>+0.25 / 0.70</dd>
         <dt>inletW / airbox</dt><dd>+0.16 / 0.80</dd>
         <dt>side, nearest shipped</dt><dd>3.5 % (anteater)</dd>
@@ -170,7 +218,7 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
         <p class="note"><span class="label">Real car</span><br>The 2012 "platypus" noses. A rule that lowered the nose, combined with a tall chassis, gave the Caterham CT01 and Ferrari F2012 a visible step.</p>
       </div>
       <dl class="recipe">
-        <dt>noseStep</dt><dd class="new">new: 0.20 m ledge, 6 cm ahead of the nose root (round 1: 0.14 m at 10 cm)</dd>
+        <dt>noseStep</dt><dd class="new">0.20 m ledge. Round 3: the crown holds to 14 cm past the nose root (clear of the hood), then drops in 5 cm.</dd>
         <dt>noseTipZ / noseSlim</dt><dd>+0.28 / 1.20</dd>
         <dt>noseDroop</dt><dd>−0.028 (the team floor)</dd>
         <dt>airbox / fin</dt><dd>1.30 / 1</dd>
@@ -200,7 +248,7 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
       </div>
       <dl class="recipe">
         <dt>coverLift</dt><dd>−0.16 (the clamp floor)</dd>
-        <dt>inletH / airbox</dt><dd>−0.20 / 0.40</dd>
+        <dt>inletH / airbox</dt><dd>−0.20 / 0.40 (round 3: the snorkel is faired down into the cover)</dd>
         <dt>inletW / waist</dt><dd>+0.20 / +0.20 (round 1: +0.10 / +0.10)</dd>
         <dt>noseTipZ / noseSlim</dt><dd>+0.20 / 1.30</dd>
         <dt>side, nearest shipped</dt><dd>3.7 % (needle)</dd>
@@ -219,34 +267,6 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
     </div>
   </div>
 
-  <div class="body">
-    <div class="head">
-      <div class="info">
-        <h3><span class="rank">#5</span> Zeropod <code>zeropod</code></h3>
-        <p class="pitch">Sidepods squeezed to low slivers behind a slot inlet, under a big airbox.</p>
-        <div class="pills"><span class="pill ok">Valid on all 11 chassis</span><span class="pill bad">Does not hold up at phone size</span></div>
-        <p class="note"><span class="label">Real car</span><br>Mercedes W13 (2022) and W14 (2023) had tiny, inward-angled pods with almost no undercut. From the side the real car looks fairly ordinary too, which is why this body only reads from above.</p>
-      </div>
-      <dl class="recipe">
-        <dt>inletW / waist</dt><dd>−0.30 / −0.30 (the clamp keeps the pod 4–12 cm wide)</dd>
-        <dt>inletH</dt><dd>−0.25 (round 1: +0.12)</dd>
-        <dt>airbox / coverLift</dt><dd>1.60 / −0.06</dd>
-        <dt>side, nearest shipped</dt><dd>2.3 % (team)</dd>
-        <dt>top, vs team</dt><dd>4.9 %</dd>
-      </dl>
-    </div>
-    <div class="pair">
-      <figure class="real"><img src="img/ref-zeropod-side.jpg" alt="Mercedes W13 in side view at the 2022 Austrian GP"><figcaption>real · Mercedes W13 (2022) · side</figcaption></figure>
-      <figure><img src="img/zeropod-wide.jpg" alt="Zeropod game car, full side view"><figcaption>game · side, d 8.5</figcaption></figure>
-      <figure class="real"><img src="img/ref-zeropod-34.jpg" alt="Mercedes W14 from the front, showing the narrow pods"><figcaption>real · Mercedes W14 (2023) · front 3/4</figcaption></figure>
-      <figure><img src="img/zeropod-hero.jpg" alt="Zeropod game car, front three-quarter"><figcaption>game · front 3/4</figcaption></figure>
-    </div>
-    <div class="trio">
-      <figure><img src="img/zeropod-closeup.jpg" alt="Zeropod close-up from above: slim pods beside the tub"><figcaption>close-up · pods from above (crop of top)</figcaption></figure>
-      <figure><img src="img/zeropod-top.jpg" alt="Zeropod, top-down"><figcaption>top</figcaption></figure>
-      <figure><img src="img/phone-zeropod.jpg" alt="Zeropod in the garage at 844 by 390"><figcaption>phone 844×390</figcaption></figure>
-    </div>
-  </div>
 </section>
 
 <section>
@@ -277,7 +297,7 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
 
 <section>
   <h2>Validity</h2>
-  <p>All five are valid on every team chassis and every catalog engine after round 2. None inverts, overlaps the tyres or sinks under the road.</p>
+  <p>All four are valid on every team chassis after round 3. None inverts, overlaps the tyres or sinks under the road, and the 11 factory cars and six shipped bodies build bit-identical to HEAD.</p>
   <div class="tbl"><table>
     <thead><tr><th>Check</th><th>Scope</th><th>Result</th></tr></thead>
     <tbody>
