@@ -451,6 +451,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | Tool | Does | Paired skill |
 |---|---|---|
 | **mcp/apex-extras.mjs** | Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit. | check-changes |
+| **mcp/apex-one-tool.mjs** | Opt-in one-tool apex-tools surface: `apex {op, args}` instead of 41 apex_* tools (APEX_MCP_ONE_TOOL=1). | agent-config |
 | **mcp/apex-report.js** | Browser paste, not a node tool: one diagnostic JSON bundle from a live page (diag, GL identity, log ring, errors). | mcp-probe |
 | **mcp/apex-tools-mcp.mjs** | Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock). | check-changes |
 | **mcp/apex-tools-mcp.sh** | Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `serve`); `help`/`call`/`smoke` from a shell. | check-changes |
@@ -483,6 +484,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/lsp-mcp.sh** | apex-lsp MCP wrapper: serve (stdio), or def\|refs\|sym\|hover\|diag from a shell over TypeScript 7 `tsc --lsp`. | — |
 | **mcp/lsp-navigation-bench.mjs** | Measure real-tree LSP navigation latency and output size, with cold/first queries separated from warm queries. | — |
 | **mcp/mcp-cli.mjs** | chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`. | mcp-probe |
+| **mcp/mcp-listing-cost.mjs** | Sizes each .mcp.json server's tools/list: tool count, chars, est. tokens, names-only cost. `--json`, `--entry`. | agent-config |
 | **mcp/mcp-preflight.sh** | Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only. | mcp-probe |
 | **mcp/mcp-smoke.mjs** | Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium. | check-changes |
 | **mcp/output-level-mcp.mjs** | Wrap a stdio MCP server with bounded output levels and saved-result retrieval. | — |

@@ -228,6 +228,14 @@ TinyFish key / chrome clone = warn; playwright `status` only):
 node tools/mcp/mcp-smoke.mjs --dry-run
 ```
 
+What each server's `tools/list` costs a client (tools, chars, estimated
+tokens, names-only cost): `node tools/mcp/mcp-listing-cost.mjs`. **Opt-in,
+off by default:** `serve --one-tool` (or `APEX_MCP_ONE_TOOL=1`) makes
+apex-tools publish one `apex {op, args}` tool instead of the 41 `apex_*`
+tools. It is not in `.mcp.json`, because the subagent browser guard matches
+tool names. Measurements, client docs and the decision are in
+`docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md`.
+
 ## Layers
 
 | Layer | Lives | Answers |

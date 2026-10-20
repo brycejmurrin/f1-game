@@ -125,6 +125,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apex-diag-canvas.test.mjs",
   // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
   "tests/unit/apex-memory.test.mjs",
+  // Opt-in one-tool apex-tools surface + the MCP listing-cost meter (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md). Mock stdio, ~2 s.
+  "tests/unit/apex-one-tool.test.mjs",
   "tests/unit/apex-server-fixes.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
