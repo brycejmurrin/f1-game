@@ -100,7 +100,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
                           coverVents: "none", spineHeight: "standard", spineSide: "none",
-                          coverBind: "independent", finHandoff: "match", bodySplit: "off", bodyStyle: "team",
+                          coverBind: "independent", finHandoff: "match", bodySplit: "off", bodyStyle: "team", aeroShape: "fitted", floorShape: "fitted",
                           patternPlacement: "crown", patternSide: "both", patternWidth: "70", patternRepeat: "6",
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
                           patternRotation: "0", patternStretch: "100", patternWeight: "100", patternKey: "auto",
@@ -199,6 +199,8 @@ const LIV_ROW_HINT = {
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
   sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also greys every spine design that writes a sponsor name (TOP wordmark, SIDE wordmark/duo/title).",
+  aeroShape: "AERO SHAPE — front/rear wing and aero package appearance. FITTED follows your installed AERO part. Looks only; performance and fitted parts stay unchanged.",
+  floorShape: "FLOOR SHAPE — floor and diffuser appearance. FITTED follows your installed FLOOR part. Looks only; performance and fitted parts stay unchanged.",
   bodyStyle: "BODY — the chassis silhouette. TEAM keeps this car's own shape; concept bodies reshape the nose, sidepods and engine cover. Looks only — performance stays the same.",
   finShape: "FIN SHAPE — the shark-fin blade. NONE removes it, and with it the fin's paint, graphic, style and badge. Every 2026 team car runs NONE.",
   finStyle: "TAIL STYLE — the motif painted on the fin.",
@@ -1360,6 +1362,15 @@ function buildLiveryCreator(container, team) {
   // carries, and whether the crest also repeats on the spine. Four single-choice
   // fields, so four pill rows — the same node shape as FINISH above.
   pillRow("BODY", "bodyStyle", ["team", ...(Car3D.BODY_STYLE_IDS || [])], "team");
+  // Use the catalog's current STYLE labels and ids; no second shape catalog.
+  for (const [label, key, category] of [["AERO SHAPE", "aeroShape", "aero"], ["FLOOR SHAPE", "floorShape", "floor"]]) {
+    const styles = Parts.CATALOG.find((c) => c.id === category).options.filter((o) => o.tag === "STYLE");
+    const row = pillRow(label, key, ["fitted", ...styles.map((o) => o.id)], "fitted");
+    Array.from(row.querySelectorAll("button")).slice(1).forEach((b, i) => {
+      const opt = styles[i];
+      b.textContent = opt.label.toUpperCase(); b.title = opt.desc.replace(/^[^—]+— /, "") + " — appearance only";
+    });
+  }
   pillRow("FIN SHAPE", "finShape", Car3D.FIN_SHAPE_IDS || ["standard"], "standard");
   deps.push({ row: pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team"), when: needFin, why: NO_FIN });
   deps.push({ row: pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo"), when: needFin, why: NO_FIN });

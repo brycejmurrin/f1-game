@@ -3084,6 +3084,7 @@
         "tests/unit/career-regulations.test.mjs"
       ],
       "aeroLoad": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/setup-tune.test.mjs"
@@ -3099,6 +3100,7 @@
         "tests/unit/legends-team.test.mjs"
       ],
       "getCost": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -3119,6 +3121,7 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "getMods": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-tune.test.mjs"

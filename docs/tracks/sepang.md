@@ -45,11 +45,13 @@ Gently rolling reclaimed plantation, with one genuine drop and one climb.
 | — | ring | far | Plantation horizon of ordered palm ranks; faint Selangor limestone hills behind; **KLIA control tower** and terminal roofline on the far skyline (`sepang-klia-skyline`) |
 
 ## 5. Track features
-- Famously **wide** — 8 m base half-width, only three corners narrow at all (T3–T4, T9, T15).
+- Famously **wide** — 8 m base half-width. The operator publishes a 16 m minimum; the unsupported 13.6 m T3–T4 and 13.8 m T9 zones have been removed. The 13.2 m T15 zone remains a temporary geometry constraint: removing it exposes two centreline nodes tighter than the road half-width. It is not a sourced local width. Exact local widening remains unsurveyed.
 - Two long straights joined by the T15 hairpin; vast tarmac run-off almost everywhere, so gravel is limited. 5.543 km, 15 turns, 16–22 m wide (Wikipedia / operator).
 - Gentle banking: T1–T2 loop 3.5°, T5–T6 sweep 4°, T12–T13 3°.
 - Tropical downpours define its races — the open drains beside the run-off should always be visible.
 - No Petronas sponsor lettering on structures (uncertain / brand-policy).
+
+Width evidence: the [operator architecture page](https://www.sepangcircuit.com/architecture) states a 16 m minimum and 22 m maximum. The [historical official Super GT guide](https://supergt.net/wp-content/archive/classic/supergt.net/supergt/circuit/sepang/circ_sepang.htm) independently gives a 16 m minimum (its 25 m maximum differs). [Reporting of Sepang/Dromo's 2016 briefing](https://www.motorsport.com/f1/news/analysis-why-revamped-sepang-means-step-into-unknown-for-f1-teams-830812/830812/) explicitly describes moving a track boundary line to maintain 16 m, separately from runoff. These sources justify removing unsupported sub-16 m zones; they do not register each local edge or widening station. The retained T15 constraint remains an accuracy defect, not an exception established by these sources.
 
 ## 6. Modelling notes
 - Main canopy follows **hibiscus petal bays** (operator + KKL), not a single hypar saddle. Six along-track petal dishes on masts, fabric panels drooping toward the track; spine beam links the hubs. Say so if a survey still prefers hypar.
