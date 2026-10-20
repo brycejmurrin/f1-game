@@ -1,5 +1,19 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
+
+`js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
+The growth is the opt-in consumers of the four concept-sheet aero rows (Terrace /
+Flatline / Updraft / Swell) and four diffuser floor rows: front endplate accent tips
+(epTip 2/3), the rear tip fins and Flatline's trailing-edge stripes, the rwPlanes 1
+single-flap wing (no DRS pod/rail where no DRS plane exists — a pod there floats
+73–84 mm), Flatline's rwGap main plane (`rearMainOf`) and the pylon / swan-neck seats
+that keep single-flap wings on their mounts (car-fit-audit: 11 floating-wing GAP rows
+gone), and the `diffShape` tunnel/fence variants. Every block is gated on a recipe key
+absent from shipped rows: 671 deploy-tip builds hash-identical. The geometry helpers
+live in `js/car/car-body-geom.js` (not ratcheted). Fragment delta:
+`ratchets.d/cursor--design-aero-d3c-7e2a.json` (+62 lines vs the merge base).
+
 ## 2026-10-19 — PR #2924 (cursor/body-styles-r8n5): concept body silhouette pass
 
 `js/car/car3d.js` lines 2218 → **2259** (+41). Deliberate raise past the 40-line absorb.
