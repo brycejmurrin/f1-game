@@ -153,6 +153,7 @@ jobs:
       garage_ab: ${{ steps.split.outputs.garage_ab }}
       live_matrix: ${{ steps.split.outputs.live_matrix }}
       livery: ${{ steps.split.outputs.livery }}
+      h10frame: ${{ steps.split.outputs.h10frame }}
       lrm_leg: ${{ steps.split.outputs.lrm_leg }}
       lrm_rows: ${{ steps.split.outputs.lrm_rows }}
       lrm_scale: ${{ steps.split.outputs.lrm_scale }}
@@ -263,6 +264,8 @@ jobs:
           print("live_matrix=" + str(req.get("leg") == "render-live-matrix-2572").lower())
           # Garage livery-edit census (B·P1 2026-10-20): TLX WebGPU vs WebGL2, ~30 editor edits. Push requests only.
           print("livery=" + str(req.get("leg") == "garage-livery-perf").lower())
+          # Live race frame time at the phone shape (B·H10 2026-10-20). Push requests only.
+          print("h10frame=" + str(req.get("leg") == "h10-live-frame").lower())
           lg = str(req.get("lrm_leg") or "glx").strip()
           lg = lg if lg in ("glx", "tlx-gl", "tlx-native") else "glx"
           print("lrm_leg=" + lg)
@@ -473,6 +476,26 @@ jobs:
           path: |
             game-livery-*.json
             game-livery-*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Opt-in by request leg `h10-live-frame`; pair with census_only=true. Never fails the job.
+      - name: Live race frame census (B·H10)
+        if: ${{ needs.plan.outputs.h10frame == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 27
+        shell: bash
+        env:
+          H10_TRACKS: ${{ needs.plan.outputs.track }}
+          H10_LS: ${{ needs.plan.outputs.ls }}
+        run: node scratch/h10-live-frame.mjs || true
+
+      - name: Upload live race frame census
+        if: ${{ always() && needs.plan.outputs.h10frame == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: h10-live-frame-${{ matrix.image }}
+          path: h10-live-frame.json
           if-no-files-found: warn
           retention-days: 7
 
