@@ -30,7 +30,7 @@ test("acquire: a free or lapsed lease is taken; a live one held by another is re
   assert.equal(decide("acquire", held(B, 0), A, T).ok, true, "expiry is inclusive: at `expires` it has lapsed");
   const r = decide("acquire", held(B, 5), A, T);
   assert.equal(r.ok, false);
-  assert.match(r.reason, /held by cursor:bc-B for 5 more min/);
+  assert.equal(r.reason, "held by cursor:bc-B for 5 more min");
 });
 
 test("renew extends only the holder's lease and keeps its start", () => {
@@ -40,25 +40,25 @@ test("renew extends only the holder's lease and keeps its start", () => {
   assert.equal(d.lease.since, T - 600, "a renewal is the same tenure");
   assert.equal(d.lease.note, "q", "the note carries over");
   assert.equal(decide("acquire", held(A, 3), A, T).verb, "renew", "acquire by the holder is a renewal");
-  assert.match(decide("renew", held(B, 3), A, T).reason, /not yours/);
-  assert.match(decide("renew", null, A, T).reason, /no lease/);
+  assert.equal(decide("renew", held(B, 3), A, T).reason, "not yours: held by cursor:bc-B for 3 more min");
+  assert.equal(decide("renew", null, A, T).reason, "no lease to renew (acquire)");
 });
 
 test("release: the holder frees it; anyone clears a lapsed one; a live foreign lease is refused", () => {
   assert.equal(decide("release", held(A, 10), A, T).lease, null);
   const lapsed = decide("release", held(B, -2), A, T);
   assert.equal(lapsed.ok, true);
-  assert.match(lapsed.verb, /clear lapsed cursor:bc-B/);
+  assert.equal(lapsed.verb, "clear lapsed cursor:bc-B");
   assert.equal(decide("release", held(B, 10), A, T).ok, false);
   assert.equal(decide("release", null, A, T).ok, false);
 });
 
 test("break takes a live lease only with the user's words, which the LEASE line records", () => {
-  assert.match(decide("break", held(B, 30), A, T).reason, /--grant/);
+  assert.equal(decide("break", held(B, 30), A, T).reason, "break needs --grant with the user's words (authority.md)");
   const d = decide("break", held(B, 30), A, T, { grant: 'Bryce: "ORCH takes merges"' });
   assert.equal(d.ok, true);
   assert.equal(d.lease.holder, A);
-  assert.match(leaseLine(d, A, T), /^LEASE to:\* from:claude:session_A break cursor:bc-B grant="Bryce: 'ORCH takes merges'" ttl=60m until=/);
+  assert.equal(leaseLine(d, A, T), `LEASE to:* from:claude:session_A break cursor:bc-B grant="Bryce: 'ORCH takes merges'" ttl=60m until=2027-01-15T09:00Z`);
 });
 
 test("ttl is clamped to 1..MAX_TTL_MIN; junk falls back to the default", () => {
@@ -97,13 +97,16 @@ test("recipients: send refuses an undeliverable --to and names the accepted form
   for (const to of ok) assert.equal(addressProblem(to), "", to);
   for (const to of ok) assert.equal(parseLine(formatLine("BLOCKED", to, A, "x")).to, to);
   const refused = {
-    "claude:1923dcd1d9ef874aad548d82": /claims-board hash/, "codex:75a8d0d2822ffc7d0c1393d0": /claims-board hash/,
-    "cursor:92332ab30177276994b63bc0": /claims-board hash/, "claude:session_short": /not a claude session id/,
-    "#PR": /not an address/, "#12a": /not an address/, "a": /not an address/, "AB": /not an address/, "random-role": /not an address/,
-    "codex:refactor-all": /not a codex session id/, "slack:abc-1234": /unknown host/, "": /one address/,
+    "claude:1923dcd1d9ef874aad548d82": "claude:1923dcd1d9ef874aad548d82 is a claims-board hash, not a session id: no session receives it",
+    "codex:75a8d0d2822ffc7d0c1393d0": "codex:75a8d0d2822ffc7d0c1393d0 is a claims-board hash, not a session id: no session receives it",
+    "cursor:92332ab30177276994b63bc0": "cursor:92332ab30177276994b63bc0 is a claims-board hash, not a session id: no session receives it",
+    "claude:session_short": "claude:session_short is not a claude session id",
+    "#PR": "#PR is not an address", "#12a": "#12a is not an address", "a": "a is not an address", "AB": "AB is not an address",
+    "random-role": "random-role is not an address", "codex:refactor-all": "codex:refactor-all is not a codex session id",
+    "slack:abc-1234": "unknown host slack (claude, codex, cursor, grok)", "": "--to needs one address",
   };
-  for (const [to, re] of Object.entries(refused)) {
-    assert.match(addressProblem(to), re, to);
+  for (const [to, want] of Object.entries(refused)) {
+    assert.equal(addressProblem(to), want, to);
     assert.throws(() => formatLine("BLOCKED", to, A, "x"), (e) => e.message.includes(ADDRESS_FORMS), to);
   }
   for (const r of ["orchestrator", "merge-holder", "tools", "track-engine"]) assert.ok(ROLES.includes(r), `${r} is used on the bus`);
@@ -131,11 +134,11 @@ test("send to #<PR> dispatches the mirror once; other addresses and a failed dis
     const opts = (dispatch) => ({ cwd: h, log: (l) => out.push(l), dispatch });
     assert.equal(main(["send", "READY", "--to", "#7", "--as", A, "abc ready"], opts(() => { calls++; return "dispatched"; })), 0);
     assert.equal(calls, 1);
-    assert.match(out.join("\n"), /= mirror dispatched/);
+    assert.equal(out.at(-1), "= mirror dispatched", out.join("\n"));
     assert.equal(main(["send", "GREEN", "--to", "orchestrator", "--as", A, "#7 green"], opts(() => { calls++; return "x"; })), 0);
     assert.equal(calls, 1, "only to:#<PR> dispatches");
     assert.equal(main(["send", "READY", "--to", "#8", "--as", A, "x"], opts(() => { throw new Error("no gh"); })), 0, "dispatch failure is not a send failure");
-    assert.match(out.at(-1), /= mirror not dispatched \(no gh\)/);
+    assert.equal(out.at(-1), "= mirror not dispatched (no gh)");
     assert.equal(main(["send", "BLOCKED", "--to", "claude:1923dcd1d9ef874aad548d82", "--as", A, "x"], opts(() => { calls++; })), 1, "refused before any write");
     assert.deepEqual(readBus({ cwd: h, last: 10 }).entries.map((e) => e.to), ["#7", "orchestrator", "#8"]);
   } finally {
@@ -179,7 +182,7 @@ test("against real git: two hosts race for one lease, exactly one wins; the bus 
     const lost = acquire(HB, B, T + 60);
     assert.equal(lost.ok, false, "B, racing from a stale view, is refused");
     assert.equal(lost.refused, true);
-    assert.match(lost.reason, /held by claude:session_A/);
+    assert.equal(lost.reason, "held by claude:session_A for 59 more min");
     assert.equal(readLease({ cwd: HB }).holder, A);
     // A dead holder's lease lapses: B takes it after expiry.
     assert.equal(acquire(HB, B, T + DEFAULT_TTL_MIN * 60).ok, true, "lapsed: B takes it");
