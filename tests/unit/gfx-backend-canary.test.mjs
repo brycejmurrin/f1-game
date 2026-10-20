@@ -3395,6 +3395,14 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "the adapter verdict must be the sniff EXPRESSION — re-anchor this span, the pins below depend on it");
   assert.doesNotMatch(verdict, /HeadlessChrome/,
     "the adapter verdict must not treat headless as software — that is a presentation fact");
+  // forceMobileTier makes GLX.isMobile true on a desktop / CI VM; the "a phone has
+  // no software adapter" guard must key on a REAL handset UA, or a forced-mobile
+  // run on lavapipe / the macOS paravirtual device presents natively and loses
+  // the device (gpu-census 39477339291 vs 39488541983).
+  assert.match(verdict, /!_phoneHw\s*&&/,
+    "the software verdict must be skipped only for a real phone (_phoneHw), not for forced GLX.isMobile");
+  assert.match(src, /const _phoneHw = isMobile && \(\/iPhone\|iPad\|iPod\|Android\/i\.test\(ua\)/,
+    "_phoneHw must require a handset UA (or an iPad reporting as a Mac), not just GLX.isMobile");
   assert.match(src, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"\s*&&\s*!!\s*\(\s*_softAdapter\s*\|\|\s*_headless\s*\|\|\s*_capPref\s*===\s*"1"\s*\)/,
     "the blit must follow headless: a headless swapchain does not composite even on real silicon");
   assert.match(src, /_headless\s*=\s*\/HeadlessChrome\/i\.test\(ua\)\s*\|\|\s*\([\s\S]{0,80}?navigator\.webdriver/,

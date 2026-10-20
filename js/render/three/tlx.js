@@ -229,6 +229,18 @@ const TLX = (function () {
       // mappable pool dies on the first large mesh; PlayCanvas #6676).
       // Phones / WebKit take the same WebGPU path with WGX-lite caps
       // (8-bit canvas, no MSAA 4, low-power) when AUTO tries WebGPU.
+      // A REAL phone (a handset UA, or an iPad that reports as a Mac), as opposed to
+      // GLX.isMobile, which apex26.forceMobileTier=1 also sets on a desktop or CI
+      // VM. The "a phone has no software adapter" rule below protects handsets
+      // from the empty-info tie-break; on a forced-mobile test run it hid a
+      // software/paravirtual adapter (lavapipe, the macOS runner's Apple
+      // Paravirtual device), so TLX presented to the native WebGPU canvas, which
+      // such an adapter cannot composite: [Invalid Texture] CreateView, then
+      // device.lost "Instance reference no longer exists" (gpu-census 39477339291
+      // and 39488541983: the forced-mobile arm lost the device, the same arm with
+      // the software verdict stayed up with 0 GPU errors).
+      const _phoneHw = isMobile && (/iPhone|iPad|iPod|Android/i.test(ua)
+        || ((navigator.maxTouchPoints || 0) > 1 && /Mac/.test(ua)));
       let _softAdapter = false;
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
@@ -314,7 +326,7 @@ const TLX = (function () {
             // read (measured in-container: byte-identical captures across a
             // camera move, awaitSoftPresent never resolving again). Content
             // gates key off this flag too. Never on a mobile UA.
-            _softAdapter = !isMobile && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
+            _softAdapter = !_phoneHw && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
