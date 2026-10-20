@@ -189,12 +189,12 @@ const WGX = (function () {
   // the same ones GLX and TLX use, so the three backends cannot disagree about
   // what a colour means.
   //
-  // The WGSL is UNTOUCHED. It declares aNrm/aCol as vec3<f32> and WebGPU lets a
-  // wider vertex format feed a narrower shader input, dropping the extra
-  // component — so snorm16x4 and float16x4 read as the same vec3 they always
-  // did. That is also why they are x4 and not x3: WebGPU has no 3-wide 16-bit
-  // vertex format, and this widens an EXISTING attribute rather than adding a
-  // fourth, which is the thing Dawn zeroes on this adapter.
+  // Normal.w carries the integer car surface id in the existing snorm16x4
+  // padding lane. Indexed vertex_index can stay zero on this adapter, so the
+  // storage pull alone cannot distinguish a car's paint, carbon, glass and lights.
+  // The id uses /256 of a signed short (20..85 fits); WGSL decodes it before
+  // passing the existing flat material varying. RGB still ignores float16x4.w.
+  // No fourth attribute: Dawn zeroes that separate location on this adapter.
   //
   // The float stride stays a whole number of words (28 = 7 x 4), and position
   // stays at word 0, so _expandPull's word-wise copy, the piece slicing in
@@ -2744,7 +2744,8 @@ const WGX = (function () {
         i16[h + 6] = VertexPack.snorm16(nrm[i*3]);
         i16[h + 7] = VertexPack.snorm16(nrm[i*3+1]);
         i16[h + 8] = VertexPack.snorm16(nrm[i*3+2]);
-        i16[h + 9] = 0;                          // pad — keeps the colour 4-byte aligned
+        const carId = mat && Number.isInteger(mat[i]) && mat[i] >= 20 && mat[i] <= 85 ? mat[i] : 0;
+        i16[h + 9] = carId * 256;                 // existing padding: classified car id, no stride growth
         // Half float, and still RAW RGB — the quantisation changes the WIDTH of
         // the colour lane, never what is in it.
         // Raw RGB. Packing MAT into col.x interpolates 16→0 and sawtooths.

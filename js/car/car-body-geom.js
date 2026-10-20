@@ -37,6 +37,7 @@ const CarBodyGeom = (function () {
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
     const midY = mid.y + (s.noseDroop || 0) * (sil ? 0.85 : 0.45)
       + (sil ? (s.noseSlim < 0.7 ? -0.04 : 0) + (s.noseSlim > 1.2 ? 0.03 : 0) : 0);
+    // Every concept body, fitBodyDetails included, roots on CHASSIS.nose[2] (#3111 tip rule).
     if (sil || s.fitSeat) return conceptNose(s, [   // fitted bodies keep this seam even with a level cover
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
         w: tip.w * s.noseSlim, h: tip.h * (s.noseTipH == null ? s.noseSlim : s.noseTipH), t: tip.t },
@@ -46,7 +47,7 @@ const CarBodyGeom = (function () {
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
         w: tip.w * s.noseSlim, h: tip.h * (s.noseTipH == null ? s.noseSlim : s.noseTipH), t: tip.t },
       { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * (s.noseMidH == null ? midSlim : s.noseMidH), t: mid.t },
-      s.fitBodyDetails ? { ...CHASSIS.monocoque[0] } : { z: root.z + (s.noseTipZ || 0) * (sil ? 0.28 : 0.12),
+      { z: root.z + (s.noseTipZ || 0) * (sil ? 0.28 : 0.12),
         y: root.y + (s.noseDroop || 0) * (sil ? 0.35 : 0.15)
           + (sil ? (s.noseSlim < 0.7 ? -0.025 : 0) : 0),
         w: root.w * (s.noseRootSlim == null ? 1 + (s.noseSlim - 1) * (sil ? 0.45 : 0.2) : s.noseRootSlim),
@@ -86,9 +87,7 @@ const CarBodyGeom = (function () {
     return _teamNoseFloor;
   }
   function conceptNose(s, cone) {
-    // Native fitted concepts join the monocoque seam; earlier concepts keep
-    // their authored nose datum while sharing the wing-clearance solver.
-    const root = s.fitBodyDetails ? CHASSIS.monocoque[0] : CHASSIS.nose[2];
+    const root = CHASSIS.nose[2];   // every concept body, fitBodyDetails included (#3111 tip rule)
     let st = [...cone, { z: root.z, y: root.y, w: root.w, h: root.h, t: root.t }];
     if (st[1].z < root.z + 0.15) st[1].z = root.z + 0.15;    // keep the mid ahead of the pinned root
     // noseStep (preview bodies only): the 2012 "platypus" step — the tub's crown
@@ -1452,7 +1451,52 @@ const CarBodyGeom = (function () {
         st[i].outerBottom = Math.max(st[i].innerBottom + 0.004, ob[i] + (chord - ob[i]) * 0.6);
       }
     }
+    // Concept-only span floor: supplier engines may be narrower than the concept's
+    // additive waist/inlet cuts. Preserve an open duct and outward-facing flank;
+    // legacy recipes omit this control and retain their original streams.
+    if (style && style.minPodSpan) for (const p of st)
+      p.outer = Math.max(p.outer, p.inner + style.minPodSpan);
+    // Aft shoulder relief changes the existing rings; decals sample these same stations.
+    if (style && style.waistH) for (const p of st) {
+      const k = Math.max(0, 1 - Math.abs(p.z + 0.62) / 0.90);
+      p.innerTop += style.waistH * k; p.outerTop += style.waistH * k;
+    }
     return st;
+  }
+
+  // New concepts opt into detail fitting; legacy recipes keep their emitted streams.
+  function fitBodyDetails(anchors, style) {
+    if (!style.fitBodyDetails) return null;
+    return {
+      floorStep(step, ride) {
+        const bottom = Math.max(CHASSIS.floor.cy + ride, 0.052) - CHASSIS.floor.sy / 2;
+        const needed = (base, down, up = down) => {
+          const dy = bottom - base - ride; return dy / (dy > 0 ? up : down);
+        };
+        return Math.max(step * 0.85, -0.030, needed(0.084, 1, 0.825), needed(0.087, 0.675, 0.425),
+          needed(0.090, 0.45), needed(0.116, 0.25), needed(0.120, 0.70, 0.30));
+      },
+      noseMount(side) {
+        const z = Math.min(2.40, CHASSIS.nose[0].z + style.noseTipZ - 0.065), n = anchors.noseAt(z);
+        const w = Math.min(anchors.noseAt(z - 0.060).side, anchors.noseAt(z + 0.060).side);
+        return [side * Math.min(0.09, Math.max(0, w * 0.40 - 0.020)), n.bottom + 0.012, z];
+      },
+      coverStripe(out, color) {
+        const band = (z, w) => { const c = anchors.coverAt(z), p = coverProfile(c);
+          return [z, 0, coverSurfaceY(c, 0) + COVER_STACK.vent - 0.010,
+            Math.min(w, p.pts[p.pts.length - 1][0] * 1.8), 0.020]; };
+        const front = band(-0.64, 0.070), mid = band(-0.94, 0.075), rear = band(-1.95, 0.060);
+        addLoft(out, ...mid, ...front, color); addLoft(out, ...rear, ...mid, color);
+      },
+      tVane(vane) {
+        // Cover crown bounds every inner-span point; pay for foil thickness/camber
+        // and the decal layer before raising the unchanged foil as one rigid shape.
+        const skin = Math.max(coverSurfaceY(anchors.coverAt(vane.zLead), 0), coverSurfaceY(anchors.coverAt(vane.zTrail), 0));
+        const lift = Math.max(0, skin + COVER_STACK.decal + 0.018 - vane.yLead);
+        vane.yLead += lift; vane.yTrail += lift;
+        return { foot: coverSurfaceY(anchors.coverAt(-1.98), 0) - 0.006, head: foilAt(vane, 0, 0.5).y };
+      },
+    };
   }
   // podShape (B·D1d concept bodies, opt-in; absent = shipped): per-station metre offsets on the
   // seven pod stations, front to rear — top (both tops), out (outer half-width), bot (outer belly;
@@ -1721,7 +1765,7 @@ const CarBodyGeom = (function () {
         top: crownBase + rise + liftF, k: crown },
       { z: -2.00, x: 0.13 * eng.tailWidth,
         bottom: 0.42 - 0.17 * coverHeight,
-        top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL + lift * SPINE_TAIL, k: crown * 0.45 },
+        top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL + lift * SPINE_TAIL + (style.coverTailLift || 0), k: crown * 0.45 },
     ];
     const sculpt = style.podSculpt;
     const coverKnots = [-0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.70, -1.90, -2.00];
