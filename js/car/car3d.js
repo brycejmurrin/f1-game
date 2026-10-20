@@ -1560,6 +1560,13 @@ const Car3D = (function () {
       } else {
         addTube(out, [[0, EXH_Y, -1.99], [0, EXH_Y, tipZ]], tipRShow * 0.85, 8,
                 exhMetal, SURFACES.metal);
+        // Its root, 1 cm inside the engine cover, is capped on addTube's own ring (x = r sin, y = r cos),
+        // so the rim welds shut instead of reading as an open edge where the pylon no longer seals it.
+        for (let k = 0; k < 8; k++) {
+          const ring = (j) => { const a = (j % 8) / 8 * Math.PI * 2, r = tipRShow * 0.85;
+            return [r * Math.sin(a), EXH_Y + r * Math.cos(a), -1.99]; };
+          addTri(out, [0, EXH_Y, -1.99], ring(k + 1), ring(k), exhMetal, SURFACES.metal);
+        }
       }
       const flame = exhTwin ? fTwin : fuelFlame, rPipe = tipRShow;
       addTube(out, [[cx, EXH_Y, tipZ + 0.10], [cx, EXH_Y, tipZ + 0.01]],
@@ -2274,9 +2281,11 @@ const Car3D = (function () {
         // that long_ratio never gets — readable from the rear camera.
         if (gbPaint && gbCaseWmul < 0.85 && gbStrakes === 0) {
           addBox(out, 0, 0.26, -2.32, 0.72, 0.12, 0.55, c2, SURFACES.paint);
-          // Its top stops 4 mm under a big single tip: Cadillac's bell rim sat 28 mm into it.
-          const plateTop = Math.min(0.38, exhTipLowY - 0.004);
-          addBox(out, 0, (0.30 + plateTop) / 2, -2.55, 0.58, plateTop - 0.30, 0.18, accentC, SURFACES.paint);
+          // A single tip whose bell dips under its top (Cadillac's rim sat 28 mm in it) gets a notch:
+          // two plates either side of the bell's chord at y 0.38, 4 mm clear of the rim.
+          const bellR = 0.50 - exhTipLowY, notch = exhTipLowY < 0.384 ? Math.sqrt(Math.max(0, bellR * bellR - 0.12 * 0.12)) + 0.004 : 0;
+          if (!notch) addBox(out, 0, 0.34, -2.55, 0.58, 0.08, 0.18, accentC, SURFACES.paint);
+          else for (const s of [-1, 1]) addBox(out, s * (notch + 0.29) / 2, 0.34, -2.55, 0.29 - notch, 0.08, 0.18, accentC, SURFACES.paint);
           addBox(out, 0, 0.48, -2.40, 0.50, 0.06, 0.30, c2, SURFACES.paint);
         }
       }
