@@ -1419,7 +1419,9 @@ const Car3D = (function () {
       const u = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]], v = [c[0] - q[0][0], c[1] - q[0][1], c[2] - q[0][2]];
       const m = [(q[0][0] + q[2][0]) / 2 - cx, (q[0][1] + q[2][1]) / 2 - cy, (q[0][2] + q[2][2]) / 2 - zc];
       const out1 = (u[1] * v[2] - u[2] * v[1]) * m[0] + (u[2] * v[0] - u[0] * v[2]) * m[1] + (u[0] * v[1] - u[1] * v[0]) * m[2] > 0;
-      if (out1) addQuad(out, q[0], q[1], q[2], q[3], col, surf); else addQuad(out, q[3], q[2], q[1], q[0], col, surf); } };
+      // r1 = 0 is a disc: ONE triangle (a quad with q[2] = q[3] left a zero-area, zero-normal tri).
+      if (!r1) { if (out1) addTri(out, q[0], q[1], q[2], col, surf); else addTri(out, q[2], q[1], q[0], col, surf); }
+      else if (out1) addQuad(out, q[0], q[1], q[2], q[3], col, surf); else addQuad(out, q[3], q[2], q[1], q[0], col, surf); } };
     const exhSolid = (cx, cy, z0, r0, z1, r1, col, surf, capCol) => { const zc = (z0 + z1) / 2;
       exhCone(cx, cy, z0, r0, z1, r1, col, surf, zc);
       exhCone(cx, cy, z0, r0, z0, 0, col, surf, zc); exhCone(cx, cy, z1, r1, z1, 0, capCol || col, surf, zc); };
