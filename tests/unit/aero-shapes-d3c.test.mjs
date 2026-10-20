@@ -69,3 +69,17 @@ test("flown flaps carry the same tip lift as the baked wing", () => {
     }
   }
 });
+
+test("Keel flown flaps have no ears in either cache warm-up order (track style vs garage style)", () => {
+  for (const garageFirst of [false, true]) {
+    const P = loadParts(), t = P.Teams.LIST.find((e) => e.id === "mclaren");
+    const tiers = P.Parts.getVisualTiers({ ...P.Parts.DEFAULTS, aero: "style_aero_keel" }, t);
+    const raw = tiers._visual.aero;   // a caller without the team wing (track draw)
+    const ears = (st) => P.Car3D.aeroFlaps(2, st).filter((el) => el.upsweep).map((el) => el.id);
+    const garage = () => P.Car3D.buildComplete(t.color, t.color2, { teamId: t.id, num: 4, parts: tiers }).flapInfo.style;
+    let first, second;
+    if (garageFirst) { first = ears(garage()); second = ears(raw); }
+    else { first = ears(raw); second = ears(garage()); }
+    assert.equal(JSON.stringify([first, second]), "[[],[]]", garageFirst ? "garage first" : "track first");
+  }
+});

@@ -1698,11 +1698,9 @@ const Car3D = (function () {
     const aeroT = tier("aero");
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
-    // wsFlat (B·D3c KEEL, opt-in): drop the team's twist / curl / ears so the
-    // cascade reads as straight planks.
-    const ws = aeroStyle && aeroStyle.wsFlat
-      ? Object.assign({}, wingOf(teamStyle), { twist: 0, teCurve: 0, chordTaper: 0, tipRise: 0, flaps: 2, canard: 0 })
-      : wingOf(teamStyle);
+    // wsFlat (B·D3c KEEL, opt-in): drop the team's curl / tip rise / ears so the
+    // cascade reads as straight planks (resolved in wingOf).
+    const ws = wingOf(aeroStyle && aeroStyle.wsFlat ? Object.assign({}, teamStyle, { wsFlat: 1 }) : teamStyle);
     out.flapInfo = { aLvl, style: Object.assign({}, aeroStyle, { wingStyle: ws }), col: wingCol,
       finish: CarMaterials.finishOf(liv, "wingFinish"), surface: wingCarbon ? "carbon" : "paint" };
 

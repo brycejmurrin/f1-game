@@ -165,9 +165,17 @@ const CarBodyGeom = (function () {
   const FW_MOVEABLE = 2;
   const AERO_STYLE_DEF = { frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
                            rearSweep: 0.03, rearTaper: 0.98 };
-  function wingOf(style) { return (style && style.wingStyle) || DEFAULT_WING; }
+  function wingOf(style) {
+    const w = (style && style.wingStyle) || DEFAULT_WING;
+    // wsFlat (B·D3c KEEL) resolves HERE, so the baked wing and every flown-flap
+    // consumer (garage, track, cache key) agree: no curl, tip rise or ears. The
+    // team's twist stays: the cascade's footplate strake is seated against it.
+    return style && style.wsFlat
+      ? Object.assign({}, w, { teCurve: 0, chordTaper: 0, tipRise: 0, flaps: 2, canard: 0 })
+      : w;
+  }
   function wingFoilOf(st, i) {
-    const w = (st && st.wingStyle) || st || DEFAULT_WING;
+    const w = st && st.wsFlat ? wingOf(st) : (st && st.wingStyle) || st || DEFAULT_WING;
     const k = Math.max(0, Math.min(1, i / 2));
     return { twist: (w.twist || 0) * (0.55 + 0.55 * k),
              teCurve: (w.teCurve || 0) * (0.60 + 0.55 * k),
@@ -536,11 +544,15 @@ const CarBodyGeom = (function () {
   function flapSig(st0) {
     let sig = _flapSig.get(st0);
     if (sig === undefined) {
-      const w = st0.wingStyle || st0;
+      const w = st0.wsFlat ? wingOf(st0) : st0.wingStyle || st0;
       sig = [st0.frontSweep, st0.frontTaper, st0.frontRise,
              st0.rearSweep, st0.rearTaper, st0.drs || 0,
              w.twist || 0, w.teCurve || 0, w.chordTaper || 0, w.tipRise || 0]
         .map((v) => +v || 0).join(",");
+      // The top flap's ears are topology, not foil shape: key a non-default flap
+      // count (the default keeps its legacy text).
+      const flaps = wingOf(st0).flaps || 3;
+      if (flaps !== (DEFAULT_WING.flaps || 3)) sig += "|flaps:" + flaps;
       // B·D3c shape fields join the key only when set, so shipped keys keep their text.
       const ext = [st0.fwCurve, st0.fwStep, st0.rwRise, st0.rwCurve].map((v) => +v || 0);
       if (ext.some((v) => v)) sig += "|" + ext.join(",");
