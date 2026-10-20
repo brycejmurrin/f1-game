@@ -83,3 +83,16 @@ so polling `status` (one `list` per tick) stays the transport.
 
 The "slot leak" claim, the self-hosted worker route, and whether `auto-smart` is available to this account. None was
 exercised; none changes the ranked list above.
+
+## Closed (same day, `tools/ci/cursor-agents.mjs`)
+
+Gaps 1 to 6 are closed; each has a stubbed-fetch test in `tests/unit/cursor-agents.test.mjs`. Gap 7 (launch options)
+stays open on purpose, and gap 8 is a caller convention (`--name`).
+
+1. `dump` counts a 410 as `expired=N` and continues (`DUMP dir=... written= skipped= expired=`); other statuses throw.
+2. `api()` honours `Retry-After` (seconds or HTTP date) via `retryAfterMs`, capped by `APEX_CURSOR_BACKOFF_CAP_MS`.
+3. `list` follows `nextCursor` (100 per page), takes `--pr` (`prUrl`) and `--include-archived`.
+4. `wait <id>` (exit 0 FINISHED, 1 ERROR/CANCELLED/EXPIRED, 124 timeout) and `launch --wait`.
+5. `artifacts <id>` and `artifact <id> <path>`: path must be `artifacts/...` with no `..`; the presigned URL is fetched
+   without the Authorization header into `artifacts/cursor-artifacts/<last8>/`.
+6. `usage <id>`: token counts, not spend (plan-included agents report zeros); 403 `feature_unavailable` prints `UNAVAILABLE`.

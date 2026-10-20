@@ -771,7 +771,8 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--limit"
+        "--limit",
+        "--out"
       ]
     },
     {

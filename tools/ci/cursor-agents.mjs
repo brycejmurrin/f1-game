@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // cursor-agents.mjs — Cursor Cloud Agents client: read (list, status, dump, digest) and control agents this tool launched (launch, followup, cancel, archive, delete).
-// @doc Cursor agents client: read (list/status/dump/digest) + launch/followup/cancel/archive/delete of agents it launched.
-// Full description: Cursor Cloud Agents API v1 client (`CURSOR_API_KEY` from the environment, never printed). Reads: `list`, `status <id>`, `dump [<id>...]` (SSE run streams, rate-limit safe, into ignored artifacts/), `digest`. Writes: `launch` (client-minted agentId, so a retry never duplicates), `followup`, `cancel`, `archive`, `delete`: each refuses an agent id that `launch` did not record in artifacts/cursor-launched.json (the key reaches every agent its owner has). `allowed` lists the recorded ids.
+// @doc Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched.
+// Full description: Cursor Cloud Agents API v1 client (`CURSOR_API_KEY` from the environment, never printed). Reads: `list`, `status <id>`, `dump [<id>...]` (SSE run streams, rate-limit safe, into ignored artifacts/), `digest`. Writes: `launch` (client-minted agentId, so a retry never duplicates), `followup`, `cancel`, `archive`, `delete`: each refuses an agent id that `launch` did not record in artifacts/cursor-launched.json (the key reaches every agent its owner has). `allowed` lists the recorded ids. Also: `wait`, `artifacts`/`artifact` (presigned download), `usage`.
 // @skill agent-fleet
 //
 // Evidence: docs/notes/CURSOR-AGENTS-API-PROBE-2026-10-19.md. The run stream
@@ -9,12 +9,16 @@
 // the v0 conversation route carries text only. It rate-limits (429) when read in
 // parallel, so dump is sequential with a gap and exponential backoff.
 //
-//   node tools/ci/cursor-agents.mjs list [--limit 20]
+//   node tools/ci/cursor-agents.mjs list [--limit 20] [--pr PR_URL] [--include-archived]   (pages past 100)
 //   node tools/ci/cursor-agents.mjs status <agent-id>
+//   node tools/ci/cursor-agents.mjs wait <agent-id> [--timeout 600] [--interval 5]   (exit 0 FINISHED, 1 ERROR/CANCELLED/EXPIRED, 124 timeout)
+//   node tools/ci/cursor-agents.mjs artifacts <agent-id>
+//   node tools/ci/cursor-agents.mjs artifact <agent-id> <artifacts/path> [--out DIR]
+//   node tools/ci/cursor-agents.mjs usage <agent-id>
 //   node tools/ci/cursor-agents.mjs dump [<agent-id>...] [--limit 20]
 //   node tools/ci/cursor-agents.mjs digest [--dir artifacts/cursor-dumps]
 //   node tools/ci/cursor-agents.mjs launch (--prompt "…" | --prompt-file F) [--model composer-2.5] [--repo URL]
-//        [--ref BRANCH | --pr PR_URL] [--name N] [--mode agent|plan] [--create-pr] [--on-branch] [--dry-run]
+//        [--ref BRANCH | --pr PR_URL] [--name N] [--mode agent|plan] [--create-pr] [--on-branch] [--dry-run] [--wait [--timeout S]]
 //   node tools/ci/cursor-agents.mjs followup <id> (--text "…" | --text-file F) [--mode agent|plan]
 //   node tools/ci/cursor-agents.mjs cancel <id> [--run <runId>]
 //   node tools/ci/cursor-agents.mjs archive <id>
@@ -35,7 +39,20 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const BASE = "https://api.cursor.com";
 const DEFAULT_DIR = path.join(ROOT, "artifacts", "cursor-dumps");
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Injectable clock: tests replace `sleep` and `now` so no wall time passes. */
+export const clock = { sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: () => Date.now() };
+const sleep = (ms) => clock.sleep(ms);
+
+/** Delay before retrying a 429: the `Retry-After` header (seconds or an HTTP date) when valid, else 5 s x 2^attempt; capped by APEX_CURSOR_BACKOFF_CAP_MS (80 s). */
+export function retryAfterMs(headerValue, attempt, now = Date.now()) {
+  const cap = Number(process.env.APEX_CURSOR_BACKOFF_CAP_MS) || 80000;
+  let ms = NaN;
+  const h = typeof headerValue === "string" ? headerValue.trim() : "";
+  if (/^\d+(\.\d+)?$/.test(h)) ms = Number(h) * 1000;
+  else if (h) ms = Date.parse(h) - now;
+  if (!Number.isFinite(ms) || ms < 0) ms = 5000 * 2 ** attempt;
+  return Math.min(ms, cap);
+}
 
 /** One API call. GETs retry 429/5xx; a write retries 429 only (the request was not processed), plus 5xx when `retry5xx` (idempotent create). */
 async function api(route, { accept = "application/json", tries = 6, method = "GET", body, retry5xx = false } = {}) {
@@ -50,7 +67,7 @@ async function api(route, { accept = "application/json", tries = 6, method = "GE
     const r = await fetch(BASE + route, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
     const again = r.status === 429 || (r.status >= 500 && (method === "GET" || retry5xx));
     if (again) {
-      await sleep(Math.min(5000 * 2 ** a, Number(process.env.APEX_CURSOR_BACKOFF_CAP_MS) || 80000));
+      await sleep(r.status === 429 ? retryAfterMs(r.headers.get("retry-after"), a, clock.now()) : retryAfterMs(null, a));
       continue;
     }
     return r;
@@ -343,9 +360,108 @@ export async function deleteAgent(id, { file = allowFile() } = {}) {
   return [`DELETED ${id}`];
 }
 
-async function listAgents(limit) {
-  const d = await json(`/v1/agents?limit=${limit}`);
-  return d.items || [];
+/** List agents, following `nextCursor` (the API caps a page at 100). */
+export async function listAgents(limit, { prUrl, includeArchived } = {}) {
+  const out = [];
+  let cursor;
+  while (out.length < limit) {
+    const q = new URLSearchParams({ limit: String(Math.min(100, limit - out.length)) });
+    if (cursor) q.set("cursor", cursor);
+    if (prUrl) q.set("prUrl", prUrl);
+    if (includeArchived) q.set("includeArchived", "true");
+    const d = await json(`/v1/agents?${q}`);
+    out.push(...(d.items || []));
+    cursor = d.nextCursor;
+    if (!cursor || !(d.items || []).length) break;
+  }
+  return out.slice(0, limit);
+}
+
+/** Save every run stream of `agents` under `dir`; a 410 (stream_expired, 24 h retention) is counted and skipped. */
+export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
+  fs.mkdirSync(dir, { recursive: true });
+  let got = 0;
+  let skipped = 0;
+  let expired = 0;
+  for (const id of agents) {
+    for (const run of (await json(`/v1/agents/${id}/runs`)).items || []) {
+      const out = path.join(dir, `${id.slice(-8)}_${run.id.slice(-8)}.sse`);
+      if (run.status === "CREATING" || (fs.existsSync(out) && fs.statSync(out).size > 2000)) {
+        skipped++;
+        continue;
+      }
+      const r = await api(`/v1/agents/${id}/runs/${run.id}/stream`, { accept: "text/event-stream" });
+      if (r.status === 410) {
+        expired++;
+        continue;
+      }
+      if (!r.ok) throw new Error(`stream ${run.id}: HTTP ${r.status}`);
+      fs.writeFileSync(out, await r.text());
+      got++;
+      await sleep(gapMs);
+    }
+  }
+  return `DUMP dir=${path.relative(ROOT, dir)} written=${got} skipped=${skipped} expired=${expired}`;
+}
+
+/** Poll an agent until it is neither ACTIVE nor CREATING. Exit code: 0 last run FINISHED, 1 ERROR/CANCELLED/EXPIRED (or other), 124 timeout. */
+export async function waitAgent(id, { timeoutS = 600, intervalS = 5 } = {}) {
+  const end = clock.now() + timeoutS * 1000;
+  for (;;) {
+    const a = await json(`/v1/agents/${id}`);
+    if (a.status !== "ACTIVE" && a.status !== "CREATING") {
+      const runs = (await json(`/v1/agents/${id}/runs`)).items || [];
+      const last = runs[0]?.status || "-";
+      return { code: last === "FINISHED" ? 0 : 1, line: `WAIT ${id} ${a.status} run=${a.latestRunId || "-"} last=${last}` };
+    }
+    if (clock.now() + intervalS * 1000 > end) return { code: 124, line: `WAIT ${id} TIMEOUT after=${timeoutS}s status=${a.status} run=${a.latestRunId || "-"}` };
+    await sleep(intervalS * 1000);
+  }
+}
+
+/** Reject anything but a plain relative `artifacts/...` path before a request is made. */
+export function checkArtifactPath(p) {
+  const segs = typeof p === "string" ? p.split("/") : [];
+  if (!p || p.startsWith("/") || p.includes("\\") || p.includes("\0") || segs[0] !== "artifacts" || segs.length < 2 || segs.some((x) => x === ".." || x === "." || x === "")) {
+    throw new Error(`artifact path must be relative, start with artifacts/ and contain no .., got ${JSON.stringify(p)}`);
+  }
+  return p;
+}
+
+export async function listArtifacts(id) {
+  const items = (await json(`/v1/agents/${id}/artifacts`)).items || [];
+  return items.map((x) => `ARTIFACT ${id} ${x.path} ${x.sizeBytes} ${x.updatedAt}`);
+}
+
+/** Fetch one artifact through its 15-minute presigned URL (no Authorization header: S3 rejects it) into <outDir>/<last8 of id>/<path without the artifacts/ prefix>. */
+export async function downloadArtifact(id, p, outDir = path.join(ROOT, "artifacts", "cursor-artifacts")) {
+  checkArtifactPath(p);
+  const meta = await json(`/v1/agents/${id}/artifacts/download?path=${encodeURIComponent(p)}`);
+  const r = await fetch(meta.url);
+  if (!r.ok) throw new Error(`artifact download ${p}: HTTP ${r.status}`);
+  const dest = path.join(outDir, id.slice(-8), p.slice("artifacts/".length));
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const buf = Buffer.from(await r.arrayBuffer());
+  fs.writeFileSync(dest, buf);
+  return [`SAVED ${path.relative(ROOT, dest)} ${buf.length}`];
+}
+
+/**
+ * Token usage (early-access endpoint). Plan-included agents report zeros for tokens and charge
+ * (measured 2026-10-20), so this is a token count, not a spend meter.
+ */
+export async function agentUsage(id) {
+  const r = await api(`/v1/agents/${id}/usage`);
+  if (r.status === 403) {
+    const e = await apiError(r);
+    if (e.code === "feature_unavailable") return [`USAGE ${id} UNAVAILABLE`];
+    throw fail(e, "usage");
+  }
+  if (!r.ok) throw fail(await apiError(r), "usage");
+  const d = await r.json();
+  const runs = d.runs || [];
+  const cents = d.totalUsage?.chargedCents ?? runs.reduce((s, x) => s + (x.usage?.chargedCents || 0), 0);
+  return [`USAGE ${id} tokens=${d.totalUsage?.totalTokens ?? 0} chargedCents=${cents} runs=${runs.length}`];
 }
 
 const flag = (args, name, dflt) => {
@@ -365,7 +481,8 @@ async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   const dir = path.resolve(flag(rest, "--dir", DEFAULT_DIR));
   if (cmd === "list") {
-    for (const a of await listAgents(Number(flag(rest, "--limit", 20)))) {
+    const opts = { prUrl: flag(rest, "--pr"), includeArchived: has(rest, "--include-archived") };
+    for (const a of await listAgents(Number(flag(rest, "--limit", 20)), opts)) {
       const repo = (a.repos?.[0]?.url || "-").split("/").pop();
       console.log(`AGENT ${a.id} ${a.status} ${repo} ${a.updatedAt} "${(a.name || "").slice(0, 40)}"`);
     }
@@ -377,26 +494,9 @@ async function main() {
     const dur = r.reduce((s, x) => s + (x.durationMs || 0), 0);
     console.log(`AGENT ${a.id} ${a.status} run=${a.latestRunId} runs=${r.length} durMin=${Math.round(dur / 60000)} last=${r[0]?.status || "-"}`);
   } else if (cmd === "dump") {
-    fs.mkdirSync(dir, { recursive: true });
     const ids = rest.filter((x) => !x.startsWith("--") && x !== flag(rest, "--dir") && x !== flag(rest, "--limit"));
     const agents = ids.length ? ids : (await listAgents(Number(flag(rest, "--limit", 20)))).map((a) => a.id);
-    let got = 0;
-    let skipped = 0;
-    for (const id of agents) {
-      for (const run of (await json(`/v1/agents/${id}/runs`)).items || []) {
-        const out = path.join(dir, `${id.slice(-8)}_${run.id.slice(-8)}.sse`);
-        if (run.status === "CREATING" || (fs.existsSync(out) && fs.statSync(out).size > 2000)) {
-          skipped++;
-          continue;
-        }
-        const r = await api(`/v1/agents/${id}/runs/${run.id}/stream`, { accept: "text/event-stream" });
-        if (!r.ok) throw new Error(`stream ${run.id}: HTTP ${r.status}`);
-        fs.writeFileSync(out, await r.text());
-        got++;
-        await sleep(1500);
-      }
-    }
-    console.log(`DUMP dir=${path.relative(ROOT, dir)} written=${got} skipped=${skipped}`);
+    console.log(await dumpRuns(agents, dir));
   } else if (cmd === "digest") {
     const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".sse")) : [];
     if (!files.length) throw new Error(`no .sse dumps in ${dir}; run dump first`);
@@ -416,6 +516,23 @@ async function main() {
       dryRun: has(rest, "--dry-run"),
     });
     emit(lines);
+    const id = /^LAUNCH (bc-\S+)/.exec(lines[0])?.[1];
+    if (has(rest, "--wait") && id) {
+      const w = await waitAgent(id, { timeoutS: Number(flag(rest, "--timeout", 600)) });
+      console.log(w.line);
+      process.exitCode = w.code;
+    }
+  } else if (cmd === "wait") {
+    if (!rest[0]) throw new Error("wait <agent-id> [--timeout S] [--interval S]");
+    const w = await waitAgent(rest[0], { timeoutS: Number(flag(rest, "--timeout", 600)), intervalS: Number(flag(rest, "--interval", 5)) });
+    console.log(w.line);
+    process.exitCode = w.code;
+  } else if (cmd === "artifacts") {
+    for (const l of await listArtifacts(rest[0])) console.log(l);
+  } else if (cmd === "artifact") {
+    emit(await downloadArtifact(rest[0], rest[1], flag(rest, "--out") ? path.resolve(flag(rest, "--out")) : undefined));
+  } else if (cmd === "usage") {
+    emit(await agentUsage(rest[0]));
   } else if (cmd === "followup") {
     emit(await followUp(rest[0], textArg(rest, "--text"), flag(rest, "--mode")));
   } else if (cmd === "cancel") {
@@ -427,7 +544,7 @@ async function main() {
   } else if (cmd === "allowed") {
     for (const [id, m] of Object.entries(readAllow())) console.log(`ALLOWED ${id} ${m.launchedAt} ${m.model} "${(m.name || "").slice(0, 40)}"`);
   } else {
-    console.log("usage: cursor-agents.mjs list|status <id>|dump [<id>...]|digest [--dir D]|launch …|followup <id> …|cancel <id>|archive <id>|delete <id>|allowed");
+    console.log("usage: cursor-agents.mjs list [--pr U] [--include-archived]|status <id>|wait <id>|artifacts <id>|artifact <id> <path>|usage <id>|dump [<id>...]|digest [--dir D]|launch …|followup <id> …|cancel <id>|archive <id>|delete <id>|allowed");
     process.exit(cmd ? 1 : 0);
   }
 }

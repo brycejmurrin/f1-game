@@ -28,6 +28,15 @@ import {
   recordAllow,
   Refused,
   DEFAULT_MODEL,
+  clock,
+  retryAfterMs,
+  listAgents,
+  waitAgent,
+  dumpRuns,
+  checkArtifactPath,
+  listArtifacts,
+  downloadArtifact,
+  agentUsage,
 } from "../../tools/ci/cursor-agents.mjs";
 
 const sse = (rows) => rows.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n`).join("\n");
@@ -88,8 +97,8 @@ function stub(...replies) {
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
     calls.push({ url: String(url), method: init.method, headers: init.headers, body: init.body ? JSON.parse(init.body) : undefined });
-    const [status, body] = replies.shift() ?? [500, { error: { code: "stub_empty", message: "no reply queued" } }];
-    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    const [status, body, headers = {}] = replies.shift() ?? [500, { error: { code: "stub_empty", message: "no reply queued" } }];
+    return new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
   };
   return calls;
 }
@@ -263,6 +272,176 @@ test("archive keeps the allow-list entry; delete forgets it", async () => {
     assert.deepEqual(await deleteAgent(ID, { file }), [`DELETED ${ID}`]);
     assert.deepEqual(readAllow(file), {});
     assert.deepEqual(calls.map((c) => c.method), ["POST", "DELETE"]);
+  } finally {
+    after();
+  }
+});
+
+// ---- gap fixes: dump 410, Retry-After, list paging, wait, artifacts, usage ---------------------------
+
+/** Replace the clock with a fake: sleep advances `now` and records the delay, no wall time passes. */
+function fakeClock() {
+  const real = { sleep: clock.sleep, now: clock.now };
+  const t = { now: 1_000_000, slept: [] };
+  clock.now = () => t.now;
+  clock.sleep = async (ms) => {
+    t.slept.push(ms);
+    t.now += ms;
+  };
+  t.restore = () => Object.assign(clock, real);
+  return t;
+}
+const tmpDir = () => fs.mkdtempSync(path.join(os.tmpdir(), "cursor-agents-"));
+
+test("dump skips a 410 stream_expired, counts it, and keeps going", async () => {
+  const dir = tmpDir();
+  const calls = stub(
+    [200, { items: [{ id: "run-aaaaaaaa", status: "FINISHED" }, { id: "run-bbbbbbbb", status: "FINISHED" }] }],
+    [410, err("stream_expired")],
+    [200, "event: status\ndata: {}\n\n"],
+  );
+  try {
+    const line = await dumpRuns([ID], dir, { gapMs: 0 });
+    assert.equal(calls.length, 3);
+    assert.ok(/ written=1 skipped=0 expired=1$/.test(line));
+    assert.equal(fs.readdirSync(dir).length, 1);
+    stub([200, { items: [{ id: "run-cccccccc", status: "FINISHED" }] }], [403, err("forbidden")]);
+    await assert.rejects(dumpRuns([ID], dir, { gapMs: 0 }), /HTTP 403/);
+  } finally {
+    after();
+  }
+});
+
+test("retryAfterMs reads seconds and HTTP dates, falls back on garbage, and caps", () => {
+  const saved = process.env.APEX_CURSOR_BACKOFF_CAP_MS;
+  process.env.APEX_CURSOR_BACKOFF_CAP_MS = "80000";
+  try {
+    assert.equal(retryAfterMs("7", 0, 0), 7000);
+    assert.equal(retryAfterMs(" 1.5 ", 3, 0), 1500);
+    assert.equal(retryAfterMs(new Date(10_000 + 30_000).toUTCString(), 0, 10_000), 30000);
+    assert.equal(retryAfterMs("garbage", 2, 0), 20000);
+    assert.equal(retryAfterMs(null, 1, 0), 10000);
+    assert.equal(retryAfterMs(new Date(0).toUTCString(), 0, 60_000), 5000, "a past date is invalid, so exponential");
+    assert.equal(retryAfterMs("3600", 0, 0), 80000, "capped");
+    assert.equal(retryAfterMs(null, 9, 0), 80000);
+    process.env.APEX_CURSOR_BACKOFF_CAP_MS = "2000";
+    assert.equal(retryAfterMs("30", 0, 0), 2000);
+  } finally {
+    if (saved === undefined) delete process.env.APEX_CURSOR_BACKOFF_CAP_MS;
+    else process.env.APEX_CURSOR_BACKOFF_CAP_MS = saved;
+  }
+});
+
+test("a 429 with Retry-After sleeps that long, not the exponential default", async () => {
+  const saved = process.env.APEX_CURSOR_BACKOFF_CAP_MS;
+  process.env.APEX_CURSOR_BACKOFF_CAP_MS = "80000";
+  const t = fakeClock();
+  const calls = stub([429, err("rate_limited"), { "retry-after": "3" }], [429, err("rate_limited")], [200, { items: [] }]);
+  try {
+    await listAgents(5);
+    assert.equal(calls.length, 3);
+    assert.deepEqual(t.slept, [3000, 10000]);
+  } finally {
+    t.restore();
+    after();
+    process.env.APEX_CURSOR_BACKOFF_CAP_MS = saved;
+  }
+});
+
+test("list pages 150 items across two pages and passes prUrl / includeArchived", async () => {
+  const mk = (from, n) => Array.from({ length: n }, (_, i) => ({ id: `a${from + i}` }));
+  let calls = stub([200, { items: mk(0, 100), nextCursor: "cur-1" }], [200, { items: mk(100, 50) }]);
+  try {
+    const out = await listAgents(150);
+    assert.equal(out.length, 150);
+    assert.equal(calls.length, 2);
+    const u0 = new URL(calls[0].url);
+    const u1 = new URL(calls[1].url);
+    assert.equal(u0.searchParams.get("limit"), "100");
+    assert.equal(u0.searchParams.get("cursor"), null);
+    assert.equal(u1.searchParams.get("limit"), "50");
+    assert.equal(u1.searchParams.get("cursor"), "cur-1");
+    calls = stub([200, { items: [{ id: "x" }] }]);
+    await listAgents(20, { prUrl: "https://github.com/o/r/pull/9", includeArchived: true });
+    const u = new URL(calls[0].url);
+    assert.equal(u.searchParams.get("prUrl"), "https://github.com/o/r/pull/9");
+    assert.equal(u.searchParams.get("includeArchived"), "true");
+    calls = stub([200, { items: [{ id: "x" }] }]);
+    await listAgents(20);
+    assert.equal(new URL(calls[0].url).searchParams.get("prUrl"), null);
+    assert.equal(new URL(calls[0].url).searchParams.get("includeArchived"), null);
+  } finally {
+    after();
+  }
+});
+
+test("wait returns at once on IDLE, maps CANCELLED to exit 1, and times out with 124", async () => {
+  const t = fakeClock();
+  try {
+    stub([200, { id: ID, status: "IDLE", latestRunId: "run-1" }], [200, { items: [{ id: "run-1", status: "FINISHED" }] }]);
+    assert.deepEqual(await waitAgent(ID), { code: 0, line: `WAIT ${ID} IDLE run=run-1 last=FINISHED` });
+    assert.deepEqual(t.slept, []);
+    stub([200, { id: ID, status: "ACTIVE" }], [200, { id: ID, status: "IDLE", latestRunId: "run-2" }], [200, { items: [{ id: "run-2", status: "CANCELLED" }] }]);
+    const w = await waitAgent(ID, { intervalS: 5 });
+    assert.equal(w.code, 1);
+    assert.equal(w.line, `WAIT ${ID} IDLE run=run-2 last=CANCELLED`);
+    assert.deepEqual(t.slept, [5000]);
+    t.slept.length = 0;
+    const calls = stub(...Array.from({ length: 50 }, () => [200, { id: ID, status: "ACTIVE", latestRunId: "run-3" }]));
+    const to = await waitAgent(ID, { timeoutS: 12, intervalS: 5 });
+    assert.equal(to.code, 124);
+    assert.ok(to.line.startsWith(`WAIT ${ID} TIMEOUT `));
+    assert.equal(calls.length, 3);
+    assert.equal(t.slept.reduce((a, b) => a + b, 0), 10000);
+  } finally {
+    t.restore();
+    after();
+  }
+});
+
+test("artifact paths: traversal and absolute paths are refused with zero requests", async () => {
+  const calls = stub();
+  try {
+    for (const bad of ["../x", "artifacts/../../etc/passwd", "/etc/passwd", "artifacts", "artifacts/", "other/x.png", "artifacts//x", "artifacts/./x", "artifacts\\x", "", undefined]) {
+      await assert.rejects(downloadArtifact(ID, bad, tmpDir()), /artifact path/, String(bad));
+    }
+    assert.equal(calls.length, 0);
+    assert.equal(checkArtifactPath("artifacts/a/b.png"), "artifacts/a/b.png");
+  } finally {
+    after();
+  }
+});
+
+test("artifacts lists typed rows; artifact downloads via the presigned URL with no Authorization header", async () => {
+  const out = tmpDir();
+  try {
+    stub([200, { items: [{ path: "artifacts/a.txt", sizeBytes: 5, updatedAt: "2026-10-20T00:00:00Z" }] }]);
+    assert.deepEqual(await listArtifacts(ID), [`ARTIFACT ${ID} artifacts/a.txt 5 2026-10-20T00:00:00Z`]);
+    const calls = stub([200, { url: "https://s3.example/presigned?sig=1", expiresAt: "x" }], [200, "hello"]);
+    const lines = await downloadArtifact(ID, "artifacts/dir/a.txt", out);
+    assert.equal(calls.length, 2);
+    assert.ok(calls[0].url.endsWith(`/v1/agents/${ID}/artifacts/download?path=artifacts%2Fdir%2Fa.txt`));
+    assert.equal(calls[0].headers.Authorization, `Bearer ${KEY}`);
+    assert.equal(calls[1].url, "https://s3.example/presigned?sig=1");
+    assert.equal(calls[1].headers?.Authorization, undefined);
+    assert.equal(fs.readFileSync(path.join(out, ID.slice(-8), "dir", "a.txt"), "utf8"), "hello");
+    assert.ok(/^SAVED .*a\.txt 5$/.test(lines[0]));
+    assert.ok(!lines[0].includes(KEY));
+  } finally {
+    after();
+  }
+});
+
+test("usage prints token totals, types 403 feature_unavailable, and throws other errors", async () => {
+  try {
+    stub([200, { totalUsage: { totalTokens: 36170 }, runs: [{ id: "r1" }, { id: "r2" }] }]);
+    assert.equal((await agentUsage(ID))[0], `USAGE ${ID} tokens=36170 chargedCents=0 runs=2`);
+    stub([200, { totalUsage: { totalTokens: 0, chargedCents: 12 }, runs: [] }]);
+    assert.equal((await agentUsage(ID))[0], `USAGE ${ID} tokens=0 chargedCents=12 runs=0`);
+    stub([403, err("feature_unavailable")]);
+    assert.deepEqual(await agentUsage(ID), [`USAGE ${ID} UNAVAILABLE`]);
+    stub([403, err("forbidden")]);
+    await assert.rejects(agentUsage(ID), /forbidden/);
   } finally {
     after();
   }
