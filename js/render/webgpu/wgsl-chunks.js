@@ -779,7 +779,7 @@ struct VSOut {
 fn vs_main(
   @builtin(vertex_index) vid : u32,
   @location(0) aPos : vec3<f32>,
-  @location(1) aNrm : vec3<f32>,
+  @location(1) aNrm : vec4<f32>,
   @location(2) aCol : vec3<f32>,
   @location(5) aInst0 : vec4<f32>,
   @location(6) aInst1 : vec4<f32>,
@@ -814,8 +814,11 @@ fn vs_main(
   // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
   // fight and then buried cars, AI, and fence feet in the tarmac.
   o.trk = pulled.yzw;           // s, x, hw — vec3 at location 3
-  o.matId = pulled.x;
-  o.nrm  = nm * aNrm;
+  // Integer car ids travel in normal.w, independent of indexed vertex_index.
+  // Non-car meshes keep the authored storage/LUT path, including FLAG fractions.
+  let packedCarId = floor(aNrm.w * (32767.0 / 256.0) + 0.5);
+  o.matId = select(pulled.x, packedCarId, packedCarId >= 20.0 && packedCarId <= 85.0);
+  o.nrm  = nm * aNrm.xyz;
   o.col  = col;
   o.wpos = wp.xyz;
   o.objPos = aPos;              // object space: paint flake / orange-peel (GLX vObjPos)
@@ -922,7 +925,11 @@ fn lampContrib(Lt : Light, isShadowLamp : bool, wpos : vec3<f32>, N : vec3<f32>,
 fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f32> {
   // Screen-space derivatives MUST be computed in uniform control flow at the top level
   // before any branching or early exit.
-  let fwWpos = abs(dpdx(in.wpos)) + abs(dpdy(in.wpos));
+  // Hammered cotangent inputs: every derivative precedes divergent flow.
+  let hmUV = in.objPos.xz + in.objPos.y * vec2<f32>(0.73, -0.61);
+  let hmDP1 = dpdx(in.wpos); let hmDP2 = dpdy(in.wpos);
+  let hmDUV1 = dpdx(hmUV); let hmDUV2 = dpdy(hmUV);
+  let fwWpos = abs(hmDP1) + abs(hmDP2);
   let fwTrkAttr = abs(dpdx(in.trk)) + abs(dpdy(in.trk));
   let isRoadDraw = D.mat2.z > 15.5 && D.mat2.z < 16.5;
   // Only road (markings, asphalt/verge) and buryRibbon draws consume the
@@ -1075,6 +1082,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let mirrorSurface = surfaceId == 27 || tintedSurface || goldSurface;
   let forgedSurface = surfaceId == 38;
   let gunSurface = surfaceId == 39;
+  // EXPANDED FINISHES: independent surface identities; no new material resources.
+  let holoSurface = surfaceId == 41;
+  let velvetSurface = surfaceId == 42;
+  let hammerSurface = surfaceId == 43;
+  let anodSurface = surfaceId == 44;
+  // END EXPANDED FINISHES
   // Three more livery finishes, mirroring js/render/glx/shaders/glsl-lit.js. A finish
   // costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE remaps a painted
   // vertex. Carbon needs no id — 21 already exists and the finish points at it.
@@ -1110,7 +1123,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
   // clearcoat, but a DIELECTRIC env response, not chrome — see baseRefl below.
   let visorSurface = surfaceId == 32;
-  let paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface || forgedSurface || gunSurface;
+  let paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface || forgedSurface || gunSurface || holoSurface || hammerSurface || anodSurface;
   if (classifiedCar) {
     if (paintLike) {
       carPaint = D.mat1.w;
@@ -1129,6 +1142,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       if (carbonSurface || carbonFinish) { clearcoat = min(D.mat1.z, 0.42); }
     }
   }
+  // EXPANDED FINISHES: only the newly classified surfaces take these coats.
+  if (holoSurface) { clearcoat = max(D.mat1.z, 0.80); }
+  if (velvetSurface) { clearcoat = 0.0; }
+  if (hammerSurface) { clearcoat = min(D.mat1.z, 0.15); }
+  if (anodSurface) { clearcoat = min(D.mat1.z, 0.08); }
+  // END EXPANDED FINISHES
   let envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;
 
   // [Block 1a] Ground/terrain detail MICRO-NORMAL (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js).
@@ -1171,6 +1190,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let wB = cross(N, wT);
     N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.26);
   }
+  // EXPANDED FINISHES: smooth object-space dimples; no derivative after divergent flow.
+  if (hammerSurface) {
+    N = Ngeo;
+    let hmF = clamp(1.0 - (vDist - 8.0) / 14.0, 0.0, 1.0);
+    if (hmF > 0.0) {
+      let hmP = (in.objPos.xz + in.objPos.y * vec2<f32>(0.73, -0.61)) * 90.0;
+      let hmT = sin(hmP + sin(hmP.yx * 0.73) * 0.80);
+      let hmC1 = cross(hmDP2, Ngeo); let hmC2 = cross(Ngeo, hmDP1);
+      let hmU = hmC1 * hmDUV1.x + hmC2 * hmDUV2.x;
+      let hmV = hmC1 * hmDUV1.y + hmC2 * hmDUV2.y;
+      let hmOrient = select(1.0, -1.0, dot(hmDP1, hmC1) < 0.0);
+      let hmScale = hmOrient / sqrt(max(max(dot(hmU, hmU), dot(hmV, hmV)), 1e-12));
+      let hmTilt = (hmU * hmT.x + hmV * hmT.y) * hmScale;
+      N = normalize(Ngeo + hmTilt * (0.42 * hmF));
+    }
+  }
+  // END EXPANDED FINISHES
   // Wall/MAT bump AFTER detail + peel, matching GLX glsl-lit.js. Lighting
   // still uses the bumped N; SAA does not (Nsaa / geo+peel mix).
   // The baked normal map composes on top with its OWN fade (GLX/TLX call it
@@ -1207,6 +1243,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (matteSurface) { metalness = 0.0; }
     if (forgedSurface) { metalness = 0.08; specular = 0.48; }
     if (gunSurface) { metalness = max(D.mat0.w, 0.85); specular = 0.90; }
+    // EXPANDED FINISHES: pin independent optical responses.
+    if (holoSurface) { metalness = 0.35; specular = 0.90; }
+    if (velvetSurface) { metalness = 0.0; specular = 0.08; }
+    if (hammerSurface) { metalness = 0.90; specular = 0.90; }
+    if (anodSurface) { metalness = 0.90; specular = 0.90; }
+    // END EXPANDED FINISHES
     if (rubberSurface) { specular = 0.18; }
     if (sidewallSurface) { specular = 0.35; }
     if (metalSurface || mirrorSurface) { specular = 1.0; }
@@ -1229,6 +1271,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (iriSurface) { rough = min(rough, 0.22); }
     if (forgedSurface) { rough = clamp(rough, 0.28, 0.42) + (fgM - 0.667) * 0.20; }
     if (gunSurface) { rough = clamp(rough, 0.16, 0.28); }
+    // EXPANDED FINISHES: distinct narrow-coat, fabric and satin-metal lobes.
+    if (holoSurface) { rough = 0.18; }
+    if (velvetSurface) { rough = max(rough, 0.96); }
+    if (hammerSurface) { rough = clamp(rough, 0.24, 0.36); }
+    if (anodSurface) { rough = clamp(rough, 0.30, 0.42); }
+    // END EXPANDED FINISHES
   }
   // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js):
   // coarse+fine value-noise grain + repair-patch tint/roughness + sparse crack lines.
@@ -1290,6 +1338,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   } else if (goldSurface) {
     albedo = vec3<f32>(0.83, 0.65, 0.23);
   }
+  // EXPANDED FINISHES: diffuse fabric absorption and bright anodised pigment.
+  if (velvetSurface) { albedo = albedo * 0.65; }
+  if (anodSurface) {
+    let anHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+    albedo = anHue * 0.78 + albedo * 0.22;
+  }
+  // END EXPANDED FINISHES
   if (finishId == 74) { albedo = vec3<f32>(0.012, 0.012, 0.012); }   // JPS GOLD: gloss black, set before lighting
   if (finishId == 84) { albedo = vec3<f32>(0.016, 0.007, 0.030); }   // MIDNIGHT PURPLE: own violet base
   var chamFlip = 0.0;
@@ -1420,7 +1475,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // keyed; the dull surfaces darken a little and gain a little gloss and a
   // water-film f0. No puddles, no ripples, wetSheen stays 0.
   if (wetness > 0.001 && classifiedCar) {
-    if (carbonSurface || carbonFinish || rubberSurface || sidewallSurface || matteSurface || panelSurface) {
+    if (carbonSurface || carbonFinish || rubberSurface || sidewallSurface || matteSurface || panelSurface || velvetSurface) {
       albedo = albedo * (1.0 - 0.20 * wetness);
       rough = rough * (1.0 - 0.25 * wetness);
       a = rough * rough;
@@ -1814,7 +1869,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // the block above drops with (1 - metalness) — env x Schlick(NoV, F0 = albedo)
   // x metalness; sky/ground split + live probe exactly as the lacquer's envCC
   // (same -y probe read), x ccTrans under a lacquer. No sun disc: GGX owns it.
-  if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface) {
+  if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface || hammerSurface || anodSurface) {
     let Rm = reflect(-V, N);
     let skyM = mix(F.skyHorizon.xyz * 1.2, F.skyZenith.xyz, sqrt(max(Rm.y, 0.0)));
     var envMet = mix(F.ambGround.xyz * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
@@ -1834,6 +1889,22 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
   if (goldSurface) { color = color * vec3<f32>(1.0, 0.78, 0.27); }   // GOLD PLATE: lit terms take the fixed gold hue
   if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
+  // EXPANDED FINISHES: responses use existing light, never emit their own.
+  if (holoSurface) {
+    let hoF = clamp(1.0 - NoV, 0.0, 1.0);
+    let hoS = vec3<f32>(0.5) + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + vec3<f32>(hoF * 1.65)));
+    let hoPeak = max(max(max(color.r, color.g), color.b), 0.0);
+    color = mix(color, hoPeak * (vec3<f32>(0.25) + 0.75 * hoS), vec3<f32>(mix(0.28, 0.85, smoothstep(0.05, 0.60, hoF))));
+  }
+  if (velvetSurface) {
+    let veF = clamp(1.0 - NoV, 0.0, 1.0);
+    color = color * (1.0 + veF * veF * 1.50);
+  }
+  if (anodSurface) {
+    let anHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+    color = color * mix(vec3<f32>(1.0), anHue, vec3<f32>(0.72));
+  }
+  // END EXPANDED FINISHES
   // FINISH TINTS 60-85 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells). carFinish draws only.
   if (D.mat3.z > 0.5 && finishId >= 60 && finishId <= 85) {
     let pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
