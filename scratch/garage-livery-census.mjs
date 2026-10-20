@@ -28,6 +28,9 @@ function installCounters(){
   wrap(window.WebGL2RenderingContext?.prototype,['compileShader','linkProgram','texImage2D','texSubImage2D','texImage3D','texSubImage3D','texStorage2D','texStorage3D','generateMipmap','bufferData','bufferSubData'],'gl.');
   wrap(window.GPUQueue?.prototype,['writeTexture','copyExternalImageToTexture','writeBuffer'],'gpu.');
   wrap(window.GPUDevice?.prototype,['createBindGroup','createSampler'],'gpu.');
+  // Who binds a context on #game (a canvas keeps its first context type for life; MDN getContext).
+  const gc=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type){const r=gc.apply(this,arguments);
+    if(this.id==='game'||this.id==='game-soft'){const k=this.id+':'+type+':'+(r?'ok':'null');if(!c['ctx.'+k]){console.warn('[ctxprobe gfx] '+k+' @'+performance.now().toFixed(0)+' '+(new Error().stack||'').split('\n').slice(2,9).map(l=>l.trim()).join(' | '));}bump('ctx.'+k);}return r;};
   const longs=[];
   try{new PerformanceObserver(l=>{for(const e of l.getEntries())longs.push([e.startTime,e.duration]);}).observe({type:'longtask',buffered:true});}catch(_){}
   window.__livCount={read:()=>({...c}),longs};
@@ -90,7 +93,7 @@ try{
     const row={arm,pageErrors:[],consoleErrors:[],gfxLog:[],edits:[]};report.arms.push(row);save();log(`${arm} boot`);
     const ctx=await browser.newContext({viewport:report.viewport,deviceScaleFactor:1,hasTouch:true,reducedMotion:'reduce'});
     try{
-      const page=await ctx.newPage();page.on('pageerror',e=>row.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')row.consoleErrors.push(m.text().slice(0,300));else if(/gfx|TLX|WebGPU|reload|device/i.test(m.text())&&row.gfxLog.length<80)row.gfxLog.push(m.type()+' '+m.text().slice(0,240));});
+      const page=await ctx.newPage();page.on('pageerror',e=>row.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')row.consoleErrors.push(m.text().slice(0,300));else if((m.type()==='warning'||/gfx|TLX|WebGPU|reload|device|lost/i.test(m.text()))&&!/experimental on this platform/.test(m.text())&&row.gfxLog.length<200)row.gfxLog.push(m.type()+' '+m.text().slice(0,/ctxprobe/.test(m.text())?1200:240));});
       await installProbeInit(page,{backend:'three',team:2,tlxForceGL:forceGL==='1'});
       await page.addInitScript(fgl=>{window.__TEST_MODE=true;localStorage.setItem('apex26.tlxForceGL',fgl);localStorage.setItem('apex26.wgxCapture','0');sessionStorage.setItem('apex26.wgxCapture','0');localStorage.setItem('apex26.gfxBootStepMs','45000');},forceGL);
       await page.addInitScript(installGarageGpuAllocationProbe);await page.addInitScript(installCounters);await page.addInitScript(installPageCounters);
@@ -104,7 +107,7 @@ try{
       await page.locator('#mb-garage').click();
       await page.waitForFunction(()=>!document.querySelector('#carsetup').hasAttribute('aria-busy')&&document.querySelector('#cs-tabs [data-cs-cat="livery"]'),null,{polling:100,timeout:120000});
       const s1=await snapshot(page);row.entry={ms:+(s1.t-tIn).toFixed(0),delta:delta(s0.calls,s1.calls),alloc:delta(s0.alloc,s1.alloc),memory:s1.memory,programs:s1.programs};
-      row.backend=await page.evaluate(()=>__apex.diag({download:false}).env.backendState);log(`${arm} garage open ${JSON.stringify(row.backend)}`);
+      row.backend=await page.evaluate(()=>GLX.backendState()); // NOT __apex.diag(): its GL sniff binds an unconfigured #game to webgl2 (apex.js diag)log(`${arm} garage open ${JSON.stringify(row.backend)}`);
       await page.waitForTimeout(3000);
       const i0=await snapshot(page);await page.waitForTimeout(IDLE_MS);const i1=await snapshot(page);
       row.idleGarage={...await windowStats(page,i0.t,i1.t),delta:delta(i0.calls,i1.calls)};
@@ -134,7 +137,7 @@ try{
       const p0=await snapshot(page);await page.waitForTimeout(IDLE_MS);const p1=await snapshot(page);row.idleAfter={...await windowStats(page,p0.t,p1.t),delta:delta(p0.calls,p1.calls)};
       await page.screenshot({path:`game-livery-${arm}.png`,timeout:60000}).catch(()=>{});
       row.ok=!row.pageErrors.length;save();log(`${arm} done`);
-    }catch(e){row.error=String(e.stack||e);save();log(`${arm} FAILED ${row.error}`);}finally{await ctx.close();}
+    }catch(e){row.error=String(e.stack||e);save();log(`${arm} FAILED ${row.error}`);}finally{await Promise.race([ctx.close(),new Promise(r=>setTimeout(r,20000))]);}
   }
   report.ok=report.arms.every(r=>r.ok);report.finished=new Date().toISOString();save();
 }catch(e){report.ok=false;report.error=String(e.stack||e);save();console.error(report.error);process.exitCode=1;}finally{await shutdown();}
