@@ -50,11 +50,11 @@ test("the catalog census is what the rest of this file assumes", () => {
   assert.equal(M.Parts.CATALOG.length, 12);
   const all = M.Parts.CATALOG.flatMap((c) => c.options);
   // 297 → 321 on 2026-10-18: 24 STYLE reskins, two per category (js/car/parts.js STYLES).
-  // 321 → 334 on 2026-10-19 (design integration): 5 D4 STYLE rows (wheels/brakes/cockpit)
-  // and 8 D6 STYLE rows (4 tyres, 4 exhaust).
-  assert.equal(all.length, 334);
+  // 321 → 340 on 2026-10-19 (design integration): 5 D4 STYLE rows (wheels/brakes/cockpit),
+  // 8 D6 STYLE rows (4 tyres, 4 exhaust) and 6 D3 STYLE rows (5 aero, 1 floor).
+  assert.equal(all.length, 340);
   assert.equal(all.filter((o) => o.tag === "SIGNATURE").length, 128);
-  assert.equal(all.filter((o) => o.tag === "STYLE").length, 37);
+  assert.equal(all.filter((o) => o.tag === "STYLE").length, 43);
 });
 
 test("a SIGNATURE or STYLE option is a pure reskin: same cost, same four stat multipliers", () => {

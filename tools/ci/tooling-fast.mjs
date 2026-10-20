@@ -80,6 +80,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 2026 aero defaults for catalog options that omit beam/drs/board (item 4).
   "tests/unit/aero-defaults-2026.test.mjs",
   "tests/unit/aero-flap-travel.test.mjs",
+  // B·D3 design-preview aero/floor fields: reach the mesh, default off.
+  "tests/unit/aero-preview-fields.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via

@@ -45,7 +45,7 @@
 //                         twelve sheets to open side by side; this is one.
 //   --livery=mcl_gulf     livery id (js/car/liveries.js). Default: team default
 //   --num=4               driver number override
-//   --engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=
+//   --engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel= --exhaust= --floor= --cockpit= --wheels=
 //                         force a part option id (see js/car/parts.js) to inspect its look
 //   --tod=day             day|dusk|dawn|night|void. Default: day (per-shot presets may override)
 //   --rig=3point          lighting rig: studio|3point|rim|topdown|none (reflection tests)
@@ -301,7 +301,7 @@ const EXE    = chromiumPath();
 // present a frame. These were fixed 15 s and aborted the whole sheet.
 const WAIT_MS = Math.max(15_000, (parseFloat(arg('wait', '90')) || 90) * 1000);
 
-const PART_CATS = ['engine', 'aero', 'brakes', 'gearbox', 'ers', 'tyres', 'suspension', 'fuel'];
+const PART_CATS = ['engine', 'aero', 'brakes', 'gearbox', 'ers', 'tyres', 'suspension', 'fuel', 'exhaust', 'floor', 'cockpit', 'wheels'];
 const parts = {};
 for (const c of PART_CATS) if (arg(c, null) != null) parts[c] = arg(c, null);
 

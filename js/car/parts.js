@@ -650,8 +650,8 @@ const Parts = (function () {
     // so Full Disc does not inherit dished's floating over-wheel winglets.
     ["wheels", "dished", "style_wheels_fulldisc", "Full Disc", "closed disc cover with a deep dish and a bright rim",
       { cover: 1, coverVanes: 0, spokes: 0, dish: 2, tape: 1, deflector: 0, gunNut: 1, nut: [0.85, 0.12, 0.10], rim: [0.92, 0.92, 0.94] }],
-    // PREVIEW candidates (B·D4 design preview, 2026-10-19; throwaway branch):
-    // each turns on one opt-in field the shipped grid never sets.
+    // B·D4 wheels/brakes/mirrors (2026-10-19): each turns on one opt-in field
+    // the shipped grid never sets.
     ["wheels", "mag_forged", "style_wheels_ysplit", "Y-Split Mag", "five Y-split spokes, ten tips at the lip (BBS 18-inch mag, 2022+)",
       { spokes: 5, spokeSplit: 1, dish: 1, tape: 0, deflector: 0, gunNut: 1, nut: [0.85, 0.72, 0.10] }],
     ["wheels", "open_spoke", "style_wheels_blownaxle", "Blown Axle", "hollow axle bore instead of a nut (Mercedes W11, 2020)",
@@ -662,6 +662,20 @@ const Parts = (function () {
       { mirrorMount: 1, mirror: 1 }],
     ["cockpit", "deflector", "style_cockpit_mirrorframe", "Framed Mirrors", "boxed aero frame round each mirror (Ferrari SF90 / Red Bull RB16)",
       { mirrorFrame: 1, mirror: 1.1 }],
+    // B·D3 period aero (2026-10-19): one opt-in mesh field each (rwSpoon, beam2,
+    // monkey, fwBridge, xwing, ddiff) on top of the equivalent's full recipe.
+    ["aero", "low", "style_aero_rwspoon", "F1-75 Spoon", "2022 spoon rear wing (Ferrari F1-75, RB18 low-drag)",
+      {rwSpoon: 1, lvl: 1, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.03, frontTaper: 0.96, frontRise: 0.02, rearSweep: 0.04, rearTaper: 0.94, floorEdge: 0.88, floorCut: 0.06, diffuserRise: 0.82, fin: 0.8}],
+    ["aero", "high", "style_aero_beamtwin", "Twin Beam Wing", "2022-25 two-element beam wing (RB19)",
+      {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}],
+    ["aero", "extreme", "style_aero_monkey", "Monkey Seat", "2014-16 monkey-seat winglet (Mercedes W07)",
+      {monkey: 1, lvl: 4, vane: 3, beam: 0, drs: 1, board: 1, frontSweep: 0.12, frontTaper: 0.86, frontRise: 0.14, rearSweep: 0.12, rearTaper: 0.86, floorEdge: 1.18, floorCut: 0.16, diffuserRise: 1.3, fin: 1.42}],
+    ["aero", "medium", "style_aero_bridge", "Bridge Wing", "2008 bridge wing over the nose (McLaren MP4-23)",
+      {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }],
+    ["aero", "rake_setup", "style_aero_xwings", "X-Wings", "1997-98 sidepod X-wings (Tyrrell 025)",
+      {xwing: 1, lvl: 3, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.06, frontTaper: 0.94, frontRise: 0.07, rearSweep: 0.08, rearTaper: 0.94, floorEdge: 1.04, floorCut: 0.11, diffuserRise: 1.12, fin: 1.2}],
+    ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",
+      {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }],
   ];
   for (const [catId, eqId, id, label, look, visual] of STYLES) {
     const cat = CATALOG.find((c) => c.id === catId);
@@ -688,7 +702,9 @@ const Parts = (function () {
       aero: Object.freeze(["lvl", "beam", "drs", "vane", "plate", "casc", "swan", "tvane",
         "arch", "gill", "duct", "board", "slot",
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
-        "floorEdge", "floorCut", "diffuserRise", "fin"]),
+        "floorEdge", "floorCut", "diffuserRise", "fin",
+        // Design-preview (B·D3) opt-in fields: absent = shipped mesh.
+        "rwSpoon", "beam2", "monkey", "fwBridge", "xwing"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),
       // cover + coverVanes: opt-in covered face only (open rim is the default).
@@ -703,7 +719,7 @@ const Parts = (function () {
       fuel: Object.freeze(["filler", "hatch", "vent", "breather", "capBig"]),
       exhaust: Object.freeze(["pipes", "bore", "flare", "wastegate", "wrap",
         "lip", "shield", "stack", "heatTint", "gateStack", "hood"]),
-      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt"]),
+      floor: Object.freeze(["fences", "fenceH", "skid", "edgeLip", "plank", "gurney", "scroll", "skirt", "ddiff"]),
       cockpit: Object.freeze(["haloBlade", "haloWing", "camPods", "screen", "halo", "headrest", "mirror", "mirrorMount", "mirrorFrame"]),
       // cover: opt-in closed disc face (car-wheels useCover); not inferred from dish/spokes.
       // coverVanes: wheel-owned vane count on a covered face (0 = sealed Full Disc).

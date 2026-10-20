@@ -402,7 +402,7 @@ const CarWheels = (function () {
           }
         }
       }
-      // PREVIEW (B·D4, opt-in, default off): brakes `drum` — the 2017–21 carbon
+      // B·D4 (opt-in, default off): brakes `drum` — the 2017–21 carbon
       // "cake tin" round the disc. A carbon band at 0.80 rimR the width of the
       // barrel, closed on each face between the hub and the band, with 16 vent
       // slots near its rim and a foil lip at the OD — read through the spokes.
@@ -438,7 +438,7 @@ const CarWheels = (function () {
       // Open hub is smaller so the rotor shows through the spoke gaps; cover
       // keeps the wide boss that sat on the old dish floor.
       const hubFrac = useCover ? 0.46 : 0.22;
-      // PREVIEW (B·D4, opt-in, default off): blownAxle draws the 2017–21 hollow
+      // B·D4 (opt-in, default off): blownAxle draws the 2017–21 hollow
       // axle — a wide hub ring round a dark bore, no centre nut — on an open rim.
       const blownAxle = !useCover && !!(wheelStyle && wheelStyle.blownAxle);
       const spokeSplit = !!(wheelStyle && wheelStyle.spokeSplit);
