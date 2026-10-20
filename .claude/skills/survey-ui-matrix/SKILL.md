@@ -52,6 +52,11 @@ Flags (header of `layout-audit.mjs`): `--screens=a,b` / `--viewports=ios-*`
 `--jobs=N`, `--gallery`, `--screen=ID` + `--viewport=NAME`, `--force`, `--report`
 (summarize the last gallery), `--diff=` (below), `--out=DIR`.
 
+**Pseudo-locale stress:** pass `--lang=en-XA` on any layout-audit run (geometry,
+`--gallery`, or `--screen=`). The harness boots with `?lang=en-XA` so `I18n` expands
+strings via `js/core/i18n-pseudo.js` — use this when hunting clipping, truncation,
+and tap targets on longer labels before translating real locales.
+
 `--scale` takes a PERCENT (`--scale=125`; `1.25` throws). Viewports are catalog
 names only (`VIEWPORTS`, `menu-screens.mjs`; shortest is 852x344), so a free-form
 size such as 568x320 is `menu-fit.mjs 568x320 --scale=125` (its own 18 screens,

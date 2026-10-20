@@ -16,6 +16,7 @@ const {
   parseMenuGalleryArgv,
   pickScreens,
   SCREENS,
+  urlWithLang,
 } = await import("../../tools/ui/menu-capture.mjs");
 
 test("cellFileBase and cellPaths agree", () => {
@@ -63,9 +64,16 @@ test("layout-audit --help names gallery and survey", () => {
     encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stderr || r.stdout);
-  assert.match(r.stdout, /--gallery/);
-  assert.match(r.stdout, /--survey/);
-  assert.match(r.stdout, /--screen=/);
+  assert.ok(r.stdout.includes("--gallery"));
+  assert.ok(r.stdout.includes("--survey"));
+  assert.ok(r.stdout.includes("--screen="));
+  assert.ok(r.stdout.includes("--lang="));
+});
+
+test("urlWithLang appends lang query", () => {
+  assert.equal(urlWithLang("http://127.0.0.1:3456/", "en-XA"), "http://127.0.0.1:3456/?lang=en-XA");
+  assert.equal(urlWithLang("http://127.0.0.1:3456/?foo=1", "de"), "http://127.0.0.1:3456/?foo=1&lang=de");
+  assert.equal(urlWithLang("http://127.0.0.1:3456/", null), "http://127.0.0.1:3456/");
 });
 
 test('menu screenshot report renders responsive native screen navigation and DOM links', () => {
