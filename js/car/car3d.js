@@ -388,18 +388,31 @@ const Car3D = (function () {
       }
     }
 
+    // Floor edge rail: ONE loft along floorEdgeAt (was two spans + a z -0.45 joint box, outer face
+    // stepped 15-52 mm). Heights ease C1 from the z 0.78 to the -1.58 datums (flat to -0.15 like the
+    // old front span, then its rear rise); floorCut keeps its flare; behind z -1.15 it tucks with the
+    // rounded plate's tyre cut (CarShade.floor), soft-min'd, instead of running into the rear tyre.
+    const railS = (z) => { const d = Math.max(0, -0.15 - z);
+      return (0.0085 * (0.78 - z) + 0.0283 * (d < 0.6 ? d * d / 1.2 : d - 0.3)) / 0.052039; };
+    const railQ = (z, f, r) => f + (r - f) * railS(z), railFlare = floorX(0.54 + floorCut * 0.35) - floorEdgeAt(-1.58);
+    const railCap = (z) => { const u = Math.max(0, Math.min(1, (-1.15 - z) / 0.15));
+      return (u <= 0 ? 0.705 + (z + 1.15) : 0.555 + 0.15 * (1 - u * u * (3 - 2 * u))) - 0.025; };
+    const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
+    const railAt = (z) => ({ z, x: smin(floorEdgeAt(z) + railFlare * ((0.78 - z) / 2.36) ** 2, railCap(z), 0.04),
+      y: railQ(z, 0.108 + floorStepY, 0.150 + floorStepY * 0.25) + rideDY, w: railQ(z, 0.062, 0.040),
+      h: railQ(z, 0.048 + Math.max(0, floorStepY) * 0.35, 0.068) });
+    const railN = ckpt ? 5 : 13, railZ = (i) => 0.78 - i * 2.36 / (railN - 1);   // onboard: keep its tri budget
+    const railTop = (z) => {   // the top AS MESHED (chords between stations): what the fences sit on
+      const f = Math.max(0, Math.min(railN - 1 - 1e-9, (0.78 - z) / 2.36 * (railN - 1))), i = Math.floor(f);
+      const a = railAt(railZ(i)), b = railAt(railZ(i + 1));
+      return a.y + a.h / 2 + (b.y + b.h / 2 - a.y - a.h / 2) * (f - i);
+    };
     zone("floor", () => { for (const side of [-1, 1]) {
-      addSpan(out,
-        { z: 0.78, x: side * floorX(0.69), y: 0.108 + rideDY + floorStepY, w: 0.062, h: 0.048 + Math.max(0, floorStepY) * 0.35 },
-        { z: -0.42 - floorCut, x: side * floorX(0.72), y: 0.114 + rideDY + floorStepY * 0.55, w: 0.052, h: 0.054 + Math.abs(floorStepY) * 0.25 },
-        CARBON, null, SURFACES.carbon);
-      addSpan(out,
-        { z: -0.48 + floorCut, x: side * floorX(0.70), y: 0.116 + rideDY + floorStepY * 0.45, w: 0.048, h: 0.052 },
-        { z: -1.58, x: side * floorX(0.54 + floorCut * 0.35),
-          y: 0.150 + rideDY + floorStepY * 0.25, w: 0.040, h: 0.068 },
-        CARBON, null, SURFACES.carbon);
-      addBox(out, side * floorX(0.71), 0.128 + rideDY + floorStepY * 0.5, -0.45,
-             0.038, 0.016 + Math.abs(floorStepY) * 0.4, 0.058, CARBON, SURFACES.carbon);
+      addStationLoft(out, Array.from({ length: railN }, (_, i) => {
+        const r = railAt(railZ(i)), x = side * r.x;
+        return [[x - r.w / 2, r.y - r.h / 2, r.z], [x + r.w / 2, r.y - r.h / 2, r.z],
+                [x + r.w / 2, r.y + r.h / 2, r.z], [x - r.w / 2, r.y + r.h / 2, r.z]];
+      }), CARBON, null, SURFACES.carbon);
     } });
     // 2026 floor leading-edge devices — up to five vortex teeth across the
     // width (motorsport.tech Issue-12). Chase only: they sit under the nose
@@ -846,22 +859,22 @@ const Car3D = (function () {
         const frac = 0.28 + 0.30 * Math.max(0, Math.min(1, (fenceH - 1.0) / 1.25));
         return pod.bottom + frac * (pod.top - pod.bottom);
       };
-      const fenceFit = (y, h, cap) => {
-        const top = y + h * 0.5;
-        if (top <= cap) return { y, h };
-        const room = Math.max(0.018, cap - (y - h * 0.5));
-        return { y: cap - room * 0.5, h: room };
-      };
+      // One capped top line for the row (each fence capped itself off the stepped pod bottom: a
+      // 99-210 mm staircase of square ends), straight nose-to-tail and dropped under every cap.
+      const fz0 = 0.515, fz1 = 0.325 - (fenceN - 1) * fenceStep;
+      const capLine = (z) => fenceCap(fz0) + (fenceCap(fz1) - fenceCap(fz0)) * (fz0 - z) / (fz0 - fz1);
+      let capDrop = 0;
+      for (let i = 0; i < fenceN; i++) for (const dz of [0.095, 0, -0.095]) capDrop = Math.max(capDrop, capLine(0.42 - i * fenceStep + dz) - fenceCap(0.42 - i * fenceStep + dz));
+      const fenceTop = (z) => Math.max(railTop(z) + 0.018, Math.min(0.160 + rideDY + 0.132 * fenceH, capLine(z) - capDrop));
       zone("floor", () => { for (let i = 0; i < fenceN; i++) {
         const fz = 0.42 - i * fenceStep;
-        const ex = floorEdgeAt(fz);
-        const cap = fenceCap(fz);
-        const a = fenceFit(0.152 + rideDY + 0.058 * fenceH, 0.132 * fenceH, cap);
-        const b = fenceFit(0.168 + rideDY + 0.062 * fenceH, 0.145 * fenceH, cap);
-        addSpan(out,
-          { z: fz + 0.095, x: s * (ex + 0.014), y: a.y, w: 0.028, h: a.h },
-          { z: fz - 0.095, x: s * (ex + 0.038), y: b.y, w: 0.022, h: b.h },
-          CARBON);
+        // Seated on the rail, raked up over 85 mm and chamfered down over 85 mm (≤ 70°); onboard: one block.
+        addStationLoft(out, (ckpt ? [[0.095, 1], [-0.095, 1]] : [[0.095, 0], [0.01, 1], [-0.01, 1], [-0.095, 0]]).map(([dz, k]) => {
+          const z = fz + dz, u = (0.095 - dz) / 0.19;
+          const r = railAt(z), w = 0.028 - 0.006 * u, x = s * (r.x + r.w / 2 + w / 2 - 0.008);
+          const yb = railTop(z) + 0.0006, yt = k ? fenceTop(z) : yb + 0.0005;   // overhangs the rail face by 8 mm
+          return [[x - w / 2, yb, z], [x + w / 2, yb, z], [x + w / 2, yt, z], [x - w / 2, yt, z]];
+        }), CARBON);
       } });
       const edgeLip = Math.max(0, Math.min(2, floorStyle.edgeLip || 0));
       if (edgeLip > 0) {
@@ -880,8 +893,8 @@ const Car3D = (function () {
           0.004, accentC, null, SURFACES.paint);
       }
       if (Math.round(floorStyle.gurney || 0) > 0) {
-        const er = floorEdgeAt(-1.10);
-        addBox(out, s * (er + 0.028 + 0.042 * Math.max(0, edgeLip)), 0.154 + rideDY, -1.12,
+        const er = railAt(-1.12).x;   // sits on the rail top, wherever the tyre tuck put it
+        addBox(out, s * (er + 0.012), railTop(-1.12) + 0.011, -1.12,
                0.026, 0.024, 0.014, CARBON, SURFACES.carbon);
       }
       if (Math.round(floorStyle.scroll || 0) > 0) {

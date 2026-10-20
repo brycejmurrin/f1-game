@@ -1203,7 +1203,7 @@ const CarBodyGeom = (function () {
     // decal are both sized in pod fractions, so they track it together.
     const waistTop = 0.42 + 0.10 * (shoulder - 1) + (sil ? inletH * 0.70 : 0);
     const waistOuterTop = 0.38 + 0.08 * (shoulder - 1) + (sil ? inletH * 0.55 : 0);
-    return [
+    const st = [
       { z: 0.62, inner: 0.30, outer: outerFront, innerBottom: inletFloor,
         outerBottom: 0.258 + 0.09 * (undercut - 1) + undercutD * 0.70,
         innerTop: 0.45 + inletBias + inletH, outerTop: 0.46 + inletBias * 0.6 + inletH * 0.85 },
@@ -1235,6 +1235,18 @@ const CarBodyGeom = (function () {
         innerTop: 0.30 + 0.05 * (shoulder - 1) + (sil ? inletH * 0.08 : 0),
         outerTop: 0.27 + (sil ? inletH * 0.05 : 0) },
     ];
+    // Ease the undercut's lower line: each inner station's outerBottom moves
+    // part-way onto the chord of its neighbours, so the belly no longer creases
+    // 5-9° at z 0.50 (two passes; the ends and the undercut gap stay).
+    for (let pass = 0; pass < 2; pass++) {
+      const ob = st.map((p) => p.outerBottom);
+      for (let i = 1; i < st.length - 1; i++) {
+        const a = st[i - 1], b = st[i + 1], k = (a.z - st[i].z) / (a.z - b.z);
+        const chord = ob[i - 1] + (ob[i + 1] - ob[i - 1]) * k;
+        st[i].outerBottom = Math.max(st[i].innerBottom + 0.004, ob[i] + (chord - ob[i]) * 0.6);
+      }
+    }
+    return st;
   }
 
   const _anchorCache = new WeakMap();

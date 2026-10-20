@@ -362,10 +362,13 @@ const CarShade = (function () {
     const zF = fl.cz + fl.sz / 2, zR = fl.cz - fl.sz / 2, y0 = cy - fl.sy / 2, y1 = cy + fl.sy / 2, R = 0.15, TYRE = 0.555;
     // Tyre cap eased (smoothstep) over z -1.15..-1.30 rather than a straight ramp, and
     // the plan sampled every 0.1 m, so the edge reads as one curve, not a polyline.
-    const cap = (z) => { const u = Math.max(0, Math.min(1, (-1.15 - z) / 0.15)); return u <= 0 ? Infinity : TYRE + 0.15 * (1 - u * u * (3 - 2 * u)); };
-    const hw = (z) => Math.min(edgeAt(z), cap(z)) - (z > zF - R ? R - Math.sqrt(Math.max(0, R * R - (z - zF + R) ** 2)) : 0);
+    const cap = (z) => { const u = Math.max(0, Math.min(1, (-1.15 - z) / 0.15)); return u <= 0 ? TYRE + 0.15 + (z + 1.15) : TYRE + 0.15 * (1 - u * u * (3 - 2 * u)); };   // ahead of the cap: a 45° lead-in, not a step
+    // Soft min (k 4 cm) where the cap meets the edge taper: a hard min left a notch.
+    const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
+    const hw = (z) => smin(edgeAt(z), cap(z), 0.04) - (z > zF - R ? R - Math.sqrt(Math.max(0, R * R - (z - zF + R) ** 2)) : 0);
     const zs = [0, 1, 2, 3, 4].map((k) => zF - R * (1 - Math.cos(k * Math.PI / 8)))
-      .concat(Array.from({ length: 35 }, (_, k) => Math.round((0.80 - k * 0.10) * 100) / 100), [-1.20, -1.25, zR])
+      .concat(Array.from({ length: 35 }, (_, k) => Math.round((0.80 - k * 0.10) * 100) / 100),
+              Array.from({ length: 9 }, (_, k) => Math.round((-1.125 - k * 0.025) * 1000) / 1000), [zR])
       .filter((z, i, a) => z <= zF && z >= zR && a.indexOf(z) === i);
     const S = zs.sort((a, b) => b - a).map((z) => [z, hw(z)]);
     const q = (a, b, c, d, want) => {   // a quad facing `want`
