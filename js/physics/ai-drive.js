@@ -681,7 +681,11 @@ const AiDrive = (function () {
       return side * lerp(0.7, 2.35, clamp(1 - gap / 14, 0, 1))
         * clamp(need / 2.3, 0, 1) * streetOtScale(t) * house;
     }
-    const pull = lerp(0.8, 2.6, Math.max(clamp(1 - gap / reach, 0, 1), tN))
+    // ...a full lane only as it closes (the yield's own band, TRAIL_NEAR_S..
+    // TRAIL_FAR_S): a full pull 25 m back put it 12 m off the yielder's line,
+    // out of the tow and off-line through every corner (silverstone SAI<STR).
+    const v = Math.max(ctx.speed || 0, 1), tNear = tN * clamp((TRAIL_FAR_S * v - gap) / ((TRAIL_FAR_S - TRAIL_NEAR_S) * v), 0, 1);
+    const pull = lerp(0.8, 2.6, Math.max(clamp(1 - gap / reach, 0, 1), tNear))
       * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, t.craft) * house;
     // ...on the ROAD: `need` measures to the run-off edge (hw + 5), and a full
     // trail pull with the yielder stepping the other way put the attacker

@@ -924,15 +924,15 @@ test("trailYield: past its patience the slower car lifts and lets the trailing c
   assert.ok(A.trailYieldCorner(60) > 0.92 && A.trailYieldCorner(60) < A.trailYieldCorner(16), "the corner deepens too, still mild");
 });
 
-test("trailYieldStep: the yield scales with how close the trailer is, and is gone past 1 s (#2356)", () => {
+test("trailYieldStep: the yield scales with how close the trailer is, and is gone past 1.2 s (#2356)", () => {
   const mk = (gap) => { const c = { prog: 1000, x: 0 }; const b = { prog: 1000 - gap, x: 0, speed: 50, trailT: 20, _trOf: c, passOf: null }; return [c, b]; };
-  let [c, b] = mk(20);   // 0.4 s back: full
+  let [c, b] = mk(25);   // 0.5 s back: full
   assert.equal(A.trailYieldStep(c, b, false), true);
-  assert.equal(c._trYT, 20, "within 0.5 s the whole trail time drives the lift");
-  [c, b] = mk(37.5);     // 0.75 s back: half
+  assert.equal(c._trYT, 20, "within 0.6 s the whole trail time drives the lift");
+  [c, b] = mk(45);       // 0.9 s back: half
   assert.equal(A.trailYieldStep(c, b, false), true);
-  assert.ok(Math.abs(c._trYT - 10) < 1e-9, "half way to 1 s: half the trail time");
-  [c, b] = mk(55);       // 1.1 s back: inside the trail window, but no yield
+  assert.ok(Math.abs(c._trYT - 10) < 1e-9, "half way to 1.2 s: half the trail time");
+  [c, b] = mk(62);       // 1.24 s back: no yield
   assert.equal(A.trailYieldStep(c, b, false), false);
   assert.equal(c._trYT, 0);
   [c, b] = mk(20);
