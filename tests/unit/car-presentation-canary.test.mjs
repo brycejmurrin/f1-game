@@ -147,7 +147,8 @@ test("the shadow passes and the race warm share one caster gate and key", () => 
   assert.match(sp, /deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\)/, "the pass fetches casters by (team, car, true)");
   assert.match(sp, /G\.gfx\.carShadowBegin && LT\.carShadow && PerfGov\.tier\(\) < 3/);
   assert.match(sp, /G\.gfx\.lampShadowBegin && LT\.lampShadow && PerfGov\.tier\(\) < 2/);
-  assert.match(cd, /gfx\.carShadowBegin && LT\.carShadow && tier < 3\) \|\| \(gfx\.lampShadowBegin && LT\.lampShadow && tier < 2\)/);
+  // The map gates in front (no map behind a Begin hook = a phone: nothing casts) are driven in car-presentation-vm.test.mjs.
+  assert.match(cd, /\(carMap && gfx\.carShadowBegin && LT\.carShadow && tier < 3\) \|\| \(lampMap && gfx\.lampShadowBegin && LT\.lampShadow && tier < 2\)/);
 });
 
 // The mirror's wheels share the main pass's material: TLX keys materials by

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# @doc Post-install MCP bootstrap: Playwright chrome channel symlink + apex-tools smoke (no Chromium).
+# @doc MCP bootstrap: Playwright chrome symlink, chrome-devtools clone, browser cache env, mcp-smoke (no Chromium).
 # @skill check-changes
 # Idempotent checks after cloud-agent-install / environment build. Exit 0 when
 # the repo MCP wrappers are callable; warns (does not fail the build) on optional
@@ -18,7 +18,8 @@ usage: bash tools/env/ensure-mcp-ready.sh [--strict] [--help]
 
 Playwright MCP expects the Chrome *channel* at /opt/google/chrome/chrome on
 some hosts; this script symlinks there from tools/lib/chromium-path.mjs when
-missing. Then runs tools/mcp/mcp-smoke.mjs (apex_status + wrapper status only).
+missing, clones chrome-devtools when egress allows, exports PLAYWRIGHT_BROWSERS_PATH,
+then runs tools/mcp/mcp-smoke.mjs (apex_status, wrapper status, js-debugger and apex-lsp list-tools).
 EOF
   exit 0
 fi
@@ -30,6 +31,34 @@ elif [[ -n "${1:-}" ]]; then
   echo "Unknown argument: $1 (use --help)" >&2
   exit 2
 fi
+
+ensure_chrome_devtools_clone() {
+  if [[ "${APEX_SKIP_CHROME_MCP_CLONE:-}" == "1" ]]; then
+    return 0
+  fi
+  local bin="$ROOT/scratch/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js"
+  if [[ -f "$bin" ]]; then
+    echo "chrome-devtools MCP clone: present"
+    return 0
+  fi
+  echo "chrome-devtools MCP clone: building (best-effort)…"
+  if bash "$ROOT/tools/mcp/chrome-devtools-mcp.sh" clone; then
+    echo "chrome-devtools MCP clone: OK"
+  else
+    echo "WARN: chrome-devtools clone failed; npx pin remains" >&2
+  fi
+}
+
+ensure_playwright_browser_cache_env() {
+  local cache=""
+  cache="$(node "$ROOT/tools/lib/chromium-path.mjs" --cache-path 2>/dev/null || true)"
+  if [[ -z "$cache" ]]; then
+    echo "WARN: no writable Playwright browser cache discovered" >&2
+    return 0
+  fi
+  export PLAYWRIGHT_BROWSERS_PATH="$cache"
+  echo "PLAYWRIGHT_BROWSERS_PATH=$cache"
+}
 
 ensure_google_chrome_channel() {
   local exe=""
@@ -83,6 +112,8 @@ run_mcp_smoke() {
 }
 
 mkdir -p "$ROOT/artifacts/logs"
+ensure_chrome_devtools_clone
+ensure_playwright_browser_cache_env
 ensure_google_chrome_channel
 
 fail=0

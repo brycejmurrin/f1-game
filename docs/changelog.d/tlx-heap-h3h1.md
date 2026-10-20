@@ -1,0 +1,1 @@
+Improved: phones no longer build the car shadow-caster meshes that only the desktop car and lamp shadow maps use. They were built for every car at race start (about 1.5 MB of geometry each, never drawn), so a phone race now loads faster and holds less memory.

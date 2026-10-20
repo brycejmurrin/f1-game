@@ -22,5 +22,11 @@
       "name": "apex-lsp",
       "command": "*bash*tools/mcp/lsp-mcp.sh serve"
     }
+  ],
+  "mcpPluginServerAllowlist": [
+    {
+      "name": "browser-use",
+      "command": "*uvx*browser-use*--cli-mcp*"
+    }
   ]
 }

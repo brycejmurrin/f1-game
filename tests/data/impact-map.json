@@ -2288,6 +2288,9 @@
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
+      "menuStepYield": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
       ],
@@ -2298,7 +2301,8 @@
       ],
       "prepareMenuCarAssets": [
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/menu-car-prep-yield.test.mjs"
       ],
       "putBoundedMesh": [
         "tests/unit/car-presentation-vm.test.mjs"
@@ -4740,6 +4744,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
         "tests/unit/service-worker.test.mjs"
@@ -12526,10 +12531,14 @@
       "create": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-boot-timeout.test.mjs"
+        "tests/unit/renderer-boot-timeout.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "gpuAdapterAvailable": [
         "tests/unit/boot-idle-prefetch.test.mjs"
+      ],
+      "guessBackend": [
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "proved": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -12539,7 +12548,8 @@
       ],
       "start": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-boot-timeout.test.mjs"
+        "tests/unit/renderer-boot-timeout.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "storedBackendPreference": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13150,7 +13160,8 @@
       ],
       "_poolShow": [
         "tests/unit/tlx-fail-scope.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-warm-chunks.test.mjs"
       ],
       "_showInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs",
@@ -13176,7 +13187,8 @@
       "acquireMesh": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-warm-chunks.test.mjs"
       ],
       "applyResize": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13414,7 +13426,8 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-warm-chunks.test.mjs"
       ],
       "startRigWarm": [
         "tests/unit/tlx-rig-warm.test.mjs"

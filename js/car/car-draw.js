@@ -748,11 +748,31 @@ const CarDraw = (function () {
       return (typeof scheduler !== "undefined" && scheduler && typeof scheduler.yield === "function")
         ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
     }
+    // THE MENU PREP'S YIELD IS ONE FRAME, NOT 32 ms. A fixed 32 ms sleep after every
+    // 8 ms slice left the prep asleep ~80 % of the time: 44 sleeps (1.4 s) for 2.4 s of
+    // work locally, and on Metal (gpu-census 39462965755) 0.64 s of car work sat behind
+    // ~2 s of timers — on RACE SETTINGS, and under the card when RACE! joins it. Resume
+    // right after the next frame paints (rAF, then a 0 ms task), so the sheet still gets
+    // every frame; the old 32 ms timer stays as the fallback for a stalled rAF (hidden
+    // tab, a soft-GL readback), so no yield is ever longer than before.
+    function menuStepYield() {
+      return new Promise((resolve) => {
+        let done = false;
+        const go = () => { if (!done) { done = true; resolve(); } };
+        setTimeout(go, 32);
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(go, 0));
+      });
+    }
     function shadowCastersWanted() {
       const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};
       if (G.headlessMode || !LT) return false;
       const tier = typeof PerfGov === "undefined" ? 0 : PerfGov.tier();
-      return !!((gfx.carShadowBegin && LT.carShadow && tier < 3) || (gfx.lampShadowBegin && LT.lampShadow && tier < 2));
+      // The passes' own map gates (shadow-pass.js): a backend with no car or lamp map
+      // (every phone on TLX/GLX, a failed target) never casts, so its ~1.5 MB
+      // silhouettes would be built and held for nothing. Undefined = an older stub: wanted.
+      const carMap = gfx.carShadowEnabled !== false && !(LT.shadowStr <= 0);
+      const lampMap = gfx.lampShadowEnabled !== false;
+      return !!((carMap && gfx.carShadowBegin && LT.carShadow && tier < 3) || (lampMap && gfx.lampShadowBegin && LT.lampShadow && tier < 2));
     }
     // Prepare visual descriptors only: do not call makeCars(), advance the seeded
     // simulation, replace the live field, or arm a race from a menu. Existing bounded
@@ -787,12 +807,13 @@ const CarDraw = (function () {
       // each after the bodies, under warmCarAssets' lodWarm gate — race entry then hits.
       const lodPrep = carWarmSliceOn() && FieldLod.on && !!(casters || typeof G.gfx.mirrorBegin === "function");
       const plan = lodPrep ? steps.concat(field.filter(c => !c.isPlayer).map(c => ({ lod: c }))) : steps;
-      let cpuMs = 0, maxCpuMs = 0, sliceAt = performance.now();
+      let cpuMs = 0, maxCpuMs = 0, yields = 0, sliceAt = performance.now();
+      const t0 = sliceAt;
       for (const step of plan) {
         // Cache hits need no per-car timer. Yield only after real work spends
         // the slice; still use the actual caches so eviction/settings stay correct.
         if (performance.now() - sliceAt >= 8) {
-          await new Promise(resolve => setTimeout(resolve, 32));
+          await menuStepYield(); yields++;
           sliceAt = performance.now();
         }
         if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
@@ -815,7 +836,7 @@ const CarDraw = (function () {
         const elapsed = performance.now() - at; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
       }
       // Resolves to its record only when it ran to its end (the export keeps the last: menuCarAssets).
-      const done = { cars: field.length, steps: plan.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs), at: Math.round(performance.now()) };
+      const done = { cars: field.length, steps: plan.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs), yields, wallMs: Math.round(performance.now() - t0), at: Math.round(performance.now()) };
       Log.info("gfx", "selector car assets ready", done);
       return done;
     }
