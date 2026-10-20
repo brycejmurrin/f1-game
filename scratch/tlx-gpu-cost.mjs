@@ -15,9 +15,10 @@ import { gotoGame } from "../tools/shot/probe-page.mjs";
 import { raceGate } from "../tools/lib/census-entry.mjs";
 import { writeFileSync } from "node:fs";
 
-const TRACKS = (process.env.H7_TRACKS || "monaco,spa").split(",");
-const CAMS = (process.env.H7_CAMS || "chase,cockpit").split(",");
+const TRACKS = (process.env.H7_TRACKS || "monaco").split(",");
+const CAMS = (process.env.H7_CAMS || "chase").split(",");
 const PROFILES = (process.env.H7_PROFILES || "phone,desktop").split(",");
+const VARIANTS = (process.env.H7_VARIANTS || "nocount,count").split(",");
 const ROUNDS = +(process.env.H7_ROUNDS || 7), N = +(process.env.H7_N || 8);
 const OUT = process.env.H7_OUT || "tlx-gpu-cost.json";
 const report = { started: new Date().toISOString(), rounds: ROUNDS, n: N, rows: [] };
@@ -57,12 +58,15 @@ function counters() {
   } catch (_) {}
 }
 
-async function boot(browser, server, prof, track, cam) {
+async function boot(browser, server, prof, track, cam, variant) {
   const P = PROFILE[prof];
   const ctx = await browser.newContext({ viewport: P.viewport, deviceScaleFactor: P.deviceScaleFactor, hasTouch: P.hasTouch, reducedMotion: "reduce" });
   const page = await ctx.newPage();
   const cons = [];
-  page.on("console", (m) => { if (m.type() === "error" && cons.length < 20) cons.push(m.text().slice(0, 200)); });
+  const t0 = Date.now();
+  page.on("console", (m) => { if ((m.type() === "error" || m.type() === "warning") && cons.length < 80) cons.push(((Date.now() - t0) / 1000).toFixed(1) + "s " + m.type() + ": " + m.text().slice(0, 300)); });
+  page.on("pageerror", (e) => { if (cons.length < 80) cons.push(((Date.now() - t0) / 1000).toFixed(1) + "s pageerror: " + String(e && e.message).slice(0, 300)); });
+  page.on("framenavigated", (f) => { if (f === page.mainFrame() && cons.length < 80) cons.push(((Date.now() - t0) / 1000).toFixed(1) + "s NAV " + f.url()); });
   await page.addInitScript((ls) => {
     window.__TEST_MODE = true;
     localStorage.setItem("apex26.gfxBackend", "three");
@@ -71,7 +75,8 @@ async function boot(browser, server, prof, track, cam) {
     try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) {}
     for (const k of Object.keys(ls)) if (k !== "__forceGL") localStorage.setItem(k, ls[k]);
   }, Object.assign({}, P.ls, process.env.H7_FORCEGL ? { __forceGL: "1" } : {}));
-  await page.addInitScript(counters);
+  if (variant !== "nocount") await page.addInitScript(counters);
+  else await page.addInitScript(() => { window.__h7 = { passes: 0, submits: 0, kinds: new Map(), on: false }; });
   await gotoGame(page, server.url, 180000);
   await page.evaluate(async ([t, c]) => {
     const A = window.__apex;
@@ -79,15 +84,20 @@ async function boot(browser, server, prof, track, cam) {
     A.go();
   }, [track, cam]);
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
+  cons.push(((Date.now() - t0) / 1000).toFixed(1) + "s GATE passed");
   await page.evaluate((c) => window.__apex.camera(c), cam);
-  // Let the race settle (pipelines compile, packs land).
-  await page.waitForTimeout(6000);
+  // Let the race settle (pipelines compile, packs land); record the state each second.
+  const trail = [];
+  for (let i = 0; i < 6; i++) { await page.waitForTimeout(1000); trail.push(await page.evaluate(() => { const i = window.__apex.info(); return i.state + ":" + i.track; }).catch((e) => "ERR " + e.message.slice(0, 60))); }
+  cons.push("trail " + trail.join(" "));
   const env = await page.evaluate(() => {
     const g = typeof GLX !== "undefined" ? GLX : null, t = g && g.__tlx;
     let bs = null; try { bs = t && t.backendState && t.backendState(); } catch (_) {}
     return { api: bs && bs.api, softBlit: bs && bs.softBlit, isMobile: bs && bs.isMobile, mobileTier: bs && bs.mobileTier,
       liteGpu: bs && bs.liteGpu, present: t && t.renderer && [t.renderer.domElement.width, t.renderer.domElement.height],
-      dpr: devicePixelRatio, gov: window.__apex.renderScale(), track: window.__apex.info().track };
+      dpr: devicePixelRatio, gov: window.__apex.renderScale(), track: window.__apex.info().track, state: window.__apex.info().state,
+      gpuErrors: bs && bs.gpuErrors, gpuFirstError: bs && bs.gpuFirstError,
+      ls: Object.keys(localStorage).filter((k) => /gfx|tlx|crash|ctxLost/i.test(k)).map((k) => k + "=" + String(localStorage.getItem(k)).slice(0, 160)) };
   });
   return { ctx, page, env, cons };
 }
@@ -163,16 +173,18 @@ if (SOFT) Object.assign(process.env, WEBGPU_LAVAPE_ENV || {});
 const browser = await launchChromium(SOFT ? { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"], env: { ...process.env, ...(WEBGPU_LAVAPE_ENV || {}) } }
   : { args: ["--enable-unsafe-webgpu", "--disable-background-timer-throttling"] });
 try {
-  for (const prof of PROFILES) for (const track of TRACKS) for (const cam of CAMS) {
+  for (const variant of VARIANTS) for (const prof of PROFILES) for (const track of TRACKS) for (const cam of CAMS) {
     if (prof === "desktop" && cam !== "chase") continue;   // desktop is the reference row only
-    const row = { prof, track, cam };
+    const row = { variant, prof, track, cam };
     report.rows.push(row);
     const t0 = Date.now();
     let ctx = null;
     try {
-      const b = await boot(browser, server, prof, track, cam);
+      const b = await boot(browser, server, prof, track, cam, variant);
+      row.consoleErrors = b.cons;
       ctx = b.ctx; row.env = b.env;
-      log(`${prof} ${track} ${cam} booted ${JSON.stringify(b.env)}`);
+      log(`${variant} ${prof} ${track} ${cam} booted ${JSON.stringify(b.env).slice(0, 900)}`);
+      if (b.env.state !== "race") { row.error = "race not live after gate: " + b.env.state; log("  console " + JSON.stringify(b.cons).slice(0, 3000)); continue; }
       row.arms = await bench(b.page, [0.18, 0.62]);
       row.consoleErrors = b.cons;
       log("  dbg " + JSON.stringify(row.arms.dbg).slice(0, 600));
