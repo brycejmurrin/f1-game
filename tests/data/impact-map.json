@@ -5194,6 +5194,7 @@
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/i18n.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
         "tests/unit/tools-runnable.test.mjs"
@@ -6693,6 +6694,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
@@ -12390,7 +12392,8 @@
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
-        "tests/unit/lighting-reapply.test.mjs"
+        "tests/unit/lighting-reapply.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-chunks.js": {
@@ -12926,6 +12929,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "postChain": [
@@ -13851,6 +13855,7 @@
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/validation-cli.test.mjs"
       ]
@@ -15492,6 +15497,11 @@
       "*": [
         "tests/unit/followup-platform.test.mjs",
         "tests/unit/pause-key-tools.test.mjs"
+      ]
+    },
+    "js/ui/post-fx-opts.js": {
+      "read": [
+        "tests/unit/post-fx-opts.test.mjs"
       ]
     },
     "js/ui/quali-sheet.js": {

@@ -8250,8 +8250,10 @@ function render(dt) {
   // passes whose cost doesn't shrink with the render target, so a device still
   // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops dry + car-paint SSR (wet-road SSR at 3);
   // autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone.
-  po.ssao = PerfGov.autoTier() >= 4 ? 0 : _ao;
-  po.godray = PerfGov.autoTier() >= 4 ? 0 : _gr;
+  // GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS (PostFxOpts) take the same exit: every strength of the pass at 0.
+  const _aoOff = PerfGov.autoTier() >= 4 || !PostFxOpts.ssaoOn(), _grOff = PerfGov.autoTier() >= 4 || !PostFxOpts.godraysOn();
+  po.ssao = _aoOff ? 0 : _ao;
+  po.godray = _grOff ? 0 : _gr;
   // lampVol sheds at tier 4 with its god-ray siblings: haveGR is `sunGR || lampVol > 0`, so leaving it set keeps the whole march alive past po.godray = 0.
   // contact is the SSAO half of the same trap: haveAO is `aoStr > 0 || contactStr > 0`,
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
@@ -8260,7 +8262,7 @@ function render(dt) {
   // WET-road SSR sheds one tier later (3) than the dry sheens and car paint (2): tier 2 is every phone's
   // GRAPHICS: MEDIUM, and rain with no mirror read as reflections broken. The governor still sheds it at 3.
   const _ssrTier = (frame.wetness || 0) > 0.01 ? 3 : 2;
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= _ssrTier ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.contact = _aoOff ? 0 : _cs; po.reflect = PerfGov.tier() >= _ssrTier ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = _grOff ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
