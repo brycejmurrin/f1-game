@@ -1864,13 +1864,17 @@ const Input = (function () {
   function lookingBack() { return keyLookBack || padLookBack || (!remoteDrivingBlocked() && remoteActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
 
   /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
-     (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas. */
-  function lookStick() { return { x: lookStickX, y: lookStickY }; }
+     (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas.
+     Both return a REUSED object (CamFeel calls them every race frame): read it
+     before the next call. */
+  const _lookStickOut = { x: 0, y: 0 }, _lookMouseOut = { dx: 0, dy: 0 };
+  function lookStick() { _lookStickOut.x = lookStickX; _lookStickOut.y = lookStickY; return _lookStickOut; }
   // RMB is DOWN: a glance held still is still a glance (CamFeel holds the
   // angle instead of recentring on a frame with no mouse delta).
   function lookMouseHeld() { return lookMouseDown; }
   function consumeLookMouse() {
-    const o = { dx: lookMouseDx, dy: lookMouseDy };
+    const o = _lookMouseOut;
+    o.dx = lookMouseDx; o.dy = lookMouseDy;
     lookMouseDx = 0; lookMouseDy = 0;
     return o;
   }

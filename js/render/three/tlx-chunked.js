@@ -167,6 +167,25 @@
     // W2: only a 3-wide 8/16-bit or a 1-wide 16-bit result misses 4 bytes (itemSize 2 of 16 bits is 4 B).
     const pad = fmt24 === false && pad4On && (itemSize === 3 || itemSize === 1);
     if (fmt24 && itemSize === 3 && ok && kind === "unit") {
+      // Validate and pack in one source pass: no padded Float32 temporary
+      // (16 bytes/vertex). fround preserves that temporary's conversion of
+      // JS-array inputs before both the range check and quantisation.
+      if (packOn) {
+        const a = new Int16Array((len / 3) * 4);
+        let fits = true;
+        for (let i = 0; i < len; i++) {
+          const v = Math.fround(src[i]);
+          if (!(v >= -1.0001 && v <= 1.0001)) { fits = false; break; }
+          const q = Math.round(v * 32767);
+          a[i + ((i / 3) | 0)] = q < -32767 ? -32767 : q > 32767 ? 32767 : q;
+        }
+        if (fits) {
+          packStats.small++; packStats.savedMB += a.byteLength / 1048576;
+          return new THREE.BufferAttribute(a, 4, true);
+        }
+      }
+      // Packing off, or an out-of-range/nonfinite normal: retain the wide
+      // fallback and its diagnostics exactly as before.
       src = pad4(src, len); len = (len / 3) * 4; itemSize = 4;
     }
     // NORMAL ONLY, and COLOUR DELIBERATELY LEFT WIDE. Bisected on lavapipe,
@@ -251,16 +270,22 @@
     }
     packStats.small++;
     if (kind === "unit") {
-      const a = new Int16Array(len);
+      // Write padded WebGL2 normals into their final storage: widening an
+      // Int16x3 temporary would allocate another 6 bytes per vertex.
+      const wide = pad && itemSize === 3;
+      const a = new Int16Array(wide ? (len / 3) * 4 : len);
       // CLAMP, like VertexPack.qs: the scan above admits |v| <= 1.0001, and
       // round(1.0001 * 32767) = 32770 WRAPS in an Int16 to -32766 — a
       // normal flipped to the opposite hemisphere. ±32767 keeps snorm symmetric.
       for (let i = 0; i < len; i++) {
         const q = Math.round(src[i] * 32767);
-        a[i] = q < -32767 ? -32767 : q > 32767 ? 32767 : q;
+        a[wide ? i + ((i / 3) | 0) : i] = q < -32767 ? -32767 : q > 32767 ? 32767 : q;
       }
       packStats.savedMB += (len * 2) / 1048576;
-      if (pad && itemSize === 3) return new THREE.BufferAttribute(_widen4(a, 0), 4, true);   // W2: snorm16x4, w 0
+      if (wide) {
+        packStats.pad4++; packStats.pad4MB += ((len / 3) * 2) / 1048576;
+        return new THREE.BufferAttribute(a, 4, true);   // untouched fourth lanes stay zero
+      }
       return new THREE.BufferAttribute(a, itemSize, true);            // normalized
     }
     if (kind === "id") {

@@ -65,12 +65,21 @@ this block for state. Put it under **Next step / handoff** of
 
 ```fleet
 worker: <host>:<session or agent id>     # e.g. claude:session_01ABC…, cursor:bc-…
-orchestrator: <host>:<session id>        # who to escalate to
+fleet: <letter>                          # A, B, C, D… (references/multi-host.md); optional `slot: A·W3`
+orchestrator: <letter>                   # who to escalate to: `fleet-bus.mjs who <letter>` names the live one
 owned: <globs from the launch prompt>
 state: planning | implementing | verifying | pr-open | fixing | blocked | done
 blocker: <one line, or none>
 needs-orchestrator: yes | no
 ```
+
+`orchestrator:` takes the fleet letter, because orchestrators rotate and a
+letter outlives every id: resolve the live one with
+`node tools/ci/fleet-bus.mjs who <letter>` (newest `ORCH <letter> LIVE` bus
+line; `references/comms.md` §Fleet bus). An older body's
+`orchestrator: <host>:<session id>` still parses. `ready-gate.mjs --pr`
+refuses a `cursor/` branch whose body lacks the block's `fleet:` (or a letter
+`orchestrator:`) and `orchestrator:`; `pr-board.mjs` shows FLEET and SLOT.
 
 A cloud worker also keeps one report line in the PR body, under the block
 rather than inside it, and posts the same line as a PR comment on every change

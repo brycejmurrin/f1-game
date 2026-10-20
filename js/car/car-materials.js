@@ -24,13 +24,21 @@ const CarMaterials = (function () {
     flake: 34, candy: 35, tinted: 36, chameleon: 37,   // shader branches exist in GLX/TLX/WGX (surface-id-parity.test.mjs)
     forged: 38, gunmetal: 39, goldplate: 40,
     holographic: 41, velvet: 42, hammered: 43, anodized: 44,
+    // FINISHES 60+ (design lane D2, round 4 close-up matrix): each rides a base branch above and adds one tint after the
+    // metal block, in GLX / TLX / WGX alike, tuned against a real-car or real-paint reference.
+    oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, alubare: 65, rawcarbon: 66, flovis: 67, carbonfade: 68,
+    silverfade: 69, metalflop: 70, truematte: 71, pearlwhite: 72, jpsgold: 74, ghostpearl: 81, xirallic: 82,
+    mystichrome: 83, midnightpurple: 84, ultrablack: 85,
   });
   // RESERVED FINISH IDS (garage finishes contract, 2026-10-17). A finish row joins FINISH_SURFACE only when its
   // shader branch exists in GLX, TLX and WGX, so the garage never offers a finish that renders as plain paint;
   // the id is fixed here first so the slices cannot take the same one. tests/unit/livery-finish-contract.test.mjs
   // pins that no id repeats and that every FINISH_SURFACE id is either shipped (<= 33) or reserved.
   const FINISH_RESERVED = Object.freeze({ flake: 34, candy: 35, tinted: 36, chameleon: 37, forged: 38, gunmetal: 39, goldplate: 40,
-    holographic: 41, velvet: 42, hammered: 43, anodized: 44 });
+    holographic: 41, velvet: 42, hammered: 43, anodized: 44,
+    oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, alubare: 65, rawcarbon: 66, flovis: 67, carbonfade: 68, silverfade: 69,
+    metalflop: 70, truematte: 71, pearlwhite: 72, jpsgold: 74, ghostpearl: 81, xirallic: 82, mystichrome: 83,
+    midnightpurple: 84, ultrablack: 85 });
   const DARK   = [0.05, 0.05, 0.05];
   // Deeper resin base so the shader weave (CarMaterialShade.CARBON) reads at
   // garage and near-track distance instead of flat charcoal paint.

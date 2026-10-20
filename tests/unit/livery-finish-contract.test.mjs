@@ -20,7 +20,7 @@ vm.runInContext(read("js/car/car-materials.js"), cx, { filename: absSrc("js/car/
 const CM = vm.runInContext("CarMaterials", cx);
 
 const COLOURS = ["mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent"];
-const PILLS = ["podFinish", "finFinish", "mirrorFinish", "helmetStyle"];
+const PILLS = ["podFinish", "finFinish", "mirrorFinish", "helmetStyle", "crestTone", "crestFrame"];
 
 test("reserved finish ids are unique, past the shipped chain, and disjoint from FINISH_SURFACE", () => {
   const reserved = Object.values(CM.FINISH_RESERVED);

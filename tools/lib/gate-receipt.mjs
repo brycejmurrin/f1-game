@@ -12,6 +12,7 @@
 // `receiptVerdict` — keep the two in step (tests/unit/merge-gate.test.mjs).
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 export const KINDS = ["merge", "ready"];
 /** A receipt older than this is stale: the tip, CI or the body may have moved. */
@@ -20,14 +21,33 @@ export const MAX_AGE_MIN = 30;
 export const receiptDir = (root, kind) => path.join(root, "artifacts", `${kind}-gate`);
 export const receiptPath = (root, kind, pr) => path.join(receiptDir(root, kind), `${Number(pr)}.json`);
 
-/** Write `{ kind, pr, head, ok, at, ... }`; returns the path. */
-export function writeReceipt(root, kind, data) {
+/**
+ * The main checkout of `root`'s repository, or null when `root` is the main checkout (or not a git tree).
+ * A gate run from a linked worktree (`git worktree add`, EnterWorktree) must also leave its receipt there:
+ * the hooks read CLAUDE_PROJECT_DIR, the main checkout (2026-10-19: a ready-gate run in a worktree passed,
+ * and the draft→ready hook still refused #3131).
+ */
+export function mainCheckout(root) {
+  const r = spawnSync("git", ["rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], { cwd: root, encoding: "utf8" });
+  if (r.status !== 0) return null;
+  const [top, common] = r.stdout.trim().split("\n");
+  // Only a linked worktree's own top level mirrors: a scratch dir inside a checkout is not a checkout.
+  if (!top || !common || path.resolve(top) !== path.resolve(root)) return null;
+  const main = path.dirname(common);
+  return path.resolve(main) === path.resolve(root) ? null : main;
+}
+
+/** Write `{ kind, pr, head, ok, at, ... }` under `root` (and the main checkout, from a worktree); returns the path. */
+export function writeReceipt(root, kind, data, { main = mainCheckout(root) } = {}) {
   if (!KINDS.includes(kind)) throw new Error(`unknown receipt kind ${kind}`);
   const pr = Number(data.pr);
   if (!Number.isInteger(pr) || pr < 1) throw new Error(`receipt needs a PR number, got ${data.pr}`);
+  const body = JSON.stringify({ kind, ...data, pr, at: data.at || new Date().toISOString() }, null, 2) + "\n";
   const file = receiptPath(root, kind, pr);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ kind, ...data, pr, at: data.at || new Date().toISOString() }, null, 2) + "\n");
+  for (const f of main ? [file, receiptPath(main, kind, pr)] : [file]) {
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, body);
+  }
   return file;
 }
 
