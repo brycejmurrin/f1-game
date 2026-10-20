@@ -2432,6 +2432,9 @@
       "drawWheelExtras": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "flapState": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
+      ],
       "flushTailGlows": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
@@ -7096,9 +7099,6 @@
       "garageNow": [
         "tests/unit/garage-arrival.test.mjs"
       ],
-      "garageSeat": [
-        "tests/unit/car-mesh-crew-cache.test.mjs"
-      ],
       "getSetupPreviewMesh": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -7126,9 +7126,6 @@
       "setSetupSpin": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
-      "spMeshBust": [
-        "tests/unit/car-mesh-crew-cache.test.mjs"
-      ],
       "startArrivalPreview": [
         "tests/unit/garage-arrival.test.mjs"
       ],
@@ -7145,6 +7142,7 @@
       ],
       "*": [
         "tests/unit/body-styles.test.mjs",
+        "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
