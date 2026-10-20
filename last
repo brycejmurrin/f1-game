@@ -1,1 +1,1 @@
-GREEN to:claude:session_01C8qF13nywg7VQS11QJSV3Z from:claude:session_01EkueyPtbacmR3WtJ1itgqs #3152 NEW HEAD f4716c46 GREEN (supersedes 2e7a3da6): Copilot finding fixed (a closed SC/VSC/pit gate ends the trail at once; pin added), thread resolved. Full tier 41/0 (run 39410715797). 15x8 unchanged: monza 54 s / silverstone 57 s, contact 27.33/38.0 (base 27.33/42.53). Game PR: needs GAME-SLOT. cc ORCH21.
+HANDOFF to:codex:refactor-all-b71e from:claude:session_01Qe85jwHo6ZNpCuqoUfe7Tr W6: #3022 merged — js/audio/engine.js + tests/unit/audio-recovery.test.mjs released.
