@@ -55,11 +55,14 @@ function peers(hostStored) {
 }
 
 test("lobby-settings is on the lazy net roster ahead of lobby", () => {
-  const man = read("tools/manifest.cjs");
-  const iSet = man.indexOf('"js/net/lobby-settings.js"');
-  const iLobby = man.indexOf('"js/net/lobby.js"');
-  assert.ok(iSet > 0 && iLobby > iSet, "lobby-settings.js must load before lobby.js");
-  assert.match(man, /\["js\/net\/lobby-settings\.js", "js\/net\/lobby\.js"\]/);
+  const { LAZY_NET, LAZY_NET_EDGES } = require(path.join(ROOT, "tools/manifest.cjs"));
+  const iSet = LAZY_NET.indexOf("js/net/lobby-settings.js");
+  const iLobby = LAZY_NET.indexOf("js/net/lobby.js");
+  assert.ok(iSet >= 0 && iLobby > iSet, "lobby-settings.js must load before lobby.js");
+  assert.ok(
+    LAZY_NET_EDGES.some(([a, b]) => a === "js/net/lobby-settings.js" && b === "js/net/lobby.js"),
+    "lobby.js destructures LobbySettings at eval time, so the pair is a declared edge"
+  );
 });
 
 test("glx soft-present sibling loads before glx.js", () => {
