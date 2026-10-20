@@ -3,10 +3,9 @@
 //
 // The macos-latest adapter is an Apple PARAVIRTUAL device with no timestamp-query, so three's
 // gpuTimer is {supported:false} there and no per-pass GPU time exists. This measures GPU THROUGHPUT
-// instead: with the sim frozen and the clock pinned, render N frames back to back in ONE task
-// (__apex.snapCam(true) = one full game render + present), then await queue.onSubmittedWorkDone().
-//   cpu  = encode wall per frame (the loop alone)
-//   wall = loop + drain per frame; when wall >> cpu the GPU is the bottleneck and wall IS gpu ms/frame
+// instead: sim frozen, clock pinned, scale pinned 1, governor held; the game's own loop renders.
+//   cpu  = mean rAF-callback wall per frame (the game's frame CPU)
+//   wall = mean rAF interval; when wall >> cpu the GPU is the bottleneck and wall IS gpu ms/frame
 // Arms are toggled LIVE and interleaved round-robin, so runner drift lands on every arm alike.
 // Arms: bloom / ssao+contact / godray / matTex (PBR pack) via lightTune, and render scale 0.75 / 0.5
 // (fill sensitivity). A full chain "all post off" arm bounds the post chain.
@@ -19,7 +18,7 @@ const TRACKS = (process.env.H7_TRACKS || "monaco,spa").split(",");
 const CAMS = (process.env.H7_CAMS || "chase,cockpit").split(",");
 const PROFILES = (process.env.H7_PROFILES || "phonelike,desktop").split(",");
 const VARIANTS = (process.env.H7_VARIANTS || "count").split(",");
-const ROUNDS = +(process.env.H7_ROUNDS || 5), N = +(process.env.H7_N || 6);
+const ROUNDS = +(process.env.H7_ROUNDS || 4), N = +(process.env.H7_N || 24);
 const OUT = process.env.H7_OUT || "tlx-gpu-cost.json";
 const report = { started: new Date().toISOString(), rounds: ROUNDS, n: N, rows: [] };
 const save = () => writeFileSync(OUT, JSON.stringify(report, null, 2));
@@ -34,6 +33,12 @@ const PROFILE = {
   desktop: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, hasTouch: false, ls: {} },
 };
 
+function cbTimer() {
+  // Sum the wall of every rAF callback (the game's frame CPU) into window.__h7cbMs.
+  const r = window.requestAnimationFrame.bind(window);
+  window.__h7cbMs = 0;
+  window.requestAnimationFrame = (f) => r((t) => { const a = performance.now(); try { return f(t); } finally { window.__h7cbMs += performance.now() - a; } });
+}
 function counters() {
   // Pass + submit counts, and every render pass's attachment sizes (tagged at createView).
   const C = window.__h7 = { passes: 0, submits: 0, kinds: new Map(), on: false };
@@ -79,6 +84,7 @@ async function boot(browser, server, prof, track, cam, variant) {
     try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) {}
     for (const k of Object.keys(ls)) if (k !== "__forceGL") localStorage.setItem(k, ls[k]);
   }, Object.assign({}, P.ls, process.env.H7_FORCEGL ? { __forceGL: "1" } : {}));
+  await page.addInitScript(cbTimer);
   if (variant !== "nocount") await page.addInitScript(counters);
   else await page.addInitScript(() => { window.__h7 = { passes: 0, submits: 0, kinds: new Map(), on: false }; });
   await gotoGame(page, server.url, 180000);
@@ -125,28 +131,30 @@ async function bench(page, positions) {
       scale50: () => { tune({}); A.renderScale(0.5); },
     };
     const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
-    // Every fence is capped: a lost device never resolves onSubmittedWorkDone (rev 12's desktop row hung 25 min).
-    const fence = () => Promise.race([q.onSubmittedWorkDone(), new Promise((_, rej) => setTimeout(() => rej(new Error("fence timeout 8s")), 8000))]);
+    // FRAME PACING, not fences: queue.onSubmittedWorkDone never resolved on the macos-latest paravirtual
+    // adapter (rev 13, run 39475376136, live race, gpuErrors 0). The game's own loop keeps rendering the
+    // frozen scene; GPU-bound (~18 fps there), the mean rAF interval over n frames IS the per-frame GPU cost.
+    // cpu = the mean wall of the game's rAF callback (window.__h7cb, wrapped below) — the CPU side, for the
+    // GPU-bound check (cpu << wall).
     const burst = async (n) => {
-      await fence();
+      await raf();
+      const c0 = window.__h7cbMs || 0;
       const t0 = performance.now();
-      for (let i = 0; i < n; i++) A.snapCam(true);
+      for (let i = 0; i < n; i++) await raf();
       const t1 = performance.now();
-      await fence();
-      const t2 = performance.now();
-      return { cpu: (t1 - t0) / n, wall: (t2 - t0) / n };
+      return { cpu: ((window.__h7cbMs || 0) - c0) / n, wall: (t1 - t0) / n };
     };
     const res = {};
     const dbg = { info: A.info(), hasGPU: typeof GPUCommandEncoder, patched: String(GPUCommandEncoder.prototype.beginRenderPass).slice(0, 60) };
     window.__h7.on = true; for (let i = 0; i < 10; i++) await raf(); dbg.rafPasses = window.__h7.passes; dbg.rafSubmits = window.__h7.submits;
-    window.__h7.passes = 0; A.snapCam(true); dbg.snapPasses = window.__h7.passes; window.__h7.on = false; window.__h7.passes = 0; window.__h7.submits = 0;
+     window.__h7.on = false; window.__h7.passes = 0; window.__h7.submits = 0;
     for (const k of Object.keys(ARMS)) res[k] = { cpu: [], wall: [], passes: 0, submits: 0, frames: 0, kinds: {}, post: null };
     for (const pos of positions) {
-      A.freeze(false); A.jump(pos, 55); A.freeze(true); A.snapCam(true);
-      for (const k of Object.keys(ARMS)) { ARMS[k](); for (let i = 0; i < 4; i++) await raf(); await burst(3); }   // warm every arm's programs
+      A.freeze(false); A.jump(pos, 55); A.freeze(true); A.snapCam();
+      for (const k of Object.keys(ARMS)) { ARMS[k](); for (let i = 0; i < 6; i++) await raf(); }   // warm every arm's programs
       for (let r = 0; r < ROUNDS; r++) {
         for (const k of Object.keys(ARMS)) {
-          ARMS[k](); await raf(); await raf(); await raf();
+          ARMS[k](); for (let i = 0; i < 5; i++) await raf();
           window.__h7.on = true; const p0 = window.__h7.passes, s0 = window.__h7.submits; window.__h7.kinds.clear();
           const b = await burst(N);
           window.__h7.on = false;
@@ -180,18 +188,20 @@ const browser = await launchChromium(SOFT ? { args: [...WEBGPU_LAVAPE_CHROMIUM_A
   : { args: ["--enable-unsafe-webgpu", "--disable-background-timer-throttling"] });
 try {
   for (const variant of VARIANTS) for (const prof of PROFILES) for (const track of TRACKS) for (const cam of CAMS) {
-    if (prof === "desktop" && cam !== "chase") continue;   // desktop is the reference row only
+    if (prof === "desktop" && (cam !== "chase" || track !== TRACKS[0])) continue;   // desktop is the reference row only
     const row = { variant, prof, track, cam };
     report.rows.push(row);
     const t0 = Date.now();
     let ctx = null;
     try {
-      const b = await boot(browser, server, prof, track, cam, variant);
+      let b;
+      try { b = await boot(browser, server, prof, track, cam, variant); }
+      catch (e) { log("boot retry after: " + String(e && e.message).slice(0, 120)); b = await boot(browser, server, prof, track, cam, variant); }
       row.consoleErrors = b.cons;
       ctx = b.ctx; row.env = b.env;
       log(`${variant} ${prof} ${track} ${cam} booted ${JSON.stringify(b.env).slice(0, 900)}`);
       if (b.env.state !== "race") { row.error = "race not live after gate: " + b.env.state; log("  console " + JSON.stringify(b.cons).slice(0, 3000)); continue; }
-      row.arms = await Promise.race([bench(b.page, [0.18, 0.62]), new Promise((_, rej) => setTimeout(() => rej(new Error("bench cap 240 s")), 240000))]);
+      row.arms = await Promise.race([bench(b.page, [0.18, 0.62]), new Promise((_, rej) => setTimeout(() => rej(new Error("bench cap 300 s")), 300000))]);
       row.consoleErrors = b.cons;
       log("  dbg " + JSON.stringify(row.arms.dbg).slice(0, 600));
       for (const k of Object.keys(row.arms)) { if (k === "dbg") continue; const a = row.arms[k]; log(`  ${k.padEnd(9)} wall ${a.wallMs} cpu ${a.cpuMs} d ${a.deltaMs ?? "-"} passes ${a.passesPerFrame} submits ${a.submitsPerFrame}`); }
