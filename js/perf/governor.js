@@ -267,7 +267,7 @@ const VERIFY_COOL = 5000;   // ms: the wait after a step that made things worse
 // clear sustained headroom at FULL resolution, so the ladder can't oscillate:
 //   1  env probe off        (car paint falls back to the analytic sky mirror)
 //   2  lamp spot shadow + SSR march off (dry sheens + car-paint; wet-road SSR survives)
-//   3  car sun-shadow map off (the blob contact shadow remains) + wet-road SSR off
+//   3  car sun-shadow map off (the blob contact shadow remains) + reduced wet-road SSR
 //   4  SSAO + god rays + bloom off
 
 // Crash sentinel.
@@ -498,7 +498,7 @@ function cleanRace() {
     // RECOMPUTE THE FLOOR. Paying a strike down must move the floor, not just
     // the counter, or _perfTierFloor stays at whatever init() derived for the
     // WHOLE session. One strike floors the tier at 2, and tier() >= 2 is exactly
-    // the gate that sheds SSR (the dry sheens; the WET MIRROR at 3) and lamp shadows,
+    // the gate that sheds dry SSR and lamp shadows (wet roads use a smaller budget),
     // while tier() >= 1 sheds PER-CHUNK LAMPS and the env probe — so a single
     // crash (or one sentinel trip that was never a crash) would pin those
     // features off until a reload, whatever GRAPHICS says. On mobile only ULTRA
@@ -871,7 +871,7 @@ return {
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
   // Crash + measured only — no GRAPHICS user floor. Look-defining post
   // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
-  // GRAPHICS: LOW still sheds env/SSR/shadows via tier() but the lighting
+  // GRAPHICS: LOW still sheds env/dry-SSR/shadows via tier() but the lighting
   // tuner stays live unless the device proved it cannot afford the pass.
   // READS _perfTier ON PURPOSE, and a draft of the preset-release fix below got
   // this wrong in a way worth recording. That draft derived the governor tier as
