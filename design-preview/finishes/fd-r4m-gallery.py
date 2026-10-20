@@ -92,7 +92,9 @@ def cmd_html():
     assets = load_assets()
     diffs = json.load(open(os.path.join(HERE, "r4-diff.json")))
     have = {(l, k, t, a) for l, k, t, a, _ in cells()}
-    shot = sum(1 for c in have if c[1] != "gloss")
+    up = {k for k in assets}
+    shot = sum(1 for c in have if c[1] != "gloss" and os.path.relpath(jpg_path(*c), ROOT) in up)
+    pending = []
     verdicts = {}
     vp = os.path.join(HERE, "r4-verdicts.json")
     if os.path.exists(vp):
@@ -125,6 +127,9 @@ def cmd_html():
             else:
                 f = F[fid]; key, name, pitch = f["key"], f["name"], f["pitch"]
                 chip = verdicts.get(key, {}).get("verdict") or {"keep": "keep", "borderline": "borderline", "drop": "would drop"}[group]
+            if not any(os.path.relpath(jpg_path(l, key, t, a), ROOT) in up for l, _ in LIGHTS for t, _ in TEAMS for a, _ in ANGLES):
+                pending.append(f"#{fid} {key}" if fid else key)
+                continue
             v = verdicts.get(key, {})
             cls = "ok" if chip.startswith("keep") else ("" if chip == "baseline" else "warn")
             body = "".join(f'<h4>{html.escape(ll)}</h4>{grid(l, key, name)}' for l, ll in lights)
@@ -149,6 +154,7 @@ def cmd_html():
       #r4 .finishes {{ grid-template-columns: 1fr; }}
       @media (max-width: 720px) {{ .r4g {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} .r4row {{ grid-column: 1 / -1; }} .r4g > span:first-child {{ display: none; }} }}
     </style>
+    {f'<p class="note">Still shooting: {", ".join(pending)}.</p>' if pending else ""}
     <div class="finishes">
 {chr(10).join(parts)}
     </div>
@@ -164,5 +170,15 @@ def cmd_html():
     print("spliced", shot, "cells")
 
 
+def cmd_record():
+    """stdin: the Artifact asset-upload result lines, `- "<path>" (…) → "/_blob/<id>"`; merged into r4-assets.json."""
+    import re
+    assets = load_assets()
+    for m in re.finditer(r'"([^"]+\.jpg)"[^\n]*?"(/_blob/[0-9a-f]{32})"', sys.stdin.read()):
+        assets[m.group(1)] = m.group(2)
+    json.dump(assets, open(os.path.join(HERE, "r4-assets.json"), "w"), indent=0, sort_keys=True)
+    print(len(assets), "assets recorded")
+
+
 if __name__ == "__main__":
-    {"jpg": cmd_jpg, "diff": cmd_diff, "html": cmd_html}[sys.argv[1]]()
+    {"jpg": cmd_jpg, "diff": cmd_diff, "html": cmd_html, "record": cmd_record}[sys.argv[1]]()
