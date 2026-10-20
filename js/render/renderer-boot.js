@@ -339,6 +339,33 @@ function proved() {
 }
 return { start, backendPreference, storedBackendPreference, gpuAdapterAvailable, proved };
 }
-  return { create };
+// THE LIKELY BACKEND'S BYTES DURING THE BOOT WALL (B·H8 load hunt, 2026-10-20).
+// start() runs only once game.js — the last of ~230 deferred scripts — has
+// evaluated, and its group's fetch began there: 4.26 s into a cold boot at 4x CPU
+// on Fast 4G, ~3.5 s after this file evaluated. Guess the pick now from what
+// start() itself reads first (no adapter probe, no XR plan) and preload that
+// group through ScriptLoader — fetch only; start() still decides, injects and
+// evaluates exactly as before. A wrong guess costs the bytes, never the pick.
+// An armed canary or a claim-fail skip boots GLX, so those guess GLX.
+function guessBackend() {
+  try {
+    if (localStorage.getItem("apex26.gfxBackendProbe") || sessionStorage.getItem("apex26.gfxClaimFail") === "1") return "webgl2";
+    const pref = localStorage.getItem("apex26.gfxBackend");
+    const gpu = typeof navigator !== "undefined" && !!navigator.gpu;
+    if (pref === "webgl2") return "webgl2";
+    if (pref === "webgpu") return gpu ? "webgpu" : "webgl2";
+    if (pref == null || pref === "three") return gpu || pref === "three" ? "three" : "webgl2";
+  } catch (_) { /* blocked storage: start() picks without it; fetch nothing early */ }
+  return "";
+}
+function preloadLikelyBackend() {
+  try {
+    if (typeof ScriptLoader === "undefined" || !ScriptLoader.preload || typeof ApexRoster === "undefined") return 0;
+    const files = ApexRoster.DEFERRED && ApexRoster.DEFERRED[guessBackend()];
+    return files ? ScriptLoader.preload(files) : 0;
+  } catch (_) { return 0; /* an optimisation only */ }
+}
+preloadLikelyBackend();
+  return { create, guessBackend };
 })();
 Object.freeze(RendererBoot);
