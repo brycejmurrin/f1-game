@@ -37,9 +37,9 @@ export const STATIONS = {
     "Extinguishers, cooling fan, starter cart and tyre trolleys", "Check safety equipment, castors and aisle-facing details."),
   engineerDesk: roomStation([-2.1, 1.8, 2.2], [-5.0, 1.5, 0.6],
     "Engineer desk and monitor bank", "Check desk legs, work surface and monitor arrangement."),
-  roomBack: roomStation([-3.9, 2.5, 4.5], [0, 1.25, -1.2],
+  roomBack: roomStation([-4.3, 2.7, 5.5], [0.4, 1.9, -4.5],
     "Whole bay toward the back wall", "Review back-wall signage, ceiling and both equipment aisles."),
-  roomDoor: roomStation([3.9, 2.5, -4.5], [0, 1.25, 1.2],
+  roomDoor: roomStation([4.3, 2.7, -5.5], [-0.4, 1.9, 4.5],
     "Whole bay toward the garage door", "Review the opposite side, entrance and storage in context."),
   // crown / SPINE TOP, read top-down nose-up the way the chase camera does
   spineTop:  { view: "rear",      az: 0.92 * Math.PI, el: 0.72, dist: 3.2, target: [0, 0.9, -0.85], lamp: "off", clamp: false },
