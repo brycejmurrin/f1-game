@@ -96,7 +96,10 @@ pass behind a yielding car, not a chain.
 | `45e1c2eb` | 58 / 46, 0 | 27.7 | 98 / 63, 9 | 38.9 |
 | A: lift a further 6 % vmax / 4 % corner from 24→40 s | 61 / 42, 1 | 28.5 | 64 / 45, 1 | 40.9 |
 | B: A + trail pull reach back to `pullReachM` | 51 / 43, 0 | 30.1 | 72 / 55, 3 | 43.8 |
-| **C: A with the deep stage at 18→32 s (shipped)** | **56 / 44, 0** | **29.1** | **57 / 45, 0** | **40.9** |
+| C: A with the deep stage at 18→32 s | 56 / 44, 0 | 29.1 | 57 / 45, 0 | 40.9 |
+| D: C + the yield scaled by proximity (full ≤ 0.5 s, none ≥ 1.0 s) | 64 / 48, 2 | 28.6 | 56 / 45, 0 | 39.2 |
+| E: D with the band at 0.6–1.2 s | 55 / 44, 0 | 28.1 | 70 / 42, 1 | 36.9 |
+| **F: E + the trail pull's full lane in the same band (shipped)** | **54 / 45, 0** | **27.3** | **57 / 42, 0** | **38.0** |
 
 B was tried because monza seed 11 HAD<PER sat 9 m wide 40 m back under A.
 It helped Monza but cost Silverstone and contact, so it was reverted.
@@ -107,3 +110,18 @@ deeper yield (27.7 → 28.5 → 29.1), so treat it as a possible small cost.
 
 Biting VM test: `tests/unit/ai-trail-yield-vm.test.mjs`, a two-car Monza duel
 with a 0.6 % edge and a 30 m gap. Base passed at 93.7 s, head at 21.8 s.
+
+### The proximity band (D–F)
+
+`quali-pace-parity-vm` (game-vm) failed from `ed4bb0c3` on. On a sampled
+five-car Monza field at PACE 1, the median model/driven lap ratio went from
+1.066 to 0.982 (the gate is ±3 % of PACE 1). The yielders lifted for trailers
+53–75 m back, about 1.2 s, where no pass was on offer. They lost 4–7 s a lap
+and slowed the car behind them. The yield now scales with the trailer's time
+gap: full within 0.6 s, gone past 1.2 s (`TRAIL_NEAR_S` / `TRAIL_FAR_S`).
+The parity test passes (Monza 1.044 / 1.031 / 1.045).
+
+E left silverstone seed 12 SAI<STR at 70 s. SAI sat 12 m off STR's line 25 m
+back, out of the tow and off-line through every corner. F gives the trail pull
+its full lane only in the same band. F's contact equals base at Monza and is
+lower at Silverstone.
