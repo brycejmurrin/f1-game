@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * @doc Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium.
+ * @doc Pokes repo MCP wrappers (apex_status, chrome-devtools status, js-debugger/apex-lsp list-tools, probe help). No Chromium.
  * @skill check-changes
- * mcp-smoke — poke the repo shell wrappers (only apex-tools and chrome-devtools are MCP-attached).
+ * mcp-smoke — poke the repo shell wrappers (all five .mcp.json servers; host attach optional).
  *
  * No Chromium. Missing TinyFish key / chrome-devtools clone = warning, not fail.
  * Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json

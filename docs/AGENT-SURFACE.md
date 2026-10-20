@@ -108,13 +108,15 @@ does not discover, install or validate hosted tools.
 | `environment-info` → `mcpServerAllowlist` | five named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
 | Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official`, `js-debugger`, `apex-lsp` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
 | VM wrappers | `bash tools/env/ensure-mcp-ready.sh` / `mcp-smoke` OK | n/a (VM ≠ host attach) |
+| `mcpPluginServerAllowlist` | optional **browser-use** row when the plugin is enabled at launch | missing when Integrations plugin off |
 
 **MCP empty in this session?** CLI fallbacks work without attachment:
 `bash tools/mcp/apex-tools-mcp.sh call …`, `bash tools/mcp/playwright-mcp.sh run`,
 `python3 tools/mcp/probe-mcp.py chrome-start` (see Fallback column below).
 `tools/env/cloud-agent-install.sh` runs `tools/env/ensure-mcp-ready.sh` at the
-end (Playwright chrome-channel symlink + `mcp-smoke.mjs`) — that validates the
-VM, not host MCP attachment. If `environment-info` shows an allowlist without
+end (Playwright chrome-channel symlink, chrome-devtools clone when egress allows,
+`PLAYWRIGHT_BROWSERS_PATH`, then `mcp-smoke.mjs` including js-debugger and
+apex-lsp list-tools) — that validates the VM, not host MCP attachment. If `environment-info` shows an allowlist without
 **`name`** on each row, re-**Save** the environment from git’s
 `.cursor/environment.json`, then start a **new** agent with all five MCPs enabled.
 
