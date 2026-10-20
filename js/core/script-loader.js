@@ -49,7 +49,7 @@ function url(src) {
 }
 // A hung lazy file (a stalled phone connection) never fires load OR error, so
 // the caller's loading card waited forever (#2582). After SLOW_MS `opts.onSlow`
-// fires (the UI may say "still loading"); after DEADLINE_MS the file counts as
+// fires (the UI may say "still loading"); after DEADLINE_MS of main-thread-responsive time the file counts as
 // failed, exactly like onerror, so every caller's existing fallback and its
 // memo-clear-on-failure retry path run. Overridable per load: opts.slowMs / deadlineMs.
 const SLOW_MS = 10000, DEADLINE_MS = 25000;
@@ -98,12 +98,26 @@ function loadBackendScripts(files, edges, opts) {
     slowT = W.setTimeout(() => {
       try { if (opts && opts.onSlow) opts.onSlow(src); } catch (_) { /* UI hook only */ }
     }, slowMs);
-    deadT = W.setTimeout(() => {
+    // THE DEADLINE COUNTS RESPONSIVE TIME, NOT WALL CLOCK (#3157). One 25 s
+    // timer fires on a starved main thread (TLX right after a race on a slow
+    // GPU, minutes of long tasks) in the same stall in which the fetched
+    // script's load event is still queued, so a file that ARRIVED was counted
+    // failed. A heartbeat adds at most two ticks per beat: a stall that
+    // swallowed many beats buys the file its load task, a real hang still
+    // reaches deadlineMs of live beats.
+    const tickMs = Math.max(10, Math.min(1000, Math.floor(deadlineMs / 10)));
+    let budget = 0, last = Date.now();
+    const beat = () => {
+      const t = Date.now();
+      budget += Math.max(0, Math.min(t - last, 2 * tickMs));
+      last = t;
+      if (budget < deadlineMs) { deadT = W.setTimeout(beat, tickMs); return; }
       if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
       el.onload = el.onerror = null;
       if (el.remove) el.remove();
       settle(false);
-    }, deadlineMs);
+    };
+    deadT = W.setTimeout(beat, tickMs);
     }
     el.onload = () => {
       let ready = true;

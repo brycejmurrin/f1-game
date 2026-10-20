@@ -1,0 +1,1 @@
+Improved: MY TEAM dialog typing no longer rebuilds the 3D car per keystroke (a changed livery does, debounced 75 ms) and dragging a livery colour no longer rebuilds ~23 rows of palette chips per tick (#3108).

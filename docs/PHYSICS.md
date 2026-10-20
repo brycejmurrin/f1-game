@@ -987,6 +987,37 @@ so in the rain the field cornered on wets and braked on slicks, and a player on
 full wets out-braked it by the whole ratio (~27 % at full wet) while the
 corner-speed model showed no such gap. Dry pace is untouched by construction.
 
+### Wheel state: torque-balanced lock-up and wheelspin (opt-in, #1628)
+
+`js/physics/wheel-state.js` gives the player's axles a rim speed (`vwF`/`vwR`)
+and slip ratio (`kappaF`/`kappaR`). It is **opt-in and default OFF**
+(`WheelState.setEnabled(true)` or `apex26.wheelState = "1"`): OFF never enters
+the branch, so `physics-characterization` stays bit-identical to its baseline.
+
+ON, PlayerForces bills each axle's brake or drive demand against its tyre's
+longitudinal capacity on the same circle the legacy `axFracF`/`axFracR` charge
+uses (`LONG_GRIP × weather`, `brakeFront`, the rear `beta`, the bias split), and
+adds the surface, kerb, wear, marble and aero grip the legacy pedal never saw.
+Under the peak the slip settles at demand/capacity × `KAPPA_PEAK` and the tyre
+delivers what was asked; over it the rim runs away (lock or spin), the tyre
+delivers only its sliding force, and the shortfall goes back into `c.speed`
+(and the weight-transfer estimate) through game.js's `axTarget`. Lateral grip
+is the combined force's sideways share, `F(ρ)·|αN|/ρ` against `F(|αN|)`: a fully
+locked front does not steer.
+
+VM bench, Monza start straight (`tests/unit/player-dynamics-vm.test.mjs`):
+
+| scenario | OFF | ON |
+|---|---|---|
+| dry stop from 200 km/h | 70.6 m, no lock | 70.6 m, κF −0.064, no lock |
+| dry 0–100 km/h | 6.33 s | 6.33 s, κR 0.062, no spin |
+| storm, slicks, bias 0.75: stop from 100 km/h | 17.5 m | 18.9 m, κF −1 (locked) |
+| same, from 200 km/h | 57.7 m | 59.7 m, locked |
+| grass launch, speed at 0.5 s | 1.7 m/s | 1.1 m/s, κR 1, 49 % force lost |
+
+Not yet: ABS/TC levels and the default-ON decision (a characterization
+re-baseline). Detail: `docs/notes/WHEEL-STATE-2026-10-19.md`.
+
 ### Wear, and the stop
 
 > Until 2026-09-14 this section read "Two things this does NOT do", and the

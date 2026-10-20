@@ -22,7 +22,7 @@ const CarBodyGeom = (function () {
     const tip = CHASSIS.nose[0], mid = CHASSIS.nose[1], root = CHASSIS.nose[2];
     // Concept bodies (coverLift set): push the WHOLE cone in Z and scale mid/root
     // height hard so a side silhouette moves, not only a tip past the front wing.
-    const sil = Math.abs(s.coverLift || 0) > 1e-6;
+    const sil = Math.abs(s.coverLift || 0) > 1e-6 || !!s.fitSeat;   // fitSeat: a concept body with a flat cover
     const midSlim = 1 + (s.noseSlim - 1) * (sil ? 0.85 : 0.55);
     const midZ = mid.z + (s.noseTipZ || 0) * (sil ? 0.72 : 0.45);
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
@@ -197,7 +197,10 @@ const CarBodyGeom = (function () {
       Math.pow(topLift, 0.6) * (0.29 + 0.03 * sweepN + 0.03 * finN));
     const topY = (REAR_TYRE_CROWN - 0.02) + rise, sy = 0.22 + 0.80 * rise;   // bottom = topY - sy stays ≈ 0.44–0.53
     const cy = topY - 0.015 - sy * 0.5;
-    const chord = 0.48 + 0.24 * topLift, rearZ = -2.69, frontZ = rearZ + chord;
+    // epChord (B·D3c, opt-in): a shorter plate, rear edge fixed; it still spans the
+    // whole wing (main plane LE -2.30) and the number board (-2.27..-2.57).
+    const ec = st.epChord ? Math.max(0.6, Math.min(1, +st.epChord)) : 1;
+    const chord = Math.max(ec < 1 ? 0.43 : 0, (0.48 + 0.24 * topLift) * ec), rearZ = -2.69, frontZ = rearZ + chord;
     const profile = (z, sectionCy, sectionSy) => ({
       z, cy: sectionCy, sy: sectionSy,
       bottom: sectionCy - sectionSy * 0.5,
@@ -212,16 +215,37 @@ const CarBodyGeom = (function () {
   const FW_MOVEABLE = 2;
   const AERO_STYLE_DEF = { frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
                            rearSweep: 0.03, rearTaper: 0.98 };
-  function wingOf(style) { return (style && style.wingStyle) || DEFAULT_WING; }
+  function wingOf(style) {
+    const w = (style && style.wingStyle) || DEFAULT_WING;
+    // wsFlat (B·D3c KEEL) resolves HERE, so the baked wing and every flown-flap
+    // consumer (garage, track, cache key) agree: no curl, tip rise or ears. The
+    // team's twist stays: the cascade's footplate strake is seated against it.
+    return style && style.wsFlat
+      ? Object.assign({}, w, { teCurve: 0, chordTaper: 0, tipRise: 0, flaps: 2, canard: 0 })
+      : w;
+  }
+  // The rear MAIN PLANE section [zLead, yLead, zTrail, yTrail] under the flap
+  // stack's trailing edge `u`. rwGap (B·D3c KEEL, opt-in, m): the plane drops and
+  // flattens (trailing edge drops more), opening a wider slot under the flap.
+  // `ep` (endplateGeom) caps the drop: the trailing edge stays 3 cm above the
+  // plate's lower edge, so the plane always seats in both plates.
+  function rearMainOf(u, st, ep) {
+    let g = st && st.rwGap ? Math.max(0, Math.min(0.08, +st.rwGap)) : 0;
+    if (g && ep) g = Math.max(0, Math.min(g, u - 0.225 - Math.max(ep.front.bottom, ep.rear.bottom) - 0.03));
+    return g ? [-2.30, u - 0.270 - g * 0.6, -2.52, u - 0.225 - g]
+             : [-2.30, u - 0.270, -2.52, u - 0.225];
+  }
   function wingFoilOf(st, i) {
-    const w = (st && st.wingStyle) || st || DEFAULT_WING;
+    const w = st && st.wsFlat ? wingOf(st) : (st && st.wingStyle) || st || DEFAULT_WING;
     const k = Math.max(0, Math.min(1, i / 2));
     return { twist: (w.twist || 0) * (0.55 + 0.55 * k),
              teCurve: (w.teCurve || 0) * (0.60 + 0.55 * k),
              chordTaper: (w.chordTaper || 0) * (0.55 + 0.55 * k),
              tipRise: (w.tipRise || 0) * (0.50 + 0.50 * k) };
   }
-  function frontCascade(aLvl) {
+  // fwGap (B·D3c KEEL, opt-in, m): each flap stands g higher than the one under
+  // it, so the slots between the elements open up. Absent = the shipped stack.
+  function frontCascade(aLvl, st) {
     const a = aLvl;
     const els = [
       [2.72, 0.048, 2.40, 0.086, 1.00, 0.024],   // main plane (structure, never moves)
@@ -230,6 +254,8 @@ const CarBodyGeom = (function () {
     if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.018]);   // flap 2
     if (a >= 3) els.push([2.20, 0.200, 1.98, 0.272, 0.92, 0.016]);   // flap 3
     if (a >= 4) els.push([2.08, 0.256, 1.88, 0.328, 0.88, 0.014]);   // flap 4
+    const g = st && st.fwGap ? Math.max(0, Math.min(0.03, +st.fwGap)) : 0;
+    if (g) for (let i = 1; i < els.length; i++) { els[i][1] += g * i; els[i][3] += g * i; }
     return els;
   }
   // How many of them the mesh still bakes. Never the main plane.
@@ -285,17 +311,28 @@ const CarBodyGeom = (function () {
     // adds the curled lip below), the 2026 field's signature endplate.
     { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
   ];
+  // B·D3c concept-sheet endplates (aero `epShape`, opt-in; absent = the
+  // `plate` table above). Heights stay inside FRONT_PLATE's own range.
+  // 1 RIFT: low nose, raked-up tail. 2 DELTA: tall, for up-swept flaps.
+  // 3 SERPENT: rolled crown over curled flaps. 4 KEEL: tall square plate, flat top.
+  const EP_SHAPES = [null,
+    { hF: 0.14, hR: 0.46, kick: 0.040, footW: 0.12, footZ: 0.54, arch: 0 },
+    { hF: 0.28, hR: 0.54, kick: 0.050, footW: 0.13, footZ: 0.56, arch: 1 },
+    { hF: 0.22, hR: 0.48, kick: 0.040, footW: 0.14, footZ: 0.58, arch: 0, roll: 1 },
+    { hF: 0.30, hR: 0.36, kick: 0.010, footW: 0.12, footZ: 0.52, arch: 0 },
+  ];
   function frontPlateGeom(aLvl, aero) {
     const lvl = aLvl == null ? 2 : aLvl;
     const pick = aero && aero.plate != null ? aero.plate : 1;
-    const P = FRONT_PLATE[Math.max(0, Math.min(3, Math.round(pick)))];
+    const shape = aero && aero.epShape ? EP_SHAPES[Math.max(1, Math.min(4, Math.round(aero.epShape)))] : null;
+    const P = shape || FRONT_PLATE[Math.max(0, Math.min(3, Math.round(pick)))];
     const half = frontHalf(lvl);
     const w = lvl >= 4 ? 0.060 : (lvl <= 0 ? 0.028 : 0.044);
     const x = half + 0.03;
     const kick = Math.min(P.kick, Math.max(0, CAR_HALF - half - 0.03 - w * 0.5 - 0.006));
     return { P, w, kick,
              front: { z: 2.66, x, y: 0.135, h: P.hF, t: 0.62 },
-             rear:  { z: 1.98, x: x + kick, y: 0.245, h: P.hR, t: 0.78 } };
+             rear:  { z: shape ? 2.06 : 1.98, x: x + kick, y: 0.245, h: P.hR, t: 0.78 } };
   }
   // FIA overall-width envelope, half. The 2026 regulations cap car width at
   // 1900 mm, which is also exactly where this model already draws the front
@@ -572,11 +609,19 @@ const CarBodyGeom = (function () {
   function flapSig(st0) {
     let sig = _flapSig.get(st0);
     if (sig === undefined) {
-      const w = st0.wingStyle || st0;
+      const w = st0.wsFlat ? wingOf(st0) : st0.wingStyle || st0;
       sig = [st0.frontSweep, st0.frontTaper, st0.frontRise,
              st0.rearSweep, st0.rearTaper, st0.drs || 0,
              w.twist || 0, w.teCurve || 0, w.chordTaper || 0, w.tipRise || 0]
         .map((v) => +v || 0).join(",");
+      // The top flap's ears are topology, not foil shape: key a non-default flap
+      // count (the default keeps its legacy text).
+      const flaps = wingOf(st0).flaps || 3;
+      if (flaps !== (DEFAULT_WING.flaps || 3)) sig += "|flaps:" + flaps;
+      // B·D3c shape fields join the key only when set, so shipped keys keep their text.
+      const ext = [st0.fwCurve, st0.fwStep, st0.rwRise, st0.rwCurve, st0.rwPlanes, st0.epChord].map((v) => +v || 0);
+      if (ext.some((v) => v)) sig += "|" + ext.join(",");
+      if (st0.rwGap || st0.fwGap) sig += "|gap:" + (+st0.rwGap || 0) + "," + (+st0.fwGap || 0);
       _flapSig.set(st0, sig);
     }
     return sig;
@@ -597,6 +642,18 @@ const CarBodyGeom = (function () {
     if (!byLvl) _flapByStyle.set(st0, byLvl = new Map());
     byLvl.set(aLvl, hit); return hit;
   }
+  // B·D3c tip lift, applied to EVERY element of a wing alike so the slots
+  // between elements keep their gap at every span station. Front: fwCurve
+  // (quadratic curl) + fwStep (stepped flaps). Rear: rwRise (linear) +
+  // rwCurve (quadratic). Returns {} when unset, so shipped specs stay as they were.
+  function shapeLift(st, wing) {
+    const c = Math.max(0, Math.min(0.14, +(wing === "front" ? st.fwCurve : st.rwCurve) || 0));
+    const r = Math.max(0, Math.min(0.10, +(wing === "front" ? st.fwStep : st.rwRise) || 0));
+    if (!c && !r) return {};
+    // A lifted front tip climbs toward the tyre's axle height, where its forward
+    // bulge reaches furthest: move the tip 6 cm forward with it.
+    return wing === "front" ? { rise2: c, riseStep: r, tePull: 0.06 } : { rise: r, rise2: c };
+  }
   function solveFlapsGeom(aLvl, style) {
     // A style must be a RECIPE OBJECT (see aeroStyleOf). Anything else — most
     // dangerously the truthy tier NUMBER getVisualTiers stores under .aero —
@@ -609,7 +666,7 @@ const CarBodyGeom = (function () {
     const frontRise = Math.max(-0.03, Math.min(0.16, st.frontRise));
     const rearSweep = Math.max(-0.06, Math.min(0.20, st.rearSweep));
     const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
-    const els = frontCascade(a), baked = frontBakedCount(a), fwHalf = frontHalf(a);
+    const els = frontCascade(a, st), baked = frontBakedCount(a), fwHalf = frontHalf(a);
     const out = [];
     // Solved in cascade order, each element handed the one it nests over: the
     // neighbour's own solved poses are what bound this one's travel, so the
@@ -624,27 +681,35 @@ const CarBodyGeom = (function () {
                                           xAngle: out[out.length - 1].xAngle })
         : null;
       const extra = wingFoilOf(st, i);
-      out.push(hinged("front" + i, "front", e[0], e[1], e[2], e[3], {
+      out.push(hinged("front" + i, "front", e[0], e[1], e[2], e[3], Object.assign({
         half: fwHalf * e[4], thick: e[5], taper: frontTaper,
         sweep: frontSweep * (0.75 + i * 0.10),
         rise: frontRise * (0.65 + i * 0.12) + extra.tipRise,
         attachHalf: fwHalf + 0.03,
-        upsweep: i === els.length - 1 && (wingOf(st).flaps || 3) >= 3 ? { fwHalf, e } : null,
+        // A B·D3c lifted tip IS the curl: no team ears on top of it (they reach the tyre).
+        upsweep: i === els.length - 1 && (wingOf(st).flaps || 3) >= 3 && !shapeLift(st, "front").rise2
+          && !shapeLift(st, "front").riseStep ? { fwHalf, e } : null,
         twist: extra.twist, teCurve: extra.teCurve, chordTaper: extra.chordTaper,
-      }, prev));
+      }, shapeLift(st, "front")), prev));
     }
     const ep = endplateGeom(a, st), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
-    const rearMain = elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0);
+    const rm = rearMainOf(upperTrailY, st, ep);
+    const rearMain = elemRecord([rm[0], rm[1]], [rm[2], rm[3]], 0.024, 0);
     const stack = [];   // [id, le, te, thick, sweepMul, half, paint?] bottom-up
-    if (a >= 2) stack.push(["rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9, 0.51]);
+    // rwPlanes 1 (B·D3c concept wings): one broad flap over the main plane, no mid
+    // element, top element or separate DRS plane, the sheet's two-plane wing.
+    const single = (st.rwPlanes | 0) === 1;
+    if (a >= 2 && !single) stack.push(["rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9, 0.51]);
     stack.push(["rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1, 0.51]);
-    if (a >= 4 && !(st.drs || 0)) stack.push(["rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1, 0.50]);
+    if (single) { /* the "rear" flap alone */ }
+    else if (a >= 4 && !(st.drs || 0)) stack.push(["rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1, 0.50]);
     // The drs plane car3d.js used to bake STATIC over this stack. It is part of
     // the RW Flap too, so it flies with it, in the livery's rearWing colour.
-    if (st.drs || 0) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
+    if ((st.drs || 0) && !single) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
     for (const el of rearFlap(stack, rearMain)) {
-      out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 }));
+      out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 },
+        shapeLift(st, "rear")));
     }
     return out;
   }
@@ -657,6 +722,7 @@ const CarBodyGeom = (function () {
       half: el.half, thick: el.thick, taper: el.taper,
       sweep: el.sweep, rise: el.rise, attachHalf: el.attachHalf,
       twist: el.twist, teCurve: el.teCurve, chordTaper: el.chordTaper,
+      rise2: el.rise2, riseStep: el.riseStep, tePull: el.tePull,
     }, col, surface === "carbon" ? SURFACES.carbon : SURFACES.paint);
     if (el.upsweep) {
       const { fwHalf, e } = el.upsweep;
@@ -715,7 +781,7 @@ const CarBodyGeom = (function () {
     // drawAeroFlaps hangs it at with the wing closed.
     const spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
                    half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
-                   rise: fg.rise, attachHalf: fg.attachHalf };
+                   rise: fg.rise, attachHalf: fg.attachHalf, rise2: fg.rise2, riseStep: fg.riseStep };
     const elem = fg.id, ca = Math.cos(fg.zAngle), sa = Math.sin(fg.zAngle);
     const pose = (p) => {
       const dy = p.y + p.h - fg.y, dz = p.z - fg.z;
@@ -1322,7 +1388,7 @@ const CarBodyGeom = (function () {
     // Concept bodies set coverLift ≠ 0: push inletH onto the pod TOP line so
     // tall/low inlets read in side view (DAD #2924: need ≥ SUBTLE_PCT in side).
     // TEAM_STYLE has no coverLift — keep the old mild shoulder coupling.
-    const sil = style && Math.abs(style.coverLift || 0) > 1e-6;
+    const sil = style && (Math.abs(style.coverLift || 0) > 1e-6 || !!style.fitSeat);
     const shoulderTop = 0.49 + 0.23 * (shoulder - 1) + inletH * (sil ? 0.95 : 0);
     const inletBias = style ? (style.inlet || 0) : 0;
     // THE UNDERCUT. The pod section is a quad from [inner, innerBottom] to
@@ -1343,7 +1409,7 @@ const CarBodyGeom = (function () {
     // decal are both sized in pod fractions, so they track it together.
     const waistTop = 0.42 + 0.10 * (shoulder - 1) + (sil ? inletH * 0.70 : 0);
     const waistOuterTop = 0.38 + 0.08 * (shoulder - 1) + (sil ? inletH * 0.55 : 0);
-    return [
+    const st = [
       { z: 0.62, inner: 0.30, outer: outerFront, innerBottom: inletFloor,
         outerBottom: 0.258 + 0.09 * (undercut - 1) + undercutD * 0.70,
         innerTop: 0.45 + inletBias + inletH, outerTop: 0.46 + inletBias * 0.6 + inletH * 0.85 },
@@ -1374,7 +1440,32 @@ const CarBodyGeom = (function () {
         outerBottom: 0.134,
         innerTop: 0.30 + 0.05 * (shoulder - 1) + (sil ? inletH * 0.08 : 0),
         outerTop: 0.27 + (sil ? inletH * 0.05 : 0) },
-    ].map(clampPodStation);
+    ].map(podShaped(style && style.podShape)).map(clampPodStation);
+    // Ease the undercut's lower line: an inner station whose outerBottom creases
+    // more than 3° (5-9° at z 0.50 on every car) moves part-way onto its
+    // neighbours' chord (up to four passes; the ends and the undercut gap stay). The
+    // gentler aft stations stay put: the flank details are pinned to them.
+    const crease = (a, b, c) => Math.abs(Math.atan2(a.outerBottom - b.outerBottom, a.z - b.z) - Math.atan2(b.outerBottom - c.outerBottom, b.z - c.z));
+    for (let pass = 0; pass < 4; pass++) {
+      const ob = st.map((p) => p.outerBottom);
+      const ease = st.map((p, i) => i > 0 && i < st.length - 1 && crease(st[i - 1], p, st[i + 1]) > 0.0524);
+      for (let i = 1; i < st.length - 1; i++) {
+        if (!ease[i]) continue;
+        const a = st[i - 1], b = st[i + 1], k = (a.z - st[i].z) / (a.z - b.z);
+        const chord = ob[i - 1] + (ob[i + 1] - ob[i - 1]) * k;
+        st[i].outerBottom = Math.max(st[i].innerBottom + 0.004, ob[i] + (chord - ob[i]) * 0.6);
+      }
+    }
+    return st;
+  }
+  // podShape (B·D1d concept bodies, opt-in; absent = shipped): per-station metre offsets on the
+  // seven pod stations, front to rear — top (both tops), out (outer half-width), bot (outer belly;
+  // + raises it = deeper undercut). The validity clamp below still runs after it.
+  function podShaped(ps) {
+    if (!ps) return (p) => p;
+    return (p, i) => Object.assign(p, {
+      innerTop: p.innerTop + (ps.top ? ps.top[i] : 0), outerTop: p.outerTop + (ps.top ? ps.top[i] : 0),
+      outer: p.outer + (ps.out ? ps.out[i] : 0), outerBottom: p.outerBottom + (ps.bot ? ps.bot[i] : 0) });
   }
   // Post-styling validity pass (#3111). The style offsets are raw metres and
   // BODY_STYLES carries 4-10x the TEAM_STYLE ranges, so on a narrow or low-
@@ -1677,11 +1768,11 @@ const CarBodyGeom = (function () {
     addBox(out, x, y, z - D - 0.008, w * K, h * K, 0.016, DARK);
   }
 
-  function buildSidepodBodywork(out, c1, eng, anchors) {
+  function buildSidepodBodywork(out, c1, eng, anchors, facet) {   // facet (B·D1d Delta): flat-panel pods inside a rounded build
     const data = anchors || bodyAnchors({ engine: 1, _visual: { engine: eng } });
     const stations = data.podStations;
     if (data.podProfile) buildConceptPods(out, stations, data.podProfile, c1);
-    else if (shadeFlags.round) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
+    else if (shadeFlags.round && !facet) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
     else for (const side of [-1, 1]) {
       addStationLoft(out, stations.map((p) => sidepodStation(side, p.z, p.inner, p.outer,
         p.innerBottom, p.outerBottom, p.innerTop, p.outerTop)), c1, INTAKE);
@@ -1787,7 +1878,7 @@ const CarBodyGeom = (function () {
       styledNoseStations, noseFlankX, bodySpan, haloHoopPath,
       endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
       noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
-      buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard,
+      buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift, rearMainOf,
       FIN_SHAPES, FIN_SHAPE_IDS, FIN, sharkFinRoot, sharkFinPanel, sharkFinBadge, finOf, finTop,
       COVER_VENT_IDS, SPINE_HEIGHT_IDS, spineRise, COVER_STACK,
       coverProfile, coverFlankX, coverSurfaceY,

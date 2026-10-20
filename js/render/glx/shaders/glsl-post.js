@@ -153,35 +153,14 @@ void main() {
   // derivatives), then counts neighbour samples that rise above the surface
   // tangent plane — so flat ground (the road at a grazing angle) is NOT falsely
   // darkened, only real creases/contacts (car-on-tarmac, barrier feet, kerbs).
-  // PERSPECTIVE SCALARS (perf hunt 2 G11, TLX D11 perspU). game.js builds proj
-  // with M4.perspectiveTo and invProj with M4.invertTo: every entry but
-  // invProj (0, 5, 11, 12, 13, 14, 15) / proj (0, 5, 8, 9, 10, 11, 14) is an
-  // exact 0, so the mat4 x vec4 per tap reduces to a few MADs. The dropped
-  // products are +-0, but the GPU may round the remaining sum in a different
-  // order (FMA), so this is ulp-level, not bit-identical: compiled in only with
-  // apex26.glxPerspScalar=1 (GLX_PERSP_SCALAR, post.js), and per frame only
-  // while the CPU sees the sparse shape (uPersp; XR or any other matrix keeps
-  // the mat4). Without the define the source is the original expressions.
-  // Column-major: uIpXY = invProj (0, 5, 12, 13), uIpZW = invProj (14, 11, 15),
-  // uPXY = proj (0, 5, 8, 9), uPW = proj[11]. Callers never read clip .z.
-  const PERSP_FNS = `#ifdef GLX_PERSP_SCALAR
-uniform float uPersp;
-uniform vec4 uIpXY;
-uniform vec3 uIpZW;
-uniform vec4 uPXY;
-uniform float uPW;
-#endif
-vec3 invProjP(vec2 ndcXY, float nz) {
-#ifdef GLX_PERSP_SCALAR
-  if (uPersp > 0.5) return vec3(ndcXY * uIpXY.xy + uIpXY.zw, uIpZW.x) / (nz * uIpZW.y + uIpZW.z);
-#endif
+  // View-space reconstruct / reproject through the full matrices. A scalar
+  // sparse-perspective variant (perf hunt 2 G11) was ulp-level, never on by
+  // default, and retired with its glxPerspScalar knob (#3115).
+  const PERSP_FNS = `vec3 invProjP(vec2 ndcXY, float nz) {
   vec4 v = uInvProj * vec4(ndcXY, nz, 1.0);
   return v.xyz / v.w;
 }
 vec4 projP(vec3 q) {
-#ifdef GLX_PERSP_SCALAR
-  if (uPersp > 0.5) return vec4(q.x * uPXY.x + q.z * uPXY.z, q.y * uPXY.y + q.z * uPXY.w, 0.0, q.z * uPW);
-#endif
   return uProj * vec4(q, 1.0);
 }`;
   const SSAO_FS = `#version 300 es

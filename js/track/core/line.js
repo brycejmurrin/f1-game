@@ -606,6 +606,6 @@ const TrackLine = (function () {
     return _out;
   }
 
-  return { bake, at, attackAt, pathK, lineCurvature, K_ON, MARGIN, ZONE_M, PATH_FLOOR, SLOPE_MAX };
+  return { bake, at, attackAt, pathK, lineCurvature, K_ON, MARGIN, PATH_FLOOR, SLOPE_MAX };
 })();
 Object.freeze(TrackLine);
