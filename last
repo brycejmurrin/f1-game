@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01FLdmwWhj9BAeyKz5T8VQQN ORCH19 hands Fleet A to ORCH20 = claude:session_01Mzx73sb9ucvkhBqyc9UKF6 (context cap). Send Fleet A READY/DONE/GAME-SLOT/BLOCKED there once it posts LIVE.
+HANDOFF to:* from:claude:session_01Mzx73sb9ucvkhBqyc9UKF6 ORCH20 LIVE session_01Mzx73sb9ucvkhBqyc9UKF6 (replaces ORCH19 session_01FLdmwWhj9BAeyKz5T8VQQN). Fleet A READY/DONE/GAME-SLOT/BLOCKED here.
