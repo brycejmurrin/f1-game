@@ -662,6 +662,23 @@ const Parts = (function () {
       { mirrorMount: 1, mirror: 1 }],
     ["cockpit", "deflector", "style_cockpit_mirrorframe", "Framed Mirrors", "boxed aero frame round each mirror (Ferrari SF90 / Red Bull RB16)",
       { mirrorFrame: 1, mirror: 1.1 }],
+    // B·D7 suspension layouts (2026-10-19): the pullAt / antiDive / upright knobs
+    // (car3d.js; 0 = shipped geometry) as extra picks, each on the option whose
+    // stats the real car's layout shares. Shipped options keep their look.
+    ["suspension", "active", "style_susp_upright", "Extended Upright", "extended upright, anti-dive and a front pullrod (Red Bull RB19-style)",
+      { ride: -0.043, arm: 1.28, push: 1, pull: 1, rocker: 0, upright: 1, antiDive: 1.2, pullAt: 1, heave: 1 }],
+    ["suspension", "low_ride", "style_susp_splitpull", "Split Pullrod", "pullrod front, pushrod rear on slim carbon arms (Williams FW46-style)",
+      { ride: -0.037, arm: 0.924, push: 1, pull: 1, pullAt: 1, wishbone: 1.12, toe: 0.88, rocker: 0, heave: 1 }],
+    ["suspension", "kerb_spec", "style_susp_doublepull", "Double Pullrod", "pullrod at both ends on heavy-gauge arms (Alpine A524-style)",
+      { ride: 0.012, arm: 1.144, push: 1, pull: 1, wishbone: 0.96, toe: 1.04, rocker: 1 }],
+    ["suspension", "interlinked", "style_susp_antidive", "Anti-Dive Pushrod", "pushrod with steeply raked anti-dive front arms (Mercedes W15-style)",
+      { ride: -0.024, arm: 1.053, push: 1, antiDive: 1, wishbone: 1.06, toe: 0.94, rocker: 2, heave: 1 }],
+    ["suspension", "track", "style_susp_tallupright", "Tall Upright", "tall uprights lifting the upper wishbone clear of the airflow",
+      { upright: 1.2 }],
+    ["suspension", "heave_spring", "style_susp_rearpull", "Rear Pullrod", "pullrod rear with a pushrod front and a heave spring",
+      { pullAt: 2 }],
+    ["suspension", "active", "style_susp_activedive", "Active Anti-Dive", "active layout with short uprights and anti-dive geometry",
+      { upright: 0.8, antiDive: 0.8 }],
     // B·D3 period aero (2026-10-19): one opt-in mesh field each (rwSpoon, beam2,
     // monkey, fwBridge, xwing, ddiff) on top of the equivalent's full recipe.
     ["aero", "low", "style_aero_rwspoon", "F1-75 Spoon", "2022 spoon rear wing (Ferrari F1-75, RB18 low-drag)",
@@ -698,14 +715,15 @@ const Parts = (function () {
     geometry: Object.freeze({
       engine: Object.freeze(["in", "snork", "twin", "inlet", "outlet",
         "podWidth", "shoulderHeight", "undercut", "coke", "tailWidth", "coverHeight",
-        "servicePanel", "heatShield", "chimney", "scoopLip"]),
+        "servicePanel", "heatShield", "chimney", "scoopLip", "louvre"]),
       aero: Object.freeze(["lvl", "beam", "drs", "vane", "plate", "casc", "swan", "tvane",
         "arch", "gill", "duct", "board", "slot",
         "frontSweep", "frontTaper", "frontRise", "rearSweep", "rearTaper",
         "floorEdge", "floorCut", "diffuserRise", "fin",
-        // Design-preview (B·D3) opt-in fields: absent = shipped mesh.
+        // B·D3 period aero opt-in fields: absent = shipped mesh.
         "rwSpoon", "beam2", "monkey", "fwBridge", "xwing"]),
-      suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave"]),
+      suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
+        "pullAt", "antiDive", "upright"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),
       // cover + coverVanes: opt-in covered face only (open rim is the default).
       // spokes / dish / gunNut: open-rim identity consumed by car-wheels when the
