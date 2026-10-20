@@ -1043,6 +1043,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/screen-looks.test.mjs",
+  // Lazy bundles preload every gated wave and still evaluate in edge order; the boot preloads its likely backend (B·H8 load hunt).
+  "tests/unit/script-loader-preload.test.mjs",
   "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",

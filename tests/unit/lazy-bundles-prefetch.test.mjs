@@ -58,6 +58,7 @@ function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
   ctx.document = {
     createElement() { return { dataset: {}, remove() {} }; },
     head: { appendChild(el) {
+      if (el.rel === "preload") return;   // ScriptLoader.preload: a fetch hint, not an inject
       const rel = el.src.replace(/\?.*$/, "");
       injected.set(rel, (injected.get(rel) || 0) + 1);
       setTimeout(() => {
