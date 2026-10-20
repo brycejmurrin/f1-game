@@ -146,6 +146,7 @@
       "*": [
         "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
+        "tests/unit/apex-diag-canvas.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/net-stub-surface.test.mjs"
       ]
@@ -162,6 +163,7 @@
       "create": [
         "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
+        "tests/unit/apex-diag-canvas.test.mjs",
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -2376,7 +2378,8 @@
         "tests/unit/livery-finish-contract.test.mjs"
       ],
       "finishOf": [
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs"
       ],
       "*": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -2641,6 +2644,7 @@
         "tests/unit/helmets.test.mjs"
       ],
       "teamStyleOf": [
+        "tests/unit/car-mesh-anchors.test.mjs",
         "tests/unit/livery-stations.test.mjs"
       ],
       "*": [
@@ -6925,9 +6929,53 @@
       ]
     },
     "js/garage/scene-equipment.js": {
+      "extinguisher": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "floorFan": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "hoseReel": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "noseTrolley": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "radioRack": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "rearJack": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "rollingStool": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "serviceRig": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "starterCart": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "toolChest": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "tyreTrolley": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wheelDolly": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wheelGun": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wheelGunDock": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "wingRack": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "*": [
         "tests/unit/garage-looks.test.mjs",
-        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -7056,6 +7104,9 @@
         "tests/unit/garage-looks.test.mjs"
       ],
       "spot": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "toolChest": [
         "tests/unit/garage-mesh.test.mjs"
       ],
       "uploadLive": [
@@ -7202,6 +7253,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "create": [
@@ -7216,8 +7268,15 @@
       "csTabId": [
         "tests/unit/livery-design.test.mjs"
       ],
+      "discardLivDraft": [
+        "tests/unit/team-livery.test.mjs"
+      ],
       "endLivPreview": [
-        "tests/unit/livery-draft-mesh-cache.test.mjs"
+        "tests/unit/livery-draft-mesh-cache.test.mjs",
+        "tests/unit/team-livery.test.mjs"
+      ],
+      "flushLivPreview": [
+        "tests/unit/livery-design.test.mjs"
       ],
       "framePreset": [
         "tests/unit/ui-improve-pass.test.mjs"
@@ -12796,6 +12855,7 @@
         "tests/unit/vertex-pack.test.mjs"
       ],
       "pack": [
+        "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
       ],
       "toHalf": [
@@ -13461,6 +13521,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -13566,14 +13627,23 @@
       "_ensureSpatial": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "_expandPull": [
+        "tests/unit/livery-finish-contract.test.mjs"
+      ],
       "_fail": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "_flushLitRings": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "_interleave": [
+        "tests/unit/livery-finish-contract.test.mjs"
+      ],
       "_jsStrike": [
         "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "_makeAttrBG": [
+        "tests/unit/livery-finish-contract.test.mjs"
       ],
       "_matLayerBytes": [
         "tests/unit/assets-pack.test.mjs"
