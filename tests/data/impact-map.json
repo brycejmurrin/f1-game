@@ -7014,7 +7014,8 @@
       ],
       "setLook": [
         "tests/unit/garage-crew.test.mjs",
-        "tests/unit/garage-looks.test.mjs"
+        "tests/unit/garage-looks.test.mjs",
+        "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
         "tests/unit/garage-personality.test.mjs",

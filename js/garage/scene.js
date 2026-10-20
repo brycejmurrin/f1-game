@@ -729,11 +729,14 @@ function mirrorSheen(eye, carMat) {
   const height = 1 / (1 + Math.max(0, ey - 2.5) * 0.25);
   return MIRROR_SHEEN_PEAK * MD.sheen * lateral * height;
 }
-function ensureMirrorFade() {
+function ensureMirrorFade(liv) {
   if (mirrorFadeMesh || !_gfx) return;
   const out = acc();
-  // Bay box only — apron / pit lane stay opaque so a fade pass cannot open them.
-  tile(out, -BOX_HW, BOX_HW, BOX_ZB, BOX_ZF, [0.115, 0.118, 0.126], 0.002, MAT.ASPHALT);
+  // Restore the authored bay surface over the resolved reflection. A plain
+  // grey quad repainted the whole box, then popped away as the car moved out.
+  // Preserve every room colour, joint and marking; apron / lane stay opaque.
+  buildBayFloor(out, liv, GaragePrims.look());
+  for (let i = 1; i < out.pos.length; i += 3) out.pos[i] += 0.002;
   mirrorFadeMesh = _gfx.createMesh(out);
 }
 function ensureDynamic() {
@@ -1111,6 +1114,7 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++)
       if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
     if (floorMesh) _gfx.freeMesh(floorMesh);
+    if (mirrorFadeMesh) { _gfx.freeMesh(mirrorFadeMesh); mirrorFadeMesh = null; }
     for (let i = 0; i < SIDES.length; i++)
       if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
     const look = GaragePrims.look();   // design-preview room look; null = shipped
@@ -1300,7 +1304,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
     const sheen = mirrorSheen(eye, carMat);
     if (sheen > 0.02) {
       _gfx.draw(carMesh, arrivalMirror, MIRROR_RESOLVE);
-      ensureMirrorFade();
+      ensureMirrorFade(liv);
       if (mirrorFadeMesh) {
         _mirrorFadeOpts.alpha = 1 - sheen;
         _gfx.draw(mirrorFadeMesh, MAT_I, _mirrorFadeOpts);
