@@ -1644,6 +1644,21 @@ try {
   } else {
     out.frameReadFailed = shot ? "screenshot failed, so there is nothing to measure" : "no --shot requested";
   }
+  // --profile: the next launch must find the pick PROVED. game.js disarms the boot
+  // canary after PROVE_FRAMES (300) world presents; a cold leg that closed at 284
+  // (census 39504425366) left it armed, so the warm leg booted GLX ("three never
+  // presented a frame last load") and timed the wrong renderer.
+  if (PROFILE) {
+    const t = Date.now();
+    let armed = null;
+    while (Date.now() - t < 30000) {
+      armed = await page.evaluate(() => localStorage.getItem("apex26.gfxBackendProbe")).catch(() => "unreadable");
+      if (!armed || armed === "unreadable") break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    out.profile.probeArmedAtClose = armed || null;
+    out.profile.proofWaitMs = Date.now() - t;
+  }
   out.ok = true;
   checkpoint("done");
 } catch (e) {
