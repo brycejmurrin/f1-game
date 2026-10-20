@@ -80,6 +80,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 2026 aero defaults for catalog options that omit beam/drs/board (item 4).
   "tests/unit/aero-defaults-2026.test.mjs",
   "tests/unit/aero-flap-travel.test.mjs",
+  // B·D3 design-preview aero/floor fields: reach the mesh, default off.
+  "tests/unit/aero-preview-fields.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
@@ -370,6 +372,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/deploy-tool.test.mjs",
   // Design-review matrix (tools/shot/design-matrix.mjs): expansion, framing math, diff labels, batch + resume. Pure, no browser.
   "tests/unit/design-matrix.test.mjs",
+  // B·D4 preview fields (wheels/brakes/cockpit): default off, each candidate visible vs its equivalent. ~10 s.
+  "tests/unit/design-preview-wheels.test.mjs",
   // The track designer's drawing surface (js/editor/canvas.js) alone: long-press
   // → onContext, the stamp tool's ghost polyline, the drag / span measurement
   // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
@@ -455,6 +459,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
   "tests/unit/finish-coast-rev-vm.test.mjs",
+  // Car part fit (tools/car/car-fit-audit.mjs): GAP / PENETRATION / ZFIGHT / OPEN on box
+  // fixtures, the --base comparison, and the Fenced Halo brow fixture. VM, ~2 s.
+  "tests/unit/fit-audit-car.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/flags.test.mjs",
   // Nightly flake tally (tools/ci/flake-tally.mjs): report.json / live-reporter
@@ -560,6 +567,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-defaults.test.mjs",
   "tests/unit/garage-followups.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
+  // Garage room LOOKS (design preview): every look builds a valid bay and changes the room.
+  "tests/unit/garage-looks.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
   // The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.

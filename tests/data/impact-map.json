@@ -3048,6 +3048,7 @@
       "getVisualTiers": [
         "tests/specs/parts-catalog.spec.js",
         "tests/unit/aero-defaults-2026.test.mjs",
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -6700,6 +6701,7 @@
         "tests/unit/garage-sheet-round2.test.mjs"
       ],
       "*": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
@@ -6802,22 +6804,33 @@
     },
     "js/garage/scene-crew.js": {
       "build": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "draw": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "init": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "layout": [
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "noseTip": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "setLook": [
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs"
       ]
     },
     "js/garage/scene-dress.js": {
       "*": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -6828,6 +6841,7 @@
     },
     "js/garage/scene-equipment.js": {
       "*": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -6841,6 +6855,7 @@
         "tests/unit/scene-live.test.mjs"
       ],
       "*": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -6852,8 +6867,11 @@
       "block": [
         "tests/unit/garage-mesh.test.mjs"
       ],
-      "*": [
+      "setLook": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs"
+      ],
+      "*": [
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -6863,6 +6881,7 @@
     },
     "js/garage/scene.js": {
       "buildStatic": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
       ],
       "ctxKey": [
@@ -6870,6 +6889,7 @@
         "tests/unit/scene-live.test.mjs"
       ],
       "debug": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -6879,6 +6899,7 @@
       ],
       "draw": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -6889,9 +6910,13 @@
       "framingHull": [
         "tests/unit/garage-mesh.test.mjs"
       ],
+      "hangerSpan": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
       "init": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -6903,6 +6928,16 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "mood": [
+        "tests/unit/garage-looks.test.mjs",
+        "tests/unit/garage-personality.test.mjs"
+      ],
+      "moodCtx": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
+      "moodDef": [
+        "tests/unit/garage-personality.test.mjs"
       ],
       "prepare": [
         "tests/unit/garage-mesh.test.mjs",
@@ -6930,6 +6965,9 @@
       "release": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "setMood": [
+        "tests/unit/garage-looks.test.mjs"
       ],
       "spot": [
         "tests/unit/garage-mesh.test.mjs"
@@ -7128,6 +7166,7 @@
         "tests/unit/car-materials.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
@@ -13772,6 +13811,7 @@
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/build-worker.test.mjs",
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -13826,6 +13866,7 @@
     },
     "js/track/core/pit.js": {
       "build": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -13834,6 +13875,7 @@
       "resolve": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",

@@ -56,6 +56,11 @@
       "presentation": "shared-levels",
       "preserve": "All screenshots and contact sheets; distinguish successful captures from blank/error renders."
     },
+    "tools/car/car-fit-audit.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Every failing row with its NEW/WORSE/PRE-EXISTING status, section pair, worst value and position, the final = car-fit-audit verdict line and the failed exit; JSON retains every row and joint."
+    },
     "tools/car/career-economy.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -90,6 +95,16 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Generated fitted-zone/source output when requested, original photo provenance and exact mappings."
+    },
+    "tools/car/lib/fit-checks.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/car/lib/fit-geom.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/car/livery-contrast.mjs": {
       "action": "keep-native",
