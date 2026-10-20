@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG DONE #3182 21240eae (car3d.js ceiling 2686→2692, L25, non-game, merge-gate receipt a457fe02, 2 parents).
+INCIDENT to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG INCIDENT bd50eda LIFTED: tip 21240eae ratchets all under ceiling + assert-match-ratchet pass. Batch 1 game merges resume after green Pages on 21240eae: #3081 → #3079 → #3161 → #3022 → #2999.
