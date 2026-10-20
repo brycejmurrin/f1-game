@@ -172,6 +172,7 @@ const TLX = (function () {
     try {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
+      const _dbg = (k) => { try { return localStorage.getItem("apex26.dbg" + k) === "1"; } catch (_) { return false; } };   // MEASUREMENT ONLY
 
       // PHONES GET TLX WHEN THEY PICK IT. three retains the CPU copy of every
       // geometry attribute (71.5 MB / 5,665 buffers vs GLX 17.8 MB / 253) and
@@ -495,7 +496,7 @@ const TLX = (function () {
           // WebKit #269582: a float swapchain crashed / painted black through
           // iOS 26.x. HDR stays in offscreen targets (tlx-post); only the
           // canvas format downgrades. Same as WGX_LITE → bgra8unorm.
-          ...(!forceWebGL && (isMobile || isWebKit)
+          ...(!forceWebGL && (isMobile || isWebKit) && !_dbg("U8off")
             ? { outputType: THREE.UnsignedByteType, powerPreference: "low-power" }
             : {}),
           forceWebGL,
@@ -1228,7 +1229,7 @@ const TLX = (function () {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
-            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"),
+            renderer, mobileTier: mobileTier && !_dbg("ShadowFull"), isMobile: isMobile && !_dbg("ShadowFull"), softwareGL: softContent("shadow"),
             isWarming: () => !!_warmPending,   // releaseGeometry queues its park while a compile holds the casters
           });
         }
@@ -1290,7 +1291,7 @@ const TLX = (function () {
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
-            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode, ssrTag: _wantTag(),
+            { renderer, isMobile: isMobile && !_dbg("PostFull"), chunks, shadow: shadowSys, viz: vizMode, ssrTag: _wantTag(),
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
@@ -2290,7 +2291,7 @@ const TLX = (function () {
       // route: their pack is the caster's. Desktop only (a phone's mirror is the
       // lite rung, which draws no batches); gfx.instPerPass tells game.js to
       // skip its freeze replay and record copies, which this makes redundant.
-      const _instPerPass = !isMobile;
+      const _instPerPass = !isMobile || _dbg("InstPass");
       function _mirOf(batch) {
         if (batch._mir) return batch._mir;
         const main = batch.imesh, src = batch.geo, n = main.userData.tlxInstCap | 0;
@@ -3718,7 +3719,7 @@ const TLX = (function () {
         // see it (lavapipe renders the road at every tier — measured). The
         // desktop win (PERF-FINDINGS 2r) is untouched; re-open this only with
         // evidence from a real handset.
-        if (isMobile) return;
+        if (isMobile && !_dbg("FreeGeo")) return;
         // AND KNOW WHAT IT COSTS ON DESKTOP. Freeing an array disarms the
         // two intermediate rungs of the paint-failure ladder below (dropTo ->
         // unlitMat -> rawUnlitMat): dropTo reassigns pm.material, a new

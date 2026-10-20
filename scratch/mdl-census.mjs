@@ -7,20 +7,27 @@ import { gotoGame } from "../tools/shot/probe-page.mjs";
 import { raceGate } from "../tools/lib/census-entry.mjs";
 import { writeFileSync } from "node:fs";
 
-const WATCH_S = +(process.env.MDL_WATCH || 75);
+const WATCH_S = +(process.env.MDL_WATCH || 70);
 const TRACK = process.env.MDL_TRACK || "monaco";
 const OUT = process.env.MDL_OUT || "tlx-devlost.json";
 const SOFT = process.env.MDL_SOFT === "1";
 const PHONE = { viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, hasTouch: true };
 const DESK = { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, hasTouch: false };
+const HI = { "apex26.forceMobileTier": "1", "apex26.gfxHigh": "1" };
 const ALL = {
+  base: { v: DESK, ls: HI },
+  U8off: { v: DESK, ls: { ...HI, "apex26.dbgU8off": "1" } },
+  ShadowFull: { v: DESK, ls: { ...HI, "apex26.dbgShadowFull": "1" } },
+  PostFull: { v: DESK, ls: { ...HI, "apex26.dbgPostFull": "1" } },
+  InstPass: { v: DESK, ls: { ...HI, "apex26.dbgInstPass": "1" } },
+  all: { v: DESK, ls: { ...HI, "apex26.dbgU8off": "1", "apex26.dbgShadowFull": "1", "apex26.dbgPostFull": "1", "apex26.dbgInstPass": "1" } },
   mobile: { v: DESK, ls: { "apex26.forceMobileTier": "1" } },
   mobilePhone: { v: PHONE, ls: { "apex26.forceMobileTier": "1" } },
   mobileHigh: { v: DESK, ls: { "apex26.forceMobileTier": "1", "apex26.gfxHigh": "1" } },
   control: { v: DESK, ls: {} },
   controlPhone: { v: PHONE, ls: {} },
 };
-const ARMS = (process.env.MDL_ARMS || "mobile,mobileHigh,control,mobilePhone").split(",").filter((a) => ALL[a]);
+const ARMS = (process.env.MDL_ARMS || "base,U8off,ShadowFull,PostFull,InstPass,all").split(",").filter((a) => ALL[a]);
 const report = { started: new Date().toISOString(), watchS: WATCH_S, track: TRACK, rows: [] };
 const save = () => writeFileSync(OUT, JSON.stringify(report, null, 2));
 const log = (m) => console.log("[mdl] " + m);
