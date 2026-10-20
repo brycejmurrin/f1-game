@@ -276,7 +276,7 @@ test("cancelRun uses latestRunId by default and maps 409 run_not_cancellable", a
   let calls = stub([200, { id: ID, latestRunId: "run-9" }], [200, { id: "run-9" }]);
   try {
     assert.deepEqual(await cancelRun(ID, undefined, { file }), [`CANCELLED ${ID} run=run-9`]);
-    assert.match(calls[1].url, /\/runs\/run-9\/cancel$/);
+    assert.ok(/\/runs\/run-9\/cancel$/.test(calls[1].url));
     stub([409, err("run_not_cancellable")]);
     assert.ok((/^NOT_CANCELLABLE /).test((await cancelRun(ID, "run-9", { file }))[0]));
     calls = stub([200, { id: ID }]);
