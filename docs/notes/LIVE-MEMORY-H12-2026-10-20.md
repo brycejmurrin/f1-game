@@ -47,3 +47,31 @@ Growth from cycle 2 to cycle 3 at the menu: +12.1 MB heap and +12.2 MB buffers b
 
 Guard: `tests/unit/traffic-arc-buckets.test.mjs` "arc buckets never keep a previous field's cars alive" (WeakRef +
 `--expose-gc`). It fails with the nulling line removed.
+
+## How much is too much on a phone (web research, 2026-10-20)
+
+No vendor publishes a per-tab budget. The evidence is bug reports and engine forums, anecdotal, and it agrees on
+a WebGL page dying silently (Safari "A problem repeatedly occurred", no `webglcontextlost` first) well under 1 GB:
+
+- WebKit bug 290623 (iPhone 13 mini): page memory 180 → 338 MB over repeated navigation, then the crash loop.
+  https://bugs.webkit.org/show_bug.cgi?id=290623
+- WebKit bug 300782 (iOS 18): endless reload loop, no OOM error reaches JS. https://bugs.webkit.org/show_bug.cgi?id=300782
+- three.js forum: Safari crashes when GPU memory crosses a per-device threshold; CPU and GPU share it.
+  https://discourse.threejs.org/t/a-problem-repeatedly-occurred-in-safari-when-shadow-map-size-too-big/44542
+- Unity WebGL forum guidance: keep Safari pages around 300–500 MB.
+  https://discussions.unity.com/t/webgl-deliver-for-all-platforms-including-iphones-930374/930374
+- JSC GC is concurrent (Riptide): most pauses ≤ 1 ms, but a full collection over a large heap still pauses.
+  https://webkit.org/blog/7122/ ; V8: https://v8.dev/blog/trash-talk
+
+Working budget for this game on a 2–4 year old iPhone: ~300 MB total WebKit-visible memory (JS heap + ArrayBuffers +
+GPU), with no net growth per race. Before this fix a session grew ~24 MB per cycle of two races (heap + buffers,
+CPU side only); about a dozen races would reach the growth that crashed the iPhone 13 mini in bug 290623.
+
+## Leads for other lanes (measured here, not fixed)
+
+- Garage prebuild at the idle title (`js/garage/prebuild.js`): ~11 MB post-GC at the menu, released at race start.
+  By design (it removes the GARAGE tap freeze); a candidate for B·H8's warm path is to skip the speculative title
+  prebuild on low-memory phones.
+- `resolveLivery` (`js/car/custom-liveries.js`) is memoised on `store.rev`, yet the race-frame allocation sample shows
+  its slow path (`pickLivery`, `Liveries.forTeam`, `store.js cloneDef`): something bumps the key or bypasses the cache
+  during a race. Needs a miss counter in a rendered race to confirm.
