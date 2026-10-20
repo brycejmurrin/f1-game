@@ -565,6 +565,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
   "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
+  "tests/unit/garage-finish-remap.test.mjs",
   "tests/unit/garage-followups.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   // Garage room LOOKS (design preview): every look builds a valid bay and changes the room.

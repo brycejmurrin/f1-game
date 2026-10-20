@@ -502,7 +502,7 @@ function resetSetupCam() {
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
-let _spMesh = null, _spMeshKey = "", _spHull = null;
+let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null;
 // Which livery fields can MOVE a vertex, as opposed to only recolouring one.
 // Measured (tests/unit/setup-preview-hull.test.mjs builds the car both ways and
 // compares positions byte for byte): a hue change never moves anything, and only
@@ -546,13 +546,17 @@ function getSetupPreviewMesh() {
     // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
     // survives the per-value colour-drag busts livePreviewDraft issues.
     const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (typeof liv[f] === "string" ? liv[f] : liv[f] ? 1 : 0)).join(",");
-    const ent = GarageScene.previewMesh(key, hullKey, () => Car3D.build(liv.c1, liv.c2, {
-      livery: liv,
-      teamId: team.id,   // per-team chassis style shows in the setup turntable too
-      num: seat && seat.num,
-      helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
-      parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-    }));
+    // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
+    // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
+    const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
+    const ent = GarageScene.previewMesh(key, hullKey, () => _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
+      : (_spBase = { key: baseKey, data: Car3D.build(liv.c1, liv.c2, {
+        livery: liv, refinish: true,
+        teamId: team.id,   // per-team chassis style shows in the setup turntable too
+        num: seat && seat.num,
+        helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
+        parts: Parts.getVisualTiers(getTeamParts(team.id), team),
+      }) }).data);
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
@@ -1117,7 +1121,7 @@ return {
   // garage is on screen. The cleared key makes the next getSetupPreviewMesh rebuild.
   release() {
     if (G.setupPreviewOn) return false;
-    GarageScene.release(); _spMesh = null; _spMeshKey = "";   // the hull is CPU-only and frames the next visit
+    GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
     return true;
   },
   get meshKey() { return _spMeshKey; },
