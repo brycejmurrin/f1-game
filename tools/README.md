@@ -257,9 +257,10 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/capture-benchmark.mjs** | Sequential cold-scene benchmark across GPU/browser/profile combinations; records unsupported cells. | playwright-probe |
 | **shot/capture-contract.mjs** | Shared bounded input/output and pixel evidence contracts for capture CLIs. | — |
 | **shot/capture-diagnostics.mjs** | Bounded Chromium GPU provenance and opt-in streamed capture tracing. | — |
+| **shot/capture-gallery.mjs** | Verify capture indexes and package all images, recipes and source receipts into a portable static gallery. | — |
 | **shot/capture-options.mjs** | Validated shared screenshot profiles, scope, rendering stack, and session options. | — |
 | **shot/capture-runtime.mjs** | Serial browser capture lifecycle with identity, diagnostics and teardown on every path. | — |
-| **shot/design-matrix.mjs** | Design-review matrix: part x angle x colour x light x variant, close-up framing, per-cell diff vs baseline, HTML sheet. | garage-parts-livery |
+| **shot/design-matrix.mjs** | Source-bound captures: browser preflight, bounded commands, safe resume, HTML and hashed gallery.json. | garage-parts-livery |
 | **shot/export-history-evidence.mjs** | Export selected committed evidence files, preserving Git blob identities without executing the old checkout. | — |
 | **shot/flicker-gate.mjs** | Rendered z-fighting gate: still camera at known fight sites, sub-mm dolly jitter, per-site flip ceiling; JSON + exit 1. | playwright-probe |
 | **shot/flyby.mjs** | Contact sheet + JSON of the pre-race FLYBY shots, flagging a camera in scenery. `--track --frames --out --u --shots`. | — |
@@ -273,6 +274,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot. | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
+| **shot/lib/design-matrix-run.mjs** | Source-bound capture manifests, file verification and bounded garage JSON-line transport. | — |
 | **shot/lib/design-matrix.mjs** | Design-review matrix core: PART_BOXES, ANGLES, COLOURS, LIGHTS, expandMatrix, frameForPart, labelDiff, manifest. | garage-parts-livery |
 | **shot/lib/garage-camera-catalog.mjs** | Named garage targets, camera aliases, stations and livery field mappings. | garage-parts-livery |
 | **shot/lib/survey-runner.mjs** | Shared shot-survey runner: identical plans, failure state and gallery rows for CLI and MCP. | survey-track |
@@ -284,6 +286,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/publish-evidence.mjs** | Packages generated evidence with provenance and publishes checksum-verified GitHub Release assets outside Git history. | — |
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | f1-animation-cameras |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
+| **shot/run-capture-request.mjs** | Validate bounded CI requests and run native captures plus portable gallery export without shell interpolation. | — |
 | **shot/scenery-source-hash.cjs** | Fingerprint all scenery geometry/build inputs used by the named screenshot catalog. | — |
 | **shot/shot-jobs.mjs** | Pure helpers for shot.mjs: CLI/batch job parse, output format, track grouping. | — |
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
@@ -485,7 +488,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/mcp-cli.mjs** | chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`. | mcp-probe |
 | **mcp/mcp-listing-cost.mjs** | Sizes each .mcp.json server's tools/list: tool count, chars, est. tokens, names-only cost. `--json`, `--entry`. | agent-config |
 | **mcp/mcp-preflight.sh** | Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only. | mcp-probe |
-| **mcp/mcp-smoke.mjs** | Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium. | check-changes |
+| **mcp/mcp-smoke.mjs** | Pokes repo MCP wrappers (apex_status, chrome-devtools status, js-debugger/apex-lsp list-tools, probe help). No Chromium. | check-changes |
 | **mcp/output-level-mcp.mjs** | Wrap a stdio MCP server with bounded output levels and saved-result retrieval. | — |
 | **mcp/output-level-mcp.sh** | Agent MCP entrypoint: compact by default; outputLevel diagnostic/full and saved-result retrieval for every tool. | check-changes |
 | **mcp/playwright-mcp.sh** | Official `@playwright/mcp@0.0.79` wrapper (help/status/run): the `playwright-official` stdio server. | survey-ui-matrix / css-play / mcp-probe |
@@ -530,7 +533,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 |---|---|---|
 | **env/apex-memory.mjs** | List, show, and retire `.claude/memory` topic files from any host; no assume-unchanged. | agent-config |
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
-| **env/ensure-mcp-ready.sh** | Post-install MCP bootstrap: Playwright chrome channel symlink + apex-tools smoke (no Chromium). | check-changes |
+| **env/ensure-mcp-ready.sh** | MCP bootstrap: Playwright chrome symlink, chrome-devtools clone, browser cache env, mcp-smoke (no Chromium). | check-changes |
 | **env/install-browsers.sh** | Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs. | — |
 | **env/install-lint-bins.sh** | Pinned, checksummed install of actionlint, shellcheck, zizmor, glslang and naga into artifacts/bin. | — |
 | **env/mirror-skills.sh** | Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback). | agent-config |

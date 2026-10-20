@@ -799,6 +799,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/memory-sync.test.mjs",
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
+  // The menu car prep yields one frame, not a fixed 32 ms (B·H8 load hunt). VM, no browser.
+  "tests/unit/menu-car-prep-yield.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
   // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
@@ -854,6 +856,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/overtake-mode.test.mjs",
   // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
   "tests/unit/pace-math.test.mjs",
+  // Perf hunt 6 (B·H6): the material strips decode to their stored bytes (DecompressionStream + PNG unfilter) with no GPU readback; every shipped layer is byte-identical to sharp's decode; a missing DecompressionStream or a tagged/palette/corrupt PNG falls back to createImageBitmap.
+  "tests/unit/pack-png-bytes.test.mjs",
   "tests/unit/pad-haptics.test.mjs",
   // particles.js dirty latch: parked rain skips expand/upload until eye cell moves.
   "tests/unit/particles-dirty.test.mjs",
@@ -1044,6 +1048,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/screen-looks.test.mjs",
+  // Lazy bundles preload every gated wave and still evaluate in edge order; the boot preloads its likely backend (B·H8 load hunt).
+  "tests/unit/script-loader-preload.test.mjs",
   "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
@@ -1225,6 +1231,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-mat-key-memo.test.mjs",
   // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
   "tests/unit/tlx-post-fixed-mats.test.mjs",
+  // TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.
+  "tests/unit/tlx-rig-warm.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
   // and freeTexture retires the decal materials bound to it (lifted source
   // against three r186's real Texture). The pit-crew mesh cache is capped.

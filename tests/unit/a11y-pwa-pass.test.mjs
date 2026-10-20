@@ -585,7 +585,8 @@ function generationLoader(h, appended) {
   h.sb.Log.warn = () => {};
   h.sb.document = {
     createElement: () => ({ dataset: {} }),
-    head: { appendChild(node) { appended.push(node.src); queueMicrotask(() => node.onload()); } },
+    // ScriptLoader.preload's <link rel=preload> is a fetch hint, never an inject: not counted here.
+    head: { appendChild(node) { if (node.rel === "preload") return; appended.push(node.src); queueMicrotask(() => node.onload()); } },
   };
   vm.runInContext(read("js/core/script-loader.js"), h.sb, { filename: absSrc("js/core/script-loader.js") });
   return vm.runInContext("ScriptLoader.create()", h.sb);
@@ -610,7 +611,7 @@ test("a serial lazy chain pays the legacy-worker timeout once per load invocatio
 test("a serial chain rechecks a replacement controller after its legacy fallback", async () => {
   const h = generationHarness(), appended = [], loader = generationLoader(h, appended);
   const append = h.sb.document.head.appendChild;
-  h.sb.document.head.appendChild = (node) => { append(node); h.sw.controller = h.makeWorker(); };
+  h.sb.document.head.appendChild = (node) => { if (node.rel === "preload") return; append(node); h.sw.controller = h.makeWorker(); };
   const pending = loader.load(["a.js", "b.js"], [["a.js", "b.js"]]);
   h.timers[0]();
   await new Promise(setImmediate);
@@ -623,7 +624,7 @@ test("a serial chain rechecks a replacement controller after its legacy fallback
 test("a known newer build still blocks a serial chain using legacy fallback", async () => {
   const h = generationHarness(), appended = [], loader = generationLoader(h, appended);
   const append = h.sb.document.head.appendChild;
-  h.sb.document.head.appendChild = (node) => { append(node); h.u.markReady(101); };
+  h.sb.document.head.appendChild = (node) => { if (node.rel === "preload") return; append(node); h.u.markReady(101); };
   const pending = loader.load(["a.js", "b.js"], [["a.js", "b.js"]]);
   h.timers[0]();
   assert.equal(await pending, false);

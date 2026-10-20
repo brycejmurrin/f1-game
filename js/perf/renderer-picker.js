@@ -207,6 +207,8 @@ const RENDERER_LS_KEYS = [
   // next boot a strike it did not earn, and retire the pick on its first
   // real failure.
   "apex26.gfxProbeStrikes",
+  // The last boot's bound backend (renderer-boot.js): only steers the next boot's early preload.
+  "apex26.gfxBootBound",
   "apex26.envProbeOff", "apex26.perChunkOff",
   "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
   "apex26.wgxCapture",
