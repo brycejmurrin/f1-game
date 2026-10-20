@@ -27,6 +27,7 @@
 //   node tools/ci/fleet-bus.mjs send READY --to orchestrator "#2990 abc1234 ready-gate 0"
 //   node tools/ci/fleet-bus.mjs send GAME-SLOT --to '*' "#2990 <head sha>"   # before a game merge (merge-gate.mjs reads it)
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json]
+//   node tools/ci/fleet-bus.mjs who A [--last 500] [--json]   # fleet A's live orchestrator: `A <host:id> <sha7> <age>`; exit 1 none
 //
 // `--to` must be deliverable (addressProblem): *, #<PR>, a fleet letter (A, B·O3), a role, or a real
 // <host>:<session id>; a claims-board hash is refused (plan §8.7). A `to:#<PR>` send also dispatches fleet.yml,
@@ -170,6 +171,51 @@ export function parseLog(text) {
   }).filter(Boolean);
 }
 
+/** A bare session id -> `<host>:<id>`; `fromHost` decides an id no prefix identifies. Pure. */
+function withHost(id, fromHost) {
+  if (/^[a-z]+:/.test(id)) return id.replace(/^claude:cse_/, "claude:session_");
+  if (/^cse_/.test(id)) return `claude:${id.replace(/^cse_/, "session_")}`;
+  if (/^session_/.test(id)) return `claude:${id}`;
+  if (/^bc-/.test(id)) return `cursor:${id}`;
+  return fromHost ? `${fromHost}:${id}` : id;
+}
+const LIVE_ID = /\bLIVE\s+((?:[a-z]+:)?[A-Za-z0-9][A-Za-z0-9_-]{7,})/;
+
+/**
+ * The orchestrator a bus entry announces, as { letter, id } (id = `<host>:<session id>`), or null. Pure.
+ * Explicit form (comms.md §Fleet bus): `ORCH <letter> LIVE <host>:<session id>` anywhere in the text.
+ * Tolerated free text (ORCH19, 2026-10-19): "ORCH19 LIVE session_X (replaces ORCH18 session_Y), Fleet A orchestrator":
+ * LIVE, the id right after it, "Fleet <letter>" and an ORCH/orchestrator word. SEED and FLEET lines name no orchestrator.
+ */
+export function parseLive(entry) {
+  const text = String(entry?.text || "");
+  const fromHost = (/^([a-z]+):/.exec(String(entry?.from || "")) || [])[1] || "";
+  const explicit = /\bORCH\s+([A-Z])\s+LIVE\s+([^\s,;)]+)/.exec(text);
+  if (explicit) return { letter: explicit[1], id: withHost(explicit[2].replace(/\.$/, ""), fromHost) };
+  if (/\b(?:SEED|FLEET)\s+[A-Z]\s+LIVE\b/.test(text) || !/\bORCH|orchestrator/i.test(text)) return null;
+  const id = LIVE_ID.exec(text), fleet = /\bFleet\s+([A-Z])\b/.exec(text);
+  return id && fleet ? { letter: fleet[1], id: withHost(id[1], fromHost) } : null;
+}
+
+/** The newest entry announcing fleet `letter`'s orchestrator: { letter, id, sha, at }, or null. Entries oldest first. Pure. */
+export function whoIs(entries, letter) {
+  const want = String(letter || "").toUpperCase();
+  for (let i = (entries || []).length - 1; i >= 0; i--) {
+    const live = parseLive(entries[i]);
+    if (live && live.letter === want) return { ...live, sha: entries[i].sha, at: entries[i].at };
+  }
+  return null;
+}
+
+/** "45m", "3h", "2d" between two unix-second times. Pure. */
+export function ageOf(at, now) {
+  const m = Math.max(0, Math.round((now - at) / 60));
+  return m < 60 ? `${m}m` : m < 48 * 60 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
+}
+
+/** The `who` output line: `<letter> <host:id> <sha7> <age>`. Pure. */
+export const whoLine = (w, now) => `${w.letter} ${w.id} ${String(w.sha).slice(0, 7)} ${ageOf(w.at, now)}`;
+
 // ---- git -------------------------------------------------------------------
 
 const gitIn = (cwd) => (args, input) => spawnSync("git", args, { cwd, encoding: "utf8", input, env: identityEnv(cwd), timeout: 60_000 });
@@ -262,6 +308,7 @@ function usage(msg) {
   console.error("usage: fleet-bus.mjs lease [acquire|renew|release|check|break] [--ttl MIN] [--note T] [--grant T]\n" +
     "       fleet-bus.mjs send <TYPE> --to <ADDR> \"<text>\"   ADDR: " + ADDRESS_FORMS + "\n" +
     "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json]\n" +
+    "       fleet-bus.mjs who <fleet letter> [--last N] [--json]   (exit 1: no live orchestrator line)\n" +
     "       common: --as <host>:<id>   types: " + TYPES.join(" "));
   return 1;
 }
@@ -322,6 +369,15 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
         log(`= mirror ${how}`);
       }
       return r.ok ? 0 : 1;
+    }
+    if (cmd === "who") {
+      if (!sub || !/^[A-Za-z]$/.test(sub)) return usage("who needs one fleet letter (A, B, C, D, …)");
+      const L = sub.toUpperCase(), last = Number(flags.last) || 500;
+      // Not cursor-based: the newest LIVE line may sit behind this session's read cursor.
+      const w = whoIs(readBus({ cwd, last }).entries, L);
+      if (flags.json) log(JSON.stringify(w ? { ...w, age: ageOf(w.at, now()) } : { letter: L, id: null }));
+      else log(w ? whoLine(w, now()) : `= who ${L}: no ORCH ${L} LIVE line in the last ${last} bus entries`);
+      return w ? 0 : 1;
     }
     if (cmd === "read") {
       const file = me ? cursorFile(me) : "";

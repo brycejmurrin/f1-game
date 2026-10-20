@@ -3,7 +3,9 @@ name: Fleet board
 # The backlog's phone view (tools/ci/fleet-board.mjs): syncs .github/labels.json,
 # keeps the `claimed` label derived from the claims board and open PR bodies
 # (`Closes #n`), rewrites the pinned "Fleet board" issue, and mirrors `to:#<PR>`
-# fleet-bus lines as PR comments (tools/ci/fleet-bus-mirror.mjs).
+# fleet-bus lines as PR comments (tools/ci/fleet-bus-mirror.mjs). The `tick` job is the
+# fleet watch (tools/ci/fleet-tick.mjs): changed PR/ship/Pages rows in the run summary and
+# a `fleet-board` artifact.
 # Why: docs/notes/AGENT-WORK-TRACKING-2026-10-14.md.
 #
 # Every 30 minutes at :23 and :53 (Merge Desk cadence; 2026-10-14 CI-volume cut, process-review fix 1;
@@ -22,10 +24,10 @@ on:
     - cron: "23,53 * * * *"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: read
+# Per-job permissions: the board job writes issues, the tick job only reads
+# (zizmor excessive-permissions: a write grant stays off the workflow level once
+# there are two jobs; https://docs.zizmor.sh/audits/#excessive-permissions).
+permissions: {}
 
 # One fleet-board run at a time (cancel-in-progress: false). who-is-on-it.mjs
 # skips workflow_dispatch while a run is already queued, so claim bursts do not
@@ -38,6 +40,10 @@ jobs:
   board:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -67,3 +73,83 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node tools/ci/fleet-bus-mirror.mjs --no-fetch
+
+  # THE FLEET WATCH AS A JOB, NOT A SESSION (docs/plans/2026-10-19-fleet-redesign.md §4B item 6): one
+  # tools/ci/fleet-tick.mjs tick per run — pr-board.mjs --json (needs-sync per SYNC/FIX row) plus ci-watch.mjs
+  # --once on the deploy tip and --pages --once — diffed against the previous run's state. It runs on the
+  # Actions token (GH_TOKEN below), so the cloud proxy's 403 on session-side API reads does not apply. The
+  # session-side watcher only reads sessions/cost (fleet-flags.mjs on a saved list_sessions page) and posts
+  # flags: .claude/skills/agent-fleet/references/role-fleet-watch.md.
+  # Read-only job, its own permissions (GET only; the board job above keeps issues: write):
+  #   actions: read  workflow runs + jobs (ci-watch, needs-sync), checks: read  check-runs (ready-gate's
+  #   guards verdict), pull-requests/issues: read  PR list, comments, issue events, contents: read  checkout.
+  #   https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps (read 2026-10-19).
+  # Advisory: every tick step is continue-on-error with a ::warning::, so a tick failure never reds the run
+  # (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error).
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+      issues: read
+    steps:
+      # needs-sync.mjs runs `git merge-base` / `git merge-tree` against each SYNC/FIX branch, which a depth-1
+      # clone cannot answer; full history without blobs is the same trade ci.yml makes
+      # (https://github.com/actions/checkout#usage, `filter`).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # fetch-only; the repo is public
+          ref: claude/f1-game-project-26h3ng
+          fetch-depth: 0
+          filter: blob:none
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # STATE ACROSS RUNS: caches are immutable, so each run saves under a run-unique key and the next restores
+      # the newest one by prefix ("If there are multiple partial matches for a restore key, the action returns
+      # the most recently created cache"). Schedule runs use the default branch and who-is-on-it dispatches on
+      # it too (same branch = same cache scope); entries unused for 7 days are evicted, and a state file is a
+      # few KB. https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching and
+      # https://github.com/actions/cache/blob/main/tips-and-workarounds.md#update-a-cache (read 2026-10-19).
+      # A miss is a first tick: fleet-tick reports everything once as the baseline.
+      - name: Restore previous tick state
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: artifacts/fleet-watch/state.json
+          key: fleet-tick-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fleet-tick-
+      - name: Fleet tick
+        id: tick
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/fleet-watch
+          node tools/ci/fleet-tick.mjs --state artifacts/fleet-watch/state.json --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee artifacts/fleet-watch/tick.log
+          exit "${PIPESTATUS[0]}"
+      - name: Tick failure is a warning, not a red
+        if: ${{ steps.tick.outcome == 'failure' }}
+        run: |
+          echo "::warning title=fleet-tick::fleet-tick.mjs failed; see the Fleet tick step log (state not advanced)"
+          echo "fleet-tick failed this run; state not advanced. See the Fleet tick step log." >> "$GITHUB_STEP_SUMMARY"
+      - name: Save tick state
+        if: ${{ steps.tick.outcome == 'success' && hashFiles('artifacts/fleet-watch/state.json') != '' }}
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: artifacts/fleet-watch/state.json
+          key: fleet-tick-${{ github.run_id }}-${{ github.run_attempt }}
+      # The board artifact: this tick's state (every open PR's compact row, ship, Pages) and its printed lines.
+      # Short retention: the next tick supersedes it. https://github.com/actions/upload-artifact (retention-days).
+      - name: Upload fleet board
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fleet-board
+          path: artifacts/fleet-watch/
+          retention-days: 2
+          if-no-files-found: warn

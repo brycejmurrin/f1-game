@@ -478,7 +478,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/fleet-board.test.mjs",
   // fleet-bus-mirror: which bus lines become PR comments (to:#<n> only), the comment body, dedupe by bus sha and the closed/merged skip; gh injected, pure; < 0.2 s.
   "tests/unit/fleet-bus-mirror.test.mjs",
-  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break), the bus cursor read and the deliverable-recipient rule; a real-git race on a local bare origin; < 2 s.
+  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break), the bus cursor read, the deliverable-recipient rule and `who <letter>` (ORCH LIVE lines, explicit and free text); a real-git race on a local bare origin; < 2 s.
   "tests/unit/fleet-bus.test.mjs",
   "tests/unit/fleet-flags.test.mjs",
   // fleet-owner: HELD (open PR diff) beats CLAIMED (board glob) beats FREE, RELEASE? answers, the 60-min lapse, fail-closed file lists; fake API, < 0.2 s.
@@ -971,6 +971,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/real-replay-frame-fit.test.mjs",
   "tests/unit/real-replay-transport.test.mjs",
   "tests/unit/real-replay-vm.test.mjs",
+  // Rear wing active aero to FIA 2026 C3.11.6: one rigid RW Flap, one aft pivot, Straight Mode flattens (never inverts). VM, ~1 s.
+  "tests/unit/rear-wing-active-aero.test.mjs",
   "tests/unit/red-flag-fuel-vm.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
   // REJECTION, and index.html turns an unhandled one into a full-screen
@@ -1340,6 +1342,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/uilayers-modal-order.test.mjs",
   "tests/unit/validation-cli.test.mjs",
+  // Vendored licence files: every vendor/ package has one and a declared SPDX licence matches its text (#3092). < 0.1 s.
+  "tests/unit/vendor-licences.test.mjs",
   "tests/unit/verify-live.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
   // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
@@ -1814,7 +1818,7 @@ const TOOLING_FAST_CHANGED_RUN_ALL = [
 
 const PATH_PIN_RE = /["'`]((?:js|css|tools|types|desktop|docs|tests\/|index\.html|AGENTS\.md|CLAUDE\.md|README\.md|\.claude\/|\.cursor\/|sw\.js|version\.json)[^"'`]+)["'`]/g;
 
-const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|environment-json|comment-citations|agent-surface|agent-fleet)\.test\.mjs$/;
+const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|environment-json|comment-citations|agent-surface)\.test\.mjs$/;
 
 let _pinIndex = null;
 

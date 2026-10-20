@@ -2062,7 +2062,7 @@ const Car3D = (function () {
       }
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
-        rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.016, rearC, 1.15);
+        // Not baked: it is part of the FIA RW Flap, so rearFlap() (car-body-geom.js) flies it as "rearDrs" in rearC.
       }
       const drsSX = aLvl >= 3 ? 0.16 : 0.13;
       // DRS actuator pod + the slot-gap rail it sits on. The pod used to be a

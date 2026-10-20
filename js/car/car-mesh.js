@@ -701,24 +701,35 @@ function getAeroFlap(aLvl, col, idx, style, el, finish, surface) {
 // into one buffer: one draw with the same options, the same surfaces. It is what
 // a rival past FieldLod.flapsM() and the mirror / PiP draw (they drew NO flaps:
 // a rear wing stripped to its main plane) and any car whose wings are at rest.
-const _flapSets = {}, _flapSetOrder = [], _flapSetMemo = new Map();   // base key -> [mesh per (open, only) slot]
+const _flapSets = {}, _flapSetOrder = [], _flapSetMemo = new Map();   // base key -> rear-paint key -> [mesh per (open, only) slot]
 const FLAP_SET_MAX = 64;   // ~11 teams x 2 poses a race (+ the cockpit's front-only)
-function getAeroFlapSet(aLvl, col, style, finish, open, only, surface) {
+// `rearCol` paints the element flagged paint "rearWing" (the flown drs plane,
+// always last in the set); its own memoised key picks the memo row, no concat.
+function getAeroFlapSet(aLvl, col, style, finish, open, only, surface, rearCol) {
   const c = col || FLAP_DEF_COL, flaps = Car3D.aeroFlaps(aLvl, style);
   if (!flaps.length) return null;
+  const pr = rearCol && flaps[flaps.length - 1].paint ? flaps[flaps.length - 1] : null;
+  const rk = pr ? _flapKey(pr, aLvl, style, rearCol, finish, surface) : "";
   // The full key is a string concat per call (per drawn car per frame): a (record, pose) memo keyed on the
   // already-memoised base key turns a hit into two Map/array reads. Cleared whole on an eviction.
   const bk = _flapKey(flaps[0], aLvl, style, c, finish, surface), slot = !only ? (open ? 1 : 0) : only === "front" ? (open ? 3 : 2) : only === "rear" ? (open ? 5 : 4) : -1;
-  let memo = slot >= 0 ? _flapSetMemo.get(bk) : undefined;
+  let row = slot >= 0 ? _flapSetMemo.get(bk) : undefined, memo = row && row.get(rk);
   if (memo && memo[slot]) return _flapUse(memo[slot]);
-  const key = bk + (open ? "|X|" : "|Z|") + (only || "");
-  const remember = (m) => { if (slot >= 0) { if (!memo) _flapSetMemo.set(bk, memo = []); memo[slot] = m; } return m; };
+  const key = bk + (rk && "|R|" + rk) + (open ? "|X|" : "|Z|") + (only || "");
+  const remember = (m) => {
+    if (slot >= 0) {
+      if (!row) _flapSetMemo.set(bk, row = new Map());
+      if (!memo) row.set(rk, memo = []);
+      memo[slot] = m;
+    }
+    return m;
+  };
   if (_flapSets[key]) return remember(_flapUse(_flapSets[key]));
   const nOrder = _flapSetOrder.length;
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   for (const fg of flaps) {
     if (only && fg.wing !== only) continue;
-    const g = Car3D.buildFlapGeom(fg, c, finish, surface), ang = open ? fg.xAngle : fg.zAngle;
+    const g = Car3D.buildFlapGeom(fg, fg === pr ? rearCol : c, finish, surface), ang = open ? fg.xAngle : fg.zAngle;
     const ca = Math.cos(ang), sa = Math.sin(ang), base = out.pos.length / 3;
     for (let i = 0; i < g.pos.length; i += 3) {
       const y = g.pos[i + 1], z = g.pos[i + 2], ny = g.nrm[i + 1], nz = g.nrm[i + 2];
@@ -730,7 +741,7 @@ function getAeroFlapSet(aLvl, col, style, finish, open, only, surface) {
     for (const k of g.idx) out.idx.push(base + k);
   }
   const made = _flapPut(_flapSets, _flapSetOrder, FLAP_SET_MAX, key, out);
-  if (_flapSetOrder.length === nOrder) { _flapSetMemo.clear(); memo = undefined; }   // an eviction freed a mesh the memo may still point at
+  if (_flapSetOrder.length === nOrder) { _flapSetMemo.clear(); row = memo = undefined; }   // an eviction freed a mesh the memo may still point at
   return remember(made);
 }
 
