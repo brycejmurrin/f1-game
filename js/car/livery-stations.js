@@ -48,7 +48,7 @@ const LiveryStations = (function () {
       const w = (e1[1] * e2[2] - e1[2] * e2[1]) * n[0] + (e1[2] * e2[0] - e1[0] * e2[2]) * n[1] + (e1[0] * e2[1] - e1[1] * e2[0]) * n[2];
       if (w < 0) quadUv0([c[3], c[2], c[1], c[0]], n, [uv[3], uv[2], uv[1], uv[0]]); else quadUv0(c, n, uv);
     };
-    const lerp = (a, b, t) => a + (b - a) * t;
+    const lerp = M4.lerp;
     const norm = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
 
     // NOSE TIP: a colour cap over the last 280 mm of the nose — top, both sides and the front face.
