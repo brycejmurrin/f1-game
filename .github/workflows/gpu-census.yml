@@ -153,6 +153,9 @@ jobs:
       garage_ab: ${{ steps.split.outputs.garage_ab }}
       live_matrix: ${{ steps.split.outputs.live_matrix }}
       lrm_leg: ${{ steps.split.outputs.lrm_leg }}
+      lrm_rows: ${{ steps.split.outputs.lrm_rows }}
+      lrm_scale: ${{ steps.split.outputs.lrm_scale }}
+      lrm_tag: ${{ steps.split.outputs.lrm_tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
@@ -258,7 +261,16 @@ jobs:
           # #2572 render live-debug matrix (tools/perf/live-render-matrix.mjs): opt-in by leg name, push requests only.
           print("live_matrix=" + str(req.get("leg") == "render-live-matrix-2572").lower())
           lg = str(req.get("lrm_leg") or "glx").strip()
-          print("lrm_leg=" + (lg if lg in ("glx", "tlx-gl", "tlx-native") else "glx"))
+          lg = lg if lg in ("glx", "tlx-gl", "tlx-native") else "glx"
+          print("lrm_leg=" + lg)
+          # Which matrix rows this request runs (1 rebuild, 2 ctxloss, 3 tiers, 4 visibility, 5 night) and the row-cap
+          # scale: macos-latest is slow enough that a TLX leg needs several requests, rebuild alone wants ~6x.
+          rw = "".join(ch for ch in str(req.get("lrm_rows") or "1,2,3,4,5") if ch in "12345,") or "1,2,3,4,5"
+          try: sc = float(req.get("lrm_scale") or 2.3)
+          except (TypeError, ValueError): sc = 2.3
+          print("lrm_rows=" + rw)
+          print("lrm_scale=" + str(min(max(sc, 1.0), 6.0)))
+          print("lrm_tag=" + lg + "-r" + rw.replace(",", ""))
           # The player camera (hunt 4 H5). A push request bypasses the
           # dispatch form's choice list, so the allowlist is enforced here too.
           cm = str(req.get("cam") or os.environ.get("INPUT_CAM") or "helmet").strip()
@@ -423,15 +435,18 @@ jobs:
         shell: bash
         env:
           LRM_LEG: ${{ needs.plan.outputs.lrm_leg }}
+          LRM_ROWS: ${{ needs.plan.outputs.lrm_rows }}
+          LRM_SCALE: ${{ needs.plan.outputs.lrm_scale }}
+          LRM_TAG: ${{ needs.plan.outputs.lrm_tag }}
         # One backend leg per request (glx | tlx-gl | tlx-native): macos-latest draws through an Apple Paravirtual
         # device at under 1 frame/s, so a leg needs most of the job. --cap-scale/--min-frames size the row caps.
-        run: node tools/perf/live-render-matrix.mjs --leg "$LRM_LEG" --cap-scale 2.3 --min-frames 2 --json "live-matrix-${LRM_LEG}.json"
+        run: node tools/perf/live-render-matrix.mjs --leg "$LRM_LEG" --rows "$LRM_ROWS" --cap-scale "$LRM_SCALE" --min-frames 2 --json "live-matrix-${LRM_TAG}.json"
 
       - name: Upload live render matrix
         if: ${{ always() && needs.plan.outputs.live_matrix == 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: live-render-matrix-${{ matrix.image }}-${{ needs.plan.outputs.lrm_leg }}
+          name: live-render-matrix-${{ matrix.image }}-${{ needs.plan.outputs.lrm_tag }}
           path: live-matrix-*.json
           if-no-files-found: warn
           retention-days: 14
