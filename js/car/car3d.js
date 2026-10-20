@@ -862,20 +862,19 @@ const Car3D = (function () {
         return pod.bottom + frac * (pod.top - pod.bottom);
       };
       // One capped top line for the row (each fence capped itself off the stepped pod bottom: a
-      // 99-210 mm staircase of square ends), straight nose-to-tail and dropped under every cap.
-      const fL = Math.max(0.095, Math.min(0.15, fenceStep / 2 - 0.012));   // half-length: use the spacing there is
-      const fz0 = 0.42 + fL, fz1 = 0.42 - (fenceN - 1) * fenceStep - fL;
+      // 99-210 mm staircase), straight nose-to-tail and dropped under every cap. The ends stay
+      // upright plates (Bryce 2026-10-20: crisp fence edges; only the rail is smoothed).
+      const fz0 = 0.515, fz1 = 0.325 - (fenceN - 1) * fenceStep;
       const capLine = (z) => fenceCap(fz0) + (fenceCap(fz1) - fenceCap(fz0)) * (fz0 - z) / (fz0 - fz1);
       let capDrop = 0;
-      for (let i = 0; i < fenceN; i++) for (const dz of [fL, 0, -fL]) capDrop = Math.max(capDrop, capLine(0.42 - i * fenceStep + dz) - fenceCap(0.42 - i * fenceStep + dz));
+      for (let i = 0; i < fenceN; i++) for (const dz of [0.095, 0, -0.095]) capDrop = Math.max(capDrop, capLine(0.42 - i * fenceStep + dz) - fenceCap(0.42 - i * fenceStep + dz));
       const fenceTop = (z) => Math.max(railTop(z) + 0.018, Math.min(0.160 + rideDY + 0.132 * fenceH, capLine(z) - capDrop));
       zone("floor", () => { for (let i = 0; i < fenceN; i++) {
-        const fz = 0.42 - i * fenceStep, ramp = Math.min(0.085, Math.max(0.03, (fenceTop(fz) - railTop(fz)) / 2.6));
-        // Seated on the rail, nose raked up and tail chamfered down over h/2.6 (≤ 69°); onboard: one block.
-        addStationLoft(out, (ckpt ? [[fL, 1], [-fL, 1]] : [[fL, 0], [fL - ramp, 1], [ramp - fL, 1], [-fL, 0]]).map(([dz, k]) => {
-          const z = fz + dz, u = (fL - dz) / (2 * fL);
+        const fz = 0.42 - i * fenceStep;
+        addStationLoft(out, [0.095, -0.095].map((dz) => {   // seated on the rail, overhanging its face by 8 mm
+          const z = fz + dz, u = (0.095 - dz) / 0.19;
           const r = railAt(z), w = 0.028 - 0.006 * u, x = s * (r.x + r.w / 2 + w / 2 - 0.008);
-          const yb = railTop(z) + 0.0006, yt = k ? fenceTop(z) : yb + 0.0005;   // overhangs the rail face by 8 mm
+          const yb = railTop(z) + 0.0006, yt = fenceTop(z);
           return [[x - w / 2, yb, z], [x + w / 2, yb, z], [x + w / 2, yt, z], [x - w / 2, yt, z]];
         }), CARBON);
       } });
