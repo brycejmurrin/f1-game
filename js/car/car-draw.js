@@ -752,7 +752,12 @@ const CarDraw = (function () {
       const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};
       if (G.headlessMode || !LT) return false;
       const tier = typeof PerfGov === "undefined" ? 0 : PerfGov.tier();
-      return !!((gfx.carShadowBegin && LT.carShadow && tier < 3) || (gfx.lampShadowBegin && LT.lampShadow && tier < 2));
+      // The passes' own map gates (shadow-pass.js): a backend with no car or lamp map
+      // (every phone on TLX/GLX, a failed target) never casts, so its ~1.5 MB
+      // silhouettes would be built and held for nothing. Undefined = an older stub: wanted.
+      const carMap = gfx.carShadowEnabled !== false && !(LT.shadowStr <= 0);
+      const lampMap = gfx.lampShadowEnabled !== false;
+      return !!((carMap && gfx.carShadowBegin && LT.carShadow && tier < 3) || (lampMap && gfx.lampShadowBegin && LT.lampShadow && tier < 2));
     }
     // Prepare visual descriptors only: do not call makeCars(), advance the seeded
     // simulation, replace the live field, or arm a race from a menu. Existing bounded

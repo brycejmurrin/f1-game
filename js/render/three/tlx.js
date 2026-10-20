@@ -229,6 +229,18 @@ const TLX = (function () {
       // mappable pool dies on the first large mesh; PlayCanvas #6676).
       // Phones / WebKit take the same WebGPU path with WGX-lite caps
       // (8-bit canvas, no MSAA 4, low-power) when AUTO tries WebGPU.
+      // A REAL phone (a handset UA, or an iPad that reports as a Mac), as opposed to
+      // GLX.isMobile, which apex26.forceMobileTier=1 also sets on a desktop or CI
+      // VM. The "a phone has no software adapter" rule below protects handsets
+      // from the empty-info tie-break; on a forced-mobile test run it hid a
+      // software/paravirtual adapter (lavapipe, the macOS runner's Apple
+      // Paravirtual device), so TLX presented to the native WebGPU canvas, which
+      // such an adapter cannot composite: [Invalid Texture] CreateView, then
+      // device.lost "Instance reference no longer exists" (gpu-census 39477339291
+      // and 39488541983: the forced-mobile arm lost the device, the same arm with
+      // the software verdict stayed up with 0 GPU errors).
+      const _phoneHw = isMobile && (/iPhone|iPad|iPod|Android/i.test(ua)
+        || ((navigator.maxTouchPoints || 0) > 1 && /Mac/.test(ua)));
       let _softAdapter = false;
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
@@ -314,7 +326,7 @@ const TLX = (function () {
             // read (measured in-container: byte-identical captures across a
             // camera move, awaitSoftPresent never resolving again). Content
             // gates key off this flag too. Never on a mobile UA.
-            _softAdapter = !isMobile && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
+            _softAdapter = !_phoneHw && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
@@ -3748,10 +3760,25 @@ const TLX = (function () {
         if (!_bs || !(_bs.radius >= 0) || !_bs.center
             || !(Math.abs(_bs.center.x) >= 0) || !(Math.abs(_bs.center.y) >= 0)
             || !(Math.abs(_bs.center.z) >= 0)) return 0;
-        let freed = 0;
+        let freed = 0, kept = 0;
+        // three reads attribute.array only while it creates the attribute's GPU
+        // buffer (XB.createAttribute: `r.array` when `get(attr).buffer` is still
+        // undefined). A depth-only first draw (the car shadow casters) uploads
+        // POSITION alone, so freeing every array after it left normal / colour /
+        // MAT without a buffer, and the first lit RenderObject of that geometry
+        // threw "Cannot read properties of null (reading 'constructor')" in
+        // present. Free only what already has its GPU buffer.
+        const _be = renderer && renderer.backend;
+        const uploaded = (a) => {
+          try {
+            const d = _be && _be.get(a);
+            return !!d && (d.buffer !== undefined || d.bufferGPU !== undefined);
+          } catch (_) { return false; }
+        };
         const drop = (a) => {
           if (!a || !a.array || !a.array.length) return;
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
+          if (!uploaded(a)) { kept++; return; }
           freed += a.array.byteLength;
           // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
           // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
@@ -3769,7 +3796,7 @@ const TLX = (function () {
         // while the WebGL2 control leg reported 0 — WebGL2 tolerates it and
         // WebGPU does not, which is why a tlxForceGL=1 measurement here looked
         // clean. Vertex attributes are sized from count/itemSize and are fine.
-        g.__tlxFreed = true;
+        if (!kept) g.__tlxFreed = true;   // a kept array retries on the next sweep
         return freed;
       }
       const _chunkRelOptIn = (function () {
