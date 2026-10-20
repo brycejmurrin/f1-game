@@ -57,8 +57,10 @@ const CarBodyGeom = (function () {
       const f = 1 - i / 8, top = topR + (topT - topR) * Math.pow(f, s.noseCurve);
       const bottom = bottomR + (bottomT - bottomR) * f;
       return { z: root.z + (zTip - root.z) * f, y: (top + bottom) / 2,
-        w: wTip + (root.w - wTip) * Math.pow(1 - f, 0.75),
-        h: top - bottom, t: root.t + (tip.t - root.t) * f };
+        // Carry the shoulder forward over the axle before rounding into the
+        // tip. A wide end alone still leaves a needle-shaped upper surface.
+        w: wTip + (root.w - wTip) * Math.pow(1 - f, 0.45),
+        h: top - bottom, t: root.t + (0.90 - root.t) * f };
     }), { curve: true });
   }
 
@@ -1141,7 +1143,7 @@ const CarBodyGeom = (function () {
   // and method: docs/notes/OCCLUSION-PROBE.md §4. The cockpit span (z 0.05..-0.55) is
 
   const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.32, w: 0.552, h: 0.16, t: 0.752 });
-  function buildSharedChassis(out, c1, rideDY, noseStations, ckpt, edgeAt, measure) {
+  function buildSharedChassis(out, c1, rideDY, noseStations, ckpt, edgeAt, measure, noseC) {
     const floor = CHASSIS.floor;
     if (shadeFlags.round) CarShade.floor(out, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
@@ -1151,7 +1153,7 @@ const CarBodyGeom = (function () {
       closedSkin(out, nose.map((p) => shadeFlags.round ? CarShade.ring(p, 16) : [
         [p.w / 2, p.y - p.h / 2, p.z], [p.w * p.t / 2, p.y + p.h / 2, p.z],
         [-p.w * p.t / 2, p.y + p.h / 2, p.z], [-p.w / 2, p.y - p.h / 2, p.z],
-      ]), c1);
+      ]), noseC || c1);
       if (measure) out.noseSkin = { from, to: out.pos.length / 3 };
     } else for (let i = 0; i < nose.length - 1; i++) bodySpan(out, nose[i], nose[i + 1], c1, i ? 0.028 : 0.022);
     const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];

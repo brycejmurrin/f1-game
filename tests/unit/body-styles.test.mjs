@@ -218,11 +218,28 @@ test("Blender bodies emit short broad noses with a curved descending crown", () 
     const tipZ = Math.max(...points.map((p) => p[2]));
     assert.ok(tipZ >= 2.44 && tipZ <= 2.56 + 1e-9, `${bodyStyle}: long cone ${tipZ}`);
     const tipWidth = 2 * Math.max(...points.filter((p) => Math.abs(p[2] - tipZ) < 1e-8).map((p) => Math.abs(p[0])));
-    assert.ok(tipWidth >= 0.135, `${bodyStyle}: needle tip ${tipWidth}`);
+    assert.ok(tipWidth >= 0.25, `${bodyStyle}: needle tip ${tipWidth}`);
     const z0 = 1.12, z1 = tipZ - 0.02, zm = (z0 + z1) / 2;
     const top = (z) => Math.max(...verticalHits(m, chassis, 0, z));
     assert.ok(top(z0) > top(zm) && top(zm) > top(z1), `${bodyStyle}: crown does not descend`);
     assert.ok(top(zm) - (top(z0) + top(z1)) / 2 > 0.035, `${bodyStyle}: straight wedge instead of a curved crown`);
+  }
+});
+
+test("Blender noses carry a broad painted shoulder over the front axle", () => {
+  const paint = [0.72, 0.66, 0.54];
+  for (const smooth of [false, true]) for (const bodyStyle of BLENDER_BODIES) {
+    const options = { noWheels: true, measure: true, smooth, teamId: team.id, livery: { bodyStyle } };
+    const plain = Car3D.build(team.color, team.color2, options);
+    const m = Car3D.build(team.color, team.color2, { ...options, livery: { bodyStyle, nose: paint } });
+    // Read the actual roof at both sides of a 320 mm shoulder, rather than
+    // accepting a wide bottom edge or a cap at the very end of a thin cone.
+    for (const x of [-0.16, 0.16])
+      assert.ok(Math.max(...verticalHits(m, m.noseSkin, x, Car3D.AXLES.frontZ)) > 0.43,
+        `${bodyStyle}/${smooth}: upper shoulder too narrow`);
+    assert.deepEqual(m.pos, plain.pos, "nose colour must not add a straight overlay over the curved skin");
+    for (let i = m.noseSkin.from; i < m.noseSkin.to; i++)
+      assert.deepEqual(Array.from(m.col.slice(i * 3, i * 3 + 3)), paint, "nose paint must reach every skin station");
   }
 });
 
@@ -279,9 +296,12 @@ test("thin study pods keep the accent flash above the sponsor board", () => {
   }
 });
 
-test("the short Rovik nose retains seated wing mounts", () => {
+test("Blender noses retain seated wing mounts and suspension roots", () => {
   const t=Teams.LIST.find(t=>t.id==="mercedes"), parts=Parts.getVisualTiers(Parts.getFactorySetup(t),t);
-  const m=Car3D.buildComplete([.8,.1,.1],[.1,.2,.85],{teamId:t.id,num:44,parts,measure:true,livery:{bodyStyle:"rovik"}});
-  const {rows}=auditMesh(m,["GAP","PENETRATION"]);
-  assert.deepEqual(rows.filter(r=>r.fail && r.a==="frontWing" && ["chassis","aeroFlaps"].includes(r.b)),[],"Main wing must connect without excessive nose penetration");
+  for (const bodyStyle of BLENDER_BODIES) {
+    const m=Car3D.buildComplete([.8,.1,.1],[.1,.2,.85],{teamId:t.id,num:44,parts,measure:true,livery:{bodyStyle}});
+    const {rows}=auditMesh(m,["GAP","PENETRATION"]);
+    assert.deepEqual(rows.filter(r=>r.fail && r.a==="frontWing" && ["chassis","aeroFlaps"].includes(r.b)),[],`${bodyStyle}: main wing attachment`);
+    assert.deepEqual(rows.filter(r=>r.fail && r.check==="PENETRATION" && r.a==="suspension" && r.b==="chassis"),[],`${bodyStyle}: suspension roots buried in the nose`);
+  }
 });

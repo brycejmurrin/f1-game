@@ -102,13 +102,13 @@ const Car3D = (function () {
     // campaign. fitSeat keeps nose attachments on the measured skin; the existing
     // body anchors own pod/cover clearances and decal placement for these too.
     // Caldra: raised cooling shoulder, a pinched waist and a scalloped front cascade.
-    caldra: Object.freeze({ fitSeat: 1, noseCurve: 2.2, spineCurve: 0.035, podProfile: "rift", noseTipZ: -0.1, noseSlim: 1.28, noseDroop: -0.028, airbox: 0.88, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.000, inletW: -0.040, undercutD: 0.120, waist: -0.100, floorStep: 0.035, coverCrown: 0.02, coverLift: 0.025, wingStyle: W({ clean: 1, canard: 0, arch: 0.55, twist: 0.18, teCurve: 0.065, chordTaper: 0.22, foot: 0.92, tipRise: 0.018 }) }),
+    caldra: Object.freeze({ fitSeat: 1, noseCurve: 2.2, spineCurve: 0.035, podProfile: "rift", noseTipZ: -0.1, noseSlim: 2.35, noseDroop: -0.028, airbox: 0.88, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.000, inletW: -0.040, undercutD: 0.120, waist: -0.100, floorStep: 0.035, coverCrown: 0.02, coverLift: 0.025, wingStyle: W({ clean: 1, canard: 0, arch: 0.55, twist: 0.18, teCurve: 0.065, chordTaper: 0.22, foot: 0.92, tipRise: 0.018 }) }),
     // Rovik: low cooling shelf, short broad nose and almost flat wings.
-    rovik: Object.freeze({ fitSeat: 1, noseCurve: 1.8, spineCurve: 0.022, podProfile: "keel", noseTipZ: -0.14, noseSlim: 1.18, noseDroop: -0.028, airbox: 0.68, fin: 0, mirror: 0, inlet: -0.040, inletH: -0.100, inletW: -0.080, undercutD: 0.065, waist: -0.130, floorStep: -0.015, coverCrown: 0.005, coverLift: -0.04, wingStyle: W({ clean: 1, canard: 0, arch: 0.2, twist: 0.06, teCurve: 0.02, chordTaper: 0.12, foot: 0.82, tipRise: 0.006 }) }),
+    rovik: Object.freeze({ fitSeat: 1, noseCurve: 1.8, spineCurve: 0.022, podProfile: "keel", noseTipZ: -0.14, noseSlim: 2.25, noseDroop: -0.028, airbox: 0.68, fin: 0, mirror: 0, inlet: -0.040, inletH: -0.100, inletW: -0.080, undercutD: 0.065, waist: -0.130, floorStep: -0.015, coverCrown: 0.005, coverLift: -0.04, wingStyle: W({ clean: 1, canard: 0, arch: 0.2, twist: 0.06, teCurve: 0.02, chordTaper: 0.12, foot: 0.82, tipRise: 0.006 }) }),
     // Senzo: broad cooling shoulders and swept wing tips.
-    senzo: Object.freeze({ fitSeat: 1, noseCurve: 2.0, spineCurve: 0.028, podProfile: "delta", noseTipZ: -0.04, noseSlim: 1.42, noseDroop: -0.028, airbox: 1.05, fin: 0, mirror: 2, inlet: 0.060, inletH: -0.005, inletW: -0.050, undercutD: -0.020, waist: 0.025, floorStep: 0.025, coverCrown: 0.01, coverLift: -0.035, wingStyle: W({ clean: 1, arch: 0.72, twist: 0.22, teCurve: 0.09, chordTaper: 0.28, foot: 0.98, canard: 0, tipRise: 0.025 }) }),
+    senzo: Object.freeze({ fitSeat: 1, noseCurve: 2.0, spineCurve: 0.028, podProfile: "delta", noseTipZ: -0.04, noseSlim: 2.65, noseDroop: -0.028, airbox: 1.05, fin: 0, mirror: 2, inlet: 0.060, inletH: -0.005, inletW: -0.050, undercutD: -0.020, waist: 0.025, floorStep: 0.025, coverCrown: 0.01, coverLift: -0.035, wingStyle: W({ clean: 1, arch: 0.72, twist: 0.22, teCurve: 0.09, chordTaper: 0.28, foot: 0.98, canard: 0, tipRise: 0.025 }) }),
     // Talven: a rising shoulder/cover arc, deep undercut and bowed wing cascade.
-    talven: Object.freeze({ fitSeat: 1, noseCurve: 2.35, spineCurve: 0.042, podProfile: "serpent", noseTipZ: -0.08, noseSlim: 1.35, noseDroop: -0.028, airbox: 0.90, fin: 0, mirror: 0, inlet: -0.020, inletH: -0.005, inletW: -0.035, undercutD: 0.100, waist: -0.080, floorStep: 0.040, coverCrown: 0.03, coverLift: 0.035, wingStyle: W({ clean: 1, canard: 0, arch: 0.82, twist: 0.25, teCurve: 0.11, chordTaper: 0.3, foot: 1.02, tipRise: 0.03 }) }),
+    talven: Object.freeze({ fitSeat: 1, noseCurve: 2.35, spineCurve: 0.042, podProfile: "serpent", noseTipZ: -0.08, noseSlim: 2.5, noseDroop: -0.028, airbox: 0.90, fin: 0, mirror: 0, inlet: -0.020, inletH: -0.005, inletW: -0.035, undercutD: 0.100, waist: -0.080, floorStep: 0.040, coverCrown: 0.03, coverLift: 0.035, wingStyle: W({ clean: 1, canard: 0, arch: 0.82, twist: 0.25, teCurve: 0.11, chordTaper: 0.3, foot: 1.02, tipRise: 0.03 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -303,7 +303,10 @@ const Car3D = (function () {
     shadeFlags.round = shade;
     const bodySplitFrom = out.pos.length / 3;
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
-    buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt, floorEdgeAt, opts && opts.measure);
+    // Curved studies paint the continuous nose skin, rather than a straight
+    // tip overlay that hides their shoulders and cuts through the crown.
+    const nosePaint = teamStyle.noseCurve ? noseC || c1 : c1;
+    buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt, floorEdgeAt, opts && opts.measure, nosePaint);
 
     part("hood");
     // Driver-eye deck and shoulders (official F1 / Sky visor cams).
@@ -320,7 +323,7 @@ const Car3D = (function () {
     hR.w += profile[0]; hR.y += profile[1];
     const deck = ckpt ? [hF, { z: 0.86, y: 0.56, w: 0.58, h: 0.12, t: 0.62 }, hR] : [hF, hR];
     for (let i = 0; i < deck.length - 1; i++) {
-      bodySpan(out, deck[i], deck[i + 1], c1, 0.026);
+      bodySpan(out, deck[i], deck[i + 1], nosePaint, 0.026);
     }
     // Exterior crown stripe follows the deck. In cockpit it foreshortens into
     // a slab (a white accent hit the centre ray at 0.69 m), so it stays outside.
@@ -1139,7 +1142,7 @@ const Car3D = (function () {
              stripeTipZ, 0, ns314.top + 0.016, 0.036, 0.010, noseStripeC);
     }
 
-    if (noseC) {
+    if (noseC && !teamStyle.noseCurve) {
       const capRearZ = styledTipZ - 0.38;
       const nt = anchors.noseAt(styledTipZ), nb = anchors.noseAt(capRearZ);
       const capF = { z: styledTipZ + 0.005, y: (nt.bottom + nt.top) * 0.5, w: nt.side*2 + 0.010, h: nt.top - nt.bottom + 0.010, t: 0.70 };
@@ -1155,7 +1158,7 @@ const Car3D = (function () {
 
     const deckF = anchors.noseAt(2.15), deckR = anchors.noseAt(1.69), deckW = (a) => Math.min(0.28, a.topSide*1.75);
     const deckY = (a) => a.top + 0.010 - (shadeFlags.round ? CarShade.sink(a, deckW(a) / 2) : 0);   // rounded nose: edges seat on the skin
-    addLoft(out, deckR.z, 0, deckY(deckR), deckW(deckR), 0.018, deckF.z, 0, deckY(deckF), deckW(deckF), 0.018, c1);
+    addLoft(out, deckR.z, 0, deckY(deckR), deckW(deckR), 0.018, deckF.z, 0, deckY(deckF), deckW(deckF), 0.018, nosePaint);
     const camPod = anchors.noseAt(1.55);
     // fitSeat: sit on the LOWER skin under the pod's 15 cm, not the top at its centre
     // (a stepped cone climbs under it and the rear floated 13 mm).
@@ -1907,7 +1910,7 @@ const Car3D = (function () {
       const armNose = (teamStyle.noseDroop || 0) > 0.06 || teamStyle.fitSeat ? anchors.noseAt(2.40) : null;
       const armLow = !!(teamStyle.fitSeat && (armNose.bottom < 0.195 || teamStyle.noseCurve));
       const armOff = teamStyle.noseCurve ? -0.020 : armLow ? -0.025 : (teamStyle.noseDroop || 0) > 0.06 ? 0.045 : null;
-      const armX = armOff != null ? Math.min(0.09, armNose.side - 0.03) : 0.09, armY = armOff != null ? armNose.bottom + armOff : 0.275;
+      const armX = armOff != null ? Math.min(teamStyle.noseCurve ? 0.06 : 0.09, armNose.side - 0.03) : 0.09, armY = armOff != null ? armNose.bottom + armOff : 0.275;
       const foot = teamStyle.noseCurve ? fwMounts[s < 0 ? 0 : 1] : [s*0.09, 0.085, 2.54];
       if (shadeFlags.round) CarShade.strut(out, foot, [s*armX, armY, 2.40], 0.16, 0.040, c1, addTri, null, { n: 10, taper: 0.72 });
       else addFairedArm(out, [s*armX, armY, 2.40], foot, 0.040, c1, SURFACES.paint);
@@ -2416,7 +2419,10 @@ const Car3D = (function () {
     // visible gap between arm root and body from any three-quarter camera.
     // Sample the SAME anchors the bodywork lofts from — the arms then follow a
     // team's nose style and an engine's tailWidth instead of ignoring both.
-    const inNose = (z) => anchors.noseAt(z).side - 0.012;
+    const inNose = (z, y) => {
+      const p = anchors.noseAt(z);
+      return teamStyle.noseCurve ? noseFlankX(p, y, shadeFlags.round) - 0.004 : p.side - 0.012;
+    };
     const inTail = (z) => Math.max(0.14, anchors.coverAt(z).x - 0.012);
     for (const s of [-1, 1]) {
       // Wishbone PLANE SPREAD. 0.27/0.43 put the two pickups 160 mm apart on an
@@ -2430,16 +2436,16 @@ const Car3D = (function () {
       const fLowZ = [AXLES.frontZ - wishboneSpread, AXLES.frontZ + wishboneSpread];
       const fUpY = (z) => 0.42 + upX * 0.6 + (z < AXLES.frontZ ? antiDive : -antiDive * 0.4) + rideDY;
       for (const z of fLowZ) {
-        drawArm(out, [s*inNose(z), 0.225 + rideDY, z], fLower, armTh, suspC, SURFACES.carbon);
-        drawArm(out, [s*inNose(z), fUpY(z), z], fUpper, armTh, suspC, SURFACES.carbon);
+        drawArm(out, [s*inNose(z, 0.225 + rideDY), 0.225 + rideDY, z], fLower, armTh, suspC, SURFACES.carbon);
+        drawArm(out, [s*inNose(z, fUpY(z)), fUpY(z), z], fUpper, armTh, suspC, SURFACES.carbon);
       }
       if (fairArms) {
-        addWishboneWeb(out, [s*inNose(fLowZ[0]), 0.225 + rideDY, fLowZ[0]],
-          [s*inNose(fLowZ[1]), 0.225 + rideDY, fLowZ[1]], fLower, suspC, SURFACES.carbon);
-        addWishboneWeb(out, [s*inNose(fLowZ[0]), fUpY(fLowZ[0]), fLowZ[0]],
-          [s*inNose(fLowZ[1]), fUpY(fLowZ[1]), fLowZ[1]], fUpper, suspC, SURFACES.carbon);
+        addWishboneWeb(out, [s*inNose(fLowZ[0], 0.225 + rideDY), 0.225 + rideDY, fLowZ[0]],
+          [s*inNose(fLowZ[1], 0.225 + rideDY), 0.225 + rideDY, fLowZ[1]], fLower, suspC, SURFACES.carbon);
+        addWishboneWeb(out, [s*inNose(fLowZ[0], fUpY(fLowZ[0])), fUpY(fLowZ[0]), fLowZ[0]],
+          [s*inNose(fLowZ[1], fUpY(fLowZ[1])), fUpY(fLowZ[1]), fLowZ[1]], fUpper, suspC, SURFACES.carbon);
       }
-      drawArm(out, [s*inNose(AXLES.frontZ - 0.16), 0.34 + rideDY, AXLES.frontZ - 0.16],
+      drawArm(out, [s*inNose(AXLES.frontZ - 0.16, 0.34 + rideDY), 0.34 + rideDY, AXLES.frontZ - 0.16],
         [s*0.69, 0.35 + rideDY, AXLES.frontZ - 0.04*toeScale],
         armTh*0.72*toeScale, suspC, SURFACES.carbon);
       // An upright is a CASTING: wide at the lower wishbone pickup, narrow at
@@ -2450,7 +2456,7 @@ const Car3D = (function () {
               [0.18, 0.18, 0.20], null, SURFACES.metal);
       if (wbPush) {
         const outer = pullF ? fUpper : fLower;
-        const iX = inNose(AXLES.frontZ - 0.05);
+        const iX = inNose(AXLES.frontZ - 0.05, (pullF ? 0.20 : 0.455) + rideDY);
         const inner = pullF ? [s*(iX + armTh*0.41),0.20+rideDY,AXLES.frontZ-0.05]
           : [s*iX,0.455+rideDY,AXLES.frontZ-0.05];
         drawArm(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
