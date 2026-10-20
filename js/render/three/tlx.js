@@ -255,7 +255,7 @@ const TLX = (function () {
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
       const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
-        mirrorDeferred: false, mirrorLazy: null, rig: null };   // rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
+        mirrorDeferred: false, mirrorLazy: null, rig: null, allChunks: null };   // rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -3121,6 +3121,8 @@ const TLX = (function () {
       let _drawWarmKnob = null;
       try { const v = localStorage.getItem("apex26.tlxDrawWarm"); _drawWarmKnob = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       const drawWarmOn = () => (_drawWarmKnob !== null ? _drawWarmKnob : !(softGpu() || softwareGL));
+      let _warmChunksOn = true;   // present(): the warm's frame holds every chunk (the note there)
+      try { _warmChunksOn = localStorage.getItem("apex26.tlxWarmChunks") !== "0"; } catch (_) { /* no storage: on */ }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
         const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
@@ -5836,6 +5838,25 @@ const TLX = (function () {
             }
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
+          // EVERY CHUNK INTO THE WARM'S FRAME. The pool holds only the chunks this
+          // frame's cull kept, so the program warm compiled, drew and bound those
+          // alone; a chunk first in view mid-lap linked its program and allocated its
+          // bindings on the race's main thread (TLX-WebGL2 census 39510807053 /
+          // 39510922959: LINK_STATUS 19.8 s spa, 156 s singapore; bufferData 17.7 s).
+          // The warm's frame acquires the rest too; the next present re-culls.
+          // apex26.tlxWarmChunks=0 restores the visible-only warm.
+          if (_warmRequested && !_warmPending && !_deviceLost && _warmChunksOn) {
+            let added = 0;
+            for (let i = 0; i < drawList.n; i++) {
+              const rec = drawList[i], chs = rec.chunked && rec.chunked.chunks;
+              if (!chs) continue;
+              for (let j = 0; j < chs.length; j++) {
+                if (chs[j].geo.__tlxDrawnBatch === _poolBatch) continue;   // the cull already acquired it
+                acquireMesh(chs[j].geo, rec.m, rec.mat, rec).renderOrder = i; added++;
+              }
+            }
+            _warmStages.allChunks = added;
+          }
           _poolShow();
           // Hide InstancedMeshes that were not drawn this frame (still in scene).
           _hideUndrawnInstanced();
@@ -6326,6 +6347,7 @@ const TLX = (function () {
             o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
+                       allChunks: _warmStages.allChunks,   // off-view chunks the warm's frame added
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count

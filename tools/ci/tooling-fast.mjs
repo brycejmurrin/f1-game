@@ -1239,6 +1239,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-texture-release.test.mjs",
   // Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.
   "tests/unit/tlx-viewport.test.mjs",
+  // TLX program warm (B·H8): the warm's frame acquires every chunked record's off-view chunks too, so no chunk links its program or makes its bindings mid-lap (census 39510807053 / 39510922959). Runs the real present() block.
+  "tests/unit/tlx-warm-chunks.test.mjs",
   // tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).
   "tests/unit/tolerance-diff.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",

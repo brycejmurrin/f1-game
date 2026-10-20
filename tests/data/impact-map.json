@@ -13160,7 +13160,8 @@
       ],
       "_poolShow": [
         "tests/unit/tlx-fail-scope.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-warm-chunks.test.mjs"
       ],
       "_showInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs",
@@ -13186,7 +13187,8 @@
       "acquireMesh": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-warm-chunks.test.mjs"
       ],
       "applyResize": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13424,7 +13426,8 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-warm-chunks.test.mjs"
       ],
       "startRigWarm": [
         "tests/unit/tlx-rig-warm.test.mjs"

@@ -1,0 +1,1 @@
+Improved: the three.js renderer warms every track chunk before the race, not just the ones on screen, so on WebGL2 (the iPhone default) a chunk no longer compiles its shader mid-lap the first time it comes into view (multi-second stalls at Spa and Singapore on the macOS census).
