@@ -2287,6 +2287,9 @@
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
+      "menuStepYield": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
       ],
