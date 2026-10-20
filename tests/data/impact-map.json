@@ -10334,6 +10334,7 @@
         "tests/unit/wheel-state.test.mjs"
       ],
       "setEnabled": [
+        "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/wheel-state.test.mjs"
       ],
       "stepPlayer": [
