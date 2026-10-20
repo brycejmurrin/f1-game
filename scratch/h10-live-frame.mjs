@@ -19,7 +19,7 @@ import { raceGate } from "../tools/lib/census-entry.mjs";
 import { writeFileSync } from "node:fs";
 
 const TRACKS = (process.env.H10_TRACKS || "monaco,spa,singapore").split(",");
-const BACKENDS = (process.env.H10_BACKENDS || "tlx-gpu,tlx-gl").split(",");
+const BACKENDS = (process.env.H10_BACKENDS || "tlx-gl").split(",");
 const CAM = process.env.H10_CAM || "helmet";
 const WARM = +(process.env.H10_WARM || 8), WIN = +(process.env.H10_WIN || 40), TRACE = +(process.env.H10_TRACE || 6);
 const EXTRA = (process.env.H10_LS || "").split(/\s+/).filter(Boolean).map((kv) => kv.split("="));
@@ -194,6 +194,12 @@ async function runRow(browser, server, backend, track) {
             mat: (m.type || "") + ":" + (m.name || ""), obj: (ob.type || "") + ":" + (ob.name || "") + (ob.isInstancedMesh ? ":inst" + ob.count : ""), ud, parents: chain.join("<"),
             attrs: Object.keys(g.attributes || {}).join(","), rt: ro.context && ro.context.renderTarget ? (ro.context.renderTarget.texture && ro.context.renderTarget.texture.name || "rt") + ":" + ro.context.width + "x" + ro.context.height : "canvas",
             tier: (() => { try { return PerfGov.tier(); } catch (_) { return null; } })(),
+            shed: (() => { try { return window.__apex.renderScale().autoShed; } catch (_) { return null; } })(),
+            objId: ob.id, matId: m.id, matVer: m.version, curRT: (() => { try { const t = this.renderer && this.renderer.getRenderTarget ? this.renderer.getRenderTarget() : null; return t ? (t.texture && t.texture.name) || "rt" : null; } catch (_) { return "err"; } })(),
+            ctxRT: !!(ro.context && ro.context.renderTarget), mrt: (() => { try { return ro.context && ro.context.textures ? ro.context.textures.length : null; } catch (_) { return null; } })(),
+            key: (() => { try { return typeof ro.getCacheKey === "function" ? String(ro.getCacheKey()).slice(0, 160) : null; } catch (e) { return "err:" + String(e.message).slice(0, 40); } })(),
+            lights: (() => { try { const ln = ro.lightsNode; return ln ? { n: (ln.getLights ? ln.getLights().length : (ln._lights || []).length), key: typeof ln.getCacheKey === "function" ? String(ln.getCacheKey()).slice(0, 80) : null } : null; } catch (_) { return "err"; } })(),
+            lamp: (() => { try { const ms = GLX.__tlx.memState(); return ms && ms.lampGrid ? JSON.stringify(ms.lampGrid).slice(0, 120) : null; } catch (_) { return null; } })(),
             pos: (() => { try { const p = window.__apex.probe(); return p ? +(p.s).toFixed(0) : null; } catch (_) { return null; } })() });
         } catch (_) {}
       }
