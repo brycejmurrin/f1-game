@@ -442,6 +442,7 @@ function makeGpuHarness(opts = {}) {
     },
     // This VM's Log ring (seedLog): what a phone's COPY DIAG would carry.
     logs: (filter) => context.Log.records(filter),
+    vm: context,
   };
 }
 
@@ -1092,6 +1093,48 @@ test("the WGX mirror pass runs with the lamp shadow off; the main pass after it 
 
 // 1b-F4 (hunt 3): frame.allLights is ONE buffer refilled in place (frame-lights.js), so a rebuild:true
 // tuner edit (LAMP DENSITY / POOL RADIUS) re-orders it under the same identity while the caster keeps
+// Night + mirror (the phone's onboard default): the mirror packs its own re-ranked lamp list and the forward
+// pass packs the frame's, and both compared against ONE shared snapshot, so the lamp-mask generation moved twice
+// a frame and drawChunked re-ran visibleChunks x nL AABB tests in both passes, every frame.
+test("WGX per-chunk lamp masks stay cached across a mirror pass with its own lamp list", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const quads = 1001, pos = [], nrm = [], col = [], idx = [], mat = [], trk = [];
+  for (let q = 0, v = 0; q < quads; q++, v += 4) {
+    const x = q * 0.1;
+    pos.push(x,0,0, x+1,0,0, x+1,0,1, x,0,1);
+    idx.push(v,v+1,v+2, v,v+2,v+3);
+    for (let i = 0; i < 4; i++) { nrm.push(0,1,0); col.push(1,1,1); mat.push(1); trk.push(x,0,6); }
+  }
+  const m = gfx.createChunkedMesh({ pos, nrm, col, idx, mat, trk }, 72);
+  assert.ok(m.chunks.length > 1);
+  const lamps = (n, dx) => lampRecs(...Array.from({ length: n }, (_, i) => [i * 9 + dx, 5, 0]));
+  const vp = new Float32Array([0.001, 0, 0, 0, 0, 0.001, 0, 0, 0, 0, 0.001, 0, 0, 0, 0, 1]);   // everything in frustum
+  const mir = { viewProj: vp, lights: lamps(12, 3) }, fwd = { viewProj: vp, lights: lamps(20, 0) };
+  const F = h.vm.Frustum;   // frozen: swap the global for a counting copy
+  let tests = 0;
+  h.vm.Frustum = { ...F, aabbDist2: (...a) => { tests++; return F.aabbDist2(...a); } };
+  const frame = () => {
+    assert.equal(gfx.mirrorBegin(mir, 64, 16), true);
+    gfx.drawChunked(m, IDENT16, {});
+    gfx.mirrorEnd();
+    assert.equal(gfx.begin(fwd), true);
+    gfx.drawChunked(m, IDENT16, {});
+    gfx.present({});
+  };
+  frame();
+  assert.ok(tests > 0, "the first frame builds both passes' masks");
+  tests = 0;
+  frame(); frame();
+  assert.equal(tests, 0, "unchanged lamp lists: every chunk mask is a cache hit in both passes");
+  // A real move still invalidates: only the pass whose list moved recomputes.
+  fwd.lights = lamps(20, 1);
+  tests = 0;
+  frame();
+  assert.equal(tests, m.chunks.length * 20, "the forward pass re-tests each chunk against its 20 lamps; the mirror hits");
+});
+
 // its position. The memo keyed on identity + position returned the caster's OLD index.
 test("the WGX shadow-lamp absolute index follows an in-place refill of the baked set (1b-F4)", async () => {
   const h = makeGpuHarness();
@@ -1318,8 +1361,8 @@ test("WGX R8 perf changes hold (SSR depth stride, pooled merge-run, lamp-mask ca
   // when a ranked light's position or radius moves, instead of re-running
   // visibleChunks x nL AABB tests every frame.
   assert.match(WGX_SOURCE, /const _lmCache = new WeakMap\(\);/);
-  assert.match(WGX_SOURCE, /if \(_lmMoved\) CHK\.bumpLampGen\(\);/);
-  assert.match(WGX_SOURCE, /if \(cm && cm\.gen === _lmGen\)/);
+  assert.match(WGX_SOURCE, /if \(_lmMoved\) CHK\.bumpLampGen\(_lmPass\);/);
+  assert.match(WGX_SOURCE, /if \(cm\.gen\[lp\] === _lmGen\[lp\]\)/);
   // F7-lite: the dead DRAW_FLOATS const is gone (it looked like the stride but
   // nothing read it); the deferral doctrine stays written down.
   assert.doesNotMatch(WGX_SOURCE, /const DRAW_FLOATS\b/);
