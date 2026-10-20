@@ -144,6 +144,10 @@ const TrackSpace = (function () {
   }
 
   function range(def, s0, s1, coordinateSpace) {
+    // Width zones call this directly in SOURCE space, without sceneryRange's
+    // full-lap guard. Preserve coverage before wrapping 0 and 1 to the same
+    // point, or rotating/reversing a def narrows only one point of the lap.
+    if (Math.abs(s1 - s0) >= 1 - 1e-9) return { s0: 0, s1: 1 };
     const racing = coordinateSpace === "racing";
     const mirror = racing && lapMirror(def);
     const map = racing
