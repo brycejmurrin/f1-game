@@ -703,7 +703,7 @@ const MAT_MIRROR = new Float32Array([-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0,
 // Draw the room first, resolve the mirror opaque with depth bias so it depth-tests
 // against floor/props, then composite a bay fade quad for contact sheen.
 const MIRROR_BIAS = [-2, -120];
-const MIRROR_RESOLVE = { alpha: 1, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, depthBias: MIRROR_BIAS };
+const MIRROR_RESOLVE = { alpha: 1, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, carFinish: true, depthBias: MIRROR_BIAS };   // carFinish: the reflected car keeps its finish tints
 const MIRROR_SHEEN_PEAK = 0.14;
 const _mirrorFadeOpts = { alpha: 0.86, roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0 };
 function mirrorSheen(eye, carMat) {
