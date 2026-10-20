@@ -793,10 +793,14 @@ test.describe("Parts module — visual recipes", () => {
         const ep = Car3D.endplate(level, style);
         const sweep = Math.max(-0.06, Math.min(0.20, style.rearSweep));
         const crownY = ep.rear.top - 0.018;
+        // B·D3c tip lift (rwRise + rwCurve, 0 on every shipped row): the flown
+        // "rear" flap record carries it, and the tip vertex rises by exactly that.
+        const rf = Car3D.aeroFlaps(level, style).find((e) => e.id === "rear");
+        const lift = (rf.rise || 0) + (rf.rise2 || 0);
         // The trailing edge of the aerofoil section closes to zero thickness ON
         // the chord line, so the tip vertex sits exactly at yTrail — the old
         // flat sheet floated its single surface up by thick/2 instead.
-        const expectedY = crownY - (level >= 4 || style.drs ? 0.075 : 0);
+        const expectedY = crownY - (level >= 4 || style.drs ? 0.075 : 0) + lift;
         const expectedZ = -2.64 - sweep;
         // buildComplete, not build: the wing's top elements are ACTIVE AERO and are
         // drawn separately so they can rotate, so the render mesh no longer holds
@@ -835,7 +839,12 @@ test.describe("Parts module — visual recipes", () => {
             maxY = Math.max(maxY, y);
           }
         }
-        const crownTop = ep.rear.top + 0.012;
+        // A lifted tip (B·D3c rwRise/rwCurve) grows a tip fin on the plate up to
+        // rear.top + lift + 0.012, capped by an accent block 8 mm above that:
+        // the crown the tip must stay under. lift is 0 on every shipped row.
+        const rf = Car3D.aeroFlaps(option.visual.lvl, option.visual).find((e) => e.id === "rear");
+        const lift = (rf.rise || 0) + (rf.rise2 || 0);
+        const crownTop = ep.rear.top + 0.012 + (lift ? lift + 0.008 : 0);
         return maxY <= crownTop + 1e-6 ? [] : [`${option.id}:${(maxY - crownTop).toFixed(3)}`];
       });
     });
