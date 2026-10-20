@@ -879,10 +879,6 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // and in renderer-picker.js long after its only writer left game.js, which
     // is what the WRITER check below now catches.)
     "apex26.gfxProbeStrikes",
-    // The last boot's BOUND backend (renderer-boot.js start()): steers only the next
-    // boot's early backend preload (guessBackend). A RESET that kept it would preload
-    // the old path's group once; dropping it costs nothing.
-    "apex26.gfxBootBound",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     "apex26.wgxCapture",
