@@ -41,17 +41,20 @@ test("listServer runs initialize + tools/list and returns the instructions", asy
 
 test("the output-level gateway adds a bounded amount per tool to tools/list", async () => {
   // Measured on this fixture 2026-10-20: +469 / +667 chars (plain / typed) while
-  // LEVEL carried its prose on every tool, +276 / +474 after. The hint text itself
-  // is pinned by output-level-mcp.test.mjs, so the bound sits just above it.
+  // LEVEL and a per-tool hint carried prose; +276 / +474 with bare LEVEL; the hint
+  // then moved to initialize's instructions (once per server), leaving the level
+  // key and, for a typed tool, the output envelope.
   const before = await raw(), after = await wrapped();
   const size = (t) => JSON.stringify(t).length;
   for (const t of before.tools) {
     const w = after.tools.find((x) => x.name === t.name);
     assert.ok(w, t.name);
     assert.equal(w.inputSchema.properties.outputLevel.description, undefined, "LEVEL carries no per-tool prose");
-    const budget = t.outputSchema ? 500 : 300;
+    const budget = t.outputSchema ? 300 : 120;
     assert.ok(size(w) - size(t) <= budget, `${t.name}: +${size(w) - size(t)} chars (budget ${budget})`);
   }
   const reader = after.tools.find((x) => x.name === "output_read");
   assert.ok(reader.inputSchema.properties.outputLevel.description, "output_read keeps the level prose, once per server");
+  assert.ok(after.instructions.startsWith("fixture\n\n"), "upstream instructions come first");
+  assert.ok(after.instructions.includes("outputLevel=compact"), "the gateway hint follows them");
 });

@@ -180,6 +180,44 @@ node tools/mcp/mcp-listing-cost.mjs --entry 'raw-apex=bash tools/mcp/apex-tools-
 node --test tests/unit/mcp-listing-cost.test.mjs tests/unit/output-level-mcp.test.mjs
 ```
 
+### Second trim (Bryce, 2026-10-20, typed in the B·W11 session)
+
+Bryce asked for the three cuts the tests pinned:
+
+- **Generic output schema.** apex-tools no longer publishes an
+  `outputSchema` for the 24 tools whose shape is the generic CLI envelope
+  (`{ok, error, message, fix, out}` with `additionalProperties`). It was 394
+  chars each through the gateway. The 17 tools with a measured shape keep
+  theirs, and `apex-tools-mcp.test.mjs` pins that list.
+- **Gateway hint.** It is no longer appended to every tool. The gateway
+  appends it once to `initialize`'s `instructions`, after the upstream text.
+  A per-tool line remains only when the level key was renamed to avoid a
+  name collision.
+- **Default annotation values.** The gateway drops any hint equal to its MCP
+  2025-06-18 default (`readOnlyHint` false, `destructiveHint` true,
+  `idempotentHint` false, `openWorldHint` true;
+  https://modelcontextprotocol.io/specification/2025-06-18/schema
+  §ToolAnnotations). This applies to all five servers.
+
+| server | after §6 | after the second trim | raw (no gateway) |
+|---|---:|---:|---:|
+| apex-tools | 75,249 | 56,946 | 53,919 |
+| playwright-official | 26,464 | 20,772 | 18,502 |
+| chrome-devtools | 44,373 | 36,490 | 31,994 |
+| js-debugger | 27,007 | 21,708 | 19,598 |
+| apex-lsp | 12,154 | 10,859 | 8,882 |
+| **total** | **185,247** | **146,775** | **132,895** |
+
+Over the day the total went from 211,974 to 146,775 chars (−31 %). The
+gateway's share fell from +59 % to +10 %, and apex-tools now lists only 6 %
+above its raw server.
+
+The cost of this trim: server `instructions` grew from 995 to 2,521 chars
+(the hint appears once per server). Claude Code loads instructions at every
+session start, so a deferring session pays about +380 tokens at start. In
+exchange, every loaded schema is about 270 chars smaller on average, and a
+full-schema client pays 38k chars (about 9.6k tokens) less.
+
 ### The one-tool prototype (built, measured, removed)
 
 `apex {op, args}` worked like this. `op` was an enum of the 41 apex_* names
@@ -202,7 +240,7 @@ them in a subagent because they can boot Chromium.
 | chrome-devtools | gate per host; no redesign | third-party; its heap tools are candidates to hide |
 | js-debugger | don't | 207 tokens of names |
 | apex-lsp | don't | 56 tokens of names; `lsp_*` names are what agents search for |
-| output-level gateway | **done** (§6); the next step is Bryce's call | −26.7k chars across all five servers |
+| output-level gateway | **done** (§6 and the second trim) | −65k chars across all five servers |
 | server instructions | name when to search each server (the Claude Code docs say instructions "help Claude understand when to search for your tools") | instructions are the only per-server text a deferred client always sees |
 
 Revisit if a client we use stops deferring: Claude Code with

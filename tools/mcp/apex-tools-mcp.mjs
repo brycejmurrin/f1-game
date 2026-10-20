@@ -2943,7 +2943,9 @@ function listTools(compact = true) {
     title: toolAnnotations(t).title,
     description: compactDescription(t.name, t.description),
     inputSchema: publishedInputSchema(t),
-    outputSchema: compactOutput(toolOutputSchema(t)),
+    // The generic CLI envelope ({ok, error, message, fix, out}, additionalProperties) says nothing a
+    // client can use and was 9.5k of the listing on 24 tools; only a tool-specific shape is published.
+    ...(toolOutputSchema(t) === CLI_RESULT_SCHEMA ? {} : { outputSchema: compactOutput(toolOutputSchema(t)) }),
     annotations: toolAnnotations(t),
   }) : ({
     name: t.name,

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const gateway = fileURLToPath(new URL('../../tools/mcp/output-level-mcp.mjs', import.meta.url));
+const { withoutDefaultHints } = await import(new URL('../../tools/mcp/output-level-mcp.mjs', import.meta.url));
 const fixture = String.raw`
 const {createInterface}=require('node:readline');
 let calls=0;
@@ -55,6 +56,14 @@ function harness(t, code = fixture) {
   return { root, child, closed, messages, wait, send, request, call, stderr: () => stderr };
 }
 
+test('annotation hints equal to the MCP 2025-06-18 defaults are dropped; the rest pass through', () => {
+  assert.deepEqual(withoutDefaultHints({ title: 'T', readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }), { title: 'T' });
+  assert.deepEqual(withoutDefaultHints({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }),
+    { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  assert.deepEqual(withoutDefaultHints({ readOnlyHint: false, destructiveHint: false }), { destructiveHint: false }, 'a non-default destructiveHint survives');
+  assert.equal(withoutDefaultHints(undefined), undefined);
+});
+
 test('help starts no executable and documents presentation levels', () => {
   const r = spawnSync(process.execPath, [gateway, '--help', '--server', 'fake', '--', '/nonexistent'], { encoding: 'utf8' });
   assert.equal(r.status, 0); assert.match(r.stdout, /compact.*diagnostic.*full/); assert.equal(r.stderr, '');
@@ -66,9 +75,10 @@ test('paginated schemas retain upstream constraints and full output schema; coll
   assert.equal(first.nextCursor, 'second'); assert.equal(first.tools.length, 2);
   for (const tool of first.tools) assert.deepEqual(tool.inputSchema.properties.outputLevel.enum, ['compact', 'diagnostic', 'full']);
   assert.equal(first.tools[0].inputSchema.additionalProperties, false);
-  assert.ok(first.tools[0].description.startsWith('Echo\n'), 'keep upstream description');
-  assert.ok(Buffer.byteLength(first.tools[0].description) - Buffer.byteLength('Echo') <= 256, 'presentation hint stays bounded per discovered tool');
-  for (const needed of ['compact', 'diagnostic', 'full', 'final-page', 'structuredContent.artifact.path', '_meta["apex/agent-output"].artifact.path']) assert.ok(first.tools[0].description.includes(needed), needed);
+  // The presentation hint is said once, in initialize's instructions (next test), not per tool.
+  assert.equal(first.tools[0].description, 'Echo', 'upstream description untouched');
+  assert.equal(Object.hasOwn(first.tools[1], 'description'), false, 'no description invented for a tool that had none');
+  assert.equal(first.tools[0].inputSchema.properties.outputLevel.description, undefined, 'LEVEL carries no per-tool prose');
   assert.equal(first.tools[0].outputSchema.anyOf[0].required[0], 'value');
   assert.equal(first.tools[0].outputSchema.anyOf[1].required[0], 'outputLevel');
   assert.equal(Object.hasOwn(first.tools[1], 'outputSchema'), false);
@@ -124,6 +134,8 @@ test('initialize, progress, cancellation, bidirectional ids including null, conc
   const h = harness(t);
   const init = await h.request('init', 'initialize', {});
   assert.deepEqual(init.result.capabilities, { tools: { listChanged: true }, resources: { subscribe: true } });
+  for (const needed of ['compact', 'diagnostic', 'full', 'final-page', 'structuredContent.artifact.path', '_meta["apex/agent-output"].artifact.path']) assert.ok(init.result.instructions.includes(needed), needed);
+  assert.ok(init.result.instructions.length <= 512, 'the hint stays one short paragraph per server');
   await h.request('list', 'tools/list');
   h.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
   assert.equal((await h.wait(m => m.method === 'notifications/progress')).params.progressToken, 0);
