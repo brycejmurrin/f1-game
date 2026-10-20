@@ -9,6 +9,8 @@ import { spawnSync } from "node:child_process";
 import sharp from "sharp";
 import { digest, matrixOutputDir, captureSource, matrixManifest, resumeManifest, evidenceFile, metadataFile, validateRunDirectory, verifiedCell, galleryIndex, garageChannel } from "../../tools/shot/lib/design-matrix-run.mjs";
 import { prepareGallery, galleryHtml } from "../../tools/shot/capture-gallery.mjs";
+import { captureRequest } from "../../tools/shot/run-capture-request.mjs";
+import { parse as parseYAML } from "yaml";
 import {
   expandMatrix, batchSlice, frameForPart, cameraFor, labelDiff, pendingGroups, parseVariant, parseBatch,
   checkLimits, parseArgs, sheetHtml, PART_BOXES, SAME_PCT,
@@ -91,6 +93,8 @@ test("limits: dpr, viewport, loadavg", () => {
   assert.throws(() => checkLimits({ viewport: [844, 390], dpr: 2 }), /dpr/);
   assert.throws(() => checkLimits({ viewport: [1920, 1080] }), /1600x900/);
   assert.throws(() => checkLimits({ viewport: [844, 390], load: 3 }), /loadavg/);
+  assert.doesNotThrow(() => checkLimits({ viewport: [844, 390], load: 65.7, platform: "darwin" }));
+  assert.throws(() => checkLimits({ viewport: [844, 390], load: 3, platform: "linux" }), /loadavg/);
 });
 
 test("args and sheet", () => {
@@ -192,4 +196,18 @@ test("real CLI gallery export packages image assets and rejects output reuse", a
   const run=()=>spawnSync(process.execPath,args,{encoding:"utf8",timeout:10000});
   const r=run();assert.equal(r.status,0,r.stderr);const data=JSON.parse(fs.readFileSync(path.join(out,"gallery.json")));assert.equal(data.items[0].kind,"geometry-preview");assert.equal(digest(fs.readFileSync(path.join(out,data.items[0].src))),digest(image));assert.ok(fs.existsSync(path.join(out,"index.html")));
   assert.match(run().stderr,/new or empty/);
+});
+
+test("CI requests bound work, reject output/command injection and retain mixed recipes as one argument", () => {
+  const request={schemaVersion:1,args:["--part=sidepod,frontWing","--angles=headOn","--colours=light","--variants=pod=#225bb4;podFinish=satin"]};
+  const r=captureRequest(request);assert.equal(r.cells,4);assert.ok(r.args.includes(request.args[3]));assert.equal(r.args.at(-1),"--out=artifacts/design-matrix/ci-capture");
+  for(const args of [["--out=../escape"],["--resume"],["--team=x","--team=y"],["--part=sidepod","--angles=headOn,grazing,specular,low34,topFront","--colours=dark,mid,light","--lights=lamp,off"]])assert.throws(()=>captureRequest({schemaVersion:1,args}));
+  assert.throws(()=>captureRequest({...request,command:"sh"}));
+});
+
+test("capture workflow is opt-in, read-only and pins the captured source without cancelling active jobs", () => {
+  const w=parseYAML(fs.readFileSync(".github/workflows/capture-gallery.yml","utf8"));
+  assert.deepEqual(w.permissions,{contents:"read"});assert.equal(w.concurrency["cancel-in-progress"],false);assert.equal(w.jobs.capture["runs-on"],"macos-latest");assert.equal(w.jobs.capture["timeout-minutes"],15);
+  assert.deepEqual(w.on.push.paths,[".github/capture-gallery-request.json"]);assert.equal(w.jobs.capture.steps[0].with.ref,"${{ github.sha }}");assert.equal(w.jobs.capture.steps[0].with["persist-credentials"],false);
+  assert.ok(w.jobs.capture.steps.some(s=>s.run==="node tools/shot/run-capture-request.mjs"));assert.ok(w.jobs.capture.steps.some(s=>s.with?.["retention-days"]===7));
 });

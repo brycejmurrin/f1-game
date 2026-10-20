@@ -2995,6 +2995,15 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/shot/run-capture-request.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/scenery-locations.json",
       "classification": "data",
       "outputPolicy": "no-direct-output"

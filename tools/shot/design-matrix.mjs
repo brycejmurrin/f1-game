@@ -44,7 +44,7 @@ async function main() {
   const todo = pendingGroups(groups, manifest, (_png, cell) => verifiedCell(outDir, cell, o.backend));
   if (!o.indexOnly && todo.length) {
     if (!browserAvailable) throw new Error("native screenshots unavailable: no executable Chromium discovered. Run bash tools/env/ensure-mcp-ready.sh and configure PW_CHROMIUM with an installed executable. No browser installed or CPU images substituted.");
-    checkLimits({ ...o, load: loadavg()[0] });
+    checkLimits({ ...o, load: loadavg()[0], platform: process.platform });
   }
   mkdirSync(outDir, { recursive: true });
   const save = () => { const tmp = join(outDir, `.manifest-${randomUUID()}.tmp`); writeFileSync(tmp, JSON.stringify(manifest, null, 2), { flag: "wx" }); renameSync(tmp, mfPath); };

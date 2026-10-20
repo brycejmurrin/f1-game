@@ -1886,6 +1886,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/run-capture-request.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
+    },
     "tools/shot/capture-gallery.mjs": {
       "action": "keep-native",
       "presentation": "native",

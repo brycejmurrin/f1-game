@@ -146,12 +146,14 @@ export function parseBatch(s) {
 }
 
 /** Guards from the launch contract: dpr 1, <= 1600x900, loadavg < 3. */
-export function checkLimits({ viewport, dpr = 1, load }) {
+export function checkLimits({ viewport, dpr = 1, load, platform = "linux" }) {
   const [w, h] = viewport;
   if (dpr !== 1) throw new Error("dpr must be 1 (dpr > 1 starves SwiftShader)");
   if (viewport.length !== 2 || !viewport.every(Number.isInteger) || w < 64 || h < 64) throw new Error("viewport needs integer dimensions >= 64");
   if (w > 1600 || h > 900) throw new Error(`viewport ${w}x${h} exceeds 1600x900`);
-  if (load != null && load >= 3) throw new Error(`loadavg ${load.toFixed(2)} >= 3; wait for the box to settle`);
+  // Match garage-angles' /proc/loadavg guard: this absolute threshold belongs
+  // to the Linux software-rendering container, not a shared macOS host.
+  if (platform === "linux" && load != null && load >= 3) throw new Error(`loadavg ${load.toFixed(2)} >= 3; wait for the box to settle`);
 }
 
 export function parseArgs(argv) {
