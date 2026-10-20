@@ -786,6 +786,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/marshal-post-grounding.test.mjs",
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/mcp-http-origin.test.mjs",
+  // MCP listing-cost meter + the per-tool bound on what output-level-mcp adds to tools/list (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md). Inline fixture, ~1 s.
+  "tests/unit/mcp-listing-cost.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/measure-pr-ci-after-close.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",

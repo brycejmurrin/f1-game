@@ -233,6 +233,12 @@ TinyFish key / chrome clone = warn; playwright `status` only):
 node tools/mcp/mcp-smoke.mjs --dry-run
 ```
 
+What each server's `tools/list` costs a client (tools, chars, estimated
+tokens, names-only cost): `node tools/mcp/mcp-listing-cost.mjs` (`--entry
+NAME=cmd…` adds an unconfigured server, e.g. a raw one without the gateway).
+Why the servers stay many-tool rather than one parameterized tool each, and
+what the gateway costs per tool: `docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md`.
+
 ## Layers
 
 | Layer | Lives | Answers |

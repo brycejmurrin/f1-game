@@ -1681,6 +1681,11 @@
       "presentation": "shared-levels",
       "preserve": "JSON-RPC errors/isError and nontext blocks"
     },
+    "tools/mcp/mcp-listing-cost.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Per-server ERROR rows and the TOTAL line"
+    },
     "tools/mcp/mcp-preflight.sh": {
       "action": "keep-native",
       "presentation": "native",
