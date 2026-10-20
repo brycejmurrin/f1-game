@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { isBad, severity, findingHead, summarize, readAudit } from "../../tools/ui/audit-summary.mjs";
+import { isBad, severity, findingHead, summarize, readAudit, DEFAULT_DIR } from "../../tools/ui/audit-summary.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CLI = path.join(ROOT, "tools/ui/audit-summary.mjs");
@@ -135,7 +135,7 @@ test("readAudit takes a directory or a file and refuses anything that is not an 
   assert.throws(() => readAudit(path.join(dir, "other.json")), /no rows array/);
 });
 
-test("the CLI prints the summary, --json prints one object, and a bad argument exits 2 without a stack", () => {
+test("the CLI prints the summary, defaults to layout-audit's folder, --json prints one object, and a bad argument exits 2 without a stack", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "audit-summary-"));
   fs.writeFileSync(path.join(dir, "audit.json"), JSON.stringify(GRID));
   const run = (...a) => spawnSync(process.execPath, [CLI, ...a], { encoding: "utf8", cwd: ROOT });
@@ -146,7 +146,17 @@ test("the CLI prints the summary, --json prints one object, and a bad argument e
   assert.equal(js.data.bad, 3);
   assert.ok(Array.isArray(js.lines));
   assert.equal(run(dir, "--cell", "settings@iphone").stdout.split("\n")[0], "CELL settings @ iphone: clipped 2 offscreen 1 tapUnder24 1");
-  for (const bad of [[], [dir, "--top", "0"], [dir, "--top", "x"], [path.join(dir, "nope")]]) {
+  // no target = layout-audit's own output folder (the geometry run ignores --out), run from a cwd that has one
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "audit-summary-cwd-"));
+  fs.mkdirSync(path.join(cwd, DEFAULT_DIR), { recursive: true });
+  fs.writeFileSync(path.join(cwd, DEFAULT_DIR, "audit.json"), JSON.stringify(GRID));
+  const bare = spawnSync(process.execPath, [CLI, "--top", "1"], { encoding: "utf8", cwd });
+  assert.equal(bare.status, 0, bare.stdout);
+  assert.ok(bare.stdout.startsWith("AUDIT cells=7 bad=3"));
+  const missing = spawnSync(process.execPath, [CLI], { encoding: "utf8", cwd: fs.mkdtempSync(path.join(os.tmpdir(), "audit-summary-empty-")) });
+  assert.equal(missing.status, 2);
+  assert.ok(missing.stdout.includes("no audit.json at artifacts/layout-audit"));
+  for (const bad of [[dir, "--top", "0"], [dir, "--top", "x"], [path.join(dir, "nope")]]) {
     const r = run(...bad);
     assert.equal(r.status, 2, bad.join(" "));
     assert.ok(r.stdout.startsWith("ERROR "), r.stdout);

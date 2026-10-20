@@ -930,6 +930,12 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/lane-preamble.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/live-run-check.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
