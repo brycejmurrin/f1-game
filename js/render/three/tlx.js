@@ -2560,13 +2560,13 @@ const TLX = (function () {
       }
       // A freed decal source must release its hidden instance buffer/render object
       // too. Geometry.dispose alone leaves the run in both strong registries.
-      function _decalDrop(geo, later) {
+      function _decalDrop(geo) {
         const b = _decalRuns.get(geo);
         if (!b) return;
         _decalRuns.delete(geo);
         const ix = _instRegistry.indexOf(b.imesh);
         if (ix >= 0) _instRegistry.splice(ix, 1);
-        dropWrapper(b.imesh, null, later);   // waits for an in-flight compile before disposal
+        dropWrapper(b.imesh);   // waits for an in-flight compile before disposal
         b.rec = -1;
       }
       // R1 (perf hunt 3) — REPEATED OPAQUE DRAWS AS ONE INSTANCED RUN PER PASS. The field's wheel layers
@@ -3458,9 +3458,9 @@ const TLX = (function () {
       // edit in the WebGPU livery probe. Held here, the new car's render object
       // takes the pipeline (usedTimes 1 -> 2) before the old one lets go. The
       // GPU buffers still go at once (the caller's geometry.dispose()); only the
-      // JS render objects wait. The geometry's coalesced (R1) and decal (F3)
-      // runs wait too: a freed flap set's run is often the instanced lit
-      // program's last holder (B·R1's repro). Bounded: past DROP_LATER_MAX (a track free)
+      // JS render objects wait. The geometry's coalesced (R1) runs wait too:
+      // a freed flap set's run is often the instanced lit program's last
+      // holder (B·R1's repro). Bounded: past DROP_LATER_MAX (a track free)
       // everything drops now, so a circuit switch keeps its synchronous free.
       const _dropLater = [];   // { mesh, at: _sceneRenders when dropped }
       const DROP_LATER_MAX = 64;
@@ -3515,7 +3515,7 @@ const TLX = (function () {
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
         _coDrop(geo, true);   // R1: its coalesced runs (often the instanced lit program's last holder)
-        _decalDrop(geo, true);   // F3: its batched decal run
+        _decalDrop(geo);   // F3: its batched decal run (immediate: no measured pipeline loss, and tlx-probes pins it)
       }
 
       function disposeGeometry(geo) {

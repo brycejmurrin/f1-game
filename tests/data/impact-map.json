@@ -13092,8 +13092,7 @@
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "flushDropLater": [
-        "tests/unit/render-final-contracts.test.mjs",
-        "tests/unit/tlx-round2.test.mjs"
+        "tests/unit/render-final-contracts.test.mjs"
       ],
       "flushDropped": [
         "tests/unit/render-final-contracts.test.mjs",
