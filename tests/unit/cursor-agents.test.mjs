@@ -49,6 +49,7 @@ import {
   maskBody,
   interpolate,
   loadRuns,
+  handback,
   transcript,
   transcriptCall,
   clock,
@@ -952,4 +953,74 @@ test("parseRun merges assistant chunks across streaming updates and starts a new
     { id: RUN1 },
   ).rows;
   assert.deepEqual(rows.filter((r) => r.kind === "chat").map((r) => r.text), ["pong", "after the tool", "after thinking"]);
+});
+
+test("handback waits, caches every retrievable run, and returns a bounded digest with failures and the artifact count", async () => {
+  const dir = tmpDir();
+  const t = fakeClock();
+  t.now = Date.parse("2026-10-20T20:00:00Z");
+  const ago = (h) => new Date(t.now - h * 3600e3).toISOString();
+  const bad = sse([["tool_call", { callId: "k1", name: "get_mcp_tools", status: "completed", args: { server: "x" }, result: { error: { error: 'namespace "Github" not found' } } }, ], ["result", { status: "FINISHED", text: "done", durationMs: 1000 }]]);
+  const runs = { items: [{ id: RUN2, status: "FINISHED", createdAt: ago(1) }, { id: RUN1, status: "FINISHED", createdAt: ago(40) }] };
+  stub(
+    [200, { id: ID, status: "IDLE", latestRunId: RUN2 }],
+    [200, runs],
+    [200, runs],
+    [200, bad],
+    [200, { items: [{ path: "artifacts/a.md" }, { path: "artifacts/b.md" }] }],
+  );
+  try {
+    const r = await handback(ID, { dir });
+    assert.equal(r.code, 0);
+    assert.equal(r.lines[0], `WAIT ${ID} IDLE run=${RUN2} last=FINISHED HANDBACK runs=1 expired=1 notCached=0 calls=1 err=1`);
+    assert.equal(r.lines.filter((l) => l.startsWith("RUN ")).length, 1);
+    assert.ok(r.lines.some((l) => l.startsWith("TOOL ") && l.includes("get_mcp_tools ERR") && l.includes('namespace "Github" not found')));
+    assert.equal(r.lines.at(-1), `ARTIFACTS 2 (artifacts ${ID})`);
+    assert.equal(fs.readdirSync(dir).length, 1, "the retrievable run is cached on disk");
+  } finally {
+    t.restore();
+    after();
+  }
+});
+
+test("handback: a timeout returns 124 and reads no transcript; failures beyond the cap are counted; artifacts may be unreadable", async () => {
+  const dir = tmpDir();
+  const t = fakeClock();
+  t.now = Date.parse("2026-10-20T20:00:00Z");
+  let calls = stub(...Array.from({ length: 10 }, () => [200, { id: ID, status: "ACTIVE", latestRunId: RUN1 }]));
+  try {
+    const r = await handback(ID, { dir, timeoutS: 6, intervalS: 5 });
+    assert.equal(r.code, 124);
+    assert.equal(r.lines.length, 1);
+    assert.ok(r.lines[0].startsWith(`WAIT ${ID} TIMEOUT`));
+    assert.ok(!calls.some((c) => c.url.includes("/stream")), "no stream read while the agent is still working");
+    // 7 failing calls, cap 5: five lines and a count of the rest; the artifacts request fails -> "unreadable"
+    const many = sse([...Array.from({ length: 7 }, (_, i) => ["tool_call", { callId: `k${i}`, name: "read_file", status: "completed", args: { path: `f${i}.js` }, result: { error: { message: `boom ${i}` } } }]), ["result", { status: "FINISHED", text: "x" }]]);
+    const run = { items: [{ id: RUN1, status: "FINISHED", createdAt: new Date(t.now - 3600e3).toISOString() }] };
+    stub([200, { id: ID, status: "IDLE", latestRunId: RUN1 }], [200, run], [200, run], [200, many], [500, err("boom")]);
+    const r2 = await handback(ID, { dir: tmpDir(), errors: 5 });
+    assert.equal(r2.lines.filter((l) => l.startsWith("TOOL ")).length, 5);
+    assert.ok(r2.lines.includes(`… 2 more failures (transcript ${ID} --only errors)`));
+    assert.equal(r2.lines.at(-1), "ARTIFACTS unreadable");
+  } finally {
+    t.restore();
+    after();
+  }
+});
+
+test("handback keeps wait's exit code: a cancelled last run is 1, and the digest still prints", async () => {
+  const t = fakeClock();
+  t.now = Date.parse("2026-10-20T20:00:00Z");
+  const run = { items: [{ id: RUN1, status: "CANCELLED", createdAt: new Date(t.now - 3600e3).toISOString() }] };
+  const stream = sse([["status", { status: "CANCELLED" }], ["result", { status: "CANCELLED", text: "" }]]);
+  stub([200, { id: ID, status: "IDLE", latestRunId: RUN1 }], [200, run], [200, run], [200, stream], [200, { items: [] }]);
+  try {
+    const r = await handback(ID, { dir: tmpDir() });
+    assert.equal(r.code, 1);
+    assert.ok(r.lines[0].includes("last=CANCELLED HANDBACK runs=1"));
+    assert.equal(r.lines.at(-1), "ARTIFACTS 0");
+  } finally {
+    t.restore();
+    after();
+  }
 });
