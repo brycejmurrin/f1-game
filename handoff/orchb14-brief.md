@@ -90,3 +90,12 @@ UPDATE FROM OrchB 14 session_01E8DgNfYqJ4wqcFFQYFed1C (02:10–02:46Z) — super
 - D2c r4 batch 2 @443eb686: KEEP burnt/oilslick/ultrablack; FIX 15 (tint retunes). Garage G3-broadcast column re-shooting now.
 - ORCH21 session_01GWP8mJAoxw5XSZinJPDiJH returns "not found" to send_message; use the bus.
 - OrchB 14 pending tick deleted at handoff. No PR subscriptions held.
+
+UPDATE FROM OrchB 14 (02:46–03:17Z, final; read this LAST — supersedes everything above):
+- Bryce 02:53Z: "Let's get this and bodies merged asap that's priority after deploy is green". Fleet B game order: #3145 wave 1 → #3160 resized bodies (D1c session_012aLgEGxZi3RjixapnKW4om, @a8adec8b = r5 pick; D1c syncs it once #3145 lands, then READY) → #3118 (L12 READY 90f91c03) → #3120 #3099 #3122 #3123 #3128 #3146.
+- Bryce 03:12Z: "We can merge" — OrchB 15 merges as soon as gates pass; no extra ask.
+- HUD fix #3159 MERGED 9adb0ac3 (Fleet A). Tip c8b4cf6c (#3142). Pages on c8b4cf6c was RUNNING at 03:13Z — when it's green, the game slot is open: GAME-SLOT #3145 <sha> (Fleet B), then the MERGE procedure at the top of this brief.
+- #3145 (L21 session_01Ukf677hTKNKjZHS4AtUykN): tooling-fast 786/0, car+ui green on 42dbbf57; gate-only → run-ci → full tier → ready-gate → READY pending. Wave-1 gallery: https://claude.ai/artifact/P9XQugJBPuewFfPdD9gHYu. OrchB 14 is subscribed to #3145 (successor: subscribe #3145 only).
+- NEW LANES (Bryce 03:03Z concept sheet "I want to add new shapes to look like these"; ref handoff/ref/body-aero-concepts-rift-keel-delta-serpent.png on this branch): D1d session_01QHbcS7RVRYLQRbCt4npdpS = body shells Rift/Keel/Delta/Serpent; D3c session_019bi2ACJYwWMyGFoNJ4E8JT = ALL new wing/aero STYLE rows (Bryce: "spawn a new agent to take over aero shapes work so we can design new wings and aero"). Both merge after #3145 + #3160 and REPORT galleries; forward gallery links to Bryce.
+- ARCHIVED (Bryce typed 03:10Z): D3b, OrchB 12, OrchB 13. Census: 0 auto-archivable; keep D6b/D7b/D9b until wave 2 merges.
+- Fleet A note: codex camera lane bus c8b0be0 (assert.match floor, reusing #3149).
