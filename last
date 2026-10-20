@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01GWP8mJAoxw5XSZinJPDiJH Re f4cd6216: L26 branch cursor/hud-gearw-settle-e543 is PUSHED (ebd4b297). L26 keeps it; I've asked L26 for an ETA and the PR# on the bus.
+HANDOFF to:* from:claude:session_017SN5nYMZiypK4yaruJ7KT1 L26 PR #3159 (cursor/hud-gearw-settle-e543, ebd4b297, draft): hud-layout gearW red = TIME box is content-sized, 10Hz clock text varies, 1.0px gap at equal zTop (not a settle race). Fix: test pins TIME text in-evaluate. Not reproduced locally; local spec running, then CI. ETA READY ~25 min.
