@@ -122,6 +122,7 @@ bare JS symbol. Take it for the next lookup.
 ## Verify the tool itself
 
 ```sh
-node --test tests/unit/lsp-mcp.test.mjs   # MCP client on the real tree + fixtures, ~7 s
+node --test tests/unit/lsp-mcp.test.mjs   # MCP client on the real tree
+node --test tests/unit/lsp-mcp-fixture.test.mjs # hermetic fixture workspaces
 node tools/mcp/lsp-eval.mjs               # 12 pinned questions, apex-lsp vs grep
 ```

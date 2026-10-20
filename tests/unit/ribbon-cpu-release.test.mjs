@@ -26,7 +26,8 @@ test("player build with chunkRibbons drops ribbon CPU channels after upload", ()
   assert.ok(tr.meshes.roadChunked && tr.meshes.terrainChunked);
   assert.equal(tr.roadGeo.nrm, null);
   assert.equal(tr.roadGeo.col, null);
-  assert.ok(Array.isArray(tr.roadGeo.pos) && Array.isArray(tr.roadGeo.idx));
+  // pos/idx stay for debris, groundY and terrainY, re-typed like the worker's post (#3113 F7).
+  for (const g of [tr.roadGeo, tr.terrainGeo]) assert.ok(g.pos instanceof Float64Array && g.idx instanceof Uint32Array);
   assert.equal(tr.terrainGeo.mat, null);
 });
 
