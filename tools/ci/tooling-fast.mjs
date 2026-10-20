@@ -797,6 +797,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/memory-sync.test.mjs",
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
+  // The menu car prep yields one frame, not a fixed 32 ms (B·H8 load hunt). VM, no browser.
+  "tests/unit/menu-car-prep-yield.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
   // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
