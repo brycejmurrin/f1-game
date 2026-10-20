@@ -3662,3 +3662,10 @@ It covers four STYLE recipes (Auralis, Cevora, Vantrel, Orynth), the `podSculpt`
 in the sidepod emit, and curved nose paint that follows `anchors.noseStops`. The shell geometry
 itself lives in `js/car/car-body-geom.js`. Each new line hooks the emit closures inside `build`,
 so it stays there and is not extracted.
+## 2026-10-20 — PR #3188 (cursor/garage-research-surfaces-7b41): six study body profiles
+
+`js/car/car3d.js` +40 via `tests/data/ratchets.d/cursor--garage-shape-refinement-3c9a.json` (the
+branch's lineage name). The PR's own geometry, +37 net on the tip after #3151: curved-nose paint
+carried into the shared chassis, seated nose strips, the noseCurve arm and its wing-mounted foot,
+and the clean-wing carbon gates for caldra/rovik/senzo/talven/orvex/nacrel. No extraction: each
+hunk sits in `build`'s emit closures beside the part it shapes.
