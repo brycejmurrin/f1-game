@@ -259,7 +259,7 @@ const CarBodyGeom = (function () {
     const kick = Math.min(P.kick, Math.max(0, CAR_HALF - half - 0.03 - w * 0.5 - 0.006));
     return { P, w, kick,
              front: { z: 2.66, x, y: 0.135, h: P.hF, t: 0.62 },
-             rear:  { z: 1.98, x: x + kick, y: 0.245, h: P.hR, t: 0.78 } };
+             rear:  { z: shape ? 2.06 : 1.98, x: x + kick, y: 0.245, h: P.hR, t: 0.78 } };
   }
   // FIA overall-width envelope, half. The 2026 regulations cap car width at
   // 1900 mm, which is also exactly where this model already draws the front
@@ -572,7 +572,9 @@ const CarBodyGeom = (function () {
     const c = Math.max(0, Math.min(0.14, +(wing === "front" ? st.fwCurve : st.rwCurve) || 0));
     const r = Math.max(0, Math.min(0.10, +(wing === "front" ? st.fwStep : st.rwRise) || 0));
     if (!c && !r) return {};
-    return wing === "front" ? { rise2: c, riseStep: r } : { rise: r, rise2: c };
+    // A lifted front tip climbs toward the tyre's axle height, where its forward
+    // bulge reaches furthest: pull the tip's trailing edge 6 cm forward with it.
+    return wing === "front" ? { rise2: c, riseStep: r, tePull: 0.06 } : { rise: r, rise2: c };
   }
   function solveFlapsGeom(aLvl, style) {
     // A style must be a RECIPE OBJECT (see aeroStyleOf). Anything else — most
@@ -635,7 +637,7 @@ const CarBodyGeom = (function () {
       half: el.half, thick: el.thick, taper: el.taper,
       sweep: el.sweep, rise: el.rise, attachHalf: el.attachHalf,
       twist: el.twist, teCurve: el.teCurve, chordTaper: el.chordTaper,
-      rise2: el.rise2, riseStep: el.riseStep,
+      rise2: el.rise2, riseStep: el.riseStep, tePull: el.tePull,
     }, col, surface === "carbon" ? SURFACES.carbon : SURFACES.paint);
     if (el.upsweep) {
       const { fwHalf, e } = el.upsweep;
@@ -645,10 +647,10 @@ const CarBodyGeom = (function () {
         const g = Math.min(1, Math.max(0, (x - inner) / (half - inner)));
         return r2 * g * g + rs * Math.min(1, g * 2);
       };
-      const l0 = r2 || rs ? lift(half - 0.05) : 0, l1 = r2 || rs ? lift(half) : 0;
+      const l0 = r2 || rs ? lift(half - 0.05) : 0, l1 = r2 || rs ? lift(half) : 0, tp = el.tePull || 0;
       for (const sgn of [-1, 1]) {
-        addSpan(out, { z: e[2], x: sgn * (fwHalf * e[4] - 0.05), y: e[3] + l0, w: 0.16, h: e[5] * 1.5 },
-                     { z: e[2] - 0.04, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085 + l1, w: 0.09, h: e[5] * 1.6 }, col);
+        addSpan(out, { z: e[2] + tp, x: sgn * (fwHalf * e[4] - 0.05), y: e[3] + l0, w: 0.16, h: e[5] * 1.5 },
+                     { z: e[2] - 0.04 + tp, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085 + l1, w: 0.09, h: e[5] * 1.6 }, col);
       }
     }
     for (let i = 0; i < out.pos.length; i += 3) {

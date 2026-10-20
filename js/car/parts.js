@@ -696,7 +696,7 @@ const Parts = (function () {
     ["aero", "medium", "style_aero_keel", "Keel Wing", "straight three-element front and a flat, straight rear wing",
       { wsFlat: 1, epShape: 4, frontSweep: 0, frontRise: 0, frontTaper: 1.0, rearSweep: 0, rearTaper: 1.0, casc: 0, gill: 0 }],
     ["aero", "diffuser", "style_aero_delta", "Delta Wing", "flaps sweeping up into tall endplates, delta-tipped rear wing",
-      { fwCurve: 0.06, frontRise: 0.10, epShape: 2, rwRise: 0.035, rwCurve: 0.045, rearSweep: 0.06 }],
+      { fwCurve: 0.06, frontRise: 0.10, epShape: 2, rwRise: 0.035, rwCurve: 0.045 }],
     ["aero", "rake_setup", "style_aero_serpent", "Serpent Wing", "flaps curling up to the endplates, dipped-centre spoon rear wing",
       { fwCurve: 0.09, frontRise: 0.03, epShape: 3, rwRise: 0.02, rwCurve: 0.06, rearSweep: 0.10, rearTaper: 0.86 }],
     ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",

@@ -1756,6 +1756,9 @@ const Car3D = (function () {
     // The plate table and its placement live at module scope (frontPlateGeom):
     // the decal mesh reads the same numbers, or it floats.
     const _fp = frontPlateGeom(aLvl, aeroStyle), PLATE = _fp.P;
+    // B·D3c concept plates end 8 cm further forward (_fp.rear.z), clear of the
+    // tyre's forward bulge; 0 on every shipped plate.
+    const dzR = _fp.rear.z - 1.98;
     const aArch = aeroStyle.arch != null
       ? Math.max(0, Math.min(1, Math.round(aeroStyle.arch))) : (PLATE.arch || 0);
     const aGill = aeroStyle.gill != null
@@ -1782,7 +1785,7 @@ const Car3D = (function () {
       addBeveledSpan(out,
         { z: 2.30, x: epX + s*epKick*0.42, y: 0.190 + archN * 0.008, w: epW * 0.93,
           h: (PLATE.hF + PLATE.hR) * 0.5 + archN * 0.038, t: 0.70 },
-        { z: 1.98, x: epX + s*epKick, y: 0.245, w: epW * 0.88, h: PLATE.hR, t: _fp.rear.t },
+        { z: 1.98 + dzR, x: epX + s*epKick, y: 0.245, w: epW * 0.88, h: PLATE.hR, t: _fp.rear.t },
         bevel, endplateC || c2);
       const footW = Math.min(PLATE.footW * (ws.foot || 1), (CAR_HALF - Math.abs(epX) - 0.02) * 2);
       addBox(out, epX - s * (footW * 0.08), 0.034, 2.50, footW * 0.92, 0.016, 0.50, CARBON);
@@ -1800,7 +1803,7 @@ const Car3D = (function () {
       // keeps every shipped recipe exactly where it was.
       addBeveledSpan(out,
         { z: 2.62, x: epX + s*0.010, y: 0.135 + PLATE.hF * 0.5 + archN * 0.028, w: 0.032, h: 0.020 },
-        { z: 2.06, x: epX + s*(epKick + 0.010), y: 0.245 + PLATE.hR * 0.46, w: 0.028, h: 0.016 },
+        { z: 2.06 + dzR, x: epX + s*(epKick + 0.010), y: 0.245 + PLATE.hR * 0.46, w: 0.028, h: 0.016 },
         0.006, aArch ? c1 : CARBON);
       if (aGill > 0) {
         // GILLS. The rear endplate has had its louvre stack for ages; the
@@ -1827,16 +1830,16 @@ const Car3D = (function () {
         // and more canted at the rear — the outwash curl, not a straight rail.
         addBeveledSpan(out,
           { z: 2.58, x: epX + s * 0.012, y: 0.135 + PLATE.hF * 0.5 + 0.006, w: 0.040, h: 0.014, t: 0.45 },
-          { z: 2.02, x: epX + s * epKick, y: 0.245 + PLATE.hR * 0.5 - 0.004, w: 0.044, h: 0.012, t: 0.40 },
+          { z: 2.02 + dzR, x: epX + s * epKick, y: 0.245 + PLATE.hR * 0.5 - 0.004, w: 0.044, h: 0.012, t: 0.40 },
           0.006, c2);
       }
       // epTip (B·D3c RIFT, opt-in): an accent cap sleeved over the plate's
       // trailing top corner, 3 mm proud each side so it never z-fights the plate.
       if (aeroStyle.epTip) {
         const topR = 0.245 + PLATE.hR * 0.5, topM = 0.190 + archN * 0.008 + ((PLATE.hF + PLATE.hR) * 0.5 + archN * 0.038) * 0.5;
-        const k = (2.12 - 1.98) / (2.30 - 1.98), topK = topR + (topM - topR) * k;
-        addSpan(out, { z: 2.12, x: epX + s * epKick * (0.42 + 0.58 * (1 - k)), y: topK - 0.040, w: epW * 0.88 + 0.006, h: 0.080 },
-                     { z: 1.975, x: epX + s * epKick, y: topR - 0.050, w: epW * 0.88 + 0.006, h: 0.100 }, accentC);
+        const zR = _fp.rear.z, k = 0.13 / (2.30 - zR), topK = topR + (topM - topR) * k;
+        addSpan(out, { z: zR + 0.13, x: epX + s * epKick * (0.42 + 0.58 * (1 - k)), y: topK - 0.040, w: epW * 0.88 + 0.006, h: 0.080 },
+                     { z: zR - 0.005, x: epX + s * epKick, y: topR - 0.050, w: epW * 0.88 + 0.006, h: 0.100 }, accentC);
       }
       // Canard / dive-plane: first element is a horizontal strake on the
       // outer face (the 2026 flick); extras stay as the older cascade vanes.
@@ -2007,10 +2010,10 @@ const Car3D = (function () {
         const topM = _ep.front.top + (_ep.rear.top - _ep.front.top) * f, ov = 0.012;
         const fin = (z, top, h) => ({ z, x: s * 0.50, y: top - ov + (h + ov) / 2, w: 0.036, h: h + ov });
         addSpan(out, fin(_ep.front.z - 0.02, _ep.front.top + (topM - _ep.front.top) * 0.08, 0.004), fin(zM, topM, rTip * 0.80), endplateC || DARK);
-        addSpan(out, fin(zM, topM, rTip * 0.80), fin(_ep.rear.z, _ep.rear.top, rTip + 0.006), endplateC || DARK);
+        addSpan(out, fin(zM, topM, rTip * 0.80), fin(_ep.rear.z + 0.006, _ep.rear.top, rTip + 0.024), endplateC || DARK);
         if ((aeroStyle.epTip || 0) >= 2) addSpan(out,
-          { z: -2.50, x: s * 0.50, y: _ep.rear.top + rTip - 0.030, w: 0.042, h: 0.064 },
-          { z: _ep.rear.z - 0.004, x: s * 0.50, y: _ep.rear.top + rTip - 0.030, w: 0.042, h: 0.064 }, accentC);
+          { z: -2.50, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 },
+          { z: _ep.rear.z + 0.002, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 }, accentC);
       }
       // Preview sharkfin (2017 style): the fin runs on as a sail whose foot ends
       // 8 mm into the main plane, instead of a 30 cm cut face 0.45 m short of the
