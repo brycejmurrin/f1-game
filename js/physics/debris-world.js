@@ -261,6 +261,28 @@ function rapierReady() { return _loadState === 2 && !!world; }
 function worldGen() { return _worldGen; }
 
 // Share the road pose between ordinary kinematic updates and incident takeover.
+// Last next-kinematic target each mirror was given, keyed by every input
+// mirrorPose reads (s, x, and head for the human). Re-sending an identical
+// target leaves Rapier's state as it was, so a parked or retired car skips the
+// Tracks.sample + two WASM calls (#3109). Cleared on build and body-type change.
+let _mpS = new Float64Array(0), _mpX = new Float64Array(0), _mpH = new Float64Array(0);
+let _mpOk = new Uint8Array(0), _mpHum = new Uint8Array(0);
+function _mirrorPoseReset(n) {
+  if (n != null && _mpOk.length !== n) {
+    _mpS = new Float64Array(n); _mpX = new Float64Array(n); _mpH = new Float64Array(n);
+    _mpOk = new Uint8Array(n); _mpHum = new Uint8Array(n);
+  } else _mpOk.fill(0);
+}
+function _poseMirror(track, i, c, m) {
+  // Object.is, not ===: a -0 lateral or heading reaches the quaternion's sign bit.
+  const hum = (c.human && c.head != null) ? 1 : 0;
+  if (_mpOk[i] && Object.is(_mpS[i], c.s) && Object.is(_mpX[i], c.x) && _mpHum[i] === hum
+      && (!hum || Object.is(_mpH[i], +c.head))) return;
+  mirrorPose(track, c);
+  m.setNextKinematicTranslation(_v);
+  m.setNextKinematicRotation(_q);
+  _mpS[i] = c.s; _mpX[i] = c.x; _mpHum[i] = hum; _mpH[i] = hum ? +c.head : 0; _mpOk[i] = 1;
+}
 function mirrorPose(track, c) {
   Tracks.sample(track, c.s, _smp);
   const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
@@ -285,6 +307,7 @@ function promoteCarDynamic(i, lin, ang) {
     b.setTranslation(_v, true);
     b.setRotation(_q, true);
     b.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    if (i < _mpOk.length) _mpOk[i] = 0;
     if (lin) b.setLinvel({ x: lin.x || 0, y: lin.y || 0, z: lin.z || 0 }, true);
     if (ang) b.setAngvel({ x: ang.x || 0, y: ang.y || 0, z: ang.z || 0 }, true);
     _dynCars.add(i);
@@ -301,6 +324,7 @@ function demoteCarKinematic(i) {
   if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
   const b = _mirrors[i];
   if (!b) return false;
+  if (i < _mpOk.length) _mpOk[i] = 0;   // re-pose on the next solve, whatever the dynamic phase left
   try { b.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true); } catch (e) { return false; }
   return true;
 }
@@ -438,6 +462,7 @@ function buildWorld(track, cars) {
     _colliderCar.set(col.handle, i);   // handle → cars[] index (stable order)
     _mirrors.push(body);
   }
+  _mirrorPoseReset(cars.length);
   _cap = capFor();
   _slots = [];
   for (let i = 0; i < _cap; i++) {
@@ -685,7 +710,7 @@ function spawnMarble(c, m, r) {
   b.setAngvel(_v, true);
   _q.x = 0; _q.y = 0; _q.z = 0; _q.w = 1;
   b.setRotation(_q, true);
-  slot.live = true; slot.restT = 0; slot.spawnTick = _tick;
+  slot.live = true; slot.restT = 0; slot.spawnTick = _tick; slot.restPose = null;
   _marbleSeq++;
 }
 
@@ -724,7 +749,7 @@ function spawnImpact(imp, track) {
     b.setAngvel(_v, true);
     _q.x = 0; _q.y = 0; _q.z = 0; _q.w = 1;
     b.setRotation(_q, true);
-    slot.live = true; slot.restT = 0; slot.spawnTick = _tick;
+    slot.live = true; slot.restT = 0; slot.spawnTick = _tick; slot.restPose = null;
     slot.s = imp.s;              // hazard-projection hint only (see projectHazard)
     // Race control distinguishes one car shedding many shards from a pile-up.
     // Copy this tiny list because the queued impact is discarded after spawn.
@@ -745,16 +770,35 @@ function _anyAwake(pool) {
   }
   return false;
 }
+// Cone arcs, sorted once per furniture list (#3109): the gate asks "is ANY car
+// within FURN_WAKE_M of ANY cone", so per car only the two cones bracketing its
+// arc (closest |d|) and the two extremes (closest L - d) can decide it — the
+// same expressions as the cones × cars scan it replaces, so the same verdict.
+let _furnSortedFor = null, _furnSortedN = -1, _furnS = new Float64Array(0);
+function _furnArcs() {
+  if (_furnSortedFor !== _furn || _furnSortedN !== _furn.length) {
+    // A NaN arc compares false either way: it never woke the scan, so drop it.
+    _furnS = Float64Array.from(_furn.map((f) => +f.s).filter((v) => v === v)).sort();
+    _furnSortedFor = _furn; _furnSortedN = _furn.length;
+  }
+  return _furnS;
+}
+function _nearArc(cs, fs, L) {
+  let d = Math.abs(cs - fs);
+  if (L) d = Math.min(d, L - d);
+  return d < FURN_WAKE_M;
+}
 function _carNearFurn(track, cars) {
   if (!_furn.length) return false;
   const L = (track && track.total) || 0;
-  for (let k = 0; k < _furn.length; k++) {
-    const fs = _furn[k].s;
-    for (let i = 0; i < cars.length; i++) {
-      let d = Math.abs((cars[i].s || 0) - fs);
-      if (L) d = Math.min(d, L - d);
-      if (d < FURN_WAKE_M) return true;
-    }
+  const arcs = _furnArcs(), n = arcs.length;
+  if (!n) return false;
+  for (let i = 0; i < cars.length; i++) {
+    const cs = cars[i].s || 0;
+    let lo = 0, hi = n;   // first arc >= cs
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (arcs[mid] < cs) lo = mid + 1; else hi = mid; }
+    if ((lo < n && _nearArc(cs, arcs[lo], L)) || (lo > 0 && _nearArc(cs, arcs[lo - 1], L))) return true;
+    if (L && (_nearArc(cs, arcs[0], L) || _nearArc(cs, arcs[n - 1], L))) return true;
   }
   return false;
 }
@@ -768,6 +812,13 @@ function _playerSample(track) {
   _psOut.px = _smp.p[0]; _psOut.pz = _smp.p[2];
   return _psOut;
 }
+// A sleeping body does not move until a solve wakes it or a spawn re-seats its
+// slot (both clear restPose), so its translation is read across WASM once per
+// nap rather than twice per step (#3109).
+function _restPose(s) {
+  if (!s.restPose) { const t = s.body.translation(); s.restPose = { x: t.x, y: t.y, z: t.z }; }
+  return s.restPose;
+}
 // Shared by the WASM path and the asleep-skip path so despawn stays bit-identical.
 function _ageAndCullPool(pool, dt, px, pz, havePlayer, restLimit, farM) {
   const far2 = farM * farM;
@@ -775,11 +826,13 @@ function _ageAndCullPool(pool, dt, px, pz, havePlayer, restLimit, farM) {
     const s = pool[i];
     if (!s.live) continue;
     const b = s.body;
-    if (b.isSleeping()) { s.restT += dt; } else { s.restT = 0; }
+    const asleep = b.isSleeping();
+    if (asleep) { s.restT += dt; } else { s.restT = 0; }
     // The world is the road ribbon alone: a shard thrown off it free-falls, never
     // sleeps and is never "far" from a player standing above it, so it held a
     // pool slot and kept the asleep-skip off. Below the floor it is gone.
-    const t = b.translation();
+    const t = asleep ? _restPose(s) : b.translation();
+    if (!asleep) s.restPose = null;
     let far = t.y < _floorY;
     if (havePlayer) {
       const dx = t.x - px, dz = t.z - pz;
@@ -810,7 +863,7 @@ function _poolNearCars(pool, n, r2) {
   for (let i = 0; i < pool.length; i++) {
     const s = pool[i];
     if (!s.live || !s.body) continue;
-    const t = s.body.translation();
+    const t = s.restPose || s.body.translation();
     for (let k = 0; k < n; k++) {
       const dx = t.x - _cnx[k], dz = t.z - _cnz[k];
       if (dx * dx + dz * dz < r2) return true;
@@ -868,9 +921,7 @@ function step(dt) {
     if (_dynCars.has(i)) continue;
     const c = cars[i], m = _mirrors[i];
     if (!Number.isFinite(c.s) || !Number.isFinite(c.x)) continue;   // a NaN pose must not reach wasm
-    mirrorPose(track, c);
-    m.setNextKinematicTranslation(_v);
-    m.setNextKinematicRotation(_q);
+    _poseMirror(track, i, c, m);
   }
 
   _hinted.clear();
