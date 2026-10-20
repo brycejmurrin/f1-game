@@ -9995,6 +9995,9 @@
       "pushVelocity": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "releaseArcBuckets": [
+        "tests/unit/traffic-arc-buckets.test.mjs"
+      ],
       "resolveCollisions": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",

@@ -1486,7 +1486,7 @@ function fieldSize() {
 }
 
 function makeCars() {
-  cars = [];
+  cars = []; releaseFieldScratch();
   // the custom team only enters the grid when the player has selected it
   const grid = gridTeams();
   // Counted through the same accessor the loop below iterates, or MY TEAM's second
@@ -4259,7 +4259,7 @@ function quitToMenu() {
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; releaseFieldScratch(); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4335,6 +4335,8 @@ function rankFinishers() {
   _finRanked.sort(RaceControl.finishOrder);
   for (let i = 0, k = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked[k++].rank = i + 1;
 }
+// A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
+function releaseFieldScratch() { ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); }
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
