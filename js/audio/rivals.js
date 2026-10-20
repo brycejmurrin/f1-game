@@ -208,7 +208,10 @@ var RivalAudio = (() => {
       if (!player || !track || !cars || player.s == null) { applyPassBy(out); return out; }
       const lapLen = track.total, half = lapLen * 0.5;
       let n = 0;
-      for (const c of cars) {
+      // Net ownership is read once per call, not per car (collect runs every frame).
+      const np = G.netPlay, npLive = !!(np && np.active && np.active() && np.owns);
+      for (let ci = 0; ci < cars.length; ci++) {
+        const c = cars[ci];
         const retired = typeof ReplayBuf !== "undefined" && ReplayBuf.audioRetired ? ReplayBuf.audioRetired(c) : c.retired;
         if (c === player || retired || c.s == null) continue;
         let arc = c.s - player.s;
@@ -246,11 +249,10 @@ var RivalAudio = (() => {
         slot.relativeSpeed = Math.abs((c.speed || 0) - (player.speed || 0));
         slot.approach = -(arc / Math.max(dist, 1e-3)) * ((c.speed || 0) - (player.speed || 0));
         // Net-owned rivals get heavier pitch smoothing in engine.js; solo AI stays snappy.
-        const np = G.netPlay;
-        slot.net = !!(np && np.active && np.active() && np.owns && np.owns(c));
-        // Index in G.cars — read-only. Do not call G.wireId here: it caches c._wireId and
+        slot.net = npLive && !!np.owns(c);
+        // Index in G.cars (`cars` is G.cars) — read-only. Do not call G.wireId here: it caches c._wireId and
         // episode-transients.test.mjs expects that field absent after reset().
-        slot.key = G.cars.indexOf(c);
+        slot.key = ci;
       }
       // Bind voices. A car already bound keeps its voice; a voice whose car left
       // the set is freed; a newcomer takes the lowest free voice.
