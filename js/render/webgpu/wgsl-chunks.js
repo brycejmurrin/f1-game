@@ -1865,7 +1865,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       color = mix(color, fvGlow, vec3<f32>(fv * 0.9));
     } else if (finishId == 68) {
       let cfW = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
-      let cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * clamp(0.033 / fnPx * 0.5 - 1.0, 0.0, 1.0);
+      let cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * saturate(0.033 / fnPx * 0.5 - 1.0);
       let cfN = sin(in.objPos.z * 9.0 + sin(in.objPos.x * 13.0) * 1.5) * 0.5 + sin(in.objPos.z * 23.0 + in.objPos.x * 7.0) * 0.25;
       let cfM = smoothstep(0.56, 0.64, in.objPos.y + cfN * 0.05);
       color = mix(vec3<f32>(min(pvLit, 3.0) * 0.065) * (0.84 + 0.32 * cfWv) * vec3<f32>(0.95, 0.97, 1.05), color, vec3<f32>(cfM));

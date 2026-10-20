@@ -100,7 +100,7 @@
   "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic (test-day paint)",
-  "fit": "streaks fade to their mean coverage under ~4 px per period, so no crawl in motion"
+  "fit": "thin streak lines that fade to their mean coverage under ~3 px per period, so no crawl in motion"
  },
  {
   "id": 68,
@@ -136,7 +136,7 @@
   "pitch": "Metallic paint with a bright face and dark flop at the edges.",
   "reference": "Aston Martin AMR25 green; Williams FW48 blue.",
   "reference_url": "https://www.formula1.com/en/latest/article/gallery-check-out-all-the-angles-of-aston-martins-new-amr25-car.3BqW12L2GynV0ajssfp91z",
-  "base": "Metallic flake (34)",
+  "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
   "fit": "flop from the geometric normal, withheld on creases: no outline round every panel"
@@ -285,7 +285,7 @@
   "pitch": "Dense, sharp white crystal glints that twinkle as the view moves.",
   "reference": "Merck Xirallic aluminium-oxide platelets. No photo in the library.",
   "reference_url": null,
-  "base": "Metallic flake (34)",
+  "base": "Gloss (20)",
   "status": "reserved",
   "verdict": "realistic",
   "fit": "glints fade by footprint (no shimmer at 10-26 m); a crisp white lustre carries it at hero distance"

@@ -122,20 +122,267 @@ summary:focus-visible { outline: 2px solid var(--tape); outline-offset: 3px; }
   <header>
     <div class="tape" aria-hidden="true"></div>
     <h1>Apex Finish Lab</h1>
-    <p class="lede">31 prototype livery finishes, each shot on the same Ferrari in the garage at hero distance on TLX, the default renderer. The round-1 survivors also have close-up and race-day stills; close-ups, race stills and team-livery pairs for #65–#90 come next round. Every one rides an existing paint surface and changes nothing that ships. Below them is the library of real-car reference photos used to design them. Pick the finishes you want; the picks go to whoever lands them.</p>
+    <p class="lede">Round 3 is the realism cut, right below. Further down: the round-2 set of 31 prototype livery finishes, each shot on the same Ferrari in the garage at hero distance on TLX, the default renderer. The round-1 survivors also have close-up and race-day stills; close-ups, race stills and team-livery pairs for #65–#90 come next round. Every one rides an existing paint surface and changes nothing that ships. Below them is the library of real-car reference photos used to design them. Pick the finishes you want; the picks go to whoever lands them.</p>
     <div class="facts">
       <span class="chip">branch cursor/design-preview-finishes-d2f5</span>
-      <span class="chip">round 2 · 31 preview finishes</span>
-      <span class="chip">preview surface ids 60–90</span>
+      <span class="chip">round 3 · 18 kept · 13 out</span>
+      <span class="chip ok">real finish ids 60–85</span>
       <span class="chip warn">software render, no GPU</span>
       <span class="chip">refs: 162 photos</span>
     </div>
   </header>
 
+  <section id="cut">
+    <h2>Round 3 · the realism cut <small>18 kept as real finishes · 13 out</small></h2>
+    <p class="note">Every finish was judged against its real-car reference, then the flagged ones were fixed and re-shot on TLX in the phone frame (844×390). The 18 kept are now real garage finishes in code (ids 60–85, GLX, TLX and WGX). The chip is my call for the final cut: <strong>keep</strong>, <strong>borderline</strong>, or <strong>would drop</strong>. Ordered strongest first. Tap any still to zoom.</p>
+    <div class="callout"><strong>My recommendation:</strong> ship the 13 marked keep. Frozen, metal flop, JPS gold and ghost pearl are real paints but read weakly on this camera; take them only after one more round. Drop xirallic.</div>
+    <div class="finishes">
+      <article class="card" id="r3-silverfade">
+        <div class="card-head"><span class="id">#69 silverfade</span><h3>Silver Fade</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Strongest: the W17 look reads at phone size; the dot screen stays continuous over the top panels.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Mercedes W17.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>dot screen printed per panel plane (top panels had stripes), anti-aliased dot edges, neutral black tail (was dark red)</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="silverfade · phone hero 844×390"><img src="/_blob/f2f2ed44545f98d09e02770c0521a0b9" alt="Silver Fade on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+          <figure><button class="shot" data-cap="silverfade · panel-join close-up"><img src="/_blob/2bcbd9adcc1da20fe2c8c82561bc8a63" alt="Silver Fade close-up at the sidepod and cover joins" loading="lazy"></button><figcaption>join close-up</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-burnt">
+        <div class="card-head"><span class="id">#63 burnt</span><h3>Burnt Titanium</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Reads at once; the oxide order is right; off the mirror base the joins are clean.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Titanium oxide colours: gold, purple, blue with thickness.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>rebased chrome 27 -&gt; satin metal 29: the mirror no longer magnifies jagged panel joins; livery divided out</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Brushed metal (29)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="burnt · phone hero 844×390"><img src="/_blob/d1d31c1c97fff5b270d428601a76bfd2" alt="Burnt Titanium on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-flovis">
+        <div class="card-head"><span class="id">#67 flovis</span><h3>Flo-Vis</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Now thin yellow-green lines like real test paint, instead of thick bands.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic (test-day paint) · copies F1 flow-vis paint in testing.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>thin streak lines that fade to their mean coverage under ~3 px per period, so no crawl in motion</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="flovis · phone hero 844×390"><img src="/_blob/754edda375f1a7e8c4fb8561c94e333c" alt="Flo-Vis on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+          <figure><button class="shot" data-cap="flovis · panel-join close-up"><img src="/_blob/4eea5dd2a964843e20ffe530857ee68c" alt="Flo-Vis close-up at the sidepod and cover joins" loading="lazy"></button><figcaption>join close-up</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-carbonfade">
+        <div class="card-head"><span class="id">#68 carbonfade</span><h3>Carbon Fade</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Clear FW47 split: neutral weave below the sidepod line, soft torn edge.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Williams FW47; also RB22 and AMR25.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>neutral weave (was livery-tinted), torn edge from smooth noise not hash blocks, raised to the sidepod line; weave fades by footprint</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="carbonfade · phone hero 844×390"><img src="/_blob/ce1d18184d295facbfab73fff8d974b2" alt="Carbon Fade on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-pearlwhite">
+        <div class="card-head"><span class="id">#72 pearlwhite</span><h3>Pearl White</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Clean tri-coat white, warm face, cool edges.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Rolls-Royce Phantom Syntopia pearlescent.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>no pattern</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Metallic flake (34)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="pearlwhite · phone hero 844×390"><img src="/_blob/802cd7ee9569533c6ddd0ed6fcebc4b9" alt="Pearl White on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-truematte">
+        <div class="card-head"><span class="id">#71 truematte</span><h3>True Matte</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Finally looks flat next to gloss: duller, chalkier, no highlight. This is the fix for shipped matte.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Red Bull matte navy, 2016 onward.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>fixes shipped matte ~ gloss: capped below any highlight, greyed, shadows lifted</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Matte (28)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="truematte · phone hero 844×390"><img src="/_blob/295f4b75449be21af2a2bb44b7308ee5" alt="True Matte on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-midnightpurple">
+        <div class="card-head"><span class="id">#84 midnightpurple</span><h3>Midnight Purple</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Its own violet base now, so no Ferrari red bleeds through.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Nissan R34 GT-R Midnight Purple III. No photo in the library.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>angle from the geometric normal</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="midnightpurple · phone hero 844×390"><img src="/_blob/93a4eebed22efb46365316bd5467497d" alt="Midnight Purple on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-rawcarbon">
+        <div class="card-head"><span class="id">#66 rawcarbon</span><h3>Raw Carbon</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Graphite weave with the livery red gone.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Koenigsegg Regera Naked Carbon (KNC).</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>weave is the shipped carbon weave</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Carbon (31)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="rawcarbon · phone hero 844×390"><img src="/_blob/31d0b1c2dbbf83c9aa1c4ef6781fb8ee" alt="Raw Carbon on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-ultrablack">
+        <div class="card-head"><span class="id">#85 ultrablack</span><h3>Ultra Black</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">A true silhouette, like the Vantablack BMW.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies BMW VBX6 in Vantablack VBx2 (Surrey NanoSystems). No photo in the library.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>no pattern</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Matte (28)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="ultrablack · phone hero 844×390"><img src="/_blob/b9643fa0ad933457c93b86c1f9002797" alt="Ultra Black on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-alubare">
+        <div class="card-head"><span class="id">#65 alubare</span><h3>Bare Aluminium</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Plain bare aluminium; quiet but real.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Mercedes-Benz W196 silver arrow.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>no pattern</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Brushed metal (29)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="alubare · phone hero 844×390"><img src="/_blob/67bceae07c66e8514c5daa20e57ef712" alt="Bare Aluminium on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-mystichrome">
+        <div class="card-head"><span class="id">#83 mystichrome</span><h3>Mystichrome</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Purple-to-cobalt shift reads; the green face is weak on this camera.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies 2004 Ford SVT Cobra Mystichrome; ChromaFlair pigment. No photo in the library.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>angle from the geometric normal</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="mystichrome · phone hero 844×390"><img src="/_blob/c73edfa31c7dc9a0dd5921fcf15c5068" alt="Mystichrome on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-oilslick">
+        <div class="card-head"><span class="id">#60 oilslick</span><h3>Oil Slick</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">A smooth body gradient now, not one colour per panel. Real as a flip wrap; drop it if you only want factory paints.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic as a custom flip wrap · copies Thin-film interference: soap bubbles, oil on wet tarmac.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>fixed: bands halved and driven by the geometric normal (orange peel had made them jagged), withheld on panel creases</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gunmetal (39)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="oilslick · phone hero 844×390"><img src="/_blob/e33f4a6c4efe99aac1dfeb1d546818f6" alt="Oil Slick on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+          <figure><button class="shot" data-cap="oilslick · panel-join close-up"><img src="/_blob/2505e342f27b51c3e34540598b4a7afe" alt="Oil Slick close-up at the sidepod and cover joins" loading="lazy"></button><figcaption>join close-up</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-fluoro">
+        <div class="card-head"><span class="id">#62 fluoro</span><h3>Fluoro</h3><span class="chip ok">keep</span></div>
+        <p class="pitch">Glows in shade like day-glo paint; no pattern, so nothing to break.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies F1 flo-vis aero paint and fluoro liveries.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>no pattern, no seam risk</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="fluoro · phone hero 844×390"><img src="/_blob/9deafe22d47bc797103f18e5132c22c7" alt="Fluoro on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-frozen">
+        <div class="card-head"><span class="id">#61 frozen</span><h3>Frozen</h3><span class="chip warn">borderline</span></div>
+        <p class="pitch">Duller and pinker than gloss with a soft sheen. Real, but subtle at hero distance.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies BMW Individual Frozen paints; Bugatti satin finishes for the sheen.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>rebased gloss-metal 29 -&gt; matte 28 so it finally loses the clearcoat mirror; broad metallic sheen; grain fades by pixel footprint</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Matte (28)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="frozen · phone hero 844×390"><img src="/_blob/a172a960cf67fc29a96ff3f032ad9e2d" alt="Frozen on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+          <figure><button class="shot" data-cap="frozen · panel-join close-up"><img src="/_blob/a48fc66380d59db5aba9c662fd75a840" alt="Frozen close-up at the sidepod and cover joins" loading="lazy"></button><figcaption>join close-up</figcaption></figure>
+          <figure><button class="shot" data-cap="frozen · GLX parity"><img src="/_blob/1d916be1eb4d7caaaefbd4d333e4d7b1" alt="Frozen on GLX" loading="lazy"></button><figcaption>GLX parity</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-metalflop">
+        <div class="card-head"><span class="id">#70 metalflop</span><h3>Metal Flop</h3><span class="chip warn">borderline</span></div>
+        <p class="pitch">Clean now (the flake speckle is gone), but the face/flop split is mild on red.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Aston Martin AMR25 green; Williams FW48 blue.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>flop from the geometric normal, withheld on creases: no outline round every panel</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="metalflop · phone hero 844×390"><img src="/_blob/042155bfe247e3b7b70ee6bed89c7fbe" alt="Metal Flop on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+          <figure><button class="shot" data-cap="metalflop · panel-join close-up"><img src="/_blob/c2598821111cebd3d5fb4f7250bdca84" alt="Metal Flop close-up at the sidepod and cover joins" loading="lazy"></button><figcaption>join close-up</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-jpsgold">
+        <div class="card-head"><span class="id">#74 jpsgold</span><h3>JPS Gold</h3><span class="chip warn">borderline</span></div>
+        <p class="pitch">Gloss black base is right; at hero distance the gold reads as muddy bronze. Iterate or drop.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies John Player Special black and gold (Radford Type 62-2 JPS).</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>base is now true gloss black set before lighting (was the livery dimmed: dark red); flake fades by footprint</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20), black albedo</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="jpsgold · phone hero 844×390"><img src="/_blob/46a05946ba2afa5786dbdf82c09e6ce0" alt="JPS Gold on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-ghostpearl">
+        <div class="card-head"><span class="id">#81 ghostpearl</span><h3>Ghost Pearl</h3><span class="chip warn">borderline</span></div>
+        <p class="pitch">Toned down to a real ghost pearl, so it is now barely visible. Iterate or drop.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies House of Kolor ice / ghost pearls. No photo in the library.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>pearl moved off the silhouette onto the sheen skirt and mid flop, withheld on creases</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="ghostpearl · phone hero 844×390"><img src="/_blob/235847b95dcff87a35e1df21799b7817" alt="Ghost Pearl on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+          <figure><button class="shot" data-cap="ghostpearl · GLX parity"><img src="/_blob/92a4e9060dee45a4611372173e34b8ea" alt="Ghost Pearl on GLX" loading="lazy"></button><figcaption>GLX parity</figcaption></figure>
+        </div>
+      </article>
+      <article class="card" id="r3-xirallic">
+        <div class="card-head"><span class="id">#82 xirallic</span><h3>Xirallic</h3><span class="chip warn">would drop</span></div>
+        <p class="pitch">Shimmer fixed (motion test equals gloss), but the glints are invisible at hero and close-up. I would drop it.</p>
+        <dl class="specs">
+          <div class="spec"><dt>Realism</dt><dd>realistic · copies Merck Xirallic aluminium-oxide platelets. No photo in the library.</dd></div>
+          <div class="spec"><dt>Fit and seams</dt><dd>glints fade by footprint (no shimmer at 10-26 m); a crisp white lustre carries it at hero distance</dd></div>
+          <div class="spec"><dt>Built on</dt><dd>Gloss (20)</dd></div>
+        </dl>
+        <div class="stills">
+          <figure><button class="shot" data-cap="xirallic · phone hero 844×390"><img src="/_blob/64a9a50f110489dd77676c408152e1ee" alt="Xirallic on the Ferrari, phone hero frame" loading="lazy"></button><figcaption>phone hero</figcaption></figure>
+          <figure><button class="shot" data-cap="xirallic · panel-join close-up"><img src="/_blob/4a75c6468b9161aa1d5467883e90d591" alt="Xirallic close-up at the sidepod and cover joins" loading="lazy"></button><figcaption>join close-up</figcaption></figure>
+        </div>
+      </article>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Id</th><th>Finish</th><th>Why it is out (kept as a preview, not offered in the garage)</th></tr></thead>
+        <tbody><tr><td class="n">#64</td><td>starlight</td><td>drop: duplicates holographic 41 / flake 34; sparse prism sparks shimmer</td></tr><tr><td class="n">#73</td><td>raceworn</td><td>drop: dirt is a wear layer, not a paint finish</td></tr><tr><td class="n">#75</td><td>testcamo</td><td>drop: sine blobs do not read as a real camo wrap and break at panel joins</td></tr><tr><td class="n">#76</td><td>goldfoil</td><td>drop: a whole body in heat-shield foil is not a real finish; mirror base magnifies joins</td></tr><tr><td class="n">#77</td><td>anodblue</td><td>drop: composite panels are not anodised; reads as candy 35</td></tr><tr><td class="n">#78</td><td>cerabronze</td><td>drop: Cerakote is not body paint; duplicates satin 26 with a tint</td></tr><tr><td class="n">#79</td><td>engineturn</td><td>drop: a jewelled whole body is not real; planar projection breaks at joins</td></tr><tr><td class="n">#80</td><td>magchrom</td><td>drop: cast-magnesium blotches on body panels are not real</td></tr><tr><td class="n">#86</td><td>rainsoak</td><td>drop: a weather state, not a finish (belongs to the wet-race look)</td></tr><tr><td class="n">#87</td><td>stealth</td><td>iterate later: coordinate-box stripes do not follow the panels</td></tr><tr><td class="n">#88</td><td>primer</td><td>iterate later: box masks do not follow the part boundaries</td></tr><tr><td class="n">#89</td><td>heatrear</td><td>iterate later: plausible, but the stain is not tied to the exhaust geometry</td></tr><tr><td class="n">#90</td><td>sunfaded</td><td>drop: plausible on a road car, odd on an F1 car</td></tr></tbody>
+      </table>
+    </div>
+    <h3>Seams, edges and shimmer: what was fixed</h3>
+    <ul class="changelog">
+      <li><strong>Outlines on every panel edge</strong> (frozen, metal flop, ghost pearl). Angle effects now read the smooth geometric normal, not the orange-peeled one, and switch off on hard panel creases (detected from how fast the normal changes per pixel).</li>
+      <li><strong>Patterns breaking at panel joins</strong> (silver fade, flo-vis). Silver fade's dots are printed per panel plane, so the top panels get dots instead of stripes, and the dot edges are anti-aliased. Flo-vis streaks are thinner and fade to their average cover when they get too small to draw.</li>
+      <li><strong>Mirror base magnifying jagged joins</strong> (burnt titanium, oil slick). Burnt moved off chrome onto satin metal; oil slick's colour now follows a smooth gradient across the body instead of one colour per facet.</li>
+      <li><strong>Sparkle shimmer in motion</strong> (xirallic, JPS gold, and the flake base under metal flop). Every sparkle, grain and weave cell now fades to its average once it is under about 2 pixels, based on the real pixel size rather than distance. Two frames a camera step apart at 12 m flicker exactly as much as plain gloss: 4.41% of pixels for gloss, 4.41% xirallic, 4.35% JPS gold.</li>
+      <li>Not fixed, because they are out: test camo, engine-turned and chromated magnesium seams; gold foil's mirror base. Rain-soaked, race-worn and starlight sparkle got the same footprint fade anyway.</li>
+    </ul>
+  </section>
+
   <section>
-    <h2>Round 2 — what changed and why</h2>
+    <h2>What changed, round by round</h2>
     <ol class="changelog" id="changelog">
       <!-- CHANGELOG -->
+      <li><strong>Round 3</strong> (this publish). The realism cut: 18 kept and made real finishes in all three renderers, 13 moved out. Fixed the flagged seam, edge and shimmer problems, re-shot everything kept in the phone frame, added join close-ups, a motion test and GLX parity stills. JPS gold and midnight purple got their own base colour; frozen moved to the matte base; true matte now looks flat. Code: <code>cursor/design-preview-finishes-d2f5@fe67a4f6</code>.</li>
       <li><strong>Round 1</strong> (first publish). Five prototypes: oil slick, frozen, fluoro, burnt titanium, holo flake.</li>
       <li><strong>Round 2</strong> (this page). Re-tuned those five against real photos: oil-film bands over dark metal, a satin sun sheen on frozen, the real titanium oxide order on burnt, sparse Lunaflair-style glitter.</li>
       <li>Added 26 finishes: 11 copied off the reference library (#65–#75: W196 aluminium, KNC bare carbon, flow-vis, FW47 carbon fade, W17 silver fade, AMR25 metallic flop and more) and 15 from three parallel design lanes (#76–#90: metals, paint effects, race condition).</li>
@@ -147,12 +394,12 @@ summary:focus-visible { outline: 2px solid var(--tape); outline-offset: 3px; }
   </section>
 
   <section>
-    <h2>Shortlist <small>the strongest picks so far</small></h2>
+    <h2>Round 2 shortlist <small>before the cut</small></h2>
     <div id="shortlist" class="placeholder"><!-- SHORTLIST --><ol class="shortlist"><li><a href="#f-silverfade"><strong>#69 silverfade</strong></a> · Mercedes W17 silver nose breaking into halftone dots, then black. A real 2026 F1 look that reads at phone size. <span class="px">6.9% of car pixels differ from gloss</span></li><li><a href="#f-flovis"><strong>#67 flovis</strong></a> · F1 flow-vis aero paint: glowing yellow-green streaks down the sidepods (MCL40 and Toro Rosso photos). Unmistakable on track. <span class="px">2.3% of car pixels differ from gloss</span></li><li><a href="#f-burnt"><strong>#63 burnt</strong></a> · Heat-tinted titanium in the real oxide order: silver nose, straw and gold, purple, blue tail. Reads in race day and dusk stills. <span class="px">7.4% of car pixels differ from gloss</span></li><li><a href="#f-oilslick"><strong>#60 oilslick</strong></a> · Thin-film rainbow bands over dark anodised metal. The strongest read of all in the race stills. <span class="px">7.6% of car pixels differ from gloss</span></li><li><a href="#f-goldfoil"><strong>#76 goldfoil</strong></a> · Crinkled gold heat-shield foil from F1 engine bays: faceted glints that move with the camera. <span class="px">7.7% of car pixels differ from gloss</span></li><li><a href="#f-mystichrome"><strong>#83 mystichrome</strong></a> · Three-colour shift, green to cobalt to purple across one car (Ford Mystichrome). Not the same as chameleon’s two hues. <span class="px">7.1% of car pixels differ from gloss</span></li></ol><p class="note">Runners-up: #77 anodblue, #72 pearlwhite, #79 engineturn, #75 testcamo, #84 midnightpurple, #80 magchrom. Too subtle at hero distance (under 3.7% of pixels; needs tuning or a closer camera): #61 frozen, #64 starlight, #68 carbonfade, #70 metalflop, #71 truematte, #73 raceworn, #81 ghostpearl, #82 xirallic, #87 stealth, #89 heatrear. Only #60 and #63 have race stills so far.</p></div>
   </section>
 
   <section>
-    <h2>Current designs <small>31 · hero, close-up, race day, real reference</small></h2>
+    <h2>Round 2 designs <small>31 · before the cut, with the real reference</small></h2>
     <p class="note">Ask for a change by the card's id, e.g. "iterate #64 starlight". Each card: what it looks like, the real thing it copies, and the shipped surface it is built on. "Built on" is the paint surface the preview borrows for lighting before its tint runs. The chip on each card is its review status.</p>
     <div class="round" id="round-r1">
       <div class="round-head"><h3>Round 1</h3><span class="count">ids 60–64</span><span class="note">First five: colour-shift and special-effect finishes.</span></div>
