@@ -6,8 +6,8 @@
   python3 design-preview/finishes/fd-r4m-gallery.py diff     # write r4-diff.json
   python3 design-preview/finishes/fd-r4m-gallery.py html     # splice the section (needs r4-assets.json: jpg path -> blob url)
 
-Diff = share of pixels whose largest channel moved by more than 12/255, inside the car's box (the union box of every
-pixel that differs between any two finishes of that cell is too noisy; we use a fixed box per angle instead).
+Diff = share of the cell's paint area (the union of pixels any finish changes vs gloss there) whose largest channel
+moved by more than 12/255 against gloss. The scene is pinned (shot.mjs "comparison" profile), so the background is 0%.
 """
 import json, os, sys, html
 from PIL import Image, ImageChops
@@ -18,8 +18,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LIGHTS = [("day", "Race daylight · Monza, sun 48° up"), ("garage", "Garage broadcast")]
 TEAMS = [("williams", "dark · Williams navy"), ("ferrari", "mid · Ferrari red"), ("haas", "light · Haas white")]
 ANGLES = [("side", "side"), ("graze", "45° grazing"), ("spec", "specular")]
-# Car box per angle as frame fractions (x0, y0, x1, y1): measured off the gloss frames.
-BOX = {"day": {"side": (0.03, 0.40, 0.92, 0.95), "graze": (0.0, 0.40, 0.97, 1.0), "spec": (0.12, 0.30, 0.92, 1.0)}}
 ORDER = [("keep", [69, 63, 67, 68, 72, 71, 84, 66, 85, 65, 83, 60, 62]), ("borderline", [61, 70, 74, 81]),
          ("drop", [82])]
 THRESH = 12
@@ -44,6 +42,13 @@ def jpg_path(light, key, team, angle):
     return os.path.join(SRC, "jpg", f"{light}-{key}-{team}-{angle}.jpg")
 
 
+def cmd_files():
+    """Print the Artifact `files` list (root artifacts/finish-designs/r4m) for every JPEG not served as a blob."""
+    assets = load_assets()
+    print(json.dumps([{"path": "jpg/" + n} for n in sorted(os.listdir(os.path.join(SRC, "jpg")))
+                      if os.path.relpath(os.path.join(SRC, "jpg", n), ROOT) not in assets]))
+
+
 def cmd_jpg():
     os.makedirs(os.path.join(SRC, "jpg"), exist_ok=True)
     assets = load_assets()
@@ -57,27 +62,30 @@ def cmd_jpg():
     print("\n".join(todo))
 
 
-def diff_pct(a, b, box):
-    A, B = Image.open(a).convert("RGB"), Image.open(b).convert("RGB")
-    if box:
-        w, h = A.size
-        crop = (int(box[0] * w), int(box[1] * h), int(box[2] * w), int(box[3] * h))
-        A, B = A.crop(crop), B.crop(crop)
-    d = ImageChops.difference(A, B)
-    r, g, bb = d.split()
-    m = ImageChops.lighter(ImageChops.lighter(r, g), bb).point(lambda v: 255 if v > THRESH else 0)
-    hist = m.histogram()
-    return round(100.0 * hist[255] / (A.size[0] * A.size[1]), 1)
+def changed_mask(a, b):
+    import numpy as np
+    A = np.asarray(Image.open(a).convert("RGB")).astype(np.int16)
+    B = np.asarray(Image.open(b).convert("RGB")).astype(np.int16)
+    return np.abs(A - B).max(axis=2) > THRESH
 
 
 def cmd_diff():
-    out = {}
+    """Share of the PAINT AREA that changed vs gloss. The paint area of a cell (team x angle x light) is the union of
+    pixels any of the 18 finishes changes there, so 100% = every paintable pixel moved (ultra black does that)."""
+    import numpy as np
+    groups = {}
     for light, key, team, angle, p in cells():
-        if key == "gloss":
-            continue
+        if key != "gloss":
+            groups.setdefault((light, team, angle), []).append((key, p))
+    out = {}
+    for (light, team, angle), items in groups.items():
         base = os.path.join(SRC, light, f"gloss-{team}-{angle}.png")
-        if os.path.exists(base):
-            out[f"{light}-{key}-{team}-{angle}"] = diff_pct(p, base, BOX.get(light, {}).get(angle))
+        if not os.path.exists(base):
+            continue
+        masks = {k: changed_mask(p, base) for k, p in items}
+        area = np.logical_or.reduce(list(masks.values())).sum()
+        for k, m in masks.items():
+            out[f"{light}-{k}-{team}-{angle}"] = round(100.0 * m.sum() / max(area, 1), 1)
     json.dump(out, open(os.path.join(HERE, "r4-diff.json"), "w"), indent=0, sort_keys=True)
     print(len(out), "cells diffed")
 
@@ -92,7 +100,7 @@ def cmd_html():
     assets = load_assets()
     diffs = json.load(open(os.path.join(HERE, "r4-diff.json")))
     have = {(l, k, t, a) for l, k, t, a, _ in cells()}
-    up = {k for k in assets}
+    up = {k for k in assets} | {os.path.relpath(jpg_path(*c), ROOT) for c in have if os.path.exists(jpg_path(*c))}
     shot = sum(1 for c in have if c[1] != "gloss" and os.path.relpath(jpg_path(*c), ROOT) in up)
     pending = []
     verdicts = {}
@@ -101,12 +109,12 @@ def cmd_html():
         verdicts = json.load(open(vp))
 
     def img(light, key, team, angle, cap):
-        rel = os.path.relpath(jpg_path(light, key, team, angle), ROOT)
-        url = assets.get(rel)
+        j = jpg_path(light, key, team, angle)
+        url = assets.get(os.path.relpath(j, ROOT)) or (f"jpg/{os.path.basename(j)}" if os.path.exists(j) else None)
         if not url:
             return '<figure class="r4c r4miss"><figcaption>not shot yet</figcaption></figure>'
         d = diffs.get(f"{light}-{key}-{team}-{angle}")
-        tag = f'<span class="r4d">{d:.1f}% vs gloss</span>' if d is not None else '<span class="r4d">baseline</span>'
+        tag = f'<span class="r4d">{d:.1f}% of the paint changed vs gloss</span>' if d is not None else '<span class="r4d">baseline</span>'
         return (f'<figure class="r4c"><button class="shot" data-cap="{html.escape(cap)}"><img src="{url}" '
                 f'alt="{html.escape(cap)}" loading="lazy"></button><figcaption>{tag}</figcaption></figure>')
 
@@ -171,7 +179,8 @@ def cmd_html():
 
 
 def cmd_record():
-    """stdin: the Artifact asset-upload result lines, `- "<path>" (…) → "/_blob/<id>"`; merged into r4-assets.json."""
+    """(Round 4 batch 1 only; later batches publish the JPEGs as the artifact's own files at jpg/<name>, root
+    artifacts/finish-designs/r4m.) stdin: the Artifact asset-upload result lines, `- "<path>" (…) → "/_blob/<id>"`; merged into r4-assets.json."""
     import re
     assets = load_assets()
     for m in re.finditer(r'"([^"]+\.jpg)"[^\n]*?"(/_blob/[0-9a-f]{32})"', sys.stdin.read()):
@@ -181,4 +190,4 @@ def cmd_record():
 
 
 if __name__ == "__main__":
-    {"jpg": cmd_jpg, "diff": cmd_diff, "html": cmd_html, "record": cmd_record}[sys.argv[1]]()
+    {"jpg": cmd_jpg, "diff": cmd_diff, "html": cmd_html, "record": cmd_record, "files": cmd_files}[sys.argv[1]]()
