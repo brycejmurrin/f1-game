@@ -654,6 +654,21 @@ const MOODS = {
   daylight: { night: false, key: 0.35, fill: 0.45, wash: 0.6, up: 0.25, keyTint: [0.92, 0.98, 1.10], fillTint: [0.90, 0.97, 1.12],
     sky: [3.4, 2.75, 1.85], amb: [1.25, 1.65, 2.6], ambG: [3.0, 2.3, 1.4], sun: [0, 0.42, 0.9075], bd: [0.62, 0.70, 0.82],
     exposure: 1.08, bloom: 0.7, glare: 0.25, sheen: 1.3 },
+  // Inspection bench: cool, broad fill reveals hands, tooling and panel gaps.
+  // Suppressed glare and floor sheen keep bright fixtures off the work surface.
+  inspection: { key: 1.2, fill: 3.6, wash: 3.4, up: 0.25, keyTint: [0.92, 0.98, 1.12], fillTint: [0.90, 1.0, 1.16],
+    washTint: [0.94, 1.0, 1.10], sky: [1.8, 2.15, 2.8], amb: [2.0, 2.25, 2.65], ambG: [1.5, 1.7, 1.95],
+    exposure: 1.08, bloom: 0.15, glare: 0.15, sheen: 0.45, backdrop: 2.5 },
+  // Low sun at the open door: amber apron bounce under cool ceiling fill.
+  // The warm/cool split lives in the hemisphere and rig, not an orange filter.
+  goldenhour: { night: false, key: 1.1, fill: 1.2, wash: 1.0, up: 0.35, keyTint: [1.24, 0.90, 0.62], fillTint: [0.82, 0.94, 1.18],
+    washTint: [1.10, 0.96, 0.82], sky: [2.3, 1.55, 0.9], amb: [1.1, 1.35, 1.9], ambG: [3.8, 1.8, 0.65],
+    sun: [0, 0.18, 0.9837], bd: [0.68, 0.42, 0.22], exposure: 1.08, bloom: 0.45, glare: 0.35, sheen: 1.1 },
+  // Overnight service: blue-white keys and a warm working fill, with the pit
+  // lane dark. Keep shelves and crew readable instead of the showroom blackout.
+  endurance: { night: true, key: 2.5, fill: 1.4, wash: 1.7, up: 1.8, gantry: 1.4, keyTint: [0.86, 0.95, 1.16],
+    fillTint: [1.12, 0.97, 0.84], washTint: [0.78, 0.91, 1.17], sky: [0.35, 0.5, 0.95], amb: [0.85, 1.12, 1.6], ambG: [0.55, 0.7, 1.0],
+    bd: [0.025, 0.04, 0.08], exposure: 1.1, bloom: 0.65, glare: 0.45, sheen: 1.1 },
 };
 const SKY_BASE = SKYLIGHT.slice(), AMB_SKY_BASE = AMB_SKY.slice(), AMB_GROUND_BASE = AMB_GROUND.slice();
 const _bdBase = BACKDROP.slice();

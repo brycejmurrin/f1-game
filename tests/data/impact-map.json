@@ -7064,6 +7064,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "live": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -7073,6 +7074,7 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "moodCtx": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "moodDef": [
