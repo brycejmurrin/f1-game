@@ -24,13 +24,17 @@ function teTravelMm(e) {
   return Math.hypot(b[0] - a[0], b[1] - a[1]) * 1000;
 }
 function leTravelMm(e) {
-  const u = (0 - e.hinge) * e.chord;
-  const at = (ang) => [e.z - u * Math.cos(ang), e.y + u * Math.sin(ang)];
-  const a = at(e.zAngle), b = at(e.xAngle);
+  // The rear stack shares ONE pivot that is off most elements' chord lines,
+  // so rotate the design-pose LE about it rather than walking the chord.
+  const ly = e.le[1] - e.y, lz = e.le[0] - e.z;
+  const a = posed(e, e.zAngle, ly, lz), b = posed(e, e.xAngle, ly, lz);
   return Math.hypot(b[0] - a[0], b[1] - a[1]) * 1000;
 }
 
 test("default garage flaps travel on BOTH wings (TE front, LE rear)", () => {
+  // Rear: FIA C3.11.6 puts the RW Flap's axis in its REAR half, so the
+  // slot opens at the LEADING edge and the trailing edge barely moves —
+  // rear-wing-active-aero.test.mjs pins the geometry itself.
   const els = M.Car3D.aeroFlaps(2, null);
   const front = els.filter((e) => e.wing === "front");
   const rear = els.filter((e) => e.wing === "rear");
@@ -43,7 +47,7 @@ test("default garage flaps travel on BOTH wings (TE front, LE rear)", () => {
     "at least one front flap must drop its TE by a garage-visible amount");
   for (const e of rear) {
     assert.ok(leTravelMm(e) > 80, `${e.id} rear LE travel ${leTravelMm(e).toFixed(0)} mm — DRS slot will not open`);
-    assert.ok(teTravelMm(e) > 80, `${e.id} rear TE travel ${teTravelMm(e).toFixed(0)} mm — wingRear silhouette will not flatten`);
+    assert.ok(teTravelMm(e) < leTravelMm(e), `${e.id} rear TE travel ${teTravelMm(e).toFixed(0)} mm exceeds its LE's — pivot is not aft`);
   }
 });
 

@@ -20,6 +20,7 @@ import { chromiumArgsForBackend, gotoGame, installProbeInit } from "../shot/prob
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const PROTOCOL = "2025-06-18";
+const MAX_REQUEST_BYTES = 64_000;
 
 const TOOLS = [
   {
@@ -77,6 +78,14 @@ const PHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWe
 export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) {
   if (!token) throw new Error("token required");
   const state = { browser: null, context: null, page: null, game: null, orient: null };
+  const uploads = new Set(), pending = new Set();
+  let closing = false, closePromise;
+  function send(res, status, body) {
+    if (res.destroyed || res.writableEnded) return;
+    res.writeHead(status, { "content-type": "application/json" });
+    res.end(body === undefined ? undefined : JSON.stringify(body));
+  }
+  const invalid = (code, message) => ({ jsonrpc: "2.0", id: null, error: { code, message } });
 
   async function ensurePage(orientation) {
     const orient = orientation === "portrait" ? "portrait" : "landscape";
@@ -179,50 +188,76 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) 
   }
 
   const server = createServer(async (req, res) => {
-    const url = new URL(req.url || "/", "http://127.0.0.1");
-    if (req.method === "GET" && url.pathname === "/healthz") {
+    try {
+      if (closing) return send(res, 503, invalid(-32603, "Browser MCP is shutting down"));
+      const url = new URL(req.url || "/", "http://127.0.0.1");
+      if (req.method === "GET" && url.pathname === "/healthz") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, browser: !!state.page }));
+        return;
+      }
+      if (url.pathname !== "/mcp") {
+        res.writeHead(404, { "content-type": "text/plain" });
+        res.end("MCP is at /mcp");
+        return;
+      }
+      if (!tokenOk(presentedToken(req, url), token)) {
+        res.writeHead(401, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "unauthorized" }));
+        return;
+      }
+      if (req.method === "GET" || req.method === "DELETE") {
+        res.writeHead(405, { allow: "POST" });
+        res.end();
+        return;
+      }
+      if (req.method !== "POST") {
+        res.writeHead(404).end();
+        return;
+      }
+      const chunks = [];
+      let bytes = 0;
+      uploads.add(req);
+      for await (const chunk of req) {
+        bytes += chunk.length;
+        if (bytes > MAX_REQUEST_BYTES) {
+          send(res, 413, invalid(-32700, "Request exceeds 64000 bytes"));
+          return;
+        }
+        chunks.push(chunk);
+      }
+      uploads.delete(req);
+      let msg;
+      try { msg = JSON.parse(Buffer.concat(chunks).toString("utf8")); }
+      catch {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }));
+        return;
+      }
+      if (!msg || typeof msg !== "object" || Array.isArray(msg) || msg.jsonrpc !== "2.0" || typeof msg.method !== "string" ||
+          (msg.params !== undefined && (!msg.params || typeof msg.params !== "object" || Array.isArray(msg.params))) ||
+          (msg.id !== undefined && msg.id !== null && typeof msg.id !== "string" && typeof msg.id !== "number")) {
+        return send(res, 400, invalid(-32600, "Invalid JSON-RPC request"));
+      }
+      const task = Promise.resolve().then(() => rpc(msg));
+      pending.add(task);
+      let out;
+      try { out = await task; } finally { pending.delete(task); }
+      if (out == null) {
+        res.writeHead(202);
+        res.end();
+        return;
+      }
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, browser: !!state.page }));
-      return;
-    }
-    if (url.pathname !== "/mcp") {
-      res.writeHead(404, { "content-type": "text/plain" });
-      res.end("MCP is at /mcp");
-      return;
-    }
-    if (!tokenOk(presentedToken(req, url), token)) {
-      res.writeHead(401, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: "unauthorized" }));
-      return;
-    }
-    if (req.method === "GET" || req.method === "DELETE") {
-      res.writeHead(405, { allow: "POST" });
-      res.end();
-      return;
-    }
-    if (req.method !== "POST") {
-      res.writeHead(404).end();
-      return;
-    }
-    const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
-    let msg;
-    try { msg = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
-    catch {
-      res.writeHead(400, { "content-type": "application/json" });
-      res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }));
-      return;
-    }
-    const out = await rpc(msg);
-    if (out == null) {
-      res.writeHead(202);
-      res.end();
-      return;
-    }
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(out));
+      res.end(JSON.stringify(out));
+    } catch {
+      // A phone or tunnel can disconnect halfway through an upload. The
+      // IncomingMessage iterator rejects; it must not reject the server callback.
+      if (!req.destroyed) send(res, 500, invalid(-32603, "Browser MCP request failed"));
+    } finally { uploads.delete(req); }
   });
-  server.requestTimeout = 0;
+  server.requestTimeout = 10_000;
+  server.headersTimeout = 10_000;
   await new Promise((ok, fail) => {
     server.once("error", fail);
     server.listen(port, "127.0.0.1", ok);
@@ -232,10 +267,23 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT } = {}) 
     port: actual,
     token,
     url: `http://127.0.0.1:${actual}/mcp`,
-    close: async () => {
-      await new Promise((r) => server.close(() => r()));
-      if (state.browser) await state.browser.close().catch(() => {});
-      if (state.game) await state.game.close();
+    close: () => {
+      if (!closePromise) closePromise = (async () => {
+        closing = true;
+        const stopped = new Promise((r) => server.close(() => r()));
+        // server.close does not end active uploads (Node's HTTP contract).
+        // Stop those first, while letting already-dispatched calls finish.
+        for (const req of uploads) req.destroy();
+        try {
+          await Promise.allSettled([...pending]);
+          if (state.browser) await state.browser.close().catch(() => {});
+          if (state.game) await state.game.close();
+        } finally {
+          server.closeAllConnections();
+          await stopped;
+        }
+      })();
+      return closePromise;
     },
   };
 }

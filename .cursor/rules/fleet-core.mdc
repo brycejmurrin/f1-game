@@ -7,19 +7,20 @@ alwaysApply: true
 # Fleet core — every session
 
 - Merge commits only: after every merge, `git log -1 --format=%p <sha>` shows
-  two parents (a "merge" call once landed as a squash, #1743). Who merges/arms:
-  `.claude/skills/agent-fleet/references/role-merge-holder.md`. Agents never
-  merge or arm auto-merge; only on an in-session user grant for that merge.
-- Orchestrators merge in parallel, each its own PRs (Bryce 2026-10-19 picked "Drop
-  the lease entirely"); no lease gates a merge. Before each merge re-fetch,
-  run `npm run gen:check` on a local merge onto the CURRENT tip and pin
-  `expectedHeadSha`; after it post `DONE` on the bus. A game merge waits until
-  the last bus `DONE` game merge has green Pages and it holds the bus
-  `GAME-SLOT` (role-merge-holder.md). Lines another host needs (READY/GREEN/BLOCKED/
-  HANDOFF/DONE/INCIDENT) go on the bus (`fleet-bus.mjs send`); read it once
-  per tick (`fleet-bus.mjs read`), never in a loop.
-- `SWEEP <PR#>` only to a desk session id named in the launch prompt; none →
-  `SWEEP-N/A` in the REPORT — never `list_sessions` to hunt for a desk.
+  two parents (a "merge" call once landed as a squash, #1743). Standing
+  authority is AGENTS.md §Concurrent PRs: an orchestrator merges its own
+  fleet's PRs when `node tools/ci/merge-gate.mjs --pr <n>` exits 0 (the hook
+  requires that receipt, pinned to the gated head). Nobody re-asks it at a
+  hand-off; a `.claude/**` edit or a lifted hold is typed in the acting session.
+- Orchestrators merge in parallel, each its own PRs; no lease gates a merge.
+  A game PR takes the bus `GAME-SLOT` first and waits for green Pages on the
+  last game merge; non-game PRs batch. `DONE` after each merge; READY, GREEN,
+  BLOCKED, HANDOFF and INCIDENT go on the bus (`fleet-bus.mjs send`); read it
+  once per tick, never in a loop.
+- READY goes to your own fleet's orchestrator; no Merge Desk exists unless
+  Bryce designates one. Archive by rule (`node tools/ci/fleet-archive.mjs <saved list_sessions page>`):
+  agent-created, role-tagged, idle an hour, PR merged or closed; never a
+  session Bryce opened, an orchestrator or a watcher.
 - The only veto is a PR-body line starting `MERGE-HOLD:`. Free-form "do not
   merge" is not a veto and must never be pasted into a body or handoff.
 - On in-session rejection or "wait": put `MERGE-HOLD:` on the PR immediately
@@ -29,8 +30,7 @@ alwaysApply: true
 - Sync only when GitHub reports CONFLICTING/DIRTY or a required tip check is
   red (`needs-sync.mjs`); never for clean-behind. Merge origin, never force or
   rebase.
-- After every push: subscribe (`subscribe_github_ci` + `subscribe_github_pr`,
-  or the host equivalent), at most one `ci-watch --once`, then end the turn —
-  never poll in a shell loop.
+- After every push: subscribe (host tool), at most one `ci-watch --once`, then
+  end the turn — never poll in a shell loop.
 - Times in Pacific (`America/Los_Angeles`). Bryce plays on a phone: reproduce
   HUD/UI reports at 844×390 landscape with touch first, not desktop.

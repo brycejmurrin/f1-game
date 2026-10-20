@@ -1074,7 +1074,7 @@ test("the fleet block keys are the same in the skill and the worker reference", 
   const block = FLEET_SKILL.match(/```fleet\n([\s\S]*?)```/);
   assert.ok(block, "SKILL.md carries the fenced fleet block");
   const keys = [...block[1].matchAll(/^([a-z-]+):/gm)].map((m) => m[1]);
-  assert.deepEqual(keys, ["worker", "orchestrator", "owned", "state", "blocker", "needs-orchestrator"]);
+  assert.deepEqual(keys, ["worker", "fleet", "orchestrator", "owned", "state", "blocker", "needs-orchestrator"]);
   assert.match(block[1], /state: .*\bblocked\b/);
   for (const k of ["state: blocked", "needs-orchestrator: yes"]) {
     assert.ok(FLEET_WORKER.includes(k), `worker.md escalation uses \`${k}\``);
@@ -1091,7 +1091,6 @@ test("the launch template carries every field the agent-fleet launch policy requ
     "ready-gate.mjs", "Do not enable auto-merge or merge."]) {
     assert.ok(tpl[1].includes(field), `launch template lost ${field}`);
   }
-  assert.ok(!tpl[1].includes("ready-full-cap"), "the ready cap was retired 2026-10-16");
   assert.ok(!tpl[1].includes("PUSH SLOT"), "paced push was retired 2026-10-16");
   // The policy moved from AGENTS.md §Concurrent PRs to the skill (2026-10-14 trim); the pin moved with it.
   const policy = read(".claude/skills/agent-fleet/references/launch-policy.md").split("## Launch policy")[1] || "";

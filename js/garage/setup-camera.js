@@ -61,6 +61,10 @@ const _presentTune = { sunShaftMul: 0 };
 function garagePhone() {
   return typeof GLX !== "undefined" && !!(GLX && (GLX.isMobile || GLX.mobileTier));
 }
+// The shipped look when GarageScene carries no mood table (older stubs, headless VMs).
+const NO_MOOD = Object.freeze({ exposure: 1, bloom: 1, glare: 1, sun: null });
+const moodDef = () => (typeof GarageScene !== "undefined" && GarageScene.moodDef && GarageScene.moodDef()) || NO_MOOD;
+
 function presentOpts(tune) {
   const T = tune === undefined ? liveTune() : tune;
   const exposureMul = _tuneNum(T, "exposureMul", 1);
@@ -74,8 +78,11 @@ function presentOpts(tune) {
   // Prototype chain carries the rest of the image-grade knobs (no Object.create).
   Object.setPrototypeOf(_presentTune, T && typeof T === "object" ? T : null);
   _presentTune.sunShaftMul = 0;
-  _presentOpts.exposure = SP_EXPOSURE * exposureMul;
-  _presentOpts.bloom = shed ? 0 : SP_BLOOM * bloomMul;
+  // The garage lighting mood (identity when shipped). Inline, not moodDef():
+  // tests run this function sliced out of the file.
+  const md = (typeof GarageScene !== "undefined" && GarageScene.moodDef && GarageScene.moodDef()) || { exposure: 1, bloom: 1 };
+  _presentOpts.exposure = SP_EXPOSURE * exposureMul * md.exposure;
+  _presentOpts.bloom = shed ? 0 : SP_BLOOM * bloomMul * md.bloom;
   _presentOpts.threshold = threshold;
   _presentOpts.contact = 0;
   // A closed bay has no wet road and no env probe. Omitted carReflect is the
@@ -607,7 +614,7 @@ function garageCtx(asSetup = false) {
   ctx.ambient = !reducedMotion() && (!h || home.moving);
   ctx.studio = !!(h && home.mode === "studio");
   ctx.unlimited = !!G.unlimitedBudget;   // the wall BUDGET board reads FREE BUILD, like the DOM sheet
-  return ctx;
+  return typeof GarageScene !== "undefined" && GarageScene.moodCtx ? GarageScene.moodCtx(ctx) : ctx;
 }
 function captureCamera() {
   return { az: setupPreviewAz, el: setupPreviewEl, dist: setupPreviewDist, spin: setupPreviewSpin,
@@ -820,7 +827,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     // as long as the sun stayed at full white it owned the picture and the bay's
     // ten fixtures were decoration. proj/invProj are what unlock SSAO in
     // present(), and an interior lives or dies on its corner darkening.
-    viewProj: _spVP, view: _spView, eye, sunDir: _spSun, sunColor: GarageScene.SKYLIGHT,
+    viewProj: _spVP, view: _spView, eye, sunDir: (GarageScene.moodDef && GarageScene.moodDef().sun) || _spSun, sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
     fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: lightsRig,
     proj: _spProj, invProj: _spInvProj,
@@ -865,7 +872,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale());
+  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale() * moodDef().glare);
   gfx.present(presentOpts());
   return !(gfx.warming && gfx.warming());
 }

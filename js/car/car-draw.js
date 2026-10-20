@@ -949,7 +949,7 @@ const CarDraw = (function () {
       // Keyed on the RESOLVED body: "team" and unknown ids are the team's own
       // geometry and share its key instead of each costing a rebuild (#3111 F17).
       const rawBs = deps.resolveLivery(team).bodyStyle;
-      const bk = Car3D.bodyStyleKey ? Car3D.bodyStyleKey(team.id, rawBs) : (rawBs || team.id), bs = bk !== team.id ? bk : "";   // guarded like car-mesh's anchorKey: test stubs of Car3D omit it
+      const bk = Car3D.bodyStyleKey ? Car3D.bodyStyleKey(team.id, rawBs) : rawBs, bs = bk && bk !== team.id ? bk : "";
       const body = CockpitOpts.body() + (bs ? ":S" + bs : "");
       if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum) {
         _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + (bs ? ":S" + bs : "") + ":" + num;   // halo size keys the cache: a change rebuilds, no reload

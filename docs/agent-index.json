@@ -686,7 +686,8 @@
         "tests/unit/skill-smoke.test.mjs",
         "tests/unit/subagent-contract-hook.test.mjs",
         "tests/unit/test-groups.test.mjs",
-        "tests/unit/ui-improve-pass.test.mjs"
+        "tests/unit/ui-improve-pass.test.mjs",
+        "tests/unit/vendor-licences.test.mjs"
       ],
       "twinned": false
     },
@@ -984,6 +985,7 @@
       "script": "test:garage-unit",
       "kind": "node",
       "files": [
+        "tests/unit/aero-preview-fields.test.mjs",
         "tests/unit/body-split.test.mjs",
         "tests/unit/car-materials.test.mjs",
         "tests/unit/car-shade.test.mjs",
@@ -1072,7 +1074,6 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
-        "tests/unit/ready-full-cap.test.mjs",
         "tests/unit/selected-gate-verdict.test.mjs",
         "tests/unit/shell-ids.test.mjs",
         "tests/unit/test-coverage-audit.test.mjs",
@@ -1308,7 +1309,6 @@
         "tests/specs/offtrack.spec.js",
         "tests/specs/physics-*.spec.js",
         "tests/specs/pit-lane.spec.js",
-        "tests/specs/projection.spec.js",
         "tests/specs/race-control.spec.js",
         "tests/specs/world-physics.spec.js"
       ],
@@ -1572,7 +1572,6 @@
         "tests/specs/albert-park-foundation.spec.js",
         "tests/specs/autopilot.spec.js",
         "tests/specs/logging.spec.js",
-        "tests/specs/projection.spec.js",
         "tests/unit/adapted-specs.test.mjs"
       ],
       "twinned": true

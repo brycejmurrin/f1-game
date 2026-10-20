@@ -80,6 +80,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 2026 aero defaults for catalog options that omit beam/drs/board (item 4).
   "tests/unit/aero-defaults-2026.test.mjs",
   "tests/unit/aero-flap-travel.test.mjs",
+  // B·D3 design-preview aero/floor fields: reach the mesh, default off.
+  "tests/unit/aero-preview-fields.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
@@ -368,6 +370,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/deploy-tool.test.mjs",
+  // Design-review matrix (tools/shot/design-matrix.mjs): expansion, framing math, diff labels, batch + resume. Pure, no browser.
+  "tests/unit/design-matrix.test.mjs",
+  // B·D4 preview fields (wheels/brakes/cockpit): default off, each candidate visible vs its equivalent. ~10 s.
+  "tests/unit/design-preview-wheels.test.mjs",
   // The track designer's drawing surface (js/editor/canvas.js) alone: long-press
   // → onContext, the stamp tool's ghost polyline, the drag / span measurement
   // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
@@ -453,6 +459,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
   "tests/unit/finish-coast-rev-vm.test.mjs",
+  // Car part fit (tools/car/car-fit-audit.mjs): GAP / PENETRATION / ZFIGHT / OPEN on box
+  // fixtures, the --base comparison, and the Fenced Halo brow fixture. VM, ~2 s.
+  "tests/unit/fit-audit-car.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/flags.test.mjs",
   // Nightly flake tally (tools/ci/flake-tally.mjs): report.json / live-reporter
@@ -461,12 +470,21 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
   // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
   "tests/unit/flaky-quarantine.test.mjs",
+  // fleet-archive: the archive rule over a saved list_sessions page (role tag, agent-created, idle, PR merged or
+  // closed, no human turn in the last hour); pure fixtures; < 0.5 s.
+  "tests/unit/fleet-archive.test.mjs",
+  // Fleet Board snapshot (tools/ci/fleet-board-snapshot.mjs): dashboard datasets from fixtures, no network. < 1 s.
+  "tests/unit/fleet-board-snapshot.test.mjs",
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
-  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break) and the bus cursor read; a real-git race on a local bare origin; < 2 s.
+  // fleet-bus-mirror: which bus lines become PR comments (to:#<n> only), the comment body, dedupe by bus sha and the closed/merged skip; gh injected, pure; < 0.2 s.
+  "tests/unit/fleet-bus-mirror.test.mjs",
+  // fleet-bus: the cross-host merge lease (acquire/renew/expiry/break), the bus cursor read, the deliverable-recipient rule and `who <letter>` (ORCH LIVE lines, explicit and free text); a real-git race on a local bare origin; < 2 s.
   "tests/unit/fleet-bus.test.mjs",
   "tests/unit/fleet-flags.test.mjs",
+  // fleet-owner: HELD (open PR diff) beats CLAIMED (board glob) beats FREE, RELEASE? answers, the 60-min lapse, fail-closed file lists; fake API, < 0.2 s.
+  "tests/unit/fleet-owner.test.mjs",
   // fleet-tick: the diff of two watcher states into changed rows, pure fixtures; < 0.1 s.
   "tests/unit/fleet-tick.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
@@ -549,6 +567,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-defaults.test.mjs",
   "tests/unit/garage-followups.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
+  // Garage room LOOKS (design preview): every look builds a valid bay and changes the room.
+  "tests/unit/garage-looks.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
   // The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.
@@ -573,6 +593,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
   // repo stays untouched; every fixture-repo test imports the scrub first). ~2.5 s.
   "tests/unit/git-fixture-env.test.mjs",
+  // Shared GET-only GitHub REST helper (#3013).
+  "tests/unit/github-api.test.mjs",
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
@@ -584,6 +606,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-resize-hysteresis.test.mjs",
   "tests/unit/glx-resource-balance.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
+  "tests/unit/gpu-allocation-estimator.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
   "tests/unit/harness-display.test.mjs",
@@ -764,6 +787,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
   // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
   "tests/unit/menu-sentinel-resize.test.mjs",
+  // merge-gate: the merge gate's pure rows (open, required CI check, game paths, bus GAME-SLOT pacing), the receipt
+  // github-mcp-guard.sh reads, and merge_policy.py agreeing with gate-receipt.mjs on every receipt case; < 2 s.
+  "tests/unit/merge-gate.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   // tools/perf/mesh-census-lib.mjs: pass/source/distance banding + #2657/#2631 recommend (no browser). ~0.1 s.
   "tests/unit/mesh-census.test.mjs",
@@ -871,7 +897,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
   "tests/unit/poll-live-shell.test.mjs",
-  // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
+  // CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.
   "tests/unit/pr-board.test.mjs",
   // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.
   "tests/unit/pr-body.test.mjs",
@@ -927,8 +953,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ratchet-reason.test.mjs",
   "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
-  // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
-  "tests/unit/ready-full-cap.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
   // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
   // director lays it over a stub field — grid, plans, the pace loop, the
@@ -949,6 +973,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/real-replay-frame-fit.test.mjs",
   "tests/unit/real-replay-transport.test.mjs",
   "tests/unit/real-replay-vm.test.mjs",
+  // Rear wing active aero to FIA 2026 C3.11.6: one rigid RW Flap, one aft pivot, Straight Mode flattens (never inverts). VM, ~1 s.
+  "tests/unit/rear-wing-active-aero.test.mjs",
   "tests/unit/red-flag-fuel-vm.test.mjs",
   // ...and its sibling over js/: a try/catch cannot swallow a promise
   // REJECTION, and index.html turns an unhandled one into a full-screen
@@ -1085,6 +1111,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/sporting-regs.test.mjs",
   "tests/unit/spotify-native.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
+  // The deploy-only minify (#3110): ~20 s, it minifies every js/ file twice
+  // (once to check top-level names and directives, once for the scenery scans).
+  "tests/unit/stage-minify.test.mjs",
   // #2204: terrace / spectatorHill / vaultStand curve follow — outside-of-bend
   // gap ≤ 0.5 m on moderate bends, no severe terrace self-pairs on jerez.
   "tests/unit/stand-curve-gap.test.mjs",
@@ -1318,6 +1347,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/uilayers-modal-order.test.mjs",
   "tests/unit/validation-cli.test.mjs",
+  // Vendored licence files: every vendor/ package has one and a declared SPDX licence matches its text (#3092). < 0.1 s.
+  "tests/unit/vendor-licences.test.mjs",
   "tests/unit/verify-live.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
   // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
@@ -1792,7 +1823,7 @@ const TOOLING_FAST_CHANGED_RUN_ALL = [
 
 const PATH_PIN_RE = /["'`]((?:js|css|tools|types|desktop|docs|tests\/|index\.html|AGENTS\.md|CLAUDE\.md|README\.md|\.claude\/|\.cursor\/|sw\.js|version\.json)[^"'`]+)["'`]/g;
 
-const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|environment-json|comment-citations|agent-surface|agent-fleet)\.test\.mjs$/;
+const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|environment-json|comment-citations|agent-surface)\.test\.mjs$/;
 
 let _pinIndex = null;
 

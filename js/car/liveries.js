@@ -618,6 +618,8 @@ const Liveries = (function () {
     "podFinish", "finFinish", "mirrorFinish", "helmetStyle",
     // LD zones slice (docs/notes/LIVERY-REF-2026-10-18.md): front and rear wing endplates.
     "endplate", "crestStyle",
+    // Crest customisation (B·D8 round 5): tone and frame dress an original emblem.
+    "crestTone", "crestFrame",
     // BODY (2026-10-18): the chassis shape, Car3D.bodyStyleKey — geometry, like finShape.
     "bodyStyle",
     // PAINT ZONES (CarMaterials.PAINT_ZONES; header above): new surfaces, each optional.
