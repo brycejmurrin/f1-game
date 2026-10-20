@@ -15,11 +15,11 @@ import { gotoGame } from "../tools/shot/probe-page.mjs";
 import { raceGate } from "../tools/lib/census-entry.mjs";
 import { writeFileSync } from "node:fs";
 
-const TRACKS = (process.env.H7_TRACKS || "monaco").split(",");
-const CAMS = (process.env.H7_CAMS || "chase").split(",");
-const PROFILES = (process.env.H7_PROFILES || "phone,desktop").split(",");
-const VARIANTS = (process.env.H7_VARIANTS || "nocount,count").split(",");
-const ROUNDS = +(process.env.H7_ROUNDS || 7), N = +(process.env.H7_N || 8);
+const TRACKS = (process.env.H7_TRACKS || "monaco,spa").split(",");
+const CAMS = (process.env.H7_CAMS || "chase,cockpit").split(",");
+const PROFILES = (process.env.H7_PROFILES || "phonelike,desktop").split(",");
+const VARIANTS = (process.env.H7_VARIANTS || "count").split(",");
+const ROUNDS = +(process.env.H7_ROUNDS || 5), N = +(process.env.H7_N || 6);
 const OUT = process.env.H7_OUT || "tlx-gpu-cost.json";
 const report = { started: new Date().toISOString(), rounds: ROUNDS, n: N, rows: [] };
 const save = () => writeFileSync(OUT, JSON.stringify(report, null, 2));
@@ -27,6 +27,10 @@ const log = (m) => console.log("[h7] " + m);
 
 const PROFILE = {
   phone: { viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, hasTouch: true, ls: { "apex26.forceMobileTier": "1" } },
+  // A phone-shaped present (844x390 css x 1.5 = the mobile tier's DPR cap -> 1266x585) on GRAPHICS MEDIUM
+  // (userTier 2, the phone default), WITHOUT forceMobileTier: that tier loses the WebGPU device ~20-40 s in
+  // (census 39468515776), so its memory caps (sun shadow 1024 etc.) are the one phone delta this row lacks.
+  phonelike: { viewport: { width: 844, height: 390 }, deviceScaleFactor: 1.5, hasTouch: true, ls: { "apex26.gfxPreset": '"medium"' } },
   desktop: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, hasTouch: false, ls: {} },
 };
 
@@ -121,12 +125,14 @@ async function bench(page, positions) {
       scale50: () => { tune({}); A.renderScale(0.5); },
     };
     const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
+    // Every fence is capped: a lost device never resolves onSubmittedWorkDone (rev 12's desktop row hung 25 min).
+    const fence = () => Promise.race([q.onSubmittedWorkDone(), new Promise((_, rej) => setTimeout(() => rej(new Error("fence timeout 8s")), 8000))]);
     const burst = async (n) => {
-      await q.onSubmittedWorkDone();
+      await fence();
       const t0 = performance.now();
       for (let i = 0; i < n; i++) A.snapCam(true);
       const t1 = performance.now();
-      await q.onSubmittedWorkDone();
+      await fence();
       const t2 = performance.now();
       return { cpu: (t1 - t0) / n, wall: (t2 - t0) / n };
     };
@@ -185,7 +191,7 @@ try {
       ctx = b.ctx; row.env = b.env;
       log(`${variant} ${prof} ${track} ${cam} booted ${JSON.stringify(b.env).slice(0, 900)}`);
       if (b.env.state !== "race") { row.error = "race not live after gate: " + b.env.state; log("  console " + JSON.stringify(b.cons).slice(0, 3000)); continue; }
-      row.arms = await bench(b.page, [0.18, 0.62]);
+      row.arms = await Promise.race([bench(b.page, [0.18, 0.62]), new Promise((_, rej) => setTimeout(() => rej(new Error("bench cap 240 s")), 240000))]);
       row.consoleErrors = b.cons;
       log("  dbg " + JSON.stringify(row.arms.dbg).slice(0, 600));
       for (const k of Object.keys(row.arms)) { if (k === "dbg") continue; const a = row.arms[k]; log(`  ${k.padEnd(9)} wall ${a.wallMs} cpu ${a.cpuMs} d ${a.deltaMs ?? "-"} passes ${a.passesPerFrame} submits ${a.submitsPerFrame}`); }

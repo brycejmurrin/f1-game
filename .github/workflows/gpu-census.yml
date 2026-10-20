@@ -483,7 +483,7 @@ jobs:
       - name: TLX GPU cost census
         if: ${{ needs.plan.outputs.h7cost == 'true' }}
         continue-on-error: true
-        timeout-minutes: 26
+        timeout-minutes: 27
         shell: bash
         run: node scratch/tlx-gpu-cost.mjs || true
 
