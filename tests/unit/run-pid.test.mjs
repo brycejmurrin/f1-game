@@ -47,3 +47,21 @@ test("stop: none / stale / stopped; signals the tree leaf-first, SIGKILLs only s
   const stale = await stop("tf", { dir, deps: { alive: () => true, cmdline: () => "bash unrelated", table: () => [], kill: (p) => rec.push(p) } });
   assert.equal(stale.state, "stale"); assert.deepEqual(rec, [], "a pid that is no longer our command is never signalled");
 });
+
+test("stop keeps parents alive until their terminated children have been reaped", async () => {
+  const dir = tmp(), alive = new Set([50, 51, 52, 99]), terminating = new Set(), sent = [];
+  fs.writeFileSync(runFile("reap", dir), JSON.stringify({ pid: 50, cmd: "tooling-fast.mjs" }));
+  const children = new Map([[50, [51]], [51, [52]], [52, []]]);
+  const r = await stop("reap", { dir, graceMs: 1000, deps: {
+    alive: (p) => alive.has(p), cmdline: () => "node tooling-fast.mjs",
+    table: () => [[50, 1], [51, 50], [52, 51], [99, 1]],
+    kill: (p, signal) => {
+      assert.equal(signal, "SIGTERM", "cooperative children need no escalation");
+      assert.ok(children.get(p).every((c) => !alive.has(c)), "parent still owns and reaps each child");
+      sent.push(p); terminating.add(p);
+    },
+    sleep: async () => { for (const p of terminating) alive.delete(p); terminating.clear(); },
+  } });
+  assert.deepEqual(sent, [52, 51, 50]); assert.equal(r.forced, 0);
+  assert.deepEqual([...alive], [99], "unregistered bystander survives");
+});

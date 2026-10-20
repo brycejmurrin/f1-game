@@ -1074,7 +1074,8 @@
       "connect": [
         "tests/specs/music-library.spec.js",
         "tests/unit/audio-mix-improvements.test.mjs",
-        "tests/unit/spotify-refresh.test.mjs"
+        "tests/unit/spotify-refresh.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
       ],
       "connectRemote": [
         "tests/unit/spotify-refresh.test.mjs"
@@ -1085,7 +1086,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "disconnect": [
-        "tests/unit/spotify-refresh.test.mjs"
+        "tests/unit/spotify-refresh.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
       ],
       "emit": [
         "tests/unit/audio-panel-boot.test.mjs"
@@ -4353,6 +4355,7 @@
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -5491,6 +5494,7 @@
       ],
       "load": [
         "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
         "tests/unit/track-codec.test.mjs"
       ],
       "preflightCollection": [
@@ -5913,7 +5917,8 @@
         "tests/unit/track-themes-build.test.mjs"
       ],
       "*": [
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/lobby-settings.test.mjs"
       ]
     },
     "js/editor/validate.js": {
@@ -7115,7 +7120,8 @@
       "*": [
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
-        "tests/unit/test-groups.test.mjs"
+        "tests/unit/test-groups.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs"
       ]
     },
     "js/garage/setup-camera.js": {
@@ -8492,6 +8498,25 @@
         "tests/unit/net-authority.test.mjs"
       ]
     },
+    "js/net/lobby-settings.js": {
+      "circuitPayload": [
+        "tests/unit/lobby-settings.test.mjs"
+      ],
+      "installCircuit": [
+        "tests/unit/lobby-settings.test.mjs"
+      ],
+      "normaliseSettings": [
+        "tests/unit/lobby-settings.test.mjs"
+      ],
+      "*": [
+        "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/storm-weather.test.mjs"
+      ]
+    },
     "js/net/lobby.js": {
       "abortQuali": [
         "tests/unit/net-authority.test.mjs",
@@ -8533,7 +8558,6 @@
       ],
       "create": [
         "tests/specs/wake-lock.spec.js",
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -8569,11 +8593,11 @@
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "join": [
-        "tests/unit/custom-tracks.test.mjs",
         "tests/unit/flyby-shots.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lobby-answer-flight.test.mjs",
         "tests/unit/lobby-codes.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -9229,7 +9253,8 @@
         "tests/unit/perf-governor.test.mjs"
       ],
       "current": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/perf-try.test.mjs"
       ],
       "defaultId": [
         "tests/unit/perf-governor.test.mjs"
@@ -9242,7 +9267,6 @@
       "*": [
         "tests/unit/light-grid.test.mjs",
         "tests/unit/light-store-cond-layer.test.mjs",
-        "tests/unit/perf-try.test.mjs",
         "tests/unit/race-entry-profile.test.mjs"
       ]
     },
@@ -12170,10 +12194,6 @@
       ]
     },
     "js/render/glx/glx.js": {
-      "awaitSoftPresent": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
       "begin": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -12274,10 +12294,6 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
-      "invalidateSoftPresent": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
       "link": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -12289,28 +12305,6 @@
       ],
       "mirrorEnd": [
         "tests/unit/gfx-backend-canary.test.mjs"
-      ],
-      "push": [
-        "tests/unit/ci-gate-selection.test.mjs",
-        "tests/unit/comment-citations.test.mjs",
-        "tests/unit/deploy-staging.test.mjs",
-        "tests/unit/frame-hotpath-alloc.test.mjs",
-        "tests/unit/frustum-buckets.test.mjs",
-        "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/lamp-fixture-anchor.test.mjs",
-        "tests/unit/light-grid.test.mjs",
-        "tests/unit/lighting-reapply.test.mjs",
-        "tests/unit/mem-census-growth.test.mjs",
-        "tests/unit/pause-hud-layout.test.mjs",
-        "tests/unit/perf-governor.test.mjs",
-        "tests/unit/perf-try.test.mjs",
-        "tests/unit/puddles.test.mjs",
-        "tests/unit/render-final-contracts.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs",
-        "tests/unit/service-worker.test.mjs",
-        "tests/unit/tools-runnable.test.mjs"
       ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -12339,15 +12333,6 @@
       "setSpatialUpscale": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "softBlit": [
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
-      "softBlitNotify": [
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
-      "softPresentState": [
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
-      ],
       "updateInstances": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -12357,6 +12342,19 @@
       ],
       "*": [
         "tests/unit/change-driver-tools.test.mjs",
+        "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/comment-citations.test.mjs",
+        "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/frustum-buckets.test.mjs",
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/lamp-fixture-anchor.test.mjs",
+        "tests/unit/light-grid.test.mjs",
+        "tests/unit/lighting-reapply.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
+        "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/puddles.test.mjs",
+        "tests/unit/service-worker.test.mjs",
+        "tests/unit/tools-runnable.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ]
     },
@@ -12476,6 +12474,35 @@
       "*": [
         "tests/unit/light-grid.test.mjs",
         "tests/unit/lighting-reapply.test.mjs"
+      ]
+    },
+    "js/render/glx/soft.js": {
+      "awaitSoftPresent": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "create": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "invalidateSoftPresent": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "push": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
+        "tests/unit/mem-census-growth.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "softBlit": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "softBlitNotify": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "softPresentState": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
       ]
     },
     "js/render/renderer-boot.js": {
@@ -13157,6 +13184,7 @@
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
@@ -13682,6 +13710,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
@@ -14207,6 +14236,7 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/start-lights.test.mjs"
       ],
@@ -15598,7 +15628,6 @@
       "*": [
         "tests/specs/ui-resize.spec.js",
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/perf-try.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
@@ -15848,6 +15877,7 @@
     },
     "js/ui/settings-tabs.js": {
       "back": [
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
@@ -15857,6 +15887,7 @@
         "tests/unit/settings-tabs.test.mjs"
       ],
       "create": [
+        "tests/unit/perf-try.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
@@ -15872,7 +15903,6 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
-        "tests/unit/perf-try.test.mjs",
         "tests/unit/settings-one-home.test.mjs"
       ]
     },

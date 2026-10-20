@@ -63,6 +63,13 @@ wait_chrome() {
 # https) FIRST. That cost an afternoon; it is not a flag problem.
 build_mcp_args() {
   local chrome="$1"
+  # Opt-in: attach to tools/mcp/debug-chrome.sh's browser (one browser shared
+  # with js-debugger / browser-use) instead of launching an isolated one. The
+  # attached browser already carries the WebGPU/SwiftShader flags.
+  if [[ -n "${APEX_CDT_BROWSER_URL:-}" ]]; then
+    MCP_ARGS=(--browserUrl "$APEX_CDT_BROWSER_URL" --memoryDebugging)
+    return 0
+  fi
   MCP_ARGS=(
     --headless
     --isolated

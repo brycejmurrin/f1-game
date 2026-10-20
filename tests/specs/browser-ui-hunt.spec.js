@@ -3,6 +3,7 @@
 import { test, expect } from "@playwright/test";
 import { createRequire } from "node:module";
 import { BOOT_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const { LAZY_DATA } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
@@ -10,6 +11,76 @@ async function waitReady(page) {
   await page.goto("/");
   await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
 }
+
+test.describe("Accessible settings discovery", () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
+  test("settings Back reveals its launcher after rotating the phone", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
+    await waitReady(page); await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").tap(); await page.locator("#pm-open-appearance").tap();
+    const jump = page.locator('#appearance-studio [data-settings-jump="a11y"]');
+    for (const viewport of [{ width: 390, height: 844 }, { width: 734, height: 343 }]) {
+      await jump.tap(); await page.setViewportSize(viewport); await page.keyboard.press("Escape");
+      await expect(jump).toBeFocused(); await expect(jump).toBeInViewport({ ratio: 1 });
+      expect(await jump.evaluate(e => {
+        const r = e.getBoundingClientRect();
+        return e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      })).toBe(true);
+    }
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#pm-open-appearance")).toBeFocused();
+    await expect(page.locator("#pm-open-appearance")).toBeInViewport({ ratio: 1 });
+  });
+  test("settings cross-links restore their page, scroll and focus before returning to search", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
+    await waitReady(page); await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").tap(); await page.locator("#pm-open-appearance").tap();
+    const jump = page.locator('#appearance-studio [data-settings-jump="a11y"]'), body = page.locator("#pm-settings-body"), motion = page.locator("#pm-motion-sel");
+    const value = await motion.inputValue();
+    for (const escape of [true, false]) {
+      await jump.scrollIntoViewIfNeeded(); const scroll = await body.evaluate(e => e.scrollTop);
+      await jump.tap(); await expect(motion).toBeFocused(); await expect(motion).toBeInViewport();
+      if (escape) await page.keyboard.press("Escape"); else await page.locator("#pm-settings-close").tap();
+      await expect(jump).toBeFocused(); await expect(jump).toBeInViewport();
+      await expect.poll(() => body.evaluate(e => e.scrollTop)).toBeCloseTo(scroll, 0);
+      await expect(motion).toHaveValue(value);
+    }
+    await page.keyboard.press("Escape"); await expect(page.locator("#pm-open-appearance")).toBeFocused();
+    await expect(page.locator("#pm-open-appearance")).toBeInViewport({ ratio: 1 });
+    const search = page.getByRole("searchbox", { name: "Find a setting" }); await search.fill("caption size");
+    const result = page.locator("[data-setting-result]").first(); await result.tap();
+    await jump.tap(); await expect(motion).toBeFocused();
+    await page.keyboard.press("Escape"); await expect(jump).toBeFocused();
+    await page.keyboard.press("Escape"); await expect(result).toBeFocused(); await expect(search).toHaveValue("caption size");
+    await page.locator("#pm-settings-close").tap(); await expect(page.locator("#mb-settings")).toBeFocused();
+  });
+  test("search opens caption and hold controls without changing them, and Escape restores the result", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").tap();
+    for (const [query, id, title] of [
+      ["subtitles hearing", "pm-captions-sel", "APPEARANCE"], ["caption size", "pm-caption-size-sel", "APPEARANCE"],
+      ["caption position", "pm-caption-pos-sel", "APPEARANCE"], ["caption background", "pm-caption-bg-sel", "APPEARANCE"],
+      ["caption speaker", "pm-caption-speaker-sel", "APPEARANCE"], ["protanopia", "pm-cvd-sel", "APPEARANCE"],
+      ["gas toggle", "pm-hold-throttle-sel", "ACCESSIBILITY"], ["look back toggle", "pm-hold-lookback-sel", "ACCESSIBILITY"],
+    ]) {
+      const search = page.getByRole("searchbox", { name: "Find a setting" }), control = page.locator("#" + id);
+      const before = await control.inputValue();
+      await search.fill(query);
+      const result = page.locator("[data-setting-result]").first();
+      await expect(result).toHaveText(new RegExp(" · " + title + "$"));
+      await result.tap();
+      await expect(control).toBeFocused(); await expect(control).toBeInViewport();
+      await expect(control).toHaveValue(before);
+      await page.keyboard.press("Escape");
+      await expect(search).toBeVisible(); await expect(search).toHaveValue(query);
+      await expect(result).toBeFocused(); await expect(result).toBeInViewport();
+    }
+    await page.locator("#pm-settings-close").tap();
+    await expect(page.locator("#mb-settings")).toBeFocused();
+  });
+});
 
 async function dataReady(page) {
   await page.goto("/version.json");

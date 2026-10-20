@@ -15,6 +15,7 @@
       "js/render/glx/post.js",
       "js/render/glx/shadow.js",
       "js/render/glx/chunked.js",
+      "js/render/glx/soft.js",
       "js/render/glx/glx.js"
     ],
     "webgpu": [
@@ -84,6 +85,10 @@
     ],
     [
       "js/render/glx/chunked.js",
+      "js/render/glx/glx.js"
+    ],
+    [
+      "js/render/glx/soft.js",
       "js/render/glx/glx.js"
     ],
     [
@@ -511,6 +516,7 @@
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
     "js/net/lobby-roster.js",
+    "js/net/lobby-settings.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/spectate.js",
@@ -565,6 +571,10 @@
     ],
     [
       "js/net/lobby-roster.js",
+      "js/net/lobby.js"
+    ],
+    [
+      "js/net/lobby-settings.js",
       "js/net/lobby.js"
     ]
   ],
