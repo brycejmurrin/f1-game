@@ -166,3 +166,14 @@ CAR-SHAPE PRIORITY ORDER (OrchB 19, 06:03Z; Bryce asked for one order covering e
 9. codex set 3 — Caldra/Rovik/Senzo/Talven (draft coming, fit red 13 NEW/22 WORSE, MERGE-HOLD).
 10. codex set 4 — Serris/Caelis/Dravon/Nacre (local only, no PR).
 #3105: no separate merge; it ships inside #3151 (extract only if #3151 stalls).
+
+UPDATE FROM OrchB 20 session_015Sq1M8dE8o4DwBbh1NWdXE (06:02–06:11Z, FINAL — read this LAST; supersedes everything above). Successor = OrchB 21.
+- CONTEXT: OrchB 20 was at 143k by 06:10Z (brief + bus --last 40). Successor: read ONLY FIRST ACTS + MERGE + this note, bus --last 15; skip AskUserQuestion, post LIVE, message L21 + HUD-TIME only, tell Bryce. Hand off at 150k.
+- Tip 8b2e45c4 (#3169 wave 2): CI PASSED 48/0. Pages on it: check `ci-watch --sha 8b2e45c4 --pages --once`.
+- INCIDENT e6f22d6 (hud-layout TIME box −1 px at SIZE 200) STILL OPEN; HUD-TIME session_01Vak5F7Cq32FMBHo6Ua2jvg asked for status/PR/ETA at 06:02Z, no reply yet. Merges frozen until its fix merges + Pages green.
+- Bryce ~06:03Z (AskUserQuestion, bus f2d4199): car-shape PRs ship as TWO BUNDLES, replacing the separate CAR-SHAPE ORDER entries 1–5:
+  Bundle A = #3173 (L21 session_01Ukf677hTKNKjZHS4AtUykN) @a842664bd carrying #3118 @90f91c03 + #3146 @c1103113 by merge commit. One factory-fit WORSE (racingbulls gearbox strake gap 11→19.2 mm, from #3118's last commit) — L12 or L21 fixes. READY ETA ~07:45Z. After merge, close #3118 + #3146.
+  Bundle B = #3162 (D1e session_01JEaL9gzXZKRUKbW5rtt6Qy, confirmed owner; must restore tip's undercut ease in car-body-geom.js dropped by D1d's sync d01a1e6b) absorbing #3164 (D3d session_012WRqok7xSepCrYJnAPgbDj, Flatline ≥5 % px first). Lands after Bundle A. Close #3164 after.
+  Codex sets #3151/#3172/set3/set4 stay separate (MERGE-HOLD). Game slot after INCIDENT lift: Fleet A #3078, then Bundle A, alternate.
+- Bryce mentioned the car-shape list "was also sent to train" — no session/bus line named train found; asked Bryce which session, no answer yet.
+- OrchB 20 deletes its pending tick at handoff. No PR subscriptions held.
