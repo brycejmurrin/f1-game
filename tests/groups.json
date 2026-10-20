@@ -514,6 +514,7 @@
     "tests/unit/garage-looks.test.mjs",
     "tests/unit/garage-mesh.test.mjs",
     "tests/unit/garage-panel-side.test.mjs",
+    "tests/unit/garage-perf-mesh-free.test.mjs",
     "// The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.",
     "tests/unit/garage-personality.test.mjs",
     "// The garage pre-built while the title idles (js/garage/prebuild.js): the gate,",

@@ -86,7 +86,7 @@ const TrackDesigner = (function () {
   let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null, sceneryView = false, repair = null, bridges = null, workspace = null;
+  let propKind = "stand", scenery = null, sceneryView = false, repair = null, bridges = null, workspace = null, seatFootFn = null;
   const undo = [], redo = [];
   let replacementGeneration = 0, lifecycleWired = false;
   let libraryImportGeneration = 0, libraryImportPlan = null;
@@ -914,17 +914,21 @@ const TrackDesigner = (function () {
     root.append(body, foot);
     // Short landscape phone: the foot rides under the rail (inside the body) so the dialog never scrolls.
     // Sizes are the effective ones (UI SIZE zooms the dialog); a very narrow effective width keeps the stacked layout.
-    const seatFoot = () => {
+    const seatFoot = (force) => {
+      if (root.hidden && force !== true) return;   // closed: no style read / reparent per resize
       let tuck = false;
       try {
         const cs = getComputedStyle(document.documentElement);
         const k = (parseFloat(cs.getPropertyValue("--ui-scale")) || 1) * (parseFloat(cs.getPropertyValue("--look-designer-size")) || 1);
         tuck = innerWidth > innerHeight && innerHeight / k <= 600 && innerWidth / k >= 560;
       } catch (_) { /* no layout engine (unit VM): the foot stays under the body */ }
-      (tuck ? body : root).appendChild(foot); root.dataset.foot = tuck ? "in" : "out";
+      const home = tuck ? body : root;
+      if (foot.parentNode !== home) home.appendChild(foot);   // a no-op re-append can drop focus from SAVE/RACE
+      root.dataset.foot = tuck ? "in" : "out";
     };
     if (typeof addEventListener === "function") addEventListener("resize", seatFoot);
-    seatFoot();
+    seatFootFn = seatFoot;
+    seatFoot(true);
     workspace = DesignerWorkspace.create({ root, ui, files, el, btn,
       onTest: () => { showPane("design"); setMode("test"); },
       onHelp: () => {
@@ -1675,6 +1679,7 @@ const TrackDesigner = (function () {
       else { design = blank(); afterChange("blank"); randomise(design.seed); randomisedOnOpen = true; }
     }
     root.hidden = false; openFlag = true; checksSaid = null;
+    if (seatFootFn) seatFootFn(true);   // a resize while closed was skipped
     showPane("design");
     hideCtx();
     showCoach();

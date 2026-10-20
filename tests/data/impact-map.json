@@ -7225,6 +7225,7 @@
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
+        "tests/unit/garage-perf-mesh-free.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
@@ -9811,6 +9812,9 @@
       ]
     },
     "js/physics/collide.js": {
+      "arcBackSpan": [
+        "tests/unit/traffic-arc-buckets.test.mjs"
+      ],
       "blockerReach": [
         "tests/unit/traffic-arc-buckets.test.mjs"
       ],
@@ -10334,6 +10338,7 @@
         "tests/unit/wheel-state.test.mjs"
       ],
       "setEnabled": [
+        "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/wheel-state.test.mjs"
       ],
       "stepPlayer": [

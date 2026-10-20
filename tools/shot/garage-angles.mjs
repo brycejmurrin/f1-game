@@ -10,7 +10,7 @@ import { TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS } from "./lib/garage-camer
 //     [--driver=0,1] [--light.keyMul=0.8,1.2] [--spineSide=all] [--part.aero=all] [--base=default,rb_white]
 //     [--oracle] [--baseline=dir] [--budget=10m]
 //     [--station=spineTop,spineSide,finBadge,…] [--pair=spineLogo:wrap|saddle] [--flat]
-//     [--eye=x,y,z;…] [--look=x,y,z] [--clamp=0] [--path=@keyframes.json] [--path-steps=6]
+//     [--eye=x,y,z;…] [--look=x,y,z] [--clamp=0] [--fov=deg] [--centre=1] [--path=@keyframes.json] [--path-steps=6]
 //     [--list-cameras[=literal-search]] [--serve] [--watch[=js/car/liverytex.js,…]]
 //     [--preset=wall|fin|flank|mark|quick|sweep|closeup|none] [--plan] [--fast] [--settle=8] [--view-settle=4]
 //     [--name='{team}-{tag}-{cam}'] [--out=dir] [--label=0] [--sheet=0] [--cols=3] [--cell=420] [--json]
@@ -144,7 +144,7 @@ const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom"
   "--az", "--el", "--dist", "--az-nudge", "--el-nudge", "--cam", "--crop", "--name",
   "--cols", "--json", "--base", "--design", "--zip", "--logos", "--site", "--cdn",
   "--lamp", "--aero", "--target", "--dpr", "--budget", "--baseline",
-  "--station", "--pair", "--flat", "--eye", "--look", "--path", "--path-steps", "--clamp",
+  "--station", "--pair", "--flat", "--eye", "--look", "--path", "--path-steps", "--clamp", "--fov", "--centre",
   "--serve", "--watch", "--overlay", "--backend", "--list-cameras"]);
 
 // Bare `--help` used to be silently ignored (OWN_FLAGS only catches `--k=v`
@@ -745,6 +745,9 @@ if ((argvHas("--eye") && !eyeList.length) || (argvHas("--look") && !lookList.len
   console.error("--eye / --look want x,y,z[;x,y,z…] in car-space metres"); process.exit(1);
 }
 const noClamp = flag("--clamp", "1") === "0";
+// MATCHED LENS: --fov=<deg> sets the garage camera's vertical fov, --centre=1 puts the look-at in
+// the middle of the frame (no panel lens shift, no auto recentre) — to copy a reference image's camera.
+const lensFov = Number(flag("--fov", "")) || null, lensCentre = flag("--centre", "0") === "1";
 eyeList.forEach((eye, i) => {
   for (const look of (lookList.length ? lookList : [[0, 0.45, 0.2]])) {
     const c = { view: "free", alias: null, station: null, az: null, el: null, dist: null, zoom: 0, strafe: 0, dolly: 0,
@@ -1173,12 +1176,13 @@ function hookOptsFor(cam) {
     eye: cam.eye || undefined, look: cam.look || undefined,
     // `--clamp=0`, an eye, or a path frame may leave the player's orbit range.
     clamp: (noClamp || cam.clamp === false) ? false : undefined,
+    fov: cam.fov ?? lensFov ?? undefined, centre: (cam.centre ?? lensCentre) || undefined,
   };
 }
 
 /** A camera from a SESSION command: a station / alias / view name, or an
  *  object with any of view, cam, station, az, el, dist, target, lamp, zoom,
- *  pan, eye, look, clamp, crop. Throws instead of exiting — the browser is up. */
+ *  pan, eye, look, clamp, crop, fov, centre. Throws instead of exiting — the browser is up. */
 function camFromSpec(spec) {
   const o = typeof spec === "string" ? (isAlias(spec) ? { cam: spec } : { view: spec }) : (spec || {});
   let c;
@@ -1200,6 +1204,8 @@ function camFromSpec(spec) {
   if (o.lamp !== undefined) c.lamp = o.lamp || "off";
   if (Array.isArray(o.eye) && Array.isArray(o.look)) { c.eye = o.eye.map(Number); c.look = o.look.map(Number); c.clamp = false; }
   if (o.clamp === false) c.clamp = false;
+  if (o.fov != null) c.fov = Number(o.fov);
+  if (o.centre != null) c.centre = !!o.centre;
   if (o.zoom) c.zoom = Number(o.zoom) | 0;
   if (Array.isArray(o.pan)) { c.strafe = Number(o.pan[0]) || 0; c.dolly = Number(o.pan[1]) || 0; }
   if (Array.isArray(o.crop) && o.crop.length === 4) c.crop = o.crop.map(Number);

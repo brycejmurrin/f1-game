@@ -290,3 +290,33 @@ test("_ageAndCullPool retires a body that fell below the floor, keeps one restin
   assert.equal(lone.live, false, "the kill plane does not depend on a player");
   assert.match(extractFn(SRC, "buildWorld"), /_floorY = lo - FLOOR_MARGIN_M/, "buildWorld sets the floor from the road mesh");
 });
+
+test("the cone wake gate's sorted lookup answers exactly as the cones × cars scan (#3109)", () => {
+  const body = ["_furnArcs", "_nearArc", "_carNearFurn"].map((n) => extractFn(SRC, n)).join("\n");
+  const make = new Function("FURN_WAKE_M", `let _furn = []; let _furnSortedFor = null, _furnSortedN = -1, _furnS = new Float64Array(0);
+    ${body}
+    return { set(f) { _furn = f; }, near: _carNearFurn };`);
+  const M = make(14);
+  const scan = (track, cars, furn) => {   // the loop this replaced
+    const L = (track && track.total) || 0;
+    for (const f of furn) for (const c of cars) {
+      let d = Math.abs((c.s || 0) - f.s);
+      if (L) d = Math.min(d, L - d);
+      if (d < 14) return true;
+    }
+    return false;
+  };
+  let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
+  let hits = 0, n = 0;
+  for (let run = 0; run < 3000; run++) {
+    const L = rnd() < 0.1 ? 0 : 1500 + rnd() * 5000;
+    const span = L || 6000;
+    const furn = Array.from({ length: 1 + ((rnd() * 20) | 0) }, () => ({ s: rnd() < 0.03 ? NaN : rnd() * span }));
+    const cars = Array.from({ length: 1 + ((rnd() * 22) | 0) }, () => ({ s: rnd() < 0.02 ? undefined : rnd() < 0.05 ? -rnd() * 20 : rnd() * span * 1.01 }));
+    M.set(furn);
+    const want = scan({ total: L }, cars, furn), got = M.near({ total: L }, cars);
+    assert.equal(got, want, `run ${run}`);
+    if (want) hits++; n++;
+  }
+  assert.ok(hits > n * 0.2 && hits < n * 0.95, "the sweep must exercise both verdicts: " + hits + "/" + n);
+});
