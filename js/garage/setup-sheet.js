@@ -1117,11 +1117,14 @@ function buildLiveryCreator(container, team) {
   // and rebuilt per tick, so a drag only moves the .active marks; the change
   // event (applyPreview without defer3d) rebuilds once.
   const refreshPalettes = (drag) => {
+    for (const pr of palRows) pr.sync();
     const cols = paletteColours();
     const key = cols.slice().sort().join(",");
     if (key === paletteKey || (drag && paletteKey !== null)) {
-      for (const pr of palRows) for (const chip of pr.el.children)
-        chip.classList.toggle("active", (d[pr.key] || "").toLowerCase() === chip.dataset.csColour);
+      for (const pr of palRows) for (const chip of pr.el.children) {
+        const on = (d[pr.key] || "").toLowerCase() === chip.dataset.csColour;
+        chip.classList.toggle("active", on); chip.setAttribute("aria-pressed", String(on));
+      }
       return null;   // unchanged chips keep their handlers and keyboard focus
     }
     const focused = document.activeElement;
@@ -1140,6 +1143,7 @@ function buildLiveryCreator(container, team) {
         chip.title = "Use " + cols[c];
         chip.setAttribute("aria-label", "Use colour " + cols[c] + " for " + pr.label);
         if ((d[pr.key] || "").toLowerCase() === cols[c]) chip.classList.add("active");
+        chip.setAttribute("aria-pressed", String((d[pr.key] || "").toLowerCase() === cols[c]));
         chip.onclick = () => { pr.set(cols[c]); };
         pr.el.appendChild(chip);
         if (ownedFocus && (cols[c] === focusColour || (!cols.includes(focusColour) && cols[c] === (d[pr.key] || "").toLowerCase()))) replacement = chip;
@@ -1161,13 +1165,21 @@ function buildLiveryCreator(container, team) {
     inp.oninput = () => { d[key] = inp.value; inp.classList.remove("cs-liv-off"); applyPreview(true); };
     inp.onchange = () => { applyPreview(); flushLivPreview(); };
     r.appendChild(inp);
+    let off = null;
     if (allowNone) {
-      const off = document.createElement("button"); off.type = "button"; off.className = "cs-liv-ed-none"; off.textContent = "NONE";
+      off = document.createElement("button"); off.type = "button"; off.className = "cs-liv-ed-none"; off.textContent = "NONE";
+      off.setAttribute("aria-label", "Use inherited colour for " + label);
       off.onclick = () => { d[key] = ""; inp.classList.add("cs-liv-off"); applyPreview(); };
       r.appendChild(off);
     }
     const pal = document.createElement("span"); pal.className = "cs-liv-pal";
-    palRows.push({ el: pal, key, label,
+    const sync = () => {
+      const inherited = allowNone && !d[key];
+      inp.setAttribute("aria-description", inherited ? "Inherited colour" : "Custom colour " + inp.value);
+      if (off) off.setAttribute("aria-pressed", String(inherited));
+    };
+    sync();
+    palRows.push({ el: pal, key, label, sync,
       set: (hex) => { d[key] = hex; inp.value = hex; inp.classList.remove("cs-liv-off"); applyPreview(); } });
     r.appendChild(pal);
     if (surfaceControls) surfaceControls.row(r, label, key);
@@ -1356,8 +1368,13 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(nameRow);
 
   const btns = document.createElement("div"); btns.className = "cs-liv-ed-btns";
+  const focusFitted = () => {
+    const id = getLiveryId(team.id);
+    const fitted = Array.from(container.querySelectorAll("[data-cs-livery]")).find((b) => b.dataset.csLivery === id);
+    (fitted || container.querySelector(".cs-liv-create"))?.focus();
+  };
   const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "cs-liv-ed-cancel"; cancel.textContent = "CANCEL";
-  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); };
+  cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); focusFitted(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
   save.onclick = () => {
     const now = Teams.LIST[G.teamIdx];
@@ -1371,22 +1388,27 @@ function buildLiveryCreator(container, team) {
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     Object.assign(liv, livDraftTo(d, false));
     const existing = getCustomLiveries(team.id);
-    // Edit-in-place replaces the entry that carried the OLD id; create appends.
-    setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
+    // Another tab may already have replaced/deleted the old id. Keep its work
+    // and save this draft as a new copy rather than fitting an unstored id.
+    const replacing = csLivEditId && existing.some((l) => l.id === csLivEditId);
+    setCustomLiveries(team.id, replacing ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
     saveLiveryId(team.id, id);
     csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();
     buildSetup();
+    focusFitted();
   };
   btns.append(cancel, save);
   wrap.appendChild(btns);
 
   if (typeof GarageLiveryDesignEditor !== "undefined") designTools = GarageLiveryDesignEditor.attach(wrap, d, {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
-    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id,
+    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id, scrollRoot: container,
   });
   container.appendChild(wrap);
   applyPreview();
+  container.scrollTop = 0;
+  (wrap.querySelector('[role="tab"][aria-selected="true"]') || name).focus();
   // Spine / logo edits need the crown in the car gap the sheet leaves — the
   // default front az puts the nose toward camera and the cover under the
   // panel. Hero is the rear three-quarter the CAMERA presets already use.
