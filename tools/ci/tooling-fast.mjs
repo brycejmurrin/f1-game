@@ -120,6 +120,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apex-arg-guards.test.mjs",
   "tests/unit/apex-cam-fallback.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
+  // __apex.diag() never binds #game while WebGPU is bound (B·P1 garage census).
+  "tests/unit/apex-diag-canvas.test.mjs",
   // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
   "tests/unit/apex-memory.test.mjs",
   "tests/unit/apex-server-fixes.test.mjs",

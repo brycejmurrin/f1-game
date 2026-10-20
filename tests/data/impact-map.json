@@ -146,6 +146,7 @@
       "*": [
         "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
+        "tests/unit/apex-diag-canvas.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/net-stub-surface.test.mjs"
       ]
@@ -162,6 +163,7 @@
       "create": [
         "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
+        "tests/unit/apex-diag-canvas.test.mjs",
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",

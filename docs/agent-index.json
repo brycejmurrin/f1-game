@@ -1355,6 +1355,7 @@
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
+        "tests/unit/apex-diag-canvas.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/badges.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
