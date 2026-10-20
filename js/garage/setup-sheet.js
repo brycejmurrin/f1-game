@@ -397,6 +397,7 @@ function buildLookRows(optsEl) {
     const row = document.createElement("div");
     row.className = "chip-row"; row.id = "cs-look-" + key;
     row.setAttribute("role", "group"); row.setAttribute("aria-label", "Garage " + label.toLowerCase());
+    let selected = cur;
     for (const id of ids) {
       const b = document.createElement("button");
       b.type = "button"; b.className = "sel-chip" + (id === cur ? " active" : "");
@@ -404,9 +405,21 @@ function buildLookRows(optsEl) {
       b.dataset.csLook = key + ":" + id;
       b.textContent = name(id);
       b.onclick = () => {
-        if (id === cur) return;
+        if (id === selected) return;
         apply(id);
         if (G.soundOn) GameAudio.uiTick();
+        // Lighting is read live by the scene. Keep the controls and focused
+        // button instead of rebuilding the whole setup sheet for a mood pick.
+        if (key === "mood") {
+          selected = id;
+          for (const peer of row.children) {
+            const active = peer === b;
+            peer.classList.toggle("active", active);
+            peer.setAttribute("aria-pressed", String(active));
+          }
+          b.focus({ preventScroll: true });
+          return;
+        }
         buildSetup();
         $("cs-options")?.querySelector(`[data-cs-look="${key}:${id}"]`)?.focus({ preventScroll: true });
       };
