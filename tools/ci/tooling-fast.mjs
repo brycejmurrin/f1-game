@@ -82,6 +82,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/aero-flap-travel.test.mjs",
   // B·D3 design-preview aero/floor fields: reach the mesh, default off.
   "tests/unit/aero-preview-fields.test.mjs",
+  // B·D3c concept-sheet wing shapes: registered, reach the mesh, default off.
+  "tests/unit/aero-shapes-d3c.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
@@ -571,6 +573,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-looks.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
+  "tests/unit/garage-perf-mesh-free.test.mjs",
   // The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.
   "tests/unit/garage-personality.test.mjs",
   // The garage pre-built while the title idles (js/garage/prebuild.js): the gate,

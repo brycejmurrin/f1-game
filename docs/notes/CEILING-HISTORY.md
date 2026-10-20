@@ -1,5 +1,19 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
+
+`js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
+The growth is the opt-in consumers of the four concept-sheet aero rows (Terrace /
+Flatline / Updraft / Swell) and four diffuser floor rows: front endplate accent tips
+(epTip 2/3), the rear tip fins and Flatline's trailing-edge stripes, the rwPlanes 1
+single-flap wing (no DRS pod/rail where no DRS plane exists — a pod there floats
+73–84 mm), Flatline's rwGap main plane (`rearMainOf`) and the pylon / swan-neck seats
+that keep single-flap wings on their mounts (car-fit-audit: 11 floating-wing GAP rows
+gone), and the `diffShape` tunnel/fence variants. Every block is gated on a recipe key
+absent from shipped rows: 671 deploy-tip builds hash-identical. The geometry helpers
+live in `js/car/car-body-geom.js` (not ratcheted). Fragment delta:
+`ratchets.d/cursor--design-aero-d3c-7e2a.json` (+62 lines vs the merge base).
+
 ## 2026-10-19 — PR #2924 (cursor/body-styles-r8n5): concept body silhouette pass
 
 `js/car/car3d.js` lines 2218 → **2259** (+41). Deliberate raise past the 40-line absorb.
@@ -3625,3 +3639,16 @@ smoothing and vertical fence ends +17, D1c body styles via #3160 +23, D8b shrunk
 `js/car/livery-stations.js`). Extraction was weighed and not done here: each is a few lines of
 geometry inside `build`'s own emit closure, and a new car module needs a `tools/manifest.cjs` entry,
 which is a shared contract outside this integration PR's scope.
+
+## 2026-10-20 — #3162 + #3177 landed back to back: car3d.js +6 lines
+
+`js/car/car3d.js` lines 2686 → 2692. Each PR fit the ceiling on its own; merged one after the other
+(7165753a #3162 D1d concept bodies/aero, then e27a17a9 #3177 post-Bundle-A fit rows: single-pipe
+root cap, DRS pod tail cut, Smooth Case notch, Hooded Exit visor post) their deltas summed past it,
+and the deploy tip went red on `ratchets.test.mjs`. Raised on Bryce's in-session answer to L25
+("Raise ceiling", 2026-10-20); #3177's own hunks had already been compacted by 7 lines to fit, so
+the +6 is the overlap of the two merges, not new geometry. No extraction here: both sets of lines
+sit inside `build`'s emit closures beside the parts they shape. The same `--update` also records
+the tree's `dynamicIdReads` falling 74 → 73 (a measured lowering, not a raise).
+
+- 2026-10-20 `dynamicIdReads` 72 -> 73 (+1): double-counted auto-lower from two fragments measured off the same base 74; restoring the true count 73, no code growth.
