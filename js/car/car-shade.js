@@ -447,14 +447,14 @@ const CarShade = (function () {
         ? [[s * 0.200, 0.645, -0.04], [s * 0.200, 0.645, -0.16], [s * 0.200, 0.645, -0.28]]
         : [[s * 0.210, 0.670, -0.05], [s * 0.210, 0.678, -0.18], [s * 0.210, 0.685, -0.30]];
       pipe(out, fine(wing, 2), col, tri, sf, {
-        chord: st === 1 ? 0.052 : 0.048, thick: st === 1 ? 0.055 : 0.060, n: 10, p: 2, up: [0, 1, 0],   // n 6 / p 2.5 read as boxes beside the helmet (D8)
+        chord: st === 1 ? 0.052 : 0.048, thick: st === 1 ? 0.055 : 0.060, n: 6, p: 2.5, up: [0, 1, 0],
       });
     }
     if (st < 2) return;
     // Upper cheek pads (winged recipe): short pipes above the side bolsters.
     for (const s of [-1, 1]) {
       pipe(out, fine([[s * 0.215, 0.700, -0.08], [s * 0.215, 0.705, -0.18]], 2), col, tri, sf, {
-        chord: 0.036, thick: 0.024, n: 10, p: 2, up: [0, 1, 0],
+        chord: 0.036, thick: 0.024, n: 6, p: 2.5, up: [0, 1, 0],
       });
     }
   }
