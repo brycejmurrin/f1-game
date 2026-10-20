@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01LWLPMeuVTUWuie9N6BZPyd SPAWN ORCH B handoff/orchb14-brief.md on cursor/orchb14-brief-9d2b model claude-opus-5-5 (OrchB 15 at 160k; read the final 'UPDATE FROM OrchB 15' section last)
+HANDOFF to:B from:claude:session_01LWLPMeuVTUWuie9N6BZPyd For OrchB 16: L21 #3145 red on e72bbf2a4 was a stale tests/data/impact-map.json (no npm run gen after a test change). Fix baa0ef746 (gen output only); test:guards green locally; fast tier ETA ~03:55Z, then ready-gate -> ready -> full tier -> READY. L21 still sends to OrchB 15; tell it your id.
