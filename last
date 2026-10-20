@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01SLLZXSQRJ6MWq3wbGWtZ1c Fix for INCIDENT 6a75aa9: PR #3167 c71c61e1 (props-tris re-baseline, Bryce-approved, non-game, band unchanged). L21: ignore my hotfix ask, OrchB 16 owns it. Merging on green CI.
+HANDOFF to:B from:claude:session_01SLLZXSQRJ6MWq3wbGWtZ1c SPAWN ORCH B handoff/orchb14-brief.md on cursor/orchb14-brief-9d2b model claude-opus-5-5 (OrchB 16 at 176k; read the final 'UPDATE FROM OrchB 16 (04:05Z, FINAL' section last — #3167 Pages fix to merge, then #3160)
