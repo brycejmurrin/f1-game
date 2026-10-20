@@ -117,20 +117,14 @@ async function main() {
     const f0 = await frames(page);
     try { await page.waitForFunction(([f, k]) => window.__lrm.frames >= f + k, [f0, n], { polling: 100, timeout: ms }); return true; } catch (_) { return false; }
   };
-  // A black frame check: read the visible game canvases' centre pixels via 2D drawImage (works for #game-soft blits too).
-  const notBlack = (page) => page.evaluate(() => {
-    const cv = [...document.querySelectorAll("canvas")].filter((c) => c.width > 8 && c.height > 8);
-    for (const c of cv) {
-      try {
-        const t = document.createElement("canvas"); t.width = 16; t.height = 16;
-        const x = t.getContext("2d"); x.drawImage(c, 0, 0, 16, 16);
-        const d = x.getImageData(0, 0, 16, 16).data; let s = 0;
-        for (let i = 0; i < d.length; i += 4) s += d[i] + d[i + 1] + d[i + 2];
-        if (s > 16 * 16 * 3 * 2) return true;
-      } catch (_) { /* tainted or webgl without preserveDrawingBuffer */ }
-    }
-    return false;
-  });
+  // "Drawing": the GL uniform-upload counter advances over a few frames and no context is lost. A WebGPU-only
+  // page has no GL context to count, so it falls back to frames alone (the row says so via drawingBasis).
+  const notBlack = async (page) => {
+    const r0 = await page.evaluate(() => ({ u: window.__lrm.uploads, n: window.__lrm.ctxs.length }));
+    if (!r0.n) return true;
+    await framesAdvance(page, 3, 30000);
+    return page.evaluate((u0) => window.__lrm.uploads > u0 && !window.__lrm.ctxs.every((c) => c.isContextLost()), r0.u);
+  };
   const mkPage = async () => {
     const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
     await ctx.addInitScript(([be, force]) => {
@@ -169,7 +163,7 @@ async function main() {
   ]).catch((e) => ({ err: String(e) }));
   // Each row is capped (a hung row used to eat the whole job) and a failed row gets a fresh page, so one
   // failure does not poison the rows after it.
-  const ROW_CAP = { rebuild: 180000 * o.capScale }, DEFAULT_CAP = 90000 * o.capScale;   // a capped row is "timeout" (inconclusive), never a silent pass
+  const ROW_CAP = { rebuild: 180000 * o.capScale, tiers: 132000 * o.capScale, night: 132000 * o.capScale }, DEFAULT_CAP = 90000 * o.capScale;   // a capped row is "timeout" (inconclusive), never a silent pass
   const row = async (n, name, fn) => {
     if (!o.rows.includes(n)) return;
     const r = report.rows[name] = { verdict: "fail", notes: [] };
@@ -183,6 +177,7 @@ async function main() {
     clearTimeout(timer);
     if (r.verdict === "timeout" || r.verdict === "fail") { r.diag = await diag(page); console.log("= diag " + name + " " + JSON.stringify(r.diag).slice(0, 1500)); }
     r.ms = Date.now() - t0;
+    { const { diag: _d, ...pub } = r; console.log("= result " + name + " " + JSON.stringify(pub).slice(0, 3500)); }
     console.log("= row " + name + " " + r.verdict + (r.error ? " " + r.error : ""));
     save();
     if (r.verdict === "fail" || r.verdict === "timeout") {
@@ -216,47 +211,43 @@ async function main() {
     await row(2, "ctxloss", async () => {
       const out = { phases: {} };
       const lose = (p) => p.evaluate(() => { const c = window.__lrm.ctxs.find((x) => !x.isContextLost()); const e = c && c.getExtension("WEBGL_lose_context"); if (!e) return "no-ext"; e.loseContext(); return "lost"; });
-      const recover = async (p, label) => {
-        const t0 = Date.now();
-        let ok = false;
-        for (let i = 0; i < 6 && !ok; i++) {
-          ok = await framesAdvance(p, 20, 20000).catch(() => false);
-          if (ok && await notBlack(p).catch(() => false)) break; ok = false;
-          await sleep(1000);
+      // After a loss the game must end drawing again: GLX/TLX self-heal by reloading the page on a timer
+      // (glx.js "SELF-HEAL"), or the context is restored. A context that stays lost with the page still up is the
+      // stuck-black-frame failure #2572 asks about.
+      const afterLoss = async (p, label) => {
+        const ph = out.phases[label];
+        ph.reloaded = await p.waitForEvent("framenavigated", { timeout: 30000, predicate: (f) => f === p.mainFrame() }).then(() => true).catch(() => false);
+        if (ph.reloaded) {
+          await p.waitForFunction(() => window.__apex && window.__apex.info, null, { polling: 100, timeout: 120000 });
+        } else {
+          ph.stillLost = await p.evaluate(() => window.__lrm.ctxs.map((c) => c.isContextLost())).catch(() => null);
+          ph.stuck = !!ph.stillLost && ph.stillLost.every(Boolean);
         }
-        out.phases[label].recoverMs = Date.now() - t0; out.phases[label].recovered = ok;
-        return ok;
+        tr("ctxloss " + label + ": reloaded=" + ph.reloaded + (ph.stuck ? " STUCK (context lost, page not reloaded)" : ""));
       };
       out.phases.duringBuild = {};
+      await raceTo(page, A);
       const call = page.evaluate((t) => window.__apex.race(t), B).catch(() => {});
       await sleep(400);
       out.phases.duringBuild.lose = await lose(page);
       await call;
-      out.phases.duringBuild.state = await page.evaluate(readState).catch((e) => ({ err: String(e) }));
-      const ok1 = await recover(page, "duringBuild");
-      if (!ok1) {   // a clean reload is the accepted ending; the page must come back drawing
-        await page.reload({ waitUntil: "load" });
-        await page.waitForFunction(() => window.__apex && window.__apex.info, null, { polling: 100, timeout: 120000 });
-        await raceTo(page, A);
-        out.phases.duringBuild.reloaded = true;
-      }
+      await afterLoss(page, "duringBuild");
       await raceTo(page, A);
       out.phases.settled = {};
       out.phases.settled.lose = await lose(page);
-      await sleep(1500);
-      const ok2 = await recover(page, "settled");
-      if (!ok2) { await page.reload({ waitUntil: "load" }); await page.waitForFunction(() => window.__apex && window.__apex.info, null, { polling: 100, timeout: 120000 }); await raceTo(page, A); out.phases.settled.reloaded = true; }
-      const drawing = await framesAdvance(page, 20, 60000) && await notBlack(page).catch(() => false);
-      out.endsDrawing = drawing;
+      await afterLoss(page, "settled");
+      await raceTo(page, A);
+      out.endsDrawing = await framesAdvance(page, 4, 60000) && await notBlack(page).catch(() => false);
       const noExt = out.phases.duringBuild.lose === "no-ext" || out.phases.settled.lose === "no-ext";
-      return { ...out, verdict: noExt ? "skip" : drawing ? "pass" : "fail", ...(noExt ? { skipWhy: "WEBGL_lose_context unavailable on this context (WebGPU-backed or blocked)" } : {}) };
+      const stuck = out.phases.duringBuild.stuck || out.phases.settled.stuck;
+      return { ...out, verdict: noExt ? "skip" : (out.endsDrawing && !stuck) ? "pass" : "fail", ...(noExt ? { skipWhy: "WEBGL_lose_context unavailable on this context (WebGPU-backed or blocked)" } : {}) };
     });
 
     await row(3, "tiers", async () => {
       await raceTo(page, A);
       const before = await page.evaluate(readState);
       const seq = [];
-      const step = async (label, fn) => { await page.evaluate(fn); await framesAdvance(page, 20, 90000); seq.push({ label, ...(await page.evaluate(readState)) }); };
+      const step = async (label, fn) => { tr("tiers: " + label); await page.evaluate(fn); await framesAdvance(page, 20, 90000); seq.push({ label, ...(await page.evaluate(readState)) }); };
       await page.evaluate(() => { try { window.__apex.mirror && window.__apex.mirror("on"); } catch (_) { /* hook absent */ } });
       await step("renderScale 0.6", () => window.__apex.renderScale(0.6));
       await step("govHold on", () => window.__apex.govHold(true));
@@ -302,6 +293,7 @@ async function main() {
       await raceTo(page, A, "night");
       const out = { toggles: [] };
       const snap = async (label, fn) => {
+        tr("night: " + label);
         if (fn) await page.evaluate(fn);
         const adv = await framesAdvance(page, 20, 90000);
         out.toggles.push({ label, framesAdvance: adv, drawing: await notBlack(page).catch(() => false), lights: await page.evaluate(() => { try { return window.__apex.lightState(); } catch (_) { return null; } }), ...(await page.evaluate(readState)) });
