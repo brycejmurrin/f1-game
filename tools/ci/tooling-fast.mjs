@@ -1018,6 +1018,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/screen-looks.test.mjs",
+  "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
