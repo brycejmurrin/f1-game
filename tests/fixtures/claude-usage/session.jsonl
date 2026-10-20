@@ -1,0 +1,15 @@
+{"type": "user", "uuid": "u1", "turnOrigin": "human", "origin": {"kind": "human"}, "message": {"role": "user", "content": "fix the red test"}}
+{"type": "assistant", "uuid": "a1", "requestId": "req_1", "message": {"id": "msg_1", "content": [{"type": "thinking"}], "usage": {"input_tokens": 2, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 10}}}
+{"type": "assistant", "uuid": "a2", "requestId": "req_1", "message": {"id": "msg_1", "content": [{"type": "tool_use", "id": "t1"}], "usage": {"input_tokens": 2, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 40}}}
+{"type": "user", "uuid": "r1", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1"}]}}
+{"type": "user", "uuid": "m1", "isMeta": true, "message": {"role": "user", "content": [{"type": "text", "text": "Base directory for this skill"}]}}
+{"type": "assistant", "uuid": "a3", "requestId": "req_2", "message": {"id": "msg_2", "content": [{"type": "text", "text": "done"}]}}
+{not json
+{"type": "user", "uuid": "u2", "message": {"role": "user", "content": "<task-notification>\n<status>completed</status></task-notification>"}}
+{"type": "assistant", "uuid": "a4", "requestId": "req_3", "message": {"id": "msg_3", "content": [{"type": "text", "text": "echo"}], "usage": {"input_tokens": 1, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 500, "output_tokens": 5}}}
+{"type": "user", "uuid": "u3", "turnOrigin": "task_notification", "message": {"role": "user", "content": "x"}}
+{"type": "assistant", "uuid": "a5", "requestId": "req_4", "isApiErrorMessage": true, "message": {"id": "msg_4", "content": [{"type": "text", "text": "API Error"}], "usage": {"input_tokens": 3, "cache_creation_input_tokens": 0, "output_tokens": 0}}}
+{"type": "assistant", "uuid": "a6", "isSidechain": true, "requestId": "req_5", "message": {"id": "msg_5", "content": [{"type": "tool_use", "id": "t9"}], "usage": {"input_tokens": 1, "cache_creation_input_tokens": 10, "cache_read_input_tokens": 200, "output_tokens": 7}}}
+{"type": "user", "uuid": "u4", "message": {"role": "user", "content": "plain old prompt"}}
+{"type": "assistant", "uuid": "a7", "message": {"id": "msg_6", "content": [{"type": "tool_use", "id": "t2"}, {"type": "tool_use", "id": "t3"}], "usage": {"input_tokens": 1, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 300, "output_tokens": 9}}}
+{"type": "assistant", "uuid": "a8", "message": {"id": "msg_6", "content": [{"type": "tool_use", "id": "t3"}], "usage": {"input_tokens": 1, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 300, "output_tokens": 9}}}

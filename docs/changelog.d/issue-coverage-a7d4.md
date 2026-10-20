@@ -1,0 +1,1 @@
+Fixed: The Fleet board separates current and stale claims from open, merged and closed PR associations. Partial work stays visible without implying ownership or completion; canonical GitHub links cover URL and manually linked PRs. Incomplete evidence prevents label writes.

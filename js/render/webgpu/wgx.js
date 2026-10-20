@@ -3589,6 +3589,7 @@ const WGX = (function () {
       // stale chunk mask on a car draw would silently unlight it. drawChunked
       // overwrites per run.
       d[base + 28] = LAMP_MASK_ALL; d[base + 29] = LAMP_MASK_ALL;
+      d[base + 30] = o.carFinish ? 1 : 0;   // DrawU.mat3.z: the finish 60-85 block runs for car paint only
       // lampRange (DrawU lanes 32-34): zeroed for EVERY draw — a stale
       // per-chunk range from a prior chunked draw would silently rebind that
       // chunk's lamp slice. drawChunked overwrites when per-chunk is active.
@@ -3727,7 +3728,7 @@ const WGX = (function () {
     // is consumed synchronously by _writeDraw/_litPipeline within the call.
     const _litOptsBag = {
       emissive: 0, alpha: 1, roughness: 0.7, metalness: 0, specular: 0.5,
-      detail: 0, clearcoat: 0, carPaint: 0, sparkle: 1, _instanced: false,
+      detail: 0, clearcoat: 0, carPaint: 0, carFinish: false, sparkle: 1, _instanced: false,
       surfaceId: 0, buryRibbon: false, depthBias: null, doubleSided: false,
       noAlphaWrite: false, decal: false, depthCompare: undefined,
       noDepthTest: false,
@@ -3758,7 +3759,7 @@ const WGX = (function () {
       const b = _litOptsBag;
       b.emissive = o.emissive; b.alpha = o.alpha; b.roughness = o.roughness;
       b.metalness = o.metalness; b.specular = o.specular; b.detail = o.detail;
-      b.clearcoat = o.clearcoat; b.carPaint = o.carPaint; b.sparkle = o.sparkle;
+      b.clearcoat = o.clearcoat; b.carPaint = o.carPaint; b.carFinish = o.carFinish; b.sparkle = o.sparkle;
       b._instanced = o._instanced; b.surfaceId = o.surfaceId;
       b.buryRibbon = o.buryRibbon; b.noAlphaWrite = o.noAlphaWrite;
       b.decal = o.decal; b.depthCompare = o.depthCompare;
