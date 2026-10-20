@@ -102,6 +102,10 @@
   font-family: var(--font-hud);
   font-size: var(--fs-micro);
   font-weight: 600;
+  /* Barlow's own normal line (16 px at 14 px), pinned: `normal` follows the face, so a tower laid out
+     before the faces landed (or with one missing) was 53 px tall, not 48, and fitHud's sector-row cap
+     came out a grid step or more low — HUD SIZE 200 painted 1 px narrower than 100 on CI (e6f22d6). */
+  line-height: 1.143;
   letter-spacing: 0.2em;
   color: var(--dim);
 }

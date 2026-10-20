@@ -369,7 +369,16 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
   }
+  if (typeof LiveryStations !== "undefined" && !legacyBody) LiveryStations.emit(quadUv, uvOf, R, anchors, stationCtx(parts, teamId, bodyStyle, round));
   return out;
+}
+// What LiveryStations needs beyond the anchors: the nose tip, the monocoque and the halo hoop.
+function stationCtx(parts, teamId, bodyStyle, round) {
+  const style = Car3D.teamStyleOf ? Car3D.teamStyleOf(anchorKey(teamId, bodyStyle)) : null;
+  const nose = Car3D.styledNoseStations ? Car3D.styledNoseStations(style) : null;
+  const cockpit = parts && parts._visual && parts._visual.cockpit || {};
+  return { noseTipZ: nose && nose[0] ? nose[0].z : null, monocoque: Car3D.CHASSIS && Car3D.CHASSIS.monocoque,
+           halo: LiveryStations.haloOf(cockpit, round) };
 }
 // The decal key, memoised per PARTS object (teamDecalState hands the same one
 // back until rev / ruleset move; bodyAnchors already keys on that identity):
@@ -426,7 +435,9 @@ function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, roun
                    : ((parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0);
   // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
   const shapeK = finShape || "standard";
-  return level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
+  // The halo strip follows the cockpit's hoop style and fairing (LiveryStations.haloOf).
+  const ck = parts && parts._visual && parts._visual.cockpit, haloK = ck ? (ck.halo || 0) + "." + (ck.haloBlade || 0) : "0.0";
+  return level + "|" + haloK + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
 }
 let _cockpitDecalMesh = null, _cockpitDecalKey = "";
 function getCockpitDecalMesh(parts, teamId, bodyStyle) {
