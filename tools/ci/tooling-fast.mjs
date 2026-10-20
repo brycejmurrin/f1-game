@@ -82,6 +82,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/aero-flap-travel.test.mjs",
   // B·D3 design-preview aero/floor fields: reach the mesh, default off.
   "tests/unit/aero-preview-fields.test.mjs",
+  // B·D3c concept-sheet wing shapes: registered, reach the mesh, default off.
+  "tests/unit/aero-shapes-d3c.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
@@ -565,12 +567,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
   "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
+  "tests/unit/garage-finish-remap.test.mjs",
   "tests/unit/garage-followups.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   // Garage room LOOKS (design preview): every look builds a valid bay and changes the room.
   "tests/unit/garage-looks.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
+  "tests/unit/garage-perf-mesh-free.test.mjs",
   // The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.
   "tests/unit/garage-personality.test.mjs",
   // The garage pre-built while the title idles (js/garage/prebuild.js): the gate,
@@ -1028,6 +1032,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/screen-looks.test.mjs",
+  "tests/unit/script-loader-starved.test.mjs",
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",

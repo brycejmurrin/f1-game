@@ -467,7 +467,7 @@ const api = {
     G.tickUi();
     return { ok: true, switched: true, label, seat };
   },
-  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; eye+look [x,y,z] place the eye itself (implies clamp:false); clamp:false lifts the player's el ≥ 0 / minDist floors for this framing; view "free" keeps the current camera.
+  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; eye+look [x,y,z] place the eye itself (implies clamp:false); fov (deg) / centre:true a matched-lens reference shot (look-at centred, no panel shift); clamp:false lifts the player's el ≥ 0 / minDist floors for this framing; view "free" keeps the current camera.
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
@@ -484,7 +484,11 @@ const api = {
       o = Object.assign({}, o, { target: o.look.map(Number), az: Math.atan2(dx, dz),
         el: Math.asin(Math.max(-1, Math.min(1, dy / d))), dist: d, clamp: false });
     }
+    // fov (deg) / centre: a matched-lens reference shot — its own vertical fov, the look-at in the
+    // middle of the frame (no panel lens shift, no auto recentre). Absent = the player's camera.
+    const lens = num(o.fov) > 0 || o.centre ? { fov: num(o.fov) > 0 ? Math.max(5, Math.min(90, o.fov)) : null, centre: !!o.centre } : null;
     G.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
+    if (lens) G.setSetupFree(/** @type {any} */ (lens));   // a matched lens is a free dev shot too (setup-camera reads the object)
     if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
     if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
     if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
@@ -1670,7 +1674,7 @@ const api = {
   // frame budget from js/perf/spans.js: on:true starts the span recorder (off = one bool per call),
   // reset:true clears the rings, measure:true also emits performance.measure() for traces. While
   // recording, `spans` holds p50/p95/p99/max ms per phase (frame input physics ai collide camera
-  // render hud), `loaf` the long-animation-frame ring, `gpu` gpuTimer().
+  // audio render hud), `loaf` the long-animation-frame ring, `gpu` gpuTimer().
   perf(o) {
     if (typeof PerfSpans !== "undefined") {
       if (o && o.reset) PerfSpans.reset();
