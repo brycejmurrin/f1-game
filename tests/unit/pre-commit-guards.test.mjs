@@ -83,12 +83,12 @@ function spawnTests(files, cwd) {
   });
 }
 
-test("OK_REL and FRESH_MS match bash-guard's cache file and 10-minute window", () => {
+test("OK_REL and FRESH_MS match bash-guard's shared verdict cache (#2889)", () => {
   assert.equal(OK_REL, "artifacts/pre-commit-guards.ok");
   assert.equal(FRESH_MS, 10 * 60 * 1000);
   const bash = fs.readFileSync(path.join(ROOT, ".claude/hooks/bash-guard.sh"), "utf8");
-  assert.match(bash, /pre-commit-guards\.ok/);
-  assert.match(bash, /-mmin -10/);
+  assert.match(bash, /guards-verdict\.mjs check/);
+  assert.match(bash, /apex\.guardTimeout/);
 });
 
 test("check hits a fresh green write-tree and misses after re-stage", () => {
@@ -286,10 +286,94 @@ esac
   }
 });
 
+test("bash-guard skips the suite on a guards-verdict cache hit and honours git config apex.guardTimeout", () => {
+  const repo = scratchRepo("guards-bash-");
+  const BASH_HOOK = path.join(ROOT, ".claude/hooks/bash-guard.sh");
+  try {
+    const env = cleanEnv({
+      PATH: path.join(repo.dir, "bin") + path.delimiter + (process.env.PATH || ""),
+    });
+    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tools/gen"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "node_modules"));
+    fs.mkdirSync(path.join(repo.dir, "bin"));
+    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
+    fs.writeFileSync(path.join(repo.dir, "tools/gen/targets.mjs"), "process.exit(0);\n");
+    fs.writeFileSync(
+      path.join(repo.dir, "tools/ci/guards-verdict.mjs"),
+      `#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+const cmd = process.argv[2];
+if (cmd === "check") {
+  if (process.env.APEX_FIXTURE_CACHE_HIT === "1") {
+    const tree = spawnSync("git", ["write-tree"], { encoding: "utf8" }).stdout.trim();
+    console.log("guards: cache hit " + tree);
+    process.exit(0);
+  }
+  console.error("guards: cache miss fixture");
+  process.exit(1);
+}
+process.exit(2);
+`,
+    );
+    fs.writeFileSync(
+      path.join(repo.dir, "bin/npm"),
+      `#!/usr/bin/env bash
+echo "npm $*" >> "${repo.dir}/npm-calls.log"
+case "$*" in
+  *test:guards*) sleep 30; exit 0 ;;
+  *) exit 0 ;;
+esac
+`,
+    );
+    fs.chmodSync(path.join(repo.dir, "bin/npm"), 0o755);
+    fs.writeFileSync(
+      path.join(repo.dir, "package.json"),
+      JSON.stringify({ scripts: { "test:guards": "sleep 30" } }),
+    );
+    fs.writeFileSync(path.join(repo.dir, "code.js"), "v1\n");
+    fs.writeFileSync(path.join(repo.dir, ".gitignore"), "artifacts/\nnode_modules/\nnpm-calls.log\n");
+    repo.g("add", "-A");
+    repo.g("commit", "-qm", "init");
+
+    fs.writeFileSync(path.join(repo.dir, "code.js"), "v2\n");
+    repo.g("add", "code.js");
+
+    const commit = (extra = {}) =>
+      spawnSync("bash", [BASH_HOOK], {
+        input: JSON.stringify({ tool_name: "Bash", tool_input: { command: "git commit -m x" } }),
+        cwd: repo.dir,
+        encoding: "utf8",
+        env: { ...env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "", ...extra },
+      });
+
+    let r = commit({ APEX_FIXTURE_CACHE_HIT: "1" });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.match(r.stderr, /guards: cache hit/);
+    assert.equal(fs.existsSync(path.join(repo.dir, "npm-calls.log")), false);
+
+    repo.g("config", "apex.guardTimeout", "1");
+    r = commit({ APEX_FIXTURE_CACHE_HIT: "0" });
+    assert.equal(r.status, 2, r.stderr + r.stdout);
+    assert.match(r.stderr, /npm run test:guards did not finish within 1 s/);
+    assert.match(r.stderr, /apex\.guardTimeout/);
+  } finally {
+    repo.rm();
+  }
+});
+
 test("shipped pre-commit still early-exits on APEX_SKIP_GUARDS and CLAUDECODE", () => {
   const src = fs.readFileSync(HOOK, "utf8");
   assert.match(src, /APEX_SKIP_GUARDS/);
   assert.match(src, /CLAUDECODE/);
+  assert.match(src, /guards-verdict\.mjs check/);
+  assert.match(src, /apex\.guardTimeout/);
+  assert.match(src, /timeout -k 5/);
+});
+
+test("shipped bash-guard shares guards-verdict check and apex.guardTimeout with pre-commit", () => {
+  const src = fs.readFileSync(path.join(ROOT, ".claude/hooks/bash-guard.sh"), "utf8");
   assert.match(src, /guards-verdict\.mjs check/);
   assert.match(src, /apex\.guardTimeout/);
   assert.match(src, /timeout -k 5/);
