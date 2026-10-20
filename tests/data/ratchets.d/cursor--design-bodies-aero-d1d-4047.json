@@ -1,7 +1,11 @@
 {
   "files": {
+    "js/agent/apex.js": {
+      "codeLines": 1,
+      "lines": 3
+    },
     "js/car/car3d.js": {
-      "lines": 8
+      "lines": 7
     }
   }
 }

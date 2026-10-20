@@ -11,7 +11,7 @@ const BODIES = [
 ];
 const keys = ["n2.2h", "n1.9w", "pod0.2w", "pod0.2top", "cov-0.95"], lab = { "n2.2h": "nose depth @2.2", "n1.9w": "nose width @1.9", "pod0.2w": "pod half-width", "pod0.2top": "pod top", "cov-0.95": "cover top" };
 const SBS = process.env.SBS;   // dir of <id>-front.jpg / <id>-rear.jpg: sheet crop | in-game, same camera
-const sbs = (id) => SBS ? `<div class="sbs">${["front", "rear"].map((v) => `<figure><img src="${b64ab(SBS + "/" + id + "-" + v + ".jpg")}" alt="${id} ${v}: sheet left, in-game right"><figcaption>${v === "front" ? "front 3/4" : "rear"} · sheet (left) vs in-game, same angle, no fin</figcaption></figure>`).join("")}</div>` : "";
+const sbs = (id) => SBS ? `<div class="sbs">${["front", "rear"].map((v) => `<figure><img src="${b64ab(SBS + "/" + id + "-" + v + ".jpg")}" alt="${id} ${v}: sheet left, in-game right"><figcaption>${v === "front" ? "front 3/4" : "rear"} · sheet (left) vs in-game through the camera solved from the sheet, fin off</figcaption></figure>`).join("")}</div>` : "";
 const card = ([id, name, blurb]) => `<section class="body" id="${id}"><header><h2>${name}</h2><p>${blurb}</p></header>${sbs(id)}
 <div class="views">${["front34", "rear34", "side"].map((v) => `<figure><img src="${b64(`${id}-${v}.jpg`)}" alt="${name} ${v}" loading="lazy"><figcaption>${{ front34: "front 3/4", rear34: "rear 3/4", side: "side" }[v]}</figcaption></figure>`).join("")}</div>
 <dl class="nums"><div><dt>fit NEW / WORSE</dt><dd>${FIT[id] || "–"}</dd></div><div><dt>side Δ vs team</dt><dd>${SIDE[id] || "–"}</dd></div>${keys.map((k) => `<div><dt>${lab[k]}</dt><dd>${env.rows[id].dims[k]} <small>/ p75 ${env.p75[k]} mm</small></dd></div>`).join("")}</dl></section>`;

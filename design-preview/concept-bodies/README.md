@@ -12,3 +12,16 @@ Rift / Keel / Delta / Serpent BODY_STYLES rows. Gallery: https://claude.ai/artif
   `BASE=body:probe0 BASE_JSON=probe.json node design-preview/concept-bodies/fit-diff.mjs a.json`.
 - Garage frames: `apex_garage` (team mercedes, backend three), az 0.75 / 2.45 / 1.5708, el 0.24 / 0.26 / 0.06,
   dist 7 / 7 / 7.5; crops + `build-gallery.mjs` republish the gallery.
+
+## Camera matched to the concept sheet (2026-10-20)
+
+`solve-cam.mjs '<[[x,y,z,u,v,w?],…]>' '[cx,cy]'` fits a pinhole camera to sheet landmarks (car space:
++z nose, +x the side the sheet shows; `BEHIND=1` seeds the eye behind the car). Solved:
+
+| view | eye (m) | look | lens | game crop (1280×720) ↔ sheet box |
+|---|---|---|---|---|
+| front 3/4 | 4.38, 1.84, 7.36 | −0.264, 0.197, 0.312 | `fov: 26, centre: true` | 243,159,804,423 ↔ 10,80,760,400 |
+| rear | 1.223, 0.745, −7.779 | −0.256, 0.401, −0.25 | `fov: 16, centre: true` | 160,97,961,527 ↔ 455,335,310,170 |
+
+Shoot with `apex_garage` frame `{eye, look, fov, centre}` (or `garage-angles.mjs --eye=… --look=… --fov=26 --centre=1`),
+`finShape: none`. Other sheet panels: offset the sheet box by (766, 0), (0, 435), (766, 435).

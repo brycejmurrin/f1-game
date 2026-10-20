@@ -328,6 +328,9 @@ const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
 let setupPreviewMinDist = 0, setupPreviewFree = false;   // 0 = use the global SP_DIST_MIN; free = a dev shot may leave the player's range
+// lens (dev shot only, __apex.garageFrame fov/centre): { fov deg, centre } — a matched-lens
+// reference frame: its own vertical fov, no panel lens shift, no auto recentre. null = the player's camera.
+let setupPreviewLens = null;
 // The player's orbit floor is 0 (never under the car) and a view's minDist; a
 // survey tool asking to look UP at a wing from the floor needs neither, and
 // setSetupFree lifts both until the next preset. Nothing the player can reach.
@@ -366,7 +369,7 @@ function setSetupView(name) {
   if (!v) return;
   setupPreviewView = name;
   GarageScene.spot(name);   // the work lamp wheels over to what the preset frames
-  setupPreviewFree = false;   // a preset is the player's range again
+  setupPreviewFree = false; setupPreviewLens = null;   // a preset is the player's range again
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
   // A preset is an absolute framing, so it also drops any pan the player had
   // walked in — otherwise "show me the rear wing" shows them the rear wing plus
@@ -788,7 +791,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   eye[0] = setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * spDist * spCe;
   eye[1] = setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe;
   eye[2] = setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe;
-  M4.perspectiveTo(_spProj, homeFov * Math.PI / 180, gfx.aspect, 0.1, 60);
+  const lens = setupPreviewLens;
+  M4.perspectiveTo(_spProj, (lens && lens.fov || homeFov) * Math.PI / 180, gfx.aspect, 0.1, 60);
   // An on-axis camera centers the car behind the panel, half-cropped. Shift the
   // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
   // region instead — sideways when the panel is docked to an edge, downwards
@@ -798,6 +802,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   _spProj[8] = panelFrac;
   _spProj[9] = panelFracY;
   if (homeFit) { _spProj[8] = homeFit.shiftX; _spProj[9] = homeFit.shiftY; }
+  if (lens && lens.centre) { _spProj[8] = 0; _spProj[9] = 0; }
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
@@ -808,7 +813,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   }
   M4.lookAtTo(_spView, eye, _spAim, _spUp);
   M4.mulTo(_spVP, _spProj, _spView);
-  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(arriving && arriving.active), _spHull);
+  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(lens && lens.centre) && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
@@ -1093,7 +1098,7 @@ return {
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },
-  setSetupFree(on) { setupPreviewFree = !!on; },
+  setSetupFree(on, lens) { setupPreviewFree = !!on; setupPreviewLens = lens || null; },
   get spin() { return setupPreviewSpin; },
   get az() { return setupPreviewAz; },
   get el() { return setupPreviewEl; },
