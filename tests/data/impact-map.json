@@ -622,6 +622,7 @@
       ],
       "stopRain": [
         "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/radio-voice.test.mjs"
       ],
       "syncReplayRpms": [
@@ -5005,6 +5006,7 @@
         "tests/unit/engine-revs-replay-vm.test.mjs",
         "tests/unit/f1-dev-tools.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/game-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs"
@@ -6363,6 +6365,7 @@
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs",
