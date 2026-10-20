@@ -129,6 +129,23 @@ const FlybySight = (function () {
 
   const CELL = 32;
   const cellKey = (ix, iz) => ix * 100003 + iz;
+  // The cell walk and the terrain scan are their own functions, not loops nested in
+  // sceneOf: a stand spans hundreds of cells, so the inner loop got hot inside one box,
+  // V8 OSR-entered it and deopted on the way out — 654-1,333 "exit from OSR'd inner loop"
+  // deopts at the intro flyby (docs/notes/PERF-RENDER-CPU-2026-10-20.md).
+  function binBox(cells, i, x0, x1, z0, z1) {
+    for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+      const k = cellKey(ix, iz);
+      let a = cells.get(k);
+      if (!a) cells.set(k, a = []);
+      a.push(i);
+    }
+  }
+  function maxStride3(pos) {
+    let m = -Infinity;
+    for (let k = 1; k < pos.length; k += 3) if (pos[k] > m) m = pos[k];
+    return m;
+  }
   function sceneOf(track) {
     if (track._fsScene) return track._fsScene;
     const boxes = offRoad(propBoxes(track), track).concat(spanBoxes(track));
@@ -141,19 +158,12 @@ const FlybySight = (function () {
         hx = c * b.w / 2 + s * b.d / 2; hz = s * b.w / 2 + c * b.d / 2;
       }
       b._hx = hx; b._hz = hz; b._r = 0.5 * Math.hypot(b.w, b.h, b.d);
-      const x0 = Math.floor((b.x - hx) / CELL), x1 = Math.floor((b.x + hx) / CELL);
-      const z0 = Math.floor((b.z - hz) / CELL), z1 = Math.floor((b.z + hz) / CELL);
-      for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
-        const k = cellKey(ix, iz);
-        let a = cells.get(k);
-        if (!a) cells.set(k, a = []);
-        a.push(i);
-      }
+      binBox(cells, i, Math.floor((b.x - hx) / CELL), Math.floor((b.x + hx) / CELL),
+             Math.floor((b.z - hz) / CELL), Math.floor((b.z + hz) / CELL));
     }
     // The highest terrain anywhere: a sightline above it needs no terrain test.
-    let maxT = -Infinity;
     const pos = track.terrainGeo && track.terrainGeo.pos;
-    if (pos) for (let k = 1; k < pos.length; k += 3) if (pos[k] > maxT) maxT = pos[k];
+    const maxT = pos ? maxStride3(pos) : -Infinity;
     track._fsScene = { boxes, cells, stamp: new Uint32Array(boxes.length), gen: 0, maxT };
     return track._fsScene;
   }
