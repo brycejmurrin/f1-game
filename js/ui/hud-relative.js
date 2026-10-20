@@ -90,7 +90,7 @@ const HudRelative = (function () {
   function fmtGap(sec, ahead, profile) {
     if (typeof HudReadouts !== "undefined" && HudReadouts && typeof HudReadouts.fmtGap === "function") return HudReadouts.fmtGap(sec, ahead, profile);
     const a = Math.abs(sec);   // boots without HudReadouts: the same rule, inline
-    return (ahead ? "-" : "+") + (!Number.isFinite(a) ? "--" : a >= 99.5 ? "99+" : a.toFixed(profile === "broadcast" || a < 9.95 ? 2 : 1));
+    return (ahead ? "-" : "+") + (!Number.isFinite(a) ? "--" : a >= 99.5 ? "99+" : a.toFixed(profile === "broadcast" || a < 9.995 ? 2 : 1));
   }
   const lapText = (n) => (n > 0 ? "+" + n + "L" : n < 0 ? n + "L" : "");
 
