@@ -76,7 +76,28 @@ test("__apex.perf() on the booted game: ai/collide spans fill from step()", asyn
     assert.ok(r.spans.ai && r.spans.ai.n >= 30, "ai span n=" + (r.spans.ai && r.spans.ai.n));
     assert.ok(r.spans.ai.max > 0, "ai span is zero");
     assert.ok(r.spans.collide && r.spans.collide.n >= 30);
+    assert.ok(r.spans.audio && r.spans.audio.n >= 1, "audio span");
     assert.ok("gpu" in r);
     g.apex.perf({ on: false });
   } finally { g.close(); }
+});
+
+test("measure(true) tags each phase with a detail.devtools track-entry; off emits nothing", () => {
+  const calls = [];
+  const ctx = vm.runInNewContext(src + ";PerfSpans", { performance: { now: () => 0, measure: (n, o) => calls.push([n, o]) } });
+  let t = 0; const ps = ctx.create(() => t);
+  ps.on(true);
+  ps.begin("audio"); t += 2; ps.end("audio");
+  assert.equal(calls.length, 0, "measure is a separate opt-in");
+  ps.measure(true);
+  ps.begin("audio"); t += 2; ps.end("audio");
+  ps.begin("custom"); t += 1; ps.end("custom");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0][0], "apex:audio");
+  const d = calls[0][1].detail.devtools;
+  assert.equal(d.dataType, "track-entry"); assert.equal(d.track, "audio"); assert.equal(d.trackGroup, "Apex 26");
+  assert.equal(calls[1][1].detail.devtools.track, "custom");
+  assert.ok(calls[1][1].detail.devtools.color, "unknown phases fall back to a colour");
+  ps.on(false); ps.begin("audio"); t += 1; ps.end("audio");
+  assert.equal(calls.length, 2, "off = no measure");
 });
