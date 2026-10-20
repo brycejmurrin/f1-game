@@ -1913,6 +1913,16 @@ const CarBodyGeom = (function () {
       coverStops,
       podRing(z, side) { return sculptPodRing(podSample(z), side, sculpt); },
       podRoof: sculpt ? (z, u) => sculptPodRoof(podSample(z), u, sculpt) : null,
+      // Roof height under a roof part at x (half-width hw): the control top, or on a sculpted
+      // roof its mid-slope there (neither sunk nor floating; B·H13 D4 buried 22-44 mm).
+      podSeatY(z, x, hw) {
+        if (!sculpt) return this.podAt(z).top;
+        let lo = Infinity, hi = -Infinity, near = null;
+        for (let u = 0; u <= 1.0001; u += 0.05) { const r = sculptPodRoof(podSample(z), u, sculpt);
+          if (!near || Math.abs(r[0] - x) < Math.abs(near[0] - x)) near = r;
+          if (Math.abs(r[0] - x) <= hw) { lo = Math.min(lo, r[1]); hi = Math.max(hi, r[1]); } }
+        return hi > -Infinity ? (lo + hi) / 2 : near[1];
+      },
       podFlank(z, fraction) {
         const p = podSample(z), y = p.outerBottom + (p.outerTop - p.outerBottom) * fraction;
         if (!sculpt) return [p.outer, y, z];

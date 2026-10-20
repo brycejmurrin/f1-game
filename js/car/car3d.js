@@ -966,19 +966,10 @@ const Car3D = (function () {
     // 0 none / 1 low NACA lip / 2 lip + louvre grille behind it.
     const ersIntake = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.coolerIntake) || 0)));
     if (ersIntake > 0 && !ckpt) {
-      // A sculpted pod's roof (podRoof: channel, crown) is not the control top: seat on
-      // the skin under the part's width, or it buried 22-44 mm (B·H13 D4).
-      const roofY = (z, x, hw) => { const p = anchors.podAt(z);
-        if (!anchors.podRoof) return p.top;
-        let lo = Infinity, hi = -Infinity, near = null;
-        for (let u = 0; u <= 1.0001; u += 0.05) { const r = anchors.podRoof(z, u);
-          if (!near || Math.abs(r[0] - x) < Math.abs(near[0] - x)) near = r;
-          if (Math.abs(r[0] - x) <= hw) { lo = Math.min(lo, r[1]); hi = Math.max(hi, r[1]); } }
-        return hi > -Infinity ? (lo + hi) / 2 : near[1]; };   // mid-slope: neither sunk nor floating
+      const roofY = (z, x, hw) => anchors.podSeatY(z, x, hw);   // a sculpted roof is not the control top
       for (const side of [-1, 1]) {
         const p = anchors.podAt(-0.30), x = p.x - 0.02;
-        const sit = anchors.podRoof ? -0.002 : 0;   // on a sculpted roof the part's underside meets the skin
-        addBox(out, side * x, roofY(-0.30, x, 0.055) + 0.008 + sit, -0.30, 0.11, 0.016, 0.14, INTAKE);
+        addBox(out, side * x, roofY(-0.30, x, 0.055) + (anchors.podRoof ? 0.006 : 0.008), -0.30, 0.11, 0.016, 0.14, INTAKE);
         addBox(out, side * x, roofY(-0.38, x, 0.06) + (anchors.podRoof ? 0.003 : 0.020), -0.38, 0.12, 0.010, 0.030,
                CARBON, SURFACES.carbon);
         if (ersIntake >= 2) {
