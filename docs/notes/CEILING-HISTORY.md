@@ -3650,3 +3650,5 @@ and the deploy tip went red on `ratchets.test.mjs`. Raised on Bryce's in-session
 the +6 is the overlap of the two merges, not new geometry. No extraction here: both sets of lines
 sit inside `build`'s emit closures beside the parts they shape. The same `--update` also records
 the tree's `dynamicIdReads` falling 74 → 73 (a measured lowering, not a raise).
+
+- 2026-10-20 `dynamicIdReads` 72 -> 73 (+1): double-counted auto-lower from two fragments measured off the same base 74; restoring the true count 73, no code growth.
