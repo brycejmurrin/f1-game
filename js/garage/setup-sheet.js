@@ -194,7 +194,7 @@ const LIV_ROW_HINT = {
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
   sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also greys every spine design that writes a sponsor name (TOP wordmark, SIDE wordmark/duo/title).",
-  bodyStyle: "BODY — the chassis shape: TEAM keeps this car's own; NEEDLE, BRICK, ANTEATER, ARCHED, WEDGE and BARGE are concept bodies with distinct outlines. Team-body swaps (another constructor's chassis) stay off the picker until Car3D.ALLOW_TEAM_BODY_SWAP is on. Looks only — it never changes performance.",
+  bodyStyle: "BODY — the chassis shape: TEAM keeps this car's own; NEEDLE, BRICK, ANTEATER, ARCHED, WEDGE and BARGE are concept bodies with distinct outlines; RIFT, KEEL, DELTA and SERPENT follow the 2026 concept sheet. Team-body swaps (another constructor's chassis) stay off the picker until Car3D.ALLOW_TEAM_BODY_SWAP is on. Looks only — it never changes performance.",
   finShape: "FIN SHAPE — the shark-fin blade. NONE removes it, and with it the fin's paint, graphic, style and badge. Every 2026 team car runs NONE.",
   finStyle: "TAIL STYLE — the motif painted on the fin.",
   finBadge: "FIN BADGE — what the fin carries: the mark, the race number, the driver code, or nothing.",
@@ -1080,7 +1080,7 @@ function buildLiveryCreator(container, team) {
     prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
     prev.textContent = "";
     if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
-    const restorePaletteFocus = refreshPalettes();   // a slot's new colour becomes matchable from every other slot
+    const restorePaletteFocus = refreshPalettes(defer3d);   // a slot's new colour becomes matchable from every other slot
     syncDeps();
     if (restorePaletteFocus && !restorePaletteFocus.disabled) restorePaletteFocus.focus({ preventScroll: true });
     defer3d ? scheduleLivPreview(team, d) : livePreviewDraft(team, d);
@@ -1113,10 +1113,13 @@ function buildLiveryCreator(container, team) {
   };
   const palRows = [];   // the palette IS the other slots
   let paletteKey = null;
-  const refreshPalettes = () => {
+  // `drag`: a colour-picker `input` tick. ~23 rows of chips would be torn down
+  // and rebuilt per tick, so a drag only moves the .active marks; the change
+  // event (applyPreview without defer3d) rebuilds once.
+  const refreshPalettes = (drag) => {
     const cols = paletteColours();
     const key = cols.slice().sort().join(",");
-    if (key === paletteKey) {
+    if (key === paletteKey || (drag && paletteKey !== null)) {
       for (const pr of palRows) for (const chip of pr.el.children)
         chip.classList.toggle("active", (d[pr.key] || "").toLowerCase() === chip.dataset.csColour);
       return null;   // unchanged chips keep their handlers and keyboard focus

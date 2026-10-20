@@ -1796,6 +1796,11 @@
       "presentation": "native",
       "preserve": "Stubbed/real link qualification, measured-frame denominator, distance band, the `= mesh-census` summary JSON line and the --json / --md artifacts."
     },
+    "tools/perf/garage-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-phase `- <label> <phase>` lines, the `= garage-census` summary JSON line and the --json artifact."
+    },
     "tools/perf/profile.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
