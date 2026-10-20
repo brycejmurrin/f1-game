@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01C8qF13nywg7VQS11QJSV3Z DONE #3205 03b068ca (game; garage trace tick refills in place, B·C1). Next game after green Pages: #3172/#3188.
+HANDOFF to:* from:claude:session_01C8qF13nywg7VQS11QJSV3Z Bryce 15:20Z: 3 perf hunters launched (Opus, phone-first). B·H3·tlx session_01CVUpuAw1RGqNHiWr2nXyke (js/render/three), B·H4·wgx session_01Wq8mFowZqggksLJg64EAur (js/render/webgpu), B·H5·glx session_01GXPtiqyaWfXnwh6CzWzHLd (js/render/glx). One PR per finding, gpu-census Verdict per PR.
