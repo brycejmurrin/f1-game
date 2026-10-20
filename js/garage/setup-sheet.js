@@ -105,7 +105,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
                           patternRotation: "0", patternStretch: "100", patternWeight: "100",
                           coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit",
-                          podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team",
+                          podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team", crestTone: "team", crestFrame: "none",
                           floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
@@ -137,7 +137,9 @@ const LIV_ROW_HINT = {
   plateTint: "PLATE — the board SPINE SIDE's PLATE / TITLE designs paint on. The colour you pick is used as-is. Unset = SECONDARY, contrast-checked against the flank — never BODY STRIPE. Lettering auto-inks.",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
-  crestStyle: "CREST — TEAM keeps the team's own mark; the others are original emblems (shield, roundel, wings, arrow, star) worn wherever the mark sits: nose, cover, fin and flanks.",
+  crestStyle: "CREST — TEAM keeps the team's own mark; the others are original emblems (shield, roundel, wings, arrow, star, bolt, laurel, chevrons, diamond, gear, crown, flag, flame) worn wherever the mark sits: nose, cover, fin and flanks.",
+  crestTone: "CREST TONE — the emblem's two colours: TEAM as picked for this paint, SWAP trades them, MONO paints the silhouette in one.",
+  crestFrame: "CREST FRAME — a backing behind the emblem: DISC, SHIELD or BADGE plate in the second colour, or a RING keyline. NONE draws it bare.",
   endplate: "ENDPLATES — the front-wing endplates and the rear-wing endplate bodies. Unset = the secondary body colour at the front, dark at the rear.",
   fin: "TAIL FIN — the shark-fin plate. The colour you pick is used as-is (even under FIN HANDOFF CONTRAST). Unset = ACCENT, or a contrast-derived colour when HANDOFF is CONTRAST. Needs a FIN SHAPE other than NONE.",
   finArt: "TAIL GRAPHIC — fin motif / badge ink. The colour you pick is used as-is. Unset = first base colour that clears the fin plate.",
@@ -362,6 +364,52 @@ function csLabel(text) {
   return h;
 }
 
+// GARAGE / CREW / LIGHTING — the room around the car. One chip row per look
+// table: GaragePrims.LOOKS (room), GarageCrew.LOOKS (crew that meets the car),
+// GarageScene.MOODS (light rig). The scene modules apply and save the pick
+// (apex26.garageLook / crewLook / garageMood); a row whose module is absent is
+// skipped. Crew and mood tables are bare ids, so their names live here.
+const CREW_NAMES = { classic: "CLASSIC", sculpted: "SCULPTED", pitstop: "PIT STOP", workshop: "WORKSHOP", welcome: "WELCOME" };
+const MOOD_NAMES = { shipped: "STANDARD", broadcast: "BROADCAST", night: "NIGHT", showroom: "SHOWROOM", daylight: "DAYLIGHT" };
+function lookRowSpecs() {
+  const out = [];
+  if (typeof GaragePrims !== "undefined" && GaragePrims.LOOK_IDS)
+    out.push({ label: "GARAGE", key: "room", ids: GaragePrims.LOOK_IDS, cur: GaragePrims.lookId(),
+      name: (id) => (GaragePrims.LOOKS[id] ? GaragePrims.LOOKS[id].label.toUpperCase() : "TEAM BAY"),
+      apply: (id) => { GaragePrims.setLook(id); } });
+  if (typeof GarageCrew !== "undefined" && GarageCrew.LOOKS)
+    out.push({ label: "CREW", key: "crew", ids: GarageCrew.LOOKS, cur: GarageCrew.look(),
+      name: (id) => CREW_NAMES[id] || id.toUpperCase(), apply: (id) => { GarageCrew.setLook(id); } });
+  if (typeof GarageScene !== "undefined" && GarageScene.MOODS && GarageScene.setMood)
+    out.push({ label: "LIGHTING", key: "mood", ids: Object.keys(GarageScene.MOODS), cur: GarageScene.mood(),
+      name: (id) => MOOD_NAMES[id] || id.toUpperCase(), apply: (id) => { GarageScene.setMood(id); } });
+  return out;
+}
+function buildLookRows(optsEl) {
+  for (const { label, key, ids, cur, name, apply } of lookRowSpecs()) {
+    optsEl.appendChild(csLabel(label));
+    const row = document.createElement("div");
+    row.className = "chip-row"; row.id = "cs-look-" + key;
+    row.setAttribute("role", "group"); row.setAttribute("aria-label", "Garage " + label.toLowerCase());
+    for (const id of ids) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "sel-chip" + (id === cur ? " active" : "");
+      b.setAttribute("aria-pressed", id === cur ? "true" : "false");
+      b.dataset.csLook = key + ":" + id;
+      b.textContent = name(id);
+      b.onclick = () => {
+        if (id === cur) return;
+        apply(id);
+        if (G.soundOn) GameAudio.uiTick();
+        buildSetup();
+        $("cs-options")?.querySelector(`[data-cs-look="${key}:${id}"]`)?.focus({ preventScroll: true });
+      };
+      row.appendChild(b);
+    }
+    optsEl.appendChild(row);
+  }
+}
+
 // TEAM & DRIVER — who the car belongs to.
 //
 // The garage owns this, so the title-screen GARAGE route can say whose car it
@@ -431,6 +479,7 @@ function buildTeamOptions(optsEl, team) {
   edit.onclick = () => { if (pitLocked()) return; if (G.soundOn) GameAudio.uiSelect(); G.openCustomize(); };
   editRow.appendChild(edit);
   optsEl.appendChild(editRow);
+  buildLookRows(optsEl);
 
   // THE GARAGE FILE — parts, liveries, setup sheets and an invented team, for
   // every team, saved out and read back in. It lives HERE rather than beside
@@ -1258,6 +1307,9 @@ function buildLiveryCreator(container, team) {
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
   pillRow("SPONSORS", "sponsors", LT && LT.SPONSOR_PACK_IDS || ["default"], "default");
   pillRow("CREST", "crestStyle", LT && LT.CREST_STYLE_IDS || ["team"], "team");
+  const emblemOn = () => (d.crestStyle || "team") !== "team", NO_EMBLEM = "Needs a CREST other than TEAM";
+  deps.push({ row: pillRow("CREST TONE", "crestTone", LT && LT.CREST_TONE_IDS || ["team"], "team"), when: emblemOn, why: NO_EMBLEM });
+  deps.push({ row: pillRow("CREST FRAME", "crestFrame", LT && LT.CREST_FRAME_IDS || ["none"], "none"), when: emblemOn, why: NO_EMBLEM });
   // The tail DESIGN: what the fin is shaped like, what is painted on it, what it
   // carries, and whether the crest also repeats on the spine. Four single-choice
   // fields, so four pill rows — the same node shape as FINISH above.

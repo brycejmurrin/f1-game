@@ -56,6 +56,11 @@
       "presentation": "shared-levels",
       "preserve": "All screenshots and contact sheets; distinguish successful captures from blank/error renders."
     },
+    "tools/car/car-fit-audit.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "Every failing row with its NEW/WORSE/PRE-EXISTING status, section pair, worst value and position, the final = car-fit-audit verdict line and the failed exit; JSON retains every row and joint."
+    },
     "tools/car/career-economy.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -90,6 +95,16 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Generated fitted-zone/source output when requested, original photo provenance and exact mappings."
+    },
+    "tools/car/lib/fit-checks.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/car/lib/fit-geom.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
     },
     "tools/car/livery-contrast.mjs": {
       "action": "keep-native",
@@ -534,7 +549,7 @@
     "tools/ci/fleet-bus.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
-      "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha"
+      "preserve": "REFUSED (exit 2) versus FAILED (exit 1) on lease ops; lease holder and minutes left; every new bus line and the new cursor sha; who: the one `<letter> <host:id> <sha7> <age>` line or exit 1 none"
     },
     "tools/ci/fleet-flags.mjs": {
       "action": "page-results",
@@ -549,7 +564,7 @@
     "tools/ci/fleet-tick.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
-      "preserve": "Changed-only rows versus first tick; ship/Pages red; dry-run state not saved"
+      "preserve": "Changed-only rows versus first tick; ship/Pages red; dry-run state not saved; --summary appends Markdown to a file and leaves stdout unchanged"
     },
     "tools/ci/geometry-paths.mjs": {
       "action": "protocol-only",
@@ -664,7 +679,7 @@
     "tools/ci/pr-board.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
-      "preserve": "ARM/READY/SYNC blockers; CI unknown; open Plan and repository-wide cap"
+      "preserve": "ARM/READY/SYNC blockers; CI unknown; open Plan and repository-wide cap; fleet letter and slot per row"
     },
     "tools/ci/pr-body.mjs": {
       "action": "keep-native",
@@ -694,7 +709,7 @@
     "tools/ci/ready-gate.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan"
+      "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan; missing fleet-block field on a cursor/ branch"
     },
     "tools/ci/release-provenance.mjs": {
       "action": "keep-native",
@@ -845,6 +860,11 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Fetch failed means nothing read; stale claims hidden count; never suppress conflicting work"
+    },
+    "tools/desktop/minify.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
     },
     "tools/desktop/pack-dry-run.mjs": {
       "action": "keep-native",
@@ -1751,6 +1771,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/live-render-matrix.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-row `= row <name> <verdict>` lines, the final `= live-render-matrix` summary and the checkpointed --json report."
+    },
     "tools/perf/diagnostics.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -1851,6 +1876,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/design-matrix.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
     "tools/shot/export-history-evidence.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1915,6 +1945,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/shot/lib/design-matrix.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/shot/lib/garage-camera-catalog.mjs": {
       "action": "no-direct-output",
