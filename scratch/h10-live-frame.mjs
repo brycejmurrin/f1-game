@@ -19,7 +19,7 @@ import { raceGate } from "../tools/lib/census-entry.mjs";
 import { writeFileSync } from "node:fs";
 
 const TRACKS = (process.env.H10_TRACKS || "monaco,spa,singapore").split(",");
-const BACKENDS = (process.env.H10_BACKENDS || "tlx-gl").split(",");
+const BACKENDS = (process.env.H10_BACKENDS || "tlx-gpu,tlx-gl").split(",");
 const CAM = process.env.H10_CAM || "helmet";
 const WARM = +(process.env.H10_WARM || 8), WIN = +(process.env.H10_WIN || 40), TRACE = +(process.env.H10_TRACE || 6);
 const EXTRA = (process.env.H10_LS || "").split(/\s+/).filter(Boolean).map((kv) => kv.split("="));
@@ -199,6 +199,17 @@ async function runRow(browser, server, backend, track) {
       }
     };
   });
+  await page.evaluate(() => {
+    // Mark the frames that rebuild the snap-cached sun map (gfx.shadowBegin) and the car map (carShadowBegin).
+    const T = typeof GLX !== "undefined" ? GLX.__tlx : null, H = window.__h10;
+    H.sun = []; H.car = 0;
+    if (!T) return;
+    for (const [k, tag] of [["shadowBegin", "sun"], ["carShadowBegin", "car"]]) {
+      const o = T[k]; if (typeof o !== "function" || o.__h10) continue;
+      const w = function () { if (H.on) { if (tag === "sun") H.sun.push(H.ts.length); else H.car++; } return o.apply(this, arguments); };
+      w.__h10 = true; T[k] = w;
+    }
+  });
   await page.evaluate(async (t) => { const A = window.__apex; await A.race(t); A.go(); }, track);
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   await page.evaluate((c) => { const A = window.__apex; try { A.camera(c); } catch (_) {} window.__h10d.start(); }, CAM);
@@ -237,12 +248,19 @@ async function runRow(browser, server, backend, track) {
     const A = window.__apex, p = A.perf();
     const iv = []; for (let i = 1; i < H.ts.length; i++) iv.push(H.ts[i] - H.ts[i - 1]);
     let gpuMs = null; try { gpuMs = A.gpuTimer().ms; } catch (_) {}
-    return { iv, cb: H.cb, spans: p.spans, loaf: p.loaf, drive: { frames: window.__h10d.frames, dist: Math.round(window.__h10d.dist), off: window.__h10d.off, err: window.__h10d.err },
+    return { iv, ts: H.ts.map((x) => Math.round(x)), sun: H.sun, carN: H.car, cb: H.cb, spans: p.spans, loaf: p.loaf, drive: { frames: window.__h10d.frames, dist: Math.round(window.__h10d.dist), off: window.__h10d.off, err: window.__h10d.err },
       tierLog: window.__h10tier, warm: (() => { try { const m = GLX.__tlx.memState(); return m && m.warm; } catch (_) { return null; } })(), gpuMs, slow: { calls: SC.slow, links: SC.links, pipes: SC.pipes, linkNames: SC.linkNames, pipeNames: SC.pipeNames }, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
   });
   const over = (ms) => +(got.iv.filter((x) => x > ms).length / Math.max(1, got.iv.length) * 100).toFixed(1);
   const loafE = (got.loaf && got.loaf.entries) || [];
-  const row = {
+  // Frame k's interval is ts[k]-ts[k-1]; a rebuild recorded while frame index n was the last pushed ts runs in the
+  // callback of frame n-1 -> its cost shows as interval iv[n-1] (ts[n]-ts[n-1]).
+  const sunSet = new Set(got.sun.map((n) => n - 1));
+  const ivS = [], ivO = []; got.iv.forEach((x, i) => (sunSet.has(i) ? ivS : ivO).push(x));
+  const cbS = [], cbO = []; got.cb.forEach((x, i) => (sunSet.has(i) ? cbS : cbO).push(x));
+  const sunCorr = { rebuilds: got.sun.length, carCasts: got.carN, frames: got.iv.length, ivSun: dist(ivS), ivOther: dist(ivO), cbSun: dist(cbS), cbOther: dist(cbO),
+    over100Sun: ivS.filter((x) => x > 100).length, over100Other: ivO.filter((x) => x > 100).length };
+  const row = { sunCorr, ivs: got.iv.map((x) => Math.round(x)), sunIdx: got.sun,
     env, frame: Object.assign(dist(got.iv), { over33: over(33.4), over50: over(50), over100: over(100), fps: +(1000 * got.iv.length / Math.max(1, got.iv.reduce((a, b) => a + b, 0))).toFixed(1) }),
     cpu: dist(got.cb), spans: got.spans, slow: got.slow, tierLog: got.tierLog, warm: got.warm, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
     loaf: { supported: got.loaf && got.loaf.supported, n: loafE.length, top: loafE.slice().sort((a, b) => (b.duration || 0) - (a.duration || 0)).slice(0, 6) },
@@ -265,6 +283,7 @@ try {
       log(`  frame p50 ${f.p50} p95 ${f.p95} p99 ${f.p99} max ${f.max} fps ${f.fps} >33 ${f.over33}% >50 ${f.over50}% | cpu p50 ${c.p50} p95 ${c.p95} max ${c.max} | drive ${JSON.stringify(row.drive)}`);
       log(`  spans ${JSON.stringify(row.spans)}`);
       log(`  trace ${JSON.stringify(row.trace)}`);
+      log(`  sunCorr ${JSON.stringify(row.sunCorr)}`);
       log(`  slow ${JSON.stringify(row.slow).slice(0, 2500)}`);
       log(`  prof ${JSON.stringify(row.prof).slice(0, 3000)}`);
       log(`  loaf ${JSON.stringify(row.loaf).slice(0, 1500)}`);
