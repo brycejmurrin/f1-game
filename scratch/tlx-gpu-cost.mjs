@@ -14,11 +14,14 @@ import { gotoGame } from "../tools/shot/probe-page.mjs";
 import { raceGate } from "../tools/lib/census-entry.mjs";
 import { writeFileSync } from "node:fs";
 
-const TRACKS = (process.env.H7_TRACKS || "monaco,spa").split(",");
+const TRACKS = (process.env.H7_TRACKS || "monaco").split(",");
 const CAMS = (process.env.H7_CAMS || "chase,cockpit").split(",");
-const PROFILES = (process.env.H7_PROFILES || "phonelike,desktop").split(",");
-const VARIANTS = (process.env.H7_VARIANTS || "count").split(",");
-const ROUNDS = +(process.env.H7_ROUNDS || 4), N = +(process.env.H7_N || 24);
+const PROFILES = (process.env.H7_PROFILES || "phonelike").split(",");
+const VARIANTS = (process.env.H7_VARIANTS || "base,shadowOff").split(",");
+// Boot-level arms (a reload each): extra localStorage per variant. Live arms (lightTune / scale) run inside every row.
+const VARIANT_LS = { base: {}, count: {}, nocount: {}, shadowOff: { "apex26.tlxShadowOff": "1" } };
+const ARMSEL = process.env.H7_ARMS ? process.env.H7_ARMS.split(",") : ["scale50", "noPost"];
+const ROUNDS = +(process.env.H7_ROUNDS || 4), N = +(process.env.H7_N || 30);
 const OUT = process.env.H7_OUT || "tlx-gpu-cost.json";
 const report = { started: new Date().toISOString(), rounds: ROUNDS, n: N, rows: [] };
 const save = () => writeFileSync(OUT, JSON.stringify(report, null, 2));
@@ -83,7 +86,7 @@ async function boot(browser, server, prof, track, cam, variant) {
     localStorage.setItem("apex26.wgxCapture", "0");
     try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) {}
     for (const k of Object.keys(ls)) if (k !== "__forceGL") localStorage.setItem(k, ls[k]);
-  }, Object.assign({}, P.ls, process.env.H7_FORCEGL ? { __forceGL: "1" } : {}));
+  }, Object.assign({}, P.ls, VARIANT_LS[variant] || {}, process.env.H7_FORCEGL ? { __forceGL: "1" } : {}));
   await page.addInitScript(cbTimer);
   if (variant !== "nocount") await page.addInitScript(counters);
   else await page.addInitScript(() => { window.__h7 = { passes: 0, submits: 0, kinds: new Map(), on: false }; });
@@ -113,7 +116,7 @@ async function boot(browser, server, prof, track, cam, variant) {
 }
 
 async function bench(page, positions) {
-  return page.evaluate(async ([ROUNDS, N, positions]) => {
+  return page.evaluate(async ([ROUNDS, N, positions, ARMSEL]) => {
     const A = window.__apex, T = GLX.__tlx;
     const be = T.renderer.backend;
     const q = be.device ? be.device.queue : { onSubmittedWorkDone: async () => { be.gl.finish(); } };   // GL path: local smoke only
@@ -130,6 +133,7 @@ async function bench(page, positions) {
       scale75: () => { tune({}); A.renderScale(0.75); },
       scale50: () => { tune({}); A.renderScale(0.5); },
     };
+    for (const k of Object.keys(ARMS)) if (k !== "base" && ARMSEL && ARMSEL.indexOf(k) < 0) delete ARMS[k];
     const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
     // FRAME PACING, not fences: queue.onSubmittedWorkDone never resolved on the macos-latest paravirtual
     // adapter (rev 13, run 39475376136, live race, gpuErrors 0). The game's own loop keeps rendering the
@@ -178,14 +182,15 @@ async function bench(page, positions) {
     for (const k of Object.keys(res)) if (k !== "base" && out.base.wallMs) out[k].deltaMs = +(out[k].wallMs - out.base.wallMs).toFixed(2);
     out.dbg = dbg;
     return out;
-  }, [ROUNDS, N, positions]);
+  }, [ROUNDS, N, positions, ARMSEL]);
 }
 
 const server = await startStaticServer(process.cwd());
 const SOFT = process.env.H7_SOFT === "1";   // local smoke only (lavapipe); the census runs the real adapter
 if (SOFT) Object.assign(process.env, WEBGPU_LAVAPE_ENV || {});
-const browser = await launchChromium(SOFT ? { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"], env: { ...process.env, ...(WEBGPU_LAVAPE_ENV || {}) } }
+const launch = () => launchChromium(SOFT ? { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"], env: { ...process.env, ...(WEBGPU_LAVAPE_ENV || {}) } }
   : { args: ["--enable-unsafe-webgpu", "--disable-background-timer-throttling"] });
+let browser = null;   // ONE BROWSER PER ROW: rev 14's second boot hung in the first row's browser until the step cap
 try {
   for (const variant of VARIANTS) for (const prof of PROFILES) for (const track of TRACKS) for (const cam of CAMS) {
     if (prof === "desktop" && (cam !== "chase" || track !== TRACKS[0])) continue;   // desktop is the reference row only
@@ -194,6 +199,7 @@ try {
     const t0 = Date.now();
     let ctx = null;
     try {
+      browser = await launch();
       let b;
       try { b = await boot(browser, server, prof, track, cam, variant); }
       catch (e) { log("boot retry after: " + String(e && e.message).slice(0, 120)); b = await boot(browser, server, prof, track, cam, variant); }
@@ -206,11 +212,15 @@ try {
       log("  dbg " + JSON.stringify(row.arms.dbg).slice(0, 600));
       for (const k of Object.keys(row.arms)) { if (k === "dbg") continue; const a = row.arms[k]; log(`  ${k.padEnd(9)} wall ${a.wallMs} cpu ${a.cpuMs} d ${a.deltaMs ?? "-"} passes ${a.passesPerFrame} submits ${a.submitsPerFrame}`); }
     } catch (e) { row.error = String((e && e.stack) || e).slice(0, 600); log("FAILED " + row.error); }
-    finally { row.ms = Date.now() - t0; save(); if (ctx) await Promise.race([ctx.close(), new Promise((r) => setTimeout(r, 15000))]); }
+    finally {
+      row.ms = Date.now() - t0; save();
+      if (browser) await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]);
+      browser = null;
+    }
   }
 } finally {
   save();
-  await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]);
+  if (browser) await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]);
   server.close && server.close();
   process.exit(0);
 }
