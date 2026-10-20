@@ -1,0 +1,1 @@
+Fixed: Garage livery editor no longer rebuilds the whole car when you pick a crest style, tone or frame, a cover bind, a fin handoff, fin art or grips colour — those taps now repaint only the decals (a ~250 ms stall per tap in testing, now under 30 ms).

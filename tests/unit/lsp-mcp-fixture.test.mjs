@@ -16,7 +16,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 test("fixture workspace: freshness, ambiguity, window globals, honest misses", { timeout: 60000 }, async () => {
   const { dir, w } = lspFixture("lsp-mcp-");
   w("jsconfig.json", jsconfig());
-  w("src/a.js", `"use strict";\nconst Alpha = (function () {\n  function ping(x) { return x + 1; }\n  function wrap(s) { return s; }\n  return { ping };\n})();\n`);
+  w("src/a.js", `"use strict";\nconst Alpha = (function () {\n  function ping(x) { return x + 1; }\n  function wrap(s) { return s; }\n  function quiet(x) { return x; }\n  return { ping, quiet };\n})();\n`);
   w("src/b.js", `"use strict";\n// Alpha.ping in a comment\nconst msg = "Alpha.ping in a string";\nfunction wrap(s) { return s * 2; }\nconst v = Alpha.ping(1);\n`);
   w("src/c.js", `"use strict";\nwindow.Beta = {\n  KEY: 5,\n  go() { return 1; },\n};\nconst k = Beta.KEY + Beta.KEY;\n`);
   w("src/d.js", `"use strict";\nconst {\n  go, KEY: key } = Beta;\n// key in a comment\nconst twice = key * 2;\nconst B = Beta;\nconst again = B.KEY;\n`);
@@ -32,7 +32,11 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
     r = await text("lsp_definition", { symbol: "Alpha.wrap" });
     assert.match(r.t, /src\/a\.js:4:\d+ {2}\[def\] function wrap/, "the wrap in Alpha's file, never b.js's");
     assert.doesNotMatch(r.t, /src\/b\.js/);
-    assert.match(r.t, /no Alpha\.wrap use in src\/.*may not export/, "labelled, not presented as an export");
+    assert.match(r.t, /no direct Alpha\.wrap use in src\/.*module-file fallback.*export and caller coverage unverified/, "fallback cannot establish export membership");
+    r = await text("lsp_definition", { symbol: "Alpha.quiet" });
+    assert.equal(r.t, "1 definition (at the declaration; no direct Alpha.quiet use in src/; module-file fallback for quiet; " +
+      "export and caller coverage unverified)\nsrc/a.js:5:12  [def] function quiet(x) { return x; }");
+    assert.doesNotMatch(r.t, /may not export/, "an exported unused member must not imply missing export");
     r = await text("lsp_definition", { symbol: "Alpha.nope" });
     assert.equal(r.err, true); assert.match(r.t, /has no member nope/);
     r = await text("lsp_definition", { symbol: "Gamma.ping" });

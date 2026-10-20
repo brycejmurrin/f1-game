@@ -976,7 +976,7 @@ body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
    (28px speed, 48px gear, 128px map). The height term keeps a desktop browser
    dragged to 1100x600 on the phone tier it fits. */
 @media (min-width: 1200px), ((min-width: 1024px) and (min-height: 740px)) {
-  .hud-box { padding: 5px 16px; }
+  .hud-box { --hud-box-pad: 16px; padding: 5px var(--hud-box-pad); padding-left: calc(var(--hud-box-pad) + var(--hud-box-stripe)); }
   .hud-value { font-size: calc(23px * var(--hud-text-boost, 1)); }
   .hud-label { font-size: var(--fs-micro); }
   /* minimap is 160px here — gaps dock beside it (10+160+8), top-aligned with it

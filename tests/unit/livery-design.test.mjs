@@ -7,6 +7,7 @@ import { loadCrests, paintAt } from "../../tools/car/crest-sweep.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { loadAtlas } from "../../tools/car/livery-contrast.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const source = (path) => fs.readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 function load(extra = {}) {
@@ -177,7 +178,7 @@ function editorFixture() {
   vm.runInContext(source("js/garage/livery-design-editor.js"), ctx, { filename: absSrc("js/garage/livery-design-editor.js") });
   const E = vm.runInContext("GarageLiveryDesignEditor", ctx), root = dom.document.createElement("div");
   const draft = { name: "Mine", c1: "#000000", c2: "#ffffff", spineLogo: "stripe", patternWidth: "70", patternRepeat: "6", patternOffset: "0", patternTaper: "20", patternOpacity: "100", patternPlacement: "crown", patternSide: "both" };
-  const previews = []; let editor;
+  const previews = [], scrollRoot = { scrollTop: 0 }; let editor;
   const changed = (drag) => { editor?.changed(drag); previews.push(plain(draft)); };
   Object.assign(ctx, { d: draft, wrap: root, LIV_ROW_HINT: {}, applyPreview: changed });
   const sheet = source("js/garage/setup-sheet.js");
@@ -199,9 +200,9 @@ function editorFixture() {
   const nameRow = dom.document.createElement("label"); root.appendChild(nameRow);
   ctx.LiveryTex = { tailStyleOf: (id) => (id === "mclaren" ? "chevron" : "diag") };
   editor = E.attach(root, draft, { flush() {}, changed, preview(value) { previews.push(plain(value)); },
-    pillRow, spineRow, bodyRow, nameRow, teamId: "mclaren" });
+    pillRow, spineRow, bodyRow, nameRow, teamId: "mclaren", scrollRoot });
   const click = (text) => { const b = root.querySelectorAll("button").find((b) => b.textContent === text); assert.ok(b, text); assert.ok(!b.disabled, text + " enabled"); b.onclick(); };
-  return { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow, D };
+  return { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow, D, scrollRoot };
 }
 
 test("existing SPINE TOP controls drive undo, palettes and pattern adjustments without duplicate menus", () => {
@@ -420,7 +421,7 @@ test("a paint job started from the team's own scheme saves the marks the editor 
 
 // Reorganization option B (orchestrator pick, 2026-10-18): one car area at a time.
 test("car-area tabs: every control in exactly one area, advanced rows reachable, edits survive a tab switch", () => {
-  const { root, draft, click } = editorFixture();
+  const { root, draft, click, scrollRoot } = editorFixture();
   const tabs = root.querySelectorAll('[role="tab"]'), panes = root.querySelectorAll('[role="tabpanel"]');
   assert.ok(tabs.length >= 3 && tabs.length === panes.length, "one tab per area pane");
   assert.equal(root.querySelectorAll('[role="tablist"]').length, 1);
@@ -445,7 +446,9 @@ test("car-area tabs: every control in exactly one area, advanced rows reachable,
   const kids = pane.children, adv = kids.findIndex((k) => k.textContent === "ADVANCED");
   assert.ok(adv > 0 && kids.indexOf(width.parentNode) > adv, "pattern size is an ADVANCED row");
   assert.equal(pane.hidden, true);
+  scrollRoot.scrollTop = 5157;
   tab.onclick();
+  assert.equal(scrollRoot.scrollTop, 0, "another area's deep scroll must not hide the first controls");
   assert.equal(pane.hidden, false); assert.equal(quick.hidden, true);
   // a switch loses nothing
   click("CONTOUR LINES"); width.value = "40"; width.oninput(); width.onchange();
@@ -453,10 +456,40 @@ test("car-area tabs: every control in exactly one area, advanced rows reachable,
   assert.equal(draft.spineLogo, "contours"); assert.equal(draft.patternWidth, "40"); assert.equal(String(width.value), "40");
   // arrow keys move between tabs
   const list = root.querySelector('[role="tablist"]'), at = tabs.indexOf(tab);
+  scrollRoot.scrollTop = 2251;
   list.onkeydown({ key: "ArrowRight", preventDefault() {} });
+  assert.equal(scrollRoot.scrollTop, 0, "keyboard area changes also start at the top");
   assert.equal(tabs[(at + 1) % tabs.length].getAttribute("aria-selected"), "true");
   list.onkeydown({ key: "Home", preventDefault() {} });
   assert.equal(tabs[0].getAttribute("aria-selected"), "true");
+});
+
+test("optional colour inheritance and palette selection stay accessible through clear, drag and restore", () => {
+  const dom = makeDom(), draft = { nose: "#ff0000" };
+  const ctx = vm.createContext({ document: dom.document, d: draft, LIV_ROW_HINT: {},
+    palRows: [], surfaceControls: null, flushLivPreview() {} });
+  const sheet = source("js/garage/setup-sheet.js");
+  vm.runInContext('let paletteKey = null; const paletteColours = () => ["#ff0000", "#00ff00"];'
+    + fnSource(sheet, "const refreshPalettes = (drag) => {")
+    + ';\nfunction applyPreview(drag) { refreshPalettes(drag); }\n'
+    + fnSource(sheet, "const colorRow = (label, key, allowNone) => {"), ctx);
+  const row = vm.runInContext('colorRow("NOSE CAP", "nose", true)', ctx);
+  const input = row.querySelector("input"), none = row.querySelector("button");
+  const chips = () => row.querySelectorAll("button").filter((b) => b.dataset.csColour);
+  vm.runInContext("refreshPalettes(false)", ctx);
+  assert.equal(none.getAttribute("aria-pressed"), "false");
+  assert.equal(chips().find((b) => b.dataset.csColour === "#ff0000").getAttribute("aria-pressed"), "true");
+  none.onclick();
+  assert.equal(draft.nose, "");
+  assert.equal(none.getAttribute("aria-pressed"), "true");
+  assert.equal(input.getAttribute("aria-description"), "Inherited colour");
+  assert.ok(chips().every((b) => b.getAttribute("aria-pressed") === "false"));
+  input.value = "#00ff00"; input.oninput();
+  assert.equal(none.getAttribute("aria-pressed"), "false");
+  assert.equal(input.getAttribute("aria-description"), "Custom colour #00ff00");
+  assert.equal(chips().find((b) => b.dataset.csColour === "#00ff00").getAttribute("aria-pressed"), "true");
+  draft.nose = ""; vm.runInContext("refreshPalettes(false)", ctx);
+  assert.equal(none.getAttribute("aria-pressed"), "true", "history/restore also synchronizes the NONE state");
 });
 
 test("2026-motif designs: named, registered in their colour/line lists, and each paints distinct art", () => {

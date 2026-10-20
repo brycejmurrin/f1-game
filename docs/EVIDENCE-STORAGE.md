@@ -32,7 +32,10 @@ Actions artifact expires.
 This route uses the GitHub runner's token and needs no personal token. Some
 managed development environments provide API proxy credentials that cannot upload
 binary release assets; an upload-host HTTP 401 there is not evidence that a bundle
-was stored. Use this workflow or an authenticated local GitHub CLI instead.
+was stored. This workflow can recover bytes already in an Actions artifact or
+supported historical Git selection; it cannot read a local prepared bundle. For
+local-only evidence, preserve the bundle and follow the blocked-publication
+procedure below.
 
 ## Preserve selected historical Git evidence
 
@@ -135,6 +138,32 @@ links. Authentication failures, changed local files, conflicting tags, draft
 releases and checksum mismatches stop for inspection. No `--clobber` or deletion
 is used. One bundle per release also supports repositories with immutable releases,
 where published assets cannot be appended or replaced.
+
+### When local publication is blocked
+
+Keep the complete prepared receipt directory: archive, manifest, checksum file
+and any selected image assets. The retry command resolves assets relative to
+`receipt.json`; copying only that file is insufficient. Verify the checksum file
+before and after an authorized transfer, then use the same `--receipt ...
+--publish` command on a host with this checkout and working authenticated `gh`
+access. Keep captures unchanged when retrying delivery.
+
+Record the failing operation and HTTP status without credentials. A metadata
+read on `api.github.com` can fail before any binary upload on
+`uploads.github.com` is attempted. A connected GitHub reader can use a different
+authentication route from the CLI; successful connector reads do not establish
+CLI publishing access. Preserve configured proxy and credential settings.
+
+The Archive evidence workflow accepts existing Actions artifacts and supported
+historical Git selections, not local directories or prepared receipts. Transfer
+local-only reviewed bundles through an authorized path to a publishing host;
+keep new captures out of Git. Until publication and uploaded asset digest checks
+succeed, report the evidence as local with publication blocked.
+
+See GitHub's [REST authentication guidance](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api),
+[release asset upload endpoint](https://docs.github.com/en/rest/releases/assets#upload-a-release-asset)
+and [`gh auth status`](https://cli.github.com/manual/gh_auth_status). Avoid options
+that print tokens when recording authentication diagnostics.
 
 ## Download and verify
 

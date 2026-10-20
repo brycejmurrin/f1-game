@@ -152,6 +152,7 @@ jobs:
       reanalysis: ${{ steps.split.outputs.reanalysis }}
       garage_ab: ${{ steps.split.outputs.garage_ab }}
       live_matrix: ${{ steps.split.outputs.live_matrix }}
+      livery: ${{ steps.split.outputs.livery }}
       lrm_leg: ${{ steps.split.outputs.lrm_leg }}
       lrm_rows: ${{ steps.split.outputs.lrm_rows }}
       lrm_scale: ${{ steps.split.outputs.lrm_scale }}
@@ -260,6 +261,8 @@ jobs:
           print("garage_ab=" + str(req.get("leg") == "garage-retry-63a1" and not co).lower())
           # #2572 render live-debug matrix (tools/perf/live-render-matrix.mjs): opt-in by leg name, push requests only.
           print("live_matrix=" + str(req.get("leg") == "render-live-matrix-2572").lower())
+          # Garage livery-edit census (B·P1 2026-10-20): TLX WebGPU vs WebGL2, ~30 editor edits. Push requests only.
+          print("livery=" + str(req.get("leg") == "garage-livery-perf").lower())
           lg = str(req.get("lrm_leg") or "glx").strip()
           lg = lg if lg in ("glx", "tlx-gl", "tlx-native") else "glx"
           print("lrm_leg=" + lg)
@@ -450,6 +453,28 @@ jobs:
           path: live-matrix-*.json
           if-no-files-found: warn
           retention-days: 14
+
+      # Opt-in by request leg `garage-livery-perf`; pair with census_only=true. Never fails the job:
+      # the result is game-livery-census.json and the job-summary table.
+      - name: Garage livery-edit census
+        if: ${{ needs.plan.outputs.livery == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 26
+        shell: bash
+        run: |
+          node scratch/garage-livery-census.mjs || true
+          node scratch/summarize-livery-census.mjs >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload garage livery census
+        if: ${{ always() && needs.plan.outputs.livery == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: garage-livery-census-${{ matrix.image }}
+          path: |
+            game-livery-*.json
+            game-livery-*.png
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Game check — three.js / WebGPU
         if: ${{ needs.plan.outputs.census_only != 'true' }}

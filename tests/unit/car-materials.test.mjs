@@ -266,7 +266,7 @@ test("FINISH_SURFACE rows flake 34 and candy 35 exist, are accepted by Teams.liv
   assert.equal(CarMaterials.FINISH_SURFACE.flake, 34);
   assert.equal(CarMaterials.FINISH_SURFACE.candy, 35);
   const chips = ["gloss", ...Object.keys(CarMaterials.FINISH_SURFACE)];
-  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon", "forged", "gunmetal", "goldplate",
+  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon", "forged", "gunmetal", "goldplate", "holographic", "velvet", "hammered", "anodized",
     // finishes 60+ (design lane D2): round 4 close-up matrix
     "oilslick", "frozen", "fluoro", "burnt", "alubare", "rawcarbon", "flovis", "carbonfade", "silverfade", "metalflop",
     "truematte", "pearlwhite", "jpsgold", "ghostpearl", "xirallic", "mystichrome", "midnightpurple", "ultrablack"]);
@@ -377,7 +377,7 @@ test("FINISH_SURFACE rows forged 38, gunmetal 39, goldplate 40 exist in the rese
   vm.runInContext(read("js/data/teams.js"), cx, { filename: absSrc("js/data/teams.js") });
   const Teams = vm.runInContext("Teams", cx);
   for (const f of ["forged", "gunmetal", "goldplate"]) assert.equal(Teams.liveryEnumOk("finish", f), true, f);
-  assert.match(read("js/garage/setup-sheet.js"), /\n  finish: "[^"]*forged[^"]*gunmetal[^"]*goldplate[^"]*",/, "LIV_ROW_HINT names the new finishes");
+  assert.match(read("js/garage/setup-sheet.js"), /\n  finish: "FINISH[^\n]*",/, "FINISH has a surface hint; the registry owns the option inventory");
 });
 
 test("forged carbon: chip cells, fade, resin, roughness and lacquer — same numbers in GLX / TLX / WGX", () => {
@@ -416,16 +416,16 @@ test("gunmetal: metal lobe with a dark livery-hue tint and the dark-metal env bo
     GLX: [/bool gunSurface = surfaceId == 39;/, `albedo = mix(vec3(${lit3(G.base)}), ${hue}, ${f2(G.hueMix)});`,
       `gunSurface ? max(uMetalness, ${f2(G.metalness)})`, `gunSurface ? ${f2(G.specular)}`, `gunSurface ? min(uClearcoat, ${f2(G.clearcoatMax)})`,
       `if (gunSurface) rough = clamp(rough, ${f2(G.roughLo)}, ${f2(G.roughHi)});`,
-      "if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface) {", "if (metalSurface || gunSurface) {"],
+      "if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface || hammerSurface || anodSurface) {", "if (metalSurface || gunSurface) {"],
     WGX: [/let gunSurface = surfaceId == 39;/, `albedo = mix(vec3<f32>(${lit3(G.base)}), ${hue}, vec3<f32>(${f2(G.hueMix)}));`,
       `metalness = max(D.mat0.w, ${f2(G.metalness)}); specular = ${f2(G.specular)};`, `if (gunSurface) { clearcoat = min(D.mat1.z, ${f2(G.clearcoatMax)}); }`,
       `if (gunSurface) { rough = clamp(rough, ${f2(G.roughLo)}, ${f2(G.roughHi)}); }`,
-      "if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface) {", "if (metalSurface || gunSurface) {"],
+      "if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface || hammerSurface || anodSurface) {", "if (metalSurface || gunSurface) {"],
     TLX: [/const gunSurface = surfaceId\.equal\(39\.0\)\.toVar\(\);/,
       `albedo.assign(mix(vec3(${lit3(G.base)}), albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), ${G.chromaFloor})).mul(${f2(G.hueGain)}), ${f2(G.hueMix)}));`,
       `clearcoat.assign(min(matU.clearcoat, ${f2(G.clearcoatMax)})); metalness.assign(max(matU.metalness, ${f2(G.metalness)})); specular.assign(${f2(G.specular)});`,
       `If(gunSurface, () => { rough.assign(clamp(rough, ${f2(G.roughLo)}, ${f2(G.roughHi)})); });`,
-      "If(metalSurface.or(satinMetalSurface).or(mirrorSurface).or(gunSurface), () => {", "If(metalSurface.or(gunSurface), () => {"],
+      "If(metalSurface.or(satinMetalSurface).or(mirrorSurface).or(gunSurface).or(hammerSurface).or(anodSurface), () => {", "If(metalSurface.or(gunSurface), () => {"],
   };
   for (const [name, list] of Object.entries(pins))
     for (const p of list) assert.match(src[name], p instanceof RegExp ? p : new RegExp(esc(p)), `${name}: gunmetal drifted: ${p}`);
@@ -458,4 +458,170 @@ test("forged, gunmetal and gold plate add no uniform, define, texture fetch or s
     assert.ok(m.length > 0, `${name}: no forged/gunmetal/gold code found`);
     assert.doesNotMatch(m, /\buniform\b|#define|texture\w*\(|textureSample|cubeTexture|\buForg|\buGun|\buGold/i, `${name}: the new finishes must stay ALU-only`);
   }
+});
+
+// Four distinct BRDF families, not alternate names for existing surface identities.
+test("expanded finishes reserve unique ids, accept whole-car/zone values and preserve mesh streams", () => {
+  const { CarMaterials } = loadMaterials();
+  const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
+  cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: absSrc("js/data/teams.js") });
+  const Teams = vm.runInContext("Teams", cx);
+  const { SURFACES: S } = CarMaterials;
+  for (const [name, id] of [["holographic", 41], ["velvet", 42], ["hammered", 43], ["anodized", 44]]) {
+    assert.equal(CarMaterials.FINISH_SURFACE[name], id);
+    assert.equal(CarMaterials.FINISH_RESERVED[name], id);
+    assert.equal(Teams.liveryEnumOk("finish", name), true);
+    assert.equal(Teams.liveryEnumOk("coverFinish", name), true);
+    const out = { mat: [S.paint, S.carbon, S.glass, S.emissive, S.mirror, S.paint], pos: [1, 2, 3], nrm: [0, 1, 0], col: [0.8, 0.2, 0.1], idx: [0] };
+    const streams = [out.pos, out.nrm, out.col, out.idx];
+    const values = streams.map((s) => s.slice());
+    CarMaterials.applyFinish(out, name);
+    assert.deepEqual(out.mat, [id, S.carbon, S.glass, S.emissive, S.mirror, id]);
+    assert.deepEqual([out.pos, out.nrm, out.col, out.idx], values);
+    streams.forEach((s, i) => assert.equal([out.pos, out.nrm, out.col, out.idx][i], s, "finish remaps IDs without allocating mesh streams"));
+  }
+});
+
+const expandedPins = (label, pins) => {
+  const shaders = shaderSources();
+  for (const [backend, snippets] of Object.entries(pins)) for (const snippet of snippets)
+    assert.ok(shaders[backend].includes(snippet), `${backend}: ${label} drifted: ${snippet}`);
+};
+
+test("holographic keeps one continuous angular spectrum in all three backends", () => {
+  const { HOLOGRAPHIC: H } = loadMaterials().CarMaterialShade;
+  expandedPins("holographic", {
+    GLX: [`bool holoSurface = surfaceId == 41;`, `clearcoat = max(uClearcoat, ${f2(H.clearcoat)}); metalness = ${f2(H.metalness)}; specular = ${f2(H.specular)};`,
+      `rough = ${f2(H.roughness)};`, `vec3(${lit3(H.phase)}) + hoF * ${H.cycles}`, `vec3(${H.hueFloor}) + ${H.hueSpan} * hoS`, `mix(${f2(H.minWeight)}, ${f2(H.tintWeight)}, smoothstep(${f2(H.fresLo)}, ${f2(H.fresHi)}, hoF))`],
+    WGX: [`let holoSurface = surfaceId == 41;`, `clearcoat = max(D.mat1.z, ${f2(H.clearcoat)});`, `metalness = ${f2(H.metalness)}; specular = ${f2(H.specular)};`,
+      `rough = ${f2(H.roughness)};`, `vec3<f32>(${lit3(H.phase)}) + vec3<f32>(hoF * ${H.cycles})`, `vec3<f32>(${H.hueFloor}) + ${H.hueSpan} * hoS`, `mix(${f2(H.minWeight)}, ${f2(H.tintWeight)}, smoothstep(${f2(H.fresLo)}, ${f2(H.fresHi)}, hoF))`],
+    TLX: [`const holoSurface = surfaceId.equal(41.0).toVar();`, `clearcoat.assign(max(matU.clearcoat, ${f2(H.clearcoat)})); metalness.assign(${f2(H.metalness)}); specular.assign(${f2(H.specular)});`,
+      `rough.assign(${f2(H.roughness)});`, `vec3(${lit3(H.phase)}).add(hoF.mul(${H.cycles}))`, `hoS.mul(${H.hueSpan}).add(${H.hueFloor})`, `mix(float(${f2(H.minWeight)}), float(${f2(H.tintWeight)}), smoothstep(${f2(H.fresLo)}, ${f2(H.fresHi)}, hoF))`],
+  });
+  assert.ok(H.cycles > 1 && H.fresLo < 0.1 && H.tintWeight > 0.75, "multi-hue response is broader than pearl/chameleon's grazing-only flip");
+});
+
+test("velvet has a diffuse dark face and lighting-preserving grazing sheen across backends", () => {
+  const { VELVET: V, MATTE: M } = loadMaterials().CarMaterialShade;
+  expandedPins("velvet", {
+    GLX: [`bool velvetSurface = surfaceId == 42;`, `clearcoat = ${f1(V.clearcoat)}; metalness = ${f1(V.metalness)}; specular = ${f2(V.specular)};`,
+      `rough = max(rough, ${f2(V.roughFloor)});`, `albedo *= ${f2(V.darken)};`, `color *= 1.0 + veF * veF * ${f2(V.sheenGain)};`],
+    WGX: [`let velvetSurface = surfaceId == 42;`, `metalness = ${f1(V.metalness)}; specular = ${f2(V.specular)};`, `rough = max(rough, ${f2(V.roughFloor)});`,
+      `albedo = albedo * ${f2(V.darken)};`, `color = color * (1.0 + veF * veF * ${f2(V.sheenGain)});`],
+    TLX: [`const velvetSurface = surfaceId.equal(42.0).toVar();`, `clearcoat.assign(${f1(V.clearcoat)}); metalness.assign(${f1(V.metalness)}); specular.assign(${f2(V.specular)});`,
+      `rough.assign(max(rough, ${f2(V.roughFloor)}));`, `albedo.mulAssign(${f2(V.darken)});`, `color.mulAssign(veF.mul(veF).mul(${f2(V.sheenGain)}).add(1.0));`],
+  });
+  assert.ok(V.roughFloor > M.roughFloor && V.specular < M.specular && V.darken * (1 + V.sheenGain) > 1, "velvet darkens the face and softly lifts the edge without a mirror lobe");
+});
+
+test("hammered relief is smooth, object-space and faded by 22 metres across backends", () => {
+  const { HAMMERED: H } = loadMaterials().CarMaterialShade;
+  expandedPins("hammered", {
+    GLX: [`bool hammerSurface = surfaceId == 43;`, `clearcoat = min(uClearcoat, ${f2(H.clearcoatMax)}); metalness = ${f2(H.metalness)}; specular = ${f2(H.specular)};`,
+      `(vObjPos.xz + vObjPos.y * vec2(${lit3(H.projectY)})) * ${f1(H.frequency)}`, `vDist - ${f1(H.fadeStartM)}) / ${f1(H.fadeSpanM)}`, `sin(hmP + sin(hmP.yx * ${H.warpFrequency}) * ${f2(H.warpGain)})`, `* (${f2(H.normalAmp)} * hmF)`, `rough = clamp(rough, ${f2(H.roughLo)}, ${f2(H.roughHi)});`],
+    WGX: [`let hammerSurface = surfaceId == 43;`, `clearcoat = min(D.mat1.z, ${f2(H.clearcoatMax)});`, `metalness = ${f2(H.metalness)}; specular = ${f2(H.specular)};`,
+      `(in.objPos.xz + in.objPos.y * vec2<f32>(${lit3(H.projectY)})) * ${f1(H.frequency)}`, `vDist - ${f1(H.fadeStartM)}) / ${f1(H.fadeSpanM)}`, `sin(hmP + sin(hmP.yx * ${H.warpFrequency}) * ${f2(H.warpGain)})`, `* (${f2(H.normalAmp)} * hmF)`, `rough = clamp(rough, ${f2(H.roughLo)}, ${f2(H.roughHi)});`],
+    TLX: [`const hammerSurface = surfaceId.equal(43.0).toVar();`, `clearcoat.assign(min(matU.clearcoat, ${f2(H.clearcoatMax)})); metalness.assign(${f2(H.metalness)}); specular.assign(${f2(H.specular)});`,
+      `objP.xz.add(objP.y.mul(vec2(${lit3(H.projectY)}))).mul(${f1(H.frequency)})`, `vd.sub(${f1(H.fadeStartM)}).div(${f1(H.fadeSpanM)}).oneMinus()`, `hmP.add(hmP.yx.mul(${H.warpFrequency}).sin().mul(${f2(H.warpGain)})).sin()`, `.mul(hmF.mul(${f2(H.normalAmp)}))`, `rough.assign(clamp(rough, ${f2(H.roughLo)}, ${f2(H.roughHi)}));`],
+  });
+  assert.equal(H.fadeStartM + H.fadeSpanM, 22);
+  const fade = (m) => Math.min(1, Math.max(0, 1 - (m - H.fadeStartM) / H.fadeSpanM));
+  assert.equal(fade(8), 1); assert.equal(fade(22), 0); assert.equal(fade(100), 0);
+});
+
+test("anodized retains bright colour on a broad metal lobe rather than gunmetal's dark substrate", () => {
+  const { ANODIZED: A, GUNMETAL: G } = loadMaterials().CarMaterialShade;
+  expandedPins("anodized", {
+    GLX: [`bool anodSurface = surfaceId == 44;`, `clearcoat = min(uClearcoat, ${f2(A.clearcoatMax)}); metalness = ${f2(A.metalness)}; specular = ${f2(A.specular)};`,
+      `rough = clamp(rough, ${f2(A.roughLo)}, ${f2(A.roughHi)});`, `albedo = anHue * ${f2(A.hueWeight)} + albedo * ${f2(A.baseWeight)};`, `mix(vec3(1.0), anHue, ${f2(A.tintWeight)})`],
+    WGX: [`let anodSurface = surfaceId == 44;`, `clearcoat = min(D.mat1.z, ${f2(A.clearcoatMax)});`, `metalness = ${f2(A.metalness)}; specular = ${f2(A.specular)};`,
+      `rough = clamp(rough, ${f2(A.roughLo)}, ${f2(A.roughHi)});`, `albedo = anHue * ${f2(A.hueWeight)} + albedo * ${f2(A.baseWeight)};`, `mix(vec3<f32>(1.0), anHue, vec3<f32>(${f2(A.tintWeight)}))`],
+    TLX: [`const anodSurface = surfaceId.equal(44.0).toVar();`, `clearcoat.assign(min(matU.clearcoat, ${f2(A.clearcoatMax)})); metalness.assign(${f2(A.metalness)}); specular.assign(${f2(A.specular)});`,
+      `rough.assign(clamp(rough, ${f2(A.roughLo)}, ${f2(A.roughHi)}));`, `albedo.assign(anHue.mul(${f2(A.hueWeight)}).add(albedo.mul(${f2(A.baseWeight)})));`, `mix(vec3(1.0), anHue, ${f2(A.tintWeight)})`],
+  });
+  assert.ok(A.hueWeight > G.hueGain && A.roughLo > G.roughHi && A.clearcoatMax < G.clearcoatMax);
+});
+
+test("expanded finish blocks add no resources, temporal pattern or shader derivatives", () => {
+  for (const [backend, source] of Object.entries(shaderSources())) {
+    const blocks = [...source.matchAll(/\/\/ EXPANDED FINISHES[\s\S]*?\/\/ END EXPANDED FINISHES/g)].map((m) => m[0]).join("\n");
+    assert.ok(blocks.length > 500, `${backend}: finish implementation blocks are missing`);
+    assert.doesNotMatch(blocks, /\buniform\b|#define|texture\w*\(|textureSample|cubeTexture|\bdpdx\b|\bdpdy\b|\bfwidth\b|\bdFdx\b|\bdFdy\b|\buTime\b|\btime\b/i, `${backend}: response must remain procedural and resource-free`);
+  }
+});
+
+test("hammered cotangent frame follows panel rotation, reflection and screen handedness", () => {
+  const { HAMMERED: H } = loadMaterials().CarMaterialShade;
+  const dot3 = (a, b) => a.reduce((n, v, i) => n + v * b[i], 0);
+  const plus = (a, b) => a.map((v, i) => v + b[i]), times = (a, s) => a.map((v) => v * s);
+  const cross3 = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const unit = (a) => times(a, 1 / (Math.hypot(...a) || 1));
+  const uv = (p) => [p[0] + p[1] * H.projectY[0], p[2] + p[1] * H.projectY[1]];
+  const point = [0.31, 0.72, -1.12], phase = uv(point).map((v) => v * H.frequency);
+  const tilt = phase.map((v, i) => Math.sin(v + Math.sin(phase[1-i] * H.warpFrequency) * H.warpGain));
+  const normal = (n, dp1, dp2, duv1, duv2, amplitude = H.normalAmp) => {
+    const c1 = cross3(dp2, n), c2 = cross3(n, dp1);
+    const u = plus(times(c1, duv1[0]), times(c2, duv2[0]));
+    const v = plus(times(c1, duv1[1]), times(c2, duv2[1]));
+    const scale = (dot3(dp1, c1) < 0 ? -1 : 1) / Math.sqrt(Math.max(dot3(u, u), dot3(v, v), 1e-12));
+    return unit(plus(n, times(plus(times(u, tilt[0]), times(v, tilt[1])), scale * amplitude)));
+  };
+  const close = (a, b) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-10, `${a} != ${b}`));
+  for (const [n, dx, dy] of [[[0, 1, 0], [1, 0, 0], [0, 0, 1]], [[1, 0, 0], [0, 1, 0], [0, 0, 1]]]) {
+    const duv1 = uv(dx), duv2 = uv(dy), original = normal(n, dx, dy, duv1, duv2);
+    for (const angle of [Math.PI/2, Math.PI, 0.37]) for (const reflectX of [1, -1]) {
+      const rotate = (p) => [reflectX * (p[0]*Math.cos(angle)+p[2]*Math.sin(angle)), p[1], -p[0]*Math.sin(angle)+p[2]*Math.cos(angle)];
+      close(normal(rotate(n), rotate(dx), rotate(dy), duv1, duv2), rotate(original));
+    }
+    close(normal(n, dx, times(dy, -1), duv1, times(duv2, -1)), original);
+    close(normal(n, [0, 0, 0], [0, 0, 0], [0, 0], [0, 0]), n);
+    // Hammered always resets to Ngeo, including where its relief fade reaches
+    // zero: otherwise the old generic peel abruptly reappears at 22 m.
+    const fade = (distance) => Math.min(1, Math.max(0, 1 - (distance - H.fadeStartM) / H.fadeSpanM));
+    const end = H.fadeStartM + H.fadeSpanM;
+    const at = (distance) => normal(n, dx, dy, duv1, duv2, H.normalAmp * fade(distance));
+    close(at(end), n); close(at(end + 1), n);
+    at(end - 1e-6).forEach((v, i) => assert.ok(Math.abs(v - n[i]) < 1e-7, "normal approaches Ngeo continuously at the relief cutoff"));
+  }
+  expandedPins("hammered transformed frame", {
+    GLX: ["vec3 hmDP1 = dFdx(vWorldPos), hmDP2 = dFdy(vWorldPos);", "vec2 hmDUV1 = dFdx(hmUV), hmDUV2 = dFdy(hmUV);", "cross(hmDP2, Ngeo)", "hmC1 * hmDUV1.x + hmC2 * hmDUV2.x", "dot(hmDP1, hmC1) < 0.0 ? -1.0 : 1.0", "N = normalize(Ngeo + hmTilt"],
+    WGX: ["let hmDP1 = dpdx(in.wpos); let hmDP2 = dpdy(in.wpos);", "let hmDUV1 = dpdx(hmUV); let hmDUV2 = dpdy(hmUV);", "cross(hmDP2, Ngeo)", "hmC1 * hmDUV1.x + hmC2 * hmDUV2.x", "select(1.0, -1.0, dot(hmDP1, hmC1) < 0.0)", "N = normalize(Ngeo + hmTilt"],
+    TLX: ["const hmDP1 = dFdx(wp).toVar(), hmDP2 = dFdy(wp).toVar();", "const hmDUV1 = dFdx(hmUV).toVar(), hmDUV2 = dFdy(hmUV).toVar();", "cross(hmDP2, Ngeo)", "hmC1.mul(hmDUV1.x).add(hmC2.mul(hmDUV2.x))", "select(dot(hmDP1, hmC1).lessThan(0.0), float(-1.0), float(1.0))", "N.assign(normalize(Ngeo.add(hmTilt"],
+  });
+  expandedPins("hammered fade baseline", {
+    GLX: ["if (hammerSurface) {\n    N = Ngeo;\n    float hmF"],
+    WGX: ["if (hammerSurface) {\n    N = Ngeo;\n    let hmF"],
+    TLX: ["If(hammerSurface, () => {\n          N.assign(Ngeo);\n          const hmF"],
+  });
+  // In WGSL no dFdx/dpdx may be first evaluated inside the surface branch.
+  const wgsl = shaderSources().WGX.slice(shaderSources().WGX.indexOf("fn fs_main(in : VSOut, @builtin(front_facing)"));
+  assert.ok(wgsl.indexOf("let hmDUV2") < wgsl.indexOf("let isRoadDraw"), "all hammered derivatives precede divergent flow");
+});
+
+test("holographic transfers existing light across hue channels without increasing the lit peak", () => {
+  const { HOLOGRAPHIC: H } = loadMaterials().CarMaterialShade;
+  const response = (lit, fres) => {
+    const peak = Math.max(...lit, 0), t = Math.max(0, Math.min(1, (fres - H.fresLo) / (H.fresHi - H.fresLo)));
+    const blend = H.minWeight + (H.tintWeight - H.minWeight) * t*t*(3-2*t);
+    return H.phase.map((phase, i) => {
+      const spectrum = H.hueFloor + H.hueSpan * (0.5 + 0.5 * Math.cos(6.2831853 * (phase + fres * H.cycles)));
+      return lit[i] * (1 - blend) + peak * spectrum * blend;
+    });
+  };
+  for (const lit of [[1, 0, 0], [0, 0.8, 0], [0, 0, 0.6], [0.01, 0.01, 0.01], [2, 1, 0.5]]) {
+    for (const fres of [0, 0.2, 0.35, 0.6, 1]) {
+      const result = response(lit, fres);
+      assert.ok(result.every((v) => Number.isFinite(v) && v >= 0 && v <= Math.max(...lit) + 1e-12), "interference redistributes existing light, never adds a brighter source");
+    }
+  }
+  assert.deepEqual(Array.from(response([0, 0, 0], 0.4)), [0, 0, 0], "an unlit panel stays black");
+  const shiftedRed = response([1, 0, 0], 0.35);
+  assert.ok(shiftedRed[1] > 0.4 && shiftedRed[2] > 0.2, "saturated red can visibly shift green/blue; multiplication cannot do this");
+  assert.ok(response([0, 0, 0.6], 0)[2] >= 0.6 * (1 - H.minWeight), "face-on retains most authored paint");
+  expandedPins("bounded spectral light blend", {
+    GLX: ["float hoPeak = max(max(max(color.r, color.g), color.b), 0.0);", "color = mix(color, hoPeak * (vec3(0.25) + 0.75 * hoS)"],
+    WGX: ["let hoPeak = max(max(max(color.r, color.g), color.b), 0.0);", "color = mix(color, hoPeak * (vec3<f32>(0.25) + 0.75 * hoS)"],
+    TLX: ["const hoPeak = max(max(max(color.r, color.g), color.b), 0.0).toVar();", "color.assign(mix(color, hoS.mul(0.75).add(0.25).mul(hoPeak)"],
+  });
 });

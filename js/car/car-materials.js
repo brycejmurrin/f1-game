@@ -7,7 +7,7 @@ const CarMaterials = (function () {
     emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27, sidewall: 33,   // 33: satin tyre sidewall (glsl-lit.js)
   });
   // A livery FINISH is a surface-id remap on painted vertices, not a material
-  // uniform: the shaders classify car surfaces 20-40 and branch per id, so a new
+  // uniform: the shaders classify car surfaces 20-44 and 60-85 and branch per id, so a new
   // finish costs an id in that chain (js/render/glx/shaders/glsl-lit.js and its WGSL/TSL
   // mirrors) and one row here. `carbon` gets id 31 rather than reusing
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
@@ -23,6 +23,7 @@ const CarMaterials = (function () {
     satin: 26, chrome: 27, matte: 28, carbon: 31, brushed: 29, pearl: 30,
     flake: 34, candy: 35, tinted: 36, chameleon: 37,   // shader branches exist in GLX/TLX/WGX (surface-id-parity.test.mjs)
     forged: 38, gunmetal: 39, goldplate: 40,
+    holographic: 41, velvet: 42, hammered: 43, anodized: 44,
     // FINISHES 60+ (design lane D2, round 4 close-up matrix): each rides a base branch above and adds one tint after the
     // metal block, in GLX / TLX / WGX alike, tuned against a real-car or real-paint reference.
     oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, alubare: 65, rawcarbon: 66, flovis: 67, carbonfade: 68,
@@ -34,6 +35,7 @@ const CarMaterials = (function () {
   // the id is fixed here first so the slices cannot take the same one. tests/unit/livery-finish-contract.test.mjs
   // pins that no id repeats and that every FINISH_SURFACE id is either shipped (<= 33) or reserved.
   const FINISH_RESERVED = Object.freeze({ flake: 34, candy: 35, tinted: 36, chameleon: 37, forged: 38, gunmetal: 39, goldplate: 40,
+    holographic: 41, velvet: 42, hammered: 43, anodized: 44,
     oilslick: 60, frozen: 61, fluoro: 62, burnt: 63, alubare: 65, rawcarbon: 66, flovis: 67, carbonfade: 68, silverfade: 69,
     metalflop: 70, truematte: 71, pearlwhite: 72, jpsgold: 74, ghostpearl: 81, xirallic: 82, mystichrome: 83,
     midnightpurple: 84, ultrablack: 85 });
