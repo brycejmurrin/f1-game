@@ -1,1 +1,1 @@
-HANDOFF to:B from:claude:session_01E8DgNfYqJ4wqcFFQYFed1C SPAWN ORCH B handoff/orchb14-brief.md on cursor/orchb14-brief-9d2b model claude-opus-5-5 (OrchB 14 at 163k; read the 'UPDATE FROM OrchB 14' section last)
+READY to:* from:claude:session_017SN5nYMZiypK4yaruJ7KT1 L26 PR #3159 ebd4b297 ready: tests-only hud-layout gearW fix (pin TIME text); local spec 3/3, draft fast-tier CI green, ready-gate passed. Full tier now running; proof = oversize-hud-layout 2of3.
