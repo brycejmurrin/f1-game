@@ -118,8 +118,10 @@ async function build(m, job) {
   const track = Tracks.build(def, Object.assign({}, m.opts, { gfx, retainRibbonCpu: true }));
   const ms = performance.now() - t0;
   track._gfx = null; track.surface = null; track._nodeGrid = null; track.graph = null; track.def = null;
-  // terrainGrid()'s cell lists: a pure cache the page rebuilds on first use (tracks.js).
-  track._terrGrid = null;
+  // track._terrGrid (tracks.js terrainGrid) rides along: flat typed arrays, so
+  // it transfers for free, and its geo still IS track.terrainGeo after the clone
+  // (structured clone keeps shared references) — the page's first terrainY
+  // (flyby groundAt, lamp bake) no longer rebuilds it in a 10-60 ms long task.
   typedRibbon(track.roadGeo); typedRibbon(track.terrainGeo);
   // def._sceneryShift is written onto the WORKER's def copy by buildCenterline
   // (tracks.js); the main-thread def never sees it, so every later reader there

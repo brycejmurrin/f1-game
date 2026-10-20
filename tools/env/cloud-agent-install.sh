@@ -91,7 +91,11 @@ if ! bash "$ROOT/tools/env/install-browsers.sh"; then
   system_browser="$(node "$ROOT/tools/lib/chromium-path.mjs" --path || true)"
   if [[ -n "$system_browser" && -x "$system_browser" ]]; then
     echo "WARN: Playwright browser install failed; installed Chrome is present at $system_browser"
-    if [[ -f node_modules/playwright/package.json && -f node_modules/sharp/package.json ]]; then
+    # A browser alone cannot recover incomplete or incompatible test tooling.
+    # Match install-browsers.sh's offline direct-dependency validation, including
+    # dev packages even when the host defaults to production installs.
+    if [[ -f node_modules/playwright/package.json && -f node_modules/sharp/package.json ]] \
+        && npm ls --depth=0 --include=dev --offline >/dev/null 2>&1; then
       ensure_mcp_clones
       echo "OK: cloud-agent install complete (npm ready, browsers deferred)"
       exit 0

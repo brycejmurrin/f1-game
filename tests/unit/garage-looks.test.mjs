@@ -128,24 +128,33 @@ test("fit: every look's roof structure is hung from the ceiling", () => {
 // (GarageCrew.LOOKS), LIGHTING (GarageScene.MOODS) — and a click must reach the
 // scene module, which applies and saves it. Runs the real lookRowSpecs /
 // buildLookRows source against stub tables and a minimal DOM.
-function pickerHarness() {
+function pickerHarness(soundOn = false) {
   const src = read("js/garage/setup-sheet.js");
   const start = src.indexOf("const CREW_NAMES"), end = src.indexOf("// TEAM & DRIVER");
   assert.ok(start > 0 && end > start, "picker source found in setup-sheet.js");
   const calls = [], focused = [];
-  let rebuilds = 0;
-  const el = (tag) => ({
-    tag, children: [], dataset: {}, attrs: {}, className: "", id: "", textContent: "",
-    appendChild(c) { this.children.push(c); return c; },
-    setAttribute(k, v) { this.attrs[k] = v; },
-  });
+  let rebuilds = 0, ticks = 0;
+  const el = (tag) => {
+    const node = {
+      tag, children: [], dataset: {}, attrs: {}, className: "", id: "", textContent: "",
+      appendChild(c) { this.children.push(c); return c; },
+      setAttribute(k, v) { this.attrs[k] = v; },
+      focus() { focused.push(`[data-cs-look="${this.dataset.csLook}"]`); },
+    };
+    node.classList = { toggle(name, on) {
+      const classes = new Set(node.className.split(/\s+/).filter(Boolean));
+      if (on) classes.add(name); else classes.delete(name);
+      node.className = [...classes].join(" ");
+    } };
+    return node;
+  };
   const opts = el("div");
   const ctx = vm.createContext({
     document: { createElement: el },
     csLabel: (t) => Object.assign(el("label"), { textContent: t }),
     buildSetup: () => { rebuilds++; },
     $: () => ({ querySelector: (sel) => ({ focus: () => focused.push(sel) }) }),
-    G: { soundOn: false }, GameAudio: { uiTick() {} },
+    G: { soundOn }, GameAudio: { uiTick() { ticks++; } },
     GaragePrims: { LOOK_IDS: ["stock", "studio"], LOOKS: { stock: null, studio: { label: "Silver studio" } },
       lookId: () => "stock", setLook: (id) => calls.push(["room", id]) },
     GarageCrew: { LOOKS: ["classic", "pitstop"], look: () => "classic", setLook: (id) => calls.push(["crew", id]) },
@@ -153,7 +162,7 @@ function pickerHarness() {
   });
   vm.runInContext(src.slice(start, end), ctx);
   vm.runInContext("buildLookRows", ctx)(opts);
-  return { opts, calls, focused, rebuilds: () => rebuilds };
+  return { opts, calls, focused, rebuilds: () => rebuilds, ticks: () => ticks };
 }
 
 test("pickers: GARAGE, CREW and LIGHTING rows, current look pressed", () => {
@@ -172,15 +181,32 @@ test("pickers: GARAGE, CREW and LIGHTING rows, current look pressed", () => {
   }
 });
 
-test("pickers: a click applies through the scene module, rebuilds and keeps focus", () => {
+test("pickers: room/crew rebuild, lighting applies in place and keeps focus", () => {
   const h = pickerHarness();
   const rows = h.opts.children.filter((c) => c.tag === "div");
   rows[0].children[0].onclick();                       // already current: no-op
   assert.equal(h.calls.length, 0);
   rows[0].children[1].onclick(); rows[1].children[1].onclick(); rows[2].children[1].onclick();
   assert.deepEqual(h.calls, [["room", "studio"], ["crew", "pitstop"], ["mood", "night"]]);
-  assert.equal(h.rebuilds(), 3);
+  assert.equal(h.rebuilds(), 2);
   assert.deepEqual(h.focused, ['[data-cs-look="room:studio"]', '[data-cs-look="crew:pitstop"]', '[data-cs-look="mood:night"]']);
+});
+
+test("lighting picker: alternating moods keeps one pressed button without rebuilding or duplicate ticks", () => {
+  const h = pickerHarness(true);
+  const row = h.opts.children.find((c) => c.id === "cs-look-mood");
+  const [standard, night] = row.children;
+  standard.onclick();
+  for (const button of [night, standard, night]) {
+    button.onclick();
+    button.onclick(); // the current selection stays a no-op after an in-place update
+    assert.deepEqual(row.children.filter((b) => b.attrs["aria-pressed"] === "true"), [button]);
+    assert.deepEqual(row.children.filter((b) => b.className.split(" ").includes("active")), [button]);
+  }
+  assert.deepEqual(h.calls, [["mood", "night"], ["mood", "shipped"], ["mood", "night"]]);
+  assert.equal(h.rebuilds(), 0);
+  assert.equal(h.ticks(), 3);
+  assert.deepEqual(h.focused, ['[data-cs-look="mood:night"]', '[data-cs-look="mood:shipped"]', '[data-cs-look="mood:night"]']);
 });
 
 test("pickers: the crew and mood picks are saved by their scene modules", () => {

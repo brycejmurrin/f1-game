@@ -388,7 +388,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      at all — so the one place they are read at arm's length, on a phone, in
      motion, is the place they were smallest relative to the screen. Desktop
      keeps the base sizes; this is the touch notch they never had. */
-  body:not(.desktop) .hud-box { padding: 5px 13px; }
+  body:not(.desktop) .hud-box { --hud-box-pad: 13px; padding: 5px var(--hud-box-pad); padding-left: calc(var(--hud-box-pad) + var(--hud-box-stripe)); }
   /* max(): a painted floor of ~11px (the micro token over 1.27), so HUD SIZE 70% (9.8px labels) stays readable like the gap chip's 10px floor. */
   body:not(.desktop) .hud-label { font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.27 / var(--hud-z, 1))); }
   body:not(.desktop) .hud-value { font-size: calc(22px * var(--hud-text-boost, 1)); }

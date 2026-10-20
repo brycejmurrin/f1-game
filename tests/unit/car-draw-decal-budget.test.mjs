@@ -124,6 +124,33 @@ test("a failed hi-res build is tried twice per key, not on every draw", () => {
   assert.equal(r.hiBuilds.length, 3);
 });
 
+// A live garage paint draft (G.livDraftOverride) gives every edit a new decal key; the hi-res kick used to
+// build + upload a fresh 2048 atlas (~26.7 MB) for each key the idle slot reached mid-edit — the extra GPU
+// texture garage-livery-churn.spec.js caught (B·C1, 2026-10-20). Draft: preview only. Save/close: one upgrade.
+test("no player hi-res while a garage paint draft is live; exactly one after it ends", () => {
+  const r = rig(), t = team("me"), m = new Float32Array(16);
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);   // garage open: the saved livery's kick is queued...
+  const stale = r.idle.splice(0);
+  r.G.livDraftOverride = { teamId: "me", liv: {} };      // ...and the editor opens before the idle slot runs
+  for (let i = 0; i < 6; i++) {                          // six draft edits, each a fresh key
+    r.carDraw.invalidateDecalTextures("me");
+    r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+    r.drain();
+  }
+  for (const cb of stale) cb({ didTimeout: false, timeRemaining: () => 50 });
+  r.drain();
+  assert.equal(r.hiBuilds.length, 0, "no 2048 paint while the draft is live: " + r.hiBuilds.join(","));
+  assert.equal(r.built.filter((c) => c.hi).length, 0, "no 2048 upload while the draft is live");
+  r.G.livDraftOverride = null;                           // SAVE / CANCEL / leave (endLivPreview)
+  r.carDraw.invalidateDecalTextures("me");
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  r.drain();
+  assert.deepEqual(r.hiBuilds, ["me#1"], "exactly one upgrade once the draft ends");
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  assert.equal(r.carDraw.getCarDecalTexture(t, 1, true).canvas.id, "me#1:hi", "the 2048 atlas arrives after save/close");
+});
+
 test("a hi-res createTexture that returns nothing keeps the preview instead of caching a null", () => {
   const r = rig();
   const t = team("me"), m = new Float32Array(16);

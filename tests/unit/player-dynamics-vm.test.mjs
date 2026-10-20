@@ -15,6 +15,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 import { measure, bench } from "../../tools/check/player-dyn.mjs";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -442,4 +443,71 @@ test("a light LIVE analog brake: the weight-transfer estimate tracks the decel a
     assert.ok(Math.abs(-axEst - decel) < 0.5,
       `axEstSm (${axEst}) must track the applied decel (${decel.toFixed(2)} m/s²), not BRAKE·level`);
   } finally { Object.assign(I, saved); a.clearInput(); }
+});
+
+// WHEEL STATE (#1628, js/physics/wheel-state.js; opt-in, default OFF). The
+// rims are torque-balanced and a sliding tyre's shortfall goes back into
+// c.speed, so ON must (a) change NOTHING on a dry stop or launch, where the
+// demand sits under the tyre's peak, (b) lock and stop LONGER when the demand
+// exceeds the circle (storm, slicks, forward bias), and (c) spin and pull
+// SLOWER on grass. Evidence: docs/notes/WHEEL-STATE-2026-10-19.md.
+const DT_ = 1 / 60;
+// One game per weather; the flag toggles between rows (bench.reset / jump
+// re-place the car and WheelState re-syncs its rims on a placement).
+async function wheelGame(wx) {
+  const w = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false } });
+  await w.race("monza", "day", wx);
+  const set = (on) => vm.runInContext(`WheelState.setEnabled(${on})`, w.ctx);
+  return { w, set };
+}
+function stopFrom(w, v0, setup) {
+  const b = bench(w, 0), P = b.P;
+  b.reset(v0); if (setup) setup(P);
+  let d = 0, t = 0, lock = 0;
+  while (P.speed > 0.3 && t < 15) { b.step({ steer: 0, brake: true }); d += P.speed * DT_; t += DT_; lock = Math.max(lock, P.wheelLock || 0); }
+  return { d, lock, kF: P.kappaF };
+}
+let dry = null;
+after(() => { if (dry) dry.w.close(); });
+test("wheel state ON: a dry stop and launch are unchanged and never lock or spin", async () => {
+  dry = await wheelGame("dry");
+  const rows = {};
+  for (const on of [false, true]) {
+    dry.set(on);
+    const s = stopFrom(dry.w, 55.56);
+    const b = bench(dry.w, 0), P = b.P; b.reset(0.5); let t = 0, spin = 0;
+    while (P.speed < 27.78 && t < 20) { b.step({ steer: 0, throttle: true }); t += DT_; spin = Math.max(spin, P.wheelSpin || 0); }
+    rows[on ? "on" : "off"] = { d: s.d, lock: s.lock, t100: t, spin };
+  }
+  dry.set(false);
+  assert.ok(Math.abs(rows.on.d - rows.off.d) < 0.5, JSON.stringify(rows));
+  assert.ok(Math.abs(rows.on.t100 - rows.off.t100) < 0.05, JSON.stringify(rows));
+  assert.equal(rows.on.lock, 0, "a dry BB_REF stop sits under the front's peak");
+  assert.equal(rows.on.spin, 0, "a dry launch sits under the rear's peak");
+});
+test("wheel state ON: over the circle the front locks and the stop gets longer", async () => {
+  const { w, set } = await wheelGame("storm");
+  const setup = (P) => { P.tread = 0; P.brakeBias = 0.75; };   // slicks in a storm, bias forward
+  const d = {};
+  for (const on of [false, true]) { set(on); d[on ? "on" : "off"] = stopFrom(w, 27.78, setup); }
+  set(false); w.close();
+  assert.ok(d.on.kF < -0.5 && d.on.lock > 0.5, `locked: ${JSON.stringify(d.on)}`);
+  assert.ok(d.on.d > d.off.d + 0.5, `a sliding tyre stops longer: ${d.off.d} → ${d.on.d}`);
+});
+test("wheel state ON: full throttle on grass spins the rear and pulls slower", () => {
+  const w = dry.w, P = w.G.player, v = {};
+  for (const on of [false, true]) {
+    dry.set(on);
+    for (const c of w.G.cars) if (c !== P) { c.retired = true; c.x = 80; }
+    const sm = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    w.sandbox.Tracks.sample(w.G.track, 0.02 * w.G.track.total, sm);
+    w.apex.jump(0.02, 0.5, -(sm.hw + 4.5)); P.axEstSm = 0; P.yawRateCur = 0; P.vLat = 0;
+    let spin = 0, off = true;
+    for (let i = 0; i < 30; i++) { w.apex.setInput({ steer: 0, throttle: true }); w.step(1, DT_); spin = Math.max(spin, P.wheelSpin || 0); off = off && P.offroad; }
+    v[on ? "on" : "off"] = { speed: P.speed, spin, off };
+  }
+  dry.set(false); w.apex.clearInput();
+  assert.ok(v.off.off && v.on.off, `stayed on the grass: ${JSON.stringify(v)}`);
+  assert.ok(v.on.spin > 0.5, `wheelspin: ${JSON.stringify(v.on)}`);
+  assert.ok(v.on.speed < v.off.speed - 0.3, `spinning tyres pull slower: ${v.off.speed} → ${v.on.speed}`);
 });

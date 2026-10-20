@@ -326,7 +326,16 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
   const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
+  if (typeof LiveryStations !== "undefined" && !legacyBody) LiveryStations.emit(quadUv, uvOf, R, anchors, stationCtx(parts, teamId, bodyStyle, round));
   return out;
+}
+// What LiveryStations needs beyond the anchors: the nose tip, the monocoque and the halo hoop.
+function stationCtx(parts, teamId, bodyStyle, round) {
+  const style = Car3D.teamStyleOf ? Car3D.teamStyleOf(anchorKey(teamId, bodyStyle)) : null;
+  const nose = Car3D.styledNoseStations ? Car3D.styledNoseStations(style) : null;
+  const cockpit = parts && parts._visual && parts._visual.cockpit || {};
+  return { noseTipZ: nose && nose[0] ? nose[0].z : null, monocoque: Car3D.CHASSIS && Car3D.CHASSIS.monocoque,
+           halo: LiveryStations.haloOf(cockpit, round) };
 }
 // The decal key, memoised per PARTS object (teamDecalState hands the same one
 // back until rev / ruleset move; bodyAnchors already keys on that identity):
@@ -383,7 +392,9 @@ function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, roun
                    : ((parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0);
   // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
   const shapeK = finShape || "standard";
-  return level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
+  // The halo strip follows the cockpit's hoop style and fairing (LiveryStations.haloOf).
+  const ck = parts && parts._visual && parts._visual.cockpit, haloK = ck ? (ck.halo || 0) + "." + (ck.haloBlade || 0) : "0.0";
+  return level + "|" + haloK + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
 }
 let _cockpitDecalMesh = null, _cockpitDecalKey = "";
 function getCockpitDecalMesh(parts, teamId, bodyStyle) {
@@ -644,6 +655,10 @@ function _flapKey(g, aLvl, style, c, finish, surface) {
 // node VM): nothing is idle.
 const _flapNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
 function _flapUse(m) { if (m) m.__flapT = _flapNow(); return m; }
+function _flapLast(cache, order, t) {
+  for (let i = 0; i < order.length; i++) { const m = cache[order[i]]; if (m && m.__flapT > t) t = m.__flapT; }
+  return t;
+}
 function _flapEvictIdle(cache, order, idleMs, now) {
   let w = 0, n = 0;
   for (let i = 0; i < order.length; i++) {
@@ -661,9 +676,13 @@ function _flapEvictIdle(cache, order, idleMs, now) {
 }
 // How many flap meshes the caches hold (__apex/specs: garage-livery-churn.spec.js bounds them).
 function flapState() { return { sets: _flapSetOrder.length, elements: _flapOrder.length }; }
+// IDLE IS MEASURED FROM THE NEWEST FLAP DRAW, NOT THE WALL CLOCK. A frame longer than `ms` (SwiftShader
+// draws the garage at ~3 s a frame; a phone stalled on a rebuild) left the set drawn on the LAST frame
+// "idle", so an edit freed the live wings and their coalesced run, three's last holder of the instanced
+// lit program, and the next frame relinked it: a 2.7 s frame on a part pick (garage-perf-2026-10-20.md).
 function releaseIdleFlaps(idleMs) {
-  const now = _flapNow();
-  if (!now || !_gfx) return 0;
+  if (!_flapNow() || !_gfx) return 0;
+  const now = _flapLast(_flapSets, _flapSetOrder, _flapLast(_flapMeshes, _flapOrder, 0));
   const n = _flapEvictIdle(_flapMeshes, _flapOrder, idleMs, now);
   const sets = _flapEvictIdle(_flapSets, _flapSetOrder, idleMs, now);
   if (sets) _flapSetMemo.clear();   // it may still point at a freed set

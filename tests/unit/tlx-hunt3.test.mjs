@@ -479,7 +479,7 @@ test("R1: the AI material is the lit instanced fragment on its own program key; 
   assert.equal(ai.customProgramCacheKey(), "ai-" + inst.customProgramCacheKey());
   assert.match(TLX, /draw\(mesh, model, opts\) \{\s*if \(opts && opts\.coalesce && mesh && mesh\.geo && _coAppend\(mesh\.geo, model, opts\)\) return;/);
   assert.match(fnSource(TLX, "async function warmFxPrograms() {"), /await _coWarm\(\);/);
-  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo\);/);
+  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo, true\);/);
   assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
   assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
   assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);
@@ -793,4 +793,14 @@ test("memState reports the renderer's primitive resource counts and byte sizes",
   assert.equal("unusedObject" in result.resources, false);
   assert.equal("readbackBuffers" in result.resources, false, "missing telemetry is absent, rather than a fabricated zero");
   assert.equal(report({info: {}}, {}).progs, null);
+});
+
+test("carFinish rides the material's packB.w and its cache key (finish 60-85 block on car paint only)", async () => {
+  // garage-perf-2026-10-20 finding 2: the per-draw uniform that gates the finish AA inputs + tint switch.
+  const { lit } = await litGLSL();
+  assert.equal(lit.makeMaterial({ carPaint: 1, carFinish: true }).userData.tlxPackB.w, 1, "a car-paint material sets packB.w");
+  assert.equal(lit.makeMaterial({ carPaint: 1 }).userData.tlxPackB.w, 0, "anything else leaves it 0");
+  const key = vm.runInNewContext("(" + fnSource(TLX, "function buildMatKey(") + ")", {});
+  assert.notEqual(key({ carPaint: 1, carFinish: true }, false, 2), key({ carPaint: 1 }, false, 2),
+    "matCache never hands a car-paint draw a material minted without the flag");
 });

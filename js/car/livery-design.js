@@ -3,13 +3,23 @@
 const LiveryDesign = (function () {
   const PATTERNS = Object.freeze(["ribbon", "brokenChevron", "contours", "honeycomb", "segments", "gradient", "twoTone", "checker", "diamonds", "slashes", "pinstripes", "dots", "lightning", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade", "speedlines",
     // 2026-grid motifs (docs/notes/LIVERY-REF-2026-10-18.md): generic geometry, no team's or sponsor's mark.
-    "keylineSplit", "halftone", "chevronStack", "gradBands", "slashBlock", "lineFade"]);
+    "keylineSplit", "halftone", "chevronStack", "gradBands", "slashBlock", "lineFade",
+    // Paint layouts after classic schemes (docs/notes/LIVERY-LAYOUTS-2026-10-19.md): generic geometry, no marks.
+    "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
   const SECOND_COLOR = Object.freeze(["gradient", "twoTone", "segments", "checker", "diamonds", "dots", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade",
-    "keylineSplit", "chevronStack", "slashBlock"]);
-  const LINE_PATTERNS = Object.freeze(["contours", "honeycomb", "waves", "herringbone", "circuit", "speedlines", "keylineSplit"]);
+    "keylineSplit", "chevronStack", "slashBlock", "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
+  const LINE_PATTERNS = Object.freeze(["contours", "honeycomb", "waves", "herringbone", "circuit", "speedlines", "keylineSplit",
+    "tartanBand", "borderedStripe", "spearhead", "deckSplit"]);
+  // Single-figure layouts: REPEATS (patternRepeat) changes none of their pixels, so the editor greys it.
+  const NO_REPEAT = Object.freeze(["ribbon", "gradient", "twoTone", "keylineSplit", "slashBlock", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
+  // KEYLINE (patternKey) picks which colour slot paints these layouts' keylines (tricolour: its middle band).
+  // "auto" is each layout's own pick, so a livery saved before the choice existed paints unchanged.
+  const KEY_PATTERNS = Object.freeze(["keylineSplit", "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
+  const KEY_SLOTS = Object.freeze(["auto", "accent", "design", "second", "body"]);
   // Editor names for the 2026-motif designs; the garage editor falls back to the id for any it does not name.
   const LABELS = Object.freeze({ keylineSplit: "Keyline split", halftone: "Halftone fade", chevronStack: "Chevron stack",
-    gradBands: "Graduated bands", slashBlock: "Slash block", lineFade: "Line fade" });
+    gradBands: "Graduated bands", slashBlock: "Slash block", lineFade: "Line fade",
+    tartanBand: "Tartan band", borderedStripe: "Bordered stripe", tricolour: "Tricolour sweep", spearhead: "Spearhead", deckSplit: "Deck split" });
   const RANGES = Object.freeze({
     patternWidth: [20, 100, 70], patternRepeat: [2, 12, 6], patternOffset: [-40, 40, 0],
     patternTaper: [0, 80, 20], patternOpacity: [10, 100, 100],
@@ -55,6 +65,7 @@ const LiveryDesign = (function () {
       ctx.transform(a, b, c, d, offset - a * offset - c * 1.25, 1.25 - b * offset - d * 1.25);
     }
     const weight = value(liv, "patternWeight") / 100;
+    const keyline = (auto) => ({ accent: color(liv.accent, auto), design: primary, second: secondary, body: color(liv.c1, auto) })[liv.patternKey] || auto;
     ctx.fillStyle = primary; ctx.strokeStyle = primary; ctx.lineWidth = 0.018 * weight;
     if (kind === "ribbon") ctx.fillRect(offset - width, 0.5, width * 2, 1.5);
     else if (kind === "gradient") {
@@ -188,7 +199,7 @@ const LiveryDesign = (function () {
       }
     } else if (kind === "keylineSplit") {
       // Two blocks meeting on a raked edge, the edge picked out by a thin keyline in the car's accent.
-      const edge = (z) => offset - 0.25 + (z - 0.5) * 0.3, key = color(liv.accent, "#ffffff");
+      const edge = (z) => offset - 0.25 + (z - 0.5) * 0.3, key = keyline(color(liv.accent, "#ffffff"));
       ctx.fillRect(-1.2, 0.5, 2.4, 1.5);
       ctx.fillStyle = secondary; ctx.beginPath(); ctx.moveTo(edge(0.5), 0.5); ctx.lineTo(edge(2), 2);
       ctx.lineTo(1.2, 2); ctx.lineTo(1.2, 0.5); ctx.closePath(); ctx.fill();
@@ -237,6 +248,45 @@ const LiveryDesign = (function () {
         const t = Math.max(0, 1 - (z - 0.5) / 1.5) * step * 0.45;
         if (t > 0.003) ctx.fillRect(-1.2, z, 2.4, t);
       }
+    } else if (kind === "tartanBand") {
+      // A broad band woven from crossing stripes: a plaid sett, two colours over the second colour's ground.
+      const pitch = step * 0.8, key = keyline(color(liv.accent, "#ffffff"));
+      ctx.fillStyle = secondary; ctx.fillRect(offset - width, 0.5, width * 2, 1.5);
+      ctx.globalAlpha *= 0.62; ctx.fillStyle = primary;
+      for (let i = -12; i <= 12; i++) ctx.fillRect(offset + i * pitch - pitch * 0.2, 0.5, pitch * 0.4, 1.5);
+      for (let z = 0.5; z < 2; z += pitch) ctx.fillRect(offset - width, z, width * 2, pitch * 0.4);
+      ctx.globalAlpha /= 0.62; ctx.fillStyle = key;
+      for (let i = -12; i <= 12; i++) ctx.fillRect(offset + (i + 0.5) * pitch - 0.006 * weight, 0.5, 0.012 * weight, 1.5);
+      for (let z = 0.5 + pitch * 0.7; z < 2; z += pitch) ctx.fillRect(offset - width, z, width * 2, 0.012 * weight);
+    } else if (kind === "borderedStripe") {
+      // One centre stripe with a keyline each side in the second colour, a body-colour gap between.
+      const w = width * 0.45, gap = 0.03, line = 0.03 * weight;
+      ctx.fillRect(offset - w, 0.5, w * 2, 1.5);
+      ctx.fillStyle = keyline(secondary);
+      for (const side of [-1, 1]) ctx.fillRect(offset + side * (w + gap) - (side < 0 ? line : 0), 0.5, line, 1.5);
+    } else if (kind === "tricolour") {
+      // Three equal raked bands sweeping across the rear half: first colour, middle, second colour.
+      // The middle band is 2ND BAND (bandTint2) when set, else the accent; KEYLINE overrides both.
+      const w = width * 0.32, key = keyline(color(liv.bandTint2, color(liv.accent, "#ffffff")));
+      [primary, key, secondary].forEach((fill, i) => {
+        const x0 = offset - w * 1.5 + i * w;
+        ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(x0 - 0.5, 1.05); ctx.lineTo(x0 - 0.5 + w, 1.05);
+        ctx.lineTo(x0 + 0.25 + w, 2); ctx.lineTo(x0 + 0.25, 2); ctx.closePath(); ctx.fill();
+      });
+    } else if (kind === "spearhead") {
+      // One arrow along the car: a broad head at the front, a level shaft behind it, keylined in the second colour.
+      const shaft = width * 0.3, neck = 1.15;
+      ctx.beginPath(); ctx.moveTo(offset, 0.5); ctx.lineTo(offset + width, neck); ctx.lineTo(offset + shaft, neck);
+      ctx.lineTo(offset + shaft, 2); ctx.lineTo(offset - shaft, 2); ctx.lineTo(offset - shaft, neck);
+      ctx.lineTo(offset - width, neck); ctx.closePath();
+      ctx.fill(); ctx.strokeStyle = keyline(secondary); ctx.lineWidth = 0.035 * weight; ctx.stroke();
+    } else if (kind === "deckSplit") {
+      // A level split, first colour on one deck and second on the other, with a double pinline on the seam.
+      const key = keyline(color(liv.accent, "#ffffff"));
+      ctx.fillRect(-1.2, 0.5, offset + 1.2, 1.5);
+      ctx.fillStyle = secondary; ctx.fillRect(offset, 0.5, 1.2 - offset, 1.5);
+      ctx.fillStyle = key; ctx.fillRect(offset - 0.02 * weight, 0.5, 0.04 * weight, 1.5);
+      ctx.fillRect(offset + 0.05 * weight, 0.5, 0.012 * weight, 1.5);
     }
     ctx.restore();
   }
@@ -275,5 +325,5 @@ const LiveryDesign = (function () {
       original: () => clone(original),
     };
   }
-  return Object.freeze({ PATTERNS, SECOND_COLOR, LINE_PATTERNS, LABELS, RANGES, PALETTES, value, drawAtlas, history });
+  return Object.freeze({ PATTERNS, SECOND_COLOR, LINE_PATTERNS, NO_REPEAT, KEY_PATTERNS, KEY_SLOTS, LABELS, RANGES, PALETTES, value, drawAtlas, history });
 })();

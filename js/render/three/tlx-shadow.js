@@ -318,6 +318,17 @@
     // every slot the new track did not refill. An attribute-less geometry is never
     // rendered (the wrapper is invisible) and costs nothing.
     const parkedGeo = new THREE.BufferGeometry();
+    // THE PASS ROOT (tlx.js R6, applied to castScene). castScene holds every
+    // slot of every target's pool plus every keyed batch caster, and three's
+    // projectObject visits each child of every renderer.render(castScene) —
+    // hidden or not — so the per-frame car pass walked the sun and lamp pools
+    // the last rebuilds grew. endPass hands three exactly what the pass cast
+    // (pool[0..used) + iCast) and restores the full list after the render, so
+    // add/remove, the warms (showAllCasters) and prime() still see everything.
+    // apex26.tlxPoolRoot=0 (the R6 knob) renders the full list again.
+    let _passRoot = true;
+    try { _passRoot = localStorage.getItem("apex26.tlxPoolRoot") !== "0"; } catch (_) { /* no storage: on */ }
+    const _passKids = [];
 
     function cast(mesh /* {__tlx, geo} */, model /* column-major mat4 */) {
       if (!S.depthPassOn || !mesh || !mesh.geo) return;
@@ -566,7 +577,14 @@
         // autoClear: depth cleared per pass, like GLX's clear(DEPTH_BUFFER_BIT) —
         // except a car-only lamp pass, which draws onto the copied static depth.
         if (keepDepth) renderer.autoClear = false;
-        renderer.render(castScene, shadowCam);
+        const all = castScene.children;
+        if (_passRoot) {
+          _passKids.length = 0;
+          for (let i = 0; i < used; i++) _passKids.push(pool[i]);
+          for (let i = 0; i < iCast.length; i++) _passKids.push(iCast[i]);
+          castScene.children = _passKids;
+        }
+        try { renderer.render(castScene, shadowCam); } finally { castScene.children = all; }
         if (target === lampRT) _lampRendered = true;
         _lastPassOk = true;
       } catch (e) {

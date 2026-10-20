@@ -269,3 +269,60 @@ test("Assets strip decode gives a future task a turn between successive layers",
     assert.equal(turns.length, 0);
   }
 });
+
+// #3110: Save-Data or a 2G link skips the title's idle race-session and audio
+// prefetches (startRace awaits both); the lights (re-asked only after a FAILED
+// fetch) and the selected circuit's scenery still load. A normal link keeps all.
+test("raceAssets skips the race-session and audio prefetches under Save-Data or 2G, keeps them otherwise (#3110)", async () => {
+  const loader = read("js/core/script-loader.js");
+  const bundles = read("js/core/lazy-bundles.js");
+  const run = async (connection) => {
+    const idles = [];
+    let sceneryKicks = 0;
+    const ctx = vm.createContext({
+      ApexRoster: {
+        DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+        LAZY_RACE: [], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+        LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
+        LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
+        SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
+        LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
+      },
+      navigator: connection === undefined ? { userAgent: "test" } : { userAgent: "test", connection },
+      window: { __APEX_BUILD: "test", LightPresets: null },
+      PitLane: { _stub: true },
+      Tracks: {
+        LIST: [{ id: "monza", custom: true, scenery: () => {} }],
+        circuitPayloadResident: () => { sceneryKicks++; return true; },
+        hydrate: () => true,
+      },
+      TrackScenery: { monza: () => {} },
+      TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
+      Assets: { modelsReady: () => Promise.resolve(0) },
+      Log: { warn() {}, info() {} },
+      els: { datahub: {} },
+      queueMicrotask: (fn) => queueMicrotask(fn),
+      requestIdleCallback(fn, opts) { idles.push(opts && opts.timeout); return idles.length; },
+      setTimeout() { throw new Error("setTimeout fallback must not run when rIC exists"); },
+      document: { createElement() { return { dataset: {}, remove() {} }; }, head: { appendChild() {} } },
+    });
+    vm.runInContext(loader + "\n" + bundles + `
+      globalThis.__lb = LazyBundles.create({
+        els, loadBackendScripts: ScriptLoader.create().load,
+        getContext: () => ({ trackIdx: 0 }),
+        applyLightTuneIfReady() {}, bindAgent() {}, createNetwork() { return { wire() {} }; }, onAudioReady() {},
+      });
+    `, ctx);
+    ctx.__lb.raceAssets();
+    await new Promise((r) => setTimeout(r, 0));
+    return { idles: idles.sort(), sceneryKicks };
+  };
+  assert.deepEqual((await run(undefined)).idles, [2500, 2800, 4500], "no Network Information API: unchanged");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "4g" })).idles, [2500, 2800, 4500], "a normal link prefetches");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "3g" })).idles, [2500, 2800, 4500], "3G still prefetches");
+  const sd = await run({ saveData: true, effectiveType: "4g" });
+  assert.deepEqual(sd.idles, [2500], "Save-Data: only the lights prefetch");
+  assert.ok(sd.sceneryKicks > 0, "the selected circuit's scenery still kicks under Save-Data");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "slow-2g" })).idles, [2500], "slow-2g: only the lights prefetch");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "2g" })).idles, [2500], "2g: only the lights prefetch");
+});

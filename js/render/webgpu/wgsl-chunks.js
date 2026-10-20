@@ -574,11 +574,12 @@ struct DrawU {
   mat0  : vec4<f32>,          // off 64  (emissive, alpha, roughness, metalness)
   mat1  : vec4<f32>,          // off 80  (specular, detail, clearcoat, carPaint)
   mat2  : vec4<f32>,          // off 96  (sparkle, instanced, surfaceId, buryRibbon)
-  mat3  : vec4<f32>,          // off 112 (lampMask lo24, lampMask hi24, 0, 0) — chunk-AABB
+  mat3  : vec4<f32>,          // off 112 (lampMask lo24, lampMask hi24, carFinish, 0) — chunk-AABB
                               //         lamp cull, bit-exact (see the lamp loop); each mask
                               //         float holds a 24-bit integer exactly. All-ones
                               //         (16777215) = unmasked, the default for every draw.
-  lampRange : vec4<f32>,      // off 128 (chunkLampIdx offset, count, per-chunk-active flag, pad)
+  lampRange : vec4<f32>,      // off 128 (chunkLampIdx offset, count, per-chunk-active flag,
+                              //          packDraw: 0 = no fragment can take a pack material)
 };                            // size 144
 struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(0) var<uniform> F : FrameU;
@@ -963,17 +964,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // same aniso, same quad divergence at material seams (GLX ships it).
   // matUvLit(16) is the road UV (road is not wall-like, same wpos.xz/sc),
   // so the road folds into the same lookup. Identity layers (0/3/15) still
-  // sample — the result is select()ed away, keeping the call unconditional.
+  // sample — the result is select()ed away. The whole tap pair (below the
+  // derivatives) is skipped on a UNIFORM gate (GLX matTexUV's early return): pack off, or a draw whose
+  // mesh holds no pack material (cars 20-40, identity-only props — wgx.js
+  // _packDraw). Both readers ignore the pack then (hoisted needs packOn and
+  // a 1..16 mid), so the gate is pixel-identical.
   let topNgeo = normalize(in.nrm);
   let identPack = vec4<f32>(0.5, 0.5, 0.5, 0.5);
   let packOn = F.params8.w > 0.001;
   let midClamp = clamp(i32(vMatId + 0.5), 0, 16);
   let isIdentMat = midClamp == 0 || midClamp == 3 || midClamp == 15;
   let uvSel = matUvLit(midClamp, topNgeo, in.wpos);
-  let sampAlbedo = textureSample(matAlbedoTex, matSamp, uvSel, midClamp);
-  let sampNormal = textureSample(matNormalTex, matSamp, uvSel, midClamp);
-  let litPack = select(sampAlbedo, identPack, isIdentMat);
-  let litNrm = select(sampNormal, identPack, isIdentMat);
   // GLX takes dFdx(N) AFTER orange-peel + applyMaterialNormal. The matId
   // bump is non-uniform — a dpdx after that branch is the NaN-white-road
   // class. Peel is a function of interpolators only, so hoist it here
@@ -985,6 +986,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // second dpdx/dpdy pair of topNgeo across divergent later uses.
   let saaDxGeo = ccDx;
   let saaDyGeo = ccDy;
+  // Car finish anti-alias inputs (finishes 60-85, glsl-lit.js): object-space metres per pixel, and 1 on a hard panel edge.
+  // Not gated on carFinish like GLX/TLX: every WGSL derivative sits above fs_main's first branch (WebKit
+  // uniformity; webgpu-lifecycle.test.mjs), and fnCrease reuses ccDx, so this is one dpdx/dpdy pair.
+  let fnPx = max(length(abs(dpdx(in.objPos)) + abs(dpdy(in.objPos))), 1e-5);
+  let fnCrease = smoothstep(0.02, 0.20, dot(ccDx, ccDx) + dot(ccDy, ccDy));
   // Paint peel ran for EVERY fragment — road, terrain, buildings — feeding a
   // mix whose factor (carPaint, D.mat1.w) is 0 on all of them. The gate lives
   // INSIDE paintPeelN as a uniform early return (see its header) so these
@@ -994,6 +1000,16 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let Npeel = paintPeelN(topNgeo, in.objPos, vDist, peelAmt);
   let saaDxPeel = dpdx(Npeel);
   let saaDyPeel = dpdy(Npeel);
+  // The gated pack taps sit AFTER every derivative (the first branch of
+  // fs_main must follow the last dpdx) and before any non-uniform branch.
+  var sampAlbedo = identPack;
+  var sampNormal = identPack;
+  if (packOn && D.lampRange.w > 0.5) {
+    sampAlbedo = textureSample(matAlbedoTex, matSamp, uvSel, midClamp);
+    sampNormal = textureSample(matNormalTex, matSamp, uvSel, midClamp);
+  }
+  let litPack = select(sampAlbedo, identPack, isIdentMat);
+  let litNrm = select(sampNormal, identPack, isIdentMat);
   // Floor + terrain only. The 1600 m scenery slab is skipped on WGX
   // (G.roadLutReady); a screen-footprint "slab" test also punched long
   // barrier / grandstand faces that sit on the ribbon.
@@ -1023,8 +1039,18 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let wetness   = F.params1.z;
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
-  let surfaceId = i32(vMatId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 40;
+  // FINISHES 60-85 (CarMaterials.FINISH_RESERVED): ride an existing base branch, tinted after the metal block
+  // (js/render/glx/shaders/glsl-lit.js). The rows test surfaceId (surface-id-parity).
+  var surfaceId = i32(vMatId + 0.5);
+  let finishId = surfaceId;
+  if (surfaceId == 62 || surfaceId == 67 || surfaceId == 68 || surfaceId == 69 || surfaceId == 70 || surfaceId == 74 || surfaceId == 81
+    || surfaceId == 82 || surfaceId == 83 || surfaceId == 84) { surfaceId = 20; }
+  if (surfaceId == 61 || surfaceId == 71 || surfaceId == 85) { surfaceId = 28; }
+  if (surfaceId == 63 || surfaceId == 65) { surfaceId = 29; }
+  if (surfaceId == 72) { surfaceId = 34; }
+  if (surfaceId == 60) { surfaceId = 39; }
+  if (surfaceId == 66) { surfaceId = 31; }
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 90;
   // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (see js/render/glx/shaders/glsl-lit.js); the grain / saturation / rim
   // are layered in the albedo and env blocks (CarMaterialShade.FLAKE / .CANDY).
   let flakeSurface = surfaceId == 34;
@@ -1264,6 +1290,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   } else if (goldSurface) {
     albedo = vec3<f32>(0.83, 0.65, 0.23);
   }
+  if (finishId == 74) { albedo = vec3<f32>(0.012, 0.012, 0.012); }   // JPS GOLD: gloss black, set before lighting
+  if (finishId == 84) { albedo = vec3<f32>(0.016, 0.007, 0.030); }   // MIDNIGHT PURPLE: own violet base
   var chamFlip = 0.0;
   var chamHue = vec3<f32>(1.0);
   if (chamSurface) {
@@ -1549,12 +1577,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Tile atlas: the indirection names this tile's slot (empty -> live loop);
   // the slot's gutter holds the neighbours, so the bilinear tap matches the
   // full grid and never crosses slots. Bounce = the same slot + 0.5 v.
+  // Taps gated like GLX (glsl-lit.js): no bake, a non-upward normal or an
+  // out-of-grid fragment skips the load and both samples. Outside the gate
+  // bSlot stays -1, so bIn is false and bakeW 0; at N.y <= 0.55 the weight
+  // was smoothstep(0.55, ...) == 0 anyway, so the colour adds are unchanged.
   let bG = bUv * F.bakeD.xy;
   let bTile = clamp(floor(bG), vec2<f32>(0.0), max(F.bakeD.xy - 1.0, vec2<f32>(0.0)));
-  let bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
-  let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
-  let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
-  let bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
+  var bSlot = vec2<f32>(-1.0);
+  var bT = vec4<f32>(0.0);
+  var bB = vec3<f32>(0.0);
+  if (F.bakeB.w > 0.5 && N.y > 0.55 && all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0))) {
+    bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
+    if (bSlot.x >= 0.0) {
+      let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
+      bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
+      bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
+    }
+  }
   let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0)) && bSlot.x >= 0.0;
   let bakeW = select(0.0, smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(in.wpos.y - bT.a))),
                      F.bakeB.w > 0.5 && bIn);
@@ -1795,6 +1834,142 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
   if (goldSurface) { color = color * vec3<f32>(1.0, 0.78, 0.27); }   // GOLD PLATE: lit terms take the fixed gold hue
   if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
+  // FINISH TINTS 60-85 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells). carFinish draws only.
+  if (D.mat3.z > 0.5 && finishId >= 60 && finishId <= 85) {
+    let pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+    let pvG = 1.0 - clamp(dot(Ngeo, V), 0.0, 1.0);
+    let pvL = dot(color, vec3<f32>(0.299, 0.587, 0.114));
+    let pvA = max(dot(albedo, vec3<f32>(0.299, 0.587, 0.114)), 0.05);
+    let pvLit = pvL / pvA;
+    let pvSun = max(dot(Ngeo, F.sunDir.xyz), 0.0);
+    let pvNH = max(dot(Ngeo, normalize(F.sunDir.xyz + V)), 0.0);
+    let pvEdge = 1.0 - fnCrease;
+    if (finishId == 60) {
+      let film0 = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + pvG * 0.9 + in.objPos.y * 1.3 + in.objPos.z * 0.32 + in.objPos.x * 0.4));
+      let film = mix(vec3<f32>(dot(film0, vec3<f32>(0.3333))), film0, vec3<f32>(0.75));
+      color = mix(color, color * film * 2.4, vec3<f32>((0.35 + 0.65 * smoothstep(0.05, 0.6, pvG)) * mix(0.35, 1.0, pvEdge)));
+    } else if (finishId == 61) {
+      let frC = floor(in.objPos * 90.0);
+      let frF = clamp(0.5 / (90.0 * fnPx) - 0.5, 0.0, 1.0);
+      color = min((mix(color, vec3<f32>(pvL), vec3<f32>(0.6)) * vec3<f32>(0.80, 0.82, 0.86) + vec3<f32>(0.02))
+        * (1.0 + (hash21(frC.xy + frC.z * 19.7) - 0.5) * 0.35 * frF), vec3<f32>(0.26)) * vec3<f32>(0.90, 0.94, 1.0);
+      color = color + F.sunColor.xyz * mix(pvHue, vec3<f32>(1.0), vec3<f32>(0.6)) * ((pvA * 0.25 + 0.03) * pow(pvNH, 2.0) * pvSun);
+      color = color + (F.ambSky.xyz + F.sunColor.xyz * 0.25) * vec3<f32>(0.78, 0.80, 0.86) * (smoothstep(0.15, 0.8, pvG) * 0.40 * pvEdge);
+    } else if (finishId == 62) {
+      let flS = max(pvHue.r, max(pvHue.g, pvHue.b)) - min(pvHue.r, min(pvHue.g, pvHue.b));
+      let flH = mix(vec3<f32>(0.80, 1.0, 0.06), pow(pvHue, vec3<f32>(2.6)), vec3<f32>(smoothstep(0.20, 0.50, flS)));
+      let flK = smoothstep(0.05, 0.14, pvA);
+      color = color * mix(vec3<f32>(1.0), flH, vec3<f32>(0.6 * flK)) + flH * (F.ambSky.xyz * 1.6 + F.sunColor.xyz * (0.55 * pvSun) + vec3<f32>(0.22)) * flK;
+    } else if (finishId == 63) {
+      let t = clamp(0.5 - in.objPos.z * 0.30 + pvG * 0.10, 0.0, 1.0);
+      var ox = vec3<f32>(0.85, 0.86, 0.88);
+      ox = mix(ox, vec3<f32>(0.95, 0.82, 0.52), vec3<f32>(smoothstep(0.10, 0.25, t)));
+      ox = mix(ox, vec3<f32>(0.92, 0.66, 0.30), vec3<f32>(smoothstep(0.25, 0.40, t)));
+      ox = mix(ox, vec3<f32>(0.72, 0.42, 0.40), vec3<f32>(smoothstep(0.40, 0.55, t)));
+      ox = mix(ox, vec3<f32>(0.50, 0.30, 0.75), vec3<f32>(smoothstep(0.55, 0.70, t)));
+      ox = mix(ox, vec3<f32>(0.25, 0.45, 0.95), vec3<f32>(smoothstep(0.70, 0.88, t)));
+      color = vec3<f32>(min(pvLit, 2.5)) * ox * 0.85;
+    } else if (finishId == 65) {
+      let abY = smoothstep(-0.3, 0.7, Ngeo.y);
+      let abB = hash21(vec2<f32>(floor(in.objPos.y * 320.0), floor(in.objPos.x * 320.0)));
+      let abF = clamp(0.5 / (320.0 * fnPx) - 0.5, 0.0, 1.0);
+      color = vec3<f32>(min(pvLit, 3.0)) * vec3<f32>(0.60, 0.58, 0.54) * (mix(0.45, 1.25, abY) * (1.0 + (abB - 0.5) * 0.22 * abF))
+        + (F.ambSky.xyz * 0.6 + F.sunColor.xyz * 0.2) * vec3<f32>(0.95, 0.97, 1.0) * (smoothstep(0.35, 0.9, pvG) * abY * 0.5);
+    } else if (finishId == 66) {
+      color = (vec3<f32>(pvL) * 1.7 + vec3<f32>(0.030)) * vec3<f32>(0.66, 0.68, 0.74)
+        + F.sunColor.xyz * vec3<f32>(0.80, 0.84, 0.92) * (0.22 * pow(pvNH, 4.0) * pvSun);
+    } else if (finishId == 67) {
+      let fvN = abs(Ngeo);
+      let fvC = select(in.objPos.y, in.objPos.x, fvN.y > max(fvN.x, fvN.z));
+      let fvS = 0.5 + 0.5 * sin(fvC * 70.0 + sin(in.objPos.z * 1.7 + fvC * 9.0) * 1.2);
+      let fvBr = smoothstep(-0.6, 0.2, sin(in.objPos.z * 4.0 + fvC * 37.0));
+      let fvPer = 0.090 / fnPx;
+      let fv = mix(smoothstep(0.50, 0.80, fvS) * fvBr, 0.30, 1.0 - smoothstep(1.5, 3.0, fvPer)) * (1.0 - smoothstep(0.2, 1.4, in.objPos.z));
+      let fvGlow = mix(vec3<f32>(0.78, 1.0, 0.30), vec3<f32>(0.05, 0.14, 0.0), vec3<f32>(smoothstep(0.35, 0.75, pvA)))
+        * (F.ambSky.xyz * 2.5 + F.sunColor.xyz * (0.6 * pvSun) + vec3<f32>(0.15));
+      color = mix(color, fvGlow, vec3<f32>(fv));
+    } else if (finishId == 68) {
+      let cfW = in.objPos.xz * 120.0 + vec2<f32>(in.objPos.y * 120.0);
+      let cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * saturate(0.052 / fnPx * 0.5 - 1.0);
+      let cfN = sin(in.objPos.z * 9.0 + sin(in.objPos.x * 13.0) * 1.5) * 0.5 + sin(in.objPos.z * 23.0 + in.objPos.x * 7.0) * 0.25
+        + sin(in.objPos.z * 61.0 + in.objPos.x * 29.0) * 0.35 + (hash21(floor(in.objPos.zx * 40.0)) - 0.5) * 0.6;
+      let cfM = smoothstep(0.585, 0.615, in.objPos.y + cfN * 0.08);
+      let cfC = vec3<f32>(min(pvLit, 3.0) * 0.11) * (0.62 + 0.76 * cfWv) * vec3<f32>(0.95, 0.97, 1.05)
+        + F.sunColor.xyz * (0.30 * pow(pvNH, 6.0) * pvSun * (0.5 + cfWv));
+      color = mix(cfC, color, vec3<f32>(cfM));
+    } else if (finishId == 69) {
+      let sfT = clamp(0.5 - in.objPos.z * 0.28, 0.0, 1.0);
+      let sfN = abs(Ngeo);
+      var sfUV = in.objPos.xy;
+      if (sfN.y > max(sfN.x, sfN.z)) { sfUV = in.objPos.zx; } else if (sfN.x > sfN.z) { sfUV = in.objPos.zy; }
+      let sfR = 0.62 * (1.0 - smoothstep(0.15, 0.85, sfT));
+      let sfW = max(11.0 * fnPx, 0.02);
+      var sfDot = 1.0 - smoothstep(sfR - sfW, sfR + sfW, length(fract(sfUV * 11.0) - vec2<f32>(0.5)));
+      sfDot = mix(sfDot, min(3.14159 * sfR * sfR, 1.0), smoothstep(0.25, 0.45, sfW));
+      let sfS = max(sfDot, 1.0 - smoothstep(0.08, 0.18, sfT));
+      color = mix(vec3<f32>(min(pvLit, 3.0) * 0.035), vec3<f32>(pvLit) * vec3<f32>(0.70, 0.72, 0.76), vec3<f32>(sfS));
+    } else if (finishId == 70) {
+      let mfF = smoothstep(0.04, 0.30, pvG) * pvEdge;
+      let mfFace = max(mix(vec3<f32>(pvL), color, vec3<f32>(1.4)), vec3<f32>(0.0)) * 1.7;
+      let mfFlop = mix(color * 0.08, vec3<f32>(pvL * 0.12) * vec3<f32>(0.80, 0.84, 0.92), vec3<f32>(smoothstep(0.40, 0.80, pvA)));
+      let mfC = floor(in.objPos * 150.0);
+      let mfH = hash21(mfC.xy + mfC.z * 17.3);
+      let mfSp = step(0.80, mfH) * smoothstep(0.6, 1.0, fract(mfH * 41.0 + pvNH * 3.0));
+      color = mix(mfFace, mfFlop, vec3<f32>(mfF)) + F.sunColor.xyz * (pvSun * 1.2 * mix(0.03, mfSp, clamp(0.5 / (150.0 * fnPx) - 0.5, 0.0, 1.0)));
+    } else if (finishId >= 81 && finishId <= 85) {
+      // tint group B (81-85)
+      let bL = pvA;
+      let bLit = min(pvLit, 1.6);
+      let bSun = pvSun;
+      let bNH = pvNH;
+      if (finishId == 81) {   // ghostpearl
+        let gpK0 = vec3<f32>(1.0) - pvHue;
+        let gpK = gpK0 / max(max(gpK0.r, max(gpK0.g, gpK0.b)), 0.04);
+        let gpS = max(pvHue.r, max(pvHue.g, pvHue.b)) - min(pvHue.r, min(pvHue.g, pvHue.b));
+        let gpC = mix(pvHue, mix(vec3<f32>(0.55, 0.40, 1.0), gpK, vec3<f32>(smoothstep(0.15, 0.5, gpS))), vec3<f32>(0.85));
+        let gpE = (smoothstep(0.15, 0.55, pvG) * (1.0 - smoothstep(0.85, 1.0, pvG)) * (0.45 + 0.55 * bSun) + pow(bNH, 6.0) * 0.6) * pvEdge;
+        color = mix(color, vec3<f32>(bLit) * gpC * 0.85, vec3<f32>(clamp(gpE, 0.0, 1.0) * 0.75));
+      } else if (finishId == 82) {   // xirallic
+        let xC = floor(in.objPos * 75.0);
+        let xH = hash21(xC.xy + xC.z * 23.1);
+        let xF = clamp(0.5 / (75.0 * fnPx) - 0.5, 0.0, 1.0);
+        let xS = step(0.45, xH) * smoothstep(0.70, 1.0, fract(xH * 53.0 + bNH * 4.0));
+        color = color * mix(1.04, 0.80, smoothstep(0.45, 0.85, bL) * xF)
+          + (F.sunColor.xyz * (0.5 + 2.5 * bSun) + F.ambSky.xyz * 2.0) * vec3<f32>(0.92, 0.96, 1.0) * mix(0.08, xS * 3.0, xF)
+          + F.sunColor.xyz * (0.55 * pow(bNH, 30.0) * bSun);
+      } else if (finishId == 83) {   // mystichrome
+        let mcT = clamp(pvG * 1.05 + in.objPos.y * 0.30 - in.objPos.z * 0.06 + 0.04, 0.0, 1.0);
+        var mc = mix(vec3<f32>(0.05, 0.80, 0.30), vec3<f32>(0.06, 0.25, 1.0), vec3<f32>(smoothstep(0.05, 0.45, mcT)));
+        mc = mix(mc, vec3<f32>(0.50, 0.05, 0.80), vec3<f32>(smoothstep(0.38, 0.68, mcT)));
+        mc = mix(mc, vec3<f32>(0.012, 0.008, 0.02), vec3<f32>(smoothstep(0.62, 0.88, mcT)));
+        color = vec3<f32>(min(pvLit, 1.3)) * mc * 0.95 + F.sunColor.xyz * (0.35 * pow(bNH, 24.0) * bSun);
+      } else if (finishId == 84) {   // midnightpurple
+        let mpH = pow(bNH, 16.0);
+        color = color + F.sunColor.xyz * vec3<f32>(0.40, 0.20, 1.0) * (mpH * 0.35 + bSun * 0.006)
+          + (F.ambSky.xyz + F.sunColor.xyz * 0.3) * vec3<f32>(0.60, 0.36, 0.12) * (smoothstep(0.50, 0.92, pvG) * 0.45 * pvEdge);
+      } else {   // ultrablack
+        color = vec3<f32>(0.010, 0.010, 0.011) * (1.0 + 0.6 * bLit) + F.ambSky.xyz * (0.010 * pvG);
+      }
+    } else if (finishId >= 71) {
+      let aL = pvA;
+      let lit = pvLit;
+      if (finishId == 71) {   // truematte
+        let tmAlb = mix(vec3<f32>(pvA), albedo, vec3<f32>(0.55));
+        color = tmAlb * (pow(min(pvLit, 0.85), 0.55) * 0.82) + vec3<f32>(dot(F.ambSky.xyz, vec3<f32>(0.299, 0.587, 0.114)) * 0.10 + 0.03)
+          + mix(vec3<f32>(0.62), albedo, vec3<f32>(0.35)) * (0.55 * smoothstep(0.25, 0.95, pvG) * pvEdge);
+      } else if (finishId == 72) {
+        var pwT = mix(vec3<f32>(1.0, 0.92, 0.80), vec3<f32>(0.70, 0.82, 1.05), vec3<f32>(smoothstep(0.10, 0.70, pvG)));
+        pwT = mix(pwT, vec3<f32>(0.98, 0.86, 0.96), vec3<f32>(smoothstep(0.25, 0.45, pvG) * (1.0 - smoothstep(0.45, 0.65, pvG)) * 0.6));
+        color = vec3<f32>(min(lit, 1.3)) * 0.85 * pwT;
+      } else if (finishId == 74) {   // jpsgold
+        let jgC = floor(in.objPos * 180.0);
+        let jgH = hash21(jgC.xy + jgC.z * 19.7);
+        let jg = smoothstep(0.975, 1.0, jgH) * smoothstep(0.55, 1.0, fract(jgH * 37.0 + pvNH * 3.0));
+        color = color + vec3<f32>(1.0, 0.78, 0.32) * ((F.sunColor.xyz * pvSun + F.ambSky.xyz) * mix(0.010, jg * 6.0, clamp(0.5 / (180.0 * fnPx) - 0.5, 0.0, 1.0)))
+          + F.sunColor.xyz * (0.30 * pow(pvNH, 40.0) * pvSun);
+      }
+    }
+  }
 
   // Sky rim / fresnel (GLX js/render/glx/shaders/glsl-lit.js): grazing-angle atmospheric
   // brightening tinted by the horizon. SKY RIM GLOW = params9.w (def 1.0).

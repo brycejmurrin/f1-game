@@ -7,8 +7,8 @@
  *   node tools/ci/guards-verdict.mjs run [-- file.mjs…]
  *
  * `run` executes the test:guards file list (from tests/groups.json, or the
- * paths after `--`) and, only when green AND the working tree matched the
- * index at start and end (no unstaged tracked changes), writes the
+ * paths after `--`). Only a green COMPLETE roster whose worktree matched the
+ * same index tree at start and end (no unstaged tracked changes) writes the
  * `git write-tree` hash to artifacts/pre-commit-guards.ok — the same path and
  * format bash-guard.sh already reuses (raw tree hash, 10-minute freshness).
  * Red, timed-out or dirty-tree runs never write; any re-stage changes the tree
@@ -55,7 +55,7 @@ export function unstagedTracked(cwd = ROOT) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  if (out.status !== 0) return [];
+  if (out.status !== 0) throw new Error("Cannot inspect unstaged tracked changes");
   return out.stdout
     .split("\n")
     .map((s) => s.trim())
@@ -131,29 +131,36 @@ export function runGuards({
       cwd,
       encoding: "utf8",
       stdio: "inherit",
+      // Node treats inherited test context as recursion and skips all files.
+      env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "NODE_TEST_CONTEXT")),
     }),
 } = {}) {
-  const list = files && files.length ? files : loadGuardFiles(root);
-  const dirtyStart = unstagedTracked(root);
+  const roster = loadGuardFiles(root);
+  const list = files && files.length ? files : roster;
+  const complete = list.length === roster.length && new Set(list).size === roster.length
+    && roster.every((file) => list.includes(file));
+  // A new attempt supersedes an earlier verdict, including on red or interruption.
+  fs.rmSync(okPath(root), { force: true });
+  let startTree = null, dirtyStart = null;
+  try {
+    startTree = writeTree(root);
+    dirtyStart = unstagedTracked(root);
+  } catch { /* Unknown Git state cannot authorize a cache write. */ }
   const r = spawn(list, root);
   const status = r.status == null ? 1 : r.status;
-  const dirtyEnd = unstagedTracked(root);
-  const dirty = dirtyStart.length > 0 || dirtyEnd.length > 0;
-  let tree = null;
+  let tree = null, dirtyEnd = null;
   try {
     tree = writeTree(root);
-  } catch {
-    tree = null;
+    dirtyEnd = unstagedTracked(root);
+  } catch { /* Keep the suite's status, but refuse to cache unknown provenance. */ }
+  const dirty = !!(dirtyStart?.length || dirtyEnd?.length);
+  if (status !== 0) return { status, wrote: false, tree, dirty, reason: "red" };
+  if (!complete) return { status: 0, wrote: false, tree, dirty, reason: "partial-suite" };
+  if (!startTree || !tree || !dirtyStart || !dirtyEnd) {
+    return { status: 0, wrote: false, tree, dirty, reason: "git-inspection" };
   }
-  if (status !== 0) {
-    return { status, wrote: false, tree, dirty, reason: "red" };
-  }
-  if (dirty) {
-    return { status: 0, wrote: false, tree, dirty: true, reason: "dirty-tree" };
-  }
-  if (!tree) {
-    return { status: 0, wrote: false, tree: null, dirty: false, reason: "no-tree" };
-  }
+  if (dirty) return { status: 0, wrote: false, tree, dirty: true, reason: "dirty-tree" };
+  if (tree !== startTree) return { status: 0, wrote: false, tree, dirty: false, reason: "changed-tree" };
   writeOk(okPath(root), tree);
   return { status: 0, wrote: true, tree, dirty: false, reason: "green" };
 }
@@ -179,8 +186,11 @@ function main(argv) {
   const result = runGuards({ root: ROOT, files: files.length ? files : undefined });
   if (result.wrote) {
     console.error(`guards: cached green ${result.tree}`);
-  } else if (result.reason === "dirty-tree") {
-    console.error("guards: green but dirty worktree — cache not written (stage or stash unstaged tracked files)");
+  } else if (result.status === 0) {
+    const reason = { "dirty-tree": "dirty worktree (stage or stash unstaged tracked files)",
+      "partial-suite": "only a subset of the guards roster ran", "changed-tree": "the index tree changed during execution",
+      "git-inspection": "Git provenance could not be inspected" }[result.reason];
+    console.error(`guards: green but ${reason} — cache not written`);
   }
   process.exit(result.status);
 }
