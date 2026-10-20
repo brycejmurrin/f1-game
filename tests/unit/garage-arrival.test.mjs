@@ -1214,3 +1214,17 @@ test('garage aero keeps authored opening and closing rates at 10, 20 and 60 FPS'
   c.stepSetupAero(60);
   near(c.setupPreviewAeroX, 1 - c.window.PhysicsConsts.X_CLOSE_RATE * 0.1, 'background gap bounds closing');
 });
+
+test('entry and departure crew choices save independently and fall back safely for old settings', () => {
+  const { $ } = harness(); let saved = null;
+  const read = Arrival.bindSettings($, { get: () => saved, set: (_, value) => { saved = value; } });
+  assert.equal(read().enterCrew, 'current'); assert.equal(read().leaveCrew, 'current');
+  $('ga-crew-in').value = 'welcome'; $('ga-crew-in').onchange();
+  $('ga-crew-out').value = 'guides'; $('ga-crew-out').onchange();
+  assert.equal(Arrival.pose(2, read(), true).crew, 'welcome');
+  assert.equal(Arrival.poseOut(2, read(), true).crew, 'guides');
+  $('ga-crew-out').value = 'none'; $('ga-crew-out').onchange();
+  assert.equal(read().enterCrew, 'welcome'); assert.equal(Arrival.poseOut(2, read(), true).crew, 'none');
+  assert.equal(Arrival.settings({ enterCrew: 'unknown', leaveCrew: 3 }).leaveCrew, 'current');
+  $('ga-reset').onclick(); assert.equal(saved, null); assert.equal(read().enterCrew, 'current');
+});

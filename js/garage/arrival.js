@@ -3,13 +3,15 @@ const GarageArrival = (function () {
   "use strict";
   const DOOR_S = 1.8;
   const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
-  const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54 });
+  const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "current", leaveCrew: "current" });
   function settings(value) {
     const v = value && typeof value === "object" ? value : {};
     const number = (key, lo, hi) => typeof v[key] === "number" && Number.isFinite(v[key])
       ? Math.max(lo, Math.min(hi, v[key])) : DEFAULT[key];
+    const crew = (key) => ["current", "guides", "welcome", "none"].includes(v[key]) ? v[key] : DEFAULT[key];
     return { enabled: v.enabled !== false, speed: number("speed", 0.5, 2),
-      angle: ["cut", "left", "right"].includes(v.angle) ? v.angle : "cut", fov: number("fov", 40, 75) };
+      angle: ["cut", "left", "right"].includes(v.angle) ? v.angle : "cut", fov: number("fov", 40, 75),
+      enterCrew: crew("enterCrew"), leaveCrew: crew("leaveCrew") };
   }
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
@@ -37,11 +39,12 @@ const GarageArrival = (function () {
   function bindSettings($, store, opts = {}) {
     const preview = typeof opts.preview === "function" ? opts.preview : null;
     const read = () => settings(store.get("garageArrival", null));
-    const fields = ["enabled", "speed", "angle", "fov"];
+    const fields = { enabled: $("ga-enabled"), speed: $("ga-speed"), angle: $("ga-angle"), fov: $("ga-fov"),
+      enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out") };
     function refresh() {
       const value = read();
-      for (const key of fields) {
-        const el = $("ga-" + key);
+      for (const key of Object.keys(fields)) {
+        const el = fields[key];
         if (key === "enabled") el.checked = value[key];
         else el.value = String(value[key]);
       }
@@ -59,9 +62,9 @@ const GarageArrival = (function () {
           : (value.angle === "left" ? "Left" : "Right") + " of the bay, looking out of the door");
       }
     }
-    for (const key of fields) $("ga-" + key).onchange = () => {
-      const el = $("ga-" + key), value = read();
-      value[key] = key === "enabled" ? el.checked : key === "angle" ? el.value : Number(el.value);
+    for (const key of Object.keys(fields)) fields[key].onchange = () => {
+      const el = fields[key], value = read();
+      value[key] = key === "enabled" ? el.checked : key === "speed" || key === "fov" ? Number(el.value) : el.value;
       store.set("garageArrival", settings(value)); refresh();
     };
     $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); };
@@ -129,7 +132,7 @@ const GarageArrival = (function () {
     const back = ease((t - DOOR_S - IN_LANE - IN_PAUSE) / IN_BACK);
     const p = back > 0 ? pathAt(OUT_PATH * (1 - back), side)
       : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
-    return shot({ active: t < DURATION, fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+    return shot({ active: t < DURATION, crew: config.enterCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
       label: t < DOOR_S ? "OPENING GARAGE" : t < DURATION - 0.3 ? "BRINGING CAR IN" : "READY FOR WORK" },
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
@@ -174,7 +177,7 @@ const GarageArrival = (function () {
       e = [eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, eye[2] + HOLD_PUSH * k];
       aim[0] -= side * 2.2 * k;
     }
-    return shot({ active: t < OUT_DURATION, fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+    return shot({ active: t < OUT_DURATION, crew: config.leaveCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
       label: opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
   }
   function create($, reducedMotion, readSettings = () => DEFAULT) {

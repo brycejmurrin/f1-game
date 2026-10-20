@@ -6751,7 +6751,8 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "pose": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew.test.mjs"
       ],
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",

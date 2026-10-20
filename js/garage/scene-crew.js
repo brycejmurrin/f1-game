@@ -247,22 +247,22 @@ const GarageCrew = (function () {
     }
     return m;
   }
-  function build(liv, teamId) {
+  function build(liv, teamId, style = look) {
     const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
     const c2 = rgb(liv && (liv.c2 || liv.accent || liv.stripe), [0.85, 0.86, 0.88]);
     const nose = noseTip(teamId, liv), noseY = nose.at(nose.z - 0.1);
     // Snapshot components rather than a weighted sum: distinct palettes can
     // share a numeric hash, and the editor can mutate a colour array in place.
-    if (mechMesh && key && key[0] === look && key[1] === c1[0] && key[2] === c1[1] && key[3] === c1[2] &&
+    if (mechMesh && key && key[0] === style && key[1] === c1[0] && key[2] === c1[1] && key[3] === c1[2] &&
         key[4] === c2[0] && key[5] === c2[1] && key[6] === c2[2] && key[7] === nose.z && key[8] === noseY) return;
     free();
-    key = [look, ...c1, ...c2, nose.z, noseY];
-    const classic = look === "classic", J = joints("stand");
+    key = [style, ...c1, ...c2, nose.z, noseY];
+    const classic = style === "classic", J = joints("stand");
     const m = acc(); if (classic) figure(m, c1, c2, true); else rig(m, J, c1, c2, false);
     mechMesh = gfx.createMesh(m);
     const b = acc(); if (classic) figure(b, c1, c2, false); else rig(b, J, c1, c2, true);
     bodyMesh = gfx.createMesh(b);
-    const L = classic ? null : buildLook(look, c1, c2, nose);
+    const L = classic ? null : buildLook(style, c1, c2, nose);
     lookMesh = L && L.idx.length ? gfx.createMesh(L) : null;
     // The lollipop: arm and pole along local +x from the shoulder, the round
     // board at the end facing ±z (toward the car), raised by a turn about z.
@@ -315,12 +315,18 @@ const GarageCrew = (function () {
   }
   // teamId (optional): the car's team, so the pit-stop jack seats on its nose.
   function draw(liv, eye, pose, opts, teamId) {
-    if (!gfx || !pose) return;
-    build(liv, teamId);
+    if (!gfx || !pose || pose.crew === "none") return;
+    // Per-direction animation choices never change the saved Team-tab crew.
+    const style = pose.crew === "guides" ? "sculpted" : pose.crew === "welcome" ? "welcome" : look;
+    build(liv, teamId, style);
     const L = layout(pose, eye && eye[0] > 0 ? 1 : -1);
-    if (look === "classic" || look === "sculpted")
+    const moving = Math.abs(pose.z || 0) > 1e-6 || Math.abs(pose.x || 0) > 1e-6;
+    // Service tools and people leaning into the cockpit belong to a parked
+    // car. The already-built guides take over while it enters or leaves.
+    const guides = style === "classic" || style === "sculpted" || (moving && (style === "pitstop" || style === "workshop"));
+    if (guides)
       for (const [x, z, yaw] of L.mechanics) gfx.draw(mechMesh, mk(x, 0, z, yaw, 0), opts || OPTS);
-    if (lookMesh) gfx.draw(lookMesh, mk(0, 0, 0, 0, 0), opts || OPTS);
+    if (lookMesh && !guides) gfx.draw(lookMesh, mk(0, 0, 0, 0, 0), opts || OPTS);
     const lp = L.lollipop;
     gfx.draw(bodyMesh, mk(lp.x, 0, lp.z, lp.yaw + Math.PI, 0), opts || OPTS);   // facing the garage
     // The pole from the right shoulder, across the car's path, lifted by `raise`.

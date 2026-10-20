@@ -203,3 +203,38 @@ test("helmet visor faces point out of the closed shell with unit normals", () =>
   }
   assert.ok(faces >= 4, "the visor wraps across the front of the helmet");
 });
+
+test("animation crew overrides do not overwrite the garage crew selection", () => {
+  const { Crew, Arrival, draws, meshes } = load();
+  Crew.setLook("workshop");
+  const pose = Arrival.poseOut(1.8, Arrival.settings({ leaveCrew: "guides" }), true);
+  Crew.draw(LIV, [-3, 2, -4], pose);
+  assert.equal(draws.length, 4, "two guides, lollipop marshal and pole");
+  assert.equal(Crew.look(), "workshop", "Team-tab preference is unchanged");
+  draws.length = 0;
+  Crew.draw(LIV, [-3, 2, -4], { ...pose, crew: "welcome" });
+  assert.equal(draws.length, 3, "welcome group, marshal and pole");
+  const count = meshes.length; draws.length = 0;
+  Crew.draw(LIV, [-3, 2, -4], { ...pose, crew: "none" });
+  assert.equal(draws.length + meshes.length, count, "no crew draws or new meshes when disabled");
+  Crew.draw(LIV, [-3, 2, -4], { ...pose, crew: "current" });
+  assert.equal(Crew.look(), "workshop");
+});
+
+test("service crews hand over to already-built guides while the car moves", () => {
+  const { Crew, Arrival, draws, meshes } = load();
+  for (const look of ["pitstop", "workshop"]) {
+    Crew.setLook(look); draws.length = 0; meshes.length = 0;
+    Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(1.8, Arrival.DEFAULT, true));
+    const service = draws[0].mesh, count = meshes.length;
+    for (const pose of [Arrival.pose(4, Arrival.DEFAULT, true), Arrival.poseOut(4, Arrival.DEFAULT, true)]) {
+      draws.length = 0; Crew.draw(LIV, [-3, 2, -4], pose);
+      assert.equal(draws.length, 4, look + ": guiding crew during motion");
+      assert.ok(draws.every((d) => d.mesh !== service), look + ": no jack or cockpit worker in the car path");
+      assert.equal(meshes.length, count, look + ": handover creates no meshes per frame");
+    }
+    draws.length = 0;
+    Crew.draw(LIV, [-3, 2, -4], Arrival.pose(Arrival.DURATION, Arrival.DEFAULT, true));
+    assert.equal(draws[0].mesh, service, look + ": service crew returns when parked");
+  }
+});
