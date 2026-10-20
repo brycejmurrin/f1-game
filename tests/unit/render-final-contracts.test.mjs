@@ -46,6 +46,18 @@ test('releaseGeometry holds its wrappers until a scene render, bounded by DROP_L
   const own = wrap('g'); c.dropWrapper(own, { dispose() { events.push('geo'); } }, true);
   assert.deepEqual(events.slice(-2), ['g', 'geo'], 'an owned geometry is never held');
 });
+test('releaseGeometry holds the coalesced run too (the instanced lit program\'s last holder); a direct _coDrop does not', () => {
+  const events = [];
+  const run = (id) => ({ imesh: { id, geometry: { dispose() { events.push(id + ':view'); } }, material: {}, parent: null, dispatchEvent() { events.push(id); } } });
+  const later = {}, now = {};
+  const c = ctx({ _warmPending: false, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 64, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 },
+    _coRuns: new Map([[later, [run('a')]], [now, [run('b')]]]), _instRegistry: [] },
+    fn(tlx, 'flushDropLater') + fn(tlx, 'dropWrapper') + fn(tlx, '_coDrop'));
+  c._coDrop(later, true); c._coDrop(now);
+  assert.deepEqual(events, ['b', 'b:view'], 'held run waits; the direct drop is immediate');
+  c._sceneRenders++; c.flushDropLater(false);
+  assert.deepEqual(events, ['b', 'b:view', 'a', 'a:view'], 'the held run and its own view go after the render');
+});
 for (const requested of [null, '8', '999']) for (const cap of [1, 2, 4, 8, 16]) test(`material-array detail ${requested} respects cap ${cap}`, () => {
   const c = ctx({ materialArrayDetail: null, localStorage: { getItem: () => requested }, renderer: { getMaxAnisotropy: () => cap } }, fn(tlx, 'materialArrayAnisotropy'));
   assert.equal(c.materialArrayAnisotropy(), Math.min(requested === '8' ? 8 : 4, cap));
