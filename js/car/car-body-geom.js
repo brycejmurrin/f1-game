@@ -27,7 +27,8 @@ const CarBodyGeom = (function () {
     // Anteater/wedge (low tip) also drop the mid cone; needle keeps a low slim mid.
     const midY = mid.y + (s.noseDroop || 0) * (sil ? 0.85 : 0.45)
       + (sil ? (s.noseSlim < 0.7 ? -0.04 : 0) + (s.noseSlim > 1.2 ? 0.03 : 0) : 0);
-    if (sil || s.fitSeat) return conceptNose(s, [   // fitted bodies keep this seam even with a level cover
+    // A fitBodyDetails body (#3151) carries its own tip/mid/root heights, fitted to the tub: it keeps that path.
+    if (!s.fitBodyDetails && (sil || s.fitSeat)) return conceptNose(s, [   // fitted bodies keep this seam even with a level cover
       { z: tip.z + s.noseTipZ, y: tip.y + s.noseDroop,
         w: tip.w * s.noseSlim, h: tip.h * s.noseSlim, t: tip.t },
       { z: midZ, y: midY, w: mid.w * midSlim, h: mid.h * midSlim, t: mid.t },
