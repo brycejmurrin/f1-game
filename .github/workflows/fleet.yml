@@ -2,7 +2,8 @@ name: Fleet board
 
 # The backlog's phone view (tools/ci/fleet-board.mjs): syncs .github/labels.json,
 # keeps the `claimed` label derived from the claims board and open PR bodies
-# (`Closes #n`), and rewrites the pinned "Fleet board" issue.
+# (`Closes #n`), rewrites the pinned "Fleet board" issue, and mirrors `to:#<PR>`
+# fleet-bus lines as PR comments (tools/ci/fleet-bus-mirror.mjs).
 # Why: docs/notes/AGENT-WORK-TRACKING-2026-10-14.md.
 #
 # Every 30 minutes at :23 and :53 (Merge Desk cadence; 2026-10-14 CI-volume cut, process-review fix 1;
@@ -51,3 +52,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node tools/ci/fleet-board.mjs --apply
+      # Bus -> PR comments (tools/ci/fleet-bus-mirror.mjs; docs/plans/2026-10-19-fleet-redesign.md §7 item 2):
+      # each `to:#<PR>` line on claude/fleet-bus becomes one comment on that open PR, which wakes its owner on
+      # any host. Idempotent (a mirrored sha is skipped), so the 30-min schedule and the dispatch that
+      # `fleet-bus.mjs send --to '#<n>'` sends never double-post. PR conversation comments are issue comments,
+      # so `issues: write` above covers them:
+      # https://docs.github.com/en/rest/issues/comments#create-an-issue-comment ("Issues" write in
+      # https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps, read 2026-10-19).
+      - name: Fleet bus
+        if: ${{ !cancelled() }}   # a failed board step must not hold the bus lines back
+        run: git fetch --no-tags --depth=500 origin "+refs/heads/claude/fleet-bus:refs/remotes/origin/claude/fleet-bus" || echo "no fleet bus yet"
+      - name: Bus to PR comments
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/ci/fleet-bus-mirror.mjs --no-fetch

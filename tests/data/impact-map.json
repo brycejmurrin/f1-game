@@ -4113,6 +4113,7 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/profile-lib.test.mjs",
         "tests/unit/prop-clipping.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
@@ -4190,6 +4191,7 @@
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/profile-lib.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
@@ -6590,6 +6592,7 @@
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/merge-gate.test.mjs",
         "tests/unit/metrics.test.mjs",
         "tests/unit/mobile-sync-web.test.mjs",
         "tests/unit/node-plan.test.mjs",
@@ -6600,6 +6603,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/profile-lib.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
@@ -12084,6 +12088,7 @@
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
+        "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
@@ -12703,6 +12708,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
@@ -13160,9 +13166,11 @@
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/fleet-owner.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
+        "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-car-shadow-cpu.test.mjs"
@@ -13406,11 +13414,23 @@
       "_flushLitRings": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "_jsStrike": [
+        "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
       "_matLayerBytes": [
         "tests/unit/assets-pack.test.mjs"
       ],
+      "_retireFlush": [
+        "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
       "_softBlitNotify": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "_softDisplayAbort": [
+        "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
+      "_softDisplayFinish": [
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "awaitSoftPresent": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14829,7 +14849,8 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-pins.test.mjs",
-        "tests/unit/hud-radio-slot.test.mjs"
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-readouts.test.mjs"
       ],
       "invalidateMap": [
         "tests/unit/hud-feel.test.mjs"
@@ -14858,7 +14879,8 @@
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
       "syncPhoneFit": [
-        "tests/specs/hud-layout.spec.js"
+        "tests/specs/hud-layout.spec.js",
+        "tests/unit/hud-readouts.test.mjs"
       ],
       "updateHud": [
         "tests/specs/hud-layout.spec.js",

@@ -18,15 +18,13 @@
 //      the CURRENT attachment state; +14 MB a round, 65 orphans after 3 rounds).
 //      Measured: the unfixed tree has 2 orphans at the first monaco reading,
 //      the fixed tree 0 at every reading.
-//   3. BOUNDED: across five visits the heap grows by at most GROWTH_MB in the
-//      SMALLEST interval after the second visit (sustainedGrowthMB). A leak
-//      grows every interval (#773: ~17 MB a pick; 2026-10-04: 14-26 MB a round).
-//      Visit 1 is warm-up and the warm-up can finish a visit later: monza's terrain / road /
-//      shadow-caster meshes are chunked lazily at draw time (game.js
-//      drawWorldMeshes, shadow-pass.js; PerfGov.tier() < 3, built once per track,
-//      freed with it) and the ~13 MB of CPU vertex data they keep lands at visit
-//      2 or 3 depending on what the picker's warm frames drew. On Metal the old
-//      check (visit 3 against visit 2) failed whenever it landed at 3.
+//   3. SAMPLED BUDGET: across five visits the MEDIAN of the three heap-growth
+//      intervals after visit 2 must stay within GROWTH_MB. The first interval
+//      is warm-up; one measured late warm-up step may land at visit 3 on Metal.
+//      Median catches repeated drift even when one interval shrinks, which
+//      the old minimum interval policy missed. All recorded five-visit warm-up
+//      series still pass the unchanged 10 MiB bound; known sustained leaks fail.
+//      Passing this finite sequence does not prove absence of leaks.
 //      Measured: docs/notes/TRACK-SWITCH-METAL-2026-10-17.md.
 //
 // TLX on purpose: the shared fixtures pin GLX (cheaper under SwiftShader), but
@@ -82,16 +80,23 @@ test("loading circuits one after another keeps one world in memory and does not 
   for (let visit = 1; visit <= VISITS; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
-      await waitUntilDrawn(page, id);
+      try { await waitUntilDrawn(page, id); }
+      catch (error) {
+        await test.info().attach(`picker-presentation-${visit}-${id}`, {
+          body: Buffer.from(JSON.stringify({ visit, id, error: String(error.message || error),
+            presentation: error.presentation || null }, null, 2)), contentType: "application/json",
+        });
+        throw error;
+      }
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);
       expect(c.aliveTracks, `visit ${visit} to ${id}: built tracks still reachable after GC`).toEqual([id]);
       expect(c.three && c.three.renderObjects, `visit ${visit} to ${id}: the world must have drawn for this reading to mean anything`)
         .toBeGreaterThanOrEqual(MIN_RENDER_OBJECTS);
-      (heap[id] = heap[id] || [])[visit] = c.heapMB;
+      (heap[id] = heap[id] || [])[visit] = c.heapBytes / 1048576;
       const nbc = await page.evaluate(() => { const n = window.renderer && window.renderer._nodes; let zero = 0; if (n) for (const st of n.nodeBuilderCache.values()) if (st.usedTimes <= 0) zero++; return n ? { size: n.nodeBuilderCache.size, zero } : null; });
-      readings.push({ visit, id, heapMB: c.heapMB, renderObjects: c.three && c.three.renderObjects, nodeBuilderCache: nbc });
+      readings.push({ visit, id, heapBytes: c.heapBytes, heapMB: c.heapMB, renderObjects: c.three && c.three.renderObjects, nodeBuilderCache: nbc });
       mkdirSync("artifacts/logs", { recursive: true });
       writeFileSync("artifacts/logs/track-switch-memory.json", JSON.stringify(readings, null, 1));
       expect(nbc, "three r186 keeps renderer._nodes.nodeBuilderCache; a three upgrade that moves it must move this read").not.toBeNull();
@@ -100,8 +105,9 @@ test("loading circuits one after another keeps one world in memory and does not 
   }
   for (const id of CIRCUITS) {
     const series = heap[id].slice(1);
-    const { intervals, min } = sustainedGrowthMB(series);
-    expect(min, `${id}: heap ${series.join(" → ")} MB across ${VISITS} visits; growth per visit after the second: ${intervals.join(", ")} (the smallest must be within the bound)`)
+    const { intervals, min, median, netAfterWarmupMB, policyReady } = sustainedGrowthMB(series);
+    expect(policyReady, "growth policy needs the existing five-visit browser sequence").toBe(true);
+    expect(median, `${id}: heap ${series.join(" → ")} MB across ${VISITS} visits; growth per visit after the second: ${intervals.join(", ")} (median ${median}, min ${min}, net after warm-up ${netAfterWarmupMB}; median must be within the bound)`)
       .toBeLessThanOrEqual(GROWTH_MB);
   }
 });

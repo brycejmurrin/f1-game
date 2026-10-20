@@ -1115,10 +1115,11 @@ jobs:
           echo "targeted shard ${SHARD}of4: ${MINE:-"(none on this shard)"}"
           [ -z "$MINE" ] && exit 0
           node --test --test-concurrency=1 $MINE
-      # Once per matrix, not once per shard — shard 1 only (same work as the
-      # old single job's trailing step).
+      # Once per matrix, not once per shard — shard 3 only (same work as the
+      # old single job's trailing step). Shard 3 is the lightest (#3117 F2:
+      # sweeps 276 s vs 374 s on shard 1), so the +77 s lands off the critical path.
       - name: Every circuit still builds headlessly
-        if: needs.select.outputs.geometry != 'false' && matrix.shard == 1
+        if: needs.select.outputs.geometry != 'false' && matrix.shard == 3
         run: node tools/track/verify-track.cjs --all
 
   # Un-suffixed check name for pages-reuse-verdict.sh (exact match on
@@ -1448,6 +1449,7 @@ jobs:
       # above was skipped, so there is no junit and nothing to say.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always() && needs.select.outputs.ships != 'false'
+        continue-on-error: true  # telemetry only (#3117 F1): an upload ETIMEDOUT must not redden a green job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spec-timings-junit-smoke-${{ matrix.shard }}
@@ -1559,6 +1561,7 @@ jobs:
       # were all skipped (the ship filter) legitimately produces none.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always()
+        continue-on-error: true  # telemetry only (#3117 F1): an upload ETIMEDOUT must not redden a green job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spec-timings-junit-driving-model
@@ -2461,6 +2464,7 @@ jobs:
       # were all skipped (the ship filter) legitimately produces none.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always()
+        continue-on-error: true  # telemetry only (#3117 F1): an upload ETIMEDOUT must not redden a green job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # matrix.name is unique per plan (select-specs shards()); the job
