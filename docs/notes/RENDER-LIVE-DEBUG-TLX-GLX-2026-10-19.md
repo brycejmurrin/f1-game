@@ -21,8 +21,8 @@ Legend: **pass**, **timeout** (inconclusive: runner speed), **blocked** (a probe
 | 1 | Same-circuit rebuild A/B (bahrain, monaco ×3) | **pass** (run 39351604149) | **blocked**: the second circuit's lazy load throws `circuit payload not resident: monaco` after the first race (runs 39339325536, 39354599571); see Finding A |
 | 2 | Context loss during build and after settle | game self-heals by reloading within ~8 s in both phases (39351604149); final draw check capped | self-heals in the build phase (39351702257, 39354702088); remaining steps capped |
 | 3 | Quality tiers, mirror/shadow/post live, NaN uniform scan | **pass** (39351604149) | timeout (39351702257, 39354702088): `page.evaluate` unanswered for >2 min after race start |
-| 4 | visibilitychange / pageshow, 844×390 ↔ 390×844 | pending (run 39354499177) | timeout (39354808426): page unresponsive right after the first hide |
-| 5 | Night, mirror on/off, `matTex(0/1)` | timeout (baseline, mirror off/on ran; `matTex` not reached) | timeout (39354808426) |
+| 4 | visibilitychange / pageshow, 844×390 ↔ 390×844 | **pass** (run 39356448785, 6× caps) | timeout (39354808426): page unresponsive right after the first hide |
+| 5 | Night, mirror on/off, `matTex(0/1)` | **pass** (run 39356448785, 6× caps) | timeout (39354808426) |
 
 TLX on the `tlx-native` leg resolved to the same ANGLE/WebGL2 path as `tlx-gl` on this runner (it has a GL
 context and counts uploads), so it carries no separate evidence; its rev-4 and rev-5 runs (39349367064,
@@ -57,12 +57,30 @@ the whole sequence (232 → 233 VAO, 458 → 460 buffers).
 (`glx.js` "SELF-HEAL") and TLX both reloaded the page on their own within ~8 s (`ctxloss … reloaded=true`);
 the game then reached the grid again. The rev-5 row hit its cap before the post-reload draw check.
 
-### Row 4 — why the first visibility results are not verdicts
+### Row 4 — GLX visibility / pageshow / rotation (run 39356448785, `= result visibility`)
 
 The game pauses itself on a hidden tab (`platform-session.js`: `setPaused(true, "hidden-tab")`) and does not
-render while the pause card is open (`game.js` tick: `render()` only when not paused). The first probe never
-resumed, so GL uploads stayed flat (28,220 on GLX, 3,892 on TLX) and its "drawing" check read false. That
-was a probe error. The probe now clicks RESUME after each show, then rotates while paused and measures the canvas.
+render while the pause card is open (`game.js` tick: `render()` only when not paused). Earlier visibility
+"fails" (runs 39351604149, 39351702257) were the probe not resuming; the probe now clicks RESUME.
+
+Three hide → show (`pageshow persisted:true`) → RESUME cycles: each time the pause card was up after show
+(`pausedAfterShow: true`), RESUME restored drawing (GL uniform uploads advanced, 8,053 → 12,608 → 17,231), no
+context lost, `gpuErrors` 0. Then rotate while paused (844×390 → 390×844): the card stays up, **no redraw
+while paused** (`uploadsDuringResize: 0`), and the one screenshot of `#game` at 390×844 with the card hidden has
+mean luma **49.2, not black** (`blackWhilePaused: false`). After RESUME, resizes 844×390 → 390×844 → 844×390 all
+drew (`drawing: true`).
+
+Open observation, not a verdict: live object counts rose across the three post-resume resizes
+(VAO 207 → 213 → 229, buffers 428 → 440 → 472) while the race kept running; one run cannot separate a
+per-resize allocation from race-progress growth (tiers, run 39351604149, moved by one VAO over a longer span).
+A repeated rotate cycle with the race paused would settle it.
+
+### Row 5 — GLX night (run 39356448785, `= result night`)
+
+Night race, floodlights on (`bakedLights` 163, `lampPosts` 134, `builtNight`/`trackNight` true, `perChunkLights`
+0.3). Baseline → mirror off → mirror on → `matTex(0)` → `matTex(1)`: all five steps drew, `nan` 0, `gpuErrors` 0.
+Turning the mirror on compiled its pass (Program 19 → 21, FBO 17 → 18, RBO 3 → 4), as expected for a lazily
+built pass.
 
 ## Findings
 
