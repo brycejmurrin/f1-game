@@ -1,0 +1,1 @@
+New: Every garage crew style wears full-face helmets, with suits and helmet shells in the active livery primary colour and contrasting panels and helmet stripes in its secondary colour. Live paint edits reliably refresh the crew.

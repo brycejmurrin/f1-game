@@ -20,14 +20,14 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 function load() {
-  const draws = [];
-  const gfx = { createMesh: (d) => ({ n: d.pos.length }), freeMesh() {}, draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
+  const draws = [], meshes = [], freed = [];
+  const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length, d }; meshes.push(mesh); return mesh; }, freeMesh: (mesh) => freed.push(mesh), draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
-  return { Crew, Arrival, draws };
+  return { Crew, Arrival, draws, meshes, freed };
 }
 const LIV = { c1: [1, 0.5, 0], c2: [0.1, 0.1, 0.1] };
 
@@ -142,4 +142,64 @@ test("pit-stop front jack: saddle seated on each chassis' nose underside, clear 
     assert.ok(worst > -1e-3, `${id}: and touches it, no gap (closest ${(-worst * 1000).toFixed(2)} mm below)`);
     assert.equal(inWing, 0, id + ": nothing of the jack (or crew) inside the front wing's main plane");
   }
+});
+
+
+test("every crew style wears primary/secondary livery helmets, including former cap roles", () => {
+  const { Crew, Arrival, meshes } = load();
+  const liv = { c1: [0.83, 0.09, 0.19], c2: [0.04, 0.66, 0.91], accent: [0.18, 0.77, 0.31] };
+  const same = (d, i, c) => c.every((v, k) => Math.abs(d.col[i + k] - v) < 1e-8);
+  for (const look of Crew.LOOKS) {
+    Crew.setLook(look); meshes.length = 0;
+    Crew.draw(liv, [-3, 2, -4], Arrival.poseOut(1.8, Arrival.DEFAULT, true));
+    const head = meshes[0].d, hits = [0, 0, 0];
+    for (let i = 0; i < head.pos.length; i += 3) if (head.pos[i + 1] > 1.50) {
+      for (const [k, c] of [liv.c1, liv.c2, [0.05, 0.06, 0.08]].entries()) if (same(head, i, c)) hits[k]++;
+    }
+    assert.ok(hits.every((n) => n > 0), look + ": shell, contrasting stripe and dark visor");
+    for (const { d } of meshes) for (let i = 0; i < d.col.length; i += 3)
+      assert.ok(!same(d, i, [0.62, 0.47, 0.38]), look + ": no exposed cap faces or necks");
+  }
+});
+
+test("crew paint cache detects colliding palettes and in-place edits, but reuses unchanged meshes", () => {
+  const { Crew, Arrival, meshes, freed } = load();
+  const liv = { c1: [0.5, 0.125, 0.25], c2: [0.25, 0.5, 0.75] };
+  const pose = Arrival.poseOut(1.8, Arrival.DEFAULT, true);
+  for (const look of ["classic", "workshop"]) {
+    Crew.setLook(look); meshes.length = 0; freed.length = 0;
+    Crew.draw(liv, [-3, 2, -4], pose);
+    const built = meshes.length, old = meshes.slice();
+    Crew.draw(liv, [-3, 2, -4], pose);
+    assert.equal(meshes.length, built, look + ": no mesh creation on another frame");
+    // These two secondary palettes have EXACTLY the same old 7R + 11G + 13B hash.
+    liv.c2 = [0.421875, 0.390625, 0.75];
+    Crew.draw(liv, [-3, 2, -4], pose);
+    assert.equal(meshes.length, built * 2, look + ": distinct paint cannot share cached geometry");
+    assert.ok(old.every((m) => freed.includes(m)), look + ": previous meshes are released");
+    liv.c1[1] += 0.125;
+    Crew.draw(liv, [-3, 2, -4], pose);
+    assert.equal(meshes.length, built * 3, look + ": editing an existing colour array refreshes paint");
+    Crew.draw(liv, [-3, 2, -4], pose);
+    assert.equal(meshes.length, built * 3, look + ": the edited palette is cached");
+    liv.c2 = [0.25, 0.5, 0.75];
+  }
+});
+
+test("helmet visor faces point out of the closed shell with unit normals", () => {
+  const { Crew, Arrival, meshes } = load();
+  Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(1.8, Arrival.DEFAULT, true));
+  const d = meshes[0].d; let faces = 0;
+  for (let i = 0; i < d.idx.length; i += 3) {
+    const ids = d.idx.slice(i, i + 3).map((v) => v * 3);
+    if (!ids.every((v) => d.pos[v + 1] > 1.50 && Math.abs(d.col[v] - 0.05) < 1e-8)) continue;
+    const [a, b, c] = ids.map((v) => d.pos.slice(v, v + 3));
+    const u = b.map((v, k) => v - a[k]), v = c.map((x, k) => x - a[k]);
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const centre = a.map((x, k) => (x + b[k] + c[k]) / 3 - [0, 1.62, 0][k]);
+    assert.ok(n.reduce((sum, x, k) => sum + x * centre[k], 0) > 0, "non-degenerate, outward visor triangle");
+    for (const at of ids) assert.ok(Math.abs(Math.hypot(...d.nrm.slice(at, at + 3)) - 1) < 1e-8);
+    faces++;
+  }
+  assert.ok(faces >= 4, "the visor wraps across the front of the helmet");
 });
