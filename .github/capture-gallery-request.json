@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "args": [
+    "--team=mercedes",
+    "--backend=three",
+    "--part=sidepod,frontWing",
+    "--angles=headOn",
+    "--colours=light",
+    "--lights=lamp",
+    "--baseline=podFinish=gloss",
+    "--variants=pod=#225bb4;podFinish=satin;coverFinish=pearl",
+    "--viewport=1120x700"
+  ]
+}
