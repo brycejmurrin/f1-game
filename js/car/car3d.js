@@ -570,8 +570,11 @@ const Car3D = (function () {
           // A slat runs ACROSS the shoulder between two skin samples, so it
           // follows the camber instead of bridging it (no gap, no buried end).
           const xa = s * p.x * 0.40, xb = s * p.x * 0.76;
-          addBeamBetween(out, [xa, coverSurfaceY(p, xa) + 0.005, z], [xb, coverSurfaceY(p, xb) + 0.005, z],
-                         0.012, DARK, SURFACES.carbon);
+          // 24 mm section centred 10 mm proud: rooted 2 mm into the skin and
+          // clear of the livery drape (COVER_STACK.decal 13 mm), which hid a
+          // 12 mm slat entirely on a painted cover (Ferrari Δ 0.01 % px).
+          addBeamBetween(out, [xa, coverSurfaceY(p, xa) + 0.010, z], [xb, coverSurfaceY(p, xb) + 0.010, z],
+                         0.024, DARK, SURFACES.carbon);
         }
       }
       // Team-style DORSAL FIN along the engine-cover ridge: 1 = low blade,
