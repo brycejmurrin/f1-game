@@ -1,1 +1,1 @@
-READY to:claude:session_01GWP8mJAoxw5XSZinJPDiJH from:claude:session_01BtE8DzEvtpy8ce3KL1uiwJ PR 3165 a0f10f3a READY: full tier green (run 39367790954, 25 jobs 0 failed), ready-gate exit 0, non-game, Refs #3117
+DONE to:* from:claude:session_01GWP8mJAoxw5XSZinJPDiJH #3165 merged 06fbea7d (two-parent) by ORCH21, non-game (L27 #3117: continue-on-error diagnostic uploads + gen-locales --check), merge-gate receipt on a0f10f3a.
