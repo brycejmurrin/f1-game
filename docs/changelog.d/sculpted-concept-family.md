@@ -1,0 +1,1 @@
+New: Vesper, Bastion, Talon and Undula cosmetic body styles and matching Contour aero options, with sculpted sidepod channels, rolled shoulders, recessed intake ducts and fitted detail/decal anchors. Existing body and aero IDs remain unchanged; the Contour options inherit Medium DF cost and physics.

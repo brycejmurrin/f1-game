@@ -85,7 +85,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
       top: 0.41 + 0.07 * (z - zR) / (zF - zR) };
   const podStops = (front, rear) => {
     const internal = anchors && anchors.podStations ?
-      anchors.podStations.map((p) => p.z) : [0.22, -0.62];
+      (anchors.podStops || anchors.podStations).map((p) => p.z) : [0.22, -0.62];
     return [front, ...internal.filter((z) => z < front && z > rear), rear]
       .sort((a, b) => b - a);
   };
@@ -96,6 +96,20 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
       const ta = (zF - aZ) / (zF - zR), tb = (zF - bZ) / (zF - zR);
       const rU = (t) => u.uR + (u.uL - u.uR) * t;
       const lU = (t) => u.uL + (u.uR - u.uL) * t;
+      if (anchors && anchors.podSculpt) {
+        const cuts = [yBottom, ...[0.22, 0.65].filter(f => f > yBottom && f < yTop), yTop];
+        const point = (z, f, side) => { const p = anchors.podFlank(z, f); return [side * (p[0] + 0.004), p[1], z]; };
+        const vAt = f => u.vB + (u.vT - u.vB) * (f - yBottom) / (yTop - yBottom);
+        for (let k = 0; k < cuts.length - 1; k++) {
+          const lo = cuts[k], hi = cuts[k + 1];
+          const p = point(aZ, lo, 1), q = point(aZ, hi, 1), dx = q[0] - p[0], dy = q[1] - p[1], n = Math.hypot(dx, dy);
+          quadUv([p, point(bZ, lo, 1), point(bZ, hi, 1), q], [dy / n, -dx / n, 0],
+            [[rU(ta),vAt(lo)], [rU(tb),vAt(lo)], [rU(tb),vAt(hi)], [rU(ta),vAt(hi)]]);
+          quadUv([point(bZ, lo, -1), point(aZ, lo, -1), point(aZ, hi, -1), point(bZ, hi, -1)], [-dy / n, -dx / n, 0],
+            [[lU(tb),vAt(lo)], [lU(ta),vAt(lo)], [lU(ta),vAt(hi)], [lU(tb),vAt(hi)]]);
+        }
+        continue;
+      }
       quadUv([[a.x+proud, pY(a,yBottom), aZ], [b.x+proud, pY(b,yBottom), bZ],
               [b.x+proud, pY(b,yTop), bZ], [a.x+proud, pY(a,yTop), aZ]], [1, 0, 0],
              [[rU(ta),u.vB], [rU(tb),u.vB], [rU(tb),u.vT], [rU(ta),u.vT]]);
@@ -324,8 +338,10 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
   // fin move the endplate), so the digit must be too (#3111 F15).
   const nb = (Car3D.numberBoard ? Car3D.numberBoard(aLvl == null ? 2 : aLvl, Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : undefined) : { cy: 0.62, h: 0.20 });
   const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
+  if (!anchors?.podSculpt) {
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
+  }
   return out;
 }
 // The decal key, memoised per PARTS object (teamDecalState hands the same one
