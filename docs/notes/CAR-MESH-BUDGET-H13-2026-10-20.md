@@ -36,6 +36,24 @@ anteater "and a few more" have noses that are far too narrow. PR #3242.
   ~30 ms per build in node:vm, inside the race-load warm.
   `measure` and `refinish` builds (fit audit, garage refinish) skip it, because
   they read vertex ranges. `noWeld: true` opts out.
+- **Mac GPU A/B** (gpu-census.yml, macos-latest, montreal, chase cam, branch tip
+  09fdaac7). Arm A was run 39510291428 with the weld on; arm B was run 39510306852
+  with `ls apex26.carWeld=0`. The like-for-like number is GLX's GPU timer at the
+  same canvas (0.75 MP, scale 0.9): **11.1 ms welded vs 12.41 ms unwelded (−10.6 %)**,
+  20 samples each. Frame times on that runner are not comparable between the two
+  arms: the governor settled on a different tier per leg (GLX tier 4 vs 1;
+  three/WebGL2 ran at 0.75 MP in A and 0.92 MP in B), and the paravirtual adapter
+  is noisy (WGX 78.8 vs 62.1 ms/frame). So car geometry does cost GPU time in a
+  full-field race, and the weld is about a tenth of GLX's GPU frame on that
+  machine. This is one pair of runs on a software-class adapter, not phone
+  evidence (the forced-mobile note in train #3237).
+- A mid-range per-team LOD mesh was considered and dropped. It would save about 11 %
+  of a field body's triangles (the rounded headrest, ducts and mirrors) for rivals
+  50–120 m away, but each team would need a second ~200 ms build, made either
+  at race load or the first time a rival crosses 50 m mid-race (a hitch).
+  Same-recipe sharing already exists past 120 m (one shared body). Inside 120 m
+  each seat keeps its own body, because the helmet design is baked into it
+  (opts.num).
 - Race estimate at a grid start (20 cars inside 120 m): ~19 × 16.5k + 18k ≈ 330k
   car triangles, plus casters inside 50 m (6–10 × 18–20k) ≈ 450–530k a frame.
   A grid of all sculpted bodies is +8 %.
@@ -53,11 +71,16 @@ shell moved under it.
 |---|---|---|---|---|
 | D1 | ERS conduit clamp boxes, cover flank | every concept (needle 142 mm, blade 156, auralis 84–102; factory 54) | float | on the cable line (`coverFlankX` below the shoulder) |
 | D2 | conduit end box, z −1.68 | all | float 58–76 mm | same |
-| D3 | roll-hoop scoop lip + cheeks | low or tall airboxes (needle, wedge, swan, scorpion, brick, barge, stepnose) | float 28–57 mm | seated on the mouth top and sized to the mouth's width |
-| D4 | ERS cooler intake + grille slats | every pod-sculpted body | buried 22–44 / float 12–24 mm | on the highest `podRoof` skin under the part |
-| D5 | second bargeboard vane, x 0.66 | wide pods (brick, barge, anteater, wedge, lowline, sharkfin) | buried 26–60 mm | ends at the pod mouth |
-| D6 | front-wing cascade vanes i ≥ 1 | sharkfin, serpent, delta, stepnose, highnose, rift | float 20–39 mm behind the endplate | end on the endplate |
+| D3 | roll-hoop scoop lip + cheeks | low or tall airboxes (needle, wedge, swan, scorpion, brick, barge, stepnose) | float 28–57 mm | seated on the mouth top and sized to the mouth's width; no lip on a mouth below y 0.80 and no cheeks below 0.85 (they sat in the helmet) |
+| D4 | ERS cooler intake + grille slats | every pod-sculpted body | buried 22–44 / float 12–24 mm | on the mid-slope of the `podRoof` skin under the part (auralis slats 21 → 12 mm) |
+| D5 | second bargeboard vane, x 0.66 | wide pods (brick, barge, anteater, wedge, lowline, sharkfin) | runs 26–60 mm into the pod mouth | **not changed**: shortening or dropping it left the turning-vane cluster floating 15–93 mm (fit audit), which is worse |
+| D6 | front-wing cascade vanes i ≥ 1 | sharkfin, serpent, delta, stepnose, highnose, rift | float 20–39 mm behind the endplate | drawn only where the vane ends on the endplate |
 | D7 | fuel filler housing | lowline | buried 33–55 mm in the tub | not under the tub rim |
+
+After the fixes, `car-fit-audit --base` on the changed bodies shows no new visible
+floaters. What it still lists as WORSE is hidden: the hood deck sits 5 mm deeper in
+the widened nose root at z 1.15, and repeat counts of pre-existing wheel/suspension
+rows moved.
 
 Not fixed (minor, or the factory car has them too): mirror stalk root buried
 35–50 mm on high-shoulder bodies, gearbox heat fins 7–11 mm clear, the studies'
