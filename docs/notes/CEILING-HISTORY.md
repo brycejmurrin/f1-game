@@ -3625,3 +3625,14 @@ smoothing and vertical fence ends +17, D1c body styles via #3160 +23, D8b shrunk
 `js/car/livery-stations.js`). Extraction was weighed and not done here: each is a few lines of
 geometry inside `build`'s own emit closure, and a new car module needs a `tools/manifest.cjs` entry,
 which is a shared contract outside this integration PR's scope.
+
+## 2026-10-20 — #3162 + #3177 landed back to back: car3d.js +6 lines
+
+`js/car/car3d.js` lines 2686 → 2692. Each PR fit the ceiling on its own; merged one after the other
+(7165753a #3162 D1d concept bodies/aero, then e27a17a9 #3177 post-Bundle-A fit rows: single-pipe
+root cap, DRS pod tail cut, Smooth Case notch, Hooded Exit visor post) their deltas summed past it,
+and the deploy tip went red on `ratchets.test.mjs`. Raised on Bryce's in-session answer to L25
+("Raise ceiling", 2026-10-20); #3177's own hunks had already been compacted by 7 lines to fit, so
+the +6 is the overlap of the two merges, not new geometry. No extraction here: both sets of lines
+sit inside `build`'s emit closures beside the parts they shape. The same `--update` also records
+the tree's `dynamicIdReads` falling 74 → 73 (a measured lowering, not a raise).
