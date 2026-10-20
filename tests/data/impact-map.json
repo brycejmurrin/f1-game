@@ -7173,10 +7173,14 @@
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "setSetupAero": [
+        "tests/unit/garage-aero-no-camera.test.mjs",
         "tests/unit/garage-arrival.test.mjs"
       ],
       "setSetupSpin": [
         "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "setupZoom": [
+        "tests/unit/garage-aero-no-camera.test.mjs"
       ],
       "startArrivalPreview": [
         "tests/unit/garage-arrival.test.mjs"
