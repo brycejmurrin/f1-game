@@ -25,7 +25,10 @@
       const shift = def._sceneryShift || 0;
       const SF = wrapFrac(-shift);
       const T1F = wrapFrac(def.turns[0] - shift);
-      const FC = wrapFrac(def.turns[def.turns.length - 1] - shift);
+      // The final-complex camera and two-sided light ring start from T14.
+      // The old last table entry was T14, with T15 missing; keep these
+      // fixtures at that physical bend when the numbering table is corrected.
+      const FC = wrapFrac(def.turns[13] - shift);
 
       if (circuitKit) {
         circuitKit.hospitality({

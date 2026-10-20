@@ -18,7 +18,7 @@ climbs through the middle sector before rolling home.
 
 | s | Side | Distance | Box-model description |
 |------|------|----------|------------------------|
-| 0.00 | L | near | 2024–25 pit / paddock building: five storeys, parallel white slab with cantilever terrace lips, bioclimatic pergola, rooftop terrace (DVM / IADA / Motorsport.com). Authored length ~128 m (under sourced >340 m) to stay inside the props-tris ratchet; still clearly longer than the old ~80 m slab |
+| 0.00 | L | near | 2024–25 pit / paddock building: approximate 340 m continuous white/glazed mass, five stylized storeys, burgundy terrace fascia and five simplified pergola bays. Local level podium supports the building on the game's slope; footprint, height and grading remain artistic |
 | 0.00 | R | near | Main grandstand opposite the pits: covered, ~10k seats, deep perpendicular terrace stack + dark roof (IADA); size approximate |
 | — | — | — | Dynamics 21 m sculpture + separate entrance office: not modelled (appearance/GPS UNSOURCED for a faithful placement) |
 | 0.02 / 0.985 | both | near | Two tunnel stairheads between paddock and main tribune (Motorsport.com) |
@@ -140,3 +140,25 @@ Corner stands are keyed with `au(def.turns[i])`, the authored fraction that land
 pit complex owns racing 0.93-0.04 (`pit.keep` reaches 30 m beyond the edge), so the hand-built pit block must clear that
 footprint outright (gap 44 for its 22 m bounds) or it is superseded whole. Not re-keyed: the T1 / Pit Exit cluster
 (authored 0.07-0.12, racing 0.97-0.02), whose `-1` stands at authored 0.10 / 0.12 sit on the engine pit and are dropped.
+
+## 2025 paddock reference and grading limits
+
+[DVM Group's completed-2025 project](https://www.dvmgroup.com/en/references/projects/hungaroring)
+(publication unstated; consulted 19 October 2026) describes a paddock over
+340 m long and five storeys. Its Hungaroring Media photograph supports the
+continuous white/glazed mass and burgundy fascia. The model approximates that
+lower-bound extent without adding pergola bays. Other dimensions and door
+rhythm remain simplified; the perspective image is not a metre survey.
+
+[The operator's 19 June 2025 update](https://hungaroring.hu/site/en/media/news/hungaroring-the-future-has-begun)
+confirms the new exterior and transitional 2025 use, with final fit-out continuing
+into 2026. This brief does not treat a future interior as completed in 2025.
+
+The game's terrain intruded into the old ground floor. The long model now uses
+a level floor above sampled terrain under its actual ground-storey footprint,
+with a retaining footing matching the body perimeter and filling downhill gaps.
+Upper storeys meet rather than floating across the former shadow gaps. The exposed footing varies
+roughly 0.15–5.11 m in this procedural setting. This is artistic site grading,
+not a sourced real-world podium height. Model bounds include the footing and
+roof; expanded bounds do not set the floor's height. Road, elevation, banking,
+pit lane and required landmark identities are unchanged.
