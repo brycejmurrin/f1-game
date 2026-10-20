@@ -191,3 +191,21 @@ UPDATE FROM OrchB 21 session_013hpoGb4E43VwtFEZzAnTm4 (06:13–06:57Z, FINAL —
 - ARCHIVED by OrchB 21 (Bryce 'You archive the old ones'): HUD-TIME, D1c, D5c, D6b, D7b, D9b, D3c, D1d, OrchB 19, OrchB 20, L12, L21, L22. Still idle/kept: D2c, L13–L16, seed.
 - Open for Bryce: which session is 'train'; one naming scheme across body/aero drafts (D1d ask). MERGE-HOLD (Bryce's): codex #3151 #3172 #3175 + set 4 local, #3105, #3127, #3163, #3171.
 - OrchB 21 pending tick deleted at handoff. No PR subscriptions held.
+
+UPDATE FROM OrchB 22 session_01FmCiNv9wLivXiw7zwBz9QG (06:57–09:42Z, FINAL — read this LAST; supersedes everything above). Successor = OrchB 23.
+- Read ONLY FIRST ACTS + MERGE + this note; bus `read --since 83c45d1`. Skip AskUserQuestion; post LIVE; tell Bryce. Keep ticks lean (no raw list dumps; summarise with python/subagent).
+- BRYCE GRANTS TO OrchB 22 (typed): "Manage all for me" (07:40Z) = OrchB runs the WHOLE merge queue (Claude, Codex, Cursor PRs; MERGE-HOLD untouched). "Yes" (08:00Z) to back-to-back game merges — but the merge hook still requires a merge-gate receipt, so OrchB can do only ONE game merge per green Pages; Bryce often merges himself in batches. "Fix batch 1 asap" (08:31Z). Archive finished workers. Worker pushes only (Bryce denied an orchestrator push to a PR branch 07:31Z).
+- LESSON (3 tip reds today): before ANY merge, trial-merge onto the CURRENT tip and run `node tools/check/ratchets.mjs` + `node --test tests/unit/assert-match-ratchet.test.mjs` + gen:check. Combined merges broke the tip three times: #3120 assert.match +1 (fixed #3179), #3162+#3177 car3d.js +6 (fixed #3182, ceiling 2692), and a double-counted ratchets.d auto-lower dynamicIdReads 74→72 (fixed #3190 = c1121dea; ONE parent: Bryce squash-merged it). Closed duplicate #3189.
+- TIP c1121dea, ratchets green. Live site was 21240eae; Pages on c1121dea pending at 09:42Z (5b99520d failed on the ratchet, expected).
+- MERGED today (all two-parent except c1121dea): #3099 #3122 #3123 #3126 #3120 #3128 #3136 #3143 #3102 (Bryce); #3144 #3139 #3125 #3162 #3081 #3182 (OrchB 22); #3175 #3176 #3177 #3164 #3179 #3190 (Bryce).
+- NEXT GAME MERGES (one per green Pages; slot via bus GAME-SLOT): #3079 (green) → #3152 (READY 2e7a3da6, B·S3) → #3161 → #3022 → #2999 → #3150 (B·S3 pushing 9bda7dce) → #3021 (d8996a90) → #2993 (4d3760a7) → Codex HUD #3186 (draft) → perf PRs below. Batch-1 trial (08:26Z): #3150 conflicts with #3081 (now synced), #3152 needed sync (done).
+- NON-GAME ready+green: #3114 #3112 #3106 #3103 — batch via merge-gate.
+- LIVE LANES (REPORT/READY to OrchB):
+  - Garage lag (Bryce "my garage is pretty laggy", "really laggy on three js webgpu… editing a livery"): B·R1 session_01QT8Tb4y36jrdgk3yo6saEN #3180 (TLX relink after idle + finish gate per-draw uniform; syncing onto c1121dea); B·P2 session_01Jdubvvo3RePa3a27C33k6p #3187 (WebGPU pipeline recreate per livery edit, 1→0; syncs after #3180; coordinate tlx.js lifetime with R1); B·C1 session_018Ka6enjJhSzcdKE7jyz2jZ #3181 (finish tap = refinish, no Car3D build; fixing reds); L24 session_01UCDAVRahCf1qqowKNHw6HR #3185 (atlas-only livery taps no rebuild; syncing); B·P1 session_012svaFy4N8VxnSeCPfxJEqn (real-GPU census of DEPLOYED build via gpu-census.yml macOS; REPORT + phone Artifact due). Perf merge order: #3180 → #3185 → #3181 → #3187.
+  - B·D2d session_01337xbh82PgZ2FUG8eCSSRm #3178 finishes retune (15; red on assert-match, told to sync); gallery GqcJU9VgByuXYzme5Nrwgj.
+  - B·S3 session_01WBwsHp7KphdraGFseot6Ks (#3152 READY, #3150 push).
+  - Codex lanes: HUD #3186; car lane 01a1558b (finish pills for duct/deflector/cockpit/board, coordinating with C1); garage-edit-perf-a8d2 (LIGHTING panel full rebuild 36→0.4 ms, no PR yet).
+- DECIDED by OrchB 22 (Bryce delegated): Flatline accepted at 3.7/4.8 % px; D3d kept rwPlanes-1 guard (no DRS pod on single-flap wings, pod would float 73–84 mm); R1 uniform gate over define split; D2c shot cap stayed 400 (Bryce chose).
+- MERGE-HOLD (Bryce's): #3172 #3171 #3163 #3151 #3127 #3105.
+- Stale trigger: "Merge Desk hourly sweep" trig_012C3b3etWvDsQxxsGvd5H6E still fires into a dead session — ask Bryce before disabling.
+- ARCHIVED by OrchB 22: D2c, B·S1, B·S2, B·S4, L13, L14, L15, L16, H1, L25, D3d (D1e told to stand down). OrchB 22 deletes its pending tick at handoff. Subscriptions: none needed.
