@@ -1402,7 +1402,10 @@ let _livPrevDraft = null;
 // it must not also throw away the preview mesh (a full car rebuild on a phone).
 const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1, patternTint: 1, patternSecond: 1, patternPlacement: 1, patternSide: 1,
   patternWidth: 1, patternRepeat: 1, patternOffset: 1, patternTaper: 1, patternOpacity: 1, patternRotation: 1, patternStretch: 1, patternWeight: 1, patternKey: 1,
-  decalNoseTip: 1, decalCockpit: 1, decalPodTop: 1, decalHalo: 1 };
+  decalNoseTip: 1, decalCockpit: 1, decalPodTop: 1, decalHalo: 1,
+  // Atlas-only too (wave 1/2 crest + tail fields, the grips colour): each crest pill tap paid a whole Car3D.build
+  // (B·L24, docs/notes/garage-perf-2026-10-20.md); tests/unit/garage-perf-mesh-free.test.mjs builds the car both ways.
+  crestStyle: 1, crestTone: 1, crestFrame: 1, coverBind: 1, finArt: 1, finHandoff: 1, gripTint: 1 };
 function draftSkipsMesh(prev, next) {
   if (!prev) return false;
   const seen = Object.create(null);

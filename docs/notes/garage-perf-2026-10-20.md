@@ -7,35 +7,59 @@ resized bodies (#3160) and wave 2 (#3169, finishes 60–85). The baseline is
 Probe: `node tools/perf/garage-census.mjs [--root <worktree>]`. TLX (the shipped
 default) with GL forced, 844×390, SwiftShader. Frame times here measure this
 container's CPU, not a phone GPU: the COUNTS (programs, shader source bytes,
-tris, build ms) are the evidence. The gl.finish column is a fragment-cost proxy
-between two trees only.
+tris, build ms) are the evidence. The census's gl.finish column reads ~0 on TLX:
+the soft-blit readback already syncs every frame, so the rendered-frame ms is the
+software proxy (and a weak one — it is this box's CPU).
 
 ## Measured (tip vs baseline)
 
 | metric | baseline | tip | delta |
 |---|---|---|---|
-| lit uber-shader fragment source (TLX, both lit programs) | 91.7 KB / 86.9 KB | 105.3 KB / 100.5 KB | +13.6 KB each (+15 %) |
+| lit uber-shader fragment source (TLX, the two lit programs) | 91.7 KB / 86.9 KB | 105.3 KB / 100.5 KB | +13.6 KB each (+15 %) |
 | programs linked on garage open | 6 | 6 | 0 |
-| compile ms on open (SwiftShader) | 1402 | 1494 | +7 % |
 | preview car (team body) | 53.4 k verts / 19.4 k tris | 55.2 k / 20.0 k | +3 % |
-| Car3D.build, team body (median of 3) | 100 ms | 97 ms | ~0 |
-| draws / tris per frame (rAF avg) | 14.7 / 24.5 k | 14.7 / 25.3 k | +3 % tris |
-| main-thread ms per frame (median) | 2.1 | 1.8 | ~0 |
-| JS heap | 28.6 MB | 29.2 MB | +0.6 MB |
-| DOM nodes (whole page) | 15 409 | 15 453 | +44 |
+| body styles (tris, min–max) | 18.9–20.0 k (7 styles) | 19.5–20.7 k (11 styles) | +3 % |
+| Car3D.build, team body (median of 3) | ~100 ms | ~100 ms | ~0 |
+| per rendered frame: draws / tris | 37.4 / 61.7 k | 37.4 / 63.7 k | +3 % tris |
+| rendered-frame ms (median) | 5.5 * | 4.7 | ~0 |
+| first part change after ≥ 20 s in the bay | recompiles the car program (86.9 KB) | recompiles the car program (100.5 KB): 2.7 s compile in SwiftShader | pre-existing; +15 % per recompile |
+| setup-sheet buttons (garage tab) | 49 | 64 | +15 |
+| JS heap | 16–29 MB | 28–29 MB | noise (run-to-run) |
+
+\* baseline leg ran under a parallel node suite (load ~8); counts unaffected.
 
 The car is drawn twice every garage frame (the car, and the floor reflection,
-`GarageScene.draw` → `MIRROR_RESOLVE`), so every car fragment-shader cost is
-paid twice in the bay.
+`GarageScene.draw` → `MIRROR_RESOLVE`): 63.7 k tris per frame, of which ~40 k are
+the car. Every car fragment cost is paid twice in the bay.
 
-## Findings so far (ranked; detail in the PR body)
+## Ranked causes
 
-1. Finish shader cost is paid by every lit pixel, not only the car: the finish
-   anti-alias inputs (`dFdx/dFdy(Ngeo)`, `fwidth(vObjPos)`, a `smoothstep`) run
-   unconditionally in `glsl-lit.js` / `tsl-lit.js`, and the program grew 15 %.
-2. A livery-editor tap on an atlas-only field (crest style / tone / frame, cover
-   bind, fin art, grips) rebuilt the whole car: those fields are not in
-   `MESH_FREE_DRAFT` (js/garage/setup-sheet.js). Guarded by
-   `tests/unit/garage-perf-mesh-free.test.mjs`.
-3. A one-off ~3 s shader compile on the first picker change in one census run
-   (not reproduced by the link probe) — under investigation.
+1. **Car shader recompile on a part change after ~20 s in the bay** (TLX,
+   pre-existing on the baseline too, ~15 % longer since wave 2). The new preview
+   car links a program byte-identical in size to the live car program (100.5 KB
+   fragment) — a pipeline-cache miss, one 2.7 s frame here. INTERMITTENT: 7 of 8
+   changes made ≥ 20 s after the bay opened recompiled on the tip (5 of 6 after
+   an idle wait, 2 of 2 after a 2.5 s main-thread block), 1 of 1 on the baseline;
+   0 of 4 changes made within ~20 s of opening (2 tip, 2 baseline). Not the wing-flap eviction (flaps alone:
+   0 links; change with the eviction stubbed: still links). Freeing the outgoing
+   car one frame late (tried, dropped) did NOT stop it: the link landed before
+   the deferred free. Lives in TLX's pool / pipeline lifecycle
+   (`prunePool` PRUNE_IDLE_MS 20 s, `dropWrapper`, js/render/three/tlx.js) —
+   the render lane's to root-cause.
+2. **Finish shader cost on every lit pixel.** The finish anti-alias inputs
+   (`dFdx/dFdy(Ngeo)`, `fwidth(vObjPos)`, `smoothstep`) run unconditionally in
+   glsl-lit.js / tsl-lit.js / WGSL for every lit fragment (room, and the track in
+   a race), and the program grew 15 %: more registers, longer compiles.
+3. **Full Car3D.build on atlas-only livery taps — FIXED in #3176.** crestStyle /
+   crestTone / crestFrame / coverBind / finArt / finHandoff / gripTint were not in
+   `MESH_FREE_DRAFT` (js/garage/setup-sheet.js). Measured on the real tap path
+   (livery editor, 844×390 touch, TLX): Car3D.build per tap 1 → 0, worst frame
+   194–277 ms → 19–30 ms; final frame pixel-identical (0 of 329 160 px).
+   Guarded by `tests/unit/garage-perf-mesh-free.test.mjs` (builds the car with
+   every listed field changed, two contexts; a mutation listing `c2` goes red).
+4. **Full Car3D.build on every FINISH tap** (11 finish rows × 28 pills): a finish
+   only remaps painted surface ids (`CarMaterials.applyFinish`), but the
+   preview rebuilds the whole car.
+5. Not causes (measured flat): body-style geometry (+3 % tris), garage mood
+   lighting (same light count; gains only), fixture hangers, main-thread frame
+   CPU, programs on open.
