@@ -60,7 +60,10 @@ test("halo literals stay in lockstep with the hoop car3d builds", () => {
   assert.ok(src.includes(`haloHoopPath(${a[0]}, ${a[1]}, ${a[2]}, ${a[3].toFixed(2)}, ${a[4]}, crownY, ${a[6]})`), "car3d hoop call matches HALO_ARGS");
   assert.ok(src.includes(`const crownY = ${a[5]} - (haloSty === 1 ? 0.008 : 0)`), "crown height matches");
   assert.ok(src.includes("const hr = haloSty === 1 ? 0.024 : 0.028"), "tube radius matches");
-  assert.equal(M.S.haloOf({ haloBlade: 1 }, false), null, "no strip under a blade fairing");
+  assert.ok(src.includes("addTube(out, shadeFlags.round ? CarShade.fine(hoop, 3, 3, 12) : hoop.slice(3, 12), hr + 0.008,"), "blade fairing tube matches");
+  const faired = M.S.haloOf({ haloBlade: 1 }, false);
+  assert.ok(faired && Math.abs(faired.r - 0.036) < 1e-9 && faired.path.length === 9, "the strip rides the blade fairing (pts 3..11, hr + 8 mm)");
+  assert.equal(M.S.haloOf({ halo: 1, haloBlade: 2 }, false), null, "no strip under the full shroud's spine");
   assert.equal(M.S.haloOf({ halo: 2 }, false), null, "no strip between the fenced crown's vanes");
 });
 
@@ -71,8 +74,10 @@ const segDist = (p, a, b) => {
 };
 
 test("halo strip lies 0-4 mm proud of the tube, on the crown bar only", () => {
-  for (const round of [false, true]) for (const halo of [0, 1]) {
-    const c = stationCtx("mclaren", { halo }, round), H = c.halo;
+  // haloBlade 1 is the Garage's stock cockpit for most teams (D5c 2026-10-20: the strip sat on the
+  // hoop INSIDE the fairing, so no Garage shot ever showed it).
+  for (const round of [false, true]) for (const halo of [0, 1]) for (const haloBlade of [0, 1]) {
+    const c = stationCtx("mclaren", { halo, haloBlade }, round), H = c.halo;
     const q = capture({ haloTop: M.T.REGIONS.haloTop }, M.Car3D.bodyAnchors({}, "mclaren", undefined, round), c);
     assert.ok(q.length > 4, "strip emitted");
     for (const { c: cs } of q) for (const p of cs) {
@@ -80,12 +85,12 @@ test("halo strip lies 0-4 mm proud of the tube, on the crown bar only", () => {
       for (let i = 0; i < H.path.length - 1; i++) d = Math.min(d, segDist(p, H.path[i], H.path[i + 1]));
       // A vertex of the strip is r + 3 mm from the centreline; between path points the
       // chord pulls in, so allow the polygonal tube's own sag below r + 3 mm.
-      assert.ok(d > H.r - 0.002 && d < H.r + 0.004, `round=${round} halo=${halo}: ${(d * 1000).toFixed(1)} mm from centreline (r ${H.r * 1000})`);
+      assert.ok(d > H.r - 0.002 && d < H.r + 0.004, `round=${round} halo=${halo} blade=${haloBlade}: ${(d * 1000).toFixed(1)} mm from centreline (r ${H.r * 1000})`);
       assert.ok(p[2] >= H.midZ - 0.03, "on the crown bar, not down a leg");
     }
     // ON TOP of the bar: a strip on the tube's flank or underside is hidden inside the hoop (D5b
     // 2026-10-20: the transported frame had turned, so the "top" strip faced the cockpit).
-    for (const { n } of q) assert.ok(n[1] > 0.5, `round=${round} halo=${halo}: strip normal y ${n[1].toFixed(2)} faces up`);
+    for (const { n } of q) assert.ok(n[1] > 0.5, `round=${round} halo=${halo} blade=${haloBlade}: strip normal y ${n[1].toFixed(2)} faces up`);
   }
 });
 

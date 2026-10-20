@@ -108,7 +108,7 @@ const LiveryStations = (function () {
     }
 
     // HALO TOP: a strip on top of the crown bar, through the tube's own ring vertices (addTube's
-    // frame), 3 mm proud. No strip under a blade fairing or between the fenced hoop's vanes.
+    // frame), 3 mm proud — on the blade fairing when one sleeves the hoop. None between the fenced hoop's vanes.
     const H = ctx.halo;
     if (R.haloTop && H && H.path && H.path.length > 2) {
       const u = uvOf(R.haloTop), path = H.path, sides = H.sides, r = H.r + 0.003;
@@ -161,18 +161,21 @@ const LiveryStations = (function () {
     }
   }
 
-  // The halo centreline and tube the car mesh builds (car3d.js exterior hoop), or null when a
-  // fairing or the fenced crown would cover a strip. Literals mirror car3d's haloHoopPath call;
-  // tests/unit/livery-stations.test.mjs holds the two in lockstep.
+  // The outermost tube over the halo crown the car mesh builds (car3d.js exterior hoop): the bare
+  // hoop, or the low blade fairing that sleeves it (haloBlade 1: path pts 3..11, 8 mm fatter) —
+  // the Garage's stock cockpits wear that fairing, and a strip on the hoop inside it never shows.
+  // Null for the fenced crown (vanes, and the full shroud's spine, cover the bar). Literals mirror
+  // car3d's haloHoopPath and fairing calls; tests/unit/livery-stations.test.mjs holds them in lockstep.
   const HALO_ARGS = Object.freeze([0.235, 0.505, -0.46, 0.30, 0.02, 0.845, 0.49]);
   function haloOf(cockpit, round) {
     if (typeof Car3D === "undefined" || !Car3D.haloHoopPath) return null;
     const sty = Math.max(0, Math.min(2, Math.round((cockpit && cockpit.halo) || 0)));
-    if (sty === 2 || (cockpit && cockpit.haloBlade > 0)) return null;
-    const a = HALO_ARGS, crownY = a[5] - (sty === 1 ? 0.008 : 0);
-    let path = Car3D.haloHoopPath(a[0], a[1], a[2], a[3], a[4], crownY, a[6]);
-    if (round && typeof CarShade !== "undefined" && CarShade.fine) path = CarShade.fine(path, 3);
-    return { path, r: sty === 1 ? 0.024 : 0.028, sides: round ? 12 : 6, midZ: a[4] };
+    const blade = Math.max(0, Math.min(2, Math.round((cockpit && cockpit.haloBlade) || 0)));
+    if (sty === 2 || blade === 2) return null;
+    const a = HALO_ARGS, crownY = a[5] - (sty === 1 ? 0.008 : 0), fine = round && typeof CarShade !== "undefined" && CarShade.fine;
+    const hoop = Car3D.haloHoopPath(a[0], a[1], a[2], a[3], a[4], crownY, a[6]);
+    const path = blade ? (fine ? CarShade.fine(hoop, 3, 3, 12) : hoop.slice(3, 12)) : (fine ? CarShade.fine(hoop, 3) : hoop);
+    return { path, r: (sty === 1 ? 0.024 : 0.028) + (blade ? 0.008 : 0), sides: round ? 12 : 6, midZ: a[4] };
   }
 
   return Object.freeze({ IDS, TOGGLES, paint, emit, haloOf, driverCode, HALO_ARGS });

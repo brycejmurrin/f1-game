@@ -25,9 +25,15 @@ atlas regions and their decal geometry, each placed from the geometry the body i
 | `noseTip` | last 280 mm of the nose: top, sides, front face | solid `liv.noseTip`, else the accent | `Car3D.styledNoseStations` + `anchors.noseAt` |
 | `cockpitSide` | monocoque flank, z 0.68–0.98, ahead of the pod inlet | driver code for the race number (`Teams.LIST`) | `Car3D.CHASSIS.monocoque`, 5 mm proud |
 | `podTop` | sidepod upper face, z 0.42 → −0.30 | main sponsor | `anchors.podAt` inner/outer tops, 8 mm proud |
-| `haloTop` | halo crown bar only | sixth sponsor | `Car3D.haloHoopPath` + addTube's ring frame, 3 mm proud; none under a blade fairing or the fenced crown |
+| `haloTop` | halo crown bar only | sixth sponsor | `Car3D.haloHoopPath` + addTube's ring frame, 3 mm proud; on the low blade fairing (`haloBlade` 1, hr + 8 mm) when one sleeves the hoop; none on the fenced crown or under the full shroud |
 
 Not built: `floorEdge` (ride height moves the floor and the decal cache does not key on it), and the
 other-lane spots found by survey (front-wing flap top, rear endplate inner face, tyre sidewall,
 bargeboard, brake duct, headrest pad, T-cam, steering wheel). The rear-wing upper flap already
 carries the `wing` sponsor band. Gate: `node --test tests/unit/livery-stations.test.mjs`.
+
+Round 4 (D5c, 2026-10-20): the halo strip never showed in the Garage because most stock cockpits
+(Deflector, Faired Halo, Halo Wing, Twin Pod Screen) sleeve the hoop in the low blade fairing, and
+`haloOf` returned null under any fairing, so no strip was emitted. A probe that hooked the renderer's
+`drawDecal` on a car WITHOUT the fairing saw the 72 quads and sent the hunt the wrong way; pinning
+the team as `garage-angles.mjs` does showed `ctx.halo === null`. The strip now rides the fairing tube.

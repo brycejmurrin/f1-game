@@ -2320,6 +2320,9 @@
       "addBeamBetween": [
         "tests/unit/car-wing-foil.test.mjs"
       ],
+      "addTube": [
+        "tests/unit/livery-stations.test.mjs"
+      ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs"
@@ -2330,7 +2333,6 @@
       "*": [
         "tests/unit/aero-defaults-2026.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2514,7 +2516,8 @@
         "tests/unit/car-shade.test.mjs"
       ],
       "fine": [
-        "tests/unit/car-shade.test.mjs"
+        "tests/unit/car-shade.test.mjs",
+        "tests/unit/livery-stations.test.mjs"
       ],
       "floor": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -2558,7 +2561,6 @@
       "*": [
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
