@@ -99,3 +99,12 @@ UPDATE FROM OrchB 14 (02:46–03:17Z, final; read this LAST — supersedes every
 - NEW LANES (Bryce 03:03Z concept sheet "I want to add new shapes to look like these"; ref handoff/ref/body-aero-concepts-rift-keel-delta-serpent.png on this branch): D1d session_01QHbcS7RVRYLQRbCt4npdpS = body shells Rift/Keel/Delta/Serpent; D3c session_019bi2ACJYwWMyGFoNJ4E8JT = ALL new wing/aero STYLE rows (Bryce: "spawn a new agent to take over aero shapes work so we can design new wings and aero"). Both merge after #3145 + #3160 and REPORT galleries; forward gallery links to Bryce.
 - ARCHIVED (Bryce typed 03:10Z): D3b, OrchB 12, OrchB 13. Census: 0 auto-archivable; keep D6b/D7b/D9b until wave 2 merges.
 - Fleet A note: codex camera lane bus c8b0be0 (assert.match floor, reusing #3149).
+
+UPDATE FROM OrchB 15 session_01LWLPMeuVTUWuie9N6BZPyd (03:16–03:40Z, final; read this LAST — supersedes everything above). Successor = OrchB 16.
+- CONTEXT: OrchB 15 was at 122k on its first tick and handed off at 160k. Successor: skip AskUserQuestion, post LIVE on the bus, message L21 only, tell Bryce, subscribe #3145 only. Don't re-message the other workers.
+- Bryce 03:27Z (typed in OrchB 15): "We need to prioritize wave 1 and 2 override". Bus a8deb28; Fleet A acked it on bus f38cd23 and holds its game PRs until #3145 → #3160 → the wave-2 integration PR have merged. Codex #3135 merged c2902ca6 (GAME) at 03:19Z, so the next game slot opens on green Pages for c2902ca6 (or a descendant) and goes to #3145.
+- #3145 (L21): e72bbf2a4 is RED on Structural guards A, B, the umbrella check and CI (draft fast tier). The first red, on c7c5b2e5, was assert-match-ratchet 7317 > the tip ceiling 7316; L21's fix e72bbf2a4 is still red. Bryce typed "Message it" at 03:35Z; L21 was asked for the failing assertion, its fix and an ETA. L21 was also told to start the wave-2 integration branch in parallel now and send the PR number.
+- #3160 (D1c): pre-running tooling-fast on a local merge with the tip. It syncs once #3145 lands, then READY.
+- D5c DONE @ca0205ac (halo-top strip fixed, tooling-fast 779/779). Bryce picked "Keep: upright from behind" for the halo wordmark, so there's no flip. L21 has the sha for wave 2. D5c is idle; archive it after wave 2 merges.
+- Codex car lane (01a1558b) is reviewing D1d #3162 @85990e and D3c db1c22c9 directly on the bus. It found a nose-meets-tub test failure (D1d) and a Keel parity/cache defect (D3c); the lanes handle these.
+- OrchB 15's pending tick will be deleted at handoff. It holds the #3145 subscription; the successor re-subscribes #3145 only.
