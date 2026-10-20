@@ -54,3 +54,23 @@ test("`start --help` prints usage and exits 0 without launching Chromium", async
   assert.match(out.join("\n"), /debug-chrome — own a headless Chromium/);
   assert.ok(!out.join("\n").includes('"started"'), "no browser was started");
 });
+
+test("phone-landscape sends the iPhone UA (the mobile render tier is UA-driven); desktop sends none", async () => {
+  const { IPHONE_UA } = await import("../../tools/mcp/debug-chrome.mjs");
+  assert.ok(chromeArgs({}).includes(`--user-agent=${IPHONE_UA}`));
+  assert.ok(!chromeArgs({ device: "desktop" }).some(a => a.startsWith("--user-agent=")));
+});
+test("browser-use discovery file: Chrome's port + path format, removed only while it names our port", async () => {
+  const { discoveryText, removeDiscovery, runningEndpoint } = await import("../../tools/mcp/debug-chrome.mjs");
+  const { mkdtempSync, writeFileSync, existsSync } = await import("node:fs");
+  const os = await import("node:os"); const path = await import("node:path");
+  assert.equal(discoveryText(9222, "ws://127.0.0.1:9222/devtools/browser/abc"), "9222\n/devtools/browser/abc\n");
+  const f = path.join(mkdtempSync(path.join(os.tmpdir(), "dc-")), "DevToolsActivePort");
+  writeFileSync(f, "9333\n/devtools/browser/x\n");
+  assert.equal(removeDiscovery(9222, f), false); assert.ok(existsSync(f), "another browser's file stays");
+  assert.equal(removeDiscovery(9333, f), true); assert.ok(!existsSync(f));
+  const pids = { port: 9222, procs: [{ role: "chrome", pid: 7, marker: "--remote-debugging-port=9222" }] };
+  assert.equal(runningEndpoint({ pids, read: () => "chrome --remote-debugging-port=9222" }), "http://127.0.0.1:9222");
+  assert.equal(runningEndpoint({ pids, read: () => null }), null);
+  assert.equal(runningEndpoint({ pids: null }), null);
+});

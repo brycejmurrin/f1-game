@@ -342,6 +342,7 @@ and report comparison do not launch Chromium.
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
 | `apex_session_status` | `ci/session-status.mjs` | tree | steward |
 | `apex_who_is_on_it` | `ci/who-is-on-it.mjs` | tree | steward |
+| `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
 | `apex_ci_status` | `ci/ci-watch.mjs` | tree | steward |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
