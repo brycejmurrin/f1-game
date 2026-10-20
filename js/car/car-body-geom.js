@@ -1465,10 +1465,10 @@ const CarBodyGeom = (function () {
     addBox(out, x, y, z - D - 0.008, w * K, h * K, 0.016, DARK);
   }
 
-  function buildSidepodBodywork(out, c1, eng, anchors) {
+  function buildSidepodBodywork(out, c1, eng, anchors, facet) {   // facet (B·D1d Delta): flat-panel pods inside a rounded build
     const data = anchors || bodyAnchors({ engine: 1, _visual: { engine: eng } });
     const stations = data.podStations;
-    if (shadeFlags.round) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
+    if (shadeFlags.round && !facet) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
     else for (const side of [-1, 1]) {
       addStationLoft(out, stations.map((p) => sidepodStation(side, p.z, p.inner, p.outer,
         p.innerBottom, p.outerBottom, p.innerTop, p.outerTop)), c1, INTAKE);
