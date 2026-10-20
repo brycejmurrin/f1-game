@@ -1393,10 +1393,14 @@
         If(surfaceId.equal(72.0), () => { surfaceId.assign(34.0); });
         If(surfaceId.equal(60.0), () => { surfaceId.assign(39.0); });
         If(surfaceId.equal(66.0), () => { surfaceId.assign(31.0); });
-        // Finish anti-alias inputs in uniform control flow (glsl-lit.js): metres per pixel, and 1 on a hard panel edge.
-        const fnDx = dFdx(Ngeo).toVar(), fnDy = dFdy(Ngeo).toVar();
-        const fnPx = max(length(fwidth(objP)), 1e-5).toVar();
-        const fnCrease = smoothstep(0.02, 0.20, dot(fnDx, fnDx).add(dot(fnDy, fnDy))).toVar();
+        // Finish anti-alias inputs (glsl-lit.js): metres per pixel, and 1 on a hard panel edge. carFinish draws
+        // only: matU.carFinish is a per-draw uniform, so the derivatives stay in uniform control flow.
+        const fnPx = float(1.0).toVar(), fnCrease = float(0.0).toVar();
+        If(matU.carFinish.greaterThan(0.5), () => {
+          const fnDx = dFdx(Ngeo).toVar(), fnDy = dFdy(Ngeo).toVar();
+          fnPx.assign(max(length(fwidth(objP)), 1e-5));
+          fnCrease.assign(smoothstep(0.02, 0.20, dot(fnDx, fnDx).add(dot(fnDy, fnDy))));
+        });
         const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(90.0)).toVar();
         // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (js/render/glx/shaders/glsl-lit.js); grain / saturation / rim below.
         const flakeSurface = surfaceId.equal(34.0).toVar();
@@ -2190,7 +2194,7 @@
           color.mulAssign(mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip.mul(0.90)));
         });
         // FINISH TINTS 60-85 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells).
-        If(finishId.greaterThanEqual(60.0).and(finishId.lessThanEqual(85.0)), () => {
+        If(matU.carFinish.greaterThan(0.5).and(finishId.greaterThanEqual(60.0)).and(finishId.lessThanEqual(85.0)), () => {   // carFinish draws only
           // Snapshot once with toVar(): a bare node is inlined and cached by TSL, so later branches read a stale (zero) value
           // (pearlwhite / silverfade / alubare rendered black on TLX while GLX was right, 2026-10-19).
           const pvHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)).toVar();
@@ -2515,7 +2519,7 @@
     // same OBJECT update materialReference rides), falling back to the
     // material's own value for meshes the pool never touched.
     const _PACK_A_DEF = new THREE.Vector4(0.7, 0.0, 0.5, 0.0);   // roughness, metalness, specular, detail
-    const _PACK_B_DEF = new THREE.Vector4(0.0, 0.0, 1.0, 0.0);   // clearcoat, carPaint, sparkle, -
+    const _PACK_B_DEF = new THREE.Vector4(0.0, 0.0, 1.0, 0.0);   // clearcoat, carPaint, sparkle, carFinish
     // ONE per-object callback per graph (was five: three per-draw scalars and
     // two packed vec4s, each its own OBJECT update on every draw of every pass).
     // It writes the per-draw scalars (emissive, alpha, lgRoad) into its own
@@ -2557,7 +2561,7 @@
         const matU = { emissive: draw.x, alpha: draw.y, lgRoad: draw.z };
         matU.roughness = pA.x; matU.metalness = pA.y;
         matU.specular = pA.z;  matU.detail = pA.w;
-        matU.clearcoat = pB.x; matU.carPaint = pB.y; matU.sparkle = pB.z;
+        matU.clearcoat = pB.x; matU.carPaint = pB.y; matU.sparkle = pB.z; matU.carFinish = pB.w;
         const packed = buildFragment(matU, chunked, instanced);
         // Swizzle ONCE: packed.rgb mints a new wrapper node per access, and a
         // fresh wrapper is a fresh cache key — the whole point is one graph.
@@ -2597,7 +2601,7 @@
       ud.tlxCarPaint  = val(o.carPaint, 0.0);
       ud.tlxSparkle   = val(o.sparkle, 1.0);
       ud.tlxPackA = new THREE.Vector4(ud.tlxRoughness, ud.tlxMetalness, ud.tlxSpecular, ud.tlxDetail);
-      ud.tlxPackB = new THREE.Vector4(ud.tlxClearcoat, ud.tlxCarPaint, ud.tlxSparkle, 0);
+      ud.tlxPackB = new THREE.Vector4(ud.tlxClearcoat, ud.tlxCarPaint, ud.tlxSparkle, o.carFinish ? 1 : 0);
       ud.tlxChunked   = !!o.chunked;
       ud.tlxInstanced = !!o.instanced;
       const packed = sharedFragment(!!o.chunked, !!o.instanced);

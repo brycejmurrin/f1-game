@@ -2826,7 +2826,8 @@ test("lit material scalars ride two packed per-object vec4s, not seven materialR
   const lit = code("js/render/three/tsl-lit.js");
   assert.doesNotMatch(lit, /materialReference\("userData\.tlx/, "a per-material scalar went back to a materialReference node");
   assert.match(lit, /ud\.tlxPackA = new THREE\.Vector4\(ud\.tlxRoughness, ud\.tlxMetalness, ud\.tlxSpecular, ud\.tlxDetail\);/);
-  assert.match(lit, /ud\.tlxPackB = new THREE\.Vector4\(ud\.tlxClearcoat, ud\.tlxCarPaint, ud\.tlxSparkle, 0\);/);
+  // packB.w = carFinish (the finish 60-85 gate; tlx-hunt3 runs it).
+  assert.match(lit, /ud\.tlxPackB = new THREE\.Vector4\(ud\.tlxClearcoat, ud\.tlxCarPaint, ud\.tlxSparkle, o\.carFinish \? 1 : 0\);/);
   // One per-object callback feeds the per-draw scalars AND both packed vectors.
   assert.match(lit, /const \{ draw, pA, pB \} = perDrawUniforms\(\);/);
   assert.match(lit, /pA\.value = \(mud && mud\.tlxPackA\) \|\| _PACK_A_DEF;/);

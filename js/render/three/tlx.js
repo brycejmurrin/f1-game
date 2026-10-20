@@ -1828,6 +1828,7 @@ const TLX = (function () {
           (o.clearcoat !== undefined ? o.clearcoat : 0) + "," +
           (o.carPaint !== undefined ? o.carPaint : 0) + "," +
           (o.sparkle !== undefined ? o.sparkle : 1) +
+          (o.carFinish ? "|cf" : "") +
           (o.doubleSided ? "|ds" : "") +
           (o.noAlphaWrite ? "|na" : "") +
           (o.depthBias ? "|db" + o.depthBias[0] + "," + o.depthBias[1] : "") +
@@ -1847,13 +1848,13 @@ const TLX = (function () {
         if (c !== undefined && c.tr === tr && c.ro === o.roughness
           && c.me === o.metalness && c.sp === o.specular && c.de === o.detail
           && c.cc === o.clearcoat && c.cp === o.carPaint && c.sk === o.sparkle
-          && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
+          && c.cf === !!o.carFinish && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
           && c.hb === !!db && c.b0 === db0 && c.b1 === db1
           && c.ch === !!chunked && c.in === _instMode(instanced)) return c.key;
         if (c === undefined) { c = {}; _matKeyMemo.set(o, c); }
         c.tr = tr; c.ro = o.roughness; c.me = o.metalness;
         c.sp = o.specular; c.de = o.detail; c.cc = o.clearcoat; c.cp = o.carPaint;
-        c.sk = o.sparkle; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
+        c.sk = o.sparkle; c.cf = !!o.carFinish; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
         c.nd = !!o.noDepthTest; c.hb = !!db; c.b0 = db0; c.b1 = db1;
         c.ch = !!chunked; c.in = _instMode(instanced);
         c.key = buildMatKey(o, chunked, instanced);

@@ -574,7 +574,7 @@ struct DrawU {
   mat0  : vec4<f32>,          // off 64  (emissive, alpha, roughness, metalness)
   mat1  : vec4<f32>,          // off 80  (specular, detail, clearcoat, carPaint)
   mat2  : vec4<f32>,          // off 96  (sparkle, instanced, surfaceId, buryRibbon)
-  mat3  : vec4<f32>,          // off 112 (lampMask lo24, lampMask hi24, 0, 0) — chunk-AABB
+  mat3  : vec4<f32>,          // off 112 (lampMask lo24, lampMask hi24, carFinish, 0) — chunk-AABB
                               //         lamp cull, bit-exact (see the lamp loop); each mask
                               //         float holds a 24-bit integer exactly. All-ones
                               //         (16777215) = unmasked, the default for every draw.
@@ -987,6 +987,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let saaDxGeo = ccDx;
   let saaDyGeo = ccDy;
   // Car finish anti-alias inputs (finishes 60-85, glsl-lit.js): object-space metres per pixel, and 1 on a hard panel edge.
+  // Not gated on carFinish like GLX/TLX: every WGSL derivative sits above fs_main's first branch (WebKit
+  // uniformity; webgpu-lifecycle.test.mjs), and fnCrease reuses ccDx, so this is one dpdx/dpdy pair.
   let fnPx = max(length(abs(dpdx(in.objPos)) + abs(dpdy(in.objPos))), 1e-5);
   let fnCrease = smoothstep(0.02, 0.20, dot(ccDx, ccDx) + dot(ccDy, ccDy));
   // Paint peel ran for EVERY fragment — road, terrain, buildings — feeding a
@@ -1832,8 +1834,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
   if (goldSurface) { color = color * vec3<f32>(1.0, 0.78, 0.27); }   // GOLD PLATE: lit terms take the fixed gold hue
   if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
-  // FINISH TINTS 60-85 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells).
-  if (finishId >= 60 && finishId <= 85) {
+  // FINISH TINTS 60-85 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells). carFinish draws only.
+  if (D.mat3.z > 0.5 && finishId >= 60 && finishId <= 85) {
     let pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
     let pvG = 1.0 - clamp(dot(Ngeo, V), 0.0, 1.0);
     let pvL = dot(color, vec3<f32>(0.299, 0.587, 0.114));
