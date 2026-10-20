@@ -40,10 +40,14 @@ jobs:
   board:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # pull-requests: write is for the "Bus to PR comments" step: POST issues/<n>/comments on a PR
+    # number returned 403 "Resource not accessible by integration" with only issues: write
+    # (run 39350106641; the endpoint is listed under both Issues and Pull requests write:
+    # https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps, read 2026-10-20).
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

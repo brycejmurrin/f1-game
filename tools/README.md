@@ -255,6 +255,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/capture-diagnostics.mjs** | Bounded Chromium GPU provenance and opt-in streamed capture tracing. | — |
 | **shot/capture-options.mjs** | Validated shared screenshot profiles, scope, rendering stack, and session options. | — |
 | **shot/capture-runtime.mjs** | Serial browser capture lifecycle with identity, diagnostics and teardown on every path. | — |
+| **shot/design-matrix.mjs** | Design-review matrix: part x angle x colour x light x variant, close-up framing, per-cell diff vs baseline, HTML sheet. | garage-parts-livery |
 | **shot/export-history-evidence.mjs** | Export selected committed evidence files, preserving Git blob identities without executing the old checkout. | — |
 | **shot/flicker-gate.mjs** | Rendered z-fighting gate: still camera at known fight sites, sub-mm dolly jitter, per-site flip ceiling; JSON + exit 1. | playwright-probe |
 | **shot/flyby.mjs** | Contact sheet + JSON of the pre-race FLYBY shots, flagging a camera in scenery. `--track --frames --out --u --shots`. | — |
@@ -268,6 +269,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot. | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
+| **shot/lib/design-matrix.mjs** | Design-review matrix core: PART_BOXES, ANGLES, COLOURS, LIGHTS, expandMatrix, frameForPart, labelDiff, manifest. | garage-parts-livery |
 | **shot/lib/garage-camera-catalog.mjs** | Named garage targets, camera aliases, stations and livery field mappings. | garage-parts-livery |
 | **shot/lib/survey-runner.mjs** | Shared shot-survey runner: identical plans, failure state and gallery rows for CLI and MCP. | survey-track |
 | **shot/loading-probe.mjs** | Tap RACE! headless; record preparation, garage, flyby and first presented race frame. `--settle ms --invalidate`. | — |
@@ -292,6 +294,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 |---|---|---|
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
+| **perf/live-render-matrix.mjs** | #2572 render matrix: rebuild A/B, context loss, quality tiers, visibility/resize, night/mirror per backend. | renderer-debug |
 | **perf/mesh-census-lib.mjs** | Pure aggregation for mesh-census: pass/source/distance bands + #2657 recommend. | — |
 | **perf/mesh-census.mjs** | Mesh census (#2657/#2631): main/mirror tris by distance band and source. | playwright-probe / renderer-debug |
 | **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
@@ -532,6 +535,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **desktop/minify.mjs** | Deploy-only minify of the staged js/ tree (terser, names kept, unlinked .map beside each file). | check-changes |
 | **desktop/pack-dry-run.mjs** | Desktop pack dry-run: stage + stamp to a temp dir, check every electron-builder input, build no installer. | check-changes |
 | **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
 | **desktop/stage.mjs** | Stage the deployable site folder (Pages / Electron) from the shared allow-list; optional content-hash stamp. | check-changes |
