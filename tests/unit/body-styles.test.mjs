@@ -19,7 +19,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const M = loadParts();
 const R = loadParts({ shade: true });
-const sculptIds = ["vesper", "bastion", "talon", "undula"];
+const sculptIds = ["auralis", "cevora", "vantrel", "orynth"];
 const { Car3D, Parts, Teams } = M;
 const Liveries = (() => { const ctx = { console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set };
   vm.createContext(ctx); vm.runInContext(fs.readFileSync("js/car/liveries.js", "utf8"), ctx, { filename: absSrc("js/car/liveries.js") });
@@ -204,18 +204,18 @@ test("renamed sculpted bodies and matching aero options expose unique new IDs", 
   }
 });
 
-test("Vesper, Bastion, Talon and Undula have distinct post-clamp silhouettes", () => {
+test("Auralis, Cevora, Vantrel and Orynth have distinct post-clamp silhouettes", () => {
   const at = (id) => Car3D.bodyAnchors(tiers, id);
-  const vesper = at("vesper"), bastion = at("bastion"), talon = at("talon"), undula = at("undula");
-  const riftRing = vesper.podRing(0.22, 1), riftPod = vesper.podAt(0.22);
-  assert.ok(riftRing[6][1] < (riftPod.innerTop + riftPod.top) / 2 - 0.04, "vesper has a real transverse roof channel");
-  assert.ok(bastion.podAt(0.22).x < talon.podAt(0.22).x - 0.20, "bastion leaves much more floor exposed than talon");
-  assert.ok(bastion.podAt(0.22).bottom > talon.podAt(0.22).bottom + 0.08, "bastion pods sit higher");
-  assert.ok(talon.noseAt(2.95).side > bastion.noseAt(2.95).side * 1.5, "talon tip is broader while keeping the reference's tapered nose");
-  assert.ok(undula.podAt(-0.62).top > undula.podAt(0.22).top + 0.06, "undula roof swells aft");
+  const auralis = at("auralis"), cevora = at("cevora"), vantrel = at("vantrel"), orynth = at("orynth");
+  const riftRing = auralis.podRing(0.22, 1), riftPod = auralis.podAt(0.22);
+  assert.ok(riftRing[6][1] < (riftPod.innerTop + riftPod.top) / 2 - 0.04, "auralis has a real transverse roof channel");
+  assert.ok(cevora.podAt(0.22).x < vantrel.podAt(0.22).x - 0.20, "cevora leaves much more floor exposed than vantrel");
+  assert.ok(cevora.podAt(0.22).bottom > vantrel.podAt(0.22).bottom + 0.08, "cevora pods sit higher");
+  assert.ok(vantrel.noseAt(2.95).side > cevora.noseAt(2.95).side * 1.5, "vantrel tip is broader while keeping the reference's tapered nose");
+  assert.ok(orynth.podAt(-0.62).top > orynth.podAt(0.22).top + 0.06, "orynth roof swells aft");
   for (const X of [M, R]) {
     const hashes = new Set();
-    for (const id of ["vesper", "bastion", "talon", "undula"]) {
+    for (const id of ["auralis", "cevora", "vantrel", "orynth"]) {
       const mesh = X.Car3D.build(team.color, team.color2, { teamId: team.id, parts: tiers,
         livery: { c1: team.color, c2: team.color2, bodyStyle: id } });
       assert.ok(mesh.pos.every(Number.isFinite), `${id}: finite mesh`);
@@ -226,7 +226,7 @@ test("Vesper, Bastion, Talon and Undula have distinct post-clamp silhouettes", (
 });
 
 test("sculpted pods keep mirrored, positive closed sections and sampled detail stops", () => {
-  for (const X of [M, R]) for (const id of ["vesper", "bastion", "talon", "undula"]) {
+  for (const X of [M, R]) for (const id of ["auralis", "cevora", "vantrel", "orynth"]) {
     const a = X.Car3D.bodyAnchors(tiers, id, undefined, X === R);
     assert.ok(X.Car3D.BODY_STYLES[id].noseTipZ <= 0.12, `${id}: nose ends within the front-wing leading edge`);
     assert.equal(a.podStops.length, X === R ? 15 : 7, `${id}: bounded longitudinal refinement in the smooth mesh only`);
@@ -258,17 +258,17 @@ test("sculpted pods keep mirrored, positive closed sections and sampled detail s
   }
 });
 
-test("reference study smooth rings curve off their chords and Undula belly recovers aft", () => {
-  const a = R.Car3D.bodyAnchors(tiers, "undula", undefined, true);
+test("reference study smooth rings curve off their chords and Orynth belly recovers aft", () => {
+  const a = R.Car3D.bodyAnchors(tiers, "orynth", undefined, true);
   const p = a.podStations[2], q = a.podStations[3], z = p.z + (q.z - p.z) / 3;
   const stop = a.podStops.find(s => Math.abs(s.z - z) < 1e-10);
   assert.ok(stop, "third-point sample is emitted, not just queried by decals");
   assert.ok(Math.abs(stop.outer - (p.outer + (q.outer - p.outer) / 3)) > 0.002, "sample departs from the straight chord");
   assert.equal(a.podRing(z, 1)[3][0], stop.outer, "emitted skin uses the sampled shoulder");
   for (const X of [M, R]) {
-    const body = X.Car3D.bodyAnchors(tiers, "undula", undefined, X === R);
+    const body = X.Car3D.bodyAnchors(tiers, "orynth", undefined, X === R);
     assert.ok(body.podAt(-0.62).bottom > body.podAt(-1.05).bottom + 0.04, "scallop recovers before the tail");
-    const vesper = X.Car3D.bodyAnchors(tiers, "vesper", undefined, X === R), ring = vesper.podRing(-0.38, 1);
-    assert.ok(ring[3][0] - ring[2][0] > 0.10, "Vesper waist is genuine concave body geometry");
+    const auralis = X.Car3D.bodyAnchors(tiers, "auralis", undefined, X === R), ring = auralis.podRing(-0.38, 1);
+    assert.ok(ring[3][0] - ring[2][0] > 0.10, "Auralis waist is genuine concave body geometry");
   }
 });
