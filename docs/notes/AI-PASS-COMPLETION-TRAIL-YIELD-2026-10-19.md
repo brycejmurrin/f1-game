@@ -54,6 +54,30 @@ Streets, Monaco, the player and cars behind a human are unchanged. There is no
 | + 10 % lift | 54 | 65 |
 | yield at 14 s (4 seeds max 68) | 65 | 68 |
 | yield at 8 s (4 seeds max 62) | 40 | 45 |
-| + corner ease, side away (shipped) | see the PR body's 15-seed table | |
+| + corner ease, yielder steps away | 64 (15-seed max) | 61 |
 
-The full 15 × 8 before/after table, with AI-AI contact, is in the PR body.
+## 15 seeds × 8 laps (`ai-race.mjs tactics --laps 8`, seeds 1–15)
+
+| | Monza longest max / median | Monza AI-AI contact mean | Silverstone max / median | Silverstone contact mean |
+|---|---|---|---|---|
+| base `dc3222f0` | 252 / 139 s | 27.3 | 239 / 119 s | 42.5 |
+| `ed4bb0c3` (push + yield) | 64 / 46 s (4 seeds > 60) | 27.4 | 90 / 61 s (8 seeds > 60) | 39.4 |
+
+The done-when (≤ 60 s on every seed) is NOT met. Two later changes are on
+the branch with only 4-seed evidence: the trail pull is clamped to the road,
+and the yield lift goes in before `_vmaxNow`. Silverstone seeds 3/5/9 went
+from 81/77/76 s to 64/98/43 s, and Monza seed 1 to 43 s. They are unverified
+at 15 seeds.
+
+## What the remaining long episodes are (episode summaries)
+
+- **Chains.** In a chain A>B>C with C quickest, B lifts for C and so cannot
+  pass A (BEA<STR, 84–98 s). A rule "a pushing car does not yield" made it
+  worse (silverstone seed 15: 91/85/84 s; reverted). Chains need a
+  front-first resolution that does not stall the back.
+- **Lap-1 trains.** SAI<COL starts at t = 3 s, with the yield on 90 % of the
+  time and still 64 s: the yielder is boxed in a train and has nowhere to lift
+  into.
+- A synthetic duel VM test (two cars alone, 0.6 % edge, 30 m) did not pass
+  within 60 s even with the yield firing. Debug it before relying on it as the
+  biting test.

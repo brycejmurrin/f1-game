@@ -4887,7 +4887,7 @@ function updateCar(c, dt, ranked) {
       c.speed, vT / VMAX, !!chaser && chaser._snapProg - c.prog > track.total * 0.5);
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
-    letPass = AiDrive.trailYieldStep(c, ranked[c.rank], !!track.street) || (c.letPassT || 0) > AiDrive.letPassDelay(aiT);   // ...or a quicker car has trailed us past its patience (AiDrive.trailYieldStep)
+    if (AiDrive.trailYieldStep(c, ranked[c.rank], !!track.street)) { letPass = true; vmax *= AiDrive.trailYieldEase(c._trYT, aiT); } else letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);   // ...or a quicker car has trailed us past its patience: the lift goes in BEFORE _vmaxNow, so paceVmax shows the trailer the slower car (AiDrive.trailYieldStep)
     // PASSED: the car alongside went from behind to ahead — by a player or an AI, latched or not. The re-pass lockout (AiDrive.repassLock), shorter with a pace edge.
     if (alongO && alongO === c._alPrev && c._alPrevDp < 0 && alongDprog >= 0) { c.passFailOf = alongO; c.passFailT = Math.max(c.passFailT || 0, AiDrive.repassLock(aiT, (vmax - paceVmax(alongO)) / vT)); }
     c._alPrev = alongO; c._alPrevDp = alongDprog;
@@ -5341,7 +5341,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     }
     // The other half of LET PASS: stop accelerating away. A multiplier, not a
     // threshold, so it eases at every OVERALL SPEED by construction.
-    if (letPass) vmax *= c._trYT ? AiDrive.trailYieldEase(c._trYT, aiT) : AiDrive.letPassEase(aiT);
+    if (letPass && !c._trYT) vmax *= AiDrive.letPassEase(aiT);   // a trail yield already lifted (trailYieldEase, above _vmaxNow)
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.

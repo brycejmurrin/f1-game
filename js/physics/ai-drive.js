@@ -681,8 +681,13 @@ const AiDrive = (function () {
       return side * lerp(0.7, 2.35, clamp(1 - gap / 14, 0, 1))
         * clamp(need / 2.3, 0, 1) * streetOtScale(t) * house;
     }
-    return side * lerp(0.8, 2.6, Math.max(clamp(1 - gap / reach, 0, 1), tN))
+    const pull = lerp(0.8, 2.6, Math.max(clamp(1 - gap / reach, 0, 1), tN))
       * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, t.craft) * house;
+    // ...on the ROAD: `need` measures to the run-off edge (hw + 5), and a full
+    // trail pull with the yielder stepping the other way put the attacker
+    // 9-10 m wide on the grass, slower than the car lifting for it (silverstone).
+    const road = side > 0 ? ctx.roadR : ctx.roadL;
+    return side * (tN > 0 && road != null ? Math.min(pull, Math.max(0, road - 1)) : pull);
   }
 
   // THE INCENTIVE, on PACE rather than on the blocker's speed this instant.
