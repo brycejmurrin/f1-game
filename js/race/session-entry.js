@@ -21,7 +21,9 @@ const SessionEntry = (function () {
           // Start after `pending` is installed. A synchronous prepare failure
           // otherwise runs catch/finally before the assignment below and leaves
           // its already-rejected promise latched as the pending request.
-          await Promise.resolve().then(prepare);
+          // A quit or replacement can happen before this microtask starts.
+          // Stale preparation must not mutate the newer session.
+          await Promise.resolve().then(() => current() ? prepare() : undefined);
           if (!current()) return canceled("superseded");
           if (!valid()) {
             cancel();

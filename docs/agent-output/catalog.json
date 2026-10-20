@@ -746,6 +746,16 @@
       ]
     },
     {
+      "path": "tools/ci/claude-usage.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--limit"
+      ]
+    },
+    {
       "path": "tools/ci/coverage-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -3471,7 +3481,7 @@
     },
     {
       "name": "test:agent-output",
-      "command": "node --test tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
+      "command": "node --test tests/unit/agent-experiment.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
     },
     {
       "name": "test:audio-unit",

@@ -19,6 +19,7 @@ const GradeTint = (function () {
     m.emissive  = (base.emissive  || 0) * LT.carGlow;
     m.carPaint  = base.carPaint != null ? base.carPaint : 0;
     m.sparkle   = base.sparkle  != null ? base.sparkle  : 1;
+    m.carFinish = true;   // the lit shaders run the livery finish 60-85 block on car paint draws only
     m.doubleSided = true;
     return m;
   }
