@@ -228,7 +228,7 @@ function installGlxWrap(bandM) {
     return "other";
   };
 
-  const wrapDraw = (name, countIdx) => {
+  const wrapDraw = (name, countIdx, instanceIdx = null) => {
     const orig = gl[name].bind(gl);
     gl[name] = function (...args) {
       if (!state.on) return orig.apply(this, args);
@@ -236,7 +236,7 @@ function installGlxWrap(bandM) {
       const pass = passOfStack(st);
       if (pass === "shadow" || pass === "aux") return orig.apply(this, args);
       const count = args[countIdx] | 0;
-      const inst = name.includes("Instanced") ? (args[countIdx + 1] | 0) || 1 : 1;
+      const inst = instanceIdx == null ? 1 : (args[instanceIdx] | 0) || 1;
       const mode = args[0];
       const tris = (mode === gl.TRIANGLES || mode === 4) ? Math.floor((count * inst) / 3) : 0;
       const source = sourceOfStack(st);
@@ -248,10 +248,10 @@ function installGlxWrap(bandM) {
       return orig.apply(this, args);
     };
   };
-  wrapDraw("drawElements", 2);
+  wrapDraw("drawElements", 1);
   wrapDraw("drawArrays", 2);
-  if (gl.drawElementsInstanced) wrapDraw("drawElementsInstanced", 2);
-  if (gl.drawArraysInstanced) wrapDraw("drawArraysInstanced", 2);
+  if (gl.drawElementsInstanced) wrapDraw("drawElementsInstanced", 1, 4);
+  if (gl.drawArraysInstanced) wrapDraw("drawArraysInstanced", 2, 3);
   if (typeof gl.multiDrawElementsWEBGL === "function") {
     const orig = gl.multiDrawElementsWEBGL.bind(gl);
     gl.multiDrawElementsWEBGL = function (mode, counts, countsOffset, type, offsets, offsetsOffset, drawCount) {

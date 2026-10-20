@@ -4,6 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
+import { readFileSync } from "node:fs";
+import { fnSource } from "../helpers/fn-source.mjs";
 import { initCensusPage } from "../../tools/lib/census-init.mjs";
 import {
   distanceBand, classifySource, classifyPass, aggregateRows, tableRows,
@@ -174,3 +176,159 @@ for (const constructors of [[], ["WebGL2RenderingContext"], ["WebGLRenderingCont
     for (const [GL] of f.originals) assert.equal(new GL().getProgramParameter({}, 1), true);
   });
 }
+
+
+// Extract the exact private page function without importing the CLI (which runs it).
+const glxWrapSource = fnSource(
+  readFileSync(new URL("../../tools/perf/mesh-census.mjs", import.meta.url), "utf8"),
+  "function installGlxWrap(", { sourceType: "module" },
+);
+
+function glxCensus({ instanced = true, multiDraw = false, canvas = true, context = true } = {}) {
+  const calls = [], result = {}, nativeError = {};
+  const probe = { stack: "at drawRoad (/road/chunked.js:1:1)", stacks: 0, fail: false };
+  const gl = { TRIANGLES: 4 };
+  const methods = ["drawElements", "drawArrays"];
+  if (instanced) methods.push("drawElementsInstanced", "drawArraysInstanced");
+  if (multiDraw) methods.push("multiDrawElementsWEBGL");
+  for (const method of methods) {
+    gl[method] = function (...args) {
+      calls.push({ method, receiver: this, args });
+      if (probe.fail) throw nativeError;
+      return result;
+    };
+  }
+  const install = runInNewContext(`(${glxWrapSource})`, {
+    document: { getElementById(id) {
+      assert.equal(id, "game");
+      return canvas ? { getContext(type) { assert.equal(type, "webgl2"); return context ? gl : null; } } : null;
+    } },
+    Error: class { constructor() { probe.stacks++; this.stack = probe.stack; } },
+  });
+  const installed = install(150);
+  return { gl, calls, result, nativeError, probe, install, installed, state: gl.__meshCensus };
+}
+
+// Literal public WebGL signatures and expected triangles are independent of the wrapper's indices.
+for (const [method, args, tris] of [
+  ["drawElements", [4, 6, 5123, 24], 2], // mode, count, UNSIGNED_SHORT, byte offset
+  ["drawElements", [4, 9, 5125, 48], 3], // UNSIGNED_INT must not become the count
+  ["drawArrays", [4, 11, 12], 4], // mode, first, count
+  ["drawElementsInstanced", [4, 6, 5123, 24, 5], 10], // byte offset != instance count
+  ["drawArraysInstanced", [4, 7, 9, 4], 12], // mode, first, count, instance count
+]) {
+  test(`GLX census native signature: ${method}(${args.join(",")})`, () => {
+    const f = glxCensus();
+    f.state.on = true;
+    assert.equal(f.gl[method].call({}, ...args), f.result);
+    assert.deepEqual(f.calls, [{ method, receiver: f.gl, args }]);
+    assert.equal(f.state.rows.length, 1);
+    assert.deepEqual({ ...f.state.rows[0] }, {
+      pass: "main", source: "ribbon", band: "unknown", draws: 1, tris, calls: 1, group: method + ":ribbon",
+    });
+    assert.deepEqual({ ...f.state.infoSamples[0] }, { pass: "main", passKey: "main:" + method, calls: 1, tris });
+    assert.deepEqual({ ...f.state.passKeys }, { ["main:" + method]: 1 });
+  });
+}
+
+test("GLX census preserves measurement gating, pass exclusions and native forwarding", () => {
+  const f = glxCensus();
+  const args = [4, 6, 5123, 24];
+  const draw = () => {
+    const before = f.calls.length;
+    assert.equal(f.gl.drawElements.call({}, ...args), f.result);
+    assert.equal(f.calls.length, before + 1);
+    assert.deepEqual(f.calls.at(-1), { method: "drawElements", receiver: f.gl, args });
+  };
+  const empty = () => {
+    assert.equal(f.state.rows.length, 0);
+    assert.equal(f.state.infoSamples.length, 0);
+    assert.deepEqual({ ...f.state.passKeys }, {});
+  };
+  assert.equal(f.state.on, false);
+  draw();
+  empty();
+  assert.equal(f.probe.stacks, 0, "disabled measurement does not capture a stack");
+  f.state.on = true;
+  for (const stack of ["at castShadow (/shadow.js:1:1)", "at render (/post.js:1:1)"]) {
+    f.probe.stack = stack;
+    draw();
+    empty();
+  }
+  f.probe.stack = "at drawMirror (/props/scenery.js:1:1)";
+  draw();
+  draw();
+  assert.equal(f.state.rows.length, 2);
+  assert.deepEqual({ ...f.state.rows[0] }, {
+    pass: "mirror", source: "props", band: "unknown", draws: 1, tris: 2, calls: 1, group: "drawElements:props",
+  });
+  assert.deepEqual({ ...f.state.infoSamples[0] }, { pass: "mirror", passKey: "mirror:drawElements", calls: 1, tris: 2 });
+  assert.deepEqual({ ...f.state.passKeys }, { "mirror:drawElements": 2 });
+  f.state.on = false;
+  const stacks = f.probe.stacks;
+  draw();
+  assert.equal(f.probe.stacks, stacks);
+  assert.equal(f.state.rows.length, 2);
+  assert.equal(f.state.infoSamples.length, 2);
+  assert.deepEqual({ ...f.state.passKeys }, { "mirror:drawElements": 2 });
+  f.probe.fail = true;
+  assert.throws(() => f.gl.drawElements(...args), (error) => error === f.nativeError);
+  assert.deepEqual(f.calls.at(-1), { method: "drawElements", receiver: f.gl, args });
+});
+
+test("GLX census retains coercion, zero-instance fallback and nontriangle accounting", () => {
+  const f = glxCensus();
+  f.state.on = true;
+  f.gl.drawElementsInstanced(4, "6", 5123, 24, "5");
+  f.gl.drawElementsInstanced(4, 6, 5123, 24, 0);
+  f.gl.drawArraysInstanced(4, 7, 9, 0);
+  f.gl.drawArrays(1, 0, 12);
+  assert.deepEqual(Array.from(f.state.rows, (row) => row.tris), [10, 2, 3, 0]);
+  assert.deepEqual(Array.from(f.state.infoSamples, (sample) => sample.tris), [10, 2, 3, 0]);
+});
+
+test("GLX census installs idempotently and tolerates missing optional methods or context", () => {
+  const f = glxCensus({ instanced: false });
+  assert.equal(f.installed, true);
+  assert.equal(f.gl.drawElementsInstanced, undefined);
+  assert.equal(f.gl.multiDrawElementsWEBGL, undefined);
+  const wrapped = f.gl.drawElements;
+  assert.equal(f.install(200), true);
+  assert.equal(f.gl.drawElements, wrapped);
+  assert.equal(f.gl.__meshCensus, f.state);
+  f.state.on = true;
+  f.gl.drawElements(4, 6, 5123, 24);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.state.rows.length, 1);
+  assert.equal(glxCensus({ canvas: false }).installed, false);
+  assert.equal(glxCensus({ context: false }).installed, false);
+});
+
+test("GLX census retains multiDraw offsets, measurement gating and exclusions", () => {
+  const f = glxCensus({ multiDraw: true });
+  const args = [4, new Int32Array([99, 6, 9]), 1, 5123, new Int32Array([0, 24, 48]), 1, 2];
+  const draw = () => {
+    const before = f.calls.length;
+    assert.equal(f.gl.multiDrawElementsWEBGL.call({}, ...args), f.result);
+    assert.equal(f.calls.length, before + 1);
+    assert.deepEqual(f.calls.at(-1), { method: "multiDrawElementsWEBGL", receiver: f.gl, args });
+  };
+  draw();
+  assert.equal(f.probe.stacks, 0);
+  assert.equal(f.state.rows.length, 0);
+  f.state.on = true;
+  for (const stack of ["at castShadow (/shadow.js:1:1)", "at render (/post.js:1:1)"]) {
+    f.probe.stack = stack;
+    draw();
+    assert.equal(f.state.rows.length, 0);
+    assert.equal(f.state.infoSamples.length, 0);
+  }
+  f.probe.stack = "at drawMirror (/props/scenery.js:1:1)";
+  draw();
+  assert.equal(f.state.rows.length, 1);
+  assert.deepEqual({ ...f.state.rows[0] }, {
+    pass: "mirror", source: "props", band: "unknown", draws: 2, tris: 5, calls: 1, group: "multiDraw:props",
+  });
+  assert.deepEqual({ ...f.state.infoSamples[0] }, { pass: "mirror", passKey: "multiDraw", calls: 1, tris: 5 });
+  assert.deepEqual({ ...f.state.passKeys }, {}, "multiDraw keeps its existing pass-key behavior");
+});
