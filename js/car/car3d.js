@@ -1178,11 +1178,10 @@ const Car3D = (function () {
     const camPods = Math.max(0, Math.min(2, Math.round(exHalo ? cockpitStyle.camPods || 0 : 0)));
     for (let i = 0; i < camPods; i++) {
       const s = i === 0 ? -1 : 1;
-      // Mount arm: a round 7 mm stalk off the headrest hoop, bent outboard so it
-      // clears the helmet dome (centre (0, 0.715, -0.075), r 0.145) by 4+ cm and
-      // ends in the barrel's rear face. It was a 14 mm square beam running 2 cm
-      // off the shell up the lid's rear quarter (B·D8 trace, 2026-10-20).
-      addTube(out, [[s * 0.08, 0.720, -0.255], [s * 0.13, 0.800, -0.220], [s * 0.12, 0.818, -0.140]], 0.007, 8, DARK, SURFACES.carbon);
+      addBeamBetween(out,
+        [s * 0.11, 0.760, -0.20],
+        [s * 0.12, 0.812, -0.14],
+        0.014, DARK);
       // A round camera barrel, not a box: D8's helmet shots read the 30x26 mm
       // cube either side of the helmet as a "boxy block" (2026-10-19).
       addTube(out, [[s * 0.12, 0.818, -0.140], [s * 0.12, 0.818, -0.097]], 0.014, 10, DARK, SURFACES.carbon);
