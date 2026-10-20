@@ -627,7 +627,7 @@ function loadSetupUi() {
   const sb = sandbox(dom, {
     MutationObserver: class { constructor(cb) { this.cb = cb; observers.push(this); } observe(t, o) { this.target = t; this.opts = o; } },
     Parts: { STAT_KEYS: [{ key: "speed", label: "SPEED" }], displayStat: (x) => x,
-             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [], BUDGET: 780,
+             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [{ id: "aero", label: "AERO", options: [] }, { id: "floor", label: "FLOOR", options: [] }], BUDGET: 780,
              getCost: () => 0, isOptionAvailable: () => true, DEFAULTS: {}, getFactorySetup: () => ({}) },
     Teams: { LIST: TEAMS, isReal: (t) => !!t && !t.custom && !t.legends }, Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
     SetupTune: { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 },
