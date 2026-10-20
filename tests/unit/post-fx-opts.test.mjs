@@ -92,18 +92,18 @@ test("each row flips its own pass only, and persists through its own key", () =>
   }
 });
 
-test("game.js zeroes EVERY strength of a switched-off pass, so each backend skips the pass itself", () => {
-  // GLX post.js haveAO = aoStr > 0 || contactStr > 0; WGX/TLX the same. haveGR = sun strength || lampVol > 0.
-  assert.match(GAME, /const _aoOff = PerfGov\.autoTier\(\) >= 4 \|\| !PostFxOpts\.ssaoOn\(\)/);
-  assert.match(GAME, /_grOff = PerfGov\.autoTier\(\) >= 4 \|\| !PostFxOpts\.godraysOn\(\)/);
-  assert.match(GAME, /po\.ssao = _aoOff \? 0 : _ao;/);
-  assert.match(GAME, /po\.contact = _aoOff \? 0 : _cs;/);
-  assert.match(GAME, /po\.godray = _grOff \? 0 : _gr;/);
-  assert.match(GAME, /po\.lampVol = _grOff \? 0 : _lampVol;/);
-  for (const [file, re] of [
-    ["js/render/glx/post.js", /aoStr > 0 \|\| contactStr > 0/],
-    ["js/render/three/tlx-post.js", /\(aoStr > 0 \|\| contactStr > 0\)/],
-    ["js/render/webgpu/wgx.js", /\(aoStr > 0 \|\| contact > 0\)/],
-    ["js/render/webgpu/wgx.js", /\(sunGR \|\| lampVol > 0\)/],
-  ]) assert.match(fs.readFileSync(path.join(ROOT, file), "utf8"), re, file + " still gates the pass on its strengths");
+test("gate() zeroes EVERY strength a switched-off pass is gated on, and nothing of the other pass", () => {
+  // Each backend runs AO while ssao || contact > 0 and the god-ray march while godray || lampVol > 0,
+  // so OFF has to clear both members of the pair or the GPU work survives.
+  const full = () => ({ ssao: 0.8, contact: 0.5, godray: 0.6, lampVol: 0.3, bloom: 1 });
+  const { M } = load();
+  assert.deepEqual({ ...M.gate(full(), false) }, full(), "both ON, no shed: untouched");
+  M.set("ssao", false);
+  assert.deepEqual({ ...M.gate(full(), false) }, { ssao: 0, contact: 0, godray: 0.6, lampVol: 0.3, bloom: 1 });
+  M.set("ssao", true); M.set("godrays", false);
+  assert.deepEqual({ ...M.gate(full(), false) }, { ssao: 0.8, contact: 0.5, godray: 0, lampVol: 0, bloom: 1 });
+  M.set("godrays", true);
+  assert.deepEqual({ ...M.gate(full(), true) }, { ssao: 0, contact: 0, godray: 0, lampVol: 0, bloom: 1 }, "the governor's tier-4 shed takes the same exit");
+  // game.js routes the present opts through it after setting all four strengths.
+  assert.match(GAME, /po\.lampVol = _lampVol;[^\n]*\n\s*PostFxOpts\.gate\(po, PerfGov\.autoTier\(\) >= 4\);/);
 });

@@ -1400,9 +1400,8 @@ test("WGX R8 perf changes hold (SSR depth stride, pooled merge-run, lamp-mask ca
   // F10: per-chunk lamp masks are cached on a generation that only advances
   // when a ranked light's position or radius moves, instead of re-running
   // visibleChunks x nL AABB tests every frame.
+  // (Behaviour, not source: "WGX per-chunk lamp masks stay cached across a mirror pass" counts the AABB tests.)
   assert.match(WGX_SOURCE, /const _lmCache = new WeakMap\(\);/);
-  assert.match(WGX_SOURCE, /if \(_lmMoved\) CHK\.bumpLampGen\(_lmPass\);/);
-  assert.match(WGX_SOURCE, /if \(cm\.gen\[lp\] === _lmGen\[lp\]\)/);
   // F7-lite: the dead DRAW_FLOATS const is gone (it looked like the stride but
   // nothing read it); the deferral doctrine stays written down.
   assert.doesNotMatch(WGX_SOURCE, /const DRAW_FLOATS\b/);

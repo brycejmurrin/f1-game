@@ -12392,8 +12392,7 @@
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
-        "tests/unit/lighting-reapply.test.mjs",
-        "tests/unit/post-fx-opts.test.mjs"
+        "tests/unit/lighting-reapply.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-chunks.js": {
@@ -12929,7 +12928,6 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
-        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "postChain": [
@@ -13855,7 +13853,6 @@
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
-        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/validation-cli.test.mjs"
       ]
@@ -15500,6 +15497,9 @@
       ]
     },
     "js/ui/post-fx-opts.js": {
+      "gate": [
+        "tests/unit/post-fx-opts.test.mjs"
+      ],
       "read": [
         "tests/unit/post-fx-opts.test.mjs"
       ]

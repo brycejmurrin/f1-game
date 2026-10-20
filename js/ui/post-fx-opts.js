@@ -31,6 +31,14 @@ const PostFxOpts = (function () {
   }
   const ssaoOn = () => state.ssao;
   const godraysOn = () => state.godrays;
+  // The present opts' one exit for both passes (shed = the governor's autoTier 4):
+  // a pass is skipped only when EVERY strength it is gated on is 0 — AO is
+  // ssao || contact, the god-ray march is godray || lampVol.
+  function gate(po, shed) {
+    if (shed || !state.ssao) { po.ssao = 0; po.contact = 0; }
+    if (shed || !state.godrays) { po.godray = 0; po.lampVol = 0; }
+    return po;
+  }
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
@@ -52,6 +60,6 @@ const PostFxOpts = (function () {
     else initUI();
   }
 
-  return { KEYS, set, ssaoOn, godraysOn, initUI };
+  return { KEYS, set, ssaoOn, godraysOn, gate, initUI };
 })();
 Object.freeze(PostFxOpts);
