@@ -124,7 +124,8 @@ const CarGeometry = (function () {
       // trailing edge is an arc, not a straight plank. chordTaper shortens
       // the tip chord. twist adds a few degrees of outboard incidence.
       if (spec.teCurve) zR += spec.teCurve * edge * edge;
-      if (spec.tePull) zR += spec.tePull * edge;   // B·D3c: lifted tips, TE forward
+      // B·D3c: a lifted tip moves forward whole, so the cascade's slots keep their shape.
+      if (spec.tePull) { zF += spec.tePull * edge; zR += spec.tePull * edge; }
       const ct = 1 - Math.max(0, spec.chordTaper || 0) * edge;
       if (ct < 1) { zR = zF + (zR - zF) * ct; yR = yF + (yR - yF) * ct; }
       const tw = (spec.twist || 0) * edge;

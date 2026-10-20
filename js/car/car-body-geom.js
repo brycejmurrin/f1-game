@@ -245,7 +245,7 @@ const CarBodyGeom = (function () {
   const EP_SHAPES = [null,
     { hF: 0.14, hR: 0.46, kick: 0.040, footW: 0.12, footZ: 0.54, arch: 0 },
     { hF: 0.28, hR: 0.54, kick: 0.050, footW: 0.13, footZ: 0.56, arch: 1 },
-    { hF: 0.22, hR: 0.48, kick: 0.080, footW: 0.14, footZ: 0.58, arch: 0, roll: 1 },
+    { hF: 0.22, hR: 0.48, kick: 0.040, footW: 0.14, footZ: 0.58, arch: 0, roll: 1 },
     { hF: 0.18, hR: 0.30, kick: 0.020, footW: 0.10, footZ: 0.50, arch: 0 },
   ];
   function frontPlateGeom(aLvl, aero) {
@@ -573,7 +573,7 @@ const CarBodyGeom = (function () {
     const r = Math.max(0, Math.min(0.10, +(wing === "front" ? st.fwStep : st.rwRise) || 0));
     if (!c && !r) return {};
     // A lifted front tip climbs toward the tyre's axle height, where its forward
-    // bulge reaches furthest: pull the tip's trailing edge 6 cm forward with it.
+    // bulge reaches furthest: move the tip 6 cm forward with it.
     return wing === "front" ? { rise2: c, riseStep: r, tePull: 0.06 } : { rise: r, rise2: c };
   }
   function solveFlapsGeom(aLvl, style) {
@@ -608,7 +608,9 @@ const CarBodyGeom = (function () {
         sweep: frontSweep * (0.75 + i * 0.10),
         rise: frontRise * (0.65 + i * 0.12) + extra.tipRise,
         attachHalf: fwHalf + 0.03,
-        upsweep: i === els.length - 1 && (wingOf(st).flaps || 3) >= 3 ? { fwHalf, e } : null,
+        // A B·D3c lifted tip IS the curl: no team ears on top of it (they reach the tyre).
+        upsweep: i === els.length - 1 && (wingOf(st).flaps || 3) >= 3 && !shapeLift(st, "front").rise2
+          && !shapeLift(st, "front").riseStep ? { fwHalf, e } : null,
         twist: extra.twist, teCurve: extra.teCurve, chordTaper: extra.chordTaper,
       }, shapeLift(st, "front")), prev));
     }
@@ -641,16 +643,9 @@ const CarBodyGeom = (function () {
     }, col, surface === "carbon" ? SURFACES.carbon : SURFACES.paint);
     if (el.upsweep) {
       const { fwHalf, e } = el.upsweep;
-      // The ears ride the B·D3c tip lift (0 when unset) at their own span station.
-      const half = fwHalf * e[4], inner = half * 0.34, r2 = el.rise2 || 0, rs = el.riseStep || 0;
-      const lift = (x) => {
-        const g = Math.min(1, Math.max(0, (x - inner) / (half - inner)));
-        return r2 * g * g + rs * Math.min(1, g * 2);
-      };
-      const l0 = r2 || rs ? lift(half - 0.05) : 0, l1 = r2 || rs ? lift(half) : 0, tp = el.tePull || 0;
       for (const sgn of [-1, 1]) {
-        addSpan(out, { z: e[2] + tp, x: sgn * (fwHalf * e[4] - 0.05), y: e[3] + l0, w: 0.16, h: e[5] * 1.5 },
-                     { z: e[2] - 0.04 + tp, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085 + l1, w: 0.09, h: e[5] * 1.6 }, col);
+        addSpan(out, { z: e[2], x: sgn * (fwHalf * e[4] - 0.05), y: e[3], w: 0.16, h: e[5] * 1.5 },
+                     { z: e[2] - 0.04, x: sgn * (fwHalf + 0.02), y: e[3] + 0.085, w: 0.09, h: e[5] * 1.6 }, col);
       }
     }
     for (let i = 0; i < out.pos.length; i += 3) {
