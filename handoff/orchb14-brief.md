@@ -73,3 +73,9 @@ UPDATE FROM OrchB 13 (01:58–02:02Z, final):
 - NEXT GAME SLOT: after green Pages on 19bb85ed → codex #3135, then Fleet A, then Fleet B #3120 76f1cfda (then #3099 #3118[orchestrator hold for L21 fit flag] #3122 #3123 #3128 #3146).
 - Bryce 02:01Z (typed, AskUserQuestion): D9b fences → "Vertical fence ends" (relax the 4 mm step rule at fence ends only; rails stay smooth). D9b told: round 2, same gallery WwvxwbrWob9SCnT8kiRrop, REPORT to OrchB 14. D9b r1 = cursor/floor-smooth-d9a3@a226da03 (0 NEW / 6 WORSE, pre-existing); merge note for L21: regenerate tests/data/car-wing-foil-tris.json with `node tests/unit/car-wing-foil.test.mjs --update`.
 - OrchB 13 pending tick trig_01RvjDuZg1qQDpxZRaCPkHiK deleted at handoff.
+
+BRYCE 02:05Z (typed in OrchB 13) — TOP PRIORITY, supersedes the game queue order above:
+"let's get these merged after we resized. Let's prioritize getting all these designs in and lighting and garage."
+- Bryce 02:03Z picked D1c Round 5 @274e6ee8 for the resized bodies (supersedes @1f72c744). Merge the resized bodies as soon as possible, not parked.
+- Fleet B game slots go FIRST to design / lighting / garage PRs: #3145 (wave 1), then the wave-2 integration PR (bodies r5, D2c finishes, D5c liveries, D6b, D7b, D9b r2 vertical fence ends), and any lighting or garage PR. The perf/game PRs (#3120 #3099 #3118 #3122 #3123 #3128 #3146) wait behind them.
+- L21 told (get #3145 READY fast, start wave 2 right after). D1c told. D9b granted 6 more captures (36 total) for round 2.
