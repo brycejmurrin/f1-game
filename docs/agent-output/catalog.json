@@ -74,6 +74,14 @@
       ]
     },
     {
+      "path": "tools/car/car-tri-census.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/car/career-economy.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
