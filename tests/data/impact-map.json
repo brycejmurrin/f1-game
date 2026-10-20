@@ -4736,6 +4736,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
         "tests/unit/service-worker.test.mjs"
@@ -12516,10 +12517,14 @@
       "create": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-boot-timeout.test.mjs"
+        "tests/unit/renderer-boot-timeout.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "gpuAdapterAvailable": [
         "tests/unit/boot-idle-prefetch.test.mjs"
+      ],
+      "guessBackend": [
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "proved": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -12529,7 +12534,8 @@
       ],
       "start": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-boot-timeout.test.mjs"
+        "tests/unit/renderer-boot-timeout.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "storedBackendPreference": [
         "tests/unit/gfx-backend-canary.test.mjs"
