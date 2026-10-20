@@ -409,8 +409,10 @@ const Car3D = (function () {
     };
     zone("floor", () => { for (const side of [-1, 1]) {
       addStationLoft(out, Array.from({ length: railN }, (_, i) => {
-        const r = railAt(railZ(i)), x = side * r.x;
-        return [[x - r.w / 2, r.y - r.h / 2, r.z], [x + r.w / 2, r.y - r.h / 2, r.z],
+        // Square floor: a bottom buried in the 1.5 m plate sits on its top instead (hidden either way).
+        const r = railAt(railZ(i)), x = side * r.x, fl = CHASSIS.floor;
+        const yb = !shade && r.x + r.w / 2 < fl.sx / 2 ? Math.max(r.y - r.h / 2, Math.max(fl.cy + rideDY, 0.052) + fl.sy / 2 + 0.003) : r.y - r.h / 2;
+        return [[x - r.w / 2, yb, r.z], [x + r.w / 2, yb, r.z],
                 [x + r.w / 2, r.y + r.h / 2, r.z], [x - r.w / 2, r.y + r.h / 2, r.z]];
       }), CARBON, null, SURFACES.carbon);
     } });

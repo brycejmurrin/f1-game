@@ -1235,12 +1235,16 @@ const CarBodyGeom = (function () {
         innerTop: 0.30 + 0.05 * (shoulder - 1) + (sil ? inletH * 0.08 : 0),
         outerTop: 0.27 + (sil ? inletH * 0.05 : 0) },
     ];
-    // Ease the undercut's lower line: each inner station's outerBottom moves
-    // part-way onto the chord of its neighbours, so the belly no longer creases
-    // 5-9° at z 0.50 (two passes; the ends and the undercut gap stay).
+    // Ease the undercut's lower line: an inner station whose outerBottom creases
+    // more than 3° (5-9° at z 0.50 on every car) moves part-way onto its
+    // neighbours' chord (two passes; the ends and the undercut gap stay). The
+    // gentler aft stations stay put: the flank details are pinned to them.
+    const crease = (a, b, c) => Math.abs(Math.atan2(a.outerBottom - b.outerBottom, a.z - b.z) - Math.atan2(b.outerBottom - c.outerBottom, b.z - c.z));
+    const ease = st.map((p, i) => i > 0 && i < st.length - 1 && crease(st[i - 1], p, st[i + 1]) > 0.0524);
     for (let pass = 0; pass < 2; pass++) {
       const ob = st.map((p) => p.outerBottom);
       for (let i = 1; i < st.length - 1; i++) {
+        if (!ease[i]) continue;
         const a = st[i - 1], b = st[i + 1], k = (a.z - st[i].z) / (a.z - b.z);
         const chord = ob[i - 1] + (ob[i + 1] - ob[i - 1]) * k;
         st[i].outerBottom = Math.max(st[i].innerBottom + 0.004, ob[i] + (chord - ob[i]) * 0.6);
