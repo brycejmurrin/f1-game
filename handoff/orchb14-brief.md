@@ -153,3 +153,16 @@ UPDATE FROM OrchB 19 session_01BFqKe4g9rr7kpnonrLtgKo (05:24–05:52Z, FINAL —
 - D3c session_019bi2ACJYwWMyGFoNJ4E8JT REPORT r3 v12 @b8eafbd0 (gallery 14NZUdiTMpNKRTu4u9ZP3m); next 11-chassis fit; syncs after #3169 (now).
 - #3105 stays parked (MERGE-HOLD, contained in codex #3151 as noseTrimW); if #3151 stalls, extract the nose-trim fix into its own PR.
 - OrchB 19 deleted its pending tick. No PR subscriptions held.
+
+CAR-SHAPE PRIORITY ORDER (OrchB 19, 06:03Z; Bryce asked for one order covering every car-shape draft). Each PR syncs onto the previous merge (all touch js/car/car3d.js); Fleet A alternates game slots between Fleet B entries.
+1. #3118 L12 — 2 car3d.js hunks left (halo vane bar, factory strakes); READY after its sync.
+2. #3173 L21 — DRS pod attached on every wing < lvl 3.6 + Cadillac exhaust shrink (Bryce 05:55Z); skids unchanged. READY ETA ~07:00Z. (If READY before #3118, take it first.)
+3. #3146 L22 — car-fit-audit tool (1 car3d.js line); READY c1103113, needs re-check vs tip.
+4. #3162 D1e — concept bodies rift/keel/delta/serpent; lands the SHARED pod-profile helper the codex sets reuse.
+5. #3164 D3d session_012WRqok7xSepCrYJnAPgbDj — Terrace/Flatline/Updraft/Swell wings + 4 diffuser rows (Flatline ≥5 % px first).
+6. #3150 garage props (15 workshop items; garage, not car; dirty, CI pending) — whenever green, it only conflicts on js/garage/scene.js.
+7. #3151 codex — 6 bodies hammerhead/swan/manta/wasp/scorpion/blade + finishes 41–44; carries #3105's nose-trim fix. Needs sync onto the above, holographic-vs-holo(64) look check, and Bryce lifting its MERGE-HOLD.
+8. #3172 codex set 2 — auralis/cevora/vantrel/orynth + Contour aero (fix red guards: board:0); MERGE-HOLD Bryce's.
+9. codex set 3 — Caldra/Rovik/Senzo/Talven (draft coming, fit red 13 NEW/22 WORSE, MERGE-HOLD).
+10. codex set 4 — Serris/Caelis/Dravon/Nacre (local only, no PR).
+#3105: no separate merge; it ships inside #3151 (extract only if #3151 stalls).
