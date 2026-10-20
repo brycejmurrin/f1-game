@@ -3652,3 +3652,13 @@ sit inside `build`'s emit closures beside the parts they shape. The same `--upda
 the tree's `dynamicIdReads` falling 74 → 73 (a measured lowering, not a raise).
 
 - 2026-10-20 `dynamicIdReads` 72 -> 73 (+1): double-counted auto-lower from two fragments measured off the same base 74; restoring the true count 73, no code growth.
+
+## 2026-10-20 — #3172 sculpted concepts: car3d.js +66 lines
+
+`js/car/car3d.js` lines 2764 → **2830** (+66), measured against deploy tip 3d3345f7 after the sync.
+This is the PR's own growth from two branch fragments: `cursor--sculpted-concepts-rename-8c41`
+(+24) and `cursor--complete-concept-meshes-3d82` (+42). No other branch's raise is stacked in it.
+It covers four STYLE recipes (Auralis, Cevora, Vantrel, Orynth), the `podSculpt` flank-paint cuts
+in the sidepod emit, and curved nose paint that follows `anchors.noseStops`. The shell geometry
+itself lives in `js/car/car-body-geom.js`. Each new line hooks the emit closures inside `build`,
+so it stays there and is not extracted.

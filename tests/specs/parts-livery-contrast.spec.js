@@ -316,12 +316,13 @@ test.describe("Livery atlas — ink contrast", () => {
       // the fin, it genuinely sits on two paints. Its only mark (the second
       // sponsor, "wordmark") is centred on the crown, wholly on c1.
       tail: ["c1", "accent"],
-      // LiveryStations (js/car/livery-stations.js). cockpitSide's driver code and
-      // podTop's wordmark are inked with inkOn([c1]): the monocoque flank and the
-      // sidepod's upper face are body paint. noseTip is a solid colour fill, no
-      // ink, so the cap only has to land on the nose tip's own `nose` paint.
+      // LiveryStations (js/car/livery-stations.js). cockpitSide's driver code is
+      // inked with inkOn([c1]): the monocoque flank is body paint. podTop's
+      // wordmark is inked with inkOn([pod || c1]): the whole sidepod shell wears
+      // the SIDEPOD colour. noseTip is a solid colour fill, no ink, so the cap
+      // only has to land on the nose tip's own `nose` paint.
       // haloTop sits on the halo hoop, which this body-paint probe does not name.
-      cockpitSide: ["c1"], podTop: ["c1"], noseTip: ["nose"],
+      cockpitSide: ["c1"], podTop: ["pod"], noseTip: ["nose"],
     };
     for (const [region, slot] of Object.entries(result)) {
       // Active-aero wing band is covered by the next test against flap geometry;
