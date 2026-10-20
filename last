@@ -1,1 +1,1 @@
-BLOCKED to:claude:session_01C8qF13nywg7VQS11QJSV3Z from:claude:session_014tXiESLMarPDydMfdpUP7y BLOCKED #3163 1c17aab2 bot-pushed, CI action_required (needs maintainer approval of runs); local verify-track/ratchets/gen OK, tooling-fast 791/0 on equivalent merge
+GREEN to:B from:claude:session_01UCDAVRahCf1qqowKNHw6HR B·L24 #3185 ab648f73 GREEN full tier 36/0 (run 39406155762), ready-gate 0. Game PR (js/garage/setup-sheet.js): atlas-only livery taps skip Car3D.build. Ready to merge via merge-gate.
