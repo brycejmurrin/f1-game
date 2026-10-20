@@ -18,6 +18,7 @@ import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const M = loadParts();
+const R = loadParts({ shade: true });
 const { Car3D, Parts, Teams } = M;
 const Liveries = (() => { const ctx = { console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set };
   vm.createContext(ctx); vm.runInContext(fs.readFileSync("js/car/liveries.js", "utf8"), ctx, { filename: absSrc("js/car/liveries.js") });
@@ -189,4 +190,317 @@ test("bodyStyle is a published livery field and live resolution carries it", () 
   const resolve = vm.runInContext("CustomLiveries.create({ store: {} })", ctx);
   assert.equal(resolve.pickLivery({ id: "mine", c1: [0, 0, 0], c2: [1, 1, 1], bodyStyle: "needle" }).bodyStyle, "needle");
   assert.match(fs.readFileSync("js/garage/setup-camera.js", "utf8"), /SP_HULL_GEOM_FIELDS = \[[^\]]*"bodyStyle"/);
+});
+
+const expansionIds = ["hammerhead", "swan", "manta", "wasp", "scorpion", "blade"];
+
+test("expanded bodies have independent, recognizable profile relationships", () => {
+  const at = (id, spine) => Car3D.bodyAnchors(tiers, id, spine);
+  for (const id of expansionIds) assert.ok(Car3D.BODY_STYLE_IDS.includes(id), id);
+  const hammer = at("hammerhead"), tip = hammer.noseAt(2.26), neck = hammer.noseAt(1.7552);
+  assert.ok(tip.side > neck.side * 1.5, "hammerhead shovel is wider than its neck");
+  assert.ok(tip.top - tip.bottom < 0.05, "hammerhead shovel stays thin");
+  assert.ok(at("swan").noseAt(2.78).bottom > 0.39, "swan bridge clears the low nose line");
+  const manta = at("manta");
+  assert.ok(manta.podAt(0.62).x > manta.podAt(-0.62).x * 2, "manta sweeps into a pinched waist");
+  const wasp = at("wasp");
+  assert.ok(wasp.podAt(-0.62).x > wasp.podAt(0.62).x * 1.5, "wasp swells aft of its inlet");
+  assert.ok(wasp.podAt(-0.62).top > wasp.podAt(0.62).top + 0.10, "wasp has high aft shoulders");
+  for (const spine of ["standard", "dorsal"]) {
+    const scorpion = at("scorpion", spine);
+    assert.ok(scorpion.coverAt(-2).top > scorpion.coverAt(-0.55).top + 0.04,
+      `scorpion tail rises with ${spine} cover`);
+  }
+  const blade = at("blade").noseAt(2.0);
+  assert.ok(blade.top - blade.bottom > blade.side * 3.5, "blade nose is tall and thin");
+});
+
+test("expanded profiles retain canonical station order, positive sections and bounded mesh streams", () => {
+  const reference = JSON.stringify(Car3D.AXLES);
+  const accountingBytes = (d) => [d.pos, d.nrm, d.col, d.mat, d.idx]
+    .reduce((n, stream) => n + stream.length * 4, 0);
+  const legacyIds = [undefined, "needle", "brick", "anteater", "arched", "wedge", "barge"];
+  const budgetModes = [["flat", Car3D], ["rounded", R.Car3D]].map(([name, X]) => {
+    const opts = (id) => ({ livery: { c1: team.color, c2: team.color2, bodyStyle: id },
+      teamId: team.id, num: 16, parts: tiers });
+    const body = (id) => X.build(team.color, team.color2, { ...opts(id), noWheels: true });
+    const complete = (id) => X.buildComplete(team.color, team.color2, opts(id));
+    const ceiling = { bodyTriangles: 0, bodyBytes: 0, completeTriangles: 0, completeBytes: 0 };
+    for (const id of legacyIds) {
+      const b = body(id), c = complete(id);
+      ceiling.bodyTriangles = Math.max(ceiling.bodyTriangles, b.idx.length / 3);
+      ceiling.bodyBytes = Math.max(ceiling.bodyBytes, accountingBytes(b));
+      ceiling.completeTriangles = Math.max(ceiling.completeTriangles, c.idx.length / 3);
+      ceiling.completeBytes = Math.max(ceiling.completeBytes, accountingBytes(c));
+    }
+    return { name, body, complete, ceiling };
+  });
+  for (const id of expansionIds) {
+    const a = Car3D.bodyAnchors(tiers, id);
+    assert.equal(a.podStations.length, 7, `${id}: reuses the seven pod rings`);
+    for (let i = 0; i < a.podStations.length; i++) {
+      const p = a.podStations[i];
+      if (i) assert.ok(a.podStations[i - 1].z > p.z, `${id}: ordered pod stations`);
+      assert.ok(p.outer > p.inner && p.outerTop > p.outerBottom && p.innerTop > p.innerBottom,
+        `${id}: positive pod section at ${p.z}`);
+    }
+    // Both regular and rounded builders sample the same two-station linear cover.
+    for (const round of [false, true]) {
+      const b = (round ? R.Car3D : Car3D).bodyAnchors(tiers, id, "dorsal", round);
+      const f = b.coverAt(-0.55), r = b.coverAt(-2), m = b.coverAt(-1.275);
+      assert.ok(Math.abs(m.top - (f.top + r.top) / 2) < 1e-12, `${id}: linear cover crown`);
+      assert.ok(f.top > f.bottom && r.top > r.bottom, `${id}: positive cover sections`);
+    }
+    // Flat near bodies retain the declared fixed budget. Rounded meshes must fit
+    // the existing rounded maximum under identical parts, including complete cars.
+    for (const { name, body, complete, ceiling } of budgetModes) {
+      const d = body(id), c = complete(id), label = `${id}/${name}`;
+      const bodyTriangles = name === "flat" ? 12000 : ceiling.bodyTriangles;
+      const bodyBytes = name === "flat" ? 1.75 * 1024 * 1024
+        : ceiling.bodyBytes;
+      assert.ok(d.idx.length / 3 <= bodyTriangles, `${label}: exceeds ${bodyTriangles} body triangles`);
+      assert.ok(accountingBytes(d) <= bodyBytes, `${label}: exceeds ${bodyBytes} body accounting bytes`);
+      assert.ok(c.idx.length / 3 <= ceiling.completeTriangles, `${label}: exceeds existing complete triangle maximum`);
+      assert.ok(accountingBytes(c) <= ceiling.completeBytes, `${label}: exceeds existing complete byte maximum`);
+    }
+    assert.equal(JSON.stringify(Car3D.AXLES), reference, `${id}: leaves physics datums alone`);
+  }
+});
+
+
+test("expanded pod sections stay open across every team's available engine and extreme recipes", () => {
+  const engineCat = Parts.CATALOG.find((c) => c.id === "engine");
+  const extreme = [
+    { podWidth: 0.72, shoulderHeight: 0.76, undercut: 1.38, coke: 1.38, tailWidth: 0.70, coverHeight: 0.78 },
+    { podWidth: 1.28, shoulderHeight: 1.28, undercut: 0.72, coke: 0.72, tailWidth: 1.30, coverHeight: 1.28 },
+  ];
+  for (const t of Teams.LIST) {
+    const factory = Parts.getFactorySetup(t);
+    const cases = [["factory", Parts.getVisualTiers(factory, t)]];
+    for (const e of engineCat.options.filter((o) => Parts.isOptionAvailable(o, t)))
+      cases.push([e.id, Parts.getVisualTiers({ ...factory, engine: e.id }, t)]);
+    for (let i = 0; i < extreme.length; i++) cases.push([`extreme-${i}`, {
+      ...cases[0][1], _visual: { ...cases[0][1]._visual, engine: {
+        in: 1, inlet: 1, outlet: 1, ...extreme[i],
+      } },
+    }]);
+    for (const [engineId, parts] of cases) for (const id of expansionIds) for (const round of [false, true]) {
+      const a = (round ? R.Car3D : Car3D).bodyAnchors(parts, id, "dorsal", round);
+      const label = `${t.id}/${engineId}/${id}/${round ? "round" : "flat"}`;
+      for (const p of a.podStations) {
+        assert.ok(p.outer - p.inner >= 0.08 - 1e-12, `${label}: open span at ${p.z}`);
+        assert.ok(p.outerTop > p.outerBottom && p.innerTop > p.innerBottom,
+          `${label}: positive height at ${p.z}`);
+      }
+      const inlet = a.podAt(0.62);
+      assert.ok(inlet.x - inlet.inner >= 0.08 - 1e-12, `${label}: positive inlet mouth`);
+    }
+  }
+});
+
+
+// Recover connected central supports from the emitted front-wing triangles.
+// This deliberately observes mesh output rather than restating the mount recipe.
+function emittedNoseSupports(mesh) {
+  let from = 0;
+  for (const p of mesh.parts) { if (p.name === "frontWing") break; from += p.vertices; }
+  const count = mesh.parts.find((p) => p.name === "frontWing").vertices;
+  const verts = new Map(), groups = [];
+  const point = (i) => mesh.pos.slice(i * 3, i * 3 + 3);
+  for (let i = from; i < from + count; i += 3) {
+    const tri = [point(i), point(i + 1), point(i + 2)];
+    if (!tri.every((p) => Math.abs(p[0]) < 0.20 && p[2] > 2 && p[2] < 2.75)
+        || !tri.some((p) => p[1] > 0.18)) continue;
+    const keys = tri.map((p) => p.join(","));
+    let group = groups.find((g) => keys.some((k) => g.has(k)));
+    if (!group) { group = new Set(); groups.push(group); }
+    for (const other of groups.slice()) if (other !== group && keys.some((k) => other.has(k))) {
+      for (const k of other) group.add(k); groups.splice(groups.indexOf(other), 1);
+    }
+    keys.forEach((k, j) => { group.add(k); verts.set(k, tri[j]); });
+  }
+  return groups.map((g) => [...g].map((k) => verts.get(k)))
+    .filter((g) => Math.min(...g.map((p) => p[1])) < 0.12 && Math.max(...g.map((p) => p[1])) > 0.20);
+}
+
+function insideSection(point, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i], b = polygon[j];
+    if ((a[1] > point[1]) !== (b[1] > point[1])
+        && point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+  }
+  return inside;
+}
+
+test("expanded wing supports penetrate the nose while retaining their lower wing mounts", () => {
+  for (const t of Teams.LIST.filter((t) => ["ferrari", "mercedes", "astonmartin"].includes(t.id))) {
+    const parts = Parts.getVisualTiers(Parts.getFactorySetup(t), t);
+    for (const id of expansionIds) for (const [name, X] of [["flat", M], ["rounded", R]]) {
+      const mesh = X.Car3D.build(t.color, t.color2, { noWheels: true, measure: true,
+        teamId: t.id, parts, livery: { c1: t.color, c2: t.color2, bodyStyle: id } });
+      const label = `${t.id}/${id}/${name}`, supports = emittedNoseSupports(mesh);
+      assert.equal(supports.length, 2, `${label}: both emitted supports were found`);
+      const anchors = X.Car3D.bodyAnchors(parts, id, undefined, name === "rounded");
+      for (const support of supports) {
+        const side = support.reduce((n, p) => n + p[0], 0) < 0 ? -1 : 1;
+        const foot = [side * 0.09, 0.085, 2.54];
+        support.sort((a, b) => Math.hypot(...a.map((v, i) => v - foot[i])) - Math.hypot(...b.map((v, i) => v - foot[i])));
+        const half = support.length / 2;
+        assert.equal(half, name === "rounded" ? 10 : 4, `${label}: unchanged ring topology`);
+        const centre = (pts) => pts.reduce((p, q) => p.map((v, i) => v + q[i] / pts.length), [0, 0, 0]);
+        const lower = centre(support.slice(0, half)), upper = centre(support.slice(half));
+        assert.ok(lower.every((v, i) => Math.abs(v - foot[i]) < 1e-9), `${label}: original lower root retained`);
+        const n = anchors.noseAt(upper[2]);
+        const hull = name === "rounded" ? X.CarShade.ring({ z: upper[2], w: n.side * 2,
+          h: n.top - n.bottom, y: (n.top + n.bottom) / 2, t: n.topSide / n.side })
+          : [[-n.side, n.bottom], [n.side, n.bottom], [n.topSide, n.top], [-n.topSide, n.top]];
+        assert.ok(insideSection(upper, hull), `${label}: emitted upper cap penetrates actual nose section`);
+        assert.ok(support.slice(half).every((p) => p[2] <= Car3D.CHASSIS.nose[0].z + Car3D.BODY_STYLES[id].noseTipZ),
+          `${label}: entire upper cap stays behind the nose tip`);
+      }
+    }
+  }
+});
+
+
+const DETAIL_INK = [0.137, 0.419, 0.683];
+function detailPoints(mesh, color, keep) {
+  const points = [];
+  for (let i = 0; i < mesh.pos.length; i += 3) if (color.every((v, j) => mesh.col[i + j] === v)) {
+    const p = mesh.pos.slice(i, i + 3); if (keep(p)) points.push(p);
+  }
+  return points;
+}
+
+test("expanded cover stripes stay on the crown instead of bridging to the roll structure", () => {
+  for (const id of expansionIds) for (const [name, X] of [["flat", M], ["rounded", R]]) {
+    const mesh = X.Car3D.build(team.color, team.color2, { noWheels: true, teamId: team.id, parts: tiers,
+      livery: { c1: team.color, c2: team.color2, bodyStyle: id, stripe: DETAIL_INK, spineHeight: "dorsal" } });
+    const anchors = X.Car3D.bodyAnchors(tiers, id, "dorsal", name === "rounded");
+    const points = detailPoints(mesh, DETAIL_INK, (p) => [-0.64, -0.94, -1.95].includes(p[2]));
+    assert.ok(points.length >= 48, `${id}/${name}: both cover stripe lofts emitted`);
+    for (const p of points) {
+      const c = anchors.coverAt(p[2]), profile = X.Car3D.coverProfile(c);
+      assert.ok(Math.abs(p[0]) < profile.pts[profile.pts.length - 1][0], `${id}/${name}: stripe fits flat crown`);
+      const gap = p[1] - X.Car3D.coverSurfaceY(c, p[0]);
+      assert.ok(gap >= -0.016 && gap <= 0.006, `${id}/${name}: stripe touches cover skin (${gap})`);
+    }
+  }
+});
+
+test("scorpion cover clears actual factory T-wings and their supports bridge the gap", () => {
+  let checked = 0;
+  for (const t of Teams.LIST) {
+    const parts = Parts.getVisualTiers(Parts.getFactorySetup(t), t);
+    if (!parts._visual.aero.tvane) continue;
+    for (const spineHeight of ["standard", "dorsal"]) for (const [name, X] of [["flat", M], ["rounded", R]]) {
+      const mesh = X.Car3D.build(t.color, t.color2, { noWheels: true, teamId: t.id, parts,
+        livery: { c1: t.color, c2: t.color2, bodyStyle: "scorpion", rearWing: DETAIL_INK, spineHeight } });
+      const anchors = X.Car3D.bodyAnchors(parts, "scorpion", spineHeight, name === "rounded");
+      const wing = detailPoints(mesh, DETAIL_INK, (p) => p[2] > -2.05 && p[2] < -1.92 && Math.abs(p[0]) <= 0.171);
+      const label = `${t.id}/${spineHeight}/${name}`;
+      assert.ok(wing.length > 0, `${label}: actual factory T-wing emitted`);
+      for (const p of wing.filter((p) => p[2] >= -2)) {
+        const skin = X.Car3D.coverSurfaceY(anchors.coverAt(p[2]), p[0]);
+        assert.ok(p[1] > skin + 0.002, `${label}: foil clears cover (${p[1] - skin})`);
+      }
+      const stem = detailPoints(mesh, [0.05, 0.05, 0.05], (p) => Math.abs(Math.abs(p[0]) - 0.015) < 1e-9
+        && [-1.9925, -1.9675].some((z) => Math.abs(z - p[2]) < 1e-9));
+      assert.ok(stem.length > 0, `${label}: support emitted`);
+      const floor = Math.min(...stem.map((p) => p[1])), top = Math.max(...stem.map((p) => p[1]));
+      const skin = X.Car3D.coverSurfaceY(anchors.coverAt(-1.98), 0);
+      assert.ok(floor < skin && floor > skin - 0.020, `${label}: support root touches cover`);
+      assert.ok(top >= Math.min(...wing.map((p) => p[1])) && top <= Math.max(...wing.map((p) => p[1])),
+        `${label}: support reaches foil`);
+      checked++;
+    }
+  }
+  assert.ok(checked >= 4, "at least one actual factory T-wing checked in both modes and cover heights");
+});
+
+
+test("expanded nose roots meet the chassis nose root without moving their tip or mid sections", () => {
+  // #3111 tip rule (Bryce 2026-10-20): every concept nose roots on CHASSIS.nose[2], where the tub starts.
+  const root0 = Car3D.CHASSIS.nose[2];
+  for (const t of Teams.LIST) {
+    const parts = Parts.getVisualTiers(Parts.getFactorySetup(t), t);
+    for (const id of expansionIds) for (const [name, X] of [["flat", M], ["rounded", R]]) {
+      const a = X.Car3D.bodyAnchors(parts, id, "dorsal", name === "rounded"), root = a.noseAt(root0.z);
+      const label = `${t.id}/${id}/${name}`;
+      assert.equal(root.side, root0.w / 2, `${label}: nose root width seam`);
+      assert.equal(root.topSide, root0.w * root0.t / 2, `${label}: nose root crown seam`);
+      assert.equal(root.top, root0.y + root0.h / 2, `${label}: nose root upper seam`);
+      assert.equal(root.bottom, root0.y - root0.h / 2, `${label}: nose root underside seam`);
+      const forward = a.noseAt(root0.z + 0.0001);
+      assert.ok(Math.abs(forward.top - root.top) < 0.0001 && Math.abs(forward.bottom - root.bottom) < 0.0001,
+        `${label}: continuous nose immediately ahead of the root`);
+    }
+  }
+  const wasp = Car3D.bodyAnchors(tiers, "wasp").noseAt(2.2016);
+  assert.ok(Math.abs(wasp.side - 0.11115) < 1e-10 && Math.abs(wasp.top - 0.38155625) < 1e-10,
+    "Wasp keeps its shaped mid-nose when cover lift is zero");
+});
+
+test("Wasp airbox and principal hoop remain below the fixed hoop crowns", () => {
+  const engineCat = Parts.CATALOG.find((c) => c.id === "engine");
+  assert.equal(Car3D.BODY_STYLES.wasp.coverLift, 0, "Wasp adds no extra crown lift to inherited spines");
+  const cases = engineCat.options.map((engine) => {
+    const t = Teams.LIST.find((t) => Parts.isOptionAvailable(engine, t));
+    assert.ok(t, `${engine.id}: a compatible team exists`);
+    return [t, { ...Parts.getFactorySetup(t), engine: engine.id }];
+  });
+  for (const [t, setup] of cases) for (const [name, X] of [["flat", M], ["rounded", R]]) {
+    const parts = Parts.getVisualTiers(setup, t);
+    assert.equal(parts._ids.engine, setup.engine, `${setup.engine}: probe uses the requested engine`);
+    const mesh = X.Car3D.build(t.color, t.color2, { noWheels: true, teamId: t.id, parts,
+      livery: { c1: t.color, c2: t.color2, bodyStyle: "wasp", cover: DETAIL_INK } });
+    for (const [z, cap] of [[-0.33, 0.968], [-0.63, 0.938]]) {
+      const points = detailPoints(mesh, DETAIL_INK, (p) => p[2] === z);
+      assert.ok(points.length >= 8, `${t.id}/${setup.engine}/${name}: principal hoop ring emitted`);
+      assert.ok(points.every((p) => p[1] <= cap + 1e-9), `${t.id}/${setup.engine}/${name}: fixed hoop crown at ${z}`);
+    }
+  }
+});
+
+
+test("low concept floor fences clear the emitted tray with every engine and lowest available suspension", () => {
+  const engineCat = Parts.CATALOG.find((c) => c.id === "engine");
+  const suspensionCat = Parts.CATALOG.find((c) => c.id === "suspension");
+  const cases = engineCat.options.map((engine) => {
+    const t = Teams.LIST.find((t) => Parts.isOptionAvailable(engine, t));
+    assert.ok(t, `${engine.id}: compatible team`);
+    const suspension = suspensionCat.options.filter((o) => Parts.isOptionAvailable(o, t))
+      .reduce((lowest, o) => (o.visual.ride || 0) < (lowest.visual.ride || 0) ? o : lowest);
+    const parts = Parts.getVisualTiers({ ...Parts.getFactorySetup(t), engine: engine.id, suspension: suspension.id }, t);
+    assert.equal(parts._ids.engine, engine.id, "probe uses the requested engine");
+    return { label: engine.id, t, parts };
+  });
+  const base = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
+  cases.push({ label: "synthetic-positive-clearance", t: team, parts: { ...base,
+    _visual: { ...base._visual, suspension: { ...base._visual.suspension, ride: -0.10 } } } });
+  for (const { label, t, parts } of cases) for (const id of ["hammerhead", "manta"])
+    for (const [name, X] of [["flat", M], ["rounded", R]]) {
+      const mesh = X.Car3D.build(t.color, t.color2, { noWheels: true, measure: true, teamId: t.id, parts,
+        livery: { c1: t.color, c2: t.color2, bodyStyle: id } });
+      const chassis = mesh.parts.find((p) => p.name === "chassis");
+      let trayBottom = Infinity;
+      for (let i = 1; i < chassis.vertices * 3; i += 3) trayBottom = Math.min(trayBottom, mesh.pos[i]);
+      // The edge rail is one loft along floorEdgeAt (13 rings, z 0.78 to -1.58): at each ring
+      // the outermost carbon on each side is the rail's outer face. It must exist inside the
+      // 1900 mm car and clear both the emitted tray and the road.
+      for (let r = 0; r < 13; r++) for (const side of [-1, 1]) {
+        const z = 0.78 - r * 2.36 / 12, carbon = [];
+        for (let i = 0; i < mesh.mat.length; i++) if (mesh.mat[i] === X.Car3D.SURFACES.carbon) {
+          const p = mesh.pos.slice(i * 3, i * 3 + 3);
+          if (Math.abs(p[2] - z) < 1e-9 && p[0] * side > 0) carbon.push(p);
+        }
+        const tag = `${label}/${id}/${name}/${z.toFixed(3)}/${side}`;
+        assert.ok(carbon.length >= 2, `${tag}: rail ring emitted`);
+        const outer = Math.max(...carbon.map((p) => Math.abs(p[0])));
+        const rail = carbon.filter((p) => outer - Math.abs(p[0]) < 1e-9);
+        assert.ok(rail.length >= 2 && outer <= 0.95, `${tag}: rail outer face inside the car`);
+        assert.ok(rail.every((p) => p[1] >= trayBottom - 1e-9 && p[1] >= 0), `${tag}: rail clears tray and road`);
+      }
+    }
 });

@@ -96,3 +96,175 @@ test("a zone finish reaches the built mesh for its section only", () => {
   assert.ok(pods[PAINT] > 0 && pods[PAINT] < plain[PAINT], "the zone finish must replace some paint, not all of it");
   assert.equal((pods[CHROME] || 0) + pods[PAINT], plain[PAINT], "every changed vertex was paint");
 });
+
+test("expanded finishes preserve nested-zone precedence, nose override and protected surfaces", () => {
+  const P = CM.SURFACES.paint, protectedIds = [CM.SURFACES.carbon, CM.SURFACES.glass, CM.SURFACES.emissive, CM.SURFACES.mirror];
+  const sections = [{ name: "chassis", from: 0, to: 3 }, { name: "engineCover", from: 3, to: 5 },
+    { name: "mirrors", from: 5, to: 9 }];
+  const zones = [{ name: "engineCover", from: 1, to: 2 }];
+  for (const finish of ["holographic", "velvet", "hammered", "anodized"]) {
+    const id = CM.FINISH_SURFACE[finish];
+    assert.ok(Number.isInteger(id) && id > 40, `${finish} has its own shader identity`);
+    const out = { mat: [P, P, P, P, P, ...protectedIds], pos: Array.from({ length: 9 }, (_, i) => [0, 0, i === 2 ? 2 : 0]).flat() };
+    CM.applyFinish(out, finish, sections, { finish, coverFinish: "gloss", noseFinish: "satin" }, zones);
+    assert.deepEqual(out.mat, [id, P, CM.FINISH_SURFACE.satin, P, P, ...protectedIds], `${finish}: overrides must touch only their paint`);
+    assert.equal(CM.finishOf({ finish, coverFinish: "inherit" }, "coverFinish"), finish);
+    assert.equal(CM.finishOf({ finish, coverFinish: "unknown-future-finish" }, "coverFinish"), finish);
+  }
+});
+
+// Execute WGX's actual packing function with its real quantisers. The GPU mock
+// cannot emulate a broken indexed vertex_index, so verify the independent bytes
+// and the shader's selection contract rather than trusting the storage pull.
+function wgxCarPacking() {
+  const source = read("js/render/webgpu/wgx.js"), start = source.indexOf("    function _interleave(data) {");
+  const end = source.indexOf("    // createBuffer may still throw", start);
+  assert.ok(start >= 0 && end > start, "real WGX interleave body must be found");
+  const stride = Number(/const VERTEX_STRIDE = (\d+);/.exec(source)[1]);
+  const context = vm.createContext({ Float32Array, Int16Array, Uint16Array, Uint32Array, ArrayBuffer,
+    Number, Array, Math, toF32: (v) => v instanceof Float32Array ? v : new Float32Array(v),
+    VERTEX_STRIDE: stride, VERTEX_FLOATS: stride >> 2 });
+  vm.runInContext(read("js/render/shared/vertex-pack.js"), context, { filename: absSrc("js/render/shared/vertex-pack.js") });
+  const expandStart = source.indexOf("    function _expandPull(vert, attr, idx) {");
+  const expandEnd = source.indexOf("    function _makeAttrBG(attr)", expandStart);
+  assert.ok(expandStart >= 0 && expandEnd > expandStart, "real WGX indexed expansion body must be found");
+  return { pack: vm.runInContext(`(${source.slice(start, end)})`, context),
+    expand: vm.runInContext(`(${source.slice(expandStart, expandEnd)})`, context), stride };
+}
+function carIdMesh(ids) {
+  const n = ids.length;
+  return { pos: Float32Array.from(ids.flatMap((_, i) => [i * .25, .3, -i * .125])),
+    nrm: Float32Array.from(ids.flatMap(() => [.2, .9, -.3])),
+    col: Float32Array.from(ids.flatMap(() => [.1, .3, .8])),
+    mat: Float32Array.from(ids), idx: Uint16Array.from({ length: n }, (_, i) => i) };
+}
+
+test("WGX carries every packed car id independently of indexed vertex_index without growing its vertices", () => {
+  const { pack, stride } = wgxCarPacking(), ids = Array.from({ length: 66 }, (_, i) => i + 20);
+  const data = carIdMesh(ids), packed = pack(data), plain = pack({ ...data, mat: null });
+  assert.equal(stride, 28); assert.equal(packed.vert.byteLength, ids.length * 28);
+  assert.equal(packed.count, data.idx.length); assert.deepEqual(Array.from(packed.idx), Array.from(data.idx));
+  const short = new Int16Array(packed.vert.buffer), raw = new Uint8Array(packed.vert.buffer), baseline = new Uint8Array(plain.vert.buffer);
+  ids.forEach((id, i) => {
+    const encoded = short[i * 14 + 9];
+    assert.equal(encoded, id * 256);
+    const fetched = Math.fround(encoded / 32767);  // snorm16 vertex fetch
+    const decoded = Math.floor(Math.fround(fetched * Math.fround(32767 / 256)) + .5);
+    assert.equal(decoded, id, `${id} must survive GPU f32 decode, including protected carbon/glass/light ids`);
+    // Even when the broken storage route returns vertex zero's material, this
+    // vertex's valid padding route selects its own authored classification.
+    assert.equal(decoded >= 20 && decoded <= 85 ? decoded : ids[0], id);
+    for (let b = 0; b < stride; b++) if (b !== 18 && b !== 19)
+      assert.equal(raw[i * stride + b], baseline[i * stride + b], `id ${id}: byte ${b} outside normal.w changed`);
+    assert.equal(packed.attr[i * 4], data.mat[i], "data.mat remains authoritative in the storage buffer too");
+  });
+});
+
+test("WGX car padding does not capture non-car material or FLAG fractional fields", () => {
+  const { pack } = wgxCarPacking(), ids = [0, 1, 15.4, 16, 19, 19.5, 85.5, 86, NaN, Infinity];
+  const data = carIdMesh(ids), packed = pack(data), short = new Int16Array(packed.vert.buffer);
+  ids.forEach((_, i) => {
+    assert.equal(short[i * 14 + 9], 0, "only exact integer car ids occupy normal.w");
+    assert.ok(Object.is(packed.attr[i * 4], data.mat[i]), "legacy storage material survives unchanged");
+  });
+  assert.ok(new Int16Array(pack({ ...data, mat: null }).vert.buffer).every((v, i) => i % 14 !== 9 || v === 0));
+
+});
+
+
+
+// Evaluate the actual backend layout declarations and the small, pure vertex
+// expressions at this transport boundary. This is not a WGSL compiler/GPU test:
+// the independent f32 round-trip above and rendered checks cover those layers.
+function wgxVertexTransport() {
+  const backend = read("js/render/webgpu/wgx.js"), shader = read("js/render/webgpu/wgsl-chunks.js");
+  const declaration = (name) => {
+    const found = new RegExp(`const ${name} = ([\\s\\S]*?);`).exec(backend);
+    assert.ok(found, `backend declaration ${name} must exist`);
+    return found[1];
+  };
+  const stride = vm.runInNewContext(declaration("VERTEX_STRIDE"));
+  const layout = (name) => JSON.parse(JSON.stringify(vm.runInNewContext(`(${declaration(name)})`, { VERTEX_STRIDE: stride })));
+  const input = /@location\((\d+)\)\s+aNrm\s*:\s*vec(\d)<f32>/.exec(shader);
+  assert.ok(input, "vertex normal input must be declared");
+  const expression = (lhs) => {
+    const found = new RegExp(`\\b${lhs.replaceAll(".", "\\.")}\\s*=\\s*([^;]+);`).exec(shader);
+    assert.ok(found, `vertex expression ${lhs} must exist`);
+    return found[1];
+  };
+  // Both scalar expressions are valid JS arithmetic too. Execute their source,
+  // rather than recopying the decode scale, selection predicate or fallback.
+  const decode = new vm.Script(expression("packedCarId"));
+  const select = new vm.Script(expression("o.matId"));
+  const normal = expression("o.nrm").split("*").map((term) => term.trim());
+  const normalLayout = layout("VERTEX_POS_LAYOUT").attributes.find((a) => a.shaderLocation === Number(input[1]));
+  assert.ok(normalLayout, "vertex input must have a bound layout attribute");
+  const format = /^snorm(\d+)x(\d)$/.exec(normalLayout.format);
+  assert.ok(format, "normal fetch requires a signed normalized vector");
+  assert.equal(Number(format[1]), 16, "normal components consume two bytes");
+  assert.equal(Number(format[2]), Number(input[2]), "pipeline and shader must agree on the normal width");
+  const shadow = layout("SHADOW_VERTEX_LAYOUT");
+  const lit = layout("VERTEX_POS_LAYOUT");
+  assert.equal(lit.arrayStride, stride);
+  assert.equal(shadow.arrayStride, stride);
+  assert.deepEqual(shadow.attributes, [lit.attributes.find((a) => a.shaderLocation === 0)],
+    "shadow uses exactly the same position fetch, without consuming the packed normal lane");
+  return (packed, vertex, pulledId, matrix) => {
+    const bytes = new DataView(packed.vert.buffer, packed.vert.byteOffset, packed.vert.byteLength);
+    const values = Array.from({ length: Number(input[2]) }, (_, c) =>
+      Math.fround(Math.max(-1, bytes.getInt16(vertex * stride + normalLayout.offset + c * 2, true) / 32767)));
+    const aNrm = Object.fromEntries([..."xyzw"].map((name, c) => [name, values[c]]));
+    const context = vm.createContext({ aNrm, pulled: { x: pulledId }, floor: Math.floor,
+      select: (a, b, condition) => condition ? b : a });
+    context.packedCarId = decode.runInContext(context);
+    const matId = select.runInContext(context);
+    // Interpret matrix-vector multiplication with explicit dimensions. A vec4
+    // normal (including its material lane) cannot silently pass as a vec3.
+    assert.equal(normal.length, 2, "normal transform must remain one matrix-vector product");
+    const vector = (term) => {
+      if (term === "nm") return matrix;
+      const swizzle = /^aNrm\.([xyzw]+)$/.exec(term);
+      assert.ok(swizzle, `unsupported normal operand ${term}`);
+      return [...swizzle[1]].map((component) => aNrm[component]);
+    };
+    const left = vector(normal[0]), right = vector(normal[1]);
+    assert.equal(left.length, 3); assert.equal(right.length, 3);
+    const nrm = left.map((row) => row.reduce((sum, value, c) => sum + value * right[c], 0));
+    const position = shadow.attributes[0];
+    assert.equal(position.format, "float32x3");
+    const shadowPos = Array.from({ length: 3 }, (_, c) =>
+      bytes.getFloat32(vertex * shadow.arrayStride + position.offset + c * 4, true));
+    return { matId, nrm, shadowPos };
+  };
+}
+
+test("WGX vertex transport delivers classified ids and rotates normals independently of normal.w", () => {
+  const { pack } = wgxCarPacking(), transport = wgxVertexTransport();
+  const ids = Array.from({ length: 66 }, (_, i) => i + 20).concat([0, 15.4, 16, 19.5, 85.5, 86]);
+  const data = carIdMesh(ids), packed = pack(data);
+  const identity = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], yaw = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]];
+  const base = transport(packed, 0, 21, identity).nrm;
+  ids.forEach((id, i) => {
+    const pulled = i < 66 ? 21 : packed.attr[i * 4];
+    const result = transport(packed, i, pulled, yaw);
+    assert.equal(result.matId, i < 66 ? id : pulled,
+      `vertex ${i}: packed car classification must bypass stuck vertex_index, non-cars retain storage`);
+    assert.deepEqual(result.shadowPos, Array.from(data.pos.slice(i * 3, i * 3 + 3)),
+      `vertex ${i}: shadow fetch must preserve the authored position`);
+    assert.deepEqual(result.nrm, [base[2], base[1], -base[0]],
+      `vertex ${i}: material padding must not affect the transformed normal`);
+  });
+});
+
+
+test("WGX indexed expansion preserves packed car surface bytes through triangle reordering", () => {
+  const { pack, expand, stride } = wgxCarPacking(), packed = pack(carIdMesh([21, 41, 25]));
+  const indices = Uint16Array.from([2, 1, 0, 0, 1, 2]), order = [2, 0, 1, 0, 2, 1];
+  const expanded = expand(packed.vert, packed.attr, indices);
+  const source = new Uint8Array(packed.vert.buffer), result = new Uint8Array(expanded.vert.buffer);
+  assert.equal(expanded.count, indices.length);
+  order.forEach((vertex, i) => {
+    assert.deepEqual(Array.from(result.slice(i * stride, (i + 1) * stride)), Array.from(source.slice(vertex * stride, (vertex + 1) * stride)), "expanded triangles retain all packed lanes bit-for-bit");
+    assert.equal(expanded.attr[i * 4], packed.attr[vertex * 4], "storage sidecar follows the same reordered vertex");
+  });
+});

@@ -1445,7 +1445,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /surfaceId <= 90/);
   // Every livery-finish surface must exist in WGSL too — a finish implemented
   // on GLX alone is invisible on WebGPU and nothing else would catch it.
-  for (const id of [28, 29, 30, 31, 33])
+  for (const id of [28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44])
     assert.match(CHUNKS_SOURCE, new RegExp("surfaceId == " + id), "WGX is missing surface " + id);
   assert.match(CHUNKS_SOURCE, /wetSheen/);
   assert.match(CHUNKS_SOURCE, /fn roadMarkings\(/);
@@ -2097,7 +2097,12 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   DERIV.lastIndex = 0;
 
   // …and the footprint must reach every consumer as a parameter.
-  for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
+  // World-position derivatives also drive the hammered cotangent frame.
+  // Pin their inputs and reuse explicitly; the control-flow walk above still
+  // requires every derivative to precede the first branch in fs_main.
+  for (const re of [/let hmDP1 = dpdx\(in\.wpos\);/,
+                    /let hmDP2 = dpdy\(in\.wpos\);/,
+                    /let fwWpos = abs\(hmDP1\) \+ abs\(hmDP2\);/,
                     /let fwTrkAttr = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
                     /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos\);/,
                     /applyMaterialTexNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn, NmatPre\);/,
