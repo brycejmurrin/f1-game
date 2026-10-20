@@ -1350,7 +1350,7 @@ function buildLiveryCreator(container, team) {
     ["COCKPIT SURROUND FINISH", "cockpitFinish"], ["NUMBER BOARD FINISH", "boardFinish"]]) {
     const r = pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
     if (key === "finFinish") deps.push({ row: r, when: needFin, why: NO_FIN });
-    if (key === "deflectorFinish") deps.push({ row: r, when: needDeflectors, why: "Needs wheel deflectors — choose a WHEELS part that includes them" });
+    if (key === "deflectorFinish") deps.push({ row: r, when: needDeflectors, why: "Needs wheel deflectors — use FITTED in WHEELS STYLE with a WHEELS part that includes them" });
   }
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
