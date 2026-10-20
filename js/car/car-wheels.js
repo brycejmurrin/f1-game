@@ -283,14 +283,97 @@ const CarWheels = (function () {
       // player's and the AI teammate's alike); livery sidewallInk paints the lettering rings below.
       const BAND = bandColor || [0.85, 0.10, 0.08];
       const bandWidth = tyreStyle && tyreStyle.bandWidth != null ? tyreStyle.bandWidth : 0.09;
+      // bandArcs (B·D6): 0 full ring; 2 / 4 split the band into
+      // arcs with a gap between each, the 2019+ Pirelli sidewall. letters: 1
+      // white glyph blocks in each gap, 2 a big lettering ring inboard of the
+      // band all the way round (the 1970s raised-letter wall).
+      const bandArcs = tyreStyle && (tyreStyle.bandArcs === 2 || tyreStyle.bandArcs === 4) ? tyreStyle.bandArcs : 0;
+      const letters = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.letters) || 0)));
+      const gapHalf = bandArcs === 2 ? 0.42 : 0.26;
+      const inGap = (a) => {
+        if (!bandArcs) return false;
+        const step = (Math.PI * 2) / bandArcs;
+        const d = ((a - Math.PI / 2) % step + step) % step;
+        return d < gapHalf || d > step - gapHalf;
+      };
+      const outerB = 0.96 * edgeRm, innerB = Math.max(0.76 * edgeRm, outerB - bandWidth);
+      const GLYPH = [0.95, 0.95, 0.96];
+      // D6 decals are CLOSED slabs (fit pass): a single-faced sheet 4 mm off the wall is an
+      // open, floating piece. Front quad f → back quad b; every face winds away from the
+      // slab's centroid; skipAD / skipBC drop the side shared with a welded neighbour.
+      const slab = (f, b, col, skipAD, skipBC) => {
+        const ref = [0, 1, 2].map((k) => (f[0][k] + f[1][k] + f[2][k] + f[3][k] + b[0][k] + b[1][k] + b[2][k] + b[3][k]) / 8);
+        const face = (q) => {
+          const u = [0, 1, 2].map((k) => q[1][k] - q[0][k]), v = [0, 1, 2].map((k) => q[3][k] - q[0][k]);
+          const m = [0, 1, 2].map((k) => (q[0][k] + q[2][k]) / 2 - ref[k]);
+          const d = (u[1] * v[2] - u[2] * v[1]) * m[0] + (u[2] * v[0] - u[0] * v[2]) * m[1] + (u[0] * v[1] - u[1] * v[0]) * m[2];
+          if (d > 0) addQuad(out, q[0], q[1], q[2], q[3], col, SURFACES.rubber);
+          else addQuad(out, q[3], q[2], q[1], q[0], col, SURFACES.rubber);
+        };
+        face(f); face(b); face([f[0], f[1], b[1], b[0]]); face([f[2], f[3], b[3], b[2]]);
+        if (!skipBC) face([f[1], f[2], b[2], b[1]]);
+        if (!skipAD) face([f[3], f[0], b[0], b[3]]);
+      };
+      // An annular sector on a sidewall: proud face at xF, rooted at xB inside the rubber.
+      const sector = (xF, xB, r0, r1, a0, a1, col, skipAD, skipBC) => {
+        const Q = (x) => [[x, cy + r1 * Math.cos(a0), cz + r1 * Math.sin(a0)], [x, cy + r1 * Math.cos(a1), cz + r1 * Math.sin(a1)],
+          [x, cy + r0 * Math.cos(a1), cz + r0 * Math.sin(a1)], [x, cy + r0 * Math.cos(a0), cz + r0 * Math.sin(a0)]];
+        slab(Q(xF), Q(xB), col, skipAD, skipBC);
+      };
+      // A row of glyph blocks along an arc: alternating widths read as a word.
+      const glyphRow = (xF, xB, aMid, span, r0, r1, n) => {
+        for (let g = 0; g < n; g++) {
+          const t0 = aMid - span / 2 + (g / n) * span, w = (span / n) * (g % 3 === 1 ? 0.45 : 0.72);
+          sector(xF, xB, r * r0, r * r1, t0, t0 + w, GLYPH);
+        }
+      };
       for (const bs of [[x0, -1], [x1, 1]]) {
         const xb = bs[0] + bs[1] * 0.004;
+        // Split band: closed arc slabs 2.5 mm proud (a sheet at 4 mm floated); full ring unchanged.
+        const xF = bs[0] + bs[1] * 0.0025, xB = bs[0] - bs[1] * 0.002;
+        const segIn = (i) => !inGap(((i + 0.5) / SEG) * Math.PI * 2);
         for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+          if (bandArcs) {
+            if (segIn(i)) sector(xF, xB, r * innerB, r * outerB, a0, a1, BAND, segIn((i + SEG - 1) % SEG), segIn((i + 1) % SEG));
+            continue;
+          }
           const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-          const outer = 0.96 * edgeRm, inner = Math.max(0.76 * edgeRm, outer - bandWidth);
-          const A = P(r * outer, a0), B = P(r * outer, a1), C = P(r * inner, a1), D = P(r * inner, a0);
+          const A = P(r * outerB, a0), B = P(r * outerB, a1), C = P(r * innerB, a1), D = P(r * innerB, a0);
           addQuad(out, A, B, C, D, BAND, SURFACES.rubber);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
+        }
+        if (letters === 1 && bandArcs) {
+          for (let k = 0; k < bandArcs; k++) {
+            glyphRow(xF, xB, Math.PI / 2 + k * (Math.PI * 2) / bandArcs, gapHalf * 1.5,
+                     (outerB + innerB) / 2 - 0.03, (outerB + innerB) / 2 + 0.03, 5);
+          }
+        } else if (letters === 2) {
+          for (let k = 0; k < 4; k++) {
+            glyphRow(xF, xB, k * Math.PI / 2 + Math.PI / 4, 0.95, innerB - 0.085, innerB - 0.015, 7);
+          }
+        }
+      }
+      // rimGuard (D6): a proud bead ring in the band colour where the tyre
+      // meets the rim, just outboard of the rim lip so the two never overlap.
+      if (tyreStyle && tyreStyle.rimGuard) {
+        for (const bs of [[x0, -1], [x1, 1]]) {
+          for (let i = 0; i < SEG; i++) {   // a closed ring: no side faces between segments
+            const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+            sector(bs[0] + bs[1] * 0.007, bs[0] + bs[1] * 0.002, r * 0.705, r * 0.735, a0, a1, BAND, true, true);
+          }
+        }
+      }
+      // sipes (D6): directional chevrons across the tread, a shade lighter
+      // than the rubber — how a wet tyre reads from behind.
+      if (tyreStyle && tyreStyle.sipes) {
+        const SIPE = [0.30, 0.30, 0.32], N = 18, xm = (x0 + x1) / 2;
+        for (let k = 0; k < N; k++) {
+          const a = (k / N) * Math.PI * 2, rr = r * 1.004, hw = 0.022;
+          const P = (x, t, R) => [x, cy + R * Math.cos(t), cz + R * Math.sin(t)];
+          const Q = (xa, xb2, R) => [P(xa, a, R), P(xb2, a + 0.12, R), P(xb2, a + 0.12 + hw * 3, R), P(xa, a + hw * 3, R)];
+          for (const [xa, xb2] of [[x0 + (x1 - x0) * SH2_W, xm], [x1 - (x1 - x0) * SH2_W, xm]]) {   // flat crown only: past the shoulder a sipe floats
+            slab(Q(xa, xb2, rr), Q(xa, xb2, r * 0.996), SIPE);   // closed: rooted 1.4 mm into the tread
+          }
         }
       }
       // Raised sidewall lettering ring(s): proud dark annulus inboard of the band
@@ -344,6 +427,37 @@ const CarWheels = (function () {
           }
         }
       }
+      // B·D4 (opt-in, default off): brakes `drum` — the 2017–21 carbon
+      // "cake tin" round the disc. A carbon band at 0.80 rimR the width of the
+      // barrel, closed on each face between the hub and the band, with 16 vent
+      // slots near its rim and a foil lip at the OD — read through the spokes.
+      if (!useCover && brakeStyle && brakeStyle.drum) {
+        // Round 2: a pale weave face drilled with three rings of cooling holes
+        // and a wide gold heat-foil band at the OD — the carbon disc behind an
+        // open rim is a dark plain ring, so the drum must read lighter and busy.
+        const dR = Math.max(rimR * 0.84, rotorOuter + 0.012), dIn = rimR * (wheelStyle && wheelStyle.blownAxle ? 0.46 : 0.25);
+        const DRUM = [0.34, 0.34, 0.37], FOIL = [0.80, 0.64, 0.26], SLOT = [0.02, 0.02, 0.025];
+        for (let i = 0; i < SEG; i++) {
+          const a0 = i / SEG * Math.PI * 2, a1 = (i + 1) / SEG * Math.PI * 2;
+          const E = (rad, a, xx) => [xx, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, E(dR, a0, x0 + 0.004), E(dR, a1, x0 + 0.004), E(dR, a1, x1 - 0.004), E(dR, a0, x1 - 0.004), FOIL, SURFACES.metal);
+          // Faces, foil and the bore share their edges with the band, so the
+          // drum is one closed ring (fit-audit OPEN: +1.8 m when the foil sat
+          // 2 mm proud and the bore was open).
+          addQuad(out, E(dIn, a1, x0 + 0.004), E(dIn, a0, x0 + 0.004), E(dIn, a0, x1 - 0.004), E(dIn, a1, x1 - 0.004), DRUM, SURFACES.carbon);
+          for (const xf of [x0 + 0.004, x1 - 0.004]) {
+            addQuad(out, E(dIn, a0, xf), E(dIn, a1, xf), E(dR * 0.80, a1, xf), E(dR * 0.80, a0, xf), DRUM, SURFACES.carbon);
+            addQuad(out, E(dR * 0.80, a0, xf), E(dR * 0.80, a1, xf), E(dR, a1, xf), E(dR, a0, xf), FOIL, SURFACES.metal);
+          }
+        }
+        // Holes are flat dark quads just outboard of each face: only that face is
+        // ever seen, and a box per hole put the drum over the triangle budget.
+        const H = 0.0055;
+        for (const xf of [x0 + 0.004 - 0.0035, x1 - 0.004 + 0.0035]) for (const [rf, n] of [[0.38, 12], [0.55, 18], [0.70, 24]]) for (let k = 0; k < n; k++) {
+          const a = k / n * Math.PI * 2 + rf, rr = dR * rf, hy = cy + rr * Math.cos(a), hz = cz + rr * Math.sin(a);
+          addQuad(out, [xf, hy - H, hz - H], [xf, hy - H, hz + H], [xf, hy + H, hz + H], [xf, hy + H, hz - H], SLOT, SURFACES.carbon);
+        }
+      }
       const HUBCAP = RC;                   // raised boss: lighter than the dish floor
       // The deep cover's floor sits OUTBOARD of the plane the hubcap and nut
       // were placed on, so both were buried behind it and gunNut:1 drew
@@ -352,9 +466,34 @@ const CarWheels = (function () {
       // Open hub is smaller so the rotor shows through the spoke gaps; cover
       // keeps the wide boss that sat on the old dish floor.
       const hubFrac = useCover ? 0.46 : 0.22;
+      // B·D4 (opt-in, default off): blownAxle draws the 2017–21 hollow
+      // axle — a wide hub ring round a dark bore, no centre nut — on an open rim.
+      const blownAxle = !useCover && !!(wheelStyle && wheelStyle.blownAxle);
+      const spokeSplit = !!(wheelStyle && wheelStyle.spokeSplit);
       for (const ss of [[x0, -1], [x1, 1]]) {
-        const dir = ss[1], hubX = ss[0] + dir * hubLift, xc0 = hubX - dir * 0.014, hcR = rimR * hubFrac, ctr = [xc0, cy, cz];
-        for (let i = 0; i < SEG; i++) {
+        const dir = ss[1], hubX = ss[0] + dir * hubLift, xc0 = hubX - dir * 0.014, hcR = rimR * (blownAxle ? 0.44 : hubFrac), ctr = [xc0, cy, cz];
+        if (blownAxle) {
+          // Bore radius 0.55 hcR (~43 mm) — the axle's open exit; a dark tube
+          // 60 mm deep behind a machined lip, the ring carrying the spokes.
+          // Round 2: wider ring (0.44 rimR), bore 0.62 of it, the lip in the nut
+          // colour and six drive pegs round the ring so the hub reads at 3/4.
+          const boreR = hcR * 0.62, BORE = [0.02, 0.02, 0.025];
+          const lipC = (wheelStyle && wheelStyle.nut) || LIP;
+          for (let i = 0; i < SEG; i++) {
+            const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+            const P = (rad, a, x) => [x, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+            addQuad(out, P(boreR, a0, xc0), P(boreR, a1, xc0), P(hcR, a1, xc0), P(hcR, a0, xc0), HUBCAP, RS);
+            addQuad(out, P(boreR, a0, xc0 + dir * 0.012), P(boreR * 1.18, a0, xc0 + dir * 0.012),
+                         P(boreR * 1.18, a1, xc0 + dir * 0.012), P(boreR, a1, xc0 + dir * 0.012), lipC, SURFACES.metal);
+            addQuad(out, P(boreR, a0, xc0 + dir * 0.012), P(boreR, a1, xc0 + dir * 0.012),
+                         P(boreR, a1, xc0 - dir * 0.06), P(boreR, a0, xc0 - dir * 0.06), BORE, SURFACES.carbon);
+            addTri(out, [xc0 - dir * 0.06, cy, cz], P(boreR, a0, xc0 - dir * 0.06), P(boreR, a1, xc0 - dir * 0.06), BORE, SURFACES.carbon);
+          }
+          for (let k = 0; k < 6; k++) {
+            const a = k / 6 * Math.PI * 2 + 0.4, pr = (boreR * 1.18 + hcR) / 2;
+            addBox(out, xc0 + dir * 0.008, cy + pr * Math.cos(a), cz + pr * Math.sin(a), 0.016, 0.014, 0.014, lipC, SURFACES.metal);
+          }
+        } else for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
           addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
                            [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, RS);   // single face (cull-off → opaque both sides)
@@ -365,7 +504,9 @@ const CarWheels = (function () {
         // when it sets a value (factory rim signatures stay intact).
         const nutCol = (wheelStyle && wheelStyle.nut) || (tyreStyle && tyreStyle.nut) || NUT;
         const gunNut = (wheelStyle && wheelStyle.gunNut) || (tyreStyle && tyreStyle.gunNut) ? 1 : 0;
-        if (!gunNut) {
+        if (blownAxle) {
+          // no centre nut: the bore IS the hub
+        } else if (!gunNut) {
           addBox(out, hubX - dir * 0.002, cy, cz, 0.026, Math.max(hcR * 0.55, rimR * 0.12), Math.max(hcR * 0.55, rimR * 0.12), nutCol, SURFACES.metal);
         } else {
           const nx = hubX - dir * 0.001;
@@ -406,10 +547,29 @@ const CarWheels = (function () {
           const ri = hcR * 1.08, ro = rimR * 0.90;
           const xsF = ss[0] + dir * 0.026, xsB = ss[0] + dir * 0.026 - dir * thick;
           const P = (xs, rad, sgn) => [xs, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
+          if (spokeSplit) {
+            // Y-split (BBS 2022+ forged mag): a trunk to 55 % of the span, then
+            // two thinner tines fanning ±0.19 rad to the lip — 2N tips at the rim.
+            const rm = ri + (ro - ri) * 0.55;
+            spokeBlade(xsF, xsB, [rm, a], [ri, a], hw);
+            for (const da of [-0.19, 0.19]) spokeBlade(xsF, xsB, [rm, a], [ro, a + da], hw * 0.70);
+            continue;
+          }
           addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsF, ro, -1), P(xsF, ri, -1), HUBCAP, RS);
           addQuad(out, P(xsB, ri, -1), P(xsB, ro, -1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, RS);
           addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, RS);
           addQuad(out, P(xsF, ri, -1), P(xsB, ri, -1), P(xsB, ro, -1), P(xsF, ro, -1), HUBCAP, RS);
+        }
+        // An extruded blade between two polar points [rad, angle] on the face.
+        function spokeBlade(xsF, xsB, A, B, hw) {
+          const ay = cy + A[0] * Math.cos(A[1]), az = cz + A[0] * Math.sin(A[1]);
+          const by = cy + B[0] * Math.cos(B[1]), bz = cz + B[0] * Math.sin(B[1]);
+          const L = Math.hypot(by - ay, bz - az) || 1, ny = -(bz - az) / L * hw, nz = (by - ay) / L * hw;
+          const Q = (xs, py, pz, sg) => [xs, py + ny * sg, pz + nz * sg];
+          addQuad(out, Q(xsF, ay, az, 1), Q(xsF, by, bz, 1), Q(xsF, by, bz, -1), Q(xsF, ay, az, -1), HUBCAP, RS);
+          addQuad(out, Q(xsB, ay, az, -1), Q(xsB, by, bz, -1), Q(xsB, by, bz, 1), Q(xsB, ay, az, 1), HUBCAP, RS);
+          addQuad(out, Q(xsF, ay, az, 1), Q(xsF, by, bz, 1), Q(xsB, by, bz, 1), Q(xsB, ay, az, 1), HUBCAP, RS);
+          addQuad(out, Q(xsF, ay, az, -1), Q(xsB, ay, az, -1), Q(xsB, by, bz, -1), Q(xsF, by, bz, -1), HUBCAP, RS);
         }
         // Rim TAPE: face band + short OD bead so the set marks read from a ¾ view.
         if (wheelStyle && wheelStyle.tape) {

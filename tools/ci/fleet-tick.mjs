@@ -5,13 +5,17 @@
  * @skill agent-fleet
  *
  *   node tools/ci/fleet-tick.mjs [--sessions <saved list_sessions page>] [--state artifacts/fleet-watch/state.json] [--dry]
+ *                                [--summary <file>]
  *
  * Runs `pr-board.mjs --json` (which already runs needs-sync.mjs for every SYNC/FIX row and embeds the verdict as
  * `sync`), `ci-watch.mjs --once` for the deploy tip and `--pages --once`, optionally `fleet-flags` on a saved
  * `list_sessions` page. Compares with the state file, writes the new state (unless --dry) and prints ONLY changed rows
  * as one-line JSON (cap 40) plus a `= tick …` summary line; no change is one line.
  * State: { tick, prs: {<n>: {state,sha,ci,mergeable,suggest,hold,gate,plan,fleet,sync}}, ship: {sha,line},
- * pages: {line}, sessions: {<id>: flags[]} }. Pure parts (`diffState`, `rowOf`) are unit-tested.
+ * pages: {line}, sessions: {<id>: flags[]} }. Pure parts (`diffState`, `rowOf`, `summaryMd`) are unit-tested.
+ * --summary appends a Markdown digest (the `= tick` line, ship/Pages, changed rows, the whole board) to <file>; the
+ * `tick` job in .github/workflows/fleet.yml passes $GITHUB_STEP_SUMMARY (docs/plans/2026-10-19-fleet-redesign.md §4B
+ * item 6: the watch runs as an Actions job, with the Actions token, not a session).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -73,6 +77,21 @@ export function render({ rows, first }, tick) {
   return [...shown, sum];
 }
 
+const cell = (v) => (v === null || v === undefined || v === "" ? "-" : String(v).replace(/\|/g, "\\|").replace(/</g, "&lt;").replace(/\n/g, " "));
+const SUMMARY_COLS = ["state", "sha", "ci", "suggest", "sync", "plan", "hold", "fleet"];
+/** Markdown digest for a CI step summary. Pure. `lines` = render()'s output; `cur` = the new state. */
+export function summaryMd(lines, cur) {
+  const out = [`### Fleet tick ${cur.tick ?? "?"}`, "", `\`${lines.at(-1)}\``, "",
+    `- ship \`${cell(cur.ship?.sha)}\`: ${cell(cur.ship?.line)}`, `- pages: ${cell(cur.pages?.line)}`, ""];
+  if (lines.length > 1) out.push("Changed since the last tick:", "", "```", ...lines.slice(0, -1), "```", "");
+  const prs = Object.entries(cur.prs || {}).sort((a, b) => +a[0] - +b[0]);
+  out.push(`<details><summary>Board: ${prs.length} open PR${prs.length === 1 ? "" : "s"}</summary>`, "",
+    `| PR | ${SUMMARY_COLS.join(" | ")} |`, `|${"---|".repeat(SUMMARY_COLS.length + 1)}`,
+    ...prs.map(([n, r]) => `| #${n} | ${SUMMARY_COLS.map((c) => cell(c === "hold" ? (r.hold ? "HOLD" : "") : r[c])).join(" | ")} |`),
+    "", "</details>", "");
+  return out.join("\n");
+}
+
 const run = (args) => {
   const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 });
   return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
@@ -111,7 +130,10 @@ function main(argv) {
   const err = cur.boardError; delete cur.boardError;
   const d = diffState(prev, cur);
   if (err) d.rows.unshift({ k: "error", msg: err });
-  console.log(render(d, cur.tick).join("\n"));
+  const lines = render(d, cur.tick);
+  console.log(lines.join("\n"));
+  const summary = val("--summary");
+  if (summary) fs.appendFileSync(summary, summaryMd(lines, cur));
   if (!argv.includes("--dry")) { fs.mkdirSync(path.dirname(stateFile), { recursive: true }); fs.writeFileSync(stateFile, JSON.stringify(cur, null, 1)); }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main(process.argv.slice(2));

@@ -352,7 +352,7 @@ const GameStore = (function () {
   const MIRROR_RETRY_MS = 2000;     // one automatic retry; a later write/pagehide retries retained failures again
   const AUTHORED_KEY = /^apex26\.(?:customTeam|customLogo|(?:parts|setup|setupPresets)\.[A-Za-z0-9_-]{1,64}|livery\.(?:custom\.)?[A-Za-z0-9_-]{1,64})$/;
   const AUTHORED_ROW_BYTES = 512 * 1024, AUTHORED_TOTAL_BYTES = 2 * 1024 * 1024, AUTHORED_KEYS = 96;
-  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, settled: false, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
+  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, inFlight: 0, settled: false, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
   // Compare the last COMMITTED/restored payload, not permanent key ownership:
@@ -471,6 +471,7 @@ const GameStore = (function () {
     _mirrorPending = new Map();
     mirror.pending = 0;
     if (!batch.size) return Promise.resolve(false);
+    mirror.inFlight = batch.size;
     const work = mirrorOpen().then((db) => new Promise((res) => {
       if (!db) { res(false); return; }
       let t;
@@ -546,7 +547,7 @@ const GameStore = (function () {
       return ok;
     });
     let flight;
-    flight = work.finally(() => { if (_mirrorFlight === flight) _mirrorFlight = null; });
+    flight = work.finally(() => { if (_mirrorFlight === flight) { _mirrorFlight = null; mirror.inFlight = 0; } });
     _mirrorFlight = flight;
     return flight;
   }
@@ -644,13 +645,18 @@ const GameStore = (function () {
   }
 
   mirror.ready = mirrorRestore();
-  store.mirror = mirror;           // { supported, restored, flushed, failed, pending, ready } — __apex.persistState()
+  store.mirror = mirror;           // pending = queued keys; inFlight = uncommitted batch keys; flushed = committed operations — __apex.persistState()
   store.mirrorPolicy = Object.freeze({ authoredRowBytes: AUTHORED_ROW_BYTES, authoredTotalBytes: AUTHORED_TOTAL_BYTES, authoredKeys: AUTHORED_KEYS,
     includes: (key) => mirrorKey(fullKey(key)) });
   store.mirrorFlush = mirrorFlush; // flush the debounced batch now (tests; pagehide)
 
-  // A tab closing mid-debounce would drop the last burst; pagehide is the one
-  // reliable signal on mobile (unload never fires on iOS).
+  // Flush before backgrounding or leaving while lifecycle events are available.
+  // This is best effort: an asynchronous commit can still be interrupted.
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") mirrorFlush();
+    });
+  }
   if (typeof window !== "undefined" && window.addEventListener) {
     window.addEventListener("pagehide", () => { mirrorFlush(); });
   }

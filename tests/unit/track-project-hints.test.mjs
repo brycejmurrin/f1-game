@@ -1,7 +1,7 @@
 /* track-project-hints.test.mjs — Tracks.project() recovers (s, lateral) from a world point, with
  * and without a hint, across several circuits, a lap seam and wrong hints (R3-21).
  *
- * WHY THIS EXISTS. tests/specs/projection.spec.js drives `__apex.projTest`, which hands project()
+ * WHY THIS EXISTS. the retired browser projection spec drove `__apex.projTest`, which hands project()
  * the TRUE s as its hint (js/agent/apex-track.js), so on one circuit (monza) the hinted window
  * always contains the answer: a perturbed hint, a hint across the lap seam and a hint a whole lap
  * away were never exercised. This runs the real track build in a VM (no browser) over several
@@ -92,6 +92,14 @@ for (const id of CIRCUITS) {
     const q = (lat) => T.project(track, smp.p[0] + smp.r[0] * lat, smp.p[2] + smp.r[2] * lat, 0.3 * L);
     assert.ok(q(5).lat > 3.5, `right of centre projects ${q(5).lat.toFixed(2)}`);
     assert.ok(q(-5).lat < -3.5, `left of centre projects ${q(-5).lat.toFixed(2)}`);
-    assert.ok(Math.abs(q(0).lat) < 0.25 && q(0).dist < 0.5, "a centreline point projects to lateral ~0");
+  });
+
+  test(`${id}: a point on the centreline projects to lateral ~0`, () => {
+    const L = track.total, smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+    for (const f of [0.1, 0.35, 0.6, 0.85]) {
+      T.sample(track, f * L, smp);
+      const p = T.project(track, smp.p[0], smp.p[2], f * L);
+      assert.ok(Math.abs(p.lat) < 0.25 && p.dist < 0.5, `frac ${f}: lateral ${p.lat.toFixed(2)}, dist ${p.dist.toFixed(2)}`);
+    }
   });
 }

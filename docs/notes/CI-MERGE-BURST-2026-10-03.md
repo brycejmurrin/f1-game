@@ -43,7 +43,7 @@
    not to a personal account's repository
    (https://github.blog/changelog/2023-07-12-pull-request-merge-queue-is-now-generally-available/).
 4. **Ready full-tier cap** (2026-10-06): Merge Desk runs
-   `node tools/ci/ready-full-cap.mjs` before mark-ready / full-tier launch and
+   `node ready-full-cap (deleted, #3013)` before mark-ready / full-tier launch and
    refuses when ≥3 ready PRs already have in-progress or queued full-tier
    `ci.yml`. Draft=fast stays uncapped; ready=full is unchanged — only how many
    ready full-tier runs may stack. GitHub concurrency groups only allow one

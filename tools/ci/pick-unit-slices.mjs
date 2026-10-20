@@ -214,7 +214,7 @@ const PAGE_SOURCES = [
   /^js\/race\/pit-lane\.js$/, /^js\/race\/race-control\.js$/,
   // 15-F1 (2026-10-10): the other files the ADAPTED specs assert. The VM boots the
   // whole manifest, so these are the ones a spec reads by name: logging.spec ->
-  // core/log.js; projection.spec -> spline.js; pit-lane.spec -> pit.js / line.js /
+  // core/log.js; track-project-hints.test -> spline.js; pit-lane.spec -> pit.js / line.js /
   // space.js; physics-fixes + autopilot -> js/physics/**; agent-drive-bench -> js/agent/**.
   /^js\/core\/log\.js$/, /^js\/track\/core\/(space|spline|pit|line)\.js$/,
   /^js\/physics\//, /^js\/agent\//,

@@ -331,10 +331,17 @@ const CamFeel = (function () {
     tgt[0] += n2 * amt * 0.6; tgt[1] += n3 * amt * 0.6;
   }
 
+  // Last opacity written. paintVignette runs every race frame and its node sits under
+  // #overlay, which UiLayers observes for style mutations: an unchanged or sub-1 % write
+  // still queues a record that drops the nav memo (layers.js navDirty), so skip it.
+  let _vigOp = "";
+  function setVigOpacity(v) {
+    if (v !== _vigOp) { _vigOp = v; _vigEl.style.opacity = v; }
+  }
   function paintVignette(amt) {
     if (typeof document === "undefined") return;
     if (!(amt > 0.01)) {
-      if (_vigEl) _vigEl.style.opacity = "0";
+      if (_vigEl) setVigOpacity("0");
       return;
     }
     if (!_vigEl) {
@@ -348,7 +355,8 @@ const CamFeel = (function () {
         "rgba(0,0,0,0) 42%,rgba(0,0,0,.55) 100%)";
       (document.getElementById("overlay") || document.body).appendChild(_vigEl);
     }
-    _vigEl.style.opacity = String(clamp(amt, 0, 0.7));
+    // 1 % steps under a .12 s opacity transition: not a visible change.
+    setVigOpacity(String(Math.round(clamp(amt, 0, 0.7) * 100) / 100));
   }
 
   function freeLookState() {

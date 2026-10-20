@@ -26,9 +26,9 @@
  *                MERGE-HOLD, MAX_ARMED already armed, Plan items open
  * ARM and READY never fire on a row ready-gate.mjs --pr would refuse
  * (plan-open), nor on a MERGE-HOLD: line (#2737 / #2789, 2026-10-18).
- * The cap (ready-full-cap.mjs, MAX_LIVE = 8) is REPORTED, never a WAIT: since
- * 2026-10-16 (CI/CD review #2333 finding 7) GitHub's own `queue: max` lanes
- * bound the browser legs, and the cap sat at 13/3 while 12 ready PRs were open.
+ * There is no ready-PR cap: since 2026-10-16 (CI/CD review #2333 finding 7)
+ * GitHub's own `queue: max` lanes bound the browser legs; the cap tool was
+ * deleted in #3013.
  * Each ARM counts toward MAX_ARMED (2 repo-wide, any method). The
  * PLAN column is ready-gate.mjs's planVerdict of the PR body: done/items, or "-"
  * for a body with no ## Plan checklist (AGENTS.md rule 12).
@@ -36,21 +36,25 @@
  * reporting): the body's `fleet-status: <state> | <reason> | <utc>` line,
  * or the newest PR comment starting `fleet-status:` or `@orchestrator
  * NEEDS-DECISION:` when it is newer than the body line; state, age, reason.
+ * FL and SLOT (JSON `fleetLetter`, `slot`; `fleet` stays the report above, which
+ * fleet-tick.mjs reads) are the body's ```fleet block: the letter from `fleet:`,
+ * a letter `orchestrator:` or the slot; the slot from `slot:` or a `<letter>·<slot>`
+ * token in the block's title (ready-gate.mjs fleetIdentity; no extra API call).
  *
  *   node tools/ci/pr-board.mjs              # the table
- *   node tools/ci/pr-board.mjs --json       # rows + cap, for the skill
- *   node tools/ci/pr-board.mjs --pr 1234    # one PR (still measures the cap)
+ *   node tools/ci/pr-board.mjs --json       # rows, for the skill
+ *   node tools/ci/pr-board.mjs --pr 1234    # one PR
  *
  * Exit: 0 printed, 2 bad args (or --pr is not open into the deploy branch), 3 no token / API error.
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { api, measure as capMeasure, reportLine as capLine, DEPLOY, MAX_LIVE } from "./ready-full-cap.mjs";
-import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
+import { api, DEPLOY } from "./github-api.mjs";
+import { guardsVerdict, planVerdict, fleetIdentity } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
 
-export { DEPLOY, MAX_LIVE };
+export { DEPLOY };
 /** At most this many PRs armed repo-wide (AGENTS.md §Concurrent PRs, Merge Desk's hard gate). */
 export const MAX_ARMED = 2;
 /** The one merge method allowed (AGENTS.md MERGE-COMMIT-ONLY). */
@@ -140,15 +144,13 @@ export function ciState(runs) {
 const planOpen = (row) => !!(row.plan && row.plan.state === "open");
 
 /**
- * The decision for one row. Pure. `ctx.room` is how many more full-tier slots a
- * READY may take (default: ctx.cap.cap - ctx.cap.count).
+ * The decision for one row. Pure.
  * @param {{ draft:boolean, armed:boolean, mergeMethod?:string|null, mergeableState?:string|null, ci:string, gate:string }} row
- * @param {{ room?: number, armed?: number, cap?: { cap:number, count:number } }} [ctx]
+ * @param {{ armed?: number }} [ctx]
  *   ctx.armed: PRs armed repo-wide so far (ARM waits at MAX_ARMED).
  * @returns {{ action: string, why: string }}
  */
 export function decide(row, ctx = {}) {
-  const room = ctx.room ?? (ctx.cap ? Math.max(0, ctx.cap.cap - ctx.cap.count) : 0);
   const method = String(row.mergeMethod || "").toLowerCase();
   if (row.armed && method !== MERGE_METHOD) {
     return { action: "FOREIGN-ARM", why: `auto-merge armed with ${method || "an unknown method"}; only MERGE is allowed` };
@@ -174,8 +176,7 @@ export function decide(row, ctx = {}) {
   if (planOpen(row)) {
     return { action: "WAIT", why: `draft is green but ${row.plan.open.length} Plan item(s) are open (ready-gate refuses)` };
   }
-  // `room` is informational since 2026-10-16: the lanes in ci.yml bound the legs.
-  return { action: "READY", why: `draft, ci green, Structural guards passed${room < 1 ? " (full-tier cap reported full; lanes bound the legs)" : ""}` };
+  return { action: "READY", why: `draft, ci green, Structural guards passed` };
 }
 
 /** Just the verb. */
@@ -193,12 +194,11 @@ export function fullTierPassed(jobs = []) {
  * Rows from collected facts. Pure: inject what the API returned.
  * @param {Array<{ pr: object, runs?: object[], jobs?: object[], jobsRunId?: number, checkRuns?: object[] }>} items
  *   pr = the pulls/{n} object (needs number, title, draft, head.sha/ref, auto_merge, mergeable_state)
- * @param {{ cap?: { cap:number, count:number, ok?:boolean }, armed?: number }} [opts]
+ * @param {{ armed?: number }} [opts]
  *   armed = repository-wide initial count, including siblings omitted from items.
  */
 export function evaluate(items, opts = {}) {
-  const cap = opts.cap || { cap: MAX_LIVE, count: 0, ok: true };
-  const ctx = { cap, room: Math.max(0, cap.cap - cap.count),
+  const ctx = {
     armed: opts.armed ?? (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
   const rows = [];
   for (const it of [...(items || [])].sort((a, b) => a.pr.number - b.pr.number)) {
@@ -206,8 +206,11 @@ export function evaluate(items, opts = {}) {
     const ci = ciState(it.runs);
     const gate = guardsVerdict(it.checkRuns || []);
     const failing = [...new Set((it.jobs || []).filter((j) => BAD_JOB.has(j.conclusion)).map((j) => j.name))].sort();
+    const who = fleetIdentity(pr.body);
     const row = {
       number: pr.number,
+      fleetLetter: who.letter || "-",
+      slot: who.slot || "-",
       title: pr.title || "",
       branch: pr.head?.ref || "",
       draft: pr.draft === true,
@@ -227,24 +230,22 @@ export function evaluate(items, opts = {}) {
       url: pr.html_url || "",
     };
     const d = decide(row, ctx);
-    if (d.action === "READY") ctx.room -= 1;
     if (d.action === "ARM") ctx.armed += 1;
     rows.push({ ...row, suggest: d.action, why: d.why });
   }
-  const room = Math.max(0, cap.cap - cap.count);
-  return { rows, cap: { ok: room > 0, count: cap.count, cap: cap.cap, room } };
+  return { rows };
 }
 
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** The table plus a one-line footer. */
-export function render(result, { capLine: line, now = Date.now() } = {}) {
-  const { rows, cap } = result;
-  const head = ["PR", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "FLEET", "SUGGEST"];
+export function render(result, { now = Date.now() } = {}) {
+  const { rows } = result;
+  const head = ["PR", "FL", "SLOT", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "FLEET", "SUGGEST"];
   const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
   const fleet = (f) => (!f ? "-" : clip(`${f.state} ${ageLabel(f.at, now)}${f.reason ? `: ${f.reason}` : ""}`, 40));
   const body = rows.map((r) => [
-    `#${r.number}`, clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
+    `#${r.number}`, r.fleetLetter || "-", clip(r.slot || "-", 12), clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
     clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), fleet(r.fleet), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
   ]);
@@ -252,21 +253,19 @@ export function render(result, { capLine: line, now = Date.now() } = {}) {
   const w = head.map((_, i) => Math.max(...all.map((row) => row[i].length)));
   const fmt = (row) => row.map((c, i) => c.padEnd(w[i])).join("  ").trimEnd();
   const out = rows.length ? all.map(fmt) : ["no open PRs into " + DEPLOY];
-  out.push(`pr-board: ${rows.length} open PR(s); ${line || `${cap.count}/${cap.cap} ready full-tier live`}`);
+  out.push(`pr-board: ${rows.length} open PR(s)`);
   return out.join("\n");
 }
 
 /**
  * Gather every open PR into the deploy branch and evaluate. GET requests only.
  * Injectable `request` (a `pathQs` -> `{json}|{error}` function) for tests; the
- * default is ready-full-cap's api(), which sends a plain curl GET.
- * @param {{ request?: typeof api, run?: Function, env?: object, gh?: Function, only?: number|null, cap?: number }} [opts]
+ * default is github-api.mjs's api(), which sends a plain curl GET.
+ * @param {{ request?: typeof api, run?: Function, env?: object, gh?: Function, only?: number|null }} [opts]
  */
 export function measure(opts = {}) {
   const request = opts.request || ((p) => api(p, { run: opts.run, env: opts.env, gh: opts.gh }));
-  const fail = (error) => ({ ok: false, error, rows: [], cap: null });
-  const capV = capMeasure({ request, cap: opts.cap });
-  if (capV.error) return fail(capV.error);
+  const fail = (error) => ({ ok: false, error, rows: [] });
 
   // --pr limits expensive detail/CI reads, not the repository-wide armed cap.
   // The list includes auto_merge metadata; no sibling detail request is needed.
@@ -286,7 +285,7 @@ export function measure(opts = {}) {
     if (one.error) return fail(`PR #${n}: ${one.error}`);
     const pr = one.json || {};
     if (opts.only != null && (pr.state !== "open" || pr.base?.ref !== DEPLOY)) {
-      return { ok: false, badArgs: true, error: `PR #${n} is not open into ${DEPLOY}`, rows: [], cap: null };
+      return { ok: false, badArgs: true, error: `PR #${n} is not open into ${DEPLOY}`, rows: [] };
     }
     const sha = pr.head?.sha;
     if (!sha) return fail(`PR #${n}: no head sha`);
@@ -318,8 +317,8 @@ export function measure(opts = {}) {
     }
     items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [], comments });
   }
-  const result = evaluate(items, { cap: capV, armed: [...armedByPr.values()].filter(Boolean).length });
-  return { ok: true, ...result, capLine: capLine(capV) };
+  const result = evaluate(items, { armed: [...armedByPr.values()].filter(Boolean).length });
+  return { ok: true, ...result };
 }
 
 function parseArgs(argv) {
@@ -342,7 +341,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
-the worker's fleet-status report (state, age, reason), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
+the worker's fleet-status report (state, age, reason), the fleet block's letter (FL)
+and slot (SLOT), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
 Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
 Exit 0 printed, 2 bad args, 3 API/token.`);
   const args = parseArgs(argv);
@@ -360,9 +360,9 @@ Exit 0 printed, 2 bad args, 3 API/token.`);
   const sync = {};
   for (const r of v.rows) if (r.suggest === "SYNC" || r.suggest === "FIX") sync[r.number] = needsSync(r.branch);
   const syncLine = (n) => (sync[n].ok ? `${verdictLine(sync[n])} (${sync[n].why})` : `= sync needed: unknown (${sync[n].error})`);
-  if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)), cap: v.cap, line: v.capLine }, null, 2));
+  if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)) }, null, 2));
   else {
-    console.log(render(v, { capLine: v.capLine }));
+    console.log(render(v));
     for (const n of Object.keys(sync)) console.log(`#${n} ${syncLine(n)}`);
   }
 }

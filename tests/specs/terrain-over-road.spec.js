@@ -7,13 +7,15 @@
 // sample points across the whole lap — purely geometric, no rendering.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { auditTracks } from "../helpers/track-helpers.js";
+import { crossoverIds } from "../helpers/circuit-crossovers.js";
 import { createRequire } from "node:module";
 
 const { scanOverRoad, roadFails } = createRequire(import.meta.url)("../../tools/lib/over-road-scan.cjs");
 
 // Every circuit (derived from tools/manifest.cjs), or TRACK=<id> for one.
 const TRACKS = auditTracks();
-const CROSSOVER_TRACKS = new Set(["madrid", "suzuka", "zandvoort"]);
+// From the `crossover: true` def field (throws if a def has `bridges` without it).
+const CROSSOVER_TRACKS = new Set(crossoverIds());
 
 // A face poking this far above the asphalt counts as a defect. Small tolerance
 // absorbs banking/elevation interpolation noise and z-fight-scale slivers.
@@ -158,43 +160,6 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
     expect(typeof probe.gap, `Mexico terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m`).toBe("number");
     expect(probe.gap, `Mexico terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBeLessThanOrEqual(TOL);
   }
-});
-
-// RC2-21: tests/unit/terrain-falloff.test.mjs now carries a node twin of this Madrid check.
-// The browser copy stays until select-budget.test.mjs (not in this lane's globs) drops its 4 + roster pin to 3.
-test("Madrid terrain drops away from the road instead of forming a raised floor", async ({ page }) => {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  const terrain = await page.evaluate(async () => {
-    // LAZY_CIRCUIT meta stub has no path — hydrate before buildCenterline.
-    const idx = Tracks.LIST.findIndex((entry) => entry.id === "madrid");
-    const ensure = window.__apex && window.__apex.ensureCircuit;
-    if (!ensure) throw new Error("ensureCircuit not on __apex");
-    await ensure(idx);
-    const def = Tracks.LIST[idx];
-    const track = Tracks.buildCenterline(def);
-    const surface = TrackSurface.profile(def, track);
-    const k = Math.round(0.75 * track.n) % track.n;
-    const drop = (lat) => track.py[k] - surface.heightAt(k, lat);
-    return { flatTerrain: def.flatTerrain, drop8: drop(8), drop12: drop(12), drop20: drop(20), drop30: drop(30), drop40: drop(40) };
-  });
-
-  // THE RUN-OFF SHELF MOVED WHERE THE FALL-OFF STARTS, not whether it happens.
-  // b3acbb088 (2026-09-24) made the ground meet the verge just under its edge,
-  // hold flat to 12 m, and smoothstep back into the old fall-off by 30 m, so a
-  // car off the tarmac is not left hanging over the gravel. That put the old
-  // 20 m probe mid-blend: 2.828 -> 1.267 m (nightly 36702685304 went red on
-  // `> 2`). Measured before/after in the track-build VM: 30 m 4.856 = 4.856 and
-  // 40 m 6.692 = 6.692, unchanged. So the contract is pinned where it holds:
-  // never a raised floor anywhere (every drop positive), a near-flat shelf, and
-  // the full fall-off back by 30 m.
-  expect(terrain.flatTerrain).toBe(false);
-  for (const k of ["drop8", "drop12", "drop20", "drop30", "drop40"]) {
-    expect(terrain[k], `${k}: terrain below the road, not a raised floor`).toBeGreaterThan(0);
-  }
-  expect(terrain.drop12, "the run-off shelf stays near-flat").toBeLessThan(0.5);
-  expect(terrain.drop30, "the old fall-off is back by 30 m (measured 4.856)").toBeGreaterThan(4);
-  expect(terrain.drop40).toBeGreaterThan(5);
 });
 
 for (const trk of TRACKS) {
