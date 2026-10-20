@@ -65,3 +65,4 @@ UPDATE FROM OrchB 13 (01:40–01:50Z) — supersedes the above where they differ
 - SUBSCRIPTIONS: OrchB 12 unsubscribed #3097 #3145 #3129. OrchB 13 subscribed #3097 only (subscriptions follow the session; successor re-subscribes #3097 only when it is about to merge).
 - READY re-sent to OrchB 13: #3097 #3122 #3123 #3128 (game). D6b round 5 done/idle.
 - No pending tick of OrchB 13 after handoff.
+- D1c round 5 @274e6ee8 (cursor/design-preview-bodies-f0e0) supersedes @1f72c744 for the wave-2 bodies set: fit 7.2–8.3 vs L21 bar ≤7.9 (lowline 8.3 still over; its extra rows also show on factory cars after D4 rounding). L21 has the sha. Gallery EkspVdVKpht3wDjn4C81MS.
