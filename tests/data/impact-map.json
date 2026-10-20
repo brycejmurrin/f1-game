@@ -13134,6 +13134,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs"
       ],
+      "_gpuSettled": [
+        "tests/unit/tlx-gpu-settled.test.mjs"
+      ],
       "_hideUndrawnInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs"
       ],

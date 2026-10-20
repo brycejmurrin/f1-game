@@ -254,7 +254,7 @@ const TLX = (function () {
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
-      const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
+      const _warmStages = { at: 0, settle: null, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
         mirrorDeferred: false, mirrorLazy: null, rig: null };   // rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
@@ -3163,14 +3163,15 @@ const TLX = (function () {
         return drawn;
       }
       // Resolves once the GPU has run what was submitted (capped): WebGPU onSubmittedWorkDone, WebGL2 a polled fence.
+      // The value says how it ended: "done" (the GPU answered), "cap" (capMs ran out first) or "none" (no settle here).
       function _gpuSettled(capMs) {
         const be = renderer.backend, t0 = performance.now();
         try {
           const q = be && be.device && be.device.queue;
           if (q && typeof q.onSubmittedWorkDone === "function") {
             let timer = 0;
-            const cap = new Promise((res) => { timer = setTimeout(res, capMs); });
-            return Promise.race([q.onSubmittedWorkDone(), cap]).finally(() => clearTimeout(timer));
+            const cap = new Promise((res) => { timer = setTimeout(() => res("cap"), capMs); });
+            return Promise.race([q.onSubmittedWorkDone().then(() => "done"), cap]).finally(() => clearTimeout(timer));
           }
           const gl = be && be.gl;
           if (gl && typeof gl.fenceSync === "function") {
@@ -3182,12 +3183,12 @@ const TLX = (function () {
                 try { st = gl.clientWaitSync(sync, 0, 0); } catch (_) { /* context lost: stop */ }
                 if (st === gl.TIMEOUT_EXPIRED && performance.now() - t0 < capMs) { setTimeout(poll, 4); return; }
                 try { gl.deleteSync(sync); } catch (_) { /* */ }
-                res();
+                res(st === gl.TIMEOUT_EXPIRED ? "cap" : "done");
               })();
             });
           }
         } catch (_) { /* no settle on this backend */ }
-        return Promise.resolve();
+        return Promise.resolve("none");
       }
       // The late sky mesh is hidden until drawSky. compileAsync skips invisible objects, which would leave the
       // first painted frame to build the sky program. Show it for the warm's compiles only; begin() hides it again
@@ -3301,13 +3302,15 @@ const TLX = (function () {
               _warmStages.mirror = Math.round(performance.now() - _tStage);
             }
             _tStage = performance.now();
-            _warmStages.draw = null; _warmStages.drawn = null;
+            _warmStages.draw = null; _warmStages.drawn = null; _warmStages.settle = null;
             if (drawWarmOn()) {
               // Its own guard: a draw that throws costs the draw warm, never a re-run of the compiles above.
               try {
                 _gpuLastOperation = "warm-draw";
                 _warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);
-                await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
+                const _tSettle = performance.now();
+                const how = await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
+                _warmStages.settle = { ms: Math.round(performance.now() - _tSettle), how };   // draw = the draws + this wait
               } catch (e) {
                 _warmStages.drawn = { error: String((e && e.message) || e) };
                 try { Log.warn("gfx", "TLX draw warm failed", String(e)); } catch (_) { /* logging is optional */ }
@@ -6325,6 +6328,7 @@ const TLX = (function () {
             // pending/done say whether a census beat is inside it (207 was, all 15).
             o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
+                       settle: _warmStages.settle,   // the draw stage's GPU wait: { ms, how: done | cap | none }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
