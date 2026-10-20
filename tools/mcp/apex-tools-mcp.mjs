@@ -429,7 +429,7 @@ const CATALOG = [
   {
     name: "apex_status",
     week: 1,
-    description: "Tree — read-only occupancy: lock, chrome /healthz, test-bg, playwright PIDs, loadavg. Does not take the lock. Call before any browser apex_*.",
+    description: "Tree — read-only occupancy: lock, chrome /healthz, test-bg, playwright PIDs, loadavg. Call before any browser apex_*.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
   },
   {
@@ -441,9 +441,9 @@ const CATALOG = [
       required: ["action"],
       properties: {
         action: { type: "string", enum: ["start", "status", "stop"] },
-        device: { type: "string", enum: ["phone-landscape", "desktop"], description: "start: default phone-landscape (iPhone UA, mobile render tier)." },
-        webgpu: { type: "boolean", description: "start: add --enable-unsafe-webgpu." },
-        headlessGame: { type: "boolean", description: "start: load the game, then __apex.headless(true) (no drawing; physics/AI only)." },
+        device: { type: "string", enum: ["phone-landscape", "desktop"], description: "start: default phone-landscape." },
+        webgpu: { type: "boolean", description: "start: enable WebGPU." },
+        headlessGame: { type: "boolean", description: "start: load the game headless." },
         dryRun: { type: "boolean" },
       },
     },
@@ -452,7 +452,7 @@ const CATALOG = [
     name: "apex_catalog",
     week: 8,
     kind: "tree",
-    description: "Tree — every valid track/camera/UI id the other apex_* tools accept, in one read. For per-track turn and scenery targets call apex_locations. Read-only, no browser.",
+    description: "Tree — every valid track/camera/UI id the apex_* tools accept. Turn and scenery targets: apex_locations. Read-only, no browser.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
@@ -497,7 +497,7 @@ const CATALOG = [
   {
     name: "apex_shot",
     week: 2,
-    description: "Browser (lock first) — deterministic scene screenshot (track/frac/cam). Local harness only. Skill: playwright-probe.",
+    description: "Browser (lock first) — deterministic scene screenshot (track/frac/cam). Local only. Skill: playwright-probe.",
     inputSchema: {
       type: "object",
       properties: {
@@ -663,7 +663,7 @@ const CATALOG = [
   {
     name: "apex_select_specs",
     week: 3,
-    description: "Tree — which SPECS fit the budget since a git ref (--json). Requires since. Never starts tests. Skill: check-changes.",
+    description: "Tree — which SPECS fit the budget since a git ref. Requires since. Never starts tests. Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -732,7 +732,7 @@ const CATALOG = [
     name: "apex_session_status",
     week: 6,
     kind: "tree",
-    description: "Tree — this branch's handoff block as JSON (sessions, commits vs the deploy branch, dirty/unpushed, each test log's verdict, a live run): the PR body's status section. Read-only. Skill: steward.",
+    description: "Tree — this branch's handoff block as JSON (commits vs deploy, dirty/unpushed, test-log verdicts, live run). Read-only. Skill: steward.",
     inputSchema: {
       type: "object",
       properties: {
@@ -746,7 +746,7 @@ const CATALOG = [
     name: "apex_who_is_on_it",
     week: 6,
     kind: "tree",
-    description: "Tree — recent pushes per branch, who touched these paths, live claims (--json): the check before fixing a red you did not cause. Read-only: never --claim / --release (run the CLI for those). Skill: steward.",
+    description: "Tree — recent pushes, who touched these paths, live claims: check before fixing a red you did not cause. Read-only. Skill: steward.",
     inputSchema: {
       type: "object",
       properties: {
@@ -763,7 +763,7 @@ const CATALOG = [
     name: "apex_ci_status",
     week: 6,
     kind: "tree",
-    description: "Tree — ONE poll of a SHA's CI runs (ci-watch --once): per-job lines, a red's failing step, and the `= ci <verdict>` line parsed into out. Never waits — arm a Monitor on ci-watch.mjs for that. Read-only GETs. Skill: steward.",
+    description: "Tree — ONE poll of a SHA's CI runs (ci-watch --once): per-job lines, a red's failing step, `= ci <verdict>`. Never waits. Skill: steward.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1015,7 +1015,7 @@ const CATALOG = [
     name: "apex_job_cancel",
     week: 7,
     kind: "tree",
-    description: "Tree — stop a running background job: kills its process group (and the Chromium it launched) and releases the browser lock. Skill: check-changes.",
+    description: "Tree — stop a background job: kills its process group and Chromium, frees the browser lock. Skill: check-changes.",
     inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" }, dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } }, required: ["jobId"] },
   },
   {
@@ -1041,7 +1041,7 @@ const CATALOG = [
     name: "apex_ui_shot",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — PNG + structured DOM of ONE menu screen at one viewport (layout-audit --screen), ~15 s, with a thumbnail in the result. Every screen: apex_job_start ui_gallery. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — PNG + DOM of ONE menu screen at one viewport, ~15 s. All screens: apex_job_start ui_gallery. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -1096,7 +1096,7 @@ const CATALOG = [
     name: "apex_unit_test",
     week: 8,
     kind: "tree",
-    description: "Tree — `node --test` of ONE file under tests/unit/ (seconds, no browser): the check eight skills run every session. `pattern` is --test-name-pattern. Not for tests/specs (browser groups go through test-bg). Skill: check-changes.",
+    description: "Tree — `node --test` of ONE tests/unit/ file (seconds). Not tests/specs. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
