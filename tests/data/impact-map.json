@@ -6977,6 +6977,7 @@
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]

@@ -20,6 +20,14 @@
 //
 // Pure Node — tools/track/props-tris.cjs runs the real track build in a VM.
 
+// 2026-10-20: re-measured all 52 circuits after #3145 (design integration wave 1). The
+// garage fixture-hanger fit fix (js/garage/scene.js hangerSpan, B·G3, kept by Bryce)
+// ends every pit-bay hanger at the ceiling instead of 22 cm through the roof, so
+// faces the strip used to bury now survive in each trackside garage: bahrain
+// 192016 -> 192688 with only scene.js changed. Over the band: bahrain +0.50 %,
+// baku +0.60 %, portimao +0.77 %, kyalami +0.74 %, dijon +0.68 %; every other row
+// set to its measured count (down-drift from earlier tip changes included, e.g.
+// istanbul -0.66 %, donington -0.68 %). Compaction identical on all 52.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
