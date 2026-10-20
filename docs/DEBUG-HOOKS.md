@@ -1064,10 +1064,12 @@ __apex.gpuTimer();   // → { supported:true, on:true, ms:6.2, software:false }
 Per-subsystem frame budget (`js/perf/spans.js`). With no argument and the recorder off it
 returns the governor snapshot exactly as before. `perf({on:true, reset:true})` starts
 `PerfSpans` (off = one boolean test per call); while on, the result adds
-`spans: {frame, input, physics, ai, collide, camera, render, hud}` each
+`spans: {frame, input, physics, ai, collide, camera, audio, render, hud}` each
 `{n, window, p50, p95, p99, max, mean}` in ms (512-sample ring), `loaf` (Long Animation
 Frames ring, `supported:null/false` where Chrome < 123) and `gpu` (= `gpuTimer()`).
-`measure:true` also emits `performance.measure("apex:<span>")` for Perfetto traces.
+`measure:true` also emits `performance.measure("apex:<span>")` for Perfetto traces, each tagged
+`detail.devtools` (track-entry, group "Apex 26", one named track per phase) so the Chrome
+Performance panel shows them without a pause (`profile.mjs --mode trace` counts the tracks).
 `physics` contains `ai` (the per-car `updateCar` loop, AI and player) and `collide`.
 Spans run on rendered frames (`tickBody`); `step()` only fills `ai`/`collide`. SwiftShader:
 CPU numbers are real, `render`/GPU are not. CLI: `node tools/perf/profile.mjs <track> --mode spans

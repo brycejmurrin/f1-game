@@ -622,6 +622,7 @@
       ],
       "stopRain": [
         "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/radio-voice.test.mjs"
       ],
       "syncReplayRpms": [
@@ -4711,6 +4712,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
@@ -5005,6 +5007,7 @@
         "tests/unit/engine-revs-replay-vm.test.mjs",
         "tests/unit/f1-dev-tools.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/game-vm.test.mjs",
         "tests/unit/race-flow-fixes-vm.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs"
@@ -5956,6 +5959,9 @@
       ]
     },
     "js/fx/grade-tint.js": {
+      "carPaint": [
+        "tests/unit/surface-id-parity.test.mjs"
+      ],
       "*": [
         "tests/unit/carve-a-modules.test.mjs"
       ]
@@ -6362,6 +6368,7 @@
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs",
@@ -6965,7 +6972,8 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs"
       ],
       "framingHull": [
         "tests/unit/garage-mesh.test.mjs"
@@ -7123,6 +7131,7 @@
       "*": [
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
+        "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs"
@@ -7225,6 +7234,7 @@
         "tests/specs/career.spec.js",
         "tests/unit/car-materials.test.mjs",
         "tests/unit/garage-before.test.mjs",
+        "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
@@ -12086,7 +12096,8 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-try.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
+        "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs"
       ],
       "bindVAO": [
         "tests/unit/render-final-contracts.test.mjs"
@@ -12096,7 +12107,8 @@
       ],
       "createMesh": [
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs"
       ],
       "createTexMesh": [
         "tests/unit/garage-mesh.test.mjs",
@@ -12118,7 +12130,8 @@
       "draw": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs"
       ],
       "drawDecal": [
         "tests/unit/garage-mesh.test.mjs",
@@ -12239,7 +12252,6 @@
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/service-worker.test.mjs",
-        "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ]
@@ -13049,6 +13061,7 @@
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "buildMatKey": [
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-mat-key-memo.test.mjs"
       ],
       "buildPost": [
@@ -13114,6 +13127,9 @@
       ],
       "fallbackMat": [
         "tests/unit/tlx-hunt3.test.mjs"
+      ],
+      "flushDropLater": [
+        "tests/unit/render-final-contracts.test.mjs"
       ],
       "flushDropped": [
         "tests/unit/render-final-contracts.test.mjs",
@@ -13558,6 +13574,9 @@
       "_softDisplayFinish": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
+      "_writeDraw": [
+        "tests/unit/surface-id-parity.test.mjs"
+      ],
       "awaitSoftPresent": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -13566,6 +13585,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "capturePixels": [
@@ -13586,6 +13606,7 @@
       ],
       "createMesh": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "createTexMesh": [
@@ -13610,6 +13631,7 @@
       "draw": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "drawDecal": [
@@ -13742,7 +13764,6 @@
         "tests/unit/godray-keep-nearest.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/puddles.test.mjs",
-        "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/validation-cli.test.mjs"
       ]
     },

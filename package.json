@@ -80,7 +80,7 @@
     "memory:list": "node tools/env/apex-memory.mjs list",
     "memory:show": "node tools/env/apex-memory.mjs show",
     "memory:retire": "node tools/env/apex-memory.mjs retire",
-    "test:agent-output": "node --test tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
+    "test:agent-output": "node --test tests/unit/agent-experiment.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

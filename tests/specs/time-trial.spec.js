@@ -2,10 +2,117 @@
 // Time Trial mode: ghost recording, ghost delta HUD, sector-split announces,
 // and the TT results panel. Uses __apex.tt() to enter TT mode programmatically.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, test as journeyTest } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
+
+journeyTest.describe("Practice return journeys — phone landscape", () => {
+  // Keep literal test(...) calls visible to the static CI budget counter.
+  const test = journeyTest;
+  // Shared fixture pins GLX, test mode, tyre/wind off and offline API stubs.
+  test.use(uiTestOptions({ touch: true, viewport: LANDSCAPE }));
+
+  test.beforeEach(async ({ page, pageErrors }) => {
+    // Match the player's phone identity, including UA and touch, not just size.
+    // The dev-only Inspector must not intercept the shipped game's controls.
+    await page.goto("/?inspector=0");
+    await page.waitForFunction(() => !!window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+    expect(pageErrors).toEqual([]);
+    // Rendering and intro presentation are suppressed; input and physics stay real;
+    // this checks navigation/re-entry, not the full garage/flyby presentation.
+    await page.evaluate(() => window.__apex.headless(true));
+  });
+
+  test.afterEach(async ({ pageErrors, consoleLines }) => {
+    expect(pageErrors).toEqual([]);
+    expect(consoleLines.filter(line => line.startsWith("error:"))).toEqual([]);
+  });
+
+  test("cancelling Practice twice leaves ordinary TT and Race pickers usable", async ({ page }) => {
+    for (let visit = 0; visit < 2; visit++) {
+      await page.locator("#mb-practice").tap();
+      await expect(page.locator("#select-title")).toHaveText("PRACTICE");
+      await expect(page.locator("#practice-brief")).toBeVisible();
+      await page.locator("#sel-go").tap();
+      await expect(page.locator("#rs-go")).toHaveText("START PRACTICE");
+      await page.locator("#rs-cancel").tap();
+      await expect(page.locator("#select-title")).toHaveText("PRACTICE");
+      await page.locator("#sel-back").tap();
+      await expect(page.locator("#overlay")).toBeVisible();
+
+      for (const [door, heading, label, session] of [
+        ["#mb-tt", "TIME TRIAL", "START TIME TRIAL", "tt"],
+        ["#mb-race", "GRAND PRIX", "START RACE", "race"],
+      ]) {
+        await page.locator(door).tap();
+        await expect(page.locator("#select-title")).toHaveText(heading);
+        await expect(page.locator("#practice-brief")).toBeHidden();
+        expect(await page.evaluate(() => UiExperience.isPracticePick())).toBe(false);
+        await page.locator("#sel-go").tap();
+        await expect(page.locator("#rs-go")).toHaveText(label);
+        expect(await page.evaluate(() => window.__apex.info().session)).toBe(session);
+        expect(await page.evaluate(() => window.__apex.info().state)).toBe("menu");
+        await page.locator("#rs-cancel").tap();
+        await page.locator("#sel-back").tap();
+        await expect(page.locator("#overlay")).toBeVisible();
+      }
+    }
+  });
+
+  test("Practice and TT restart and quit require confirmation and reset the session", async ({ page }) => {
+    for (const [door, label] of [["#mb-practice", "START PRACTICE"], ["#mb-tt", "START TIME TRIAL"]]) {
+      await page.locator(door).tap();
+      await page.locator("#sel-go").tap();
+      await expect(page.locator("#rs-go")).toHaveText(label);
+      await page.locator("#rs-go").tap();
+      await page.waitForFunction(() => window.__apex.info().state === "race", null,
+        { polling: 100, timeout: BOOT_MS });
+      await expect(page.locator("#loading")).toBeHidden();
+      await page.locator("#pausebtn").tap();
+      await expect(page.locator("#pausemenu")).toBeVisible();
+
+      // Synthetic progress is a precondition, not a claim to have driven laps.
+      // It distinguishes a real restart from merely dismissing the pause card.
+      await page.evaluate(() => window.__apex.setLap(2));
+      await page.locator("#pm-restart").tap();
+      await expect(page.locator("#pm-restart")).toHaveText("RESTART — TAP AGAIN");
+      expect(await page.evaluate(() => window.__apex.timing().lap)).toBe(2);
+      await expect(page.locator("#pausemenu")).toBeVisible();
+      await page.locator("#pm-restart").tap();
+      await expect.poll(() => page.evaluate(() => window.__apex.timing()?.lap), { timeout: BOOT_MS }).toBe(0);
+      await expect(page.locator("#pausemenu")).toBeHidden();
+      expect(await page.evaluate(() => window.__apex.info().session)).toBe("tt");
+      // gridUp resets laps before asynchronous warmup commits the new start.
+      // Wait for a playable session and a natural clock tick, not only lap zero.
+      await expect(page.locator("#loading")).toBeHidden();
+      await page.waitForFunction(() => window.__apex.info().state === "race" && !window.__apex.freeze(), null,
+        { polling: 100, timeout: BOOT_MS });
+      const restartedAt = await page.evaluate(() => window.__apex.timing().raceT);
+      await expect.poll(() => page.evaluate(() => window.__apex.timing().raceT), { timeout: BOOT_MS })
+        .toBeGreaterThan(restartedAt);
+
+      await page.locator("#pausebtn").tap();
+      await page.locator("#pm-quit").tap();
+      await expect(page.locator("#pm-quit")).toHaveText("QUIT TO MENU — TAP AGAIN");
+      await expect(page.locator("#pausemenu")).toBeVisible();
+      await expect(page.locator("#overlay")).toBeHidden();
+      await page.locator("#pm-quit").tap();
+      await expect(page.locator("#overlay")).toBeVisible();
+      for (const selector of ["#pausemenu", "#loading", "#results", "#race-settings", "#select"])
+        await expect(page.locator(selector)).toBeHidden();
+      expect(await page.evaluate(() => window.__apex.info().state)).toBe("menu");
+      expect(await page.evaluate(() => window.__apex.info().timeTrial)).toBe(false);
+    }
+    await page.locator("#mb-race").tap();
+    await expect(page.locator("#select-title")).toHaveText("GRAND PRIX");
+    await expect(page.locator("#practice-brief")).toBeHidden();
+    await page.locator("#sel-go").tap();
+    await expect(page.locator("#rs-go")).toHaveText("START RACE");
+    expect(await page.evaluate(() => window.__apex.info().session)).toBe("race");
+  });
+});
 
 async function enterTT(page, trackId = "monza") {
   // Factory McLaren, empty sheet — GarageDefaults Mercedes kit made

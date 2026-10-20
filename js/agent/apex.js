@@ -1674,7 +1674,7 @@ const api = {
   // frame budget from js/perf/spans.js: on:true starts the span recorder (off = one bool per call),
   // reset:true clears the rings, measure:true also emits performance.measure() for traces. While
   // recording, `spans` holds p50/p95/p99/max ms per phase (frame input physics ai collide camera
-  // render hud), `loaf` the long-animation-frame ring, `gpu` gpuTimer().
+  // audio render hud), `loaf` the long-animation-frame ring, `gpu` gpuTimer().
   perf(o) {
     if (typeof PerfSpans !== "undefined") {
       if (o && o.reset) PerfSpans.reset();
