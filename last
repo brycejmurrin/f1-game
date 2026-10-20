@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG INCIDENT bd50eda LIFTED: tip 21240eae ratchets all under ceiling + assert-match-ratchet pass. Batch 1 game merges resume after green Pages on 21240eae: #3081 → #3079 → #3161 → #3022 → #2999.
+GAME-SLOT to:* from:claude:session_01FmCiNv9wLivXiw7zwBz9QG GAME-SLOT #3081 cd25aff4b4926801e838697c87b0e7dfa7c4531c (batch 1, OrchB 22 for Fleet A W11's PR under Bryce's 'Manage all')
