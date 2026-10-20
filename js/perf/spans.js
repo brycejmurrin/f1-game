@@ -10,7 +10,10 @@
 
    measure(true) additionally emits performance.measure() per span so the phases
    show as User Timing tracks in a Chrome / Perfetto trace; that path allocates,
-   so it is a separate opt-in used by tools/perf/profile.mjs --mode trace.
+   so it is a separate opt-in used by tools/perf/profile.mjs --mode trace. Each measure carries
+   detail.devtools (a track-entry: trackGroup "Apex 26", one named track per phase), so the
+   Chrome Performance panel's Timings lane shows physics / audio / render / hud on their own
+   tracks (developer.chrome.com/docs/devtools/performance/extension); other consumers ignore it.
 
    LoAF: PerformanceObserver "long-animation-frame" (Chrome 123+), feature-
    detected, the last LOAF_CAP entries with their top scripts. Software-GL
@@ -21,6 +24,7 @@ const PerfSpans = (() => {
   const RING = 512;       // samples kept per span (~8.5 s at 60 fps)
   const LOAF_CAP = 32;    // long-animation-frame entries kept
   const LOAF_SCRIPTS = 4; // scripts kept per entry (the longest)
+  const TRACK_COLOR = { frame: "primary", input: "secondary", physics: "tertiary-dark", ai: "tertiary", collide: "warning", camera: "secondary-light", audio: "primary-light", render: "primary-dark", hud: "secondary-dark" };
 
   function create(clock) {
     const now = clock || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
@@ -41,7 +45,7 @@ const PerfSpans = (() => {
       if (!s || s.t0 < 0) return;
       const t1 = now(), d = t1 - s.t0;
       if (measure && typeof performance !== "undefined" && performance.measure) {
-        try { performance.measure("apex:" + name, { start: s.t0, end: t1 }); } catch (_) { /* a stub clock is not a timeline */ }
+        try { performance.measure("apex:" + name, { start: s.t0, end: t1, detail: { devtools: { dataType: "track-entry", track: name, trackGroup: "Apex 26", color: TRACK_COLOR[name] || "primary" } } }); } catch (_) { /* a stub clock is not a timeline */ }
       }
       s.t0 = -1;
       s.buf[s.head] = d; s.head = (s.head + 1) % RING;

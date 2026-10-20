@@ -114,12 +114,18 @@ const CarGeometry = (function () {
         : null;
       const xF = attachedX != null ? attachedX : x;
       const xR = attachedX != null ? attachedX : x * taper;
-      let yF = spec.yLead + rise * edge, yR = spec.yTrail + rise * edge;
+      // rise2 / riseStep (opt-in aero shapes, absent = 0): a quadratic tip
+      // curl and a step that completes by mid-span (edge 0.5).
+      const lift = rise * edge + (spec.rise2 || 0) * edge * edge
+        + (spec.riseStep || 0) * Math.min(1, edge * 2);
+      let yF = spec.yLead + lift, yR = spec.yTrail + lift;
       let zF = spec.zLead - sweep * edge, zR = spec.zTrail - sweep * edge;
       // teCurve: pull the TE toward the LE at the tip (quadratic) so the
       // trailing edge is an arc, not a straight plank. chordTaper shortens
       // the tip chord. twist adds a few degrees of outboard incidence.
       if (spec.teCurve) zR += spec.teCurve * edge * edge;
+      // B·D3c: a lifted tip moves forward whole, so the cascade's slots keep their shape.
+      if (spec.tePull) { zF += spec.tePull * edge; zR += spec.tePull * edge; }
       const ct = 1 - Math.max(0, spec.chordTaper || 0) * edge;
       if (ct < 1) { zR = zF + (zR - zF) * ct; yR = yF + (yR - yF) * ct; }
       const tw = (spec.twist || 0) * edge;
