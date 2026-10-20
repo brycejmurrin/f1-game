@@ -163,8 +163,10 @@ const GarageCrew = (function () {
   function frontJack(out, nose) {
     const pz = Math.max(WING_LE, nose.z) + 0.14, py = nose.under - 0.03;
     const sz0 = nose.z - 0.10, sz1 = nose.z - 0.015;                          // saddle, under the tip
-    const top = Math.min(nose.at(sz0), nose.at(sz1));                          // the cone's lowest point over it
-    block(out, 0, top - 0.022, (sz0 + sz1) / 2, 0.05, 0.022, (sz1 - sz0) / 2, JACK);
+    // A round cradle laid along the cone's own slope: its top line IS the
+    // nose's underside over the whole saddle, so no wedge of light under it.
+    const R = 0.024;
+    tube(out, [0, nose.at(sz0) - R, sz0], [0, nose.at(sz1) - R, sz1], R, JACK, 12);
     tube(out, [0, py, sz1], [0, py, pz], 0.022, ALLOY, 8);                     // the arm, above the wing
     tube(out, [0, py, pz], [0, 0.07, pz + 0.06], 0.026, JACK, 6);              // the frame to the axle
     for (const s of [-1, 1]) tube(out, [s * 0.10, 0.07, pz + 0.06], [s * 0.16, 0.07, pz + 0.06], 0.07, RUBBER, 10);
