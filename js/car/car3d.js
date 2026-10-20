@@ -498,19 +498,20 @@ const Car3D = (function () {
                  0.045, 0.055, 0.055, CARBON);
         }
       }
-      // airScoop (B·D1d concept bodies, opt-in): a tall framed mouth — cheeks run back past the
-      // hoop blade (they read either side of it from the chase cam), a top bar, and a dark
-      // recessed panel filling the opening up to the bar (above the halo, as on the sheet).
-      if (teamStyle.airScoop && !engSnork) {
-        const aw = 0.30 * inScale / 2, top = 0.952, bot = 0.70, cw = 0.026;
+      // airScoop (B·D1d concept bodies, opt-in): a framed mouth — cheeks running back either side of
+      // the airbox / snorkel (they read from the chase cam), a top bar, and a dark recessed panel
+      // filling the opening, so the intake reads as a cut-out as on the sheet. Both airbox paths.
+      const scoopFrame = (zF, halfW, top, bot, zTail, yTail, panelZ) => {
+        const cw = 0.026;
         for (const s of [-1, 1]) {
-          const x = s * (aw + cw / 2 - 0.006);
-          addSpan(out, { z: -0.255, x, y: (top + bot) / 2, w: cw, h: top - bot, t: 0.9 },
-                       { z: -0.46, x: x * 0.92, y: 0.80, w: cw * 0.8, h: 0.06, t: 0.9 }, airboxC);
+          const x = s * (halfW + cw / 2 - 0.006);
+          addSpan(out, { z: zF, x, y: (top + bot) / 2, w: cw, h: top - bot, t: 0.9 },
+                       { z: zTail, x: x * 0.92, y: yTail, w: cw * 0.8, h: 0.06, t: 0.9 }, airboxC);
         }
-        addBox(out, 0, top - 0.014, -0.272, (aw + cw) * 2 - 0.020, 0.028, 0.040, airboxC);
-        addBox(out, 0, (0.86 + top - 0.028) / 2, -0.300, aw * 2 - 0.004, top - 0.028 - 0.855, 0.030, INTAKE, SURFACES.carbon);
-      }
+        addBox(out, 0, top - 0.014, zF - 0.017, (halfW + cw) * 2 - 0.020, 0.028, 0.040, airboxC);
+        addBox(out, 0, (bot + top - 0.028) / 2 + 0.0025, panelZ, halfW * 2 - 0.004, top - 0.028 - bot + 0.005, 0.030, INTAKE, SURFACES.carbon);
+      };
+      if (teamStyle.airScoop && !engSnork) scoopFrame(-0.255, 0.30 * inScale / 2, 0.952, 0.70, -0.46, 0.80, -0.300);
       if (engSnork) {
         const sk = 0.78 + inScale * 0.32;
         const mouth = { z: -0.12, y: 0.96, w: 0.15 * sk, h: 0.10 * sk, t: 0.62 };
@@ -529,6 +530,8 @@ const Car3D = (function () {
         }
         addBox(out, 0, mouth.y + 0.01, mouth.z + 0.01,
                mouth.w * 0.72, mouth.h * 0.55, 0.04, INTAKE);
+        if (teamStyle.airScoop) scoopFrame(mouth.z + 0.015, mouth.w / 2, mouth.y + mouth.h / 2 + 0.03,
+          mouth.y - mouth.h / 2 - 0.012, crest.z, crest.y, mouth.z - 0.003);
         if (scoopLip >= 1) {
           addBox(out, 0, mouth.y + mouth.h * 0.35, mouth.z + 0.02,
                  mouth.w * 0.88, 0.022, 0.028, CARBON);
