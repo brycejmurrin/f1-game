@@ -15,7 +15,7 @@ from PIL import Image, ImageChops
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, "artifacts/finish-designs/r4m")
 HERE = os.path.dirname(os.path.abspath(__file__))
-LIGHTS = [("day", "Race daylight · Monza, sun 48° up"), ("garage", "Garage broadcast")]
+LIGHTS = [("day", "Race daylight · Monza, sun 48° up"), ("garage", "Garage · G3 broadcast lighting")]
 TEAMS = [("williams", "dark · Williams navy"), ("ferrari", "mid · Ferrari red"), ("haas", "light · Haas white")]
 ANGLES = [("side", "side"), ("graze", "45° grazing"), ("spec", "specular")]
 ORDER = [("keep", [69, 63, 67, 68, 72, 71, 84, 66, 85, 65, 83, 60, 62]), ("borderline", [61, 70, 74, 81]),
@@ -40,6 +40,23 @@ def cells():
 
 def jpg_path(light, key, team, angle):
     return os.path.join(SRC, "jpg", f"{light}-{key}-{team}-{angle}.jpg")
+
+
+def cmd_garage():
+    """Link garage-angles frames (<team>-finish-<key>-hero_az<deg>_el<deg>_d<m>.png) into garage/<key>-<team>-<angle>.png."""
+    import re
+    raw, out = os.path.join(SRC, "garage-raw"), os.path.join(SRC, "garage")
+    os.makedirs(out, exist_ok=True)
+    cam = {90: "side", 140: "graze", 126: "spec"}
+    n = 0
+    for f in sorted(os.listdir(raw)):
+        m = re.match(r"([a-z]+)-finish-([a-z]+)-hero_az(\d+)_el", f)
+        if m and int(m.group(3)) in cam and f.endswith(".png"):
+            dst = os.path.join(out, f"{m.group(2)}-{m.group(1)}-{cam[int(m.group(3))]}.png")
+            if not os.path.exists(dst):
+                os.symlink(os.path.join(raw, f), dst)
+            n += 1
+    print(n, "garage frames linked")
 
 
 def cmd_files():
@@ -201,4 +218,4 @@ def cmd_record():
 
 
 if __name__ == "__main__":
-    {"jpg": cmd_jpg, "diff": cmd_diff, "html": cmd_html, "record": cmd_record, "files": cmd_files}[sys.argv[1]]()
+    {"jpg": cmd_jpg, "diff": cmd_diff, "html": cmd_html, "record": cmd_record, "files": cmd_files, "garage": cmd_garage}[sys.argv[1]]()
