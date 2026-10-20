@@ -142,3 +142,31 @@ entry, the SDK as a map.
   `inline-prober` available. `wait` blocked until `FINISHED` (exit 0).
 - Not verified: an HTTP remote server with `headers` or `auth` (no endpoint to point at), `followup --mcp-file` live,
   and whether `envVars` is silently ignored on an account where the beta is off (here it was delivered).
+
+## Agent-to-agent, and MCP attach: read from a 15-run chat (`Mcp server listing`, 2026-10-20)
+
+Source: `cursor-agents.mjs dump` of one agent that a person followed up 14 times in 45 minutes about why cloud agents
+miss MCP servers; read by its final replies and its `task` tool calls (no secret read: dashboard JSON appeared only as
+shapes with masked placeholders).
+
+- **Correction to the messaging answer above.** A cloud agent can launch another cloud agent: its `task` calls carried
+  `environment: SUBAGENT_EXECUTION_ENVIRONMENT_CLOUD`, two new `bc-` agents appeared while that run was in progress
+  (created 21:01:40 and 21:01:47Z, env cloud, repo `f1-game`, names matching the task descriptions), and the call
+  returned the child's conversation to the parent (4 calls, 283 s, so it blocks). A later call carried `resume`, which
+  continues a subagent the parent launched: parent-to-child messaging exists; child-to-parent is only its final reply.
+  Our own survey agent (launched through the API) reported `Task` as local-only, so the tool may differ by how an agent
+  was started; not tested.
+- **The MCP attach set is frozen at agent start.** A dashboard fix does not reach a running agent, and a local subagent
+  inherits the parent's set; a cloud subagent or a new agent gets the current one. In the chat the three tree servers
+  (`apex-tools`, `apex-lsp`, `js-debugger`) attached and the browser pair did not, until the dashboard entries were
+  fixed: `chrome-devtools` used `start` (the script has only `run`), `playwright-official` used `Bash`, and one brace was
+  missing. Our docs say `run` everywhere; the error was in the typed config.
+- **Project `.mcp.json` is not auto-loaded in cloud runs** and `mcpServerAllowlist` only permits a launch string, it does
+  not attach anything. Inline `mcpServers` at create (built in this PR) is the programmatic equivalent of the launch
+  checkboxes; it is replaced per run, so a follow-up that needs the servers passes them again (`followup --mcp-file`).
+- **Named environments are an API object**: `POST /v1/environments` takes `environmentJson` (a string, the
+  `.cursor/environment.json` schema: `install`, `mcpServerAllowlist`), and create takes `env: {type: "cloud", name}`
+  (`repos` is mutually exclusive with a named environment) or `{type: "pool"|"machine", name}` for self-hosted workers.
+  Not built: `launch --environment NAME` and an `env` verb group.
+- Unverified: a `task` call from an API-launched agent with `environment: cloud`; why the subagent probes read `loading`
+  for five servers while a fresh agent saw them attached.
