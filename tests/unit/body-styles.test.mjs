@@ -20,6 +20,7 @@ import { auditMesh } from "../../tools/car/car-fit-audit.mjs";
 
 const M = loadParts();
 const R = loadParts({ shade: true });
+const sculptIds = ["auralis", "cevora", "vantrel", "orynth"];
 const { Car3D, Parts, Teams } = M;
 const Liveries = (() => { const ctx = { console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set };
   vm.createContext(ctx); vm.runInContext(fs.readFileSync("js/car/liveries.js", "utf8"), ctx, { filename: absSrc("js/car/liveries.js") });
@@ -38,6 +39,17 @@ test("bodyStyleKey: a known body wins, anything else is the team's own", () => {
   assert.equal(Car3D.ALLOW_TEAM_BODY_SWAP, false);
   assert.deepEqual([...Car3D.BODY_STYLE_IDS].sort(), [...Object.keys(Car3D.BODY_STYLES)].sort());
   for (const id of Object.keys(Car3D.TEAM_STYLE)) assert.ok(!Car3D.BODY_STYLE_IDS.includes(id), id);
+});
+
+// Two lanes once both named their nose flag `noseCurve` (a boolean and a pow
+// exponent), so each lane's paths fired on the other's bodies. Pin the types.
+test("nose shape flags keep one type each across every body", () => {
+  for (const [id, s] of Object.entries({ ...Car3D.TEAM_STYLE, ...Car3D.BODY_STYLES })) {
+    assert.ok(s.noseSculpt === undefined || typeof s.noseSculpt === "boolean", `${id}: noseSculpt is a boolean`);
+    assert.ok(s.noseCurve === undefined || (typeof s.noseCurve === "number" && s.noseCurve > 0),
+      `${id}: noseCurve is a positive exponent`);
+    assert.ok(!(s.noseSculpt && s.noseCurve), `${id}: one curved-nose recipe, not both`);
+  }
 });
 
 test("every body builds a finite car whose hull differs from the team's own", () => {
@@ -408,13 +420,14 @@ test("expanded profiles retain canonical station order, positive sections and bo
       assert.ok(p.outer > p.inner && p.outerTop > p.outerBottom && p.innerTop > p.innerBottom,
         `${id}: positive pod section at ${p.z}`);
     }
-    // Both regular and rounded builders sample the same two-station linear cover.
-    for (const round of [false, true]) {
+    // Both regular and rounded builders sample the same cover crown (sculpted or linear).
+    const crowns = [false, true].map((round) => {
       const b = (round ? R.Car3D : Car3D).bodyAnchors(tiers, id, "dorsal", round);
-      const f = b.coverAt(-0.55), r = b.coverAt(-2), m = b.coverAt(-1.275);
-      assert.ok(Math.abs(m.top - (f.top + r.top) / 2) < 1e-12, `${id}: linear cover crown`);
+      const f = b.coverAt(-0.55), r = b.coverAt(-2);
       assert.ok(f.top > f.bottom && r.top > r.bottom, `${id}: positive cover sections`);
-    }
+      return [-0.55, -0.9, -1.275, -1.7, -2].map((z) => b.coverAt(z).top);
+    });
+    crowns[0].forEach((top, i) => assert.ok(Math.abs(top - crowns[1][i]) < 1e-12, `${id}: one cover crown in both builders`));
     // Flat near bodies retain the declared fixed budget. Rounded meshes must fit
     // the existing rounded maximum under identical parts, including complete cars.
     for (const { name, body, complete, ceiling } of budgetModes) {
@@ -508,13 +521,15 @@ test("expanded wing supports penetrate the nose while retaining their lower wing
       const anchors = X.Car3D.bodyAnchors(parts, id, undefined, name === "rounded");
       for (const support of supports) {
         const side = support.reduce((n, p) => n + p[0], 0) < 0 ? -1 : 1;
-        const foot = [side * 0.09, 0.085, 2.54];
-        support.sort((a, b) => Math.hypot(...a.map((v, i) => v - foot[i])) - Math.hypot(...b.map((v, i) => v - foot[i])));
+        // The lower ring is the one on the main plane: shipped long arms root at
+        // (0.09, 0.085, 2.54), curved-nose arms tuck inboard on the same chord.
+        support.sort((a, b) => a[1] - b[1] || b[2] - a[2]);
         const half = support.length / 2;
         assert.equal(half, name === "rounded" ? 10 : 4, `${label}: unchanged ring topology`);
         const centre = (pts) => pts.reduce((p, q) => p.map((v, i) => v + q[i] / pts.length), [0, 0, 0]);
         const lower = centre(support.slice(0, half)), upper = centre(support.slice(half));
-        assert.ok(lower.every((v, i) => Math.abs(v - foot[i]) < 1e-9), `${label}: original lower root retained`);
+        assert.ok(Math.abs(lower[1] - 0.085) < 1e-9 && lower[2] >= 2.42 - 1e-9 && lower[2] <= 2.54 + 1e-9
+          && lower[0] * side > 0 && Math.abs(lower[0]) <= 0.09 + 1e-9, `${label}: lower root on the main-plane chord`);
         const n = anchors.noseAt(upper[2]);
         const hull = name === "rounded" ? X.CarShade.ring({ z: upper[2], w: n.side * 2,
           h: n.top - n.bottom, y: (n.top + n.bottom) / 2, t: n.topSide / n.side })
@@ -542,8 +557,11 @@ test("expanded cover stripes stay on the crown instead of bridging to the roll s
     const mesh = X.Car3D.build(team.color, team.color2, { noWheels: true, teamId: team.id, parts: tiers,
       livery: { c1: team.color, c2: team.color2, bodyStyle: id, stripe: DETAIL_INK, spineHeight: "dorsal" } });
     const anchors = X.Car3D.bodyAnchors(tiers, id, "dorsal", name === "rounded");
-    const points = detailPoints(mesh, DETAIL_INK, (p) => [-0.64, -0.94, -1.95].includes(p[2]));
-    assert.ok(points.length >= 48, `${id}/${name}: both cover stripe lofts emitted`);
+    // The ridge run from -0.64 to the tail; a sculpted cover lofts it on its own stations.
+    // z -0.67 is the end of the separate spine band over the roll structure, not the cover.
+    const points = detailPoints(mesh, DETAIL_INK, (p) => p[2] >= -1.95 - 1e-9 && p[2] <= -0.64 + 1e-9
+      && Math.abs(p[2] + 0.67) > 1e-9);
+    assert.ok(points.length >= 48, `${id}/${name}: cover stripe run emitted`);
     for (const p of points) {
       const c = anchors.coverAt(p[2]), profile = X.Car3D.coverProfile(c);
       assert.ok(Math.abs(p[0]) < profile.pts[profile.pts.length - 1][0], `${id}/${name}: stripe fits flat crown`);
@@ -667,4 +685,198 @@ test("low concept floor fences clear the emitted tray with every engine and lowe
         assert.ok(rail.every((p) => p[1] >= trayBottom - 1e-9 && p[1] >= 0), `${tag}: rail clears tray and road`);
       }
     }
+});
+
+test("renamed sculpted bodies and matching aero options expose unique new IDs", () => {
+  const aero = Parts.CATALOG.find(c => c.id === "aero");
+  const medium = aero.options.find(o => o.id === "medium");
+  for (const id of sculptIds) {
+    assert.ok(Car3D.BODY_STYLE_IDS.includes(id));
+    assert.equal(Car3D.bodyStyleKey(team.id, id), id);
+    const opt = aero.options.find(o => o.id === "style_aero_" + id);
+    assert.equal(opt.label, id[0].toUpperCase() + id.slice(1) + " Contour");
+    for (const key of ["cost", ...Parts.STAT_KEYS.map(k => k.key)]) assert.equal(opt[key], medium[key], `${id}/${key}`);
+    assert.equal(opt.equivalent, "medium");
+  }
+});
+
+test("Auralis, Cevora, Vantrel and Orynth have distinct post-clamp silhouettes", () => {
+  const at = (id) => Car3D.bodyAnchors(tiers, id);
+  const auralis = at("auralis"), cevora = at("cevora"), vantrel = at("vantrel"), orynth = at("orynth");
+  const riftRing = auralis.podRing(0.22, 1), riftPod = auralis.podAt(0.22);
+  assert.ok(riftRing[6][1] < (riftPod.innerTop + riftPod.top) / 2 - 0.04, "auralis has a real transverse roof channel");
+  assert.ok(cevora.podAt(0.22).x < vantrel.podAt(0.22).x - 0.20, "cevora leaves much more floor exposed than vantrel");
+  assert.ok(cevora.podAt(0.22).bottom > vantrel.podAt(0.22).bottom + 0.08, "cevora pods sit higher");
+  assert.ok(vantrel.noseAt(2.95).side > cevora.noseAt(2.95).side * 1.5, "vantrel tip is broader while keeping the reference's tapered nose");
+  assert.ok(orynth.podAt(-0.62).top > orynth.podAt(0.22).top + 0.06, "orynth roof swells aft");
+  for (const X of [M, R]) {
+    const hashes = new Set();
+    for (const id of ["auralis", "cevora", "vantrel", "orynth"]) {
+      const mesh = X.Car3D.build(team.color, team.color2, { teamId: team.id, parts: tiers,
+        livery: { c1: team.color, c2: team.color2, bodyStyle: id } });
+      assert.ok(mesh.pos.every(Number.isFinite), `${id}: finite mesh`);
+      hashes.add(JSON.stringify(mesh.pos));
+    }
+    assert.equal(hashes.size, 4, "all four geometry streams differ in both shading modes");
+  }
+});
+
+test("sculpted pods keep mirrored, positive closed sections and sampled detail stops", () => {
+  for (const X of [M, R]) for (const id of ["auralis", "cevora", "vantrel", "orynth"]) {
+    const a = X.Car3D.bodyAnchors(tiers, id, undefined, X === R);
+    assert.ok(X.Car3D.BODY_STYLES[id].noseTipZ <= 0.12, `${id}: nose ends within the front-wing leading edge`);
+    assert.equal(a.podStops.length, X === R ? 15 : 7, `${id}: bounded longitudinal refinement in the smooth mesh only`);
+    const cover = a.coverAt(-0.85), profile = X.Car3D.coverProfile(cover);
+    assert.ok(cover.xb < cover.x * 0.60, `${id}: haunched cover has a recessed foot`);
+    assert.ok(profile.d >= (cover.top - cover.bottom) * 0.30, `${id}: rounded shoulder replaces the tall slab`);
+    const measured = X.Car3D.build(team.color, team.color2, { livery: { bodyStyle: id }, parts: tiers, measure: true });
+    assert.ok(!measured.parts.some(p => p.name === "sponsorBoard"), `${id}: clean wing has no separate number-board block`);
+    for (const p of a.podStops) {
+      const right = a.podRing(p.z, 1), left = a.podRing(p.z, -1).slice().reverse();
+      assert.equal(right.length, 9);
+      right.forEach((v, i) => {
+        assert.ok(v.every(Number.isFinite));
+        assert.ok(Math.abs(v[0] + left[i][0]) < 1e-12 && v[1] === left[i][1] && v[2] === left[i][2]);
+        assert.ok(v[1] >= Math.min(p.innerBottom, p.outerBottom) - 1e-9);
+      });
+      const skin = a.podAt(p.z);
+      assert.ok(Math.abs(skin.x - p.outer) < 1e-12 && Math.abs(skin.top - p.outerTop) < 1e-12);
+      assert.ok(right[6][1] > Math.min(p.innerBottom, p.outerBottom) + 0.02, "channel never cuts through belly");
+      assert.ok(right[2][0] < right[3][0] && right[4][0] < right[3][0], "flank rolls into its shoulder instead of a vertical slab");
+      for (const f of [0.19, 0.32, 0.65, 0.80, 0.88]) {
+        const point = a.podFlank(p.z, f);
+        assert.ok(point.every(Number.isFinite));
+        assert.ok(point[0] <= p.outer && point[0] >= p.inner);
+        assert.ok(Math.abs(point[1] - (skin.bottom + (skin.top - skin.bottom) * f)) < 1e-12,
+          "detail and decal samples share the rolled skin");
+      }
+    }
+  }
+});
+
+test("reference study smooth rings curve off their chords and Orynth belly recovers aft", () => {
+  const a = R.Car3D.bodyAnchors(tiers, "orynth", undefined, true);
+  const p = a.podStations[2], q = a.podStations[3], z = p.z + (q.z - p.z) / 3;
+  const stop = a.podStops.find(s => Math.abs(s.z - z) < 1e-10);
+  assert.ok(stop, "third-point sample is emitted, not just queried by decals");
+  assert.ok(Math.abs(stop.outer - (p.outer + (q.outer - p.outer) / 3)) > 0.002, "sample departs from the straight chord");
+  assert.equal(a.podRing(z, 1)[3][0], stop.outer, "emitted skin uses the sampled shoulder");
+  for (const X of [M, R]) {
+    const body = X.Car3D.bodyAnchors(tiers, "orynth", undefined, X === R);
+    assert.ok(body.podAt(-0.62).bottom > body.podAt(-1.05).bottom + 0.04, "scallop recovers before the tail");
+    const auralis = X.Car3D.bodyAnchors(tiers, "auralis", undefined, X === R), ring = auralis.podRing(-0.38, 1);
+    assert.ok(ring[3][0] - ring[2][0] > 0.10, "Auralis waist is genuine concave body geometry");
+  }
+});
+
+test("complete concepts emit shaped cover rings, deep ducts and full finite car assemblies", () => {
+  for (const X of [M, R]) for (const id of sculptIds) {
+    const a = X.Car3D.bodyAnchors(tiers, id, undefined, X === R), recipe = X.Car3D.BODY_STYLES[id].podSculpt;
+    assert.equal(a.coverStops.length, 17, `${id}: refined longitudinal cover mesh`);
+    const f = a.coverAt(-0.55), r = a.coverAt(-2), m = a.coverAt(-1.275);
+    assert.ok(Math.abs(m.top - (f.top + r.top) / 2) > 0.01, `${id}: authored crown is not a straight end-to-end loft`);
+    assert.ok(recipe.ductDepth >= 0.10 && recipe.exitDepth >= 0.04, `${id}: real recessed duct dimensions`);
+    const setup = { ...Parts.getFactorySetup(team), aero: `style_aero_${id}` };
+    const parts = X.Parts.getVisualTiers(setup, team);
+    const mesh = X.Car3D.buildComplete(team.color, team.color2, { teamId: team.id, parts,
+      noDriver: true, livery: { bodyStyle: id }, measure: true });
+    for (const key of ["pos", "nrm", "col", "mat", "idx"]) assert.ok(mesh[key].every(Number.isFinite), `${id}/${key}`);
+    assert.ok(mesh.idx.length / 3 < 24000, `${id}: complete mesh stays bounded`);
+    for (const name of ["hood", "sidepods", "engineCover", "frontWing", "rearAssembly", "chassis"])
+      assert.ok(mesh.parts.some(p => p.name === name && p.vertices > 0), `${id}: ${name} is real emitted geometry`);
+  }
+});
+
+test("complete concept cover skins are welded, closed and outward in both LODs", () => {
+  const ink = [0.213, 0.517, 0.811], key = p => p.map(v => v.toFixed(7)).join(",");
+  for (const X of [M, R]) for (const id of sculptIds) {
+    const mesh = X.Car3D.build(team.color, team.color2, { teamId: team.id, parts: tiers,
+      noWheels: true, livery: { bodyStyle: id, cover: ink }, measure: true });
+    const tris = [], links = new Map();
+    for (let i = 0; i < mesh.idx.length; i += 3) {
+      const ids = Array.from(mesh.idx.slice(i, i + 3));
+      if (!ids.every(v => ink.every((c, k) => mesh.col[v * 3 + k] === c))) continue;
+      const tri = ids.map(v => Array.from(mesh.pos.slice(v * 3, v * 3 + 3)));
+      const n = tris.push(tri) - 1;
+      for (const p of tri) { const k = key(p); if (!links.has(k)) links.set(k, []); links.get(k).push(n); }
+    }
+    const seen = new Set(), groups = [];
+    for (let i = 0; i < tris.length; i++) {
+      if (seen.has(i)) continue;
+      const stack = [i], group = []; seen.add(i);
+      while (stack.length) { const n = stack.pop(); group.push(tris[n]);
+        for (const p of tris[n]) for (const j of links.get(key(p))) if (!seen.has(j)) { seen.add(j); stack.push(j); }
+      }
+      groups.push(group);
+    }
+    const shell = groups.find(g => { const z = g.flat().map(p => p[2]);
+      return Math.abs(Math.max(...z) + 0.55) < 1e-7 && Math.abs(Math.min(...z) + 2) < 1e-7 && g.length >= 128; });
+    assert.ok(shell, `${id}: closed longitudinal cover shell is emitted`);
+    const edges = new Map(); let volume = 0;
+    for (const [a, b, c] of shell) {
+      for (const [p, q] of [[a, b], [b, c], [c, a]]) { const k = key(p) + ">" + key(q); edges.set(k, (edges.get(k) || 0) + 1); }
+      volume += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
+    }
+    for (const [edge, count] of edges) { const [a, b] = edge.split(">");
+      assert.equal(count, 1, `${id}: duplicate directed edge`); assert.equal(edges.get(b + ">" + a), 1, `${id}: open edge`); }
+    assert.ok(volume > 0, `${id}: outward signed volume`);
+  }
+});
+
+test("complete cover artwork keeps continuous UVs at shared longitudinal rings", () => {
+  for (const X of [M, R]) for (const id of sculptIds) {
+    const d = X.CarMesh.carDecalData(2, tiers, false, team.id, "none", "standard", id);
+    const region = X.LiveryTex.REGIONS.crest, size = X.LiveryTex.SIZE;
+    for (let v = 0; v < d.pos.length / 3; v++) {
+      const z = d.pos[v * 3 + 2];
+      if (Math.abs(d.nrm[v * 3 + 2] - 0.06) > 1e-8 || z < -1.279 || z > -0.62) continue;
+      assert.ok(d.uv[v * 2] >= region.x / size - 1e-8 && d.uv[v * 2] <= (region.x + region.w) / size + 1e-8,
+        `${id}: bulged cover must not sample outside crest atlas region`);
+    }
+    for (const z of [-0.66, -0.90, -1.13]) {
+      const front = [], rear = [];
+      for (let v = 0; v < d.pos.length / 3; v += 4) {
+        if (Math.abs(d.nrm[v * 3 + 2] - 0.06) > 1e-8) continue;
+        for (let k = 0; k < 4; k++) if (Math.abs(d.pos[(v + k) * 3 + 2] - z) < 1e-8)
+          (k < 2 ? front : rear).push(d.uv[(v + k) * 2].toFixed(8));
+      }
+      assert.ok(front.length && rear.length, `${id}/${z}: artwork spans both sides of the shared ring`);
+      assert.deepEqual(front.sort(), rear.sort(), `${id}/${z}: no texture tear across cover sections`);
+    }
+  }
+});
+
+test("reference noses are short, broad and curved downward; spines have rounded crown sections", () => {
+  for(const X of [M,R]) for(const id of sculptIds) {
+    const a=X.Car3D.bodyAnchors(tiers,id,undefined,X===R);
+    assert.equal(a.noseStops.length,9,`${id}: curved nose is emitted in sections`);
+    const tip=a.noseAt(a.noseStops[0]);
+    assert.ok(tip.z<=2.48 && tip.side*2>=0.14,`${id}: shorter broad tip, not a long pencil`);
+    assert.ok(tip.top<0.30,`${id}: crown curves down to a low tip`);
+    const frontSlope=(a.noseAt(2.24).top-a.noseAt(2.34).top)/0.10;
+    const rearSlope=(a.noseAt(1.20).top-a.noseAt(1.30).top)/0.10;
+    assert.ok(frontSlope>rearSlope+0.08,`${id}: front slope steepens into the drooping tip`);
+    const profile=X.Car3D.coverProfile(a.coverAt(-0.90));
+    assert.equal(profile.pts.length,10,`${id}: rounded crown geometry in both detail levels`);
+    assert.ok(profile.pts[4][1]>profile.shoulder && profile.pts[4][1]<profile.top);
+    const d=X.CarMesh.carDecalData(2,tiers,false,team.id,"none","standard",id);
+    const label=[];
+    for(let v=0;v<d.pos.length/3;v++) if(Math.abs(d.nrm[v*3+2]-0.05)<1e-8 && d.pos[v*3+2]>=1.72 && d.pos[v*3+2]<=2.10) {
+      label.push(v);
+      assert.ok(Math.abs(d.pos[v*3+1]-a.noseAt(d.pos[v*3+2]).top-0.020)<1e-8,`${id}: number follows nose skin`);
+    }
+    assert.ok(label.length>4,`${id}: number drape spans the new curved nose sections`);
+    assert.equal(X.Car3D.BODY_STYLES[id].wingStyle.canard,0,`${id}: clean front-wing surface`);
+    const ink=[0.219,0.487,0.813],m=X.Car3D.build(team.color,team.color2,{parts:tiers,teamId:team.id,noWheels:true,livery:{bodyStyle:id,noseStripe:ink}});
+    let painted=0;
+    for(let v=0;v<m.pos.length/3;v++) if(ink.every((c,k)=>m.col[v*3+k]===c)) {
+      painted++;
+      assert.ok(Math.abs(m.pos[v*3+1]-a.noseAt(m.pos[v*3+2]).top)<0.025,`${id}: optional stripe follows curved skin`);
+    }
+    assert.ok(painted>48,`${id}: optional stripe uses multiple sections`);
+    const whiteSupport=[];
+    for(let v=0;v<m.pos.length/3;v++) if(Math.abs(m.pos[v*3])<0.14 && m.pos[v*3+1]<0.16 && m.pos[v*3+2]>2.42
+      && team.color.every((c,k)=>m.col[v*3+k]===c)) whiteSupport.push(v);
+    assert.equal(whiteSupport.length,0,`${id}: no painted support horn ahead of the short nose`);
+  }
 });

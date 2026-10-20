@@ -28,7 +28,7 @@ const LiveryStations = (function () {
     }
     if (!names.length) return;   // `clean`: no sponsor text
     if (R.podTop && on(colors, "podTop")) {
-      const ink = h.inkOn([c1]);
+      const ink = h.inkOn([colors.pod || c1]);   // the sidepod shell wears `pod` paint (c1 when unset)
       h.drawWordmark(ctx, names[0], R.podTop, ink, { align: "center", spacing: 0.05, halo: h.haloIf(ink) });
     }
     if (R.haloTop && on(colors, "haloTop")) {
@@ -89,21 +89,31 @@ const LiveryStations = (function () {
     // SIDEPOD TOP: the main sponsor along the pod's upper face, inner edge = top of the letters.
     if (R.podTop && anchors.podAt) {
       const u = uvOf(R.podTop), zF = 0.42, zR = -0.30, P = 0.008, g0 = 0.18, g1 = 0.84;
-      const stops = [zF, ...((anchors.podStations || []).map((p) => p.z).filter((z) => z < zF && z > zR)), zR];
-      const face = (z) => {
+      const stops = [zF, ...((anchors.podStops || anchors.podStations || []).map((p) => p.z).filter((z) => z < zF && z > zR)), zR];
+      // A sculpted roof (channel / crown) is curved across: drape the band over it in strips.
+      const roof = anchors.podRoof, G = roof ? [0, 0.25, 0.5, 0.75, 1].map((f) => g0 + (g1 - g0) * f) : [g0, g1];
+      const face = (z, g) => {
+        if (roof) {
+          const a = roof(z, g - 0.01), b = roof(z, g + 0.01), r = roof(z, g);
+          let n = norm(a[1] - b[1], b[0] - a[0]); if (n[1] < 0) n = [-n[0], -n[1]];
+          return { n, p: [r[0] + n[0] * P, r[1] + n[1] * P] };
+        }
         const p = anchors.podAt(z), dx = p.x - p.inner, dy = p.top - p.innerTop;
         let n = norm(-dy, dx); if (n[1] < 0) n = [-n[0], -n[1]];
-        const at = (g) => [p.inner + dx * g + n[0] * P, p.innerTop + dy * g + n[1] * P];
-        return { n, i: at(g0), o: at(g1) };
+        return { n, p: [p.inner + dx * g + n[0] * P, p.innerTop + dy * g + n[1] * P] };
       };
+      const rU = (t) => u.uR + (u.uL - u.uR) * t, lU = (t) => u.uL + (u.uR - u.uL) * t;
+      const vOf = (j) => u.vT + (u.vB - u.vT) * (G[j] - g0) / (g1 - g0);   // inner edge = top of the letters
       for (let k = 0; k < stops.length - 1; k++) {
-        const za = stops[k], zb = stops[k + 1], A = face(za), B = face(zb);
-        const ta = (zF - za) / (zF - zR), tb = (zF - zb) / (zF - zR);
-        const rU = (t) => u.uR + (u.uL - u.uR) * t, lU = (t) => u.uL + (u.uR - u.uL) * t;
-        quadUv([[A.o[0], A.o[1], za], [B.o[0], B.o[1], zb], [B.i[0], B.i[1], zb], [A.i[0], A.i[1], za]], [A.n[0], A.n[1], 0],
-               [[rU(ta), u.vB], [rU(tb), u.vB], [rU(tb), u.vT], [rU(ta), u.vT]]);
-        quadUv([[-B.o[0], B.o[1], zb], [-A.o[0], A.o[1], za], [-A.i[0], A.i[1], za], [-B.i[0], B.i[1], zb]], [-A.n[0], A.n[1], 0],
-               [[lU(tb), u.vB], [lU(ta), u.vB], [lU(ta), u.vT], [lU(tb), u.vT]]);
+        const za = stops[k], zb = stops[k + 1], ta = (zF - za) / (zF - zR), tb = (zF - zb) / (zF - zR);
+        for (let j = 0; j < G.length - 1; j++) {
+          const Ai = face(za, G[j]), Ao = face(za, G[j + 1]), Bi = face(zb, G[j]), Bo = face(zb, G[j + 1]);
+          const vI = vOf(j), vO = vOf(j + 1), n = Ai.n;
+          quadUv([[Ao.p[0], Ao.p[1], za], [Bo.p[0], Bo.p[1], zb], [Bi.p[0], Bi.p[1], zb], [Ai.p[0], Ai.p[1], za]], [n[0], n[1], 0],
+                 [[rU(ta), vO], [rU(tb), vO], [rU(tb), vI], [rU(ta), vI]]);
+          quadUv([[-Bo.p[0], Bo.p[1], zb], [-Ao.p[0], Ao.p[1], za], [-Ai.p[0], Ai.p[1], za], [-Bi.p[0], Bi.p[1], zb]], [-n[0], n[1], 0],
+                 [[lU(tb), vO], [lU(ta), vO], [lU(ta), vI], [lU(tb), vI]]);
+        }
       }
     }
 
