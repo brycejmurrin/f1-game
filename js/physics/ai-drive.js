@@ -867,7 +867,7 @@ const AiDrive = (function () {
   // 6 % over TRAIL_YIELD_RAMP s so the move completes on one straight.
   const TRAIL_YIELD_RAMP = 6, TRAIL_YIELD_EASE = 0.90;
   function trailYieldEase(trailT, t) {
-    return lerp(letPassEase(t), TRAIL_YIELD_EASE, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1));
+    return lerp(letPassEase(t), TRAIL_YIELD_EASE, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1)) * trailYieldDeep(trailT, TRAIL_DEEP_EASE);
   }
   // The lift is a vmax cap, so it only binds on the straights; the corners were
   // where the yielder kept pulling 15 m on every exit while the follower sat
@@ -875,7 +875,16 @@ const AiDrive = (function () {
   // too, a third as deep, so the follower is still on its gearbox at the exit.
   const TRAIL_YIELD_CORNER = 0.965;
   function trailYieldCorner(trailT) {
-    return lerp(1, TRAIL_YIELD_CORNER, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1));
+    return lerp(1, TRAIL_YIELD_CORNER, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1)) * trailYieldDeep(trailT, TRAIL_DEEP_CORNER);
+  }
+  // ...and if the trail outlives both ramps, the lift keeps deepening: a
+  // further 6 % vmax and 4 % corner authority from TRAIL_DEEP_T0 to
+  // TRAIL_DEEP_T1 s. At a full 10 % lift the follower still lost 15-20 m in
+  // every slow corner, in the yielder's dirty air (silverstone LEC<ALO, +1 %,
+  // 66 s). 15 seeds x 8 laps: silverstone longest 98 -> 57 s.
+  const TRAIL_DEEP_T0 = 18, TRAIL_DEEP_T1 = 32, TRAIL_DEEP_EASE = 0.94, TRAIL_DEEP_CORNER = 0.96;
+  function trailYieldDeep(trailT, floor) {
+    return lerp(1, floor, clamp((trailT - TRAIL_DEEP_T0) / (TRAIL_DEEP_T1 - TRAIL_DEEP_T0), 0, 1));
   }
 
   // A PASS IS A POSITION, NOT A BIAS. otPull's return is a lateral offset

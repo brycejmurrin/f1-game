@@ -912,11 +912,16 @@ test("trailYield: past its patience the slower car lifts and lets the trailing c
   // the lift starts at the blue-flag ease and deepens; the corner eases a third as deep
   const t = { experience: 1 };
   assert.ok(Math.abs(A.trailYieldEase(8, t) - A.letPassEase(t)) < 1e-9, "starts at the blue-flag ease");
-  assert.ok(A.trailYieldEase(60, t) <= 0.91, "deepens enough to finish the move on one straight");
-  assert.ok(A.trailYieldEase(60, t) >= 0.88, "a lift, not a stop");
+  assert.ok(A.trailYieldEase(16, t) <= 0.91, "deepens enough to finish the move on one straight");
+  assert.ok(A.trailYieldEase(16, t) >= 0.88, "a lift, not a stop");
   assert.equal(A.trailYieldCorner(8), 1, "no corner ease at the start");
-  assert.ok(A.trailYieldCorner(60) < 1 && A.trailYieldCorner(60) > 0.95, "corner ease is mild");
-  assert.ok(1 - A.trailYieldCorner(60) < (1 - A.trailYieldEase(60, t)) / 2, "corner ease is shallower than the straight lift");
+  assert.ok(A.trailYieldCorner(16) < 1 && A.trailYieldCorner(16) > 0.95, "corner ease is mild");
+  assert.ok(1 - A.trailYieldCorner(16) < (1 - A.trailYieldEase(16, t)) / 2, "corner ease is shallower than the straight lift");
+  // a trail that outlives both ramps deepens further, then holds
+  assert.ok(A.trailYieldEase(32, t) < A.trailYieldEase(16, t) - 0.04, "a long trail lifts deeper");
+  assert.ok(A.trailYieldEase(60, t) >= 0.84, "still a lift at its deepest");
+  assert.equal(A.trailYieldEase(60, t), A.trailYieldEase(32, t), "the deep stage saturates");
+  assert.ok(A.trailYieldCorner(60) > 0.92 && A.trailYieldCorner(60) < A.trailYieldCorner(16), "the corner deepens too, still mild");
 });
 
 test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an obstacle", () => {
