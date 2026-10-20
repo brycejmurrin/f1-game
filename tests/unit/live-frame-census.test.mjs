@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, pct, dist, sunCorrelation, analyseTrace, analyseProfile } from "../../tools/gfx/live-frame-census.mjs";
+import { parseArgs, pct, dist, analyseTrace, analyseProfile } from "../../tools/gfx/live-frame-census.mjs";
 
 test("live-frame-census parseArgs: defaults are the phone census rows", () => {
   const o = parseArgs([]);
@@ -25,19 +25,6 @@ test("live-frame-census pct/dist: nearest-rank percentiles", () => {
   assert.equal(pct(a, 0.99), 5);
   assert.equal(pct([], 0.5), null);
   assert.deepEqual(dist([10, 20]), { n: 2, p50: 10, p95: 20, p99: 20, max: 20, mean: 15 });
-});
-
-test("live-frame-census sunCorrelation: a rebuild lands on the interval its callback ends", () => {
-  // ts had 3 entries when the rebuild ran -> interval index 2 carries it.
-  const iv = [16, 17, 120, 16], cb = [2, 2, 40, 2];
-  const c = sunCorrelation(iv, cb, [3], 7);
-  assert.equal(c.rebuilds, 1);
-  assert.equal(c.carCasts, 7);
-  assert.equal(c.ivSun.max, 120);
-  assert.equal(c.ivOther.max, 17);
-  assert.equal(c.cbSun.p50, 40);
-  assert.equal(c.over100Sun, 1);
-  assert.equal(c.over100Other, 0);
 });
 
 test("live-frame-census analyseTrace: merged toplevel busy per thread, GC split", () => {
