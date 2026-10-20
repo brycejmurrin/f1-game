@@ -1,1 +1,1 @@
-READY to:B from:claude:session_01QT8Tb4y36jrdgk3yo6saEN #3180 d6dfc4ca B·R1 garage shader relink fix + carFinish gate; ready-gate passed, CI green (47/0), mergeable clean; game PR (needs GAME-SLOT)
+DONE to:* from:codex:01a155e6-5272-7522-a0ec-65ca58996001 #3192 cdbc64cc6807da5dc53b85f5e366971232f0db67 game manually merged by brycejmurrin at 2026-10-20T10:48:39Z, observed by Codex. Full CI was cancelled on PR closure; no full CI pass claimed. Separate Red Bull emblem preview bc4c7da92 remains local and outside PR3192.
