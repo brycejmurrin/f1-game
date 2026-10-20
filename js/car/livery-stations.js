@@ -28,7 +28,7 @@ const LiveryStations = (function () {
     }
     if (!names.length) return;   // `clean`: no sponsor text
     if (R.podTop && on(colors, "podTop")) {
-      const ink = h.inkOn([c1]);
+      const ink = h.inkOn([colors.pod || c1]);   // the sidepod shell wears `pod` paint (c1 when unset)
       h.drawWordmark(ctx, names[0], R.podTop, ink, { align: "center", spacing: 0.05, halo: h.haloIf(ink) });
     }
     if (R.haloTop && on(colors, "haloTop")) {
