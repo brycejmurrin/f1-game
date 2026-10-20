@@ -11,7 +11,7 @@
 import { screenshotCard, renderGallery } from "../lib/screenshot-gallery.cjs";
 import { launchChromium, shutdown } from "../lib/harness.mjs";
 import { screenshotPresentedCanvas } from "../shot/probe-page.mjs";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,12 +28,14 @@ const ROOT = resolve(HERE, "..", "..");
 const ARGV = process.argv.slice(2);
 exitIfHelp(ARGV, `usage: node tools/car/audit-parts.mjs [--cats=engine,aero] [--team=mclaren]
   [--body-styles=all|team,needle] [--finishes=all|gloss,satin]
-  [--body-style=needle] [--finish=satin] [--cats=none] [--wait=90] [--url=http://127.0.0.1:3456]
+  [--body-style=needle] [--finish=satin] [--designs=all|build-01,build-02] [--append]
+  [--cats=none] [--wait=90] [--url=http://127.0.0.1:3456]
   Renders every catalog option of selected categories; optionally add independent
-  body-shape and paint-finish surveys. --body-style/--finish apply that variant
-  to every part-option render. Output is under scratch/renders/parts/. Requires
-  a static server; PW_CHROMIUM overrides Playwright's bundled Chromium.`);
-const F = parseFlags(ARGV, ["--cats", "--team", "--url", "--body-styles", "--finishes", "--body-style", "--finish", "--wait"]);
+  body-shape and paint-finish surveys. --designs captures complete combinations
+  of body, finish, palette and part selections. --append merges shots into the
+  existing survey manifest. Output is under scratch/renders/parts/. Requires a
+  static server; PW_CHROMIUM overrides Playwright's bundled Chromium.`);
+const F = parseFlags(ARGV, ["--cats", "--team", "--url", "--body-styles", "--finishes", "--body-style", "--finish", "--designs", "--append", "--wait"]);
 const arg = (key, fallback) => F.flag(`--${key}`, fallback);
 const TEAM = assertSafePathToken(arg("team", "mclaren"), "team");
 const URL = arg("url", "http://127.0.0.1:3456");
@@ -133,6 +135,7 @@ try {
       })),
       bodyStyles: ["team", ...Car3D.BODY_STYLE_IDS],
       finishes: ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)],
+      palettes: LiveryDesign.PALETTES,
       renderer: (() => {
         const gl = document.getElementById("view")?.getContext("webgl2");
         const ext = gl?.getExtension("WEBGL_debug_renderer_info");
@@ -153,6 +156,8 @@ try {
   if (FINISH !== "team" && !audit.finishes.includes(FINISH)) throw new Error(`Unknown --finish=${FINISH}\nAvailable: team, ${audit.finishes.join(", ")}`);
   const bodySweeps = parseSelection(arg("body-styles", null), audit.bodyStyles, "body style");
   const finishSweeps = parseSelection(arg("finishes", null), audit.finishes, "finish");
+  const designIds = Array.from({ length: 36 }, (_, i) => `build-${String(i + 1).padStart(2, "0")}`);
+  const designSweeps = parseSelection(arg("designs", null), designIds, "design");
   const variant = {};
   if (BODY_STYLE !== "team") variant.bodyStyle = BODY_STYLE;
   if (FINISH !== "team") variant.finish = FINISH;
@@ -169,6 +174,12 @@ try {
     views: CAT_VIEW,
     shots: [],
   };
+  const partsRoot = resolveRepoDefault(ROOT, "scratch", "renders", "parts");
+  const manifestPath = resolveContainedChild(partsRoot, "survey.json", "parts survey manifest");
+  if (F.has("--append") && existsSync(manifestPath)) {
+    const previous = JSON.parse(readFileSync(manifestPath, "utf8"));
+    survey.shots = Array.isArray(previous.shots) ? previous.shots : [];
+  }
 
   for (const cat of cats) {
     const view = CAT_VIEW[cat];
@@ -237,6 +248,47 @@ try {
     console.log(`  finishes: ${cards.length} renders`);
   }
 
+  if (designSweeps.length) {
+    const dir = resolveRepoDefault(partsRoot, "builds");
+    mkdirSync(dir, { recursive: true });
+    const cards = [];
+    const bodyChoices = audit.bodyStyles.filter((id) => id !== "team");
+    const hexRgb = (hex) => {
+      const value = hex.replace(/^#/, "");
+      return [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16) / 255);
+    };
+    const designs = designSweeps.map((id) => {
+      const index = Number(id.slice("build-".length)) - 1;
+      const palette = audit.palettes[index % audit.palettes.length];
+      const bodyStyle = bodyChoices[(index * 7) % bodyChoices.length];
+      const finish = audit.finishes[(index * 5) % audit.finishes.length];
+      const parts = { ...audit.defaults };
+      const selectedParts = {};
+      for (const [category, options] of Object.entries(audit.catalog)) {
+        const optionIndex = Math.floor(index * options.length / designIds.length);
+        const option = options[optionIndex];
+        parts[category] = option.id;
+        selectedParts[category] = { id: option.id, label: option.label };
+      }
+      return { id, index, palette, bodyStyle, finish, parts, selectedParts };
+    });
+    for (const design of designs) {
+      const colors = design.palette.colors;
+      const livery = { bodyStyle: design.bodyStyle, finish: design.finish, accent: colors[2] };
+      await setAndSettle(page, {
+        team: TEAM, livery, colors: [hexRgb(colors[0]), hexRgb(colors[1])], parts: design.parts,
+        az: 40, el: 16, dist: 6.4, tod: "day",
+      });
+      const file = `${design.id}.png`;
+      await screenshot(page, resolveContainedChild(dir, file, "complete design survey shot"));
+      const label = `${String(design.index + 1).padStart(2, "0")} · ${design.palette.name} · ${design.bodyStyle} · ${design.finish}`;
+      cards.push({ file, label });
+      survey.shots.push({ group: "builds", id: design.id, label, file: `parts/builds/${file}`, palette: design.palette, bodyStyle: design.bodyStyle, finish: design.finish, parts: design.selectedParts });
+    }
+    writeFileSync(resolveContainedChild(dir, "index.html", "complete designs survey index"), sheet("complete livery and parts builds", cards));
+    console.log(`  builds: ${cards.length} renders`);
+  }
+
   const factoryDir = resolveRepoDefault(ROOT, "scratch", "renders", "parts", "factory");
   mkdirSync(factoryDir, { recursive: true });
   const factoryCards = [];
@@ -279,8 +331,8 @@ try {
   writeFileSync(resolveContainedChild(effectsDir, "index.html", "effects audit index"),
     sheet("grounded runtime effects", effectCards));
   console.log(`  effects: ${effectCards.length} renders`);
-  const partsRoot = resolveRepoDefault(ROOT, "scratch", "renders", "parts");
   mkdirSync(partsRoot, { recursive: true });
+  survey.shots = [...new Map(survey.shots.map((shot) => [`${shot.group}/${shot.id}`, shot])).values()];
   writeFileSync(resolveContainedChild(partsRoot, "survey.json", "parts survey manifest"), JSON.stringify(survey, null, 2) + "\n");
   console.log("done -> scratch/renders/parts/");
 } finally {
