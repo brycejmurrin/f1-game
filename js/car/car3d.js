@@ -682,15 +682,9 @@ const Car3D = (function () {
                  [0.22, 0.22, 0.24], fuelSurface);
           addBox(out, p.x, py + 0.073, p.z, 0.050 * s, 0.010 * s, 0.050 * s,
                  fuelDisplay, fuelSurface);
-          const r = 0.016 * s, capY = py + 0.081, n = 6;
-          const ctr = [p.x, capY, p.z];
-          for (let i = 0; i < n; i++) {
-            const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
-            addTri(out, ctr,
-              [p.x + Math.cos(a1) * r, capY, p.z + Math.sin(a1) * r],
-              [p.x + Math.cos(a0) * r, capY, p.z + Math.sin(a0) * r],
-              [0.06, 0.06, 0.07], SURFACES.carbon);
-          }
+          // Cap: a closed 6 mm puck, not a one-sided disc (its open rim showed
+          // once the hatch plank stopped hiding it).
+          addBox(out, p.x, py + 0.081, p.z, 0.030 * s, 0.006, 0.030 * s, [0.06, 0.06, 0.07], SURFACES.carbon);
         }
         if (fuelFiller >= 2) {
           addSpan(out,
@@ -702,15 +696,14 @@ const Car3D = (function () {
       }
       const fuelHatch = Math.max(0, Math.min(1, Math.round(fuelStyle.hatch || 0)));
       if (fuelHatch) {
-        const lift = fuelFiller >= 1 ? 0.055 : 0.028;
-        const hy0 = coverSurfaceY(anchors.coverAt(-0.40), fuelX);
-        const hy1 = coverSurfaceY(anchors.coverAt(-0.58), fuelX);
-        addSpan(out,
-          { z: -0.40, x: fuelX, y: hy0 + 0.059, w: 0.108, h: 0.012, t: 0.92 },
-          { z: -0.58, x: fuelX, y: hy1 + 0.059 + lift, w: 0.096, h: 0.010, t: 0.88 },
+        // The fuel DOOR is a dark lip framing the filler collar, in the collar's
+        // own plane. The old flat plank hung 59-114 mm over the airbox fairing:
+        // a dark slab beside the helmet on every shipped car (haloBehind view).
+        addBeveledSpan(out, { z: fuelZ + 0.088, x: fuelX, y: fy + 0.0125, w: 0.122, h: 0.012, t: 0.94 },
+          { z: fuelZ - 0.088, x: fuelX, y: fy + 0.0125, w: 0.122, h: 0.012, t: 0.94 }, 0.004,
           [0.08, 0.08, 0.09], null, SURFACES.carbon);
-        addBox(out, fuelX, hy0 + 0.057, -0.405, 0.092, 0.010, 0.016,
-               [0.24, 0.24, 0.26], SURFACES.metal);
+        addBox(out, fuelX, fy + 0.019, fuelZ + 0.084, 0.092, 0.010, 0.012,
+               [0.24, 0.24, 0.26], SURFACES.metal);   // hinge on the forward edge
       }
       const fuelVent = Math.max(0, Math.min(1, Math.round(fuelStyle.vent || 0)));
       if (fuelVent) {
