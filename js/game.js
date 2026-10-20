@@ -4336,7 +4336,11 @@ function rankFinishers() {
   for (let i = 0, k = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked[k++].rank = i + 1;
 }
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
-function releaseFieldScratch() { ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); }
+// Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
+function releaseFieldScratch() {
+  ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets();
+  for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
+}
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 

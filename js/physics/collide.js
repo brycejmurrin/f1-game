@@ -97,7 +97,7 @@ const Collide = (() => {
     _arcBucketIds.length = 0;
   }
   // Race teardown: drop every car reference the buckets hold (the next fill rebuilds them).
-  function releaseArcBuckets() { _arcClear(); }
+  function releaseArcBuckets() { _arcClear(); _ot.c = _ot.ahead = _ot.skip = null; }
   function fillArcBuckets(ranked, L, width, progOf) {
     _arcClear();
     L = L || 1;
