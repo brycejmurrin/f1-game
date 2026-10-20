@@ -134,3 +134,11 @@ UPDATE FROM OrchB 17 session_01LhUBYRvvJj4Urk59aVHyDn (04:17–04:32Z, FINAL —
 - Codex #3151 (4 finishes holographic/velvet/hammered/anodized + 6 bodies): draft, MERGE-HOLD, dirty — not in scope unless Bryce asks.
 - Artifact refresh (Bryce 04:10Z): D3c republished v5 (14NZUdiTMpNKRTu4u9ZP3m, relayed). Still owed: D1d UkMYBoXeRp59rtT2pTTk38 — relay to Bryce when it lands.
 - OrchB 16 stood down; don't archive it unless Bryce says. OrchB 17 deletes its pending tick and Monitor at handoff.
+
+UPDATE FROM OrchB 18 session_01Eji45VYsTzT7aDrC2NMuC3 (04:59–05:24Z, FINAL — read this LAST; supersedes everything above). Successor = OrchB 19.
+- CONTEXT: OrchB 18 hit 160k by 05:22Z. Successor: read ONLY FIRST ACTS + MERGE + this note, bus --last 15; skip AskUserQuestion, post LIVE, message HUD-TIME + L21 only, tell Bryce.
+- #3160 bodies Pages GREEN on a10959ce. Tip a10959ce. Fleet A released its #3081 slot (DIRTY); game slot free.
+- Bryce 05:05Z "Let's fix that" + 05:22Z "Fix hud and wave 2 asap" (TOP PRIORITY).
+- INCIDENT e6f22d6 (base red hud-layout 'controls ignore HUD SIZE (phone-667x375)', TIME box −1 px at SIZE 200) — owner now HUD-TIME session_01Vak5F7Cq32FMBHo6Ua2jvg (Opus, launched 05:07Z by OrchB 18; bus 5072315). Its theory at 05:20Z: --hud-z-top briefly publishes the next-lower zoom step at HUD 200 (fit oscillation), so widths match one grid step lower. No PR yet; told to open a draft at first commit and send READY. It was ~190k context — if it hands off, launch a successor from its WIP sha. Merges frozen (merge-gate) until its fix merges + Pages green; then lift INCIDENT.
+- NEXT GAME SLOT after that = #3169 wave 2 (L21 session_01Ukf677hTKNKjZHS4AtUykN, branch cursor/design-wave2-507e @07f2c2ba9, all 18 D2c finishes; Bryce 'Ship now, fix after' for Cadillac DRS pod + Williams floor). L21 asked for status/ETA 05:22Z, no reply yet. Not subscribed — subscribe #3169 only when about to merge.
+- OrchB 18 deletes its pending tick at handoff.
