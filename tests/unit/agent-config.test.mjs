@@ -1074,7 +1074,7 @@ test("the fleet block keys are the same in the skill and the worker reference", 
   const block = FLEET_SKILL.match(/```fleet\n([\s\S]*?)```/);
   assert.ok(block, "SKILL.md carries the fenced fleet block");
   const keys = [...block[1].matchAll(/^([a-z-]+):/gm)].map((m) => m[1]);
-  assert.deepEqual(keys, ["worker", "orchestrator", "owned", "state", "blocker", "needs-orchestrator"]);
+  assert.deepEqual(keys, ["worker", "fleet", "orchestrator", "owned", "state", "blocker", "needs-orchestrator"]);
   assert.match(block[1], /state: .*\bblocked\b/);
   for (const k of ["state: blocked", "needs-orchestrator: yes"]) {
     assert.ok(FLEET_WORKER.includes(k), `worker.md escalation uses \`${k}\``);

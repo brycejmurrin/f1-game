@@ -106,14 +106,13 @@
   color: var(--dim);
 }
 .hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
-/* A STABLE TOWER. .hud-top is a centred flex row, so any box that changes width
-   re-centres all of them: POS going 9/22 -> 10/22, LAP 9/58 -> 10/58, a lap
-   clock gaining its minute. Each slot holds its widest spelling (tabular
-   figures, so `ch` is a digit) and DELTA keeps its place while it waits for a
-   reference (js/ui/hud.js paintHudDelta: data-pending), instead of unhiding
-   half a box wide after lap 1. */
-#hud-pos, #hud-lap { min-width: 5ch; }
-#hud-time, #hud-best, #hud-delta-n { min-width: 7ch; }
+/* A STABLE TOWER: a box that changes width re-centres the flex row, so each slot holds its widest
+   spelling, 0.04em letter-spacing included ("22/22" 2.41em, "8:88.88" 3.03em, Barlow Condensed 700).
+   In em, not ch: ch follows the face on screen, and a fit measured in the fallback (ch 0.56em vs
+   0.416em) capped 667x375 at 0.89 instead of 0.97 (#3064). DELTA keeps its place (data-pending). */
+#hud-pos, #hud-lap { min-width: 2.489em; }
+#hud-time, #hud-best { min-width: 3.09em; }
+#hud-delta-n { min-width: 2.914em; }
 /* DESKTOP: the labelled plate stays, only its value is invisible, so the four
    live boxes read centred (an invisible 5th box left them 56px off the flag's
    axis). TOUCH: the pending plate leaves the layout — its ~95px capped the

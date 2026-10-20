@@ -1151,6 +1151,27 @@ test("H4: a push over a red tooling-fast run is refused; && chains, green logs a
   } finally { repo.rm(); }
 });
 
+// #1714: a push while a ci.yml run is live warns (advisory) and never blocks.
+test("#1714: git push prints the live-run WARN from live-run-check and still passes; non-push stays silent", () => {
+  const repo = scratchRepo("hook-pushlive-");
+  try {
+    const stub = path.join(repo.dir, "live-stub.mjs");
+    fs.writeFileSync(stub, 'console.log("WARN: 1 live ci.yml run on x \\u2014 this push cancels them and loses their failures.");\n');
+    const quiet = path.join(repo.dir, "quiet-stub.mjs");
+    fs.writeFileSync(quiet, "");
+    const push = (command, check) => hook("bash-guard.sh", { tool_name: "Bash", tool_input: { command }, cwd: repo.dir }, { cwd: repo.dir, env: { APEX_LIVE_RUN_CHECK: check } });
+    let r = push("git push -u origin x", stub);
+    assert.notEqual(r.status, 2, r.stderr);
+    assert.equal(
+      r.stderr.split("\n").filter((l) => l.startsWith("WARN:")).join("\n"),
+      "WARN: 1 live ci.yml run on x — this push cancels them and loses their failures.",
+    );
+    assert.doesNotMatch(push("git push -u origin x", quiet).stderr, /live ci\.yml/, "no live run, no line");
+    assert.doesNotMatch(push("git status", stub).stderr, /live ci\.yml/, "only a push warns");
+    assert.doesNotMatch(push("git push -u origin x", path.join(repo.dir, "missing.mjs")).stderr, /live ci\.yml/, "a missing check is silent");
+  } finally { repo.rm(); }
+});
+
 // H1 (#2662): harness Stop hook — memory dir excluded from porcelain; push-hold silences unpushed nag.
 test("H1: stop-hook-git-check.sample treats synced memory and a held push as clean (Bryce applies the same to ~/.claude)", () => {
   const sample = path.join(ROOT, "tests/fixtures/stop-hook-git-check.sample.sh");
