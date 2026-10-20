@@ -2383,6 +2383,7 @@
     }
   },
   "isolatedFiles": [
+    "tests/unit/catalog-discovery.test.mjs",
     "tests/unit/car-shade.test.mjs",
     "tests/unit/game-vm.test.mjs"
   ]
