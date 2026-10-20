@@ -2002,10 +2002,10 @@ void main() {
       float fvS = 0.5 + 0.5 * sin(fvC * 70.0 + sin(vObjPos.z * 1.7 + fvC * 9.0) * 1.2);
       float fvBr = smoothstep(-0.6, 0.2, sin(vObjPos.z * 4.0 + fvC * 37.0));   // streaks break up along their length
       float fvPer = 0.090 / fnPx;   // streak period in pixels: under ~3 px the streaks are their mean coverage
-      float fv = mix(smoothstep(0.62, 0.85, fvS) * fvBr, 0.22, smoothstep(3.0, 1.5, fvPer)) * smoothstep(1.4, 0.2, vObjPos.z);
-      vec3 fvGlow = mix(vec3(0.78, 1.0, 0.30), vec3(0.10, 0.22, 0.0), smoothstep(0.35, 0.75, pvA))
+      float fv = mix(smoothstep(0.50, 0.80, fvS) * fvBr, 0.30, smoothstep(3.0, 1.5, fvPer)) * smoothstep(1.4, 0.2, vObjPos.z);
+      vec3 fvGlow = mix(vec3(0.78, 1.0, 0.30), vec3(0.05, 0.14, 0.0), smoothstep(0.35, 0.75, pvA))
         * (uAmbSky * 2.5 + uSunColor * 0.6 * pvSun + vec3(0.15));
-      color = mix(color, fvGlow, fv * 0.95);
+      color = mix(color, fvGlow, fv);
     } else if (finishId == 68) {   // carbonfade (FW47): lacquered weave with a sun sheen below the sidepod line, a torn edge between
       vec2 cfW = vObjPos.xz * 120.0 + vObjPos.y * 120.0;
       float cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * clamp(0.052 / fnPx * 0.5 - 1.0, 0.0, 1.0);

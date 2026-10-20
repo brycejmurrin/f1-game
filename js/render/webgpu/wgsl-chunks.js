@@ -1882,10 +1882,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let fvS = 0.5 + 0.5 * sin(fvC * 70.0 + sin(in.objPos.z * 1.7 + fvC * 9.0) * 1.2);
       let fvBr = smoothstep(-0.6, 0.2, sin(in.objPos.z * 4.0 + fvC * 37.0));
       let fvPer = 0.090 / fnPx;
-      let fv = mix(smoothstep(0.62, 0.85, fvS) * fvBr, 0.22, 1.0 - smoothstep(1.5, 3.0, fvPer)) * (1.0 - smoothstep(0.2, 1.4, in.objPos.z));
-      let fvGlow = mix(vec3<f32>(0.78, 1.0, 0.30), vec3<f32>(0.10, 0.22, 0.0), vec3<f32>(smoothstep(0.35, 0.75, pvA)))
+      let fv = mix(smoothstep(0.50, 0.80, fvS) * fvBr, 0.30, 1.0 - smoothstep(1.5, 3.0, fvPer)) * (1.0 - smoothstep(0.2, 1.4, in.objPos.z));
+      let fvGlow = mix(vec3<f32>(0.78, 1.0, 0.30), vec3<f32>(0.05, 0.14, 0.0), vec3<f32>(smoothstep(0.35, 0.75, pvA)))
         * (F.ambSky.xyz * 2.5 + F.sunColor.xyz * (0.6 * pvSun) + vec3<f32>(0.15));
-      color = mix(color, fvGlow, vec3<f32>(fv * 0.95));
+      color = mix(color, fvGlow, vec3<f32>(fv));
     } else if (finishId == 68) {
       let cfW = in.objPos.xz * 120.0 + vec2<f32>(in.objPos.y * 120.0);
       let cfWv = 0.5 + 0.5 * sin(cfW.x) * sin(cfW.y) * saturate(0.052 / fnPx * 0.5 - 1.0);
