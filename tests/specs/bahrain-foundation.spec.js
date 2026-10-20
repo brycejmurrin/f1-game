@@ -134,6 +134,13 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
     const definition = Tracks.LIST.find((track) => track.id === "bahrain");
     return {
       sceneryCoordinates: definition.sceneryCoordinates,
+      // Independent trace locations matched to the numbered 2025 F1 GP map.
+      // A count of 15 alone missed skipped esses and the absent final T15.
+      turnAnchors: definition.turns.map((frac) => {
+        const node = window.__apex.nodeAt(frac);
+        const sample = profile[Math.round(frac * profile.length) % profile.length];
+        return { x: node.x, z: node.z, dir: sample.k > 0 ? "L" : "R" };
+      }),
       exclusions: definition.dressingExclusions,
       relief: Math.max(...elevations) - Math.min(...elevations),
       // Racing fracs re-located +0.2702 by #878's start-line move (same world
@@ -150,6 +157,21 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   });
 
   expect(audit.sceneryCoordinates).toBe("racing");
+  const officialTurns = [
+    [349, 599, "R"], [273, 542, "L"], [162, 570, "R"],
+    [-405, 440, "R"], [-230, 266, "L"], [-147, 170, "R"],
+    [-30, 155, "L"], [112, -4, "R"], [82, 352, "L"],
+    [155, 423, "L"], [192, -290, "L"], [-23, -130, "R"],
+    [-314, -205, "R"], [364, -598, "R"], [405, -512, "R"],
+  ];
+  expect(audit.turnAnchors).toHaveLength(officialTurns.length);
+  officialTurns.forEach(([x, z, dir], i) => {
+    const actual = audit.turnAnchors[i];
+    // 25 m allows spline sampling/apex choice, but not the old 47–785 m
+    // numbering errors. These are in-game trace coordinates, not GPS fixes.
+    expect(Math.hypot(actual.x - Number(x), actual.z - Number(z)), `T${i + 1}`).toBeLessThan(25);
+    expect(actual.dir, `T${i + 1} direction`).toBe(dir);
+  });
   expect(audit.exclusions).toContainEqual({
     kinds: ["foliage", "lighting"], s0: 0, s1: 1,
   });

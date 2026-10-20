@@ -27,7 +27,7 @@ Clockwise; s=0.0 at start/finish on the main straight.
 | 0.10 | L | mid | Olympic Basin rowing lake — wide flat teal plane behind low wall |
 | 0.15 | both | mid | Parkland trees — clusters of green cube canopies on brown trunk boxes |
 | 0.274 | R | 47–143 m | **Casino de Montréal** (`montreal-casino`, required) — 4 stacked pale tiers ~44 m with glint prisms + gold Quebec annex; built on dry ground (the river `waterBand` starts at s≈0.3125). Approach plaza cue at s 0.255 |
-| 0.30 | L | far | **Biosphère** (`montreal-biosphere`) — 76 m Ø / 62 m high geodesic dome on Île Sainte-Hélène |
+| 0.30 | L | far | **Biosphère** (`montreal-biosphere`) — open triangular sphere frame on Île Sainte-Hélène; nominal 76 m diameter / 62 m height, approximate |
 | 0.38 | L | far | Montreal skyline across river — distant grey tower boxes of varied height |
 | 0.45 | R | close | Casino corner (T8–9) + footbridge — grey box spanning over the track |
 | 0.52–0.58 | both | close | **L'Épingle** (`montreal-hairpin-grandstands`) — 3 outside stands + GS 34 inside |
@@ -53,7 +53,7 @@ Clockwise; s=0.0 at start/finish on the main straight.
   Placement: the footprint (plinth 72 x 58 m + 21 x 36 m annex) cannot fit the 70 m terrain ribbon, so it stands at s 0.274, gap 95 m, mostly on
   the grass floor (its inboard edge touches the ribbon); nothing may stand on the `montreal-river-*` water bands (s 5/16–11/16 on this side). Verified headless: a 3 m grid over the footprint hits 0 water-mesh samples.
   Evidence: Wikipedia places the casino on Île Notre-Dame beside the Olympic Basin; the exact bearing/distance is UNVERIFIED (the def's OSM trace is the circuit only, no building footprint).
-- Background skyline (distant grey tower boxes) and the Biosphère hemisphere across the water give the island scale and identity.
+- Background skyline (distant grey tower boxes) and the Biosphère sphere frame across the water give the island scale and identity.
 
 ## Wave 6 — sourced vs uncertain (2026-09-29)
 
@@ -121,3 +121,20 @@ Local densify only (no shared `city.js` / water core / `flatTerrain` change):
 - Island midfield: service paths, low park sheds, tree/bush variety, casino plaza cue.
 - Hairpin stand end fascias + Canadian GP billboards; S/F bay `endWalls` where missing.
 
+
+## Biosphere reference and modelling limits
+
+The [Bureau International des Expositions article, 10 April 2019](https://ppp.bie-paris.org/site/en/latest/blog/entry/a-to-z-of-expo-architects-buckminster-fuller)
+provides a primary photograph of the open steel triangular sphere and quotes
+76 m diameter / 61 m height. Other references above quote 62 m height; the
+existing nominal 62 m model is retained as an approximation, not a survey.
+Consulted 19 October 2026. The frame uses one coherent spherical centre,
+converges at the crown and starts above its ground datum. It replaces an
+opaque shell whose inconsistent bands extended outside the declared bounds.
+Sparse member thickness and internal platforms remain artistic simplifications.
+Twelve short piers adapt the lower frame to the game's existing terrain; the
+whole sphere is raised about 1.69 m to clear the members' thickness, with
+interior columns reaching the ground. This is artistic local grading, not a
+claim about the real foundation. The registered bounds include piers and crown.
+The neighbouring-island sight-line and nominal footprint are not GPS placement
+certification; a photograph does not supply a metre profile.

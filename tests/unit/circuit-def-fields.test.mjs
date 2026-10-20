@@ -407,12 +407,13 @@ test("Spa and Monaco elevation extremes sit on their named corners", () => {
 
   const spa = profile("spa");
   const top = spa.ext(0, 1, +1), bottom = spa.ext(0, 1, -1);
-  // Les Combes is a complex (T4-T6): the summit sits at its entry or exit.
-  const lesCombes = [4, 5, 6].map(spa.T).reduce((a, b) => (Math.abs(b - top.f) < Math.abs(a - top.f) ? b : a));
+  // 2025 GP identities: Les Combes T5-T7. These retain the same physical
+  // stations as the former curated T4-T6; no profile/tolerance change.
+  const lesCombes = [5, 6, 7].map(spa.T).reduce((a, b) => (Math.abs(b - top.f) < Math.abs(a - top.f) ? b : a));
   near(top, lesCombes, "Spa high point = Les Combes");
-  near(bottom, spa.T(17), "Spa low point = Stavelot");
-  const eauRouge = spa.ext(spa.T(1), spa.T(3), -1);
-  near(eauRouge, spa.T(2), "Spa valley = Eau Rouge");
+  near(bottom, spa.T(15), "Spa low point = Stavelot exit / Paul Frere");
+  const eauRouge = spa.ext(spa.T(1), spa.T(4), -1);
+  near(eauRouge, spa.T(3), "Spa valley = Eau Rouge/Raidillon compression");
   assert.ok(top.y - eauRouge.y > 60, `Kemmel must climb well above Eau Rouge (${(top.y - eauRouge.y).toFixed(1)} m)`);
   assert.ok(spa.grade < 0.18, `Raidillon is ~17 %; nothing on the lap may exceed 18 % (got ${(spa.grade * 100).toFixed(1)} %)`);
 
