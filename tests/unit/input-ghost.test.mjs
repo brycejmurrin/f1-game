@@ -430,3 +430,37 @@ test("150-second mixed analog lap keeps all channels exact with sparse braking/c
   assert.ok(Object.is(signed.atStep(0).steer, -0)); assert.ok(Object.is(signed.atStep(30).steer, 0));
   assert.ok(Object.is(signed.atStep(0).throttleLevel, -0));
 });
+
+test("a PB write waits for a long idle slot, and the cap still writes it (#3109)", () => {
+  const h = createHarness();
+  const queued = [];
+  h.sandbox.requestIdleCallback = (fn) => queued.push(fn);
+  const IG = h.InputGhost;
+  IG.setTrack("monza");
+  assert.equal(driveLap(IG, 60, 12.5), true);
+  const key = "apex26." + IG.STORE_KEY;
+  assert.equal(queued.length, 1);
+  queued.shift()({ timeRemaining: () => 4 });
+  assert.equal(h.disk.has(key), false, "a short idle tail must not take the write");
+  assert.equal(queued.length, 1, "the write re-queues for the next idle slot");
+  queued.shift()({ timeRemaining: () => 40 });
+  assert.equal(h.disk.has(key), true);
+  assert.equal(IG.persistence().reason, "saved");
+});
+
+test("the trimmed store on disk is byte-identical to a fresh whole-store pack (#3109)", () => {
+  const h = createHarness();
+  const IG = h.InputGhost;
+  for (let k = 0; k < 4; k++) { IG.setTrack("t" + k); assert.equal(driveLap(IG, 600, 30 - k), true); }
+  const key = "apex26." + IG.STORE_KEY;
+  const onDisk = h.disk.get(key);
+  // A second harness decodes the disk copy and re-packs it from scratch: the
+  // cached packing must have produced exactly those bytes.
+  const h2 = createHarness({ store: new Map(h.disk) });
+  h2.InputGhost.setTrack("t0");
+  h2.InputGhost.flush();
+  h2.InputGhost.clear("nope");
+  const repacked = h2.disk.get(key);
+  const strip = (s) => JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(s)).map(([id, g]) => [id, Object.assign({}, g, { _used: 0 })])));
+  assert.equal(strip(repacked), strip(onDisk));
+});

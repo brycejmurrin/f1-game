@@ -1,0 +1,1 @@
+Improved: On the WebGPU renderer the game no longer runs a second per-frame animation loop beside its own, each shadow pass skips casters that belong to other shadow maps, and night lamps are no longer re-ranked every frame while cornering.

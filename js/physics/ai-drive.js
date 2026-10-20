@@ -74,13 +74,18 @@ const AiDrive = (function () {
 
   const _look = [];
   const _lookPool = [];
-  function beginLook() { _look.length = 0; }
+  // _lookSorted: every pushLook so far had d >= the one before (the game's node walk always does). A NaN or
+  // a step back clears it, and brakeTarget then scans every sample as it does for hand-built lists.
+  let _lookSorted = true, _lookLastD = -Infinity;
+  function beginLook() { _look.length = 0; _lookSorted = true; _lookLastD = -Infinity; }
   // `mu` is bankGrip(bank), passed in by a caller that caches it per node (game.js c._lk); omitted, it is
   // computed here. brakeTarget reads `mu` and never re-takes the sine (PERF-HUNT-4 B-F4).
   function pushLook(d, k, bank, mu) {
     let s = _lookPool[_look.length];
     if (!s) s = _lookPool[_look.length] = { d: 0, k: 0, bank: 0, mu: 1 };
     s.d = d; s.k = k; s.bank = bank; s.mu = mu === undefined ? bankGrip(bank) : mu;
+    if (!(d >= _lookLastD)) _lookSorted = false;
+    _lookLastD = d;
     _look.push(s);
   }
   // The bank's lateral-grip factor for the brake planner: a banked node holds 1 + sin(bank)·0.8 of the flat grip.
@@ -549,6 +554,9 @@ const AiDrive = (function () {
     const V = vs * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
     let vLimSq = Infinity, bVC = 0, bD = 1;
     const scrub = 2 * brake * 0.85;   // the same ((2·brake)·0.85)·d product as before, so bit-identical
+    // The game's pooled look-ahead arrives with d ascending, so dSq = scrub·max(d, 1) never falls while vLimSq
+    // never rises: past the first skip every later sample skips too, and `break` returns the same answer (#3109).
+    const ascending = samples === _look && _lookSorted && scrub > 0;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
@@ -557,7 +565,7 @@ const AiDrive = (function () {
       // EXACT SKIP (PERF-HUNT-4 B-F4): entrySq = vC² + dSq >= dSq, so once the distance term alone reaches
       // the tightest budget so far this sample cannot win — skip its corner solve. `continue`, not `break`:
       // the result stays independent of sample order. A NaN dSq falls through to the original test.
-      if (dSq >= vLimSq) continue;
+      if (dSq >= vLimSq) { if (ascending) break; continue; }
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
       const bankMu = s.mu !== undefined ? s.mu : bankGrip(s.bank);   // pooled samples carry it; hand-built ones may not
       const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq) * skill * (ctx.diffCorner || 1);

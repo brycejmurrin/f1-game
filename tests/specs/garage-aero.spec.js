@@ -136,9 +136,11 @@ test.describe("garage active aero", () => {
     const moved = await page.evaluate(() => {
       // Where each element's leading edge sits at the two ends of the travel —
       // the same rotation-about-the-pivot the draw applies.
+      // The rear stack shares one pivot, off most elements' chord lines (FIA
+      // C3.11.6), so rotate the design-pose LE about it.
       const at = (e, d) => {
-        const a = e.natural + d, u = (0 - e.hinge) * e.chord;
-        return [e.z - u * Math.cos(a), e.y + u * Math.sin(a)];
+        const dy = e.le[1] - e.y, dz = e.le[0] - e.z, c = Math.cos(d), s = Math.sin(d);
+        return [dy * s + dz * c + e.z, dy * c - dz * s + e.y];
       };
       return Car3D.aeroFlaps(2, null).map((e) => {
         const c = at(e, e.zAngle), o = at(e, e.xAngle);

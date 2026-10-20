@@ -1239,9 +1239,11 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
   const livery = resolveLivery(team), finish = CarMaterials.finishOf(livery, "wingFinish");
   const surface = livery.wingCarbon === "carbon" ? "carbon" : "paint";
+  // The flown drs plane (paint "rearWing") keeps the livery's REAR WING colour, as Car3D.build painted it baked.
+  const rearCol = surface === "carbon" ? col : (livery.rearWing || livery.c2 || team.color2);
   const co = typeof CarDraw !== "undefined" ? CarDraw.coOpt(mat) : mat;   // A-H3 (hunt 4): opaque flaps join R1's coalesced runs on TLX; GLX/WGX and alpha < 1 get `mat` itself
   if (still || b === 0 || b === 1) {
-    const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only, surface);
+    const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only, surface, rearCol);
     if (set) gfx.draw(set, modelMat, co);
     if (b >= 0.5 && CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, 1);
     return;
@@ -1266,7 +1268,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
       W[8 + k] = -uu * sa + ff * ca;
       W[12 + k] += uu * fg.y + ff * fg.z;
     }
-    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg, finish, surface);
+    const mesh = CarMesh.getAeroFlap(aLvl, fg.paint ? rearCol : col, i, style, fg, finish, surface);
     if (mesh) gfx.draw(mesh, W, co);
   }
   if (CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, b);
@@ -4634,7 +4636,7 @@ const _aiBr = CarFields.warmDoubles({ traits: null, samples: null, latMax: 0, ae
 const _aiLane = CarFields.warmDoubles({ traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 }, ["queueT"]);
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 // PlayerForces.step's ctx, pooled like _wallCtx (updateCar's player bicycle model fills it every step).
-const _pfCtx = { dt: 0, driverDelta: 0, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 0, deploy: 0, braking: false,
+const _pfCtx = { dt: 0, driverDelta: 0, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 0, deploy: 0, braking: false, axTarget: 0,
   surfaceMu: 0, kerbGrip: 0, bankMu: 0, modsCornering: 0, modsBraking: 1, loadF: 0, loadR: 0, vertLoad: 0, af: 0, ar: 0, sp: 0, steer: 0,
   weatherGrip: 0, aeroDf: 0, dirtyMul: 0, coastCut: 0, vTopNow: 0, tyres: null };
 const _aiOtPull = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0, trailT: 0 }, ["freeSpeed", "queueT", "kTurn", "trailT"]);
@@ -4686,7 +4688,7 @@ function collideFx(a, b, impact) {
 }
 
 // updateCar's per-step scratch: the locals its parts (below it) read and hand back; rewritten before every read.
-const _ucS = CarFields.warmDoubles({ recordInput: null, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl"]);
+const _ucS = CarFields.warmDoubles({ recordInput: null, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
 function updateCar(c, dt, ranked) {
   const S = _ucS;
   // This scratch snapshot never supplies controls to physics. Native Input is
@@ -4902,6 +4904,9 @@ function updateCar(c, dt, ranked) {
   // pitHeld: lane limiter only (OT earn / flaps also gate on it). ersHeld adds box + caution for BOOST.
   const pitHeld = pits.held(c);
   const ersHeld = pitHeld || cautionV >= 0 || c.pitState === "box"; let aiWantsBoost = false;   // no BOOST at the limiter, in the box or under a caution cap: it only hit the cap and drained ~0.23/s
+  // paceVmax(c) in two slots (#3109): its inputs (aeroX, _vmaxNow) move only at the flap/vmax stamp below, so
+  // S.pvA serves every read before it (this step sees last step's flap) and S.pvB, taken in updateCarLateral, every read after.
+  S.pvA = paceVmax(c);
   if (!c.human && c.energy > 0.02 && !ersHeld) {
     _aiBoost.traits = aiT; _aiBoost.energy = c.energy; _aiBoost.otActive = c.otT > 0;
     _aiBoost.kAhead60 = Tracks.curvature(track, wrapS(c.s + 60));
@@ -4911,7 +4916,7 @@ function updateCar(c, dt, ranked) {
     _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen; _aiBoost.vTop = vT; _aiBoost.trailT = c.trailT || 0;   // closing rates ride the pace scale
     // Pace-scaled catch (#1401): edge over the tow car arms ERS when queue-levelled.
     _aiBoost.street = !!track.street; _aiBoost.towVmax = towCar ? paceVmax(towCar) : 0;
-    _aiBoost.ourVmax = paceVmax(c); _aiBoost.ourPace = scriptPace(c); _aiBoost.towPace = towCar ? scriptPace(towCar) : 0;
+    _aiBoost.ourVmax = S.pvA; _aiBoost.ourPace = scriptPace(c); _aiBoost.towPace = towCar ? scriptPace(towCar) : 0;
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
   const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld)
@@ -4976,7 +4981,7 @@ function updateCar(c, dt, ranked) {
                           // Pass hunger (permanent): queue time + pace edge over the car ahead.
                           _aiOtFire.queueT = c.queueT || 0,
                           _aiOtFire.blockerVmax = blocker ? paceVmax(blocker) : (ahead ? paceVmax(ahead) : 0),
-                          _aiOtFire.ourVmax = paceVmax(c), _aiOtFire.ourPace = scriptPace(c),
+                          _aiOtFire.ourVmax = S.pvA, _aiOtFire.ourPace = scriptPace(c),
                           _aiOtFire.blockerPace = blocker ? scriptPace(blocker) : (ahead ? scriptPace(ahead) : 0),
                           AiDrive.otShouldFire(simRnd(), dt, _aiOtFire)));
   if (S.recordInput) S.recordInput.overtake = !!fire;
@@ -5292,7 +5297,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       // car ahead (AiDrive.towGain); streets and the player path stay base gain.
       const towH = AiDrive.passHunger({
         street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0,
-        blockerVmax: paceVmax(towCar), ourVmax: paceVmax(c), blockerPace: scriptPace(towCar), ourPace: scriptPace(c),
+        blockerVmax: paceVmax(towCar), ourVmax: S.pvA, blockerPace: scriptPace(towCar), ourPace: scriptPace(c),
       });
       vmax *= 1 + AiDrive.towGain(!!track.street, towH) * c.towing;
     }
@@ -5347,11 +5352,11 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // dabbed, until we are clear. The pass latch below reads it too.
     if (alongO && c.sbsT > AiDrive.sbsCommitT({
       street: !!track.street, traits: aiT, vTop: vT, other: alongO,
-      ourVmax: paceVmax(c), ourPace: scriptPace(c),
+      ourVmax: S.pvA, ourPace: scriptPace(c),
       otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
     }) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase({
       street: !!track.street, traits: aiT, vTop: vT, other: alongO,
-      ourVmax: paceVmax(c), ourPace: scriptPace(c),
+      ourVmax: S.pvA, ourPace: scriptPace(c),
       otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
     }));   // COMMIT OR YIELD: tuck in behind
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
@@ -5563,6 +5568,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
 function updateCarLateral(c, dt, ranked, S) {
   const hw = S.hw; const k = S.k; const dd = S.dd; const vT = S.vT; const inp = S.inp; const vmax = S.vmax; const roomL = S.roomL; const roomR = S.roomR; const blocker = S.blocker; const blockerGap = S.blockerGap; const unstuckActive = S.unstuckActive; const letPass = S.letPass; const aiFreeSpeed = S.aiFreeSpeed; const squeezed = S.squeezed; const roadL = S.roadL; const roadR = S.roadR; const alongO = S.alongO; const alongDx = S.alongDx; const alongDprog = S.alongDprog; const chaser = S.chaser; const chaserGap = S.chaserGap; const nearbyN = S.nearbyN; let sep = S.sep; const aiT = S.aiT; const braking = S.braking;
   let steer, gripScale;
+  S.pvB = paceVmax(c);
   if (c.human) {
     steer = inp ? (inp.steer ?? 0) : Input.steer(dt);
     if (S.recordInput) S.recordInput.steer = steer;   // dt: ramps advance per physics step
@@ -5615,7 +5621,7 @@ function updateCarLateral(c, dt, ranked, S) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    const _passH = blocker ? AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: paceVmax(c), blockerPace: scriptPace(blocker), ourPace: scriptPace(c) }) : 1;
+    const _passH = blocker ? AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: S.pvB, blockerPace: scriptPace(blocker), ourPace: scriptPace(c) }) : 1;
     c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street, _passH) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
@@ -5666,7 +5672,7 @@ function updateCarLateral(c, dt, ranked, S) {
              own comment states the contract ("callers must read fields before
              the next traits() call"); this was the one site that broke it.
              Take po's number, then put c's ratings back. */
-          const poCool = AiDrive.repassLock(AiDrive.traits(po), (paceVmax(po) - paceVmax(c)) / vT);
+          const poCool = AiDrive.repassLock(AiDrive.traits(po), (paceVmax(po) - S.pvB) / vT);
           if (!c.human) AiDrive.traits(c);
           po.passFailT = Math.max(po.passFailT || 0, poCool);
           if (po.passOf === c) { po.passOf = null; po.passCool = po.passFailT; }
@@ -5701,7 +5707,7 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
       _aiOtPull.blockerVmax = paceVmax(blocker); _aiOtPull.vTop = vT; _aiOtPull.queueT = c.queueT || 0; _aiOtPull.trailT = c._trOf === blocker ? c.trailT : 0;
-      _aiOtPull.ourVmax = paceVmax(c); _aiOtPull.ourPace = scriptPace(c); _aiOtPull.blockerPace = scriptPace(blocker);
+      _aiOtPull.ourVmax = S.pvB; _aiOtPull.ourPace = scriptPace(c); _aiOtPull.blockerPace = scriptPace(blocker);
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
@@ -5745,7 +5751,7 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x; _aiDefend.vTop = vT;
       _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
       // Cover concede (permanent, AI-AI): chaser pace edge → defender yields cover.
-      _aiDefend.chaserVmax = paceVmax(chaser); _aiDefend.ourVmax = paceVmax(c);
+      _aiDefend.chaserVmax = paceVmax(chaser); _aiDefend.ourVmax = S.pvB;
       _aiDefend.chaserPace = scriptPace(chaser); _aiDefend.ourPace = scriptPace(c); defend = AiDrive.defendPull(_aiDefend);
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in
@@ -6027,7 +6033,7 @@ function updateCarBicycle(c, dt, ranked, S) {
     // (step() reads every field once at entry and keeps none): a fresh ~26-field literal per step was ~20 boxed doubles.
     const pf = _pfCtx;
     pf.dt = dt; pf.driverDelta = driverDelta; pf.assistDelta = assistDelta; pf.lineDelta = lineDelta; pf.onThrottle = onThrottle;
-    pf.throttleLvl = throttleLvl; pf.gearMult = gearMult; pf.deploy = deploy; pf.braking = braking;
+    pf.throttleLvl = throttleLvl; pf.gearMult = gearMult; pf.deploy = deploy; pf.braking = braking; pf.axTarget = axEstTarget;
     pf.surfaceMu = surfaceMu; pf.kerbGrip = kerbGrip; pf.bankMu = bankMu; pf.modsCornering = mods.cornering; pf.modsBraking = mods.braking;
     pf.loadF = loadF; pf.loadR = loadR; pf.vertLoad = vertLoad; pf.af = af; pf.ar = ar; pf.sp = sp; pf.steer = steer;
     pf.weatherGrip = gmC; pf.aeroDf = aeroDfMult(c); pf.dirtyMul = dirtyAirMul(c.wake || 0, c.speed);

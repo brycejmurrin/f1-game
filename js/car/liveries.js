@@ -612,12 +612,14 @@ const Liveries = (function () {
     "saddleTint", "coverBind", "finHandoff",
     "rearWing", "wingCarbon", "bodySplit", "lower", "upper",
     "patternTint", "patternSecond", "patternPlacement", "patternSide", "patternWidth", "patternRepeat",
-    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "coverFinish", "wingFinish", "haloFinish",
+    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "patternKey", "decalNoseTip", "decalCockpit", "decalPodTop", "decalHalo", "coverFinish", "wingFinish", "haloFinish",
     // GARAGE FINISHES/PARTS contract (docs/notes/GARAGE-FINISHES-PARTS-2026-10-17.md): one row per field, owned by the slice named there.
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
     "podFinish", "finFinish", "mirrorFinish", "helmetStyle",
     // LD zones slice (docs/notes/LIVERY-REF-2026-10-18.md): front and rear wing endplates.
     "endplate", "crestStyle",
+    // Crest customisation (B·D8 round 5): tone and frame dress an original emblem.
+    "crestTone", "crestFrame",
     // BODY (2026-10-18): the chassis shape, Car3D.bodyStyleKey — geometry, like finShape.
     "bodyStyle",
     // PAINT ZONES (CarMaterials.PAINT_ZONES; header above): new surfaces, each optional.

@@ -1658,14 +1658,6 @@
     "Apex 26 — presets › clicking a preset marks it active and persists": [["2026-10-06T06:08:16Z","llvmpipe",9.156], ["2026-10-06T07:00:28Z","llvmpipe",4.103], ["2026-10-06T23:09:02Z","llvmpipe",2.76], ["2026-10-07T08:34:22Z","llvmpipe",1.826], ["2026-10-07T09:06:58Z","llvmpipe",2.411], ["2026-10-07T10:16:30Z","llvmpipe",2.681], ["2026-10-08T01:17:42Z","llvmpipe",1.977], ["2026-10-09T19:36:06Z","llvmpipe",2.16], ["2026-10-10T11:43:05Z","llvmpipe",1.718], ["2026-10-10T14:27:54Z","llvmpipe",2.293]]
    }
   },
-  "tests/specs/projection.spec.js": {
-   "s": [["2026-09-25T08:50:23Z","llvmpipe",7.631,2], ["2026-09-25T08:50:37Z","llvmpipe",11.184,1], ["2026-10-10T13:25:08Z","llvmpipe",13.4,2], ["2026-10-10T13:25:36Z","llvmpipe",12.1,1], ["2026-10-10T14:35:47Z","llvmpipe",11.4,1], ["2026-10-10T14:38:50Z","llvmpipe",7.8,2]],
-   "t": {
-    "Apex 26 — world<->track projection › a point on the centreline projects to lateral ~0": [["2026-09-25T08:50:23Z","llvmpipe",3.881], ["2026-10-10T13:25:08Z","llvmpipe",6.5], ["2026-10-10T14:38:50Z","llvmpipe",3.8]],
-    "Apex 26 — world<->track projection › lateral sign matches the +right convention": [["2026-09-25T08:50:37Z","llvmpipe",11.184], ["2026-10-10T13:25:36Z","llvmpipe",12.1], ["2026-10-10T14:35:47Z","llvmpipe",11.4]],
-    "Apex 26 — world<->track projection › round-trips (s, lateral) all around the lap and across the width": [["2026-09-25T08:50:23Z","llvmpipe",3.75], ["2026-10-10T13:25:08Z","llvmpipe",6.9], ["2026-10-10T14:38:50Z","llvmpipe",4]]
-   }
-  },
   "tests/specs/props-over-road.spec.js": {
    "s": [["2026-10-10T05:50:18Z","llvmpipe",196.626,26], ["2026-10-10T05:51:39Z","llvmpipe",185.683,26], ["2026-10-10T07:15:03Z","llvmpipe",190.405,26], ["2026-10-10T07:26:49Z","llvmpipe",200.965,26], ["2026-10-10T11:43:46Z","llvmpipe",183.642,26], ["2026-10-10T11:48:54Z","llvmpipe",189.282,26], ["2026-10-10T14:17:34Z","llvmpipe",184.359,26], ["2026-10-10T14:39:30Z","llvmpipe",131.125,26], ["2026-10-10T23:04:56Z","llvmpipe",315.3,45], ["2026-10-10T23:06:06Z","llvmpipe",38.9,7]],
    "t": {
