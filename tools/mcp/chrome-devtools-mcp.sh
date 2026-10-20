@@ -13,7 +13,9 @@ REPO_URL="https://github.com/ChromeDevTools/chrome-devtools-mcp.git"
 # fresh machine cannot silently run a different MCP release than CI/tests saw.
 MCP_NPM_PACKAGE="chrome-devtools-mcp@1.7.0"
 MCP_PIN_VERSION="${MCP_NPM_PACKAGE#*@}"
-MCP_PIN_TAG="v${MCP_PIN_VERSION}"
+# Upstream tags are chrome-devtools-mcp-vX.Y.Z (not bare vX.Y.Z — measured 2026-10-20).
+MCP_PIN_TAG="chrome-devtools-mcp-v${MCP_PIN_VERSION}"
+MCP_PIN_TAG_LEGACY="v${MCP_PIN_VERSION}"
 PATCHER="$ROOT/tools/mcp/chrome-devtools-runtime.mjs"
 PATCH_CACHE_ROOT="${APEX_CHROME_MCP_CACHE_ROOT:-$ROOT/scratch/chrome-devtools-runtime}"
 
@@ -178,21 +180,37 @@ cmd_build() {
   fi
 }
 
+checkout_pin_tag() {
+  local tag="$1"
+  git fetch --depth 1 origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null \
+    || git fetch --depth 1 origin "$tag" 2>/dev/null || return 1
+  git checkout -f "$tag" 2>/dev/null || git checkout -f "tags/$tag" 2>/dev/null
+}
+
+clone_at_pin() {
+  local tag="$1"
+  mkdir -p "$(dirname "$REPO")"
+  git clone --depth 1 --branch "$tag" "$REPO_URL" "$REPO"
+}
+
 cmd_clone() {
   if [[ -d "$REPO/.git" ]]; then
     echo "Already cloned: $REPO (pin $MCP_PIN_TAG)"
     cd "$REPO"
-    git fetch --depth 1 origin "refs/tags/${MCP_PIN_TAG}:refs/tags/${MCP_PIN_TAG}" 2>/dev/null \
-      || git fetch --depth 1 origin "$MCP_PIN_TAG" 2>/dev/null || true
-    git checkout -f "$MCP_PIN_TAG" 2>/dev/null || git checkout -f "tags/$MCP_PIN_TAG" 2>/dev/null || {
-      echo "WARN: could not checkout $MCP_PIN_TAG — re-cloning" >&2
-      cd "$ROOT"
-      rm -rf "$REPO"
-    }
+    if ! checkout_pin_tag "$MCP_PIN_TAG"; then
+      checkout_pin_tag "$MCP_PIN_TAG_LEGACY" 2>/dev/null || {
+        echo "WARN: could not checkout $MCP_PIN_TAG — re-cloning" >&2
+        cd "$ROOT"
+        rm -rf "$REPO"
+      }
+    fi
   fi
   if [[ ! -d "$REPO/.git" ]]; then
-    mkdir -p "$(dirname "$REPO")"
-    git clone --depth 1 --branch "$MCP_PIN_TAG" "$REPO_URL" "$REPO"
+    if ! clone_at_pin "$MCP_PIN_TAG" 2>/dev/null; then
+      echo "WARN: tag $MCP_PIN_TAG missing — trying legacy $MCP_PIN_TAG_LEGACY" >&2
+      rm -rf "$REPO"
+      clone_at_pin "$MCP_PIN_TAG_LEGACY"
+    fi
   fi
   cmd_build
 }

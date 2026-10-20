@@ -49,6 +49,11 @@ test("Chrome MCP network fallback is pinned to the audited release", () => {
   assert.doesNotMatch(src, /chrome-devtools-mcp@latest/);
 });
 
+test("chrome-devtools-mcp.sh clone pins upstream git tag chrome-devtools-mcp-v*", () => {
+  const src = fs.readFileSync(CD_SH, "utf8");
+  assert.match(src, /MCP_PIN_TAG="chrome-devtools-mcp-v/);
+});
+
 
 test("Playwright MCP network fallback is pinned to the audited release", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "utf8");
