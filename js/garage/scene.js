@@ -23,7 +23,7 @@ const AMB_SKY = [0.200, 0.215, 0.250], AMB_GROUND = [0.130, 0.125, 0.118];
 // Mesh primitives, room dimensions and the shared colours live in
 // js/garage/scene-prims.js (GaragePrims); the pit equipment in scene-equipment.js
 // (GarageEquipment); the live atlas in scene-live.js (GarageLive).
-const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, MAT, smooth, scale, rgb, css, pushMat, tile } = GaragePrims;
+const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css, pushMat, tile } = GaragePrims;
 
 // ── the bay shell ──────────────────────────────────────────────────────────
 // A CLOSED six-sided room whose every face is wound to be seen from INSIDE.
@@ -161,7 +161,8 @@ function buildTruss(out, L, bay) {
 // an absolute one — the ceiling LED housings reach x 2.70 and are fine, because
 // they sit at y 4.3, above the top of the frame.
 const SIDES = ["nx", "px", "back", "door", "mid", "shutter", "barrier"];
-// The two props the trackside bay (buildPropsLite) shares with the full one.
+// Trackside keeps a cheap chest recipe; the full bay uses GarageEquipment.
+// Both bays share the tyre-stack recipe.
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90]];
 function tyreStack(out, x, z, seed) {
   for (let t = 0; t < 4; t++) {
@@ -201,9 +202,11 @@ function buildPropsLite(g, liv) {
 function buildProps(g, liv) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const stack = tyreStack;
-  const toolbox = (out, x, z) => toolChest(out, x, z, c1);
+  const toolbox = (out, x, z) => GarageEquipment.toolChest(out, x, z, c1);
   // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
   toolbox(g.nx, -4.92, 3.6);
+  // The charging rack sits on the actual chest top (1.16 + 0.03 m).
+  GarageEquipment.radioRack(g.nx, -4.92, 3.6, c1, 1.19);
   // The -X stacks stand in the DOOR corner, not the deep bay: at z -5.4 and
   // -3.1 they were 0.46 m in front of the BUDGET board (y 0.69-1.44, z
   // -5.4..-2.4) at exactly its height, and the SIDE preset read the board
@@ -215,7 +218,9 @@ function buildProps(g, liv) {
   block(g.nx, -5.02, 0.86, 0.6, 0.30, 0.03, 1.30, scale(STEEL, 0.9));
   for (let s = -1; s <= 1; s += 2) cyl(g.nx, -5.02, 0, 0.6 + s * 1.15, 0.04, 0.86, STEEL, 6);
   // +X wall: the tool trolleys.
-  toolbox(g.px, 4.92, -3.4); toolbox(g.px, 4.92, -1.5); toolbox(g.px, 4.92, 0.4);
+  // Trade repeated storage for distinct service stations within the same budget.
+  GarageEquipment.wheelGunDock(g.px, 4.85, -1.5, c1);
+  GarageEquipment.noseTrolley(g.px, 4.65, 0.4, c1);
   stack(g.px, 4.55, -5.4, 1); stack(g.px, 4.55, 4.6, 2);
   // Back wall: the pit board.
   cyl(g.back, 4.70, 0, -6.15, 0.03, 1.80, STEEL, 6);
@@ -274,32 +279,22 @@ function buildProps(g, liv) {
 
   // Spare front wings on a rack — the most recognisable thing in a real bay
   // after the tyres, and the reason a garage reads as a WORKSHOP.
-  const wingRack = (out, x, z, sgn) => {
-    for (let r = 0; r < 2; r++) cyl(out, x, 0, z + (r ? 0.85 : -0.85), 0.035, 1.15, STEEL, 6);
-    block(out, x, 1.16, z, 0.05, 0.03, 0.95, STEEL);
-    for (let w = 0; w < 2; w++) {                      // two wings leaning on it
-      const y = 0.52 + w * 0.46;
-      block(out, x + sgn * 0.16, y, z, 0.30, 0.02, 0.86, scale(c1, 0.62));
-      block(out, x + sgn * 0.34, y + 0.10, z, 0.06, 0.09, 0.84, scale(c1, 0.45));
-      for (let e = -1; e <= 1; e += 2)                 // endplates
-        block(out, x + sgn * 0.16, y + 0.07, z + e * 0.84, 0.26, 0.13, 0.02, DARK);
-    }
-  };
-  wingRack(g.nx, -4.30, 1.2, 1);
-  wingRack(g.px, 4.30, 2.6, -1);
-  // Wheel guns on a wall rack, hoses coiled on a reel above them.
-  for (let i = 0; i < 3; i++) {
+  // One rack retains spare-wing storage; its former duplicate pays for career trophies.
+  GarageEquipment.wingRack(g.px, 4.30, 2.6, -1, c1);
+  // Wall kit shares the floor guns/reels, mounted clear of the chest worktops.
+  for (let i = 0; i < 1; i++) {
     const z = -1.9 + i * 0.55;
-    // The gun bodies were a hard yellow on all eleven grids. Real crews run
-    // them in team colours, and they sit 1.3 m up on the wall the SIDE preset
-    // looks straight at.
-    block(g.px, 5.16, 1.34, z, 0.07, 0.07, 0.10, scale(c1, 0.92));
-    cyl(g.px, 5.16, 0.98, z, 0.045, 0.34, scale(STEEL, 0.7), 6, MAT.METAL);
+    GarageEquipment.wheelGun(g.px, 5.16, z, 1, -1, c1, 1.34);
+    block(g.px, 5.28, 1.52, z, 0.03, 0.15, 0.06, STEEL, MAT.METAL);
+    tube(g.px, [5.28, 1.46, z], [5.16, 1.46, z], 0.015, STEEL, 6, MAT.METAL);
   }
   block(g.px, 5.20, 1.62, -1.35, 0.06, 0.03, 1.15, STEEL);
   for (let i = 0; i < 2; i++) {
-    cyl(g.px, 5.14, 2.30 + i * 0.02, 0.9 + i * 0.8, 0.22, 0.10, scale(DARK, 1.5), 10);
-    cyl(g.px, 5.14, 2.28 + i * 0.02, 0.9 + i * 0.8, 0.07, 0.14, STEEL, 6);
+    const z = 0.9 + i * 0.8;
+    GarageEquipment.hoseReel(g.px, 5.14, 2.35, z, c1);
+    tube(g.px, [5.38, 2.62, z], [5.14, 2.62, z], 0.02, STEEL, 6, MAT.METAL);
+    hose(g.px, [[5.14, 2.17, z], [5.10, 1.98, z + 0.10], [5.10, 1.90, z]], 0.016, DARK, 6);
+    block(g.px, 5.10, 1.87, z, 0.025, 0.035, 0.025, STEEL, MAT.METAL);
   }
   // Shelving of parts crates and a workbench. These live on the DOOR wall, not
   // the back wall: the back wall is where the information boards go, and a
@@ -313,15 +308,10 @@ function buildProps(g, liv) {
   }
   block(g.door, -4.02, 0.42, 6.05, 1.30, 0.04, 0.32, scale(STEEL, 0.85));
   for (let lg = -1; lg <= 1; lg += 2) cyl(g.door, -4.02 + lg * 1.15, 0, 6.05, 0.035, 0.42, DARK, 6);
-  // Fire extinguishers — every real garage wall has a pair.
-  for (let f = 0; f < 2; f++) {
-    cyl(g.nx, -5.22, 0.32, -4.4 + f * 0.42, 0.075, 0.44, [0.72, 0.09, 0.07], 8);
-    cyl(g.nx, -5.22, 0.76, -4.4 + f * 0.42, 0.028, 0.09, scale(STEEL, 0.6), 6);
-  }
-  // A bin and a wheeled stool by the desk.
-  cyl(g.nx, -4.75, 0, 4.7, 0.20, 0.52, scale(STEEL, 0.5), 8);
-  cyl(g.nx, -4.10, 0.52, 3.0, 0.20, 0.06, scale(c1, 0.5), 8);
-  cyl(g.nx, -4.10, 0, 3.0, 0.045, 0.52, STEEL, 6);
+  // Wall-mounted safety gear, with brackets and hoses below the budget board.
+  for (let f = 0; f < 2; f++) GarageEquipment.extinguisher(g.nx, -5.22, -4.4 + f * 0.42, 1);
+  cyl(g.nx, -4.75, 0, 4.7, 0.20, 0.52, scale(STEEL, 0.5), 8); // desk bin
+  GarageEquipment.rollingStool(g.nx, -4.10, 3.0, c1);
   // Barrier stanchions across the pit-lane opening, chain height only.
   for (let i = -1; i <= 1; i += 2) {
     cyl(g.barrier, i * 2.2, 0, Z_DOOR - 0.55, 0.05, 0.95, scale(STEEL, 0.8), 8);
@@ -331,16 +321,10 @@ function buildProps(g, liv) {
   // Overhead cable tray running the length of the bay, under the truss.
   for (let sd = -1; sd <= 1; sd += 2)
     block(g.mid, sd * 4.6, 3.62, 0, 0.16, 0.05, 6.2, scale(STEEL, 0.6));
-  // Fuel rig and a wheel trolley in the +X/door corner (x 3.6..5.4, z 5.0..6.4),
-  // the emptiest floor in the bay.
-  block(g.px, 4.55, 0.62, 5.55, 0.42, 0.62, 0.36, scale(c1, 0.5));
-  block(g.px, 4.55, 1.28, 5.55, 0.44, 0.05, 0.38, STEEL);
-  cyl(g.px, 4.55, 1.30, 5.55, 0.14, 0.46, scale(STEEL, 0.75), 8);
-  for (let w = 0; w < 4; w++)
-    cyl(g.px, 4.55 + (w % 2 ? 0.3 : -0.3), 0, 5.55 + (w < 2 ? 0.26 : -0.26), 0.05, 0.10, DARK, 6);
-  block(g.px, 4.30, 0.30, 4.35, 0.55, 0.03, 0.34, STEEL);          // wheel trolley
-  for (let w = 0; w < 4; w++)
-    cyl(g.px, 4.30 + (w % 2 ? 0.42 : -0.42), 0, 4.35 + (w < 2 ? 0.24 : -0.24), 0.05, 0.27, scale(STEEL, 0.7), 6);
+  // Fluid-service cart and inspection dolly in the door corner. The dolly
+  // parks between the wing rack (ends z 3.57) and tyre stack (starts 4.24).
+  GarageEquipment.serviceRig(g.px, 4.55, 5.55, c1);
+  GarageEquipment.wheelDolly(g.px, 4.30, 3.90, c1);
   // Laptop bench beside the engineers' desk, in the -X mid-wall gap.
   block(g.nx, -5.00, 0.74, -1.85, 0.32, 0.04, 0.62, scale(STEEL, 0.9));
   for (let l = -1; l <= 1; l += 2) cyl(g.nx, -5.00, 0, -1.85 + l * 0.5, 0.035, 0.74, DARK, 6);
@@ -353,9 +337,8 @@ function buildProps(g, liv) {
     cyl(g.nx, -4.60, 0, -4.6 + j * 0.7, 0.16, 0.09, scale(STEEL, 0.65), 6);
     cyl(g.nx, -4.60, 0.09, -4.6 + j * 0.7, 0.05, 0.40, STEEL, 6);
   }
-  cyl(g.nx, -4.35, 0, -3.05, 0.26, 0.06, DARK, 10);                 // fan base
-  cyl(g.nx, -4.35, 0.06, -3.05, 0.05, 0.46, scale(STEEL, 0.7), 6);
-  cyl(g.nx, -4.35, 0.52, -3.05, 0.30, 0.12, scale(STEEL, 0.55), 10);
+  // Vertical fan cage; top stays under the budget board's 0.69 m sill.
+  GarageEquipment.floorFan(g.nx, -4.35, -3.05, c1);
   // Radio post at the deep end, and ceiling ducting above the truss.
   cyl(g.back, -4.60, 0, -5.95, 0.04, 1.45, STEEL, 6);
   block(g.back, -4.60, 1.45, -5.95, 0.18, 0.12, 0.10, DARK);

@@ -686,3 +686,135 @@ test("the LEGENDS bay rebuilds when the legend changes, even on the same paint",
   GarageScene.draw(row("senna"), LIV, [0, 1.6, 0], null, 0);
   assert.notEqual(GarageScene.debug().geomKey, a, "a new legend is a new bay");
 });
+
+test("equipment props stay grounded, inside their parking envelopes and material-complete", () => {
+  const { ctx } = harness();
+  const equipment = vm.runInContext("GarageEquipment", ctx);
+  for (const [name, build, limit, bounds] of [
+    ["cart", out => equipment.starterCart(out, 0, 0, LIV.c1), 650, [[-0.58, 0, -0.28], [0.78, 0.98, 0.45]]],
+    ["trolley", out => equipment.tyreTrolley(out, 0, 0, [0, 0, 1, 1], LIV.c1), 1450, [[-0.46, 0, -1.37], [0.46, 0.98, 1.58]]],
+  ]) {
+    const mesh = { pos: [], nrm: [], col: [], idx: [], mat: [] };
+    build(mesh);
+    assert.ok(mesh.idx.length / 3 <= limit, `${name} triangle budget`);
+    assert.equal(mesh.mat.length, mesh.pos.length / 3);
+    assert.equal(mesh.nrm.length, mesh.pos.length);
+    assert.equal(mesh.col.length, mesh.pos.length);
+    assert.ok([...mesh.pos, ...mesh.nrm, ...mesh.col].every(Number.isFinite));
+    assert.ok(mesh.idx.every(i => Number.isInteger(i) && i >= 0 && i < mesh.pos.length / 3));
+    for (let axis = 0; axis < 3; axis++) {
+      const values = mesh.pos.filter((_, i) => i % 3 === axis);
+      assert.ok(Math.min(...values) >= bounds[0][axis] - 1e-6, `${name} min axis ${axis}`);
+      assert.ok(Math.max(...values) <= bounds[1][axis] + 1e-6, `${name} max axis ${axis}`);
+      if (axis === 1) assert.ok(Math.abs(Math.min(...values)) < 1e-6, `${name} touches floor`);
+    }
+    // A caster's rubber end caps must face along X, never vertically like a floor puck.
+    const capNormals = mesh.nrm.filter((_, i) => i % 3 === 0 && mesh.pos[i + 1] < 0.13 &&
+      mesh.col[i] === equipment.RUBBER[0] && Math.abs(mesh.nrm[i]) > 0.99);
+    assert.ok(capNormals.length >= 4 * 16, `${name} has four horizontal wheel axles`);
+  }
+});
+
+test("parked trolley compound labels still follow dry and wet garage context", () => {
+  const { ctx } = harness(), equipment = vm.runInContext("GarageEquipment", ctx);
+  for (const [weather, expected] of [["dry", [3, 3, 2, 0, 0]], ["rain", [0, 2, 0, 3, 3]], ["wet", [0, 2, 0, 3, 3]]]) {
+    const empty = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [] });
+    const groups = { mid: empty(), back: empty(), nx: empty(), px: empty() };
+    equipment.build(groups, LIV, { weather });
+    for (let compound = 0; compound < 5; compound++) {
+      const color = equipment.COMPOUND[compound];
+      let vertices = 0;
+      for (let i = 0; i < groups.back.col.length; i += 3)
+        if (color.every((v, axis) => Math.abs(groups.back.col[i + axis] - v) < 1e-9)) vertices++;
+      assert.equal(vertices, expected[compound] * 24, `${weather} compound ${compound}`);
+    }
+  }
+});
+
+// Geometry budgets and parking envelopes, in metres. Mounted/handheld models
+// need finite, valid geometry; rolling fixtures must also touch the floor.
+test("workshop models keep their geometry budgets and parking envelopes", async (t) => {
+  const { ctx } = harness();
+  const kit = vm.runInContext("GarageEquipment", ctx);
+  for (const [name, build, budget, halfX, halfZ, top, floor] of [
+    ["noseTrolley", out => kit.noseTrolley(out, 0, 0, LIV.c1), 900, 0.47, 0.64, 0.98, true],
+    ["wheelGunDock", out => kit.wheelGunDock(out, 0, 0, LIV.c1), 430, 0.23, 0.29, 1.02, true],
+    ["radioRack", out => kit.radioRack(out, 0, 0, LIV.c1, 0), 500, 0.18, 0.39, 0.50, true],
+    ["toolChest", out => kit.toolChest(out, 0, 0, LIV.c1), 500, 0.42, 0.85, 1.26, true],
+    ["rearJack", out => kit.rearJack(out, 0, 0, LIV.c1), 300, 0.95, 1.08, 0.68, true],
+    ["wheelGun", out => kit.wheelGun(out, 0, 0, 1, 1, LIV.c1), 150, 0.14, 0.32, 0.20, false],
+    ["hoseReel", out => kit.hoseReel(out, 0, 0.21, 0, LIV.c1), 220, 0.17, 0.23, 0.51, false],
+    ["wingRack", out => kit.wingRack(out, 0, 0, 1, LIV.c1), 380, 0.45, 0.99, 1.21, true],
+    ["extinguisher", out => kit.extinguisher(out, 0, 0, 1), 230, 0.21, 0.12, 0.85, false],
+    ["rollingStool", out => kit.rollingStool(out, 0, 0, LIV.c1), 580, 0.28, 0.27, 0.60, true],
+    ["floorFan", out => kit.floorFan(out, 0, 0, LIV.c1), 700, 0.26, 0.31, 0.64, true],
+    ["serviceRig", out => kit.serviceRig(out, 0, 0, LIV.c1), 700, 0.50, 0.40, 1.76, true],
+    ["wheelDolly", out => kit.wheelDolly(out, 0, 0, LIV.c1), 480, 0.57, 0.31, 0.68, true],
+  ]) await t.test(name, () => {
+    const mesh = { pos: [], nrm: [], col: [], idx: [], mat: [] };
+    build(mesh);
+    const count = mesh.pos.length / 3;
+    assert.ok(mesh.idx.length > 0 && mesh.idx.length / 3 <= budget);
+    assert.equal(mesh.mat.length, count); assert.equal(mesh.nrm.length, mesh.pos.length);
+    assert.equal(mesh.col.length, mesh.pos.length);
+    assert.ok([...mesh.pos, ...mesh.col, ...mesh.nrm, ...mesh.mat].every(Number.isFinite));
+    assert.ok(mesh.idx.every(i => Number.isInteger(i) && i >= 0 && i < count));
+    for (let i = 0; i < mesh.nrm.length; i += 3)
+      assert.ok(Math.abs(Math.hypot(...mesh.nrm.slice(i, i + 3)) - 1) < 1e-6, "unit normal");
+    for (let i = 0; i < mesh.pos.length; i += 3) {
+      assert.ok(Math.abs(mesh.pos[i]) <= halfX + 1e-6, "lateral envelope");
+      assert.ok(Math.abs(mesh.pos[i + 2]) <= halfZ + 1e-6, "depth envelope");
+      assert.ok(mesh.pos[i + 1] >= -1e-6 && mesh.pos[i + 1] <= top + 1e-6, "height envelope");
+    }
+    if (floor) assert.ok(Math.abs(Math.min(...mesh.pos.filter((_, i) => i % 3 === 1))) < 1e-6, "floor contact");
+  });
+});
+
+test("full workshop routes detailed models to the existing wall batches and leaves tyre access clear", () => {
+  const { ctx, GarageScene } = harness(), kit = vm.runInContext("GarageEquipment", ctx), calls = [];
+  for (const name of ["toolChest", "noseTrolley", "wheelGunDock", "radioRack", "wingRack", "extinguisher", "rollingStool", "floorFan", "serviceRig", "wheelDolly", "wheelGun", "hoseReel"]) {
+    const build = kit[name];
+    kit[name] = (out, ...args) => {
+      const start = out.pos.length; build(out, ...args);
+      const pos = out.pos.slice(start);
+      calls.push({ name, out, args, min: [0, 1, 2].map(a => Math.min(...pos.filter((_, i) => i % 3 === a))),
+        max: [0, 1, 2].map(a => Math.max(...pos.filter((_, i) => i % 3 === a))) });
+    };
+  }
+  const bay = GarageScene.buildStatic(LIV, { props: true, equipment: true });
+  assert.ok(bay.idx.length / 3 <= 18000, "full static bay geometry budget");
+  assert.equal(calls.filter(c => c.name === "toolChest").length, 1, "repeated storage pays for distinct stations");
+  assert.equal(calls.filter(c => c.name === "wheelGun").length, 1, "a mounted spare complements the service dock");
+  assert.equal(calls.filter(c => c.name === "hoseReel").length, 2, "mounted reels share the detailed model");
+  const chestTop = Math.max(...calls.filter(c => c.name === "toolChest").map(c => c.max[1]));
+  assert.ok(calls.filter(c => c.name === "wheelGun").every(c => c.min[1] > chestTop + 0.08), "wall guns clear worktops");
+  const dolly = calls.find(c => c.name === "wheelDolly"), rack = calls.find(c => c.name === "wingRack" && c.args[0] > 0);
+  const rig = calls.find(c => c.name === "serviceRig"), fan = calls.find(c => c.name === "floorFan");
+  assert.equal(dolly.out, rack.out); assert.equal(dolly.out, rig.out, "right-wall batching retained");
+  assert.ok(dolly.min[2] - rack.max[2] >= 0.025, "dolly clears the wing-rack feet");
+  assert.ok(dolly.max[2] <= 4.24 - 0.025, "dolly clears the spare-tyre envelope");
+  assert.ok(fan.max[1] <= 0.64 + 1e-6, "vertical fan stays below the information-board sill");
+  assert.ok(fan.min[0] < -3.6 && rig.min[0] > 3.6, "workshop stays outboard of car framing");
+  for (const name of ["noseTrolley", "wheelGunDock", "radioRack"])
+    assert.equal(calls.filter(c => c.name === name).length, 1, `${name} is present in the actual detailed bay`);
+  const nose = calls.find(c => c.name === "noseTrolley"), dock = calls.find(c => c.name === "wheelGunDock");
+  const radios = calls.find(c => c.name === "radioRack"), chest = calls.find(c => c.name === "toolChest");
+  assert.equal(nose.out, rack.out); assert.equal(dock.out, rack.out);
+  assert.ok(nose.min[0] > 4 && dock.min[0] > 4, "new floor stations leave the car corridor clear");
+  assert.ok(rack.min[2] - nose.max[2] > 0.5, "nose trolley clears wing-rack feet");
+  assert.ok(nose.min[2] - dock.max[2] > 0.5, "service stations do not clip each other");
+  assert.equal(radios.out, chest.out, "radio rack shares its supporting chest's wall batch");
+  assert.ok(Math.abs(radios.min[1] - 1.19) < 1e-6, "radio rack rests on the chest's worktop");
+  for (const axis of [0, 2]) {
+    assert.ok(radios.min[axis] > chest.min[axis] && radios.max[axis] < chest.max[axis], "rack remains inside its support footprint");
+  }
+});
+
+test("workshop budget includes earned trophies and dry/wet equipment", () => {
+  const { GarageScene } = harness();
+  for (const weather of ["dry", "wet", "rain"]) for (let wins = 0; wins <= 8; wins++) {
+    const bay = GarageScene.buildStatic(LIV, { props: true, equipment: true, ctx: { weather, wins } });
+    assert.ok(bay.idx.length / 3 <= 18000, `${weather}, ${wins} trophies stay within the detailed bay budget`);
+    assert.equal(bay.mat.length, bay.pos.length / 3);
+  }
+});
