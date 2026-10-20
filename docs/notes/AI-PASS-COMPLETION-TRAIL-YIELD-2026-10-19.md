@@ -81,3 +81,29 @@ at 15 seeds.
 - A synthetic duel VM test (two cars alone, 0.6 % edge, 30 m) did not pass
   within 60 s even with the yield firing. Debug it before relying on it as the
   biting test.
+
+## Session 2 (L25, 2026-10-20): the deep stage
+
+15 seeds × 8 laps on `45e1c2eb`: Monza max 58 s (none over 60), Silverstone
+max 98 s (9 seeds over 60). A trace of silverstone seed 6 LEC<ALO (+1.04 %,
+66 s, no chain) showed ALO yielding at the full 10 % lift for 58 s while LEC
+lost 15–20 m in every slow corner in ALO's dirty air. That case was a slow
+pass behind a yielding car, not a chain.
+
+| variant | Monza max / median, >60 | Monza contact | Silverstone max / median, >60 | Silverstone contact |
+|---|---|---|---|---|
+| base `dc3222f0` (re-run, identical) | 252 / 139, 15 | 27.3 | 239 / 119, 15 | 42.5 |
+| `45e1c2eb` | 58 / 46, 0 | 27.7 | 98 / 63, 9 | 38.9 |
+| A: lift a further 6 % vmax / 4 % corner from 24→40 s | 61 / 42, 1 | 28.5 | 64 / 45, 1 | 40.9 |
+| B: A + trail pull reach back to `pullReachM` | 51 / 43, 0 | 30.1 | 72 / 55, 3 | 43.8 |
+| **C: A with the deep stage at 18→32 s (shipped)** | **56 / 44, 0** | **29.1** | **57 / 45, 0** | **40.9** |
+
+B was tried because monza seed 11 HAD<PER sat 9 m wide 40 m back under A.
+It helped Monza but cost Silverstone and contact, so it was reverted.
+
+Contact, C vs base, paired by seed: Monza +1.73 ± 1.95 episodes (SE),
+Silverstone −1.60 ± 2.25. Neither is significant. Monza still rose with each
+deeper yield (27.7 → 28.5 → 29.1), so treat it as a possible small cost.
+
+Biting VM test: `tests/unit/ai-trail-yield-vm.test.mjs`, a two-car Monza duel
+with a 0.6 % edge and a 30 m gap. Base passed at 93.7 s, head at 21.8 s.
