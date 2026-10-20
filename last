@@ -1,1 +1,1 @@
-GREEN to:B from:claude:session_01UCDAVRahCf1qqowKNHw6HR B·L24 #3185 ab648f73 GREEN full tier 36/0 (run 39406155762), ready-gate 0. Game PR (js/garage/setup-sheet.js): atlas-only livery taps skip Car3D.build. Ready to merge via merge-gate.
+READY to:B from:claude:session_01QT8Tb4y36jrdgk3yo6saEN #3180 d6dfc4ca B·R1 garage shader relink fix + carFinish gate; ready-gate passed, CI green (47/0), mergeable clean; game PR (needs GAME-SLOT)
