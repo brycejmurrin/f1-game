@@ -391,6 +391,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
 | `livery-design.js` | `LiveryDesign` | tag | Optional, bounded cover artwork. |
 | `livery-graphics.js` | `LiveryGraphics` | tag | cover crown/tail and fin graphic painters; create receives atlas drawing and paint-selection helpers. |
+| `livery-stations.js` | `LiveryStations` | tag | extra livery decal stations (nose tip cap, cockpit-side driver code, sidepod top, halo top). |
 | `crest-draw.js` | `LiveryCrests` | tag | LiveryCrests: the team-mark painters of LiveryTex (traced, Mercedes, Haas, Audi, generic) and the CRESTS table. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |

@@ -180,7 +180,7 @@ function editorFixture() {
   const insertBefore = root.insertBefore;
   root.insertBefore = (node, before) => { if (node.parentNode === root) node.remove(); return insertBefore(node, before); };
   const bodyRow = dom.document.createElement("label"); root.appendChild(bodyRow);
-  const spineRow = pillRow("SPINE TOP", "spineLogo", ["stripe", ...D.PATTERNS], "stripe");
+  const spineRow = pillRow("SPINE TOP", "spineLogo", ["stripe", "tricolour", ...D.PATTERNS], "stripe");
   const nextRow = pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
   pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
   pillRow("FIN SHAPE", "finShape", ["standard", "none"], "standard");
@@ -490,5 +490,64 @@ test("2026-motif designs: named, registered in their colour/line lists, and each
       }
     }
     monotone(dots, "halftone dot radius");
+  }
+});
+
+test("classic paint layouts: named, two-colour, deterministic, and each paints distinct art", () => {
+  const { D } = load();
+  const layouts = ["tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"];
+  const sigs = new Set();
+  for (const id of layouts) {
+    assert.ok(D.PATTERNS.includes(id), id); assert.ok(D.LABELS[id], id + " has an editor label");
+    assert.ok(D.SECOND_COLOR.includes(id), id + " uses the second colour");
+    const a = drawing(), b = drawing(), liv = { spineLogo: id, c1: [0, 0, 0], c2: [1, 1, 1], accent: [1, 0, 0], patternPlacement: "wrap" };
+    assert.equal(D.drawAtlas(a.ctx, liv, a.regions, a.flank, a.each), true, id + " paints");
+    D.drawAtlas(b.ctx, liv, b.regions, b.flank, b.each);
+    assert.deepEqual(a.ops, b.ops, id + " is deterministic");
+    assert.ok(a.ops.length > 3, id + " painted something");
+    sigs.add(JSON.stringify(a.ops));
+  }
+  assert.equal(sigs.size, layouts.length, "no two layouts paint the same art");
+});
+
+// D5 round 3: a slider or pill the editor shows must change the paint, and one it greys must not.
+test("REPEATS, LINE WEIGHT and KEYLINE are live exactly where the editor offers them", () => {
+  const { D } = load();
+  const paintOps = (liv) => {
+    const a = drawing(), stroke = a.ctx.stroke;
+    a.ctx.stroke = function () { a.ops.push([this.lineWidth]); return stroke.call(this); };
+    D.drawAtlas(a.ctx, liv, a.regions, a.flank, a.each); return JSON.stringify(a.ops);
+  };
+  const inks = (liv) => {
+    const a = drawing(), seen = [];
+    for (const m of ["fill", "fillRect", "stroke"]) { const f = a.ctx[m]; a.ctx[m] = function (...p) { seen.push(m === "stroke" ? this.strokeStyle : this.fillStyle); return f.apply(this, p); }; }
+    D.drawAtlas(a.ctx, liv, a.regions, a.flank, a.each); return JSON.stringify(seen);
+  };
+  const base = { c1: [0, 0, 0], c2: [1, 1, 1], accent: [1, 0, 0], patternTint: [0, 0, 1], patternSecond: [0, 1, 0] };
+  for (const id of D.PATTERNS) {
+    const liv = { ...base, spineLogo: id };
+    const repeats = paintOps({ ...liv, patternRepeat: "3" }) !== paintOps({ ...liv, patternRepeat: "10" });
+    assert.equal(repeats, !D.NO_REPEAT.includes(id), id + (repeats ? " uses REPEATS, so it must not be greyed" : " ignores REPEATS, so NO_REPEAT must list it"));
+    if (D.LINE_PATTERNS.includes(id)) assert.ok(paintOps({ ...liv, patternWeight: "40" }) !== paintOps({ ...liv, patternWeight: "180" }), id + " LINE WEIGHT");
+    const keyed = D.KEY_SLOTS.some((k) => inks({ ...liv, patternKey: k }) !== inks({ ...liv, patternKey: "auto" }));
+    assert.equal(keyed, D.KEY_PATTERNS.includes(id), id + " KEYLINE");
+  }
+  for (const id of ["tartanBand", "borderedStripe", "spearhead", "deckSplit"]) assert.ok(D.LINE_PATTERNS.includes(id), id);
+  for (const id of D.KEY_PATTERNS) assert.ok(inks({ ...base, spineLogo: id }) === inks({ ...base, spineLogo: id, patternKey: "auto" }), id + " AUTO is today's paint");
+  // tricolour's middle band is the 2ND BAND colour when one is chosen
+  assert.ok(inks({ ...base, spineLogo: "tricolour", bandTint2: [1, 1, 0] }) !== inks({ ...base, spineLogo: "tricolour" }), "tricolour 2ND BAND");
+});
+
+test("editor greys REPEATS / LINE WEIGHT / KEYLINE per layout", () => {
+  const { root, click } = editorFixture();
+  const input = (key) => root.querySelectorAll("input").find((el) => el.dataset.livField === key);
+  const key = root.querySelectorAll("button").find((b) => b.dataset.csPill === "patternKey:accent");
+  assert.ok(key, "KEYLINE row exists");
+  for (const [label, repeat, weight, keyline] of [["TARTAN BAND", false, false, false], ["BORDERED STRIPE", true, false, false],
+    ["TRICOLOUR SWEEP", true, true, false], ["SPEARHEAD", true, false, false], ["DECK SPLIT", true, false, false], ["HONEYCOMB", false, false, true]]) {
+    click(label);
+    assert.equal(input("patternRepeat").disabled, repeat, label + " REPEATS");
+    assert.equal(input("patternWeight").disabled, weight, label + " LINE WEIGHT");
+    assert.equal(key.disabled, keyline, label + " KEYLINE");
   }
 });

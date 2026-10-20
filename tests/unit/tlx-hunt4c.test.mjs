@@ -92,7 +92,7 @@ async function shadowRig(t, ls = {}) {
     const u8 = gm.mem.get(d.bufferGPU);
     return u8 ? Array.from(new Float32Array(u8.buffer, 0, nf)) : null;
   };
-  return { fg, gm, renderer, sys, pass, bytes, frame, caster, gpuRows, bufOf };
+  return { fg, gm, renderer, sys, pass, bytes, frame, caster, gpuRows, bufOf, castScene: scenes[0] };
 }
 function buildTri() {
   const g = new THREE.BufferGeometry();
@@ -332,6 +332,36 @@ async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
   const mirrorDraws = () => draws.filter((d) => d.size && d.size[0] === 4 && d.size[1] === 4).length;
   return { renderer, R, compiles, draws, entry, OPTS, mirrorCompiles, mirrorDraws };
 }
+
+// Pass root: three's projectObject visits every child of castScene, hidden or not, so each pass must hand it only
+// what that pass cast — the per-frame car pass used to walk the sun pool the last rebuild grew.
+async function passRootRun(t, ls) {
+  const h = await shadowRig(t, ls);
+  const seen = [];
+  const render0 = h.renderer.render.bind(h.renderer);
+  h.renderer.render = (sc, cam) => { if (sc === h.castScene) seen.push(sc.children.length); return render0(sc, cam); };
+  const VP = new Float32Array(new THREE.Matrix4().elements);
+  const plain = (n) => Array.from({ length: n }, () => ({ geo: buildTri() }));
+  const sunCasts = plain(6), carCasts = plain(1), b = batchOf(5);
+  h.sys.shadowBegin(VP);
+  for (const c of sunCasts) h.sys.castShadow(c, null);
+  b.packMatrices = mats(5, 1); h.sys.castInstanced(b, 5);
+  h.sys.shadowEnd();
+  h.sys.carShadowBegin(VP, 1);
+  for (const c of carCasts) h.sys.castShadow(c, null);
+  h.sys.carShadowEnd();
+  return { h, seen, total: h.castScene.children.length };
+}
+test("pass root: each shadow render walks only its pass's casters; the scene keeps every caster between passes", async (t) => {
+  const { h, seen, total } = await passRootRun(t, {});
+  assert.equal(total, 6 + 1 + 1, "castScene still owns the sun pool, the car pool and the batch caster");
+  assert.deepEqual(seen, [7, 1], "sun render: 6 slots + 1 batch caster; car render: its 1 slot, not the 8");
+  assert.ok(h.castScene.children.every((m) => m.parent === h.castScene), "the full list is restored after each render");
+});
+test("pass root: apex26.tlxPoolRoot=0 renders the full caster list (the R6 A/B knob)", async (t) => {
+  const { seen } = await passRootRun(t, { "apex26.tlxPoolRoot": "0" });
+  assert.deepEqual(seen, [7, 8], "the car render walks every caster again");
+});
 
 test("B-F3.1: AUTO on a real GPU — the entry warm skips the mirror stage and W1's mirror draw, and owes them", async (t) => {
   const h = await mirrorWarmRig(t);

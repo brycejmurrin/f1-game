@@ -17,9 +17,6 @@ async function raceAndBuild(page, id) {
 }
 
 const LANDSCAPE = { width: 1180, height: 720 };
-// Cells where a toolbar label really overflows its chip today (issue #3041, found by this very assertion).
-// Remove the entry when the CSS is fixed; the chip is still held to the tap floor meanwhile.
-const KNOWN_CLIPPED_CHIPS = new Set(["393x659@200", "1194x834@200"]);
 
 test.describe("Touch designer workspace", () => {
   test.use({ hasTouch: true, isMobile: true });
@@ -56,10 +53,9 @@ test.describe("Touch designer workspace", () => {
         }) };
       });
       expect(chips.chips.length, `${width}x${height}@${scale} ${mode}: toolbar chips are drawn`).toBeGreaterThan(0);
-      const knownClipped = KNOWN_CLIPPED_CHIPS.has(`${width}x${height}@${scale}`);
       if (chips.chips.some((c) => c.clipX > 1 || c.clipY > 1)) await page.screenshot({ path: testInfo.outputPath(`chips-clipped-${width}x${height}-${scale}-${mode}.png`) });
       for (const c of chips.chips) {
-        if (!knownClipped) expect(c.clipX <= 1 && c.clipY <= 1, `${width}x${height}@${scale} ${mode}: "${c.label}" is clipped inside its chip (${c.clipX}x${c.clipY} px)`).toBe(true);
+        expect(c.clipX <= 1 && c.clipY <= 1, `${width}x${height}@${scale} ${mode}: "${c.label}" is clipped inside its chip (${c.clipX}x${c.clipY} px)`).toBe(true);
         expect(Math.min(c.w, c.h), `${width}x${height}@${scale} ${mode}: "${c.label}" is under the ${chips.tap} px painted tap floor (--tap-paint)`).toBeGreaterThanOrEqual(chips.tap - 2);
       }
       await expect.poll(() => root.evaluate((e) => {

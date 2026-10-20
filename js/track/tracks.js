@@ -641,11 +641,14 @@ const Tracks = (function () {
   // edge (a barycentric slack scales with the triangle and bridged a 1 m gap
   // between two 100 m rects). Covers float cracks at shared edges and no more.
   const TRI_EPS = 0.01;
+  // 8 m cells (~14 triangles each, 50 at 24 m) as a flat, transferable CSR
+  // (start/list; build-worker.js posts it). lo[k]: a floor under every height
+  // terrainY can return in cell k (_triLo of each listed triangle).
   function terrainGrid(track) {
     const g = track.terrainGeo;
     if (!g || !g.pos || !g.idx) return null;
     if (track._terrGrid && track._terrGrid.geo === g) return track._terrGrid;
-    const pos = g.pos, idx = g.idx, CELL = 24;
+    const pos = g.pos, idx = g.idx, CELL = 8;
     let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
     for (let i = 0; i < pos.length; i += 3) {
       if (pos[i] < mnx) mnx = pos[i]; if (pos[i] > mxx) mxx = pos[i];
@@ -654,41 +657,59 @@ const Tracks = (function () {
     if (!isFinite(mnx)) return null;
     const nx = Math.max(1, Math.ceil((mxx - mnx) / CELL));
     const nz = Math.max(1, Math.ceil((mxz - mnz) / CELL));
-    const cells = new Array(nx * nz);
-    for (let t = 0; t < idx.length; t += 3) {
+    const nc = nx * nz, start = new Int32Array(nc + 1), lo = new Float64Array(nc).fill(Infinity);
+    const rng = new Int32Array(idx.length / 3 * 4);   // per triangle i0 i1 j0 j1: counted, then filled
+    for (let t = 0, r = 0; t < idx.length; t += 3, r += 4) {
       const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
       const x0 = __M.min(pos[a], pos[b], pos[c]) - TRI_EPS, x1 = __M.max(pos[a], pos[b], pos[c]) + TRI_EPS;
       const z0 = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]) - TRI_EPS;
       const z1 = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]) + TRI_EPS;
-      const i0 = __M.max(0, __M.floor((x0 - mnx) / CELL));
-      const i1 = __M.min(nx - 1, __M.floor((x1 - mnx) / CELL));
-      const j0 = __M.max(0, __M.floor((z0 - mnz) / CELL));
-      const j1 = __M.min(nz - 1, __M.floor((z1 - mnz) / CELL));
-      for (let i = i0; i <= i1; i++) {
-        for (let j = j0; j <= j1; j++) {
-          const k = j * nx + i;
-          (cells[k] || (cells[k] = [])).push(t);
-        }
-      }
+      const i0 = rng[r] = __M.max(0, __M.floor((x0 - mnx) / CELL)), i1 = rng[r + 1] = __M.min(nx - 1, __M.floor((x1 - mnx) / CELL));
+      const j0 = rng[r + 2] = __M.max(0, __M.floor((z0 - mnz) / CELL)), j1 = rng[r + 3] = __M.min(nz - 1, __M.floor((z1 - mnz) / CELL));
+      const tl = _triLo(pos, a, b, c);
+      for (let j = j0; j <= j1; j++) for (let k = j * nx + i0, e = j * nx + i1; k <= e; k++) { start[k + 1]++; if (tl < lo[k]) lo[k] = tl; }
     }
-    track._terrGrid = { geo: g, mnx, mnz, mxx, mxz, nx, nz, cell: CELL, cells };
+    for (let k = 0; k < nc; k++) start[k + 1] += start[k];
+    const list = new Uint32Array(start[nc]), fill = start.slice(0, nc);
+    for (let t = 0, r = 0; t < idx.length; t += 3, r += 4) {
+      for (let j = rng[r + 2]; j <= rng[r + 3]; j++) for (let k = j * nx + rng[r], e = j * nx + rng[r + 1]; k <= e; k++) list[fill[k]++] = t;
+    }
+    track._terrGrid = { geo: g, mnx, mnz, mxx, mxz, nx, nz, cell: CELL, start, list, lo };
     return track._terrGrid;
+  }
+  // The lowest height _triY can return: the lowest vertex, less the dip of each
+  // barycentric to -TRI_EPS / altitude (altitude = 2A / edge): at most (maxY -
+  // minY) * TRI_EPS * perimeter / 2A, and perimeter <= sqrt(3 * sum of edge^2)
+  // (one sqrt, still a floor). 1e-6 m covers rounding.
+  function _triLo(pos, a, b, c) {
+    const v0x = pos[c] - pos[a], v0z = pos[c + 2] - pos[a + 2], v1x = pos[b] - pos[a], v1z = pos[b + 2] - pos[a + 2];
+    const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z;
+    const den = d00 * d11 - d01 * d01; if (__M.abs(den) < 1e-9) return Infinity;
+    const ya = pos[a + 1], yb = pos[b + 1], yc = pos[c + 1], mn = __M.min(ya, yb, yc), dy = __M.max(ya, yb, yc) - mn;
+    return dy > 0 ? mn - dy * TRI_EPS * __M.sqrt(3 * (d00 + d11 + (d00 + d11 - 2 * d01)) / den) - 1e-6 : mn - 1e-6;
+  }
+  // terrainGrid cell holding (x, z), or -1 off the grid (terrainY answers null there).
+  function terrainCell(G, x, z) {
+    if (!(x >= G.mnx - TRI_EPS && z >= G.mnz - TRI_EPS && x <= G.mxx + TRI_EPS && z <= G.mxz + TRI_EPS)) return -1;
+    // The exact maximum edge floors one cell past the grid when the extent is a whole number of cells.
+    const i = __M.min(G.nx - 1, __M.max(0, __M.floor((x - G.mnx) / G.cell)));
+    const j = __M.min(G.nz - 1, __M.max(0, __M.floor((z - G.mnz) / G.cell)));
+    return j * G.nx + i;
   }
 
   // Height of the tallest prop above ITS OWN ground (terrainY): the car passing
   // it is on that ground too, so this — not the altitude over the lowest road
   // point, which read 1159 m at Monaco's cliffs — is how far up the sun axis a
   // caster sits from the shadow anchor. Props off the terrain (far backdrop,
-  // outside every shadow box) are skipped. Pruned by the terrain's lowest point:
-  // terrainY runs only for a vertex that could still beat the best so far.
+  // outside every shadow box) are skipped. Pruned by the vertex's terrain cell
+  // floor (terrainGrid lo): terrainY runs only for a vertex that could still beat the best so far.
   function propTop(track, propsGeo) {
-    const t = track.terrainGeo && track.terrainGeo.pos, p = propsGeo && propsGeo.pos;
-    if (!t || !t.length || !p || !p.length) return 0;
-    let lo = Infinity, best = 0;
-    for (let i = 1; i < t.length; i += 3) if (t[i] < lo) lo = t[i];
+    const G = terrainGrid(track), p = propsGeo && propsGeo.pos;
+    if (!G || !p || !p.length) return 0;
+    let best = 0;
     for (let i = 0; i < p.length; i += 3) {
-      const y = p[i + 1];
-      if (!(y - lo > best)) continue;
+      const y = p[i + 1], k = terrainCell(G, p[i], p[i + 2]);
+      if (k < 0 || !(y - G.lo[k] > best)) continue;
       const g = terrainY(track, p[i], p[i + 2]);
       if (g != null && y - g > best) best = y - g;
     }
@@ -700,10 +721,9 @@ const Tracks = (function () {
   // an upright placement, an upper bound when tilted), above the ground at the
   // instance origin. 8 corners per instance: Vegas alone has ~22k.
   function instTop(track, batches) {
-    const t = track.terrainGeo && track.terrainGeo.pos;
-    if (!t || !t.length || !batches) return 0;
-    let lo = Infinity, best = 0;
-    for (let i = 1; i < t.length; i += 3) if (t[i] < lo) lo = t[i];
+    const G = terrainGrid(track);
+    if (!G || !batches) return 0;
+    let best = 0;
     for (const b of batches) {
       const p = b && b.geo && b.geo.pos, M = b && b.matrices;
       if (!p || !p.length || !M) continue;
@@ -713,8 +733,8 @@ const Tracks = (function () {
         // Per axis, the larger of the two extents' contributions is the corner max.
         let hi = 0;
         for (let a = 0; a < 3; a++) hi += __M.max(M[k + 1 + 4 * a] * mn[a], M[k + 1 + 4 * a] * mx[a]);
-        const y = M[k + 13] + hi;
-        if (!(y - lo > best)) continue;
+        const y = M[k + 13] + hi, c = terrainCell(G, M[k + 12], M[k + 14]);
+        if (c < 0 || !(y - G.lo[c] > best)) continue;
         const g = terrainY(track, M[k + 12], M[k + 14]);
         if (g != null && y - g > best) best = y - g;
       }
@@ -726,14 +746,10 @@ const Tracks = (function () {
     const pos = g.pos, idx = g.idx; let best = null;
     const G = terrainGrid(track);
     if (G) {
-      if (x < G.mnx - TRI_EPS || z < G.mnz - TRI_EPS || x > G.mxx + TRI_EPS || z > G.mxz + TRI_EPS) return null;
-      // The exact maximum edge floors one cell past the grid when the extent is a whole number of cells.
-      const i = __M.min(G.nx - 1, __M.max(0, __M.floor((x - G.mnx) / G.cell)));
-      const j = __M.min(G.nz - 1, __M.max(0, __M.floor((z - G.mnz) / G.cell)));
-      const list = G.cells[j * G.nx + i];
-      if (!list) return null;
-      for (let n = 0; n < list.length; n++) {
-        const t = list[n];
+      const k = terrainCell(G, x, z);
+      if (k < 0) return null;
+      for (let n = G.start[k], e = G.start[k + 1]; n < e; n++) {
+        const t = G.list[n];
         best = _triY(pos, idx[t] * 3, idx[t + 1] * 3, idx[t + 2] * 3, x, z, best);
       }
       return best;
@@ -790,10 +806,13 @@ const Tracks = (function () {
     if (!ribbonGpuSettled(track, "road") || !ribbonGpuSettled(track, "terrain")) return;
     for (const geo of [track.roadGeo, track.terrainGeo]) {
       geo.nrm = geo.col = geo.mat = null;
+      // A main-thread build's push-grown arrays carry slack; typed as the worker posts them (build-worker.js typedRibbon).
+      if (Array.isArray(geo.pos)) geo.pos = Float64Array.from(geo.pos);
+      if (Array.isArray(geo.idx) && geo.idx.every((v) => v >= 0 && v <= 4294967295 && v === Math.floor(v))) geo.idx = Uint32Array.from(geo.idx);
       if (geo.trk) geo.trk = null;
     }
     track._ribbonCpuDropped = true;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, diagnosticBuild, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident, dropRibbonCpuIfReady, ribbonGpuSettled };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, diagnosticBuild, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident, dropRibbonCpuIfReady };
 })();

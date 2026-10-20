@@ -64,6 +64,38 @@ test("Cursor's MCP door: a run cancel is denied (exit 2), a merge needs the gate
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// Codex had only a Bash hook, so an MCP merge skipped the gate (fleet redesign §8; Bryce approved the
+// hook 2026-10-19). Codex reads Claude's hookSpecificOutput JSON but cannot "ask" (it fails the hook
+// and continues the call: https://learn.chatgpt.com/docs/hooks), so the wrapper turns every ask into a deny.
+test("Codex's MCP door: the GitHub guard runs, an ask becomes a deny, a gated merge passes", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "codex-mcp-"));
+  const mcp = (tool_name, input, env = {}) => {
+    const r = spawnSync("bash", [path.join(ROOT, ".codex/hooks/mcp-guard.sh")],
+      { input: JSON.stringify({ tool_name, tool_input: input, hook_event_name: "PreToolUse" }), encoding: "utf8",
+        env: { ...process.env, APEX_RUN_CANCEL_OK: "", APEX_MERGE_DESK: "", CLAUDE_PROJECT_DIR: dir, ...env } });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : null;
+  };
+  try {
+    const hooks = JSON.parse(fs.readFileSync(path.join(ROOT, ".codex/hooks.json"), "utf8")).hooks.PreToolUse;
+    const g = hooks.find((x) => x.hooks.some((h) => h.command.includes(".codex/hooks/mcp-guard.sh")));
+    assert.ok(g, ".codex/hooks.json wires the MCP guard");
+    const re = new RegExp(g.matcher);
+    for (const n of ["mcp__github__merge_pull_request", "mcp__gh__enable_pr_auto_merge", "mcp__github__update_pull_request", "mcp__github__actions_run_trigger"]) assert.ok(re.test(n), n);
+    for (const n of ["mcp__github__pull_request_read", "Bash", "mcp__github__update_pull_request_branch"]) assert.ok(!re.test(n), `matcher must not catch ${n}`);
+    const head = "a".repeat(40);
+    assert.equal(mcp("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "squash" }), "deny");
+    assert.equal(mcp("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), "deny", "no merge-gate receipt");
+    assert.equal(mcp("mcp__github__enable_pr_auto_merge", { pullNumber: 1 }), "deny", "the guard's ask (no MERGE method) becomes a deny");
+    assert.equal(mcp("mcp__github__actions_run_trigger", { method: "rerun_failed_jobs", run_id: 1 }), "deny", "a re-run ask becomes a deny");
+    assert.equal(mcp("mcp__github__actions_run_trigger", { method: "cancel_workflow_run", run_id: 1 }), "deny");
+    fs.mkdirSync(path.join(dir, "artifacts/merge-gate"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString() }));
+    assert.equal(mcp("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), null, "gated merge passes");
+    assert.equal(mcp("mcp__github__update_pull_request", { pullNumber: 1, body: "x" }), null, "a body edit passes");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-forward and a new branch", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "prepush-"));
   try {
