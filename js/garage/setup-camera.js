@@ -369,7 +369,8 @@ function setSetupView(name) {
   if (!v) return;
   setupPreviewView = name;
   GarageScene.spot(name);   // the work lamp wheels over to what the preset frames
-  setupPreviewFree = false; setupPreviewLens = null;   // a preset is the player's range again
+  setupPreviewFree = false;   // a preset is the player's range again
+  setupPreviewLens = null;   // and its own lens
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
   // A preset is an absolute framing, so it also drops any pan the player had
   // walked in — otherwise "show me the rear wing" shows them the rear wing plus
@@ -1098,7 +1099,8 @@ return {
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },
-  setSetupFree(on, lens) { setupPreviewFree = !!on; setupPreviewLens = lens || null; },
+  // on: boolean, or a lens {fov, centre} (a matched-lens dev shot, which is free too).
+  setSetupFree(on) { setupPreviewFree = !!on; setupPreviewLens = on && typeof on === "object" ? on : null; },
   get spin() { return setupPreviewSpin; },
   get az() { return setupPreviewAz; },
   get el() { return setupPreviewEl; },

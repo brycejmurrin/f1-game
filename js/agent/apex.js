@@ -487,7 +487,8 @@ const api = {
     // fov (deg) / centre: a matched-lens reference shot — its own vertical fov, the look-at in the
     // middle of the frame (no panel lens shift, no auto recentre). Absent = the player's camera.
     const lens = num(o.fov) > 0 || o.centre ? { fov: num(o.fov) > 0 ? Math.max(5, Math.min(90, o.fov)) : null, centre: !!o.centre } : null;
-    G.setSetupFree(o.clamp === false || !!lens, lens);   // a dev shot may leave the player's range; the next preset restores it
+    G.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
+    if (lens) G.setSetupFree(/** @type {any} */ (lens));   // a matched lens is a free dev shot too (setup-camera reads the object)
     if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
     if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
     if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
