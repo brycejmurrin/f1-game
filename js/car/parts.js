@@ -688,16 +688,17 @@ const Parts = (function () {
       {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}],
     ["aero", "medium", "style_aero_bridge", "Bridge Wing", "2008 bridge wing over the nose (McLaren MP4-23)",
       {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }],
-    // B·D3c concept-sheet wings (2026-10-20): RIFT / KEEL / DELTA / SERPENT, each
-    // pairing with the body shell of the same name. Opt-in shape fields
+    // B·D3c concept-sheet wings (2026-10-20), shown as Terrace / Flatline / Updraft /
+    // Swell (Bryce: names of their own); ids keep the sheet's rift/keel/delta/serpent
+    // so each pairs with the body shell of that id. Opt-in shape fields
     // (car-body-geom.js shapeLift / EP_SHAPES): absent = shipped mesh.
-    ["aero", "high", "style_aero_rift", "Rift Wing", "stepped front flaps, raked endplates with accent tips, swan-neck rear wing with kicked-up tips",
+    ["aero", "high", "style_aero_rift", "Terrace Wing", "stepped front flaps, raked endplates with accent tips, swan-neck rear wing with kicked-up tips",
       { fwStep: 0.065, epShape: 1, epTip: 2, rwCurve: 0.04, frontRise: 0.02, frontSweep: 0.06, swan: 1 }],
-    ["aero", "medium", "style_aero_keel", "Keel Wing", "straight three-element front, square accent-tipped endplates and a flat, straight rear wing",
+    ["aero", "medium", "style_aero_keel", "Flatline Wing", "straight three-element front, square accent-tipped endplates and a flat, straight rear wing",
       { wsFlat: 1, epShape: 4, epTip: 2, frontTaper: 1.0, rearTaper: 1.0, casc: 0, gill: 0 }],
-    ["aero", "diffuser", "style_aero_delta", "Delta Wing", "flaps sweeping sharply up into tall endplates, rear wing with strongly upturned delta tips",
+    ["aero", "diffuser", "style_aero_delta", "Updraft Wing", "flaps sweeping sharply up into tall endplates, rear wing with strongly upturned delta tips",
       { lvl: 2, fwCurve: 0.05, frontRise: 0.15, epShape: 2, epTip: 2, rwRise: 0.055, rwCurve: 0.055 }],
-    ["aero", "rake_setup", "style_aero_serpent", "Serpent Wing", "flaps curling up to rolled endplates, deep dipped-centre spoon rear wing",
+    ["aero", "rake_setup", "style_aero_serpent", "Swell Wing", "flaps curling up to rolled endplates, deep dipped-centre spoon rear wing",
       { lvl: 2, fwCurve: 0.10, epShape: 3, epTip: 2, rwRise: 0.02, rwCurve: 0.09, rearTaper: 0.86 }],
     ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",
       {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }],
