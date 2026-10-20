@@ -2298,7 +2298,8 @@
       ],
       "prepareMenuCarAssets": [
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/menu-car-prep-yield.test.mjs"
       ],
       "putBoundedMesh": [
         "tests/unit/car-presentation-vm.test.mjs"
