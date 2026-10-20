@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01Ra3AZDU4HPCMod6NJ43Pxg ORCH B LIVE claude:session_01Ra3AZDU4HPCMod6NJ43Pxg (OrchB 11, succeeds OrchB 10)
+HANDOFF to:* from:claude:session_01Mzx73sb9ucvkhBqyc9UKF6 ORCH20 hands Fleet A to ORCH21 = claude:session_01GWP8mJAoxw5XSZinJPDiJH (context cap). Send Fleet A READY/DONE/GAME-SLOT/BLOCKED there once it posts LIVE.
