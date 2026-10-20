@@ -560,8 +560,10 @@ const Car3D = (function () {
       // Seated on the mouth loft above (top 0.76 + 0.10*inScale, trapezoid t 0.55), not
       // literals: a 0.2-1.78 airbox scale left the lip 28-57 mm off its mouth (B·H13 D3).
       const mouthTop = 0.76 + 0.10 * inScale, mouthHW = (y) => 0.15 * inScale * (1 - 0.45 * (y - mouthTop + 0.20 * inScale) / (0.20 * inScale));
-      if (scoopLip >= 1) addBox(out, 0, mouthTop - 0.016, -0.265, 2 * mouthHW(mouthTop - 0.016), 0.032, 0.030, INTAKE);
-      if (scoopLip >= 2) for (const s of [-1, 1])
+      // A tiny airbox (inScale < 0.56: needle, swan, blade…) has no room above the helmet for one.
+      const lipOn = mouthTop - 0.016 >= 0.80;
+      if (scoopLip >= 1 && lipOn) addBox(out, 0, mouthTop - 0.016, -0.265, 2 * mouthHW(mouthTop - 0.016), 0.032, 0.030, INTAKE);
+      if (scoopLip >= 2 && lipOn) for (const s of [-1, 1])
         addBox(out, s * Math.min(0.115 * inScale, mouthHW(mouthTop - 0.036) - 0.012), mouthTop - 0.036, -0.295, 0.045, 0.055, 0.055, CARBON);
       // airScoop (B·D1d concept bodies, opt-in): a framed mouth — cheeks running back either side of
       // the airbox / snorkel (they read from the chase cam), a top bar, and a dark recessed panel
@@ -956,7 +958,7 @@ const Car3D = (function () {
         // widest x: concept covers left them 58-156 mm off the skin (B·H13 D1/D2).
         const clamp = (c, dx, w, h, d) => { const y = coverProfile(c).shoulder - 0.02;
           addBox(out, side * (coverFlankX(c, y) + dx), y, c.z, w, h, d, [0.10, 0.10, 0.12], SURFACES.carbon); };
-        clamp(c2e, 0.014, 0.026, 0.032, 0.040);
+        clamp(anchors.coverAt(c2e.z + 0.06), 0.014, 0.026, 0.032, 0.040);   // ahead of the rear suspension pickups
         if (ersConduit >= 2) for (let i = 0; i < 2; i++) clamp(anchors.coverAt(-0.96 - i * 0.28), 0.016, 0.028, 0.036, 0.044);
       }
     }
@@ -965,12 +967,12 @@ const Car3D = (function () {
     const ersIntake = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.coolerIntake) || 0)));
     if (ersIntake > 0 && !ckpt) {
       // A sculpted pod's roof (podRoof: channel, crown) is not the control top: seat on
-      // the highest skin under the part's width, or it buried 22-44 mm (B·H13 D4).
+      // the skin under the part's width, or it buried 22-44 mm (B·H13 D4).
       const roofY = (z, x, hw) => { const p = anchors.podAt(z);
         if (!anchors.podRoof) return p.top;
-        let y = -Infinity;
-        for (let u = 0; u <= 1.0001; u += 0.05) { const r = anchors.podRoof(z, u); if (Math.abs(r[0] - x) <= hw) y = Math.max(y, r[1]); }
-        return y > -Infinity ? y : p.top; };
+        let lo = Infinity, hi = -Infinity;
+        for (let u = 0; u <= 1.0001; u += 0.05) { const r = anchors.podRoof(z, u); if (Math.abs(r[0] - x) <= hw) { lo = Math.min(lo, r[1]); hi = Math.max(hi, r[1]); } }
+        return hi > -Infinity ? (lo + hi) / 2 : p.top; };   // mid-slope: neither sunk nor floating
       for (const side of [-1, 1]) {
         const p = anchors.podAt(-0.30), x = p.x - 0.02;
         addBox(out, side * x, roofY(-0.30, x, 0.055) + 0.008, -0.30, 0.11, 0.016, 0.14, INTAKE);
@@ -2107,11 +2109,11 @@ const Car3D = (function () {
             { z: 2.30, x: epX + s * 0.058, y: 0.172, w: 0.115, h: 0.013, t: 0.62 },
             0.004, CARBON);
         } else {
-          // Ends on the endplate, never behind it: a short plate left it in clear air (B·H13 D6).
-          const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058, cr = Math.max(cz - 0.22, _fp.rear.z + 0.02);
-          if (cr < cz - 0.06) addBeveledSpan(out,
-            { z: cz, x: s * (fwHalf - 0.03), y: cy,                              w: 0.018, h: 0.12, t: 0.55 },
-            { z: cr, x: epX + s*0.012,       y: cy + 0.070 * (cz - cr) / 0.22, w: 0.018, h: 0.12 + 0.06 * (cz - cr) / 0.22, t: 0.70 },
+          // Only where it ends on the endplate: behind a short plate it hung in clear air (B·H13 D6).
+          const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058;
+          if (cz - 0.22 >= _fp.rear.z) addBeveledSpan(out,
+            { z: cz,        x: s * (fwHalf - 0.03), y: cy,         w: 0.018, h: 0.12, t: 0.55 },
+            { z: cz - 0.22, x: epX + s*0.012,       y: cy + 0.070, w: 0.018, h: 0.18, t: 0.70 },
             0.008, c1);
         }
       }
@@ -2186,12 +2188,11 @@ const Car3D = (function () {
           { z: 1.15, x: s*0.725, y: 0.196, w: 0.135, h: 0.016, t: 0.74 },
           { z: 0.81, x: s*0.735, y: 0.204, w: 0.115, h: 0.014, t: 0.82 },
           0.005, CARBON);
-        // Stops at the pod mouth when the pod is wider than the vane line: wide inlets
-        // (brick, barge, lowline, sharkfin) buried 26-60 mm of it (B·H13 D5).
-        const vRear = anchors.podAt(0.62).x > 0.65 ? 0.63 : 0.57;
-        if (aVane >= 2) addBeveledSpan(out,
+        // Not inside a wide pod mouth (brick, barge, anteater, lowline, sharkfin, auralis:
+        // outer x 0.80-0.94 buried 26-60 mm of it, B·H13 D5); grid pods (x ≤ 0.72) keep it.
+        if (aVane >= 2 && anchors.podAt(0.62).x <= 0.75) addBeveledSpan(out,
           { z: 0.87, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
-          { z: vRear, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
+          { z: 0.57, x: s*0.66, y: 0.26, w: 0.014, h: 0.17, t: 0.50 },
           0.006, CARBON);
         if (aVane >= 3) {
           // Curved triple cascade: a swept forward vane + a canted footplate vane.

@@ -329,9 +329,11 @@ const CarGeometry = (function () {
   // with a bit-identical picture. Vertex ranges (sections, zones) do not survive,
   // so callers that read them (measure, refinish) skip it. Returns out.
   const _f = new Float32Array(10), _u = new Uint32Array(_f.buffer);
+  // A/B: localStorage apex26.carWeld = 0 ships the unwelded meshes (read once at load).
+  const WELD_ON = (() => { try { return typeof localStorage === "undefined" || localStorage.getItem("apex26.carWeld") !== "0"; } catch (_) { return true; } })();
   function weld(out) {
     const n = out.pos.length / 3;
-    if (!n || out.nrm.length !== n * 3 || out.col.length !== n * 3 || (out.mat && out.mat.length !== n)) return out;
+    if (!WELD_ON || !n || out.nrm.length !== n * 3 || out.col.length !== n * 3 || (out.mat && out.mat.length !== n)) return out;
     let cap = 1; while (cap < n * 2) cap <<= 1;
     const table = new Int32Array(cap).fill(-1), keys = new Uint32Array(n * 10), remap = new Int32Array(n);
     const pos = [], nrm = [], col = [], mat = out.mat ? [] : null;
