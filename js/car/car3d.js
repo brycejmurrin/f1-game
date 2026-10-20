@@ -101,14 +101,18 @@ const Car3D = (function () {
     // Blender-derived studies: independent IDs from the Rift/Keel/Delta/Serpent
     // campaign. fitSeat keeps nose attachments on the measured skin; the existing
     // body anchors own pod/cover clearances and decal placement for these too.
-    // Caldra: raised cooling shoulder, a pinched waist and a scalloped front cascade.
-    caldra: Object.freeze({ fitSeat: 1, noseCurve: 2.2, spineCurve: 0.035, podProfile: "rift", noseTipZ: -0.1, noseSlim: 2.35, noseDroop: -0.028, airbox: 0.88, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.000, inletW: -0.040, undercutD: 0.120, waist: -0.100, floorStep: 0.035, coverCrown: 0.02, coverLift: 0.025, wingStyle: W({ clean: 1, canard: 0, arch: 0.55, twist: 0.18, teCurve: 0.065, chordTaper: 0.22, foot: 0.92, tipRise: 0.018 }) }),
-    // Rovik: low cooling shelf, short broad nose and almost flat wings.
-    rovik: Object.freeze({ fitSeat: 1, noseCurve: 1.8, spineCurve: 0.022, podProfile: "keel", noseTipZ: -0.14, noseSlim: 2.25, noseDroop: -0.028, airbox: 0.68, fin: 0, mirror: 0, inlet: -0.040, inletH: -0.100, inletW: -0.080, undercutD: 0.065, waist: -0.130, floorStep: -0.015, coverCrown: 0.005, coverLift: -0.04, wingStyle: W({ clean: 1, canard: 0, arch: 0.2, twist: 0.06, teCurve: 0.02, chordTaper: 0.12, foot: 0.82, tipRise: 0.006 }) }),
-    // Senzo: broad cooling shoulders and swept wing tips.
-    senzo: Object.freeze({ fitSeat: 1, noseCurve: 2.0, spineCurve: 0.028, podProfile: "delta", noseTipZ: -0.04, noseSlim: 2.65, noseDroop: -0.028, airbox: 1.05, fin: 0, mirror: 2, inlet: 0.060, inletH: -0.005, inletW: -0.050, undercutD: -0.020, waist: 0.025, floorStep: 0.025, coverCrown: 0.01, coverLift: -0.035, wingStyle: W({ clean: 1, arch: 0.72, twist: 0.22, teCurve: 0.09, chordTaper: 0.28, foot: 0.98, canard: 0, tipRise: 0.025 }) }),
-    // Talven: a rising shoulder/cover arc, deep undercut and bowed wing cascade.
-    talven: Object.freeze({ fitSeat: 1, noseCurve: 2.35, spineCurve: 0.042, podProfile: "serpent", noseTipZ: -0.08, noseSlim: 2.5, noseDroop: -0.028, airbox: 0.90, fin: 0, mirror: 0, inlet: -0.020, inletH: -0.005, inletW: -0.035, undercutD: 0.100, waist: -0.080, floorStep: 0.040, coverCrown: 0.03, coverLift: 0.035, wingStyle: W({ clean: 1, canard: 0, arch: 0.82, twist: 0.25, teCurve: 0.11, chordTaper: 0.3, foot: 1.02, tipRise: 0.03 }) }),
+    // Caldra: tapered beak, raised cooling shoulder and a deeply pinched waist.
+    caldra: Object.freeze({ fitSeat: 1, nosePlan: Object.freeze([0.26, 0.32, 0.44, 0.48, 0.48]), noseCurve: 2.7, spineCurve: 0.04, podProfile: "caldra", noseTipZ: -0.04, noseSlim: 2.26087, noseDroop: -0.028, airbox: 0.88, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.000, inletW: -0.040, undercutD: 0.120, waist: -0.100, floorStep: 0.035, coverCrown: 0.02, coverLift: 0.025, wingStyle: W({ clean: 1, canard: 0, arch: 0.55, twist: 0.18, teCurve: 0.065, chordTaper: 0.22, foot: 0.92, tipRise: 0.018 }) }),
+    // Rovik: blunt shovel nose, long low cooling shelf and a flat spine.
+    rovik: Object.freeze({ fitSeat: 1, nosePlan: Object.freeze([0.4, 0.43, 0.46, 0.48, 0.48]), noseCurve: 1.8, spineCurve: 0.012, podProfile: "rovik", noseTipZ: -0.16, noseSlim: 3.47826, noseDroop: -0.028, airbox: 0.68, fin: 0, mirror: 0, inlet: -0.040, inletH: -0.08, inletW: -0.080, undercutD: 0.065, waist: -0.03, floorStep: -0.015, coverCrown: 0.005, coverLift: -0.04, wingStyle: W({ clean: 1, canard: 0, arch: 0.2, twist: 0.06, teCurve: 0.02, chordTaper: 0.12, foot: 0.82, tipRise: 0.006 }) }),
+    // Senzo: chined wedge nose and a broad triangular cooling shoulder.
+    senzo: Object.freeze({ fitSeat: 1, nosePlan: Object.freeze([0.28, 0.32, 0.48, 0.48, 0.48]), noseCurve: 2.0, spineCurve: 0.008, podProfile: "senzo", noseTipZ: -0.06, noseSlim: 2.43478, noseDroop: -0.028, airbox: 1.05, fin: 0, mirror: 2, inlet: 0.060, inletH: -0.005, inletW: -0.05, undercutD: -0.020, waist: 0.02, floorStep: 0.025, coverCrown: 0.01, coverLift: -0.06, wingStyle: W({ clean: 1, arch: 0.72, twist: 0.22, teCurve: 0.09, chordTaper: 0.28, foot: 0.98, canard: 0, tipRise: 0.025 }) }),
+    // Talven: spoon nose, S-curved pod waist and a visibly arched spine.
+    talven: Object.freeze({ fitSeat: 1, nosePlan: Object.freeze([0.36, 0.32, 0.4, 0.48, 0.48]), noseCurve: 2.35, spineCurve: 0.07, podProfile: "talven", noseTipZ: -0.12, noseSlim: 3.13043, noseDroop: -0.028, airbox: 0.90, fin: 0, mirror: 0, inlet: -0.020, inletH: -0.005, inletW: -0.035, undercutD: 0.100, waist: -0.1, floorStep: 0.040, coverCrown: 0.03, coverLift: 0.035, wingStyle: W({ clean: 1, canard: 0, arch: 0.82, twist: 0.25, teCurve: 0.11, chordTaper: 0.3, foot: 1.02, tipRise: 0.03 }) }),
+    // Orvex: raised slender bridge nose, tight upright pods and a high curved spine.
+    orvex: Object.freeze({ fitSeat: 1, nosePlan: Object.freeze([.26,.27,.34,.46,.48]), noseCurve: 2.8, spineCurve: .055, podProfile: "orvex", noseTipZ: -.08, noseSlim: 2.26, noseDroop: .075, airbox: .72, fin: 0, mirror: 1, inlet: -.025, inletH: -0.08, inletW: -.080, undercutD: .11, waist: -.12, floorStep: .025, coverCrown: 0.02, coverLift: 0.025, wingStyle: W({ clean: 1, canard: 0, arch: .55, twist: .08, teCurve: .035, chordTaper: .18, foot: .88, tipRise: .02 }) }),
+    // Nacrel: blunt low slab nose, full box shoulders and a low almost-level cover.
+    nacrel: Object.freeze({ fitSeat: 1, nosePlan: Object.freeze([.42,.44,.48,.48,.48]), noseCurve: 1.1, spineCurve: .006, podProfile: "nacrel", noseTipZ: -.16, noseSlim: 3.65, noseDroop: -.028, airbox: 1.08, fin: 0, mirror: 2, inlet: .015, inletH: -0.04, inletW: .005, undercutD: .015, waist: .02, floorStep: .015, coverCrown: 0.005, coverLift: -0.04, wingStyle: W({ clean: 1, canard: 0, arch: .10, twist: .04, teCurve: .012, chordTaper: .08, foot: .82, tipRise: .004 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -1163,7 +1167,10 @@ const Car3D = (function () {
     // fitSeat: sit on the LOWER skin under the pod's 15 cm, not the top at its centre
     // (a stepped cone climbs under it and the rear floated 13 mm).
     const camY = teamStyle.fitSeat ? Math.min(anchors.noseAt(1.475).top, anchors.noseAt(1.625).top) + 0.038 : camPod.top + 0.045;   // 2 mm in at the high end
-    addBox(out, 0, camY, 1.55, 0.06, 0.08, 0.15, DARK);
+    if (teamStyle.noseCurve) addSpan(out,
+      { z: 1.475, y: anchors.noseAt(1.475).top + .036, w: .06, h: .08 },
+      { z: 1.625, y: anchors.noseAt(1.625).top + .036, w: .06, h: .08 }, DARK);
+    else addBox(out, 0, camY, 1.55, 0.06, 0.08, 0.15, DARK);
 
     // Two-tone body (CarShade): `lower` below the sidepod board line, `upper`
     // above it. bodySplit lr wins; cockpit / silhouette builds skip both.
@@ -2419,9 +2426,13 @@ const Car3D = (function () {
     // visible gap between arm root and body from any three-quarter camera.
     // Sample the SAME anchors the bodywork lofts from — the arms then follow a
     // team's nose style and an engine's tailWidth instead of ignoring both.
-    const inNose = (z, y) => {
+    const noseRoot = (side, z, y) => {
       const p = anchors.noseAt(z);
-      return teamStyle.noseCurve ? noseFlankX(p, y, shadeFlags.round) - 0.004 : p.side - 0.012;
+      if (!teamStyle.noseCurve) return [side * (p.side - 0.012), y, z];
+      y = Math.max(p.bottom + 0.012, Math.min(p.top - 0.012, y));
+      // Seat the full arm chord on a shoulder, including raised/low noses.
+      const x = Math.max(...[-.04, 0, .04].map(d => noseFlankX(anchors.noseAt(z + d), y, shadeFlags.round))) - .004;
+      return [side * x, y, z];
     };
     const inTail = (z) => Math.max(0.14, anchors.coverAt(z).x - 0.012);
     for (const s of [-1, 1]) {
@@ -2436,16 +2447,16 @@ const Car3D = (function () {
       const fLowZ = [AXLES.frontZ - wishboneSpread, AXLES.frontZ + wishboneSpread];
       const fUpY = (z) => 0.42 + upX * 0.6 + (z < AXLES.frontZ ? antiDive : -antiDive * 0.4) + rideDY;
       for (const z of fLowZ) {
-        drawArm(out, [s*inNose(z, 0.225 + rideDY), 0.225 + rideDY, z], fLower, armTh, suspC, SURFACES.carbon);
-        drawArm(out, [s*inNose(z, fUpY(z)), fUpY(z), z], fUpper, armTh, suspC, SURFACES.carbon);
+        drawArm(out, noseRoot(s, z, 0.225 + rideDY), fLower, armTh, suspC, SURFACES.carbon);
+        drawArm(out, noseRoot(s, z, fUpY(z)), fUpper, armTh, suspC, SURFACES.carbon);
       }
       if (fairArms) {
-        addWishboneWeb(out, [s*inNose(fLowZ[0], 0.225 + rideDY), 0.225 + rideDY, fLowZ[0]],
-          [s*inNose(fLowZ[1], 0.225 + rideDY), 0.225 + rideDY, fLowZ[1]], fLower, suspC, SURFACES.carbon);
-        addWishboneWeb(out, [s*inNose(fLowZ[0], fUpY(fLowZ[0])), fUpY(fLowZ[0]), fLowZ[0]],
-          [s*inNose(fLowZ[1], fUpY(fLowZ[1])), fUpY(fLowZ[1]), fLowZ[1]], fUpper, suspC, SURFACES.carbon);
+        addWishboneWeb(out, noseRoot(s, fLowZ[0], 0.225 + rideDY),
+          noseRoot(s, fLowZ[1], 0.225 + rideDY), fLower, suspC, SURFACES.carbon);
+        addWishboneWeb(out, noseRoot(s, fLowZ[0], fUpY(fLowZ[0])),
+          noseRoot(s, fLowZ[1], fUpY(fLowZ[1])), fUpper, suspC, SURFACES.carbon);
       }
-      drawArm(out, [s*inNose(AXLES.frontZ - 0.16, 0.34 + rideDY), 0.34 + rideDY, AXLES.frontZ - 0.16],
+      drawArm(out, noseRoot(s, AXLES.frontZ - 0.16, 0.34 + rideDY),
         [s*0.69, 0.35 + rideDY, AXLES.frontZ - 0.04*toeScale],
         armTh*0.72*toeScale, suspC, SURFACES.carbon);
       // An upright is a CASTING: wide at the lower wishbone pickup, narrow at
@@ -2456,9 +2467,8 @@ const Car3D = (function () {
               [0.18, 0.18, 0.20], null, SURFACES.metal);
       if (wbPush) {
         const outer = pullF ? fUpper : fLower;
-        const iX = inNose(AXLES.frontZ - 0.05, (pullF ? 0.20 : 0.455) + rideDY);
-        const inner = pullF ? [s*(iX + armTh*0.41),0.20+rideDY,AXLES.frontZ-0.05]
-          : [s*iX,0.455+rideDY,AXLES.frontZ-0.05];
+        const inner = noseRoot(s, AXLES.frontZ - 0.05, (pullF ? 0.20 : 0.455) + rideDY);
+        if (pullF) inner[0] += s * armTh * 0.41;
         drawArm(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
       }
       if (!ckpt) {

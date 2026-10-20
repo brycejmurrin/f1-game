@@ -1,1 +1,1 @@
-New: Caldra, Rovik, Senzo and Talven body profiles bring four Blender-inspired garage silhouettes with shorter broad downturned noses, rounded engine-cover spines and clean wing cascades.
+New: Caldra, Rovik, Senzo and Talven body profiles plus Orvex and Nacrel bring six distinct garage silhouettes: tapered, shovel, chined, spoon, raised and slab noses, with independent sidepod and spine shapes. Nose paint follows the continuous skin.

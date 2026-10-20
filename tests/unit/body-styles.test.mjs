@@ -193,6 +193,35 @@ test("bodyStyle is a published livery field and the garage's copy list carries i
 // downturned cone and a continuous rounded spine. These checks read emitted
 // triangles as well as attachment datums, so a recipe flag alone cannot pass.
 const BLENDER_BODIES = ["caldra", "rovik", "senzo", "talven"];
+const STUDY_BODIES = [...BLENDER_BODIES, "orvex", "nacrel"];
+function skinSection(mesh, range, z) {
+  const points = [];
+  for (let i = 0; i < mesh.idx.length; i += 3) {
+    const ids = mesh.idx.slice(i, i + 3);
+    if (!ids.every(v => v >= range.from && v < range.to)) continue;
+    const tri = ids.map(v => mesh.pos.slice(v * 3, v * 3 + 3));
+    for (let e = 0; e < 3; e++) {
+      const a = tri[e], b = tri[(e + 1) % 3];
+      if ((z - a[2]) * (z - b[2]) > 0 || Math.abs(b[2] - a[2]) < 1e-9) continue;
+      const f = (z - a[2]) / (b[2] - a[2]);
+      points.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+    }
+  }
+  assert.ok(points.length, `No emitted skin section at ${z}`);
+  return [Math.max(...points.map(p => p[0])) - Math.min(...points.map(p => p[0])), Math.max(...points.map(p => p[1]))];
+}
+test("six studies have distinct emitted nose/pod/spine silhouettes with common paint", () => {
+  for (const smooth of [false, true]) {
+    const profiles = STUDY_BODIES.map(bodyStyle => {
+      const m = Car3D.build(team.color, team.color2, { smooth, measure: true, noWheels: true, teamId: team.id, livery: { bodyStyle } });
+      return [[m.noseSkin, [2.40, 2.20, 1.70]], [m.podSkin, [.22, -.38, -.62, -.90]], [m.coverSkin, [-.80, -1.30, -1.70]]]
+        .flatMap(([range, zs]) => zs.flatMap(z => skinSection(m, range, z)));
+    });
+    for (let a = 0; a < profiles.length; a++) for (let b = a + 1; b < profiles.length; b++)
+      assert.ok(Math.max(...profiles[a].map((n, i) => Math.abs(n - profiles[b][i]))) >= .08,
+        `${STUDY_BODIES[a]}/${STUDY_BODIES[b]}/${smooth}: no 80 mm silhouette difference`);
+  }
+});
 function verticalHits(mesh, range, x, z) {
   const hits = [], P = mesh.pos;
   for (let i = 0; i < mesh.idx.length; i += 3) {
@@ -243,12 +272,12 @@ test("Blender noses carry a broad painted shoulder over the front axle", () => {
   }
 });
 
-test("Blender nose and spine skins are closed, consistently wound and sampled by their anchors", () => {
+test("study nose, pod and spine skins are closed, consistently wound and sampled by their anchors", () => {
   for (const round of [false, true]) {
     const X = round ? Shaded : Car3D;
-    for (const bodyStyle of BLENDER_BODIES) {
+    for (const bodyStyle of STUDY_BODIES) {
       const m = X.build(team.color, team.color2, { noWheels: true, measure: true, smooth: round, teamId: team.id, livery: { bodyStyle } });
-      for (const [skin, range] of [["cover", m.coverSkin], ["nose", m.noseSkin]]) {
+      for (const [skin, range] of [["cover", m.coverSkin], ["nose", m.noseSkin], ["pod", m.podSkin]]) {
       assert.ok(range && range.to > range.from, `${bodyStyle}: no emitted ${skin} skin`);
       const edges = new Map(), zs = new Set(); let volume6 = 0, count = 0;
       const key = (p) => p.map((x) => Math.round(x * 1e8)).join(",");
@@ -265,9 +294,11 @@ test("Blender nose and spine skins are closed, consistently wound and sampled by
           const e = edges.get(k) || { count: 0, direction: 0 }; e.count++; e.direction += u < v ? 1 : -1; edges.set(k,e);
         }
       }
-      assert.equal(zs.size, 9, `${bodyStyle}/${round}: longitudinal curve missing`);
+      if (skin === "pod") assert.ok(zs.size >= 9 && zs.size <= 10, `${bodyStyle}/${round}: pod stations or inlet throat missing`);
+      else assert.equal(zs.size, 9, `${bodyStyle}/${round}: longitudinal curve missing`);
       if (skin === "cover") assert.equal(count, 284, `${bodyStyle}/${round}: unexpected cover cost`);
-      else assert.ok(count >= 68 && count <= 300, `${bodyStyle}/${round}: unexpected nose cost ${count}`);
+      else if (skin === "nose") assert.ok(count >= 68 && count <= 300, `${bodyStyle}/${round}: unexpected nose cost ${count}`);
+      else assert.ok(count <= 400, `${bodyStyle}/${round}: unexpected pod cost ${count}`);
       assert.ok(volume6 > 0, `${bodyStyle}/${round}: inward skin`);
       assert.ok([...edges.values()].every((e) => e.count === 2 && e.direction === 0), `${bodyStyle}/${round}: open or inconsistent skin`);
       const anchors = X.bodyAnchors(null, bodyStyle, undefined, round);
@@ -282,7 +313,7 @@ test("Blender nose and spine skins are closed, consistently wound and sampled by
 
 test("thin study pods keep the accent flash above the sponsor board", () => {
   const accent = [0.123,0.456,0.789];
-  for (const bodyStyle of BLENDER_BODIES) {
+  for (const bodyStyle of STUDY_BODIES) {
     const m = Car3D.build(team.color,team.color2,{noWheels:true,measure:true,livery:{bodyStyle,accent}});
     const sec = m.parts.find(p=>p.name==="livery"), a = Car3D.bodyAnchors(null,bodyStyle);
     let count = 0;
@@ -298,10 +329,11 @@ test("thin study pods keep the accent flash above the sponsor board", () => {
 
 test("Blender noses retain seated wing mounts and suspension roots", () => {
   const t=Teams.LIST.find(t=>t.id==="mercedes"), parts=Parts.getVisualTiers(Parts.getFactorySetup(t),t);
-  for (const bodyStyle of BLENDER_BODIES) {
+  for (const bodyStyle of STUDY_BODIES) {
     const m=Car3D.buildComplete([.8,.1,.1],[.1,.2,.85],{teamId:t.id,num:44,parts,measure:true,livery:{bodyStyle}});
     const {rows}=auditMesh(m,["GAP","PENETRATION"]);
     assert.deepEqual(rows.filter(r=>r.fail && r.a==="frontWing" && ["chassis","aeroFlaps"].includes(r.b)),[],`${bodyStyle}: main wing attachment`);
     assert.deepEqual(rows.filter(r=>r.fail && r.check==="PENETRATION" && r.a==="suspension" && r.b==="chassis"),[],`${bodyStyle}: suspension roots buried in the nose`);
+    if (bodyStyle === "senzo") assert.deepEqual(rows.filter(r=>r.fail && r.check==="PENETRATION" && r.a==="bodyDetail" && r.b==="sidepods"),[],"Senzo must not stack the supplier duct inside its triangular inlet");
   }
 });

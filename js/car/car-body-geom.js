@@ -56,10 +56,13 @@ const CarBodyGeom = (function () {
     return Object.assign(Array.from({ length: 9 }, (_, i) => {
       const f = 1 - i / 8, top = topR + (topT - topR) * Math.pow(f, s.noseCurve);
       const bottom = bottomR + (bottomT - bottomR) * f;
+      const u = i / 2, k = Math.min(3, Math.floor(u));
+      const width = s.nosePlan ? s.nosePlan[k] + (s.nosePlan[k + 1] - s.nosePlan[k]) * (u - k)
+        : wTip + (root.w - wTip) * Math.pow(1 - f, 0.45);
       return { z: root.z + (zTip - root.z) * f, y: (top + bottom) / 2,
         // Carry the shoulder forward over the axle before rounding into the
         // tip. A wide end alone still leaves a needle-shaped upper surface.
-        w: wTip + (root.w - wTip) * Math.pow(1 - f, 0.45),
+        w: width,
         h: top - bottom, t: root.t + (0.90 - root.t) * f };
     }), { curve: true });
   }
@@ -1419,17 +1422,25 @@ const CarBodyGeom = (function () {
     keel: { span: [.84,.86,.90,.92,.92,.94,.96,.98,.98] },
     delta: { span: [.98,1.05,1.20,1.15,.96,.82,.78,.79,.85], depth: [.012,.025,.045,.055,.07,.06,.04,.02,.012] },
     serpent: { span: [1,.98,1.18,1.04,.70,.66,.86,.88,.86], depth: [.012,.02,.04,.08,.11,.12,.07,.025,.012] },
+    // Independent recipes: keep the shared reference-body profiles above intact.
+    caldra: { shape: "rift", span: [1.08,1.08,1.35,1.15,.70,.55,.55,.65,.80], depth: [.015,.035,.10,.14,.15,.12,.08,.03,.012] },
+    rovik: { shape: "keel", span: [1.10,1.12,1.15,1.10,1.06,1,1,.98,.95], roofDrop: .04 },
+    senzo: { shape: "delta", span: [.98,1.05,1.40,1.40,1.20,1,.78,.60,.65], depth: [.012,.025,.04,.06,.075,.07,.04,.02,.012] },
+    talven: { shape: "serpent", span: [.95,1,1.16,1.04,.66,.55,1.10,1.02,.80], depth: [.012,.025,.05,.10,.14,.14,.08,.03,.012] },
+    orvex: { shape: "keel", span: [.80,.80,.86,.84,.78,.76,.75,.80,.85] },
+    nacrel: { shape: "rift", span: [1.20,1.30,1.30,1.25,1.15,1.10,1,.90,.90], depth: [.012,.015,.025,.035,.05,.045,.03,.02,.012] },
   });
   // Shape only opt-in bodies, AFTER supplier downwash. Interpolate the original
   // station floors explicitly: the legacy clamp's tables have only seven Z keys.
   function conceptPodStations(stations, profile) {
     const recipe = CONCEPT_PODS[profile];
+    const shape = recipe.shape || profile;
     const floors = Object.keys(POD_MIN_W).map(Number).sort((a, b) => b - a)
       .map((z) => ({ z, width: POD_MIN_W[String(z)], height: POD_MIN_H[String(z)] }));
     const shaped = CONCEPT_POD_Z.map((z, i) => {
       const p = sampleStations(stations, z), f = sampleStations(floors, z);
       p.outer = Math.min(0.88, p.inner + Math.max(f.width, (p.outer - p.inner) * recipe.span[i]));
-      const roofDrop = profile === "keel" ? 0.018 : profile === "delta" || profile === "serpent" ? 0.006 : 0;
+      const roofDrop = recipe.roofDrop || (shape === "keel" ? 0.018 : shape === "delta" || shape === "serpent" ? 0.006 : 0);
       p.innerTop -= roofDrop; p.outerTop -= roofDrop;
       for (const edge of ["inner", "outer"]) {
         const b = edge + "Bottom", t = edge + "Top";
@@ -1441,7 +1452,7 @@ const CarBodyGeom = (function () {
       p.outerTop = Math.min(POD_TOP_MAX, Math.max(p.outerTop, p.outerBottom + f.height));
       return p;
     });
-    if (profile === "serpent") {
+    if (shape === "serpent") {
       // Supplier taper can overwhelm a factor-only recovery. Pin a real outer
       // bulge behind the waist, then return continuously to the supplier tail.
       shaped[6].outer = Math.min(.88, Math.max(shaped[6].outer, shaped[5].outer + .025, shaped[8].outer + .025));
@@ -1450,10 +1461,12 @@ const CarBodyGeom = (function () {
     return shaped;
   }
   function conceptPodRing(p, profile, index) {
+    const recipe = CONCEPT_PODS[profile];
+    profile = recipe.shape || profile;
     const x = p.outer, w = x - p.inner, b = p.outerBottom, h = p.outerTop - b;
     if (profile === "keel") return [[p.inner,p.innerBottom], [x-w*.06,b], [x,b+h*.12],
       [x,b+h*.90], [x-w*.12,p.outerTop], [p.inner,p.innerTop]];
-    const depth = Math.min(CONCEPT_PODS[profile].depth[index], w * 0.55);
+    const depth = Math.min(recipe.depth[index], w * 0.55);
     // The forward channel stays BELOW the original 32..88% sponsor landing.
     // Behind its rear edge it climbs, exposing a tall inset wall and silver lip.
     const aft = Math.max(0, Math.min(1, (-p.z - .34) / .45));
@@ -1502,15 +1515,16 @@ const CarBodyGeom = (function () {
     }
   }
   function buildConceptPods(out, stations, profile, c1) {
+    const shape = CONCEPT_PODS[profile].shape || profile;
     for (const side of [-1,1]) {
       const rings = stations.map((p,i) => conceptPodRing(p,profile,i));
-      const strips = shadeFlags.round && (profile==="rift" || profile==="serpent") ? [] : null;
+      const strips = shadeFlags.round && (shape==="rift" || shape==="serpent") ? [] : null;
       const xyz = (p,z) => [side*p[0],p[1],z];
       const tri = (a,b,c,col,surface) => side > 0 ? addTri(out,a,b,c,col,surface) : addTri(out,a,c,b,col,surface);
       for (let r=0;r<rings.length-1;r++) for (let e=0;e<rings[r].length;e++) {
         const start=out.pos.length;
         const j=(e+1)%rings[r].length, A=rings[r], B=rings[r+1];
-        const dark=profile!=="keel" && e>=1 && e<=4, col=dark?INTAKE:c1, sf=dark?SURFACES.carbon:SURFACES.paint;
+        const dark=shape!=="keel" && e>=1 && e<=4, col=dark?INTAKE:c1, sf=dark?SURFACES.carbon:SURFACES.paint;
         tri(xyz(A[e],stations[r].z),xyz(B[e],stations[r+1].z),xyz(B[j],stations[r+1].z),col,sf);
         tri(xyz(A[e],stations[r].z),xyz(B[j],stations[r+1].z),xyz(A[j],stations[r].z),col,sf);
         if (strips) strips.push({edge:e,start,end:out.pos.length});
@@ -1519,7 +1533,7 @@ const CarBodyGeom = (function () {
       for (const front of [true,false]) {
         const r=front?0:rings.length-1, ring=rings[r], caps=conceptPodCap(ring), z=stations[r].z;
         const area = (t) => { const [a,b,c]=t.map((i)=>ring[i]); return Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])); };
-        const opening=front && profile==="delta" ? caps.reduce((best,t)=>area(t)>area(best)?t:best,caps[0]) : null;
+        const opening=front && shape==="delta" ? caps.reduce((best,t)=>area(t)>area(best)?t:best,caps[0]) : null;
         for (const t of caps) {
           const v=t.map((i)=>xyz(ring[i],z));
           if (t!==opening) { if (front) tri(v[0],v[1],v[2],c1,SURFACES.paint); else tri(v[0],v[2],v[1],c1,SURFACES.paint); continue; }
@@ -1667,8 +1681,9 @@ const CarBodyGeom = (function () {
     const floorP = data.podAt(0.0);
     const conduitP = data.podAt(-0.65);
     const tailP = data.podAt(-1.48);
+    const profile = CONCEPT_PODS[data.podProfile];
     return {
-      conceptInlet: data.podProfile === "delta",
+      conceptInlet: !!profile && (profile.shape || data.podProfile) === "delta",
       inlet: { z: 0.625, x: (inletP.inner + inletP.x) * 0.5,
                y: (inletP.innerBottom + inletP.innerTop) * 0.5,
                width: inletP.x - inletP.inner, height: inletP.innerTop - inletP.innerBottom },
