@@ -21,7 +21,7 @@ import { writeFileSync } from "node:fs";
 const TRACKS = (process.env.H10_TRACKS || "monaco,spa,singapore").split(",");
 const BACKENDS = (process.env.H10_BACKENDS || "tlx-gl").split(",");
 const CAM = process.env.H10_CAM || "helmet";
-const WARM = +(process.env.H10_WARM || 8), WIN = +(process.env.H10_WIN || 50), TRACE = +(process.env.H10_TRACE || 6);
+const WARM = +(process.env.H10_WARM || 8), WIN = +(process.env.H10_WIN || 40), TRACE = +(process.env.H10_TRACE || 6);
 const EXTRA = (process.env.H10_LS || "").split(/\s+/).filter(Boolean).map((kv) => kv.split("="));
 const OUT = process.env.H10_OUT || "h10-live-frame.json";
 const report = { started: new Date().toISOString(), warm: WARM, win: WIN, trace: TRACE, cam: CAM, extra: EXTRA, rows: [] };
@@ -138,6 +138,23 @@ function analyseTrace(events, frames) {
       majorN: gc.major.length, majorMs: sum(gc.major), majorMax: gc.major.length ? +Math.max(...gc.major).toFixed(2) : 0, bgN: gc.other.length } };
 }
 
+function analyseProfile(p) {
+  // Self time by function (url:line) and by file, over the sampled window.
+  const byId = new Map(p.nodes.map((n) => [n.id, n]));
+  const cnt = new Map(); for (const id of p.samples) cnt.set(id, (cnt.get(id) || 0) + 1);
+  const dt = (p.endTime - p.startTime) / 1000 / Math.max(1, p.samples.length);   // ms per sample
+  const fnS = new Map(), fileS = new Map(); let total = 0, idle = 0;
+  for (const [id, c] of cnt) {
+    const n = byId.get(id), cf = n.callFrame, ms = c * dt; total += ms;
+    if (cf.functionName === "(idle)" || cf.functionName === "(program)") { idle += ms; }
+    const file = (cf.url || "").split("/").pop().replace(/\?.*$/, "") || cf.functionName;
+    const k = (cf.functionName || "(anon)") + " " + file + ":" + (cf.lineNumber + 1);
+    fnS.set(k, (fnS.get(k) || 0) + ms); fileS.set(file, (fileS.get(file) || 0) + ms);
+  }
+  const top = (m, n) => [...m].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => [k, +v.toFixed(1)]);
+  return { ms: +total.toFixed(0), idleMs: +idle.toFixed(0), fns: top(fnS, 30), files: top(fileS, 15) };
+}
+
 async function runRow(browser, server, backend, track) {
   const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1.5, hasTouch: true });
   const page = await ctx.newPage();
@@ -193,7 +210,7 @@ async function runRow(browser, server, backend, track) {
   });
   await page.evaluate(() => { window.__apex.perf({ on: true, reset: true }); const H = window.__h10; H.ts = []; H.cb = []; H.lastT = -1; H.on = true; window.__h10s.on = true; });
   // Trace the middle TRACE s of the window.
-  const pre = Math.max(0, (WIN - TRACE) / 2);
+  const pre = 4;
   await page.waitForTimeout(pre * 1000);
   const cdp = await ctx.newCDPSession(page);
   const events = [];
@@ -204,7 +221,15 @@ async function runRow(browser, server, backend, track) {
   await page.waitForTimeout(TRACE * 1000);
   const f1 = await page.evaluate(() => window.__h10.ts.length);
   await cdp.send("Tracing.end"); await Promise.race([done, new Promise((r) => setTimeout(r, 60000))]);
-  await page.waitForTimeout(Math.max(0, WIN - pre - TRACE) * 1000);
+  // V8 CPU profile over PROF s of the window, after the trace.
+  const PROF = +(process.env.H10_PROF || 12);
+  const g0 = await page.evaluate(() => window.__h10.ts.length);
+  await cdp.send("Profiler.enable"); await cdp.send("Profiler.setSamplingInterval", { interval: 250 }); await cdp.send("Profiler.start");
+  await page.waitForTimeout(PROF * 1000);
+  const { profile } = await cdp.send("Profiler.stop");
+  const g1 = await page.evaluate(() => window.__h10.ts.length);
+  const cpuProf = Object.assign(analyseProfile(profile), { frames: g1 - g0 });
+  await page.waitForTimeout(Math.max(0, WIN - pre - TRACE - PROF) * 1000);
   const got = await page.evaluate(() => {
     const H = window.__h10; H.on = false; window.__h10d.stop(); const SC = window.__h10s; SC.on = false;
     const A = window.__apex, p = A.perf();
@@ -219,7 +244,7 @@ async function runRow(browser, server, backend, track) {
     env, frame: Object.assign(dist(got.iv), { over33: over(33.4), over50: over(50), over100: over(100), fps: +(1000 * got.iv.length / Math.max(1, got.iv.reduce((a, b) => a + b, 0))).toFixed(1) }),
     cpu: dist(got.cb), spans: got.spans, slow: got.slow, drive: got.drive, gpuMs: got.gpuMs, govEnd: got.gov, heapMB: got.heap,
     loaf: { supported: got.loaf && got.loaf.supported, n: loafE.length, top: loafE.slice().sort((a, b) => (b.duration || 0) - (a.duration || 0)).slice(0, 6) },
-    trace: analyseTrace(events, f1 - f0), console: cons,
+    trace: analyseTrace(events, f1 - f0), prof: cpuProf, console: cons,
   };
   await ctx.close().catch(() => {});
   return row;
@@ -239,6 +264,7 @@ try {
       log(`  spans ${JSON.stringify(row.spans)}`);
       log(`  trace ${JSON.stringify(row.trace)}`);
       log(`  slow ${JSON.stringify(row.slow).slice(0, 2500)}`);
+      log(`  prof ${JSON.stringify(row.prof).slice(0, 3000)}`);
       log(`  loaf ${JSON.stringify(row.loaf).slice(0, 1500)}`);
     } catch (e) { row.error = String((e && e.stack) || e).slice(0, 600); log(`${backend} ${track} FAILED ${row.error}`); }
     finally { row.ms = Date.now() - t0; save(); if (browser) await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15000))]); }
