@@ -92,11 +92,11 @@ const Car3D = (function () {
     // Round 4 (B·D1c, "some are too big"): sizes cut to the shipped envelope and real
     // proportions — design-preview/bodies/measure.mjs prints the table.
     // Highnose: 1990 Tyrrell 019 / Benetton B191 raised nose, slim cone, anhedral-ish wing.
-    highnose: Object.freeze({ fitSeat: 1, noseTipZ: 0.16, noseSlim: 0.62, noseDroop:  0.215, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.020, inletH:  0.040, inletW:  0.020, undercutD:  0.040, waist: -0.040, floorStep:  0.020, coverCrown:  0.040, coverLift:  0.040, wingStyle: W({ arch: 1.10, twist: 0.30, teCurve: 0.14, foot: 1.40, tipRise: 0.060 }) }),
+    highnose: Object.freeze({ fitSeat: 1, noseTipZ: 0.16, noseSlim: 0.62, noseDroop:  0.215, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.020, inletH:  0.000, inletW:  0.020, undercutD:  0.040, waist: -0.040, floorStep:  0.020, coverCrown:  0.040, coverLift:  0.040, wingStyle: W({ arch: 1.10, twist: 0.30, teCurve: 0.14, foot: 1.40, tipRise: 0.060 }) }),
     // Sharkfin: 2008-11 / 2017 tall dorsal fin over a long raised cover, clutter wing.
     sharkfin: Object.freeze({ fitSeat: 1, noseTipZ: 0.25, noseSlim: 0.70, noseDroop: -0.020, airbox: 0.80, fin: 2, finH: 0.13, finRear: 2.0, finW: 0.018, mirror: 2, inlet: -0.020, inletH: -0.060, inletW:  0.160, undercutD:  0.080, waist: -0.060, floorStep:  0.040, coverCrown:  0.060, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.90, twist: 0.38, teCurve: 0.18, chordTaper: 0.44, canard: 2, tipRise: 0.050 }) }),
     // Downwash: 2023 RB19 — high wide mouth ramping steeply down to a low tail.
-    lowline:  Object.freeze({ fitSeat: 1, noseTipZ: 0.20, noseSlim: 1.00, noseDroop: -0.028, airbox: 0.40, fin: 0, mirror: 0, inlet: -0.080, inletH: -0.200, inletW:  0.200, undercutD:  0.000, waist:  0.200, floorStep:  0.000, coverCrown: -0.080, coverLift: -0.160, wingStyle: W({ flaps: 2, arch: 0.30, twist: 0.10, teCurve: 0.04, chordTaper: 0.20, foot: 0.85, tipRise: 0.010 }) }),
+    lowline:  Object.freeze({ fitSeat: 1, noseTipZ: 0.20, noseSlim: 1.00, noseDroop: -0.028, airbox: 0.40, fin: 0, mirror: 0, inlet: -0.080, inletH: -0.200, inletW:  0.200, undercutD:  0.000, waist:  0.200, floorStep:  0.000, coverCrown:  0.000, coverLift: -0.160, wingStyle: W({ flaps: 2, arch: 0.30, twist: 0.10, teCurve: 0.04, chordTaper: 0.20, foot: 0.85, tipRise: 0.010 }) }),
     // Stepnose: 2012 Caterham CT01 / Ferrari F2012 — tall tub crown stepping down to a low cone.
     stepnose: Object.freeze({ fitSeat: 1, noseTipZ: 0.28, noseSlim: 1.00, noseDroop: -0.028, noseStep: 0.20, airbox: 1.30, fin: 1, mirror: 2, inlet:  0.040, inletH:  0.100, inletW:  0.060, undercutD:  0.060, waist: -0.060, floorStep:  0.030, coverCrown:  0.080, coverLift:  0.060, wingStyle: W({ flaps: 3, arch: 0.75, twist: 0.30, teCurve: 0.14, chordTaper: 0.40, canard: 2, tipRise: 0.040 }) }),
   });
@@ -1001,7 +1001,16 @@ const Car3D = (function () {
     // and a literal 2.70 would have painted a stripe in mid-air ahead of it.
     const styledTipZ = styledNoseStations(teamStyle)[0].z;
     const noseAccentRear = anchors.noseAt(1.60), noseAccentFront = anchors.noseAt(styledTipZ - 0.04);
-    addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, 0.09, 0.016,
+    // fitSeat: a concept cone bulges 27-98 mm over the straight 1.60-to-tip chord, which
+    // buried the accent and z-fought where it crossed the skin (sharkfin 215 cm2). Follow
+    // the skin in ~12 cm steps from the cockpit deck's front (2.15), which covers it behind.
+    if (teamStyle.fitSeat && styledTipZ - 0.04 > 2.27) {
+      const z0 = 2.15, z1 = styledTipZ - 0.04, n = Math.ceil((z1 - z0) / 0.12), w = (z) => 0.09 + (0.05 - 0.09) * (z - 1.60) / (z1 - 1.60);
+      for (let i = 0; i < n; i++) {
+        const za = z0 + (z1 - z0) * i / n, zb = z0 + (z1 - z0) * (i + 1) / n, a = anchors.noseAt(za), b = anchors.noseAt(zb);
+        addLoft(out, za, 0, a.top + 0.008, w(za), 0.015, zb, 0, b.top + 0.008, w(zb), 0.014, c2);
+      }
+    } else addLoft(out, 1.60, 0, noseAccentRear.top + 0.008, 0.09, 0.016,
            styledTipZ - 0.04, 0, noseAccentFront.top + 0.008, 0.05, 0.014, c2);
     // Spine accent along the ROLL-STRUCTURE crown, not the airbox roof it used
     // to lie on: the blade now occupies z -0.33..-0.63 and a flat band at
@@ -1790,8 +1799,13 @@ const Car3D = (function () {
       // Raised nose (preview highnose, 1990 Tyrrell 019): the arm climbs to the
       // cone's underside and leans in under the slim nose — at 0.275 it stopped
       // 15 cm short and the wing hung in the air.
-      const armNose = (teamStyle.noseDroop || 0) > 0.06 ? anchors.noseAt(2.40) : null;
-      const armX = armNose ? Math.min(0.09, armNose.side - 0.03) : 0.09, armY = armNose ? armNose.bottom + 0.045 : 0.275;
+      // fitSeat, low cone (underside < 0.195 at the arm; lowline, stepnose): the fixed
+      // 0.275 top buried 33-43 mm of arm in the cone. A short arm leans its 16 cm chord,
+      // so its top rides ~40 mm over the end point: end 25 mm under the skin, top ~15 mm in.
+      const armNose = (teamStyle.noseDroop || 0) > 0.06 || teamStyle.fitSeat ? anchors.noseAt(2.40) : null;
+      const armLow = !!(teamStyle.fitSeat && armNose.bottom < 0.195);
+      const armOff = armLow ? -0.025 : (teamStyle.noseDroop || 0) > 0.06 ? 0.045 : null;
+      const armX = armOff != null ? Math.min(0.09, armNose.side - 0.03) : 0.09, armY = armOff != null ? armNose.bottom + armOff : 0.275;
       if (shadeFlags.round) CarShade.strut(out, [s*0.09, 0.085, 2.54], [s*armX, armY, 2.40], 0.16, 0.040, c1, addTri, null, { n: 10, taper: 0.72 });
       else addFairedArm(out, [s*armX, armY, 2.40], [s*0.09, 0.085, 2.54], 0.040, c1, SURFACES.paint);
     }

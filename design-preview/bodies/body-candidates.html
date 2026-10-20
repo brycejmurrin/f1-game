@@ -70,11 +70,46 @@ ul.src { margin: 0; padding-left: 18px; display: flex; flex-direction: column; g
 
 <div class="wrap">
 <header>
-  <div class="eyebrow">Design preview · Fleet B · B·D1 bodies · round 4 (size review) · 2026-10-20</div>
+  <div class="eyebrow">Design preview · Fleet B · B·D1 bodies · round 5 (fit score) · 2026-10-20</div>
   <h1>Four new <span>body styles</span>, cut to size</h1>
-  <p><b>Round 4</b> (<a href="#size">Size review</a>) cuts the parts that read too big: sharkfin's fin, the noses of highnose, stepnose and lowline. Round 3 fixed fit before looks: every join the candidates own was measured, and parts that floated, poked through or ended in a cut face now seat (see <a href="#fit">Fit check</a>). Zeropod is dropped. Round 2 pushed each candidate toward its real car and away from the six shipped bodies. Each strip puts a real photo (orange frame) beside the game car at a similar framing, then adds a close-up and the 844×390 phone view. The shortlist is ranked by how well the shape reads at phone size.</p>
-  <div class="meta">branch cursor/design-preview-bodies-f0e0 @ 1f72c744 (round 3 56771755, round 2 26a4b9b7, round 1 90d91cd5, on #3118's clamp pass a9b5f889) · McLaren default livery · TLX · garage-angles.mjs --backend=three · front 3/4 az 0.72 el 0.24 d 5.4 · side az 1.571 el 0.06 d 8.5 · top az 1.15 el 0.95 d 5.4 · phone 844×390 default garage framing</div>
+  <p><b>Round 5</b> (<a href="#fit5">Fit score</a>) brings each body's count of failing joins down. <b>Round 4</b> (<a href="#size">Size review</a>) cuts the parts that read too big: sharkfin's fin, the noses of highnose, stepnose and lowline. Round 3 fixed fit before looks: every join the candidates own was measured, and parts that floated, poked through or ended in a cut face now seat (see <a href="#fit">Fit check</a>). Zeropod is dropped. Round 2 pushed each candidate toward its real car and away from the six shipped bodies. Each strip puts a real photo (orange frame) beside the game car at a similar framing, then adds a close-up and the 844×390 phone view. The shortlist is ranked by how well the shape reads at phone size.</p>
+  <div class="meta">branch cursor/design-preview-bodies-f0e0 @ ROUND5SHA (round 4 1f72c744, round 3 56771755, round 2 26a4b9b7, round 1 90d91cd5, on #3118's clamp pass a9b5f889) · McLaren default livery · TLX · garage-angles.mjs --backend=three · front 3/4 az 0.72 el 0.24 d 5.4 · side az 1.571 el 0.06 d 8.5 · top az 1.15 el 0.95 d 5.4 · phone 844×390 default garage framing</div>
 </header>
+
+<section id="fit5">
+  <h2>Round 5: fewer fit failures</h2>
+  <p>L21's fit audit scored the four preview bodies at 7.3–9.1 extra failing joins per car, above the bar of 7.9 (the 75th percentile across the shipped looks). Re-measured here with the same <code>car-fit-audit</code> on all 11 teams, the score counts each gap, penetration or z-fight row a body fails that its team's factory car does not fail as badly, averaged over the 11 cars. Each body's largest repeated rows were traced to their cause and fixed. Three are now under the 7.9 bar. Lowline is at 8.3, and most of what it has left are rows that L21 also sees on the factory cars on its integration tree.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Body</th><th>Round 4</th><th>Round 5</th><th>What changed</th></tr></thead>
+    <tbody>
+      <tr><td>stepnose</td><td class="n">8.2</td><td class="n">7.2</td><td>wing arms seated on the low cone; nose accent on the skin</td></tr>
+      <tr><td>sharkfin</td><td class="n">8.3</td><td class="n">7.3</td><td>nose accent on the skin (215 cm² z-fight gone)</td></tr>
+      <tr><td>highnose</td><td class="n">8.5</td><td class="n">7.5</td><td>lower shoulders (inletH 0): mirrors and bolsters seat</td></tr>
+      <tr><td>lowline</td><td class="n lo">9.5</td><td class="n lo">8.3</td><td>flat cover crown (406 cm² z-fight gone); wing arms seated</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The arm and accent changes apply only to the preview bodies (the <code>fitSeat</code> flag), so the factory cars and the six shipped bodies are untouched (308 builds identical to HEAD). <code>fit-check.mjs</code> is ALL SEATED, the body-style and fin tests pass 48/48, and no new front-wing floats appeared. The stepnose float on mercedes (3.3 mm) predates this round.</p>
+  <div class="body">
+    <h3>highnose <code>inletH +0.04 → 0</code> <span class="rank">fit score 7.5 (round 4: 8.5)</span></h3>
+    <p>Lower shoulders: the pod top drops 544 → 506 mm at the front and 507 → 473 at the rear (team 501 / 474). The tall pods left the mirrors floating 12 mm off them on seven chassis and pushed the bolsters 58 mm into the pods. The raised nose and its arms are unchanged.</p>
+    <div class="pair"><figure><img src="img/r5-highnose-close-before.jpg" alt="highnose, close, round 4" loading="lazy"><figcaption>highnose · close · round 4</figcaption></figure><figure><img src="img/r5-highnose-close-after.jpg" alt="highnose, close, round 5" loading="lazy"><figcaption>highnose · close · round 5 (red: round 4)</figcaption></figure><figure><img src="img/r5-highnose-side-before.jpg" alt="highnose, side, round 4" loading="lazy"><figcaption>highnose · side · round 4</figcaption></figure><figure><img src="img/r5-highnose-side-after.jpg" alt="highnose, side, round 5" loading="lazy"><figcaption>highnose · side · round 5 (red: round 4)</figcaption></figure></div>
+  </div>
+  <div class="body">
+    <h3>sharkfin <code>nose accent follows the cone</code> <span class="rank">fit score 7.3 (round 4: 8.3)</span></h3>
+    <p>The painted accent along the nose top ran in a straight line from the cockpit to the tip. Every concept cone bulges 27–98 mm above that line, so the accent was buried, and where it crossed the skin it z-fought: 215 cm² of flicker on the sharkfin nose, on all 11 chassis. On the four preview bodies the accent now runs over the skin in 12 cm steps from the cockpit deck to the tip.</p>
+    <div class="pair"><figure><img src="img/r5-sharkfin-close-before.jpg" alt="sharkfin, close, round 4" loading="lazy"><figcaption>sharkfin · close · round 4</figcaption></figure><figure><img src="img/r5-sharkfin-close-after.jpg" alt="sharkfin, close, round 5" loading="lazy"><figcaption>sharkfin · close · round 5 (red: round 4)</figcaption></figure><figure><img src="img/r5-sharkfin-side-before.jpg" alt="sharkfin, side, round 4" loading="lazy"><figcaption>sharkfin · side · round 4</figcaption></figure><figure><img src="img/r5-sharkfin-side-after.jpg" alt="sharkfin, side, round 5" loading="lazy"><figcaption>sharkfin · side · round 5 (red: round 4)</figcaption></figure></div>
+  </div>
+  <div class="body">
+    <h3>stepnose <code>wing arms seated on the low cone</code> <span class="rank">fit score 7.2 (round 4: 8.2)</span></h3>
+    <p>The front-wing arms climb to a fixed 0.275 m, but the stepnose and lowline cones sit at 0.18 m over the wing, so 33–43 mm of each arm was buried in the nose. Under a low cone the arm now ends 25 mm under the skin, which seats its top about 15 mm in. Highnose and sharkfin keep their round-3 arms: moving those left the whole front wing hanging 3–24 mm clear of the nose on several chassis. The nose accent fix applies here too.</p>
+    <div class="pair"><figure><img src="img/r5-stepnose-close-before.jpg" alt="stepnose, close, round 4" loading="lazy"><figcaption>stepnose · close · round 4</figcaption></figure><figure><img src="img/r5-stepnose-close-after.jpg" alt="stepnose, close, round 5" loading="lazy"><figcaption>stepnose · close · round 5 (red: round 4)</figcaption></figure><figure><img src="img/r5-stepnose-front-before.jpg" alt="stepnose, front, round 4" loading="lazy"><figcaption>stepnose · front · round 4</figcaption></figure><figure><img src="img/r5-stepnose-front-after.jpg" alt="stepnose, front, round 5" loading="lazy"><figcaption>stepnose · front · round 5 (red: round 4)</figcaption></figure></div>
+  </div>
+  <div class="body">
+    <h3>lowline <code>coverCrown −0.08 → 0, wing arms seated</code> <span class="rank">fit score 8.3 (round 4: 9.5)</span></h3>
+    <p>The pinched cover crown folded the engine cover onto itself: 406 cm² of z-fight on seven chassis. A flat crown removes it. The cover is still the lowest on the grid (628 mm at z −0.95), and its half-width narrows 273 → 264 mm. Of the rows left, brake ducts against the wheels (x7) and the tub against the bolsters (x11) also show on the factory cars after D4's rounding, per L21.</p>
+    <div class="pair"><figure><img src="img/r5-lowline-close-before.jpg" alt="lowline, close, round 4" loading="lazy"><figcaption>lowline · close · round 4</figcaption></figure><figure><img src="img/r5-lowline-close-after.jpg" alt="lowline, close, round 5" loading="lazy"><figcaption>lowline · close · round 5 (red: round 4)</figcaption></figure><figure><img src="img/r5-lowline-q34-before.jpg" alt="lowline, q34, round 4" loading="lazy"><figcaption>lowline · q34 · round 4</figcaption></figure><figure><img src="img/r5-lowline-q34-after.jpg" alt="lowline, q34, round 5" loading="lazy"><figcaption>lowline · q34 · round 5 (red: round 4)</figcaption></figure></div>
+  </div>
+</section>
 
 <section id="size">
   <h2>Round 4: size review</h2>
