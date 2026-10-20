@@ -770,7 +770,7 @@ test("a legend's car wears its marque crest; a wordmark marque is lettered with 
 
 /* ── CREST STYLE (LD logos slice): original emblems replace the team mark at every station ── */
 test("crestStyle: each original emblem draws distinct, bounded, legible art; team/unset/unknown keep the team mark", () => {
-  assert.deepEqual(Array.from(LT.CREST_STYLE_IDS), ["team", "shield", "roundel", "wings", "arrow", "star"]);
+  assert.deepEqual(Array.from(LT.CREST_STYLE_IDS), ["team", "shield", "roundel", "wings", "arrow", "star", "bolt", "laurel", "chevrons", "diamond", "gear", "crown", "flag", "flame"]);
   const R = { x: 0, y: 0, w: 200, h: 200 };
   const ops = (liv) => { const ctx = new RecCtx(); LT.drawCrest(ctx, "ferrari", R, { liv, bare: false }); return JSON.stringify(ctx.ops); };
   const team = ops({});
@@ -789,4 +789,30 @@ test("crestStyle: each original emblem draws distinct, bounded, legible art; tea
 
 test("crestStyle is a livery field (garage file round-trip, forTeam copy)", () => {
   assert.ok(Liveries.FIELDS.includes("crestStyle"));
+  for (const k of ["crestTone", "crestFrame"]) assert.ok(Liveries.FIELDS.includes(k), k);
+});
+
+/* ── CREST TONE / CREST FRAME (B·D8 round 5): dress an emblem from the resolved palette only ── */
+test("crestTone/crestFrame: defaults are op-identical, every combo is distinct, the team mark ignores them", () => {
+  assert.deepEqual(Array.from(LT.CREST_TONE_IDS), ["team", "swap", "mono"]);
+  assert.deepEqual(Array.from(LT.CREST_FRAME_IDS), ["none", "disc", "shield", "badge", "ring"]);
+  const R = { x: 0, y: 0, w: 200, h: 200 };
+  const P = LT.markPalette("ferrari", { id: "x", crestStyle: "gear" }, [[0.9, 0.1, 0.1]], false);
+  const run = (liv, team = "ferrari") => { const ctx = new RecCtx(); LT.drawCrest(ctx, team, R, { liv, palette: P, bare: false }); return ctx; };
+  const ops = (liv, team) => JSON.stringify(run(liv, team).ops);
+  // defaults (and junk) leave the shipped emblem untouched
+  for (const [t, f] of [[undefined, undefined], ["team", "none"], ["bogus", "constructor"]])
+    assert.equal(ops({ crestStyle: "gear", crestTone: t, crestFrame: f }), ops({ crestStyle: "gear" }), `${t}/${f}`);
+  // the team's own mark ignores both rows
+  assert.equal(ops({ crestTone: "swap", crestFrame: "disc" }), ops({}));
+  const seen = new Set();
+  for (const tone of LT.CREST_TONE_IDS) for (const frame of LT.CREST_FRAME_IDS) {
+    const ctx = run({ crestStyle: "gear", crestTone: tone, crestFrame: frame });
+    const k = JSON.stringify(ctx.ops);
+    assert.ok(!seen.has(k), `${tone}/${frame} duplicates another combo`);
+    seen.add(k);
+    for (const op of ctx.ops) if (op.kind === "stroke") assert.ok(op.lw >= LT.STROKE_MIN, `${tone}/${frame} stroke floor`);
+    assert.ok(ctx.ops.length < 600, `${tone}/${frame} bounded`);
+  }
+  assert.equal(seen.size, 15);
 });

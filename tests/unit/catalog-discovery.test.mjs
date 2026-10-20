@@ -95,3 +95,14 @@ test("serial and parallel sweep paths apply team selection before mesh measureme
   assert.deepEqual(parallel, serial);
   assert.throws(() => sweepParallel({ teamId: "unknown", M }));
 });
+
+
+test("garage MCP catalog discovers workshop cameras by their subject, using the CLI's station IDs", () => {
+  const rows = discoverCatalog({ section: "garage", filter: "cabinet", limit: 100 }).rows;
+  assert.deepEqual(rows.map(r => r.id), ["toolWall"]);
+  assert.equal(rows[0].kind, "station");
+  assert.ok(rows[0].purpose.includes("mounting"));
+  assert.deepEqual(rows[0].target, [4.9, 0.9, -1.7]);
+  const safety = discoverCatalog({ section: "garage", filter: "extinguisher", limit: 100 });
+  assert.equal(safety.rows[0].id, "safetyStation");
+});

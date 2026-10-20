@@ -534,3 +534,41 @@ test("garage camera catalog: bay is a base view plus an absolute orbit, bayFront
   assert.equal(typeof TARGETS, "object");
   assert.ok(Object.keys(STATIONS).length >= 10 && Object.keys(FIELD_STATIONS).length >= 5);
 });
+
+
+test("garage discovery finds equipment by purpose without opening/resetting output; presets plan bounded distinct subjects", () => {
+  const out = "artifacts/camera-discovery-no-write-" + process.pid;
+  assert.ok(!fs.existsSync(path.join(ROOT, out)));
+  const cli = (...args) => JSON.parse(execFileSync(process.execPath,
+    ["tools/shot/garage-angles.mjs", ...args], { cwd: ROOT, encoding: "utf8", timeout: 10000 }));
+  const found = cli("--list-cameras=cabinet", "--reset", `--out=${out}`);
+  assert.equal(found.browser, false);
+  assert.equal(found.readOnly, true);
+  assert.deepEqual(found.stations.map(s => s.id), ["toolWall"]);
+  assert.ok(!fs.existsSync(path.join(ROOT, out)), "discovery must not reset or create output");
+  const workshop = cli("--plan", "--team=mclaren", "--preset=workshop", "--fast", "--budget=180s");
+  assert.equal(workshop.shotCount, 4);
+  assert.equal(workshop.overBudget, false);
+  assert.deepEqual(workshop.cams.map(c => c.key), ["toolWall", "serviceCorner", "safetyStation", "engineerDesk"]);
+  // Reconstruct the eye from the plan's actual hook parameters, checking the
+  // composition rather than merely matching names or the catalog to itself.
+  const eye = c => c.target.at.map((n, i) => n + [Math.sin(c.az) * Math.cos(c.el), Math.sin(c.el), Math.cos(c.az) * Math.cos(c.el)][i] * c.dist);
+  for (const c of workshop.cams) {
+    assert.equal(c.clamp, false, "equipment inspections may be inside the car orbit floor");
+    const e = eye(c);
+    assert.ok(Math.abs(e[0]) < 5.4 && Math.abs(e[2]) < 6.4 && e[1] > 0.1 && e[1] < 4.5, "eye stays inside the room");
+    assert.ok(Math.abs(c.target.at[0]) > 4, "inspect a wall subject rather than the car centre");
+  }
+  for (const [preset, expected] of [["workshop", 4], ["room", 2], ["closeup", 14]]) {
+    const painted = cli("--plan", "--team=mclaren", `--preset=${preset}`, "--spineLogo=wrap", "--fast");
+    assert.equal(painted.shotCount, expected, "a station preset must suppress automatic livery-field stations");
+    assert.equal(painted.stationsFrom, null);
+  }
+  const room = cli("--plan", "--team=mclaren", "--preset=room", "--fast", "--budget=180s");
+  assert.equal(room.shotCount, 2);
+  assert.ok(eye(room.cams[0])[2] > 4 && eye(room.cams[1])[2] < -4, "room views inspect opposing walls");
+  const override = cli("--plan", "--team=mclaren", "--preset=workshop", "--station=toolWall", "--az=-80deg,-50deg");
+  assert.equal(override.shotCount, 2, "an explicit station replaces the four-shot preset, then its axes sweep");
+  assert.ok(override.cams.every(c => c.station === "toolWall"));
+  assert.deepEqual(cli("--list-cameras=no-such-camera").stations, []);
+});

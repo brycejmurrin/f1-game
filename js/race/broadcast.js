@@ -166,7 +166,7 @@ const Broadcast = (function () {
     const v = mode === "interval" ? r.interval : r.gap;
     if (v == null) return "";
     // The HUD chip's spelling (hundredths under ~10 s, tenths above); inline when HudReadouts has not loaded.
-    return "+" + (typeof HudReadouts !== "undefined" && HudReadouts ? HudReadouts.fmtGapSec(v) : v.toFixed(v < 9.95 ? 2 : 1));
+    return "+" + (typeof HudReadouts !== "undefined" && HudReadouts ? HudReadouts.fmtGapSec(v) : v.toFixed(v < 9.995 ? 2 : 1));
   }
 
   // ── The director (pure): who to show, and how ─────────────────────────────

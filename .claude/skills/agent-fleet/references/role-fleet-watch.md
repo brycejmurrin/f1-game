@@ -10,7 +10,8 @@ no merges**; **events plus 3-minute ticks**; **Sonnet**; **a live dashboard page
 One fleet-watch session runs per orchestrator. It finds problems in seconds to
 minutes, fixes the routine ones itself, and sends the orchestrator only what
 needs a decision or a merge. Merging stays with the PR's own orchestrator
-(role-merge-holder.md) or a designated Merge Desk.
+(role-merge-holder.md: `merge-gate.mjs`); archiving follows the archive rule
+(`fleet-archive.mjs`, AGENTS.md §Concurrent PRs).
 
 ## Contents
 
@@ -32,40 +33,36 @@ needs a decision or a merge. Merging stays with the PR's own orchestrator
   session it was typed in (the quotes above included), and `STOP AT: 100k context`.
   A changed grant is a relaunch with the amended brief, never a message: relayed grants are refused (authority.md).
 - One watcher at a time. Before launching, archive the old one and delete its
-  pending `FLEET-WATCH tick` one-shots (`list_triggers`).
+  pending `FLEET-WATCH` scheduled tasks (`list_triggers`).
 
 ## The wake sources
 
-Different checks run at different frequencies (Bryce, 2026-10-19: "check different things at different
-frequencies like ci jobs for failures more frequently like 1 min while rest at 3").
+The board watch is an Actions job, not a session (plan `docs/plans/2026-10-19-fleet-redesign.md` §4B item 6):
+the `tick` job in `.github/workflows/fleet.yml` runs `fleet-tick.mjs` every 30 min (:23, :53) and on every
+claim/bus dispatch, on the Actions token (no proxy 403). It restores the previous state from the Actions cache,
+writes the changed PR/ship/Pages rows and the whole board to the run summary, and uploads the `fleet-board`
+artifact (`state.json` + `tick.log`, 2-day retention). A tick error is a `::warning::`, never a red run.
+
+The session-side watcher no longer polls PRs, ship CI or Pages. It only:
 
 | Source | What it catches | How it is armed |
 |---|---|---|
-| CI red loop, every 60 s | a red job within a minute | a background loop plus `Monitor` on `ci-watch.mjs --sha <head> --timeout 30 --failures-only` (≤ 6 heads), re-armed on expiry |
-| Fast tick, every 3 min | everything else: ship CI, Pages, new PRs, stale reds, conflicts | `send_later` delay 3, re-armed at the end of every wake |
-| Full sweep, every 5th tick (~15 min) | sessions, cost, context, model drift, transcripts | the same tick, counted in state |
-| Hourly fresh-session sweep | sessions, cost, dashboard, independent of the watcher's own context | `create_trigger` `create_new_session_on_fire`, model `claude-sonnet-5-5`, cron `0 * * * *` (hourly is the minimum) |
+| Hourly fresh-session sweep | sessions: cost (incl. `external_metadata.usage.cost_usd`), context, model drift, stalls | `create_trigger` `create_new_session_on_fire`, model `claude-sonnet-5-5`, cron `0 * * * *` (hourly is the minimum) |
+| The latest `fleet.yml` run | board changes the job already found | read its summary or `fleet-board` artifact (`gh run download -n fleet-board`), never re-run the board |
 
 The watcher does NOT `subscribe_pr_activity` per PR: PR owners keep their own subscriptions, and a watcher
 subscribed to every PR reads every echo into one growing context. A PR another Claude session already
-watches stays with that session (`watched-by-other` in state); never fight for it.
-
-Keep exactly one pending tick: before arming, delete any older pending
-`FLEET-WATCH tick` one-shot. A PR another Claude session already watches stays
-with that session (`watched-by-other` in state); never fight for it.
+watches stays with that session; never fight for it.
 
 ## Every wake
 
-1. `git fetch -q origin`, then `node tools/ci/fleet-tick.mjs` (add `--sessions artifacts/fleet-watch/sessions.json`
-   on a full sweep). It runs the board (with its needs-sync verdicts), ship CI and Pages, diffs against
-   `artifacts/fleet-watch/state.json`, writes the new state and prints only changed rows plus one `= tick` line.
-   Never print the raw board, a `list_sessions` page or a `list_events` page into context.
-2. **Full sweep only:** ONE `list_sessions` call (mine: true), saved straight to
-   `artifacts/fleet-watch/sessions.json` (flags: cost incl. `external_metadata.usage.cost_usd`, context, drift,
-   stalls). For each working fleet session save the newest 100 events and digest them with
-   `node tools/ci/session-transcript.mjs <page> --summary`.
+1. ONE `list_sessions` call (mine: true), saved straight to `artifacts/fleet-watch/sessions.json`, then
+   `node tools/ci/fleet-flags.mjs artifacts/fleet-watch/sessions.json` for the flags. Never print the raw
+   page, a board or a `list_events` page into context. For a flagged working session only, save its newest
+   100 events and digest them with `node tools/ci/session-transcript.mjs <page> --summary`.
+2. Read the newest `fleet.yml` run's summary for board flags (sync verdicts, reds, holds).
 3. Owner check for a flagged PR only: `node tools/ci/who-is-on-it.mjs`.
-4. Act (below), report, update the dashboard, arm the next tick.
+4. Act (below), post the flags, update the dashboard.
 
 ## What it fixes itself
 
@@ -83,7 +80,7 @@ Routine actions only; each one is logged in state and in the report.
 The watcher never: merges, arms auto-merge, marks a PR ready, pushes code of
 its own, edits the repo beyond `artifacts/`, cancels an Actions run, raises a
 ratchet or tolerance, quarantines a test, changes a scheduled task other than
-its own tick, or messages Bryce. Authority is the quotes above, carried one hop
+its own sweep, or messages Bryce. Authority is the quotes above, carried one hop
 into the PR owners it starts. Anything else is the orchestrator's.
 
 ## Report to the orchestrator
@@ -105,7 +102,8 @@ Never report your own events echoing back.
 
 Watcher state and the dashboard data live in the dashboard artifact's `db` (`ArtifactData`) or in a
 committed generator, never only in container-local files: a reclaimed container loses `artifacts/`.
-The local `artifacts/fleet-watch/state.json` is a cache that `fleet-tick.mjs` rebuilds.
+The board state lives in the `fleet.yml` `tick` job's Actions cache and `fleet-board` artifact; a local
+`fleet-tick.mjs` run (`--dry` for a one-off look) rebuilds its own `artifacts/fleet-watch/state.json`.
 
 A private Artifact page that the watcher creates on its first wake (Dashboard
 type via `quickstart`, else a plain page with the `db` capability) and keeps

@@ -775,6 +775,16 @@ def _gh_truthy(a, name):
     return None
 
 
+def _gh_pr_number(words):
+    """The PR a `gh pr merge|ready` names: `12`, `#12` or a …/pull/12 URL; None when it relies on the
+    current branch (merge_policy.receipt_check then refuses: the receipt is per PR number)."""
+    for w in words:
+        m = re.match(r"^#?(\d+)$", w) or re.search(r"/pull/(\d+)(?:/|$)", w)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def gh_issues(text, cwd=None):
     """[{cmd, decision: deny|ask, why}] for every `gh` call that merges a PR,
     arms auto-merge, flips a draft ready or moves a branch outside a PR
@@ -802,11 +812,11 @@ def gh_issues(text, cwd=None):
                             break
                         if ch in "sr":
                             method = "squash" if ch == "s" else "rebase"
-            out.append({"cmd": cmd, "decision": "deny" if method else "ask",
+            out.append({"cmd": cmd, "decision": "deny" if method else "ask", "kind": "merge", "pr": _gh_pr_number(words[2:]),
                         "why": f"gh pr merge --{method}" if method else "gh pr merge"})
         elif words[:2] == ["pr", "ready"]:
             if "--undo" not in argv:
-                out.append({"cmd": cmd, "decision": "ask", "why": "gh pr ready"})
+                out.append({"cmd": cmd, "decision": "ask", "kind": "ready", "pr": _gh_pr_number(words[2:]), "why": "gh pr ready"})
         elif words[:1] == ["api"]:
             k, method, fields, endpoint = 1, None, [], None
             while k < len(argv):
@@ -1088,11 +1098,37 @@ def guard(payload, root):
     deny = [x for x in gh if x["decision"] == "deny"]
     if deny:
         P.emit("deny", P.DENY_METHOD + " (" + deny[0]["why"] + ")")
-    elif gh and not desk:
-        ready = all("ready" in x["why"] or "Ready" in x["why"] for x in gh)
-        ref = any(x["decision"] == "ref" for x in gh)
-        P.emit("ask", (P.ASK_REF if ref else P.ASK_READY if ready else P.ASK_MERGE) + " (" + gh[0]["why"] + ")")
+        return 0
+    # `gh pr merge <n>` / `gh pr ready <n>` take the same receipt as the MCP door (merge_policy.receipt_check,
+    # 2026-10-19): a merge needs artifacts/merge-gate/<n>.json (the head pin is `--match-head-commit`, else the
+    # gated head stands), a ready flip artifacts/ready-gate/<n>.json. No receipt, no merge, desk or not.
+    gated = [x for x in gh if x.get("kind") in ("merge", "ready")]
+    receipts = P.project_root()   # CLAUDE_PROJECT_DIR, the same root github-mcp-guard.sh reads
+    for x in gated:
+        head = None
+        if x["kind"] == "merge":
+            m = re.search(r"--match-head-commit[= ]+([0-9a-fA-F]{7,40})", x["cmd"])
+            head = m.group(1) if m else _receipt_head(receipts, x.get("pr"))
+        ok, why = P.receipt_check(receipts, x["kind"], x.get("pr"), head)
+        if not ok:
+            P.emit("deny", (P.DENY_GATE_MERGE if x["kind"] == "merge" else P.DENY_GATE_READY) + " (" + x["why"] + ": " + why + ")")
+            return 0
+    rest = [x for x in gh if x.get("kind") not in ("merge", "ready")]
+    if rest and not desk:
+        ready = all("ready" in x["why"] or "Ready" in x["why"] for x in rest)
+        ref = any(x["decision"] == "ref" for x in rest)
+        P.emit("ask", (P.ASK_REF if ref else P.ASK_READY if ready else P.ASK_MERGE) + " (" + rest[0]["why"] + ")")
     return 0
+
+
+def _receipt_head(root, pr):
+    """The head a merge receipt gated, so `gh pr merge <n>` without --match-head-commit is checked against it."""
+    import merge_policy as P
+    try:
+        with open(P.receipt_path(root, "merge", pr), encoding="utf8") as f:
+            return json.load(f).get("head")
+    except Exception:
+        return None
 
 
 # ---- writes -------------------------------------------------------------------

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 import { WorkflowHarness, PROBE_HELP, TOOL_SCHEMAS, ALL_TOOL_SCHEMAS } from "../../tools/mcp/workflow-harness-core.mjs";
 import { startServer } from "../../tools/mcp/workflow-harness.mjs";
@@ -79,6 +79,67 @@ test("HTTP token, client args-file, quiet envelope, semantic exit, transcript an
 });
 
 test("probe help documents the script and IIFE contract",()=>{ assert.match(PROBE_HELP,/script completion/); assert.match(PROBE_HELP,/IIFE/); });
+
+test("HTTP probes bound serialization and microtasks, reject Promise completions, and recover", { timeout: 8000 }, t => {
+  const f = fixture(), planFile = path.join(f.base, "plan.json");
+  fs.writeFileSync(planFile, JSON.stringify(plan(30)));
+  t.after(() => {
+    // Also clean up a regression that needed the child process's outer bound.
+    if (fs.existsSync(path.join(f.run, "source"))) git(f.repo, ["worktree", "remove", "--force", path.join(f.run, "source")]);
+    fs.rmSync(f.base, { recursive: true, force: true });
+  });
+  const serverModule = new URL("../../tools/mcp/workflow-harness.mjs", import.meta.url).href;
+  const source = `
+    import assert from "node:assert/strict";
+    import fs from "node:fs";
+    import { startServer } from ${JSON.stringify(serverModule)};
+    const running = await startServer(${JSON.stringify({ repo: f.repo, runDir: f.run, plan: planFile, probeTimeoutMs: 25 })});
+    const probe = async (test, setup) => {
+      const response = await fetch('http://127.0.0.1:' + running.endpoint.port + '/call', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-workflow-token': running.endpoint.token },
+        body: JSON.stringify({ id: 'rg_worker', tool: 'probe', args: { files: [${JSON.stringify(VALUE_FILE)}], test, ...(setup ? { setup } : {}) } }),
+        signal: AbortSignal.timeout(1000),
+      });
+      assert.equal(response.status, 200); return response.json();
+    };
+    const checked = [];
+    try {
+      const attacks = [
+        ['toJSON', '({ toJSON() { while (true) {} } })'],
+        ['getter', '({ get value() { while (true) {} } })'],
+        ['microtask', 'Promise.resolve().then(() => { while (true) {} }); 1'],
+        ['serialization microtask', '({ toJSON() { Promise.resolve().then(() => { while (true) {} }); return 1; } })'],
+        ['setup microtask', 'Value.number', 'Promise.resolve().then(() => { while (true) {} })'],
+      ];
+      for (const [label, test, setup] of attacks) {
+        const row = await probe(test, setup);
+        assert.equal(row.error, true, label); assert.equal(row.errorCode, 'execution_error', label);
+        assert.match(row.output, /Script execution timed out/, label); checked.push(label);
+        const recovery = await probe('Value.number');
+        assert.equal(recovery.error, false); assert.equal(JSON.parse(recovery.output).result, 7);
+      }
+      for (const test of ['Promise.resolve(42)', 'Promise.reject(new Error("expected rejection"))', 'new Promise(() => {})']) {
+        const row = await probe(test); assert.equal(row.error, true);
+        assert.equal(row.errorCode, 'invalid_request'); assert.match(row.output, /Promise completion values are unsupported/);
+      }
+      const synchronous = await probe('console.log("hello", Value.number); ({ get answer() { return Value.number; }, custom: { toJSON() { return 8; } } })');
+      assert.equal(synchronous.error, false);
+      assert.deepEqual(JSON.parse(synchronous.output), { logs: ['hello 7'], result: { answer: 7, custom: 8 } });
+      const completion = await probe('let answer = 3; answer += Value.number; answer');
+      assert.equal(JSON.parse(completion.output).result, 10);
+      const empty = await probe('undefined'); assert.deepEqual(JSON.parse(empty.output), { logs: [], result: null });
+    } finally { await running.stop(); }
+    assert.equal(fs.existsSync(${JSON.stringify(path.join(f.run, "source"))}), false);
+    assert.equal(fs.existsSync(${JSON.stringify(path.join(f.run, "stopped.json"))}), true);
+    console.log(JSON.stringify({ checked, recovery: true, promisesRejected: 3, syncValues: true, cleanup: true }));
+  `;
+  // The outer process bound is essential: the unfixed implementation blocks
+  // its event loop, so an in-process timer or fetch timeout cannot stop it.
+  const child = spawnSync(process.execPath, ["--input-type=module", "-e", source], { encoding: "utf8", timeout: 5000 });
+  assert.equal(child.error, undefined, child.error?.message);
+  assert.equal(child.status, 0, child.stderr);
+  assert.equal(JSON.parse(child.stdout).checked.length, 5);
+});
 
 test("concurrent submissions cannot exceed a worker budget", async t => {
   const f=fixture(), h=new WorkflowHarness({repo:f.repo,runDir:f.run,plan:plan(1)}); t.after(()=>h.close());

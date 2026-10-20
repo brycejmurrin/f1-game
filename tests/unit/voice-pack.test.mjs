@@ -377,11 +377,11 @@ test("the positions, gaps and spotter calls a line can carry are all recorded", 
 // ── 3. RadioVoice hands a covered line to the pack ──────────────────────────
 
 function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTune = null } = {}) {
-  const spoken = [], packCalls = [];
+  const spoken = [], packCalls = [], ensures = [], kept = [];
   const synth = { speaking: false, speak(u) { spoken.push(u.text); }, cancel() {}, resume() {}, getVoices: () => [] };
   let onEnd = null;
   const fakePack = {
-    ensure() { return "ready"; }, stop() { packCalls.push("stop"); }, busy: () => false, remaining: (ch) => (ch === "spotter" ? spotterLeft : 0),
+    ensure(id) { ensures.push(id); return "ready"; }, releaseExcept(ids) { kept.push([...ids].sort()); }, stop() { packCalls.push("stop"); }, busy: () => false, remaining: (ch) => (ch === "spotter" ? spotterLeft : 0),
     speak(id, text, o) { packCalls.push({ id, text, leadS: o.leadS, fx: o.fx }); if (!covers) return false; onEnd = o.onEnd; return true; },
     debug: () => ({}),
     ready: () => !loading,
@@ -398,7 +398,7 @@ function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTu
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
   const v = sb.RadioVoice.create(G);
   v.setEnabled(true);
-  return { v, spoken, packCalls, ducks, saved, reload: () => sb.RadioVoice.create(G), end: () => onEnd && onEnd() };
+  return { v, spoken, packCalls, ensures, kept, ducks, saved, reload: () => sb.RadioVoice.create(G), end: () => onEnd && onEnd() };
 }
 
 test("a line the pack covers is played from it, after the courtesy figure, and synthesis stays quiet", () => {
@@ -425,6 +425,7 @@ test("a selected engineer is persisted, prepared and played; any voice may take 
   // The commentator's voice on the team radio: the same voice, the radio's words.
   assert.equal(r.v.setRecordedVoice("radio", "bella"), true);
   assert.equal(r.v.recordedPack("radio"), "bella-radio");
+  assert.equal(r.ensures.at(-1), "bella-radio", "the pick prepares the pack the channel speaks from, not bella's own (#3110)");
   r.packCalls.length = 0;
   assert.equal(r.v.say("BOX BOX BOX", 3, "info"), true);
   assert.equal(r.packCalls.find((c) => c.id).id, "bella-radio");
@@ -1065,4 +1066,28 @@ test("a stalled pack body times out, releases staged tiers, and respects retry d
   assert.equal(P.ready("george"), false, "late body cannot revive a failed attempt");
   P.ensure("george"); await drain(); assert.equal(calls.length, 4);
   now = 120000; P.ensure("george"); await drain(); assert.equal(calls.length, 6);
+});
+
+test("a voice picked over, or the recorded radio switched off, frees the packs no channel speaks from (#3110)", async () => {
+  const r = radio();
+  assert.equal(r.v.setRecordedVoice("radio", "michael"), true);
+  const keep = r.kept.at(-1);
+  assert.ok(keep.includes("michael") && !keep.includes("george"), "the replaced engineer pack is not kept: " + keep);
+  assert.ok(keep.includes(r.v.recordedPack("coach")), "the other channels keep theirs");
+  r.v.setPackOn(false);
+  assert.deepEqual(r.kept.at(-1).filter((id) => id !== r.v.recordedPack("announcer")), [], "recorded radio off keeps at most the presenter's pack");
+
+  const calls = [];
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    fetch: async (url) => { calls.push(url); return { ok: true,
+      json: async () => ({ binary: integrity(4), clips: { hello: [0, 4, 1] } }), arrayBuffer: async () => new ArrayBuffer(4) }; },
+  });
+  const P = sb.VoicePack.create({});
+  await P.load("george"); await P.load("heart");
+  P.releaseExcept(["heart"]);
+  assert.equal(P.ready("george"), false, "the released pack is gone");
+  assert.equal(P.ready("heart"), true, "the kept pack stays");
+  assert.deepEqual(Object.keys(J(P.debug().voices)), ["heart"]);
+  assert.equal(await P.load("george"), true, "a released pack loads again on demand");
+  assert.equal(calls.filter((u) => u.includes("george")).length, 4);
 });

@@ -509,8 +509,9 @@ const TLX = (function () {
         try {
           await renderer.init();
           checkInit();
-          // WebGL2 only: that is the phone's path, measured (paired census); WebGPU keeps three's own loop untouched.
-          if (renderer.backend && renderer.backend.isWebGLBackend) renderer.__apexPump = pumpAnimation(renderer);
+          // Both backends: three's Animation tick is backend-agnostic (inspector, info.reset, nodeFrame) and the
+          // WebGPU leg still counted 2.05 rAF callbacks per drawn frame (gpu-census 39262990733) with WebGL2 pumped.
+          renderer.__apexPump = pumpAnimation(renderer);
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
@@ -6120,9 +6121,17 @@ const TLX = (function () {
             try {
               const inf = renderer && renderer.info;
               if (inf) {
-                o.progs = (inf.programs && inf.programs.length) || 0;
+                o.progs = inf.memory && typeof inf.memory.programs === "number" ? inf.memory.programs : null;
                 if (inf.memory) {
                   o.rGeo = inf.memory.geometries; o.rTex = inf.memory.textures;
+                  // Copy only existing primitive resource telemetry (bytes stay bytes).
+                  o.resources = {};
+                  for (const key of ["total", "geometries", "textures", "texturesSize", "programs", "programsSize",
+                    "attributes", "attributesSize", "indexAttributes", "indexAttributesSize", "storageAttributes", "storageAttributesSize",
+                    "indirectStorageAttributes", "indirectStorageAttributesSize", "readbackBuffers", "readbackBuffersSize",
+                    "renderTargets", "uniformBuffers", "uniformBuffersSize"]) {
+                    if (typeof inf.memory[key] === "number") o.resources[key] = inf.memory[key];
+                  }
                   // Uniform buffers three holds. With the frame block in
                   // objectGroup this scaled with draws (one clone per pooled
                   // mesh, plus one per lamp array); shared, it is one per

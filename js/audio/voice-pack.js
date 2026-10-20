@@ -296,8 +296,18 @@ var VoicePack = (() => {
       return true;
     }
 
+    /** Drop every pack not named in `keep` (its .bin and decoded clips), so a
+     *  voice tried once does not stay resident all session (#3110). A pack still
+     *  loading is kept; a dropped one is fetched again by the next ensure(). */
+    function releaseExcept(keep) {
+      const k = new Set(keep || []);
+      for (const id of Object.keys(voices)) {
+        if (!k.has(id) && voices[id].state !== "loading") delete voices[id];
+      }
+    }
+
     return {
-      ensure, ensureStaged, ready, plan, speak, stop, remaining,
+      ensure, ensureStaged, ready, plan, speak, stop, remaining, releaseExcept,
       load(id) { ensure(id); return (voice(id).loading || Promise.resolve()).then(() => ready(id)); },
       busy: (channel) => (channel ? !!live[channel] : Object.keys(live).length > 0),
       debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq,

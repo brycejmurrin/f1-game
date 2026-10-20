@@ -26,7 +26,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `carView` | `carView({team,parts,detail})` | WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, measured geometry; detail:"parts" adds per-part boxes |
+| `carView` | `carView({team,parts,bodyStyle,detail})` | WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, measured geometry; detail:"parts" adds per-part boxes |
 | `perf` | `perf()` | GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes (alias of renderScale report) |
 | `spatialUpscale` | `spatialUpscale(0\|1)` | GLX + WGX + TLX SGSR1 (flag OFF by default). active only when on AND renderScale<~1; see UPSCALING-2026-09 §6–7 |
 | `survey` | `survey({stations,lats,reachM,limit,profile})` | IS ANYTHING BROKEN — floating/buried props, props over the line, terrain through the road, holes and cliffs |

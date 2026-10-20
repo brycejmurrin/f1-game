@@ -483,9 +483,8 @@ const TrackPit = (function () {
   }
 
   return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, EXIT_ROAD_MIN, WALL_GROW, MOUTH_RUN,
-           ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
+           ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, GRID_POLE_M, GRID_CLEAR,
            ROW_END, ROW_TAIL,
-           BAY_FLARE,
            resolve, window, row, build, at, outerAt, openBoundary, rowOf };
 })();
 Object.freeze(TrackPit);
