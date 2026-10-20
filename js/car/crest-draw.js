@@ -372,12 +372,108 @@ const LiveryCrests = (function () {
       emblemLetter(ctx, f, P, teamId, 0.5, 0.5, 0.30);
       ctx.restore();
     }
+    // Design preview B·D8 round 5 (2026-10-19): four more silhouettes, none of them
+    // a circle-in-a-box like the nine above — a toothed wheel, a spiked crown, a
+    // flag on a pole and a flame.
+    function emblemGear(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN), pts = [], n = 8;
+      for (let i = 0; i < n * 4; i++) {
+        const a = (i / (n * 4)) * Math.PI * 2, r = (i % 4) < 2 ? 0.48 : 0.37;
+        pts.push([0.5 + Math.cos(a) * r, 0.5 + Math.sin(a) * r]);
+      }
+      ctx.save(); ctx.fillStyle = css(P.mark); poly(ctx, f, pts); ctx.fill();
+      ctx.strokeStyle = css(P.alt); ctx.lineWidth = swMin(f, 0.04);
+      ctx.beginPath(); ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.27), 0, Math.PI * 2); ctx.stroke();
+      emblemLetter(ctx, f, P, teamId, 0.5, 0.5, 0.28);
+      ctx.restore();
+    }
+    function emblemCrown(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      poly(ctx, f, [[0.08, 0.80], [0.08, 0.30], [0.30, 0.56], [0.50, 0.18], [0.70, 0.56], [0.92, 0.30], [0.92, 0.80]]); ctx.fill();
+      for (const [u, v] of [[0.08, 0.24], [0.50, 0.12], [0.92, 0.24]]) { ctx.beginPath(); ctx.arc(f.X(u), f.Y(v), f.S(0.07), 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = css(P.alt);
+      ctx.fillRect(f.X(0.08), f.Y(0.66), f.S(0.84), f.S(0.07));
+      for (const u of [0.26, 0.50, 0.74]) { ctx.beginPath(); ctx.arc(f.X(u), f.Y(0.56), f.S(0.045), 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    }
+    function emblemFlag(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN), cols = 5, rows = 4, x0 = 0.20, y0 = 0.10, w = 0.72, h = 0.56;
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      ctx.fillRect(f.X(0.08), f.Y(0.06), f.S(0.09), f.S(0.88));    // the pole
+      ctx.fillRect(f.X(x0), f.Y(y0), f.S(w), f.S(h));
+      ctx.fillStyle = css(P.alt);
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        if ((r + c) % 2) ctx.fillRect(f.X(x0 + (c * w) / cols), f.Y(y0 + (r * h) / rows), f.S(w / cols), f.S(h / rows));
+      }
+      ctx.restore();
+    }
+    function emblemFlame(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      poly(ctx, f, [[0.50, 0.96], [0.22, 0.86], [0.12, 0.62], [0.22, 0.36], [0.30, 0.52], [0.36, 0.20], [0.50, 0.04],
+        [0.56, 0.30], [0.66, 0.16], [0.78, 0.40], [0.88, 0.62], [0.78, 0.86]]); ctx.fill();
+      ctx.fillStyle = css(P.alt);
+      poly(ctx, f, [[0.50, 0.88], [0.34, 0.80], [0.30, 0.64], [0.40, 0.48], [0.46, 0.60], [0.54, 0.40], [0.66, 0.60], [0.68, 0.78]]); ctx.fill();
+      ctx.restore();
+    }
     // "team" (or unset) keeps the team's own crest; the garage lists EMBLEM_IDS in this order.
     const EMBLEMS = Object.freeze({ shield: emblemShield, roundel: emblemRoundel, wings: emblemWings, arrow: emblemArrow, star: emblemStar,
-      bolt: emblemBolt, laurel: emblemLaurel, chevrons: emblemChevrons, diamond: emblemDiamond });
+      bolt: emblemBolt, laurel: emblemLaurel, chevrons: emblemChevrons, diamond: emblemDiamond,
+      gear: emblemGear, crown: emblemCrown, flag: emblemFlag, flame: emblemFlame });
     const EMBLEM_IDS = Object.freeze(["team", ...Object.keys(EMBLEMS)]);
 
-    return { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS };
+    // CREST CUSTOMISATION (B·D8 round 5): two rows that dress an original emblem,
+    // composed only from the palette markPalette already resolved — no new colour
+    // reaches the car, so the legibility guarantees on mark/alt still hold.
+    //   crestTone   team (as resolved) | swap (mark and alt trade places) |
+    //               mono (one colour: the silhouette alone)
+    //   crestFrame  none | disc | shield | badge | ring — a backing in `alt`
+    //               keylined in `mark`, the emblem shrunk inside it. `ring`
+    //               is the keyline alone.
+    // The team's own crest ignores both: its colours are brand pairings the
+    // palette protects, and a frame would cover its authored plate.
+    const CREST_TONE_IDS = Object.freeze(["team", "swap", "mono"]);
+    const CREST_FRAME_IDS = Object.freeze(["none", "disc", "shield", "badge", "ring"]);
+    function tonePalette(P, tone) {
+      if (tone === "swap") return Object.assign({}, P, { mark: P.alt, alt: P.mark });
+      if (tone === "mono") return Object.assign({}, P, { alt: P.mark });
+      return P;
+    }
+    const FRAME_PATH = {
+      disc: (ctx, f) => { ctx.beginPath(); ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.48), 0, Math.PI * 2); },
+      ring: (ctx, f) => { ctx.beginPath(); ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.46), 0, Math.PI * 2); },
+      shield: (ctx, f) => poly(ctx, f, [[0.08, 0.04], [0.92, 0.04], [0.92, 0.52], [0.50, 0.97], [0.08, 0.52]]),
+      badge: (ctx, f) => poly(ctx, f, [[0.16, 0.04], [0.84, 0.04], [0.96, 0.16], [0.96, 0.84], [0.84, 0.96], [0.16, 0.96], [0.04, 0.84], [0.04, 0.16]]),
+    };
+    // The emblem's box inside each frame: the shield's point is low, so its
+    // inner box rides high.
+    const FRAME_INNER = { disc: [0.5, 0.5, 0.66], ring: [0.5, 0.5, 0.70], shield: [0.5, 0.42, 0.62], badge: [0.5, 0.5, 0.72] };
+    // Wrap an emblem painter in a tone and a frame. Returns the painter itself
+    // when both are default, so the shipped draw stays op-for-op identical.
+    function dressEmblem(fn, tone, frame) {
+      const t = CREST_TONE_IDS.indexOf(tone) > 0 ? tone : null;
+      const fr = Object.hasOwn(FRAME_PATH, frame || "") ? frame : null;
+      if (!t && !fr) return fn;
+      return function (ctx, R, P0, bare, teamId) {
+        const P = t ? tonePalette(P0, t) : P0;
+        if (!fr) return fn(ctx, R, P, bare, teamId);
+        const f = fit(R, CREST_MARGIN);
+        ctx.save();
+        FRAME_PATH[fr](ctx, f);
+        // mono has no second colour to fill with: the frame is the keyline alone
+        if (fr !== "ring" && t !== "mono") { ctx.fillStyle = css(P.alt); ctx.fill(); }
+        ctx.strokeStyle = css(P.mark); ctx.lineWidth = swMin(f, fr === "ring" ? 0.06 : 0.035);
+        ctx.stroke();
+        ctx.restore();
+        const [cu, cv, k] = FRAME_INNER[fr], s = f.S(k) / (1 - CREST_MARGIN * 2);
+        // On a filled frame the emblem lands on `alt`, so its own mark/alt pair
+        // stays as resolved — mark already separates from alt by construction.
+        fn(ctx, { x: f.X(cu) - s / 2, y: f.Y(cv) - s / 2, w: s, h: s }, P, bare, teamId);
+      };
+    }
+
+    return { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS, CREST_TONE_IDS, CREST_FRAME_IDS, dressEmblem };
   }
 
   return { create };
