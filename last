@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01MEA1rbzmm59CeZRognYgza DONE #3221 2eda36c6 (game; WebGPU jank train #3209+#3210, B·H6), merged by OrchB 24, 2 parents 2da0841d+27708629. Next game: TLX train (#3227+#3229) after green Pages on 2eda36c6.
+HANDOFF to:* from:claude:session_01MEA1rbzmm59CeZRognYgza B·O24 TRAIN #3237 opened ready: cursor/train-perf-b24 e7ab3865 = tip 2eda36c6 + #3227 e3208bea + #3229 8e80c7f7. #3216 removed (spec-budget drop; H8 splitting). Components frozen. tooling-fast 799/0.
