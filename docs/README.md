@@ -148,6 +148,7 @@ rather than rewriting the record.
 
 | Doc | Topic | Cited from |
 |---|---|---|
+| [research/TRACK-SOURCE-AUDIT-2026-10-19.md](research/TRACK-SOURCE-AUDIT-2026-10-19.md) | Source-backed audit of all 52 circuits: actual construction measurements, layout-era conflicts, width/banking/elevation gaps and ranked correction batches. | `js/circuits/`, `js/track/` |
 | [research/AGENT-JS-DEBUGGER-MCP.md](research/AGENT-JS-DEBUGGER-MCP.md) | JS debugger MCP setup, routing, lifecycle and cleanup contracts. | `.claude/skills/js-debugger` |\n| [research/AGENT-CONTRACTS.md](research/AGENT-CONTRACTS.md) | Current API references and reproducible agent tool contracts: diagnostics, smoke recipes, lifecycle/capture/replay evidence and hosted provider boundaries. | `tools/check/doctor.mjs`, `tools/lib/session-contracts.mjs` |
 | [research/AGENT-CODE-INVESTIGATIONS.md](research/AGENT-CODE-INVESTIGATIONS.md) | Bounded source navigation, supported-ingress probes and evidence rules from reviewed agent workflows. | `.claude/rules/js-nav.md` |
 | [research/AGENT-WORKFLOW-HARNESS.md](research/AGENT-WORKFLOW-HARNESS.md) | Frozen-source LSP/search experiments: bounded tools, worker budgets, schemas, probes and transcript evidence. | `tools/mcp/workflow-harness.mjs` |

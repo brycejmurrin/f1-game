@@ -1,0 +1,1 @@
+Fixed: Node debugger test summaries explicitly use TAP on newer Node versions. Stopping a registered tooling process lets parents reap terminated children before shutting down, avoiding orphaned zombies on container hosts without an init reaper.

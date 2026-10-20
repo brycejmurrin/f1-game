@@ -48,7 +48,7 @@ const SettingsNav = (function () {
     for (let route = id; route; route = routes[route].parent || (route === "home" ? null : "home")) names.unshift(routes[route].title);
     return names.join(" › ");
   }
-  let live = null, jumpWired = false;
+  let live = null, enterLive = null, jumpWired = false;
   // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
   // wizard disarms itself here). Module-level so a subscriber needs no instance.
   const leaveFns = [], enterFns = [];
@@ -94,6 +94,32 @@ const SettingsNav = (function () {
       try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (_) { return false; } }
       return true;
     };
+    let stopRestore = () => {};
+    const restoreFocus = (el) => {
+      stopRestore();
+      const placed = (typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(el)) || quietFocus(el);
+      if (placed && typeof ResizeObserver === "function") {
+        const request = generation;
+        // SheetShape and rotation can reflow this page after focus returns.
+        // Follow those size changes only until the player's next interaction.
+        const observer = new ResizeObserver(() => {
+          if (request !== generation || document.activeElement !== el || !visible(el)) { stopRestore(); return; }
+          el.scrollIntoView({ block: "nearest" });
+        });
+        const events = ["pointerdown", "keydown", "wheel", "touchstart"];
+        const stop = () => {
+          observer.disconnect();
+          for (const type of events) window.removeEventListener(type, stop, true);
+          if (stopRestore === stop) stopRestore = () => {};
+        };
+        stopRestore = stop;
+        for (const type of events) window.addEventListener(type, stop, { capture: true, passive: true });
+        observer.observe(panel(current) || document.getElementById("pm-settings-index"));
+        const body = document.getElementById("pm-settings-body");
+        if (body) observer.observe(body);
+      }
+      return placed;
+    };
     function firstIn(page) {
       if (!page) return null;
       const candidates = page.querySelectorAll
@@ -113,6 +139,7 @@ const SettingsNav = (function () {
     // the stub resident, so re-gating would retry forever. (Ship #1320 used a
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
     function show(want, focus, after, audioTried) {
+      stopRestore();
       const request = ++generation;
       const id = Object.hasOwn(routes, want) ? want : "home";
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
@@ -197,6 +224,7 @@ const SettingsNav = (function () {
     }
 
     function back() {
+      stopRestore();
       if (current === "home" || direct) { generation++; if (current !== "home") fireLeave(current); direct = false; current = "home"; return true; }
       if (stack.length) {
         const parent = stack.pop();
@@ -204,25 +232,30 @@ const SettingsNav = (function () {
         originDoor = parent.origin;
         const body = document.getElementById("pm-settings-body");
         if (body) body.scrollTop = parent.scroll;
-        quietFocus(parent.door) || focusPage(parent.page);
+        // A rotation or scale change can move the launcher beyond its saved
+        // offset. Keep the returning control visible in the current layout.
+        restoreFocus(parent.door) || focusPage(parent.page);
         return false;
       }
       show("home", false);
       const door = originDoor;
       originDoor = null;
-      if (!(search && search.restore())) quietFocus(door) || focusPage("home");
+      if (!(search && search.restore())) restoreFocus(door) || focusPage("home");
       return false;
     }
 
-    const doors = Object.fromEntries(Object.entries(routes).filter(([, route]) => route.door).map(([id, route]) => [id, route.door()]));
-    for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
-      if (search) search.cancel();
+    function enter(id, door, after) {
       if (current !== "home") stack.push({ page: current, door, origin: originDoor, scroll: document.getElementById("pm-settings-body")?.scrollTop || 0 });
       originDoor = door;
       // LAZY_AUDIO: MUSIC & SOUND's SettingRows demote the static ‹ › chevrons.
       // show() reveals audio only after ensureAudio so MenuNav.items matches a
       // wired panel (otherwise arrow-walk marks ~12 chevrons missed — menu-traversal).
-      show(id, true, () => { if (onSelect) onSelect(id); });
+      show(id, true, () => { if (onSelect) onSelect(id); return typeof after === "function" && after(); });
+    }
+    const doors = Object.fromEntries(Object.entries(routes).filter(([, route]) => route.door).map(([id, route]) => [id, route.door()]));
+    for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
+      if (search) search.cancel();
+      enter(id, door);
     };
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.
@@ -242,10 +275,11 @@ const SettingsNav = (function () {
         const b = e.target && e.target.closest ? e.target.closest("[data-settings-jump]") : null;
         if (!b || !live) return;
         const target = b.getAttribute("data-jump-target");
-        live.show(b.getAttribute("data-settings-jump"), true,
+        enterLive(b.getAttribute("data-settings-jump"), b,
           () => typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(document.querySelector("#" + target)));
       });
     }
+    enterLive = enter;
     live = {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return
@@ -254,7 +288,7 @@ const SettingsNav = (function () {
       returnToSearch: () => { direct = false; stack.length = 0; show("home", false); return !!search && search.restore(); },
       showDirect: (id, focus) => { direct = true; stack.length = 0; show(id, focus); },
       current: () => current,
-      show, back, invalidate: () => { generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
+      show, back, invalidate: () => { stopRestore(); generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
     };
     return live;
   }

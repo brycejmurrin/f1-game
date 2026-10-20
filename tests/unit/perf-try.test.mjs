@@ -34,6 +34,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { bootGlx } from "../helpers/glx-mock.mjs";
 import { cssRules, ruleFor } from "../helpers/css-rules.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -335,7 +336,19 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   assert.match(nav, /controls: Object\.freeze\(\{[\s\S]*?door: \(\) => document\.getElementById\("pm-open-controls"\)/);
   assert.match(nav, /Object\.entries\(routes\).*route\.door\(\)/);
   assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = \(\) => \{/);
-  assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}(, true)?\)/);   // the door passes `ensured` since the LAZY_AUDIO busy-loop fix (bug-hunt 2.1)  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
+  // Exercise the door callback and BACK rather than pinning the shape of the
+  // shared entry function, which also serves contextual Settings cross-links.
+  const dom = makeDom(), selected = [];
+  const sb = { document: dom.document, window: {}, Log: { info() {}, warn() {} } };
+  vm.runInNewContext(nav.replace(/^const SettingsNav/m, "var SettingsNav"), sb, { filename: absSrc("js/ui/settings-tabs.js") });
+  const navigation = sb.SettingsNav.create(null, id => selected.push(id));
+  const door = dom.byId("pm-open-controls");
+  door.onclick();
+  assert.equal(navigation.current(), "controls");
+  assert.deepEqual(selected, ["controls"]);
+  assert.equal(navigation.back(), false);
+  assert.equal(navigation.current(), "home");
+  assert.equal(dom.document.activeElement, door);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
   const rules = cssRules(readCssSource("css/components.css"));
   assert.ok(ruleFor(rules, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/), "the balanced-row child rule exists");

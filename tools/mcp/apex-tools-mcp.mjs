@@ -29,6 +29,7 @@ import { listSurveyLocations } from "../lib/survey-scenarios.mjs";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 import { aliveRun } from "../ci/test-bg.mjs";
+import { runningEndpoint } from "./debug-chrome.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } from "./ui-tools.mjs";
 import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
@@ -284,6 +285,15 @@ function occupancyRefuse() {
       "apex_job_status {jobId, wait:100} until it is done, or apex_job_cancel {jobId}.",
     );
   }
+  // The shared debug Chromium is a browser outside the lock: one browser at a time. Canned-ps unit runs skip it.
+  const debugChrome = process.env.APEX_MCP_PS == null ? runningEndpoint() : null;
+  if (debugChrome) {
+    return refuse(
+      "debug_chrome_up",
+      `the shared debug Chromium (tools/mcp/debug-chrome.mjs) is up at ${debugChrome}`,
+      "apex_debug_chrome {action:\"stop\"} (or node tools/mcp/debug-chrome.mjs stop) before a browser apex_* tool; one browser at a time.",
+    );
+  }
   const port = daemonPort();
   if (port != null) {
     return refuse(
@@ -419,14 +429,30 @@ const CATALOG = [
   {
     name: "apex_status",
     week: 1,
-    description: "Tree — read-only occupancy: lock, chrome /healthz, test-bg, playwright PIDs, loadavg. Does not take the lock. Call before any browser apex_*.",
+    description: "Tree — read-only occupancy: lock, chrome /healthz, test-bg, playwright PIDs, loadavg. Call before any browser apex_*.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
+  },
+  {
+    name: "apex_debug_chrome",
+    kind: "tree",
+    description: "Tree — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, 844x390 touch + iPhone UA by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
+    inputSchema: {
+      type: "object",
+      required: ["action"],
+      properties: {
+        action: { type: "string", enum: ["start", "status", "stop"] },
+        device: { type: "string", enum: ["phone-landscape", "desktop"], description: "start: default phone-landscape." },
+        webgpu: { type: "boolean", description: "start: enable WebGPU." },
+        headlessGame: { type: "boolean", description: "start: load the game headless." },
+        dryRun: { type: "boolean" },
+      },
+    },
   },
   {
     name: "apex_catalog",
     week: 8,
     kind: "tree",
-    description: "Tree — every valid track/camera/UI id the other apex_* tools accept, in one read. For per-track turn and scenery targets call apex_locations. Read-only, no browser.",
+    description: "Tree — every valid track/camera/UI id the apex_* tools accept. Turn and scenery targets: apex_locations. Read-only, no browser.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
@@ -471,7 +497,7 @@ const CATALOG = [
   {
     name: "apex_shot",
     week: 2,
-    description: "Browser (lock first) — deterministic scene screenshot (track/frac/cam). Local harness only. Skill: playwright-probe.",
+    description: "Browser (lock first) — deterministic scene screenshot (track/frac/cam). Local only. Skill: playwright-probe.",
     inputSchema: {
       type: "object",
       properties: {
@@ -637,7 +663,7 @@ const CATALOG = [
   {
     name: "apex_select_specs",
     week: 3,
-    description: "Tree — which SPECS fit the budget since a git ref (--json). Requires since. Never starts tests. Skill: check-changes.",
+    description: "Tree — which SPECS fit the budget since a git ref. Requires since. Never starts tests. Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -706,7 +732,7 @@ const CATALOG = [
     name: "apex_session_status",
     week: 6,
     kind: "tree",
-    description: "Tree — this branch's handoff block as JSON (sessions, commits vs the deploy branch, dirty/unpushed, each test log's verdict, a live run): the PR body's status section. Read-only. Skill: steward.",
+    description: "Tree — this branch's handoff block as JSON (commits vs deploy, dirty/unpushed, test-log verdicts, live run). Read-only. Skill: steward.",
     inputSchema: {
       type: "object",
       properties: {
@@ -720,7 +746,7 @@ const CATALOG = [
     name: "apex_who_is_on_it",
     week: 6,
     kind: "tree",
-    description: "Tree — recent pushes per branch, who touched these paths, live claims (--json): the check before fixing a red you did not cause. Read-only: never --claim / --release (run the CLI for those). Skill: steward.",
+    description: "Tree — recent pushes, who touched these paths, live claims: check before fixing a red you did not cause. Read-only. Skill: steward.",
     inputSchema: {
       type: "object",
       properties: {
@@ -737,7 +763,7 @@ const CATALOG = [
     name: "apex_ci_status",
     week: 6,
     kind: "tree",
-    description: "Tree — ONE poll of a SHA's CI runs (ci-watch --once): per-job lines, a red's failing step, and the `= ci <verdict>` line parsed into out. Never waits — arm a Monitor on ci-watch.mjs for that. Read-only GETs. Skill: steward.",
+    description: "Tree — ONE poll of a SHA's CI runs (ci-watch --once): per-job lines, a red's failing step, `= ci <verdict>`. Never waits. Skill: steward.",
     inputSchema: {
       type: "object",
       properties: {
@@ -989,7 +1015,7 @@ const CATALOG = [
     name: "apex_job_cancel",
     week: 7,
     kind: "tree",
-    description: "Tree — stop a running background job: kills its process group (and the Chromium it launched) and releases the browser lock. Skill: check-changes.",
+    description: "Tree — stop a background job: kills its process group and Chromium, frees the browser lock. Skill: check-changes.",
     inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" }, dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } }, required: ["jobId"] },
   },
   {
@@ -1015,7 +1041,7 @@ const CATALOG = [
     name: "apex_ui_shot",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — PNG + structured DOM of ONE menu screen at one viewport (layout-audit --screen), ~15 s, with a thumbnail in the result. Every screen: apex_job_start ui_gallery. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — PNG + DOM of ONE menu screen at one viewport, ~15 s. All screens: apex_job_start ui_gallery. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -1070,7 +1096,7 @@ const CATALOG = [
     name: "apex_unit_test",
     week: 8,
     kind: "tree",
-    description: "Tree — `node --test` of ONE file under tests/unit/ (seconds, no browser): the check eight skills run every session. `pattern` is --test-name-pattern. Not for tests/specs (browser groups go through test-bg). Skill: check-changes.",
+    description: "Tree — `node --test` of ONE tests/unit/ file (seconds). Not tests/specs. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -1851,6 +1877,19 @@ function buildArgv(name, args) {
       }
       return argv;
     }
+    case "apex_debug_chrome": {
+      if (!["start", "status", "stop"].includes(args.action)) badArgs(`action must be start, status or stop (got ${JSON.stringify(args.action)})`);
+      const argv = [...nodeTool("mcp/debug-chrome.mjs"), args.action];
+      if (args.action === "start") {
+        if (args.device != null) {
+          if (!["phone-landscape", "desktop"].includes(args.device)) badArgs("device must be phone-landscape or desktop");
+          argv.push("--device", args.device);
+        }
+        if (args.webgpu) argv.push("--webgpu");
+        if (args.headlessGame) argv.push("--headless-game");
+      }
+      return argv;
+    }
     case "apex_ci_status": {
       const sha = args.sha == null || args.sha === "" ? "HEAD" : String(args.sha);
       if (sha !== "HEAD" && !/^[0-9a-f]{7,40}$/i.test(sha)) {
@@ -2229,16 +2268,20 @@ function handleStatus(args = {}) {
   const lock = lockInfo();
   const playwright = playwrightLive();
   const loadavg = os.loadavg();
+  const debugEndpoint = runningEndpoint();
   return toolResult({
     ok: true,
     lock,
     chromeDaemon: { up: chromePort != null, port: chromePort },
+    debugChrome: { up: debugEndpoint != null, endpoint: debugEndpoint },
     testBg: testBgStatus(),
     playwright,
     loadavg,
     server: serverFreshness(),
     sessions: sessionsInfo(),
-    next: statusNext(lock, playwright, loadavg),
+    next: debugEndpoint ? { action: "attach", tool: "js-debugger", reason: `shared debug Chromium up at ${debugEndpoint}`,
+      hint: "js-debugger / browser-use / APEX_PW_CDP / APEX_CDT_BROWSER_URL attach to it; browser apex_* tools refuse until apex_debug_chrome {action:\"stop\"}." }
+      : statusNext(lock, playwright, loadavg),
     knownGap: KNOWN_GAP,
   });
 }
@@ -2737,7 +2780,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // wrap here; derive honest hints from the catalog instead of restating them per
 // tool. Clients treat these as untrusted hints, so they are self-description,
 // not a permission boundary — the pins and the lock remain the real guards.
-const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer"]);
+const NOT_READ_ONLY = new Set(["apex_debug_chrome", "apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel"]);
 const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
 function toolAnnotations(entry) {
@@ -2805,7 +2848,7 @@ const cliOut = (properties, type = ["object", "null"]) => ({
 const S = (type) => ({ type });
 const OUTPUT_SCHEMAS = {
   apex_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), lock: S("object"), chromeDaemon: S("object"),
-    testBg: S("object"), playwright: S("object"), loadavg: S("array"), knownGap: S("object") } },
+    testBg: S("object"), playwright: S("object"), loadavg: S("array"), knownGap: S("object"), debugChrome: S("object") } },
   apex_catalog: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tracks: S("array"), cams: S("array"), tods: S("array"),
     shotPresets: S("array"), hudDevices: S("array"), hudCams: S("array"), jobKinds: S("array"), uiScreens: S("array"), uiViewports: S("array"),
     hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },

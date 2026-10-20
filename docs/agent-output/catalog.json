@@ -3623,7 +3623,7 @@
     },
     {
       "name": "test:net-unit",
-      "command": "node --test tests/unit/fuzz-untrusted-inputs.test.mjs tests/unit/lobby-answer-flight.test.mjs tests/unit/lobby-codes.test.mjs tests/unit/net-authority.test.mjs tests/unit/net-grid-separation.test.mjs tests/unit/net-lobby-friend-quali.test.mjs tests/unit/net-lobby-lifecycle.test.mjs tests/unit/net-nostr-sockets.test.mjs tests/unit/net-qr.test.mjs tests/unit/net-rendezvous.test.mjs tests/unit/net-roster.test.mjs tests/unit/net-sdp.test.mjs tests/unit/net-session.test.mjs tests/unit/net-snapshot.test.mjs tests/unit/net-start-arming.test.mjs tests/unit/net-stub-surface.test.mjs tests/unit/net-transport.test.mjs tests/unit/net-trystero-api.test.mjs tests/unit/netplay-resilience.test.mjs tests/unit/rendezvous-worker.test.mjs tests/unit/track-codec.test.mjs"
+      "command": "node --test tests/unit/fuzz-untrusted-inputs.test.mjs tests/unit/lobby-answer-flight.test.mjs tests/unit/lobby-codes.test.mjs tests/unit/lobby-settings.test.mjs tests/unit/net-authority.test.mjs tests/unit/net-grid-separation.test.mjs tests/unit/net-lobby-friend-quali.test.mjs tests/unit/net-lobby-lifecycle.test.mjs tests/unit/net-nostr-sockets.test.mjs tests/unit/net-qr.test.mjs tests/unit/net-rendezvous.test.mjs tests/unit/net-roster.test.mjs tests/unit/net-sdp.test.mjs tests/unit/net-session.test.mjs tests/unit/net-snapshot.test.mjs tests/unit/net-start-arming.test.mjs tests/unit/net-stub-surface.test.mjs tests/unit/net-transport.test.mjs tests/unit/net-trystero-api.test.mjs tests/unit/netplay-resilience.test.mjs tests/unit/rendezvous-worker.test.mjs tests/unit/track-codec.test.mjs"
     },
     {
       "name": "test:node-slow",
