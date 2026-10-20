@@ -1,1 +1,2 @@
-New: Caldra, Rovik, Senzo and Talven body profiles bring four Blender-inspired nose, sidepod, cover and wing combinations to the garage BODY picker.
+New: Caldra, Rovik, Senzo and Talven body profiles plus Orvex and Nacrel bring six distinct garage silhouettes: tapered, shovel, chined, spoon, raised and slab noses, with independent sidepod and spine shapes. Nose paint follows the continuous skin.
+Improved: Six study bodies now have clearer surface identities: Caldra roof hollows, Talven channels, Senzo downwash, Rovik shelves, slender Orvex flanks and a lower Nacrel slab. Shared wheels and chassis interfaces stay fixed.
