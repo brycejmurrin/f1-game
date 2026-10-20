@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// cursor-agents.mjs — read-only Cursor Cloud Agents client: list, status, dump full run transcripts, digest them.
-// @doc Read-only Cursor agents client: list, status, dump run transcripts to artifacts/, digest token-proxy metrics.
-// Full description: Read-only Cursor Cloud Agents API client (`CURSOR_API_KEY` from the environment, never printed). `list`, `status <id>`, `dump [<id>...]` (SSE run streams, rate-limit safe, into ignored artifacts/) and `digest` (per-tool result volume, repeats, edit_file echo, wake runs).
+// cursor-agents.mjs — Cursor Cloud Agents client: read (list, status, dump, digest) and control agents this tool launched (launch, followup, cancel, archive, delete).
+// @doc Cursor agents client: read (list/status/dump/digest) + launch/followup/cancel/archive/delete of agents it launched.
+// Full description: Cursor Cloud Agents API v1 client (`CURSOR_API_KEY` from the environment, never printed). Reads: `list`, `status <id>`, `dump [<id>...]` (SSE run streams, rate-limit safe, into ignored artifacts/), `digest`. Writes: `launch` (client-minted agentId, so a retry never duplicates), `followup`, `cancel`, `archive`, `delete`: each refuses an agent id that `launch` did not record in artifacts/cursor-launched.json (the key reaches every agent its owner has). `allowed` lists the recorded ids.
 // @skill agent-fleet
 //
 // Evidence: docs/notes/CURSOR-AGENTS-API-PROBE-2026-10-19.md. The run stream
@@ -13,9 +13,20 @@
 //   node tools/ci/cursor-agents.mjs status <agent-id>
 //   node tools/ci/cursor-agents.mjs dump [<agent-id>...] [--limit 20]
 //   node tools/ci/cursor-agents.mjs digest [--dir artifacts/cursor-dumps]
+//   node tools/ci/cursor-agents.mjs launch (--prompt "…" | --prompt-file F) [--model composer-2.5] [--repo URL]
+//        [--ref BRANCH | --pr PR_URL] [--name N] [--mode agent|plan] [--create-pr] [--on-branch] [--dry-run]
+//   node tools/ci/cursor-agents.mjs followup <id> (--text "…" | --text-file F) [--mode agent|plan]
+//   node tools/ci/cursor-agents.mjs cancel <id> [--run <runId>]
+//   node tools/ci/cursor-agents.mjs archive <id>
+//   node tools/ci/cursor-agents.mjs delete <id>        (irreversible; archive is the reversible one)
+//   node tools/ci/cursor-agents.mjs allowed
 //
-// Read-only: no launch, follow-up, stop or delete. Output is one typed line per
-// fact, never a transcript body. Exit 2 = no key, 1 = API error.
+// Writes touch ONLY ids `launch` recorded (artifacts/cursor-launched.json, override APEX_CURSOR_ALLOW):
+// the key is user-scoped and reaches every agent its owner has. Output is one typed
+// line per fact, never a transcript or prompt body. Exit 2 = no key, 3 = REFUSED
+// (id not launched by this tool), 1 = API error; BUSY / NOT_CANCELLABLE print their
+// own line and exit 1. Request shapes: https://cursor.com/docs-static/cloud-agents-openapi.yaml
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,16 +37,20 @@ const DEFAULT_DIR = path.join(ROOT, "artifacts", "cursor-dumps");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function api(route, { accept = "application/json", tries = 6 } = {}) {
+/** One API call. GETs retry 429/5xx; a write retries 429 only (the request was not processed), plus 5xx when `retry5xx` (idempotent create). */
+async function api(route, { accept = "application/json", tries = 6, method = "GET", body, retry5xx = false } = {}) {
   const key = process.env.CURSOR_API_KEY;
   if (!key) {
     console.log("BLOCKED no CURSOR_API_KEY in the environment");
     process.exit(2);
   }
+  const headers = { Authorization: `Bearer ${key}`, Accept: accept };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   for (let a = 0; a < tries; a++) {
-    const r = await fetch(BASE + route, { headers: { Authorization: `Bearer ${key}`, Accept: accept } });
-    if (r.status === 429 || r.status >= 500) {
-      await sleep(5000 * 2 ** a);
+    const r = await fetch(BASE + route, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const again = r.status === 429 || (r.status >= 500 && (method === "GET" || retry5xx));
+    if (again) {
+      await sleep(Math.min(5000 * 2 ** a, Number(process.env.APEX_CURSOR_BACKOFF_CAP_MS) || 80000));
       continue;
     }
     return r;
@@ -162,6 +177,172 @@ export function formatDigest(t) {
   return lines;
 }
 
+// ---- control verbs: launch / followup / cancel / archive / delete -------------------------------
+
+export const DEFAULT_REPO = "https://github.com/brycejmurrin/f1-game";
+export const DEFAULT_MODEL = "composer-2.5";
+const AGENT_ID = /^bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_PROMPT = 100000;
+
+/** A write the allow-list refused: nothing was sent. */
+export class Refused extends Error {}
+
+const allowFile = () => process.env.APEX_CURSOR_ALLOW || path.join(ROOT, "artifacts", "cursor-launched.json");
+
+export function readAllow(file = allowFile()) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")).agents || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAllow(agents, file) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify({ agents }, null, 2)}\n`);
+}
+
+export function recordAllow(id, meta, file = allowFile()) {
+  writeAllow({ ...readAllow(file), [id]: meta }, file);
+}
+
+export function forgetAllow(id, file = allowFile()) {
+  const a = readAllow(file);
+  delete a[id];
+  writeAllow(a, file);
+}
+
+/** Throw Refused unless `id` is well formed AND was recorded by `launch`. */
+export function assertAllowed(id, file = allowFile()) {
+  if (!id || !AGENT_ID.test(id)) throw new Refused(`REFUSED ${id || "(no id)"} is not a bc-<uuid> agent id`);
+  if (!readAllow(file)[id]) throw new Refused(`REFUSED ${id} was not launched by this tool (see: allowed)`);
+}
+
+export const newAgentId = () => `bc-${crypto.randomUUID()}`;
+
+function needText(text, what) {
+  if (typeof text !== "string" || !text.trim()) throw new Error(`${what} is empty`);
+  if (text.length > MAX_PROMPT) throw new Error(`${what} is ${text.length} chars, over ${MAX_PROMPT}`);
+  return text;
+}
+
+function needMode(mode) {
+  if (mode !== undefined && mode !== "agent" && mode !== "plan") throw new Error(`--mode must be agent or plan, got ${mode}`);
+  return mode;
+}
+
+/** The POST /v1/agents body. No PR, no push to a live branch unless asked. */
+export function buildLaunchBody({ prompt, model = DEFAULT_MODEL, repo = DEFAULT_REPO, ref, prUrl, name, createPr = false, onBranch = false, mode, agentId = newAgentId() }) {
+  needText(prompt, "prompt");
+  if (ref && prUrl) throw new Error("--ref and --pr are exclusive: a PR carries its own base");
+  const repoCfg = { url: repo };
+  if (prUrl) repoCfg.prUrl = prUrl;
+  else if (ref) repoCfg.startingRef = ref;
+  const body = {
+    prompt: { text: prompt },
+    model: { id: model },
+    name: (name || `claude-launch: ${prompt.trim().replace(/\s+/g, " ")}`).slice(0, 100),
+    agentId,
+    env: { type: "cloud" },
+    repos: [repoCfg],
+    autoCreatePR: !!createPr,
+    workOnCurrentBranch: !!onBranch,
+  };
+  if (needMode(mode)) body.mode = mode;
+  return body;
+}
+
+/** `{code, message}` from an error response, or a generic pair when the body is not the documented envelope. */
+async function apiError(r) {
+  let code = `http_${r.status}`;
+  let message = "";
+  try {
+    const e = (await r.json()).error || {};
+    code = e.code || code;
+    message = e.message || "";
+  } catch {
+    /* non-JSON error body */
+  }
+  return { status: r.status, code, message };
+}
+
+const fail = (e, what) => new Error(`${what}: HTTP ${e.status} ${e.code}${e.message ? ` — ${e.message.slice(0, 200)}` : ""}`);
+
+/** Launch one agent. Records the id BEFORE the request so a crash mid-flight still leaves it manageable; a failed create un-records it. */
+export async function launchAgent(opts, { file = allowFile() } = {}) {
+  const body = buildLaunchBody(opts);
+  const meta = { launchedAt: new Date().toISOString(), model: body.model.id, repo: body.repos[0].url, name: body.name };
+  if (opts.dryRun) {
+    const { prompt, ...rest } = body;
+    return [`DRYRUN ${body.agentId} promptChars=${prompt.text.length} ${JSON.stringify(rest)}`];
+  }
+  recordAllow(body.agentId, meta, file);
+  const r = await api("/v1/agents", { method: "POST", body, retry5xx: true });
+  if (r.status === 409) {
+    const e = await apiError(r);
+    // A 5xx retry can land after the first attempt succeeded: the same agentId then conflicts, which means "already created".
+    if (e.code === "agent_id_conflict") {
+      const a = await json(`/v1/agents/${body.agentId}`);
+      return [`LAUNCH ${body.agentId} run=${a.latestRunId || "-"} model=${meta.model} (already created)`];
+    }
+    forgetAllow(body.agentId, file);
+    throw fail(e, "launch");
+  }
+  if (!r.ok) {
+    forgetAllow(body.agentId, file);
+    throw fail(await apiError(r), "launch");
+  }
+  const d = await r.json();
+  const id = d.agent?.id || body.agentId;
+  return [`LAUNCH ${id} run=${d.run?.id || "-"} model=${meta.model} repo=${meta.repo.split("/").pop()} pr=${body.autoCreatePR ? "auto" : "off"}`];
+}
+
+export async function followUp(id, text, mode, { file = allowFile() } = {}) {
+  assertAllowed(id, file);
+  needText(text, "text");
+  const body = { prompt: { text } };
+  if (needMode(mode)) body.mode = mode;
+  const r = await api(`/v1/agents/${id}/runs`, { method: "POST", body });
+  if (r.status === 409) {
+    const e = await apiError(r);
+    if (e.code === "agent_busy") return [`BUSY ${id} a run is already active; retry when status is IDLE`];
+    throw fail(e, "followup");
+  }
+  if (!r.ok) throw fail(await apiError(r), "followup");
+  const d = await r.json();
+  return [`FOLLOWUP ${id} run=${d.run?.id || "-"} HTTP ${r.status}`];
+}
+
+export async function cancelRun(id, runId, { file = allowFile() } = {}) {
+  assertAllowed(id, file);
+  const run = runId || (await json(`/v1/agents/${id}`)).latestRunId;
+  if (!run) throw new Error(`cancel ${id}: no run to cancel`);
+  const r = await api(`/v1/agents/${id}/runs/${run}/cancel`, { method: "POST" });
+  if (r.status === 409) {
+    const e = await apiError(r);
+    if (e.code === "run_not_cancellable") return [`NOT_CANCELLABLE ${id} run=${run} (already finished)`];
+    throw fail(e, "cancel");
+  }
+  if (!r.ok) throw fail(await apiError(r), "cancel");
+  return [`CANCELLED ${id} run=${run}`];
+}
+
+export async function archiveAgent(id, { file = allowFile() } = {}) {
+  assertAllowed(id, file);
+  const r = await api(`/v1/agents/${id}/archive`, { method: "POST" });
+  if (!r.ok) throw fail(await apiError(r), "archive");
+  return [`ARCHIVED ${id}`];
+}
+
+export async function deleteAgent(id, { file = allowFile() } = {}) {
+  assertAllowed(id, file);
+  const r = await api(`/v1/agents/${id}`, { method: "DELETE" });
+  if (r.status === 404) forgetAllow(id, file);
+  if (!r.ok) throw fail(await apiError(r), "delete");
+  forgetAllow(id, file);
+  return [`DELETED ${id}`];
+}
+
 async function listAgents(limit) {
   const d = await json(`/v1/agents?limit=${limit}`);
   return d.items || [];
@@ -171,6 +352,14 @@ const flag = (args, name, dflt) => {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : dflt;
 };
+const has = (args, name) => args.includes(name);
+/** Print result lines; BUSY / NOT_CANCELLABLE are refusals by the API, so they exit 1 for callers that branch on it. */
+const emit = (lines) => {
+  for (const l of lines) console.log(l);
+  if (/^(BUSY|NOT_CANCELLABLE) /.test(lines[0] || "")) process.exitCode = 1;
+};
+/** `--x "text"` or `--x-file path`; the file form keeps prompts out of shell history and quoting. */
+const textArg = (args, name) => (flag(args, `${name}-file`) ? fs.readFileSync(flag(args, `${name}-file`), "utf8") : flag(args, name));
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
@@ -213,15 +402,39 @@ async function main() {
     if (!files.length) throw new Error(`no .sse dumps in ${dir}; run dump first`);
     const runs = files.map((f) => digestRun(parseSse(fs.readFileSync(path.join(dir, f), "utf8"))));
     for (const l of formatDigest(mergeDigests(runs))) console.log(l);
+  } else if (cmd === "launch") {
+    const lines = await launchAgent({
+      prompt: textArg(rest, "--prompt"),
+      model: flag(rest, "--model"),
+      repo: flag(rest, "--repo"),
+      ref: flag(rest, "--ref"),
+      prUrl: flag(rest, "--pr"),
+      name: flag(rest, "--name"),
+      mode: flag(rest, "--mode"),
+      createPr: has(rest, "--create-pr"),
+      onBranch: has(rest, "--on-branch"),
+      dryRun: has(rest, "--dry-run"),
+    });
+    emit(lines);
+  } else if (cmd === "followup") {
+    emit(await followUp(rest[0], textArg(rest, "--text"), flag(rest, "--mode")));
+  } else if (cmd === "cancel") {
+    emit(await cancelRun(rest[0], flag(rest, "--run")));
+  } else if (cmd === "archive") {
+    emit(await archiveAgent(rest[0]));
+  } else if (cmd === "delete") {
+    emit(await deleteAgent(rest[0]));
+  } else if (cmd === "allowed") {
+    for (const [id, m] of Object.entries(readAllow())) console.log(`ALLOWED ${id} ${m.launchedAt} ${m.model} "${(m.name || "").slice(0, 40)}"`);
   } else {
-    console.log("usage: cursor-agents.mjs list|status <id>|dump [<id>...]|digest [--dir D]");
+    console.log("usage: cursor-agents.mjs list|status <id>|dump [<id>...]|digest [--dir D]|launch …|followup <id> …|cancel <id>|archive <id>|delete <id>|allowed");
     process.exit(cmd ? 1 : 0);
   }
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((e) => {
-    console.log(`ERROR ${e.message}`);
-    process.exit(1);
+    console.log(e instanceof Refused ? e.message : `ERROR ${e.message}`);
+    process.exit(e instanceof Refused ? 3 : 1);
   });
 }
