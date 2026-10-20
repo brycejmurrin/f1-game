@@ -695,7 +695,7 @@ const Parts = (function () {
     ["aero", "high", "style_aero_rift", "Terrace Wing", "stepped front flaps, raked endplates with accent tips, swan-neck rear wing with kicked-up tips",
       { rwPlanes: 1, epChord: 0.74, fwStep: 0.065, epShape: 1, epTip: 2, rwCurve: 0.04, frontRise: 0.02, frontSweep: 0.06, swan: 1 }],
     ["aero", "medium", "style_aero_keel", "Flatline Wing", "straight three-element front, square accent-tipped endplates and a flat, straight rear wing",
-      { rwPlanes: 1, epChord: 0.74, wsFlat: 1, epShape: 4, epTip: 2, frontTaper: 1.0, rearTaper: 1.0, casc: 0, gill: 0 }],
+      { rwPlanes: 1, epChord: 0.74, wsFlat: 1, epShape: 4, epTip: 3, rwGap: 0.06, fwGap: 0.03, frontTaper: 1.0, rearTaper: 1.0, casc: 0, gill: 0 }],
     ["aero", "diffuser", "style_aero_delta", "Updraft Wing", "flaps sweeping sharply up into tall endplates, rear wing with strongly upturned delta tips",
       { rwPlanes: 1, epChord: 0.74, lvl: 2, fwCurve: 0.05, frontRise: 0.15, epShape: 2, epTip: 2, rwRise: 0.055, rwCurve: 0.055 }],
     ["aero", "rake_setup", "style_aero_serpent", "Swell Wing", "flaps curling up to rolled endplates, deep dipped-centre spoon rear wing",
@@ -742,7 +742,7 @@ const Parts = (function () {
         // B·D3 period aero opt-in fields: absent = shipped mesh.
         "rwSpoon", "beam2", "fwBridge",
         // B·D3c concept-sheet shape fields: absent = shipped mesh.
-        "fwCurve", "fwStep", "epShape", "epTip", "wsFlat", "rwRise", "rwCurve", "rwPlanes", "epChord"]),
+        "fwCurve", "fwStep", "epShape", "epTip", "wsFlat", "rwRise", "rwCurve", "rwPlanes", "epChord", "rwGap", "fwGap"]),
       suspension: Object.freeze(["ride", "arm", "push", "pull", "wishbone", "toe", "rocker", "heave",
         "pullAt", "antiDive", "upright"]),
       brakes: Object.freeze(["duct", "caliperPos", "coverOpen", "rotor", "rotorScale", "scoop", "discFace", "caliper", "bigScoop", "drum"]),

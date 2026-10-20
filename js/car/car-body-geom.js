@@ -177,6 +177,17 @@ const CarBodyGeom = (function () {
       ? Object.assign({}, w, { teCurve: 0, chordTaper: 0, tipRise: 0, flaps: 2, canard: 0 })
       : w;
   }
+  // The rear MAIN PLANE section [zLead, yLead, zTrail, yTrail] under the flap
+  // stack's trailing edge `u`. rwGap (B·D3c KEEL, opt-in, m): the plane drops and
+  // flattens (trailing edge drops more), opening a wider slot under the flap.
+  // `ep` (endplateGeom) caps the drop: the trailing edge stays 3 cm above the
+  // plate's lower edge, so the plane always seats in both plates.
+  function rearMainOf(u, st, ep) {
+    let g = st && st.rwGap ? Math.max(0, Math.min(0.08, +st.rwGap)) : 0;
+    if (g && ep) g = Math.max(0, Math.min(g, u - 0.225 - Math.max(ep.front.bottom, ep.rear.bottom) - 0.03));
+    return g ? [-2.30, u - 0.270 - g * 0.6, -2.52, u - 0.225 - g]
+             : [-2.30, u - 0.270, -2.52, u - 0.225];
+  }
   function wingFoilOf(st, i) {
     const w = st && st.wsFlat ? wingOf(st) : (st && st.wingStyle) || st || DEFAULT_WING;
     const k = Math.max(0, Math.min(1, i / 2));
@@ -185,7 +196,9 @@ const CarBodyGeom = (function () {
              chordTaper: (w.chordTaper || 0) * (0.55 + 0.55 * k),
              tipRise: (w.tipRise || 0) * (0.50 + 0.50 * k) };
   }
-  function frontCascade(aLvl) {
+  // fwGap (B·D3c KEEL, opt-in, m): each flap stands g higher than the one under
+  // it, so the slots between the elements open up. Absent = the shipped stack.
+  function frontCascade(aLvl, st) {
     const a = aLvl;
     const els = [
       [2.72, 0.048, 2.40, 0.086, 1.00, 0.024],   // main plane (structure, never moves)
@@ -194,6 +207,8 @@ const CarBodyGeom = (function () {
     if (a >= 1) els.push([2.34, 0.148, 2.10, 0.212, 0.95, 0.018]);   // flap 2
     if (a >= 3) els.push([2.20, 0.200, 1.98, 0.272, 0.92, 0.016]);   // flap 3
     if (a >= 4) els.push([2.08, 0.256, 1.88, 0.328, 0.88, 0.014]);   // flap 4
+    const g = st && st.fwGap ? Math.max(0, Math.min(0.03, +st.fwGap)) : 0;
+    if (g) for (let i = 1; i < els.length; i++) { els[i][1] += g * i; els[i][3] += g * i; }
     return els;
   }
   // How many of them the mesh still bakes. Never the main plane.
@@ -252,12 +267,12 @@ const CarBodyGeom = (function () {
   // B·D3c concept-sheet endplates (aero `epShape`, opt-in; absent = the
   // `plate` table above). Heights stay inside FRONT_PLATE's own range.
   // 1 RIFT: low nose, raked-up tail. 2 DELTA: tall, for up-swept flaps.
-  // 3 SERPENT: rolled crown over curled flaps. 4 KEEL: short square plate.
+  // 3 SERPENT: rolled crown over curled flaps. 4 KEEL: tall square plate, flat top.
   const EP_SHAPES = [null,
     { hF: 0.14, hR: 0.46, kick: 0.040, footW: 0.12, footZ: 0.54, arch: 0 },
     { hF: 0.28, hR: 0.54, kick: 0.050, footW: 0.13, footZ: 0.56, arch: 1 },
     { hF: 0.22, hR: 0.48, kick: 0.040, footW: 0.14, footZ: 0.58, arch: 0, roll: 1 },
-    { hF: 0.18, hR: 0.30, kick: 0.020, footW: 0.10, footZ: 0.50, arch: 0 },
+    { hF: 0.30, hR: 0.36, kick: 0.010, footW: 0.12, footZ: 0.52, arch: 0 },
   ];
   function frontPlateGeom(aLvl, aero) {
     const lvl = aLvl == null ? 2 : aLvl;
@@ -559,6 +574,7 @@ const CarBodyGeom = (function () {
       // B·D3c shape fields join the key only when set, so shipped keys keep their text.
       const ext = [st0.fwCurve, st0.fwStep, st0.rwRise, st0.rwCurve, st0.rwPlanes, st0.epChord].map((v) => +v || 0);
       if (ext.some((v) => v)) sig += "|" + ext.join(",");
+      if (st0.rwGap || st0.fwGap) sig += "|gap:" + (+st0.rwGap || 0) + "," + (+st0.fwGap || 0);
       _flapSig.set(st0, sig);
     }
     return sig;
@@ -603,7 +619,7 @@ const CarBodyGeom = (function () {
     const frontRise = Math.max(-0.03, Math.min(0.16, st.frontRise));
     const rearSweep = Math.max(-0.06, Math.min(0.20, st.rearSweep));
     const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
-    const els = frontCascade(a), baked = frontBakedCount(a), fwHalf = frontHalf(a);
+    const els = frontCascade(a, st), baked = frontBakedCount(a), fwHalf = frontHalf(a);
     const out = [];
     // Solved in cascade order, each element handed the one it nests over: the
     // neighbour's own solved poses are what bound this one's travel, so the
@@ -631,7 +647,8 @@ const CarBodyGeom = (function () {
     }
     const ep = endplateGeom(a, st), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
-    const rearMain = elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0);
+    const rm = rearMainOf(upperTrailY, st, ep);
+    const rearMain = elemRecord([rm[0], rm[1]], [rm[2], rm[3]], 0.024, 0);
     const stack = [];   // [id, le, te, thick, sweepMul, half, paint?] bottom-up
     // rwPlanes 1 (B·D3c concept wings): one broad flap over the main plane, no mid
     // element, top element or separate DRS plane, the sheet's two-plane wing.
@@ -1601,7 +1618,7 @@ const CarBodyGeom = (function () {
       styledNoseStations, bodySpan, haloHoopPath,
       endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
       noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
-      buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift,
+      buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift, rearMainOf,
       FIN_SHAPES, FIN_SHAPE_IDS, FIN, sharkFinRoot, sharkFinPanel, sharkFinBadge, finOf, finTop,
       COVER_VENT_IDS, SPINE_HEIGHT_IDS, spineRise, COVER_STACK,
       coverProfile, coverFlankX, coverSurfaceY,

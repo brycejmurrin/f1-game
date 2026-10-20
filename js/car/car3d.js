@@ -155,7 +155,7 @@ const Car3D = (function () {
     styledNoseStations, bodySpan, haloHoopPath,
     endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
     noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
-    buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift,
+    buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift, rearMainOf,
     FIN_SHAPES, FIN_SHAPE_IDS, FIN, sharkFinRoot, sharkFinPanel, sharkFinBadge, finOf, finTop,
     COVER_VENT_IDS, SPINE_HEIGHT_IDS, spineRise, COVER_STACK,
     coverProfile, coverFlankX, coverSurfaceY, COVER_CROWN,
@@ -1735,7 +1735,7 @@ const Car3D = (function () {
     const frontRise = Math.max(-0.03, Math.min(0.16, aeroStyle.frontRise));
 
     const fwHalf = frontHalf(aLvl);               // half-span (endplate sits just outside)
-    const fwElems = frontCascade(aLvl);
+    const fwElems = frontCascade(aLvl, aeroStyle);
     const fwBaked = frontBakedCount(aLvl);
     for (let i = 0; i < fwBaked; i++) {
       const e = fwElems[i], half = fwHalf * e[4], extra = wingFoilOf(ws, i);
@@ -1838,6 +1838,10 @@ const Car3D = (function () {
         const zR = _fp.rear.z, k = 0.13 / (2.30 - zR), topK = topR + (topM - topR) * k;
         addSpan(out, { z: zR + 0.13, x: epX + s * epKick * (0.42 + 0.58 * (1 - k)), y: topK - 0.040, w: epW * 0.88 + 0.006, h: 0.080 },
                      { z: zR - 0.005, x: epX + s * epKick, y: topR - 0.050, w: epW * 0.88 + 0.006, h: 0.100 }, accentC);
+        // epTip 3 (KEEL, as the sheet draws it): a second accent tick on the plate's leading foot.
+        if (aeroStyle.epTip >= 3) addSpan(out,
+          { z: 2.665, x: epX, y: 0.135 - PLATE.hF * 0.5 + 0.035, w: epW + 0.006, h: 0.060 },
+          { z: 2.54, x: epX + s * epKick * 0.42 * (0.12 / 0.36), y: 0.150 - PLATE.hF * 0.4 + 0.035, w: epW + 0.006, h: 0.060 }, accentC);
       }
       // Canard / dive-plane: first element is a horizontal strake on the
       // outer face (the 2026 flick); extras stay as the older cascade vanes.
@@ -1982,6 +1986,7 @@ const Car3D = (function () {
       const rearTaper = Math.max(0.72, Math.min(1.08, aeroStyle.rearTaper));
       const crownY = _ep.rear.top - 0.018;
       const upperTrailY = crownY - (aLvl >= 4 || aDrs ? 0.075 : 0);
+      const rm = rearMainOf(upperTrailY, aeroStyle, _ep);   // the main plane section (rwGap moves it)
       const rearWing = (zLead, yLead, zTrail, yTrail, half, thick, col, scale, lift) =>
         addWingFoil(out, {
           zLead, yLead, zTrail, yTrail, half, thick,
@@ -2002,7 +2007,7 @@ const Car3D = (function () {
         sweep: rearSweep * 0.8, rise: -0.070 * aSpoon, chordTaper: 0.55 * aSpoon,
         teCurve: 0.05 * aSpoon, attachHalf: 0.50,
       }, c1, wingSurf);
-      else rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
+      else rearWing(rm[0], rm[1], rm[2], rm[3],
         0.51, 0.024, c1, 0.8, rLift);
       if (rTip > 0) for (const s of [-1, 1]) {
         const zM = Math.min(-2.22, _ep.front.z - 0.03), f = (zM - _ep.front.z) / (_ep.rear.z - _ep.front.z);
@@ -2017,12 +2022,19 @@ const Car3D = (function () {
           { z: -2.50, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 },
           { z: _ep.rear.z - 0.012, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 }, accentC);
       }
+      // A flat wing (KEEL) has no tip fin: as the sheet draws it, each plate's
+      // trailing edge carries a tall accent stripe instead.
+      else if ((aeroStyle.epTip || 0) >= 2) for (const s of [-1, 1]) {
+        const h = _ep.rear.sy * 0.62, y = _ep.rear.top - 0.006 - h * 0.5;
+        addSpan(out, { z: _ep.rear.z + 0.07, x: s * 0.50, y, w: 0.054, h },
+                     { z: _ep.rear.z - 0.016, x: s * 0.50, y, w: 0.054, h }, accentC);
+      }
       // Preview sharkfin (2017 style): the fin runs on as a sail whose foot ends
       // 8 mm into the main plane, instead of a 30 cm cut face 0.45 m short of the
       // wing. foilAt is the main plane's own section (same spec as rearWing above),
       // 30 % back along the centreline chord, so low-downforce wings are met too.
       if (finTail) {
-        const m = foilAt({ zLead: -2.30, yLead: upperTrailY - 0.270, zTrail: -2.52, yTrail: upperTrailY - 0.225,
+        const m = foilAt({ zLead: rm[0], yLead: rm[1], zTrail: rm[2], yTrail: rm[3],
           half: 0.51, thick: 0.024, taper: rearTaper, sweep: rearSweep * 0.8, rise: 0, attachHalf: 0.50 }, 0, 0.30);
         const sailR = { z: m.z, y: m.y + m.h + 0.046, w: 0.010, h: 0.108 }, sz = m.z;
         const crestS = { z: sz, y: sailR.y + sailR.h * 0.5 + 0.004, w: 0.012, h: 0.010 };
@@ -2036,7 +2048,7 @@ const Car3D = (function () {
       }
       const aSwan = aeroStyle && aeroStyle.swan ? 1 : 0;
       if (aSwan) {
-        const mainTopY = upperTrailY - 0.225 + 0.016;
+        const mainTopY = rm[3] + 0.016;
         for (const s of [-1, 1]) {
           addSpan(out, { z: -1.98, x: s*0.16, y: 0.46, w: 0.048, h: 0.13 },
                        { z: -2.26, x: s*0.16, y: mainTopY + 0.075, w: 0.036, h: 0.095 }, DARK);
@@ -2046,12 +2058,14 @@ const Car3D = (function () {
       } else if (!shadeFlags.round) {   // rounded build: ONE central pylon (below) carries the wing
         for (const s of [-1, 1]) {
           // rwPlanes 1: no mid element at epCY, so the pylon climbs to the single flap's underside.
-          const pyTop = (aeroStyle.rwPlanes | 0) === 1 ? upperTrailY - 0.075 - 0.030 : epCY + 0.01;
+          // rwGap: the lowered main plane is the static seat, so the pylon ends inside it.
+          const pyTop = aeroStyle.rwGap ? rm[1] + (rm[3] - rm[1]) * (0.04 / 0.22) - 0.045
+            : (aeroStyle.rwPlanes | 0) === 1 ? upperTrailY - 0.075 - 0.030 : epCY + 0.01;
           addSpan(out, { z: -1.98, x: s*0.14, y: 0.46, w: 0.05, h: 0.13 },
                        { z: -2.34, x: s*0.14, y: pyTop, w: 0.042, h: 0.10 }, DARK);
         }
       }
-      if (shadeFlags.round) CarShade.strut(out, [0, 0.44, -1.96], [0, upperTrailY - 0.255, -2.40], 0.14, 0.06, DARK, addTri, null, { taper: 0.75, n: 10 }); else addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
+      if (shadeFlags.round) CarShade.strut(out, [0, 0.44, -1.96], [0, aeroStyle.rwGap ? (rm[1] + rm[3]) * 0.5 - 0.0075 : upperTrailY - 0.255, -2.40], 0.14, 0.06, DARK, addTri, null, { taper: 0.75, n: 10 }); else addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
                    { z: -2.36, x: 0, y: epCY, w: 0.07, h: 0.10 }, DARK);   // central spine mount (rounded: a lens pylon ending in the main plane)
       const aTvane = aeroStyle && aeroStyle.tvane != null
         ? (aeroStyle.tvane ? 1 : 0) : (aLvl >= 4 && !aDrs ? 1 : 0);

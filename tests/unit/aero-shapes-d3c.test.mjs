@@ -1,8 +1,8 @@
 /* aero-shapes-d3c.test.mjs — the B·D3c concept-sheet wings (RIFT / KEEL /
  * DELTA / SERPENT).
  *
- * Seven opt-in aero shape fields (fwCurve, fwStep, epShape, epTip, wsFlat,
- * rwRise, rwCurve), carried by four STYLE rows that clone a shipped row's cost
+ * Nine opt-in aero shape fields (fwCurve, fwStep, epShape, epTip, wsFlat,
+ * rwRise, rwCurve, and Flatline's fwGap / rwGap), carried by four STYLE rows that clone a shipped row's cost
  * and stats. Contracts: each field is registered, each row builds a car
  * distinct from its base, an explicit 0 builds the shipped car bit-for-bit (so
  * no factory car moves), and the flown flaps take the same tip lift as the
@@ -18,11 +18,11 @@ const M = loadParts();
 const team = M.Teams.LIST.find((t) => t.id === "mclaren");
 const ROWS = [
   ["style_aero_rift", "high", ["fwStep", "epShape", "epTip", "rwCurve"]],
-  ["style_aero_keel", "medium", ["wsFlat", "epShape"]],
+  ["style_aero_keel", "medium", ["wsFlat", "epShape", "epTip", "fwGap", "rwGap"]],
   ["style_aero_delta", "diffuser", ["fwCurve", "epShape", "rwRise", "rwCurve"]],
   ["style_aero_serpent", "rake_setup", ["fwCurve", "epShape", "rwRise", "rwCurve"]],
 ];
-const FIELDS = ["fwCurve", "fwStep", "epShape", "epTip", "wsFlat", "rwRise", "rwCurve"];
+const FIELDS = ["fwCurve", "fwStep", "epShape", "epTip", "wsFlat", "rwRise", "rwCurve", "fwGap", "rwGap"];
 const hash = (mesh) => {
   let x = 0x811c9dc5;
   for (const arr of [mesh.pos, mesh.col, mesh.mat]) for (let i = 0; i < arr.length; i++) {
@@ -66,6 +66,19 @@ test("flown flaps carry the same tip lift as the baked wing", () => {
       const want = el.wing === "front" ? [st.fwCurve || 0, st.fwStep || 0] : [st.rwCurve || 0, st.rwRise || 0];
       const got = el.wing === "front" ? [el.rise2 || 0, el.riseStep || 0] : [el.rise2 || 0, el.rise || 0];
       assert.deepEqual(got, want, `${id} ${el.id}`);
+    }
+  }
+});
+
+test("Flatline fwGap stands each flown front flap g x its cascade index higher", () => {
+  const st = tiersFor("style_aero_keel")._visual.aero, flat = { ...st, fwGap: 0 };
+  for (const lvl of [0, 2, 4]) {
+    const got = M.Car3D.aeroFlaps(lvl, st).filter((e) => e.wing === "front");
+    const want = M.Car3D.aeroFlaps(lvl, flat).filter((e) => e.wing === "front");
+    assert.equal(got.length, want.length);
+    for (let k = 0; k < got.length; k++) {
+      const i = +got[k].id.replace("front", "");
+      assert.ok(Math.abs(got[k].le[1] - want[k].le[1] - st.fwGap * i) < 1e-9, `lvl ${lvl} ${got[k].id}`);
     }
   }
 });
