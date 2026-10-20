@@ -1140,11 +1140,24 @@ const Car3D = (function () {
     const deckF = anchors.noseAt(2.15), deckR = anchors.noseAt(1.69), deckW = (a) => Math.min(0.28, a.topSide*1.75);
     const deckY = (a) => a.top + 0.010 - (shadeFlags.round ? CarShade.sink(a, deckW(a) / 2) : 0);   // rounded nose: edges seat on the skin
     addLoft(out, deckR.z, 0, deckY(deckR), deckW(deckR), 0.018, deckF.z, 0, deckY(deckF), deckW(deckF), 0.018, c1);
-    const camPod = anchors.noseAt(1.55);
-    // fitSeat: sit on the LOWER skin under the pod's 15 cm, not the top at its centre
-    // (a stepped cone climbs under it and the rear floated 13 mm).
-    const camY = teamStyle.fitSeat ? Math.min(anchors.noseAt(1.475).top, anchors.noseAt(1.625).top) + 0.038 : camPod.top + 0.045;   // 2 mm in at the high end
-    addBox(out, 0, camY, 1.55, 0.06, 0.08, 0.15, DARK);
+    // Nose camera: a small round barrel in the gap between the nose-top wordmark
+    // (titleB, z 1.16..1.66) and the number deck (z 1.69..), lens forward. It was
+    // a 6 x 8 x 15 cm box at z 1.55 that hid the wordmark on every car
+    // (Bryce, 2026-10-20: "Shrink and round it").
+    {
+      // The driver-eye build has 4 triangles of headroom (cockpit-wheels budget):
+      // five sides and only the tail it can see, 15 triangles against the box's 12.
+      const cz0 = 1.652, cz1 = 1.690, cr = 0.016, n = ckpt ? 5 : 12, cy = anchors.noseAt(1.671).top + cr * 0.8;
+      addTube(out, [[0, cy, cz0], [0, cy, cz1]], cr, n, DARK, SURFACES.carbon);
+      // Same ring frame addTube builds for a +z path: n = (-sin, cos, 0).
+      const ring = (z) => Array.from({ length: n }, (_, s) => { const a = (s / n) * Math.PI * 2; return [-Math.sin(a) * cr, cy + Math.cos(a) * cr, z]; });
+      const back = ring(cz0), front = ring(cz1), tail = [0, cy, cz0 - 0.012], lens = [0, cy, cz1 + 0.001];
+      for (let s = 0; s < n; s++) {
+        const s2 = (s + 1) % n;
+        addTri(out, tail, back[s2], back[s], DARK, SURFACES.carbon);      // rounded tail
+        if (!ckpt) addTri(out, lens, front[s], front[s2], VISOR, SURFACES.glass);   // lens face
+      }
+    }
 
     // Two-tone body (CarShade): `lower` below the sidepod board line, `upper`
     // above it. bodySplit lr wins; cockpit / silhouette builds skip both.
