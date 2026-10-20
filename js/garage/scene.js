@@ -1280,9 +1280,10 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
     lastTrace = now;
     try {
       paintTrace(liveCanvas, liv, now);
-      const nextTex = _gfx.createTexture(liveCanvas);
+      // A backend that re-fills a texture in place (TLX) allocates nothing per tick; else a fresh upload.
+      const nextTex = _gfx.refillTexture && _gfx.refillTexture(liveTex, liveCanvas) ? liveTex : _gfx.createTexture(liveCanvas);
       if (!nextTex || nextTex._phase === 4) throw new Error("trace texture upload returned no handle");
-      if (_gfx.freeTexture) _gfx.freeTexture(liveTex);
+      if (nextTex !== liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
       liveTex = nextTex;
       traceFail = 0;
     } catch (e) {

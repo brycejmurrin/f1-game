@@ -434,6 +434,50 @@ test("a failed trace upload preserves its decal and retries after recovery", () 
   assert.deepEqual(drawnFreed, [], "a decal drew a texture handle that had been freed");
 });
 
+// The trace tick (js/garage/scene.js) re-fills its live atlas in place where the backend can (TLX
+// refillTexture): one texture for the visit, not a create + free every 1.5 s. A backend without it keeps
+// the create path, and a refused refill (size change) falls back to it.
+test("the trace tick re-fills the live atlas in place: no texture created after the first", () => {
+  const c2d = new Proxy(function () {}, {
+    get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),
+    set: () => true, apply: () => c2d,
+  });
+  let now = 0, refuse = false;
+  const made = [], freed = [], refills = [];
+  const gfx = {
+    createMesh: () => ({}), createTexMesh: () => ({ tex: true }), freeMesh() {},
+    createTexture(src) { const h = { tex: made.length + 1, w: src.width }; made.push(h); return h; },
+    refillTexture(h, src) { if (refuse) return false; refills.push({ h, src }); return true; },
+    freeTexture(t) { freed.push(t); },
+    draw() {}, drawDecal() {}, drawGlow() {},
+  };
+  const ctx = vm.createContext({
+    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
+    Uint32Array, isFinite, parseFloat, parseInt, Date,
+    performance: { now: () => now },
+    document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) },
+    LiveryTex: {},
+    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
+  });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const GarageScene = vm.runInContext("GarageScene", ctx);
+  GarageScene.init(gfx);
+  GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+  const before = made.length;
+  assert.ok(before >= 1, "the live atlas was never created — the harness no longer reaches the trace path");
+  const freedBefore = freed.length;
+  for (let i = 1; i <= 8; i++) { now = i * 1600; GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0); }
+  assert.equal(made.length, before, `eight trace ticks created ${made.length - before} textures (they used to create one each)`);
+  assert.equal(refills.length, 8, "each tick re-fills the live handle");
+  assert.equal(freed.length, freedBefore, "the live handle is kept, not freed");
+  refuse = true;   // a refused refill (e.g. a size change) falls back to a fresh upload and retires the old handle
+  now = 9 * 1600; GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+  assert.equal(made.length, before + 1);
+  assert.equal(freed.length, freedBefore + 1);
+});
+
 test("garage dress upload retries after a transient failure, and a new team clears its cutoff", () => {
   const c2d = new Proxy(function () {}, {
     get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),

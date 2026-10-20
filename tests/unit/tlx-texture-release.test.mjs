@@ -47,13 +47,14 @@ class Bitmap {
 
 function liftTextures({ mobileTier = false, isMobile = false, initTexture = () => {}, fx = null } = {}) {
   const create = slice(TLX, "        createTexture(", "        // Upload a createTexture() handle NOW", "createTexture");
+  const refill = slice(TLX, "        refillTexture(h, src) {", "        freeMesh(m)", "refillTexture");
   const free = slice(TLX, "        freeTexture(t) {", "        texCensus:", "freeTexture");
   const pool = slice(TLX, "      const _texPool = [];", "      let envCubeCam = null;", "texture pool");
   const { releaseTexSource, texStandIn } = liftRelease(fakeDoc(), Bitmap);
   // The real backend methods and retired-texture pool, real vendored Texture/dispose dispatcher;
   // only GPU upload is stubbed. `pool`/`stat`/`age` expose the pool for the reuse tests below.
   return new Function("THREE", "releaseTexSource", "texStandIn", "mobileTier", "isMobile", "renderer", "fx", "ImageBitmap",
-    `${pool}return ({${create}${free} pool: _texPool, stat: _texStat, age: ageTexPool });`)(
+    `${pool}return ({${create}${refill}${free} pool: _texPool, stat: _texStat, age: ageTexPool });`)(
     THREE, releaseTexSource, texStandIn, mobileTier, isMobile, { initTexture }, fx, Bitmap);
 }
 
@@ -307,6 +308,43 @@ test("N same-size free/create cycles allocate ONE texture and re-fill it in plac
   }
   assert.deepEqual({ made: gfx.stat.made, reused: gfx.stat.reused }, { made: 1, reused: 50 });
   assert.equal(disposed.length, 0);
+});
+
+// The garage's live-atlas trace tick (js/garage/scene.js) repaints a 512² canvas every 1.5 s. It used to
+// create + free a texture per tick; a tick whose pool entry was gone minted a new one, the one-texture count
+// garage-livery-churn.spec.js caught on llvmpipe. refillTexture re-fills the live handle in place.
+test("refillTexture re-fills the same texture in place: no create, the source re-uploads, the release hook re-arms", () => {
+  const inits = [], gfx = liftTextures({ initTexture: (t) => inits.push(t) });
+  const h = gfx.createTexture(canvas(512, 512)), T = h.tex;
+  T.onUpdate(T);
+  for (let i = 0; i < 20; i++) {
+    const src = canvas(512, 512), v = T.version;
+    assert.equal(gfx.refillTexture(h, src), true, `tick ${i + 1}: refilled`);
+    assert.equal(h.tex, T, "the same handle and texture");
+    assert.equal(T.image, src, "the repainted source is what uploads");
+    assert.ok(T.version > v, "needsUpdate moved the version: three re-uploads into the existing GPU texture");
+    assert.equal(typeof T.onUpdate, "function", "the source is dropped again after this upload");
+    T.onUpdate(T);
+  }
+  assert.deepEqual({ made: gfx.stat.made, reused: gfx.stat.reused }, { made: 1, reused: 0 }, "no texture created or pooled per tick");
+  assert.equal(inits.length, 0, "desktop: three uploads at the next draw");
+});
+
+test("refillTexture refuses a different size, a different source kind, or a freed handle", () => {
+  const gfx = liftTextures(), h = gfx.createTexture(canvas(512, 512));
+  assert.equal(gfx.refillTexture(h, canvas(1024, 512)), false, "a size change needs a new GPU texture");
+  assert.equal(gfx.refillTexture(h, new Bitmap({ width: 512, height: 512 })), false, "a bitmap is not a canvas (three's flipY path)");
+  assert.equal(gfx.refillTexture(null, canvas(512, 512)), false);
+  gfx.freeTexture(h);
+  assert.equal(gfx.refillTexture(h, canvas(512, 512)), false, "a freed handle is the pool's now");
+});
+
+test("refillTexture uploads at once on a phone, as createTexture does", () => {
+  const inits = [], gfx = liftTextures({ mobileTier: true, initTexture: (t) => inits.push(t) });
+  const h = gfx.createTexture(canvas(512, 512));
+  inits.length = 0;
+  assert.equal(gfx.refillTexture(h, canvas(512, 512)), true);
+  assert.deepEqual(inits, [h.tex]);
 });
 
 test("a different size or source kind never takes a pooled texture", () => {
