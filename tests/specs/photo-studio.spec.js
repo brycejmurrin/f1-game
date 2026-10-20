@@ -132,6 +132,34 @@ test("Home photo retains its shot across rotation at 200%, captures, and returns
   expect(pageErrors).toEqual([]);
 });
 
+test("Garage photo offers the Team tab's room, crew and lighting at phone size and saves the pick", async ({ page, pageErrors }, info) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await boot(page);
+  await page.evaluate(() => AppearanceStudio.setScene("garage", "still"));
+  await page.waitForSelector('#overlay[data-home-ready="1"]', { timeout: BOOT_MS });
+  await clickLive(page, "mb-photo");
+  await expect(page.locator("#ps-look-mood-row")).toBeVisible();
+  await expect(page.locator("#ps-tod-row")).toBeHidden();
+  const looks = await page.evaluate(() => ["room", "crew", "mood"].map((k) => {
+    const sel = document.getElementById("ps-look-" + k);
+    return { k, value: sel.value, n: sel.options.length, label: document.getElementById("ps-look-" + k + "-row-label").textContent };
+  }));
+  expect(looks.map((l) => l.label)).toEqual(["Garage", "Crew", "Lighting"]);
+  for (const l of looks) expect(l.n, l.k + " lists the Team tab's options").toBeGreaterThan(1);
+  await page.locator("#ps-look-mood-row").scrollIntoViewIfNeeded();
+  const [box] = await controls(page, ["ps-look-mood"]);
+  const h = await page.evaluate(() => CssZoom.viewportRect(document.getElementById("ps-look-mood")).height);
+  expect(h, "LIGHTING select meets the 44 px tap floor").toBeGreaterThanOrEqual(44);
+  await page.selectOption("#ps-look-mood", "night");
+  expect(await page.evaluate(() => [GarageScene.mood(), localStorage.getItem("apex26.garageMood")])).toEqual(["night", "night"]);
+  await present(page);
+  await evidence(page, info, "garage-photo-looks-844x390");
+  expect(box.hit).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#photo-studio")).toBeHidden();
+  expect(await page.evaluate(() => GarageScene.mood()), "a garage look is a saved pick, not a preview").toBe("night");
+  expect(pageErrors).toEqual([]);
+});
 test("Paused race photo keeps controls reachable at 200% and isolates panel scrolling", async ({ page, pageErrors }, info) => {
   await boot(page);
   await page.evaluate(async () => {
