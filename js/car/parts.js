@@ -680,17 +680,14 @@ const Parts = (function () {
     ["suspension", "active", "style_susp_activedive", "Active Anti-Dive", "active layout with short uprights and anti-dive geometry",
       { upright: 0.8, antiDive: 0.8 }],
     // B·D3 period aero (2026-10-19): one opt-in mesh field each (rwSpoon, beam2,
-    // monkey, fwBridge, xwing, ddiff) on top of the equivalent's full recipe.
+    // fwBridge, ddiff) on top of the equivalent's full recipe. monkey / xwing
+    // (registered below) get their rows in a later fit pass.
     ["aero", "low", "style_aero_rwspoon", "F1-75 Spoon", "2022 spoon rear wing (Ferrari F1-75, RB18 low-drag)",
       {rwSpoon: 1, lvl: 1, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.03, frontTaper: 0.96, frontRise: 0.02, rearSweep: 0.04, rearTaper: 0.94, floorEdge: 0.88, floorCut: 0.06, diffuserRise: 0.82, fin: 0.8}],
     ["aero", "high", "style_aero_beamtwin", "Twin Beam Wing", "2022-25 two-element beam wing (RB19)",
       {beam2: 1, lvl: 3.25, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.08, frontTaper: 0.91, frontRise: 0.09, rearSweep: 0.09, rearTaper: 0.9, floorEdge: 1.08, floorCut: 0.1, diffuserRise: 1.16, fin: 1.28}],
-    ["aero", "extreme", "style_aero_monkey", "Monkey Seat", "2014-16 monkey-seat winglet (Mercedes W07)",
-      {monkey: 1, lvl: 4, vane: 3, beam: 0, drs: 1, board: 1, frontSweep: 0.12, frontTaper: 0.86, frontRise: 0.14, rearSweep: 0.12, rearTaper: 0.86, floorEdge: 1.18, floorCut: 0.16, diffuserRise: 1.3, fin: 1.42}],
     ["aero", "medium", "style_aero_bridge", "Bridge Wing", "2008 bridge wing over the nose (McLaren MP4-23)",
       {fwBridge: 1,  lvl: 2, vane: 1, beam: 0, drs: 1, board: 1, frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04, rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1.00, floorCut: 0.04, diffuserRise: 1.00 }],
-    ["aero", "rake_setup", "style_aero_xwings", "X-Wings", "1997-98 sidepod X-wings (Tyrrell 025)",
-      {xwing: 1, lvl: 3, vane: 2, beam: 0, drs: 1, board: 1, frontSweep: 0.06, frontTaper: 0.94, frontRise: 0.07, rearSweep: 0.08, rearTaper: 0.94, floorEdge: 1.04, floorCut: 0.11, diffuserRise: 1.12, fin: 1.2}],
     ["floor", "gurney_edge", "style_floor_ddiff", "Double Diffuser", "2009 double-deck diffuser (Brawn BGP001)",
       {ddiff: 1,  fences: 5, fenceH: 1.24, skid: 1, edgeLip: 0.55, gurney: 1, plank: 1 }],
   ];

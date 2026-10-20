@@ -1,7 +1,7 @@
 /* aero-preview-fields.test.mjs — the B·D3 period aero/floor fields.
  *
- * Six opt-in visual fields (aero: rwSpoon, beam2, monkey, fwBridge, xwing;
- * floor: ddiff), each carried by one STYLE row (js/car/parts.js STYLES) that
+ * Four opt-in visual fields (aero: rwSpoon, beam2, fwBridge; floor: ddiff),
+ * each carried by one STYLE row (js/car/parts.js STYLES) that
  * copies a shipped row's cost and stats. Two contracts: the field reaches the mesh (the preview
  * row builds a different car from the row it clones), and the field is OFF by
  * default (an explicit 0 builds the shipped car bit-for-bit), so no factory
@@ -18,9 +18,7 @@ const team = M.Teams.LIST.find((t) => t.id === "mclaren");
 const PREVIEW = [
   ["aero", "style_aero_rwspoon", "low", "rwSpoon"],
   ["aero", "style_aero_beamtwin", "high", "beam2"],
-  ["aero", "style_aero_monkey", "extreme", "monkey"],
   ["aero", "style_aero_bridge", "medium", "fwBridge"],
-  ["aero", "style_aero_xwings", "rake_setup", "xwing"],
   ["floor", "style_floor_ddiff", "gurney_edge", "ddiff"],
 ];
 const hash = (mesh) => {
