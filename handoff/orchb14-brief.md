@@ -79,3 +79,4 @@ BRYCE 02:05Z (typed in OrchB 13) — TOP PRIORITY, supersedes the game queue ord
 - Bryce 02:03Z picked D1c Round 5 @274e6ee8 for the resized bodies (supersedes @1f72c744). Merge the resized bodies as soon as possible, not parked.
 - Fleet B game slots go FIRST to design / lighting / garage PRs: #3145 (wave 1), then the wave-2 integration PR (bodies r5, D2c finishes, D5c liveries, D6b, D7b, D9b r2 vertical fence ends), and any lighting or garage PR. The perf/game PRs (#3120 #3099 #3118 #3122 #3123 #3128 #3146) wait behind them.
 - L21 told (get #3145 READY fast, start wave 2 right after). D1c told. D9b granted 6 more captures (36 total) for round 2.
+- D9b round 2 DONE @bf4109a0 (cursor/floor-smooth-d9a3): upright fence ends per Bryce; 0 NEW / 6 WORSE pre-existing; 36/36 captures; L21 has the sha (regenerate car-wing-foil-tris.json on merge). Gallery WwvxwbrWob9SCnT8kiRrop v2. D9b idle; archive after wave 2 merges.
