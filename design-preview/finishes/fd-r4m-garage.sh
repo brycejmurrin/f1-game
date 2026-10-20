@@ -17,7 +17,7 @@ CAMS=${CAMS:-"hero:1.57,0.12,4.6;hero:2.45,0.10,4.2;hero:2.2,0.75,4.4"}
 cd "$WT" || exit 1
 # All finishes in ONE garage-angles run (boot dominates: ~6 min for the first frame); --resume skips frames on disk.
 D="[$(for f in "$@"; do printf '{"finish":"%s"},' $f; done | sed 's/,$//')]"
-APEX_GA_QUERY="?garageMood=broadcast" APEX_GA_PIN=1 timeout 5400 node tools/shot/garage-angles.mjs \
+APEX_GA_QUERY="?garageMood=broadcast" APEX_GA_PIN=1 timeout ${GA_TIMEOUT:-9000} node tools/shot/garage-angles.mjs \
   --team=williams,ferrari,haas --preset=none --sheet=0 --label=0 --viewport=1600x900 --dpr=1 --backend=three \
   --design="$D" --cam="$CAMS" --resume --out="$OUT" > "$OUT.log" 2>&1
 echo "= garage $? $(ls "$OUT" | grep -c png)"
