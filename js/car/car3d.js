@@ -2219,7 +2219,7 @@ const Car3D = (function () {
       const gbRibs     = gbStyle ? Math.max(0, Math.min(3, Math.round(gbStyle.ribs || 0))) : 0;
       const gbCaseWmul = Math.max(0.55, Math.min(1.45, (gbStyle && gbStyle.caseWidth) || 1));
       // STYLE cases: paint strakes / casing so they leave the under-wing shadow.
-      // STYLE-only markers: heatFins rides factory/sig boxes too, which stay carbon (#3111 F9).
+      // STYLE-only markers: heatFins rides factory/sig boxes too, which keep carbon strakes (#3111 F9).
       const gbPaint = !!(gbStyle && (gbStyle.rearFins || (gbStyle.caseWidth && gbStyle.caseWidth < 0.85)));
       const gbStrakeC = gbPaint ? accentC : CARBON;
       if (gbStrakes > 0) {
