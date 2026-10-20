@@ -1,5 +1,14 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-20 — PR #3172 (cursor/sculpted-concepts-rename-8c41): sculpted concept bodies
+
+`js/car/car3d.js` lines 2770 → **2836** (+66). Deliberate raise past the 40-line absorb.
+The growth adapts existing mesh consumers to the four opt-in sculpted recipes: fit nose
+paint, caps and decks to curved nose stations; follow sculpted body anchors for pod details
+and floor steps; and omit legacy protrusions where the continuous shell owns those surfaces.
+These paths keep each sculpted reference shape and its livery details coherent while leaving
+non-sculpted recipes on their existing paths.
+
 ## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
 
 `js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
