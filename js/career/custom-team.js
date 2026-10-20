@@ -233,26 +233,36 @@ const CustomTeam = (function () {
       return liv;
     }
 
-    function czPreview() {
-      $("cz-swatch1").style.background = $("cz-color").value;
-      $("cz-swatch2").style.background = $("cz-color2").value;
-      const code = ($("cz-code").value || "YOU").toUpperCase();
-      const short = ($("cz-short").value || "YOU").toUpperCase();
-      $("cz-pvtext").textContent = `#${$("cz-num").value || "99"} ${code} · ${short}`;
-      $("cz-pvtext").style.color = $("cz-color").value;
+    // The text/swatch half is instant; the livery draft + mesh bust ride a short
+    // debounce (a colour drag fires `input` every tick) and flush on `change`.
+    let czPreviewTimer = null;
+    function czPreview3d() {
+      czPreviewTimer = null;
       const liv = Object.assign(
         { id: "default", c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) },
         czLivFromDialog());
       setLivDraftOverride({ teamId: "custom", liv });
       // The decal atlas (LOGO TINT / MONOGRAM / OUTLINE rows) is cached per
       // team and was only dropped on SAVE, so those rows did nothing live.
-      // Keyed like the garage's livePreviewDraft: input events repeat.
+      // Keyed like the garage's livePreviewDraft: input events repeat, and
+      // NAME/SHORT/CODE/NUM never reach the mesh, so only a changed draft busts it.
       const key = JSON.stringify(liv);
-      if (key !== czPreviewKey) { czPreviewKey = key; invalidateDecalTextures("custom"); }
-      spMeshBust();
+      if (key !== czPreviewKey) { czPreviewKey = key; invalidateDecalTextures("custom"); spMeshBust(); }
+    }
+    function czPreview(flush) {
+      $("cz-swatch1").style.background = $("cz-color").value;
+      $("cz-swatch2").style.background = $("cz-color2").value;
+      const code = ($("cz-code").value || "YOU").toUpperCase();
+      const short = ($("cz-short").value || "YOU").toUpperCase();
+      $("cz-pvtext").textContent = `#${$("cz-num").value || "99"} ${code} · ${short}`;
+      $("cz-pvtext").style.color = $("cz-color").value;
+      if (czPreviewTimer != null) { clearTimeout(czPreviewTimer); czPreviewTimer = null; }
+      if (flush === true) czPreview3d();
+      else czPreviewTimer = setTimeout(czPreview3d, 75);
     }
 
     function czClearPreview() {
+      if (czPreviewTimer != null) { clearTimeout(czPreviewTimer); czPreviewTimer = null; }
       setLivDraftOverride(null);
       czPreviewKey = "";
       invalidateDecalTextures("custom");   // back to the saved atlas
@@ -272,29 +282,33 @@ const CustomTeam = (function () {
       CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
       czSetFinish(liv.finish);
       refreshCustomLogoUi(loadCustomLogo());
-      czPreview();
+      czPreview(true);
       getEls().customize.hidden = false;
     }
 
     function wireDialog() {
       ["cz-name", "cz-short", "cz-color", "cz-color2", "cz-code", "cz-num"].forEach((id) => {
-        $(id).addEventListener("input", czPreview);
+        const el = $(id);
+        el.addEventListener("input", () => czPreview());
+        el.addEventListener("change", () => czPreview(true));
       });
       CZ_LIV_FIELDS.forEach(([domId]) => {
-        $(domId).addEventListener("input", () => {
-          $(domId).classList.remove("cz-off");
+        const el = $(domId);
+        el.addEventListener("change", () => czPreview(true));
+        el.addEventListener("input", () => {
+          el.classList.remove("cz-off");
           $(domId + "-none").classList.remove("active");
           czPreview();
         });
         $(domId + "-none").onclick = () => {
           $(domId).classList.add("cz-off");
           $(domId + "-none").classList.add("active");
-          czPreview();
+          czPreview(true);
           if (getSoundOn()) GameAudio.uiTick();
         };
       });
       for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
-        btn.onclick = () => { czSetFinish(btn.dataset.czFinish); czPreview(); if (getSoundOn()) GameAudio.uiTick(); };
+        btn.onclick = () => { czSetFinish(btn.dataset.czFinish); czPreview(true); if (getSoundOn()) GameAudio.uiTick(); };
       }
       $("cz-cancel").onclick = () => { czClearPreview(); getEls().customize.hidden = true; };
       $("cz-save").onclick = () => {

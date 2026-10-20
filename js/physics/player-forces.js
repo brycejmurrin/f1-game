@@ -240,20 +240,39 @@ const PlayerForces = (function () {
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // WHEEL STATE (opt-in, default OFF — tip path skips this block entirely).
     // Torque-balanced κ replaces heuristic wheelLock / axFrac telemetry and
-    // scales Fy by the long/lat ellipse. Longitudinal speed still comes from
-    // game.js (follow-up wiring; Refs #1628).
+    // scales Fy by the long/lat ellipse. Demand and capacity bill the SAME
+    // circle as axFracF/axFracR above (LONG_GRIP x weather; brakeFront, beta and
+    // the bias split), so a dry BB_REF stop sits at ~0.64 and never locks; the
+    // capacity adds the surface/kerb/wear/marble/aero grip that the legacy
+    // pedal never saw. What a running-away (locked / spinning) axle fails to
+    // deliver goes back into c.speed and the weight-transfer estimate (#1628).
     let latScaleF = 1, latScaleR = 1;
     if (useWheel) {
+      const bF = TyreModel.brakeFront(beta, loadF, loadR) * (bb ? bb.f : 1);
+      const bR = beta * (bb ? bb.r : 1);
+      const capG = longBudget * surfMu * kerbGrip * tyreMu * marbleMu * aeroGrip;
       const ws = WheelState.stepPlayer(c, {
-        dt, loadF, loadR, braking, thrOn,
-        throttleLvl: c.human ? throttleLvl : 1,
-        gearMult, deploy, weatherGrip, surfaceMu, kerbGrip,
-        aeroGrip, tyreMu, tyreAx, slipF, slipR,
-        csFront: CS_FRONT, csRear: csR, muLatF: muF, muLatR: muR,
-        brakeBias: c.brakeBias,
+        dt, braking, thrOn,
+        aReqF: -pedal * bF * longBudget,
+        aReqR: thrOn ? axThrDemand * LONG_GRIP : -(pedal * bR + engine) * longBudget,
+        muLongF: capG * tyreAx.f, muLongR: capG * tyreAx.r,
+        slipF, slipR, csFront: CS_FRONT, csRear: csR, muLatF: muF, muLatR: muR,
       });
       latScaleF = ws.latScaleF;
       latScaleR = ws.latScaleR;
+      // Fx → speed. axTarget is game.js's longitudinal target this tick
+      // (−brakeDecel under the pedal, the drive accel on the throttle), so the
+      // returned shortfall scales exactly what the integrator applied.
+      // Rolling forwards only, blended in over the first 0.5 m/s (a division,
+      // not a speed literal): brake-held reverse and a standstill pay nothing.
+      const aT = Number.isFinite(ctx.axTarget) ? ctx.axTarget : 0, q = ws.shortfall;
+      const fwd = clamp(c.speed / 0.5, 0, 1);
+      const back = fwd * (braking ? Math.max(0, -aT) * q : (thrOn ? -Math.max(0, aT) * q : 0));
+      if (back !== 0) {
+        c.speed = braking ? c.speed + back * dt : Math.max(0, c.speed + back * dt);
+        c.axEstSm = (c.axEstSm ?? 0) + back * (1 - Math.exp(-10 * dt));
+      }
+      c.wheelShort = q;
     }
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the
     // already-computed combined-slip signals READ-ONLY; cosmetic, never grip.

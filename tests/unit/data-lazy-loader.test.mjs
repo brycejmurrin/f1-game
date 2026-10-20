@@ -207,7 +207,7 @@ for (const domain of ["data", "net"]) {
     await flush();
     assert.equal(await failedStartup, false, "a throwing app hook resolves false");
     assert.equal(starts, 1);
-    assert.match(errors[0], /startup failed/);
+    assert.ok(String(errors[0]).includes("startup failed"), String(errors[0]));
     failStartup = false;
     const retry = ctx.__ensure();
     assert.equal(ctx.__ensure(), retry);

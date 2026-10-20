@@ -1,0 +1,1 @@
+Improved: The opt-in wheel-state physics (`apex26.wheelState`) now locks and spins only when the brake or throttle asks more than the tyre can give, and a locked or spinning tyre now stops longer and pulls slower (#1628).

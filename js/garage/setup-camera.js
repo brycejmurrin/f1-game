@@ -61,6 +61,10 @@ const _presentTune = { sunShaftMul: 0 };
 function garagePhone() {
   return typeof GLX !== "undefined" && !!(GLX && (GLX.isMobile || GLX.mobileTier));
 }
+// The shipped look when GarageScene carries no mood table (older stubs, headless VMs).
+const NO_MOOD = Object.freeze({ exposure: 1, bloom: 1, glare: 1, sun: null });
+const moodDef = () => (typeof GarageScene !== "undefined" && GarageScene.moodDef && GarageScene.moodDef()) || NO_MOOD;
+
 function presentOpts(tune) {
   const T = tune === undefined ? liveTune() : tune;
   const exposureMul = _tuneNum(T, "exposureMul", 1);
@@ -74,8 +78,11 @@ function presentOpts(tune) {
   // Prototype chain carries the rest of the image-grade knobs (no Object.create).
   Object.setPrototypeOf(_presentTune, T && typeof T === "object" ? T : null);
   _presentTune.sunShaftMul = 0;
-  _presentOpts.exposure = SP_EXPOSURE * exposureMul;
-  _presentOpts.bloom = shed ? 0 : SP_BLOOM * bloomMul;
+  // The garage lighting mood (identity when shipped). Inline, not moodDef():
+  // tests run this function sliced out of the file.
+  const md = (typeof GarageScene !== "undefined" && GarageScene.moodDef && GarageScene.moodDef()) || { exposure: 1, bloom: 1 };
+  _presentOpts.exposure = SP_EXPOSURE * exposureMul * md.exposure;
+  _presentOpts.bloom = shed ? 0 : SP_BLOOM * bloomMul * md.bloom;
   _presentOpts.threshold = threshold;
   _presentOpts.contact = 0;
   // A closed bay has no wet road and no env probe. Omitted carReflect is the
@@ -321,6 +328,9 @@ const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
 let setupPreviewMinDist = 0, setupPreviewFree = false;   // 0 = use the global SP_DIST_MIN; free = a dev shot may leave the player's range
+// lens (dev shot only, __apex.garageFrame fov/centre): { fov deg, centre } — a matched-lens
+// reference frame: its own vertical fov, no panel lens shift, no auto recentre. null = the player's camera.
+let setupPreviewLens = null;
 // The player's orbit floor is 0 (never under the car) and a view's minDist; a
 // survey tool asking to look UP at a wing from the floor needs neither, and
 // setSetupFree lifts both until the next preset. Nothing the player can reach.
@@ -360,6 +370,7 @@ function setSetupView(name) {
   setupPreviewView = name;
   GarageScene.spot(name);   // the work lamp wheels over to what the preset frames
   setupPreviewFree = false;   // a preset is the player's range again
+  setupPreviewLens = null;   // and its own lens
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
   // A preset is an absolute framing, so it also drops any pan the player had
   // walked in — otherwise "show me the rear wing" shows them the rear wing plus
@@ -495,7 +506,7 @@ function resetSetupCam() {
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
-let _spMesh = null, _spMeshKey = "", _spHull = null;
+let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null;
 // Which livery fields can MOVE a vertex, as opposed to only recolouring one.
 // Measured (tests/unit/setup-preview-hull.test.mjs builds the car both ways and
 // compares positions byte for byte): a hue change never moves anything, and only
@@ -506,12 +517,15 @@ let _spMesh = null, _spMeshKey = "", _spHull = null;
 const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
-// keyed on colour and finish: the old paint job's flaps go too once nothing has
-// drawn them for FLAP_IDLE_MS, or a session of edits kept every one (M1).
-const FLAP_IDLE_MS = 2000;
+// keyed on colour and finish: the old paint job's flaps go too, or a session of
+// edits kept every one (M1). Released on the first garage frame AFTER the bust,
+// right after drawAeroFlaps stamped the new paint job: every set not drawn since
+// the bust goes. Released at the bust itself, the old job (drawn a frame ago)
+// survived unless frames had stalled 2 s, so 1 or 2 sets stayed by frame timing.
+let _flapBustAt = 0;
 function spMeshBust() {
   _spMeshKey = ""; GarageScene.dropPreviewMeshes();
-  if (typeof CarMesh !== "undefined" && CarMesh.releaseIdleFlaps) CarMesh.releaseIdleFlaps(FLAP_IDLE_MS);
+  _flapBustAt = typeof performance !== "undefined" ? performance.now() : 0;
 }
 function garageSeat() {
   const team = Teams.LIST[G.teamIdx];
@@ -539,13 +553,17 @@ function getSetupPreviewMesh() {
     // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
     // survives the per-value colour-drag busts livePreviewDraft issues.
     const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (typeof liv[f] === "string" ? liv[f] : liv[f] ? 1 : 0)).join(",");
-    const ent = GarageScene.previewMesh(key, hullKey, () => Car3D.build(liv.c1, liv.c2, {
-      livery: liv,
-      teamId: team.id,   // per-team chassis style shows in the setup turntable too
-      num: seat && seat.num,
-      helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
-      parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-    }));
+    // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
+    // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
+    const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
+    const ent = GarageScene.previewMesh(key, hullKey, () => _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
+      : (_spBase = { key: baseKey, data: Car3D.build(liv.c1, liv.c2, {
+        livery: liv, refinish: true,
+        teamId: team.id,   // per-team chassis style shows in the setup turntable too
+        num: seat && seat.num,
+        helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
+        parts: Parts.getVisualTiers(getTeamParts(team.id), team),
+      }) }).data);
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
@@ -607,7 +625,7 @@ function garageCtx(asSetup = false) {
   ctx.ambient = !reducedMotion() && (!h || home.moving);
   ctx.studio = !!(h && home.mode === "studio");
   ctx.unlimited = !!G.unlimitedBudget;   // the wall BUDGET board reads FREE BUILD, like the DOM sheet
-  return ctx;
+  return typeof GarageScene !== "undefined" && GarageScene.moodCtx ? GarageScene.moodCtx(ctx) : ctx;
 }
 function captureCamera() {
   return { az: setupPreviewAz, el: setupPreviewEl, dist: setupPreviewDist, spin: setupPreviewSpin,
@@ -781,7 +799,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   eye[0] = setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * spDist * spCe;
   eye[1] = setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe;
   eye[2] = setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe;
-  M4.perspectiveTo(_spProj, homeFov * Math.PI / 180, gfx.aspect, 0.1, 60);
+  const lens = setupPreviewLens;
+  M4.perspectiveTo(_spProj, (lens && lens.fov || homeFov) * Math.PI / 180, gfx.aspect, 0.1, 60);
   // An on-axis camera centers the car behind the panel, half-cropped. Shift the
   // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
   // region instead — sideways when the panel is docked to an edge, downwards
@@ -791,6 +810,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   _spProj[8] = panelFrac;
   _spProj[9] = panelFracY;
   if (homeFit) { _spProj[8] = homeFit.shiftX; _spProj[9] = homeFit.shiftY; }
+  if (lens && lens.centre) { _spProj[8] = 0; _spProj[9] = 0; }
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
@@ -801,7 +821,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   }
   M4.lookAtTo(_spView, eye, _spAim, _spUp);
   M4.mulTo(_spVP, _spProj, _spView);
-  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(arriving && arriving.active), _spHull);
+  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(lens && lens.centre) && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
@@ -820,7 +840,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     // as long as the sun stayed at full white it owned the picture and the bay's
     // ten fixtures were decoration. proj/invProj are what unlock SSAO in
     // present(), and an interior lives or dies on its corner darkening.
-    viewProj: _spVP, view: _spView, eye, sunDir: _spSun, sunColor: GarageScene.SKYLIGHT,
+    viewProj: _spVP, view: _spView, eye, sunDir: (GarageScene.moodDef && GarageScene.moodDef().sun) || _spSun, sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
     fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: lightsRig,
     proj: _spProj, invProj: _spInvProj,
@@ -849,6 +869,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     const aSt = teamDecalState(team, true);
     drawAeroFlaps(team, aSt.val, setupPreviewAeroX, arrivalCar, spMat,
       aSt.aero);
+    if (_flapBustAt && typeof CarMesh !== "undefined" && CarMesh.releaseIdleFlaps) {
+      CarMesh.releaseIdleFlaps(Math.max(0, performance.now() - _flapBustAt));
+      _flapBustAt = 0;
+    }
   }
   // `night` here means "the sun is not the key" — which in a garage it is not.
   // The decal shader is sun + ambient + glow only, so without this the liveries'
@@ -865,7 +889,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale());
+  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale() * moodDef().glare);
   gfx.present(presentOpts());
   return !(gfx.warming && gfx.warming());
 }
@@ -1086,7 +1110,8 @@ return {
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },
-  setSetupFree(on) { setupPreviewFree = !!on; },
+  // on: boolean, or a lens {fov, centre} (a matched-lens dev shot, which is free too).
+  setSetupFree(on) { setupPreviewFree = !!on; setupPreviewLens = on && typeof on === "object" ? on : null; },
   get spin() { return setupPreviewSpin; },
   get az() { return setupPreviewAz; },
   get el() { return setupPreviewEl; },
@@ -1110,7 +1135,7 @@ return {
   // garage is on screen. The cleared key makes the next getSetupPreviewMesh rebuild.
   release() {
     if (G.setupPreviewOn) return false;
-    GarageScene.release(); _spMesh = null; _spMeshKey = "";   // the hull is CPU-only and frames the next visit
+    GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
     return true;
   },
   get meshKey() { return _spMeshKey; },

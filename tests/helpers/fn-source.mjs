@@ -38,7 +38,10 @@ function functionRanges(src, sourceType) {
         || node.type === "MethodDefinition"
         || node.type === "Property" && node.method
         || node.type === "VariableDeclaration" && node.declarations.length === 1
-          && ["ArrowFunctionExpression", "FunctionExpression"].includes(node.declarations[0].init?.type)) {
+          && ["ArrowFunctionExpression", "FunctionExpression"].includes(node.declarations[0].init?.type)
+        // `save.onclick = () => {` — a handler assigned to a property (setup-sheet.js; team-livery.test.mjs)
+        || node.type === "ExpressionStatement" && node.expression.type === "AssignmentExpression"
+          && ["ArrowFunctionExpression", "FunctionExpression"].includes(node.expression.right?.type)) {
       ranges.push(node.range);
     }
     for (const value of Object.values(node)) {
@@ -57,10 +60,29 @@ function functionRanges(src, sourceType) {
  * (optional leading indentation included). Missing and ambiguous matches throw;
  * text in comments/strings and neighboring declarations never count as hits.
  * Parsing defaults to script; pass { sourceType: "module" } for ES modules. */
+// An HTML page (tools/carview.html's inline script) is not one JS program and cannot be
+// parsed; it keeps the column rule this module used before the parse: the closing brace sits at
+// the declaration's own indentation.
+function columnSource(src, decl) {
+  const i = src.indexOf(decl);
+  if (i < 0) throw new Error(`fnSource: declaration not found: ${decl}`);
+  const ls = src.lastIndexOf("\n", i) + 1;
+  const indent = src.slice(ls, i);
+  if (/[^ \t]/.test(indent))
+    throw new Error(`fnSource: ${decl} is not at the start of its line — cannot infer the closing column`);
+  const rest = src.slice(i);
+  const m = new RegExp("\\n" + indent + "\\}").exec(rest);
+  if (!m) throw new Error(`fnSource: no closing brace at column ${indent.length} after ${decl}`);
+  return rest.slice(0, m.index + indent.length + 2);
+}
+
 export function fnSource(src, decl, { sourceType = "script" } = {}) {
   if (typeof decl !== "string" || !decl.trim()) throw new Error("fnSource: declaration must be non-empty");
   const prefix = decl.trimStart(), indent = decl.length - prefix.length;
-  const hits = functionRanges(src, sourceType).filter(([start, end]) => {
+  let ranges;
+  try { ranges = functionRanges(src, sourceType); }
+  catch (e) { if (/^\s*<|<script\b/i.test(src)) return columnSource(src, decl); throw e; }   // an HTML page only; JS syntax errors still throw
+  const hits = ranges.filter(([start, end]) => {
     const at = start - indent;
     return at >= 0 && src.slice(at, at + decl.length) === decl
       && start + prefix.length <= end

@@ -12,9 +12,10 @@ import { revealLiveryControl as reveal, openEmptyCustomLivery } from "../helpers
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
 const lastLogId = (page) => page.evaluate(() => (Log.records().at(-1) || { id: 0 }).id);
-// The garage repaints through a fresh Car3D build ("[car] build <team>"): a deterministic signal.
+// The garage repaints through a fresh Car3D build ("[car] build <team>"), or — a FINISH-only change —
+// through Car3D.refinish of the kept geometry ("[car] refinish", #3181): a deterministic signal either way.
 const rebuiltSince = (page, since) => expect.poll(() => page.evaluate((s) => Log.records({ ns: "car", since: s })
-  .some((r) => /build/.test(JSON.stringify(r))), since), { timeout: 30_000 }).toBe(true);
+  .some((r) => /build|refinish/.test(JSON.stringify(r))), since), { timeout: 30_000 }).toBe(true);
 
 test("zone finishes and ENDPLATES: tappable on a phone, and the saved car carries them", async ({ page }) => {
   await ensureLive(page);

@@ -58,13 +58,19 @@ const InputHoldButtons = (function () {
     function holdTargetGone(el) {
       if (!el || el === document) return true;
       if (!el.isConnected) return true;
-      if (el.hidden) return true;
-      const parent = el.parentElement;
-      if (parent && parent.hidden) return true;
       try {
         const s = getComputedStyle(el);
-        if (s.display === "none" || s.visibility === "hidden") return true;
+        if (s.visibility === "hidden") return true;
       } catch (_) { /* getComputedStyle can throw on a detached node */ }
+      // display does not inherit: the button's own computed display can stay
+      // "block" beneath a hidden container. Visibility, however, can be
+      // overridden by a descendant, so inspect that on the button only.
+      for (let node = el; node; node = node.parentElement) {
+        if (node.hidden) return true;
+        try {
+          if (getComputedStyle(node).display === "none") return true;
+        } catch (_) { /* getComputedStyle can throw on a detached node */ }
+      }
       return false;
     }
     function lostCaptureShouldRelease(el, pointerId) {

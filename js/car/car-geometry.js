@@ -60,6 +60,26 @@ const CarGeometry = (function () {
       addLoft(out, cz-sz/2, cx, cy, sx, sy, cz+sz/2, cx, cy, sx, sy, col, surface);
     }
 
+    // Any n-corner section (a chined pod has five), front to rear, capped: CarShade.loftRings'
+    // faces and winding (CCW from +Z, fixed by signed area so either side's mirror lofts outward).
+    function addSectionLoft(out, secs, col, frontCol, surface, frontSurface) {
+      const area = (r) => r.reduce((a, p, i) => { const q = r[(i + 1) % r.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0);
+      const rings = secs.map((r) => (area(r) < 0 ? r.slice().reverse() : r)), n = rings[0].length;
+      for (let r = 0; r < rings.length - 1; r++) {
+        const F = rings[r], R = rings[r + 1];
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          addTri(out, F[i], R[i], R[j], col, surface);
+          addTri(out, F[i], R[j], F[j], col, surface);
+        }
+      }
+      const cap = (ring, c, sf, flip) => {
+        const m = [0, 1, 2].map((k) => ring.reduce((a, p) => a + p[k], 0) / n);
+        for (let i = 0; i < n; i++) { const j = (i + 1) % n; if (flip) addTri(out, m, ring[j], ring[i], c, sf); else addTri(out, m, ring[i], ring[j], c, sf); }
+      };
+      cap(rings[0], frontCol || col, frontSurface || surface, false);
+      cap(rings[rings.length - 1], col, surface, true);
+    }
     function addBlock(out, q, col, colFront, surface, frontSurface, capFront, capRear) {
       {
         const ax = q[1][0]-q[0][0], ay = q[1][1]-q[0][1], az = q[1][2]-q[0][2];
@@ -114,12 +134,18 @@ const CarGeometry = (function () {
         : null;
       const xF = attachedX != null ? attachedX : x;
       const xR = attachedX != null ? attachedX : x * taper;
-      let yF = spec.yLead + rise * edge, yR = spec.yTrail + rise * edge;
+      // rise2 / riseStep (opt-in aero shapes, absent = 0): a quadratic tip
+      // curl and a step that completes by mid-span (edge 0.5).
+      const lift = rise * edge + (spec.rise2 || 0) * edge * edge
+        + (spec.riseStep || 0) * Math.min(1, edge * 2);
+      let yF = spec.yLead + lift, yR = spec.yTrail + lift;
       let zF = spec.zLead - sweep * edge, zR = spec.zTrail - sweep * edge;
       // teCurve: pull the TE toward the LE at the tip (quadratic) so the
       // trailing edge is an arc, not a straight plank. chordTaper shortens
       // the tip chord. twist adds a few degrees of outboard incidence.
       if (spec.teCurve) zR += spec.teCurve * edge * edge;
+      // B·D3c: a lifted tip moves forward whole, so the cascade's slots keep their shape.
+      if (spec.tePull) { zF += spec.tePull * edge; zR += spec.tePull * edge; }
       const ct = 1 - Math.max(0, spec.chordTaper || 0) * edge;
       if (ct < 1) { zR = zF + (zR - zF) * ct; yR = yF + (yR - yF) * ct; }
       const tw = (spec.twist || 0) * edge;
@@ -153,6 +179,7 @@ const CarGeometry = (function () {
       }
     }
     function addStationLoft(out, stations, col, frontCol, surface, frontSurface) {
+      if (stations[0].length !== 4) return addSectionLoft(out, stations, col, frontCol, surface, frontSurface);
       for (let i = 0; i < stations.length - 1; i++) {
         addBlock(out, stations[i].concat(stations[i + 1]), col,
                  i === 0 ? frontCol : null, surface,

@@ -14,6 +14,7 @@
  * (parts census). NO_MEMO=1 in the workflow skips the cache (nightly auditor).
  */
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,26 +30,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
  * geometry-paths parts ERE.
  */
 export const JOB_INPUTS = Object.freeze({
-  guards: Object.freeze([
-    "tools/",
-    "tests/unit/",
-    "tests/helpers/",
-    "tests/groups.json",
-    "tests/data/",
-    "docs/",
-    "js/",
-    "css/",
-    "locales/",
-    "types/",
-    "index.html",
-    "sw.js",
-    "version.json",
-    "package.json",
-    "package-lock.json",
-    "playwright.config.js",
-    ".github/workflows/ci.yml",
-    "tools/manifest.cjs",
-  ]),
+  // Tooling suites inspect configuration, symlink mirrors, fixtures and assets
+  // across the repository. The complete tracked inventory avoids a second,
+  // inevitably incomplete dependency map. ./ is Git-tracked only, not fs walk.
+  guards: Object.freeze(["./"]),
   "sweeps-parts": Object.freeze([
     "js/core/",
     "js/data/",
@@ -65,7 +50,7 @@ export const JOB_INPUTS = Object.freeze({
 
 export const JOB_NAMES = Object.freeze(Object.keys(JOB_INPUTS));
 
-/** Walk a declared path into sorted repo-relative file paths (skips missing). */
+/** Sorted input inventory: ./ means all Git-tracked paths; other paths walk existing files. */
 export function expandInputPaths(declared, root = ROOT) {
   const out = [];
   const walk = (rel) => {
@@ -86,6 +71,15 @@ export function expandInputPaths(declared, root = ROOT) {
     }
   };
   for (const d of declared) {
+    if (d === "." || d === "./") {
+      // Index inventory needs no commit history and includes staged new paths.
+      // NUL framing preserves tabs/newlines; never traverse directory symlinks.
+      const tracked = execFileSync("git", ["ls-files", "--cached", "--deduplicate", "-z"], {
+        cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
+      });
+      out.push(...tracked.split("\0").filter(Boolean));
+      continue;
+    }
     const norm = String(d).replace(/\\/g, "/").replace(/^\.\//, "");
     if (norm.endsWith("/")) walk(norm.slice(0, -1));
     else walk(norm);
@@ -93,20 +87,26 @@ export function expandInputPaths(declared, root = ROOT) {
   return [...new Set(out)].sort();
 }
 
-/** sha256 hex of sorted file contents + node version (and optional salt). */
+/** sha256 of file identity/content, link targets, executable bits and Node version. */
 export function hashInputs(files, { root = ROOT, nodeVersion = process.version, salt = "" } = {}) {
   const h = createHash("sha256");
   h.update(`node:${nodeVersion}\n`);
   if (salt) h.update(`salt:${salt}\n`);
   for (const rel of files) {
-    h.update(rel);
-    h.update("\0");
-    try {
-      h.update(fs.readFileSync(path.join(root, rel)));
-    } catch (_) {
-      h.update("<missing>");
+    const abs = path.join(root, rel);
+    let st;
+    try { st = fs.lstatSync(abs); }
+    catch (err) {
+      if (err.code !== "ENOENT" && err.code !== "ENOTDIR") throw err;
+      h.update(JSON.stringify([rel, "missing"]) + "\0");
+      continue;
     }
-    h.update("\n");
+    const kind = st.isSymbolicLink() ? "symlink" : st.isFile() ? "file" : null;
+    if (!kind) throw new Error(`Unsupported tracked input type: ${rel}`);
+    const bytes = kind === "symlink" ? Buffer.from(fs.readlinkSync(abs)) : fs.readFileSync(abs);
+    h.update(JSON.stringify([rel, kind, kind === "file" && !!(st.mode & 0o111), bytes.length]) + "\0");
+    h.update(bytes);
+    h.update("\0");
   }
   return h.digest("hex");
 }
@@ -132,6 +132,7 @@ export function coverageReport(job, expectedPaths) {
     const w = want.replace(/\\/g, "/");
     const hit = declared.some((d) => {
       const n = d.replace(/\\/g, "/");
+      if (n === "." || n === "./") return true;
       if (n.endsWith("/")) return w === n.slice(0, -1) || w.startsWith(n);
       return w === n || w.startsWith(n + "/");
     });

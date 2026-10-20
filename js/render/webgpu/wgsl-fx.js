@@ -339,10 +339,18 @@ fn decalPool(wp : vec3<f32>, N : vec3<f32>) -> vec3<f32> {
   let bUv = (wp.xz - F.bakeA.xy) / max(F.bakeA.zw, vec2<f32>(1e-3));
   let bG = bUv * F.bakeD.xy;
   let bTile = clamp(floor(bG), vec2<f32>(0.0), max(F.bakeD.xy - 1.0, vec2<f32>(0.0)));
-  let bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
-  let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
-  let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
-  let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0)) && bSlot.x >= 0.0;
+  // Gated like the lit pass: no bake or out of grid skips the load + sample.
+  var bSlot = vec2<f32>(-1.0);
+  var bT = vec4<f32>(0.0);
+  let inG = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0));
+  if (F.bakeB.w > 0.5 && inG) {
+    bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
+    if (bSlot.x >= 0.0) {
+      let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
+      bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
+    }
+  }
+  let bIn = inG && bSlot.x >= 0.0;
   let hW = 1.0 - smoothstep(1.5, 3.0, abs(wp.y - bT.a));
   return select(vec3<f32>(0.0), bT.rgb * F.bakeB.xyz * hW * (0.5 + 0.5 * N.y), F.bakeB.w > 0.5 && bIn);
 }

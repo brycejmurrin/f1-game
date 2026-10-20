@@ -235,7 +235,11 @@ function _flLive(o) {
 // g (not yaw). At true standstill (eye delta ≈ 0) the age check is skipped so
 // a parked car does not churn the heap.
 const _RANK_EYE_EPS2 = 25;     // 5 m eye motion → rebuild (was 0.5 m)
-const _RANK_FWD_EPS2 = 1e-4;   // unnormalized fwd delta (yaw/aim change)
+// Yaw budget on the UNIT forward direction: |du|^2 = 2(1 - cos θ), θ = 1.5°.
+// Was 1e-4 on the raw camTgt - camEye vector (several metres long): ~0.07° of
+// yaw failed it, so every frame of every corner re-ranked the whole lamp set
+// (Node bench, 5000 lamps: 110 vs 26 µs/frame). The age cap still bounds it.
+const _RANK_FWD_EPS2 = 2 * (1 - Math.cos(1.5 * Math.PI / 180));
 const _RANK_MAX_MS = 100;      // or ≥100 ms since last rank while moving
 const _RANK_STILL2 = 1e-4;     // ≈0.01 m: treat as standstill for the age skip
 // (the cache itself lives on each viewpoint's state: _rankState below)
@@ -396,7 +400,8 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
   const fade = LT.lampCullFade != null ? LT.lampCullFade : 0.35;   // LAMP CULL FADE knob
   const heap = S.heap;
   const edx = eye[0] - S.rankEyeX, edy = eye[1] - S.rankEyeY, edz = eye[2] - S.rankEyeZ;
-  const fdx = fx - S.rankFwdX, fdz = fz - S.rankFwdZ;
+  const finv = 1 / Math.sqrt(flen2), ux = fx * finv, uz = fz * finv;
+  const fdx = ux - S.rankFwdX, fdz = uz - S.rankFwdZ;
   const dist2 = edx * edx + edy * edy + edz * edz;
   const ageMs = (tNow - S.rankT) * 1000;
   // Distance OR time budget: reuse while inside both. Standstill skips age so a
@@ -526,7 +531,7 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
       : 1;
     S.rankSrc = src; S.rankCap = CAP; S.rankCount = count;
     S.rankEyeX = eye[0]; S.rankEyeY = eye[1]; S.rankEyeZ = eye[2];
-    S.rankFwdX = fx; S.rankFwdZ = fz;
+    S.rankFwdX = ux; S.rankFwdZ = uz;
     S.rankGRef = gRef; S.rankDEdge = dEdge; S.rankTrunc = truncated;
     S.rankReach = reach; S.rankBias = bias; S.rankFade = fade;
     S.rankT = tNow;

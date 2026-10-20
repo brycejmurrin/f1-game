@@ -145,7 +145,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
 | `garage-defaults.js` | `GarageDefaults` | tag | GarageDefaults: the SHIPPED DEFAULT garage (parts, liveries, setups, team/driver) in one file, as data. |
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
-| `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots. |
+| `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots + session when-variants. |
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
 | `api-transport.js` | `F1Transport` | LAZY_DATA | serialized API transport: cache, rate limits, timeouts, retries and cancellation. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
@@ -391,6 +391,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
 | `livery-design.js` | `LiveryDesign` | tag | Optional, bounded cover artwork. |
 | `livery-graphics.js` | `LiveryGraphics` | tag | cover crown/tail and fin graphic painters; create receives atlas drawing and paint-selection helpers. |
+| `livery-stations.js` | `LiveryStations` | tag | extra livery decal stations (nose tip cap, cockpit-side driver code, sidepod top, halo top). |
 | `crest-draw.js` | `LiveryCrests` | tag | LiveryCrests: the team-mark painters of LiveryTex (traced, Mercedes, Haas, Audi, generic) and the CRESTS table. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |

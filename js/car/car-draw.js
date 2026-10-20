@@ -452,6 +452,9 @@ const CarDraw = (function () {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
       if (_hiResDone.has(key) || _hiResPending.has(key) || (_hiResFail.get(key) || 0) >= HIRES_TRIES) return;
+      // A live garage paint draft gives every edit a new key: the preview only, or each edit the idle slot
+      // reached paid a 2048 paint and a ~26.7 MB upload. Save / cancel / leave clear it: the next draw upgrades once.
+      if (G.livDraftOverride) return;
       // The livery is resolved NOW, with the key (decalKeyFor embeds its id): the idle
       // slot can fire after the garage moved on, and building from the livery selected
       // THEN stored another livery's pixels under this key (A -> B -> A).
@@ -492,7 +495,7 @@ const CarDraw = (function () {
       };
       const kick = function () {
         try {
-          if (!owns()) { done(); return; }
+          if (!owns() || G.livDraftOverride) { done(); return; }   // a kick queued before the draft opened
           if (!G.gfx || !G.gfx.createTexture) { done(); return; }
           const canvas = LiveryTex.buildAtlas(team.id, livery, num, true, true);
           const bmp = liveryBitmap(canvas);
@@ -946,7 +949,11 @@ const CarDraw = (function () {
       // is always this team's key — no per-frame partsVisualKey() rebuild.
       const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick, 4 faired
       // BODY: the cockpit style plus the livery's chassis (Car3D.bodyStyleKey), one _cbBody input.
-      const bs = deps.resolveLivery(team).bodyStyle, body = CockpitOpts.body() + (bs ? ":S" + bs : "");
+      // Keyed on the RESOLVED body: "team" and unknown ids are the team's own
+      // geometry and share its key instead of each costing a rebuild (#3111 F17).
+      const rawBs = deps.resolveLivery(team).bodyStyle;
+      const bk = Car3D.bodyStyleKey ? Car3D.bodyStyleKey(team.id, rawBs) : rawBs, bs = bk && bk !== team.id ? bk : "";
+      const body = CockpitOpts.body() + (bs ? ":S" + bs : "");
       if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum) {
         _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + (bs ? ":S" + bs : "") + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
         _cbShKey = _cbKey + ":FP";   // the first-person caster: same cache (and wipes), its own key

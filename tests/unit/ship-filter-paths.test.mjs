@@ -22,6 +22,11 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CI = readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8");
 const PAGES = readFileSync(join(ROOT, ".github/workflows/pages.yml"), "utf8");
+const EXPECTED_STAGED_NAMES = [
+  ".nojekyll", "assets", "bench.html", "cockpit-view.html", "controller.html",
+  "css", "icons", "index.html", "js", "locales", "manifest.json", "overlay.html",
+  "sw.js", "vendor", "version.json",
+];
 
 /** Same emission the ship-filter job uses (sorted names, one per line). */
 function emitStagedPathList() {
@@ -43,6 +48,7 @@ test("stage-files.mjs allow-list is non-empty and matches its two source lists",
   const names = [...stagedNames()].sort();
   assert.ok(names.length > 0, "stagedNames() must never be empty");
   assert.equal(names.length, STAGE_ROOT_FILES.length + STAGE_DIRS.length, `staged names ${names.join(",")} drifted from STAGE_ROOT_FILES + STAGE_DIRS`);
+  assert.deepEqual(names, EXPECTED_STAGED_NAMES);
   assert.ok(names.includes("cockpit-view.html"), "player cockpit preview must ship");
   assert.deepEqual(names, [...STAGE_ROOT_FILES, ...STAGE_DIRS].sort());
 });
@@ -70,5 +76,6 @@ test("emitted staged path list matches stage-files.mjs (ship-filter / Pages drif
   const emitted = emitStagedPathList();
   assert.ok(emitted.length > 0, "emitted list must not be empty");
   assert.equal(emitted.length, [...stagedNames()].length);
+  assert.deepEqual(emitted, EXPECTED_STAGED_NAMES);
   assert.deepEqual(emitted, [...stagedNames()].sort());
 });

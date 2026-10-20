@@ -1,3 +1,5 @@
+import "../helpers/git-fixture-env.mjs";
+import { execFileSync } from "node:child_process";
 // inputs-hash — per-job verdict-cache path sets (#1712).
 //
 // The declared path set for each tree-only job must cover what that job's
@@ -126,9 +128,68 @@ test("changing only a shared unit helper invalidates the guards verdict cache", 
     fs.mkdirSync(path.join(dir, "tests", "helpers"), { recursive: true });
     const helper = path.join(dir, "tests", "helpers", "shared-fixture.mjs");
     fs.writeFileSync(helper, "export const fixtureValue = 1;");
+    // guards hashes the git-TRACKED inventory ("./"), so the helper must be tracked to count.
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    execFileSync("git", ["add", path.relative(dir, helper)], { cwd: dir });
     const before = inputsHash("guards", { root: dir });
     fs.writeFileSync(helper, "export const fixtureValue = 2;");
     assert.notEqual(inputsHash("guards", { root: dir }), before,
       "a helper implementation change must not reuse a cached tooling verdict");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("guard keys cover tracked configuration, helpers, assets and symlink identity", (t) => {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts/guard-inputs-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+  git("init", "-q");
+  const put = (rel, text) => {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  };
+  const paths = [".cursor/environment.json", ".mcp.json", ".codex/config.toml", ".claude/hooks/check.sh", ".githooks/pre-commit",
+    ".github/actions/setup/action.yml", "tests/helpers/shared-page.js", "tests/specs/smoke.spec.js", "assets/font.woff2", "vendor/trystero-0.25.4/core/actions.js",
+    "desktop/config.json", "mobile/config.json", "AGENTS.md", "CLAUDE.md", "README.md", ".gitignore", "odd\nname.txt"];
+  for (const rel of paths) put(rel, "original");
+  put(".claude/skills/demo/SKILL.md", "canonical");
+  fs.mkdirSync(path.join(dir, ".agents/skills"), { recursive: true });
+  const link = path.join(dir, ".agents/skills/demo");
+  fs.symlinkSync("../../.claude/skills/demo", link);
+  git("add", "-A");
+  const hash = () => inputsHash("guards", { root: dir, nodeVersion: "v22-fixture" });
+  const original = hash();
+  assert.equal(hash(), original);
+  for (const rel of paths) {
+    put(rel, "changed");
+    assert.notEqual(hash(), original, `${rel} content must invalidate the guard verdict`);
+    put(rel, "original");
+    assert.equal(hash(), original, `${rel} restoration recovers the original key`);
+  }
+  fs.unlinkSync(link);
+  fs.symlinkSync("../../.claude/skills/missing", link);
+  assert.notEqual(hash(), original, "a broken mirror target must invalidate without following it");
+  fs.unlinkSync(link);
+  fs.symlinkSync("../../.claude/skills/demo", link);
+  assert.equal(hash(), original);
+  const hook = path.join(dir, ".githooks/pre-commit");
+  fs.chmodSync(hook, 0o755);
+  assert.notEqual(hash(), original, "executable permissions affect hook behavior");
+  fs.chmodSync(hook, 0o644);
+  assert.equal(hash(), original);
+  fs.unlinkSync(path.join(dir, ".mcp.json"));
+  assert.notEqual(hash(), original, "unstaged deletion invalidates");
+  git("add", "-A");
+  assert.notEqual(hash(), original, "staged deletion invalidates");
+  put(".mcp.json", "original");
+  git("add", "-A");
+  assert.equal(hash(), original);
+  const addedHelper = path.posix.join("tests/helpers", "new.js");
+  put(addedHelper, "new input");
+  git("add", addedHelper);
+  assert.notEqual(hash(), original, "new tracked files invalidate");
+  git("rm", "-f", addedHelper);
+  assert.equal(hash(), original);
+  for (const rel of ["artifacts/result.log", "scratch/cache", "node_modules/pkg/index.js", "untracked.txt"]) put(rel, "transient");
+  assert.equal(hash(), original, "untracked runtime output must not pollute the key");
 });

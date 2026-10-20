@@ -320,11 +320,22 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
     quad([[BL.x, BL.y, BL.z], [BR.x, BR.y, BR.z], [TR.x, TR.y, TR.z], [TL.x, TL.y, TL.z]], [1, 0, 0], R.fwEnd);
     quad([[-BR.x, BR.y, BR.z], [-BL.x, BL.y, BL.z], [-TL.x, TL.y, TL.z], [-TR.x, TR.y, TR.z]], [-1, 0, 0], R.fwEnd);
   }
-  const nb = (Car3D.numberBoard ? Car3D.numberBoard(aLvl == null ? 2 : aLvl) : { cy: 0.62, h: 0.20 });
+  // aeroStyleOf: the board itself is placed with the aero recipe (rearSweep /
+  // fin move the endplate), so the digit must be too (#3111 F15).
+  const nb = (Car3D.numberBoard ? Car3D.numberBoard(aLvl == null ? 2 : aLvl, Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : undefined) : { cy: 0.62, h: 0.20 });
   const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
+  if (typeof LiveryStations !== "undefined" && !legacyBody) LiveryStations.emit(quadUv, uvOf, R, anchors, stationCtx(parts, teamId, bodyStyle, round));
   return out;
+}
+// What LiveryStations needs beyond the anchors: the nose tip, the monocoque and the halo hoop.
+function stationCtx(parts, teamId, bodyStyle, round) {
+  const style = Car3D.teamStyleOf ? Car3D.teamStyleOf(anchorKey(teamId, bodyStyle)) : null;
+  const nose = Car3D.styledNoseStations ? Car3D.styledNoseStations(style) : null;
+  const cockpit = parts && parts._visual && parts._visual.cockpit || {};
+  return { noseTipZ: nose && nose[0] ? nose[0].z : null, monocoque: Car3D.CHASSIS && Car3D.CHASSIS.monocoque,
+           halo: LiveryStations.haloOf(cockpit, round) };
 }
 // The decal key, memoised per PARTS object (teamDecalState hands the same one
 // back until rev / ruleset move; bodyAnchors already keys on that identity):
@@ -381,7 +392,9 @@ function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, roun
                    : ((parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0);
   // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
   const shapeK = finShape || "standard";
-  return level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
+  // The halo strip follows the cockpit's hoop style and fairing (LiveryStations.haloOf).
+  const ck = parts && parts._visual && parts._visual.cockpit, haloK = ck ? (ck.halo || 0) + "." + (ck.haloBlade || 0) : "0.0";
+  return level + "|" + haloK + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
 }
 let _cockpitDecalMesh = null, _cockpitDecalKey = "";
 function getCockpitDecalMesh(parts, teamId, bodyStyle) {
@@ -642,6 +655,10 @@ function _flapKey(g, aLvl, style, c, finish, surface) {
 // node VM): nothing is idle.
 const _flapNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
 function _flapUse(m) { if (m) m.__flapT = _flapNow(); return m; }
+function _flapLast(cache, order, t) {
+  for (let i = 0; i < order.length; i++) { const m = cache[order[i]]; if (m && m.__flapT > t) t = m.__flapT; }
+  return t;
+}
 function _flapEvictIdle(cache, order, idleMs, now) {
   let w = 0, n = 0;
   for (let i = 0; i < order.length; i++) {
@@ -659,9 +676,13 @@ function _flapEvictIdle(cache, order, idleMs, now) {
 }
 // How many flap meshes the caches hold (__apex/specs: garage-livery-churn.spec.js bounds them).
 function flapState() { return { sets: _flapSetOrder.length, elements: _flapOrder.length }; }
+// IDLE IS MEASURED FROM THE NEWEST FLAP DRAW, NOT THE WALL CLOCK. A frame longer than `ms` (SwiftShader
+// draws the garage at ~3 s a frame; a phone stalled on a rebuild) left the set drawn on the LAST frame
+// "idle", so an edit freed the live wings and their coalesced run, three's last holder of the instanced
+// lit program, and the next frame relinked it: a 2.7 s frame on a part pick (garage-perf-2026-10-20.md).
 function releaseIdleFlaps(idleMs) {
-  const now = _flapNow();
-  if (!now || !_gfx) return 0;
+  if (!_flapNow() || !_gfx) return 0;
+  const now = _flapLast(_flapSets, _flapSetOrder, _flapLast(_flapMeshes, _flapOrder, 0));
   const n = _flapEvictIdle(_flapMeshes, _flapOrder, idleMs, now);
   const sets = _flapEvictIdle(_flapSets, _flapSetOrder, idleMs, now);
   if (sets) _flapSetMemo.clear();   // it may still point at a freed set
@@ -699,24 +720,35 @@ function getAeroFlap(aLvl, col, idx, style, el, finish, surface) {
 // into one buffer: one draw with the same options, the same surfaces. It is what
 // a rival past FieldLod.flapsM() and the mirror / PiP draw (they drew NO flaps:
 // a rear wing stripped to its main plane) and any car whose wings are at rest.
-const _flapSets = {}, _flapSetOrder = [], _flapSetMemo = new Map();   // base key -> [mesh per (open, only) slot]
+const _flapSets = {}, _flapSetOrder = [], _flapSetMemo = new Map();   // base key -> rear-paint key -> [mesh per (open, only) slot]
 const FLAP_SET_MAX = 64;   // ~11 teams x 2 poses a race (+ the cockpit's front-only)
-function getAeroFlapSet(aLvl, col, style, finish, open, only, surface) {
+// `rearCol` paints the element flagged paint "rearWing" (the flown drs plane,
+// always last in the set); its own memoised key picks the memo row, no concat.
+function getAeroFlapSet(aLvl, col, style, finish, open, only, surface, rearCol) {
   const c = col || FLAP_DEF_COL, flaps = Car3D.aeroFlaps(aLvl, style);
   if (!flaps.length) return null;
+  const pr = rearCol && flaps[flaps.length - 1].paint ? flaps[flaps.length - 1] : null;
+  const rk = pr ? _flapKey(pr, aLvl, style, rearCol, finish, surface) : "";
   // The full key is a string concat per call (per drawn car per frame): a (record, pose) memo keyed on the
   // already-memoised base key turns a hit into two Map/array reads. Cleared whole on an eviction.
   const bk = _flapKey(flaps[0], aLvl, style, c, finish, surface), slot = !only ? (open ? 1 : 0) : only === "front" ? (open ? 3 : 2) : only === "rear" ? (open ? 5 : 4) : -1;
-  let memo = slot >= 0 ? _flapSetMemo.get(bk) : undefined;
+  let row = slot >= 0 ? _flapSetMemo.get(bk) : undefined, memo = row && row.get(rk);
   if (memo && memo[slot]) return _flapUse(memo[slot]);
-  const key = bk + (open ? "|X|" : "|Z|") + (only || "");
-  const remember = (m) => { if (slot >= 0) { if (!memo) _flapSetMemo.set(bk, memo = []); memo[slot] = m; } return m; };
+  const key = bk + (rk && "|R|" + rk) + (open ? "|X|" : "|Z|") + (only || "");
+  const remember = (m) => {
+    if (slot >= 0) {
+      if (!row) _flapSetMemo.set(bk, row = new Map());
+      if (!memo) row.set(rk, memo = []);
+      memo[slot] = m;
+    }
+    return m;
+  };
   if (_flapSets[key]) return remember(_flapUse(_flapSets[key]));
   const nOrder = _flapSetOrder.length;
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   for (const fg of flaps) {
     if (only && fg.wing !== only) continue;
-    const g = Car3D.buildFlapGeom(fg, c, finish, surface), ang = open ? fg.xAngle : fg.zAngle;
+    const g = Car3D.buildFlapGeom(fg, fg === pr ? rearCol : c, finish, surface), ang = open ? fg.xAngle : fg.zAngle;
     const ca = Math.cos(ang), sa = Math.sin(ang), base = out.pos.length / 3;
     for (let i = 0; i < g.pos.length; i += 3) {
       const y = g.pos[i + 1], z = g.pos[i + 2], ny = g.nrm[i + 1], nz = g.nrm[i + 2];
@@ -728,7 +760,7 @@ function getAeroFlapSet(aLvl, col, style, finish, open, only, surface) {
     for (const k of g.idx) out.idx.push(base + k);
   }
   const made = _flapPut(_flapSets, _flapSetOrder, FLAP_SET_MAX, key, out);
-  if (_flapSetOrder.length === nOrder) { _flapSetMemo.clear(); memo = undefined; }   // an eviction freed a mesh the memo may still point at
+  if (_flapSetOrder.length === nOrder) { _flapSetMemo.clear(); row = memo = undefined; }   // an eviction freed a mesh the memo may still point at
   return remember(made);
 }
 

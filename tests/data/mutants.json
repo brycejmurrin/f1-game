@@ -51,11 +51,11 @@
       "find": "const lat = (wx - bestCx) * r0 + (wz - bestCz) * r2;",
       "replace": "const lat = -((wx - bestCx) * r0 + (wz - bestCz) * r2);",
       "why": "Flips the sign of the lateral offset Tracks.project() recovers, so a car right of the centreline projects as left — the +right convention every agent-view and debris consumer relies on silently inverts.",
-      "spec": "tests/specs/projection.spec.js",
+      "spec": "tests/unit/track-project-hints.test.mjs",
       "catchers": {
-        "round-trips (s, lateral) all around the lap and across the width": true,
-        "a point on the centreline projects to lateral ~0": false,
-        "lateral sign matches the +right convention": true
+        "monza: with no hint, and with the true hint, project() returns the built (s, lateral)": true,
+        "monza: +lateral is to the right of the centreline": true,
+        "monza: a point on the centreline projects to lateral ~0": false
       }
     },
     {

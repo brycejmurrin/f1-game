@@ -205,7 +205,7 @@ function clockOf(P) {
   const g = P.CarMesh.init.constructor("return globalThis")();
   let t = 1;
   g.performance = { now: () => t };
-  return { advance: (ms) => { t += ms; } };
+  return { advance: (ms) => { t += ms; }, now: () => t };
 }
 
 test("aero flap sets: N garage edits leave one paint job resident, not N; a set drawn every frame stays", () => {
@@ -241,7 +241,21 @@ test("aero flap elements (the opening wings): idle colours are released too", ()
     clk.advance(3000);
     P.CarMesh.releaseIdleFlaps(2000);
   }
-  assert.equal(firsts.filter((m) => !P.freed.includes(m)).length, 0);
+  assert.equal(firsts.slice(0, -1).filter((m) => !P.freed.includes(m)).length, 0);
+  assert.ok(!P.freed.includes(firsts[firsts.length - 1]), "the colour drawn last is the live one");
+});
+
+test("a frame longer than the idle window never frees the set it just drew (no relink on a part pick)", () => {
+  const P = loadReal(), clk = clockOf(P);
+  const set = (col) => P.CarMesh.getAeroFlapSet(2, col, null, null, false);
+  const live = set([0.4, 0.4, 0.4]);
+  clk.advance(3000);   // one SwiftShader garage frame
+  assert.equal(P.CarMesh.releaseIdleFlaps(2000), 0, "drawn on the last frame, so not idle");
+  assert.ok(!P.freed.includes(live));
+  const old = live, next = set([0.5, 0.4, 0.4]);   // the edit's new paint job, drawn on the next frames
+  clk.advance(3000); set([0.5, 0.4, 0.4]);
+  P.CarMesh.releaseIdleFlaps(2000);
+  assert.ok(P.freed.includes(old) && !P.freed.includes(next), "the old paint job goes once a newer draw is 2 s past it");
 });
 
 test("the race path never releases: without a releaseIdleFlaps call (or without a clock) the FIFO cap alone applies", () => {
@@ -254,8 +268,34 @@ test("the race path never releases: without a releaseIdleFlaps call (or without 
   assert.equal(Q.CarMesh.releaseIdleFlaps(0), 0, "no clock in a bare VM: nothing is idle");
 });
 
-test("the garage calls releaseIdleFlaps when a livery or parts edit busts the preview", () => {
+// The garage's order (setup-camera.js): an edit stamps _flapBustAt; the NEXT garage frame draws the new
+// paint job's wings, then releases every set not drawn since the bust. Released AT the bust instead, the old
+// job (drawn a frame earlier) survived unless frames had stalled 2 s, so garage-livery-churn.spec.js read
+// 1 or 2 sets by frame timing (2/5 red with --retries=0, B·C1 2026-10-20).
+test("release-since-bust leaves exactly the drawn paint job, whatever the frame gap", () => {
+  const run = (gap, atBust) => {
+    const P = loadReal(), clk = clockOf(P);
+    const set = (i) => P.CarMesh.getAeroFlapSet(2, [i / 100, 0.5, 0.5], null, null, false);
+    let shown = set(0);
+    for (let i = 1; i <= 8; i++) {
+      clk.advance(gap); set(i - 1);                                  // the old job, drawn up to the edit
+      clk.advance(1); const bustAt = clk.now();                      // the edit (an input event after that frame)
+      if (atBust) P.CarMesh.releaseIdleFlaps(2000);                  // the old order: release at the bust
+      clk.advance(gap); shown = set(i);                              // the next garage frame draws the new job
+      if (!atBust) P.CarMesh.releaseIdleFlaps(clk.now() - bustAt);   // then releases what was not drawn since
+    }
+    return { sets: P.CarMesh.flapState().sets, shownFreed: P.freed.includes(shown) };
+  };
+  for (const gap of [16, 900, 2500, 6000]) {
+    const r = run(gap, false);
+    assert.equal(r.sets, 1, `frame gap ${gap} ms: one paint job resident`);
+    assert.ok(!r.shownFreed, `frame gap ${gap} ms: the drawn job is never freed`);
+  }
+  const ctl = run(16, true).sets;
+  assert.ok(ctl > 1, `control: released at the bust, old jobs survive at a normal frame gap (${ctl} sets)`);
+});
+
+test("the garage releases flaps on the first frame after a livery or parts edit busts the preview", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/garage/setup-camera.js"), "utf8");
-  const bust = src.slice(src.indexOf("function spMeshBust()"), src.indexOf("function garageSeat()"));
-  assert.match(bust, /CarMesh\.releaseIdleFlaps\(FLAP_IDLE_MS\)/);
+  assert.match(src, /function spMeshBust\(\) \{[^}]*_flapBustAt = [^;]*performance\.now\(\)[\s\S]*drawAeroFlaps\([^;]*;\s*if \(_flapBustAt[^{]*\{\s*CarMesh\.releaseIdleFlaps\(Math\.max\(0, performance\.now\(\) - _flapBustAt\)\);/);
 });

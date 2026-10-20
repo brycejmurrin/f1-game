@@ -11,7 +11,7 @@
 //        rAF cadence ("raf"), which exists on every ref, so --base works on a ref that predates the spans.
 // cpu    wraps tools/shot/profile-gameloop.mjs (V8 sampling profile, top self time).
 // hitch  wraps tools/gfx/frame-hitch.mjs (per-rAF cost, spike period).
-// trace  CDP Tracing → artifacts/profiles/*.json, open in ui.perfetto.dev (spans show as User Timing "apex:*").
+// trace  CDP Tracing → artifacts/profiles/*.json, open in ui.perfetto.dev or the Chrome Performance panel (spans: User Timing "apex:*", one DevTools track per phase in group "Apex 26").
 // --repeat N    N fresh pages; reports the median of each stat and the spread (max-min) across repeats.
 // --base <ref>  same scenario on an ephemeral git worktree at <ref>; prints a delta table. A delta inside the
 //               spread is "noise", never a win; with fewer than 3 repeats every verdict is "unproven"; the raf row is cadence, informational only.
@@ -149,7 +149,9 @@ async function runTrace() {
     await cdp.send("Tracing.end"); await done;
     const file = join(OUT, `${track}-trace.json`);
     writeFileSync(file, JSON.stringify({ traceEvents: chunks }));
-    console.log(`trace: ${file} (${chunks.length} events) — open in https://ui.perfetto.dev ; spans are User Timing "apex:*"`);
+    const tracks = {};
+    for (const e of chunks) { const t = e.cat === "blink.user_timing" && e.args && e.args.detail; const d = typeof t === "string" && /"track":"([^"]+)"/.exec(t); if (d) tracks[d[1]] = (tracks[d[1]] || 0) + 1; }
+    console.log(`trace: ${file} (${chunks.length} events) — open in https://ui.perfetto.dev or the Chrome Performance panel (Load profile); spans are User Timing "apex:*", DevTools tracks in group "Apex 26": ${JSON.stringify(tracks)}`);
   } finally { await browser.close().catch(() => {}); await srv.close?.(); }
 }
 

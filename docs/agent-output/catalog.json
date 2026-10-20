@@ -64,6 +64,16 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/car/car-fit-audit.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json"
+      ]
+    },
+    {
       "path": "tools/car/career-economy.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -110,6 +120,16 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/car/lib/fit-checks.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/car/lib/fit-geom.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/car/livery-contrast.mjs",
@@ -726,6 +746,16 @@
       ]
     },
     {
+      "path": "tools/ci/claude-usage.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--limit"
+      ]
+    },
+    {
       "path": "tools/ci/coverage-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -784,7 +814,32 @@
       ]
     },
     {
+      "path": "tools/ci/fleet-archive.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/fleet-board-snapshot.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-board.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/fleet-bus-mirror.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
       "interpreter": "node"
@@ -810,12 +865,23 @@
       ]
     },
     {
+      "path": "tools/ci/fleet-owner.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/fleet-tick.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--json"
+        "--json",
+        "--summary"
       ]
     },
     {
@@ -825,6 +891,11 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/ci/github-api.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/ci/github-token.mjs",
@@ -885,6 +956,17 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/merge-gate.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json",
+        "--quiet"
       ]
     },
     {
@@ -1014,15 +1096,6 @@
     },
     {
       "path": "tools/ci/queue-depth.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/ready-full-cap.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
@@ -1314,6 +1387,11 @@
       ]
     },
     {
+      "path": "tools/desktop/minify.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/desktop/pack-dry-run.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1506,7 +1584,10 @@
       "path": "tools/gen/gen-locales.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
-      "interpreter": "node"
+      "interpreter": "node",
+      "npmScripts": [
+        "gen:check"
+      ]
     },
     {
       "path": "tools/gen/gen-output-surface.mjs",
@@ -1971,6 +2052,11 @@
       ]
     },
     {
+      "path": "tools/lib/gate-receipt.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/harness.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2018,6 +2104,11 @@
     },
     {
       "path": "tools/lib/pack-assets.cjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/presentation.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -2567,9 +2658,27 @@
       ]
     },
     {
+      "path": "tools/perf/garage-census.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/perf/lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/perf/live-render-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/perf/mesh-census-lib.mjs",
@@ -2702,6 +2811,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/design-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/export-history-evidence.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2806,6 +2924,11 @@
         "--json",
         "--out"
       ]
+    },
+    {
+      "path": "tools/shot/lib/design-matrix.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/shot/lib/garage-camera-catalog.mjs",
@@ -3332,7 +3455,7 @@
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check"
     },
     {
       "name": "gen:docs",
@@ -3388,7 +3511,7 @@
     },
     {
       "name": "test:agent-output",
-      "command": "node --test tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
+      "command": "node --test tests/unit/agent-experiment.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
     },
     {
       "name": "test:audio-unit",
@@ -3424,7 +3547,7 @@
     },
     {
       "name": "test:docs-guards",
-      "command": "node --test tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/ci-gate-selection.test.mjs tests/unit/ci-gpu-census.test.mjs tests/unit/ci-pages-train.test.mjs tests/unit/ci-ship-filter-geometry.test.mjs tests/unit/ci-ship-smoke-renderer.test.mjs tests/unit/ci-workflow-triggers.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/pre-commit-guards.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs"
+      "command": "node --test tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/ci-gate-selection.test.mjs tests/unit/ci-gpu-census.test.mjs tests/unit/ci-pages-train.test.mjs tests/unit/ci-ship-filter-geometry.test.mjs tests/unit/ci-ship-smoke-renderer.test.mjs tests/unit/ci-workflow-triggers.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/pre-commit-guards.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs tests/unit/vendor-licences.test.mjs"
     },
     {
       "name": "test:float",
@@ -3436,7 +3559,7 @@
     },
     {
       "name": "test:game-vm",
-      "command": "node tools/ci/run-node-group.mjs test:game-vm tests/unit/active-aero-vm.test.mjs tests/unit/aero-zones-vm.test.mjs tests/unit/agent-anchors-vm.test.mjs tests/unit/agent-determinism-vm.test.mjs tests/unit/agent-hooks-vm.test.mjs tests/unit/agent-view-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs tests/unit/ai-pass-defend-vm.test.mjs tests/unit/ai-queue-reach-vm.test.mjs tests/unit/ai-racecraft-vm.test.mjs tests/unit/ai-stuck-vm.test.mjs tests/unit/cam-avoid-vm.test.mjs tests/unit/car-fields-vm.test.mjs tests/unit/classification-vm.test.mjs tests/unit/collide-wall-limits.test.mjs tests/unit/collision-ai-fixes-vm.test.mjs tests/unit/collision-contact-vm.test.mjs tests/unit/collisions-deep-vm.test.mjs tests/unit/collisions-vm.test.mjs tests/unit/determinism-replay-vm.test.mjs tests/unit/dev-tools-vm.test.mjs tests/unit/drift-vm.test.mjs tests/unit/driving-line-pace.test.mjs tests/unit/elevation-tracks-vm.test.mjs tests/unit/episode-transients.test.mjs tests/unit/game-round2-vm.test.mjs tests/unit/game-vm-pool.test.mjs tests/unit/game-vm.test.mjs tests/unit/headless-api-vm.test.mjs tests/unit/hunt-apex-aiplace-reset-vm.test.mjs tests/unit/hunt-tlx-create-undo.test.mjs tests/unit/input-ghost-replay-vm.test.mjs tests/unit/jump-start-vm.test.mjs tests/unit/lockup-bench-vm.test.mjs tests/unit/lockup-smoke-vm.test.mjs tests/unit/longitudinal-vm.test.mjs tests/unit/mechanics-drills-vm.test.mjs tests/unit/mechanics-integration-vm.test.mjs tests/unit/mechanics-race-vm.test.mjs tests/unit/net-seed-sync-vm.test.mjs tests/unit/new-hooks-vm.test.mjs tests/unit/obs-act-edge-vm.test.mjs tests/unit/offtrack-edges-vm.test.mjs tests/unit/offtrack-vm.test.mjs tests/unit/pace-arming-vm.test.mjs tests/unit/persistence-vm.test.mjs tests/unit/phone-pad-netplay-vm.test.mjs tests/unit/physics-characterization-vm.test.mjs tests/unit/physics-feel-vm.test.mjs tests/unit/physics-oracle.test.mjs tests/unit/physics-rows-vm.test.mjs tests/unit/pit-lane-vm.test.mjs tests/unit/player-dynamics-shipped-vm.test.mjs tests/unit/player-dynamics-vm.test.mjs tests/unit/quali-handoff-vm.test.mjs tests/unit/quali-pace-parity-vm.test.mjs tests/unit/race-flow-fixes-vm.test.mjs tests/unit/race-settings-pitplan-key.test.mjs tests/unit/race-settings-vm.test.mjs tests/unit/rain-cells-vm.test.mjs tests/unit/real-replay-vm.test.mjs tests/unit/red-flag-fuel-vm.test.mjs tests/unit/red-flag-pit-vm.test.mjs tests/unit/red-flag-vm.test.mjs tests/unit/retired-car-obstacle-vm.test.mjs tests/unit/session-entry-vm.test.mjs tests/unit/speed-cap-vm.test.mjs tests/unit/storm-vm.test.mjs tests/unit/track-wetness-vm.test.mjs tests/unit/tt-lap-validity-vm.test.mjs tests/unit/tyre-strategy-vm.test.mjs tests/unit/wake-lock-vm.test.mjs tests/unit/wind-vm.test.mjs tests/unit/world-physics-vm.test.mjs --"
+      "command": "node tools/ci/run-node-group.mjs test:game-vm tests/unit/active-aero-vm.test.mjs tests/unit/aero-zones-vm.test.mjs tests/unit/agent-anchors-vm.test.mjs tests/unit/agent-determinism-vm.test.mjs tests/unit/agent-hooks-vm.test.mjs tests/unit/agent-view-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs tests/unit/ai-pass-defend-vm.test.mjs tests/unit/ai-queue-reach-vm.test.mjs tests/unit/ai-racecraft-vm.test.mjs tests/unit/ai-stuck-vm.test.mjs tests/unit/ai-trail-yield-vm.test.mjs tests/unit/cam-avoid-vm.test.mjs tests/unit/car-fields-vm.test.mjs tests/unit/classification-vm.test.mjs tests/unit/collide-wall-limits.test.mjs tests/unit/collision-ai-fixes-vm.test.mjs tests/unit/collision-contact-vm.test.mjs tests/unit/collisions-deep-vm.test.mjs tests/unit/collisions-vm.test.mjs tests/unit/determinism-replay-vm.test.mjs tests/unit/dev-tools-vm.test.mjs tests/unit/drift-vm.test.mjs tests/unit/driving-line-pace.test.mjs tests/unit/elevation-tracks-vm.test.mjs tests/unit/episode-transients.test.mjs tests/unit/game-round2-vm.test.mjs tests/unit/game-vm-pool.test.mjs tests/unit/game-vm.test.mjs tests/unit/headless-api-vm.test.mjs tests/unit/hunt-apex-aiplace-reset-vm.test.mjs tests/unit/hunt-tlx-create-undo.test.mjs tests/unit/input-ghost-replay-vm.test.mjs tests/unit/jump-start-vm.test.mjs tests/unit/lockup-bench-vm.test.mjs tests/unit/lockup-smoke-vm.test.mjs tests/unit/longitudinal-vm.test.mjs tests/unit/mechanics-drills-vm.test.mjs tests/unit/mechanics-integration-vm.test.mjs tests/unit/mechanics-race-vm.test.mjs tests/unit/net-seed-sync-vm.test.mjs tests/unit/new-hooks-vm.test.mjs tests/unit/obs-act-edge-vm.test.mjs tests/unit/offtrack-edges-vm.test.mjs tests/unit/offtrack-vm.test.mjs tests/unit/pace-arming-vm.test.mjs tests/unit/persistence-vm.test.mjs tests/unit/phone-pad-netplay-vm.test.mjs tests/unit/physics-characterization-vm.test.mjs tests/unit/physics-feel-vm.test.mjs tests/unit/physics-oracle.test.mjs tests/unit/physics-rows-vm.test.mjs tests/unit/pit-lane-vm.test.mjs tests/unit/player-dynamics-shipped-vm.test.mjs tests/unit/player-dynamics-vm.test.mjs tests/unit/quali-handoff-vm.test.mjs tests/unit/quali-pace-parity-vm.test.mjs tests/unit/race-flow-fixes-vm.test.mjs tests/unit/race-settings-pitplan-key.test.mjs tests/unit/race-settings-vm.test.mjs tests/unit/rain-cells-vm.test.mjs tests/unit/real-replay-audio-focus.test.mjs tests/unit/real-replay-broadcast.test.mjs tests/unit/real-replay-frame-fit.test.mjs tests/unit/real-replay-transport.test.mjs tests/unit/real-replay-vm.test.mjs tests/unit/red-flag-fuel-vm.test.mjs tests/unit/red-flag-pit-vm.test.mjs tests/unit/red-flag-vm.test.mjs tests/unit/retired-car-obstacle-vm.test.mjs tests/unit/session-entry-vm.test.mjs tests/unit/speed-cap-vm.test.mjs tests/unit/storm-vm.test.mjs tests/unit/track-wetness-vm.test.mjs tests/unit/tt-lap-validity-vm.test.mjs tests/unit/tyre-strategy-vm.test.mjs tests/unit/wake-lock-vm.test.mjs tests/unit/wind-vm.test.mjs tests/unit/world-physics-vm.test.mjs --"
     },
     {
       "name": "test:game-vm-a",
@@ -3444,11 +3567,11 @@
     },
     {
       "name": "test:game-vm-b",
-      "command": "node tools/ci/run-node-group.mjs test:game-vm-b tests/unit/active-aero-vm.test.mjs tests/unit/aero-zones-vm.test.mjs tests/unit/agent-anchors-vm.test.mjs tests/unit/agent-determinism-vm.test.mjs tests/unit/agent-hooks-vm.test.mjs tests/unit/agent-view-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs tests/unit/ai-pass-defend-vm.test.mjs tests/unit/ai-queue-reach-vm.test.mjs tests/unit/ai-racecraft-vm.test.mjs tests/unit/ai-stuck-vm.test.mjs tests/unit/cam-avoid-vm.test.mjs tests/unit/car-fields-vm.test.mjs tests/unit/classification-vm.test.mjs tests/unit/collide-wall-limits.test.mjs tests/unit/collision-ai-fixes-vm.test.mjs tests/unit/collision-contact-vm.test.mjs tests/unit/collisions-deep-vm.test.mjs tests/unit/collisions-vm.test.mjs tests/unit/determinism-replay-vm.test.mjs tests/unit/dev-tools-vm.test.mjs tests/unit/drift-vm.test.mjs tests/unit/driving-line-pace.test.mjs tests/unit/episode-transients.test.mjs tests/unit/game-round2-vm.test.mjs tests/unit/game-vm-pool.test.mjs tests/unit/game-vm.test.mjs tests/unit/headless-api-vm.test.mjs tests/unit/hunt-apex-aiplace-reset-vm.test.mjs tests/unit/hunt-tlx-create-undo.test.mjs tests/unit/input-ghost-replay-vm.test.mjs tests/unit/jump-start-vm.test.mjs tests/unit/lockup-bench-vm.test.mjs tests/unit/lockup-smoke-vm.test.mjs tests/unit/longitudinal-vm.test.mjs tests/unit/mechanics-drills-vm.test.mjs tests/unit/mechanics-integration-vm.test.mjs tests/unit/mechanics-race-vm.test.mjs tests/unit/net-seed-sync-vm.test.mjs tests/unit/new-hooks-vm.test.mjs tests/unit/obs-act-edge-vm.test.mjs tests/unit/offtrack-edges-vm.test.mjs tests/unit/offtrack-vm.test.mjs tests/unit/pace-arming-vm.test.mjs tests/unit/persistence-vm.test.mjs tests/unit/phone-pad-netplay-vm.test.mjs tests/unit/physics-characterization-vm.test.mjs tests/unit/physics-feel-vm.test.mjs tests/unit/physics-oracle.test.mjs tests/unit/physics-rows-vm.test.mjs tests/unit/pit-lane-vm.test.mjs tests/unit/player-dynamics-shipped-vm.test.mjs tests/unit/player-dynamics-vm.test.mjs tests/unit/quali-handoff-vm.test.mjs tests/unit/quali-pace-parity-vm.test.mjs tests/unit/race-flow-fixes-vm.test.mjs tests/unit/race-settings-pitplan-key.test.mjs tests/unit/race-settings-vm.test.mjs tests/unit/rain-cells-vm.test.mjs tests/unit/real-replay-vm.test.mjs tests/unit/red-flag-fuel-vm.test.mjs tests/unit/red-flag-pit-vm.test.mjs tests/unit/red-flag-vm.test.mjs tests/unit/retired-car-obstacle-vm.test.mjs tests/unit/session-entry-vm.test.mjs tests/unit/speed-cap-vm.test.mjs tests/unit/storm-vm.test.mjs tests/unit/track-wetness-vm.test.mjs tests/unit/tt-lap-validity-vm.test.mjs tests/unit/tyre-strategy-vm.test.mjs tests/unit/wake-lock-vm.test.mjs tests/unit/wind-vm.test.mjs tests/unit/world-physics-vm.test.mjs --"
+      "command": "node tools/ci/run-node-group.mjs test:game-vm-b tests/unit/active-aero-vm.test.mjs tests/unit/aero-zones-vm.test.mjs tests/unit/agent-anchors-vm.test.mjs tests/unit/agent-determinism-vm.test.mjs tests/unit/agent-hooks-vm.test.mjs tests/unit/agent-view-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs tests/unit/ai-pass-defend-vm.test.mjs tests/unit/ai-queue-reach-vm.test.mjs tests/unit/ai-racecraft-vm.test.mjs tests/unit/ai-stuck-vm.test.mjs tests/unit/ai-trail-yield-vm.test.mjs tests/unit/cam-avoid-vm.test.mjs tests/unit/car-fields-vm.test.mjs tests/unit/classification-vm.test.mjs tests/unit/collide-wall-limits.test.mjs tests/unit/collision-ai-fixes-vm.test.mjs tests/unit/collision-contact-vm.test.mjs tests/unit/collisions-deep-vm.test.mjs tests/unit/collisions-vm.test.mjs tests/unit/determinism-replay-vm.test.mjs tests/unit/dev-tools-vm.test.mjs tests/unit/drift-vm.test.mjs tests/unit/driving-line-pace.test.mjs tests/unit/episode-transients.test.mjs tests/unit/game-round2-vm.test.mjs tests/unit/game-vm-pool.test.mjs tests/unit/game-vm.test.mjs tests/unit/headless-api-vm.test.mjs tests/unit/hunt-apex-aiplace-reset-vm.test.mjs tests/unit/hunt-tlx-create-undo.test.mjs tests/unit/input-ghost-replay-vm.test.mjs tests/unit/jump-start-vm.test.mjs tests/unit/lockup-bench-vm.test.mjs tests/unit/lockup-smoke-vm.test.mjs tests/unit/longitudinal-vm.test.mjs tests/unit/mechanics-drills-vm.test.mjs tests/unit/mechanics-integration-vm.test.mjs tests/unit/mechanics-race-vm.test.mjs tests/unit/net-seed-sync-vm.test.mjs tests/unit/new-hooks-vm.test.mjs tests/unit/obs-act-edge-vm.test.mjs tests/unit/offtrack-edges-vm.test.mjs tests/unit/offtrack-vm.test.mjs tests/unit/pace-arming-vm.test.mjs tests/unit/persistence-vm.test.mjs tests/unit/phone-pad-netplay-vm.test.mjs tests/unit/physics-characterization-vm.test.mjs tests/unit/physics-feel-vm.test.mjs tests/unit/physics-oracle.test.mjs tests/unit/physics-rows-vm.test.mjs tests/unit/pit-lane-vm.test.mjs tests/unit/player-dynamics-shipped-vm.test.mjs tests/unit/player-dynamics-vm.test.mjs tests/unit/quali-handoff-vm.test.mjs tests/unit/quali-pace-parity-vm.test.mjs tests/unit/race-flow-fixes-vm.test.mjs tests/unit/race-settings-pitplan-key.test.mjs tests/unit/race-settings-vm.test.mjs tests/unit/rain-cells-vm.test.mjs tests/unit/real-replay-audio-focus.test.mjs tests/unit/real-replay-broadcast.test.mjs tests/unit/real-replay-frame-fit.test.mjs tests/unit/real-replay-transport.test.mjs tests/unit/real-replay-vm.test.mjs tests/unit/red-flag-fuel-vm.test.mjs tests/unit/red-flag-pit-vm.test.mjs tests/unit/red-flag-vm.test.mjs tests/unit/retired-car-obstacle-vm.test.mjs tests/unit/session-entry-vm.test.mjs tests/unit/speed-cap-vm.test.mjs tests/unit/storm-vm.test.mjs tests/unit/track-wetness-vm.test.mjs tests/unit/tt-lap-validity-vm.test.mjs tests/unit/tyre-strategy-vm.test.mjs tests/unit/wake-lock-vm.test.mjs tests/unit/wind-vm.test.mjs tests/unit/world-physics-vm.test.mjs --"
     },
     {
       "name": "test:game-vm-b1",
-      "command": "node tools/ci/run-node-group.mjs test:game-vm-b1 tests/unit/aero-zones-vm.test.mjs tests/unit/agent-hooks-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs tests/unit/ai-pass-defend-vm.test.mjs tests/unit/ai-stuck-vm.test.mjs tests/unit/cam-avoid-vm.test.mjs tests/unit/collisions-deep-vm.test.mjs tests/unit/collisions-vm.test.mjs tests/unit/episode-transients.test.mjs tests/unit/game-round2-vm.test.mjs tests/unit/game-vm-pool.test.mjs tests/unit/game-vm.test.mjs tests/unit/headless-api-vm.test.mjs tests/unit/hunt-apex-aiplace-reset-vm.test.mjs tests/unit/hunt-tlx-create-undo.test.mjs tests/unit/input-ghost-replay-vm.test.mjs tests/unit/jump-start-vm.test.mjs tests/unit/new-hooks-vm.test.mjs tests/unit/offtrack-edges-vm.test.mjs tests/unit/offtrack-vm.test.mjs tests/unit/pace-arming-vm.test.mjs tests/unit/physics-characterization-vm.test.mjs tests/unit/player-dynamics-shipped-vm.test.mjs tests/unit/player-dynamics-vm.test.mjs tests/unit/quali-pace-parity-vm.test.mjs tests/unit/race-flow-fixes-vm.test.mjs tests/unit/race-settings-pitplan-key.test.mjs tests/unit/real-replay-vm.test.mjs tests/unit/red-flag-fuel-vm.test.mjs tests/unit/red-flag-vm.test.mjs tests/unit/track-wetness-vm.test.mjs tests/unit/world-physics-vm.test.mjs --"
+      "command": "node tools/ci/run-node-group.mjs test:game-vm-b1 tests/unit/aero-zones-vm.test.mjs tests/unit/agent-hooks-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs tests/unit/ai-pass-defend-vm.test.mjs tests/unit/ai-stuck-vm.test.mjs tests/unit/ai-trail-yield-vm.test.mjs tests/unit/cam-avoid-vm.test.mjs tests/unit/collisions-deep-vm.test.mjs tests/unit/collisions-vm.test.mjs tests/unit/episode-transients.test.mjs tests/unit/game-round2-vm.test.mjs tests/unit/game-vm-pool.test.mjs tests/unit/game-vm.test.mjs tests/unit/headless-api-vm.test.mjs tests/unit/hunt-apex-aiplace-reset-vm.test.mjs tests/unit/hunt-tlx-create-undo.test.mjs tests/unit/input-ghost-replay-vm.test.mjs tests/unit/jump-start-vm.test.mjs tests/unit/new-hooks-vm.test.mjs tests/unit/offtrack-edges-vm.test.mjs tests/unit/offtrack-vm.test.mjs tests/unit/pace-arming-vm.test.mjs tests/unit/physics-characterization-vm.test.mjs tests/unit/player-dynamics-shipped-vm.test.mjs tests/unit/player-dynamics-vm.test.mjs tests/unit/quali-pace-parity-vm.test.mjs tests/unit/race-flow-fixes-vm.test.mjs tests/unit/race-settings-pitplan-key.test.mjs tests/unit/real-replay-audio-focus.test.mjs tests/unit/real-replay-broadcast.test.mjs tests/unit/real-replay-frame-fit.test.mjs tests/unit/real-replay-transport.test.mjs tests/unit/real-replay-vm.test.mjs tests/unit/red-flag-fuel-vm.test.mjs tests/unit/red-flag-vm.test.mjs tests/unit/track-wetness-vm.test.mjs tests/unit/world-physics-vm.test.mjs --"
     },
     {
       "name": "test:game-vm-b2",
@@ -3456,7 +3579,7 @@
     },
     {
       "name": "test:garage-unit",
-      "command": "node tools/ci/run-node-group.mjs test:garage-unit tests/unit/body-split.test.mjs tests/unit/car-materials.test.mjs tests/unit/car-shade.test.mjs tests/unit/cover-legibility.test.mjs tests/unit/fill-gating.test.mjs tests/unit/fin-design.test.mjs tests/unit/front-wing-decal.test.mjs tests/unit/garage-followups.test.mjs tests/unit/garage-mesh.test.mjs tests/unit/garage-panel-side.test.mjs tests/unit/garage-sign-occlusion.test.mjs tests/unit/helmets.test.mjs tests/unit/livery-cover-graphics.test.mjs tests/unit/livery-decal-surfaces.test.mjs tests/unit/livery-finish-contract.test.mjs tests/unit/livery-paint-zones.test.mjs tests/unit/livery-sidewall.test.mjs tests/unit/livery-wheels.test.mjs tests/unit/livery-zone-finish.test.mjs tests/unit/parts-distinct-mesh.test.mjs tests/unit/parts-locked-equivalent.test.mjs tests/unit/setup-trial-session.test.mjs tests/unit/setup-tune.test.mjs tests/unit/team-livery.test.mjs tests/unit/team-style-relief.test.mjs tests/unit/tyre-recipes-open-rim.test.mjs --"
+      "command": "node tools/ci/run-node-group.mjs test:garage-unit tests/unit/aero-preview-fields.test.mjs tests/unit/aero-shapes-d3c.test.mjs tests/unit/body-split.test.mjs tests/unit/car-materials.test.mjs tests/unit/car-shade.test.mjs tests/unit/fill-gating.test.mjs tests/unit/fin-design.test.mjs tests/unit/front-wing-decal.test.mjs tests/unit/garage-followups.test.mjs tests/unit/garage-mesh.test.mjs tests/unit/garage-panel-side.test.mjs tests/unit/garage-sign-occlusion.test.mjs tests/unit/helmets.test.mjs tests/unit/livery-cover-graphics.test.mjs tests/unit/livery-decal-surfaces.test.mjs tests/unit/livery-finish-contract.test.mjs tests/unit/livery-paint-zones.test.mjs tests/unit/livery-sidewall.test.mjs tests/unit/livery-wheels.test.mjs tests/unit/livery-zone-finish.test.mjs tests/unit/parts-distinct-mesh.test.mjs tests/unit/parts-locked-equivalent.test.mjs tests/unit/setup-trial-session.test.mjs tests/unit/setup-tune.test.mjs tests/unit/team-livery.test.mjs tests/unit/team-style-relief.test.mjs tests/unit/tyre-recipes-open-rim.test.mjs --"
     },
     {
       "name": "test:gfx",
@@ -3504,7 +3627,7 @@
     },
     {
       "name": "test:node-slow",
-      "command": "node --test --test-concurrency=1 tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/livery-contrast.test.mjs tests/unit/slider-effect.test.mjs"
+      "command": "node --test --test-concurrency=1 tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/cover-legibility.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/livery-contrast.test.mjs tests/unit/slider-effect.test.mjs"
     },
     {
       "name": "test:perf-frametime",
@@ -3520,7 +3643,7 @@
     },
     {
       "name": "test:physics-core",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/debris.spec.js tests/specs/longitudinal.spec.js tests/specs/offtrack.spec.js tests/specs/physics-*.spec.js tests/specs/pit-lane.spec.js tests/specs/projection.spec.js tests/specs/race-control.spec.js tests/specs/world-physics.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/debris.spec.js tests/specs/longitudinal.spec.js tests/specs/offtrack.spec.js tests/specs/physics-*.spec.js tests/specs/pit-lane.spec.js tests/specs/race-control.spec.js tests/specs/world-physics.spec.js"
     },
     {
       "name": "test:render",

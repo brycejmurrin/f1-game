@@ -79,3 +79,23 @@ test("hud.js gapSec routes through HudReadouts (no private 1-dp ternary)", () =>
   assert.match(src, /_ro\.fmtGapSec|_ro\.gapDecimals|HudReadouts\.fmtGapSec|HudReadouts\.gapDecimals/);
   assert.doesNotMatch(src, /=== "broadcast" \? 2 : 1/);
 });
+
+test("gap chip is monotonic and fixed-width across the 9.95 s boundary (#2978)", () => {
+  const R = load();
+  for (const p of ["standard", "minimal"]) {
+    assert.equal(R.fmtGapSec(9.949, p), "9.95", p);
+    assert.equal(R.fmtGapSec(9.95, p), "9.95", p);
+    assert.equal(R.fmtGapSec(9.951, p), "9.95", p);
+    assert.equal(R.fmtGapSec(9.994, p), "9.99", p);
+    assert.equal(R.fmtGapSec(9.996, p), "10.0", p);
+    let prev = -1;
+    for (let s = 9.9; s < 10.1; s += 0.001) {
+      const t = R.fmtGapSec(s, p), v = parseFloat(t);
+      assert.ok(v >= prev, `${s.toFixed(3)} -> ${t} went backwards from ${prev}`);
+      assert.equal(t.length, 4, `${s.toFixed(3)} -> ${t} changed width`);
+      prev = v;
+    }
+  }
+  assert.equal(R.fmtGap(9.95, true, "standard"), "-9.95");
+  assert.equal(R.fmtGap(9.951, false, "standard"), "+9.95");
+});

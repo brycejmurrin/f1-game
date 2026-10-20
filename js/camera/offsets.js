@@ -500,8 +500,19 @@ function importCars(raw) {
 
 // Accept a pack, a legacy CameraEdits object, or a bare modes map.
 function importPack(raw) {
-  if (!raw || typeof raw !== "object") return { ok: false, reason: "not an object" };
-  if (raw.v === 1 || raw.v === 2 || raw.modes || raw.global || raw.comfort || raw.tracks || raw.cars) {
+  const record = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  const modes = (v) => record(v) && Object.values(v).every(record);
+  const scopes = (v) => record(v) && Object.values(v).every((scope) => record(scope) &&
+    (scope.modes === undefined || modes(scope.modes)) &&
+    (scope.comfort === undefined || record(scope.comfort)));
+  if (!record(raw)) return { ok: false, reason: "not an object" };
+  const sections = { modes, global: record, comfort: record, tracks: scopes, cars: scopes };
+  if (raw.v === 1 || raw.v === 2 || Object.keys(sections).some((key) => Object.hasOwn(raw, key))) {
+    // Validate every supplied section before replacing any store. Sanitizing
+    // a scalar/array to {} must not turn a bad paste into a successful reset.
+    for (const key of Object.keys(sections)) {
+      if (Object.hasOwn(raw, key) && !sections[key](raw[key])) return { ok: false, reason: "invalid " + key };
+    }
     // A pack is authoritative for every camera-tuner store.
     return { ok: true, modes: importModes(raw.modes || {}), global: importGlobal(raw.global || {}),
       comfort: importComfort(raw.comfort || {}), tracks: importTracks(raw.tracks || {}), cars: importCars(raw.cars || {}) };
@@ -509,6 +520,7 @@ function importPack(raw) {
   // Legacy window.CameraEdits = { chase: {...}, ... } or a modes-only map: it says
   // nothing about the GLOBAL baseline or the COMFORT (accessibility) knobs, so it
   // must not wipe them.
+  if (!modes(raw)) return { ok: false, reason: "invalid modes" };
   return { ok: true, modes: importModes(raw), global: countGlobal(), comfort: Object.keys(_comfort).length,
     tracks: Object.keys(_tracks).length, cars: Object.keys(_cars).length };
 }

@@ -84,7 +84,11 @@ function typedRibbon(geo) {
   }
 }
 
-async function build(m) {
+// Only opted-in callers require a page permit. Cancellation while model
+// readiness is pending avoids Tracks.build; its synchronous body cannot be
+// interrupted by later messages. Independent callers have no latest-wins rule.
+const _jobs = new Map();
+async function build(m, job) {
   const recs = [];
   const rec = (op) => (...args) => {
     const n = recs.length;
@@ -103,12 +107,21 @@ async function build(m) {
   adoptTeam(m.team);
   const src = scenerySrc(def);
   if (typeof Assets !== "undefined" && Assets.modelsReady) await Assets.modelsReady(0, src);
+  if (job.cancelled) return;
+  if (m.checkLive) {
+    const permitted = new Promise((resolve) => { job.permit = resolve; });
+    self.postMessage({ type: "buildReady", seq: m.seq });
+    if (!(await permitted) || job.cancelled) return;
+  }
+  adoptTeam(m.team); // readiness waits may have let another job change MY TEAM
   const t0 = performance.now();
   const track = Tracks.build(def, Object.assign({}, m.opts, { gfx, retainRibbonCpu: true }));
   const ms = performance.now() - t0;
   track._gfx = null; track.surface = null; track._nodeGrid = null; track.graph = null; track.def = null;
-  // terrainGrid()'s cell lists: a pure cache the page rebuilds on first use (tracks.js).
-  track._terrGrid = null;
+  // track._terrGrid (tracks.js terrainGrid) rides along: flat typed arrays, so
+  // it transfers for free, and its geo still IS track.terrainGeo after the clone
+  // (structured clone keeps shared references) — the page's first terrainY
+  // (flyby groundAt, lamp bake) no longer rebuilds it in a 10-60 ms long task.
   typedRibbon(track.roadGeo); typedRibbon(track.terrainGeo);
   // def._sceneryShift is written onto the WORKER's def copy by buildCenterline
   // (tracks.js); the main-thread def never sees it, so every later reader there
@@ -128,8 +141,16 @@ self.onmessage = async (e) => {
         _loaded = true;   // no model prefetch: each build fetches its own circuit's set
       }
       self.postMessage({ type: "ready" });
+    } else if (m.type === "buildPermit") {
+      const job = _jobs.get(m.seq);
+      if (job) {
+        if (!m.live) job.cancelled = true;
+        if (job.permit) job.permit(!!m.live);
+      }
     } else if (m.type === "build") {
-      await build(m);
+      const job = { cancelled: false, permit: null };
+      _jobs.set(m.seq, job);
+      try { await build(m, job); } finally { _jobs.delete(m.seq); }
     }
   } catch (err) {
     self.postMessage({ type: "error", seq: m.seq, message: String((err && err.message) || err) });

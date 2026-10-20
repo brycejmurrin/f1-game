@@ -743,3 +743,23 @@ test("fitHud: a manually placed huge plate does not reduce the automatic top ban
   for (const h of [small, huge]) { h.invalidate(); h.tick(); }
   assert.equal(huge.pub(), small.pub(), "manual plate dimensions do not constrain other readouts");
 });
+
+// #2797: a custom property written on <html> restyles the whole document at the next layout read
+// (13-16 ms on a phone), so a full fit that changes nothing must write nothing there — not a value
+// and its undo. The cap pass used to publish its zoom-1 reads (and set the band zooms to 1) only for
+// the paint pass to write them back.
+test("fitHud: a steady same-key full fit writes no root custom property (#2797)", () => {
+  const h = bootFlipHarness({ scale: 1, W: 1280, H: 720 });
+  h.paintAt(h.pub());
+  h.invalidate();
+  h.tick();
+  const st = h.root.style, set = st.setProperty, rm = st.removeProperty, writes = [];
+  st.setProperty = (k, v) => { if (st.getPropertyValue(k) !== String(v)) writes.push(k + "=" + v); set(k, v); };
+  st.removeProperty = (k) => { if (st.getPropertyValue(k) !== "") writes.push("-" + k); rm(k); };
+  try {
+    // 40 ticks cross the 30-tick same-key backstop: at least one full fit re-measures, unforced.
+    for (let i = 0; i < 40; i++) h.tick();
+  } finally { st.setProperty = set; st.removeProperty = rm; }
+  assert.equal(h.root.style.getPropertyValue("--hud-z-top"), "", "precondition: the band is uncapped at HUD SIZE 100");
+  assert.deepEqual(writes, [], "a re-fit of an unchanged layout must not touch <html>'s style");
+});

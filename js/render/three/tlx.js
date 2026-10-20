@@ -254,9 +254,11 @@ const TLX = (function () {
       // makes the number meaningless; on real hardware it is the CPU side of
       // the shared-uniform change (per-object bind groups were paid here).
       let _presentAcc = 0, _presentMs = 0;
+      let _sceneRenders = 0;   // completed scene renders: _dropLater's "drawn since" clock
       const _renderTimed = (sc, cam) => {
         const t0 = performance.now();
         renderer.render(sc, cam);
+        _sceneRenders++;
         _presentAcc += performance.now() - t0;
       };
       // Headless is a fact about PRESENTATION, not about silicon: headless
@@ -509,8 +511,9 @@ const TLX = (function () {
         try {
           await renderer.init();
           checkInit();
-          // WebGL2 only: that is the phone's path, measured (paired census); WebGPU keeps three's own loop untouched.
-          if (renderer.backend && renderer.backend.isWebGLBackend) renderer.__apexPump = pumpAnimation(renderer);
+          // Both backends: three's Animation tick is backend-agnostic (inspector, info.reset, nodeFrame) and the
+          // WebGPU leg still counted 2.05 rAF callbacks per drawn frame (gpu-census 39262990733) with WebGL2 pumped.
+          renderer.__apexPump = pumpAnimation(renderer);
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
@@ -1825,6 +1828,7 @@ const TLX = (function () {
           (o.clearcoat !== undefined ? o.clearcoat : 0) + "," +
           (o.carPaint !== undefined ? o.carPaint : 0) + "," +
           (o.sparkle !== undefined ? o.sparkle : 1) +
+          (o.carFinish ? "|cf" : "") +
           (o.doubleSided ? "|ds" : "") +
           (o.noAlphaWrite ? "|na" : "") +
           (o.depthBias ? "|db" + o.depthBias[0] + "," + o.depthBias[1] : "") +
@@ -1844,13 +1848,13 @@ const TLX = (function () {
         if (c !== undefined && c.tr === tr && c.ro === o.roughness
           && c.me === o.metalness && c.sp === o.specular && c.de === o.detail
           && c.cc === o.clearcoat && c.cp === o.carPaint && c.sk === o.sparkle
-          && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
+          && c.cf === !!o.carFinish && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
           && c.hb === !!db && c.b0 === db0 && c.b1 === db1
           && c.ch === !!chunked && c.in === _instMode(instanced)) return c.key;
         if (c === undefined) { c = {}; _matKeyMemo.set(o, c); }
         c.tr = tr; c.ro = o.roughness; c.me = o.metalness;
         c.sp = o.specular; c.de = o.detail; c.cc = o.clearcoat; c.cp = o.carPaint;
-        c.sk = o.sparkle; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
+        c.sk = o.sparkle; c.cf = !!o.carFinish; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
         c.nd = !!o.noDepthTest; c.hb = !!db; c.b0 = db0; c.b1 = db1;
         c.ch = !!chunked; c.in = _instMode(instanced);
         c.key = buildMatKey(o, chunked, instanced);
@@ -2669,7 +2673,7 @@ const TLX = (function () {
         return true;
       }
       // A freed source takes its runs (and their views) with it.
-      function _coDrop(geo) {
+      function _coDrop(geo, later) {
         const pair = _coRuns.get(geo);
         if (!pair) return;
         _coRuns.delete(geo);
@@ -2681,7 +2685,7 @@ const TLX = (function () {
           // RenderObject stayed a "dispose" listener on the shared run materials, pinning the mesh, the view and its
           // CO_CAP x 19-float buffer once per pass that drew it (#2150). The view goes with it (_ownGeo).
           b.imesh._ownGeo = true;
-          dropWrapper(b.imesh);
+          dropWrapper(b.imesh, null, later);
           b.rec = -1;
         }
       }
@@ -3445,7 +3449,33 @@ const TLX = (function () {
       // race→race switch). Queue the drop; flushDropped() finishes it on the
       // first present after the warm settles, when no compile holds the mesh.
       const _dropQueue = [];
-      function dropWrapper(m, ownedGeometry) {
+      // A FREED GEOMETRY'S RENDER OBJECTS OUTLIVE IT BY ONE SCENE RENDER. three
+      // releases a pipeline when its last render object goes (Pipelines.delete:
+      // usedTimes 0 -> _releasePipeline). The garage car is the only holder of
+      // its pipeline, and a livery edit frees it (dropPreviewMeshes) before the
+      // repainted car's first draw, so every edit made a synchronous
+      // createRenderPipeline on WebGPU (a Metal/D3D compile; a program link on
+      // WebGL2) for the same pipeline it had just thrown away — counted 1 per
+      // edit in the WebGPU livery probe. Held here, the new car's render object
+      // takes the pipeline (usedTimes 1 -> 2) before the old one lets go. The
+      // GPU buffers still go at once (the caller's geometry.dispose()); only the
+      // JS render objects wait. The geometry's coalesced (R1) runs wait too:
+      // a freed flap set's run is often the instanced lit program's last
+      // holder (B·R1's repro). Bounded: past DROP_LATER_MAX (a track free)
+      // everything drops now, so a circuit switch keeps its synchronous free.
+      const _dropLater = [];   // { mesh, at: _sceneRenders when dropped }
+      const DROP_LATER_MAX = 64;
+      const _dropStat = { held: 0, overflow: 0 };   // memState().dropLater
+      function flushDropLater(all) {
+        let w = 0;
+        for (let i = 0; i < _dropLater.length; i++) {
+          const e = _dropLater[i];
+          if (all || _sceneRenders > e.at) dropWrapper(e.mesh);
+          else _dropLater[w++] = e;
+        }
+        _dropLater.length = w;
+      }
+      function dropWrapper(m, ownedGeometry, afterRender) {
         try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         m.visible = false;
         if (_warmPending) {
@@ -3453,6 +3483,11 @@ const TLX = (function () {
           return;
         }
         if (m.__tlxDropped) return;
+        if (afterRender && !ownedGeometry) {
+          if (_dropLater.length < DROP_LATER_MAX) { _dropLater.push({ mesh: m, at: _sceneRenders }); _dropStat.held++; return; }
+          _dropStat.overflow++;
+          flushDropLater(true);
+        }
         m.__tlxDropped = true;
         try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
         if (m._ownGeo && m.geometry) m.geometry.dispose();   // a mesh that owns its geometry (an R1 run's view)
@@ -3475,13 +3510,13 @@ const TLX = (function () {
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
           if (m.geometry !== geo) { meshPool[w++] = m; continue; }
-          dropWrapper(m);
+          dropWrapper(m, null, true);
         }
         meshPool.length = w;
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
-        _coDrop(geo);   // R1: its coalesced runs
-        _decalDrop(geo);   // F3: its batched decal run
+        _coDrop(geo, true);   // R1: its coalesced runs (often the instanced lit program's last holder)
+        _decalDrop(geo);   // F3: its batched decal run (immediate: no measured pipeline loss, and tlx-probes pins it)
       }
 
       function disposeGeometry(geo) {
@@ -5851,6 +5886,7 @@ const TLX = (function () {
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }
           _matDispose.length = 0;
+          if (_dropLater.length) flushDropLater(false);   // after paint: their successors hold the pipelines now
           if (fx && fx.flushEvicted) fx.flushEvicted();
           if (_texPool.length) ageTexPool(_now);
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
@@ -6111,6 +6147,7 @@ const TLX = (function () {
           memState() {
             const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.n,
                         geoKeys: meshByGeo.size, batch: _poolBatch,
+                        dropLater: { now: _dropLater.length, held: _dropStat.held, overflow: _dropStat.overflow },
                         // The mirror sweep reports what it FREED, not that it ran:
                         // the first version of this lever never executed and read
                         // as "the fix does nothing" (PERF-FINDINGS 2m).
@@ -6120,9 +6157,17 @@ const TLX = (function () {
             try {
               const inf = renderer && renderer.info;
               if (inf) {
-                o.progs = (inf.programs && inf.programs.length) || 0;
+                o.progs = inf.memory && typeof inf.memory.programs === "number" ? inf.memory.programs : null;
                 if (inf.memory) {
                   o.rGeo = inf.memory.geometries; o.rTex = inf.memory.textures;
+                  // Copy only existing primitive resource telemetry (bytes stay bytes).
+                  o.resources = {};
+                  for (const key of ["total", "geometries", "textures", "texturesSize", "programs", "programsSize",
+                    "attributes", "attributesSize", "indexAttributes", "indexAttributesSize", "storageAttributes", "storageAttributesSize",
+                    "indirectStorageAttributes", "indirectStorageAttributesSize", "readbackBuffers", "readbackBuffersSize",
+                    "renderTargets", "uniformBuffers", "uniformBuffersSize"]) {
+                    if (typeof inf.memory[key] === "number") o.resources[key] = inf.memory[key];
+                  }
                   // Uniform buffers three holds. With the frame block in
                   // objectGroup this scaled with draws (one clone per pooled
                   // mesh, plus one per lamp array); shared, it is one per

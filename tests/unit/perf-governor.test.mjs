@@ -51,7 +51,10 @@ const SCALE_EPS = 0.02;
 function makeGov() {
   globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
   globalThis.window = { __APEX_BUILD: 1 };
-  const PerfGov = eval(SRC + ";PerfGov");
+  const PerfGov = eval(SRC.replace("strikes: () =>", `
+    testPending: () => _pendingVerify,
+    testSetPending: (pending) => { _pendingVerify = pending; },
+    strikes: () =>`) + ";PerfGov");
   let scale = 1;
   const gfx = {
     isMobile: true,
@@ -746,9 +749,9 @@ test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
   // and no other test would notice. Range grew to 31 with matte/brushed/pearl
   // and the carbon finish, 32 with the visor, 33 with the satin tyre sidewall;
   // mirror stays 27.
-  assert.match(lit, /surfaceId <= 40/);   // 34-40: garage finishes (flake/candy/tinted/chameleon/forged/gunmetal/goldplate)
+  assert.match(lit, /surfaceId <= 90/);   // 34-40: garage finishes (flake/candy/tinted/chameleon/forged/gunmetal/goldplate); 60/63/85: finishes (surface-id-parity counts their branches)
   assert.match(lit, /mirrorSurface = surfaceId == 27/);
-  assert.match(tsl, /lessThanEqual\(40\.0\)/);
+  assert.match(tsl, /lessThanEqual\(90\.0\)/);
   assert.match(tsl, /surfaceId\.equal\(27\.0\)/);
   for (const id of [28, 29, 30, 31, 33]) {
     assert.match(lit, new RegExp("surfaceId == " + id), "GLX is missing surface " + id);
@@ -1253,5 +1256,26 @@ test("one short or negative frame sample (pause -> resume stamps) must not colla
     }
     assert.equal(lowest, 1, `a ${bad} ms sample must not trigger a render-scale step-down`);
     assert.ok(Math.abs(PerfGov.floorMs() - 16.7) < 0.5, `the floor stays on the healthy cadence (${PerfGov.floorMs()}) after a ${bad} ms sample`);
+  }
+});
+
+
+test("preset changes expire scale attribution while keeping provisional resolution and no-op semantics", () => {
+  for (const [from, to] of [[0, 4], [4, 0]]) {
+    for (const prev of [1, 0.8]) {
+      const { PerfGov, scale } = makeGov();
+      PerfGov.setUserTier(from);
+      feed(PerfGov, () => 33.3, 45);
+      const chosen = scale();
+      const pending = { kind: "scale", prev, ema: 33.3 };
+      PerfGov.testSetPending(pending);
+      PerfGov.setUserTier(from);
+      assert.strictEqual(PerfGov.testPending(), pending, "same preset keeps pending attribution");
+      PerfGov.setUserTier(to);
+      assert.equal(PerfGov.testPending(), null, "both scale directions lose the old regime baseline");
+      assert.equal(scale(), chosen, "preset invalidation does not write resolution");
+      feed(PerfGov, () => 33.3, 60);
+      assert.equal(scale(), chosen, "existing cooldown protects the provisional scale while evidence settles");
+    }
   }
 });

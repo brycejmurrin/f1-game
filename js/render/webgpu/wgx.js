@@ -1072,6 +1072,7 @@ const WGX = (function () {
     let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
     let _gpuTimerEpoch = 0, _gpuFrameTimerEpoch = -1;
+    let _gpuSamples = 0, _gpuSampleAt = -1;
     let identInstanceBuf = null, zeroAttrBG = null, _roadLutBG = null, _roadLutReady = false;
     let pParticle = null, pParticleAdd = null, particleBGL = null;
     // Dual particle UBO/VBO/BG — smoke then sparks both writeBuffer before
@@ -1092,9 +1093,6 @@ const WGX = (function () {
     // binding 6 always references it (black 1×1 fallback when there's no canvas),
     // so the group stays valid and the knob simply no-ops.
     let _dirtView = null;
-
-    // TAA Halton Jitter state.
-    let _taaFrameIndex = 0;
 
     // Scene targets (allocated on resize / size change).
     let sceneTex = null, depthTex = null, sceneView = null, depthView = null,
@@ -2891,6 +2889,11 @@ const WGX = (function () {
       return { vbuf, ibuf: null, sbuf: a.sbuf, attrBG: a.attrBG, count, indexFormat, chunks: null };
     }
     function createMesh(data) {
+      const m = _createMesh(data);
+      m._matReach = _matReach(data);
+      return m;
+    }
+    function _createMesh(data) {
       const b = _interleave(data);
       const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
       const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
@@ -3120,24 +3123,6 @@ const WGX = (function () {
         _mul4(_vpGpu, _projZ01, _viewScratch);
       } else {
         _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
-      }
-
-      // TAA Halton jitter scaffolding — GATED OFF until a temporal RESOLVE pass
-      // exists. Jittering the projection each frame with nothing accumulating
-      // the history is pure sub-pixel shimmer over the whole image (the exact
-      // "flicker while driving" artifact class), so the offsets stay 0 for now.
-      // When a resolve lands: flip _TAA_ENABLED, and feed the per-frame jitter
-      // to the resolve pass so it can unjitter history lookups.
-      const _TAA_ENABLED = false;
-      if (_TAA_ENABLED) {
-        const halton = [
-          [0.5, 1/3], [0.25, 2/3], [0.75, 1/9], [0.125, 4/9],
-          [0.625, 7/9], [0.375, 2/9], [0.875, 5/9], [0.0625, 8/9],
-        ];
-        _taaFrameIndex = (_taaFrameIndex + 1) % 8;
-        const sample = halton[_taaFrameIndex];
-        _vpGpu[8] += (sample[0] - 0.5) * 2.0 / width;
-        _vpGpu[9] += (sample[1] - 0.5) * 2.0 / height;
       }
 
       d.set(_vpGpu, 0);
@@ -3604,10 +3589,37 @@ const WGX = (function () {
       // stale chunk mask on a car draw would silently unlight it. drawChunked
       // overwrites per run.
       d[base + 28] = LAMP_MASK_ALL; d[base + 29] = LAMP_MASK_ALL;
+      d[base + 30] = o.carFinish ? 1 : 0;   // DrawU.mat3.z: the finish 60-85 block runs for car paint only
       // lampRange (DrawU lanes 32-34): zeroed for EVERY draw — a stale
       // per-chunk range from a prior chunked draw would silently rebind that
       // chunk's lamp slice. drawChunked overwrites when per-chunk is active.
       d[base + 32] = 0; d[base + 33] = 0; d[base + 34] = 0;
+      // packDraw (lane 35): 1 = sample the material pack. draw/drawInstanced
+      // clear it for meshes that cannot take a pack mid (_packDraw).
+      d[base + 35] = 1;
+    }
+    // Pack-material reach of a mesh's vertex mat ids: `pack` = some vertex is a
+    // hoisted pack mid (1..16, not identity 3/15), `zero` = some vertex has no
+    // mat (it shades with the draw's surfaceId). Mirrors fs_main's vMatId.
+    const _isPackMid = (m) => { const i = Math.floor(m + 0.5); return i >= 1 && i <= 16 && i !== 3 && i !== 15; };
+    function _matReach(data) {
+      const pos = data && data.pos, mat = data && data.mat;
+      const n = pos ? (pos.length / 3) | 0 : 0;
+      if (!mat || mat.length !== n) return { pack: false, zero: n > 0 };
+      let pack = false, zero = false;
+      for (let i = 0; i < n && !(pack && zero); i++) {
+        const m = mat[i];
+        if (!(m > 0.5)) zero = true;
+        else if (_isPackMid(m)) pack = true;
+      }
+      return { pack, zero };
+    }
+    // Uniform per-draw gate for fs_main's pack taps. Unknown meshes (chunked,
+    // road pieces) and road / buryRibbon draws (LUT-classified asphalt) sample.
+    function _packDraw(mesh, o) {
+      const r = mesh && mesh._matReach;
+      if (!r || o.buryRibbon || o.surfaceId === 16) return 1;
+      return (r.pack || (r.zero && _isPackMid(o.surfaceId || 0))) ? 1 : 0;
     }
     // Post-pass uniforms that are a pure function of the render size / knobs (bloom mip steps, blur taps, FXAA and
     // SGSR texel sizes) were re-uploaded every frame (~12 writeBuffer calls of unchanged bytes). Shadow the last
@@ -3716,7 +3728,7 @@ const WGX = (function () {
     // is consumed synchronously by _writeDraw/_litPipeline within the call.
     const _litOptsBag = {
       emissive: 0, alpha: 1, roughness: 0.7, metalness: 0, specular: 0.5,
-      detail: 0, clearcoat: 0, carPaint: 0, sparkle: 1, _instanced: false,
+      detail: 0, clearcoat: 0, carPaint: 0, carFinish: false, sparkle: 1, _instanced: false,
       surfaceId: 0, buryRibbon: false, depthBias: null, doubleSided: false,
       noAlphaWrite: false, decal: false, depthCompare: undefined,
       noDepthTest: false,
@@ -3747,7 +3759,7 @@ const WGX = (function () {
       const b = _litOptsBag;
       b.emissive = o.emissive; b.alpha = o.alpha; b.roughness = o.roughness;
       b.metalness = o.metalness; b.specular = o.specular; b.detail = o.detail;
-      b.clearcoat = o.clearcoat; b.carPaint = o.carPaint; b.sparkle = o.sparkle;
+      b.clearcoat = o.clearcoat; b.carPaint = o.carPaint; b.carFinish = o.carFinish; b.sparkle = o.sparkle;
       b._instanced = o._instanced; b.surfaceId = o.surfaceId;
       b.buryRibbon = o.buryRibbon; b.noAlphaWrite = o.noAlphaWrite;
       b.decal = o.decal; b.depthCompare = o.depthCompare;
@@ -3762,6 +3774,7 @@ const WGX = (function () {
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, o);
+      drawRing[slot * DRAW_F32_STRIDE + 35] = _packDraw(mesh, o);
       _setPipe(litPass, _litPipeline(o));
       _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
@@ -4238,6 +4251,12 @@ const WGX = (function () {
       _retiredBufs.length = 0;
     }
     function _retireIdleFlush() { if (!(SHD && SHD.pendingEnc)) _retireFlush(); }
+    // Before submission the encoded readback still belongs to this frame.
+    // Leave request rejection to present's outer catch so its original error wins.
+    function _capAbort(cap) {
+      if (!cap) return;
+      try { cap.buf.destroy(); } catch (_) { /* device dying: preserve submit error */ }
+    }
     function _capFinish(cap) {
       if (!cap) return;
       const req = _capReq; _capReq = null;
@@ -4360,7 +4379,7 @@ const WGX = (function () {
         const disp = _softDisplayEncode();
         const cap = _capEncode();
         try { device.queue.submit(SHD.frameSubmitList(encoder)); }
-        catch (e) { _softDisplayAbort(disp); throw e; }
+        catch (e) { _capAbort(cap); _softDisplayAbort(disp); throw e; }
         _retireFlush();
         _capFinish(cap);
         _softDisplayFinish(disp);
@@ -4716,6 +4735,7 @@ const WGX = (function () {
 
       let timerRead = null;
       const timerEpoch = _gpuFrameTimerEpoch;
+      const timerSampleAt = _gpuTimerOn ? _nowMs() : -1;
       if (_gpuTimerOn && timerEpoch === _gpuTimerEpoch && _gpuQuerySet && _gpuResolveBuf && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped") {
         try {
           encoder.resolveQuerySet(_gpuQuerySet, 0, 2, _gpuResolveBuf, 0);
@@ -4727,7 +4747,7 @@ const WGX = (function () {
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
       try { device.queue.submit(SHD.frameSubmitList(encoder)); }
-      catch (e) { _softDisplayAbort(disp); throw e; }
+      catch (e) { _capAbort(_cap); _softDisplayAbort(disp); throw e; }
       _retireFlush();
       _capFinish(_cap);
       _softDisplayFinish(disp);
@@ -4739,6 +4759,7 @@ const WGX = (function () {
               if (_gpuTimerOn && timerEpoch === _gpuTimerEpoch) {
                 const t = new BigUint64Array(timerRead.getMappedRange());
                 _gpuMs = Number(t[1] - t[0]) / 1e6;
+                _gpuSampleAt = timerSampleAt; _gpuSamples++;
               }
             } catch (_) { /* keep last-good gpuMs */ }
             // ALWAYS unmap: a throw above would leave the buffer mapped for
@@ -4947,11 +4968,13 @@ const WGX = (function () {
     function gpuTimer(on) {
       if (on !== undefined) {
         const next = !!on && !!_timestampOk;
-        if (next !== _gpuTimerOn) _gpuTimerEpoch++;
+        if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuSamples = 0; _gpuSampleAt = -1; }
         _gpuTimerOn = next;
         if (!_gpuTimerOn) _gpuMs = -1;
       }
-      return { supported: !!_timestampOk, on: _gpuTimerOn };
+      // Timestamp writes bracket the main lit render pass, excluding shadows/post.
+      return { supported: !!_timestampOk, on: _gpuTimerOn, scope: "lit-pass",
+        samples: _gpuSamples, sampleAgeMs: _gpuSampleAt < 0 ? -1 : Math.max(0, _nowMs() - _gpuSampleAt) };
     }
     function gpuMs() { return _gpuMs; }
 
@@ -5149,6 +5172,7 @@ const WGX = (function () {
       if (opts) { for (const k in opts) o[k] = opts[k]; }
       o._instanced = true;
       _writeDraw(slot, IDENT, o);
+      drawRing[slot * DRAW_F32_STRIDE + 35] = _packDraw(batch, o);
       _setPipe(litPass, _litPipeline(o));
       _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
@@ -5871,7 +5895,8 @@ const WGX = (function () {
       // (e.g. every night frame throwing inside SHD before present()).
       // Omitting a name (or leaving a stale "absent" comment that tempts a
       // delete) re-opens that hole. Gated by backend-surface-parity.test.mjs.
-      // Honest remaining gap vs GLX: TAA scaffold (`_TAA_ENABLED`) is still off.
+      // No TAA: projection jitter without a temporal resolve is pure
+      // sub-pixel shimmer, so WGX has no jitter scaffold (#3115).
       drawParticles,
       lampShadowBegin,
       lampShadowEnd,

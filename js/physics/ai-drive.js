@@ -74,13 +74,18 @@ const AiDrive = (function () {
 
   const _look = [];
   const _lookPool = [];
-  function beginLook() { _look.length = 0; }
+  // _lookSorted: every pushLook so far had d >= the one before (the game's node walk always does). A NaN or
+  // a step back clears it, and brakeTarget then scans every sample as it does for hand-built lists.
+  let _lookSorted = true, _lookLastD = -Infinity;
+  function beginLook() { _look.length = 0; _lookSorted = true; _lookLastD = -Infinity; }
   // `mu` is bankGrip(bank), passed in by a caller that caches it per node (game.js c._lk); omitted, it is
   // computed here. brakeTarget reads `mu` and never re-takes the sine (PERF-HUNT-4 B-F4).
   function pushLook(d, k, bank, mu) {
     let s = _lookPool[_look.length];
     if (!s) s = _lookPool[_look.length] = { d: 0, k: 0, bank: 0, mu: 1 };
     s.d = d; s.k = k; s.bank = bank; s.mu = mu === undefined ? bankGrip(bank) : mu;
+    if (!(d >= _lookLastD)) _lookSorted = false;
+    _lookLastD = d;
     _look.push(s);
   }
   // The bank's lateral-grip factor for the brake planner: a banked node holds 1 + sin(bank)·0.8 of the flat grip.
@@ -163,30 +168,51 @@ const AiDrive = (function () {
   const PASS_EDGE = 0.007;       // ~0.7 % of vTop — want / concede floor
   const PASS_EDGE_FULL = 0.012;  // ~1.2 % — full hunger (stuck pairs were 0.85–1.24 %)
   const CONCEDE_EDGE_FULL = 0.008; // defender cover fully yields by ≥0.8 % (Done-when)
-  function paceEdgeN(fasterV, slowerV, vTop, full) {
+  // ATTACK-ZONE PULL (#2356). Longest faster-behind-slower episodes sit at
+  // 20–45 m (dirty-air train), outside the 16 m otPull / latch window, with
+  // +0.3–0.6 % edges below PASS_EDGE so queueT/hunger never arm. A shallow
+  // tow floor was tried and reverted (contact↑, longest unchanged). Instead:
+  // a soft edge lets the follower start the aside move while the wake still
+  // reaches (PULL_REACH at PACE 1), clear of dirty air, then latch at 16 m.
+  // Streets ignore every soft-edge path (monaco gates). Reach scales with
+  // vTop so a fixed 34 m window does not swallow the field at PACE 0.44
+  // (quali-pace-parity monza: model/driven −3.3 % off the PACE-1 ratio).
+  const PULL_EDGE = 0.003;       // ~0.3 % — aside-first floor (not tow/fire)
+  const PULL_EDGE_FULL = 0.007;  // soft edge saturates at the old PASS_EDGE
+  const PULL_REACH = 34;         // m at PACE 1 (vTop ≈ 72) — TOW_RANGE
+  const PULL_REACH_V0 = 72;      // vTop that names PULL_REACH
+  function pullReachM(vTop) {
+    const ref = vTop > 0 ? vTop : PULL_REACH_V0;
+    return clamp(PULL_REACH * (ref / PULL_REACH_V0), 16, PULL_REACH);
+  }
+  function paceEdgeN(fasterV, slowerV, vTop, full, floor) {
     const ref = vTop > 0 ? vTop : 72;
     const edge = ((fasterV || 0) - (slowerV || 0)) / ref;
-    if (edge < PASS_EDGE) return 0;
-    const span = (full > PASS_EDGE ? full : PASS_EDGE_FULL) - PASS_EDGE;
-    return clamp((edge - PASS_EDGE) / span, 0, 1);
+    const lo = floor != null ? floor : PASS_EDGE;
+    if (edge < lo) return 0;
+    const hi = full > lo ? full : (floor != null ? lo + (PASS_EDGE_FULL - PASS_EDGE) : PASS_EDGE_FULL);
+    const span = hi - lo;
+    return span > 0 ? clamp((edge - lo) / span, 0, 1) : 1;
   }
   // Pace edge from vmax (m/s, over vTop) and/or scripted pace (tierV×skill, a
   // unitless multiplier near 1 — its edge is the ratio, the same one ai-tactics
   // uses for stuck-longest). Take the larger so a compressed vmax still sees a
-  // real field-pace gap.
-  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, full) {
-    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop, full) : 0;
-    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP / slowerP, 1, 1, full) : 0;
+  // real field-pace gap. Optional `floor` lowers the gate (soft pull only).
+  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, full, floor) {
+    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop, full, floor) : 0;
+    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP / slowerP, 1, 1, full, floor) : 0;
     return Math.max(a, b);
+  }
+  function softPairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop) {
+    return pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, PULL_EDGE_FULL, PULL_EDGE);
   }
   // 1..~2.2: stuck time behind a slower car → fire / latch / run / tow boost.
   // Needs pace fields (vmax and/or scripted pace), never live speed.
   function passHunger(ctx) {
     if (!ctx || ctx.street) return 1;
-    // PASS_EDGE (0.7 %) stays the hunger gate. A shallow tow floor was tried
-    // for #2356 and reverted: it raised AI-AI contact without cutting the
-    // longest episode. Aggression spacing (followGap / contactGive) is the
-    // pass-completion lever on this PR.
+    // PASS_EDGE (0.7 %) stays the hunger/tow gate. Soft edges feed the
+    // attack-zone pull only — a mild soft tow (after2) raised monza longest
+    // seed-2 to 224 s and AI-AI contact; same shape as the reverted #2783 floor.
     const edgeN = pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop);
     if (!edgeN) return 1;
     const stuckN = clamp((ctx.queueT || 0) / 12, 0, 1);
@@ -444,7 +470,10 @@ const AiDrive = (function () {
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     const catchEdge = !ctx.street
       && pairEdgeN(ctx.ourVmax, ctx.towVmax, ctx.ourPace, ctx.towPace, ref) > 0;
-    const catching = !!(ctx.towCar && ctx.towGap < 28 && (
+    // A pushing trail (trailPush) is catching from any gap in its window: a
+    // car 37 m back has no tow car, banked its ERS and lost the straight to a
+    // leader deploying "rich" — pace edge cancelled (monza RUS<GAS, #2356).
+    const catching = trailN(ctx.trailT, ctx.street) > 0 || !!(ctx.towCar && ctx.towGap < 28 && (
       (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1 * vs || catchEdge));
     const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2 * vs);
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
@@ -525,6 +554,9 @@ const AiDrive = (function () {
     const V = vs * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
     let vLimSq = Infinity, bVC = 0, bD = 1;
     const scrub = 2 * brake * 0.85;   // the same ((2·brake)·0.85)·d product as before, so bit-identical
+    // The game's pooled look-ahead arrives with d ascending, so dSq = scrub·max(d, 1) never falls while vLimSq
+    // never rises: past the first skip every later sample skips too, and `break` returns the same answer (#3109).
+    const ascending = samples === _look && _lookSorted && scrub > 0;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
@@ -533,7 +565,7 @@ const AiDrive = (function () {
       // EXACT SKIP (PERF-HUNT-4 B-F4): entrySq = vC² + dSq >= dSq, so once the distance term alone reaches
       // the tightest budget so far this sample cannot win — skip its corner solve. `continue`, not `break`:
       // the result stays independent of sample order. A NaN dSq falls through to the original test.
-      if (dSq >= vLimSq) continue;
+      if (dSq >= vLimSq) { if (ascending) break; continue; }
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
       const bankMu = s.mu !== undefined ? s.mu : bankGrip(s.bank);   // pooled samples carry it; hand-built ones may not
       const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq) * skill * (ctx.diffCorner || 1);
@@ -630,7 +662,17 @@ const AiDrive = (function () {
     const street = !!ctx.street;
     const t = ctx.traits;
     const gap = ctx.blockerGap;
-    if (gap >= (street ? 14 : 16)) return 0;
+    // Soft pace edge (#2356): pull from the pace-scaled tow band so a faster
+    // car leaves dirty air before the 16 m latch. Equal-pace and streets keep
+    // the old 16 / 14 m ceilings.
+    const soft = street ? 0
+      : softPairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop);
+    // A pushing trail (trailPush) reaches the whole trail window and pulls a
+    // full lane: a half pull left the car at |dx| 1.8, inside the 2.2 m box
+    // that defines a blocker, capped in its wake for minutes (monza, #2356).
+    const tN = trailN(ctx.trailT, street);
+    const reach = street ? 14 : Math.max(soft > 0 ? pullReachM(ctx.vTop) : 16, tN > 0 ? TRAIL_WIN_S * Math.max(ctx.speed || 0, 1) : 0);
+    if (gap >= reach) return 0;
     // The old trigger was "I am ALREADY going faster than the car ahead", which
     // a queued car can never be: the queue cap holds it 6 m/s BELOW the
     // blocker's pace by construction, so the one car that most needs to pull
@@ -647,8 +689,17 @@ const AiDrive = (function () {
       return side * lerp(0.7, 2.35, clamp(1 - gap / 14, 0, 1))
         * clamp(need / 2.3, 0, 1) * streetOtScale(t) * house;
     }
-    return side * lerp(0.8, 2.6, clamp(1 - gap / 16, 0, 1))
+    // ...a full lane only as it closes (the yield's own band, TRAIL_NEAR_S..
+    // TRAIL_FAR_S): a full pull 25 m back put it 12 m off the yielder's line,
+    // out of the tow and off-line through every corner (silverstone SAI<STR).
+    const v = Math.max(ctx.speed || 0, 1), tNear = tN * clamp((TRAIL_FAR_S * v - gap) / ((TRAIL_FAR_S - TRAIL_NEAR_S) * v), 0, 1);
+    const pull = lerp(0.8, 2.6, Math.max(clamp(1 - gap / reach, 0, 1), tNear))
       * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, t.craft) * house;
+    // ...on the ROAD: `need` measures to the run-off edge (hw + 5), and a full
+    // trail pull with the yielder stepping the other way put the attacker
+    // 9-10 m wide on the grass, slower than the car lifting for it (silverstone).
+    const road = side > 0 ? ctx.roadR : ctx.roadL;
+    return side * (tN > 0 && road != null ? Math.min(pull, Math.max(0, road - 1)) : pull);
   }
 
   // THE INCENTIVE, on PACE rather than on the blocker's speed this instant.
@@ -673,9 +724,12 @@ const AiDrive = (function () {
     // tierV×skill); freeSpeed alone must not look like an edge.
     const edgeN = street ? 0
       : pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ref);
+    const softN = street ? 0
+      : softPairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ref);
     let margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx))
       * lerp(1.10, 0.88, (aggr + 1) * 0.5);
     if (edgeN) margin *= lerp(1, 0.42, edgeN);
+    margin *= lerp(1, 0.25, trailN(ctx.trailT, street));   // a pushing trail wants the move (trailPush)
     // A car under ~12 % of the top speed is an OBSTACLE whatever its pace: the
     // follower behind it sits on the queue crawl floor, which is below the
     // closing margin, so neither test below could ever fire — measured as an
@@ -697,7 +751,15 @@ const AiDrive = (function () {
     // not wait for a 7 % margin the field's spread can never produce.
     const edgeHeld = edgeN > 0 && clear && press >= 0.25
       && (ctx.freeSpeed || ctx.ourVmax || 0) + 0.002 * ref >= bv;
-    return crawling || closing || held || impatient || edgeHeld;
+    // Soft trail pull (#2356): ≥ ~0.3 % edge inside the pace-scaled tow band,
+    // clear side — want the aside move without queueT. reach > 16 is required
+    // so PACE 0.44 (pullReachM floors at 16) does not re-arm every soft pair
+    // inside the latch window (quali-pace-parity). At PACE 1, reach = 34 m.
+    const gap = ctx.blockerGap || 0;
+    const reach = pullReachM(ref);
+    const trailPull = softN > 0 && clear && reach > 16.5 && gap > 0 && gap < reach
+      && (ctx.freeSpeed || ctx.ourVmax || 0) + 0.002 * ref >= bv;
+    return crawling || closing || held || impatient || edgeHeld || trailPull;
   }
 
   // THE LAUNCH. Real lights-out is a reaction (a driver-dependent fraction of a
@@ -760,6 +822,92 @@ const AiDrive = (function () {
     const amp = lerp(0.016, 0.005, consistency == null ? 0.75 : consistency);
     const period = 24 + r * 36;
     return 1 + amp * Math.sin((t || 0) * (2 * Math.PI / period) + r * 6 * Math.PI);
+  }
+
+  // PUSH TO PASS (#2356). The longest faster-behind-slower episodes were pairs
+  // 30-45 m apart at ~0.9 s: outside the traffic scan, the tow and the latch,
+  // with a 0.3-0.9 % edge that the pace phase above (±0.5-1.6 %) swamps for
+  // half of every period, so the quicker car never closed and no queue knob
+  // ever reached it (docs/notes/AI-PASS-COMPLETION-TRAIL-YIELD-2026-10-19.md). A driver
+  // stuck behind a slower car pushes: after TRAIL_T0 s within TRAIL_WIN_S of
+  // the SAME scripted-slower car directly ahead, vmax rises to +TRAIL_PUSH by
+  // TRAIL_T1. The extra pace also lifts paceVmax, so the hunger and concede
+  // knobs gated on PASS_EDGE reach the pair once it closes. Permanents only
+  // (streets keep their gates); a human ahead never triggers it; pace is the
+  // scripted tierV x skill, so nothing derived from the arc goes in.
+  const TRAIL_WIN_S = 1.2, TRAIL_EDGE = 0.0025, TRAIL_T0 = 6, TRAIL_T1 = 20, TRAIL_PUSH = 0.02;
+  function trailCase(street, ourPace, aheadPace, gap, speed, aheadHuman) {
+    if (street || aheadHuman || !(ourPace > 0) || !(aheadPace > 0)) return false;
+    if (ourPace / aheadPace - 1 <= TRAIL_EDGE) return false;
+    return gap > 0 && gap < TRAIL_WIN_S * Math.max(speed || 0, 1);
+  }
+  // The per-car step game.js calls once per AI update (beside pacePhase):
+  // `ahead` is the car directly ahead in rank, `open` the caller's session
+  // gate (a green race, out of the pit lane). Writes c.trailT / c._trOf — the
+  // same car must stay ahead or the timer restarts — and returns the push.
+  function scriptPaceOf(o) { return o && o.tierV > 0 && o.skill > 0 ? o.tierV * o.skill : 0; }
+  function trailStep(c, ahead, open, street, dt) {
+    // A closed gate (caution, pit lane, flag) or a car ahead that is pitting
+    // or done ends the trail at once: a bleed there kept a 32 s trail pushing,
+    // and its yielder lifting under the caution cap, for ~8 s. Only a break in
+    // the gap bleeds.
+    if (!ahead || !open || ahead.finished || (ahead.pitState && ahead.pitState !== "none")) { c.trailT = 0; c._trOf = null; return 1; }
+    const on = trailCase(street, scriptPaceOf(c), scriptPaceOf(ahead), ahead.prog - c.prog, c.speed, !!ahead.human);
+    c.trailT = trailTime(ahead === c._trOf ? c.trailT : 0, on, dt);
+    if (on || !c.trailT) c._trOf = on ? ahead : null;
+    return trailPush(c.trailT, street);
+  }
+  function trailTime(prev, on, dt) { return on ? (prev || 0) + dt : Math.max(0, (prev || 0) - 3 * dt); }   // a flicker past the window bleeds, it does not reset
+  function trailN(trailT, street) { return street || !(trailT > TRAIL_T0) ? 0 : clamp((trailT - TRAIL_T0) / (TRAIL_T1 - TRAIL_T0), 0, 1); }
+  function trailPush(trailT, street) { return 1 + TRAIL_PUSH * trailN(trailT, street); }
+  // ...and the backstop: a car the SAME quicker car has trailed for
+  // TRAIL_YIELD_T s lets it by (game.js letPass: ease, pull aside, no cover),
+  // so no faster-behind-slower episode outlives a minute on a permanent.
+  const TRAIL_YIELD_T = 8;
+  function trailYield(trailT, street) { return !street && trailT > TRAIL_YIELD_T; }
+  // The car-side step (game.js, at letPass): `behind` is the car directly
+  // behind in rank. Sets c._trYT (its trail time scaled by how close it is,
+  // 0 = no yield) and c._trYS, the side to step to: AWAY from the move — the
+  // latched pass side when it has one, else away from where it sits — never
+  // just our freer side, which was the attacker's own side often enough to put
+  // it in the run-off (silverstone BEA<PER, 8-10 m wide).
+  // The yield is full with the trailer within TRAIL_NEAR_S and gone past
+  // TRAIL_FAR_S: lifting for a car 1.2 s back cost the yielder 4-7 s a lap and
+  // slowed the train behind it, with no pass on offer (quali-pace-parity,
+  // monza PER for GAS 53-75 m back); the trailer's push closes that gap.
+  const TRAIL_NEAR_S = 0.6, TRAIL_FAR_S = 1.2;
+  function trailYieldStep(c, behind, street) {
+    const near = behind ? clamp((TRAIL_FAR_S - (c.prog - behind.prog) / Math.max(behind.speed || 0, 1)) / (TRAIL_FAR_S - TRAIL_NEAR_S), 0, 1) : 0;
+    if (!(behind && behind._trOf === c && trailYield(behind.trailT, street) && near > 0)) { c._trYT = 0; return false; }
+    c._trYT = behind.trailT * near;
+    c._trYS = behind.passOf === c ? -behind.passSide : (c.x >= behind.x ? 1 : -1);
+    return true;
+  }
+  // The blue-flag ease (letPassEase, 1-3.5 %) let the follower draw alongside
+  // and lose it again off-line in the next corner (monza RUS<GAS: 1.7 m short
+  // at T1, then 20 m down on the exit); past the patience the lift deepens to
+  // 6 % over TRAIL_YIELD_RAMP s so the move completes on one straight.
+  const TRAIL_YIELD_RAMP = 6, TRAIL_YIELD_EASE = 0.90;
+  function trailYieldEase(trailT, t) {
+    if (trailT < TRAIL_YIELD_T) return lerp(1, letPassEase(t), clamp(trailT / TRAIL_YIELD_T, 0, 1));   // a far trailer: part of the blue-flag ease
+    return lerp(letPassEase(t), TRAIL_YIELD_EASE, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1)) * trailYieldDeep(trailT, TRAIL_DEEP_EASE);
+  }
+  // The lift is a vmax cap, so it only binds on the straights; the corners were
+  // where the yielder kept pulling 15 m on every exit while the follower sat
+  // off-line in its wake (silverstone). The yielder's corner authority eases
+  // too, a third as deep, so the follower is still on its gearbox at the exit.
+  const TRAIL_YIELD_CORNER = 0.965;
+  function trailYieldCorner(trailT) {
+    return lerp(1, TRAIL_YIELD_CORNER, clamp((trailT - TRAIL_YIELD_T) / TRAIL_YIELD_RAMP, 0, 1)) * trailYieldDeep(trailT, TRAIL_DEEP_CORNER);
+  }
+  // ...and if the trail outlives both ramps, the lift keeps deepening: a
+  // further 6 % vmax and 4 % corner authority from TRAIL_DEEP_T0 to
+  // TRAIL_DEEP_T1 s. At a full 10 % lift the follower still lost 15-20 m in
+  // every slow corner, in the yielder's dirty air (silverstone LEC<ALO, +1 %,
+  // 66 s). 15 seeds x 8 laps: silverstone longest 98 -> 57 s.
+  const TRAIL_DEEP_T0 = 18, TRAIL_DEEP_T1 = 32, TRAIL_DEEP_EASE = 0.94, TRAIL_DEEP_CORNER = 0.96;
+  function trailYieldDeep(trailT, floor) {
+    return lerp(1, floor, clamp((trailT - TRAIL_DEEP_T0) / (TRAIL_DEEP_T1 - TRAIL_DEEP_T0), 0, 1));
   }
 
   // A PASS IS A POSITION, NOT A BIAS. otPull's return is a lateral offset
@@ -951,9 +1099,16 @@ const AiDrive = (function () {
     const craft = lerp(0.7, 1.25, ctx.traits ? ctx.traits.craft : 0.75);
     const roll = 0.85 + 0.3 * (ctx.roll != null ? ctx.roll : 0.5);
     q *= 1 - (1 - START_ATTACK) * (ctx.calm || 0);   // the first lap: not lap 20 into turn 1 (startCalm)
+    // Soft pace edge (#2356): a 0.3–0.7 % car in the dirty-air band shows no
+    // live closing and no queuePress, so the old max(closing, deficit, press)
+    // never cleared 0.32 on a straight. Floor the drive so a clear soft edge
+    // can engage the aside move; streets keep softN = 0.
+    const softN = ctx.street ? 0
+      : softPairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ref);
+    const edgeDrive = softN > 0 ? lerp(0.55, 1.0, softN) : 0;
     // A queued car can never show a closing rate — the queue cap pins it to the
     // blocker's speed — so time held behind stands in for it (queuePress).
-    return q * Math.max(closing, deficit, 0.7 * queuePress(ctx)) * craft * roll >= 0.32 && passReach(ctx);
+    return q * Math.max(closing, deficit, 0.7 * queuePress(ctx), edgeDrive) * craft * roll >= 0.32 && passReach(ctx);
   }
 
   // CAN IT BE HALF ALONGSIDE BY THE TURN-IN? game.js abandons a pass that is
@@ -973,6 +1128,16 @@ const AiDrive = (function () {
     const gain = ctx.blockerGap - SIDE_LEVEL;
     if (gain <= 0) return true;
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
+    // Soft-edge aside-first (#2356): the pull clears dirty air; the latch still
+    // waits for ≤16 m. Judging a 30 m gap at 1 m/s closing refuses every
+    // Monza straight — allow when there is runway (≥80 m to turn-in).
+    const softN = ctx.street ? 0
+      : softPairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ref);
+    const reach = pullReachM(ref);
+    if (softN > 0 && reach > 16.5 && ctx.blockerGap <= reach) {
+      if (ctx.blockerGap <= 16) return true;
+      return !(to < 80);
+    }
     const dv = Math.max((ctx.speed || 0) - (ctx.blockerSpeed || 0), (ctx.freeSpeed || 0) - bv, ref / 72);
     return (ctx.speed || 0) * gain / dv <= 1.25 * to;
   }
@@ -1750,13 +1915,14 @@ const AiDrive = (function () {
     lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
-    passHunger, coverConcede, paceEdgeN, pairEdgeN, PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL,
+    passHunger, coverConcede, paceEdgeN, pairEdgeN, softPairEdgeN, pullReachM,
+    PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL, PULL_EDGE, PULL_EDGE_FULL, PULL_REACH,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
     otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
-    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, startQWinBonus, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
+    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, startQWinBonus, pacePhase, trailCase, trailTime, trailStep, trailN, trailPush, trailYield, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,
