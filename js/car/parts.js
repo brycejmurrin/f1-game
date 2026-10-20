@@ -597,7 +597,7 @@ const Parts = (function () {
       { band: [0.96, 0.96, 0.98], bandWidth: 0.132, grooves: 4, grooveDepth: 0.075, sidewall: 2, shoulder: 2 }],
     ["tyres", "compound_c4", "style_tyres_classic", "Classic Grooved", "four-groove tread on a plain dark wall",
       { band: [0.20, 0.20, 0.22], bandWidth: 0.045, grooves: 4, grooveDepth: 0.075, shoulder: 0, spokes: 8 }],
-    // D6 design preview (2026-10-19): sidewall branding, bead guard and wet
+    // B·D6 (2026-10-19): sidewall branding, bead guard and wet
     // sipes. Pirelli's 2019+ wall splits the band into two arcs with the
     // P ZERO / PIRELLI wordmark in the gaps.
     ["tyres", "medium", "style_tyres_arcscript", "Arc Script", "band split into two arcs with white lettering in the gaps",

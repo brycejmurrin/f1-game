@@ -117,7 +117,7 @@ const LiveryTex = (function () {
     tech:   ["QUBITWARE", "NEURALIX", "CLOUDFORGE", "SYNAPSE", "VECTORA", "LATTICE"],
     energy: ["VOLTSHOT", "FUSIONFUEL", "RAPTORADE", "KINETIQ", "SURGE", "IONBLAST"],
     clean:  [],
-    // B·D8 design preview (2026-10-19). Invented names, checked against no real sponsor.
+    // B·D8 (2026-10-19). Invented names, checked against no real sponsor.
     garage: ["TORQSMITH", "BOLTWORKS", "HEXDRIVE", "SPANNERCO", "RATCHETA", "GRIDFORGE"],
     aero:   ["SKYWARDO", "AIRFOILX", "STRATOLUX", "VORTEXA", "JETSTRIDE", "ALTIMERA"],
     coast:  ["SOLMARE", "DUNEWAVE", "PALMERA", "RIVIERO", "SALTLINE", "AZURIO"],
@@ -133,7 +133,7 @@ const LiveryTex = (function () {
     narrow:  { font: (px) => "800 " + px + "px 'Arial Narrow', 'Liberation Sans Narrow', Arial, sans-serif", style: "layered" },
     rounded: { font: (px) => "900 " + px + "px Verdana, 'DejaVu Sans', Arial, sans-serif", style: "rounded" },
     outline: { font: (px) => "italic 900 " + px + "px 'Arial Narrow', Arial, sans-serif", style: "outline" },
-    // B·D8 design preview (2026-10-19): a slab serif, a typewriter mono and a
+    // B·D8 (2026-10-19): a slab serif, a typewriter mono and a
     // heavy italic stencil — three shapes the six above do not cover. Each falls
     // back to a face every platform ships.
     slab:    { font: (px) => "900 " + px + "px Rockwell, 'Roboto Slab', 'DejaVu Serif', Georgia, serif", style: "layered" },
