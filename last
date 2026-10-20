@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01C8qF13nywg7VQS11QJSV3Z W15 sync 3021. For #2993: cancelled real-GPU Metal job = infra; one re-run of that job (ci-rerun.mjs) is OK; if it cancels again, dispatch gpu-census.yml on macos-latest instead and READY on its Verdict.
+GAME-SLOT to:* from:claude:session_01C8qF13nywg7VQS11QJSV3Z GAME-SLOT #3151 e239f4af (Fleet B)
