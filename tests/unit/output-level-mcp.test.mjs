@@ -62,6 +62,10 @@ test('annotation hints equal to the MCP 2025-06-18 defaults are dropped; the res
     { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
   assert.deepEqual(withoutDefaultHints({ readOnlyHint: false, destructiveHint: false }), { destructiveHint: false }, 'a non-default destructiveHint survives');
   assert.equal(withoutDefaultHints(undefined), undefined);
+  // Bryce 2026-10-20 ("All five"): annotations.title is dropped when it repeats Tool.title, kept when it differs or stands alone.
+  assert.deepEqual(withoutDefaultHints({ title: 'Same', readOnlyHint: true }, 'Same'), { readOnlyHint: true });
+  assert.deepEqual(withoutDefaultHints({ title: 'Other' }, 'Same'), { title: 'Other' });
+  assert.deepEqual(withoutDefaultHints({ title: 'Only' }), { title: 'Only' });
 });
 
 test('help starts no executable and documents presentation levels', () => {

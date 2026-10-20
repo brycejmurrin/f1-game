@@ -180,9 +180,16 @@ node tools/mcp/mcp-listing-cost.mjs --entry 'raw-apex=bash tools/mcp/apex-tools-
 node --test tests/unit/mcp-listing-cost.test.mjs tests/unit/output-level-mcp.test.mjs
 ```
 
-### Second trim (Bryce, 2026-10-20, typed in the B·W11 session)
+### Second trim: "All five" (Bryce, 2026-10-20)
 
-Bryce asked for the three cuts the tests pinned:
+Bryce asked, in the B·W11 session and through OrchB 24 ("All five", 23:04Z), for the five cuts from the addendum:
+
+- **`annotations.title`.** The gateway drops it when it equals the tool's
+  top-level `title`; it is kept when it differs or stands alone.
+- **`track` enum.** The required 52-id circuit enum on `apex_frame_report`
+  and `apex_track_audit` becomes a pointer to `apex_catalog`, and
+  `validateArgs` still rejects an unknown id. Shorter required enums stay
+  inline (24 values or fewer, e.g. `apex_job_start` `kind`).
 
 - **Generic output schema.** apex-tools no longer publishes an
   `outputSchema` for the 24 tools whose shape is the generic CLI envelope
@@ -201,21 +208,26 @@ Bryce asked for the three cuts the tests pinned:
 
 | server | after §6 | after the second trim | raw (no gateway) |
 |---|---:|---:|---:|
-| apex-tools | 75,249 | 56,946 | 53,919 |
+| apex-tools | 75,249 | 54,654 | 53,919 |
 | playwright-official | 26,464 | 20,772 | 18,502 |
 | chrome-devtools | 44,373 | 36,490 | 31,994 |
 | js-debugger | 27,007 | 21,708 | 19,598 |
 | apex-lsp | 12,154 | 10,859 | 8,882 |
-| **total** | **185,247** | **146,775** | **132,895** |
+| **total** | **185,247** | **144,483** | **132,895** |
 
-Over the day the total went from 211,974 to 146,775 chars (−31 %). The
-gateway's share fell from +59 % to +10 %, and apex-tools now lists only 6 %
-above its raw server.
+Over the day the total went from 211,974 to 144,483 chars (−32 %), and the
+gateway's share fell from +59 % to +9 %.
+
+Without the gateway, apex-tools' own `tools/list` result went from 54,191
+bytes on the deploy tip to 48,090. That is what
+`apex-tools-mcp.test.mjs`'s 55,000-byte budget counts. Merged with #3232
+(which adds `apex_cursor_agents`) it measures 48,602 bytes, so #3232's
+headroom grows from 85 bytes to 6,398.
 
 The cost of this trim: server `instructions` grew from 995 to 2,521 chars
 (the hint appears once per server). Claude Code loads instructions at every
 session start, so a deferring session pays about +380 tokens at start. In
-exchange, every loaded schema is about 270 chars smaller on average, and a
+exchange, every loaded schema is about 290 chars smaller on average, and a
 full-schema client pays 38k chars (about 9.6k tokens) less.
 
 ### The one-tool prototype (built, measured, removed)
@@ -240,7 +252,7 @@ them in a subagent because they can boot Chromium.
 | chrome-devtools | gate per host; no redesign | third-party; its heap tools are candidates to hide |
 | js-debugger | don't | 207 tokens of names |
 | apex-lsp | don't | 56 tokens of names; `lsp_*` names are what agents search for |
-| output-level gateway | **done** (§6 and the second trim) | −65k chars across all five servers |
+| output-level gateway + apex-tools | **done** (§6 and "All five") | −67.5k chars across all five servers |
 | server instructions | name when to search each server (the Claude Code docs say instructions "help Claude understand when to search for your tools") | instructions are the only per-server text a deferred client always sees |
 
 Revisit if a client we use stops deferring: Claude Code with

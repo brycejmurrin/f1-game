@@ -1695,12 +1695,16 @@ const callTools = (calls) => {
 };
 
 test("every tool answers a minimal valid call (mock): ok, not a bad_args refusal", () => {
-  const tools = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }]).find((m) => m.id === 1).result.tools;
+  const out = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }, { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_catalog", arguments: {} } }]);
+  const tools = out.find((m) => m.id === 1).result.tools;
   assert.ok(tools.length >= 28, `catalog has ${tools.length} tools`);
+  // A schema-aware client: an enum gives the value; a `track` that points at apex_catalog takes its first id there.
+  const firstTrack = out.find((m) => m.id === 2).result.structuredContent.tracks[0];
+  const valueFor = (spec) => spec.enum?.[0] ?? (/apex_catalog/.test(spec.description || "") && firstTrack ? (firstTrack.id ?? firstTrack) : "x");
   const skip = new Set(["apex_job_cancel", "apex_garage", "apex_track"]);   // need a prior job / a live session
   const calls = tools.filter((t) => !skip.has(t.name)).map((t) => {
     const args = { ...(MIN_ARGS[t.name] || {}) };
-    for (const k of t.inputSchema.required || []) if (!(k in args)) args[k] = t.inputSchema.properties[k].enum?.[0] ?? "x";
+    for (const k of t.inputSchema.required || []) if (!(k in args)) args[k] = valueFor(t.inputSchema.properties[k]);
     return [t.name, args];
   });
   const res = callTools(calls);
@@ -2311,6 +2315,14 @@ test("tools/list stays compact and apex_help returns the full text it shortens",
   assert.match(short.description, /apex_help/);
   assert.ok(Object.keys(full.inputSchema.properties.camera.properties).includes("fov"), "nested object bodies live in apex_help");
   for (const t of listed.tools) for (const k of t.inputSchema.required || []) assert.ok(t.inputSchema.properties[k], `${t.name} keeps required ${k}`);
+  // Bryce 2026-10-20 ("All five"): the required circuit-id enum points at apex_catalog instead of listing 52 ids;
+  // a shorter required enum (apex_job_start kind) stays inline, and the server still rejects an unknown id.
+  for (const name of ["apex_frame_report", "apex_track_audit"]) {
+    const track = listed.tools.find((t) => t.name === name).inputSchema.properties.track;
+    assert.equal(track.enum, undefined, `${name}.track lists no ids`);
+    assert.ok(track.description.includes("apex_catalog"), `${name}.track points at apex_catalog`);
+  }
+  assert.ok(Array.isArray(listed.tools.find((t) => t.name === "apex_job_start").inputSchema.properties.kind.enum));
   const miss = out.find((m) => m.id === 3).result;
   assert.equal(miss.isError, true);
 });
