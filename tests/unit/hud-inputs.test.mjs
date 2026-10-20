@@ -36,6 +36,28 @@ test("ring buffer: oldest-first reads, wraps at capacity, clear", () => {
   assert.equal(t.count, 0);
 });
 
+test("paused preference changes clear input history before another HUD frame", () => {
+  const values = new Map(), listeners = [];
+  const store = { get: (k, d) => values.has(k) ? values.get(k) : d,
+    set(k, v) { values.set(k, v); for (const fn of listeners) fn({ key: k }); },
+    subscribe(fn) { listeners.push(fn); } };
+  const ctx = vm.createContext({ GameStore: { store } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8"), ctx);
+  const elements = vm.runInContext("HudElements", ctx), d = fakeDom();
+  const I = load({ document: d.doc, window: d.win, HudElements: elements, GameStore: { store } });
+  elements.set("inputs", true);
+  const car = { throttleDemand: 1, brakeDemand: 0, steerCommand: 0, gear: 4 };
+  I.frame({}, car, 100);
+  assert.ok(I.trace.count > 0);
+  store.set("unrelated", 1);
+  assert.ok(I.trace.count > 0, "unrelated writes preserve the trace");
+  elements.set("inputs", false);
+  elements.set("inputs", true); // no frames run while solo-paused
+  assert.equal(I.snapshot().samples.length, 0, "re-enabling cannot restore pre-disable samples");
+  car.throttleDemand = 0; I.frame({}, car, 1000 / 30);
+  assert.deepEqual(Array.from(I.snapshot().samples, (s) => s.throttle), [0]);
+});
+
 test("the window is ~3 s at a fixed step", () => {
   const I = load();
   assert.equal(I.WINDOW_S, 3);
