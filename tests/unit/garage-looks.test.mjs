@@ -184,7 +184,23 @@ test("pickers: a click applies through the scene module, rebuilds and keeps focu
 });
 
 test("pickers: the crew and mood picks are saved by their scene modules", () => {
-  const crew = read("js/garage/scene-crew.js"), scene = read("js/garage/scene.js");
-  assert.match(crew, /function setLook\(id\) \{[\s\S]{0,200}localStorage\.setItem\("apex26\.crewLook", id\)/);
-  assert.match(scene, /function setMood\(id\) \{[\s\S]{0,120}localStorage\.setItem\("apex26\.garageMood", m\)/);
+  // The real setters, run against a stub localStorage: the pick must persist.
+  const saved = new Map();
+  const ctx = vm.createContext({
+    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
+    Uint32Array, isFinite, parseFloat, parseInt, Date,
+    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
+    localStorage: { getItem: (k) => (saved.has(k) ? saved.get(k) : null), setItem: (k, v) => saved.set(k, String(v)) },
+  });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/scene-crew.js", "js/garage/experience.js",
+                   "js/garage/scene.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const crew = vm.runInContext("GarageCrew", ctx), scene = vm.runInContext("GarageScene", ctx);
+  assert.equal(crew.setLook("pitstop"), "pitstop");
+  assert.equal(saved.get("apex26.crewLook"), "pitstop");
+  assert.equal(scene.setMood("night"), "night");
+  assert.equal(scene.mood(), "night");
+  assert.equal(saved.get("apex26.garageMood"), "night");
+  assert.equal(scene.setMood("no-such-mood"), "shipped", "an unknown id falls back to the shipped rig");
 });
