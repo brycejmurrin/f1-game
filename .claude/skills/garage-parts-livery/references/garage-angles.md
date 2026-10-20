@@ -1,7 +1,7 @@
 # garage-angles.mjs — when, how, and how fast
 
-**Use when:** placement is already answered by `spine-station.mjs` and a
-lit, foreshortened garage view is needed.
+**Use when:** inspecting garage equipment, room layout or a lit car/livery.
+For paint placement, answer the flat-atlas question with `spine-station.mjs` first.
 
 **Inputs:** team/part/design selection, shot preset, and whether the result is
 an offline or live capture.
@@ -14,6 +14,7 @@ edits stay with the owning source files.
 
 ## Contents
 
+- Choose the subject before the angle
 - Pick the cheapest path first
 - Everything is an axis
 - Presets are starting points
@@ -22,9 +23,38 @@ edits stay with the owning source files.
 - BEFORE pack — fetch, do not recapture
 - When NOT to use
 - Offline preflight
-The garage is the only place occlusion, wall crests, and real lighting get a
-vote. Use this tool when `spine-station.mjs` (0.2 s, flat atlas) has already
-answered placement and you need **lit, foreshortened** proof.
+The garage is where room occlusion, wall crests and lighting get a vote.
+Use subject stations for equipment/layout; use **lit, foreshortened** views
+after flat-atlas placement when reviewing paint.
+
+## Choose the subject before the angle
+
+Car presets centre the car. For a room, cabinet, fan or trolley review, discover
+subject stations instead of repeating `hero,front,rear` or inventing another path:
+
+```sh
+node tools/shot/garage-angles.mjs --list-cameras           # read-only JSON, no browser
+node tools/shot/garage-angles.mjs --list-cameras=cabinet   # literal metadata search
+node tools/shot/garage-angles.mjs --plan --team=mclaren --preset=workshop --fast --viewport=844x390 --budget=180s
+# After the browser/load preflight, run the same command without --plan:
+node tools/shot/garage-angles.mjs --team=mclaren --preset=workshop --fast --viewport=844x390 --budget=180s --sheet=1 --out=artifacts/workshop-review
+```
+
+`workshop` visits `toolWall`, `serviceCorner`, `safetyStation`, `engineerDesk`;
+`room` visits `roomBack`, `roomDoor` for opposite views of the bay. Discovery
+includes each station's subject, purpose and exact orbit/target. These are
+inspection defaults, not tracking cameras: changed room geometry still needs
+pixel review for occlusion. `--station=toolWall` captures just that subject;
+`--station=toolWall --az=-80deg,-50deg` explores two sides of it. Explicit
+station selection overrides a preset's station list; retain the resulting plan
+and sidecars to repeat a chosen camera before/after.
+
+The same canonical stations appear in `apex_catalog` section `garage` (search
+`filter:"cabinet"`, follow pagination), work as `apex_garage` frame names, and
+can be planned with `apex_garage_plan`'s existing maximum of four frames. Plan
+estimates and discovery do not prove visibility. `--fast` opts out of sheets
+by default, so request `--sheet=1` for a review gallery. No skill or host keeps
+its own copy of camera coordinates.
 
 ## Pick the cheapest path first
 
@@ -95,9 +125,9 @@ node tools/shot/garage-angles.mjs --team=mercedes --views=free --az=1.2 --el=0.3
 The absolute flags, targets and lamps go through `__apex.garageFrame`;
 `--picker-team` still clicks the DOM for the counted flags only.
 
-**The game clamps the orbit, not the tool.** Elevation is `0..1.30` rad
+**The player-clamped orbit** defaults to elevation `0..1.30` rad
 (`SP_EL_MIN/MAX`, `js/garage/setup-camera.js`): the eye never goes below the target, so a
-"looking up" shot is not reachable — put the TARGET below the subject instead
+"looking up" shot is not reachable within those player clamps — put the TARGET below the subject instead
 and the subject lands above frame centre from a floor-level eye. Distance is
 `4.6..15` m on every base view except `wingFront` (2.0) and `wingRear` (1.8),
 which exist to sit close to a flap; the sidecar records the clamped value
@@ -110,9 +140,9 @@ node tools/shot/garage-angles.mjs --fast --team=all --views=wingFront \
   --az=0,0.15pi --el=0.04 --dist=3.5 --target=0,-0.15,2.2 --out=artifacts/wing-ground
 ```
 
-### Stations — cameras keyed to a PART
+### Stations — cameras keyed to a subject
 
-A station is a camera bundle that frames one thing a livery field paints:
+A station is a camera bundle that frames a specific car part or room subject:
 base view + orbit + look-at + lamp, and `clamp: false` where it sits inside
 the player's 4.6 m floor (a survey framing, not a preset). Every component is
 a default the axes override, so `--station=spineTop --az=150deg,170deg` is
@@ -136,7 +166,7 @@ tuning one.
 | `wheelF` / `wheelR` | front / rear wheel (cover, rim) | side · unique az · 1.7 m · clamp off |
 | `haloBehind` / `mirror` / `cover` | halo+headrest, mirror, engine-cover mark | rear/front · unique az · ~2 m · clamp off |
 
-**`--preset=closeup`** shoots the fourteen stations above (plus `endplate`) with no shared `--az` product. Multi-team runs also write `<team>-sheet.png`.
+**`--preset=closeup`** shoots the fourteen close-up stations, including `endplate`, with no shared `--az` product. Multi-team runs also write `<team>-sheet.png`.
 
 **A design walk with no camera flag shoots its own stations.** `FIELD_STATIONS`
 maps every `Liveries.FIELDS` key to the station(s) that show it (`spineLogo →
@@ -181,7 +211,7 @@ Legacy aliases still work: `--spine-logo`, `--spine-side`.
 ### Free camera
 
 The game clamps the player's orbit (el ≥ 0, a per-view `minDist`); a survey
-does not have to live inside it. `__apex.garageFrame({clamp: false})` lifts
+does not have to live inside it. `__apex.garageFrame("free", {clamp: false})` lifts
 both floors for one framing (`G.setSetupFree`; the next preset restores them).
 
 | flag | meaning |

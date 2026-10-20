@@ -67,7 +67,7 @@ test("drawn only while a pose plays: three figures and one pole", () => {
   Crew.draw(LIV, [-3.8, 2.1, -4.8], Arrival.poseOut(6, Arrival.DEFAULT, true));
   assert.equal(draws.length, 4);
   const scene = read("js/garage/scene.js");
-  assert.match(scene, /if \(arrival && typeof GarageCrew !== "undefined"\) GarageCrew\.draw\(liv, eye, arrival, SHELL_OPTS\);/);
+  assert.match(scene, /if \(arrival && typeof GarageCrew !== "undefined"\) GarageCrew\.draw\(liv, eye, arrival, SHELL_OPTS, team && team\.id\);/);
 });
 
 test("the angle map lights the chosen eye, both for the cut, and draws the bay, door and lane", () => {
@@ -80,4 +80,66 @@ test("the angle map lights the chosen eye, both for the cut, and draws the bay, 
   const litX = (svg) => +svg.match(/<circle cx="([\d.]+)"[^>]*fill="#e10600"/)[1];
   assert.ok(litX(left) < 60 && litX(right) > 60, "LEFT is drawn on the left of the plan, RIGHT on the right");
   assert.match(Arrival.angleMap("cut"), />1<\/text>.*>2<\/text>/s, "the cut numbers its two eyes in order");
+});
+
+test("design-preview crew looks: each builds valid, distinct geometry; classic stays the default", () => {
+  const meshes = [];
+  const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
+  const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
+  Crew.init(gfx);
+  assert.equal(Crew.look(), "classic");
+  const sizes = {};
+  for (const id of Crew.LOOKS) {
+    meshes.length = 0;
+    assert.equal(Crew.setLook(id), id);
+    Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(2.5, Arrival.settings({}), true));
+    let verts = 0;
+    for (const d of meshes) {
+      const n = d.pos.length / 3;
+      assert.equal(d.nrm.length, d.pos.length); assert.equal(d.col.length, d.pos.length);
+      assert.ok(d.pos.every(Number.isFinite), id + ": finite positions");
+      assert.ok(d.idx.every((i) => i >= 0 && i < n), id + ": indices in range");
+      verts += n;
+      // FIT: nothing below the bay floor (y 0); the baked looks also stand ON it.
+      let minY = Infinity;
+      for (let i = 1; i < d.pos.length; i += 3) minY = Math.min(minY, d.pos[i]);
+      if (n > 1000) assert.ok(minY >= -1e-3 && minY < 0.03, `${id}: the crew stands on the floor (min y ${minY.toFixed(3)})`);
+    }
+    sizes[id] = verts;
+  }
+  assert.equal(new Set(Object.values(sizes)).size, Crew.LOOKS.length, "every look is different geometry: " + JSON.stringify(sizes));
+  assert.equal(Crew.setLook("nope"), "welcome", "an unknown id keeps the look");
+});
+
+test("pit-stop front jack: saddle seated on each chassis' nose underside, clear of the front wing", () => {
+  const meshes = [];
+  const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
+  const STYLES = { base: {}, droop: { noseDroop: -0.03, noseSlim: 0.84 }, long: { noseTipZ: 0.55 }, short: { noseTipZ: -0.32, noseDroop: 0.04 } };
+  const Car3D = { CHASSIS: { nose: [{ z: 2.60, y: 0.245, h: 0.072 }, { z: 2.00, y: 0.315, h: 0.235 }] }, teamStyleOf: (id) => STYLES[id] || {}, bodyStyleKey: (t, b) => b || t };
+  const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Car3D, Log: { info() {}, warn() {} } });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
+  Crew.init(gfx); Crew.setLook("pitstop");
+  for (const id of Object.keys(STYLES)) {
+    meshes.length = 0;
+    Crew.draw(LIV, [-3, 2, -4], Arrival.poseOut(2.5, Arrival.settings({}), true), null, id);
+    const nose = Crew.noseTip(id, LIV), d = meshes.find((m) => m.pos.length > 30000);
+    // The cradle's top line follows the nose underside: at every z along it, the highest jack vertex at x≈0 IS the nose.
+    let worst = -Infinity, n = 0, inWing = 0;
+    for (let i = 0; i < d.pos.length; i += 3) {
+      const x = d.pos[i], y = d.pos[i + 1], z = d.pos[i + 2];
+      if (Math.abs(x) < 1e-6 && z >= nose.z - 0.1 - 1e-6 && z <= nose.z - 0.015 + 1e-6 && y > 0.12) {
+        worst = Math.max(worst, y - nose.at(z)); n++;                                    // > 0 = inside the nose, < 0 = a gap
+      }
+      if (Math.abs(x) < 0.9 && z > 2.40 && z < 2.72 && y < 0.10) inWing++;              // the main plane's box
+    }
+    assert.ok(n > 0, id + ": the cradle's top line was sampled");
+    assert.ok(worst < 1e-4, `${id}: the cradle never rises into the nose (worst ${worst.toFixed(4)} m)`);
+    assert.ok(worst > -1e-3, `${id}: and touches it, no gap (closest ${(-worst * 1000).toFixed(2)} mm below)`);
+    assert.equal(inWing, 0, id + ": nothing of the jack (or crew) inside the front wing's main plane");
+  }
 });

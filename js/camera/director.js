@@ -77,6 +77,9 @@ const Director = (function () {
     return false;
   }
 
+  // tick()'s wantOn() argument, reused: tick runs every race frame with TV off too.
+  const _wantSt = { net: false, modeId: "", autoSpectate: false, finished: false, retired: false };
+
   let _live = null;
   function live() { return _live; }
 
@@ -183,7 +186,9 @@ const Director = (function () {
       const player = G.player;
       const finished = !!(player && player.finished);
       const retired = !!(player && player.retired);
-      if (!wantOn({ net, modeId: modeId(), autoSpectate, finished, retired })) {
+      const ws = _wantSt;
+      ws.net = net; ws.modeId = modeId(); ws.autoSpectate = autoSpectate; ws.finished = finished; ws.retired = retired;
+      if (!wantOn(ws)) {
         if (forcedTv && modeId() === "tv") { /* left on tv by us; still off if wantOn false only via net */ }
         clearDbg(!net && modeId() !== "tv");
         return;

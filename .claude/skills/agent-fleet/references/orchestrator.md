@@ -11,6 +11,7 @@ AGENTS.md §Concurrent PRs — a successor never re-asks it at a hand-off.
 
 - Before launching
 - Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
+- Hand-off to a successor (the one tested path; plan §7)
 - Never
 
 Elsewhere: grants, auto mode and measuring permissions → `authority.md`;
@@ -138,6 +139,32 @@ trips `Sandbox allocation failed … rate_limited`.
 - Stagger launches by ≥ 30 s and confirm each child with `get_session`
   (`status_bucket`, granted `permission_mode`, repo attached) before the next.
 - Waves stay within the lane caps in `launch-policy.md`.
+
+## Hand-off to a successor (the one tested path; plan §7)
+
+At the soft cap (200k), or when Bryce asks, and never sooner than ~30 calls of
+work left:
+
+1. Write the successor's brief as a file on a pushed branch (your own
+   `cursor/<topic>` branch, committed, never the deploy branch). It is the
+   launch template above with `[Orchestrator]` TITLE/TAGS, the live queue (PR,
+   head sha, state, next action), the game slot, and "standing authority:
+   AGENTS.md §Concurrent PRs". It never says "re-grant in your session" or "ask
+   Bryce to archive the predecessor".
+2. `get_session` (no id) on yourself; read `lineage.depth` and `rate_limit_info`.
+   - quota at `allowed_warning` or worse → no launch; tell Bryce once and park.
+   - depth < 7 → `create_session` the successor yourself (source_url + deploy
+     branch, `permission_mode: "auto"`, model, title, tags, prompt = the brief),
+     then `get_session` on it: repository attached, auto, not failed.
+   - depth ≥ 7 → send the fleet's seed `SPAWN ORCH <fleet> <branch>:<brief path>`
+     (`role-seed.md`; the seed's id is on its `SEED <fleet> LIVE` bus line).
+   - no live seed → print ONE paste-in prompt for Bryce (the brief path and the
+     launch lines of role-seed.md) and stop.
+   Never a scheduled task, a routine or `create_new_session_on_fire` for a
+   successor: on 2026-10-19 both produced dead successors.
+3. When the successor posts `ORCH <fleet> LIVE`, release your claims, delete
+   your own timers (`list_triggers`), and stop. The successor archives you by
+   the archive rule; nobody waits for Bryce to approve it.
 
 ## Never
 
