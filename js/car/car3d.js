@@ -2011,7 +2011,7 @@ const Car3D = (function () {
         // proud of the plate's trailing face so a swept tip never overhangs it.
         const z0 = zM + 0.12, top0 = _ep.front.top + (_ep.rear.top - _ep.front.top) * (z0 - _ep.front.z) / (_ep.rear.z - _ep.front.z);
         addSpan(out, fin(z0, top0, 0.004), fin(zM, topM, rTip * 0.80), endplateC || DARK);
-        addSpan(out, fin(zM, topM, rTip * 0.80), fin(_ep.rear.z - 0.008, _ep.rear.top, rTip + 0.024), endplateC || DARK);
+        addSpan(out, fin(zM, topM, rTip * 0.80), fin(_ep.rear.z - 0.008, _ep.rear.top, rTip + 0.012), endplateC || DARK);
         if ((aeroStyle.epTip || 0) >= 2) addSpan(out,
           { z: -2.50, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 },
           { z: _ep.rear.z - 0.012, x: s * 0.50, y: _ep.rear.top + rTip - 0.012, w: 0.042, h: 0.064 }, accentC);
