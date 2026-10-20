@@ -355,7 +355,7 @@ function decalRunHarness() {
   return new Function('THREE', `
     const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
     const shadowSys = null, BLOB_CAP = 8, window = {}, renderer = {};
-    let _warmPending = false;
+    let _warmPending = false, _sceneRenders = 0;
     const skipBatches = () => false, _coDrop = () => {};
     const drawList = []; drawList.n = 0;
     const setRange0 = () => {}, pushRec = () => { drawList.n++; };
@@ -363,7 +363,10 @@ function decalRunHarness() {
     ${TLX.slice(start, end)}
     ${TLX.slice(dropStart, dropEnd)}
     return { append: _decalAppend, free: disposeGeometry, scene, registry: _instRegistry,
-      size: () => _decalRuns.size, warm: on => { _warmPending = on; }, flush: flushDropped };
+      size: () => _decalRuns.size, warm: on => { _warmPending = on; },
+      // A present that rendered: the warm queue drains, then the one-render hold (releaseGeometry -> _decalDrop) lets go.
+      flush: () => { flushDropped(); _sceneRenders++; flushDropLater(false); },
+      held: () => _dropLater.length };
   `)(CORE);
 }
 for (const warming of [false, true]) {
@@ -378,6 +381,7 @@ for (const warming of [false, true]) {
       mesh.addEventListener('dispose', () => disposed++);
       h.warm(warming); h.free(geo);
       if (warming) assert.equal(mesh.geometry, geo, 'compile keeps its inputs until settled');
+      else assert.equal(h.held(), 1, 'held until the next scene render (its pipeline passes to the successor)');
       h.warm(false); h.flush();
     }
     assert.equal(h.size(), 0, '40 freed source geometries must leave no strong geometry -> run entries');
