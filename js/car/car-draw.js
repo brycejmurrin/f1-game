@@ -1058,6 +1058,17 @@ const CarDraw = (function () {
     // Windscreen / aeroscreen glass: a faint tint that still shows the road.
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
+    // The rig's programs before the first onboard frame needs them (TLX gfx.warmDraws captures the draws
+    // and compiles them; GLX/WGX have no warmDraws). Both seats: cockpit/helmet with the wheel, visor without.
+    // Outside a frame: the decal it queues is dropped by the next beginDecals(), and dt 0 moves nothing.
+    // mirrorKey: the world, when the menu already warmed it (the race-entry warm was skipped) — TLX then
+    // compiles the race scene into the mirror target as well, once per world.
+    const _rigWarmBase = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    function warmCockpitRig(c, paint, mirrorKey) {
+      if (!c || carModelBuf || typeof G.gfx.warmDraws !== "function") return Promise.resolve(false);
+      return G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },
+        { mirror: mirrorKey || null });
+    }
     function drawCockpitRig(c, base, dt, paint, noWheel) {
       // Match game.js sessionDarkFor / skyNight: an explicit night, or a night
       // circuit on the default TOD. (Was the same check; kept next to the glass
@@ -1637,7 +1648,7 @@ const CarDraw = (function () {
       teamMesh, teamBodyMesh, sharedRivalBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
+      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
       // __apex.menuPrep().cars: the last menu car prep that ran to its end.
       prepareMenuCarAssets: (current) => prepareMenuCarAssets(current).then((r) => { if (r) _menuCarPrep = r; return r; }),

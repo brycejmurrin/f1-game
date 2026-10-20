@@ -447,13 +447,14 @@ test("B-F3.1: tlx.js wiring — mirrorBegin's gate after the in-flight refusal, 
   assert.match(mb, /if \(_mirDead \|\| _warmPending \|\| [^\n]*\) return false;\n\s*if \(mirrorWarmGate\(\)\) return false;/,
     "the gate right after the in-flight refusal, before any target is made");
   assert.ok(mb.indexOf("mirrorWarmGate()") < mb.indexOf("prepareMirrorTarget(w, h)"));
-  assert.match(TLX, /\n\s*if \(!_warmPending && !_deviceLost\) \{ if \(_warmRequested\) startProgramWarm\(opts\); else if \(_mirWarmReq\) startMirrorWarm\(opts\); \}\n\s*if \(_warmPending\) return;/,
+  assert.match(TLX, /\n\s*if \(!_warmPending && !_deviceLost\) \{ if \(_warmRequested\) startProgramWarm\(opts\); else if \(_mirWarmReq\) startMirrorWarm\(opts\); else if \(_rigWarm\) startRigWarm\(\); \}\n\s*if \(_warmPending\) return;/,
     "present() starts it where it starts the entry warm, and paints nothing while it runs");
   assert.match(TLX, /let _mirWarmLazy = false;\s*try \{ _mirWarmLazy = localStorage\.getItem\("apex26\.tlxMirWarmLazy"\) === "1"; \}/, "opt-in: unset is the eager stage");
   assert.equal((TLX.match(/localStorage\.getItem\("apex26\.tlxMirWarmLazy"\)/g) || []).length, 1, "read once");
   assert.match(TLX, /mirrorDeferred: _warmStages\.mirrorDeferred, mirrorLazy: _warmStages\.mirrorLazy/, "memState().warm reports both");
-  // The mirror stage is ONE function shared by both warms (no drift between the eager and the deferred compiles).
-  assert.equal((TLX.match(/await warmMirrorStage\(usePost, useTag\);/g) || []).length, 2);
+  // The mirror stage is ONE function shared by every warm (no drift between the eager, the deferred and the
+  // rig warm's menu-path compiles).
+  assert.equal((TLX.match(/await warmMirrorStage\(usePost, useTag\);/g) || []).length, 3);
   assert.equal((TLX.match(/prepareMirrorTarget\(16, 8, true\)/g) || []).length, 1);
 });
 
