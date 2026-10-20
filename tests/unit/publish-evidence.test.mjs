@@ -11,7 +11,7 @@ import { inspectEvidence, prepareEvidence, publishEvidence, STORAGE_ANCHOR } fro
 import { exportHistoryEvidence, validateHistorySelection } from "../../tools/shot/export-history-evidence.mjs";
 
 function fixture(t) {
-  const root = mkTmpDir("evidence-test-");
+  const root = mkTmpDir("evidence-edit-delete-clobber-");
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const git = (...args) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
   git("init"); git("config", "user.name", "Evidence test"); git("config", "user.email", "evidence@example.test");
@@ -92,7 +92,8 @@ function fakeGitHub(bundle, { existing = false, badDigest = false } = {}) {
     assert.ok(args.includes("--prerelease")); assert.ok(args.includes("--latest=false"));
     assert.equal(args[args.indexOf("--target") + 1], STORAGE_ANCHOR);
     assert.notEqual(STORAGE_ANCHOR, bundle.sourceSha);
-    assert.equal(args.some((a) => /clobber|delete|edit/.test(a)), false);
+    // The subcommand is pinned above; asset paths may contain edit/delete/clobber.
+    assert.equal(args.some((a) => /^--clobber(?:=|$)/.test(a)), false);
     created = true; return "";
   } };
 }
@@ -104,6 +105,11 @@ test("publication anchors tags outside game history, verifies every asset, and r
   assert.ok(result.assets.every((a) => a.url.includes("/releases/download/")));
   publishEvidence(bundle.receiptPath, gh.run);
   assert.equal(gh.calls.filter((a) => a[0] === "release").length, 1);
+  const create = gh.calls.find((a) => a[0] === "release");
+  for (const flag of ["--clobber", "--clobber=true"])
+    assert.throws(() => fakeGitHub(bundle).run("gh", [...create, flag]), assert.AssertionError);
+  for (const command of ["edit", "delete"])
+    assert.throws(() => fakeGitHub(bundle).run("gh", ["release", command, ...create.slice(2)]), assert.AssertionError);
 });
 
 test("changed local data and mismatched remote hashes fail without overwriting", (t) => {
