@@ -43,8 +43,8 @@ test("listing derives the op enum and the tree/browser split from the catalog", 
   assert.equal(t.name, ONE_TOOL);
   assert.deepEqual(t.inputSchema.properties.op.enum, ["status", "help", "shot", "job_start"]);
   assert.deepEqual(t.inputSchema.required, ["op"]);
-  assert.match(t.description, /Tree ops \(no lock\): status, help\./);
-  assert.match(t.description, /Browser-capable ops .*: shot, job_start\./);
+  assert.ok(t.description.includes("Tree ops (no lock): status, help."), t.description);
+  assert.ok(t.description.endsWith("never inside a subagent): shot, job_start."), t.description);
 });
 
 test("routing: prefix optional, help's tool normalised, malformed calls refused", () => {
@@ -106,5 +106,5 @@ test("sizeListing: chars, name-only cost and the largest entries", () => {
   assert.equal(r.fullChars, JSON.stringify(tools).length);
   assert.equal(r.fullTokens, estTokens(r.fullChars));
   assert.equal(r.instructionsChars, 2);
-  assert.match(r.largest[0], /^a:/);
+  assert.equal(r.largest[0], `a:${JSON.stringify(tools[0]).length}`);
 });
