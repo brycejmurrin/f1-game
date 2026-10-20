@@ -4522,6 +4522,19 @@ const TLX = (function () {
         uploadTexture(h) {
           try { if (h && h.tex) renderer.initTexture(h.tex); } catch (_) { /* first draw uploads it */ }
         },
+        // Re-fill a live handle's GPU texture from a repainted source of the SAME size and kind: the pool's
+        // reuse (three re-uploads into the existing GPU texture when .version moves), without the create.
+        // The garage's 1.5 s trace tick created one per tick: a fresh texture whenever its pool entry was gone.
+        // false = the caller creates instead. Feature-detected: GLX and WGX have none.
+        refillTexture(h, src) {
+          const t = h && h.tex;
+          if (!t || !src || src.width !== t.__tlxPoolW || src.height !== t.__tlxPoolH || _isBitmap(src) !== !!t.__tlxPoolBmp) return false;
+          t.image = src;
+          t.onUpdate = releaseTexSource;
+          t.needsUpdate = true;
+          if (mobileTier || isMobile) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
+          return true;
+        },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
