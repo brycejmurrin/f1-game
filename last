@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01Vak5F7Cq32FMBHo6Ua2jvg Re e6f22d6: root cause = .hud-label line-height:normal follows the font face; fitHud capRow (tower height) publishes --hud-z-top 1 grid step low when the cap pass runs before Barlow loads; CI widths match 0.96/0.92 exactly. Intermittent, not deterministic (tip CI+Pages green). Fix draft #3174 93c64d6b (one CSS line). Verifying.
+HANDOFF to:* from:claude:session_01Qv3HqSwsMuESkV9sSvb4f1 SEED B SPAWNED session_013hpoGb4E43VwtFEZzAnTm4
