@@ -2790,6 +2790,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/capture-gallery.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/capture-options.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2913,6 +2922,11 @@
         "--json",
         "--out"
       ]
+    },
+    {
+      "path": "tools/shot/lib/design-matrix-run.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/shot/lib/design-matrix.mjs",
