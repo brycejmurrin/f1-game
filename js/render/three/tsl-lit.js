@@ -2244,10 +2244,10 @@
             const fvS = (sin(fvC.mul(70.0).add(sin(objP.z.mul(1.7).add(fvC.mul(9.0))).mul(1.2))).mul(0.5).add(0.5)).toVar();
             const fvBr = (smoothstep(-0.6, 0.2, sin(objP.z.mul(4.0).add(fvC.mul(37.0))))).toVar();
             const fvPer = (float(0.090).div(fnPx)).toVar();
-            const fv = (mix(smoothstep(0.62, 0.85, fvS).mul(fvBr), float(0.22), smoothstep(3.0, 1.5, fvPer)).mul(smoothstep(1.4, 0.2, objP.z))).toVar();
-            const fvGlow = (mix(vec3(0.78, 1.0, 0.30), vec3(0.10, 0.22, 0.0), smoothstep(0.35, 0.75, pvA))
+            const fv = (mix(smoothstep(0.50, 0.80, fvS).mul(fvBr), float(0.30), smoothstep(3.0, 1.5, fvPer)).mul(smoothstep(1.4, 0.2, objP.z))).toVar();
+            const fvGlow = (mix(vec3(0.78, 1.0, 0.30), vec3(0.05, 0.14, 0.0), smoothstep(0.35, 0.75, pvA))
               .mul(vec3(U.ambSky).mul(2.5).add(vec3(U.sunColor).mul(pvSun.mul(0.6))).add(0.15))).toVar();
-            color.assign(mix(color, fvGlow, fv.mul(0.95)));
+            color.assign(mix(color, fvGlow, fv));
           }).ElseIf(finishId.equal(68.0), () => {
             const cfW = (objP.xz.mul(120.0).add(objP.y.mul(120.0))).toVar();
             const cfWv = (sin(cfW.x).mul(sin(cfW.y)).mul(clamp(float(0.052).div(fnPx).mul(0.5).sub(1.0), 0.0, 1.0)).mul(0.5).add(0.5)).toVar();
