@@ -13062,7 +13062,8 @@
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "_coAppend": [
-        "tests/unit/tlx-hunt4.test.mjs"
+        "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "_coDrop": [
         "tests/unit/render-final-contracts.test.mjs",
@@ -13097,6 +13098,9 @@
       "_mirWarmSwap": [
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "_mirWarmUnswap": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "_mul4Col": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13390,6 +13394,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "warmMirrorStage": [
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "wrapStream": [

@@ -38,7 +38,7 @@ const tslice = (from, to) => {
 
 // The real capture + warm over a real renderer. Stand-ins: materialFor (one lit material per opts object, as the
 // matCache keys it), the GPU settle, and present()'s dispatch line — pinned to the real source below.
-async function rig(t) {
+async function rig(t, { soft = false } = {}) {
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
@@ -47,8 +47,13 @@ async function rig(t) {
     ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
   const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
   const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 0, 5); camera.updateMatrixWorld();
-  const mk = new Function("THREE", "renderer", "scene", "camera", "lit", "Log", `"use strict";
-    const post = null, fx = null, vizMat = null, _drawMatMode = false, _postF = {};
+  const mk = new Function("THREE", "renderer", "scene", "camera", "lit", "Log", "SOFT", `"use strict";
+    const post = { enabled: () => true }, fx = null, vizMat = null, _drawMatMode = false, _postF = {};
+    const _warmFx = true, _mirDead = false, softGpu = () => SOFT, softwareGL = SOFT;
+    let mirrorStages = 0, unswaps = 0;
+    async function warmMirrorStage() { mirrorStages++; }
+    function _mirWarmUnswap() { unswaps++; }
+    let _coOn = true;
     let _warmPending = null, _deviceLost = false, _gpuLastOperation = "";
     const mats = new Map();
     const materialFor = (o) => { let m = mats.get(o); if (!m) mats.set(o, m = lit.makeMaterial({ roughness: o.roughness })); return m; };
@@ -57,15 +62,16 @@ async function rig(t) {
     ${tslice("      const _warmProbes = new WeakMap();", "      async function warmFxPrograms() {")}
     ${tslice("      // THE DRAWS NO WARM FRAME HELD", "      const ENV_PROBE_TRIES")}
     function draw(mesh, model, opts) {
-      if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
+      if (_capture) { _captureRec(mesh, model, opts); return; }   // as tlx.js, after its coalesce line (off while capturing)
       drawList.n++;
     }
     function present() {
       if (!_warmPending && !_deviceLost) { if (_rigWarm) startRigWarm(); }
       return !_warmPending;
     }
-    return { warmDraws, draw, present, pending: () => _warmPending, drawn: () => drawList.n, mats };`);
-  const R = mk(THREE, renderer, scene, camera, lit, globalThis.Log);
+    return { warmDraws, draw, present, pending: () => _warmPending, drawn: () => drawList.n, mats,
+      mirror: () => ({ stages: mirrorStages, unswaps }) };`);
+  const R = mk(THREE, renderer, scene, camera, lit, globalThis.Log, soft);
   renderer.render(scene, camera);   // three's own first-render programs (the output pass), so a count isolates ours
   const compiles = [];
   const c0 = renderer.compileAsync.bind(renderer);
@@ -133,14 +139,34 @@ test("a second warmDraws over pairs already compiled resolves at once and holds 
   assert.equal(await h.R.warmDraws(() => {}), false, "an empty capture reports false");
 });
 
+test("menu path: opts.mirror runs the mirror stage over the race scene once per world, never on a software GPU or without a key", async (t) => {
+  const h = await rig(t);
+  const g = { geo: geo(RIG_LAYOUT) };
+  let p = h.R.warmDraws(() => h.R.draw(g, I, CAB), { mirror: "monaco|day" }); h.R.present(); await p;
+  assert.deepEqual(h.R.mirror(), { stages: 1, unswaps: 1 }, "the stage ran, and the mirror's instanced swap was undone");
+  p = h.R.warmDraws(() => h.R.draw(g, I, CAB), { mirror: "monaco|day" });
+  assert.equal(await p, true, "same world, rig compiled: nothing owed");
+  assert.equal(h.R.present(), true);
+  assert.equal(h.R.mirror().stages, 1, "once per world");
+  p = h.R.warmDraws(() => h.R.draw(g, I, CAB), { mirror: "spa|day" }); h.R.present(); await p;
+  assert.equal(h.R.mirror().stages, 2, "a new world runs it again, even with the rig already compiled");
+  p = h.R.warmDraws(() => h.R.draw({ geo: geo(RIG_LAYOUT) }, I, CAB)); h.R.present(); await p;
+  assert.equal(h.R.mirror().stages, 2, "no key (the race-entry warm ran): no mirror stage");
+  const s = await rig(t, { soft: true });
+  p = s.R.warmDraws(() => s.R.draw({ geo: geo(RIG_LAYOUT) }, I, CAB), { mirror: "monaco|day" }); s.R.present(); await p;
+  assert.equal(s.R.mirror().stages, 0, "a software GPU never warms the mirror (as wantMirrorWarm)");
+});
+
 test("wiring: present() dispatches the rig warm after the entry and mirror warms; car-draw warms both seats; race entry awaits it", () => {
   assert.ok(TLX.includes("if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }"),
     "present() dispatches the rig warm after the entry and mirror warms");
-  assert.ok(TLX.includes("draw(mesh, model, opts) {\n          if (_capture) { _captureRec(mesh, model, opts); return; }"), "draw() captures before the coalesce path");
+  assert.ok(TLX.includes("_coAppend(mesh.geo, model, opts)) return;   // R1\n          if (_capture) { _captureRec(mesh, model, opts); return; }"), "draw() captures right after the coalesce line");
+  assert.ok(TLX.includes("_capture = recs; _coOn = false;"), "coalescing is off while capturing, so _coAppend never takes a rig draw");
   assert.ok(TLX.includes("\n        warmDraws,   //"), "the backend publishes warmDraws");
-  assert.ok(CAR_DRAW.includes("G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); })"),
+  assert.ok(CAR_DRAW.includes("G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },"),
     "cockpit/helmet (wheel) and visor (no wheel)");
   const i = GAME.indexOf('spanAsync("rigWarm"'), j = GAME.indexOf('spanAsync("mirrorPrepare"');
   assert.ok(i > 0 && j > i, "startRaceBody awaits the rig warm under the cover, before the mirror preparation");
   assert.ok(GAME.indexOf('spanAsync("warmCarAssets"') < i, "after the car meshes exist");
+  assert.ok(GAME.includes("_warmKey === menuKey(trackIdx) ? _warmKey : null))"), "the mirror key only when the menu warmed this world (the entry warm was skipped)");
 });

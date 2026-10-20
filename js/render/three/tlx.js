@@ -3362,16 +3362,23 @@ const TLX = (function () {
       let _capture = null, _rigWarm = null;   // the capture in progress; { recs, done } waiting for its present
       const _rigDone = new WeakMap();         // geometry -> Set of the material ids (+0.5 mirrored) already compiled
       const _rigKey = (r) => r.mat.id + (r.sx < 0 ? 0.5 : 0);
-      function warmDraws(fn) {
+      // opts.mirror (a world key): the menu path skipped the race-entry warm, so the mirror stage last compiled the
+      // MENU's world into the mirror target and the first onboard mirror pass built the race's (census 39458228952:
+      // 6 pipelines in mirrorEnd at the switch). Run that stage over the race scene too, once per world.
+      let _rigMirrorKey = null;
+      const _rigMirrorOn = () => !!(_warmFx && post && post.enabled() && !_mirDead && !vizMat && !softGpu() && !softwareGL);
+      function warmDraws(fn, opts) {
         if (_deviceLost || !lit || _drawMatMode || vizMat || typeof renderer.compileAsync !== "function" || _rigWarm) return Promise.resolve(false);
         const recs = [];
-        _capture = recs;
+        const co = _coOn;
+        _capture = recs; _coOn = false;   // a coalesced draw reaches draw()'s capture, which skips it, never a run
         try { fn(); } catch (e) { try { Log.warn("gfx", "TLX warmDraws capture failed", String(e)); } catch (_) { /* optional */ } }
-        finally { _capture = null; }
+        finally { _capture = null; _coOn = co; }
         const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
-        if (!todo.length) return Promise.resolve(recs.length > 0);
+        const mirror = !!(opts && opts.mirror) && opts.mirror !== _rigMirrorKey && _rigMirrorOn() ? opts.mirror : null;
+        if (!todo.length && !mirror) return Promise.resolve(recs.length > 0);
         return new Promise((resolve) => {
-          const job = _rigWarm = { recs: todo, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
+          const job = _rigWarm = { recs: todo, mirror, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
           job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
         });
       }
@@ -3403,11 +3410,13 @@ const TLX = (function () {
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
             }
+            if (job.mirror) { _gpuLastOperation = "compile-rig-mirror"; await warmMirrorStage(usePost, useTag); _rigMirrorKey = job.mirror; }
             await _gpuSettled(3000);   // the driver's own compile is GPU-process side, as the draw warm's is
             ok = true;
           } catch (e) {
             try { Log.warn("gfx", "TLX rig warm failed", String(e)); } catch (_) { /* logging is optional */ }
           } finally {
+            if (job.mirror) _mirWarmUnswap();   // warmMirrorStage showed the mirror's own instanced meshes (idempotent)
             if (lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
@@ -5484,8 +5493,8 @@ const TLX = (function () {
           armSkyMesh(!!(softContent("sky") && sky.fallbackNode));
         },
         draw(mesh, model, opts) {
-          if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
           if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
+          if (_capture) { _captureRec(mesh, model, opts); return; }   // warmDraws: compile, never paint
           if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },

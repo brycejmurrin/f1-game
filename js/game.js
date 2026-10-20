@@ -2669,7 +2669,7 @@ async function startRaceBody() {
 
   // TLX: the cockpit rig's programs under the cover, whatever camera the race starts on (car-draw.js warmCockpitRig).
   if (!headlessMode && !document.hidden && player) { const nite = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night), wet = isWetRoad();
-    await RaceEntryProfile.spanAsync("rigWarm", () => carDraw.warmCockpitRig(player, carPaintMat(wet ? (nite ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (nite ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)))); }
+    await RaceEntryProfile.spanAsync("rigWarm", () => carDraw.warmCockpitRig(player, carPaintMat(wet ? (nite ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (nite ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)), _warmKey === menuKey(trackIdx) ? _warmKey : null)); }
   if (stale()) return false;
   // Warm the actual rear view at its HUD size while the grid is covered.
   // startRace's promise includes this so multiplayer cannot arm green early.

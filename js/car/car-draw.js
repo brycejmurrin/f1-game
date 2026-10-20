@@ -1055,10 +1055,13 @@ const CarDraw = (function () {
     // The rig's programs before the first onboard frame needs them (TLX gfx.warmDraws captures the draws
     // and compiles them; GLX/WGX have no warmDraws). Both seats: cockpit/helmet with the wheel, visor without.
     // Outside a frame: the decal it queues is dropped by the next beginDecals(), and dt 0 moves nothing.
+    // mirrorKey: the world, when the menu already warmed it (the race-entry warm was skipped) — TLX then
+    // compiles the race scene into the mirror target as well, once per world.
     const _rigWarmBase = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-    function warmCockpitRig(c, paint) {
+    function warmCockpitRig(c, paint, mirrorKey) {
       if (!c || carModelBuf || typeof G.gfx.warmDraws !== "function") return Promise.resolve(false);
-      return G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); });
+      return G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },
+        { mirror: mirrorKey || null });
     }
     function drawCockpitRig(c, base, dt, paint, noWheel) {
       // Match game.js sessionDarkFor / skyNight: an explicit night, or a night
