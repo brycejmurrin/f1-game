@@ -460,8 +460,11 @@ export async function agentUsage(id) {
   if (!r.ok) throw fail(await apiError(r), "usage");
   const d = await r.json();
   const runs = d.runs || [];
-  const cents = d.totalUsage?.chargedCents ?? runs.reduce((s, x) => s + (x.usage?.chargedCents || 0), 0);
-  return [`USAGE ${id} tokens=${d.totalUsage?.totalTokens ?? 0} chargedCents=${cents} runs=${runs.length}`];
+  // The live response (not the OpenAPI spec) carries cost as `cost{rawCostCents,chargedCents}` at the top level and
+  // per run; the SDK docs say it is absent until billing settles, so absent prints n/a, never a made-up 0.
+  const costed = runs.filter((x) => x.cost);
+  const cents = d.cost?.chargedCents ?? (costed.length ? costed.reduce((s, x) => s + (x.cost.chargedCents || 0), 0) : undefined);
+  return [`USAGE ${id} tokens=${d.totalUsage?.totalTokens ?? 0} chargedCents=${cents ?? "n/a"} runs=${runs.length}`];
 }
 
 const flag = (args, name, dflt) => {

@@ -432,12 +432,20 @@ test("artifacts lists typed rows; artifact downloads via the presigned URL with 
   }
 });
 
-test("usage prints token totals, types 403 feature_unavailable, and throws other errors", async () => {
+test("usage reads cost from the live shape (top-level and per-run `cost`), n/a when absent, types 403, throws the rest", async () => {
   try {
-    stub([200, { totalUsage: { totalTokens: 36170 }, runs: [{ id: "r1" }, { id: "r2" }] }]);
-    assert.equal((await agentUsage(ID))[0], `USAGE ${ID} tokens=36170 chargedCents=0 runs=2`);
-    stub([200, { totalUsage: { totalTokens: 0, chargedCents: 12 }, runs: [] }]);
-    assert.equal((await agentUsage(ID))[0], `USAGE ${ID} tokens=0 chargedCents=12 runs=0`);
+    // Shape measured live 2026-10-20: totalUsage = tokens only; cost{rawCostCents,chargedCents} beside it and on each run.
+    const tok = (n) => ({ inputTokens: n, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, totalTokens: n });
+    stub([200, { totalUsage: tok(36170), cost: { rawCostCents: 40, chargedCents: 12 }, runs: [{ id: "r1", usage: tok(1), cost: { rawCostCents: 1, chargedCents: 1 } }, { id: "r2" }] }]);
+    assert.equal((await agentUsage(ID))[0], `USAGE ${ID} tokens=36170 chargedCents=12 runs=2`);
+    // No top-level cost: sum the runs that report one.
+    stub([200, { totalUsage: tok(5), runs: [{ id: "r1", cost: { chargedCents: 3 } }, { id: "r2", cost: { chargedCents: 4 } }, { id: "r3" }] }]);
+    assert.equal((await agentUsage(ID))[0], `USAGE ${ID} tokens=5 chargedCents=7 runs=3`);
+    // Plan-included zeros stay 0; no cost anywhere is n/a, not a fabricated 0.
+    stub([200, { totalUsage: tok(0), cost: { rawCostCents: 0, chargedCents: 0 }, runs: [] }]);
+    assert.equal((await agentUsage(ID))[0], `USAGE ${ID} tokens=0 chargedCents=0 runs=0`);
+    stub([200, { totalUsage: tok(9), runs: [{ id: "r1" }] }]);
+    assert.equal((await agentUsage(ID))[0], `USAGE ${ID} tokens=9 chargedCents=n/a runs=1`);
     stub([403, err("feature_unavailable")]);
     assert.deepEqual(await agentUsage(ID), [`USAGE ${ID} UNAVAILABLE`]);
     stub([403, err("forbidden")]);
