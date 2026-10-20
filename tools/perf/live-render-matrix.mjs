@@ -140,12 +140,23 @@ async function main() {
     await page.waitForFunction(() => window.__apex && window.__apex.info && typeof Tracks !== "undefined", null, { polling: 100, timeout: 120000 });
     return { ctx, page };
   };
+  const tr = (m) => console.log("  " + new Date().toISOString().slice(11, 19) + " " + m);
   const raceTo = async (page, id, tod) => {
+    tr("raceTo " + id + (tod ? " " + tod : "") + ": ensureCircuit");
     await page.evaluate(async (t) => { const i = Tracks.LIST.findIndex((x) => x.id === t); if (i >= 0) await window.__apex.ensureCircuit(i); }, id);
+    tr("raceTo " + id + ": race()");
     await page.evaluate(([t, d]) => (d ? window.__apex.race(t, d) : window.__apex.race(t)), [id, tod || ""]);
+    tr("raceTo " + id + ": waiting for info().track");
     await page.waitForFunction((t) => { const i = window.__apex.info(); return i.track != null && (i.track === t || (i.track && i.track.id === t)); }, id, { polling: 100, timeout: 120000 });
+    tr("raceTo " + id + ": track up, waiting for frames");
     await framesAdvance(page, 15);
+    tr("raceTo " + id + ": done");
   };
+  // Page state at a timeout: where the row was stuck (info, last Log lines, frames, context-lost flags).
+  const diag = (pg) => Promise.race([
+    pg.evaluate(() => { let info = null, log = []; try { info = window.__apex.info(); } catch (e) { info = String(e); } try { log = Log.records().slice(-12).map((r) => String(r.msg).slice(0, 140)); } catch (_) { /* no Log */ } return { info, log, frames: window.__lrm.frames, lost: window.__lrm.ctxs.map((c) => c.isContextLost()) }; }),
+    sleep(5000).then(() => ({ blocked: "page.evaluate did not answer in 5 s (main thread stuck)" })),
+  ]).catch((e) => ({ err: String(e) }));
   // Each row is capped (a hung row used to eat the whole job) and a failed row gets a fresh page, so one
   // failure does not poison the rows after it.
   const ROW_CAP = { rebuild: 180000 }, DEFAULT_CAP = 90000;   // a capped row is "timeout" (inconclusive), never a silent pass
@@ -160,6 +171,7 @@ async function main() {
       Object.assign(r, await Promise.race([fn(r), cap]));
     } catch (e) { r.verdict = e && e.timedOut ? "timeout" : "fail"; r.error = String(e && e.message || e).slice(0, 400); }
     clearTimeout(timer);
+    if (r.verdict === "timeout" || r.verdict === "fail") { r.diag = await diag(page); console.log("= diag " + name + " " + JSON.stringify(r.diag).slice(0, 1500)); }
     r.ms = Date.now() - t0;
     console.log("= row " + name + " " + r.verdict + (r.error ? " " + r.error : ""));
     save();
