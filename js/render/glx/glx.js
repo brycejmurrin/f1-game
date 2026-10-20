@@ -222,7 +222,7 @@ const GLXBackend = (function () {
   // change; a typed-array slot stores the double unboxed. Index order: emissive, alpha, rough, metal, spec, detail,
   // clearcoat, carPaint, sparkle. Like _luNL below it is PROGRAM state — a WebGL uniform survives every unbind, and
   // litMaterial is the only writer — so only a relink invalidates it (reset beside _luNL), not begin().
-  const _matC = new Float64Array(9).fill(-1);
+  const _matC = new Float64Array(10).fill(-1);
   // uNumLights, last value written to the LIT program. Unlike the _mat* caches
   // above this is NOT cleared per frame: a WebGL uniform is per-PROGRAM state
   // and survives every unbind, so the only thing that can invalidate it is a
@@ -874,7 +874,7 @@ const GLXBackend = (function () {
     // floor does not, and until now the only symptom was init() returning
     // false with a 100 KB shader dumped to the console. Say the two numbers
     // side by side so a "no WebGL" report on a phone names its cause.
-    const LIT_FS_ROWS = 287;   // +uRain, +uSpecKnee (2026-10-01)
+    const LIT_FS_ROWS = 288;   // +uRain, +uSpecKnee (2026-10-01), +uCarFinish (2026-10-20)
     try {
       const rows = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) | 0;
       if (rows && rows < LIT_FS_ROWS) {
@@ -999,7 +999,7 @@ const GLXBackend = (function () {
     _envUnitSet = false;   // uEnvCube's sampler unit is program state: re-point it once after this link
     litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uRain", "uSpecKnee", "uEnvCube", "uEnvStr",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uCarFinish", "uSparkle", "uWetness", "uRain", "uSpecKnee", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
       "uCarShadowMap", "uCarLightVP", "uCarShadowOn", "uCarBiasScale",
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
@@ -2182,6 +2182,8 @@ const GLXBackend = (function () {
     if (clearcoat !== _matC[6]) { gl.uniform1f(litU.uClearcoat, clearcoat); _matC[6] = clearcoat; }
     if (carPaint !== _matC[7]) { gl.uniform1f(litU.uCarPaint, carPaint); _matC[7] = carPaint; }
     if (sparkle !== _matC[8]) { gl.uniform1f(litU.uSparkle, sparkle); _matC[8] = sparkle; }
+    const carFinish = opts && opts.carFinish ? 1 : 0;
+    if (carFinish !== _matC[9]) { gl.uniform1f(litU.uCarFinish, carFinish); _matC[9] = carFinish; }
     return alpha;
   }
 

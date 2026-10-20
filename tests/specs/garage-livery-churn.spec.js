@@ -21,7 +21,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const WARM = 3, EDITS = 6;
-// The page's own clock, polled on a timer (wait-polling-lint): past the garage's flap idle window.
+// The page's own clock, polled on a timer (wait-polling-lint).
 const pause = async (page, ms) => {
   const t0 = await page.evaluate(() => performance.now());
   await page.waitForFunction(([t, d]) => performance.now() - t > d, [t0, ms], { polling: 100, timeout: ms + 60000 });
@@ -148,7 +148,7 @@ test("N paint edits in the garage leave GPU textures, flap meshes, flap runs, te
     await frames(page, 4);   // the car, its atlas and the bay repaint, and the hi-res swap's idle slot runs
   };
   for (let i = 0; i < WARM; i++) await edit();
-  await pause(page, 2500);   // past the garage's flap idle window (setup-camera.js FLAP_IDLE_MS)
+  await pause(page, 2500);   // a pause between edits (the garage releases stale flaps the frame after each bust)
   await edit();
   // Turntable flaps must exist before the leak baseline (menu warm can delay the first garage frame).
   await page.waitForFunction(() => {

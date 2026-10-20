@@ -44,7 +44,7 @@ const VALUES = {
   finStyle: alt(LT && LT.TAIL_STYLE_IDS, "team"), finBadge: alt(LT && LT.FIN_BADGE_IDS, "logo"),
   crestStyle: alt(LT && LT.CREST_STYLE_IDS, "team"), crestTone: alt(LT && LT.CREST_TONE_IDS, "team"),
   crestFrame: alt(LT && LT.CREST_FRAME_IDS, "none"),
-  coverBind: "saddleWrap", finArt: [0.8, 0.2, 0.6], gripTint: [0.7, 0.1, 0.1],
+  coverBind: "saddleWrap", finArt: [0.8, 0.2, 0.6], finHandoff: "hardCut", gripTint: [0.7, 0.1, 0.1],
   patternTint: COLOUR, patternSecond: [0.2, 0.2, 0.9], patternPlacement: "wrap", patternSide: "left",
   patternWidth: 0.7, patternRepeat: 3, patternOffset: 0.2, patternTaper: 0.4, patternOpacity: 0.6,
   patternRotation: 15, patternStretch: 1.4, patternWeight: 0.8, patternKey: "accent",
