@@ -12543,6 +12543,9 @@
       ]
     },
     "js/render/shared/assets.js": {
+      "_ensureScratchGl": [
+        "tests/unit/pack-png-bytes.test.mjs"
+      ],
       "adopt": [
         "tests/unit/assets-pack.test.mjs"
       ],
@@ -12551,13 +12554,15 @@
       ],
       "init": [
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/boot-idle-prefetch.test.mjs"
+        "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs"
       ],
       "load": [
         "tests/specs/assets-api.spec.js",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/build-worker.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
       "loadModels": [
@@ -12590,7 +12595,8 @@
         "tests/unit/build-worker.test.mjs"
       ],
       "readLayerBytes": [
-        "tests/unit/assets-pack.test.mjs"
+        "tests/unit/assets-pack.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs"
       ],
       "readLayerBytesAsync": [
         "tests/unit/assets-pack.test.mjs"
