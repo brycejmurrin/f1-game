@@ -14,10 +14,17 @@ test.describe("Spa track-owned foundation migration", () => {
   test("preserves Spa's 102 m relief and Raidillon climb", async ({ page }) => {
     await loadSpa(page);
     const elevation = await page.evaluate(() => {
+      // @ts-expect-error Tracks is a lexical script global, not a window property.
+      const tracks = Tracks;
       const profile = window.__apex.trackProfile(720);
       const ys = profile.map((p) => p.y);
       return {
         range: Math.max(...ys) - Math.min(...ys),
+        turns: tracks.LIST.find((entry) => entry.id === "spa").turns.map((frac) => {
+          const node = window.__apex.nodeAt(frac);
+          const sample = profile[Math.round(frac * profile.length) % profile.length];
+          return { x: node.x, z: node.z, dir: sample.k > 0 ? "L" : "R" };
+        }),
         // Corrected profile (#878, SRTM-fitted, 2026-10-04): La Source falls to
         // the Eau Rouge valley floor at 0.1405 (y -26.6), then Raidillon and
         // the Kemmel straight climb to the Les Combes summit at 0.3633
@@ -35,6 +42,23 @@ test.describe("Spa track-owned foundation migration", () => {
     expect(elevation.kemmel - elevation.eauRouge).toBeGreaterThan(75);
     expect(elevation.maxUp).toBeGreaterThan(0.17);
     expect(elevation.maxUp).toBeLessThan(0.23);
+    // Physical bend stations matched to F1's 2025 numbered map, in game
+    // coordinates. This catches duplicate peaks and the missing Eau Rouge /
+    // Blanchimont identities; it does not certify GPS or absolute dimensions.
+    const gpTurns = [
+      [361, 1025, "R"], [-141, 615, "L"], [-208, 565, "R"],
+      [-248, 441, "L"], [-634, -621, "R"], [-583, -676, "L"],
+      [-595, -829, "R"], [-268, -1008, "R"], [-405, -849, "L"],
+      [-294, -359, "L"], [-81, -323, "L"], [135, -720, "R"],
+      [315, -710, "L"], [457, -905, "R"], [623, -802, "R"],
+      [195, -318, "L"], [35, -17, "L"], [146, 508, "R"], [93, 519, "L"],
+    ];
+    expect(elevation.turns).toHaveLength(gpTurns.length);
+    gpTurns.forEach(([x, z, dir], i) => {
+      const actual = elevation.turns[i];
+      expect(Math.hypot(actual.x - Number(x), actual.z - Number(z)), `T${i + 1}`).toBeLessThan(25);
+      expect(actual.dir, `T${i + 1} direction`).toBe(dir);
+    });
   });
 
   test("grounds key terrain feet without weakening road clearance", async ({ page }) => {
@@ -61,6 +85,8 @@ test.describe("Spa track-owned foundation migration", () => {
     test.setTimeout(180000);
     await loadSpa(page);
     const overlaps = await page.evaluate(() => {
+      // @ts-expect-error Tracks is a lexical script global, not a window property.
+      const appTracks = Tracks;
       const caps = window.__apex.trackGeometry();
       const count = 900;
       const profile = window.__apex.trackProfile(count);
@@ -80,15 +106,15 @@ test.describe("Spa track-owned foundation migration", () => {
       // with it (2026-08, headless VM build) the largest road-over-corridor
       // excursion anywhere on the lap is 0.037 m — below the scan's own 0.1 m
       // floor, so `overlaps.road` comes back 0 against the 0.18 m budget.
-      const bankTrack = Tracks.buildCenterline(
-        Tracks.LIST.find((entry) => entry.id === "spa"));
+      const bankTrack = appTracks.buildCenterline(
+        appTracks.LIST.find((entry) => entry.id === "spa"));
       const samples = [];
       for (let i = 0; i < count; i++) {
         const node = window.__apex.nodeAt(i / count);
         const halfWidth = profile[i].hw;
         for (const scale of [-0.6, -0.3, 0, 0.3, 0.6]) {
           const lat = halfWidth * scale;
-          const bank = Tracks.banking(bankTrack, i / count * bankTrack.total, lat);
+          const bank = appTracks.banking(bankTrack, i / count * bankTrack.total, lat);
           samples.push({
             x: node.x + node.rx * lat,
             z: node.z + node.rz * lat,
