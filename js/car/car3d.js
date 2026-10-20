@@ -87,8 +87,9 @@ const Car3D = (function () {
     wedge:   Object.freeze({ noseTipZ:  0.52, noseSlim: 1.45, noseDroop: -0.028, airbox: 0.28, fin: 0, mirror: 1, inlet: -0.110, inletH: -0.260, inletW:  0.100, undercutD:  0.220, waist: -0.220, floorStep:  0.120, coverCrown:  0.200, coverLift:  0.200, wingStyle: W({ flaps: 2, arch: 0.55, twist: 0.20, teCurve: 0.090, chordTaper: 0.30, tipRise: 0.024 }) }),
     // Barge (reads): short fat blunt hull, wide low pods, heavy waist, low flat cover.
     barge:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.10, noseDroop: -0.006, airbox: 1.55, fin: 1, mirror: 2, inlet:  0.100, inletH: -0.060, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep: -0.120, coverCrown: -0.080, coverLift: -0.100, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
-    // B·D1 period bodies (2026-10-19; resized round 5). fitSeat seats nose details on
-    // the measured skin.
+    // B·D1 period bodies (Bryce's resized pick, 2026-10-20). fitSeat seats nose details
+    // on the measured skin; sizes are cut to the shipped bodies' envelope (fin under
+    // the roll hoop, noses within ~4 % of the tallest shipped one).
     // Highnose: 1990 Tyrrell 019 / Benetton B191 raised nose, slim cone, anhedral-ish wing.
     highnose: Object.freeze({ fitSeat: 1, noseTipZ: 0.16, noseSlim: 0.62, noseDroop:  0.215, airbox: 1.00, fin: 0, mirror: 1, inlet:  0.020, inletH:  0.000, inletW:  0.020, undercutD:  0.040, waist: -0.040, floorStep:  0.020, coverCrown:  0.040, coverLift:  0.040, wingStyle: W({ arch: 1.10, twist: 0.30, teCurve: 0.14, foot: 1.40, tipRise: 0.060 }) }),
     // Sharkfin: 2008-11 / 2017 tall dorsal fin over a long raised cover, clutter wing.
