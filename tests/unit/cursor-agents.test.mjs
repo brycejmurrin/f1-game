@@ -28,6 +28,7 @@ import {
   recordAllow,
   Refused,
   DEFAULT_MODEL,
+  errorHead,
   clock,
   retryAfterMs,
   listAgents,
@@ -146,15 +147,15 @@ test("assertAllowed refuses malformed and unrecorded ids, accepts recorded ones"
 
 test("launchAgent posts the documented body, records the id and never prints the key", async () => {
   const file = tmpAllow();
-  const calls = stub([201, { agent: { id: ID }, run: { id: "run-1" } }]);
+  const calls = stub([200, { items: [] }], [201, { agent: { id: ID }, run: { id: "run-1" } }]);
   try {
     const lines = await launchAgent({ prompt: "do it", agentId: ID }, { file });
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].method, "POST");
-    assert.match(calls[0].url, /\/v1\/agents$/);
-    assert.equal(calls[0].headers.Authorization, `Bearer ${KEY}`);
-    assert.equal(calls[0].body.prompt.text, "do it");
-    assert.equal(calls[0].body.agentId, ID);
+    // The twin guard lists agents first, then the create is the only write.
+    assert.deepEqual(calls.map((c) => c.method), ["GET", "POST"]);
+    assert.ok(/\/v1\/agents$/.test(calls[1].url));
+    assert.equal(calls[1].headers.Authorization, `Bearer ${KEY}`);
+    assert.equal(calls[1].body.prompt.text, "do it");
+    assert.equal(calls[1].body.agentId, ID);
     assert.ok((new RegExp(`^LAUNCH ${ID} run=run-1 model=composer-2.5 repo=f1-game pr=off$`)).test(lines[0]));
     assert.ok(!lines.join("\n").includes(KEY));
     assert.ok(readAllow(file)[ID]);
@@ -165,7 +166,7 @@ test("launchAgent posts the documented body, records the id and never prints the
 
 test("launchAgent un-records the id when the API refuses (billing gate)", async () => {
   const file = tmpAllow();
-  stub([400, err("usage_limit_exceeded", "On-demand usage is required")]);
+  stub([200, { items: [] }], [400, err("usage_limit_exceeded", "On-demand usage is required")]);
   try {
     await assert.rejects(launchAgent({ prompt: "p", agentId: ID }, { file }), /usage_limit_exceeded/);
     assert.deepEqual(readAllow(file), {});
@@ -176,11 +177,11 @@ test("launchAgent un-records the id when the API refuses (billing gate)", async 
 
 test("launchAgent: a 5xx retry that finds the same agentId already created is a success, not a duplicate", async () => {
   const file = tmpAllow();
-  const calls = stub([503, err("unavailable")], [409, err("agent_id_conflict")], [200, { id: ID, latestRunId: "run-7" }]);
+  const calls = stub([200, { items: [] }], [503, err("unavailable")], [409, err("agent_id_conflict")], [200, { id: ID, latestRunId: "run-7" }]);
   try {
     const lines = await launchAgent({ prompt: "p", agentId: ID }, { file });
-    assert.deepEqual(calls.map((c) => c.method), ["POST", "POST", "GET"]);
-    assert.equal(calls[0].body.agentId, calls[1].body.agentId);
+    assert.deepEqual(calls.map((c) => c.method), ["GET", "POST", "POST", "GET"]);
+    assert.equal(calls[1].body.agentId, calls[2].body.agentId);
     assert.ok((/run=run-7 .*already created/).test(lines[0]));
     assert.ok(readAllow(file)[ID]);
   } finally {
@@ -450,6 +451,77 @@ test("usage reads cost from the live shape (top-level and per-run `cost`), n/a w
     assert.deepEqual(await agentUsage(ID), [`USAGE ${ID} UNAVAILABLE`]);
     stub([403, err("forbidden")]);
     await assert.rejects(agentUsage(ID), /forbidden/);
+  } finally {
+    after();
+  }
+});
+
+// ---- transcript-driven improvements: failure digest, dump age skip, launch twin guard -------------------------------
+
+test("errorHead groups tool failures by tool and masks ids and paths; success is null", () => {
+  assert.equal(errorHead("get_mcp_tools", { success: { x: 1 } }), null);
+  assert.equal(errorHead("get_mcp_tools", { error: { message: 'namespace "Github" not found. Available namespaces: cursor' } }), 'get_mcp_tools: namespace "Github" not found. Available namespaces: cursor');
+  assert.equal(errorHead("run_terminal_cmd", { spawnError: { message: "ENOENT" } }), "run_terminal_cmd: spawnError ENOENT");
+  const mcp = { success: { content: [{ text: { text: JSON.stringify({ ok: false, error: "endpoint is required: pass endpoint" }) } }] } };
+  assert.equal(errorHead("mcp", mcp), "mcp: ok:false endpoint is required: pass endpoint");
+  assert.equal(errorHead("mcp", { success: { content: [{ text: { text: JSON.stringify({ ok: true }) } }] } }), null);
+  const masked = errorHead("read_file", { error: { message: "no file /workspace/js/a.js run-3d266b1c-15ea-4cd7-a549-b64a34435823" } });
+  assert.equal(masked, "read_file: no file <path> run-<uuid>");
+  assert.ok(errorHead("x", { error: { message: "y".repeat(500) } }).length <= 94);
+});
+
+test("digest counts failures, merges them across runs and prints ERRORS plus the top ERR lines", () => {
+  const call = (name, result) => ["tool_call", { name, args: { q: "a" }, result }];
+  const bad = { error: { message: "namespace \"Github\" not found" } };
+  const a = digestRun(parseSse(sse([call("get_mcp_tools", bad), call("get_mcp_tools", { success: {} }), call("read_file", { success: {} })])));
+  const b = digestRun(parseSse(sse([call("get_mcp_tools", bad)])));
+  assert.equal(a.errCalls, 1);
+  const lines = formatDigest(mergeDigests([a, b]));
+  assert.ok(lines.includes("ERRORS calls=2 share=0.50 stormRuns=0 worstStreak=1"));
+  assert.ok(lines.includes('ERR x2 get_mcp_tools: namespace "Github" not found'));
+  assert.ok(formatDigest(mergeDigests([digestRun([])])).includes("ERRORS calls=0 share=0.00 stormRuns=0 worstStreak=0"));
+  // A storm is the same failure repeated back to back; a success in between resets the streak.
+  const storm = digestRun(parseSse(sse([call("get_mcp_tools", bad), call("get_mcp_tools", bad), call("get_mcp_tools", bad), call("read_file", { success: {} }), call("get_mcp_tools", bad)])));
+  assert.equal(storm.errStreak, 3);
+  // Different failures back to back are not a storm of one failure: the streak counts identical heads only.
+  const other = { error: { message: "something else" } };
+  assert.equal(digestRun(parseSse(sse([call("get_mcp_tools", bad), call("get_mcp_tools", bad), call("get_mcp_tools", other), call("get_mcp_tools", bad)]))).errStreak, 2);
+  assert.ok(formatDigest(mergeDigests([storm, a])).some((l) => l.startsWith("ERRORS calls=5 ") && l.endsWith("stormRuns=1 worstStreak=3")));
+});
+
+test("dump skips a run past the retention window without a request, and keeps a run just inside it", async () => {
+  const dir = tmpDir();
+  const t = fakeClock();
+  t.now = Date.parse("2026-10-20T20:00:00Z");
+  const ago = (h) => new Date(t.now - h * 3600e3).toISOString();
+  const calls = stub(
+    [200, { items: [{ id: "run-aaaaaaaa", status: "FINISHED", createdAt: ago(40) }, { id: "run-bbbbbbbb", status: "FINISHED", createdAt: ago(24.04) }, { id: "run-cccccccc", status: "FINISHED", createdAt: ago(1) }] }],
+    [200, "event: status\ndata: {}\n\n"],
+    [200, "event: status\ndata: {}\n\n"],
+  );
+  try {
+    const line = await dumpRuns([ID], dir, { gapMs: 0 });
+    assert.deepEqual(calls.map((c) => c.url.split("/").slice(-2, -1)[0]), [ID, "run-bbbbbbbb", "run-cccccccc"]);
+    assert.ok(/ written=2 skipped=0 expired=1$/.test(line));
+  } finally {
+    t.restore();
+    after();
+  }
+});
+
+test("launch refuses a twin (same name, not archived) before any write, and --allow-twin or an archived twin passes", async () => {
+  const file = tmpAllow();
+  const name = "claude-launch: list the mcps";
+  const calls = stub([200, { items: [{ id: OTHER, status: "IDLE", name: name.toUpperCase() }] }]);
+  try {
+    await assert.rejects(launchAgent({ prompt: "list the mcps", name, agentId: ID }, { file }), (e) => e instanceof Refused && e.message.startsWith(`TWIN ${OTHER} IDLE`));
+    assert.deepEqual(calls.map((c) => c.method), ["GET"]);
+    assert.deepEqual(readAllow(file), {});
+    stub([200, { items: [{ id: OTHER, status: "ARCHIVED", name }] }], [201, { agent: { id: ID }, run: { id: "run-9" } }]);
+    assert.ok((await launchAgent({ prompt: "list the mcps", name, agentId: ID }, { file }))[0].startsWith(`LAUNCH ${ID} `));
+    const c2 = stub([201, { agent: { id: ID }, run: { id: "run-9" } }]);
+    await launchAgent({ prompt: "list the mcps", name, agentId: ID, allowTwin: true }, { file });
+    assert.deepEqual(c2.map((c) => c.method), ["POST"]);
   } finally {
     after();
   }

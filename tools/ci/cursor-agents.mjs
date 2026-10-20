@@ -18,7 +18,7 @@
 //   node tools/ci/cursor-agents.mjs dump [<agent-id>...] [--limit 20]
 //   node tools/ci/cursor-agents.mjs digest [--dir artifacts/cursor-dumps]
 //   node tools/ci/cursor-agents.mjs launch (--prompt "…" | --prompt-file F) [--model composer-2.5] [--repo URL]
-//        [--ref BRANCH | --pr PR_URL] [--name N] [--mode agent|plan] [--create-pr] [--on-branch] [--dry-run] [--wait [--timeout S]]
+//        [--ref BRANCH | --pr PR_URL] [--name N] [--mode agent|plan] [--create-pr] [--on-branch] [--allow-twin] [--dry-run] [--wait [--timeout S]]
 //   node tools/ci/cursor-agents.mjs followup <id> (--text "…" | --text-file F) [--mode agent|plan]
 //   node tools/ci/cursor-agents.mjs cancel <id> [--run <runId>]
 //   node tools/ci/cursor-agents.mjs archive <id>
@@ -101,6 +101,22 @@ export function parseSse(text) {
 const TERMINAL_CLASSES =
   /\b(sync-pr|ci-watch|test-bg|tooling-fast|verify-track|deploy\.mjs|gh run|gh pr|gh api|git (?:push|commit|merge|fetch|status|diff|log)|npm test|node --test|npx|curl|grep|sed|cat|ls|seq|sleep)\b/;
 
+/** One-line head of a tool failure, or null when the call succeeded. Ids and workspace paths are masked so equal failures group. */
+export function errorHead(name, result) {
+  if (!result || typeof result !== "object") return null;
+  let bad = null;
+  if (result.error) bad = result.error.message || result.error.error || JSON.stringify(result.error);
+  else if (result.spawnError) bad = `spawnError ${result.spawnError.message || JSON.stringify(result.spawnError)}`;
+  else if (name === "mcp" && result.success) {
+    // An MCP tool reports its own failure inside a successful transport call: {"ok":false,"error"|"message":"..."}.
+    const m = /"ok":\s*false[^}]*?"(?:error|message)":\s*"([^"]{0,120})/.exec(JSON.stringify(result.success).replace(/\\"/g, '"'));
+    if (m) bad = `ok:false ${m[1]}`;
+  }
+  if (bad === null) return null;
+  const head = String(typeof bad === "string" ? bad : JSON.stringify(bad)).replace(/\s+/g, " ").replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, "<uuid>").replace(/\/workspace\S*/g, "<path>");
+  return `${name}: ${head.slice(0, 90)}`;
+}
+
 /** Metrics for one run's SSE events. Result sizes are STORED characters, a proxy: the stream elides some results. */
 export function digestRun(events) {
   const m = {
@@ -115,7 +131,12 @@ export function digestRun(events) {
     mcpDiscoveryDup: 0,
     repeatReads: 0,
     terminal: {},
+    errCalls: 0,
+    errHeads: {},
+    errStreak: 0,
   };
+  let lastBad = null;
+  let streak = 0;
   const reads = new Set();
   const disc = new Set();
   for (const { event, data } of events) {
@@ -127,6 +148,15 @@ export function digestRun(events) {
       const size = JSON.stringify(data.result ?? "").length;
       m.calls[n] = (m.calls[n] || 0) + 1;
       m.resChars[n] = (m.resChars[n] || 0) + size;
+      const bad = errorHead(n, data.result);
+      if (bad) {
+        m.errCalls++;
+        m.errHeads[bad] = (m.errHeads[bad] || 0) + 1;
+      }
+      // A retry storm: the same failure again and again with nothing in between (any success or other failure resets it).
+      streak = bad && bad === lastBad ? streak + 1 : bad ? 1 : 0;
+      lastBad = bad;
+      if (streak > m.errStreak) m.errStreak = streak;
       // The stream elides args on some calls: an object holding only `toolCallId` (or nothing).
       if (Object.keys(args).every((x) => x === "toolCallId")) m.noArgs++;
       if (size > 20000) m.bigResults++;
@@ -159,12 +189,15 @@ export function digestRun(events) {
 
 /** Sum run digests into one fleet digest. */
 export function mergeDigests(list) {
-  const t = { runs: list.length, calls: {}, resChars: {}, terminal: {} };
-  const scalars = ["noArgs", "thinkChars", "asstChars", "editEchoChars", "bigResults", "mcpDiscovery", "mcpDiscoveryDup", "repeatReads"];
+  const t = { runs: list.length, calls: {}, resChars: {}, terminal: {}, errHeads: {}, errStreakWorst: 0, errStormRuns: 0 };
+  const scalars = ["errCalls", "noArgs", "thinkChars", "asstChars", "editEchoChars", "bigResults", "mcpDiscovery", "mcpDiscoveryDup", "repeatReads"];
   for (const k of scalars) t[k] = 0;
   for (const m of list) {
     for (const k of scalars) t[k] += m[k];
+    t.errStreakWorst = Math.max(t.errStreakWorst, m.errStreak || 0);
+    if ((m.errStreak || 0) >= 3) t.errStormRuns++;
     for (const [n, v] of Object.entries(m.calls)) t.calls[n] = (t.calls[n] || 0) + v;
+    for (const [n, v] of Object.entries(m.errHeads || {})) t.errHeads[n] = (t.errHeads[n] || 0) + v;
     for (const [n, v] of Object.entries(m.resChars)) t.resChars[n] = (t.resChars[n] || 0) + v;
     for (const [n, v] of Object.entries(m.terminal)) {
       const x = (t.terminal[n] ||= { calls: 0, chars: 0 });
@@ -191,6 +224,8 @@ export function formatDigest(t) {
   lines.push(`EDIT_ECHO chars=${k(t.editEchoChars)} share=${(t.editEchoChars / Math.max(1, totalRes)).toFixed(2)} bigResults=${t.bigResults}`);
   lines.push(`REPEAT_READS ${t.repeatReads}  MCP_DISCOVERY ${t.mcpDiscovery} dup=${t.mcpDiscoveryDup}`);
   lines.push(`REASONING chars=${k(t.thinkChars)} assistant=${k(t.asstChars)}`);
+  lines.push(`ERRORS calls=${t.errCalls} share=${(t.errCalls / Math.max(1, totalCalls)).toFixed(2)} stormRuns=${t.errStormRuns} worstStreak=${t.errStreakWorst}`);
+  for (const [h, v] of Object.entries(t.errHeads).sort((a, b) => b[1] - a[1]).slice(0, 5)) lines.push(`ERR x${v} ${h}`);
   return lines;
 }
 
@@ -293,6 +328,11 @@ export async function launchAgent(opts, { file = allowFile() } = {}) {
     const { prompt, ...rest } = body;
     return [`DRYRUN ${body.agentId} promptChars=${prompt.text.length} ${JSON.stringify(rest)}`];
   }
+  if (!opts.allowTwin) {
+    // Six near-identical "Mcp ... listing" agents ran ~600 tool calls on one question in a day (2026-10-20 transcripts).
+    const twin = (await listAgents(100)).find((a) => a.status !== "ARCHIVED" && (a.name || "").toLowerCase() === body.name.toLowerCase());
+    if (twin) throw new Refused(`TWIN ${twin.id} ${twin.status} "${body.name.slice(0, 40)}" already exists with this name; pass --allow-twin to launch anyway`);
+  }
   recordAllow(body.agentId, meta, file);
   const r = await api("/v1/agents", { method: "POST", body, retry5xx: true });
   if (r.status === 409) {
@@ -377,7 +417,13 @@ export async function listAgents(limit, { prUrl, includeArchived } = {}) {
   return out.slice(0, limit);
 }
 
-/** Save every run stream of `agents` under `dir`; a 410 (stream_expired, 24 h retention) is counted and skipped. */
+// Streams are retained 24 h (`X-Cursor-Stream-Retention-Seconds: 86400`). Measured 2026-10-20 on 45 fleet runs: all 43
+// runs 37-50 h old were 410 and none younger than 24 h was; the 2 older ones that answered 200 were cancelled runs with
+// no transcript (status, result, done only). So a run past the window is skipped without a request; a 410 that still
+// arrives is counted the same way. The 5 min margin keeps a run on the boundary from being dropped by clock skew.
+const retentionMs = () => (Number(process.env.APEX_CURSOR_RETENTION_S) || 86400) * 1000 + 300000;
+
+/** Save every run stream of `agents` under `dir`; a run past the retention window, or a 410 (stream_expired), is counted as expired. */
 export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   let got = 0;
@@ -388,6 +434,10 @@ export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
       const out = path.join(dir, `${id.slice(-8)}_${run.id.slice(-8)}.sse`);
       if (run.status === "CREATING" || (fs.existsSync(out) && fs.statSync(out).size > 2000)) {
         skipped++;
+        continue;
+      }
+      if (run.createdAt && clock.now() - Date.parse(run.createdAt) > retentionMs()) {
+        expired++;
         continue;
       }
       const r = await api(`/v1/agents/${id}/runs/${run.id}/stream`, { accept: "text/event-stream" });
@@ -517,6 +567,7 @@ async function main() {
       createPr: has(rest, "--create-pr"),
       onBranch: has(rest, "--on-branch"),
       dryRun: has(rest, "--dry-run"),
+      allowTwin: has(rest, "--allow-twin"),
     });
     emit(lines);
     const id = /^LAUNCH (bc-\S+)/.exec(lines[0])?.[1];

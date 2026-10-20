@@ -96,3 +96,24 @@ stays open on purpose, and gap 8 is a caller convention (`--name`).
 5. `artifacts <id>` and `artifact <id> <path>`: path must be `artifacts/...` with no `..`; the presigned URL is fetched
    without the Authorization header into `artifacts/cursor-artifacts/<last8>/`.
 6. `usage <id>`: token counts, not spend (plan-included agents report zeros); 403 `feature_unavailable` prints `UNAVAILABLE`.
+
+## Transcript findings, 2026-10-20 (read with the tool itself)
+
+`cursor-agents.mjs dump` + `digest` over 47 retrievable runs (2,031 tool calls; typed counts only, no bodies read).
+
+- **The retrievable sample is almost all MCP-survey agents** (`Mcp tools listing`, `Mcps list view`, ...): they are the
+  runs the fleet made today. Hunters and PR owners are mostly gone: **43 of 45 of their runs were 410 expired**, all
+  37-50 h old; none younger than 24 h was. The 2 old runs that answered 200 were cancelled and held only status, result
+  and done (394 bytes). So a client-side skip of runs older than the retention window loses nothing (`dump` now does
+  it, with a 5 min margin) and **a worker's transcript has to be dumped at hand-back, within a day**.
+- **Failures: 225 of 2,031 calls (11 %).** 172 of them are one error, `get_mcp_tools: Invalid arguments`, spread over
+  about 9 survey agents; `namespace "X" not found` for servers listed in `.mcp.json` but not attached in the VM
+  (`Github`, `chrome-devtools`, `playwright-official`, `Browser-use`, in some runs `apex-tools`) is next. The cause of
+  the invalid calls cannot be read from the stream: it elides args on 36 % of calls.
+- **Retry storms:** the same failure repeated back to back in 8 runs, worst 16 in a row. `digest` now prints
+  `ERRORS calls= share= stormRuns= worstStreak=` and the top `ERR xN <tool>: <head>` lines (ids and paths masked).
+- **Duplicate discovery:** 344 `get_mcp_tools` calls, 236 exact repeats; five or six agents with the same
+  "Mcp ... listing" name ran about 600 calls on one question. `launch` now refuses a twin (same name, not archived)
+  with `TWIN <id> ...` (exit 3) unless `--allow-twin` is passed.
+- Not shown by this sample: how hunters and owners use tools, which is where the real cost is. That needs dumps taken
+  at hand-back.
