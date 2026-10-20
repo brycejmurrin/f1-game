@@ -75,12 +75,12 @@ test("main: --dry posts nothing; a real run posts each planned comment; a re-run
   const log = (l) => out.push(l);
   assert.equal(main(["--dry"], { gh, read, now: T, log }), 0);
   assert.equal(store[1].length, 0);
-  assert.match(out.at(-1), /= mirror dry 1 to post, 0 skipped, 0 failed; 1 to:#PR line\(s\) of 2/);
+  assert.equal(out.at(-1), "= mirror dry 1 to post, 0 skipped, 0 failed; 1 to:#PR line(s) of 2, bus tip bbbbbbb");
   assert.equal(main([], { gh, read, now: T, log }), 0);
   assert.deepEqual(store[1], [commentBody(entries[0])]);
   assert.equal(main([], { gh, read, now: T, log }), 0);
   assert.equal(store[1].length, 1, "idempotent");
-  assert.match(out.at(-1), /= mirror 0 posted, 1 skipped/);
+  assert.equal(out.at(-1), "= mirror 0 posted, 1 skipped, 0 failed; 1 to:#PR line(s) of 2, bus tip bbbbbbb");
 });
 
 test("main: a failed post exits 1 and names the PR; the read gets the cursor and --no-fetch", () => {
@@ -90,7 +90,7 @@ test("main: a failed post exits 1 and names the PR; the read gets the cursor and
   const out = [];
   assert.equal(main(["--since", "abc", "--no-fetch"], { gh, read, now: T + 10 * 86400, log: (l) => out.push(l) }), 1);
   assert.deepEqual(args, { since: "abc", last: 200, fetch: false });
-  assert.match(out.join("\n"), /FAILED #1 aaaaaaa: HTTP 403$/m);
+  assert.deepEqual(out, ["  FAILED #1 aaaaaaa: HTTP 403", "= mirror 0 posted, 0 skipped, 1 failed; 1 to:#PR line(s) of 1, bus tip aaaaaaa"]);
 });
 
 test("ghApi: REST paths and the JSON body go to gh api; a missing PR reads as null", () => {
