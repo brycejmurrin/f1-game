@@ -6930,6 +6930,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "mood": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "moodCtx": [
@@ -6964,6 +6965,9 @@
       "release": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "setMood": [
+        "tests/unit/garage-looks.test.mjs"
       ],
       "spot": [
         "tests/unit/garage-mesh.test.mjs"
