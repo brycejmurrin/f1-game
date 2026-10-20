@@ -102,13 +102,13 @@ const Car3D = (function () {
     // campaign. fitSeat keeps nose attachments on the measured skin; the existing
     // body anchors own pod/cover clearances and decal placement for these too.
     // Caldra: raised cooling shoulder, a pinched waist and a scalloped front cascade.
-    caldra: Object.freeze({ fitSeat: 1, podProfile: "rift", noseTipZ: 0.16, noseSlim: 0.68, noseDroop: -0.018, airbox: 0.88, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.000, inletW: -0.040, undercutD: 0.120, waist: -0.100, floorStep: 0.035, coverCrown: 0.045, coverLift: 0.065, wingStyle: W({ arch: 0.72, twist: 0.32, teCurve: 0.14, chordTaper: 0.35, foot: 1.05, tipRise: 0.025 }) }),
-    // Rovik: low, narrow cooling shelf and long slim nose with almost flat wings.
-    rovik: Object.freeze({ fitSeat: 1, podProfile: "keel", noseTipZ: 0.32, noseSlim: 0.46, noseDroop: -0.012, airbox: 0.68, fin: 0, mirror: 0, inlet: -0.040, inletH: -0.100, inletW: -0.080, undercutD: 0.065, waist: -0.130, floorStep: -0.015, coverCrown: 0.005, coverLift: -0.060, wingStyle: W({ arch: 0.20, twist: 0.08, teCurve: 0.02, chordTaper: 0.10, foot: 0.75, tipRise: 0.006 }) }),
+    caldra: Object.freeze({ fitSeat: 1, noseCurve: 2.2, spineCurve: 0.035, podProfile: "rift", noseTipZ: -0.1, noseSlim: 1.28, noseDroop: -0.028, airbox: 0.88, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.000, inletW: -0.040, undercutD: 0.120, waist: -0.100, floorStep: 0.035, coverCrown: 0.02, coverLift: 0.025, wingStyle: W({ clean: 1, canard: 0, arch: 0.55, twist: 0.18, teCurve: 0.065, chordTaper: 0.22, foot: 0.92, tipRise: 0.018 }) }),
+    // Rovik: low cooling shelf, short broad nose and almost flat wings.
+    rovik: Object.freeze({ fitSeat: 1, noseCurve: 1.8, spineCurve: 0.022, podProfile: "keel", noseTipZ: -0.14, noseSlim: 1.18, noseDroop: -0.028, airbox: 0.68, fin: 0, mirror: 0, inlet: -0.040, inletH: -0.100, inletW: -0.080, undercutD: 0.065, waist: -0.130, floorStep: -0.015, coverCrown: 0.005, coverLift: -0.04, wingStyle: W({ clean: 1, canard: 0, arch: 0.2, twist: 0.06, teCurve: 0.02, chordTaper: 0.12, foot: 0.82, tipRise: 0.006 }) }),
     // Senzo: broad cooling shoulders and swept wing tips.
-    senzo: Object.freeze({ fitSeat: 1, podProfile: "delta", noseTipZ: 0.06, noseSlim: 0.80, noseDroop: -0.020, airbox: 1.05, fin: 0, mirror: 2, inlet: 0.060, inletH: -0.005, inletW: -0.050, undercutD: -0.020, waist: 0.025, floorStep: 0.025, coverCrown: 0.000, coverLift: -0.075, wingStyle: W({ arch: 0.85, twist: 0.40, teCurve: 0.16, chordTaper: 0.42, foot: 1.20, canard: 2, tipRise: 0.035 }) }),
+    senzo: Object.freeze({ fitSeat: 1, noseCurve: 2.0, spineCurve: 0.028, podProfile: "delta", noseTipZ: -0.04, noseSlim: 1.42, noseDroop: -0.028, airbox: 1.05, fin: 0, mirror: 2, inlet: 0.060, inletH: -0.005, inletW: -0.050, undercutD: -0.020, waist: 0.025, floorStep: 0.025, coverCrown: 0.01, coverLift: -0.035, wingStyle: W({ clean: 1, arch: 0.72, twist: 0.22, teCurve: 0.09, chordTaper: 0.28, foot: 0.98, canard: 0, tipRise: 0.025 }) }),
     // Talven: a rising shoulder/cover arc, deep undercut and bowed wing cascade.
-    talven: Object.freeze({ fitSeat: 1, podProfile: "serpent", noseTipZ: 0.10, noseSlim: 0.82, noseDroop: 0.008, airbox: 0.90, fin: 0, mirror: 0, inlet: -0.020, inletH: -0.005, inletW: -0.035, undercutD: 0.100, waist: -0.080, floorStep: 0.040, coverCrown: 0.070, coverLift: 0.060, wingStyle: W({ arch: 1.08, twist: 0.30, teCurve: 0.18, chordTaper: 0.40, foot: 1.25, tipRise: 0.045 }) }),
+    talven: Object.freeze({ fitSeat: 1, noseCurve: 2.35, spineCurve: 0.042, podProfile: "serpent", noseTipZ: -0.08, noseSlim: 1.35, noseDroop: -0.028, airbox: 0.90, fin: 0, mirror: 0, inlet: -0.020, inletH: -0.005, inletW: -0.035, undercutD: 0.100, waist: -0.080, floorStep: 0.040, coverCrown: 0.03, coverLift: 0.035, wingStyle: W({ clean: 1, canard: 0, arch: 0.82, twist: 0.25, teCurve: 0.11, chordTaper: 0.3, foot: 1.02, tipRise: 0.03 }) }),
   });
   // Team-body swaps (Ferrari wearing Red Bull's chassis, …) stay in bodyStyleKey
   // for saved liveries, but the BODY picker / viewer list only offer them when
@@ -476,6 +476,7 @@ const Car3D = (function () {
         && typeof LiveryTex !== "undefined" && LiveryTex.FLANK_SEEN)
         ? LiveryTex.FLANK.zF - LiveryTex.FLANK_SEEN * LiveryTex.FLANK.zLen : 0;
       coverGeom = buildEngineCoverBodywork(out, coverC, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark, trimAft);
+      if (opts && opts.measure) out.coverSkin = coverGeom.skin;
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
       if (scoopLip >= 1) {
@@ -1984,13 +1985,13 @@ const Car3D = (function () {
         // plate thickness and read as a blank black slab from wingRear. Proud
         // raked cuts catch the bay light; two larger recesses read as DRS
         // cut-outs (void, not painted lines).
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < (teamStyle.wingStyle.clean ? 0 : 2); i++) {
           const wy = epCY + epSY * 0.12 - i * 0.11;
           addSpan(out, { z: -2.18, x: s * 0.538, y: wy + 0.028, w: 0.028, h: 0.055, t: 0.78 },
                        { z: -2.46, x: s * 0.522, y: wy - 0.012, w: 0.022, h: 0.042, t: 0.62 },
                   INTAKE, null, SURFACES.carbon);
         }
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < (teamStyle.wingStyle.clean ? 0 : 5); i++) {
           const ly = epCY + epSY * 0.42 - i * 0.048;
           addSpan(out, { z: -2.20, x: s * 0.536, y: ly + 0.014, w: 0.022, h: 0.022, t: 0.82 },
                        { z: -2.42, x: s * 0.524, y: ly - 0.012, w: 0.018, h: 0.018, t: 0.64 },
@@ -2010,7 +2011,7 @@ const Car3D = (function () {
           zLead, yLead, zTrail, yTrail, half, thick,
           taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: 0,
           attachHalf: 0.50,
-        }, col, wingSurf);
+        }, teamStyle.wingStyle.clean && wingCarbon ? CARBON : col, wingSurf);
       // rwSpoon (opt-in, 0 = shipped): the 2022 SPOON main plane (Ferrari
       // F1-75, Red Bull RB18 low-drag): deep chord at the centre, scooped-down
       // narrow tips. Absent keeps the shipped call exactly.

@@ -17,6 +17,7 @@ const CarBodyGeom = (function () {
 
   function styledNoseStations(style) {
     const s = style || DEFAULT_STYLE;
+    if (s.noseCurve) return curvedNoseStations(s);
     if (s === DEFAULT_STYLE || (!s.noseTipZ && s.noseSlim === 1 && !s.noseDroop)) return CHASSIS.nose;
     const tip = CHASSIS.nose[0], mid = CHASSIS.nose[1], root = CHASSIS.nose[2];
     // Concept bodies (coverLift set): push the WHOLE cone in Z and scale mid/root
@@ -42,6 +43,23 @@ const CarBodyGeom = (function () {
         w: root.w * (1 + (s.noseSlim - 1) * (sil ? 0.45 : 0.2)),
         h: root.h * (1 + (s.noseSlim - 1) * (sil ? 0.55 : 0.25)), t: root.t },
     ];
+  }
+  // The four Blender studies keep the tub datum but use a broad, downturned
+  // cone. Width is independent of thickness; widening must not lower the belly
+  // into the front-wing ceiling. All attachment readers use these same rings.
+  function curvedNoseStations(s) {
+    const tip = CHASSIS.nose[0], root = CHASSIS.nose[2];
+    const zTip = tip.z + s.noseTipZ, wTip = tip.w * s.noseSlim;
+    const topR = root.y + root.h / 2, bottomR = root.y - root.h / 2;
+    const topT = tip.y + s.noseDroop + tip.h / 2;
+    const bottomT = Math.max(tip.y + s.noseDroop - tip.h / 2, bottomR + 0.030);
+    return Array.from({ length: 9 }, (_, i) => {
+      const f = 1 - i / 8, top = topR + (topT - topR) * Math.pow(f, s.noseCurve);
+      const bottom = bottomR + (bottomT - bottomR) * f;
+      return { z: root.z + (zTip - root.z) * f, y: (top + bottom) / 2,
+        w: wTip + (root.w - wTip) * Math.pow(1 - f, 0.75),
+        h: top - bottom, t: root.t + (tip.t - root.t) * f };
+    });
   }
   // A concept nose (#3111) keeps its tip and mid, the stations that carry its
   // silhouette, under two seams the old recipe broke:
@@ -776,8 +794,17 @@ const CarBodyGeom = (function () {
     const cr = Math.max(0.20, COVER_CROWN - ck * 2.4);
     const keys = [[c.xb != null ? c.xb : c.x, c.bottom], [c.x * COVER_SHOULDER, c.top - d],
                   [c.x * 0.55, c.top - d * 0.32], [c.x * cr, c.top]];
-    const pts = (dense && typeof CarShade !== "undefined" && CarShade.densifyCoverPts)
+    let pts = (dense && typeof CarShade !== "undefined" && CarShade.densifyCoverPts)
       ? CarShade.densifyCoverPts(keys) : keys;
+    if (c.curve) {
+      // Keep the painted flank/shoulder datums; round only the roof above them.
+      pts = [keys[0], keys[1]];
+      for (let i = 1; i <= 6; i++) {
+        const a = i * Math.PI / 12;
+        pts.push([keys[3][0] + (keys[1][0] - keys[3][0]) * Math.cos(a),
+          keys[1][1] + (c.top - keys[1][1]) * Math.sin(a)]);
+      }
+    }
     return { x: c.x, bottom: c.bottom, top: c.top, shoulder: keys[1][1], d, pts, keys };
   }
   // x of the flank skin at height y (clamped to the flank) — where a side-
@@ -1546,9 +1573,18 @@ const CarBodyGeom = (function () {
         return { z, x: p.outer, inner: p.inner, bottom: p.outerBottom, top: p.outerTop,
                  innerBottom: p.innerBottom, innerTop: p.innerTop };
       },
-      coverAt(z) { const c = sampleStations(coverStations, z); return round ? CarShade.cokeFoot(c, coverStations, eng.coke) : c; },   // rounded: the pinched foot, c.xb
+      coverAt(z) {
+        const c = sampleStations(coverStations, z);
+        if (style.spineCurve) {
+          const f = Math.max(0, Math.min(1, (-0.55 - z) / 1.45));
+          c.top += style.spineCurve * Math.sin(Math.PI * f);
+          c.curve = true;
+        }
+        return round ? CarShade.cokeFoot(c, coverStations, eng.coke) : c;
+      },   // rounded: the pinched foot, c.xb
       noseAt(z) { return sampleStations(noseStations, z); },
       podProfile,
+      curvedCover: !!style.spineCurve,
       podStations: podStations.map((p) => Object.freeze(Object.assign({}, p))),
     };
   }
@@ -1641,7 +1677,24 @@ const CarBodyGeom = (function () {
     // flank-decal drape (car-mesh) so mid rings never leave the band floating.
     const pf = coverProfile(anchors.coverAt(front.z)), pr = coverProfile(anchors.coverAt(rear.z));
     const loftKeys = (c) => { const p = coverProfile(c); return { pts: p.keys || p.pts }; };
-    if (shadeFlags.round) {
+    const skinFrom = out.pos.length / 3;
+    if (anchors.curvedCover) {
+      // Shared flat/rounded skin: nine longitudinal rings, capped only at the
+      // ends. The roof and every decal/detail sample the same coverAt/profile.
+      const rings = Array.from({ length: 9 }, (_, i) => {
+        const z = front.z + (rear.z - front.z) * i / 8;
+        const p = coverProfile(anchors.coverAt(z)).pts;
+        return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
+      });
+      for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < rings[i].length; j++) {
+        const k = (j + 1) % rings[i].length, a = rings[i][j], b = rings[i][k];
+        const c = rings[i + 1][j], d = rings[i + 1][k];
+        addTri(out, a, c, b, c1); addTri(out, b, c, d, c1);
+      }
+      for (const [ring, reverse] of [[rings[0], false], [rings[rings.length - 1], true]])
+        for (let j = 1; j < ring.length - 1; j++)
+          addTri(out, ring[0], ring[reverse ? j + 1 : j], ring[reverse ? j : j + 1], c1);
+    } else if (shadeFlags.round) {
       CarShade.coverLoft(out, anchors, shadeFlags.coverHi ? ((c) => coverProfile(c, true)) : loftKeys,
         front.z, rear.z, c1, addTri);
     } else for (let k = 0; k < 3; k++) {
@@ -1652,6 +1705,7 @@ const CarBodyGeom = (function () {
       };
       addBlock(out, ring(pf, front.z).concat(ring(pr, rear.z)), c1, c1);
     }
+    const skin = { from: skinFrom, to: out.pos.length / 3 };
     // The accent pinstripe runs the flank just under the crease, across the
     // SPINE SIDE band — which is the WHOLE flank, z -0.66..-1.90 — so with a
     // mark on it the trim starts aft of the MARK instead: a real number
@@ -1670,7 +1724,7 @@ const CarBodyGeom = (function () {
     }
     const mid = anchors.coverAt(-1.30);
     return {
-      front, rear,
+      front, rear, skin,
       coolingX: Math.max(0.08, mid.x * 0.78),
       coolingY: mid.top - 0.12,
       tailVentY: rear.y + rear.h * 0.20,

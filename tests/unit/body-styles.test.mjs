@@ -187,3 +187,75 @@ test("bodyStyle is a published livery field and the garage's copy list carries i
   assert.match(fs.readFileSync("js/car/custom-liveries.js", "utf8"), /"bodyStyle"\]/);
   assert.match(fs.readFileSync("js/garage/setup-camera.js", "utf8"), /SP_HULL_GEOM_FIELDS = \[[^\]]*"bodyStyle"/);
 });
+
+// User reference: the four independent Blender studies have a broad, short,
+// downturned cone and a continuous rounded spine. These checks read emitted
+// triangles as well as attachment datums, so a recipe flag alone cannot pass.
+const BLENDER_BODIES = ["caldra", "rovik", "senzo", "talven"];
+function verticalHits(mesh, range, x, z) {
+  const hits = [], P = mesh.pos;
+  for (let i = 0; i < mesh.idx.length; i += 3) {
+    const ids = mesh.idx.slice(i, i + 3);
+    if (!ids.every((v) => v >= range.from && v < range.to)) continue;
+    const [a, b, c] = ids.map((v) => P.slice(v * 3, v * 3 + 3));
+    const den = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+    if (Math.abs(den) < 1e-12) continue;
+    const u = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / den;
+    const v = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / den;
+    if (u >= -1e-8 && v >= -1e-8 && u + v <= 1 + 1e-8)
+      hits.push(u * a[1] + v * b[1] + (1 - u - v) * c[1]);
+  }
+  assert.ok(hits.length, `No skin at x${x},z${z}`);
+  return hits;
+}
+
+test("Blender bodies emit short broad noses with a curved descending crown", () => {
+  for (const bodyStyle of BLENDER_BODIES) {
+    const m = Car3D.build(team.color, team.color2, { noWheels: true, measure: true, teamId: team.id, livery: { bodyStyle } });
+    const chassis = m.parts.find((p) => p.name === "chassis");
+    const points = Array.from({ length: chassis.to - chassis.from }, (_, i) => m.pos.slice((i + chassis.from) * 3, (i + chassis.from) * 3 + 3));
+    const tipZ = Math.max(...points.map((p) => p[2]));
+    assert.ok(tipZ >= 2.44 && tipZ <= 2.56 + 1e-9, `${bodyStyle}: long cone ${tipZ}`);
+    const tipWidth = 2 * Math.max(...points.filter((p) => Math.abs(p[2] - tipZ) < 1e-8).map((p) => Math.abs(p[0])));
+    assert.ok(tipWidth >= 0.135, `${bodyStyle}: needle tip ${tipWidth}`);
+    const z0 = 1.12, z1 = tipZ - 0.02, zm = (z0 + z1) / 2;
+    const top = (z) => Math.max(...verticalHits(m, chassis, 0, z));
+    assert.ok(top(z0) > top(zm) && top(zm) > top(z1), `${bodyStyle}: crown does not descend`);
+    assert.ok(top(zm) - (top(z0) + top(z1)) / 2 > 0.035, `${bodyStyle}: straight wedge instead of a curved crown`);
+  }
+});
+
+test("Blender spine skins are closed, consistently wound and sampled by their anchors", () => {
+  for (const round of [false, true]) {
+    const X = round ? Shaded : Car3D;
+    for (const bodyStyle of BLENDER_BODIES) {
+      const m = X.build(team.color, team.color2, { noWheels: true, measure: true, smooth: round, teamId: team.id, livery: { bodyStyle } });
+      const range = m.coverSkin;
+      assert.ok(range && range.to > range.from, `${bodyStyle}: no emitted cover skin`);
+      const edges = new Map(), zs = new Set(); let volume6 = 0, count = 0;
+      const key = (p) => p.map((x) => Math.round(x * 1e8)).join(",");
+      for (let i = 0; i < m.idx.length; i += 3) {
+        const ids = m.idx.slice(i, i + 3);
+        if (!ids.every((v) => v >= range.from && v < range.to)) continue;
+        const [a, b, c] = ids.map((v) => m.pos.slice(v * 3, v * 3 + 3));
+        const cross = [b[1]*c[2]-b[2]*c[1],b[2]*c[0]-b[0]*c[2],b[0]*c[1]-b[1]*c[0]];
+        volume6 += a.reduce((n, v, j) => n + v * cross[j], 0); count++;
+        const verts = [a, b, c];
+        for (let j = 0; j < 3; j++) {
+          zs.add(Math.round(verts[j][2] * 1e8));
+          const u = key(verts[j]), v = key(verts[(j+1)%3]), k = [u,v].sort().join("|");
+          const e = edges.get(k) || { count: 0, direction: 0 }; e.count++; e.direction += u < v ? 1 : -1; edges.set(k,e);
+        }
+      }
+      assert.equal(zs.size, 9, `${bodyStyle}/${round}: longitudinal curve missing`);
+      assert.equal(count, 284, `${bodyStyle}/${round}: unexpected skin cost`);
+      assert.ok(volume6 > 0, `${bodyStyle}/${round}: inward skin`);
+      assert.ok([...edges.values()].every((e) => e.count === 2 && e.direction === 0), `${bodyStyle}/${round}: open or inconsistent skin`);
+      const anchors = X.bodyAnchors(null, bodyStyle, undefined, round);
+      for (const z of [-0.73125,-1.09375,-1.45625,-1.81875]) {
+        const actual = Math.max(...verticalHits(m, range, 0, z));
+        assert.ok(Math.abs(actual - anchors.coverAt(z).top) < 1e-8, `${bodyStyle}/${round}: roof datum detached`);
+      }
+    }
+  }
+});
