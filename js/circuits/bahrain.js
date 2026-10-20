@@ -53,7 +53,12 @@
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.28, 0.62],
-    turns: [0.1038, 0.1213, 0.1413, 0.2503, 0.3183, 0.3408, 0.3868, 0.4573, 0.4733, 0.6073, 0.6653, 0.6768, 0.7223, 0.7313, 0.8783],
+    // GP layout, F1 2025 map: https://www.formula1.com/en/racing/2025/bahrain
+    // Matched to this built trace (2026-10-19), not a scale-normalised length
+    // survey. T5/6/7 are the L/R/L esses, T8 the next right hairpin, T9/10
+    // the two lefts before the back straight; T14/15 are BOTH final rights.
+    // Racing arc fractions: do not apply _sceneryShift to these markings.
+    turns: [0.1038, 0.1213, 0.1413, 0.2503, 0.2992, 0.3244, 0.3474, 0.3875, 0.4543, 0.4744, 0.6073, 0.6652, 0.7313, 0.8783, 0.8968],
     // Sakhir: sparse desert — cool-white lamps, thin palm line (not oasis green)
     furniture: { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [0.88, 0.94, 1.0], sparse: true },
     kit: { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },

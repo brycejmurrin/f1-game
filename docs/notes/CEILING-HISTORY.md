@@ -3652,3 +3652,11 @@ sit inside `build`'s emit closures beside the parts they shape. The same `--upda
 the tree's `dynamicIdReads` falling 74 → 73 (a measured lowering, not a raise).
 
 - 2026-10-20 `dynamicIdReads` 72 -> 73 (+1): double-counted auto-lower from two fragments measured off the same base 74; restoring the true count 73, no code growth.
+
+## 2026-10-20 — PR #3188 (cursor/garage-research-surfaces-7b41): six study body profiles
+
+`js/car/car3d.js` +40 via `tests/data/ratchets.d/cursor--garage-shape-refinement-3c9a.json` (the
+branch's lineage name). The PR's own geometry, +37 net on the tip after #3151: curved-nose paint
+carried into the shared chassis, seated nose strips, the noseCurve arm and its wing-mounted foot,
+and the clean-wing carbon gates for caldra/rovik/senzo/talven/orvex/nacrel. No extraction: each
+hunk sits in `build`'s emit closures beside the part it shapes.

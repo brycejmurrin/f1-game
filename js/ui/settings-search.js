@@ -18,6 +18,14 @@ const SettingsSearch = (function () {
     ["motion", "Reduce motion", "a11y", "pm-motion-sel", "shake flyby animation comfort"],
     ["focus", "Keyboard focus", "a11y", "pm-focus-sel", "outline ring accessibility"],
     ["colour", "Colourblind cues", "a11y", "pm-cbcues-sel", "colorblind tyre flags accessibility"],
+    ["colour-vision", "Colour vision", "appearance", "pm-cvd-sel", "color vision colourblind colorblind palette deuteranopia protanopia tritanopia"],
+    ["captions", "Captions", "appearance", "pm-captions-sel", "subtitles hearing speech spotter announcer on screen text"],
+    ["caption-size", "Caption size", "appearance", "pm-caption-size-sel", "captions subtitles bigger larger text"],
+    ["caption-position", "Caption position", "appearance", "pm-caption-pos-sel", "captions subtitles top bottom placement"],
+    ["caption-background", "Caption background", "appearance", "pm-caption-bg-sel", "captions subtitles opacity contrast readability"],
+    ["caption-speaker", "Caption speaker colour", "appearance", "pm-caption-speaker-sel", "captions subtitles speaker color name"],
+    ["hold-gas", "Gas hold / toggle (keyboard / pad)", "a11y", "pm-hold-throttle-sel", "throttle accelerator hold toggle accessibility"],
+    ["hold-lookback", "Look back hold / toggle (keyboard / pad)", "a11y", "pm-hold-lookback-sel", "rear view mirror hold toggle accessibility"],
     ["assist", "Steer assist", "driving", "pm-linemode-sel", "steering help racing line"],
     ["line", "Steering line bias", "advanced", "pm-line", "steer assist inside outside racing line offset"],
     ["throttle", "Throttle mode", "controls", "pm-throttlemode-sel", "automatic manual pedals"],
@@ -151,7 +159,8 @@ const SettingsSearch = (function () {
       note.textContent = input.value.trim() ? matches.length + " matching settings" : "Search names or everyday terms. Your settings stay as they are.";
       for (const row of matches) {
         const li = document.createElement("li"), button = document.createElement("button");
-        button.type = "button"; button.className = "sel-chip"; button.textContent = row.label + " · " + row.page.toUpperCase();
+        const route = typeof SettingsNav !== "undefined" && SettingsNav.routes && SettingsNav.routes[row.page];
+        button.type = "button"; button.className = "sel-chip"; button.textContent = row.label + " · " + (route ? route.title : row.page.toUpperCase());
         button.dataset.settingResult = row.id;
         button.onclick = () => {
           clearFeedback();

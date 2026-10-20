@@ -1,5 +1,5 @@
 /* livery-paint-zones.test.mjs — the PAINT ZONES livery fields (floor / suspension / brake ducts /
- * deflectors / cockpit surround / number board tints, floor / suspension / nose / rim finishes, grip
+ * deflectors / cockpit surround / number board tints and finishes, floor / suspension / nose / rim finishes, grip
  * and exhaust-heat tints) on a real Car3D build. Unset = byte-identical mesh; each field changes
  * only its own section's vertices; every field is wired through FIELDS, the resolve copy and the
  * garage sheet.
@@ -50,8 +50,10 @@ const maxC = (m, i) => Math.max(m.col[i * 3], m.col[i * 3 + 1], m.col[i * 3 + 2]
 const PINK = [1, 0, 1];
 
 test("every new field unset, or set to inherit: mesh byte-identical", () => {
-  const again = build({ floorFinish: "inherit", suspFinish: "inherit", noseFinish: "inherit", rimFinish: "inherit" });
+  const again = build({ floorFinish: "inherit", suspFinish: "inherit", noseFinish: "inherit", rimFinish: "inherit",
+    ductFinish: "inherit", deflectorFinish: "inherit", cockpitFinish: "inherit", boardFinish: "inherit" });
   assert.deepEqual(Array.from(again.pos), Array.from(base.pos));
+  assert.deepEqual(Array.from(again.idx), Array.from(base.idx));
   assert.deepEqual(Array.from(again.col), Array.from(base.col));
   assert.deepEqual(Array.from(again.mat), Array.from(base.mat));
 });
@@ -123,6 +125,115 @@ test("zone finishes: floor / suspension land their own surface id, only on that 
   }
 });
 
+const DETAIL_FINISHES = [
+  ["ductFinish", "ductTint", ["brakeDucts"], undefined],
+  ["deflectorFinish", "deflectorTint", ["wheels"], { parts: deflParts }],
+  ["cockpitFinish", "cockpitTint", ["cockpit", "bolsters"], undefined],
+  ["boardFinish", "boardTint", ["sponsorBoard"], undefined],
+];
+
+test("detail finishes work alone, with tint, and through inherited whole-car finish", () => {
+  for (const [field, tintField, allowed, opts] of DETAIL_FINISHES) {
+    const original = opts ? build({}, opts) : base;
+    const alone = build({ [field]: "chrome" }, opts);
+    const finished = changed(original, alone);
+    assert.ok(finished.length > 0, `${field}: explicit finish alone must reach actual mesh surfaces`);
+    sameShape(original, alone);
+    assert.deepEqual(Array.from(alone.idx), Array.from(original.idx), `${field}: topology`);
+    for (const i of finished) {
+      assert.ok(allowed.includes(sectionOf(alone, i).name), `${field}: changed another part`);
+      assert.equal(alone.mat[i], FS.chrome, `${field}: actual chrome surface id`);
+      assert.deepEqual(Array.from(alone.col.slice(i * 3, i * 3 + 3)),
+        Array.from(original.col.slice(i * 3, i * 3 + 3)), `${field}: finish alone keeps all colour channels`);
+      assert.ok(original.mat[i] === S.paint || original.mat[i] === S.carbon, `${field}: protected material changed`);
+      if (original.mat[i] === S.carbon) assert.ok(maxC(original, i) >= .045, `${field}: void converted to paint`);
+    }
+    const both = build({ [field]: "matte", [tintField]: PINK }, opts);
+    const tinted = changed(original, both);
+    assert.ok(tinted.length >= finished.length, `${field}: adding tint lost finished target vertices`);
+    for (const i of tinted) {
+      assert.ok(allowed.includes(sectionOf(both, i).name), `${field}: tint+finish changed another part`);
+      assert.equal(both.mat[i], FS.matte);
+      assert.deepEqual(Array.from(both.col.slice(i * 3, i * 3 + 3)), PINK, `${field}: tint is retained`);
+    }
+    const whole = build({ finish: "satin" }, opts);
+    const inherited = build({ finish: "satin", [field]: "inherit", [tintField]: PINK }, opts);
+    const inheritedChanges = changed(whole, inherited);
+    assert.ok(inheritedChanges.length > 0, `${field}: inherited tinted target is present`);
+    for (const i of inheritedChanges) {
+      assert.ok(allowed.includes(sectionOf(inherited, i).name), `${field}: inherit changed another part`);
+      assert.equal(inherited.mat[i], FS.satin, `${field}: explicit inherit uses whole-car finish on tinted surfaces`);
+      assert.deepEqual(Array.from(inherited.col.slice(i * 3, i * 3 + 3)), PINK);
+    }
+    for (const mesh of [both, inherited]) {
+      sameShape(original, mesh);
+      assert.deepEqual(Array.from(mesh.idx), Array.from(original.idx), `${field}: material edits preserve topology`);
+    }
+    // Explicit detail finishes must never recolour/reclassify a protected void,
+    // glass, rubber, emitter or metal vertex, even inside a target section.
+    for (let i = 0; i < original.mat.length; i++) {
+      const material = original.mat[i];
+      if (material === S.paint || (material === S.carbon && maxC(original, i) >= .045)) continue;
+      assert.equal(alone.mat[i], material, `${field}: protected surface id`);
+      assert.deepEqual(Array.from(alone.col.slice(i * 3, i * 3 + 3)),
+        Array.from(original.col.slice(i * 3, i * 3 + 3)), `${field}: protected surface colour`);
+    }
+  }
+});
+
+test("detail deflector finish is inert without the part and effective on WORKS RIM", () => {
+  const missing = build({ deflectorFinish: "chrome" });
+  assert.deepEqual(Array.from(missing.mat), Array.from(base.mat));
+  assert.deepEqual(Array.from(missing.col), Array.from(base.col));
+  sameShape(base, missing);
+  assert.deepEqual(Array.from(missing.idx), Array.from(base.idx));
+  const original = build({}, { parts: deflParts });
+  const mesh = build({ deflectorFinish: "chrome" }, { parts: deflParts });
+  const touched = changed(original, mesh);
+  assert.ok(touched.length > 0, "fitted deflectors have a real finish");
+  for (const i of touched) {
+    assert.equal(sectionOf(mesh, i).name, "wheels");
+    assert.equal(mesh.mat[i], FS.chrome);
+    assert.ok(Math.abs(mesh.pos[i * 3]) > .6 && mesh.pos[i * 3 + 1] > .4, "finished vertex belongs to the stationary over-wheel assembly");
+  }
+});
+
+test("cockpit finish protects harnesses, carbon trim, voids and controls in driver-eye geometry", () => {
+  const opts = { cockpit: true }, original = build({}, opts);
+  const finished = build({ cockpitFinish: "chrome" }, opts);
+  const both = build({ cockpitFinish: "matte", cockpitTint: PINK }, opts);
+  const touched = changed(original, finished);
+  assert.ok(touched.length > 0, "driver-eye bolster paint receives its finish");
+  for (const i of touched) {
+    assert.equal(sectionOf(finished, i).name, "bolsters");
+    assert.equal(original.mat[i], S.paint, "driver-eye finish never converts padded/carbon components");
+    assert.equal(finished.mat[i], FS.chrome);
+  }
+  const bolster = sec(original, "bolsters");
+  assert.ok(bolster && bolster.vertices > 0);
+  let carbon = 0, voids = 0, controls = 0, harness = 0;
+  for (let i = bolster.from; i < bolster.to; i++) {
+    if (original.mat[i] === S.carbon) {
+      carbon++;
+      if (maxC(original, i) < .045) voids++;
+      const rgb = Array.from(original.col.slice(i * 3, i * 3 + 3));
+      if (rgb.every((c, k) => Math.abs(c - [.10, .11, .14][k]) < 1e-6)) harness++;
+    }
+    if (original.mat[i] === S.metal) controls++;
+    if (original.mat[i] === S.paint) continue;
+    for (const mesh of [finished, both]) {
+      assert.equal(mesh.mat[i], original.mat[i], "protected cockpit material");
+      assert.deepEqual(Array.from(mesh.col.slice(i * 3, i * 3 + 3)),
+        Array.from(original.col.slice(i * 3, i * 3 + 3)), "protected cockpit colour");
+    }
+  }
+  assert.ok(carbon > 0 && voids > 0 && controls > 0 && harness > 0, "real cockpit includes carbon, instrument voids, controls and harness webbing");
+  for (const mesh of [finished, both]) {
+    sameShape(original, mesh);
+    assert.deepEqual(Array.from(mesh.idx), Array.from(original.idx));
+  }
+});
+
 test("NOSE FINISH: only painted vertices ahead of the bulkhead, on chassis / hood / livery", () => {
   const m = build({ noseFinish: "pearl" });
   sameShape(base, m);
@@ -178,8 +289,8 @@ test("RIM FINISH: rim faces take the finish surface; unset wheels are byte-ident
   assert.deepEqual(Array.from(c.fixed.mat), Array.from(a.fixed.mat), "caliper / upright untouched");
 });
 
-const NEW = ["floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
-  "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint"];
+const NEW = ["floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "ductFinish", "rimFinish", "deflectorTint", "deflectorFinish",
+  "cockpitTint", "cockpitFinish", "gripTint", "noseFinish", "boardTint", "boardFinish", "exhaustTint"];
 
 test("GRIPS: getCockpitWheel keys on gripTint only when it is set", () => {
   const src = read("js/car/car-mesh.js");

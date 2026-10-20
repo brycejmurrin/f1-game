@@ -26,17 +26,18 @@ const PostFxOpts = (function () {
     if (!(which in KEYS)) return false;
     const v = !!want;
     state[which] = v;
-    store.rawSet(`apex26.${KEYS[which]}`, v ? "1" : "0");
+    if (which === "ssao") store.rawSet("apex26.gfxSsao", v ? "1" : "0");
+    else store.rawSet("apex26.gfxGodrays", v ? "1" : "0");
     return v;
   }
   const ssaoOn = () => state.ssao;
   const godraysOn = () => state.godrays;
-  // The present opts' one exit for both passes (shed = the governor's autoTier 4):
-  // a pass is skipped only when EVERY strength it is gated on is 0 — AO is
+  // Applied to the present opts after the governor's own tier-4 shed: a pass is
+  // skipped only when EVERY strength it is gated on is 0 — AO is
   // ssao || contact, the god-ray march is godray || lampVol.
-  function gate(po, shed) {
-    if (shed || !state.ssao) { po.ssao = 0; po.contact = 0; }
-    if (shed || !state.godrays) { po.godray = 0; po.lampVol = 0; }
+  function gate(po) {
+    if (!state.ssao) { po.ssao = 0; po.contact = 0; }
+    if (!state.godrays) { po.godray = 0; po.lampVol = 0; }
     return po;
   }
 

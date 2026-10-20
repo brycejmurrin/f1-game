@@ -97,13 +97,13 @@ test("gate() zeroes EVERY strength a switched-off pass is gated on, and nothing 
   // so OFF has to clear both members of the pair or the GPU work survives.
   const full = () => ({ ssao: 0.8, contact: 0.5, godray: 0.6, lampVol: 0.3, bloom: 1 });
   const { M } = load();
-  assert.deepEqual({ ...M.gate(full(), false) }, full(), "both ON, no shed: untouched");
+  assert.deepEqual({ ...M.gate(full()) }, full(), "both ON: untouched");
   M.set("ssao", false);
-  assert.deepEqual({ ...M.gate(full(), false) }, { ssao: 0, contact: 0, godray: 0.6, lampVol: 0.3, bloom: 1 });
+  assert.deepEqual({ ...M.gate(full()) }, { ssao: 0, contact: 0, godray: 0.6, lampVol: 0.3, bloom: 1 });
   M.set("ssao", true); M.set("godrays", false);
-  assert.deepEqual({ ...M.gate(full(), false) }, { ssao: 0.8, contact: 0.5, godray: 0, lampVol: 0, bloom: 1 });
-  M.set("godrays", true);
-  assert.deepEqual({ ...M.gate(full(), true) }, { ssao: 0, contact: 0, godray: 0, lampVol: 0, bloom: 1 }, "the governor's tier-4 shed takes the same exit");
-  // game.js routes the present opts through it after setting all four strengths.
-  assert.match(GAME, /po\.lampVol = _lampVol;[^\n]*\n\s*PostFxOpts\.gate\(po, PerfGov\.autoTier\(\) >= 4\);/);
+  assert.deepEqual({ ...M.gate(full()) }, { ssao: 0.8, contact: 0.5, godray: 0, lampVol: 0, bloom: 1 });
+  M.set("ssao", false);
+  assert.deepEqual({ ...M.gate(full()) }, { ssao: 0, contact: 0, godray: 0, lampVol: 0, bloom: 1 });
+  // game.js routes the present opts through it once all four strengths are set (after the tier-4 shed).
+  assert.match(GAME, /po\.lampVol = PerfGov\.autoTier\(\) >= 4 \? 0 : _lampVol;[^\n]*\n\s*PostFxOpts\.gate\(po\);/);
 });

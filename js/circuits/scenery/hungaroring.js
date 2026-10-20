@@ -376,9 +376,10 @@
         // https://ad-c.org/winner/hungaroring-gold-winner-mixed-use-development-design-iada-2026/
         // https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/
         // Pit stays on side -1 (def.pit.side); do not flip from this pass.
-        // Authored length ~128 m (under the sourced 340 m) to hold the props-tris
-        // ratchet while still reading as a long parallel mass.
-        const LEN = 128;
+        // DVM's completed-2025 project describes a >340 m paddock building.
+        // Approximate that lower-bound extent, preserving this stylized footprint
+        // and height; the perspective photograph does not establish either.
+        const LEN = 340;
         const STOREYS = 5;
         const STOREY_H = 3.4;
         // Re-keyed through sl() onto the real line, where the engine builds its own
@@ -388,6 +389,20 @@
         // which gap 24 and gap 40 both were, so it stands at gap 44.
         const a = anchor(K(sl(0.00)), -1, 44);
         if (onTrack(a.c[0], a.c[2], 14)) return;
+        // Level this long building and its retaining podium on the local
+        // paddock slope. This is artistic grading, not a surveyed floor datum.
+        const tLen = Math.hypot(a.t[0], a.t[2]);
+        a.u = [0, 1, 0];
+        a.t = [a.t[0] / tLen, 0, a.t[2] / tLen];
+        let floorY = -Infinity, footingY = Infinity;
+        // Sample the actual ground-storey footprint, including door projections;
+        // upper balconies and the padded model bounds do not set its floor.
+        for (let j = 0; j <= 35; j++) for (const x of [-5.95, -3, 0, 3, 5.95]) {
+          const p = vadd(vadd(a.c, a.r, x), a.t, (j / 35 - 0.5) * LEN);
+          const gy = terrainYAt(p[0], p[2]);
+          if (gy != null) { floorY = Math.max(floorY, gy); footingY = Math.min(footingY, gy); }
+        }
+        if (Number.isFinite(floorY)) a.c[1] = floorY + 0.12;
         const b = [a.r, a.u, a.t];
         const totalH = STOREYS * STOREY_H;
         const dressPit = (stage) => {
@@ -396,9 +411,9 @@
           const SLAB2 = [0.84, 0.85, 0.88];
           const DOOR_N = 16, DOOR_PITCH = LEN / DOOR_N;
           stage._mat = MAT.CONCRETE;
-          // The block stands on the slope behind the garages (ground falls ~1 m across
-          // its 11.5 m depth): fill down to the lowest sampled corner.
-          foundation(stage, { center: a.c, size: [11.1, LEN - 0.4], top: a.c[1] + 0.02, basis: b, col: PADDOCK });
+          // The retaining footing reaches the entire ground-storey footprint
+          // and meets its floor exactly, including both ends and side edges.
+          foundation(stage, { center: a.c, size: [11.5, LEN], top: a.c[1], basis: b, col: PADDOCK });
           addBox(stage, vadd(a.c, a.u, STOREY_H * 0.5), [11.5, STOREY_H, LEN], WHITE, b);
           for (let i = 0; i < DOOR_N; i++) {
             const off = (i - (DOOR_N - 1) / 2) * DOOR_PITCH;
@@ -411,11 +426,12 @@
             const y0 = f * STOREY_H;
             const setback = f >= 3 ? 1.0 : 0.3;
             stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(vadd(a.c, a.r, -setback * 0.5), a.u, y0 + STOREY_H * 0.5),
-                   [11.5 - setback, STOREY_H - 0.2, LEN - f * 3], f % 2 ? SLAB : SLAB2, b);
+            // Fill the old 0.2 m storey gap downward, preserving every top edge.
+            addBox(stage, vadd(vadd(a.c, a.r, -setback * 0.5), a.u, y0 + STOREY_H * 0.5 - 0.1),
+                   [11.5 - setback, STOREY_H, LEN - f * 3], f % 2 ? SLAB : SLAB2, b);
             if (f % 2 === 1) {
               addBox(stage, vadd(vadd(a.c, a.r, 7.2), a.u, y0 + 0.22),
-                     [1.4, 0.2, LEN - f * 5 - 14], GREY, b);
+                     [1.4, 0.2, LEN - f * 5 - 14], f === 1 ? [0.58, 0.10, 0.17] : GREY, b);
             }
             stage._mat = 0;
             if (f === 1 || f === 3) {
@@ -435,8 +451,9 @@
           addBox(stage, vadd(vadd(a.c, a.r, -4.6), a.u, roofY + 1.0),
                  [0.12, 1.35, LEN - 22], STEEL, b);
           const PERG_H = roofY + 2.2;
-          const bay = 18;
-          const bayN = Math.floor((LEN - 28) / bay);
+          // Retain five simplified pergola bays: the long mass, rather than
+          // extra roof members, carries the sourced 2025 silhouette.
+          const bayN = 5, bay = (LEN - 28) / bayN;
           for (let i = 0; i < bayN; i++) {
             const off = (i - (bayN - 1) / 2) * bay;
             addBox(stage, vadd(vadd(a.c, a.t, off), a.u, PERG_H),
@@ -448,8 +465,11 @@
                  [0.12, 0.12, LEN - 32], PERGOLA, b);
           stage._mat = 0;
         };
+        const boundBase = Number.isFinite(footingY) ? Math.min(a.c[1] - 1.5, footingY - 0.7) : a.c[1] - 1.5;
+        const boundTop = a.c[1] + totalH + 3;
         modelGroup("hungaroring-pit-complex", {
-          center: vadd(a.c, a.u, totalH * 0.5), size: [22, totalH + 3, LEN + 8], basis: b,
+          center: [a.c[0], (boundBase + boundTop) / 2, a.c[2]],
+          size: [22, boundTop - boundBase, LEN + 8], basis: b,
         }, dressPit, { required: true });
       })();
       groundPatch(K(sl(0.00)), -1, 70, [130, 1.0, 160], PADDOCK,

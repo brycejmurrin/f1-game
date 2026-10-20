@@ -100,7 +100,8 @@ const CarMaterials = (function () {
   // nose needs no split of the shared chassis loft.
   const ZONE_FINISH = Object.freeze({ engineCover: "coverFinish", frontWing: "wingFinish", rearAssembly: "wingFinish",
     halo: "haloFinish", sidepods: "podFinish", sharkFin: "finFinish", mirrors: "mirrorFinish",
-    floor: "floorFinish", suspension: "suspFinish" });
+    floor: "floorFinish", suspension: "suspFinish", brakeDucts: "ductFinish", deflector: "deflectorFinish",
+    headrest: "cockpitFinish", bolsters: "cockpitFinish", sponsorBoard: "boardFinish" });
   const NOSE_Z = 1.55, NOSE_SECTIONS = ["chassis", "hood", "livery"];
   const pickedFinish = (v) => v === "gloss" || Object.hasOwn(FINISH_SURFACE, v) ? v : null;
   // `zones` (optional) are { name, from, to } spans drawn inside another section that belong to `name`'s
@@ -139,11 +140,11 @@ const CarMaterials = (function () {
   const PAINT_ZONES = Object.freeze([
     { colour: "floorTint", finish: "floorFinish", zone: "floor" },
     { colour: "suspTint", finish: "suspFinish", section: "suspension" },
-    { colour: "ductTint", section: "brakeDucts" },
-    { colour: "deflectorTint", zone: "deflector" },
-    { colour: "cockpitTint", zone: "headrest" },
-    { colour: "cockpitTint", section: "bolsters", paintOnly: true },
-    { colour: "boardTint", section: "sponsorBoard", paintOnly: true },
+    { colour: "ductTint", finish: "ductFinish", section: "brakeDucts" },
+    { colour: "deflectorTint", finish: "deflectorFinish", zone: "deflector" },
+    { colour: "cockpitTint", finish: "cockpitFinish", zone: "headrest" },
+    { colour: "cockpitTint", finish: "cockpitFinish", section: "bolsters", paintOnly: true },
+    { colour: "boardTint", finish: "boardFinish", section: "sponsorBoard", paintOnly: true },
   ].map(Object.freeze));
   const VOID = 0.045;
   function zoneColour(v) {
