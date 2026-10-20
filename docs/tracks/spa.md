@@ -1,6 +1,6 @@
 # Circuit de Spa-Francorchamps — Visual Design Brief
 
-**Setting:** DAY, green theme (Ardennes forest). 2025 FIA layout: 7.004 km, 19 numbered corners, clockwise; the game currently has 20 curated markers.
+**Setting:** DAY, green theme (Ardennes forest). 2025 GP layout: 7.004 km reference, 19 numbered corners, clockwise; the game uses 19 map-matched bend markers.
 
 ## Accuracy references and placement limits
 
@@ -23,8 +23,18 @@ This registration follows the game's road trace and new valley profile; stand
 dimensions, roof form and spectator banks remain artistic approximations,
 not independently surveyed footprints.
 
-The 2025 FIA event map lists 7004 m and 19 corners; the game retains 20 curated
-markers. The current source describes its 64-knot elevation profile as a fit
+The [Formula 1 2025 Belgian GP numbered map](https://www.formula1.com/en/racing/2025/belgium)
+(25–27 July event; consulted 19 October 2026) identifies 19 corners. The markers
+include the initial Eau Rouge left and both Blanchimont lefts, without counting
+multiple curvature peaks in Bruxelles/Fagnes/Stavelot as extra corners.
+Marker fractions are racing arc fractions; do not apply `_sceneryShift`.
+The existing aero-zone turn pairs are re-keyed to preserve the same five
+physical gameplay intervals; the map's 2025 DRS markings do not certify 2026
+active-aero regulations. The signature-capture recipe also retains its physical
+compression/crest anchors through the new T3/T4 identities; its offsets and FOV
+are unchanged. Built length is 6947.385 m, not a certified 7004 m:
+a normalized outline cannot establish absolute length or start/sector positions.
+The current source describes its 64-knot elevation profile as a fit
 to SRTM 30 m samples of the imported road trace, with canopy smoothing and an
 authored Raidillon climb. That coarse fit improves the valley registration;
 it does not establish surveyed grades or exact trackside elevations. Confirm

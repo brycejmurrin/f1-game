@@ -5,6 +5,7 @@
 // tests/manual/ (2026-09-10): `node --test tests/manual/probe-mcp.test.mjs`,
 // gated nowhere; the mcp-cli / gfx-probe / Chrome-flag assertions are in
 // tests/unit/mcp-cli.test.mjs on the fast gate.
+import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -28,14 +29,17 @@ test("probe-mcp.py exists and says it is a CLI, not an attached server", () => {
 });
 
 test(".mcp.json does NOT register probe — chrome-devtools is the attached Chrome MCP", () => {
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+  const raw = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const cfg = nativeMcpConfig(raw);
+  assert.deepEqual(Object.keys(raw.mcpServers).sort(), [
+    "apex-lsp",
     "apex-tools",
     "chrome-devtools",
+    "js-debugger",
     "playwright-official",
   ]);
-  assert.equal(cfg.mcpServers.probe, undefined);
-  assert.equal(cfg.mcpServers.tinyfish, undefined);
+  assert.equal(raw.mcpServers.probe, undefined);
+  assert.equal(raw.mcpServers.tinyfish, undefined);
   assert.equal(cfg.mcpServers["chrome-devtools"].command, "bash");
   assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/mcp/chrome-devtools-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers["apex-tools"].command, "bash");

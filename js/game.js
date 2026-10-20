@@ -3460,7 +3460,7 @@ const updateHud = hud.updateHud;
 // Session atmosphere: applyRaceSettings + per-track bias (js/lighting/atmosphere.js).
 const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
-const { buildSetup, openSetup } = SetupUI.create(G);
+const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
 if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
@@ -4475,7 +4475,7 @@ function update(dt) {
   // the overtake target walks past it — all of which would otherwise need their
   // own `c.retired` check and one of them would eventually be forgotten.
   ranked.length = 0;
-  for (const c of cars) if (!c.retired) ranked.push(c);
+  for (let i = 0; i < cars.length; i++) if (!cars[i].retired) ranked.push(cars[i]);   // indexed, not for-of: update() runs unoptimized enough that each for-of allocated its iterator results (PERF-SCENE-CPU-2026-10-20)
   ranked.sort(byProgDesc);
   let nFin = 0;
   for (let i = 0; i < ranked.length; i++) {
@@ -4495,7 +4495,7 @@ function update(dt) {
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
   _leadHuman = null;
   // !finished: a flagged human coasts on advancing prog — don't band toward it.
-  for (const c of cars) if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
+  for (let i = 0; i < cars.length; i++) { const c = cars[i]; if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c; }
 
   // Traffic scans read last step's poses. Writing prog/x/speed inside
   // updateCar and then scanning the next car made a side-by-side look like a
@@ -4510,8 +4510,8 @@ function update(dt) {
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars); pits.stepBegin();
   parked.length = 0;
-  for (const c of cars) if (c.retired && c.parkedOnRoad) parked.push(c);
-  PerfSpans.begin("ai"); for (const c of cars) updateCar(c, dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
+  for (let i = 0; i < cars.length; i++) if (cars[i].retired && cars[i].parkedOnRoad) parked.push(cars[i]);
+  PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
   if (jumpStartPenalty.reactWindowOpen()) {
     for (const c of cars) jumpStartPenalty.tickReaction(c);
@@ -8261,6 +8261,7 @@ function render(dt) {
   // Measured overload/crash tier 4 still falls back to material sky/lamp reflections. Dry sheen still sheds at 2.
   PostCommon.roadReflection(po, frame.wetness || 0, _ssrPo, PerfGov.tier(), PerfGov.autoTier());
   po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  PostFxOpts.gate(po);   // GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS: the tier-4 exit, taken by choice
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -8676,7 +8677,8 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: (
     finally { _simRngState = rng; }
     return () => { cars = before.cars; player = before.player; };
   }, garage: {
-  snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id), } });
+  snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
+  looks: lookRowSpecs, looked: () => { if (!$("carsetup").hidden) buildSetup(); } } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
   photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio."),

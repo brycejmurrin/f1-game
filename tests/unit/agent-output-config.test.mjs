@@ -29,10 +29,20 @@ test("every configured MCP server uses the common output gateway and retains its
   }
   assert.equal(cfg.mcpServers["apex-tools"].timeout, 900000);
   const env = JSON.parse(read(".cursor/environment.json"));
+  // The allowlist rows are GLOBS (#3220): one pattern admits both the committed
+  // gateway launch line (.mcp.json, through output-level-mcp.sh) and the short
+  // native-wrapper form the Integrations & MCP dashboard shows. Each must still
+  // match the gateway line exactly as configured, so the gateway stays allowed.
+  const glob = (pat) => new RegExp("^" + pat.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
   for (const row of env.mcpServerAllowlist) {
     const server = cfg.mcpServers[row.name];
-    assert.equal(row.command, `*${server.command} ${server.args.join(" ")}`);
+    assert.ok(server, `allowlist row ${row.name} names a configured server`);
+    const gateway = `${server.command} ${server.args.join(" ")}`;
+    assert.ok(gateway.startsWith(`bash tools/mcp/output-level-mcp.sh --server ${row.name} -- `), `${row.name} launches through the gateway`);
+    assert.ok(glob(row.command).test(gateway), `${row.name}: ${row.command} admits the gateway line ${gateway}`);
+    assert.ok(glob(row.command).test(`bash ${expected[row.name].join(" ")}`), `${row.name}: ${row.command} admits the native wrapper`);
   }
+  assert.deepEqual(env.mcpServerAllowlist.map((r) => r.name).sort(), Object.keys(expected).sort(), "one allowlist row per server");
   const toml = read(".codex/config.toml");
   for (const [name, row] of Object.entries(cfg.mcpServers)) {
     const start = toml.indexOf(`[mcp_servers.${name}]`);

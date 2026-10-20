@@ -88,7 +88,9 @@ test("Bahrain scenery landmarks track the current arc-length origin", () => {
   const wrap = f => ((f % 1) + 1) % 1;
   for (const shift of [def._sceneryShift, def._sceneryShift + 0.01]) {
     const a = anchors({ ...def, _sceneryShift: shift });
-    for (const [name, target] of [["SF", 0], ["T1F", def.turns[0]], ["FC", def.turns.at(-1)]]) {
+    // The final-complex fixtures start at T14; T15 was missing from the old
+    // table. Restoring that marker must not move the camera or light ring.
+    for (const [name, target] of [["SF", 0], ["T1F", def.turns[0]], ["FC", def.turns[13]]]) {
       const racing = wrap(a[name] + shift);
       const error = Math.min(wrap(racing - target), wrap(target - racing)) * track.total;
       assert.ok(error < 0.01, `${name}: ${error} m from its racing anchor`);

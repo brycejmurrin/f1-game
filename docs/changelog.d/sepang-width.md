@@ -1,0 +1,1 @@
+Fixed: Sepang’s T3–T4 and T9 road now retains the circuit’s published 16 m minimum instead of unsupported 13.6–13.8 m narrowing zones. T15 remains constrained by the existing centreline and still needs a separate geometry correction.

@@ -223,6 +223,9 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/targets.mjs** | Prints the GENERATED doc paths (`TARGET` of every gen-*.mjs), one per line; the hooks derive their block list from it. | — |
 | **gen/title-art.mjs** | Draws index.html's #title-car from js/car/car3d.js through the garage camera; --check fails on drift. | — |
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
+| **gen/trees/bake-trees.mjs** | Manual tool: `npm i --no-save @dgreenheck/ez-tree three` (never a package.json | scenery-dress |
+| **gen/trees/caps.mjs** | Frozen LOD0/LOD1 triangle caps from the 2026-10-19 tree-budget measurement | scenery-dress |
+| **gen/trees/measure-tree-budget.mjs** | Read-only: builds via track-build-vm, compacts with TrackHiddenFaces like | scenery-dress |
 | **gen/vendor-three.mjs** | Vendors three.js (patch, terser-minify, write vendor/three-<ver>/ + MANIFEST.json); `--check` verifies hashes. | check-changes |
 | **gen/voice-audition.mjs** | Generate a 12-call voice audition with Kokoro, OpenAI or ElevenLabs; credentials stay author-side. | audio-debug |
 | **gen/voice-corpus.mjs** | Races the game VM and writes radio lines by channel to `tools/gen/voice-corpus.json` for voicepack.mjs. | audio-debug |
@@ -299,7 +302,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/live-render-matrix.mjs** | #2572 render matrix: rebuild A/B, context loss, quality tiers, visibility/resize, night/mirror per backend. | renderer-debug |
 | **perf/mesh-census-lib.mjs** | Pure aggregation for mesh-census: pass/source/distance bands + #2657 recommend. | — |
 | **perf/mesh-census.mjs** | Mesh census (#2657/#2631): main/mirror tris by distance band and source. | playwright-probe / renderer-debug |
-| **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
+| **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace \| step) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
 | **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |
 

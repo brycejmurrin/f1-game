@@ -100,14 +100,15 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
                           coverVents: "none", spineHeight: "standard", spineSide: "none",
-                          coverBind: "independent", finHandoff: "match", bodySplit: "off", bodyStyle: "team",
+                          coverBind: "independent", finHandoff: "match", bodySplit: "off", bodyStyle: "team", aeroShape: "fitted", floorShape: "fitted",
                           patternPlacement: "crown", patternSide: "both", patternWidth: "70", patternRepeat: "6",
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
                           patternRotation: "0", patternStretch: "100", patternWeight: "100", patternKey: "auto",
                           decalNoseTip: "on", decalCockpit: "on", decalPodTop: "on", decalHalo: "on",
                           coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit",
                           podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team", crestTone: "team", crestFrame: "none",
-                          floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit" };
+                          floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit",
+                          ductFinish: "inherit", deflectorFinish: "inherit", cockpitFinish: "inherit", boardFinish: "inherit" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -126,7 +127,7 @@ const LIV_ROW_HINT = {
   stripe: "BODY STRIPE — full spine, nose tip to engine cover. This row only.",
   noseStripe: "NOSE STRIPE — the nose crown only, tip to bulkhead. Layers on top of BODY STRIPE.",
   nose: "NOSE CAP — a painted nose cone. Unset = the bodywork colour.",
-  pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
+  pod: "SIDEPOD — the whole painted sidepod shell, both sides. Intake voids, carbon and separate trim keep their colours. Unset = the bodywork colour.",
   lower: "LOWER BODY — the bodywork below a line along the sidepods at the sponsor board's top edge, carried forward along the chassis side to the nose (pod flanks and undersides, lower chassis; the nose stays PRIMARY). Only bare PRIMARY paint changes: the accent band, board, stripes and caps keep theirs. Ignored under BODY SPLIT L/R. Unset = PRIMARY.",
   upper: "UPPER BODY — the bodywork ABOVE that same sidepod board line (upper chassis / pod flanks above the board; the nose stays PRIMARY). The W17's silver-over-black split. Only bare PRIMARY paint changes. Ignored under BODY SPLIT L/R. Unset = PRIMARY (today's single-colour body above the line).",
   cover: "ENGINE COVER — airbox, roll hoop, cover loft and snorkel. Unset = the bodywork colour. (AIRBOX had its own row and no longer does: it painted a strict subset of these surfaces.)",
@@ -178,6 +179,10 @@ const LIV_ROW_HINT = {
   floorFinish: "FLOOR FINISH — the floor edge, fences and bargeboards; INHERIT uses FINISH on a painted floor, bare carbon otherwise.",
   suspTint: "SUSPENSION — the wishbones, pushrods and rockers. Unset = the suspension part's dark carbon.",
   suspFinish: "SUSPENSION FINISH — the suspension arms; INHERIT uses FINISH on painted arms, bare carbon otherwise.",
+  ductFinish: "BRAKE DUCT FINISH — the duct bodies and scoops; inlet mouths stay dark. INHERIT keeps bare carbon unless BRAKE DUCTS has a colour, then uses FINISH.",
+  deflectorFinish: "DEFLECTOR FINISH — over-wheel planes and stalks on wheel parts that fit them. INHERIT keeps bare carbon unless DEFLECTORS has a colour, then uses FINISH.",
+  cockpitFinish: "COCKPIT SURROUND FINISH — headrest and painted bolsters. Harness, instruments and metal controls stay unchanged. INHERIT uses FINISH on paint and keeps bare carbon.",
+  boardFinish: "NUMBER BOARD FINISH — the rear-wing number board; INHERIT uses FINISH. The number keeps its inked patch.",
   ductTint: "BRAKE DUCTS — the brake duct bodies and scoops; the inlet mouths stay dark. Unset = carbon.",
   deflectorTint: "DEFLECTORS — the over-wheel deflector planes and stalks (when the WHEELS part fits them). Unset = carbon.",
   cockpitTint: "COCKPIT SURROUND — the headrest pad and the cockpit-side bolsters. Unset = dark pad, PRIMARY bolsters.",
@@ -194,6 +199,8 @@ const LIV_ROW_HINT = {
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
   sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also greys every spine design that writes a sponsor name (TOP wordmark, SIDE wordmark/duo/title).",
+  aeroShape: "AERO SHAPE — front/rear wing and aero package appearance. FITTED follows your installed AERO part. Looks only; performance and fitted parts stay unchanged.",
+  floorShape: "FLOOR SHAPE — floor and diffuser appearance. FITTED follows your installed FLOOR part. Looks only; performance and fitted parts stay unchanged.",
   bodyStyle: "BODY — the chassis silhouette. TEAM keeps this car's own shape; concept bodies reshape the nose, sidepods and engine cover. Looks only — performance stays the same.",
   finShape: "FIN SHAPE — the shark-fin blade. NONE removes it, and with it the fin's paint, graphic, style and badge. Every 2026 team car runs NONE.",
   finStyle: "TAIL STYLE — the motif painted on the fin.",
@@ -1073,6 +1080,8 @@ function buildLiveryCreator(container, team) {
   let designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
+  const wheelDeflector = Parts.getVisualTiers(getTeamParts(team.id), team)._visual?.wheels?.deflector || 0;
+  const needDeflectors = () => Math.round(wheelDeflector) > 0;
   const finArtLive = () => needFin() && ((d.finStyle || "team") !== "none" || d.finBadge === "number" || d.finBadge === "code");
   const NO_ART = "Nothing to colour — TAIL STYLE is NONE and FIN BADGE is not a number or code";
   const haveNames = () => (d.sponsors || "default") !== "clean";
@@ -1334,8 +1343,13 @@ function buildLiveryCreator(container, team) {
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
   for (const [label, key] of [["COVER FINISH", "coverFinish"], ["WING FINISH", "wingFinish"], ["HALO FINISH", "haloFinish"],
     ["SIDEPOD FINISH", "podFinish"], ["FIN FINISH", "finFinish"], ["MIRROR FINISH", "mirrorFinish"],
-    ["NOSE FINISH", "noseFinish"], ["FLOOR FINISH", "floorFinish"], ["SUSPENSION FINISH", "suspFinish"], ["RIM FINISH", "rimFinish"]])
-    pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
+    ["NOSE FINISH", "noseFinish"], ["FLOOR FINISH", "floorFinish"], ["SUSPENSION FINISH", "suspFinish"], ["RIM FINISH", "rimFinish"],
+    ["BRAKE DUCT FINISH", "ductFinish"], ["DEFLECTOR FINISH", "deflectorFinish"],
+    ["COCKPIT SURROUND FINISH", "cockpitFinish"], ["NUMBER BOARD FINISH", "boardFinish"]]) {
+    const r = pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
+    if (key === "finFinish") deps.push({ row: r, when: needFin, why: NO_FIN });
+    if (key === "deflectorFinish") deps.push({ row: r, when: needDeflectors, why: "Needs wheel deflectors — choose a WHEELS part that includes them" });
+  }
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
@@ -1348,6 +1362,15 @@ function buildLiveryCreator(container, team) {
   // carries, and whether the crest also repeats on the spine. Four single-choice
   // fields, so four pill rows — the same node shape as FINISH above.
   pillRow("BODY", "bodyStyle", ["team", ...(Car3D.BODY_STYLE_IDS || [])], "team");
+  // Use the catalog's current STYLE labels and ids; no second shape catalog.
+  for (const [label, key, category] of [["AERO SHAPE", "aeroShape", "aero"], ["FLOOR SHAPE", "floorShape", "floor"]]) {
+    const styles = Parts.CATALOG.find((c) => c.id === category).options.filter((o) => o.tag === "STYLE");
+    const row = pillRow(label, key, ["fitted", ...styles.map((o) => o.id)], "fitted");
+    Array.from(row.querySelectorAll("button")).slice(1).forEach((b, i) => {
+      const opt = styles[i];
+      b.textContent = opt.label.toUpperCase(); b.title = opt.desc.replace(/^[^—]+— /, "") + " — appearance only";
+    });
+  }
   pillRow("FIN SHAPE", "finShape", Car3D.FIN_SHAPE_IDS || ["standard"], "standard");
   deps.push({ row: pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team"), when: needFin, why: NO_FIN });
   deps.push({ row: pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo"), when: needFin, why: NO_FIN });
@@ -1558,7 +1581,8 @@ if (typeof MutationObserver === "function") {
   if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
-return { buildSetup, openSetup };
+// lookRowSpecs: Photo Studio's garage visit offers the same rows (js/ui/photo-studio.js deps.garage.looks).
+return { buildSetup, openSetup, lookRowSpecs };
 }
 
 return { create };

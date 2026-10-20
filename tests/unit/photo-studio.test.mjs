@@ -39,7 +39,8 @@ function boot(options = {}) {
     close: (_pause, keep) => { closed++; order.push("close"); if (!keep) G.photoMode = false; },
     cmd: (v) => { current = v; restored = v; },
   };
-  const garage = { snapshot: () => ({ az: 1, spin: true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); } };
+  const garage = { snapshot: () => ({ az: 1, spin: true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
+    looks: options.looks, looked: options.looked };
   const scene = { value: options.homeScene || "photo" };
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
@@ -597,4 +598,64 @@ test("Time & weather group stays out of the garage subject", () => {
   api.open({ source: "garage" });
   assert.equal(dom.byId("ps-tod").closest("section").hidden, true);
   assert.deepEqual([G.raceTimeOfDay, G.raceWeather], ["day", "dry"]);
+});
+
+// GARAGE & LIGHTING (Bryce 2026-10-20): a garage visit offers the Team tab's GARAGE / CREW / LIGHTING pickers. Runs the
+// REAL lookRowSpecs from setup-sheet.js against stateful scene stubs, so a pick in the studio must land in the same
+// state the Team tab reads back on its next build.
+function teamLooks() {
+  const src = fs.readFileSync(new URL("../../js/garage/setup-sheet.js", import.meta.url), "utf8");
+  const start = src.indexOf("const CREW_NAMES"), end = src.indexOf("function buildLookRows");
+  assert.ok(start > 0 && end > start, "lookRowSpecs source found in setup-sheet.js");
+  const state = { room: "stock", crew: "classic", mood: "shipped" }, saved = [];
+  const ctx = vm.createContext({
+    GaragePrims: { LOOK_IDS: ["stock", "studio"], LOOKS: { stock: null, studio: { label: "Silver studio" } },
+      lookId: () => state.room, setLook: (id) => { state.room = id; saved.push("garageLook=" + id); } },
+    GarageCrew: { LOOKS: ["classic", "pitstop"], look: () => state.crew, setLook: (id) => { state.crew = id; saved.push("crewLook=" + id); } },
+    GarageScene: { MOODS: { shipped: {}, night: {}, daylight: {} }, mood: () => state.mood, setMood: (id) => { state.mood = id; saved.push("garageMood=" + id); } },
+  });
+  vm.runInContext(src.slice(start, end), ctx);
+  return { specs: vm.runInContext("lookRowSpecs", ctx), state, saved };
+}
+test("garage photo offers the Team tab's room, crew and lighting rows and writes the state the Team tab reads", () => {
+  const team = teamLooks(); let looked = 0;
+  const b = boot({ looks: team.specs, looked: () => { looked++; } });
+  b.api.open({ source: "home" });
+  const group = b.dom.byId("ps-look-mood-row").parentElement;
+  assert.equal(group.hidden, false, "GARAGE & LIGHTING shows in the garage");
+  assert.equal(group.getAttribute("aria-label"), "GARAGE & LIGHTING");
+  assert.equal(group.children.filter((el) => el.tagName === "DIV").length, 3, "one row per Team tab picker");
+  assert.equal(b.dom.byId("ps-tod-row").parentElement.hidden, true, "TIME & WEATHER stays a circuit control");
+  const labels = (id) => b.dom.byId(id).children.map((o) => o.textContent);
+  assert.deepEqual(labels("ps-look-room"), ["TEAM BAY", "SILVER STUDIO"]);
+  assert.deepEqual(labels("ps-look-crew"), ["CLASSIC", "PIT STOP"]);
+  assert.deepEqual(labels("ps-look-mood"), ["STANDARD", "NIGHT", "DAYLIGHT"]);
+  assert.equal(b.dom.byId("ps-look-room-row").getAttribute("aria-labelledby"), "ps-look-room-row-label");
+  for (const [id, v] of [["ps-look-room", "studio"], ["ps-look-crew", "pitstop"], ["ps-look-mood", "night"]]) {
+    const sel = b.dom.byId(id); sel.value = v; b.dom.dispatch(sel, { type: "change" });
+  }
+  b.dom.byId("ps-look-mood-row-next").click();
+  assert.deepEqual(team.state, { room: "studio", crew: "pitstop", mood: "daylight" });
+  assert.deepEqual(team.saved, ["garageLook=studio", "crewLook=pitstop", "garageMood=night", "garageMood=daylight"]);
+  // The Team tab's next build reads the picks back as current.
+  assert.deepEqual([...team.specs().map((s) => s.cur)], ["studio", "pitstop", "daylight"]);
+  assert.equal(b.dom.byId("ps-look-mood").value, "daylight");
+  b.api.close(true);
+  assert.deepEqual(team.state, { room: "studio", crew: "pitstop", mood: "daylight" }, "a garage look is a saved pick, not a preview");
+  assert.equal(looked, 1, "DONE repaints the Team tab after a pick");
+  b.api.open({ source: "garage" }); b.api.close(true);
+  assert.equal(looked, 1, "no pick, no repaint");
+});
+test("race and replay photo modes keep TIME & WEATHER and never show the garage rows", () => {
+  const team = teamLooks();
+  for (const source of ["race", "watch", "home-track"]) {
+    const b = boot({ looks: team.specs, borrowCar: () => () => {} });
+    b.api.open({ source });
+    assert.equal(b.dom.byId("ps-tod-row").parentElement.hidden, false, source + " keeps TIME & WEATHER");
+    const looks = b.dom.byId("ps-body").children.find((el) => el.getAttribute && el.getAttribute("aria-label") === "GARAGE & LIGHTING");
+    assert.equal(looks.hidden, true, source + " hides GARAGE & LIGHTING");
+    assert.equal(looks.children.some((el) => el.tagName === "DIV"), false, source + " builds no garage rows");
+    b.api.close(true);
+  }
+  assert.deepEqual(team.saved, []);
 });

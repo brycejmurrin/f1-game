@@ -1,0 +1,1 @@
+Improved: the three.js renderer's 2-second car-shadow memory sweep now checks only the car shadow meshes instead of every geometry in the scene (~4000 on a circuit), on phones too, and a healthy post-processing frame no longer allocates a status object every frame.

@@ -170,6 +170,32 @@ function create(G, deps) {
     cond.touched = false;
     if (st.open) paintCond();
   }
+  // GARAGE LOOKS: in the garage the bay's own room, crew and lighting stand in for TIME & WEATHER. The rows are the
+  // TEAM tab's GARAGE / CREW / LIGHTING pickers (deps.garage.looks = SetupUI's lookRowSpecs, one table) and call the
+  // same setters, so a pick here applies live and is saved exactly as there (apex26.garageLook / crewLook /
+  // garageMood) — no reset on close. LIGHTING carries the hour: NIGHT, DAYLIGHT, SHOWROOM…
+  const looksGroup = group("GARAGE & LIGHTING", [mk("p", { className: "adv-help", textContent: "Room, crew and lighting for your garage. Saved like the Team tab." })]);
+  const lookRows = {};
+  let looksChanged = false;
+  const lookSpecs = () => (deps.garage && deps.garage.looks ? deps.garage.looks() || [] : []);
+  const lookSpec = (key) => lookSpecs().find((s) => s.key === key) || null;
+  const lookTitle = (label) => label.charAt(0) + label.slice(1).toLowerCase();
+  function paintLooks() {
+    const specs = isGarage() ? lookSpecs() : [];
+    for (const s of specs) {
+      if (!lookRows[s.key]) {
+        const read = () => { const now = lookSpec(s.key); return now ? now.cur : ""; };
+        lookRows[s.key] = select(lookTitle(s.label), s.ids.map((id) => [id, s.name(id)]), read, (v) => {
+          const now = lookSpec(s.key);
+          if (st.busy || st.closing || !isGarage() || !now || v === now.cur) return;
+          now.apply(v); looksChanged = true;
+        }, "ps-look-" + s.key);
+        looksGroup.appendChild(lookRows[s.key]);
+      }
+      SettingRow.paint(lookRows[s.key], s.cur);
+    }
+    looksGroup.hidden = !specs.length;
+  }
   const placement = (label, id, min, max, step, unit) => {
     const out = mk("output", { id: id + "-value", textContent: "0" + unit });
     const input = mk("input", { id, type: "range", min: String(min), max: String(max), step: String(step), value: "0" });
@@ -189,6 +215,7 @@ function create(G, deps) {
       subjectGroup,
       carGroup,
       condGroup,
+      looksGroup,
       group("COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
@@ -291,6 +318,7 @@ function create(G, deps) {
     }
     placeCar();
     condGroup.hidden = isGarage();
+    looksChanged = false; paintLooks();
     if (!isGarage()) { cond.tod = G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond(); }
     subjectGroup.hidden = !st.subject;
     if (st.subject) SettingRow.paint(subjectRow, subjectValue());
@@ -348,6 +376,9 @@ function create(G, deps) {
     root.hidden = true; document.body.classList.remove("photo-studio-open");
     busy(false);
     if (back && returnTo) returnTo();
+    // A look picked here repaints the Team tab the studio was opened over (it reads the scene modules on build).
+    if (looksChanged && deps.garage && deps.garage.looked) deps.garage.looked();
+    looksChanged = false;
     // Let the caller paint its restored visibility after modal isolation settles.
     if (back && target && target.focus) requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!st.open && st.generation === generation && target.isConnected) target.focus();

@@ -261,6 +261,7 @@ export const RULES = [
   [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
   [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
+  [/^js\/ui\/post-fx-opts\.js/, ["state-unit"], "post-fx-opts.test.mjs"],
   [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
   [/^js\/ui\/a11y-opts\.js/, ["state-unit"], "a11y-opts.test.mjs"],
   [/^js\/ui\/hud-elements\.js/, ["state-unit", "ui"], "hud-elements.test.mjs"],
