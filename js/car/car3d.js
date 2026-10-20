@@ -2045,8 +2045,10 @@ const Car3D = (function () {
         }
       } else if (!shadeFlags.round) {   // rounded build: ONE central pylon (below) carries the wing
         for (const s of [-1, 1]) {
+          // rwPlanes 1: no mid element at epCY, so the pylon climbs to the single flap's underside.
+          const pyTop = (aeroStyle.rwPlanes | 0) === 1 ? upperTrailY - 0.075 - 0.030 : epCY + 0.01;
           addSpan(out, { z: -1.98, x: s*0.14, y: 0.46, w: 0.05, h: 0.13 },
-                       { z: -2.34, x: s*0.14, y: epCY + 0.01, w: 0.042, h: 0.10 }, DARK);
+                       { z: -2.34, x: s*0.14, y: pyTop, w: 0.042, h: 0.10 }, DARK);
         }
       }
       if (shadeFlags.round) CarShade.strut(out, [0, 0.44, -1.96], [0, upperTrailY - 0.255, -2.40], 0.14, 0.06, DARK, addTri, null, { taper: 0.75, n: 10 }); else addSpan(out, { z: -1.96, x: 0, y: 0.44, w: 0.09, h: 0.14 },
@@ -2098,10 +2100,13 @@ const Car3D = (function () {
       // 5 cm brick lost on the crown; a taller raked housing and a carbon
       // strip under the top flap make the mechanism (and the open slot) read
       // from wingRear.
+    // rwPlanes 1 (B·D3c): no DRS plane to sit on, so no pod or rail.
+    if ((aeroStyle.rwPlanes | 0) !== 1) {
     addSpan(out, { z: -2.40, x: 0, y: epCY + 0.268, w: drsSX, h: 0.070, t: 0.70 },
                  { z: -2.62, x: 0, y: epCY + 0.292, w: drsSX * 0.72, h: 0.048, t: 0.50 },
             DARK);
     addBox(out, 0, epCY + 0.236, -2.50, 0.42, 0.010, 0.20, CARBON, SURFACES.carbon);
+    }
 
       // Lamp above tip centreline so stock/megaphone mouth rim stays visible.
       const tipR = exhTipRForLamp, lampY = 0.545;
