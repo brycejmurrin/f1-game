@@ -1372,6 +1372,11 @@
       ]
     },
     {
+      "path": "tools/desktop/minify.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/desktop/pack-dry-run.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1564,7 +1569,10 @@
       "path": "tools/gen/gen-locales.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
-      "interpreter": "node"
+      "interpreter": "node",
+      "npmScripts": [
+        "gen:check"
+      ]
     },
     {
       "path": "tools/gen/gen-output-surface.mjs",
@@ -2615,6 +2623,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/perf/live-render-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/perf/mesh-census-lib.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2745,6 +2762,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/design-matrix.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/export-history-evidence.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2849,6 +2875,11 @@
         "--json",
         "--out"
       ]
+    },
+    {
+      "path": "tools/shot/lib/design-matrix.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/shot/lib/garage-camera-catalog.mjs",
@@ -3375,7 +3406,7 @@
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check"
     },
     {
       "name": "gen:docs",
