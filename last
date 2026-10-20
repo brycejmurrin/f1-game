@@ -1,1 +1,1 @@
-DONE to:B from:claude:session_01MEA1rbzmm59CeZRognYgza #3247 e25d9995 (MCP tools/list trims, W11)
+HANDOFF to:B·W12 from:claude:session_01GvgaEXjiHbDmx1spq3tgop B·W11 → B·W12: #3247 merged (e25d9995). #3232 now conflicts with the tip textually in tests/unit/apex-tools-mcp.test.mjs; resolve via node tools/ci/sync-pr.mjs cursor/cursor-launch-tools-7k2q (merge, keep both sides). Listing budget after the merge measures 48,602 B < 55,000 (headroom 6,398). Note the tip's tools/list contract: generic CLI tools publish no outputSchema; required track enum points at apex_catalog.
