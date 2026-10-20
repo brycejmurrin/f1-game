@@ -272,8 +272,10 @@ const Car3D = (function () {
     const floorStep = teamStyle.floorStep || 0;
     const floorStepY = floorStep * 0.85;
     const floorEdgeAt = (z) => {   // hoisted too: the rounded floor plate (CarShade.floor) follows it
-      const t = Math.max(0, Math.min(1, (0.78 - z) / 2.36));
-      return floorX(0.70 + floorStep - 0.16 * Math.max(0, t - 0.5) * 2);
+      // Rear taper eased in (C1) from t 0.3: the old hinge at t 0.5 (z -0.40)
+      // creased the floor plate and everything riding its edge. Same ends.
+      const t = Math.max(0, Math.min(1, (0.78 - z) / 2.36)), u = Math.max(0, (t - 0.3) / 0.7);
+      return floorX(0.70 + floorStep - 0.16 * u * u);
     };
 
     part("chassis");

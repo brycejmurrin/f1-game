@@ -360,10 +360,13 @@ const CarShade = (function () {
    *  (x 0.57) over its length. Same datum: fl's front, rear, thickness. */
   function floor(out, fl, cy, edgeAt, col, tri, sf) {
     const zF = fl.cz + fl.sz / 2, zR = fl.cz - fl.sz / 2, y0 = cy - fl.sy / 2, y1 = cy + fl.sy / 2, R = 0.15, TYRE = 0.555;
-    const cap = (z) => (z < -1.30 ? TYRE : z < -1.15 ? TYRE + (z + 1.30) / 0.15 * 0.15 : Infinity);
+    // Tyre cap eased (smoothstep) over z -1.15..-1.30 rather than a straight ramp, and
+    // the plan sampled every 0.1 m, so the edge reads as one curve, not a polyline.
+    const cap = (z) => { const u = Math.max(0, Math.min(1, (-1.15 - z) / 0.15)); return u <= 0 ? Infinity : TYRE + 0.15 * (1 - u * u * (3 - 2 * u)); };
     const hw = (z) => Math.min(edgeAt(z), cap(z)) - (z > zF - R ? R - Math.sqrt(Math.max(0, R * R - (z - zF + R) ** 2)) : 0);
     const zs = [0, 1, 2, 3, 4].map((k) => zF - R * (1 - Math.cos(k * Math.PI / 8)))
-      .concat([0.78, 0.40, 0, -0.40, -0.80, -1.15, -1.30, -1.60, zR]).filter((z) => z <= zF && z >= zR);
+      .concat(Array.from({ length: 35 }, (_, k) => Math.round((0.80 - k * 0.10) * 100) / 100), [-1.20, -1.25, zR])
+      .filter((z, i, a) => z <= zF && z >= zR && a.indexOf(z) === i);
     const S = zs.sort((a, b) => b - a).map((z) => [z, hw(z)]);
     const q = (a, b, c, d, want) => {   // a quad facing `want`
       const k = dot(crs(sub(b, a), sub(c, a)), want) < 0;
