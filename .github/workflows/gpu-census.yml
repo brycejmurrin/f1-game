@@ -153,6 +153,7 @@ jobs:
       garage_ab: ${{ steps.split.outputs.garage_ab }}
       live_matrix: ${{ steps.split.outputs.live_matrix }}
       livery: ${{ steps.split.outputs.livery }}
+      h7cost: ${{ steps.split.outputs.h7cost }}
       lrm_leg: ${{ steps.split.outputs.lrm_leg }}
       lrm_rows: ${{ steps.split.outputs.lrm_rows }}
       lrm_scale: ${{ steps.split.outputs.lrm_scale }}
@@ -263,6 +264,8 @@ jobs:
           print("live_matrix=" + str(req.get("leg") == "render-live-matrix-2572").lower())
           # Garage livery-edit census (B·P1 2026-10-20): TLX WebGPU vs WebGL2, ~30 editor edits. Push requests only.
           print("livery=" + str(req.get("leg") == "garage-livery-perf").lower())
+          # TLX-WebGPU GPU cost per pass (B·H7 2026-10-20): interleaved live A/B arms, phone tier. Push requests only.
+          print("h7cost=" + str(req.get("leg") == "tlx-gpu-cost").lower())
           lg = str(req.get("lrm_leg") or "glx").strip()
           lg = lg if lg in ("glx", "tlx-gl", "tlx-native") else "glx"
           print("lrm_leg=" + lg)
@@ -473,6 +476,23 @@ jobs:
           path: |
             game-livery-*.json
             game-livery-*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Opt-in by request leg `tlx-gpu-cost`; pair with census_only=true. Never fails the job.
+      - name: TLX GPU cost census
+        if: ${{ needs.plan.outputs.h7cost == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 26
+        shell: bash
+        run: node scratch/tlx-gpu-cost.mjs || true
+
+      - name: Upload TLX GPU cost census
+        if: ${{ always() && needs.plan.outputs.h7cost == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tlx-gpu-cost-${{ matrix.image }}
+          path: tlx-gpu-cost.json
           if-no-files-found: warn
           retention-days: 7
 
