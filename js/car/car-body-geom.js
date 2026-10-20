@@ -150,7 +150,10 @@ const CarBodyGeom = (function () {
       Math.pow(topLift, 0.6) * (0.29 + 0.03 * sweepN + 0.03 * finN));
     const topY = (REAR_TYRE_CROWN - 0.02) + rise, sy = 0.22 + 0.80 * rise;   // bottom = topY - sy stays ≈ 0.44–0.53
     const cy = topY - 0.015 - sy * 0.5;
-    const chord = 0.48 + 0.24 * topLift, rearZ = -2.69, frontZ = rearZ + chord;
+    // epChord (B·D3c, opt-in): a shorter plate, rear edge fixed; it still spans the
+    // whole wing (main plane LE -2.30) and the number board (-2.27..-2.57).
+    const ec = st.epChord ? Math.max(0.6, Math.min(1, +st.epChord)) : 1;
+    const chord = Math.max(ec < 1 ? 0.43 : 0, (0.48 + 0.24 * topLift) * ec), rearZ = -2.69, frontZ = rearZ + chord;
     const profile = (z, sectionCy, sectionSy) => ({
       z, cy: sectionCy, sy: sectionSy,
       bottom: sectionCy - sectionSy * 0.5,
@@ -554,7 +557,7 @@ const CarBodyGeom = (function () {
       const flaps = wingOf(st0).flaps || 3;
       if (flaps !== (DEFAULT_WING.flaps || 3)) sig += "|flaps:" + flaps;
       // B·D3c shape fields join the key only when set, so shipped keys keep their text.
-      const ext = [st0.fwCurve, st0.fwStep, st0.rwRise, st0.rwCurve].map((v) => +v || 0);
+      const ext = [st0.fwCurve, st0.fwStep, st0.rwRise, st0.rwCurve, st0.rwPlanes, st0.epChord].map((v) => +v || 0);
       if (ext.some((v) => v)) sig += "|" + ext.join(",");
       _flapSig.set(st0, sig);
     }
@@ -630,12 +633,16 @@ const CarBodyGeom = (function () {
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
     const rearMain = elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0);
     const stack = [];   // [id, le, te, thick, sweepMul, half, paint?] bottom-up
-    if (a >= 2) stack.push(["rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9, 0.51]);
+    // rwPlanes 1 (B·D3c concept wings): one broad flap over the main plane, no mid
+    // element, top element or separate DRS plane, the sheet's two-plane wing.
+    const single = (st.rwPlanes | 0) === 1;
+    if (a >= 2 && !single) stack.push(["rearMid", [-2.34, upperTrailY - 0.170], [-2.56, upperTrailY - 0.115], 0.022, 0.9, 0.51]);
     stack.push(["rear", [-2.38, upperTrailY - 0.075], [-2.64, upperTrailY], 0.026, 1, 0.51]);
-    if (a >= 4 && !(st.drs || 0)) stack.push(["rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1, 0.50]);
+    if (single) { /* the "rear" flap alone */ }
+    else if (a >= 4 && !(st.drs || 0)) stack.push(["rearTop", [-2.42, crownY - 0.055], [-2.66, crownY], 0.022, 1.1, 0.50]);
     // The drs plane car3d.js used to bake STATIC over this stack. It is part of
     // the RW Flap too, so it flies with it, in the livery's rearWing colour.
-    if (st.drs || 0) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
+    if ((st.drs || 0) && !single) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
     for (const el of rearFlap(stack, rearMain)) {
       out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 },
         shapeLift(st, "rear")));

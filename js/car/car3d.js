@@ -1960,13 +1960,14 @@ const Car3D = (function () {
         // plate thickness and read as a blank black slab from wingRear. Proud
         // raked cuts catch the bay light; two larger recesses read as DRS
         // cut-outs (void, not painted lines).
-        for (let i = 0; i < 2; i++) {
+        // epChord (B·D3c concept plates): plain, short plates with no cut-outs.
+        if (!aeroStyle.epChord) for (let i = 0; i < 2; i++) {
           const wy = epCY + epSY * 0.12 - i * 0.11;
           addSpan(out, { z: -2.18, x: s * 0.538, y: wy + 0.028, w: 0.028, h: 0.055, t: 0.78 },
                        { z: -2.46, x: s * 0.522, y: wy - 0.012, w: 0.022, h: 0.042, t: 0.62 },
                   INTAKE, null, SURFACES.carbon);
         }
-        for (let i = 0; i < 5; i++) {
+        if (!aeroStyle.epChord) for (let i = 0; i < 5; i++) {
           const ly = epCY + epSY * 0.42 - i * 0.048;
           addSpan(out, { z: -2.20, x: s * 0.536, y: ly + 0.014, w: 0.022, h: 0.022, t: 0.82 },
                        { z: -2.42, x: s * 0.524, y: ly - 0.012, w: 0.018, h: 0.018, t: 0.64 },
@@ -2004,12 +2005,12 @@ const Car3D = (function () {
       else rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
         0.51, 0.024, c1, 0.8, rLift);
       if (rTip > 0) for (const s of [-1, 1]) {
-        const zM = -2.22, f = (zM - _ep.front.z) / (_ep.rear.z - _ep.front.z);
+        const zM = Math.min(-2.22, _ep.front.z - 0.03), f = (zM - _ep.front.z) / (_ep.rear.z - _ep.front.z);
         const topM = _ep.front.top + (_ep.rear.top - _ep.front.top) * f, ov = 0.012;
         const fin = (z, top, h) => ({ z, x: s * 0.50, y: top - ov + (h + ov) / 2, w: 0.036, h: h + ov });
         // Starts on the plate crown 12 cm ahead of the wing, and stands 8 mm
         // proud of the plate's trailing face so a swept tip never overhangs it.
-        const z0 = zM + 0.12, top0 = _ep.front.top + (_ep.rear.top - _ep.front.top) * (z0 - _ep.front.z) / (_ep.rear.z - _ep.front.z);
+        const z0 = Math.min(zM + 0.12, _ep.front.z - 0.005), top0 = _ep.front.top + (_ep.rear.top - _ep.front.top) * (z0 - _ep.front.z) / (_ep.rear.z - _ep.front.z);
         addSpan(out, fin(z0, top0, 0.004), fin(zM, topM, rTip * 0.80), endplateC || DARK);
         addSpan(out, fin(zM, topM, rTip * 0.80), fin(_ep.rear.z - 0.008, _ep.rear.top, rTip + 0.012), endplateC || DARK);
         if ((aeroStyle.epTip || 0) >= 2) addSpan(out,
