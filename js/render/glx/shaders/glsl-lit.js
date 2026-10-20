@@ -148,6 +148,7 @@ uniform float uSpecular;
 uniform float uDetail;
 uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specular lobe
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
+uniform float uCarFinish;   // 1 on car-paint draws: the finish 60-85 anti-alias inputs + tint block run, else skipped
 uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
 uniform float uRain;
@@ -989,9 +990,13 @@ void main() {
   // Finish anti-alias inputs, taken here in uniform control flow (the tint block is a branch): fnPx = metres of
   // surface under one pixel (a pattern cell under ~2 px fades to its mean, so nothing shimmers in motion), fnCrease
   // = 1 on a hard panel edge, where an angle-driven effect would draw an outline round every panel.
-  vec3 fnDx = dFdx(Ngeo), fnDy = dFdy(Ngeo);
-  float fnPx = max(length(fwidth(vObjPos)), 1e-5);
-  float fnCrease = smoothstep(0.02, 0.20, dot(fnDx, fnDx) + dot(fnDy, fnDy));
+  // carFinish draws only: uCarFinish is a uniform, so the derivatives stay in uniform control flow.
+  float fnPx = 1.0, fnCrease = 0.0;
+  if (uCarFinish > 0.5) {
+    vec3 fnDx = dFdx(Ngeo), fnDy = dFdy(Ngeo);
+    fnPx = max(length(fwidth(vObjPos)), 1e-5);
+    fnCrease = smoothstep(0.02, 0.20, dot(fnDx, fnDx) + dot(fnDy, fnDy));
+  }
   bool classifiedCar = surfaceId >= 20 && surfaceId <= 90;
   // 34 = METALLIC FLAKE and 35 = CANDY (FINISH_SURFACE.flake / .candy): both are PAINT responses (gloss
   // clearcoat, env mirror, sparkle), so paintSurface includes them; the flake grain and the candy
@@ -1948,7 +1953,7 @@ void main() {
   // FINISH TINTS 60-85 (see the remap at surfaceId; tuned against reference photos in the design preview lane, round 4).
   // Angle terms read the GEOMETRIC normal: the shading N carries orange peel, which broke angle-driven bands into jagged
   // contours. Angle effects are withheld on hard panel edges (fnCrease) and pattern cells fade by footprint (fnPx).
-  if (finishId >= 60 && finishId <= 85) {
+  if (uCarFinish > 0.5 && finishId >= 60 && finishId <= 85) {   // carFinish draws only
     vec3 pvHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
     float pvG = 1.0 - clamp(dot(Ngeo, V), 0.0, 1.0);
     float pvL = dot(color, vec3(0.299, 0.587, 0.114));
