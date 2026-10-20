@@ -19,9 +19,9 @@ import { raceGate } from "../tools/lib/census-entry.mjs";
 import { writeFileSync } from "node:fs";
 
 const TRACKS = (process.env.H10_TRACKS || "monaco,spa,singapore").split(",");
-const BACKENDS = (process.env.H10_BACKENDS || "tlx-gl,tlx-gpu").split(",");
+const BACKENDS = (process.env.H10_BACKENDS || "tlx-gl").split(",");
 const CAM = process.env.H10_CAM || "helmet";
-const WARM = +(process.env.H10_WARM || 8), WIN = +(process.env.H10_WIN || 40), TRACE = +(process.env.H10_TRACE || 6);
+const WARM = +(process.env.H10_WARM || 8), WIN = +(process.env.H10_WIN || 50), TRACE = +(process.env.H10_TRACE || 6);
 const EXTRA = (process.env.H10_LS || "").split(/\s+/).filter(Boolean).map((kv) => kv.split("="));
 const OUT = process.env.H10_OUT || "h10-live-frame.json";
 const report = { started: new Date().toISOString(), warm: WARM, win: WIN, trace: TRACE, cam: CAM, extra: EXTRA, rows: [] };
@@ -158,6 +158,28 @@ async function runRow(browser, server, backend, track) {
   await page.addInitScript(driver);
   await page.addInitScript(slowCalls);
   await gotoGame(page, server.url, 180000);
+  await page.evaluate(() => {
+    // Name every render pipeline three builds after boot (the WebGL2 backend links its program here, synchronously).
+    const S = window.__h10s, T = typeof GLX !== "undefined" ? GLX.__tlx : null, be = T && T.renderer && T.renderer.backend;
+    S.pipeNames = [];
+    if (!be || typeof be.createRenderPipeline !== "function" || be.__h10) return;
+    be.__h10 = true;
+    const o = be.createRenderPipeline;
+    be.createRenderPipeline = function (ro, promises) {
+      const a = performance.now();
+      try { return o.apply(this, arguments); } finally {
+        try {
+          const m = ro.material || {}, ob = ro.object || {}, g = ro.geometry || {};
+          const ud = Object.keys(ob.userData || {}).filter((k) => !/^_/.test(k)).slice(0, 6).join(",");
+          let par = ob.parent, chain = []; for (let i = 0; par && i < 3; i++) { chain.push(par.name || par.type); par = par.parent; }
+          if (S.pipeNames.length < 80) S.pipeNames.push({ win: S.on, at: Math.round(a), ms: +(performance.now() - a).toFixed(1), async: !!promises,
+            mat: (m.type || "") + ":" + (m.name || ""), obj: (ob.type || "") + ":" + (ob.name || "") + (ob.isInstancedMesh ? ":inst" + ob.count : ""), ud, parents: chain.join("<"),
+            attrs: Object.keys(g.attributes || {}).join(","), rt: ro.context && ro.context.renderTarget ? (ro.context.renderTarget.texture && ro.context.renderTarget.texture.name || "rt") + ":" + ro.context.width + "x" + ro.context.height : "canvas",
+            pos: (() => { try { const p = window.__apex.probe(); return p ? +(p.s).toFixed(0) : null; } catch (_) { return null; } })() });
+        } catch (_) {}
+      }
+    };
+  });
   await page.evaluate(async (t) => { const A = window.__apex; await A.race(t); A.go(); }, track);
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   await page.evaluate((c) => { const A = window.__apex; try { A.camera(c); } catch (_) {} window.__h10d.start(); }, CAM);
@@ -189,7 +211,7 @@ async function runRow(browser, server, backend, track) {
     const iv = []; for (let i = 1; i < H.ts.length; i++) iv.push(H.ts[i] - H.ts[i - 1]);
     let gpuMs = null; try { gpuMs = A.gpuTimer().ms; } catch (_) {}
     return { iv, cb: H.cb, spans: p.spans, loaf: p.loaf, drive: { frames: window.__h10d.frames, dist: Math.round(window.__h10d.dist), off: window.__h10d.off, err: window.__h10d.err },
-      gpuMs, slow: { calls: SC.slow, links: SC.links, pipes: SC.pipes, linkNames: SC.linkNames }, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
+      gpuMs, slow: { calls: SC.slow, links: SC.links, pipes: SC.pipes, linkNames: SC.linkNames, pipeNames: SC.pipeNames }, gov: A.renderScale(), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null };
   });
   const over = (ms) => +(got.iv.filter((x) => x > ms).length / Math.max(1, got.iv.length) * 100).toFixed(1);
   const loafE = (got.loaf && got.loaf.entries) || [];
@@ -210,7 +232,7 @@ try {
     const t0 = Date.now(); let browser = null;
     try {
       browser = await launchChromium({ args: ["--enable-unsafe-webgpu", "--disable-background-timer-throttling", "--enable-features=LongAnimationFrameTiming"] });
-      Object.assign(row, await Promise.race([runRow(browser, server, backend, track), new Promise((_, rej) => setTimeout(() => rej(new Error("row cap 420 s")), 420000))]));
+      Object.assign(row, await Promise.race([runRow(browser, server, backend, track), new Promise((_, rej) => setTimeout(() => rej(new Error("row cap 600 s")), 600000))]));
       const f = row.frame, c = row.cpu;
       log(`${backend} ${track} ${JSON.stringify(row.env).slice(0, 400)}`);
       log(`  frame p50 ${f.p50} p95 ${f.p95} p99 ${f.p99} max ${f.max} fps ${f.fps} >33 ${f.over33}% >50 ${f.over50}% | cpu p50 ${c.p50} p95 ${c.p95} max ${c.max} | drive ${JSON.stringify(row.drive)}`);
