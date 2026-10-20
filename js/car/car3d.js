@@ -560,21 +560,27 @@ const Car3D = (function () {
           Math.min(0.18 * engStyle.heatShield, 1.9 * COVER_CROWN * p.x),
           sh, 0.30, [0.30,0.28,0.26], SURFACES.metal);
       }
-      // SHOULDER LOUVRES (`louvre` 1-3 = 4/7/10 slats a side): the stacked
-      // exit slats a hot-climate cover opens on its shoulders. Rooted on the
-      // cover skin like the fuel collar; default 0 draws nothing.
+      // SHOULDER LOUVRES (`louvre` 1-3 = 4/7/10 slats a side; 0 = none) AFT of the ERS blister
+      // on the same facet (it buried a z -0.86 band), inboard of outlet 3, on the DENSE garage
+      // profile (the four-key polyline coverSurfaceY reads sank the aft slats).
       const louvre = Math.max(0, Math.min(3, Math.round(engStyle.louvre || 0)));
+      const lvB = ckpt ? 0 : Math.round((ersStyle && ersStyle.blister) || 0);
+      const lvZ0 = lvB >= 2 ? -1.31 : lvB ? -1.15 : -0.86, [lvIn, lvOut] = engOutlet === 3 ? [0.30, 0.50] : [0.38, 0.70];
+      const skinY = (p, x) => {
+        const q = coverProfile(p, shadeFlags.round && shadeFlags.coverHi).pts, ax = Math.abs(x);
+        let i = q.length - 1;
+        while (i > 0 && ax > q[i - 1][0]) i--;
+        if (i === 0) return p.bottom;
+        const [xi, yi] = q[i], [xo, yo] = q[i - 1];
+        return ax <= xi ? yi : yi + (yo - yi) * (ax - xi) / (xo - xi);
+      };
       for (let i = 0, n = louvre * 3 + 1; louvre && i < n; i++) {
-        const z = -0.86 - i * 0.042, p = anchors.coverAt(z);
+        const z = lvZ0 - i * 0.032, p = anchors.coverAt(z);
+        // Each slat spans two skin samples (follows the camber); 24 mm section
+        // 10 mm proud: rooted 2 mm in, clear of the 13 mm livery drape.
         for (const s of [-1, 1]) {
-          // A slat runs ACROSS the shoulder between two skin samples, so it
-          // follows the camber instead of bridging it (no gap, no buried end).
-          const xa = s * p.x * 0.40, xb = s * p.x * 0.76;
-          // 24 mm section centred 10 mm proud: rooted 2 mm into the skin and
-          // clear of the livery drape (COVER_STACK.decal 13 mm), which hid a
-          // 12 mm slat entirely on a painted cover (Ferrari Δ 0.01 % px).
-          addBeamBetween(out, [xa, coverSurfaceY(p, xa) + 0.010, z], [xb, coverSurfaceY(p, xb) + 0.010, z],
-                         0.024, DARK, SURFACES.carbon);
+          const xa = s * p.x * lvIn, xb = s * p.x * lvOut;
+          addBeamBetween(out, [xa, skinY(p, xa) + 0.010, z], [xb, skinY(p, xb) + 0.010, z], 0.024, DARK, SURFACES.carbon);
         }
       }
       // Team-style DORSAL FIN along the engine-cover ridge: 1 = low blade,
@@ -2159,12 +2165,9 @@ const Car3D = (function () {
     }
     const wishboneSpread = 0.20 * Math.max(0.72, Math.min(1.3, suspStyle.wishbone));
     const toeScale = Math.max(0.7, Math.min(1.35, suspStyle.toe));
-    // LAYOUT knobs (default 0 = the shipped geometry): `pullAt` keeps a pullrod
-    // at one axle only (1 front, 2 rear — the 2026 grid splits it that way),
-    // `antiDive` tilts the front upper wishbone nose-down (rear leg raised),
-    // `upright` extends the front upright so the upper joint sits high in the rim.
-    const pullAt = Math.max(0, Math.min(2, Math.round(suspStyle.pullAt || 0)));
-    const pullF = wbPull && pullAt !== 2, pullR = wbPull && pullAt !== 1;
+    // LAYOUT knobs (0 = shipped): `pullAt` pullrod at one axle (1 front, 2 rear), `antiDive`
+    // tilts the front upper wishbone nose-down, `upright` raises the upper joint in the rim.
+    const pullAt = Math.max(0, Math.min(2, Math.round(suspStyle.pullAt || 0))), pullF = wbPull && pullAt !== 2, pullR = wbPull && pullAt !== 1;
     const antiDive = Math.max(0, Math.min(1.5, suspStyle.antiDive || 0)) * 0.07;
     const upX = Math.max(0, Math.min(1.5, suspStyle.upright || 0)) * 0.07;
     // INBOARD PICKUPS. Every arm on the car started at a hardcoded x 0.29-0.33
@@ -2210,7 +2213,7 @@ const Car3D = (function () {
       if (wbPush) {
         const outer = pullF ? fUpper : fLower;
         const iX = inNose(AXLES.frontZ - 0.05);
-        const inner = pullF ? [s*iX,0.20+rideDY,AXLES.frontZ-0.05]
+        const inner = pullF ? [s*(iX + armTh*0.41),0.20+rideDY,AXLES.frontZ-0.05]
           : [s*iX,0.455+rideDY,AXLES.frontZ-0.05];
         drawArm(out, outer, inner, armTh*0.82, suspC, SURFACES.carbon);
       }
@@ -2247,14 +2250,12 @@ const Car3D = (function () {
         // upright height, with a CV boot at each end; six sides because it is
         // small and half-hidden behind the tyre from every angle but dead
         // astern, which is the one angle that matters here.
-        // Ends ARE the joints: inboard at the cover skin, outboard 3 mm into
-        // the upright casting (x 0.67 - w/2). 0.155 / 0.605 left a 37 mm air
-        // gap at the hub on every chassis (scratch/d7/fit.mjs, B·D7 fit pass).
-        const dsIn = inTail(AXLES.rearZ) - 0.01, dsOut = 0.67 - 0.0245;
-        addTube(out, [[s * dsIn, 0.36 + rideDY, AXLES.rearZ],
-                      [s * dsOut, 0.36 + rideDY, AXLES.rearZ]],
+        // Outboard end 3 mm into the upright casting (x 0.67 - w/2): 0.605 left
+        // a 37 mm gap at the hub on every chassis (car-fit-audit).
+        addTube(out, [[s * 0.155, 0.36 + rideDY, AXLES.rearZ],
+                      [s * (0.67 - 0.0245), 0.36 + rideDY, AXLES.rearZ]],
                 0.032, 6, [0.22, 0.22, 0.25], SURFACES.metal);
-        for (const bx of [dsIn + 0.03, dsOut - 0.03])
+        for (const bx of [0.185, 0.575])
           addBox(out, s * bx, 0.36 + rideDY, AXLES.rearZ, 0.052, 0.062, 0.062,
                  [0.10, 0.10, 0.12], SURFACES.carbon);   // CV boot
       }
