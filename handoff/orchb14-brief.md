@@ -66,3 +66,10 @@ UPDATE FROM OrchB 13 (01:40–01:50Z) — supersedes the above where they differ
 - READY re-sent to OrchB 13: #3097 #3122 #3123 #3128 (game). D6b round 5 done/idle.
 - No pending tick of OrchB 13 after handoff.
 - D1c round 5 @274e6ee8 (cursor/design-preview-bodies-f0e0) supersedes @1f72c744 for the wave-2 bodies set: fit 7.2–8.3 vs L21 bar ≤7.9 (lowline 8.3 still over; its extra rows also show on factory cars after D4 rounding). L21 has the sha. Gallery EkspVdVKpht3wDjn4C81MS.
+
+UPDATE FROM OrchB 13 (01:58–02:02Z, final):
+- Pages 39355070231 on 49de83d7 GREEN (first minified deploy, verify-live passed). OrchB 13's INCIDENT 096575b LIFTED (bus 096a3d8). L18 ARCHIVED.
+- MERGED #3097 (H2) → 19bb85ed, GAME, two-parent, bus DONE d67375e. H2 ARCHIVED; #3097 unsubscribed. OrchB 13 holds NO PR subscriptions now.
+- NEXT GAME SLOT: after green Pages on 19bb85ed → codex #3135, then Fleet A, then Fleet B #3120 76f1cfda (then #3099 #3118[orchestrator hold for L21 fit flag] #3122 #3123 #3128 #3146).
+- Bryce 02:01Z (typed, AskUserQuestion): D9b fences → "Vertical fence ends" (relax the 4 mm step rule at fence ends only; rails stay smooth). D9b told: round 2, same gallery WwvxwbrWob9SCnT8kiRrop, REPORT to OrchB 14. D9b r1 = cursor/floor-smooth-d9a3@a226da03 (0 NEW / 6 WORSE, pre-existing); merge note for L21: regenerate tests/data/car-wing-foil-tris.json with `node tests/unit/car-wing-foil.test.mjs --update`.
+- OrchB 13 pending tick trig_01RvjDuZg1qQDpxZRaCPkHiK deleted at handoff.
