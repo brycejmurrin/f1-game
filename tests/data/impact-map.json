@@ -2288,9 +2288,6 @@
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
-      "menuStepYield": [
-        "tests/unit/gfx-backend-canary.test.mjs"
-      ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
       ],
@@ -2301,8 +2298,7 @@
       ],
       "prepareMenuCarAssets": [
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/menu-car-prep-yield.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "putBoundedMesh": [
         "tests/unit/car-presentation-vm.test.mjs"
