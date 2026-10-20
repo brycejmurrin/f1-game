@@ -205,8 +205,11 @@ const ShadowPass = (function () {
     // deps.cockpitCaster (car-draw.js) resolves cockpitShadowMesh — the whole
     // car, no driver, the player's own halo — at the matrix the car loop draws
     // the cockpit body with; null = an exterior view, the silhouette as before.
+    // Only the car and lamp passes cast the player (_castPlayer). With neither map
+    // (phones), resolving would build a first-person caster nothing ever draws.
     function resolvePlayer(smp, yv) {
-      _playerCockpit = deps.cockpitCaster ? deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat) : null;
+      const mapped = G.gfx.carShadowEnabled !== false || G.gfx.lampShadowEnabled !== false;
+      _playerCockpit = mapped && deps.cockpitCaster ? deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat) : null;
     }
     function _playerMat() { return _playerCockpit ? _cockpitShadowMat : _livePlayerShadowMat; }
     function _castPlayer() {
