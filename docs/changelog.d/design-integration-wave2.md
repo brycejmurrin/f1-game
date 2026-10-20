@@ -1,2 +1,3 @@
 New: Five livery layouts with LINE WEIGHT, KEYLINE and 2ND BAND controls, and decal stations on the nose tip, cockpit side, sidepod top and halo top (on by default, each with its own switch).
+New: 18 new paint finishes in the FINISH pickers: oil slick, frozen, fluoro, burnt titanium, bare aluminium, raw carbon, Flo-Vis, carbon fade, silver fade, metal flop, true matte, pearl white, JPS gold, ghost pearl, Xirallic, Mystichrome, midnight purple and ultra black, each rendered alike on every graphics backend.
 Improved: Rounded exhaust tip, a smoother floor edge with vertical fence ends, a smaller rounded nose camera and a flush bevelled fuel hatch on every car.
