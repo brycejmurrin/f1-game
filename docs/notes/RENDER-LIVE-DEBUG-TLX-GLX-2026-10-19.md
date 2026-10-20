@@ -21,8 +21,8 @@ Legend: **pass**, **timeout** (inconclusive: runner speed), **blocked** (a probe
 | 1 | Same-circuit rebuild A/B (bahrain, monaco ×3) | **pass** (run 39351604149) | **blocked**: the second circuit's lazy load throws `circuit payload not resident: monaco` after the first race (runs 39339325536, 39354599571); see Finding A |
 | 2 | Context loss during build and after settle | game self-heals by reloading within ~8 s in both phases (39351604149); final draw check capped | self-heals in the build phase (39351702257, 39354702088); remaining steps capped |
 | 3 | Quality tiers, mirror/shadow/post live, NaN uniform scan | **pass** (39351604149) | timeout (39351702257, 39354702088): `page.evaluate` unanswered for >2 min after race start |
-| 4 | visibilitychange / pageshow, 844×390 ↔ 390×844 | **pass** (run 39356448785, 6× caps) | timeout (39354808426): page unresponsive right after the first hide |
-| 5 | Night, mirror on/off, `matTex(0/1)` | **pass** (run 39356448785, 6× caps) | timeout (39354808426) |
+| 4 | visibilitychange / pageshow, 844×390 ↔ 390×844 | **pass** (run 39356448785, 6× caps) | timeout even at 6× caps (39354808426, 39356550526): page unresponsive right after the first hide |
+| 5 | Night, mirror on/off, `matTex(0/1)` | **pass** (run 39356448785, 6× caps) | timeout even at 6× caps (39354808426, 39356550526) |
 
 TLX on the `tlx-native` leg resolved to the same ANGLE/WebGL2 path as `tlx-gl` on this runner (it has a GL
 context and counts uploads), so it carries no separate evidence; its rev-4 and rev-5 runs (39349367064,
@@ -100,4 +100,8 @@ a property of this runner's device as much as of TLX, so it is recorded as a lim
 
 ## Not run / open
 
-See the PR body for the live list. Rows marked pending above are updated in place when their runs finish.
+- TLX rows 1, 3, 4, 5 and the GLX/TLX post-reload draw check of row 2 are **not measured**: they need a drawing
+  runner faster than `macos-latest`'s paravirtual Metal device (follow-up issue linked from the PR).
+- GLX row 2 at 6× caps (run 39356358422) and the TLX rebuild rerun that captures the lazy-load log line
+  (run 39356216073) finished after this note was written and were not read; their result goes in the follow-up.
+- The `tlx-native` leg shares the WebGL2 path with `tlx-gl` on this runner; a true WebGPU TLX leg was not exercised.
