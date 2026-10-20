@@ -2131,11 +2131,13 @@ const Car3D = (function () {
       // DRS actuator pod + the slot-gap rail it sits on. The pod used to be a
       // 5 cm brick lost on the crown; a taller raked housing and a carbon
       // strip under the top flap make the mechanism (and the open slot) read
-      // from wingRear.
-    addSpan(out, { z: -2.40, x: 0, y: epCY + 0.268, w: drsSX, h: 0.070, t: 0.70 },
-                 { z: -2.62, x: 0, y: epCY + 0.292, w: drsSX * 0.72, h: 0.048, t: 0.50 },
+      // from wingRear. Both ride the flap stack's crown (crownY), not the endplate centre: a
+      // lower wing's crown sits closer to its centre, so epCY offsets left them floating up
+      // to 12 cm over every wing below lvl ~3.6. These are the lvl-4 positions, unchanged there.
+    addSpan(out, { z: -2.40, x: 0, y: crownY + 0.035, w: drsSX, h: 0.070, t: 0.70 },
+                 { z: -2.62, x: 0, y: crownY + 0.059, w: drsSX * 0.72, h: 0.048, t: 0.50 },
             DARK);
-    addBox(out, 0, epCY + 0.236, -2.50, 0.42, 0.010, 0.20, CARBON, SURFACES.carbon);
+    addBox(out, 0, crownY + 0.003, -2.50, 0.42, 0.010, 0.20, CARBON, SURFACES.carbon);
 
       // Lamp above tip centreline so stock/megaphone mouth rim stays visible.
       const tipR = exhTipRForLamp, lampY = 0.545;
