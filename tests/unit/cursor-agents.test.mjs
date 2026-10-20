@@ -29,6 +29,11 @@ import {
   Refused,
   DEFAULT_MODEL,
   errorHead,
+  parseMcpServers,
+  parseSubagents,
+  buildEnvVars,
+  maskBody,
+  interpolate,
   clock,
   retryAfterMs,
   listAgents,
@@ -522,6 +527,190 @@ test("launch refuses a twin (same name, not archived) before any write, and --al
     const c2 = stub([201, { agent: { id: ID }, run: { id: "run-9" } }]);
     await launchAgent({ prompt: "list the mcps", name, agentId: ID, allowTwin: true }, { file });
     assert.deepEqual(c2.map((c) => c.method), ["POST"]);
+  } finally {
+    after();
+  }
+});
+
+// ---- launch-time options: mcpServers, customSubagents, envVars ------------------------------------------------------
+
+const SECRET = "tok_SECRETVALUE_12345";
+const ENVV = { LIN: SECRET, GH: "ghp_SECRETVALUE_99" };
+const leaks = (s) => String(s).includes("SECRETVALUE");
+
+test("parseMcpServers accepts stdio and remote servers and fills ${NAME} from the environment", () => {
+  const out = parseMcpServers(
+    [
+      { name: "apex-tools", command: "node", args: ["tools/mcp/apex-tools-mcp.mjs"], env: { GITHUB_TOKEN: "${GH}" } },
+      { name: "linear", url: "https://mcp.linear.app/mcp", headers: { Authorization: "Bearer ${LIN}" } },
+      { name: "figma", type: "http", url: "https://api.figma.com/mcp", auth: { CLIENT_ID: "id", CLIENT_SECRET: "${LIN}", scopes: ["file_content:read"] } },
+    ],
+    ENVV,
+  );
+  assert.deepEqual(out[0], { name: "apex-tools", type: "stdio", command: "node", args: ["tools/mcp/apex-tools-mcp.mjs"], env: { GITHUB_TOKEN: ENVV.GH } });
+  assert.deepEqual(out[1], { name: "linear", type: "http", url: "https://mcp.linear.app/mcp", headers: { Authorization: `Bearer ${SECRET}` } });
+  assert.deepEqual(out[2].auth, { CLIENT_ID: "id", CLIENT_SECRET: SECRET, scopes: ["file_content:read"] });
+  assert.equal(interpolate("no placeholders", {}), "no placeholders");
+});
+
+test("parseMcpServers rejects every shape the spec forbids, and no message carries a secret", () => {
+  const bad = (list, re) => assert.throws(() => parseMcpServers(list, ENVV), (e) => re.test(e.message) && !leaks(e.message));
+  bad({}, /JSON array/);
+  bad([{ name: "a" }], /exactly one of command/);
+  bad([{ name: "a", command: "x", url: "https://x.io" }], /exactly one of command/);
+  bad([{ name: "a", command: "x" }, { name: "a", command: "y" }], /duplicate name a/);
+  bad([{ name: "a", command: "x", headers: {} }], /unknown field headers/);
+  bad([{ name: "a", url: "https://x.io", env: {} }], /unknown field env/);
+  bad([{ name: "a", url: "https://x.io", type: "sse" }], /do not support sse/);
+  bad([{ name: "a", url: `https://user:${SECRET}@x.io/mcp` }], /must not carry credentials/);
+  bad([{ name: "a", url: "ftp://x.io" }], /http or https/);
+  bad([{ name: "a", url: "not a url" }], /not a valid URL/);
+  bad([{ name: "a", url: "https://x.io", headers: { A: "${MISSING}" } }], /\$\{MISSING\} but it is not set/);
+  bad([{ name: "a", url: "https://x.io", headers: { A: 5 } }], /object of strings/);
+  bad([{ name: "a", url: "https://x.io", auth: { CLIENT_SECRET: "${LIN}" } }], /CLIENT_ID is required/);
+  bad([{ name: "a", command: "x", args: [1] }], /array of strings/);
+  bad(Array.from({ length: 51 }, (_, i) => ({ name: `s${i}`, command: "x" })), /over 50/);
+});
+
+test("parseSubagents enforces names, sizes and the built-in collision rule", () => {
+  const ok = { name: "prober", description: "d", prompt: "p", model: "inherit" };
+  assert.deepEqual(parseSubagents([ok, { ...ok, name: "other", model: { id: "composer-2.5" } }]).map((a) => a.name), ["prober", "other"]);
+  const bad = (list, re) => assert.throws(() => parseSubagents(list), (e) => re.test(e.message));
+  bad([{ ...ok, name: "Explore" }], /built-in/);
+  bad([{ ...ok, name: "computerUse" }], /built-in/);
+  bad([ok, { ...ok, name: "PROBER" }], /duplicate name/);
+  bad([{ ...ok, prompt: "x".repeat(8193) }], /prompt is 8193 chars, over 8192/);
+  bad([{ ...ok, description: "x".repeat(1001) }], /description is 1001 chars/);
+  bad([{ ...ok, name: "x".repeat(101) }], /name is 101 chars/);
+  bad([{ ...ok, tools: [] }], /unknown field tools/);
+  bad([{ ...ok, model: 5 }], /model must be/);
+  bad([{ name: "a", description: "d" }], /prompt is required/);
+  bad(Array.from({ length: 21 }, (_, i) => ({ ...ok, name: `s${i}` })), /over 20/);
+});
+
+test("buildEnvVars reads names from the environment and NAME=VALUE lines, and never echoes a value", () => {
+  assert.deepEqual(buildEnvVars({ names: ["LIN"] }, ENVV), { LIN: SECRET });
+  const file = `# comment\n\nA=1\nB = "two words"\nC='x'\n`;
+  assert.deepEqual(buildEnvVars({ fileText: file }, {}), { A: "1", B: "two words", C: "x" });
+  const bad = (a, env, re) => assert.throws(() => buildEnvVars(a, env), (e) => re.test(e.message) && !leaks(e.message));
+  bad({ names: ["CURSOR_API_KEY"] }, ENVV, /reserved/);
+  bad({ names: ["cursor_x"] }, ENVV, /reserved/);
+  bad({ names: ["1BAD"] }, ENVV, /not a valid variable name/);
+  bad({ names: ["NOPE"] }, ENVV, /--env NOPE: not set/);
+  bad({ fileText: "SECRETVALUE_no_equals_sign" }, {}, /line 1 is not NAME=VALUE/);
+  bad({ fileText: "CURSOR_X=1" }, {}, /reserved/);
+  bad({ fileText: `K=${"v".repeat(4097)}` }, {}, /K: value must be 1 to 4096 bytes/);
+  bad({ fileText: "K=" }, {}, /K: value must be 1 to 4096 bytes/);
+  bad({ fileText: Array.from({ length: 51 }, (_, i) => `V${i}=1`).join("\n") }, {}, /over 50/);
+});
+
+test("buildLaunchBody attaches the options, and envVars drops the client agentId (the spec forbids both)", () => {
+  const plain = buildLaunchBody({ prompt: "p", agentId: ID });
+  assert.equal(plain.agentId, ID);
+  assert.ok(!("mcpServers" in plain) && !("customSubagents" in plain) && !("envVars" in plain));
+  const body = buildLaunchBody({ prompt: "p", agentId: ID, mcpServers: [{ name: "a", type: "stdio", command: "x" }], customSubagents: [{ name: "s", description: "d", prompt: "p" }] });
+  assert.equal(body.agentId, ID);
+  assert.equal(body.mcpServers[0].name, "a");
+  assert.equal(body.customSubagents[0].name, "s");
+  const withEnv = buildLaunchBody({ prompt: "p", agentId: ID, envVars: { A: "1" } });
+  assert.equal(withEnv.agentId, undefined);
+  assert.deepEqual(withEnv.envVars, { A: "1" });
+  assert.ok(!("envVars" in buildLaunchBody({ prompt: "p", envVars: {} })));
+});
+
+test("maskBody and the DRYRUN line carry names and counts, never a header, env, auth or variable value", async () => {
+  const mcpServers = parseMcpServers(
+    [
+      { name: "s", command: "node", env: { T: "${GH}" } },
+      { name: "r", url: "https://x.io/mcp", headers: { Authorization: "Bearer ${LIN}" }, auth: { CLIENT_ID: "cid", CLIENT_SECRET: "${LIN}" } },
+    ],
+    ENVV,
+  );
+  // An explicit name: a derived one is the first 100 chars of the prompt by design (it is also what the Cursor dashboard shows).
+  const body = buildLaunchBody({ prompt: "a very private prompt", name: "t", mcpServers, envVars: { STAGING: SECRET } });
+  const masked = JSON.stringify(maskBody(body));
+  assert.ok(!leaks(masked) && !masked.includes("private prompt"));
+  assert.deepEqual(maskBody(body).envVars, ["STAGING"]);
+  assert.deepEqual(maskBody(body).mcpServers[1], { name: "r", type: "http", headerNames: ["Authorization"], auth: ["CLIENT_ID", "CLIENT_SECRET"] });
+  const calls = stub();
+  try {
+    const lines = await launchAgent({ prompt: "x", dryRun: true, mcpServers, envVars: { STAGING: SECRET } }, { file: tmpAllow() });
+    assert.equal(calls.length, 0);
+    assert.ok(lines[0].startsWith("DRYRUN (server-minted) promptChars=1 ") && !leaks(lines[0]));
+  } finally {
+    after();
+  }
+});
+
+test("launch with envVars: no client id, no 5xx retry, the id is recorded from the response, counts (not values) are printed", async () => {
+  const file = tmpAllow();
+  const calls = stub([200, { items: [] }], [201, { agent: { id: ID }, run: { id: "run-1" } }]);
+  try {
+    const lines = await launchAgent({ prompt: "p", envVars: { STAGING: SECRET }, mcpServers: [{ name: "a", type: "stdio", command: "x" }] }, { file });
+    assert.deepEqual(calls.map((c) => c.method), ["GET", "POST"]);
+    assert.equal(calls[1].body.agentId, undefined);
+    assert.deepEqual(calls[1].body.envVars, { STAGING: SECRET });
+    assert.ok(lines[0].endsWith(" mcp=1 subagents=0 env=1") && !leaks(lines[0]));
+    assert.ok(readAllow(file)[ID]);
+  } finally {
+    after();
+  }
+});
+
+test("launch with envVars resolves an ambiguous 5xx by name instead of retrying, and does not record a launch it cannot find", async () => {
+  const file = tmpAllow();
+  const name = "claude-launch: ambiguous";
+  let calls = stub([200, { items: [] }], [503, err("unavailable")], [200, { items: [{ id: ID, name, createdAt: new Date().toISOString(), latestRunId: "run-4" }] }]);
+  try {
+    const lines = await launchAgent({ prompt: "ambiguous", name, envVars: { A: "1" } }, { file });
+    assert.deepEqual(calls.map((c) => c.method), ["GET", "POST", "GET"]);
+    assert.ok(lines[0].includes(`LAUNCH ${ID} run=run-4`) && lines[0].includes("recovered after an ambiguous failure"));
+    assert.ok(readAllow(file)[ID]);
+    calls = stub([200, { items: [] }], [503, err("unavailable")], [200, { items: [{ id: OTHER, name: "something else", createdAt: new Date().toISOString() }] }]);
+    await assert.rejects(launchAgent({ prompt: "ambiguous", name, envVars: { A: "1" } }, { file: tmpAllow() }), /HTTP 503/);
+    assert.equal(calls.filter((c) => c.method === "POST").length, 1);
+  } finally {
+    after();
+  }
+});
+
+test("followUp can replace the inline MCP servers for one run", async () => {
+  const file = tmpAllow();
+  recordAllow(ID, {}, file);
+  const calls = stub([201, { run: { id: "run-5" } }]);
+  try {
+    await followUp(ID, "go", undefined, { file, mcpServers: [{ name: "a", type: "stdio", command: "x" }] });
+    assert.deepEqual(calls[0].body, { prompt: { text: "go" }, mcpServers: [{ name: "a", type: "stdio", command: "x" }] });
+  } finally {
+    after();
+  }
+});
+
+test("launch with envVars resolves a dropped connection (a thrown fetch) by name too", async () => {
+  const file = tmpAllow();
+  const name = "claude-launch: dropped";
+  const seq = [];
+  let n = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    seq.push(init.method);
+    n++;
+    if (n === 1) return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    if (n === 2) throw new TypeError("fetch failed");
+    return new Response(JSON.stringify({ items: [{ id: ID, name, createdAt: new Date().toISOString(), latestRunId: "run-8" }] }), { status: 200 });
+  };
+  try {
+    const lines = await launchAgent({ prompt: "dropped", name, envVars: { A: "1" } }, { file });
+    assert.deepEqual(seq, ["GET", "POST", "GET"]);
+    assert.ok(lines[0].includes(`LAUNCH ${ID} run=run-8`) && lines[0].includes("recovered"));
+    assert.ok(readAllow(file)[ID]);
+    n = 0;
+    seq.length = 0;
+    globalThis.fetch = async (url, init = {}) => {
+      seq.push(init.method);
+      if (init.method === "POST") throw new TypeError("fetch failed");
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    };
+    await assert.rejects(launchAgent({ prompt: "dropped", name, envVars: { A: "1" } }, { file: tmpAllow() }), /fetch failed/);
   } finally {
     after();
   }

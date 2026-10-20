@@ -18,8 +18,9 @@
 //   node tools/ci/cursor-agents.mjs dump [<agent-id>...] [--limit 20]
 //   node tools/ci/cursor-agents.mjs digest [--dir artifacts/cursor-dumps]
 //   node tools/ci/cursor-agents.mjs launch (--prompt "…" | --prompt-file F) [--model composer-2.5] [--repo URL]
-//        [--ref BRANCH | --pr PR_URL] [--name N] [--mode agent|plan] [--create-pr] [--on-branch] [--allow-twin] [--dry-run] [--wait [--timeout S]]
-//   node tools/ci/cursor-agents.mjs followup <id> (--text "…" | --text-file F) [--mode agent|plan]
+//        [--ref BRANCH | --pr PR_URL] [--name N] [--mode agent|plan] [--create-pr] [--on-branch] [--allow-twin]
+//        [--mcp-file F] [--subagent-file F] [--env NAME]... [--env-file F] [--dry-run] [--wait [--timeout S]]
+//   node tools/ci/cursor-agents.mjs followup <id> (--text "…" | --text-file F) [--mode agent|plan] [--mcp-file F]
 //   node tools/ci/cursor-agents.mjs cancel <id> [--run <runId>]
 //   node tools/ci/cursor-agents.mjs archive <id>
 //   node tools/ci/cursor-agents.mjs delete <id>        (irreversible; archive is the reversible one)
@@ -283,8 +284,155 @@ function needMode(mode) {
   return mode;
 }
 
+// ---- launch-time options: inline MCP servers, custom subagents, session env vars -------------------------------
+// Shapes from the OpenAPI spec (CreateAgentRequest, McpServer, CustomSubagent). Secrets never live in a file or a
+// printed line: MCP values may be `${NAME}` placeholders filled from OUR environment, `--env NAME` reads the value from
+// it, and every message here names a field, never a value (JSON.parse's own errors can quote the input, so they are
+// replaced by a fixed message).
+const MAX_MCP = 50;
+const MAX_SUBAGENTS = 20;
+const MAX_ENV = 50;
+const BUILTIN_SUBAGENTS = ["explore", "shell", "debug", "computeruse", "cursorguide"];
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const isObj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+
+function noExtra(o, allowed, where) {
+  const bad = Object.keys(o).filter((k) => !allowed.includes(k));
+  if (bad.length) throw new Error(`${where}: unknown field ${bad.join(", ")}`);
+}
+
+/** Fill `${NAME}` from env. A missing variable is named, its value (or a value's absence) never echoed. */
+export function interpolate(value, env = process.env, where = "value") {
+  return String(value).replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, n) => {
+    if (!env[n]) throw new Error(`${where} references \${${n}} but it is not set in the environment`);
+    return env[n];
+  });
+}
+
+function strMap(m, env, where) {
+  if (!isObj(m) || !Object.values(m).every((v) => typeof v === "string")) throw new Error(`${where} must be an object of strings`);
+  return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, interpolate(v, env, `${where}.${k}`)]));
+}
+
+/** Validate and normalise an `mcpServers` array (<= 50). Stdio runs in the VM (its env is readable there); remote keeps headers and OAuth with Cursor's backend. */
+export function parseMcpServers(list, env = process.env) {
+  if (!Array.isArray(list)) throw new Error("mcp file must be a JSON array of servers");
+  if (list.length > MAX_MCP) throw new Error(`mcp: ${list.length} servers, over ${MAX_MCP}`);
+  const seen = new Set();
+  return list.map((sv, i) => {
+    const where = `mcp[${i}]`;
+    if (!isObj(sv)) throw new Error(`${where} must be an object`);
+    if (typeof sv.name !== "string" || !sv.name) throw new Error(`${where}: name is required`);
+    if (seen.has(sv.name)) throw new Error(`${where}: duplicate name ${sv.name}`);
+    seen.add(sv.name);
+    const stdio = sv.command !== undefined;
+    if (stdio === (sv.url !== undefined)) throw new Error(`${where} (${sv.name}): give exactly one of command (stdio) or url (remote)`);
+    if (stdio) {
+      noExtra(sv, ["name", "type", "command", "args", "env"], where);
+      if (sv.type !== undefined && sv.type !== "stdio") throw new Error(`${where}: type must be stdio when command is set`);
+      if (typeof sv.command !== "string" || !sv.command) throw new Error(`${where}: command must be a non-empty string`);
+      if (sv.args !== undefined && !(Array.isArray(sv.args) && sv.args.every((a) => typeof a === "string"))) throw new Error(`${where}: args must be an array of strings`);
+      const out = { name: sv.name, type: "stdio", command: sv.command };
+      if (sv.args) out.args = sv.args;
+      if (sv.env) out.env = strMap(sv.env, env, `${where}.env`);
+      return out;
+    }
+    noExtra(sv, ["name", "type", "url", "headers", "auth"], where);
+    // The REST schema also allows sse, but Cursor's capabilities page says cloud agents support http and stdio only.
+    if (sv.type !== undefined && sv.type !== "http") throw new Error(`${where}: remote type must be http (cloud agents do not support sse)`);
+    let u;
+    try {
+      u = new URL(sv.url);
+    } catch {
+      throw new Error(`${where}: url is not a valid URL`);
+    }
+    if (!/^https?:$/.test(u.protocol)) throw new Error(`${where}: url must be http or https`);
+    if (u.username || u.password) throw new Error(`${where}: url must not carry credentials; put them in headers`);
+    const out = { name: sv.name, type: "http", url: sv.url };
+    if (sv.headers) out.headers = strMap(sv.headers, env, `${where}.headers`);
+    if (sv.auth) {
+      if (!isObj(sv.auth)) throw new Error(`${where}.auth must be an object`);
+      noExtra(sv.auth, ["CLIENT_ID", "CLIENT_SECRET", "scopes"], `${where}.auth`);
+      if (typeof sv.auth.CLIENT_ID !== "string" || !sv.auth.CLIENT_ID) throw new Error(`${where}.auth.CLIENT_ID is required`);
+      out.auth = { CLIENT_ID: interpolate(sv.auth.CLIENT_ID, env, `${where}.auth.CLIENT_ID`) };
+      if (sv.auth.CLIENT_SECRET !== undefined) out.auth.CLIENT_SECRET = interpolate(sv.auth.CLIENT_SECRET, env, `${where}.auth.CLIENT_SECRET`);
+      if (sv.auth.scopes !== undefined) {
+        if (!(Array.isArray(sv.auth.scopes) && sv.auth.scopes.every((x) => typeof x === "string" && x))) throw new Error(`${where}.auth.scopes must be an array of non-empty strings`);
+        out.auth.scopes = sv.auth.scopes;
+      }
+    }
+    return out;
+  });
+}
+
+/** Validate a `customSubagents` array (<= 20; names unique and not a built-in; prompt <= 8192 chars). */
+export function parseSubagents(list) {
+  if (!Array.isArray(list)) throw new Error("subagent file must be a JSON array");
+  if (list.length > MAX_SUBAGENTS) throw new Error(`subagents: ${list.length}, over ${MAX_SUBAGENTS}`);
+  const seen = new Set();
+  return list.map((a, i) => {
+    const where = `subagent[${i}]`;
+    if (!isObj(a)) throw new Error(`${where} must be an object`);
+    noExtra(a, ["name", "description", "prompt", "model"], where);
+    const lim = (k, max) => {
+      if (typeof a[k] !== "string" || !a[k].trim()) throw new Error(`${where}: ${k} is required`);
+      if (a[k].length > max) throw new Error(`${where}: ${k} is ${a[k].length} chars, over ${max}`);
+    };
+    lim("name", 100);
+    lim("description", 1000);
+    lim("prompt", 8192);
+    const key = a.name.toLowerCase();
+    if (BUILTIN_SUBAGENTS.includes(key)) throw new Error(`${where}: name ${a.name} collides with a built-in subagent`);
+    if (seen.has(key)) throw new Error(`${where}: duplicate name ${a.name}`);
+    seen.add(key);
+    const m = a.model;
+    if (m !== undefined && !(typeof m === "string" && m) && !(isObj(m) && typeof m.id === "string" && m.id)) throw new Error(`${where}: model must be "inherit", a model id, or {id}`);
+    const out = { name: a.name, description: a.description, prompt: a.prompt };
+    if (m !== undefined) out.model = m;
+    return out;
+  });
+}
+
+function checkEnvName(n) {
+  if (!ENV_NAME.test(n) || Buffer.byteLength(n) > 255) throw new Error(`env name ${JSON.stringify(String(n).slice(0, 40))} is not a valid variable name`);
+  if (/^CURSOR_/i.test(n)) throw new Error(`env name ${n} is reserved: names cannot start with CURSOR_`);
+}
+
+/** Session `envVars` (<= 50, values <= 4096 bytes): `--env NAME` values come from our environment, `--env-file` lines are NAME=VALUE. */
+export function buildEnvVars({ names = [], fileText = "" } = {}, env = process.env) {
+  const out = {};
+  for (const n of names) {
+    checkEnvName(n);
+    if (!env[n]) throw new Error(`--env ${n}: not set in the environment`);
+    out[n] = env[n];
+  }
+  fileText.split("\n").forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) return;
+    const eq = line.indexOf("=");
+    if (eq < 1) throw new Error(`env file line ${i + 1} is not NAME=VALUE`); // never echo the line: it may hold the secret
+    const n = line.slice(0, eq).trim();
+    checkEnvName(n);
+    out[n] = line.slice(eq + 1).trim().replace(/^(["'])(.*)\1$/, "$2");
+  });
+  const entries = Object.entries(out);
+  if (entries.length > MAX_ENV) throw new Error(`env: ${entries.length} variables, over ${MAX_ENV}`);
+  for (const [n, v] of entries) if (!v || Buffer.byteLength(v) > 4096) throw new Error(`env ${n}: value must be 1 to 4096 bytes`);
+  return out;
+}
+
+/** The request body with every secret-bearing value reduced to names, for DRYRUN: prompt text, header/env/auth values and variable values never print. */
+export function maskBody(body) {
+  const { prompt, mcpServers, customSubagents, envVars, ...rest } = body;
+  const out = { ...rest, promptChars: prompt.text.length };
+  if (mcpServers) out.mcpServers = mcpServers.map((m) => ({ name: m.name, type: m.type, ...(m.headers && { headerNames: Object.keys(m.headers) }), ...(m.env && { envNames: Object.keys(m.env) }), ...(m.auth && { auth: Object.keys(m.auth) }) }));
+  if (customSubagents) out.customSubagents = customSubagents.map((a) => a.name);
+  if (envVars) out.envVars = Object.keys(envVars);
+  return out;
+}
+
 /** The POST /v1/agents body. No PR, no push to a live branch unless asked. */
-export function buildLaunchBody({ prompt, model = DEFAULT_MODEL, repo = DEFAULT_REPO, ref, prUrl, name, createPr = false, onBranch = false, mode, agentId = newAgentId() }) {
+export function buildLaunchBody({ prompt, model = DEFAULT_MODEL, repo = DEFAULT_REPO, ref, prUrl, name, createPr = false, onBranch = false, mode, agentId = newAgentId(), mcpServers, customSubagents, envVars }) {
   needText(prompt, "prompt");
   if (ref && prUrl) throw new Error("--ref and --pr are exclusive: a PR carries its own base");
   const repoCfg = { url: repo };
@@ -301,6 +449,14 @@ export function buildLaunchBody({ prompt, model = DEFAULT_MODEL, repo = DEFAULT_
     workOnCurrentBranch: !!onBranch,
   };
   if (needMode(mode)) body.mode = mode;
+  // Already validated by parseMcpServers / parseSubagents / buildEnvVars (the CLI calls them); attached only when non-empty.
+  if (mcpServers?.length) body.mcpServers = mcpServers;
+  if (customSubagents?.length) body.customSubagents = customSubagents;
+  if (envVars && Object.keys(envVars).length) {
+    body.envVars = envVars;
+    // The spec forbids a client agentId together with envVars, so the server mints it (launchAgent then records the id from the response).
+    delete body.agentId;
+  }
   return body;
 }
 
@@ -323,42 +479,59 @@ const fail = (e, what) => new Error(`${what}: HTTP ${e.status} ${e.code}${e.mess
 /** Launch one agent. Records the id BEFORE the request so a crash mid-flight still leaves it manageable; a failed create un-records it. */
 export async function launchAgent(opts, { file = allowFile() } = {}) {
   const body = buildLaunchBody(opts);
+  const hasEnv = !!body.envVars;
   const meta = { launchedAt: new Date().toISOString(), model: body.model.id, repo: body.repos[0].url, name: body.name };
-  if (opts.dryRun) {
-    const { prompt, ...rest } = body;
-    return [`DRYRUN ${body.agentId} promptChars=${prompt.text.length} ${JSON.stringify(rest)}`];
-  }
+  const extras = `mcp=${body.mcpServers?.length || 0} subagents=${body.customSubagents?.length || 0} env=${Object.keys(body.envVars || {}).length}`;
+  if (opts.dryRun) return [`DRYRUN ${body.agentId || "(server-minted)"} promptChars=${body.prompt.text.length} ${JSON.stringify(maskBody(body))}`];
   if (!opts.allowTwin) {
     // Six near-identical "Mcp ... listing" agents ran ~600 tool calls on one question in a day (2026-10-20 transcripts).
     const twin = (await listAgents(100)).find((a) => a.status !== "ARCHIVED" && (a.name || "").toLowerCase() === body.name.toLowerCase());
     if (twin) throw new Refused(`TWIN ${twin.id} ${twin.status} "${body.name.slice(0, 40)}" already exists with this name; pass --allow-twin to launch anyway`);
   }
-  recordAllow(body.agentId, meta, file);
-  const r = await api("/v1/agents", { method: "POST", body, retry5xx: true });
+  const startedAt = clock.now();
+  // With a client agentId the id is recorded BEFORE the request and a retry is idempotent. With envVars there is no client id:
+  // the id is recorded from the response, nothing is retried on a 5xx, and an ambiguous failure is resolved by looking the agent up by name.
+  if (!hasEnv) recordAllow(body.agentId, meta, file);
+  const recover = async (why) => {
+    const found = (await listAgents(20)).find((a) => a.name === body.name && Date.parse(a.createdAt) >= startedAt - 60000);
+    if (!found) throw why;
+    recordAllow(found.id, meta, file);
+    return [`LAUNCH ${found.id} run=${found.latestRunId || "-"} model=${meta.model} ${extras} (recovered after an ambiguous failure)`];
+  };
+  let r;
+  try {
+    r = await api("/v1/agents", { method: "POST", body, retry5xx: !hasEnv });
+  } catch (e) {
+    if (!hasEnv) throw e;
+    return recover(e);
+  }
+  if (hasEnv && r.status >= 500) return recover(fail(await apiError(r), "launch"));
   if (r.status === 409) {
     const e = await apiError(r);
     // A 5xx retry can land after the first attempt succeeded: the same agentId then conflicts, which means "already created".
-    if (e.code === "agent_id_conflict") {
+    if (!hasEnv && e.code === "agent_id_conflict") {
       const a = await json(`/v1/agents/${body.agentId}`);
       return [`LAUNCH ${body.agentId} run=${a.latestRunId || "-"} model=${meta.model} (already created)`];
     }
-    forgetAllow(body.agentId, file);
+    if (!hasEnv) forgetAllow(body.agentId, file);
     throw fail(e, "launch");
   }
   if (!r.ok) {
-    forgetAllow(body.agentId, file);
+    if (!hasEnv) forgetAllow(body.agentId, file);
     throw fail(await apiError(r), "launch");
   }
   const d = await r.json();
   const id = d.agent?.id || body.agentId;
-  return [`LAUNCH ${id} run=${d.run?.id || "-"} model=${meta.model} repo=${meta.repo.split("/").pop()} pr=${body.autoCreatePR ? "auto" : "off"}`];
+  if (hasEnv) recordAllow(id, meta, file);
+  return [`LAUNCH ${id} run=${d.run?.id || "-"} model=${meta.model} repo=${meta.repo.split("/").pop()} pr=${body.autoCreatePR ? "auto" : "off"}${hasEnv || body.mcpServers || body.customSubagents ? ` ${extras}` : ""}`];
 }
 
-export async function followUp(id, text, mode, { file = allowFile() } = {}) {
+export async function followUp(id, text, mode, { file = allowFile(), mcpServers } = {}) {
   assertAllowed(id, file);
   needText(text, "text");
   const body = { prompt: { text } };
   if (needMode(mode)) body.mode = mode;
+  if (mcpServers?.length) body.mcpServers = mcpServers; // replaces the create-time inline servers for this run only (spec)
   const r = await api(`/v1/agents/${id}/runs`, { method: "POST", body });
   if (r.status === 409) {
     const e = await apiError(r);
@@ -522,6 +695,15 @@ const flag = (args, name, dflt) => {
   return i >= 0 ? args[i + 1] : dflt;
 };
 const has = (args, name) => args.includes(name);
+const flagAll = (args, name) => args.flatMap((a, i) => (a === name && args[i + 1] ? [args[i + 1]] : []));
+/** Read a JSON file; JSON.parse's own message can quote the input (a secret), so a bad file gets a fixed message. */
+const readJson = (file, what) => {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    throw new Error(`${what} file ${file} is missing or is not valid JSON`);
+  }
+};
 /** Print result lines; BUSY / NOT_CANCELLABLE are refusals by the API, so they exit 1 for callers that branch on it. */
 const emit = (lines) => {
   for (const l of lines) console.log(l);
@@ -568,6 +750,12 @@ async function main() {
       onBranch: has(rest, "--on-branch"),
       dryRun: has(rest, "--dry-run"),
       allowTwin: has(rest, "--allow-twin"),
+      mcpServers: flag(rest, "--mcp-file") ? parseMcpServers(readJson(flag(rest, "--mcp-file"), "mcp")) : undefined,
+      customSubagents: flag(rest, "--subagent-file") ? parseSubagents(readJson(flag(rest, "--subagent-file"), "subagent")) : undefined,
+      envVars:
+        flagAll(rest, "--env").length || flag(rest, "--env-file")
+          ? buildEnvVars({ names: flagAll(rest, "--env"), fileText: flag(rest, "--env-file") ? fs.readFileSync(flag(rest, "--env-file"), "utf8") : "" })
+          : undefined,
     });
     emit(lines);
     const id = /^LAUNCH (bc-\S+)/.exec(lines[0])?.[1];
@@ -588,7 +776,7 @@ async function main() {
   } else if (cmd === "usage") {
     emit(await agentUsage(rest[0]));
   } else if (cmd === "followup") {
-    emit(await followUp(rest[0], textArg(rest, "--text"), flag(rest, "--mode")));
+    emit(await followUp(rest[0], textArg(rest, "--text"), flag(rest, "--mode"), { mcpServers: flag(rest, "--mcp-file") ? parseMcpServers(readJson(flag(rest, "--mcp-file"), "mcp")) : undefined }));
   } else if (cmd === "cancel") {
     emit(await cancelRun(rest[0], flag(rest, "--run")));
   } else if (cmd === "archive") {

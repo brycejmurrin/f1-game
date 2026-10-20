@@ -117,3 +117,28 @@ stays open on purpose, and gap 8 is a caller convention (`--name`).
   with `TWIN <id> ...` (exit 3) unless `--allow-twin` is passed.
 - Not shown by this sample: how hunters and owners use tools, which is where the real cost is. That needs dumps taken
   at hand-back.
+
+## Launch-time options built (gap 7), 2026-10-20
+
+`launch` takes `--mcp-file F` (JSON array: stdio `{name, command, args?, env?}` or remote `{name, url, headers?, auth?}`),
+`--subagent-file F` (JSON array of `{name, description, prompt, model?}`), and `--env NAME` / `--env-file F`;
+`followup` takes `--mcp-file` (replaces the create-time inline servers for that run, per the spec). Shapes are from the
+OpenAPI spec (`CreateAgentRequest`, `McpServer`, `CustomSubagent`); REST takes `mcpServers` as an array with a `name` per
+entry, the SDK as a map.
+
+- Secrets stay out of files, argv and output: MCP header, env and auth values may be `${NAME}` placeholders filled from
+  our own environment, `--env NAME` reads the value from it, `DRYRUN` and `LAUNCH` print names and counts only, and a
+  malformed JSON file gets a fixed message because `JSON.parse` quotes its input.
+- Local refusals: `CURSOR_*` variable names, duplicate names, over-limit counts (50 servers, 20 subagents, 50
+  variables, values 4096 bytes, prompt 8192 chars), a built-in subagent name (`explore`, `shell`, `debug`,
+  `computerUse`, `cursorGuide`), a server with both or neither of `command`/`url`, credentials inside a URL, and
+  `sse` (the capabilities page says cloud agents support http and stdio only).
+- The spec forbids a client `agentId` together with `envVars`, which our idempotent create relies on. With
+  `--env` the tool omits the id, does not retry a 5xx, records the id from the response, and resolves an ambiguous
+  failure (5xx or a dropped connection) by looking the agent up by name; with no match it records nothing.
+- Measured live (composer-2.5, read-only, `f1-game`): an agent launched with an inline stdio `apex-inline` server, one
+  `--env` variable and one custom subagent reported the variable `set, length 11` (the planted length; the value was in
+  no event of its transcript), `apex-inline` among its MCP namespaces with a read-only `apex_help` call OK, and
+  `inline-prober` available. `wait` blocked until `FINISHED` (exit 0).
+- Not verified: an HTTP remote server with `headers` or `auth` (no endpoint to point at), `followup --mcp-file` live,
+  and whether `envVars` is silently ignored on an account where the beta is off (here it was delivered).
