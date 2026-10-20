@@ -1965,15 +1965,16 @@ void main() {
       // capped below any glint, visible grain, a broad sun sheen in the paint's own hue and a wide silver lift toward the flop
       vec3 frC = floor(vObjPos * 90.0);
       float frF = clamp(0.5 / (90.0 * fnPx) - 0.5, 0.0, 1.0);
-      color = min((mix(color, vec3(pvL), 0.55) * vec3(0.80, 0.82, 0.86) + vec3(0.025))
-        * (1.0 + (hash21(frC.xy + frC.z * 19.7) - 0.5) * 0.24 * frF), vec3(0.78));
-      color += uSunColor * mix(pvHue, vec3(1.0), 0.6) * (pvA * 0.9 + 0.05) * pow(pvNH, 1.5) * pvSun;
-      color += (uAmbSky + uSunColor * 0.25) * vec3(0.78, 0.80, 0.86) * smoothstep(0.15, 0.8, pvG) * 0.55 * pvEdge;
+      color = min((mix(color, vec3(pvL), 0.6) * vec3(0.80, 0.82, 0.86) + vec3(0.02))
+        * (1.0 + (hash21(frC.xy + frC.z * 19.7) - 0.5) * 0.35 * frF), vec3(0.26)) * vec3(0.90, 0.94, 1.0);
+      color += uSunColor * mix(pvHue, vec3(1.0), 0.6) * (pvA * 0.25 + 0.03) * pow(pvNH, 2.0) * pvSun;
+      color += (uAmbSky + uSunColor * 0.25) * vec3(0.78, 0.80, 0.86) * smoothstep(0.15, 0.8, pvG) * 0.40 * pvEdge;
     } else if (finishId == 62) {   // fluoro: re-emits absorbed light -> glows in its hue, in shade too (an emissive floor); a
       // near-neutral livery cannot fluoresce in its own hue, so it takes safety yellow-green
       float flS = max(pvHue.r, max(pvHue.g, pvHue.b)) - min(pvHue.r, min(pvHue.g, pvHue.b));
       vec3 flH = mix(vec3(0.80, 1.0, 0.06), pow(pvHue, vec3(2.6)), smoothstep(0.20, 0.50, flS));
-      color = color * mix(vec3(1.0), flH, 0.6) + flH * (uAmbSky * 1.6 + uSunColor * 0.55 * pvSun + vec3(0.22));
+      float flK = smoothstep(0.05, 0.14, pvA);   // black panels stay black
+      color = color * mix(vec3(1.0), flH, 0.6 * flK) + flH * (uAmbSky * 1.6 + uSunColor * 0.55 * pvSun + vec3(0.22)) * flK;
     } else if (finishId == 63) {   // burnt titanium on the satin metal: silver nose -> straw -> gold -> bronze -> purple -> blue tail
       float t = clamp(0.5 - vObjPos.z * 0.30 + pvG * 0.10, 0.0, 1.0);
       vec3 ox = vec3(0.85, 0.86, 0.88);
@@ -1999,10 +2000,10 @@ void main() {
       vec3 fvN = abs(Ngeo);
       float fvC = fvN.y > max(fvN.x, fvN.z) ? vObjPos.x : vObjPos.y;   // the cross-flow coordinate of the panel plane
       float fvS = 0.5 + 0.5 * sin(fvC * 70.0 + sin(vObjPos.z * 1.7 + fvC * 9.0) * 1.2);
-      float fvBr = smoothstep(-0.2, 0.4, sin(vObjPos.z * 4.0 + fvC * 37.0));   // streaks break up along their length
+      float fvBr = smoothstep(-0.6, 0.2, sin(vObjPos.z * 4.0 + fvC * 37.0));   // streaks break up along their length
       float fvPer = 0.090 / fnPx;   // streak period in pixels: under ~3 px the streaks are their mean coverage
-      float fv = mix(smoothstep(0.80, 0.95, fvS) * fvBr, 0.12, smoothstep(3.0, 1.5, fvPer)) * smoothstep(1.4, 0.2, vObjPos.z);
-      vec3 fvGlow = mix(vec3(0.78, 1.0, 0.30), vec3(0.20, 0.30, 0.02), smoothstep(0.35, 0.75, pvA))
+      float fv = mix(smoothstep(0.62, 0.85, fvS) * fvBr, 0.22, smoothstep(3.0, 1.5, fvPer)) * smoothstep(1.4, 0.2, vObjPos.z);
+      vec3 fvGlow = mix(vec3(0.78, 1.0, 0.30), vec3(0.10, 0.22, 0.0), smoothstep(0.35, 0.75, pvA))
         * (uAmbSky * 2.5 + uSunColor * 0.6 * pvSun + vec3(0.15));
       color = mix(color, fvGlow, fv * 0.95);
     } else if (finishId == 68) {   // carbonfade (FW47): lacquered weave with a sun sheen below the sidepod line, a torn edge between
@@ -2026,13 +2027,13 @@ void main() {
       color = mix(vec3(min(pvLit, 3.0) * 0.035), vec3(pvLit) * vec3(0.70, 0.72, 0.76), sfS);
     } else if (finishId == 70) {   // metalflop (AMR25 green): bright face, a much darker flop toward the silhouette (grey on a light
       // livery) and a fine metallic sparkle; the flop is withheld on a panel crease
-      float mfF = smoothstep(0.05, 0.55, pvG) * pvEdge;
-      vec3 mfFace = max(mix(vec3(pvL), color, 1.3), vec3(0.0)) * 1.55;
-      vec3 mfFlop = mix(color * 0.16, vec3(pvL * 0.22) * vec3(0.80, 0.84, 0.92), smoothstep(0.40, 0.80, pvA));
+      float mfF = smoothstep(0.04, 0.30, pvG) * pvEdge;   // a narrow face: by mid angles the flop has won
+      vec3 mfFace = max(mix(vec3(pvL), color, 1.4), vec3(0.0)) * 1.7;
+      vec3 mfFlop = mix(color * 0.08, vec3(pvL * 0.12) * vec3(0.80, 0.84, 0.92), smoothstep(0.40, 0.80, pvA));
       vec3 mfC = floor(vObjPos * 150.0);
       float mfH = hash21(mfC.xy + mfC.z * 17.3);
       float mfSp = step(0.80, mfH) * smoothstep(0.6, 1.0, fract(mfH * 41.0 + pvNH * 3.0));
-      color = mix(mfFace, mfFlop, mfF) + uSunColor * pvSun * 0.6 * mix(0.03, mfSp, clamp(0.5 / (150.0 * fnPx) - 0.5, 0.0, 1.0));
+      color = mix(mfFace, mfFlop, mfF) + uSunColor * pvSun * 1.2 * mix(0.03, mfSp, clamp(0.5 / (150.0 * fnPx) - 0.5, 0.0, 1.0));
     } else if (finishId >= 81 && finishId <= 85) {
       // tint group B (81-85)
       float bL = pvA;
@@ -2065,8 +2066,8 @@ void main() {
         color = vec3(min(pvLit, 1.3)) * mc * 0.95 + uSunColor * 0.35 * pow(bNH, 24.0) * bSun;
       } else if (finishId == 84) {   // midnightpurple: near-black purple, a tight violet sun bloom -> bronze at the flop
         float mpH = pow(bNH, 16.0);
-        color += uSunColor * vec3(0.40, 0.20, 1.0) * (mpH * 0.7 + bSun * 0.025)
-          + (uAmbSky + uSunColor * 0.3) * vec3(0.60, 0.36, 0.12) * smoothstep(0.50, 0.92, pvG) * 0.30 * pvEdge;
+        color += uSunColor * vec3(0.40, 0.20, 1.0) * (mpH * 0.35 + bSun * 0.006)
+          + (uAmbSky + uSunColor * 0.3) * vec3(0.60, 0.36, 0.12) * smoothstep(0.50, 0.92, pvG) * 0.45 * pvEdge;
       } else {   // ultrablack: ~1% reflectance, only a faint hint of shape survives; livery ignored
         color = vec3(0.010, 0.010, 0.011) * (1.0 + 0.6 * bLit) + uAmbSky * (0.010 * pvG);
       }

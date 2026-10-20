@@ -2209,14 +2209,16 @@
           }).ElseIf(finishId.equal(61.0), () => {
             const frC = (floor(objP.mul(90.0))).toVar();
             const frF = (clamp(float(0.5).div(fnPx.mul(90.0)).sub(0.5), 0.0, 1.0)).toVar();
-            color.assign(min(mix(color, vec3(pvL), 0.55).mul(vec3(0.80, 0.82, 0.86)).add(0.025)
-              .mul(hash21(frC.xy.add(frC.z.mul(19.7))).sub(0.5).mul(0.24).mul(frF).add(1.0)), vec3(0.78)));
-            color.addAssign(vec3(U.sunColor).mul(mix(pvHue, vec3(1.0), 0.6)).mul(pvA.mul(0.9).add(0.05)).mul(pow(pvNH, 1.5)).mul(pvSun));
-            color.addAssign(vec3(U.ambSky).add(vec3(U.sunColor).mul(0.25)).mul(vec3(0.78, 0.80, 0.86)).mul(smoothstep(0.15, 0.8, pvG).mul(0.55).mul(pvEdge)));
+            color.assign(min(mix(color, vec3(pvL), 0.6).mul(vec3(0.80, 0.82, 0.86)).add(0.02)
+              .mul(hash21(frC.xy.add(frC.z.mul(19.7))).sub(0.5).mul(0.35).mul(frF).add(1.0)), vec3(0.26)).mul(vec3(0.90, 0.94, 1.0)));
+            color.addAssign(vec3(U.sunColor).mul(mix(pvHue, vec3(1.0), 0.6)).mul(pvA.mul(0.25).add(0.03)).mul(pow(pvNH, 2.0)).mul(pvSun));
+            color.addAssign(vec3(U.ambSky).add(vec3(U.sunColor).mul(0.25)).mul(vec3(0.78, 0.80, 0.86)).mul(smoothstep(0.15, 0.8, pvG).mul(0.40).mul(pvEdge)));
           }).ElseIf(finishId.equal(62.0), () => {
             const flS = (max(pvHue.r, max(pvHue.g, pvHue.b)).sub(min(pvHue.r, min(pvHue.g, pvHue.b)))).toVar();
             const flH = (mix(vec3(0.80, 1.0, 0.06), pow(pvHue, vec3(2.6)), smoothstep(0.20, 0.50, flS))).toVar();
-            color.assign(color.mul(mix(vec3(1.0), flH, 0.6)).add(flH.mul(vec3(U.ambSky).mul(1.6).add(vec3(U.sunColor).mul(pvSun.mul(0.55))).add(0.22))));
+            const flK = (smoothstep(0.05, 0.14, pvA)).toVar();   // black panels stay black
+            color.assign(color.mul(mix(vec3(1.0), flH, flK.mul(0.6)))
+              .add(flH.mul(vec3(U.ambSky).mul(1.6).add(vec3(U.sunColor).mul(pvSun.mul(0.55))).add(0.22)).mul(flK)));
           }).ElseIf(finishId.equal(63.0), () => {
             const t = (clamp(float(0.5).sub(objP.z.mul(0.30)).add(pvG.mul(0.10)), 0.0, 1.0)).toVar();
             const ox = vec3(0.85, 0.86, 0.88).toVar();
@@ -2240,10 +2242,10 @@
             const fvC = objP.y.toVar();   // the cross-flow coordinate of the panel plane
             If(fvN.y.greaterThan(max(fvN.x, fvN.z)), () => { fvC.assign(objP.x); });
             const fvS = (sin(fvC.mul(70.0).add(sin(objP.z.mul(1.7).add(fvC.mul(9.0))).mul(1.2))).mul(0.5).add(0.5)).toVar();
-            const fvBr = (smoothstep(-0.2, 0.4, sin(objP.z.mul(4.0).add(fvC.mul(37.0))))).toVar();
+            const fvBr = (smoothstep(-0.6, 0.2, sin(objP.z.mul(4.0).add(fvC.mul(37.0))))).toVar();
             const fvPer = (float(0.090).div(fnPx)).toVar();
-            const fv = (mix(smoothstep(0.80, 0.95, fvS).mul(fvBr), float(0.12), smoothstep(3.0, 1.5, fvPer)).mul(smoothstep(1.4, 0.2, objP.z))).toVar();
-            const fvGlow = (mix(vec3(0.78, 1.0, 0.30), vec3(0.20, 0.30, 0.02), smoothstep(0.35, 0.75, pvA))
+            const fv = (mix(smoothstep(0.62, 0.85, fvS).mul(fvBr), float(0.22), smoothstep(3.0, 1.5, fvPer)).mul(smoothstep(1.4, 0.2, objP.z))).toVar();
+            const fvGlow = (mix(vec3(0.78, 1.0, 0.30), vec3(0.10, 0.22, 0.0), smoothstep(0.35, 0.75, pvA))
               .mul(vec3(U.ambSky).mul(2.5).add(vec3(U.sunColor).mul(pvSun.mul(0.6))).add(0.15))).toVar();
             color.assign(mix(color, fvGlow, fv.mul(0.95)));
           }).ElseIf(finishId.equal(68.0), () => {
@@ -2268,13 +2270,13 @@
             const sfS = (max(sfDot, smoothstep(0.08, 0.18, sfT).oneMinus())).toVar();
             color.assign(mix(vec3(min(pvLit, 3.0).mul(0.035)), vec3(pvLit).mul(vec3(0.70, 0.72, 0.76)), sfS));
           }).ElseIf(finishId.equal(70.0), () => {
-            const mfF = (smoothstep(0.05, 0.55, pvG).mul(pvEdge)).toVar();
-            const mfFace = (max(mix(vec3(pvL), color, 1.3), vec3(0.0)).mul(1.55)).toVar();
-            const mfFlop = (mix(color.mul(0.16), vec3(pvL.mul(0.22)).mul(vec3(0.80, 0.84, 0.92)), smoothstep(0.40, 0.80, pvA))).toVar();
+            const mfF = (smoothstep(0.04, 0.30, pvG).mul(pvEdge)).toVar();
+            const mfFace = (max(mix(vec3(pvL), color, 1.4), vec3(0.0)).mul(1.7)).toVar();
+            const mfFlop = (mix(color.mul(0.08), vec3(pvL.mul(0.12)).mul(vec3(0.80, 0.84, 0.92)), smoothstep(0.40, 0.80, pvA))).toVar();
             const mfC = (floor(objP.mul(150.0))).toVar();
             const mfH = (hash21(mfC.xy.add(mfC.z.mul(17.3)))).toVar();
             const mfSp = (step(0.80, mfH).mul(smoothstep(0.6, 1.0, fract(mfH.mul(41.0).add(pvNH.mul(3.0)))))).toVar();
-            color.assign(mix(mfFace, mfFlop, mfF).add(vec3(U.sunColor).mul(pvSun.mul(0.6).mul(mix(float(0.03), mfSp, clamp(float(0.5).div(fnPx.mul(150.0)).sub(0.5), 0.0, 1.0))))));
+            color.assign(mix(mfFace, mfFlop, mfF).add(vec3(U.sunColor).mul(pvSun.mul(1.2).mul(mix(float(0.03), mfSp, clamp(float(0.5).div(fnPx.mul(150.0)).sub(0.5), 0.0, 1.0))))));
           }).ElseIf(finishId.greaterThanEqual(81.0).and(finishId.lessThanEqual(85.0)), () => {
             // tint group B (81-85)
             const bL = pvA;
@@ -2305,8 +2307,8 @@
               color.assign(vec3(min(pvLit, 1.3)).mul(mc).mul(0.95).add(vec3(U.sunColor).mul(pow(bNH, 24.0).mul(bSun).mul(0.35))));
             }).ElseIf(finishId.equal(84.0), () => {   // midnightpurple
               const mpH = (pow(bNH, 16.0)).toVar();
-              color.addAssign(vec3(U.sunColor).mul(vec3(0.40, 0.20, 1.0)).mul(mpH.mul(0.7).add(bSun.mul(0.025)))
-                .add(vec3(U.ambSky).add(vec3(U.sunColor).mul(0.3)).mul(vec3(0.60, 0.36, 0.12)).mul(smoothstep(0.50, 0.92, pvG).mul(0.30).mul(pvEdge))));
+              color.addAssign(vec3(U.sunColor).mul(vec3(0.40, 0.20, 1.0)).mul(mpH.mul(0.35).add(bSun.mul(0.006)))
+                .add(vec3(U.ambSky).add(vec3(U.sunColor).mul(0.3)).mul(vec3(0.60, 0.36, 0.12)).mul(smoothstep(0.50, 0.92, pvG).mul(0.45).mul(pvEdge))));
             }).Else(() => {   // ultrablack
               color.assign(vec3(0.010, 0.010, 0.011).mul(bLit.mul(0.6).add(1.0)).add(vec3(U.ambSky).mul(pvG.mul(0.010))));
             });
