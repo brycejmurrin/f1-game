@@ -1382,8 +1382,22 @@
         const Ngeo = vec3(N).toVar();
 
         // car surface ids 20-40 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
+        // FINISHES 60-85 (CarMaterials.FINISH_RESERVED): ride an existing base branch, tinted after the metal block
+        // (js/render/glx/shaders/glsl-lit.js). The rows test surfaceId (surface-id-parity).
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(40.0)).toVar();
+        const finishId = surfaceId.toVar();
+        If(surfaceId.equal(62.0).or(surfaceId.equal(67.0)).or(surfaceId.equal(68.0)).or(surfaceId.equal(69.0)).or(surfaceId.equal(70.0))
+          .or(surfaceId.equal(74.0)).or(surfaceId.equal(81.0)).or(surfaceId.equal(82.0)).or(surfaceId.equal(83.0)).or(surfaceId.equal(84.0)), () => { surfaceId.assign(20.0); });
+        If(surfaceId.equal(61.0).or(surfaceId.equal(71.0).or(surfaceId.equal(85.0))), () => { surfaceId.assign(28.0); });
+        If(surfaceId.equal(63.0).or(surfaceId.equal(65.0)), () => { surfaceId.assign(29.0); });
+        If(surfaceId.equal(72.0), () => { surfaceId.assign(34.0); });
+        If(surfaceId.equal(60.0), () => { surfaceId.assign(39.0); });
+        If(surfaceId.equal(66.0), () => { surfaceId.assign(31.0); });
+        // Finish anti-alias inputs in uniform control flow (glsl-lit.js): metres per pixel, and 1 on a hard panel edge.
+        const fnDx = dFdx(Ngeo).toVar(), fnDy = dFdy(Ngeo).toVar();
+        const fnPx = max(length(fwidth(objP)), 1e-5).toVar();
+        const fnCrease = smoothstep(0.02, 0.20, dot(fnDx, fnDx).add(dot(fnDy, fnDy))).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(90.0)).toVar();
         // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (js/render/glx/shaders/glsl-lit.js); grain / saturation / rim below.
         const flakeSurface = surfaceId.equal(34.0).toVar();
         const candySurface = surfaceId.equal(35.0).toVar();
@@ -1608,6 +1622,8 @@
         }).ElseIf(goldSurface, () => {
           albedo.assign(vec3(0.83, 0.65, 0.23));
         });
+        If(finishId.equal(74.0), () => { albedo.assign(vec3(0.022, 0.021, 0.020)); });   // JPS GOLD: gloss black, before lighting
+        If(finishId.equal(84.0), () => { albedo.assign(vec3(0.034, 0.012, 0.060)); });   // MIDNIGHT PURPLE: own violet base
         const chamFlip = float(0.0).toVar();
         const chamHue = vec3(1.0).toVar();
         If(chamSurface, () => {
@@ -2172,6 +2188,125 @@
         If(goldSurface, () => { color.mulAssign(vec3(1.0, 0.78, 0.27)); });   // GOLD PLATE: fixed gold hue
         If(chamSurface, () => {
           color.mulAssign(mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip.mul(0.90)));
+        });
+        // FINISH TINTS 60-85 (mirrors glsl-lit.js: geometric-normal angles, crease mask, footprint-faded cells).
+        If(finishId.greaterThanEqual(60.0).and(finishId.lessThanEqual(85.0)), () => {
+          // Snapshot once with toVar(): a bare node is inlined and cached by TSL, so later branches read a stale (zero) value
+          // (pearlwhite / silverfade / alubare rendered black on TLX while GLX was right, 2026-10-19).
+          const pvHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)).toVar();
+          const pvG = clamp(dot(Ngeo, V), 0.0, 1.0).oneMinus().toVar();
+          const pvG2 = pvG.mul(pvG).toVar();
+          const pvL = dot(color, vec3(0.299, 0.587, 0.114)).toVar();
+          const pvA = max(dot(albedo, vec3(0.299, 0.587, 0.114)), 0.05).toVar();
+          const pvLit = pvL.div(pvA).toVar();
+          const pvSun = max(dot(Ngeo, U.sunDir), 0.0).toVar();
+          const pvNH = max(dot(Ngeo, normalize(U.sunDir.add(V))), 0.0).toVar();
+          const pvEdge = fnCrease.oneMinus().toVar();
+          If(finishId.equal(60.0), () => {
+            const film0 = (cos(vec3(0.0, 0.33, 0.67).add(pvG.mul(0.9)).add(objP.y.mul(1.3)).add(objP.z.mul(0.32)).add(objP.x.mul(0.4)).mul(6.2831853)).mul(0.5).add(0.5)).toVar();
+            const film = (mix(vec3(dot(film0, vec3(0.3333))), film0, 0.75)).toVar();
+            color.assign(mix(color, color.mul(film).mul(2.4), smoothstep(0.05, 0.6, pvG).mul(0.65).add(0.35).mul(mix(float(0.35), float(1.0), pvEdge))));
+          }).ElseIf(finishId.equal(61.0), () => {
+            const frC = (floor(objP.mul(140.0))).toVar();
+            const frF = (clamp(float(0.5).div(fnPx.mul(140.0)).sub(0.5), 0.0, 1.0)).toVar();
+            color.assign(mix(color, vec3(pvL), 0.30).mul(0.82).mul(hash21(frC.xy.add(frC.z.mul(19.7))).sub(0.5).mul(0.10).mul(frF).add(1.0)));
+            color.addAssign(vec3(U.sunColor).mul(mix(pvHue, vec3(1.0), 0.45)).mul(pvA.mul(2.6).add(0.06)).mul(pow(pvNH, 3.0)).mul(pvSun));
+            color.addAssign(vec3(U.ambSky).add(vec3(U.sunColor).mul(0.25)).mul(mix(vec3(pvA), vec3(1.0), 0.5)).mul(smoothstep(0.30, 0.9, pvG).mul(0.30).mul(pvEdge)));
+          }).ElseIf(finishId.equal(62.0), () => {
+            const sat = (pow(pvHue, vec3(2.2))).toVar();
+            color.addAssign(sat.mul(albedo).mul(vec3(U.ambSky).mul(2.0).add(vec3(U.sunColor).mul(pvSun.mul(0.90))).add(0.10)));
+          }).ElseIf(finishId.equal(63.0), () => {
+            const t = (clamp(float(0.5).sub(objP.z.mul(0.30)).add(pvG.mul(0.10)), 0.0, 1.0)).toVar();
+            const ox = vec3(0.85, 0.86, 0.88).toVar();
+            ox.assign(mix(ox, vec3(0.95, 0.82, 0.52), smoothstep(0.10, 0.25, t)));
+            ox.assign(mix(ox, vec3(0.92, 0.66, 0.30), smoothstep(0.25, 0.40, t)));
+            ox.assign(mix(ox, vec3(0.72, 0.42, 0.40), smoothstep(0.40, 0.55, t)));
+            ox.assign(mix(ox, vec3(0.50, 0.30, 0.75), smoothstep(0.55, 0.70, t)));
+            ox.assign(mix(ox, vec3(0.25, 0.45, 0.95), smoothstep(0.70, 0.88, t)));
+            color.assign(vec3(min(pvLit, 2.5)).mul(ox).mul(0.85));
+          }).ElseIf(finishId.equal(65.0), () => {
+            color.assign(vec3(pvL).mul(vec3(1.0, 0.98, 0.94)).mul(1.55));
+          }).ElseIf(finishId.equal(66.0), () => {
+            color.assign(mix(color, vec3(pvL).mul(vec3(0.62, 0.64, 0.70)), 0.94).mul(0.90));
+          }).ElseIf(finishId.equal(67.0), () => {
+            const fvS = (sin(objP.y.mul(55.0).add(objP.x.mul(30.0)).add(sin(objP.z.mul(2.3)).mul(3.0))).mul(0.5).add(0.5)).toVar();
+            const fvPer = (float(0.114).div(fnPx)).toVar();
+            const fv = (mix(smoothstep(0.86, 0.97, fvS), float(0.12), smoothstep(3.0, 1.5, fvPer)).mul(smoothstep(1.4, 0.2, objP.z))).toVar();
+            const fvGlow = (vec3(0.78, 1.0, 0.30).mul(vec3(U.ambSky).mul(2.5).add(vec3(U.sunColor).mul(pvSun.mul(0.6))).add(0.15))).toVar();
+            color.assign(mix(color, fvGlow, fv.mul(0.9)));
+          }).ElseIf(finishId.equal(68.0), () => {
+            const cfW = (objP.xz.mul(190.0).add(objP.y.mul(190.0))).toVar();
+            const cfWv = (sin(cfW.x).mul(sin(cfW.y)).mul(clamp(float(0.033).div(fnPx).mul(0.5).sub(1.0), 0.0, 1.0)).mul(0.5).add(0.5)).toVar();
+            const cfN = (sin(objP.z.mul(9.0).add(sin(objP.x.mul(13.0)).mul(1.5))).mul(0.5).add(sin(objP.z.mul(23.0).add(objP.x.mul(7.0))).mul(0.25))).toVar();
+            const cfM = (smoothstep(0.56, 0.64, objP.y.add(cfN.mul(0.05)))).toVar();
+            color.assign(mix(vec3(min(pvLit, 3.0).mul(0.065)).mul(cfWv.mul(0.32).add(0.84)).mul(vec3(0.95, 0.97, 1.05)), color, cfM));
+          }).ElseIf(finishId.equal(69.0), () => {
+            const sfT = (clamp(float(0.5).sub(objP.z.mul(0.28)), 0.0, 1.0)).toVar();
+            const sfN = (abs(Ngeo)).toVar();
+            const sfUV = vec2(objP.x, objP.y).toVar();
+            If(sfN.y.greaterThan(max(sfN.x, sfN.z)), () => { sfUV.assign(vec2(objP.z, objP.x)); })
+              .ElseIf(sfN.x.greaterThan(sfN.z), () => { sfUV.assign(vec2(objP.z, objP.y)); });
+            const sfR = (smoothstep(0.25, 0.75, sfT).oneMinus().mul(0.62)).toVar();
+            const sfW = (max(fnPx.mul(26.0), 0.02)).toVar();
+            const sfDot0 = (smoothstep(sfR.add(sfW), sfR.sub(sfW), length(fract(sfUV.mul(26.0)).sub(0.5)))).toVar();
+            const sfDot = (mix(sfDot0, min(sfR.mul(sfR).mul(3.14159), 1.0), smoothstep(0.25, 0.45, sfW))).toVar();
+            const sfS = (max(sfDot, smoothstep(0.15, 0.30, sfT).oneMinus())).toVar();
+            color.assign(mix(vec3(min(pvLit, 3.0).mul(0.035)), vec3(pvLit).mul(vec3(0.70, 0.72, 0.76)), sfS));
+          }).ElseIf(finishId.equal(70.0), () => {
+            color.assign(max(mix(vec3(pvL), color, 1.25), vec3(0.0)).mul(mix(float(1.0), mix(float(1.45), float(0.30), smoothstep(0.10, 0.70, pvG)), pvEdge)));
+          }).ElseIf(finishId.greaterThanEqual(81.0).and(finishId.lessThanEqual(85.0)), () => {
+            // tint group B (81-85)
+            const bL = pvA;
+            const bLit = (min(pvLit, 1.6)).toVar();
+            const bSun = pvSun;
+            const bNH = pvNH;
+            If(finishId.equal(81.0), () => {   // ghostpearl
+              const gpK0 = (vec3(1.0).sub(pvHue)).toVar();
+              const gpK = (gpK0.div(max(max(gpK0.r, max(gpK0.g, gpK0.b)), 0.04))).toVar();
+              const gpS = (max(pvHue.r, max(pvHue.g, pvHue.b)).sub(min(pvHue.r, min(pvHue.g, pvHue.b)))).toVar();
+              const gpC = (mix(pvHue, mix(vec3(0.55, 0.40, 1.0), gpK, smoothstep(0.15, 0.5, gpS)), 0.6)).toVar();
+              const gpE = (smoothstep(0.30, 0.65, pvG).mul(smoothstep(0.80, 0.98, pvG).oneMinus()).mul(bSun.mul(0.65).add(0.35))
+                .add(pow(bNH, 10.0).mul(0.5)).mul(pvEdge)).toVar();
+              color.assign(mix(color, vec3(bLit).mul(gpC).mul(0.85), clamp(gpE, 0.0, 1.0).mul(0.40)));
+            }).ElseIf(finishId.equal(82.0), () => {   // xirallic
+              const xC = (floor(objP.mul(120.0))).toVar();
+              const xH = (hash21(xC.xy.add(xC.z.mul(23.1)))).toVar();
+              const xF = (clamp(float(0.5).div(fnPx.mul(120.0)).sub(0.5), 0.0, 1.0)).toVar();
+              const xS = (step(0.70, xH).mul(smoothstep(0.75, 1.0, fract(xH.mul(53.0).add(bNH.mul(4.0)))))).toVar();
+              color.assign(color.mul(1.04)
+                .add(vec3(U.sunColor).mul(bSun.mul(2.0).add(0.4)).add(vec3(U.ambSky).mul(1.5)).mul(mix(float(0.05), xS.mul(1.6), xF)))
+                .add(vec3(U.sunColor).mul(pow(bNH, 30.0).mul(bSun).mul(0.55))));
+            }).ElseIf(finishId.equal(83.0), () => {   // mystichrome
+              const mcT = (clamp(pvG.mul(1.15).add(objP.y.mul(0.15)), 0.0, 1.0)).toVar();
+              const mc = mix(vec3(0.20, 0.85, 0.35), vec3(0.15, 0.35, 1.0), smoothstep(0.05, 0.40, mcT)).toVar();
+              mc.assign(mix(mc, vec3(0.55, 0.15, 0.85), smoothstep(0.35, 0.65, mcT)));
+              mc.assign(mix(mc, vec3(0.05, 0.03, 0.08), smoothstep(0.65, 0.95, mcT)));
+              color.assign(vec3(bLit).mul(mc).mul(1.1));
+            }).ElseIf(finishId.equal(84.0), () => {   // midnightpurple
+              const mpH = (pow(bNH, 8.0)).toVar();
+              const mpGlow = (mix(vec3(0.75, 0.25, 1.0), vec3(0.85, 0.55, 0.20), smoothstep(0.3, 0.8, pvG))).toVar();
+              color.addAssign(vec3(U.sunColor).mul(mpGlow).mul(mpH.mul(0.9).add(bSun.mul(0.10))));
+            }).Else(() => {   // ultrablack
+              color.assign(vec3(0.010, 0.010, 0.011).mul(bLit.mul(0.6).add(1.0)).add(vec3(U.ambSky).mul(pvG.mul(0.010))));
+            });
+          }).ElseIf(finishId.greaterThanEqual(71.0), () => {
+            const aL = pvA;
+            const lit = pvLit;
+            If(finishId.equal(71.0), () => {   // truematte
+              const tmAlb = (mix(vec3(pvA), albedo, 0.72)).toVar();
+              color.assign(tmAlb.mul(pow(min(pvLit, 0.95), 0.75)).mul(0.92).add(dot(vec3(U.ambSky), vec3(0.299, 0.587, 0.114)).mul(0.08).add(0.016))
+                .add(mix(vec3(pvA), albedo, 0.5).mul(pvG2.mul(0.45).mul(pvEdge))));
+            }).ElseIf(finishId.equal(72.0), () => {
+              color.assign(vec3(lit).mul(0.92).mul(mix(vec3(1.0, 0.97, 0.92), vec3(0.86, 0.92, 1.0), smoothstep(0.2, 0.8, pvG))));
+            }).ElseIf(finishId.equal(74.0), () => {   // jpsgold: black albedo set before lighting; gold flake faded by footprint
+              const jgC = (floor(objP.mul(110.0))).toVar();
+              const jgH = (hash21(jgC.xy.add(jgC.z.mul(19.7)))).toVar();
+              const jg = (smoothstep(0.93, 1.0, jgH).mul(smoothstep(0.55, 1.0, fract(jgH.mul(37.0).add(pvNH.mul(3.0)))))).toVar();
+              color.addAssign(vec3(1.0, 0.76, 0.30).mul(vec3(U.sunColor).mul(pvSun).add(vec3(U.ambSky))
+                .mul(mix(float(0.06), jg.mul(2.6), clamp(float(0.5).div(fnPx.mul(110.0)).sub(0.5), 0.0, 1.0)))
+                .add(vec3(U.sunColor).mul(pow(pvNH, 12.0).mul(pvSun).mul(0.45)))));
+            });
+          });
         });
 
         // sky rim fresnel (js/render/glx/shaders/glsl-lit.js)

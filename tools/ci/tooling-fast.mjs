@@ -372,6 +372,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/deploy-tool.test.mjs",
+  // Design-review matrix (tools/shot/design-matrix.mjs): expansion, framing math, diff labels, batch + resume. Pure, no browser.
+  "tests/unit/design-matrix.test.mjs",
   // B·D4 preview fields (wheels/brakes/cockpit): default off, each candidate visible vs its equivalent. ~10 s.
   "tests/unit/design-preview-wheels.test.mjs",
   // The track designer's drawing surface (js/editor/canvas.js) alone: long-press
@@ -729,6 +731,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-paint-zones.test.mjs",
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
+  "tests/unit/livery-stations.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
@@ -1111,6 +1114,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/sporting-regs.test.mjs",
   "tests/unit/spotify-native.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
+  // The deploy-only minify (#3110): ~20 s, it minifies every js/ file twice
+  // (once to check top-level names and directives, once for the scenery scans).
+  "tests/unit/stage-minify.test.mjs",
   // #2204: terrace / spectatorHill / vaultStand curve follow — outside-of-bend
   // gap ≤ 0.5 m on moderate bends, no severe terrace self-pairs on jerez.
   "tests/unit/stand-curve-gap.test.mjs",

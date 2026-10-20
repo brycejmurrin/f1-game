@@ -481,9 +481,15 @@ test.describe("Parts module — visual recipes", () => {
         };
         const podDecals = [];
         const noseDecals = [];
+        // The sidepod-TOP station (LiveryStations) lies on the pod's upper face in
+        // this same |x| / z band; it is not a flank decal, and livery-stations.test.mjs
+        // measures its own fit. Selected out by its atlas region.
+        const top = LiveryTex.REGIONS.podTop, size = LiveryTex.SIZE, sizeH = LiveryTex.SIZE_H || size;
+        const onPodTop = (v) => top && decals.uv[v * 2] >= top.x / size - 1e-7 && decals.uv[v * 2] <= (top.x + top.w) / size + 1e-7 &&
+          decals.uv[v * 2 + 1] >= 1 - (top.y + top.h) / sizeH - 1e-7 && decals.uv[v * 2 + 1] <= 1 - top.y / sizeH + 1e-7;
         for (let i = 0; i < decals.pos.length; i += 3) {
           const p = [decals.pos[i], decals.pos[i + 1], decals.pos[i + 2]];
-          if (Math.abs(p[0]) > 0.35 && p[2] > -0.40 && p[2] < 0.50) podDecals.push(p);
+          if (Math.abs(p[0]) > 0.35 && p[2] > -0.40 && p[2] < 0.50 && !onPodTop(i / 3)) podDecals.push(p);
           if (Math.abs(p[0]) < 0.30 && p[2] > 1.10 && p[2] < 2.20) noseDecals.push(p);
         }
         const podGap = (p) => Math.abs(Math.abs(p[0]) - anchors.podAt(p[2]).x);
@@ -583,13 +589,18 @@ test.describe("Parts module — visual recipes", () => {
             titleVerts.push({ side: Math.sign(p[0]), z: p[2], u: uv[0] });
           }
         }
+        // The sidepod-TOP station shares this band on the pod's upper face; it is not
+        // the flank sponsor and livery-stations.test.mjs owns its fit.
+        const top = LiveryTex.REGIONS.podTop;
+        const onPodTop = (v) => top && data.uv[v * 2] >= top.x / size - 1e-7 && data.uv[v * 2] <= (top.x + top.w) / size + 1e-7 &&
+          data.uv[v * 2 + 1] >= 1 - (top.y + top.h) / sizeH - 1e-7 && data.uv[v * 2 + 1] <= 1 - top.y / sizeH + 1e-7;
         const triangles = [];
         for (let i = 0; i < data.idx.length; i += 3) {
           const points = [0, 1, 2].map((j) => {
             const k = data.idx[i + j] * 3;
             return [data.pos[k], data.pos[k + 1], data.pos[k + 2]];
           });
-          if (points.every((p) => Math.abs(p[0]) > 0.35 && p[2] >= -0.34 && p[2] <= 0.46)) {
+          if (!onPodTop(data.idx[i]) && points.every((p) => Math.abs(p[0]) > 0.35 && p[2] >= -0.34 && p[2] <= 0.46)) {
             triangles.push(points);
           }
         }
@@ -1319,7 +1330,16 @@ test.describe("Parts module — visual recipes", () => {
     // third, the same headroom rule as last time. The tier argument does not
     // affect the count (identical for tiers 0-3), so the 2 above is arbitrary
     // and harmless.
-    expect(triangles.decals).toBeLessThanOrEqual(93);
+    //
+    // 338, re-measured 2026-10-20 (design wave 2, #3169): the sheet was 90 on the
+    // tip and is 254 with the four LiveryStations decals, which ship default ON:
+    //
+    //     144 haloTop   8 noseTip   8 podTop   4 cockpitSide
+    //
+    // haloTop is a strip laid through the crown tube's own ring vertices (fine
+    // path x 4 quads across at round build) so it sits 3 mm proud everywhere
+    // instead of chording through the hoop. 338 is the measured 254 plus a third.
+    expect(triangles.decals).toBeLessThanOrEqual(338);
   });
 
   test("every recipe has primary and secondary visual parameters", async ({ page }) => {

@@ -1,10 +1,11 @@
-// tlx-anim-pump — three's per-frame tick runs once per DRAWN frame on WebGL2, and WebGPU is untouched.
+// tlx-anim-pump — three's per-frame tick runs once per DRAWN frame on both backends (WebGL2 and WebGPU).
 //
 // three r186 Renderer.init() starts its own window rAF loop (Animation: info.reset, nodeFrame.update ->
 // frameId, inspector) beside the game loop: 2.04 rAF callbacks per drawn frame on TLX vs 1.04 on GLX
 // (gpu-census 39071040057). On the WebGL2 backend (the phone's path) tlx.js swaps that loop's context
 // for a pump that begin() drains; paired census 3+3 runs: 1.04-1.08 callbacks per frame, no slower.
-// The WebGPU backend keeps three's own loop byte for byte (its raw p50 was not cleared by the census).
+// The WebGPU backend got the same pump later: with only WebGL2 pumped, gpu-census 39262990733's WebGPU leg
+// still counted 2.05 rAF callbacks per drawn frame; three's Animation tick has no backend-specific step.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -70,11 +71,12 @@ test("a renderer without three's Animation is left alone", () => {
   assert.equal(pumpAnimation(null), null);
 });
 
-test("only the WebGL2 backend installs the pump; begin() drains it when present", () => {
+test("every backend installs the pump (no backend gate); begin() drains it when present", () => {
   const install = SRC.match(/renderer\.__apexPump = pumpAnimation\(renderer\)/g) || [];
   assert.equal(install.length, 1, "one install site");
-  assert.match(SRC, /if \(renderer\.backend && renderer\.backend\.isWebGLBackend\) renderer\.__apexPump = pumpAnimation\(renderer\);/,
-    "WebGPU keeps three's own loop: the install is gated on isWebGLBackend");
+  assert.match(SRC, /\n\s+renderer\.__apexPump = pumpAnimation\(renderer\);/,
+    "the install is unconditional: WebGPU's second rAF loop is pumped too");
+  assert.doesNotMatch(SRC, /isWebGLBackend\) renderer\.__apexPump/, "no WebGL-only gate on the install");
   assert.match(SRC, /begin\(frame\) \{[\s\S]{0,400}?if \(renderer\.__apexPump\) renderer\.__apexPump\.drain\(\);/,
     "begin() drains the parked tick before the frame is drawn");
   const iife = SRC.indexOf("const TLX = (function () {"), fn = SRC.indexOf("function pumpAnimation(");

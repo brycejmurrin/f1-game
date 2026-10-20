@@ -1094,9 +1094,6 @@ const WGX = (function () {
     // so the group stays valid and the knob simply no-ops.
     let _dirtView = null;
 
-    // TAA Halton Jitter state.
-    let _taaFrameIndex = 0;
-
     // Scene targets (allocated on resize / size change).
     let sceneTex = null, depthTex = null, sceneView = null, depthView = null,
         depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0,
@@ -2892,6 +2889,11 @@ const WGX = (function () {
       return { vbuf, ibuf: null, sbuf: a.sbuf, attrBG: a.attrBG, count, indexFormat, chunks: null };
     }
     function createMesh(data) {
+      const m = _createMesh(data);
+      m._matReach = _matReach(data);
+      return m;
+    }
+    function _createMesh(data) {
       const b = _interleave(data);
       const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
       const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
@@ -3121,24 +3123,6 @@ const WGX = (function () {
         _mul4(_vpGpu, _projZ01, _viewScratch);
       } else {
         _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
-      }
-
-      // TAA Halton jitter scaffolding — GATED OFF until a temporal RESOLVE pass
-      // exists. Jittering the projection each frame with nothing accumulating
-      // the history is pure sub-pixel shimmer over the whole image (the exact
-      // "flicker while driving" artifact class), so the offsets stay 0 for now.
-      // When a resolve lands: flip _TAA_ENABLED, and feed the per-frame jitter
-      // to the resolve pass so it can unjitter history lookups.
-      const _TAA_ENABLED = false;
-      if (_TAA_ENABLED) {
-        const halton = [
-          [0.5, 1/3], [0.25, 2/3], [0.75, 1/9], [0.125, 4/9],
-          [0.625, 7/9], [0.375, 2/9], [0.875, 5/9], [0.0625, 8/9],
-        ];
-        _taaFrameIndex = (_taaFrameIndex + 1) % 8;
-        const sample = halton[_taaFrameIndex];
-        _vpGpu[8] += (sample[0] - 0.5) * 2.0 / width;
-        _vpGpu[9] += (sample[1] - 0.5) * 2.0 / height;
       }
 
       d.set(_vpGpu, 0);
@@ -3609,6 +3593,32 @@ const WGX = (function () {
       // per-chunk range from a prior chunked draw would silently rebind that
       // chunk's lamp slice. drawChunked overwrites when per-chunk is active.
       d[base + 32] = 0; d[base + 33] = 0; d[base + 34] = 0;
+      // packDraw (lane 35): 1 = sample the material pack. draw/drawInstanced
+      // clear it for meshes that cannot take a pack mid (_packDraw).
+      d[base + 35] = 1;
+    }
+    // Pack-material reach of a mesh's vertex mat ids: `pack` = some vertex is a
+    // hoisted pack mid (1..16, not identity 3/15), `zero` = some vertex has no
+    // mat (it shades with the draw's surfaceId). Mirrors fs_main's vMatId.
+    const _isPackMid = (m) => { const i = Math.floor(m + 0.5); return i >= 1 && i <= 16 && i !== 3 && i !== 15; };
+    function _matReach(data) {
+      const pos = data && data.pos, mat = data && data.mat;
+      const n = pos ? (pos.length / 3) | 0 : 0;
+      if (!mat || mat.length !== n) return { pack: false, zero: n > 0 };
+      let pack = false, zero = false;
+      for (let i = 0; i < n && !(pack && zero); i++) {
+        const m = mat[i];
+        if (!(m > 0.5)) zero = true;
+        else if (_isPackMid(m)) pack = true;
+      }
+      return { pack, zero };
+    }
+    // Uniform per-draw gate for fs_main's pack taps. Unknown meshes (chunked,
+    // road pieces) and road / buryRibbon draws (LUT-classified asphalt) sample.
+    function _packDraw(mesh, o) {
+      const r = mesh && mesh._matReach;
+      if (!r || o.buryRibbon || o.surfaceId === 16) return 1;
+      return (r.pack || (r.zero && _isPackMid(o.surfaceId || 0))) ? 1 : 0;
     }
     // Post-pass uniforms that are a pure function of the render size / knobs (bloom mip steps, blur taps, FXAA and
     // SGSR texel sizes) were re-uploaded every frame (~12 writeBuffer calls of unchanged bytes). Shadow the last
@@ -3763,6 +3773,7 @@ const WGX = (function () {
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
       _writeDraw(slot, model, o);
+      drawRing[slot * DRAW_F32_STRIDE + 35] = _packDraw(mesh, o);
       _setPipe(litPass, _litPipeline(o));
       _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
@@ -5160,6 +5171,7 @@ const WGX = (function () {
       if (opts) { for (const k in opts) o[k] = opts[k]; }
       o._instanced = true;
       _writeDraw(slot, IDENT, o);
+      drawRing[slot * DRAW_F32_STRIDE + 35] = _packDraw(batch, o);
       _setPipe(litPass, _litPipeline(o));
       _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
@@ -5882,7 +5894,8 @@ const WGX = (function () {
       // (e.g. every night frame throwing inside SHD before present()).
       // Omitting a name (or leaving a stale "absent" comment that tempts a
       // delete) re-opens that hole. Gated by backend-surface-parity.test.mjs.
-      // Honest remaining gap vs GLX: TAA scaffold (`_TAA_ENABLED`) is still off.
+      // No TAA: projection jitter without a temporal resolve is pure
+      // sub-pixel shimmer, so WGX has no jitter scaffold (#3115).
       drawParticles,
       lampShadowBegin,
       lampShadowEnd,

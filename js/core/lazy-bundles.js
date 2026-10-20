@@ -630,6 +630,13 @@ function ensureLightPresets() {
   });
   return lightLoad;
 }
+/** Save-Data on, or a 2G link: the title skips its idle race-session and audio
+ *  prefetches (#3110); RACE! still loads them on demand. No Network Information API (Safari,
+ *  Firefox) reads as a normal link. */
+function lowDataLink() {
+  const c = typeof navigator !== "undefined" ? navigator.connection : null;
+  return !!(c && (c.saveData || /2g$/.test(c.effectiveType || "")));
+}
 function scheduleIdle(fn, timeoutMs) {
   const ms = timeoutMs != null ? timeoutMs : 2000;
   if (typeof requestIdleCallback === "function") requestIdleCallback(fn, { timeout: ms });
@@ -682,11 +689,15 @@ function raceAssets() {
   };
   if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);
   else Promise.resolve().then(kickScenery);
+  // Lights stay on every link: a race start re-asks only after a FAILED fetch.
   scheduleIdle(() => { ensureLightPresets(); }, 2500);
   // Prefetch the session stub's real modules on idle so startRace's await is
   // usually a no-op. Do not put them on the title paint path (microtask).
-  scheduleIdle(() => { ensureRaceSession(); }, 2800);
-  scheduleIdle(() => { prefetchAudio(); }, 4500);
+  // Save-Data / 2G skips both: startRace awaits ensureRaceSession and ensureAudio.
+  if (!lowDataLink()) {
+    scheduleIdle(() => { ensureRaceSession(); }, 2800);
+    scheduleIdle(() => { prefetchAudio(); }, 4500);
+  }
   bootDesktopAudio();
 }
 
