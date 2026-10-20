@@ -147,7 +147,11 @@ async function main() {
   const tr = (m) => console.log("  " + new Date().toISOString().slice(11, 19) + " " + m);
   const raceTo = async (page, id, tod) => {
     tr("raceTo " + id + (tod ? " " + tod : "") + ": ensureCircuit");
-    await page.evaluate(async (t) => { const i = Tracks.LIST.findIndex((x) => x.id === t); if (i >= 0) await window.__apex.ensureCircuit(i); }, id);
+    await page.evaluate(async (t) => { const i = Tracks.LIST.findIndex((x) => x.id === t); if (i >= 0) await window.__apex.ensureCircuit(i); }, id).catch(async (e) => {
+      const lazy = await page.evaluate(() => { try { return Log.records().filter((r) => /lazy load timed out|circuit payload/.test(String(r.msg))).map((r) => String(r.msg).slice(0, 160)); } catch (_) { return null; } }).catch(() => null);
+      console.log("= lazy-load " + id + " " + JSON.stringify(lazy));
+      throw e;
+    });
     tr("raceTo " + id + ": race()");
     await page.evaluate(([t, d]) => (d ? window.__apex.race(t, d) : window.__apex.race(t)), [id, tod || ""]);
     tr("raceTo " + id + ": waiting for info().track");
@@ -158,7 +162,7 @@ async function main() {
   };
   // Page state at a timeout: where the row was stuck (info, last Log lines, frames, context-lost flags).
   const diag = (pg) => Promise.race([
-    pg.evaluate(() => { let info = null, log = []; try { info = window.__apex.info(); } catch (e) { info = String(e); } try { log = Log.records().slice(-12).map((r) => String(r.msg).slice(0, 140)); } catch (_) { /* no Log */ } return { info, log, frames: window.__lrm.frames, lost: window.__lrm.ctxs.map((c) => c.isContextLost()) }; }),
+    pg.evaluate(() => { let info = null, log = []; try { info = window.__apex.info(); } catch (e) { info = String(e); } let lazy = []; try { const rs = Log.records(); log = rs.slice(-12).map((r) => String(r.msg).slice(0, 140)); lazy = rs.filter((r) => /lazy load timed out|circuit payload/.test(String(r.msg))).map((r) => String(r.msg).slice(0, 160)); } catch (_) { /* no Log */ } return { info, log, lazy, frames: window.__lrm.frames, lost: window.__lrm.ctxs.map((c) => c.isContextLost()) }; }),
     sleep(5000).then(() => ({ blocked: "page.evaluate did not answer in 5 s (main thread stuck)" })),
   ]).catch((e) => ({ err: String(e) }));
   // Each row is capped (a hung row used to eat the whole job) and a failed row gets a fresh page, so one

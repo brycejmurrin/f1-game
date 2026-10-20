@@ -14,15 +14,19 @@ This container has no `/dev/dri`; nothing here is a SwiftShader verdict.
 
 ## Verdicts
 
-Legend: **pass**, **timeout** (inconclusive, runner speed), **pending** (run in flight when this was written).
+Legend: **pass**, **timeout** (inconclusive: runner speed), **blocked** (a probe step could not run), **pending**.
 
 | # | Row | GLX | TLX (three, WebGL2 path) |
 |---|---|---|---|
-| 1 | Same-circuit rebuild A/B (bahrain, monaco ×3) | **pass** — run 39351604149 | pending (rev 6 run, rows `1`, 6× caps) |
-| 2 | Context loss during build and after settle | partial: game reloads itself in both phases within ~8 s (`reloaded=true`); final draw check capped | partial: `reloaded=true` in the build phase (run 39351702257); rest capped |
-| 3 | Quality tiers, mirror/shadow/post live, NaN uniform scan | **pass** — run 39351604149 | timeout (run 39351702257); rev 6 rows `2,3` pending |
-| 4 | visibilitychange / pageshow, 844×390 ↔ 390×844 | pending (probe now resumes the hidden-tab pause) | pending |
-| 5 | Night, mirror on/off, `matTex(0/1)` | timeout (baseline, mirror off/on ran; `matTex` not reached) | timeout |
+| 1 | Same-circuit rebuild A/B (bahrain, monaco ×3) | **pass** (run 39351604149) | **blocked**: the second circuit's lazy load throws `circuit payload not resident: monaco` after the first race (runs 39339325536, 39354599571); see Finding A |
+| 2 | Context loss during build and after settle | game self-heals by reloading within ~8 s in both phases (39351604149); final draw check capped | self-heals in the build phase (39351702257, 39354702088); remaining steps capped |
+| 3 | Quality tiers, mirror/shadow/post live, NaN uniform scan | **pass** (39351604149) | timeout (39351702257, 39354702088): `page.evaluate` unanswered for >2 min after race start |
+| 4 | visibilitychange / pageshow, 844×390 ↔ 390×844 | pending (run 39354499177) | timeout (39354808426): page unresponsive right after the first hide |
+| 5 | Night, mirror on/off, `matTex(0/1)` | timeout (baseline, mirror off/on ran; `matTex` not reached) | timeout (39354808426) |
+
+TLX on the `tlx-native` leg resolved to the same ANGLE/WebGL2 path as `tlx-gl` on this runner (it has a GL
+context and counts uploads), so it carries no separate evidence; its rev-4 and rev-5 runs (39349367064,
+39351797761) timed out the same way.
 
 ### Row 1 — GLX rebuild (run 39351604149, `= result rebuild`)
 
@@ -59,6 +63,22 @@ The game pauses itself on a hidden tab (`platform-session.js`: `setPaused(true, 
 render while the pause card is open (`game.js` tick: `render()` only when not paused). The first probe never
 resumed, so GL uploads stayed flat (28,220 on GLX, 3,892 on TLX) and its "drawing" check read false. That
 was a probe error. The probe now clicks RESUME after each show, then rotates while paused and measures the canvas.
+
+## Findings
+
+**A. TLX: the second circuit's lazy load fails after a first race (3 runs, reproducible on TLX, not on GLX).**
+`__apex.ensureCircuit(monaco)` after `race(bahrain)` rejects with `circuit payload not resident: monaco`
+(`js/core/lazy-bundles.js:123`) about 67 s after the call, while `page.evaluate` is unanswered (main thread
+stuck). `ensureCircuit` rejects when `loadBackendScripts` resolves `false`; `js/core/script-loader.js` resolves
+`false` when a lazy file has not fired `onload` within `DEADLINE_MS = 25000`. The hypothesis is that the TLX
+post-race-start work holds the main thread past 25 s, so the deadline timer fires first and a file that did
+arrive is counted as failed. Unconfirmed: the log line `lazy load timed out after 25000 ms` was not captured
+(the probe's diag now records it). Effect if true: a slow device that stays busy after the first race cannot
+start a second circuit without a reload. Filed as an issue with this evidence.
+
+**B. TLX on the paravirtual Metal runner is main-thread-bound for minutes per race start.** Race builds took
+70-260 s and `page.evaluate` went unanswered for >2 min after `race()` on TLX in every leg; GLX answered. This is
+a property of this runner's device as much as of TLX, so it is recorded as a limit of the evidence, not a defect.
 
 ## Not run / open
 
