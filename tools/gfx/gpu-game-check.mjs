@@ -43,7 +43,7 @@ import { fileURLToPath } from "node:url";
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
 import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
-import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate } from "../lib/census-entry.mjs";
+import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -732,6 +732,7 @@ try {
         catch (e) { m.todError = String((e && e.message) || e).slice(0, 100); }
       }
       const tw = Date.now();
+      await page.evaluate(prepTimelineStart).catch(() => {});
       try { await page.waitForFunction(menuPrepReady, null, { polling: 100, timeout: menuTimeout }); m.prepReady = true; }
       catch (_) { m.prepReady = false; m.prepNote = `menu prep not ready after ${menuTimeout} ms — START RACE pressed anyway`; }
       // Race settings' garage prewarm runs after menuFinish: a player reading the sheet gets it; bounded.
@@ -740,6 +741,7 @@ try {
           return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, null, { polling: 100, timeout: 30000 });
       } catch (_) { m.garageNote = "garage prewarm still running after 30 s"; }
       m.prepWaitMs = Date.now() - tw;
+      m.prepTimeline = await page.evaluate(prepTimelineRead).catch(() => null);
       step("prepared");
       m.atGo = await prep();
       m.garage = await page.evaluate(() => { const g = window.__apex.garagePrebuild && window.__apex.garagePrebuild();
