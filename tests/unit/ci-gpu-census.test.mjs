@@ -320,8 +320,11 @@ test("gpu-census relaunch: one profile, one origin, the TLX/WebGPU check twice (
   assert.ok(step.if.split("&&").map((c) => c.trim()).includes("${{ needs.plan.outputs.relaunch == 'true'"), "opt-in: only a relaunch=true dispatch runs it");
   assert.equal(step["continue-on-error"], true, "a measurement, never the job's verdict");
   assert.ok(step["timeout-minutes"] <= 15, "two legs inside the job cap");
-  assert.match(step.run, /--profile "\$PROF" --port \d+/, "the SAME profile and a FIXED port: Chrome keys caches by origin");
-  assert.match(step.run, /--cam "\$\{CENSUS_CAM:-helmet\}" --entry "\$\{CENSUS_ENTRY:-api\}"/, "the plan-resolved camera and entry, like the controls");
+  const argv = step.run.replace(/\\\n/g, " ").split(/\s+/), after = (flag) => argv[argv.indexOf(flag) + 1];
+  assert.equal(after("--profile"), '"$PROF"', "the SAME profile on both legs");
+  assert.ok(/^\d+$/.test(after("--port")), "a FIXED port: Chrome keys caches by origin");
+  assert.equal(after("--cam"), '"${CENSUS_CAM:-helmet}"', "the plan-resolved camera, like the controls");
+  assert.equal(after("--entry"), '"${CENSUS_ENTRY:-api}"', "the plan-resolved entry, like the controls");
   const lines = step.run.split("\n").map((l) => l.trim());
   assert.ok(lines.includes('PROF="$RUNNER_TEMP/tlx-relaunch-profile"; rm -rf "$PROF"'), "the first leg is a first-ever launch");
   assert.ok(lines.includes("for leg in cold warm; do"), "two legs on the one profile: cold, then warm");
