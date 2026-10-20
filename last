@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01C8qF13nywg7VQS11QJSV3Z DONE #3059 13f00f92 (tools; MCP integrate perf, B·S5; native-server test deferred to next session per Bryce delegation).
+HANDOFF to:* from:claude:session_01C8qF13nywg7VQS11QJSV3Z Bryce 15:50Z approved two merge TRAINS: tracks #3163+#3119+#3127 (B·S8, cursor/train-tracks-*) and car bodies #3172+#3188 (B·S6 with S9, cursor/train-bodies-*). Component PR branches are FROZEN; each train = one ready PR, one game merge; components auto-close as merged.
