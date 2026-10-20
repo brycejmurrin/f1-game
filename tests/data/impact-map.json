@@ -6903,6 +6903,9 @@
       "framingHull": [
         "tests/unit/garage-mesh.test.mjs"
       ],
+      "hangerSpan": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
       "init": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
@@ -6918,6 +6921,15 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "mood": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
+      "moodCtx": [
+        "tests/unit/garage-personality.test.mjs"
+      ],
+      "moodDef": [
+        "tests/unit/garage-personality.test.mjs"
       ],
       "prepare": [
         "tests/unit/garage-mesh.test.mjs",
