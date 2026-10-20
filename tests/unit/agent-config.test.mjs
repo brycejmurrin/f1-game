@@ -166,6 +166,7 @@ test("the three MCP catalogs name the same servers with the same launch lines", 
   for (const [name, s] of Object.entries(claude)) {
     assert.equal(codex[name].command, s.command, `${name}: command differs in .codex/config.toml`);
     assert.deepEqual(codex[name].args, s.args, `${name}: args differ in .codex/config.toml`);
+    assert.equal(codex[name].experimental_environment, "remote", `${name}: Codex Cloud must launch the MCP server in the remote executor`);
   }
   // apex_verify_change_fast runs the whole fast gate; Codex's default per-tool
   // timeout is 60 s, which would abort it.
