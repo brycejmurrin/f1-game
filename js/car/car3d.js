@@ -2225,8 +2225,8 @@ const Car3D = (function () {
       if (gbStrakes > 0) {
         const half = (gbStrakes - 1) / 2;
         for (let i = 0; i < gbStrakes; i++) {
-          addBox(out, (i - half) * 0.24, 0.18 + gbStrakeH / 2, -2.28, 0.022, gbStrakeH, 0.55, gbStrakeC,
-                 gbPaint ? SURFACES.paint : SURFACES.carbon);
+          if (gbPaint) addBox(out, (i - half) * 0.24, 0.18 + gbStrakeH / 2, -2.28, 0.022, gbStrakeH, 0.55, gbStrakeC, SURFACES.paint);
+          else addBox(out, (i - half) * 0.24, 0.13 + gbStrakeH / 2, -2.20, 0.015, gbStrakeH, 0.42, CARBON);
         }
       }
       let gbCw = 0, gbCh = 0;
