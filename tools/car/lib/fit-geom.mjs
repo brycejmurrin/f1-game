@@ -295,8 +295,12 @@ function visibleMask(mesh, T, area) {
   const vis = new Uint8Array(T.n);
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < T.n * 9; i++) { const c = i % 3; if (T.a[i] < lo[c]) lo[c] = T.a[i]; if (T.a[i] > hi[c]) hi[c] = T.a[i]; }
-  const R = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) * 0.5 + 0.05;
-  const c = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], S = (VIS_N - 2) / (2 * R);
+  // The frame snaps to a 5 cm grid: framed on the exact bbox, a DRS pod 1 mm lower re-centred
+  // all 14 rasters and flipped borderline wheel faces visible (B·L25: a 6 cm2 ZFIGHT "WORSE"
+  // on byte-identical brake-duct and wheel triangles). A move inside one cell leaves vis unchanged.
+  const q = (v) => Math.round(v / 0.05) * 0.05;
+  const R = Math.ceil((Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) * 0.5 + 0.05) / 0.05) * 0.05;
+  const c = [q((lo[0] + hi[0]) / 2), q((lo[1] + hi[1]) / 2), q((lo[2] + hi[2]) / 2)], S = (VIS_N - 2) / (2 * R);
   const px = new Float64Array(T.n * 3), py = new Float64Array(T.n * 3), pz = new Float64Array(T.n * 3);
   const buf = new Float64Array(VIS_N * VIS_N);
   for (const w of VIS_DIRS) {

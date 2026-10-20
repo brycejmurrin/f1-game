@@ -1504,6 +1504,7 @@ const Car3D = (function () {
     part("exhaust");
     // Tip radius for the rain light. Cockpit: cheap stub (!ckpt has full tips).
     let exhTipRForLamp = 0.07;
+    let exhTipLowY = 1, exhSleeveTopY = 0;   // a single tip: its bell's lowest point (Smooth Case plate) and its heat sleeve's top (DRS pod)
     const exhTwin = exhStyle.pipes != null ? exhStyle.pipes >= 3
       : (engStyle ? !!engStyle.twin : tier("engine") === 2);
     if (ckpt) {
@@ -1557,7 +1558,7 @@ const Car3D = (function () {
         addTube(out, [[cx, EXH_Y, -2.28], [cx, EXH_Y, tipZ]], exhR, 8,
                 exhMetal, SURFACES.metal);
       } else {
-        addTube(out, [[0, EXH_Y, -2.04], [0, EXH_Y, tipZ]], tipRShow * 0.85, 8,
+        addTube(out, [[0, EXH_Y, -1.99], [0, EXH_Y, tipZ]], tipRShow * 0.85, 8,
                 exhMetal, SURFACES.metal);
       }
       const flame = exhTwin ? fTwin : fuelFlame, rPipe = tipRShow;
@@ -1589,9 +1590,11 @@ const Car3D = (function () {
     }
     if (exhStyle.wrap) {
       for (const cx of exits) {
-        addBox(out, cx, EXH_Y, -2.10, exhR * 1.18, exhR * 1.18, 0.06,
+        // A single tip's pipe (r >= 1.15 exhR) swallows these two sleeves whole: they were
+        // never seen, and their faces outvoted the crash box the pipe root sits in.
+        if (exhTwin) addBox(out, cx, EXH_Y, -2.10, exhR * 1.18, exhR * 1.18, 0.06,
                [0.72, 0.70, 0.66], SURFACES.panel);
-        addBox(out, cx, EXH_Y, -2.06, exhR * 1.24, exhR * 1.12, 0.045,
+        if (exhTwin) addBox(out, cx, EXH_Y, -2.06, exhR * 1.24, exhR * 1.12, 0.045,
                [0.68, 0.66, 0.62], SURFACES.panel);
         if (!exhTwin) {
           addBox(out, 0, EXH_Y, -1.96, exhR * 1.14, exhR * 1.22, 0.045,
@@ -1670,11 +1673,19 @@ const Car3D = (function () {
     }
     if (exhStyle.hood && !exhTwin) {
       const hr = tipRShow * (1 + 1.15 * exhFlare) + 0.03;
-      addBox(out, 0, EXH_Y + hr, tipZ - 0.02, hr * 2.4, 0.016, 0.30, CARBON, SURFACES.carbon);
+      // The visor runs 2 cm further forward than its side plates, over the heat shield's tail, so the shield hangs from it.
+      addBox(out, 0, EXH_Y + hr, tipZ - 0.01, hr * 2.4, 0.016, 0.32, CARBON, SURFACES.carbon);
       for (const s of [-1, 1]) addBox(out, s * hr * 1.2, EXH_Y + hr * 0.35, tipZ - 0.02, 0.014, hr * 1.4, 0.30, CARBON, SURFACES.carbon);
       addBox(out, 0, EXH_Y + hr + 0.014, tipZ - 0.16, hr * 2.4, 0.010, 0.02, [0.85, 0.12, 0.10], SURFACES.paint);
+      // Mount: a carbon post from the heat sleeve's crown 3 mm into the visor (it hung on the DRS rail).
+      const postLo = EXH_Y + tipRShow * 1.08 - 0.003, postHi = EXH_Y + hr - 0.008 + 0.003;
+      addBox(out, 0, (postLo + postHi) / 2, tipZ + 0.05, 0.03, postHi - postLo, 0.04, CARBON, SURFACES.carbon);
     }
     exhTipRForLamp = tipRShow * (exhFlare > 0 && !exhTwin ? (1 + 1.15 * exhFlare) : 1);
+    if (!exhTwin) {
+      const rimR = Math.max(tipRShow * 1.08, exhFlare > 0 ? tipRShow * (1 + 1.15 * exhFlare) * 0.8 * 1.12 : 0);
+      exhTipLowY = EXH_Y - rimR; exhSleeveTopY = EXH_Y + tipRShow * 1.08;
+    }
     // STACK (STYLE parts, 2026-10-18): an upswept tail-pipe stack over the crash
     // structure, 1 single / 2 twin, so an exhaust option reads from behind.
     const exhStack = Math.max(0, Math.min(2, Math.round(exhStyle.stack || 0)));
@@ -2134,8 +2145,14 @@ const Car3D = (function () {
       // from wingRear. Both ride the flap stack's crown (crownY), not the endplate centre: a
       // lower wing's crown sits closer to its centre, so epCY offsets left them floating up
       // to 12 cm over every wing below lvl ~3.6. These are the lvl-4 positions, unchanged there.
+      // A tip whose heat sleeve stands above the pod's floor at z -2.50 (Cadillac's Trumpet: 0.69 m
+      // under a 0.654 m floor) runs its bell through the pod's tail: the pod then stops 1 cm ahead of
+      // the bell (z -2.49), cut on its own taper. Every factory tip clears it and keeps the full pod.
+      const podF = (2.49 - 2.40) / 0.22, f50 = 0.10 / 0.22;
     addSpan(out, { z: -2.40, x: 0, y: crownY + 0.035, w: drsSX, h: 0.070, t: 0.70 },
-                 { z: -2.62, x: 0, y: crownY + 0.059, w: drsSX * 0.72, h: 0.048, t: 0.50 },
+                 exhSleeveTopY > crownY + 0.035 + 0.024 * f50 - (0.070 - 0.022 * f50) / 2
+                   ? { z: -2.49, x: 0, y: crownY + 0.035 + 0.024 * podF, w: drsSX * (1 - 0.28 * podF), h: 0.070 - 0.022 * podF, t: 0.70 - 0.20 * podF }
+                   : { z: -2.62, x: 0, y: crownY + 0.059, w: drsSX * 0.72, h: 0.048, t: 0.50 },
             DARK);
     addBox(out, 0, crownY + 0.003, -2.50, 0.42, 0.010, 0.20, CARBON, SURFACES.carbon);
 
@@ -2257,7 +2274,9 @@ const Car3D = (function () {
         // that long_ratio never gets — readable from the rear camera.
         if (gbPaint && gbCaseWmul < 0.85 && gbStrakes === 0) {
           addBox(out, 0, 0.26, -2.32, 0.72, 0.12, 0.55, c2, SURFACES.paint);
-          addBox(out, 0, 0.34, -2.55, 0.58, 0.08, 0.18, accentC, SURFACES.paint);
+          // Its top stops 4 mm under a big single tip: Cadillac's bell rim sat 28 mm into it.
+          const plateTop = Math.min(0.38, exhTipLowY - 0.004);
+          addBox(out, 0, (0.30 + plateTop) / 2, -2.55, 0.58, plateTop - 0.30, 0.18, accentC, SURFACES.paint);
           addBox(out, 0, 0.48, -2.40, 0.50, 0.06, 0.30, c2, SURFACES.paint);
         }
       }
