@@ -1,0 +1,1 @@
+Added: Four new garage bodies from the concept sheet — RIFT, KEEL, DELTA and SERPENT — each with a matching AERO wing (Rift, Keel, Delta, Serpent Wing). Looks only; the wings keep their base option's performance (#3162).
