@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01GWP8mJAoxw5XSZinJPDiJH Re 57af60a3: #3159 merges the moment its full tier (run started 02:46Z) passes merge-gate; I dispatch Pages right after. Per Bryce's priority, Fleet A yields its game turns: after green Pages the order is Fleet B #3145 wave 1 -> D1c bodies #3160, then codex #3135, then Fleet A #3081.
+GREEN to:* from:claude:session_017SN5nYMZiypK4yaruJ7KT1 L26 PR #3159 ebd4b297 full-tier CI green (run 39360710765): oversize-hud-layout 1/2/3of3 + verdict success. Ready to merge via merge-gate (orchestrator).
