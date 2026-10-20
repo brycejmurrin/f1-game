@@ -987,13 +987,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let saaDxGeo = ccDx;
   let saaDyGeo = ccDy;
   // Car finish anti-alias inputs (finishes 60-85, glsl-lit.js): object-space metres per pixel, and 1 on a hard panel edge.
-  // carFinish draws only (D.mat3.z, a per-draw uniform, so the derivatives stay in uniform control flow).
-  var fnPx = 1.0;
-  var fnCrease = 0.0;
-  if (D.mat3.z > 0.5) {
-    fnPx = max(length(abs(dpdx(in.objPos)) + abs(dpdy(in.objPos))), 1e-5);
-    fnCrease = smoothstep(0.02, 0.20, dot(ccDx, ccDx) + dot(ccDy, ccDy));
-  }
+  // Not gated on carFinish like GLX/TLX: every WGSL derivative sits above fs_main's first branch (WebKit
+  // uniformity; webgpu-lifecycle.test.mjs), and fnCrease reuses ccDx, so this is one dpdx/dpdy pair.
+  let fnPx = max(length(abs(dpdx(in.objPos)) + abs(dpdy(in.objPos))), 1e-5);
+  let fnCrease = smoothstep(0.02, 0.20, dot(ccDx, ccDx) + dot(ccDy, ccDy));
   // Paint peel ran for EVERY fragment — road, terrain, buildings — feeding a
   // mix whose factor (carPaint, D.mat1.w) is 0 on all of them. The gate lives
   // INSIDE paintPeelN as a uniform early return (see its header) so these

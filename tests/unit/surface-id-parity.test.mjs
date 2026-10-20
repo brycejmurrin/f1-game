@@ -406,7 +406,6 @@ test("the finish 60-85 block runs on car-paint draws only, in all three language
   assert.match(glx, /if \(uCarFinish > 0\.5 && finishId >= 60 && finishId <= 85\)/, "GLX: the tint switch under uCarFinish");
   assert.match(code("js/render/glx/glx.js"), /opts && opts\.carFinish \? 1 : 0/, "GLX: uCarFinish from opts.carFinish");
   const wgsl = code("js/render/webgpu/wgsl-chunks.js");
-  assert.match(wgsl, /if \(D\.mat3\.z > 0\.5\) \{\s*\n\s*fnPx = /, "WGX: fnPx under DrawU.mat3.z");
   assert.match(wgsl, /if \(D\.mat3\.z > 0\.5 && finishId >= 60 && finishId <= 85\)/, "WGX: the tint switch under mat3.z");
   assert.match(code("js/render/webgpu/wgx.js"), /d\[base \+ 30\] = o\.carFinish \? 1 : 0;/, "WGX: lane 30 from opts.carFinish");
   const tsl = code("js/render/three/tsl-lit.js");
