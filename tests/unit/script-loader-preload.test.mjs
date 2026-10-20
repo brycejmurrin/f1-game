@@ -105,6 +105,11 @@ test("renderer boot preloads the backend start() will most likely pick", () => {
     [{ local: { "apex26.gfxBackend": "webgpu" } }, "WGX without WebGPU boots GLX", "webgl2", ["glx.js"]],
     [{ local: { "apex26.gfxBackend": "three", "apex26.gfxBackendProbe": "three" }, gpu: true }, "an armed canary boots GLX", "webgl2", ["glx.js"]],
     [{ session: { "apex26.gfxClaimFail": "1" }, gpu: true }, "a claim-fail skip boots GLX", "webgl2", ["glx.js"]],
+    [{ local: { "apex26.gfxBootBound": "webgl2" }, gpu: true }, "navigator.gpu but the last boot bound GLX (null adapter): GLX", "webgl2", ["glx.js"]],
+    [{ local: { "apex26.gfxBootBound": "three" } }, "the last boot bound TLX", "three", ["tlx.js"]],
+    [{ local: { "apex26.gfxBackend": "three", "apex26.gfxBootBound": "webgl2" }, gpu: true }, "an explicit THREE pick whose create() refused last boot: GLX", "webgl2", ["glx.js"]],
+    [{ local: { "apex26.gfxBackend": "webgpu", "apex26.gfxBootBound": "three" }, gpu: true }, "a NEW pick ignores a bound backend it did not ask for", "webgpu", ["wgx.js"]],
+    [{ local: { "apex26.gfxBackend": "webgl2", "apex26.gfxBootBound": "three" }, gpu: true }, "an explicit WebGL2 pick", "webgl2", ["glx.js"]],
     [{ throws: true, gpu: true }, "blocked storage: no guess, no fetch", "", []],
   ];
   for (const [opts, why, guess, files] of cases) {

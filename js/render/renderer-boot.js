@@ -322,6 +322,8 @@ if (!gfx) {
   // twice instead of costing every boot BOOT_STEP_MS.
   if (!_createHung) try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
 }
+// What this boot BOUND, for the next boot's early preload (guessBackend below).
+try { localStorage.setItem("apex26.gfxBootBound", _backendBound ? pref : "webgl2"); } catch (_) { /* blocked storage: the next guess reads the pick alone */ }
 return { gfx, bound: _backendBound };
 }
 
@@ -346,11 +348,18 @@ return { start, backendPreference, storedBackendPreference, gpuAdapterAvailable,
 // start() itself reads first (no adapter probe, no XR plan) and preload that
 // group through ScriptLoader — fetch only; start() still decides, injects and
 // evaluates exactly as before. A wrong guess costs the bytes, never the pick.
-// An armed canary or a claim-fail skip boots GLX, so those guess GLX.
+// An armed canary or a claim-fail skip boots GLX, so those guess GLX. The last
+// boot's BOUND backend (apex26.gfxBootBound, written by start()) wins over the
+// navigator.gpu hint while the pick is unchanged: navigator.gpu with a null
+// adapter (desktop Chromium without a GPU, measured here) binds GLX, and the
+// first guess preloaded TLX's ten files for nothing.
 function guessBackend() {
   try {
     if (localStorage.getItem("apex26.gfxBackendProbe") || sessionStorage.getItem("apex26.gfxClaimFail") === "1") return "webgl2";
     const pref = localStorage.getItem("apex26.gfxBackend");
+    const last = localStorage.getItem("apex26.gfxBootBound");
+    if ((pref == null || pref === "three") && (last === "three" || last === "webgl2")) return last;
+    if (pref === "webgpu" && (last === "webgpu" || last === "webgl2")) return last;
     const gpu = typeof navigator !== "undefined" && !!navigator.gpu;
     if (pref === "webgl2") return "webgl2";
     if (pref === "webgpu") return gpu ? "webgpu" : "webgl2";
