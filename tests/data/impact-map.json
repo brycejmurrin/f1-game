@@ -2252,7 +2252,8 @@
       ],
       "drawCockpitRig": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "drawMirrorCar": [
         "tests/unit/car-presentation-canary.test.mjs"
@@ -2287,6 +2288,9 @@
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
+      "menuStepYield": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
       ],
@@ -2297,7 +2301,8 @@
       ],
       "prepareMenuCarAssets": [
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/menu-car-prep-yield.test.mjs"
       ],
       "putBoundedMesh": [
         "tests/unit/car-presentation-vm.test.mjs"
@@ -5200,6 +5205,7 @@
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/i18n.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
         "tests/unit/tools-runnable.test.mjs"
@@ -6454,7 +6460,8 @@
         "tests/unit/results-cam.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/session-transcript.test.mjs",
-        "tests/unit/source-integrity.test.mjs"
+        "tests/unit/source-integrity.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "renderLightingPrep": [
         "tests/unit/render-lighting-prep.test.mjs"
@@ -6701,6 +6708,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
@@ -6730,7 +6738,8 @@
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
-        "tests/unit/vm-filename-lint.test.mjs"
+        "tests/unit/vm-filename-lint.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ]
     },
     "js/garage/arrival.js": {
@@ -8224,6 +8233,7 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/weather-blend.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
@@ -12544,6 +12554,9 @@
       ]
     },
     "js/render/shared/assets.js": {
+      "_ensureScratchGl": [
+        "tests/unit/pack-png-bytes.test.mjs"
+      ],
       "adopt": [
         "tests/unit/assets-pack.test.mjs"
       ],
@@ -12552,13 +12565,15 @@
       ],
       "init": [
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/boot-idle-prefetch.test.mjs"
+        "tests/unit/boot-idle-prefetch.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs"
       ],
       "load": [
         "tests/specs/assets-api.spec.js",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/build-worker.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
       "loadModels": [
@@ -12591,7 +12606,8 @@
         "tests/unit/build-worker.test.mjs"
       ],
       "readLayerBytes": [
-        "tests/unit/assets-pack.test.mjs"
+        "tests/unit/assets-pack.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs"
       ],
       "readLayerBytesAsync": [
         "tests/unit/assets-pack.test.mjs"
@@ -12782,6 +12798,7 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
       ]
@@ -13088,8 +13105,12 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
+      "_captureRec": [
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
       "_coAppend": [
-        "tests/unit/tlx-hunt4.test.mjs"
+        "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "_coDrop": [
         "tests/unit/render-final-contracts.test.mjs",
@@ -13124,6 +13145,9 @@
       "_mirWarmSwap": [
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
+      ],
+      "_mirWarmUnswap": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "_mul4Col": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13320,6 +13344,7 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
@@ -13338,7 +13363,8 @@
         "tests/unit/tlx-round2.test.mjs"
       ],
       "releaseGeoMirrors": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ],
       "releaseTexSource": [
         "tests/unit/tlx-texture-release.test.mjs"
@@ -13385,12 +13411,17 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "startMirrorWarm": [
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "startProgramWarm": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "startRigWarm": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "sweepGeoMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -13405,10 +13436,17 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
       ],
+      "warmDraws": [
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
       "warmFxPrograms": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4.test.mjs"
+        "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "warmMirrorStage": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "wrapStream": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13426,8 +13464,7 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/tlx-car-shadow-cpu.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {
@@ -13435,7 +13472,8 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -13462,7 +13500,8 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "setLampBake": [
         "tests/unit/tlx-hunt3.test.mjs"
@@ -14052,6 +14091,7 @@
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs",
+        "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/scene-live.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs"
@@ -15528,6 +15568,14 @@
       "*": [
         "tests/unit/followup-platform.test.mjs",
         "tests/unit/pause-key-tools.test.mjs"
+      ]
+    },
+    "js/ui/post-fx-opts.js": {
+      "gate": [
+        "tests/unit/post-fx-opts.test.mjs"
+      ],
+      "read": [
+        "tests/unit/post-fx-opts.test.mjs"
       ]
     },
     "js/ui/quali-sheet.js": {

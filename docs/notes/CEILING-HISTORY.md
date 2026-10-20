@@ -3653,6 +3653,15 @@ the tree's `dynamicIdReads` falling 74 → 73 (a measured lowering, not a raise)
 
 - 2026-10-20 `dynamicIdReads` 72 -> 73 (+1): double-counted auto-lower from two fragments measured off the same base 74; restoring the true count 73, no code growth.
 
+## 2026-10-20 — #3172 sculpted concepts: car3d.js +66 lines
+
+`js/car/car3d.js` lines 2764 → **2830** (+66), measured against deploy tip 3d3345f7 after the sync.
+This is the PR's own growth from two branch fragments: `cursor--sculpted-concepts-rename-8c41`
+(+24) and `cursor--complete-concept-meshes-3d82` (+42). No other branch's raise is stacked in it.
+It covers four STYLE recipes (Auralis, Cevora, Vantrel, Orynth), the `podSculpt` flank-paint cuts
+in the sidepod emit, and curved nose paint that follows `anchors.noseStops`. The shell geometry
+itself lives in `js/car/car-body-geom.js`. Each new line hooks the emit closures inside `build`,
+so it stays there and is not extracted.
 ## 2026-10-20 — PR #3188 (cursor/garage-research-surfaces-7b41): six study body profiles
 
 `js/car/car3d.js` +40 via `tests/data/ratchets.d/cursor--garage-shape-refinement-3c9a.json` (the
@@ -3660,3 +3669,11 @@ branch's lineage name). The PR's own geometry, +37 net on the tip after #3151: c
 carried into the shared chassis, seated nose strips, the noseCurve arm and its wing-mounted foot,
 and the clean-wing carbon gates for caldra/rovik/senzo/talven/orvex/nacrel. No extraction: each
 hunk sits in `build`'s emit closures beside the part it shapes.
+
+## 2026-10-20 — car-body train (#3172 + #3188): concept shaping on for every body
+
+`js/car/car3d.js` +9 (commit-hook absorb). `withConceptDefaults` gives every BODY_STYLES entry the
+fit/seat/sculpt/curved-nose/spine paths with one shared recipe (CONCEPT_SCULPT) where a body sets
+none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_STYLE is untouched.
+The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
+default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.

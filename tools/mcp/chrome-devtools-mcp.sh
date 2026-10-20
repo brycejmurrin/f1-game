@@ -12,6 +12,8 @@ REPO_URL="https://github.com/ChromeDevTools/chrome-devtools-mcp.git"
 # Audited live in this repository on 2026-08-17. Pin the network fallback so a
 # fresh machine cannot silently run a different MCP release than CI/tests saw.
 MCP_NPM_PACKAGE="chrome-devtools-mcp@1.7.0"
+MCP_PIN_VERSION="${MCP_NPM_PACKAGE#*@}"
+MCP_PIN_TAG="v${MCP_PIN_VERSION}"
 PATCHER="$ROOT/tools/mcp/chrome-devtools-runtime.mjs"
 PATCH_CACHE_ROOT="${APEX_CHROME_MCP_CACHE_ROOT:-$ROOT/scratch/chrome-devtools-runtime}"
 
@@ -104,17 +106,34 @@ local_ok() {
   [[ -f "$BIN" ]] && node "$BIN" --help >/dev/null 2>&1
 }
 
+clone_version() {
+  if [[ ! -f "$REPO/package.json" ]]; then
+    return 1
+  fi
+  node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).version || '')" \
+    "$REPO/package.json" 2>/dev/null
+}
+
+# The runtime patch (apex-dialog-close-v1) is guarded for MCP_PIN_VERSION only.
+local_pinned_ok() {
+  local_ok || return 1
+  [[ "$(clone_version)" == "$MCP_PIN_VERSION" ]]
+}
+
 run_mcp() {
   local chrome
   chrome="$(wait_chrome)"
   # Bounded wait for the SessionStart npm install (stderr only; stdout is JSON-RPC).
   . "$ROOT/tools/mcp/mcp-preflight.sh"
-  if local_ok; then mcp_preflight; else mcp_preflight "${MCP_NPM_PACKAGE%@*}"; fi
+  if local_pinned_ok; then mcp_preflight; else mcp_preflight "${MCP_NPM_PACKAGE%@*}"; fi
   build_mcp_args "$chrome"
   local source_root patched_bin npx_bin
-  if local_ok; then
+  if local_pinned_ok; then
     source_root="$REPO"
-  else
+  elif local_ok; then
+    echo "chrome-devtools-mcp: scratch clone is $(clone_version) (need $MCP_PIN_VERSION) — using $MCP_NPM_PACKAGE" >&2
+  fi
+  if ! local_pinned_ok; then
   # The npm package is the normal path on a fresh container (the clone is an
   # opt-in for hacking on the server itself), so say so only when asked:
   # two stderr lines on every session start is noise, not a warning.
@@ -161,11 +180,27 @@ cmd_build() {
 
 cmd_clone() {
   if [[ -d "$REPO/.git" ]]; then
-    echo "Already cloned: $REPO"
-    cd "$REPO" && git pull --ff-only 2>/dev/null || true
-  else
+    echo "Already cloned: $REPO (pin $MCP_PIN_TAG)"
+    cd "$REPO"
+    git fetch --depth 1 origin "refs/tags/${MCP_PIN_TAG}:refs/tags/${MCP_PIN_TAG}" 2>/dev/null \
+      || git fetch --depth 1 origin "$MCP_PIN_TAG" 2>/dev/null || true
+    git checkout -f "$MCP_PIN_TAG" 2>/dev/null || git checkout -f "tags/$MCP_PIN_TAG" 2>/dev/null || {
+      echo "WARN: could not checkout $MCP_PIN_TAG — re-cloning" >&2
+      cd "$ROOT"
+      rm -rf "$REPO"
+    }
+  fi
+  if [[ ! -d "$REPO/.git" ]]; then
     mkdir -p "$(dirname "$REPO")"
-    git clone "$REPO_URL" "$REPO"
+    rm -rf "$REPO"
+    # Tags are not branches on chrome-devtools-mcp; shallow --branch often 404s.
+    git clone --depth 1 "$REPO_URL" "$REPO"
+    (
+      cd "$REPO"
+      git fetch --depth 1 origin "refs/tags/${MCP_PIN_TAG}:refs/tags/${MCP_PIN_TAG}" \
+        || git fetch --depth 1 origin "$MCP_PIN_TAG"
+      git checkout -f "$MCP_PIN_TAG" 2>/dev/null || git checkout -f "tags/$MCP_PIN_TAG"
+    )
   fi
   cmd_build
 }
@@ -178,7 +213,11 @@ cmd_status() {
     echo "Commit: (not cloned — run: $0 clone)"
   fi
   echo "Bin:   $BIN"
-  if local_ok; then echo "Bin:   OK (local clone)"; else echo "Bin:   missing — run: $0 clone"; fi
+  if local_pinned_ok; then echo "Bin:   OK (local clone $MCP_PIN_VERSION)"; elif local_ok; then
+    echo "Bin:   present but $(clone_version) (need $MCP_PIN_VERSION — run: $0 clone or rm -rf scratch/chrome-devtools-mcp)"
+  else
+    echo "Bin:   missing — run: $0 clone"
+  fi
   local chrome
   chrome="$(find_chrome || true)"
   echo "Chrome: ${chrome:-"(not found)"}"

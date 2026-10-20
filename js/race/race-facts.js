@@ -123,7 +123,7 @@ var RaceFacts = (function () {
     };
     function rank(list) {
       order.length = 0;
-      for (const c of list) if (!c.retired) order.push(c);
+      for (let i = 0; i < list.length; i++) if (!list[i].retired) order.push(list[i]);   // indexed: no iterator per step
       order.sort(byRace);
       return order;
     }
@@ -151,8 +151,8 @@ var RaceFacts = (function () {
 
       // ── per car: timing loop and edges ──────────────────────────────────
       let regrid = false; _shoved.clear();
-      for (const c of cars) {
-        const s = bag(c);
+      for (let ci = 0; ci < cars.length; ci++) {
+        const c = cars[ci], s = bag(c);
         const i = Math.floor((c.prog || 0) / seg);
         // FIRST SIGHT stamps nothing: the lines behind a car were crossed before
         // anyone was watching, and stamping them "now" would invent gaps.

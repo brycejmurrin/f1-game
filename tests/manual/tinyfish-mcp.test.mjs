@@ -6,6 +6,7 @@
 // tests/unit/mcp-cli.test.mjs.
 // Does NOT hit the live TinyFish API (needs a key + network). Fixtures cover
 // the nested JSON-RPC shape we measured from fetch_content / deploy-check.
+import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -53,20 +54,23 @@ test(".mcp.json is the three-server catalog — tinyfish / probe are CLI-only no
   // 2026-09: the container egress blocks agent.tinyfish.ai, so the local
   // TinyFish proxy (and probe's tinyfish_* half) can never answer here. The
   // hosted TinyFish connector / host fetch tool in the main session can.
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+  const raw = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const cfg = nativeMcpConfig(raw);
+  assert.deepEqual(Object.keys(raw.mcpServers).sort(), [
+    "apex-lsp",
     "apex-tools",
     "chrome-devtools",
+    "js-debugger",
     "playwright-official",
   ]);
-  assert.equal(cfg.mcpServers.tinyfish, undefined, "tinyfish must not be MCP-attached");
-  assert.equal(cfg.mcpServers.probe, undefined, "probe must not be MCP-attached");
-  assert.equal(cfg.mcpServers.playwright, undefined, "the wrapper playwright server failed to connect; playwright-official replaces it");
+  assert.equal(raw.mcpServers.tinyfish, undefined, "tinyfish must not be MCP-attached");
+  assert.equal(raw.mcpServers.probe, undefined, "probe must not be MCP-attached");
+  assert.equal(raw.mcpServers.playwright, undefined, "the wrapper playwright server failed to connect; playwright-official replaces it");
   assert.equal(cfg.mcpServers["chrome-devtools"].command, "bash");
   assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/mcp/chrome-devtools-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/mcp/apex-tools-mcp.sh", "serve"]);
-  assert.doesNotMatch(JSON.stringify(cfg), /3711/, "no loopback TinyFish URL in the catalog");
+  assert.doesNotMatch(JSON.stringify(raw), /3711/, "no loopback TinyFish URL in the catalog");
   const sh = fs.readFileSync(SH, "utf8");
   assert.match(sh, /NOT MCP-ATTACHED/, "tinyfish-mcp.sh must say it is a CLI, not a server entry");
 });

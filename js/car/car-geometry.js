@@ -156,9 +156,12 @@ const CarGeometry = (function () {
         zR = zF + dzc * c + dyc * s;
         yR = yF - dzc * s + dyc * c;
       }
+      const u = Math.min(1, Math.abs(x) / half);
+      const contour = (spec.wave || 0) * Math.pow(Math.sin(Math.PI * u), 2)
+        - (spec.bowl || 0) * (1 - u * u);
       return {
         x: xF + (xR - xF) * t,
-        y: yF + (yR - yF) * t - camber * 4 * t * (1 - t),
+        y: yF + (yR - yF) * t - camber * 4 * t * (1 - t) + contour,
         z: zF + (zR - zF) * t,
         h: thick * 0.5 * foilThick(t),
       };
@@ -166,7 +169,9 @@ const CarGeometry = (function () {
     function addWingFoil(out, spec, col, surface) {
       const half = spec.half, mid = half * 0.67, inner = half * 0.34;
       const at = (x, t) => foilAt(spec, x, t);
-      const segments = [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
+      const segments = spec.wave || spec.bowl ? Array.from({ length: 6 }, (_, i) =>
+        [-half + 2 * half * i / 6, -half + 2 * half * (i + 1) / 6])
+        : [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
       for (const [x0, x1] of segments) {
         for (let i = 0; i < FOIL_T.length - 1; i++) {
           const t0 = FOIL_T[i], t1 = FOIL_T[i + 1];
