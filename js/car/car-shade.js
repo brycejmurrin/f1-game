@@ -473,7 +473,7 @@ const CarShade = (function () {
   // its edge (ERS intakes, chimneys, ducts: 8-18 mm proud) see the surface
   // drop by under 1 cm. CCW seen from +Z for either side.
   const POD_ARC = 4;
-  function podRing(st, side) {
+  function podRing(st, side, chine) {   // chine: the pod has one (every ring then cuts it: same point count)
     const w = st.outer - st.inner, hO = st.outerTop - st.outerBottom;
     const rxT = Math.min(0.07, 0.25 * w), ryT = Math.min(0.05, 0.12 * hO);
     const rxB = Math.min(0.06, 0.22 * w), ryB = Math.min(0.035, 0.10 * hO);
@@ -482,7 +482,10 @@ const CarShade = (function () {
       const a = -Math.PI / 2 + (k / POD_ARC) * Math.PI / 2;
       pts.push([st.outer - rxB + rxB * Math.cos(a), st.outerBottom + ryB + ryB * Math.sin(a)]);
     }
-    for (let k = 0; k <= POD_ARC; k++) {   // flank -> top
+    if (chine != null && typeof CarBodyGeom !== "undefined") {   // chine: a sharp chamfer, not the arc
+      const c = CarBodyGeom.chineCut(st.chine || chine, w, hO);
+      pts.push([st.outer, st.outerTop - c.y], [st.outer - c.x, st.outerTop]);
+    } else for (let k = 0; k <= POD_ARC; k++) {   // flank -> top
       const a = (k / POD_ARC) * Math.PI / 2;
       pts.push([st.outer - rxT + rxT * Math.cos(a), st.outerTop - ryT + ryT * Math.sin(a)]);
     }
@@ -515,7 +518,8 @@ const CarShade = (function () {
   }
   /** Both sidepods from car3d's station list, rounded. */
   function podLoft(out, stations, col, frontCol, tri) {
-    for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side)), col, frontCol, tri);
+    const chine = stations.some((st) => st.chine != null) ? 0.004 : null;
+    for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side, chine)), col, frontCol, tri);
   }
 
   // ---- COKE BOTTLE + DOWNWASH (rounded builds, 2026-10-03) ----
