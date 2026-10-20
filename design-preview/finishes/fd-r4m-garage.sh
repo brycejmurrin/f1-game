@@ -5,7 +5,8 @@
 #   git worktree add --detach scratch/wt-g3 origin/cursor/design-integration-59af && (cd scratch/wt-g3 && git merge <this branch>)
 #   ln -s ../../node_modules scratch/wt-g3/node_modules
 # plus two local-only patches there: garage-angles appends $APEX_GA_QUERY to the game url, and probe-page's gotoGame
-# pins renderScale(1) / govHold / renderClock(0) when APEX_GA_PIN is set (the shot.mjs "comparison" profile).
+# pins renderScale(1) + govHold when APEX_GA_PIN is set (not renderClock: frozen, a design switch never presents
+# and CDP capture times out; the garage has no time-of-day drift to freeze).
 # Garage --cam is radians: side az 1.57; graze az 2.45 el 0.10; spec = high over the car under the key lights.
 # Usage: fd-r4m-garage.sh <wt dir> <finish> [finish...]   (frames land as <team>-finish-<f>-hero_az<deg>_el<deg>_d<m>.png)
 WT=$1; shift
