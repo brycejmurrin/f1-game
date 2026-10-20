@@ -188,7 +188,7 @@ const LIV_ROW_HINT = {
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
   sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also greys every spine design that writes a sponsor name (TOP wordmark, SIDE wordmark/duo/title).",
-  bodyStyle: "BODY — the chassis shape: TEAM keeps this car's own; NEEDLE, BRICK, ANTEATER, ARCHED, WEDGE and BARGE are concept bodies with distinct outlines; RIFT, KEEL, DELTA and SERPENT pair with the AERO wings of the same name. Team-body swaps (another constructor's chassis) stay off the picker until Car3D.ALLOW_TEAM_BODY_SWAP is on. Looks only — it never changes performance.",
+  bodyStyle: "BODY — the chassis shape: TEAM keeps this car's own; NEEDLE, BRICK, ANTEATER, ARCHED, WEDGE and BARGE are concept bodies with distinct outlines; RIFT, KEEL, DELTA and SERPENT follow the 2026 concept sheet. Team-body swaps (another constructor's chassis) stay off the picker until Car3D.ALLOW_TEAM_BODY_SWAP is on. Looks only — it never changes performance.",
   finShape: "FIN SHAPE — the shark-fin blade. NONE removes it, and with it the fin's paint, graphic, style and badge. Every 2026 team car runs NONE.",
   finStyle: "TAIL STYLE — the motif painted on the fin.",
   finBadge: "FIN BADGE — what the fin carries: the mark, the race number, the driver code, or nothing.",

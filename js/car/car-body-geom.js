@@ -148,11 +148,7 @@ const CarBodyGeom = (function () {
     // Grow UP from a low plank, capped at REAR_WING_TOP = a real wing's ~1.0 m (lvl 1-4 0.79/0.85/0.91/0.95; the #784 rise reached 1.58 m).
     const rise = Math.min(REAR_WING_TOP - (REAR_TYRE_CROWN - 0.02),
       Math.pow(topLift, 0.6) * (0.29 + 0.03 * sweepN + 0.03 * finN));
-    // rwTip (opt-in STYLE aero, 0 = shipped): the main plane's tips rise by this many metres
-    // (foilAt rise, shaped by rwTipPow), so the plate's top grows with them and its bottom stays.
-    // `crown` is the untipped top the wing stack hangs from.
-    const tip = Math.max(0, Math.min(0.10, +st.rwTip || 0));
-    const crown = (REAR_TYRE_CROWN - 0.02) + rise, topY = crown + tip, sy = 0.22 + 0.80 * rise + tip;   // bottom = topY - sy stays ≈ 0.44–0.53
+    const topY = (REAR_TYRE_CROWN - 0.02) + rise, sy = 0.22 + 0.80 * rise;   // bottom = topY - sy stays ≈ 0.44–0.53
     const cy = topY - 0.015 - sy * 0.5;
     const chord = 0.48 + 0.24 * topLift, rearZ = -2.69, frontZ = rearZ + chord;
     const profile = (z, sectionCy, sectionSy) => ({
@@ -161,7 +157,7 @@ const CarBodyGeom = (function () {
       top: sectionCy + sectionSy * 0.5,
     });
     return {
-      cy, sy, chord, crown,
+      cy, sy, chord,
       front: profile(frontZ, cy - 0.035, sy * 0.76),
       rear: profile(rearZ, cy + 0.015, sy),
     };
@@ -533,7 +529,7 @@ const CarBodyGeom = (function () {
       sig = [st0.frontSweep, st0.frontTaper, st0.frontRise,
              st0.rearSweep, st0.rearTaper, st0.drs || 0,
              w.twist || 0, w.teCurve || 0, w.chordTaper || 0, w.tipRise || 0]
-        .map((v) => +v || 0).join(",") + (st0.rwTip ? ",t" + st0.rwTip + "^" + (st0.rwTipPow || 1) : "");
+        .map((v) => +v || 0).join(",");
       _flapSig.set(st0, sig);
     }
     return sig;
@@ -590,8 +586,7 @@ const CarBodyGeom = (function () {
         twist: extra.twist, teCurve: extra.teCurve, chordTaper: extra.chordTaper,
       }, prev));
     }
-    const ep = endplateGeom(a, st), crownY = ep.crown - 0.018;
-    const tipRise = ep.rear.top - ep.crown, tipPow = st.rwTipPow || undefined;
+    const ep = endplateGeom(a, st), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
     const rearMain = elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0);
     const stack = [];   // [id, le, te, thick, sweepMul, half, paint?] bottom-up
@@ -602,8 +597,7 @@ const CarBodyGeom = (function () {
     // the RW Flap too, so it flies with it, in the livery's rearWing colour.
     if (st.drs || 0) stack.push(["rearDrs", [-2.44, crownY - 0.050], [-2.60, crownY], 0.016, 1.15, 0.49, "rearWing"]);
     for (const el of rearFlap(stack, rearMain)) {
-      out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: tipRise },
-        tipPow ? { risePow: tipPow } : null));
+      out.push(Object.assign(el, { taper: rearTaper, sweep: rearSweep * el.sweepMul, attachHalf: 0.50, rise: 0 }));
     }
     return out;
   }
@@ -614,7 +608,7 @@ const CarBodyGeom = (function () {
     addWingFoil(out, {
       zLead: el.le[0], yLead: el.le[1], zTrail: el.te[0], yTrail: el.te[1],
       half: el.half, thick: el.thick, taper: el.taper,
-      sweep: el.sweep, rise: el.rise, risePow: el.risePow, attachHalf: el.attachHalf,
+      sweep: el.sweep, rise: el.rise, attachHalf: el.attachHalf,
       twist: el.twist, teCurve: el.teCurve, chordTaper: el.chordTaper,
     }, col, surface === "carbon" ? SURFACES.carbon : SURFACES.paint);
     if (el.upsweep) {
