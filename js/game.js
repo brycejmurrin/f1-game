@@ -1486,7 +1486,7 @@ function fieldSize() {
 }
 
 function makeCars() {
-  cars = []; releaseFieldScratch();
+  cars = [];
   // the custom team only enters the grid when the player has selected it
   const grid = gridTeams();
   // Counted through the same accessor the loop below iterates, or MY TEAM's second
@@ -2526,7 +2526,7 @@ async function startRaceBody() {
   // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
   // chosen on the settings sheet and meant to stick until the player changes it.
   practiceMode = false;
-  makeCars(); rlap("makeCars");
+  releaseFieldScratch(); makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one flying lap.
   if (isQuali()) {
