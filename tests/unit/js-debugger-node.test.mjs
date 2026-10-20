@@ -58,7 +58,8 @@ test("debugger_node_test: exact hit counts, values, locals captures, TAP failure
     { line: 6, condition: "a === 1" }, { line: 7, column: 3 }] });
   const run = r.runs[0];
   assert.equal(r.ok, false); assert.deepEqual(r.failed, [`${FX}/sample.fixture.mjs`]);
-  assert.equal(run.exitCode, 1); assert.equal(run.summary.pass, 2); assert.equal(run.summary.fail, 1);
+  assert.equal(run.exitCode, 1); assert.equal(run.summary.tests, 3, run.stdoutTail);
+  assert.equal(run.summary.pass, 2, run.stdoutTail); assert.equal(run.summary.fail, 1, run.stdoutTail);
   assert.deepEqual(run.summary.failed, ["fails on purpose"]);
   const [p1, p2] = run.probes;
   assert.equal(p1.hits, 1501); assert.deepEqual(p1.resolved, [7]);
