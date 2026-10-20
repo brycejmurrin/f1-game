@@ -127,6 +127,33 @@ test("nested declarations are exact and duplicate declarations are ambiguous", (
   assert.equal(fnSource('function same(a) {} function same(b) {}', 'function same(b)'), 'function same(b) {}');
 });
 
+test("module syntax extracts exact declarations and retains lookup failures", () => {
+  const expected = 'function moduleTarget() { return new URL("}", import.meta.url); }';
+  const src = [
+    'import path from "node:path";',
+    '// function moduleTarget() { return "COMMENT"; }',
+    'const text = "function moduleTarget() { return STRING; }";',
+    `export ${expected}`,
+    'export function sibling() { return "OUTSIDE"; }',
+  ].join('\n');
+  const options = { sourceType: "module" };
+  assert.equal(fnSource(src, "function moduleTarget(", options), expected);
+  assert.throws(() => fnSource(src, "function absent(", options), /not found/);
+  const ambiguous = 'export function a() { function same() {} } function b() { function same() {} }';
+  assert.throws(() => fnSource(ambiguous, "function same(", options), /ambiguous/);
+  assert.throws(() => fnSource('export function broken() {', "function broken(", options), SyntaxError);
+  // A successful module parse must not let script callers bypass syntax errors.
+  assert.throws(() => fnSource(src, "function moduleTarget("), SyntaxError);
+  assert.throws(() => fnSource(src, "function moduleTarget(", { sourceType: "script" }), SyntaxError);
+});
+
+test("script cache entries never bypass module binding restrictions", () => {
+  const src = 'function same(a) {} function same(b) {}';
+  assert.equal(fnSource(src, 'function same(b)'), 'function same(b) {}');
+  assert.throws(() => fnSource(src, 'function same(b)', { sourceType: "module" }), SyntaxError);
+  assert.equal(fnSource(src, 'function same(b)', { sourceType: "script" }), 'function same(b) {}');
+});
+
 test("text-only declarations and identifier prefixes are rejected", () => {
   const src = '// function absent() {}\nconst text = "function absent() {}"; function longer() {}';
   assert.throws(() => fnSource(src, "function absent("), /not found/);

@@ -25,10 +25,12 @@ import { parse } from "espree";
 
 // Keep only ranges, not whole ASTs. A test process repeatedly reads the same
 // renderer/game sources; parsing each once also keeps source pins inexpensive.
+// Script and module grammars must never share a cached parse result.
 const rangesBySource = new Map();
-function functionRanges(src) {
-  if (rangesBySource.has(src)) return rangesBySource.get(src);
-  const ast = parse(src, { ecmaVersion: "latest", sourceType: "script", range: true });
+function functionRanges(src, sourceType) {
+  const byType = rangesBySource.get(src);
+  if (byType?.has(sourceType)) return byType.get(sourceType);
+  const ast = parse(src, { ecmaVersion: "latest", sourceType, range: true });
   const ranges = [];
   function visit(node) {
     if (!node || typeof node !== "object") return;
@@ -45,18 +47,20 @@ function functionRanges(src) {
     }
   }
   visit(ast);
-  rangesBySource.set(src, ranges);
+  if (!byType) rangesBySource.set(src, new Map());
+  rangesBySource.get(src).set(sourceType, ranges);
   return ranges;
 }
 
 /** Full original text of one syntactic function declaration, method or
  * function-valued variable declaration. `decl` is its exact source prefix
  * (optional leading indentation included). Missing and ambiguous matches throw;
- * text in comments/strings and neighboring declarations never count as hits. */
-export function fnSource(src, decl) {
+ * text in comments/strings and neighboring declarations never count as hits.
+ * Parsing defaults to script; pass { sourceType: "module" } for ES modules. */
+export function fnSource(src, decl, { sourceType = "script" } = {}) {
   if (typeof decl !== "string" || !decl.trim()) throw new Error("fnSource: declaration must be non-empty");
   const prefix = decl.trimStart(), indent = decl.length - prefix.length;
-  const hits = functionRanges(src).filter(([start, end]) => {
+  const hits = functionRanges(src, sourceType).filter(([start, end]) => {
     const at = start - indent;
     return at >= 0 && src.slice(at, at + decl.length) === decl
       && start + prefix.length <= end
