@@ -182,3 +182,4 @@ Need sync / fix first:
 HOLD: #3387 dynamic rain/twilight — MERGE-HOLD (Bryce review of galleries), DIRTY.
 All are game PRs (js/) → one GAME-SLOT per green Pages.
 17:08Z: Bryce "Two adopter lanes" → B·O-A session_01VrEd1yN1fsozZrWGomnfW5 (#3423 #3430 #3421 #3407), B·O-B session_01BnvkGjvhMSkNzRf3yQaU1M (#3428 #3432 #3424). Merge one game PR per green Pages as READYs arrive.
+17:37Z: #3423 #3430 #3421 #3407 all had author MERGE-HOLDs → Bryce "Lift all four, finish them" (typed here) → OrchB 26 removing hold lines; O-A order #3430 #3421 #3423 #3407. O-B: #3428 synced, tooling-fast running.
