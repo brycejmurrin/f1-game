@@ -3402,7 +3402,9 @@ const TLX = (function () {
         // left the rig unwarmed (+20 s per race entry; B·H14, monza-foundation 8.4 -> 26.2 s on CI llvmpipe at #3221).
         // Queued, the job still runs before any frame paints: present() holds while either warm is pending.
         if (_warmRequested || _warmPending) {
-          _rigWarm = { recs: todo, mirror, done: () => { _rigWarm = null; } };
+          const job = _rigWarm = { recs: todo, mirror, done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; } };
+          // No present ever came (hidden tab, a race abandoned first): drop the queue, or every later warmDraws refuses.
+          job.timer = setTimeout(() => { if (!job.started) job.done(); }, 20000);
           return Promise.resolve(true);
         }
         return new Promise((resolve) => {
