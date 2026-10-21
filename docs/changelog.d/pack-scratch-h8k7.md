@@ -1,0 +1,1 @@
+Improved: race entry on the three.js and WebGPU renderers no longer creates a throwaway WebGL2 context to read material-pack layers that are already decoded to bytes (0.16–0.79 s of main thread on software GL).

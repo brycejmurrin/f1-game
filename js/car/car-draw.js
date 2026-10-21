@@ -669,18 +669,43 @@ const CarDraw = (function () {
     //   0 body (+ the cockpit body)   1 livery atlas   2 caster (+ cockpit caster)
     //   3 the LAUNCH's FieldLod set: planted wheels, the flap solve, flame, ERS lamp
     const WARM_PHASES = 4;
-    function warmCarPhase(c, ph, casters, lodWarm, sliced) {
+    // THE REAR OF THE GRID WAITS FOR THE LIGHTS (race-entry CPU profile, B·H14 2026-10-21): the 22 atlas uploads
+    // (ph 1) were 2.7–3.0 s of an 11.3 s race entry on SwiftShader and the casters (ph 2) 0.4 s, all of it before
+    // setState("count"). The first countdown frame draws the player and the cars AHEAD (the rest sit behind the
+    // camera, culled; the mirror's prepareRace pulls what it shows), so only those are owed under the cover. A car
+    // behind the player keeps its body and LOD steps now and hands its atlas upload and caster to this queue,
+    // drained one piece a frame under the lights (game.js tickBody → drainDeferredCarWarm), in grid order; the
+    // lights hold ~5 s for ≤ 22 pieces, and whatever is left still builds on its first draw, as before.
+    const _deferredCarWarm = [];
+    function drainDeferredCarWarm(budgetMs) {
+      const t0 = performance.now(), budget = budgetMs > 0 ? budgetMs : 4;
+      while (_deferredCarWarm.length) {
+        const it = _deferredCarWarm.shift();
+        try {
+          // Through the caches, never a kept handle: a leftover drained by a later countdown (a red-flag restart)
+          // finds the atlas LRU may have dropped its texture since, and the cache rebuilds or hits as it should.
+          if (it.atlas) { const tex = getCarDecalTexture(it.c.team, carDecalNum(it.c.team, it.c), !!it.c.isPlayer); if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex); }
+          else if (it.caster) teamMesh(it.c.team, it.c, true);
+        } catch (e) { Log.warn("gfx", "deferred car warm failed for " + (it.c && it.c.team && it.c.team.id), e); }
+        if (performance.now() - t0 >= budget) break;
+      }
+      return _deferredCarWarm.length;
+    }
+    function warmCarPhase(c, ph, casters, lodWarm, sliced, defer) {
       if (ph === 0) {
         if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
         if (c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c);
       } else if (ph === 1) {
+        // A deferred car defers the whole phase — the paint too, since GLX, WGX and mobile TLX upload inside
+        // createTexture, so deferring only the upload would be a no-op there (code-hunter, 2026-10-21).
+        if (defer) { _deferredCarWarm.push({ c, atlas: true }); return; }
         const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
         // TLX defers every canvas to its first draw (gfx.js uploadTexture): push it
         // now, as the menu prep does, or the first warm frame uploads the field's
         // atlases in one go. GLX / WGX upload inside createTexture (no method).
         if (sliced && tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
       } else if (ph === 2) {
-        if (casters) teamMesh(c.team, c, true);
+        if (casters) { if (defer) _deferredCarWarm.push({ c, caster: true }); else teamMesh(c.team, c, true); }
         if (casters && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c);
       } else if (lodWarm) {
         // What the LAUNCH first draws (FieldLod): the planted field wheels and
@@ -716,16 +741,21 @@ const CarDraw = (function () {
     // true when every phase ran. Knob 0: the single sync task, today's path.
     // The caller must keep the loading cover up and the grid undrawn until it
     // resolves — a frame drawn between steps would build the rest itself.
-    async function warmCarAssetsAsync(current, sliceMs) {
+    async function warmCarAssetsAsync(current, sliceMs, opts) {
       if (carModelBuf) return true;
       if (!carWarmSliceOn()) { warmCarAssets(); return true; }
       const at = performance.now(), budget = sliceMs > 0 ? sliceMs : 8;
       const casters = shadowCastersWanted(), gfx = G.gfx || {};
       const lodWarm = FieldLod.on && !G.headlessMode && !!(casters || typeof gfx.mirrorBegin === "function");
       const cars = G.cars.slice();
+      // opts.deferRear: a car more than one slot behind the player (gridUp's gridPos, 1-based) defers its atlas
+      // upload and caster to the lights (the queue above). The player and the cars it sees first stay eager.
+      _deferredCarWarm.length = 0;
+      const me = cars.find((c) => c.isPlayer), playerPos = me && me.gridPos > 0 ? me.gridPos : 0;
+      const rear = (c) => !!(opts && opts.deferRear) && !c.isPlayer && playerPos > 0 && c.gridPos > playerPos + 1;
       let sliceAt = performance.now(), cpuMs = 0, maxStepMs = 0, yields = 0;
       for (let i = 0; i < cars.length; i++) {
-        const c = cars[i];
+        const c = cars[i], defer = rear(c);
         for (let ph = 0; ph < WARM_PHASES; ph++) {
           if (performance.now() - sliceAt >= budget) {
             await yieldWarm(); yields++;
@@ -736,13 +766,13 @@ const CarDraw = (function () {
             }
           }
           const t = performance.now();
-          try { warmCarPhase(c, ph, casters, lodWarm, true); }
+          try { warmCarPhase(c, ph, casters, lodWarm, true, defer); }
           catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
           const ms = performance.now() - t; cpuMs += ms; if (ms > maxStepMs) maxStepMs = ms;
         }
       }
       Log.info("gfx", "race car assets ready", { cars: cars.length, casters, lodWarm, cpuMs: Math.round(cpuMs),
-        maxStepMs: Math.round(maxStepMs), yields, wallMs: Math.round(performance.now() - at) });
+        maxStepMs: Math.round(maxStepMs), yields, wallMs: Math.round(performance.now() - at), deferred: _deferredCarWarm.length });
       // The census reads RaceEntryProfile marks, not Log.info: one mark carries the step stats.
       if (typeof RaceEntryProfile !== "undefined") RaceEntryProfile.mark("warmCarAssets:steps yields=" + yields + " maxStepMs=" + Math.round(maxStepMs) + " cpuMs=" + Math.round(cpuMs));
       return true;
@@ -1669,7 +1699,7 @@ const CarDraw = (function () {
       teamMesh, teamBodyMesh, sharedRivalBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
+      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drainDeferredCarWarm, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
       // __apex.menuPrep().cars: the last menu car prep that ran to its end.
       prepareMenuCarAssets: (current) => prepareMenuCarAssets(current).then((r) => { if (r) _menuCarPrep = r; return r; }),
