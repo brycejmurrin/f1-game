@@ -7832,6 +7832,7 @@
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -7937,6 +7938,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -8009,13 +8011,13 @@
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
         "tests/unit/pad-haptics.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs",
-        "tests/unit/touch-drag-anchor.test.mjs"
+        "tests/unit/phone-touch-surface.test.mjs"
       ]
     },
     "js/input/phone-pad.js": {
