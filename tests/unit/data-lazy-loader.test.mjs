@@ -132,7 +132,7 @@ test("a failed lighting-presets fetch is retried at the next race start, then no
   await ctx.__lb.ensureCircuit(0);
   await flush();
   assert.equal(attempts.length, 0, "no failure yet: a race start must not pull the presets onto the title path");
-  idle[1]();                                   // the lights idle prefetch (idle[0] is the scenery kick): dropped
+  idle[0]();                                   // the 2.5 s idle prefetch: dropped
   await flush();
   assert.deepEqual(attempts, ["js/lighting/presets.js"]);
   assert.equal(ctx.window.LightPresets, undefined);
