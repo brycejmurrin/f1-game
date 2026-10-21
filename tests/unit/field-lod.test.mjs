@@ -472,7 +472,7 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
 });
 
 test("game.js swaps rivals to the one shared body mesh past tier 2", () => {
-  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
+  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(FieldLod\.farBody\(_lodD2, fovY, c\)\) : teamBodyMesh\(c\.team, c\)/,
     "past tier 2 the render loop shares one rival body (apex26.fieldLod=0 keeps per-seat meshes)");
 });
 
@@ -538,4 +538,20 @@ test("moving and resting flap draws use the regional wing finish over the body f
       assert.ok(!draw.mesh.d.mat.includes(r.M.CarMaterials.FINISH_SURFACE.matte));
     }
   }
+});
+
+test("farBody: the decimated silhouette body past FAR_BODY_M, sticky, never when the LOD is off", () => {
+  const { FieldLod: L } = loadLod();
+  assert.equal(L.T.FAR_BODY_M, 250);
+  assert.equal(L.farBody(at(200), 1.05), false);
+  assert.equal(L.farBody(at(300), 1.05), true);
+  const car = {};
+  assert.equal(L.farBody(at(260), 1.05, car), true, "no history yet: the plain table");
+  assert.equal(L.farBody(at(240), 1.05, car), true, "inside the band: stays far (hysteresis)");
+  assert.equal(L.farBody(at(220), 1.05, car), false, "below -10 %: back to the full shared body");
+  assert.equal(L.farBody(at(260), 1.05, car), false, "inside the band the other way: stays near");
+  assert.equal(L.farBody(at(280), 1.05, car), true, "past +10 %: far again");
+  // a 18 deg tele lens makes the same camera distance look nearer: 300 m there is ~100 m at the reference lens
+  assert.equal(L.farBody(at(300), 18 * Math.PI / 180), false);
+  assert.equal(loadLod(0).FieldLod.farBody(at(900), 1.05), false, "apex26.fieldLod = 0 restores the legacy draw");
 });

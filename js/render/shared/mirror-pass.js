@@ -768,6 +768,8 @@ const MirrorPass = (function () {
       prepareRace,
       preparing: () => !!_preparation,
       cancelPreparation,
+      // Race teardown: the lamp re-rank cache keys on the track, and a page-lifetime pass kept it alive.
+      releaseTrack() { _vlTrack = null; _vlSrc = null; _vlAge = Infinity; },
       standDown,
       toggle,
       setMode,

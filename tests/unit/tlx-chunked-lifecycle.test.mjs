@@ -277,3 +277,37 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   assert.match(tlx, /chunkedTrackCoords:\s*false/);
 });
+
+// THE ROAD SPLIT (tlx.js _drawSplit): sub-range AABBs over index order, merged into at most N drawRanges.
+function shaders() {
+  const sandbox = { window: {}, localStorage: { getItem: () => null }, Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math, Frustum: {} };
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: absSrc("js/render/shared/chunk-bins.js") });
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: absSrc("js/render/three/tlx-chunked.js") });
+  return sandbox.window.TLXShaders;
+}
+const plain = v => JSON.parse(JSON.stringify(v));
+
+test("splitRanges covers every index exactly once and boxes its own vertices", () => {
+  const S = shaders();
+  const pos = new Float32Array([0, 0, 0, 10, 0, 0, 0, 5, 1, 100, 2, 3, 101, 2, 3, 100, 9, 4]);
+  const idx = new Uint32Array([0, 1, 2, 3, 4, 5, 0, 2, 1]);
+  const r = plain(S.splitRanges(pos, idx, 1));
+  assert.deepEqual(r.map(c => [c.start, c.count]), [[0, 3], [3, 3], [6, 3]]);
+  assert.deepEqual(r[0].min, [0, 0, 0]); assert.deepEqual(r[0].max, [10, 5, 1]);
+  assert.deepEqual(r[1].min, [100, 2, 3]); assert.deepEqual(r[1].max, [101, 9, 4]);
+  assert.deepEqual(plain(S.splitRanges(pos, idx, 2)).map(c => [c.start, c.count]), [[0, 6], [6, 3]]);
+});
+
+test("mergeRuns joins contiguous ranges and closes the smallest gaps down to the slot cap", () => {
+  const S = shaders(), out = [];
+  const c = (start, count) => ({ start, count });
+  // visible out of order; 0-3 and 3-6 touch; gaps 6->9 (3), 12->30 (18), 33->34 (1)
+  const vis = [c(30, 3), c(0, 3), c(9, 3), c(3, 3), c(34, 3)];
+  assert.equal(S.mergeRuns(vis, vis.length, 4, out), 4);
+  assert.deepEqual(out.slice(0, 8), [0, 6, 9, 3, 30, 3, 33 + 1, 3]);
+  assert.equal(S.mergeRuns(vis, vis.length, 2, out), 2);
+  assert.deepEqual(out.slice(0, 4), [0, 12, 30, 7]);   // a merged run draws the gap: a superset, never a hole
+  assert.equal(S.mergeRuns(vis, 0, 4, out), 0);
+});

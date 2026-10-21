@@ -154,6 +154,34 @@ srv.listen(0, "127.0.0.1", async () => {
     // Real players never load it; this harness needs it to measure anything.
     await p1.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 90000 })
       .catch(() => bad.push("__apex never loaded on the controlled page, so it was never cached"));
+    // #2194 / #2424: a missing shell-tag entry offline must not make the repair
+    // sweep delete the player's apex26-* caches. Delete one essential key, go
+    // offline, reload, and the install caches must still be there.
+    const repairProbe = await p1.evaluate(async () => {
+      const names = (await caches.keys()).filter((n) => n.indexOf("apex26-") === 0);
+      if (!names.length) return { ok: false, why: "no apex26-* cache after install" };
+      const cache = await caches.open(names[0]);
+      const keys = await cache.keys();
+      const essential = keys.find((r) => /\/js\/game\.js/.test(r.url));
+      if (!essential) return { ok: false, why: "js/game.js not in the precache" };
+      await cache.delete(essential);
+      return { ok: true, cache: names[0], before: names.length };
+    });
+    console.log("repair probe setup:", JSON.stringify(repairProbe));
+    if (!repairProbe.ok) bad.push("repair probe setup: " + repairProbe.why);
+    else {
+      await ctx.setOffline(true);
+      await p1.reload({ waitUntil: "domcontentloaded" });
+      const after = await p1.evaluate(async () => {
+        const names = (await caches.keys()).filter((n) => n.indexOf("apex26-") === 0);
+        return { count: names.length, names };
+      });
+      console.log("repair probe offline caches:", JSON.stringify(after));
+      await ctx.setOffline(false);
+      if (after.count < repairProbe.before) bad.push("offline repair probe deleted apex26-* caches");
+      if (!after.names.includes(repairProbe.cache)) bad.push("offline repair probe lost the install cache name");
+      await p1.reload({ waitUntil: "domcontentloaded" });
+    }
     await p1.close();
 
     // ---- 3. OFFLINE: race a circuit never raced in this session -------------

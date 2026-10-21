@@ -1,0 +1,1 @@
+New: All 56 cosmetic part styles are selectable in the livery editor, including engine packages, suspension, brakes, tyres, ERS, gearbox, fuel details, exhaust, cockpit and wheels. FITTED restores each installed part's appearance. Choices preview live, persist with the livery and leave fitted parts, cost and performance unchanged.

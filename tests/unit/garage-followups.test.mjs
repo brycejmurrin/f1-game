@@ -140,7 +140,7 @@ test('palette rebuild preserves only palette-owned focus, including repeated mat
   const store = { get: (k, d) => k === 'garageTab' ? 'livery' : saved.has(k) ? saved.get(k) : d, set: (k, v) => saved.set(k, v) };
   const context = vm.createContext({ document, Log: { info() {}, warn() {} }, setTimeout: () => 0, clearTimeout() {},
     GameStore: { store }, addEventListener() {}, removeEventListener() {},
-    GameAudio: {}, ScrollFade: { refresh() {} }, Car3D: { FINISH_SURFACE: {} },
+    GameAudio: {}, ScrollFade: { refresh() {} }, Car3D: { appearanceParts: p => p, PART_STYLE_FIELDS: { aeroShape: "aero", floorShape: "floor" }, FINISH_SURFACE: {} },
     LiveryTex: { NUM_FONT_IDS: ['default'], SPONSOR_PACK_IDS: ['default'], SPINE_LOGO_IDS: ['stripe', 'contours'], FILL_SURFACES: [] },
   });
   context.window = context;

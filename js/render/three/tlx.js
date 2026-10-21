@@ -1936,14 +1936,50 @@ const TLX = (function () {
       drawList.n = 0;
       function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
         let r = _recPool[drawList.n];
-        if (!r) r = _recPool[drawList.n] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null };
+        if (!r) r = _recPool[drawList.n] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null, split: null };
         drawList.n++;
         r.geo = geo; r.m = m; r.mat = mat; r.em = em; r.al = al; r.lg = lg; r.chunked = chunked; r.instanced = instanced;
+        // THE ROAD SPLIT (tlx-chunked.js splitRanges): its AABBs are world-space, so only an identity draw
+        // (poolModelMat hands identity on as null) culls by them.
+        r.split = _roadSplitOn && geo && geo.__tlxSplit && !m ? geo.__tlxSplit : null;
+      }
+      // Draws the visible stretches of a split road through its few slot geometries (the road's own buffers and
+      // material, each a drawRange) instead of the whole lap. Main pass: frustum only (cd 0), so the picture is
+      // the one the full mesh drew. The mirror passes its own radial cap. One use per batch: a second record of the
+      // same road in one pass draws whole rather than overwrite the slots' ranges before render().
+      const SPLIT_TRIS = 1024, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
+      // apex26.tlxRoadSplit=0 pins the whole-lap draw; __tlx.roadSplit(on) flips it live and writes the pin.
+      let _roadSplitOn = (function () { try { return localStorage.getItem("apex26.tlxRoadSplit") !== "0"; } catch (_) { return true; } })();
+      function _drawSplit(rec, i, vp, eye, cd, fog) {
+        const sp = rec.split;
+        if (!chunkedSys || !TLXShaders.mergeRuns || sp.batch === _poolBatch) return false;
+        sp.batch = _poolBatch;
+        const n = chunkedSys.cull(sp, vp, eye, cd, fog);
+        const r = TLXShaders.mergeRuns(chunkedSys.visList, n, SPLIT_SLOTS, sp.runs);
+        for (let k = 0; k < r; k++) {
+          const g = sp.slots[k];
+          g.setDrawRange(sp.runs[2 * k], sp.runs[2 * k + 1]);
+          acquireMesh(g, rec.m, rec.mat, rec).renderOrder = i;
+        }
+        rec.geo.__tlxDrawnBatch = _poolBatch;   // the shared buffers upload with the slots; releaseGeoMirrors keys on the parent
+        return true;
+      }
+      function makeSplit(geo, data) {
+        geo.computeBoundingSphere(); geo.computeBoundingBox();
+        const slots = [];
+        for (let k = 0; k < SPLIT_SLOTS; k++) {
+          const g = new THREE.BufferGeometry();
+          for (const a of Object.keys(geo.attributes)) g.setAttribute(a, geo.attributes[a]);
+          g.setIndex(geo.index);
+          g.boundingSphere = geo.boundingSphere.clone(); g.boundingBox = geo.boundingBox.clone();
+          slots.push(g);
+        }
+        return { chunks: TLXShaders.splitRanges(data.pos, data.idx, SPLIT_TRIS), slots, runs: new Array(SPLIT_SLOTS * 2).fill(0), batch: -1 };
       }
       // Every drawList reset goes through here: drop the records' references, so a
       // pooled slot never pins an evicted material or a freed geometry.
       function resetRecs() {
-        for (let i = 0; i < drawList.n; i++) { const r = _recPool[i]; r.geo = null; r.m = null; r.mat = null; r.chunked = null; r.instanced = null; }
+        for (let i = 0; i < drawList.n; i++) { const r = _recPool[i]; r.geo = null; r.m = null; r.mat = null; r.chunked = null; r.instanced = null; r.split = null; }
         drawList.n = 0;
       }
       // Model matrices are COPIED into this per-frame pool at draw() time.
@@ -3626,6 +3662,7 @@ const TLX = (function () {
 
       function disposeGeometry(geo) {
         if (!geo) return;
+        if (geo.__tlxSplit) { for (const g of geo.__tlxSplit.slots) { releaseGeometry(g); g.dispose(); } geo.__tlxSplit = null; }
         releaseGeometry(geo);
         geo.dispose();
       }
@@ -4570,7 +4607,9 @@ const TLX = (function () {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.mesh++;
           const kind = data._releaseCpuMirror ? "carSh" : "mesh";
-          return { __tlx: true, geo: _regGeo(buildGeometry(data), kind), count: (data.idx && data.idx.length) || 0 };
+          const geo = _regGeo(buildGeometry(data), kind);
+          if (TLXShaders.splitRanges && data.trk && data.trk.length === data.pos.length && data.idx && data.idx.length >= SPLIT_MIN_IDX) geo.__tlxSplit = makeSplit(geo, data);
+          return { __tlx: true, geo, count: (data.idx && data.idx.length) || 0 };
         },
         createTexMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
@@ -4708,7 +4747,7 @@ const TLX = (function () {
           if (!size || !images) return null;
           try {
             const n = layers || 17;
-            const data = new Uint8Array(size * size * 4 * n);
+            let data = new Uint8Array(size * size * 4 * n);
             data.fill(128);
             for (let i = 3; i < data.length; i += 4) data[i] = 255;
             // Async first (P4): the token comes back at once with `pending` and `ready` (true = filled and
@@ -4734,14 +4773,20 @@ const TLX = (function () {
             // three keeps texture.image.data for the texture's life (~4.4 MB a map at the shipped 256 px, ~36 MB at
             // 512). Drop it once the first upload has run; the dims stay so a later size query still answers. A context
             // loss reloads the page, so nothing re-reads the bytes. (createTexture's releaseTexSource, for arrays.)
+            // The readback callback, settle and the dispose listener share one closure context: `data` and the
+            // caller's decoded layers (`images`, ~4.3 MB a strip) stay reachable for the texture's life unless
+            // nulled here (measured 17 MB for the two strips at the shipped 256 px).
+            const letGo = () => { data = null; images = null; };
             t.onUpdate = (tex) => { tex.onUpdate = null; tex.image = { data: null, width: size, height: size, depth: n }; };
+            const dropImage = t.onUpdate;
+            t.onUpdate = (tex) => { dropImage(tex); letGo(); };
             if (!job) { t.needsUpdate = true; return t; }
             t.pending = true;
             t.addEventListener("dispose", () => { t._freed = true; });   // freeTexture / a superseding bind
             const settle = () => {
               t.pending = false;
-              if (t._freed) return false;
-              if (!filled) { t.dispose(); return false; }
+              if (t._freed) { letGo(); return false; }
+              if (!filled) { t.dispose(); letGo(); return false; }
               t.needsUpdate = true;
               return true;
             };
@@ -5149,6 +5194,7 @@ const TLX = (function () {
                 for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
                 continue;
               }
+              if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
             _poolShow();
@@ -5853,6 +5899,7 @@ const TLX = (function () {
                 _mirrorRelease.push(rec.chunked);
               continue;
             }
+            if (rec.split && _drawSplit(rec, i, _frameVP, frameEye, 0, null)) continue;
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
           _poolShow();
@@ -6094,6 +6141,13 @@ const TLX = (function () {
           },
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
+          },
+          roadSplit(on) {   // persists: a reload keeps the A/B arm (apex26.tlxRoadSplit)
+            if (on !== undefined) {
+              _roadSplitOn = !!on;
+              try { if (_roadSplitOn) localStorage.removeItem("apex26.tlxRoadSplit"); else localStorage.setItem("apex26.tlxRoadSplit", "0"); } catch (_) { /* no storage: session only */ }
+            }
+            return _roadSplitOn;
           },
           // Where the retained CPU bytes actually ARE, per attribute NAME and
           // per geometry kind. Deduped on the underlying ArrayBuffer, because a

@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-strategy.js"), "utf8");
@@ -14,7 +15,8 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-strategy.js"), "utf8");
 function load(extra = {}) {
   const ctx = { console, ...extra };
   vm.createContext(ctx);
-  vm.runInContext(SRC + "; this.HudStrategy = HudStrategy;", ctx);
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-strategy.js") });   // a filename, so V8 coverage attributes the run to the file
+  vm.runInContext("this.HudStrategy = HudStrategy;", ctx);
   return ctx.HudStrategy;
 }
 

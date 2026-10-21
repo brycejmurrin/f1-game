@@ -777,7 +777,44 @@ const Helmets = (function () {
     return out;
   }
 
+  /* A LID IS A PURE FUNCTION OF ITS ARGUMENTS (B·H13, 2026-10-21): where it sits, its design (plain data)
+     and the build options, and paintLid only APPENDS to out. It was 82 % of a garage Car3D.build in a
+     node profile (pointAt + tab, the shell sampled per corner), and the same lid is built again for the
+     body-only, cockpit and garage meshes of one seat and for every colour edit that leaves the lid's
+     inputs alone. A repeat replays the appended run, re-based on the caller's vertex count: the same
+     numbers in the same order (tests/unit/helmet-memo.test.mjs compares against a memo-free VM). */
+  const MEMO_MAX = 24, MEMO_BYTES = 8 * 1024 * 1024, _memo = new Map();
+  let _memoBytes = 0;
+  const ARRS = ["pos", "nrm", "col", "mat"];
   function build(out, cx, cy, cz, design, S) {
+    let key = null;
+    try { key = JSON.stringify([cx, cy, cz, design, S || null]); } catch (_) { key = null; }
+    const hit = key !== null ? _memo.get(key) : undefined;
+    if (hit) {
+      _memo.delete(key); _memo.set(key, hit);   // least recently used goes first
+      const v0 = out.pos.length / 3;
+      for (const a of ARRS) { const src = hit[a], dst = out[a]; for (let i = 0; i < src.length; i++) dst.push(src[i]); }
+      const idx = hit.idx, dst = out.idx;
+      for (let i = 0; i < idx.length; i++) dst.push(idx[i] + v0);
+      return out;
+    }
+    const v0 = out.pos.length / 3, at = { idx: out.idx.length };
+    for (const a of ARRS) at[a] = out[a].length;
+    paintLid(out, cx, cy, cz, design, S);
+    if (key === null) return out;
+    const rec = {}; let bytes = 0;
+    for (const a of ARRS) { rec[a] = Float64Array.from(out[a].slice(at[a])); bytes += rec[a].byteLength; }
+    rec.idx = Int32Array.from(out.idx.slice(at.idx), (i) => i - v0); bytes += rec.idx.byteLength;
+    rec.bytes = bytes;
+    _memo.set(key, rec); _memoBytes += bytes;
+    while (_memo.size > 1 && (_memo.size > MEMO_MAX || _memoBytes > MEMO_BYTES)) {
+      const k = _memo.keys().next().value;
+      _memoBytes -= _memo.get(k).bytes; _memo.delete(k);
+    }
+    return out;
+  }
+
+  function paintLid(out, cx, cy, cz, design, S) {
     // Field cars and depth casters retain the traced shell, smooth normals and
     // visor, but do not evaluate 22 detailed artwork functions per triangle.
     // At tens of pixels the design zones are sub-pixel; player/garage/cockpit

@@ -7,7 +7,7 @@ import { validateCarFilters, discoverCatalog } from './catalog-discovery.mjs';
 export const GARAGE_PLAN_SCHEMA = { type: 'object', additionalProperties: false, properties: {
   team: { type: 'string', description: 'Canonical team id, default mclaren.' },
   frames: { type: 'array', minItems: 1, maxItems: 4, uniqueItems: true, items: { type: 'string', enum: [...Object.keys(STATIONS), ...Object.keys(CAM_ALIAS)] }, description: 'Canonical station or camera alias ids; default spineTop.' },
-  field: { type: 'string', description: 'Optional canonical livery enum field from apex_catalog section liveries.' },
+  field: { type: 'string', description: 'Canonical livery enum field (including bodyStyle and finishes), or part.<category> from apex_catalog section parts.' },
   options: { type: 'array', minItems: 1, maxItems: 4, uniqueItems: true, items: { type: 'string' }, description: 'Explicit canonical enum values for field; no arbitrary design objects.' },
   maxShots: { type: 'integer', minimum: 1, maximum: 16 },
   budgetSeconds: { type: 'integer', minimum: 30, maximum: 180 },
@@ -26,10 +26,13 @@ export function createGaragePlanHandler({ ROOT, toolResult, refuse, runSpawn }) 
       if (cams.length) argv.push(`--cam=${cams.join(',')}`);
       if ((args.field == null) !== (args.options == null)) throw new Error('field and options must be supplied together');
       if (args.field != null) {
-        const fields = discoverCatalog({ section: 'liveries', filter: args.field, limit: 100 }).rows;
-        const field = fields.find(f => f.kind === 'field' && f.id === args.field);
-        if (!field?.values || !args.options.length || args.options.length > 4 || args.options.some(v => !field.values.includes(v))) throw new Error('Use a canonical livery enum field and 1..4 explicit values');
-        argv.push(`--${field.id}=${args.options.join(',')}`);
+        const isPart = args.field.startsWith('part.');
+        const fields = discoverCatalog(isPart
+          ? { section: 'parts', category: args.field.slice(5), team, limit: 100 }
+          : { section: 'liveries', filter: args.field, limit: 100 }).rows;
+        const values = isPart ? fields.map(f => f.id) : fields.find(f => f.kind === 'field' && f.id === args.field)?.values;
+        if (!values || !args.options.length || args.options.length > 4 || args.options.some(v => !values.includes(v))) throw new Error('Use a canonical livery enum or available part.<category> with 1..4 explicit values');
+        argv.push(`--${args.field}=${args.options.join(',')}`);
       }
       const shots = frames.length * (args.options?.length || 1);
       const maxShots = args.maxShots ?? 16;

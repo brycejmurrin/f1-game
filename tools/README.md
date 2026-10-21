@@ -388,7 +388,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | Tool | Does | Paired skill |
 |---|---|---|
 | **car/audit-aero.mjs** | Thin alias → `render-car.mjs --preset=wing` (three wing views). Prefer the parent. | garage-parts-livery |
-| **car/audit-parts.mjs** | Renders every option of chosen part categories through `carview.html`; per-category contact sheets. | garage-parts-livery |
+| **car/audit-parts.mjs** | Capture every catalog part, body style and finish with validated selection and resumable evidence. | garage-parts-livery |
 | **car/car-fit-audit.mjs** | Do Car3D parts connect? Per-joint GAP/PENETRATION/ZFIGHT/OPEN audit of the 11 cars; --base = no new failures. | garage-parts-livery |
 | **car/career-economy.mjs** | Sims a career season per starting team through the real `Career.settleRound()`; reports what a year's income affords. | career-mode |
 | **car/carshot.mjs** | Cropped studio-orbit car JPEG, self-booting: `carshot.mjs [az] [tod] [teamIdx] [out]` → `artifacts/tmp/carshot.jpg`. | playwright-probe |
@@ -397,6 +397,8 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/flank-occlusion.mjs** | Ray-tests cover-flank stations against the real car mesh + wheels from a garage camera; reports what is hidden. | garage-parts-livery |
 | **car/helmet-sheet.mjs** | Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact-sheet PNG. | playwright-probe |
 | **car/helmet-trace.mjs** | Projects the helmet shell into a side-on photo, samples the real colour per (t, az), writes a colour map. | playwright-probe |
+| **car/lib/carview-capture.mjs** | Keep the isolated viewer's body, flap and decal identity aligned with capture requests. | — |
+| **car/lib/customization-plan.mjs** | Browser-free customization capture plans from canonical body, finish and part registries. | — |
 | **car/lib/fit-checks.mjs** | Fit-audit checks over an analysed car: GAP, PENETRATION, ZFIGHT, OPEN edges. | — |
 | **car/lib/fit-geom.mjs** | Fit-audit geometry core: load/build Car3D cars, weld pieces, grid queries, visibility mask. | — |
 | **car/livery-contrast.mjs** | Sweeps every team x spine design offline and reports any large area that fails to separate from what it covers. | garage-parts-livery |

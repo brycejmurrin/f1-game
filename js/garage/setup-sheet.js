@@ -101,6 +101,8 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           spineLogo: "logo", finShape: "standard", tcam: "team",
                           coverVents: "none", spineHeight: "standard", spineSide: "none",
                           coverBind: "independent", finHandoff: "match", bodySplit: "off", bodyStyle: "team", aeroShape: "fitted", floorShape: "fitted",
+                          engineShape: "fitted", suspensionShape: "fitted", brakesShape: "fitted", tyresShape: "fitted", ersShape: "fitted",
+                          gearboxShape: "fitted", fuelShape: "fitted", exhaustShape: "fitted", cockpitShape: "fitted", wheelsShape: "fitted",
                           patternPlacement: "crown", patternSide: "both", patternWidth: "70", patternRepeat: "6",
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
                           patternRotation: "0", patternStretch: "100", patternWeight: "100", patternKey: "auto",
@@ -1081,8 +1083,8 @@ function buildLiveryCreator(container, team) {
   let designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
-  const wheelDeflector = Parts.getVisualTiers(getTeamParts(team.id), team)._visual?.wheels?.deflector || 0;
-  const needDeflectors = () => Math.round(wheelDeflector) > 0;
+  const wheelParts = Parts.getVisualTiers(getTeamParts(team.id), team);
+  const needDeflectors = () => Math.round(Car3D.appearanceParts(wheelParts, d)._visual?.wheels?.deflector || 0) > 0;
   const finArtLive = () => needFin() && ((d.finStyle || "team") !== "none" || d.finBadge === "number" || d.finBadge === "code");
   const NO_ART = "Nothing to colour — TAIL STYLE is NONE and FIN BADGE is not a number or code";
   const haveNames = () => (d.sponsors || "default") !== "clean";
@@ -1349,7 +1351,7 @@ function buildLiveryCreator(container, team) {
     ["COCKPIT SURROUND FINISH", "cockpitFinish"], ["NUMBER BOARD FINISH", "boardFinish"]]) {
     const r = pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
     if (key === "finFinish") deps.push({ row: r, when: needFin, why: NO_FIN });
-    if (key === "deflectorFinish") deps.push({ row: r, when: needDeflectors, why: "Needs wheel deflectors — choose a WHEELS part that includes them" });
+    if (key === "deflectorFinish") deps.push({ row: r, when: needDeflectors, why: "Needs wheel deflectors — use FITTED in WHEELS STYLE with a WHEELS part that includes them" });
   }
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
@@ -1364,9 +1366,13 @@ function buildLiveryCreator(container, team) {
   // fields, so four pill rows — the same node shape as FINISH above.
   pillRow("BODY", "bodyStyle", ["team", ...(Car3D.BODY_STYLE_IDS || [])], "team");
   // Use the catalog's current STYLE labels and ids; no second shape catalog.
-  for (const [label, key, category] of [["AERO SHAPE", "aeroShape", "aero"], ["FLOOR SHAPE", "floorShape", "floor"]]) {
-    const styles = Parts.CATALOG.find((c) => c.id === category).options.filter((o) => o.tag === "STYLE");
+  for (const [key, category] of Object.entries(Car3D.PART_STYLE_FIELDS)) {
+    const cat = Parts.CATALOG.find((c) => c.id === category);
+    const label = category === "aero" ? "AERO SHAPE" : category === "floor" ? "FLOOR SHAPE" : cat.label + " STYLE";
+    const styles = cat.options.filter((o) => o.tag === "STYLE");
     const row = pillRow(label, key, ["fitted", ...styles.map((o) => o.id)], "fitted");
+    row.title = "FITTED follows the installed " + cat.label + " part. Styles change appearance only; performance and fitted parts stay unchanged.";
+    row.setAttribute("aria-description", row.title);
     Array.from(row.querySelectorAll("button")).slice(1).forEach((b, i) => {
       const opt = styles[i];
       b.textContent = opt.label.toUpperCase(); b.title = opt.desc.replace(/^[^—]+— /, "") + " — appearance only";
@@ -1509,7 +1515,7 @@ function livePreviewDraft(team, d) {
   const skipMesh = draftSkipsMesh(_livPrevDraft, d);
   _livPreviewKey = key;
   _livPrevDraft = Object.assign({}, d);
-  if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+  dropDraftAtlases(team);
   // A custom id, as SAVE & FIT writes: "default" gave the draft the team's brand
   // mark palette, which the saved paint job then lost (audit D1; livDraftFromOwn
   // seeds those colours into the draft instead).
@@ -1518,13 +1524,21 @@ function livePreviewDraft(team, d) {
   if (!skipMesh) G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
+// A draft paints under its own decal keys (car-draw draftTag): drop only those, so the saved livery's
+// atlas survives opening the editor and CANCEL. SAVE mints a fresh id, so its atlas misses by itself.
+function dropDraftAtlases(team) {
+  const cd = typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance();
+  if (cd && cd.invalidateDecalTextures) cd.invalidateDecalTextures(team.id, true);
+  else if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+}
+
 function endLivPreview(team) {
   if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
   cancelLivPreview();
   _livPreviewKey = "";
   _livPrevDraft = null;
   G.livDraftOverride = null;
-  if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+  dropDraftAtlases(team);
   // The race body caches key on the SAVED livery id: one built while the draft
   // was live (a garage opened mid-race) holds the draft's paint (#2796 item 4).
   const cd = typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance();

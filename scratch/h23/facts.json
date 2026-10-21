@@ -1,0 +1,210 @@
+{
+ "date": "2026-10-21",
+ "round": "1",
+ "setup": "Same frozen frames on both renderers in an emulated iPhone: 844\u00d7390 landscape, DPR 3, touch, iPhone Safari user agent (so phone memory caps apply), LOW resolution (0.5) by default and MED 0.75 + UPSCALE where marked. TLX runs three's WebGL2 path, which is what an iPhone runs. Software-rendered stills and memory; frame time from the one real GPU we can reach (the CI Mac, with phone caps forced).",
+ "recommendation": "<b>Make GLX the phone default; keep TLX one tap away in RENDERER.</b> On the same phone settings GLX holds about <b>30 MB less at the menu and 42\u201353 MB less in a race</b> (heap + ArrayBuffers, software box), and <b>59 MB less JS heap</b> on the real-GPU Mac (74.5 vs 133.7 MiB). That is the three.js geometry-copy cost the code already warns has jetsam-killed an iPhone tab. On the Mac GPU with phone caps, GLX ran 24.9 fps at its full quality tier, where TLX had to shed to tier 3 and 0.8 scale for 25.9 fps. GLX entered the race in 5.9 s against 19.1 s. The look is close: 2\u201314% of pixels differ in matched frames. GLX shows more, not less: it draws clouds and night stars that TLX drops on the phone tier, and its edges are smoother in the garage. The cost is two renderers kept first-class. Every look fix must land in both, and TLX stays the path for Android WebGPU and desktop. GLX's one worse number is a single 1.4 s block during race entry, against 0.5 s on TLX.",
+ "tiles": [
+  [
+   "Menu memory, phone profile",
+   "53 vs 83 MB",
+   "GLX vs TLX, post-GC heap + ArrayBuffers"
+  ],
+  [
+   "In-race memory, 3 circuits",
+   "59\u201367 vs 101\u2013119 MB",
+   "GLX vs TLX"
+  ],
+  [
+   "Real-GPU JS heap (Mac, phone caps)",
+   "74.5 vs 133.7 MiB",
+   "GLX vs TLX, gpu-census run 39549012663"
+  ],
+  [
+   "Race entry (Mac GPU)",
+   "5.9 s vs 19.1 s",
+   "GLX vs TLX, race() to track ready"
+  ]
+ ],
+ "memNote": "Chromium in this container, phone profile (iPhone UA \u2192 mobileTier, DPR 3, LOW 0.5). Each row is three forced GCs, then Runtime.getHeapUsage. JS heap plus ArrayBuffer backing stores (\u2248 DevTools JSArrayBufferData). It matches performance.memory to within 1 MB. Each race is __apex.race(id) and go(), sampled after 10 s of racing. One browser per backend. GPU memory is not included.",
+ "memRows": [
+  [
+   "Menu (after boot)",
+   "83.1 MB",
+   "53.1 MB",
+   "44.2",
+   "26.9"
+  ],
+  [
+   "Race 1, Monza",
+   "111.0 MB",
+   "65.2 MB",
+   "73.4",
+   "39.1"
+  ],
+  [
+   "Race 2, Monaco",
+   "101.2 MB",
+   "59.1 MB",
+   "72.9",
+   "35.1"
+  ],
+  [
+   "Race 3, Spa",
+   "119.0 MB",
+   "66.5 MB",
+   "73.6",
+   "39.7"
+  ]
+ ],
+ "perfNote": "Frame time from gpu-census.yml on macos-latest. That is a paravirtual Apple GPU, not an iPhone, but it is the only real GPU the project can reach. The run forced phone caps (apex26.forceMobileTier=1) on Monza, helmet cam, with a 20 s autopilot window and the governor live. Local SwiftShader frame times at phone DPR collapsed to 0.2\u20130.4 fps on both renderers, with and without the 4\u00d7 CPU throttle, so they carry no signal and are not shown. For a true phone number, Bryce's on-phone PHONE TEST \u203a GPU TEST would do.",
+ "perfHead": [
+  "Mac GPU, phone caps",
+  "TLX (three WebGL2)",
+  "GLX"
+ ],
+ "perfRows": [
+  [
+   "fps over 20 s",
+   "25.9",
+   "24.9"
+  ],
+  [
+   "frame interval p50 / p95",
+   "36.4 / 74.2 ms",
+   "33.4 / 78.0 ms"
+  ],
+  [
+   "governor at window end",
+   "tier 3 (shed), scale 0.8",
+   "tier 2 (no shed), scale 0.9"
+  ],
+  [
+   "race entry (race() \u2192 track ready)",
+   "19.1 s",
+   "5.9 s"
+  ],
+  [
+   "longest blocking task in entry",
+   "0.50 s",
+   "1.44 s"
+  ],
+  [
+   "JS heap (usedJSHeapSize)",
+   "133.7 MiB",
+   "74.5 MiB"
+  ],
+  [
+   "GPU errors",
+   "0",
+   "0"
+  ],
+  [
+   "rear mirror drawn",
+   "546 frames, 276\u00d779",
+   "549 frames, 276\u00d779"
+  ]
+ ],
+ "gapNote": "A code read of both trees with mobileTier on, checked against the stills. Most phone gates are set once in game.js, so they apply to both renderers. Nothing a player sees on a phone exists only in TLX. What TLX has alone are cost caps.",
+ "gapRows": [
+  [
+   "Sun shadows",
+   "1024\u00b2, single map, PCSS off",
+   "1024\u00b2, single map, PCSS off",
+   "Same in stills"
+  ],
+  [
+   "Car / lamp shadow maps",
+   "off (blob decal)",
+   "off (blob decal)",
+   "\u2014"
+  ],
+  [
+   "SSAO",
+   "half-res, off at night",
+   "half-res, off at night",
+   "Same"
+  ],
+  [
+   "Bloom",
+   "3 levels at phone tier",
+   "same shared gate",
+   "Same"
+  ],
+  [
+   "Road / paint SSR",
+   "dry SSR off on phone; wet kept",
+   "same",
+   "Rain frame: TLX slightly brighter"
+  ],
+  [
+   "Env reflection cube",
+   "never built on phone",
+   "never built on phone",
+   "\u2014"
+  ],
+  [
+   "Rear-view mirror",
+   "shared MirrorPass, lite rung",
+   "same",
+   "Matches (5% px, mostly HUD)"
+  ],
+  [
+   "Liveries",
+   "shared atlas, smaller on phone",
+   "same",
+   "Same"
+  ],
+  [
+   "Baked PBR asset pack",
+   "phone \u2018low\u2019 variant",
+   "same pack",
+   "Same"
+  ],
+  [
+   "Sky clouds / night stars",
+   "<b>not drawn</b> at phone settings in these frames",
+   "drawn",
+   "Spa, Monza, Singapore: visible gap"
+  ],
+  [
+   "Antialiasing",
+   "FXAA, no MSAA",
+   "FXAA, no MSAA",
+   "Garage: TLX edges visibly more jagged"
+  ],
+  [
+   "Lamp slots per fragment",
+   "16 (TLX cap)",
+   "48",
+   "Singapore night: no visible gap"
+  ],
+  [
+   "CPU geometry copies",
+   "kept, about 54 MB",
+   "none",
+   "the memory gap above"
+  ],
+  [
+   "DPR cap / SGSR upscale",
+   "1.5 / yes",
+   "1.5 / yes",
+   "MED+UPSCALE frames match LOW deltas"
+  ]
+ ],
+ "stillsNote": "Each frame was frozen on both renderers with the same camera. Diff counts pixels whose summed RGB moved by more than 30. HUD overlays such as radio toasts sometimes land in only one frame, so read the crops, not just the number. The start grid and the MED helmet frame are left out. TLX's race entry is slower, so its start sequence put the car back on the grid after the camera was placed. Those frames compared different moments, not different renderers.",
+ "captions": {
+  "menu-low": "Identical. The menu is DOM over a dark backdrop.",
+  "garage-low": "Same framing. TLX edges are more stair-stepped (the white floor line, the car outline). GLX's FXAA smooths them.",
+  "monza-helmet-low": "The phone's default view. Scene geometry matches. Most of the diff is a radio toast on the GLX frame and the sky.",
+  "monza-straight-low": "GLX draws a cloud layer; TLX's sky is flat blue. Trees, fences and road match.",
+  "monaco-kerb-low": "The hillside and building massing differ near the top. TLX is darker and greener there, and GLX is paler and hazier.",
+  "monaco-kerb-med": "MED 0.75 + UPSCALE shows the same differences as LOW.",
+  "spa-chase-low": "The diff is all sky: clouds on GLX, flat on TLX.",
+  "spa-chase-med": "Same at MED + UPSCALE.",
+  "spa-rain-low": "Rain: GLX shows a grey overcast band; TLX's sky is flat. TLX's road is slightly brighter.",
+  "singapore-night-low": "Night lighting and lamps match. GLX adds faint night clouds and stars.",
+  "singapore-night-med": "Same at MED + UPSCALE.",
+  "monza-mirror-low": "Both draw the rear-view mirror (top centre, 276\u00d779 on the Mac census). They match."
+ },
+ "footer": "Harness: scratch/h23/ab.mjs (PR #3419). Diff: scratch/h23/diff.py. 38 captures in total: 28 in the first pass, plus a 10-frame reshoot of the garage, grid, mirror and MED helmet frames, all on SwiftShader in Chromium. Real GPU: gpu-census.yml run 39549012663 on macos-latest. Notes: docs/notes/PHONE-RENDERER-AB-2026-10-21.md."
+}
