@@ -1,0 +1,1 @@
+Fixed: wet-road scene reflections remain available on LOW graphics, using shorter-range ray marching and simpler filtering. MEDIUM uses a reduced reflection budget; sustained overload can still fall back to sky and lamp reflections.
