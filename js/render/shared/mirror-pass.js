@@ -75,10 +75,12 @@ const MirrorPass = (function () {
   // reuses the view heap. Was 2 m / 4 frames — at 60 m/s that still re-ranked
   // every other frame on top of the forward cull.
   const RERANK_M = 5, RERANK_EVERY = 8, RERANK_AIM_COS = 0.9994;
-  const LITE_CULL = 180;
-  // THE PHONE RUNG'S DRAW DISTANCE (B·H10, Bryce 2026-10-21). At 180 m the lite mirror drew ~34 % of a phone
-  // frame's triangles into a ~337x96 target (the B·H10 mirror sweep, PR #3243's note). apex26.mirrorLiteCull:
-  // unset = LITE_CULL, 60..400 = that many metres (180 = the old rung).
+  const LITE_CULL = 120;
+  // THE PHONE RUNG'S DRAW DISTANCE (B·H10, Bryce 2026-10-21: "shorter mirror draw distance"). Monza sweep, 7
+  // positions: the lite mirror drew 75k tris mean / 117k worst at 180 m, 65k / 71k at 120 m, and no less at 100 or 80 m
+  // — the floor is TLX's one unchunked whole-lap road (~51k tris, tlx.js chunkedTrackCoords:false), which no cull
+  // reaches. apex26.mirrorLiteCull: unset = LITE_CULL, 60..400 = that many metres (180 = the old rung). The low and min
+  // rungs never draw further than lite.
   let _liteCull = LITE_CULL;
   try {
     const v = +localStorage.getItem("apex26.mirrorLiteCull");
