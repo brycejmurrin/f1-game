@@ -930,6 +930,15 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/lane-preamble.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/live-run-check.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1331,7 +1340,8 @@
       "outputPolicy": "job-status",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--out"
+        "--out",
+        "--quiet"
       ],
       "npmScripts": [
         "test:tooling-fast"
@@ -3319,6 +3329,16 @@
       "path": "tools/ui/audit-diff.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/audit-summary.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
     },
     {
       "path": "tools/ui/circuit-axis.mjs",
