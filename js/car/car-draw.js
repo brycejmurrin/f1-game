@@ -630,7 +630,7 @@ const CarDraw = (function () {
         const parts = Car3D.appearanceParts(Parts.getVisualTiers(setup, team), liv);
         const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                         aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                        parts, rev: -1, leg, aeroShape, floorShape, fwKey: null, lastUse: ++_aeroCustomTick };
+                        parts, rev: -1, leg, aeroShape, floorShape, fwKey: null, fwKeyWt: null, fwKeyFull: "", lastUse: ++_aeroCustomTick };
         byTeam.set(key, state);
         // Career upgrades change the stamp for years of builds. Retain the
         // recent recipes, including both seats of every active team, rather
@@ -656,7 +656,7 @@ const CarDraw = (function () {
       // every flap vertex and made the moveable wings invisible (see aeroStyleOf).
       const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                       aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                      parts, rev, leg, aeroShape, floorShape, fwKey: null };
+                      parts, rev, leg, aeroShape, floorShape, fwKey: null, fwKeyWt: null, fwKeyFull: "" };
       cache.set(team.id, state);
       return state;
     }
@@ -1348,7 +1348,10 @@ const CarDraw = (function () {
       // A pure function of the cached state's parts, so it is built once per state.
       const wt = CarWheels.tints(deps.resolveLivery(team));   // rimTint / caliperTint: part of the key ("" unset)
       const base = st.fwKey || (st.fwKey = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1"));
-      const key = wt.key ? base + wt.key : base;
+      // tints() is memoised per livery, so `wt` is identity-stable: the concatenation is built once per state
+      // and tint set, not per car per frame.
+      let key = base;
+      if (wt.key) { if (st.fwKeyWt !== wt) { st.fwKeyWt = wt; st.fwKeyFull = base + wt.key; } key = st.fwKeyFull; }
       _fwVt = vt; _fwTints = wt;
       return putBoundedMesh(fieldWheelCache, fieldWheelOrder, key, buildPendingFieldWheels, FIELD_WHEEL_CACHE_MAX, freeWheelPair);
     }
