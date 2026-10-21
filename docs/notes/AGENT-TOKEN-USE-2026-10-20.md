@@ -53,6 +53,29 @@ stream carries no token counts. One snapshot, runs still going; the shares can m
   bounded digest (one line per run, at most five failures, artifact count). On the 16-run chat: 4.6 s, 3.4K characters,
   exit 1 because its last run was cancelled (the `wait` contract).
 
+## Fleet survey: the last 200 Cursor agents (2026-10-21)
+
+Listed the last 200 agents (2026-10-18 to 10-20) and ran `cursor-agents.mjs dump` over all of them: 1,452 runs were past the
+24 h stream window, so the sample is the 34 agents (101 runs, ~4,300 calls, ~15M result characters) of the last day. Three
+read-only subagents digested one role group each (survey, build + hunt/audit, infra) with `cursor-transcript.mjs`; I
+re-counted the headline numbers myself. The survey found two `dump` hangs, both fixed: a RUNNING run's stream never closes
+(now `live=`), and neither does a FINISHED run's on an agent with a live follow-up (now cut at 60 s, `slow=`).
+
+| pattern | evidence | direction |
+|---|---|---|
+| `edit_file` echoes the whole file before and after | 27-33 % of every group (1.8M of 5.7M in build/hunt; 0.2M was actual diff); one survey run edited its own `pass2-lane-hud.mjs` 22 times at ~23K each | one edit per file holding every hunk; a change repeated across 3+ files goes through one terminal script printing `git diff --stat`; never re-edit a report, append to it. Not verified: whether the echo reaches the model or only the stream |
+| grep instead of apex-lsp for JS symbols | LSP experiment, one run per arm: control 229 calls / 459K / 165 greps / 0 LSP; optional 137 / 236K / 81 / 23; required 147 / 180K / 28 / 89 (I re-counted). Survey lanes: 0 LSP calls in 1,547 | make apex-lsp required in the launch prompt for any named symbol: -61 % characters, -36 % calls on that task |
+| hand-rolled audit post-processing | survey: 93 inline `node -e` / heredoc scripts, 503K; `layout-audit.mjs` run only 8 times | `lane-preamble.mjs` + `audit-summary.mjs` (built above; not yet on the deploy branch, so these agents could not use them) |
+| GitHub issue loops in triage | 4 triage runs, 650K through `gh issue view` loops over number ranges; one ran its loop twice | a bounded `issue-digest.mjs` (one row per issue); the orchestrator saves the lane's issue list once for dedupe |
+| MCP discovery churn and names that do not exist | 217 `get_mcp_tools` calls, ~500K; failures on Github, Browser-use, spector-webgl, mcp-context7, `lsp_workspace_symbols` | name the exact servers and tools in the prompt ("no GitHub MCP: use `gh`"), discover once per run, `--mcp-file` with only the lane's servers |
+| process listings with full Chromium command lines | survey 16-20 `ps` calls, 267-290K; AGENTS.md rule 7's own `ps ... args` command printed 20-23K | use `comm` or `cut -c1-160` in rule 7 |
+| re-reading big reference files | `docs/AGENT-SURFACE.md` (50K) read 18 times in 14 infra runs; `hud.js` 7-9 times per run; agents re-read their own spilled outputs 42 times (~320K) | an `mcp-inventory` table (< 2K) in place of AGENT-SURFACE.md; `lsp_outline` before any file over 500 lines; output over 50 lines goes to a file |
+| unbounded test output and waits | `tooling-fast --changed` printed 13-57K (it lists every pass); `while sleep 30` waiters; `wait-for.mjs` used 0 times | a failures-only mode for tooling-fast; name `wait-for.mjs` in the prompt |
+
+Failures were 1-8 % of calls in every group with no retry storms (longest identical streak 3); the main repeated failure
+is `grep_search` with glob `**/*` (30 refusals over 11 runs). The subagents' reports and their counting scripts are in
+`scratch/survey/reports/` (local, not committed).
+
 ## Not verified
 
 Whether the survey launch prompts already carried commands (the stream has no user messages); whether the preamble changes what
