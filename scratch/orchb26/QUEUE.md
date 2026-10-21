@@ -133,3 +133,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 07:45Z: Pages cedf3811 GREEN (#3399 live). MERGED #3388 → cadeca7f (GAME). Next: #3429 (may need sync vs #3388 input.js) on green Pages cadeca7f, then #3422 #3396 #3238 #3395 #3402 #3377 #3431.
 
 07:50Z: #3377 READY ddecc85f (full 58/0). Dispatched ci.yml on #3391/#3392 branches (no CI had started); H19 readies after green. #3429 next on green Pages cadeca7f.
+
+08:08Z: Pages cadeca7f GREEN (#3388 live). #3429 → 19d6592e and #3377 → a2644006 merged outside the bus (likely Bryce). Next game #3422 on green Pages a2644006; then #3396 #3238 #3395 #3402 #3431. #3402 GREEN (O-G).
