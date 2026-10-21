@@ -10,27 +10,34 @@ and #3430 merged as `e696b626`. Those observations do not change the source of
 these reproductions.
 
 Six native lanes used isolated worktrees. The parent owned the only Chromium.
-Current open PRs and claims excluded #3407, #3423, #3424, #3430, #3421, #3387,
+The initial open PRs and claims excluded #3407, #3423, #3424, #3430, #3421, #3387,
 and active H26/H27/H28/H29 work. The H19 Assets claim was stale by 823 minutes
 and had no open path overlap. Fleet B explicitly carved out shared Assets and
 MirrorPass from H26's work. Parent/worker exact claims precede implementation.
 No physics, TLX, WGX, shader or quality/default changes are included.
+During verification, #3423 merged as `89413c86`. Its WebGPU diff only skips
+unused SSR setup on the lite tier and exports WGX_LITE; it does not address
+the sampler or instance-tail observations. Those remain owner handoffs, not
+part of this patch. A neighboring mirror-LOD investigation explicitly withdrew
+its MirrorPass overlap request and uses its existing car-draw seam instead.
 
 ## Ranked findings
 
-| Rank | Trigger | Finding and evidence | Impact and action | Validation |
-| --- | --- | --- | --- | --- |
-| 1 | Synchronous bitmap-layer readback gets a WebGL error flag | Upload failure leaves the previous texture readable; read failure leaves destination bytes unchanged, but both indices were returned as successful | Consumers skip their existing fallback and use wrong pixels. Assets now returns only validated layer indices; raw-byte fast path unchanged | Native WebGL negative-width error injection reproduced stale pixels without throwing; candidate excludes failed layer, preserves healthy bytes and siblings |
-| 2 | Chunk-index typed-array allocation throws after GPU allocations | Actual GLXChunked constructor leaves two buffers and one VAO unreachable; same failure in first or third bucket | Transactional cleanup deletes unpublished resources and rethrows the identical error; successful packed output unchanged | Actual constructor/recording-GL tests fail before and pass after, including partial uploads and next-draw binding |
-| 3 | Decompressing the shipped material PNG strips | All stream chunks were retained until a full output buffer was allocated and filled | Stream into a bounded scanline-prefix buffer, still draining and validating the whole stream. Less simultaneous application-buffer retention; copied bytes unchanged | Four real PNGs, 9,175,040 decoded layer bytes identical to baseline and independent sharp; native Chromium chunk accounting below |
-| 4 | Three full mirror passes, then standDown and a different eye | StandDown leaves the consecutive-pass counter odd, so first new full pass freezes the old resident instance pack | Reset cadence on interruption. Actual GLX pack changes from old z=80 to required z=1080 at eye z=1100 | Two fail-before regressions; normal alternating reuse and repeated standDown preserved. Same-world restart's first visible frame was already refreshed: no visible restart improvement claim |
-| 5 | WheelState enabled while travelling backwards | Lock/spin classification uses kappa sign without travel direction; mirrored axle cases swap labels. Actual wet-grass reverse case body -4 m/s, rim slows toward zero to -0.487 m/s, yet wheelSpin=1 | New confirmed telemetry classification bug, default feature OFF. H27 owns physics; owner handoff only | Actual axleStep and PlayerForces source fixture; rendered FX/handling impact unmeasured |
-| 6 | WGX decal minification | Shared sampler defaults to nearest mip and anisotropy 1, while GLX/TLX use trilinear filtering and higher anisotropy | Held cross-backend quality hypothesis, not a demonstrated visual defect; handoff to #3423/#3387 | Actual descriptor/consumer and WebGPU default contracts checked; no rendered comparison |
-| 7 | WGX instance tail becomes visible/hidden | Synthetic 5-to-4 instance change recopies 64 matrix values and uploads 320 bytes despite shared prefix; same cells do no upload | Held operation-count opportunity for #3423; actual camera-workload cost unknown | Exact packed values and invalidation checks pass; no CPU/FPS or GC saving established |
+| Rank | Trigger | Finding and evidence | Impact and action | Ownership | Validation |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Synchronous bitmap-layer readback gets a WebGL error flag | Upload failure leaves the previous texture readable; read failure leaves destination bytes unchanged, but both indices were returned as successful | Consumers skip their existing fallback and use wrong pixels. Assets now returns only validated layer indices; raw-byte fast path unchanged | Parent Assets claim; H26 carve-out | Native WebGL negative-width error injection reproduced stale pixels without throwing; candidate excludes failed layer, preserves healthy bytes and siblings |
+| 2 | Chunk-index typed-array allocation throws after GPU allocations | Actual GLXChunked constructor leaves two buffers and one VAO unreachable; same failure in first or third bucket | Transactional cleanup deletes unpublished resources and rethrows the identical error; successful packed output unchanged | Lifecycle lane claim; parent integration | Actual constructor/recording-GL tests fail before and pass after, including partial uploads and next-draw binding |
+| 3 | Decompressing the shipped material PNG strips | All stream chunks were retained until a full output buffer was allocated and filled | Stream into a bounded scanline-prefix buffer, still draining and validating the whole stream. Less simultaneous application-buffer retention; copied bytes unchanged | Parent Assets claim; H26 carve-out | Four real PNGs, 9,175,040 decoded layer bytes identical to baseline and independent sharp; native Chromium chunk accounting below |
+| 4 | Three full mirror passes, then standDown and a different eye | StandDown leaves the consecutive-pass counter odd, so first new full pass freezes the old resident instance pack | Reset cadence on interruption. Actual GLX pack changes from old z=80 to required z=1080 at eye z=1100 | Rendering lane claim; H26 carve-out | Two fail-before regressions; normal alternating reuse and repeated standDown preserved. Same-world restart's first visible frame was already refreshed: no visible restart improvement claim |
+| 5 | WheelState enabled while travelling backwards | Lock/spin classification uses kappa sign without travel direction; mirrored axle cases swap labels. Actual wet-grass reverse case body -4 m/s, rim slows toward zero to -0.487 m/s, yet wheelSpin=1 | New confirmed telemetry classification bug, default feature OFF. H27 owns physics; owner handoff only | Held by H27 physics owner | Actual axleStep and PlayerForces source fixture; rendered FX/handling impact unmeasured |
+| 6 | WGX decal minification | Shared sampler defaults to nearest mip and anisotropy 1, while GLX/TLX use trilinear filtering and higher anisotropy | Held cross-backend quality hypothesis, not a demonstrated visual defect; handoff to #3423/#3387 | Held by WGX #3423/#3387 owners | Actual descriptor/consumer and WebGPU default contracts checked; no rendered comparison |
+| 7 | WGX instance tail becomes visible/hidden | Synthetic 5-to-4 instance change recopies 64 matrix values and uploads 320 bytes despite shared prefix; same cells do no upload | Held operation-count opportunity for #3423; actual camera-workload cost unknown | Held by WGX #3423 owner | Exact packed values and invalidation checks pass; no CPU/FPS or GC saving established |
 
 ## Texture memory evidence and limits
 
 Chromium 154.0.8037.57 emitted 64 KiB maximum chunks for the actual four PNGs.
+A follow-up observation checked each view offset, backing-buffer capacity and
+ArrayBuffer identity: no chunks alias and their capacities equal payload lengths.
 The diagnostic counted application-visible output backing stores:
 
 | Strip | Inflated bytes | Chunks | Original peak bytes | Bounded destination plus largest chunk |
@@ -62,7 +69,7 @@ are confined to synchronous setup fallback, and are a correctness cost.
 
 ## Profiling and reproducibility
 
-The mobile-shaped browser is 844 by 390, DPR 2, touch 5, reduced motion false,
+The source-controlled race profile records 844 by 390, DPR 2, touch 5, reduced motion false,
 with an iPhone user agent. It remains desktop Chromium with ANGLE Vulkan
 SwiftShader, not Safari or a physical GPU/phone. The initial selected Three
 backend ran TLX/WebGL2; a later uncached boot used GLX/WebGL2. Actual backend is
@@ -84,6 +91,13 @@ are outside the retained recording: an earlier recording incorrectly included
 its expensive GPU getParameter calls and was discarded as a render profile.
 No timings from those operator attempts justify any improvement claim.
 
+In the retained render capture, 36.79% of samples are in native getError
+through GLX.present -> drainGlErrors and 62.68% idle. These are sample counts,
+not call counts. Three rendered warm-up frames do not establish completion
+of the 30-present startup drain. SwiftShader synchronization and queued GPU
+work cannot be attributed to JavaScript arithmetic or physical-GPU cost. The
+safety drain is preserved; this recording is not a steady-state FPS baseline.
+
 ## Review, verification and negative findings
 
 Independent reviews: rendering reviewed GLX construction cleanup; materials
@@ -98,6 +112,18 @@ its writer; an injected recoverable RangeError reaches bitmap fallback with
 zero stream constructions or writes. The recorded profile predates this
 allocation-order guard; `profiled-candidate.patch` pins its exact source.
 No timing comparison depends on that diagnostic.
+
+Targeted browser verification uses the existing desktop Chrome fixture
+(1280 by 720, DPR 1, no touch, reduced motion), not the mobile race profile.
+These are correctness checks, with repository inputs unchanged, not seeded
+performance comparisons. Native API fixtures do not assert viewport and do
+not exercise a rendered race. Assets-api passed 10/10 on its first run.
+The mirror suite passed GLX rendering/compositing and actual TLX countdown
+preparation, then failed its third test on the 300-second whole-test budget
+while entering PiP. Its mirror assertions had completed, but requested TLX
+had fallen back to GLX after the 15-second initialization deadline. This is
+a failed test, not a TLX composite pass; attribution remains unresolved
+without a quiet clean-baseline reproduction. No thresholds were changed.
 
 Remaining gates and final check results are maintained in the draft PR.
 No merge/deployment is part of this research pass. Native fatal process OOM,
