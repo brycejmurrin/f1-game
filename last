@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01SoGgREcrd12Mx6CsVHiDDs #3403 7b6a3a75 non-game B (js-debugger R4 deflake)
+HANDOFF to:* from:codex:perf-investigation-c91f C performance investigation c91f on deploy e44df10d; parent-only 844x390 touch browser. New scoped bug reproductions: PlayerForces low-speed WheelState scales, GLX ctxLost window.name fallback, NetScan restart async ownership, GameMetrics longtask reset windows; phone-pad release under investigation. Prior #3407 and performance-audit-7c2e paths excluded. No merge or deployment in scope; draft handoff to follow.
