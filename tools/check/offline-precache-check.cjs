@@ -146,6 +146,14 @@ srv.listen(0, "127.0.0.1", async () => {
     const controlled = await p1.evaluate(() => !!navigator.serviceWorker.controller);
     console.log("controlled after reload:", controlled);
     if (!controlled) bad.push("page is not controlled by the service worker after a reload");
+    // The agent surface (js/agent/*.js, window.__apex) is LAZY: the install
+    // leaves it out and only a CONTROLLED page's own fetch caches it (sw.js's
+    // LAZY_AGENT block, js/game.js loadAgentSurface). Closing this page at
+    // domcontentloaded, before the boot got there, meant step 3 could never
+    // find __apex offline and read a booted game as "did not boot at all".
+    // Real players never load it; this harness needs it to measure anything.
+    await p1.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 90000 })
+      .catch(() => bad.push("__apex never loaded on the controlled page, so it was never cached"));
     // #2194 / #2424: a missing shell-tag entry offline must not make the repair
     // sweep delete the player's apex26-* caches. Delete one essential key, go
     // offline, reload, and the install caches must still be there.
@@ -172,15 +180,8 @@ srv.listen(0, "127.0.0.1", async () => {
       await ctx.setOffline(false);
       if (after.count < repairProbe.before) bad.push("offline repair probe deleted apex26-* caches");
       if (!after.names.includes(repairProbe.cache)) bad.push("offline repair probe lost the install cache name");
+      await p1.reload({ waitUntil: "domcontentloaded" });
     }
-    // The agent surface (js/agent/*.js, window.__apex) is LAZY: the install
-    // leaves it out and only a CONTROLLED page's own fetch caches it (sw.js's
-    // LAZY_AGENT block, js/game.js loadAgentSurface). Closing this page at
-    // domcontentloaded, before the boot got there, meant step 3 could never
-    // find __apex offline and read a booted game as "did not boot at all".
-    // Real players never load it; this harness needs it to measure anything.
-    await p1.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 90000 })
-      .catch(() => bad.push("__apex never loaded on the controlled page, so it was never cached"));
     await p1.close();
 
     // ---- 3. OFFLINE: race a circuit never raced in this session -------------
