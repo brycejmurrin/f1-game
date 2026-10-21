@@ -3,7 +3,7 @@
 Live state, refreshed and pushed every tick (branch `cursor/orchb25-queue-o25q`, never merged).
 A successor reads this first. Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-21 03:45Z
+Updated: 2026-10-21 03:46Z
 
 ## Gate state
 - Deploy tip cfefcbf7 (#3383 + #3381). Pages run 39536139765: RED after its one rerun
@@ -20,8 +20,8 @@ Non-game first (batch, each gated on the tip the previous produced):
 
 Game, one per green Pages (GAME-SLOT on the bus first):
 5. #3390 PHONE TEST GPU preset — B·H15 — green @516d02e0
-6. #3377 memory pins + qualiField bug — B·H12 (handoff pending) — dirty, syncing
-7. #3385 race-entry cover (−1 s to lights) — B·H18 — CI running @23fc878c3
+6. #3377 memory pins + qualiField bug — B·H12 (wrapping up, handoff pending) — dirty, sync in progress
+7. #3385 race-entry cover (−1 s to lights) — B·H18 — CI RED @23fc878c3 (owner fixing)
 8. #3238 parts-livery (Bryce/Cursor author) — B·W13 watches — full tier re-running @c7fdcdc57
 9. #3382 boot/title — B·H16 — full tier running @d3531832
 10. #3386 garage-prebuild quiet gate (+ Car3D build slice) — B·H16 — draft, stacked on #3382
@@ -30,6 +30,7 @@ Game, one per green Pages (GAME-SLOT on the bus first):
 13. #3392 two leak fixes — B·H12
 14. #3395 editor atlas keep + helmet memo — B·H17 — waits for #3385
 15. #3396 TLX road split — B·H15 — draft, needs pixel diff + gpu-census Verdict
+Draft, docs: #3399 W11 perf fresh-hunt list (fold into W11 governor PR)
 Blocked on Bryce: #3230 (look sign-off from stills, https://apex-garage-review-4d7a.goofy-angel-9204.chatgpt.site).
 Not ours: Fleet D #3301 #3309 #3310 #3357 #3358 #3359; Cursor #3387.
 
