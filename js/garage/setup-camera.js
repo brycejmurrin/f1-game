@@ -554,8 +554,11 @@ function getSetupPreviewMesh() {
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
     const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
     const ent = GarageScene.previewMesh(key, hullKey, () => _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
-      : (_spBase = { key: baseKey, data: Car3D.build(liv.c1, liv.c2, {
+      : (_spBase = { key: baseKey, hullKey, data: Car3D.build(liv.c1, liv.c2, {
         livery: liv, refinish: true,
+        // Same hull key = same geometry (a colour-only livery change): the last build's smoothing prep carries
+        // over (Car3D.build shadeKeep), ~60% of a first-visit build. No extra cache: _spBase already holds it.
+        shadeKeep: _spBase && _spBase.hullKey === hullKey && _spBase.data._refinish ? _spBase.data._refinish.keep : undefined,
         teamId: team.id,   // per-team chassis style shows in the setup turntable too
         num: seat && seat.num,
         helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
