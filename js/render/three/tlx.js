@@ -1938,9 +1938,9 @@ const TLX = (function () {
         if (!r) r = _recPool[drawList.n] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null, split: null };
         drawList.n++;
         r.geo = geo; r.m = m; r.mat = mat; r.em = em; r.al = al; r.lg = lg; r.chunked = chunked; r.instanced = instanced;
-        // THE ROAD SPLIT (tlx-chunked.js splitRanges): its AABBs are world-space, so only an identity draw culls by them.
-        r.split = geo && geo.__tlxSplit && m && m[0] === 1 && m[5] === 1 && m[10] === 1 && m[12] === 0 && m[13] === 0 && m[14] === 0
-          && m[1] === 0 && m[2] === 0 && m[4] === 0 && m[6] === 0 && m[8] === 0 && m[9] === 0 ? geo.__tlxSplit : null;
+        // THE ROAD SPLIT (tlx-chunked.js splitRanges): its AABBs are world-space, so only an identity draw
+        // (poolModelMat hands identity on as null) culls by them.
+        r.split = geo && geo.__tlxSplit && !m ? geo.__tlxSplit : null;
       }
       // Draws the visible stretches of a split road through its few slot geometries (the road's own buffers and
       // material, each a drawRange) instead of the whole lap. Main pass: frustum only (cd 0), so the picture is
