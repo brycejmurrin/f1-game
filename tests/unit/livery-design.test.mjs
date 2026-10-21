@@ -598,7 +598,7 @@ test("editor greys REPEATS / LINE WEIGHT / KEYLINE per layout", () => {
 // edit, so the resolver keys on its identity and identity memos downstream (CarWheels.tints) can hit.
 test("a live draft resolves to the same object until the draft is replaced", () => {
   const { ctx } = load({ arrToHex: () => "#000000", hexToArr: () => [0, 0, 0] });
-  vm.runInContext(source("js/car/liveries.js") + source("js/car/custom-liveries.js"), ctx);
+  for (const f of ["js/car/liveries.js", "js/car/custom-liveries.js"]) vm.runInContext(source(f), ctx, { filename: absSrc(f) });
   const r = vm.runInContext(`(() => {
     const L = CustomLiveries.create({ store: { get: () => null, rev: 1 } }), team = { id: "ferrari", color: [1, 0, 0], color2: [1, 1, 1] };
     L.livDraftOverride = { teamId: "ferrari", liv: { id: "d", c1: [0, 0, 1], c2: [1, 1, 1] } };

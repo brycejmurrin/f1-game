@@ -1920,17 +1920,27 @@ const Input = (function () {
      fullscreen nor lock() and keeps its rotate prompt; the rejection there (and
      anywhere unsupported) is swallowed.
      https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock */
-  let _landscapeLocked = false;
+  // WANTED, not locked: an unlock (quit) that lands before lock() resolves must still win, or the menu
+  // stayed pinned to landscape until the next race (B·H11 hunt).
+  let _landscapeLocked = false, _landscapeWanted = false;
+  function landscapeUnlockNow() {
+    const o = typeof screen !== "undefined" && screen.orientation;
+    if (o && typeof o.unlock === "function") { try { o.unlock(); } catch (_) { /* not locked */ } }
+  }
   function lockLandscape() {
     const o = typeof screen !== "undefined" && screen.orientation;
     if (!o || typeof o.lock !== "function" || !touchControlsNeeded()) return Promise.resolve(false);
-    return Promise.resolve(o.lock("landscape")).then(() => (_landscapeLocked = true)).catch(() => false);
+    _landscapeWanted = true;
+    return Promise.resolve(o.lock("landscape")).then(() => {
+      if (!_landscapeWanted) { landscapeUnlockNow(); return false; }   // unlocked while the lock was pending
+      return (_landscapeLocked = true);
+    }).catch(() => false);
   }
   function unlockLandscape() {
+    _landscapeWanted = false;   // a pending lock unlocks itself when it resolves
     if (!_landscapeLocked) return;
     _landscapeLocked = false;
-    const o = typeof screen !== "undefined" && screen.orientation;
-    if (o && typeof o.unlock === "function") { try { o.unlock(); } catch (_) { /* not locked */ } }
+    landscapeUnlockNow();
   }
 
   function setSteerMode(m) {

@@ -13,6 +13,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const loader = readFileSync(new URL("../../js/core/script-loader.js", import.meta.url), "utf8");
 const boot = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta.url), "utf8");
@@ -91,7 +92,7 @@ function bootRig({ local = {}, session = {}, gpu = false, throws = false } = {})
     ApexRoster: { DEFERRED: { webgl2: ["glx.js"], three: ["tlx.js"], webgpu: ["wgx.js"] } },
     ScriptLoader: { preload: (files) => { preloaded.push(...files); return files.length; } },
   });
-  vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx);
+  vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx, { filename: absSrc("js/render/renderer-boot.js") });
   return { guess: ctx.RendererBoot.guessBackend(), preloaded };
 }
 
@@ -132,7 +133,7 @@ test("a TLX guess modulepreloads the whole three vendor island at eval, three.co
       ScriptLoader: { preload: (files) => files.length },
       document: { querySelector: () => null, createElement: () => ({}), head: { appendChild: (el) => links.push(el) } },
     });
-    vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx);
+    vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx, { filename: absSrc("js/render/renderer-boot.js") });
     return links.filter((l) => l.rel === "modulepreload").map((l) => l.href);
   };
   assert.deepEqual(run(true), ["vendor/three-0.186.1/three.webgpu.min.js", "vendor/three-0.186.1/three.core.min.js", "vendor/three-0.186.1/three.tsl.min.js"]);
