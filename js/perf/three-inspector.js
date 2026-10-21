@@ -16,6 +16,7 @@ const ThreeInspector = (function () {
 
   let inspector = null;   // live Inspector instance
   let host = null;        // { renderer, hold } from tlx.inspectorHost()
+  let previousInspector = null, previousTimestamp = false;
   let closeBtn = null;
   let token = 0;          // bumps on every on/off so a slow import cannot resurrect a disabled panel
   let last = { on: false, supported: false, reason: "off" };
@@ -45,9 +46,17 @@ const ThreeInspector = (function () {
     token++;
     if (closeBtn && closeBtn.parentNode) closeBtn.parentNode.removeChild(closeBtn);
     closeBtn = null;
-    const insp = inspector, h = host;
-    inspector = null; host = null;
-    try { if (h && h.renderer) h.renderer.inspector = null; } catch (_) { /* renderer may be gone */ }
+    const insp = inspector, h = host, previous = previousInspector, timestamp = previousTimestamp;
+    inspector = null; host = null; previousInspector = null;
+    try {
+      // r186 requires an InspectorBase even when the panel is off: assigning null throws AFTER storing null,
+      // and the next renderer tick dereferences it. The setter detaches/disposes our panel while restoring
+      // its original inspector. A later owner may already have replaced us; leave that owner's state alone.
+      if (h && insp && h.renderer.inspector === insp && previous) {
+        h.renderer.inspector = previous;
+        if (h.renderer.backend) h.renderer.backend.trackTimestamp = timestamp;
+      }
+    } catch (_) { /* renderer may be gone */ }
     try { if (insp && insp.domElement && insp.domElement.parentNode) insp.domElement.parentNode.removeChild(insp.domElement); } catch (_) { /* detached already */ }
     try { if (h) h.hold(false); } catch (_) { /* renderer may be gone */ }
   }
@@ -55,16 +64,18 @@ const ThreeInspector = (function () {
   async function enable(gfx) {
     const h = gfx && typeof gfx.inspectorHost === "function" ? gfx.inspectorHost() : null;
     if (!h || !h.renderer) {
+      teardown();
       last = { on: false, supported: false, reason: "TLX only: the backend that booted has no three.js renderer (a software-GL boot may pick GLX; pin apex26.gfxBackend=three)" };
       say("not available: " + last.reason);
       return;
     }
-    if (inspector && host && host.renderer === h.renderer) { last = { on: true, supported: true, reason: "on" }; return; }
+    if (inspector && host && host.renderer === h.renderer && h.renderer.inspector === inspector) { last = { on: true, supported: true, reason: "on" }; return; }
     teardown();
     const mine = ++token;
     last = { on: true, supported: true, reason: "loading" };
     let mod;
     try { mod = await import(URL_ID); } catch (e) {
+      if (mine !== token) return;
       last = { on: false, supported: true, reason: "import failed: " + (e && e.message) };
       say(last.reason);
       return;
@@ -72,6 +83,8 @@ const ThreeInspector = (function () {
     if (mine !== token) return;   // turned off (or replaced) while the files loaded
     try {
       host = h;
+      previousInspector = h.renderer.inspector;
+      previousTimestamp = h.renderer.backend && h.renderer.backend.trackTimestamp;
       h.hold(true);
       inspector = new mod.Inspector();
       h.renderer.inspector = inspector;   // three's setter calls inspector.setRenderer(renderer)
