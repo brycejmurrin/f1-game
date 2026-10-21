@@ -232,6 +232,9 @@ const RaceEntryProfile = (() => {
         armObserver();
       }
       uiPending = false;
+      // The body's legs start HERE: without this, its first lap ("scenery")
+      // absorbed the garage-out, flyby and intro build since beginUi.
+      lapT0 = now();
       if (tag) pushMark("begin:" + tag);
       presentationEnabled = false;
       return;

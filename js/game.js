@@ -2518,6 +2518,7 @@ async function startRaceBody() {
   // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
   // live() stays true: this session owns the build (menu prep uses a generation gate).
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
+  if (_menuGate.join) { const step = _menuGate.join; _menuGate.join = null; await step.catch(() => false); if (stale()) return false; }   // startRace joined the menu's build
   if (vmNoFramePump) loadTrack(trackIdx);
   else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
   if (stale()) return false; rlap("loadTrack");
@@ -2721,6 +2722,13 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
+  // A DIRECT start (Daily, Data Hub, season, agent) stands the menu's build down as RACE! does (introBuild),
+  // JOINING one of this same world in flight: left live, it ran beside this race's own build (two buildPaced
+  // for one world, measured 2026-10-21), and a loadTrackStepped that finishes behind the other returns false.
+  const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;
+  if (join) mp.owner = () => key === entrySettings();
+  _menuGate.join = join ? mp.step : null;   // startRaceBody awaits it before its own load, which then reuses the world
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); if (e) announce("COULD NOT LOAD CIRCUIT — CHECK CONNECTION", 3, "info"); });

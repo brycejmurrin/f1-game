@@ -164,6 +164,17 @@ test("beginUi + afterPaint + continueWindow keep UI cover marks into startRace",
   assert.ok(P.snapshot().marks.some((m) => m.n === "ui:tap"), "second tap while armed marks ui:tap");
 });
 
+test("continueWindow restarts the leg clock: the body's first lap is not the garage-out and flyby", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t } });
+  P.beginUi("uiStart");
+  t = 9000;   // garage-out, flyby and intro build under the UI window
+  P.continueWindow("startRace");
+  t = 9010; P.lap("scenery");
+  t = 9060; P.lap("resets");
+  assert.equal(JSON.stringify(P.snapshot().legs.map((l) => [l.n, l.ms])), JSON.stringify([["scenery", 10], ["resets", 50]]));
+});
+
 test("manifest lists the module before quality-preset (load order)", () => {
   const man = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
   const a = man.indexOf('"js/perf/race-entry-profile.js"');
