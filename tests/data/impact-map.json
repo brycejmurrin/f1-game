@@ -6700,6 +6700,7 @@
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
+        "tests/unit/live-frame-census.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/merge-gate.test.mjs",
@@ -7467,6 +7468,7 @@
         "tests/unit/input-bindings.test.mjs"
       ],
       "*": [
+        "tests/unit/a11y-opts.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",

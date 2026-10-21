@@ -197,6 +197,8 @@ const CarMaterials = (function () {
     const f = base._refinish, out = Object.assign({}, base, { mat: f.mat.slice(), col: f.col.slice(), nrm: f.nrm.slice() });
     if (out.flapInfo) out.flapInfo = Object.assign({}, out.flapInfo, { finish: finishOf(liv, "wingFinish") });
     finishPass(out, liv, f);
+    // Welded like a full build (Car3D.build skips it when keeping _refinish); own pos/idx, the base keeps its ranges.
+    if (typeof CarGeometry !== "undefined") { out.pos = base.pos.slice(); out.idx = base.idx.slice(); CarGeometry.weld(out); }
     return out;
   }
 

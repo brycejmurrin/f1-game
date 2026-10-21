@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, changedHeader, EMPTY_DIFF_MESSAGE,
-  isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine,
+  isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
   LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS }
   from "../../tools/ci/tooling-fast.mjs";
 
@@ -204,6 +204,34 @@ test("ceiling breach", () => assert.deepEqual(["js/net/lobby.js lines: 1895 > 18
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("--quiet keeps START/PASS in the log only; the console still carries FAIL, its detail and the verdict", async () => {
+  const dir = tmp();
+  const seen = [];
+  const log0 = console.log;
+  try {
+    const ok = path.join(dir, "ok.test.mjs");
+    const bad = path.join(dir, "bad.test.mjs");
+    fs.writeFileSync(ok, `import test from "node:test"; test("fine", () => {});\n`);
+    fs.writeFileSync(bad, `import test from "node:test"; import assert from "node:assert/strict";\ntest("quiet contract fails", () => assert.equal(1, 2));\n`);
+    const logPath = path.join(dir, "suite.log");
+    console.log = (...a) => seen.push(a.join(" "));
+    const r = await runToolingFast([ok, bad], { jobs: 1, logPath, localTimingsPath: null, quiet: true });
+    console.log = log0;
+    assert.equal(r.failed, 1);
+    const out = seen.join("\n");
+    assert.ok(!/\] (START|PASS) /.test(out), out);
+    assert.ok(/\] FAIL +\d\/2 \S*bad\.test\.mjs/.test(out) && out.includes("not ok 1 - quiet contract fails"), out);
+    assert.ok(/= run failed/.test(out), out);
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.ok(/\] START /.test(log) && /\] PASS +\d\/2 \S*ok\.test\.mjs/.test(log), log);
+    assert.equal(parseToolingFastArgv(["--changed", "--quiet"]).quiet, true);
+    assert.ok(TOOLING_FAST_USAGE.includes("--quiet"));
+  } finally {
+    console.log = log0;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("CLI: default --jobs stays 1 (AGENTS.md rule 4 load limits); --changed is a first-class flag", () => {
   assert.equal(DEFAULT_JOBS, 1);
   const d = parseToolingFastArgv([]);
@@ -221,7 +249,10 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   assert.equal(r.reason, "matched");
   assert.deepEqual(r.files.sort(), ["tests/unit/agent-config.test.mjs", "tests/unit/test-bg-outcome.test.mjs"].sort());
   assert.ok(r.files.length < all.length);
-  assert.deepEqual(shardsCoveringFiles(r.files, all), ["2/2"]);
+  // Which CI halves run those files follows the CI split (time-balanced since 2026-10-21), not a stride.
+  const covering = ["1/2", "2/2"].filter((sp) => ciShardFiles(all, sp).some((f) => r.files.includes(f)));
+  assert.deepEqual(shardsCoveringFiles(r.files, all), covering);
+  assert.ok(covering.length >= 1);
 });
 
 test("a file pin does not inherit a generic top-level tree pin", () => {
@@ -558,4 +589,54 @@ test("#2890 --changed CLI prints WIDENED first and the long-run hint when estima
   assert.match(src, /criticalPathMs/);
   assert.ok(LONG_RUN_MS >= 120_000);
   assert.match(LONG_RUN_HINT, /nohup npm run test:tooling-fast -- --changed/);
+});
+
+test("applyFileShard with timings packs longest first onto the least-loaded shard; unmeasured files cost the median", () => {
+  const files = ["a", "b", "c", "d", "e", "f"];
+  const t = { a: 100, b: 90, c: 60, d: 50, e: 40, f: 10 };
+  // LPT: a->s1 (100), b->s2 (90), c->s2 (150), d->s1 (150), e->s1 on the tie (190), f->s2 (160). List order is kept.
+  assert.deepEqual(applyFileShard(files, "1/2", t), ["a", "d", "e"]);
+  assert.deepEqual(applyFileShard(files, "2/2", t), ["b", "c", "f"]);
+  // A file with no recorded time costs the median of the table (60 here): same plan as giving it that time.
+  const more = [...files, "z"];
+  for (const spec of ["1/2", "2/2"]) {
+    assert.deepEqual(applyFileShard(more, spec, t), applyFileShard(more, spec, { ...t, z: 60 }), spec);
+  }
+  // Three shards still partition the list.
+  const parts = ["1/3", "2/3", "3/3"].map((s3) => applyFileShard(more, s3, t));
+  assert.deepEqual(parts.flat().sort(), [...more].sort());
+  assert.equal(new Set(parts.flat()).size, more.length);
+});
+
+test("applyFileShard: equal costs, or no table at all, reproduce the old stride", () => {
+  const files = ["a", "b", "c", "d", "e"];
+  assert.deepEqual(applyFileShard(files, "1/2", { a: 5, b: 5, c: 5, d: 5, e: 5 }), ["a", "c", "e"]);
+  assert.deepEqual(applyFileShard(files, "2/2", { a: 5, b: 5, c: 5, d: 5, e: 5 }), ["b", "d"]);
+  assert.deepEqual(applyFileShard(files, "2/2", {}), ["b", "d"]);
+  assert.deepEqual(applyFileShard(files, "1/2"), ["a", "c", "e"]);
+  assert.throws(() => applyFileShard(files, "0/2", { a: 1 }), /bad --shard/);
+});
+
+test("ciShardFiles: the two CI halves partition the list, balanced by the committed table, slowest files apart", () => {
+  const all = TOOLING_FAST_FILES;
+  const table = loadTimings([TIMINGS_FILE]);
+  const known = Object.values(table).filter((v) => typeof v === "number").sort((x, y) => x - y);
+  const median = known[known.length >> 1];
+  const cost = (f) => (typeof table[f] === "number" ? table[f] : median);
+  const sum = (fs0) => fs0.reduce((acc, f) => acc + cost(f), 0);
+  const a = ciShardFiles(all, "1/2"), b = ciShardFiles(all, "2/2");
+  assert.equal(a.length + b.length, all.length);
+  assert.equal(new Set([...a, ...b]).size, all.length, "no file runs twice, none is dropped");
+  const ratio = (x, y) => Math.max(sum(x), sum(y)) / Math.min(sum(x), sum(y));
+  // The stride this replaced was 1407 s vs 770 s of recorded work on 2026-10-20 (tooling A hit its 12 min cap twice
+  // that night) and flips with every file added, because an insertion moves every later file to the other half.
+  const strideRatio = ratio(applyFileShard(all, "1/2"), applyFileShard(all, "2/2"));
+  assert.ok(ratio(a, b) <= 1.05, `halves ${Math.round(sum(a) / 1000)} s vs ${Math.round(sum(b) / 1000)} s`);
+  assert.ok(ratio(a, b) <= strideRatio, "never worse than the stride");
+  const [first, second] = [...all].sort((x, y) => cost(y) - cost(x));
+  assert.notEqual(a.includes(first), a.includes(second), "the two slowest files are not in the same half");
+  // Every shard computes the same plan from the same inputs, and shardsCoveringFiles reads the same split.
+  assert.deepEqual(ciShardFiles(all, "1/2"), a);
+  assert.deepEqual(shardsCoveringFiles([a[0]], all), ["1/2"]);
+  assert.deepEqual(shardsCoveringFiles([b[0]], all), ["2/2"]);
 });
