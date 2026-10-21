@@ -1948,7 +1948,10 @@ function dropTrackWorld() {
 // newer build or live() going false abandons it and frees its partial uploads.
 // Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
-async function loadTrackStepped(idx, live) {
+// Under the race-entry cover (startRaceBody / introBuild): 16 ms slices and a frame every third one (~20 fps cover
+// animation) instead of 8 ms then a frame — Tracks.buildPaced's pace note. The menu picker keeps the default.
+const RACE_BUILD_PACE = { budgetMs: 16, rafEvery: 3 };
+async function loadTrackStepped(idx, live, pace) {
   // LAZY_CIRCUIT + LAZY_TRACK_BUILD: path/pal/sectors and the build toolkit land
   // via ensureScenery before any build. Callers (flyby / startRace / intro)
   // already await ensureScenery; these gates cover a direct stepped load and
@@ -1976,7 +1979,7 @@ async function loadTrackStepped(idx, live) {
     // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
     if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx, undefined, live); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
     if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
-    if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes); }
+    if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes, pace && pace.budgetMs, pace); }
   } finally {
     try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
@@ -2513,7 +2516,7 @@ async function startRaceBody() {
   // live() stays true: this session owns the build (menu prep uses a generation gate).
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
   if (vmNoFramePump) loadTrack(trackIdx);
-  else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
+  else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost(), RACE_BUILD_PACE)) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
   if (stale()) return false; rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
@@ -2620,7 +2623,9 @@ async function startRaceBody() {
   // game-vm pumps no timers: an endless slice there never yields (like yieldMain above).
   // A frame drawn between steps built the not-yet-warmed cars itself (census 502/503: GLX ~1 s tasks, steps <= 199 ms).
   _carWarm.busy = true;
-  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8)); } finally { _carWarm.busy = false; }
+  // deferRear: the cars behind the player hand their atlas upload and caster to the lights (car-draw.js
+  // drainDeferredCarWarm, one piece a countdown frame below); headless has no frames to drain them in.
+  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
   if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; skyViewOverride = null;
@@ -3839,7 +3844,7 @@ function introBuild(go) {
         if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
         // In steps, a few ms per frame: the preparation card and skip remain responsive.
         if (join) await mp.step;
-        if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live))) || !live()) return;
+        if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live, RACE_BUILD_PACE))) || !live()) return;
         _menuGate.ready = key; _menuGate.track = track;
         // Assets, plans and shader warm all settle before the outgoing animation.
         const t1 = performance.now();
@@ -8442,6 +8447,7 @@ function tickBody(now) {
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
     PerfGov.recordSimulation(steps, dropped);
     if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
+    if (state === "count") carDraw.drainDeferredCarWarm(4);   // the rear grid's atlases and casters, one piece a frame under the lights (no sim: the sim is above)
     if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
