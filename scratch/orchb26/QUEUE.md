@@ -203,3 +203,7 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 19:58Z: H29 FINAL at context cap (#3436 merged) → archived; launched B·H31 boot round 2 (Opus) session_016peTBzXhThg7o3UyBwSb34: TLX menu world warm 16-20 s. Branch to delete (Bryce, hook-blocked): cursor/live-debug-boot-1-base-h29a.
 20:09Z: #3421 → 185ab0ba merged by Bryce (on top of #3436 87246539). Live still 89413c86. Next: #3424 once 87246539 or 185ab0ba is live.
 20:17Z: H30 lead (Bryce recording): garage on TLX/WebGPU drops to 6-9 fps ~10 s after selecting a custom BRUSHED livery; GPU-side, scales with screen coverage, drawn twice (car + floor mirror). Suspect tsl-lit.js BRUSHED branch (H26 file) + tlx.js TEX_POOL_MS 10 s age-out. Census 39668066437. H26 + H30 coordinating. #3442 verified (SettingDeps writes 1000+ to 0).
+
+## 20:36Z tick
+- #3424 merged 8f03f188 (2 parents, DONE posted). Watcher bmcwb7bx9 on 8f03f188. Next: #3438 (ready, aa0e5963) → #3439 → #3442 → #3441 (READY 21d8c84a) → #3407.
+- H26 granted tlxLowMem settings-row carve-out (index.html row, settings-search, settings-export, new js/ui/low-mem-opts.js); H28 told.
