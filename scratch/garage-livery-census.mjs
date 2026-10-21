@@ -103,6 +103,7 @@ try{
       const page=await ctx.newPage();page.on('pageerror',e=>row.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')row.consoleErrors.push(m.text().slice(0,300));else if((m.type()==='warning'||/gfx|TLX|WebGPU|reload|device|lost/i.test(m.text()))&&!/experimental on this platform/.test(m.text())&&row.gfxLog.length<200)row.gfxLog.push(m.type()+' '+m.text().slice(0,/ctxprobe/.test(m.text())?1200:240));});
       await installProbeInit(page,{backend:'three',team:2,tlxForceGL:forceGL==='1'});
       await page.addInitScript(fgl=>{window.__TEST_MODE=true;localStorage.setItem('apex26.tlxForceGL',fgl);localStorage.setItem('apex26.wgxCapture','0');sessionStorage.setItem('apex26.wgxCapture','0');localStorage.setItem('apex26.gfxBootStepMs','45000');},forceGL);
+      if(REQ.livery_prewarm_off)await page.addInitScript(()=>{try{localStorage.setItem('apex26.garagePrewarm','off');}catch(_){}});
       if(noHiRes)await page.addInitScript(()=>{const t=setInterval(()=>{if(typeof LiveryTex!=='undefined'){LiveryTex.IS_PHONE=true;clearInterval(t);}},20);});
       await page.addInitScript(installGarageGpuAllocationProbe);await page.addInitScript(installCounters);await page.addInitScript(installPageCounters);
       page.on('framenavigated',f=>{if(f===page.mainFrame())row.navigations=(row.navigations||0)+1;(row.navLog||(row.navLog=[])).push({at:new Date().toISOString(),phase:row.phase||'boot'});});
@@ -131,7 +132,12 @@ try{
         const t1=(await snapshot(page)).t;
         row.idleTrace=await page.evaluate(([t0,t1])=>({frames:(__livCount.frames||[]).filter(([t])=>t>t0&&t<=t1).map(([t,d])=>[Math.round(t-t0),+d.toFixed(1)]),
           longs:__livCount.longs.filter(([s])=>s>t0&&s<t1).map(([s,d])=>[Math.round(s-t0),Math.round(d)])}),[t0,t1]);
-        row.idleTrace.mem=mem;row.idleTraceStats=await windowStats(page,t0,t1);log(`${arm} idle trace ${JSON.stringify(row.idleTraceStats)}`);save();}
+        row.idleTrace.mem=mem;row.idleTrace.t0=t0;
+        // B·H26's discriminator for the cold stall (B·H32 rev 17): the TLX warm stage timeline, the env probe and the
+        // title prebuild, on the same performance.now() clock as t0, so a stage landing at the stall names its owner.
+        row.idleTrace.owners=await page.evaluate(()=>{const T=window.GLX&&GLX.__tlx;const m=T&&T.memState?T.memState():{};
+          let env=null;try{env=T&&T.envState?T.envState():null;}catch(_){}let pb=null;try{pb=window.__apex.garagePrebuild();}catch(_){}
+          return {now:performance.now(),warm:m.warm||null,env,prebuild:pb};});row.idleTraceStats=await windowStats(page,t0,t1);log(`${arm} idle trace ${JSON.stringify(row.idleTraceStats)}`);save();}
       // livery_select_trace (B·H30, Bryce's 2026-10-21 recording: 6-9 fps for ~10 s after picking his BRUSHED custom
       // livery, then recovery): save a BRUSHED custom, then alternate stock and custom picks; per pick, ten 1 s buckets.
       if(REQ.livery_select_trace){
