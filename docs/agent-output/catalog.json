@@ -3121,6 +3121,12 @@
       ]
     },
     {
+      "path": "tools/shot/webgpu-urban-gallery.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/track/aero-zone-turns.cjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

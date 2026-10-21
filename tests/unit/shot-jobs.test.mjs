@@ -72,6 +72,14 @@ test("--clear is opt-in: off by default, on from the flag or a batch field (#225
   assert.match(SHOT_USAGE, /--clear/);
 });
 
+test("traffic and racing-line shot flags preserve AI cars and hide the suggested line", () => {
+  const plan = parseShotArgv(["--ultra", "--traffic", "--no-line", "singapore", "0.11", "trackside"], ROOT);
+  assert.equal(plan.capture.ultra, true);
+  assert.equal(plan.jobs[0].traffic, true);
+  assert.equal(plan.jobs[0].noLine, true);
+  assert.equal(plan.jobs[0].cam, "trackside");
+});
+
 test("loadBatchFile accepts JSONL", () => {
   fs.mkdirSync(TMP, { recursive: true });
   const f = path.join(TMP, "jobs.jsonl");
