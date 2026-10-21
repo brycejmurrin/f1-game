@@ -8704,6 +8704,13 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
   $("pm-flyby").disabled = !inRace;
 }
+function focusSettingsHub() {
+  const hub = $("pm-settings-index");
+  if (!hub || hub.hidden) return;
+  for (const el of hub.querySelectorAll("button:not([disabled])")) {
+    try { el.focus({ preventScroll: true }); return; } catch (_) { /* detached */ }
+  }
+}
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here
   // AUTO is FULL" is written after the first HUD tick, not only at boot.
@@ -8713,11 +8720,21 @@ function openSettings() {
   ensureAudio(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
+  focusSettingsHub();
 }
 let keyBinds = null;   // KeyBinds.create(G), below
 function closeSettings() { settingsNav.invalidate(); if (keyBinds) keyBinds.disarmAll(); els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
 $("pm-settings").onclick = openSettings;
-$("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings(); };
+$("pm-settings-close").onclick = () => {
+  // Title (not paused): one BACK/Escape from a sub-page closes the sheet — not
+  // an intermediate hop through the door index (survey #3250).
+  if (!paused && settingsNav.current() !== "home") {
+    settingsNav.invalidate();
+    closeSettings();
+    return;
+  }
+  if (settingsNav.back()) closeSettings();
+};
 // The same settings screen from the TITLE menu, so steering, audio and the
 // tuners are reachable without starting a race first. Always opens on the
 // door index. closeSettings() already only returns to the pause menu when
