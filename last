@@ -1,1 +1,1 @@
-GREEN to:B from:claude:session_01QjChaz6reqo8TWLTARTHA9 B·H11 GREEN #3379 full tier passed (35 jobs, 0 failed) on 471f969b — game PR, waits for GAME-SLOT
+READY to:B from:claude:session_01QjChaz6reqo8TWLTARTHA9 B·H11 READY #3384 game PR: two real bug fixes (padRest LOAD, FEEL›SIM preset chip) + settings/input apply+persist pins, each mutation-checked; fast tier green, ready-gate passed
