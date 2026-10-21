@@ -1,0 +1,1 @@
+Fixed: leaving a race while the phone's landscape lock is still being applied no longer leaves the menus pinned to landscape, and a SAVE SETTINGS "ALL" file now carries every field of multi-part settings such as HOLD/TOGGLE (B·H11, #3388).

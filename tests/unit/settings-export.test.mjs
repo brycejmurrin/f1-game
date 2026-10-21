@@ -606,6 +606,13 @@ test("a settings file of the wrong shape is refused whole, and a bad value skipp
   assert.equal(b.disk.get("apex26.volMusic"), "0.3", "and the rest of the file still applies");
 });
 
+test("an ALL file carries an object key's whole effective value; CHANGES only its moved fields (B·H11 hunt)", () => {
+  const disk = { "apex26.holdMode": JSON.stringify({ throttle: "toggle", lookBack: "hold" }) };
+  assert.deepEqual(boot({ disk }).collect("all").settings.a11y.holdMode, { throttle: "toggle", lookBack: "hold" },
+    "ALL is every key's effective value: lookBack must not drop out");
+  assert.deepEqual(boot({ disk }).collect("changes").settings.a11y.holdMode, { throttle: "toggle" }, "CHANGES keeps the diff");
+});
+
 test("settings backups preserve the announcer switch and radio effects in both modes", () => {
   for (const mode of ["all", "changes"]) {
     const source = boot({ disk: { "apex26.announcer": "false", "apex26.radioFx": "0.35" } });

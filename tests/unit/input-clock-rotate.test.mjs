@@ -51,3 +51,30 @@ test("a screen rotation restarts the tilt filter but keeps the calibrated zero",
   assert.ok(Math.abs(after) < 0.02, `the filter restarts on the new axis instead of easing in from the old lean (${leaning}): ` + after);
   assert.ok(Math.abs(roll(10)) < 0.02, "the calibrated neutral survived the rotation");
 });
+
+test("a window blur is not a phone-controller loss: no onPadLost edge for a link that is still alive (B·H20)", () => {
+  let lost = 0;
+  const { Input, sb, fire } = boot({ onPadLost: () => { lost++; } });
+  let t = 1000;
+  sb.performance = { now: () => t };
+  for (let i = 0; i < 5; i++) { t += 16; Input.remoteSample({ source: "phone", roll: 0, thr: 0, brk: 0 }); Input.poll(); }
+  assert.equal(lost, 0, "a live phone is no loss");
+  fire("blur");
+  t += 16; Input.poll();
+  assert.equal(lost, 0, "reset() on blur must not read as the phone going quiet");
+  t += 5000; Input.poll();
+  assert.equal(lost, 0, "and a phone that never spoke again was already cleared by the blur");
+});
+
+test("a re-paired phone's tilt starts from its own reading, not the lean the last link held (B·H20)", () => {
+  const { Input, sb } = boot();
+  let t = 1000;
+  sb.performance = { now: () => t };
+  const roll = (deg, n) => { let v = 0; for (let i = 0; i < n; i++) { t += 16; Input.remoteSample({ source: "phone", roll: deg, thr: 0, brk: 0 }); v = Input.steer(); } return v; };
+  roll(0, 5);
+  Input.calibrate();
+  assert.ok(roll(30, 60) > 0.3, "the lean steers");
+  Input.remoteLost("phone");
+  t += 5000;
+  assert.ok(Math.abs(roll(0, 1)) < 0.02, "the first level sample after a re-pair reads level, not the old lean");
+});

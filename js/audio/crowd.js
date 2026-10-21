@@ -367,7 +367,7 @@ var CrowdAudio = (function () {
     };
     GameAudio.stopEngine = function () {
       const r = _orig.stopEngine.apply(this, arguments);
-      try { silence(); } catch (e) { /* */ }
+      try { silence(); standTrack = null; standN = 0; } catch (e) { /* */ }   // the stands cache held the race's whole track into the menu
       return r;
     };
     GameAudio.setGridIdle = function () {

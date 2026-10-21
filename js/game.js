@@ -2518,6 +2518,7 @@ async function startRaceBody() {
   // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
   // live() stays true: this session owns the build (menu prep uses a generation gate).
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
+  if (_menuGate.join) { const step = _menuGate.join; _menuGate.join = null; await step.catch(() => false); if (stale()) return false; }   // startRace joined the menu's build
   if (vmNoFramePump) loadTrack(trackIdx);
   else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
   if (stale()) return false; rlap("loadTrack");
@@ -2721,6 +2722,13 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
+  // A DIRECT start (Daily, Data Hub, season, agent) stands the menu's build down as RACE! does (introBuild),
+  // JOINING one of this same world in flight: left live, it ran beside this race's own build (two buildPaced
+  // for one world, measured 2026-10-21), and a loadTrackStepped that finishes behind the other returns false.
+  const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;
+  if (join) mp.owner = () => key === entrySettings();
+  _menuGate.join = join ? mp.step : null;   // startRaceBody awaits it before its own load, which then reuses the world
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); if (e) announce("COULD NOT LOAD CIRCUIT — CHECK CONNECTION", 3, "info"); });
@@ -2904,7 +2912,7 @@ function endRace(forcedOrder) {
   // against the simulated field and becomes the grid. Mirrors the TT return
   // below — first branch out, before any race classification is built.
   if (isQuali()) {
-    cars = qualiField || cars;
+    cars = qualiField || cars; qualiField = null;   // handed back: left set, quitToMenu's mid-quali swap later replaced the RACE's field with this one
     const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
     // needs it to draw the same classification ours will.
@@ -4350,7 +4358,8 @@ function rankFinishers() {
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
 function releaseFieldScratch() {
-  ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets();
+  ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
+  _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
@@ -8369,8 +8378,8 @@ function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
   lastFrame = now;
-  // Adaptive resolution: only govern while actively rendering a race.
-  if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
+  // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
+  if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
   PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,

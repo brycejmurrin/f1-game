@@ -358,6 +358,7 @@ const Input = (function () {
     // calibrate() captured whatever deflection was held as the race's zero.
     remStick = typeof s.steer === "number" && isFinite(s.steer);
     remSteer = remStick ? clamp(s.steer, -1, 1) : 0;
+    if (remStick && tiltRemote) tiltFilterClear();   // else the next roll sample slews from the old lean
     remRoll = !remStick && typeof s.roll === "number" && isFinite(s.roll);
     if (remRoll) {
       tiltRaw = s.roll;
@@ -426,6 +427,7 @@ const Input = (function () {
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0;
     if (clearSequence) remSeq = null;
     if (tiltRemote || !gyroAttached) tiltSeen = false;
+    if (tiltRemote) tiltFilterClear();
   }
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
   // keep steering a device whose own sensor is not attached.
@@ -1188,6 +1190,9 @@ const Input = (function () {
     dragMinCutoff = clamp(hz, 0, 8);
     if (dragMinCutoff <= 0) dragOeInit = false;
   }
+  // The phone-fed tilt pipeline restarts from its next reading (a re-pair, or the phone leaving TILT for sticks).
+  function tiltFilterClear() { oeInit = false; oePrev = 0; oeDPrev = 0; tiltSteerVal = 0; tiltSteerT = 0; lastOrientMs = 0; }
+  function dragFilterClear() { dragOeInit = false; dragOePrev = 0; dragOeDPrev = 0; }
   function dragFilter(x, dt) {
     if (dragMinCutoff <= 0) return x;
     if (!dragOeInit) { dragOePrev = x; dragOeDPrev = 0; dragOeInit = true; return x; }
@@ -1920,17 +1925,27 @@ const Input = (function () {
      fullscreen nor lock() and keeps its rotate prompt; the rejection there (and
      anywhere unsupported) is swallowed.
      https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock */
-  let _landscapeLocked = false;
+  // WANTED, not locked: an unlock (quit) that lands before lock() resolves must still win, or the menu
+  // stayed pinned to landscape until the next race (B·H11 hunt).
+  let _landscapeLocked = false, _landscapeWanted = false;
+  function landscapeUnlockNow() {
+    const o = typeof screen !== "undefined" && screen.orientation;
+    if (o && typeof o.unlock === "function") { try { o.unlock(); } catch (_) { /* not locked */ } }
+  }
   function lockLandscape() {
     const o = typeof screen !== "undefined" && screen.orientation;
     if (!o || typeof o.lock !== "function" || !touchControlsNeeded()) return Promise.resolve(false);
-    return Promise.resolve(o.lock("landscape")).then(() => (_landscapeLocked = true)).catch(() => false);
+    _landscapeWanted = true;
+    return Promise.resolve(o.lock("landscape")).then(() => {
+      if (!_landscapeWanted) { landscapeUnlockNow(); return false; }   // unlocked while the lock was pending
+      return (_landscapeLocked = true);
+    }).catch(() => false);
   }
   function unlockLandscape() {
+    _landscapeWanted = false;   // a pending lock unlocks itself when it resolves
     if (!_landscapeLocked) return;
     _landscapeLocked = false;
-    const o = typeof screen !== "undefined" && screen.orientation;
-    if (o && typeof o.unlock === "function") { try { o.unlock(); } catch (_) { /* not locked */ } }
+    landscapeUnlockNow();
   }
 
   function setSteerMode(m) {
@@ -1945,6 +1960,7 @@ const Input = (function () {
     if (steerMode !== "touch") {
       touches.clear();
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+      dragFilterClear();
     }
     if (steerMode !== "tilt") detachGyro();
   }
@@ -2075,6 +2091,8 @@ const Input = (function () {
   // filter restarts, so the new axis does not ease in from the old one's value.
   function onScreenRotate() {
     oeInit = false; tiltSteerVal = 0;
+    // A drag's anchor is in the old screen space; the next move would read W - 2x as a steer.
+    touches.clear(); touchSteer = 0; touchActive = false; dragFilterClear(); hideDragAnchor();
   }
 
   // Specs must wait for ready() — NOT for Input.steer / Input.simTilt existing.
@@ -2166,12 +2184,14 @@ const Input = (function () {
     // declaring so lets the compositor skip waiting on them for every touch
     // release on the page (a non-passive window touch listener is a scroll
     // and tap-latency cost on Android Chrome). Capture stays.
-    window.addEventListener("touchend", function (e) {
-      if (e.touches.length === 0) holdReleaseAll(true);
-    }, { capture: true, passive: true });
-    window.addEventListener("touchcancel", function (e) {
-      if (e.touches.length === 0) holdReleaseAll(true);
-    }, { capture: true, passive: true });
+    // The same net frees a ghost steering finger: a lost canvas touchend left `touches` pinned at its last offset.
+    const noFingers = function (e) {
+      if (e.touches.length !== 0) return;
+      holdReleaseAll(true);
+      if (touches.size) { touches.clear(); recomputeTouchSteer(); }
+    };
+    window.addEventListener("touchend", noFingers, { capture: true, passive: true });
+    window.addEventListener("touchcancel", noFingers, { capture: true, passive: true });
 
     // Passive: it only READS positions and never calls preventDefault (the
     // touch listeners below own that), so the compositor need not wait on it.
@@ -2287,6 +2307,7 @@ const Input = (function () {
     touches.clear();
     hideDragAnchor();
     touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+    dragFilterClear();   // else a press right after a blur/reset blends from the last drag
     timeScale = 1;   // the loop re-reports it next frame; never leave it stalled slow
     // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
     // just the exported booleans — see InputHoldButtons for why both must happen.
@@ -2326,6 +2347,7 @@ const Input = (function () {
     lookStickX = 0; lookStickY = 0;
     lookMouseDx = 0; lookMouseDy = 0; lookMouseDown = false;
     clearRemoteControls();   // paired remotes may take control again with their next fresh sample
+    remoteWas = false;       // a blur is not a link loss: no onPadLost edge for a phone that is still sending
     recoverPressed = false;
     radioPressed = false;
     mirrorPressed = false;

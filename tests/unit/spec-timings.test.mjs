@@ -71,6 +71,22 @@ test("a RETRIED test is billed once, at its final attempt", () => {
   assert.equal(rows[0].sec, 42);
 });
 
+test("isolated CI retries bill the final suite, not every failed attempt", () => {
+  // playwright.config.js retryStrategy: "isolated" on CI — each retry is its own
+  // <testsuite>, not another <testcase> in the first suite (playwright #1716).
+  const xml = `<testsuites>
+<testsuite name="specs/logging.spec.js" timestamp="2026-09-16T01:00:00Z">
+<testcase name="flaky" classname="specs/logging.spec.js" time="180"><failure/></testcase>
+</testsuite>
+<testsuite name="specs/logging.spec.js" timestamp="2026-09-16T01:00:00Z">
+<testcase name="flaky" classname="specs/logging.spec.js" time="42"/>
+</testsuite>
+</testsuites>`;
+  const rows = parseJunit(xml);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].sec, 42);
+});
+
 test("a FAILED final attempt is not billed — it measures the timeout (docs/BUGS.md)", () => {
   const xml = `<testsuites><testsuite name="specs/logging.spec.js" timestamp="2026-09-16T01:00:00Z">
 <testcase name="ok" classname="specs/logging.spec.js" time="4"/>

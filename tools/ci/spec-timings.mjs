@@ -108,13 +108,15 @@ const attr = (attrs, name) => {
  *  live-reporter.js already applies before it records a duration. Billing both
  *  attempts would inflate every flaky test's history by construction. */
 export function parseJunit(xml) {
-  const rows = [];
+  // One map for the whole file: CI's isolated retries land in separate
+  // <testsuite> blocks (playwright.config.js retryStrategy), not as duplicate
+  // <testcase> rows in one suite — per-suite dedupe would bill every attempt.
+  const last = new Map();
   for (const suite of String(xml).matchAll(/<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g)) {
     const suiteAttrs = suite[1] || "", body = suite[2] || "";
     const ts = isoSecond(attr(suiteAttrs, "timestamp"));
     if (!ts) continue;
     const suiteName = attr(suiteAttrs, "name");
-    const last = new Map();
     for (const tc of body.matchAll(/<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g)) {
       const a = tc[1] || "", inner = tc[2] || "";
       if (/<skipped\b/.test(inner)) continue;
@@ -130,9 +132,8 @@ export function parseJunit(xml) {
       const failed = /<(failure|error)\b/.test(inner);
       last.set(keyOf(spec, title), failed ? null : { ts, spec, title, sec });
     }
-    rows.push(...[...last.values()].filter(Boolean));
   }
-  return rows;
+  return [...last.values()].filter(Boolean);
 }
 
 /** Rows from a live-reporter log (`artifacts/logs/*.log`).
