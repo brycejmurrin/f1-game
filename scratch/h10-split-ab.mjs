@@ -5,7 +5,7 @@ import { raceGate } from "../tools/lib/census-entry.mjs";
 import fs from "node:fs";
 const [root, tag, track, tod = "day"] = process.argv.slice(2);
 const POS = (process.env.H10_POS || "0.05,0.4,0.75").split(",").map(Number);
-const outDir = `artifacts/h10-split/${tag}`; fs.mkdirSync(outDir, { recursive: true });
+const outDir = `${process.env.H10_OUT || "artifacts/h10-split"}/${tag}`; fs.mkdirSync(outDir, { recursive: true });
 const server = await startStaticServer(root);
 const browser = await launchChromium({});
 const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true });
@@ -25,7 +25,9 @@ for (const pos of POS) {
     const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
     const be = GLX.__tlx.renderer.backend, D = { on: false, by: {} };
     const o = be.draw;
+    D.raw = 0; D.rawOn = 0;
     be.draw = function (ro) {
+      D.raw++; if (D.on) D.rawOn++;
       if (D.on) try {
         const ms = A.mirror(), mw = ms && ms.backend ? ms.backend.w : -1, w = ro.context && ro.context.width, g = ro.geometry, ob = ro.object;
         const idx = g.index ? g.index.count : (g.attributes.position ? g.attributes.position.count : 0);
@@ -33,15 +35,18 @@ for (const pos of POS) {
         const k = w === mw ? "mirror" : "w" + w, b = D.by[k] || (D.by[k] = { draws: 0, tris: 0 });
         if (g.drawRange && g.drawRange.count !== Infinity) { const sk = k + "Split"; const sb = D.by[sk] || (D.by[sk] = { draws: 0, tris: 0 }); sb.draws++; sb.tris += Math.round(dr / 3); }
         b.draws++; b.tris += Math.round(dr / 3 * (ob.isInstancedMesh ? ob.count : (g.instanceCount || 1)));
-      } catch (_) {}
+      } catch (e) { D.err = D.err || String(e && e.stack || e).slice(0, 300); }
       return o.apply(this, arguments);
     };
-    A.freeze(false); A.jump(pos, 0); A.freeze(true); try { A.snapCam(); } catch (_) {}
-    for (let i = 0; i < 10; i++) await raf();
-    for (let a = 0; a < 20 && !Object.keys(D.by).length; a++) { D.on = true; await raf(); D.on = false; }
+    // SwiftShader starves rAF (0 renders in 20 frames on monza, scratch/h15/drawcount.mjs): count ONE sync render.
+    A.freeze(false); A.jump(pos, 0); A.freeze(true);
+    for (let i = 0; i < 3; i++) A.snapCam(true);
+    // A sync render can draw nothing (snapGameCam swallows a render() throw while the build settles): retry, then report it.
+    D.tries = 0;
+    while (D.tries < 30) { D.tries++; D.on = true; A.snapCam(true); D.on = false; if (D.rawOn) break; D.by = {}; await new Promise((r) => setTimeout(r, 1000)); }
     be.draw = o;
-    for (let i = 0; i < 2; i++) await raf();
-    return D.by;
+    A.snapCam(true); await raf();
+    if (D.err) D.by.err = D.err; D.by.raw = D.raw; D.by.rawOn = D.rawOn; D.by.same = GLX.__tlx.renderer.backend === be; D.by.tries = D.tries; return D.by;
   }, pos);
   await page.screenshot({ path: `${outDir}/${track}-${tod}-${pos}.png` });
   rows.push({ track, tod, pos, ...r });

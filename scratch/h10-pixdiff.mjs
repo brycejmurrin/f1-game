@@ -1,5 +1,5 @@
 import sharp from "sharp"; import fs from "node:fs";
-const B = "artifacts/h10-split/before", A = "artifacts/h10-split/after";
+const [B = "artifacts/h10-split/before", A = "artifacts/h10-split/after"] = process.argv.slice(2);
 for (const f of fs.readdirSync(B).filter((f) => f.endsWith(".png")).sort()) {
   if (!fs.existsSync(`${A}/${f}`)) { console.log(f, "no after"); continue; }
   const [b, a] = await Promise.all([B, A].map((d) => sharp(`${d}/${f}`).raw().toBuffer({ resolveWithObject: true })));
