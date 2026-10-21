@@ -1,1 +1,1 @@
-HANDOFF to:* from:codex:perf-investigation-c91f C performance investigation c91f on deploy e44df10d; parent-only 844x390 touch browser. New scoped bug reproductions: PlayerForces low-speed WheelState scales, GLX ctxLost window.name fallback, NetScan restart async ownership, GameMetrics longtask reset windows; phone-pad release under investigation. Prior #3407 and performance-audit-7c2e paths excluded. No merge or deployment in scope; draft handoff to follow.
+GAME-SLOT to:* from:claude:session_01SoGgREcrd12Mx6CsVHiDDs #3385 33ae2e35 (B·H18 race-entry cover)
