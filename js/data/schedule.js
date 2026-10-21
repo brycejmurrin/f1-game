@@ -152,7 +152,17 @@ const DataSchedule = (function () {
       tick();
       if (typeof MutationObserver === "undefined" || typeof document === "undefined") return dispose;
       observer = new MutationObserver(sync);
-      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true });
+      // `hidden` anywhere (an ancestor can hide the hub), but child lists only inside the hub, where this
+      // node is attached and detached. Watching every child list of the document ran sync() after each HUD
+      // text write for the rest of the session once the hub had been opened (it keeps this node cached).
+      // Observing one target twice replaces its options, hence two targets or the original single call.
+      const hub = typeof document.getElementById === "function" ? document.getElementById("datahub") : null;
+      if (hub && hub !== document.documentElement) {
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], subtree: true });
+        observer.observe(hub, { childList: true, subtree: true });
+      } else {
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true });
+      }
       queueMicrotask(sync);
       return dispose;
     }

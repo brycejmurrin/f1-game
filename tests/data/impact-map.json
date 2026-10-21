@@ -5192,6 +5192,9 @@
       "raceInstant": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
+      "sync": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "tick": [
         "tests/unit/phone-touch-surface.test.mjs"
       ],

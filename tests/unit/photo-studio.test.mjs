@@ -659,3 +659,16 @@ test("race and replay photo modes keep TIME & WEATHER and never show the garage 
   }
   assert.deepEqual(team.saved, []);
 });
+
+// LIVE-MEMORY-H12: closing kept the library rows, each an <img> with a thumbnail data URL and a DOWNLOAD
+// closure over its photo blob, in the hidden studio for as long as the page lived.
+test("closing the studio drops the library rows; reopening repaints them", async () => {
+  const b = boot();
+  b.api.open({ source: "garage" }); await b.api.capture(); await b.api.savePhoto();
+  assert.ok(b.dom.byId("ps-library").children.length >= 1, "a saved photo is listed while open");
+  b.api.close(false);
+  assert.equal(b.dom.byId("ps-library").children.length, 0, "closed: no row (and no blob closure) left behind");
+  b.api.open({ source: "garage" });
+  await new Promise((r) => setImmediate(r));
+  assert.ok(b.dom.byId("ps-library").children.length >= 1, "open() repaints the library");
+});
