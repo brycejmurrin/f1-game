@@ -2613,7 +2613,8 @@
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-wing-foil.test.mjs"
+        "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs"
       ],
       "tints": [
         "tests/unit/livery-paint-zones.test.mjs",
@@ -2697,14 +2698,19 @@
       "create": [
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/team-livery.test.mjs"
+      ],
+      "getCustomLiveries": [
+        "tests/unit/livery-paint-zones.test.mjs"
       ],
       "pickLivery": [
         "tests/unit/livery-design.test.mjs"
       ],
       "resolveLivery": [
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "saveLiveryId": [
@@ -2724,7 +2730,6 @@
       "*": [
         "tests/unit/body-styles.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/share-code.test.mjs"
       ]
@@ -7331,6 +7336,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/team-livery.test.mjs",
@@ -7384,7 +7390,6 @@
         "tests/unit/garage-perf-mesh-free.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-wheels.test.mjs",

@@ -41,6 +41,16 @@ export async function ensureLive(page) {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
+/** Present one real preview after a UI mutation, then keep software rendering
+ * idle while touch/layout assertions run. No timeout or assertion is relaxed. */
+export async function presentAndPause(page) {
+  return page.evaluate(async () => {
+    window.__apex.headless(false);
+    try { return await window.__apex.awaitPresent(8000); }
+    finally { window.__apex.headless(true); }
+  });
+}
+
 // One peel of the menu onion, in the page. Returns what it did, or null once the
 // title screen is the only thing showing. Each screen leaves through its OWN
 // back control so its teardown runs (cs-back → leaveGarage drops the turntable
