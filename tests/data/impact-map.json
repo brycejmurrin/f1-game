@@ -672,6 +672,9 @@
       "deployLevel": [
         "tests/unit/ers-audio-layer.test.mjs"
       ],
+      "detach": [
+        "tests/unit/ers-audio-layer.test.mjs"
+      ],
       "harvestHz": [
         "tests/unit/ers-audio-layer.test.mjs"
       ],
@@ -4544,6 +4547,7 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs",
         "tests/unit/tyre-model.test.mjs"
       ],
@@ -4565,11 +4569,13 @@
       ],
       "lookAtTo": [
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
       "mulTo": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
@@ -4585,9 +4591,11 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/results-cam.test.mjs",
+        "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
       "wrapDelta": [
+        "tests/unit/net-snapshot.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
       "*": [
@@ -4665,7 +4673,6 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-session.test.mjs",
-        "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/pace-math.test.mjs",
@@ -4689,7 +4696,6 @@
         "tests/unit/rival-contact-sfx.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/setup-tune.test.mjs",
-        "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
@@ -5096,7 +5102,8 @@
         "tests/unit/race-flow-fixes-vm.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
-        "tests/unit/real-race.test.mjs"
+        "tests/unit/real-race.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs"
       ],
       "fetchTraces": [
         "tests/unit/real-race-script.test.mjs",
@@ -5174,8 +5181,7 @@
         "tests/unit/real-race-script.test.mjs"
       ],
       "*": [
-        "tests/unit/ratchets.test.mjs",
-        "tests/unit/real-replay-frame-fit.test.mjs"
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/data/results.js": {
@@ -6017,6 +6023,9 @@
       ]
     },
     "js/fx/droplets.js": {
+      "clear": [
+        "tests/unit/droplets-spray.test.mjs"
+      ],
       "rate": [
         "tests/unit/droplets-spray.test.mjs"
       ],
@@ -6041,7 +6050,8 @@
         "tests/unit/droplets-spray.test.mjs"
       ],
       "clear": [
-        "tests/unit/car-fx.test.mjs"
+        "tests/unit/car-fx.test.mjs",
+        "tests/unit/droplets-spray.test.mjs"
       ],
       "count": [
         "tests/unit/car-fx.test.mjs",
@@ -9662,7 +9672,8 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "bankGrip": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/physics-rows-vm.test.mjs"
       ],
       "beginLook": [
         "tests/unit/ai-drive.test.mjs"
@@ -9794,6 +9805,9 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "lineFollow": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "lookWindow": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "minLatGap": [
@@ -10023,7 +10037,6 @@
         "tests/unit/duel.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/mechanics-race-vm.test.mjs",
-        "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs"
@@ -10232,6 +10245,9 @@
       ]
     },
     "js/physics/debris-draw.js": {
+      "drawPool": [
+        "tests/unit/debris-step-skip.test.mjs"
+      ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ]
@@ -10255,6 +10271,9 @@
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/race-control.test.mjs"
+      ],
+      "draw": [
+        "tests/unit/debris-step-skip.test.mjs"
       ],
       "hazards": [
         "tests/unit/debris-hazard-hint.test.mjs",
@@ -11858,6 +11877,7 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -11887,6 +11907,9 @@
       "index": [
         "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "mapPoint": [
+        "tests/unit/real-replay-frame-fit.test.mjs"
       ],
       "onKey": [
         "tests/unit/vstd-invariant.test.mjs"
@@ -11919,9 +11942,11 @@
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "setSpeed": [
+        "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "skip": [
+        "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs"
       ],
       "start": [
@@ -12143,6 +12168,9 @@
     },
     "js/race/storm.js": {
       "schedule": [
+        "tests/unit/storm-weather.test.mjs"
+      ],
+      "strikeAt": [
         "tests/unit/storm-weather.test.mjs"
       ],
       "strikeIn": [
@@ -12850,6 +12878,9 @@
       ]
     },
     "js/render/shared/frustum.js": {
+      "aabbDist2": [
+        "tests/unit/lamp-chunks.test.mjs"
+      ],
       "aabbInFrustum": [
         "tests/unit/xr-cull-union.test.mjs"
       ],
@@ -12863,9 +12894,6 @@
       ],
       "radialCulled": [
         "tests/unit/frustum-buckets.test.mjs"
-      ],
-      "*": [
-        "tests/unit/lamp-chunks.test.mjs"
       ]
     },
     "js/render/shared/gltf.js": {
@@ -13035,7 +13063,8 @@
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "resolvePlayer": [
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "sunPass": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -16401,7 +16430,8 @@
       ],
       "paint": [
         "tests/unit/hud-feel.test.mjs",
-        "tests/unit/real-replay-transport.test.mjs"
+        "tests/unit/real-replay-transport.test.mjs",
+        "tests/unit/watch-transport-scrub.test.mjs"
       ],
       "start": [
         "tests/unit/real-replay-transport.test.mjs",
@@ -16413,7 +16443,8 @@
       ],
       "tick": [
         "tests/unit/hud-feel.test.mjs",
-        "tests/unit/real-replay-transport.test.mjs"
+        "tests/unit/real-replay-transport.test.mjs",
+        "tests/unit/watch-transport-scrub.test.mjs"
       ]
     },
     "js/workers/bitmap-decode-client.js": {
