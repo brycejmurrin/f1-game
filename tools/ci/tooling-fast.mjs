@@ -28,6 +28,7 @@
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
  *   node tools/ci/tooling-fast.mjs --bail           # stop STARTING files after the first failure (CI guard shards)
+ *   node tools/ci/tooling-fast.mjs --changed --quiet  # console: FAIL lines, their detail and the verdict only (the log keeps START/PASS)
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
  *   … --order=list                                   # list order, not longest-first
  *   … --record                                       # rewrite tests/data/tooling-fast-timings.json
@@ -1625,9 +1626,10 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   const timings = opts.order === "list" ? {} : (opts.timings || loadTimings());
   if (opts.order !== "list") files = scheduleLongestFirst(files, timings);
   const lines = [];
+  // --quiet keeps START/PASS lines in the log only: a 13-57K console was measured in Cursor agents' context (2026-10-21).
   const emit = (msg) => {
     const line = `[tooling-fast] ${msg}`;
-    console.log(line);
+    if (!opts.quiet || !/^(START|PASS) /.test(msg)) console.log(line);
     lines.push(line);
   };
 
@@ -2203,10 +2205,10 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--stop", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
 
 /** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
@@ -2242,6 +2244,7 @@ export function parseToolingFastArgv(argv) {
     files: args.length ? args : null, // null = full TOOLING_FAST_FILES
     changed: argv.includes("--changed"),
     bail: argv.includes("--bail"),
+    quiet: argv.includes("--quiet"),
     stop: argv.includes("--stop"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     order: val("order"),
@@ -2303,6 +2306,7 @@ if (isMain) {
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,
+    quiet: parsed.quiet,
     order: parsed.order,
     record: parsed.record,
     testTimeoutMs: parsed.testTimeoutMs,

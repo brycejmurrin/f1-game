@@ -12,7 +12,7 @@ session; path-scoped attach with their files; Cursor twins from `gen-cursor-rule
 npx serve -l 3456 .                   # serve locally (or: python3 -m http.server 3456)
 node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (the table below; select-specs.mjs: per-SPEC)
 #                                       2. make ALL edits, then verify ONCE (rule 2); a new test file = a tests/groups.json group + a TESTING.md §5 row + `npm run gen`
-node tools/ci/tooling-fast.mjs --changed --jobs=3   # 3. diff-aware edit-loop check; `npm run test:tooling-fast` is the full floor before a code push
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. diff-aware edit-loop check (--quiet: failures only); `npm run test:tooling-fast` is the full floor before a code push
 node tools/ci/test-bg.mjs <group>     # 4. ONE browser group, in the background → artifacts/logs/<group>.log (rule 5)
 node tools/ci/test-bg.mjs --wait --timeout 45   # 5. the waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
 node tools/ci/deploy.mjs --gate-only  # 6. before a push: the only check that runs what the deploy runs
@@ -59,7 +59,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs` (it refuses any start at loadavg ≥ 3, and a second concurrent group).
    Anchor on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`, never a looser pattern, the process table, or `| tail` on a live log.
 6. Stop a run with `node tools/ci/test-bg.mjs --stop` (`--stop --sweep` when its supervisor is dead); `bash-guard.sh` refuses a PID kill, which orphans every Chromium the run opened.
-7. Reap what you launched: before a browser run, a deploy or a timing judgement, `ps -eo pid,pcpu,args --sort=-pcpu | head`
+7. Reap what you launched: before a browser run, a deploy or a timing judgement, `ps -eo pid,pcpu,args --sort=-pcpu | head | cut -c1-160`
    (`etimes` does not track wall clock here); kill a busy Chrome of yours by a listed PID (`pkill -f` is hook-refused). The MCP servers at 0 % are the harness's.
 8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3) and for a live `playwright test` first; re-run alone only when the verdict matters.
    On CI, `cancelled` with zero failures is a timeout until proven otherwise — EXCEPT the designed one: a draft PR's run and its `ready_for_review` run share a group on purpose, so marking it ready cancels the fast run on the same `head_sha` seconds in (dedupe, not a red).

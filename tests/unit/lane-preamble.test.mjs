@@ -10,7 +10,9 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { parseCatalog, checkNames, buildPreamble } from "../../tools/ci/lane-preamble.mjs";
+import fs from "node:fs";
+import { parseCatalog, checkNames, buildPreamble, buildCore } from "../../tools/ci/lane-preamble.mjs";
+import { TOOLING_FAST_USAGE } from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const run = (...a) => spawnSync(process.execPath, [path.join(ROOT, "tools/ci/lane-preamble.mjs"), ...a], { encoding: "utf8", cwd: ROOT });
@@ -63,4 +65,19 @@ test("the CLI prints the block for valid names and exits 2 with ERROR for a typo
   const list = run("--list");
   assert.equal(list.status, 0);
   assert.ok(list.stdout.includes("desktop-narrow-860x560"));
+});
+
+test("--core prints the WORKING RULES alone; its scripts and flags exist; a survey block carries it too", () => {
+  const core = buildCore();
+  assert.ok(core.length < 2000, `core block grew to ${core.length} characters`);
+  for (const f of core.match(/tools\/[\w/-]+\.mjs/g)) assert.ok(fs.existsSync(path.join(ROOT, f)), f);
+  assert.ok(TOOLING_FAST_USAGE.includes("--quiet"));
+  assert.ok(fs.readFileSync(path.join(ROOT, "tools/ci/wait-for.mjs"), "utf8").includes("--log-matches"));
+  // The wait pattern must match tooling-fast's own verdict line.
+  const pat = /--log-matches \S+ '([^']+)'/.exec(core)[1];
+  assert.ok(new RegExp(pat).test("[tooling-fast] = run failed (799 passed, 1 failed)"));
+  const r = run("--core");
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout.trim(), core);
+  assert.ok(run("--screens=title", "--viewports=ios-iphone-portrait").stdout.trimEnd().endsWith(core));
 });

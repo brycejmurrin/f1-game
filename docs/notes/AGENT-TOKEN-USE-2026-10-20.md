@@ -72,6 +72,11 @@ re-counted the headline numbers myself. The survey found two `dump` hangs, both 
 | re-reading big reference files | `docs/AGENT-SURFACE.md` (50K) read 18 times in 14 infra runs; `hud.js` 7-9 times per run; agents re-read their own spilled outputs 42 times (~320K) | an `mcp-inventory` table (< 2K) in place of AGENT-SURFACE.md; `lsp_outline` before any file over 500 lines; output over 50 lines goes to a file |
 | unbounded test output and waits | `tooling-fast --changed` printed 13-57K (it lists every pass); `while sleep 30` waiters; `wait-for.mjs` used 0 times | a failures-only mode for tooling-fast; name `wait-for.mjs` in the prompt |
 
+Built from this table (2026-10-21): `node tools/ci/lane-preamble.mjs --core` prints rows 1, 2, 5, 6 and 8 plus the glob
+and output rules as a ~1.4K WORKING RULES block for any launch prompt (a survey block now ends with it); `tooling-fast
+--quiet` prints only failures and the verdict (the log keeps every line); AGENTS.md rule 7's `ps` is capped at 160
+columns. Not built: `issue-digest.mjs`, an `mcp-inventory` table.
+
 Failures were 1-8 % of calls in every group with no retry storms (longest identical streak 3); the main repeated failure
 is `grep_search` with glob `**/*` (30 refusals over 11 runs). The subagents' reports and their counting scripts are in
 `scratch/survey/reports/` (local, not committed).

@@ -13,6 +13,11 @@
 //   node tools/ci/lane-preamble.mjs --screens=title,settings --viewports=ios-iphone-portrait,desktop-1440x900
 //   node tools/ci/lane-preamble.mjs --screens=garage --viewports=ios-* --scale=100,200   # wildcards like layout-audit
 //   node tools/ci/lane-preamble.mjs --list                         # the catalog it validates against
+//   node tools/ci/lane-preamble.mjs --core                         # the WORKING RULES block for ANY launch prompt
+//
+// --core is the fleet survey's directions (2026-10-21: 101 Cursor runs of the last 200 agents, ~4,300 calls;
+// docs/notes/AGENT-TOKEN-USE-2026-10-20.md): edit echoes were 27-33 % of every role's result characters, a required
+// apex-lsp cut one task's characters 61 %, and MCP discovery, unbounded output and `ps ... args` made most of the rest.
 //
 // Prints the block on stdout; a bad name prints `ERROR …` with the nearest valid one and exits 2.
 import { spawnSync } from "node:child_process";
@@ -80,9 +85,27 @@ export function buildPreamble({ screens, viewports, scale = "100" }) {
   ].join("\n");
 }
 
+/** The role-agnostic block: one line per measured waste, each naming the cheaper path. */
+export function buildCore() {
+  return [
+    "WORKING RULES (measured on 101 Cursor runs; each line names the cheaper path)",
+    "1. Edits: ONE edit_file per file holding every hunk (each result echoes the whole file twice). The same change in 3+ files: one terminal script, then print only `git diff --stat`. Append to a report (`cat >>`); never re-edit it.",
+    "2. JS symbols: apex-lsp lsp_symbols / lsp_definition / lsp_references / lsp_callers, never grep (grep is for strings, CSS and comments); there is no lsp_workspace_symbols. lsp_outline before reading a file over 500 lines, then read ranges.",
+    "3. MCP: call get_mcp_tools once per run and reuse the list; use namespace names exactly as it returns them. There is no GitHub MCP: use the gh CLI.",
+    "4. Output: anything over ~50 lines goes to artifacts/logs/<step>.log; read it with tail -n 3, grep -c, or grep -E '^= |^not ok'. Never re-read a spilled output file whole.",
+    "5. Tests: node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet > artifacts/logs/tf.log 2>&1, run in the background; wait with node tools/ci/wait-for.mjs --log-matches artifacts/logs/tf.log '= run' --timeout 30, never a sleep loop.",
+    "6. Processes: cat /proc/loadavg; ps -eo pid,pcpu,comm --sort=-pcpu | head -8 (comm, not args: Chromium command lines run to 20K).",
+    "7. grep_search: omit the glob or give a concrete one like js/**/*.js (`**/*` is refused); search a named directory, not the whole repo for a common word.",
+  ].join("\n");
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const arg = (name) => argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
+  if (argv.includes("--core")) {
+    console.log(buildCore());
+    return;
+  }
   const cat = catalog();
   if (argv.includes("--list")) {
     console.log(`screens: ${cat.screens.join(", ")}\nviewports: ${cat.viewports.join(", ")}`);
@@ -90,7 +113,7 @@ function main() {
   }
   const screens = checkNames("screen", arg("--screens"), cat.screens);
   const viewports = checkNames("viewport", arg("--viewports"), cat.viewports);
-  console.log(buildPreamble({ screens, viewports, scale: arg("--scale") || "100" }));
+  console.log(`${buildPreamble({ screens, viewports, scale: arg("--scale") || "100" })}\n\n${buildCore()}`);
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
