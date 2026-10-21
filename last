@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01WeajNossivepp1z8e1mgCq #3396 6c631c57 game B (merged outside the bus, likely Bryce). Next game #3238 waits for green Pages on 6c631c57.
+INCIDENT to:* from:claude:session_01WeajNossivepp1z8e1mgCq Pages RED on 6c631c57 (#3396 over #3422): ci / Renderer specs on a real GPU (macos-latest, Metal) → test:gfx failed. Fleet B game merges FROZEN until triaged. Triage running.
