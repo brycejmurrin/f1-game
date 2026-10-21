@@ -163,6 +163,13 @@ const PostCommon = (function () {
     return d;
   }
 
-  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, knob };
+  // User LOW retains nearby wet-road mirrors; measured overload/crash shedding
+  // can still use the lit shader's sky/lamp fallback. No per-frame allocation.
+  function roadReflection(opts, wetness, strength, tier, autoTier) {
+    opts.reflect = (wetness > 0.01 ? autoTier >= 4 : tier >= 2) ? 0 : strength;
+    opts.ssrQuality = tier >= 3 ? 2 : (tier >= 2 ? 1 : 0);
+  }
+
+  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, knob, roadReflection };
 })();
 Object.freeze(PostCommon);

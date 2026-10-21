@@ -2288,6 +2288,9 @@
       "liveryBitmapOpts": [
         "tests/unit/car-draw-decal-budget.test.mjs"
       ],
+      "menuStepYield": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
       ],
@@ -2298,7 +2301,8 @@
       ],
       "prepareMenuCarAssets": [
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/menu-car-prep-yield.test.mjs"
       ],
       "putBoundedMesh": [
         "tests/unit/car-presentation-vm.test.mjs"
@@ -4740,6 +4744,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs",
         "tests/unit/script-loader-starved.test.mjs",
         "tests/unit/script-loader-throw.test.mjs",
         "tests/unit/service-worker.test.mjs"
@@ -6672,6 +6677,7 @@
         "tests/unit/damage.test.mjs",
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/design-matrix.test.mjs",
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/fleet-board-snapshot.test.mjs",
@@ -9995,6 +10001,9 @@
       "pushVelocity": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "releaseArcBuckets": [
+        "tests/unit/traffic-arc-buckets.test.mjs"
+      ],
       "resolveCollisions": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
@@ -12526,10 +12535,14 @@
       "create": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-boot-timeout.test.mjs"
+        "tests/unit/renderer-boot-timeout.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "gpuAdapterAvailable": [
         "tests/unit/boot-idle-prefetch.test.mjs"
+      ],
+      "guessBackend": [
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "proved": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -12539,7 +12552,8 @@
       ],
       "start": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/renderer-boot-timeout.test.mjs"
+        "tests/unit/renderer-boot-timeout.test.mjs",
+        "tests/unit/script-loader-preload.test.mjs"
       ],
       "storedBackendPreference": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -12829,6 +12843,9 @@
     "js/render/shared/post-common.js": {
       "keepNearest": [
         "tests/unit/godray-keep-nearest.test.mjs"
+      ],
+      "roadReflection": [
+        "tests/unit/perf-governor.test.mjs"
       ],
       "*": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",

@@ -1,0 +1,1 @@
+Improved: Cloud MCP bootstrap clones chrome-devtools during ensure-mcp-ready, exports a writable Playwright browser cache, extends mcp-smoke to js-debugger and apex-lsp, and allowlists the browser-use plugin MCP for CDP debugging alongside js-debugger.

@@ -229,6 +229,18 @@ const TLX = (function () {
       // mappable pool dies on the first large mesh; PlayCanvas #6676).
       // Phones / WebKit take the same WebGPU path with WGX-lite caps
       // (8-bit canvas, no MSAA 4, low-power) when AUTO tries WebGPU.
+      // A REAL phone (a handset UA, or an iPad that reports as a Mac), as opposed to
+      // GLX.isMobile, which apex26.forceMobileTier=1 also sets on a desktop or CI
+      // VM. The "a phone has no software adapter" rule below protects handsets
+      // from the empty-info tie-break; on a forced-mobile test run it hid a
+      // software/paravirtual adapter (lavapipe, the macOS runner's Apple
+      // Paravirtual device), so TLX presented to the native WebGPU canvas, which
+      // such an adapter cannot composite: [Invalid Texture] CreateView, then
+      // device.lost "Instance reference no longer exists" (gpu-census 39477339291
+      // and 39488541983: the forced-mobile arm lost the device, the same arm with
+      // the software verdict stayed up with 0 GPU errors).
+      const _phoneHw = isMobile && (/iPhone|iPad|iPod|Android/i.test(ua)
+        || ((navigator.maxTouchPoints || 0) > 1 && /Mac/.test(ua)));
       let _softAdapter = false;
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
@@ -244,6 +256,10 @@ const TLX = (function () {
       // gpu-census 207 spent its whole window inside the warm and no row said so.
       const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
         mirrorDeferred: false, mirrorLazy: null, rig: null };   // rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
+      // EVERY warm's stages, newest last (cap 6): the menu prep runs a world warm then the garage's, and
+      // _warmStages keeps only the last, so the census read the garage's 3.7 s as "the warm" while the
+      // world's ran 11-15 s on Metal (B·H8 prep timeline, gpu-census 39499541077).
+      const _warmHistory = [];
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -314,7 +330,7 @@ const TLX = (function () {
             // read (measured in-container: byte-identical captures across a
             // camera move, awaitSoftPresent never resolving again). Content
             // gates key off this flag too. Never on a mobile UA.
-            _softAdapter = !isMobile && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
+            _softAdapter = !_phoneHw && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
@@ -3308,6 +3324,9 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
+            _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
+              mirror: _warmStages.mirror, draw: _warmStages.draw, total: _warmStages.total, failed: _warmStages.failed });
+            if (_warmHistory.length > 6) _warmHistory.shift();
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
@@ -3748,10 +3767,25 @@ const TLX = (function () {
         if (!_bs || !(_bs.radius >= 0) || !_bs.center
             || !(Math.abs(_bs.center.x) >= 0) || !(Math.abs(_bs.center.y) >= 0)
             || !(Math.abs(_bs.center.z) >= 0)) return 0;
-        let freed = 0;
+        let freed = 0, kept = 0;
+        // three reads attribute.array only while it creates the attribute's GPU
+        // buffer (XB.createAttribute: `r.array` when `get(attr).buffer` is still
+        // undefined). A depth-only first draw (the car shadow casters) uploads
+        // POSITION alone, so freeing every array after it left normal / colour /
+        // MAT without a buffer, and the first lit RenderObject of that geometry
+        // threw "Cannot read properties of null (reading 'constructor')" in
+        // present. Free only what already has its GPU buffer.
+        const _be = renderer && renderer.backend;
+        const uploaded = (a) => {
+          try {
+            const d = _be && _be.get(a);
+            return !!d && (d.buffer !== undefined || d.bufferGPU !== undefined);
+          } catch (_) { return false; }
+        };
         const drop = (a) => {
           if (!a || !a.array || !a.array.length) return;
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
+          if (!uploaded(a)) { kept++; return; }
           freed += a.array.byteLength;
           // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
           // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
@@ -3769,7 +3803,7 @@ const TLX = (function () {
         // while the WebGL2 control leg reported 0 — WebGL2 tolerates it and
         // WebGPU does not, which is why a tlxForceGL=1 measurement here looked
         // clean. Vertex attributes are sized from count/itemSize and are fine.
-        g.__tlxFreed = true;
+        if (!kept) g.__tlxFreed = true;   // a kept array retries on the next sweep
         return freed;
       }
       const _chunkRelOptIn = (function () {
@@ -6300,7 +6334,7 @@ const TLX = (function () {
                        draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
-                       pending: !!_warmPending, done: _warmDone };
+                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice() };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the

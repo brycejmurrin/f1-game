@@ -688,7 +688,30 @@ test("autoTier still honours the crash-sentinel floor and a measured shed", () =
   assert.equal(PerfGov.autoTier(), 4, "ULTRA must not defeat the crash floor via autoTier either");
 });
 
-test("tier 2 sheds car-paint SSR and the dry sheens, not via po.reflect; the wet-road march survives to tier 3", () => {
+test("wet-road reflections survive every user tier while overload and dry shedding remain independent", () => {
+  const common = eval(fs.readFileSync(path.join(ROOT, "js/render/shared/post-common.js"), "utf8") + ";PostCommon");
+  const opts = { unrelated: 42 };
+  for (const [tier, quality] of [[0, 0], [1, 0], [2, 1], [3, 2], [4, 2]]) {
+    common.roadReflection(opts, 1, 1.4, tier, 0);
+    assert.equal(opts.reflect, 1.4, `wet user tier ${tier} retains scene reflections`);
+    assert.equal(opts.ssrQuality, quality);
+    assert.equal(opts.unrelated, 42, "existing per-frame options are preserved");
+  }
+  common.roadReflection(opts, 1, 1.4, 4, 4);
+  assert.equal(opts.reflect, 0, "measured overload or crash floor can use the material fallback");
+  common.roadReflection(opts, 1, 0, 4, 0);
+  assert.equal(opts.reflect, 0, "WET MIRROR zero remains a true off switch");
+  for (const tier of [0, 1, 2, 3, 4]) {
+    common.roadReflection(opts, 0, 0.08, tier, 0);
+    assert.equal(opts.reflect, tier >= 2 ? 0 : 0.08, `dry user tier ${tier} keeps its prior shedding`);
+  }
+  common.roadReflection(opts, 0.01, 0.08, 4, 0);
+  assert.equal(opts.reflect, 0, "the dry/wet boundary remains unchanged");
+  common.roadReflection(opts, 0.011, 0.08, 4, 0);
+  assert.equal(opts.reflect, 0.08, "a damp road receives the reduced budget");
+});
+
+test("tier 2 sheds car-paint SSR independently of the wet-road quality policy", () => {
   // po.reflect = 0 is ALSO a dry session, so pairing uCarReflect to it would
   // kill car-paint SSR on every dry lap. The governor must pass a separate
   // opts.carReflect = 0 at tier ≥ 2, and both present() paths must honour it.
@@ -696,14 +719,7 @@ test("tier 2 sheds car-paint SSR and the dry sheens, not via po.reflect; the wet
   const post = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
-  assert.match(game, /const _ssrTier = \(frame\.wetness \|\| 0\) > 0\.01 \? 3 : 2;/);
-  assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= _ssrTier \? 0 : _ssr/);
-  // Phone default GRAPHICS: MEDIUM is tier 2: a wet road keeps its mirror there, a dry one does not.
-  const tierExpr = game.match(/const _ssrTier = (.+);/)[1];
-  const shed = (tier, wetness) => tier >= new Function("frame", "return " + tierExpr)({ wetness });
-  assert.equal(shed(2, 0.9), false, "wet road at MEDIUM keeps SSR");
-  assert.equal(shed(2, 0), true, "dry sheen still sheds at tier 2");
-  assert.equal(shed(3, 0.9), true, "wet-road SSR sheds at tier 3");
+  assert.match(game, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\)\)/);
   assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/);
   assert.match(post, /opts && opts\.carReflect != null \? opts\.carReflect/);
   assert.match(tlx, /o\.carReflect != null \? o\.carReflect/);

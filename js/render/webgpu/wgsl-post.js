@@ -1182,7 +1182,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //                                          finite-difference normal strides
   //                                          march depthTex, which is full res,
   //                                          while p0.xy is the half-res OUTPUT
-  //                                          texel; w pad).
+  //                                          texel; w = road SSR budget:
+  //                                          0 full, 1 medium, 2 low).
   const SSR = `
 struct SsrU {
   invProj   : mat4x4<f32>,
@@ -1281,9 +1282,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // a cockpit camera sits close enough to the road that a -2.5 start fades out
   // the whole visible mirror, so the literal made the knob's onboard case dead.
   let ssrNear = U.reflSkyHi.w;
+  let roadQuality = clamp(U.gloss.w, 0.0, 2.0);
+  let roadFadeStart = select(-22.0, select(-18.0, -12.0, roadQuality > 1.5), roadQuality > 0.5);
+  let roadFadeEnd = select(-78.0, select(-60.0, -42.0, roadQuality > 1.5), roadQuality > 0.5);
   let roadMask = smoothstep(0.25, 0.55, upDot)
                * smoothstep(ssrNear, ssrNear * 2.8, P.z)
-               * (1.0 - smoothstep(-22.0, -78.0, P.z));
+               * (1.0 - smoothstep(roadFadeStart, roadFadeEnd, P.z));
   // Car bodywork: up-facing-ish panels, nearer than the road (chase sits ~5–8 m back).
   var carMask = carPx * smoothstep(0.30, 0.65, upDot)
               * smoothstep(-1.0, -3.0, P.z)
@@ -1295,6 +1299,11 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let ssrGate  = max(roadTerm, carTerm);
   if (ssrGate <= 0.001) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
   let carDom = carTerm > roadTerm;
+  // Car paint retains the full march; road budgets reduce actual texture work.
+  let roadReduced = !carDom && roadQuality > 0.5;
+  let roadLow = !carDom && roadQuality > 1.5;
+  let marchSteps = select(select(24, 16, roadReduced), 8, roadLow);
+  let refineSteps = select(select(4, 2, roadReduced), 1, roadLow);
 
   let V = normalize(-P);
   // Road: flatten onto the plane so bump scatter doesn't patch the mirror.
@@ -1312,15 +1321,20 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   var pos = P;
   var prevPos = P;
   var stepLen = 0.55;
+  if (roadLow) { stepLen = 1.4; }
+  else if (roadReduced) { stepLen = 0.75; }
   pos = pos + R * (stepLen * ign);           // sub-step start offset per pixel
   var found = false;
   var hitUV = vec2<f32>(0.0);
   var hitEdge = 0.0;
   var hitDist = 0.0;
   for (var i = 0; i < 24; i = i + 1) {
+    if (i >= marchSteps) { break; }
     prevPos = pos;
     pos = pos + R * stepLen;
-    stepLen = stepLen * 1.16;
+    if (roadLow) { stepLen = stepLen * 1.4; }
+    else if (roadReduced) { stepLen = stepLen * 1.22; }
+    else { stepLen = stepLen * 1.16; }
     let sp = ssrProjUV(pos);
     if (sp.z <= 0.0) { break; }              // behind the eye
     let suv = sp.xy;
@@ -1330,6 +1344,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       var a = prevPos;
       var b = pos;
       for (var j = 0; j < 4; j = j + 1) {    // binary refine -> crisp hit (GLX)
+        if (j >= refineSteps) { break; }
         let mid = (a + b) * 0.5;
         let muv = ssrProjUV(mid).xy;
         if (ssrViewPos(muv).z - mid.z > 0.20) { b = mid; } else { a = mid; }
@@ -1381,15 +1396,23 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       carReflect * (0.006 + 0.030 * carSoft),
       carDom);
     streak = streak * mix(0.3, 1.6, clamp(hitDist / 25.0, 0.0, 1.0));
-    let w0 = 0.30; let w1 = 0.24; let w2 = 0.15; let w3 = 0.08; let w4 = 0.04;
-    hitCol  = textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb * w0;
-    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 0.5), 0.0).rgb * w1;
-    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 1.0), 0.0).rgb * w2;
-    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 1.6), 0.0).rgb * w3;
-    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 2.3), 0.0).rgb * w4;
-    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0,  streak * 0.5), 0.0).rgb * w1;
-    hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0,  streak * 1.0), 0.0).rgb * w2;
-    hitCol /= (w0 + 2.0 * w1 + 2.0 * w2 + w3 + w4);
+    if (roadLow) {
+      hitCol = textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb;
+    } else if (roadReduced) {
+      hitCol = textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb * 0.50;
+      hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 0.5), 0.0).rgb * 0.25;
+      hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, streak * 0.5), 0.0).rgb * 0.25;
+    } else {
+      let w0 = 0.30; let w1 = 0.24; let w2 = 0.15; let w3 = 0.08; let w4 = 0.04;
+      hitCol  = textureSampleLevel(sceneTex, sceneSamp, hitUV, 0.0).rgb * w0;
+      hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 0.5), 0.0).rgb * w1;
+      hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 1.0), 0.0).rgb * w2;
+      hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 1.6), 0.0).rgb * w3;
+      hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0, -streak * 2.3), 0.0).rgb * w4;
+      hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0,  streak * 0.5), 0.0).rgb * w1;
+      hitCol += textureSampleLevel(sceneTex, sceneSamp, hitUV + vec2<f32>(0.0,  streak * 1.0), 0.0).rgb * w2;
+      hitCol /= (w0 + 2.0 * w1 + 2.0 * w2 + w3 + w4);
+    }
   }
   var reflCol = mix(skyRefl, hitCol, conf);
   // Road: constant cover; car: confidence-scaled (falls through to lit env on miss).

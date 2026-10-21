@@ -43,7 +43,7 @@ import { fileURLToPath } from "node:url";
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
 import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
-import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate } from "../lib/census-entry.mjs";
+import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -89,13 +89,17 @@ if (argv.includes("--help") || argv.includes("-h")) {
                                   default drains once per beat via GLX.drainGpuErrors()
   --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
   --boot-timeout MS  --race-timeout MS
+  --profile DIR  --port N         a PERSISTENT browser profile and a fixed server port: run twice
+                                  with the same pair and the second run is a returning player's
+                                  launch (shader, HTTP and storage caches warm — Chrome keys them
+                                  by origin, so the port must not change). out.profile says which
 `);
   process.exit(0);
 }
 const flag = (n, d = null) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
 // The track is the first bare word that is not some flag's value.
 const VALUE_FLAGS = new Set(["--json", "--shot", "--backend", "--path", "--cam", "--tod", "--clock", "--beats", "--ls",
-  "--boot-timeout", "--race-timeout", "--entry", "--menu-timeout"]);
+  "--boot-timeout", "--race-timeout", "--entry", "--menu-timeout", "--profile", "--port"]);
 const track = argv.find((a, i) => !a.startsWith("--") && !VALUE_FLAGS.has(argv[i - 1])) || "montreal";
 // --cam ID (hunt 4 H5): the player camera, set right after boot so no frame of
 // race entry draws through another one. The default camera is helmet
@@ -155,7 +159,7 @@ function serve() {
     // Without this a bind failure is an unhandled 'error' event: the process
     // dies before any JSON is written and the gate reports "produced nothing".
     s.once("error", rej);
-    s.listen(0, "127.0.0.1", () => res({ server: s, port: s.address().port }));
+    s.listen(Number(flag("--port", 0)) || 0, "127.0.0.1", () => res({ server: s, port: s.address().port }));
   });
 }
 
@@ -176,10 +180,19 @@ const log = (m) => console.log(`[game-check] ${m}`);
 const out = { platform: process.platform, arch: process.arch, track, backend, path: path3,
   glErrDrain: glErrDrainEveryPresent ? "present" : "beat", entry };
 const { server, port } = await serve();
-const browser = await chromium.launch({
+const launchOpts = {
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
   args: ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
-});
+};
+// --profile: one persistent context in place of browser + newContext. `launch` says whether the
+// profile already held a run (a returning player's launch) or was empty (the first ever).
+const PROFILE = flag("--profile", null);
+let persistent = null, browser;
+if (PROFILE) {
+  out.profile = { dir: PROFILE, launch: existsSync(join(PROFILE, "Default")) ? "warm" : "cold", port };
+  persistent = await chromium.launchPersistentContext(PROFILE, { ...launchOpts, viewport: { width: 1280, height: 720 } });
+  browser = { close: () => persistent.close(), on: (ev, fn) => persistent.on(ev === "disconnected" ? "close" : ev, fn) };
+} else browser = await chromium.launch(launchOpts);
 checkpoint("browser-launched");
 // ABOVE the try, deliberately. This was `const console_ = []` INSIDE the try
 // while the finally below reads it — sibling scopes, so the finally threw
@@ -193,7 +206,7 @@ checkpoint("browser-launched");
 // written the JSON, so nothing ever looked wrong. docs/PERF-FINDINGS.md 2l.
 const console_ = [];
 try {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const ctx = persistent || await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
   page.on("console", (m) => { if (console_.length < 200) console_.push(`${m.type()}: ${m.text()}`.slice(0, 300)); });
   page.on("pageerror", (e) => console_.push("pageerror: " + String(e && e.message).slice(0, 300)));
@@ -732,6 +745,7 @@ try {
         catch (e) { m.todError = String((e && e.message) || e).slice(0, 100); }
       }
       const tw = Date.now();
+      await page.evaluate(prepTimelineStart).catch(() => {});
       try { await page.waitForFunction(menuPrepReady, null, { polling: 100, timeout: menuTimeout }); m.prepReady = true; }
       catch (_) { m.prepReady = false; m.prepNote = `menu prep not ready after ${menuTimeout} ms — START RACE pressed anyway`; }
       // Race settings' garage prewarm runs after menuFinish: a player reading the sheet gets it; bounded.
@@ -740,6 +754,11 @@ try {
           return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, null, { polling: 100, timeout: 30000 });
       } catch (_) { m.garageNote = "garage prewarm still running after 30 s"; }
       m.prepWaitMs = Date.now() - tw;
+      m.prepTimeline = await page.evaluate(prepTimelineRead).catch(() => null);
+      m.warmHistory = await page.evaluate(() => {
+        const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null, w = t && t.memState ? t.memState().warm : null;
+        return w && w.history ? w.history : null;
+      }).catch(() => null);
       step("prepared");
       m.atGo = await prep();
       m.garage = await page.evaluate(() => { const g = window.__apex.garagePrebuild && window.__apex.garagePrebuild();
@@ -1624,6 +1643,21 @@ try {
     }
   } else {
     out.frameReadFailed = shot ? "screenshot failed, so there is nothing to measure" : "no --shot requested";
+  }
+  // --profile: the next launch must find the pick PROVED. game.js disarms the boot
+  // canary after PROVE_FRAMES (300) world presents; a cold leg that closed at 284
+  // (census 39504425366) left it armed, so the warm leg booted GLX ("three never
+  // presented a frame last load") and timed the wrong renderer.
+  if (PROFILE) {
+    const t = Date.now();
+    let armed = null;
+    while (Date.now() - t < 30000) {
+      armed = await page.evaluate(() => localStorage.getItem("apex26.gfxBackendProbe")).catch(() => "unreadable");
+      if (!armed || armed === "unreadable") break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    out.profile.probeArmedAtClose = armed || null;
+    out.profile.proofWaitMs = Date.now() - t;
   }
   out.ok = true;
   checkpoint("done");

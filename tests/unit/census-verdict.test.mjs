@@ -40,7 +40,8 @@ test("historical garage A/B only runs for its explicit full push request; normal
     "${{ !cancelled() && needs.plan.outputs.garage_ab == 'true' }}"];
   for (let i = 0; i < experiment.length; i++)
     assert.equal(steps.find((s) => s.name === experiment[i])?.if, expected[i], experiment[i]);
-  const controls = steps.filter((s) => s.name?.startsWith("Game check —"));
+  // The opt-in relaunch step (#3235) is not a control: ci-gpu-census.test.mjs pins it.
+  const controls = steps.filter((s) => s.name?.startsWith("Game check —") && !s.name.includes("first and second launch"));
   assert.equal(controls.length, 4);
   for (const step of controls) assert.equal(step.if, "${{ needs.plan.outputs.census_only != 'true' }}");
   assert.equal(steps.find((s) => s.name === "Verdict — fail the job on what the game reported").if,

@@ -509,7 +509,7 @@
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "BLOCKED/ERROR lines and exit status (2 no key, 1 API); dump written/skipped counts; digest figures are stored-character proxies, not tokens"
+      "preserve": "typed result lines (LAUNCH, BUSY, REFUSED, TWIN, WAIT, USAGE, CALL, ERROR) and exit status (2 no key, 3 refused or twin, 124 wait timeout, 1 API); dump written/skipped/expired counts; transcript and call output is bounded and masked; digest figures count calls, not events, and are stored-character proxies, not tokens"
     },
     "tools/ci/debug-unit.mjs": {
       "action": "keep-native",
@@ -1261,6 +1261,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/cursor-transcript.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/custom-survey-locations.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1681,6 +1686,11 @@
       "presentation": "shared-levels",
       "preserve": "JSON-RPC errors/isError and nontext blocks"
     },
+    "tools/mcp/mcp-listing-cost.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Per-server ERROR rows and the TOTAL line"
+    },
     "tools/mcp/mcp-preflight.sh": {
       "action": "keep-native",
       "presentation": "native",
@@ -1886,6 +1896,16 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/shot/run-capture-request.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Validated cell count, native backend, producer failures and artifact locations; planning does not prove capture."
+    },
+    "tools/shot/capture-gallery.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Image hash failures, exact source/status receipts, native-versus-geometry counts and output path; no capture or upload implied."
+    },
     "tools/shot/design-matrix.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1955,6 +1975,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/shot/lib/design-matrix-run.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/shot/lib/design-matrix.mjs": {
       "action": "no-direct-output",
