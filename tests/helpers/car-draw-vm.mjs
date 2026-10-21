@@ -86,6 +86,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       buildWheelLayers: () => { rec.wheels++; return { rotating: { kind: "wheel" }, fixed: { kind: "wheelFixed" } }; },
       TYRE_BAND: [null, [1, 1, 0]], BRAKE_CALIPER: [null, [1, 0, 0]],
       aeroLevelOf: () => 2, aeroStyleOf: () => null, appearanceParts: (p) => p,
+      PART_STYLE_FIELDS: Object.fromEntries(["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel", "exhaust", "floor", "cockpit", "wheels"].map(c => [c + "Shape", c])),
     },
     CarWheels: { tints: () => ({ rim: null, cal: null, ink: null, key: "" }) },   // livery wheel tints: none set
     Parts: {

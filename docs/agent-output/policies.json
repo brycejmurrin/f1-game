@@ -96,6 +96,16 @@
       "presentation": "shared-levels",
       "preserve": "Generated fitted-zone/source output when requested, original photo provenance and exact mappings."
     },
+    "tools/car/lib/carview-capture.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/car/lib/customization-plan.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/car/lib/fit-checks.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -940,6 +950,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "@c4"
+    },
+    "tools/garage/author-crew-motion.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/gen/assets.mjs": {
       "action": "targeted-summary",
@@ -1801,6 +1816,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/cpuprofile-summary.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/perf/live-render-matrix.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1839,6 +1859,11 @@
     "tools/perf/query.mjs": {
       "action": "keep-native",
       "presentation": "native",
+      "preserve": "@c1"
+    },
+    "tools/perf/race-entry-timer.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
       "preserve": "@c1"
     },
     "tools/perf/runtime-memory.mjs": {

@@ -1,0 +1,1 @@
+Improved: rivals more than about 250 m away draw a simplified body (about a fifth fewer triangles on a full grid at distance), and a race frees livery textures no car on the grid uses; off-switch for the simplified body is apex26.fieldLod=0.

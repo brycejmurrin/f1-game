@@ -1,164 +1,103 @@
-// Render every catalog option plus every team's factory preset through the
-// @doc Renders every option of chosen part categories through `carview.html`; per-category contact sheets.
+// @doc Capture every catalog part, body style and finish with validated selection and resumable evidence.
 // @skill garage-parts-livery
-// isolated car viewer. Requires a static server at http://127.0.0.1:3456.
-//
-//   node tools/car/audit-parts.mjs [--cats=engine,aero] [--team=mclaren]
-//
-// Output: scratch/renders/parts/<category>/ and parts/factory/
-import { screenshotCard, renderGallery } from "../lib/screenshot-gallery.cjs";
-import { chromium } from "playwright";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-  assertSafePathToken,
-  resolveContainedChild,
-  resolveRepoDefault,
-} from "../lib/output-paths.mjs";
-import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(HERE, "..", "..");
-// --help and a typo'd flag must answer before Chromium launches (#1708).
-const ARGV = process.argv.slice(2);
-exitIfHelp(ARGV, `usage: node tools/car/audit-parts.mjs [--cats=engine,aero] [--team=mclaren] [--url=http://127.0.0.1:3456]
-  Renders every catalog option of each category (and every factory preset)
-  through tools/carview.html into scratch/renders/parts/. Needs a static server
-  on --url and launches Chromium (PW_CHROMIUM overrides the executable).`);
-const F = parseFlags(ARGV, ["--cats", "--team", "--url"]);
-const arg = (key, fallback) => F.flag(`--${key}`, fallback);
-const TEAM = assertSafePathToken(arg("team", "mclaren"), "team");
-const URL = arg("url", "http://127.0.0.1:3456");
-const EXE = process.env.PW_CHROMIUM;
-const CAT_VIEW = {
-  engine:     { az: 322, el: 22, dist: 6.2, tod: "day" },
-  aero:       { az: 38,  el: 18, dist: 6.4, tod: "day" },
-  suspension: { az: 152, el: 6,  dist: 5.8, tod: "day" },
-  brakes:     { az: 104, el: 8,  dist: 5.6, tod: "day" },
-  tyres:      { az: 96,  el: 8,  dist: 5.8, tod: "day" },
-  ers:        { az: 322, el: 16, dist: 5.6, tod: "dusk" },
-  gearbox:    { az: 26,  el: 22, dist: 5.8, tod: "day" },
-  fuel:       { az: 6,   el: 15, dist: 6.0, tod: "dusk" },
-  // The tailpipe cluster reads from close behind and slightly above; the floor
-  // fences and skids need a low angle from the side to clear the bodywork.
-  exhaust:    { az: 10,  el: 12, dist: 4.6, tod: "dusk" },
-  floor:      { az: 118, el: 4,  dist: 5.4, tod: "day" },
-  cockpit:    { az: 148, el: 26, dist: 3.9, tod: "day" },
-  wheels:     { az: 92,  el: 10, dist: 4.4, tod: "day" },
-};
-const cats = arg("cats", Object.keys(CAT_VIEW).join(",")).split(",")
-  .map((value) => assertSafePathToken(value.trim(), "category")).filter(Boolean);
-const sheet = (title, cards) => renderGallery({ title,
-  summary: `${cards.length} part views`,
-  groups: [{ title: "Captured parts", cards: cards.map(({ file, label }) => screenshotCard({ title: label, image: file })) }],
-});
-async function setAndSettle(page, state) {
-  const before = await page.evaluate(() => window.CARVIEW.frame);
-  await page.evaluate((next) => window.CARVIEW.set(next), state);
-  await page.waitForFunction((frame) => window.CARVIEW.frame >= frame + 8, before);
-}
-
-const browser = await chromium.launch({
-  ...(EXE ? { executablePath: EXE } : {}),
-  args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"],
-});
+import { mkdirSync, writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import sharp from 'sharp';
+import { exitIfHelp, parseFlags } from '../lib/cli-args.mjs';
+import { launchChromium, startStaticServer, shutdown } from '../lib/harness.mjs';
+import { chromiumArgsForBackend, mutateCaptureScene, awaitCaptureReady, screenshotPresentedCanvas } from '../shot/probe-page.mjs';
+import { customizationCatalog, planCustomization } from './lib/customization-plan.mjs';
+import { installCarviewCapture } from './lib/carview-capture.mjs';
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const argv = process.argv.slice(2);
+exitIfHelp(argv, `usage: node tools/car/audit-parts.mjs [--cats=engine,aero|none] [--team=mclaren]
+  [--bodyStyle=needle] [--finish=pearl] [--aero=style_aero_spoon] [--styles-only]
+  [--bodies] [--finishes] [--plan] [--resume] [--out=artifacts/car-survey]
+  [--w=640 --h=448] [--url=http://127.0.0.1:3456]
+  One browser; every eligible catalog option, plus front-wing views for aero.
+  --bodies adds every canonical body in side and quarter views; --finishes adds every finish.
+  Captures include resolved IDs, geometry, frame freshness and source identity.`);
+const M = customizationCatalog();
+const flags = parseFlags(argv, ['--cats', '--team', '--bodyStyle', '--finish', '--styles-only', '--bodies', '--finishes', '--plan', '--resume', '--out', '--w', '--h', '--url', ...M.Parts.CATALOG.map(c => '--' + c.id), ...M.Liveries.FIELDS.map(f => '--' + f)]);
+const parts = Object.fromEntries(M.Parts.CATALOG.filter(c => flags.has('--' + c.id)).map(c => [c.id, flags.flag('--' + c.id)]));
+const livery = Object.fromEntries(M.Liveries.FIELDS.filter(f => !['bodyStyle', 'finish'].includes(f) && flags.has('--' + f)).map(f => {
+  const raw = flags.flag('--' + f), hex = /^#?([0-9a-f]{6})$/i.exec(String(raw));
+  return [f, hex ? [0, 2, 4].map(i => parseInt(hex[1].slice(i, i + 2), 16) / 255) : raw];
+}));
+const plan = planCustomization({ M, categories: flags.has('--cats') ? flags.flag('--cats') === 'none' ? [] : flags.list('--cats') : undefined,
+  team: flags.flag('--team', 'mclaren'), bodyStyle: flags.flag('--bodyStyle', 'team'), finish: flags.flag('--finish', 'gloss'), parts, livery,
+  stylesOnly: flags.has('--styles-only'), bodies: flags.has('--bodies'), finishes: flags.has('--finishes') });
+if (flags.has('--plan')) { console.log(JSON.stringify(plan, null, 2)); process.exit(0); }
+const out = resolve(ROOT, flags.flag('--out', 'artifacts/car-survey'));
+if (!out.startsWith(resolve(ROOT, 'artifacts') + sep) && !out.startsWith(resolve(ROOT, 'scratch') + sep)) throw new Error('Output must be inside artifacts/ or scratch/');
+const viewport = { width: Number(flags.flag('--w', '640')), height: Number(flags.flag('--h', '448')) };
+if (Object.values(viewport).some(v => !Number.isInteger(v) || v < 240 || v > 1920)) throw new Error('Viewport dimensions must be integers 240..1920');
+mkdirSync(out, { recursive: true });
+const hash = value => createHash('sha256').update(value).digest('hex');
+const source = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(),
+  diffHash: hash(execFileSync('git', ['diff', 'HEAD', '--', 'tools', 'js'], { cwd: ROOT })), viewport };
+const planHash = hash(JSON.stringify({ plan, source }));
+let manifest = { version: 1, source, planHash, viewport, counts: plan.counts, shots: [], errors: [] };
+const manifestPath = resolve(out, 'manifest.json');
+if (flags.has('--resume') && existsSync(manifestPath)) {
+  manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (manifest.planHash !== planHash) throw new Error('Resume refused: source, selection or viewport changed');
+} else if (existsSync(manifestPath)) throw new Error('Output already has a manifest; use --resume or a new directory');
+writeFileSync(resolve(out, 'plan.json'), JSON.stringify(plan, null, 2));
+const save = () => { writeFileSync(manifestPath + '.tmp', JSON.stringify(manifest, null, 2)); renameSync(manifestPath + '.tmp', manifestPath); };
 try {
-  const page = await browser.newPage({ viewport: { width: 720, height: 560 } });
-  page.on("pageerror", (error) => console.log("PAGEERR", error.message));
-  await page.goto(`${URL}/tools/carview.html?team=${TEAM}&hud=0`, { waitUntil: "load" });
-  await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { timeout: 15_000 });
-
-  const audit = await page.evaluate((fallbackTeam) => {
-    const teams = Teams.LIST.filter((team) => Parts.FACTORY_PRESETS[team.id]);
-    const byId = Object.fromEntries(teams.map((team) => [team.id, team]));
-    const eligibleTeam = (option) => {
-      if (option.teams && option.teams.length) return byId[option.teams[0]]?.id;
-      if (option.team) return byId[option.team]?.id;
-      const suppliers = option.suppliers || (option.supplier ? [option.supplier] : []);
-      if (suppliers.length) return teams.find((team) => suppliers.includes(team.engine))?.id;
-      return byId[fallbackTeam] ? fallbackTeam : teams[0].id;
-    };
-    return {
-      defaults: { ...Parts.DEFAULTS },
-      catalog: Object.fromEntries(Parts.CATALOG.map((category) => [
-        category.id,
-        category.options.map((option) => ({
-          id: option.id,
-          label: option.label,
-          team: eligibleTeam(option),
-        })),
-      ])),
-      factories: teams.map((team) => ({
-        id: team.id,
-        name: team.name,
-        parts: Parts.getFactorySetup(team),
-      })),
-    };
-  }, TEAM);
-
-  for (const cat of cats) {
-    const view = CAT_VIEW[cat];
-    const options = audit.catalog[cat];
-    if (!view || !options) throw new Error(`Unknown parts category: ${cat}`);
-    const dir = resolveRepoDefault(ROOT, "scratch", "renders", "parts", cat);
-    mkdirSync(dir, { recursive: true });
-    const cards = [];
-    for (const option of options) {
-      if (!option.team) throw new Error(`No eligible team found for ${cat}:${option.id}`);
-      const parts = { ...audit.defaults, [cat]: option.id };
-      await setAndSettle(page, {
-        team: option.team, colors: null, parts,
-        az: view.az, el: view.el, dist: view.dist, tod: view.tod,
+  const server = flags.has('--url') ? null : await startStaticServer(ROOT);
+  const browser = await launchChromium({ args: chromiumArgsForBackend('webgl2') });
+  const page = await browser.newPage({ viewport, reducedMotion: 'reduce' });
+  page.on('pageerror', e => { manifest.errors.push(e.message); console.error('PAGEERROR', e.message); });
+  const pageUrl = new URL('/tools/carview.html?team=mclaren&hud=0', server?.url || flags.flag('--url')).href;
+  const response = await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
+  if (!response?.ok()) throw new Error(`Car viewer HTTP ${response?.status()} at ${pageUrl}`);
+  await page.waitForFunction(() => window.CARVIEW?.ready, null, { polling: 100, timeout: 240000 }).catch(async error => {
+    console.error('BOOT_DIAGNOSTIC', JSON.stringify(await page.evaluate(() => ({ url: location.href, title: document.title, viewer: typeof CARVIEW, frame: window.CARVIEW?.frame, glx: typeof GLX, text: document.body.innerText.slice(0, 500) }))));
+    throw error;
+  });
+  await installCarviewCapture(page);
+  manifest.browser = browser.version();
+  manifest.renderer = await page.evaluate(() => {
+    const gl = document.querySelector('canvas').getContext('webgl2'), ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return { backend: 'webgl2', renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches };
+  });
+  for (const job of plan.jobs) {
+    if (manifest.shots.some(s => s.key === job.key && s.ok && existsSync(resolve(out, s.file)) && s.sha256 === hash(readFileSync(resolve(out, s.file))))) continue;
+    const begin = Date.now();
+    const file = job.key + '.jpg';
+    mkdirSync(resolve(out, job.kind, job.category), { recursive: true });
+    try {
+      await mutateCaptureScene(page, state => CARVIEW.set(state), {
+        look: 0, lookX: 0, lookY: 0, spin: false, sweep: false, colors: [[0.50, 0.56, 0.65], [0.12, 0.23, 0.34]],
+        tod: 'day', rig: '3point', intensity: 2.0, exp: 1.2, refl: 0.85, ...job.state,
       });
-      const file = `${assertSafePathToken(option.id, "option")}.png`;
-      await page.screenshot({ path: resolveContainedChild(dir, file, "parts audit shot") });
-      cards.push({ file, label: `${option.label} · ${option.team}` });
+      const resolved = await page.evaluate(request => {
+        const team = Teams.LIST.find(t => t.id === request.team);
+        const resolved = Parts.resolveSetup(request.parts, team);
+        for (const [cat, id] of Object.entries(request.parts)) if (resolved.ids[cat] !== id) throw new Error(cat + ' resolved to ' + resolved.ids[cat] + ', requested ' + id);
+        return { team: team.id, ids: resolved.ids, cost: resolved.cost, mods: resolved.mods, mesh: window.__carCapture.mesh, livery: window.__carCapture.livery };
+      }, job.state);
+      const readiness = await awaitCaptureReady(page, { timeoutMs: 90000 });
+      const capture = await screenshotPresentedCanvas(page, { path: resolve(out, file), preferView: true, skipAwait: true, type: 'jpeg', quality: 87, timeout: 90000 });
+      const stats = await sharp(resolve(out, file)).stats();
+      const ok = stats.channels.slice(0, 3).some(c => c.stdev > 12);
+      if (!ok) throw new Error('Rendered image is blank or lacks contrast');
+      manifest.shots = manifest.shots.filter(s => s.key !== job.key);
+      manifest.shots.push({ ...job, file, sha256: hash(capture.buf), resolved, readiness, via: capture.via, ok, elapsedMs: Date.now() - begin });
+      console.log('CAPTURE', manifest.shots.filter(s => s.ok).length + '/' + plan.jobs.length, job.key, Date.now() - begin + 'ms');
+    } catch (e) {
+      manifest.shots.push({ ...job, file, ok: false, error: e.message });
+      console.error('FAILED', job.key, e.message);
     }
-    writeFileSync(resolveContainedChild(dir, "index.html", "parts audit index"), sheet(`${cat} parts`, cards));
-    console.log(`  ${cat}: ${cards.length} options`);
+    save();
   }
-
-  const factoryDir = resolveRepoDefault(ROOT, "scratch", "renders", "parts", "factory");
-  mkdirSync(factoryDir, { recursive: true });
-  const factoryCards = [];
-  const liveries = [
-    { id: "light", colors: [[0.88, 0.9, 0.94], [0.22, 0.25, 0.3]] },
-    { id: "dark", colors: [[0.035, 0.045, 0.06], [0.3, 0.34, 0.4]] },
-  ];
-  for (const factory of audit.factories) {
-    for (const livery of liveries) {
-      await setAndSettle(page, {
-        team: factory.id, livery: null, colors: livery.colors, parts: factory.parts,
-        az: 40, el: 16, dist: 6.4, tod: "day",
-      });
-      const file = `${assertSafePathToken(factory.id, "factory team")}-${livery.id}.png`;
-      await page.screenshot({ path: resolveContainedChild(factoryDir, file, "factory audit shot") });
-      factoryCards.push({ file, label: `${factory.name} · ${livery.id}` });
-    }
-  }
-  writeFileSync(resolveContainedChild(factoryDir, "index.html", "factory audit index"), sheet("factory presets · light / dark", factoryCards));
-  console.log(`  factory: ${factoryCards.length} renders`);
-  const effectsDir = resolveRepoDefault(ROOT, "scratch", "renders", "parts", "effects");
-  mkdirSync(effectsDir, { recursive: true });
-  const effectCards = [];
-  for (const preset of [
-    { id: "after-fire", label: "Throttle-lift after-fire", effects: { exhaustFlame: true, brakeGlow: false, ersDeploy: false } },
-    { id: "brake-heat", label: "Hot brake rotors", effects: { exhaustFlame: false, brakeGlow: true, ersDeploy: false } },
-    { id: "ers-deploy", label: "Electric ERS deployment", effects: { exhaustFlame: false, brakeGlow: false, ersDeploy: true } },
-  ]) {
-    await setAndSettle(page, {
-      team: TEAM, colors: null, parts: audit.defaults,
-      az: 18, el: 10, dist: 4.8, look: -1.3, tod: "dusk", effects: preset.effects,
-    });
-    const file = `${preset.id}.png`;
-    await page.screenshot({ path: resolveContainedChild(effectsDir, file, "effects audit shot") });
-    effectCards.push({ file, label: preset.label });
-  }
-  writeFileSync(resolveContainedChild(effectsDir, "index.html", "effects audit index"),
-    sheet("grounded runtime effects", effectCards));
-  console.log(`  effects: ${effectCards.length} renders`);
-  console.log("done -> scratch/renders/parts/");
-} finally {
-  await browser.close();
-}
+  const failed = plan.jobs.filter(j => !manifest.shots.some(s => s.key === j.key && s.ok));
+  manifest.finishedAt = new Date().toISOString(); manifest.failed = failed.map(j => j.key); save();
+  console.log(JSON.stringify({ out, captured: plan.jobs.length - failed.length, failed: manifest.failed, pageErrors: manifest.errors }));
+  if (failed.length || manifest.errors.length) process.exitCode = 1;
+} finally { await shutdown(); }

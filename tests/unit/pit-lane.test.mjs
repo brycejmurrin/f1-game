@@ -1453,6 +1453,35 @@ test("in a wet race an AI's planned stop fits the wet tread, not the plan's slic
   assert.equal(c.pitNext && c.pitNext.tread, 2, `…onto wets: ${JSON.stringify(c.pitNext)}`);
 });
 
+// wetLapsToStop, pinned by its numbers: think() hands its answer to AiDrive.pitNow as q.lapsToStop / q.stopsLeft.
+// Fixture: 25 laps, car on lap 8 (18 to the flag), wet life 0.72 → a fresh wet runs planLaps = 18 laps.
+test("wetLapsToStop: the wet stint is cut midway between a fresh set reaching the flag and this one gone", () => {
+  const s = commitSession({ weather: "rain" });
+  const seen = [];
+  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  const c = s.car(0);
+  c.human = false; c.local = false; c.lap = 8; c.pitStops = 0; c.tyreWear = 0.4;
+  c.tyre = { code: "W", tread: 2 };
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [8, 17], lapsAt: [8] };
+  const run = (lapsOn, lapsLeft) => {
+    s.G.tyres.lapsOn = () => lapsOn; s.G.tyres.lapsLeft = () => lapsLeft;
+    seen.length = 0; s.pits.think(c); return seen[0];
+  };
+  // One lap on the set: the measured rate is ignored (2 left would stop now); 18 × (1 − 0.4) = 10.8 laps left on it.
+  // round(((25 − 18) + (8 + 10.8)) / 2) − 8 = 5.
+  assert.deepEqual(run(1, 2), [5, 1], "one lap on the set plans on the fresh life, not the measured rate");
+  // Two laps on: the measured 5 laps. round((7 + 13) / 2) − 8 = 2.
+  assert.deepEqual(run(2, 5), [2, 1], "two laps on, the measured rate cuts the stint");
+  // 17 × 1.1 ≥ 18: the set reaches the flag (the margin `fits` uses), so no stop is left.
+  assert.deepEqual(run(3, 17), [99, 0], "a set that reaches the flag with the 1.1 margin stops no more");
+  // 16 × 1.1 < 18: round((7 + 24) / 2) − 8 = 8.
+  assert.deepEqual(run(3, 16), [8, 1], "16 laps left is short of the flag, so it still stops");
+  // No measured tyre hooks: no wet re-cut, no stop.
+  delete s.G.tyres.lapsLeft;
+  seen.length = 0; s.pits.think(c);
+  assert.deepEqual(seen[0], [99, 0]);
+});
+
 test("lossS is the lane's net cost in seconds, and estimate agrees with it off a caution", () => {
   const { pits, car } = commitSession();
   const s = pits.lossS();

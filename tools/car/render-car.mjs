@@ -91,6 +91,8 @@ import { resolve, dirname } from 'node:path';
 import { exitIfHelp } from '../lib/cli-args.mjs';
 import { glStack } from '../lib/browser-workers.mjs';
 import { chromiumPath } from '../lib/chromium-path.mjs';
+import { customizationCatalog, customizationEnums } from './lib/customization-plan.mjs';
+import { installCarviewCapture } from './lib/carview-capture.mjs';
 
 const RC_USAGE = `usage: node tools/car/render-car.mjs [--views=a,b,c] [--preset=<name>|list] [--team=<id>|all] [options]
   Headless batch renderer for tools/carview.html (needs a static server on :3456).
@@ -379,12 +381,17 @@ for (const [k, v] of Object.entries(parts)) qs.set(k, v);
 // livery ids, so --livery cannot reach them: sweeping one design across teams —
 // the thing "does spineLogo=saddle read on every car?" needs — had no way to ask
 // for it at all before this.
-const LIV_FIELDS = ['bodyStyle', 'finish', 'finShape', 'finStyle', 'finBadge', 'spineLogo', 'spineSide',
-                    'spineHeight', 'tcam', 'coverVents', 'wingCarbon', 'numFont',
-                    'mirrorTint', 'rimTint', 'caliperTint', 'sidewallInk', 'helmetBase', 'helmetAccent',
-                    'podFinish', 'finFinish', 'mirrorFinish', 'helmetStyle', 'coverFinish', 'wingFinish', 'haloFinish',
-                    'cover', 'rearWing', 'stripe', 'accent', 'nose', 'pod', 'wing',
-                    'halo', 'fin', 'finArt', 'logo', 'logo2', 'logo3'];
+const RENDER_CATALOG = customizationCatalog();
+const LIV_FIELDS = Array.from(RENDER_CATALOG.Liveries.FIELDS);
+const FIELD_ENUMS = customizationEnums(RENDER_CATALOG);
+const fieldOverrides = {};
+for (const f of LIV_FIELDS) {
+  const raw = arg(f, null);
+  if (raw == null) continue;
+  if (FIELD_ENUMS[f] && !FIELD_ENUMS[f].includes(raw)) throw new Error(`Invalid ${f}: ${raw}`);
+  const hex = /^#?([0-9a-f]{6})$/i.exec(String(raw));
+  fieldOverrides[f] = hex ? [0, 2, 4].map(i => parseInt(hex[1].slice(i, i + 2), 16) / 255) : raw;
+}
 for (const f of LIV_FIELDS) { const v = arg(f, null); if (v != null) qs.set(f, v); }
 // --carsmooth=0 renders the car without CarShade's rounded sections + smooth shading (js/car/car-shade.js; ON by default).
 { const v = arg('carsmooth', null); if (v != null) qs.set('carsmooth', v); }
@@ -453,8 +460,15 @@ try {
   const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: WAIT_MS }).then(() => true).catch(() => false);
   if (!ok) throw new Error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`);
 
+  await installCarviewCapture(page, TEAM);
+  const renderLivery = async (team) => page.evaluate(({ team, id, fields }) => {
+    const list = Liveries.forTeam(Teams.LIST.find(t => t.id === team));
+    if (id && !list.some(l => l.id === id)) throw new Error(`Unknown livery ${id} for ${team}`);
+    return { ...(list.find(l => l.id === id) || list[0]), ...fields };
+  }, { team, id: LIVERY, fields: fieldOverrides });
+
   const boot = { team: TEAM, parts };
-  if (LIVERY) boot.livery = LIVERY;
+  boot.livery = await renderLivery(TEAM);
   if (NUM != null) boot.num = NUM;
   if (REFL != null) boot.refl = parseFloat(REFL);
   await mutateCaptureScene(page, (p) => window.CARVIEW.set(p), boot);
@@ -476,7 +490,7 @@ try {
          tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN,
          // Only when it CHANGES: CARVIEW.set({team}) rebuilds the car, and
          // re-sending the same id every shot pays that on every camera move.
-         ...(s.team !== renderedTeam ? { team: s.team } : {}) });
+         ...(s.team !== renderedTeam ? { team: s.team, livery: await renderLivery(s.team) } : {}) });
     renderedTeam = s.team;
     // The shared generation marker rejects old readbacks and waits only until
     // this camera/team has actually painted. No timed fallback can pass a stall.

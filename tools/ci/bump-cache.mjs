@@ -66,7 +66,14 @@ const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
 // Initial <script src> and <link rel="stylesheet"> tags also carry the file's FULL sha256 SRI once staged (#2312):
 // the ?v= key is 12 hex chars, and Pages serves current bytes for an older key, so only integrity authenticates them.
 const SRI_TAG_RE = /<(script|link)\b[^>]*>/gi;
-const hasSriTarget = (tag) => /^<script\b/i.test(tag) ? /\bsrc="[^"?#]+\?v=/.test(tag) : /\brel="stylesheet"/i.test(tag) && /\bhref="[^"?#]+\?v=/.test(tag);
+const hasSriTarget = (tag) => {
+  if (/^<script\b/i.test(tag)) return /\bsrc="[^"?#]+\?v=/.test(tag);
+  if (!/\bhref="[^"?#]+\?v=/.test(tag)) return false;
+  if (/\brel="stylesheet"/i.test(tag)) return true;
+  // Title-critical CSS preloads must carry the same SRI as the matching
+  // stylesheet tag or Chrome drops the preload (#3257).
+  return /\brel="preload"/i.test(tag) && /\bas="style"/i.test(tag);
+};
 const INTEGRITY_ATTR_RE = /\s+integrity="([^"]*)"/i;
 const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/;
 const LAZY_V_ID = "apex-lazy-v";

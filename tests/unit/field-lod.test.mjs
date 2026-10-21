@@ -40,6 +40,77 @@ function loadLod(stored) {
 }
 const at = (m) => m * m;
 
+// Execute the real render loop through its pose-preparation boundary. Track
+// projection is counted: an invisible world car must never reach that work.
+function carPoseRig() {
+  const render = symbolSource("function render(dt)");
+  const start = render.indexOf("for (const c of cars)", render.indexOf("const _fxCullR2"));
+  const end = render.indexOf("let bankC;", start);
+  assert.ok(start > 0 && end > start, "render car-pose boundary exists");
+  const projected = [], prepared = [];
+  const ctx = vm.createContext({
+    Math, cars: [], player: { s: 100 }, track: { total: 5000 },
+    state: "race", dbgCam: null, renderAlpha: 1,
+    camEye: [0, 1, 0], _camFwdX: 0, _camFwdZ: 1,
+    _plOk: false, _plCS: 100, _plCX: 0,
+    _rp: {}, _pa: {},
+    lerpS: (prev, cur, alpha) => prev === undefined ? cur : prev + (cur - prev) * alpha,
+    trackFrom: (x, z, s) => { projected.push({ x, z, s }); return { s, x }; },
+    loadingScreen: { active: () => false }, photoStudio: null,
+    prepared,
+  });
+  vm.runInContext(symbolSource("function renderPosOf(c)") + "\n" + symbolSource("function playerAnchor(c)"), ctx, { filename: absSrc("js/game.js") });
+  const run = vm.runInContext(`(function () { ${render.slice(start, end)}
+    prepared.push({ car: c, x: rp.x, z: rp.z, world: rp.world, cS, cX }); } })`, ctx, { filename: absSrc("js/game.js") });
+  return { ctx, projected, prepared, run };
+}
+
+test("behind-eye world rivals skip road projection, including interpolated and remote poses", () => {
+  const r = carPoseRig();
+  r.ctx.renderAlpha = 0.5;
+  const car = (id, pose) => ({ id, s: 100, x: 0, speed: 40, ...pose });
+  r.ctx.cars = [
+    car("behind", { px: 0, pz: -7 }),
+    car("remote-behind", { human: true, px: 2, pz: -20 }),
+    car("interpolated-behind", { px: 0, pz: 10, rPrevPx: 0, rPrevPz: -24 }),
+    car("grace-boundary", { px: 0, pz: -6 }),
+    car("alongside", { px: 40, pz: 0 }),
+    car("interpolated-ahead", { px: 0, pz: -20, rPrevPx: 0, rPrevPz: 30 }),
+    car("no-world", {}),
+    car("player", { isPlayer: true, px: 0, pz: -30 }),
+  ];
+  r.run();
+  assert.deepEqual(r.prepared.map(p => p.car.id),
+    ["grace-boundary", "alongside", "interpolated-ahead", "no-world", "player"]);
+  assert.equal(r.projected.length, 4, "three culled world cars do not project; the arc-only fallback does not need projection");
+  const interpolated = r.prepared.find(p => p.car.id === "interpolated-ahead");
+  assert.equal(interpolated.z, 5, "the visible pose uses interpolation rather than the latest physics position");
+  assert.equal(r.prepared.find(p => p.car.id === "no-world").world, false, "arc-only cars retain the later sampled cull");
+});
+
+test("the early car gate follows the current camera and preserves player, menu and distance guards", () => {
+  const r = carPoseRig();
+  r.ctx.camEye = [10, 2, 20]; r.ctx._camFwdX = -1; r.ctx._camFwdZ = 0;
+  r.ctx.cars = [
+    { id: "behind-x", s: 100, px: 17, pz: 20 },
+    { id: "boundary-x", s: 100, px: 16, pz: 20 },
+    { id: "ahead-x", s: 100, px: 0, pz: 20 },
+    { id: "far-arc", s: 800, px: 0, pz: 20 },
+    { id: "player", isPlayer: true, s: 100, px: 50, pz: 20 },
+  ];
+  r.ctx._plOk = true;
+  r.run();
+  assert.deepEqual(r.prepared.map(p => p.car.id), ["boundary-x", "ahead-x", "player"]);
+  assert.equal(r.projected.length, 2, "the player still reuses the frame anchor");
+  r.ctx.dbgCam = {}; r.projected.length = r.prepared.length = 0;
+  r.run();
+  assert.ok(r.prepared.some(p => p.car.id === "far-arc"), "camera overrides still bypass the player-arc distance gate");
+  r.ctx.state = "menu"; r.projected.length = r.prepared.length = 0;
+  r.run();
+  assert.equal(r.projected.length, 0, "an inactive menu never projects the old grid");
+  assert.equal(r.prepared.length, 0);
+});
+
 test("the table: a rival's parts by camera distance; the player is never reduced", () => {
   const { FieldLod: L } = loadLod();
   assert.ok(Object.isFrozen(L.T), "one frozen thresholds table");
@@ -401,7 +472,7 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
 });
 
 test("game.js swaps rivals to the one shared body mesh past tier 2", () => {
-  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
+  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(FieldLod\.farBody\(_lodD2, fovY, c\)\) : teamBodyMesh\(c\.team, c\)/,
     "past tier 2 the render loop shares one rival body (apex26.fieldLod=0 keeps per-seat meshes)");
 });
 
@@ -467,4 +538,20 @@ test("moving and resting flap draws use the regional wing finish over the body f
       assert.ok(!draw.mesh.d.mat.includes(r.M.CarMaterials.FINISH_SURFACE.matte));
     }
   }
+});
+
+test("farBody: the decimated silhouette body past FAR_BODY_M, sticky, never when the LOD is off", () => {
+  const { FieldLod: L } = loadLod();
+  assert.equal(L.T.FAR_BODY_M, 250);
+  assert.equal(L.farBody(at(200), 1.05), false);
+  assert.equal(L.farBody(at(300), 1.05), true);
+  const car = {};
+  assert.equal(L.farBody(at(260), 1.05, car), true, "no history yet: the plain table");
+  assert.equal(L.farBody(at(240), 1.05, car), true, "inside the band: stays far (hysteresis)");
+  assert.equal(L.farBody(at(220), 1.05, car), false, "below -10 %: back to the full shared body");
+  assert.equal(L.farBody(at(260), 1.05, car), false, "inside the band the other way: stays near");
+  assert.equal(L.farBody(at(280), 1.05, car), true, "past +10 %: far again");
+  // a 18 deg tele lens makes the same camera distance look nearer: 300 m there is ~100 m at the reference lens
+  assert.equal(L.farBody(at(300), 18 * Math.PI / 180), false);
+  assert.equal(loadLod(0).FieldLod.farBody(at(900), 1.05), false, "apex26.fieldLod = 0 restores the legacy draw");
 });

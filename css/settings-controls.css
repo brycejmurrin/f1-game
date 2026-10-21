@@ -684,6 +684,24 @@ button:has(> [data-fold]) {
 #pmsettings-inner[data-shape="wide"] #advanced-inner details,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
+/* UI SIZE 200% on wide sheets: ‹ select › clusters must shrink inside their
+   grid cell instead of painting past the pane (fit-audit #3254 / #3255). */
+#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div > select {
+  flex: 1 1 6rem;
+  width: auto;
+  min-width: 3.25rem;
+  max-width: 100%;
+}
+#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div > button {
+  flex: 0 0 var(--chip-h);
+  width: var(--chip-h);
+  min-width: var(--tap-min);
+}
 /* MY TEAM logo upload: the file input itself is hidden (its native button is
    unstyleable), so the <label> is the visible control.
    NOTE: this block used to sit AFTER the layer's closing brace, which made it

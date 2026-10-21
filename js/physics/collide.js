@@ -846,7 +846,9 @@ const Collide = (() => {
 
     // shiftLong and sepShares were on this API with no reader anywhere;
     // both are still used INSIDE resolveCollisions, which is the contract.
-    return { resolveCollisions, pairContact };
+    // Race teardown: the bindings above are refreshed at the next resolveCollisions entry; until then they held the last race.
+    function releaseTrack() { track = motionTrack = player = netPlay = null; motion = new WeakMap(); motionTime = -1; }
+    return { resolveCollisions, pairContact, releaseTrack };
   }
 
   // The nearest PARKED retirement (#2162) ahead of (or still beside) `c` on

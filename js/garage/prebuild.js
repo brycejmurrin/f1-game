@@ -51,6 +51,12 @@ const GaragePrebuild = (function () {
   "use strict";
 
   const POLL_MS = 1000;      // the title's idle check: a few property reads
+  // The title prebuild is one 1.0-1.5 s task at 4x CPU (Car3D.build + the framing
+  // hull). Started at the first idle after the title wired, it sat exactly where
+  // the first tap lands: a RACE tap waited 1.2-3.5 s (B-H8 phone-profile A/B,
+  // 2026-10-21). It waits for this much REAL quiet on a visible title: no
+  // pointer, key, wheel or visibility change. Input never starts it.
+  const QUIET_MS = 3000;
   const GIVE_UP_MS = 30000;  // a hidden frame withheld this long (a TLX compile) is logged as pending
 
   // Settled = uploaded, failed or unsupported (js/render/shared/assets.js state()).
@@ -95,6 +101,7 @@ const GaragePrebuild = (function () {
       if (e.off) out.push("off");
       if (e.intro) out.push("title-intro");
       if (e.saveData) out.push("save-data");
+      if (e.quietMs < QUIET_MS) out.push("input-recent");
       // Pack is NOT a start blocker: car/room build while it downloads. Frames
       // still wait on packSettled inside run() so programs compile once.
       if (e.kind === "track" && !e.worldReady) out.push("world-build");
@@ -121,6 +128,16 @@ const GaragePrebuild = (function () {
     let enabled = readSwitch();
     let running = false, warmed = false, last = null, open = null, firstFrame = null, timer = 0, visits = 0;
     let prepped = null;   // { key, room }: built on the CPU by a frameless plan, frames NOT drawn
+    // Quiet clock: reset by input, a visibility change, and every poll that finds
+    // the title not showing, so the title's own first seconds count as noisy.
+    let quietSince = null;   // first read starts it: the clock may not exist yet at create()
+    const noisy = () => { quietSince = now(); };
+    const quietMs = () => { if (quietSince === null) quietSince = now(); return now() - quietSince; };
+    if (typeof addEventListener === "function") {
+      for (const ev of ["pointerdown", "keydown", "wheel", "touchstart", "visibilitychange"]) {
+        addEventListener(ev, noisy, { capture: true, passive: true });
+      }
+    }
     const ui = () => { const u = d.ui(); return u && u.state ? u.state() : null; };
     const kind = () => homeKind(ui());
     function surface() {
@@ -140,6 +157,7 @@ const GaragePrebuild = (function () {
         packSettled: packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null),
         worldReady: !!d.worldReady(), homePainted: !!(st && st.painted),
         worldWarm: gate.warm > 0, warming: !!(G.gfx && G.gfx.warming && G.gfx.warming()),
+        quietMs: quietMs(),
       };
     }
     // Ready = drawn for THIS key (or, for the title only, built as far as the
@@ -209,9 +227,11 @@ const GaragePrebuild = (function () {
         return finish(rec, "pending");   // still armed: render() flips garageReady when it draws
       } finally { running = false; }
     }
-    const titleCurrent = () => G.state === "menu" && !G.setupPreviewOn && surface() === "title" && !starting();
+    // Input mid-sequence abandons the rest (the car step's mesh stays in the LRU).
+    const titleCurrent = () => G.state === "menu" && !G.setupPreviewOn && surface() === "title" && !starting() && quietMs() >= QUIET_MS;
     function tick() {
       timer = setTimeout(tick, POLL_MS);
+      if (surface() !== "title") noisy();
       if (running || G.state !== "menu" || ready("title")) return;
       run(titleCurrent, "title").catch((e) => Log.warn("game", "garage prewarm failed", e));
     }
@@ -262,6 +282,6 @@ const GaragePrebuild = (function () {
   // The page's one instance, for __apex.garagePrebuild() (the MirrorPass.instance() idiom: no G member).
   let _instance = null;
 
-  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, POLL_MS, GIVE_UP_MS };
+  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, POLL_MS, GIVE_UP_MS, QUIET_MS };
 })();
 Object.freeze(GaragePrebuild);
