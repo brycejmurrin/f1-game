@@ -885,6 +885,8 @@ const CarDraw = (function () {
       Teams.LIST.forEach((team, ti) => {
         if (!Teams.isReal(team) && ti !== teamPick) return;
         Career.gridDrivers(team).forEach((seat, di) => {
+          // LEGENDS carries twelve seats for the picker but grids ONE (game.js seatsFor): the picked legend.
+          if (team.legends && di !== driverPick) return;
           const d = Career.driverOverride(team.id, di) || seat, isPlayer = ti === teamPick && di === driverPick;
           // makeCars' own keys (carVisual): the player and MY TEAM's hire on the saved build, a career rival on its shelf.
           const c = Object.assign({ team, num: d.num, isPlayer }, carVisual(team, d.num, ti === teamPick && (isPlayer || !!team.custom), G.getTeamParts));
