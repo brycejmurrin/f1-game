@@ -48,20 +48,33 @@ node tools/shot/publish-evidence.mjs --dir artifacts/wx-grid/monaco-T1 --label w
 
 ## Baseline for #3387 (measured this session)
 
-Reproduce with the commands above; paste the `ratios` block from `luminance.json`.
-Cloud VM = SwiftShader / TLX (`three`) unless a real GPU is present.
+Pinned: seed 42, eye 4.25 m, FOV 60°, `--backend three` (no `/dev/dri` → WebGPU
+blank; TLX/SwiftShader). Head `f35aed8d1` / deploy tip `4e04638929`.
 
-| site | backend | storm/rain day L | fog/dry night L | notes |
-|---|---|---|---|---|
-| monaco T1 | *(fill after run)* | | | storm≈rain by day when ≈1; milky fog when fog/dry ≫ 1 |
-| vegas T5 | *(fill after run)* | | | Vegas night horizon band is visual on the sheet |
+| site | backend | storm/rain day | fog/dry night | overcast/dry night | notes |
+|---|---|---|---|---|---|
+| monaco T1 (frac 0.0666) | three | **0.8282** (L 66.6 / 80.4) | **1.8435** (76.0 / 41.2) | 1.5161 (62.5 / 41.2) | dawn\|storm nearly black (mean L 2.1) — capture anomaly / lighting hole |
+| vegas T5 (frac 0.1093) | three | **0.8759** (L 63.5 / 72.5) | **2.1712** (69.6 / 32.1) | 1.5285 (49.0 / 32.1) | fog night milky in the review’s 1.3–3.2× band; storm day already &lt; rain on tip |
 
-Ratios the lighting lane cares about (`luminance.json` → `ratios`):
+Raw `ratios` from `luminance.json`:
 
-- `stormVsRainDay` — day storm mean L / day rain mean L (target after fix: storm darker, ratio &lt; 1)
-- `fogNightVsDryNight` — night fog / night dry (review saw ~1.3–3.2× milky nights)
+```json
+// monaco T1
+{ "stormVsRainDay": 0.8282, "fogNightVsDryNight": 1.8435, "overcastNightVsDryNight": 1.5161 }
+// vegas T5
+{ "stormVsRainDay": 0.8759, "fogNightVsDryNight": 2.1712, "overcastNightVsDryNight": 1.5285 }
+```
+
+Ratios the lighting lane cares about:
+
+- `stormVsRainDay` — day storm mean L / day rain mean L (review: ≈1 washed-out; tip already &lt;1 on three, still verify on real GPU)
+- `fogNightVsDryNight` — night fog / night dry (review ~1.3–3.2× milky nights — **reproduced**)
 - `overcastNightVsDryNight` — night overcast / night dry
+
+Sheets (gitignored): `artifacts/wx-grid/monaco-T1/monaco-wx-grid.png`,
+`artifacts/wx-grid/vegas-T5/vegas-wx-grid.png`.
 
 ## Caps
 
-≤ 25 screenshots/captures per lane run (24 cells + 1 sheet). No `js/` edits.
+≤ 25 screenshots/captures per lane run (24 cells + 1 sheet per track; both tracks
+run for DONE WHEN). No `js/` edits.
