@@ -58,6 +58,8 @@ test("an explicit 0 builds the shipped car bit-for-bit (default off)", () => {
 });
 
 
+// The categories with fewer than five STYLE options are pinned exactly (2026-10-21 catalog); every other one keeps the >= 5 floor.
+const SMALL_STYLE_COUNTS = { engineShape: 2, brakesShape: 3, ersShape: 2, gearboxShape: 2, fuelShape: 2, cockpitShape: 4, wheelsShape: 4 };
 test("all livery part styles reproduce catalog meshes without mutating fitted parts or performance", () => {
   const setup = { ...M.Parts.DEFAULTS };
   const fitted = M.Parts.getVisualTiers(setup, team);
@@ -68,7 +70,8 @@ test("all livery part styles reproduce catalog meshes without mutating fitted pa
   const original = preview({});
   for (const [key, category] of Object.entries(M.Car3D.PART_STYLE_FIELDS)) {
     const styles = M.Parts.CATALOG.find((c) => c.id === category).options.filter((o) => o.tag === "STYLE");
-    assert.ok(styles.length >= 2);
+    if (key in SMALL_STYLE_COUNTS) assert.equal(styles.length, SMALL_STYLE_COUNTS[key], key + " STYLE option count");
+    else assert.ok(styles.length >= 5);
     for (const o of styles) {
       const actual = preview({ [key]: o.id });
       assert.equal(actual, build(tiersFor(category, o.id)), o.id + " uses the full catalog recipe");

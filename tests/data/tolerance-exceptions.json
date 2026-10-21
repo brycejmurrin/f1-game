@@ -5,11 +5,6 @@
       "file": "tests/unit/webgpu-lifecycle.test.mjs",
       "line": "surfaceId <= 90",
       "reason": "Not a tolerance: the pinned value is the top of the car surface-id range in the WGSL classifier. Garage finishes add ids 36 (tinted chrome), 37 (chameleon) and then 38 (forged carbon), 39 (gunmetal), 40 (gold plate) under FINISH_RESERVED, so the classifier bound moves 33 -> 37 -> 40 in GLX, TLX and WGX together; the 18 design-lane finishes (ids 60-85, design wave 2 #3169) move it to 90 (the surface-id-parity headroom over the top shipped id, 85). car-materials/livery-finish-contract tests pin the new ids."
-    },
-    {
-      "file": "tests/unit/aero-preview-fields.test.mjs",
-      "line": "styles.length >= 2",
-      "reason": "Not a loosened tolerance: the loop used to cover only aero and floor (13 and 7 STYLE options, bound 5); it now walks every Car3D.PART_STYLE_FIELDS category, and the catalog's smallest are engine, ers, gearbox and fuel with 2 STYLE options each (measured 2026-10-21). The bound is the 'a category has real alternatives to fitted' floor; aero and floor are still checked against their full option lists and every STYLE option must still change the mesh."
     }
   ]
 }
