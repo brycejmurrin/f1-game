@@ -1,0 +1,12 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": -3,
+      "lines": -2
+    },
+    "js/ui/hud.js": {
+      "codeLines": 4,
+      "lines": 4
+    }
+  }
+}

@@ -1735,3 +1735,58 @@ test("think() scans for the chequered flag once per step inside the car-loop bra
   assert.equal(scans, 8);
   assert.ok(records.soft, "fixture sanity");
 });
+
+test("planInfo shares only this player's synchronous estimate and preserves computed-null", () => {
+  const { pits, car, G } = commitSession();
+  const c = car(0); c.prog = 10000; c.pitStops = 0;
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], lapsAt: [5] };
+  let level = 2, scanned = 0;
+  G.cautionInfo = () => ({ level });
+  const behind = { prog: 0, speed: 50 };
+  G.cars = { *[Symbol.iterator]() { scanned++; yield c; yield behind; } };
+  const reads = { player: c };
+  const first = pits.planInfo(c, reads);
+  assert.equal(scanned, 1); assert.ok(reads.estimate); assert.equal(first.state, "cheap");
+  assert.deepEqual(pits.planInfo(c, reads), first); assert.equal(scanned, 1);
+  const suppressed = pits.planInfo(c, { player: c, estimate: null });
+  assert.equal(scanned, 1); assert.notEqual(suppressed.state, "cheap");
+  pits.planInfo(c, { player: {}, estimate: null }); assert.equal(scanned, 2, "wrong-player values cannot suppress current reads");
+  assert.deepEqual(pits.planInfo(c), first); assert.equal(scanned, 3, "legacy one-argument call still derives normally");
+  behind.prog = 9999; level = 3;
+  const next = { player: c };
+  const changed = pits.planInfo(c, next);
+  assert.equal(scanned, 4); assert.notEqual(changed.state, "cheap", "a fresh tick observes changed field and caution");
+  assert.notEqual(next.estimate, reads.estimate);
+  level = 0; const green = { player: c };
+  pits.planInfo(c, green); assert.equal(scanned, 4); assert.equal(green.estimate, undefined, "green plan doesn't request an estimate");
+});
+
+test("HUD plan and actual Strategy share one caution field scan and preserve visible/ARIA outputs", () => {
+  const { pits, car, G, ctx } = commitSession();
+  const c = car(0); c.prog = 10000; c.rank = 1; c.tyreWear = .4;
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], lapsAt: [5] };
+  let scans = 0;
+  G.cautionInfo = () => ({ level: 2 });
+  G.cars = { *[Symbol.iterator]() { scans++; yield c; yield { prog: 0, speed: 50 }; } };
+  G.state = "race"; G.session = "race"; G.ranked = [c]; G.pits = pits;
+  G.tyres.lapsLeft = () => 10;
+  const mk = () => ({ hidden: false, style: {}, attrs: {}, children: [], textContent: "",
+    setAttribute(k, v) { this.attrs[k] = String(v); }, appendChild(el) { this.children.push(el); return el; } });
+  const root = mk(); root.hidden = true;
+  ctx.document = { body: { classList: { contains: () => false } }, getElementById: id => id === "hud-strat" ? root : null, createElement: mk };
+  ctx.HudElements = { isOn: () => true };
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/hud-strategy.js"), "utf8"), ctx, { filename: absSrc("js/ui/hud-strategy.js") });
+  const S = vm.runInContext("HudStrategy", ctx);
+  const view = () => JSON.stringify([root.children, root.attrs]);
+  const legacyPlan = pits.planInfo(c);
+  S.tick(G, c);
+  const expected = view();
+  assert.equal(scans, 2, "separate calls each compute their own estimate");
+  scans = 0;
+  const reads = { player: c, spent: G.tyres.spent(c), left: G.tyres.lapsLeft(c) };
+  reads.plan = pits.planInfo(c, reads);
+  S.tick(G, c, reads);
+  assert.equal(scans, 1, "HUD and Strategy inspect the field only once together");
+  assert.deepEqual(reads.plan, legacyPlan);
+  assert.equal(view(), expected, "visible rows and ARIA stay equal");
+});

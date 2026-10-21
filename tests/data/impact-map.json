@@ -9442,6 +9442,9 @@
       "active": [
         "tests/unit/render-rate.test.mjs"
       ],
+      "force": [
+        "tests/unit/render-rate.test.mjs"
+      ],
       "gate": [
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs",
@@ -9451,6 +9454,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs",
+        "tests/unit/results-cam.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "observe": [
@@ -10088,6 +10092,7 @@
       ],
       "pairContact": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
@@ -12057,6 +12062,7 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "tick": [
+        "tests/unit/pit-lane.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ]
     },
@@ -15114,7 +15120,8 @@
       ],
       "push": [
         "tests/unit/hud-readouts.test.mjs",
-        "tests/unit/hud-relative.test.mjs"
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/hud-speed-parity.test.mjs"
       ],
       "reset": [
         "tests/unit/hud-readouts.test.mjs"
@@ -15191,6 +15198,9 @@
       "behindThreat": [
         "tests/unit/hud-strategy.test.mjs"
       ],
+      "build": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
       "fmtLaps": [
         "tests/unit/hud-strategy.test.mjs"
       ],
@@ -15204,7 +15214,8 @@
         "tests/unit/hud-strategy.test.mjs"
       ],
       "tick": [
-        "tests/unit/hud-strategy.test.mjs"
+        "tests/unit/hud-strategy.test.mjs",
+        "tests/unit/pit-lane.test.mjs"
       ],
       "tyresShort": [
         "tests/unit/hud-strategy.test.mjs"
@@ -15289,7 +15300,8 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "paintInstruments": [
-        "tests/unit/hud-metrics-layout.test.mjs"
+        "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/hud-speed-parity.test.mjs"
       ],
       "phoneFitStampSync": [
         "tests/unit/hud-control-clearance.test.mjs",
@@ -15330,7 +15342,6 @@
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
-        "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/node-plan.test.mjs",

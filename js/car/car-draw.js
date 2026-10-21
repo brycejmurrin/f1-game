@@ -36,11 +36,21 @@ const CarDraw = (function () {
     const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback, getMirrorGlass,
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
+    // Paired with an already-warmed rival body; never built by mirror rendering.
+    // Its lifetime and capacity are exactly the original body cache's (40).
+    let _mirrorBodies = null;
+    function freeBodyPair(mesh) {
+      if (!mesh) return;
+      const low = _mirrorBodies && _mirrorBodies.get(mesh);
+      if (low) { _mirrorBodies.delete(mesh); if (G.gfx.freeMesh) G.gfx.freeMesh(low.mesh); }
+      if (G.gfx.freeMesh) G.gfx.freeMesh(mesh);
+    }
+
     // ── cache-helpers ───────────────────────────────────────────────
     function invalidateCustomMeshCache(cache, order, prefix = "custom:") {
       Object.keys(cache).forEach((key) => {
         if (key.indexOf(prefix) !== 0) return;
-        if (cache[key] && G.gfx.freeMesh) G.gfx.freeMesh(cache[key]);
+        if (cache[key]) freeBodyPair(cache[key]);
         delete cache[key];
         if (order) {
           const i = order.indexOf(key);
@@ -66,7 +76,7 @@ const CarDraw = (function () {
       cache[key] = mesh;
       order.push(key);
       st.set(key, ++_lruTick);
-      const free = freeOne || ((m) => { if (m && G.gfx.freeMesh) G.gfx.freeMesh(m); });
+      const free = freeOne || ((m) => { if (m) freeBodyPair(m); });
       while (order.length > max) {
         let oi = 0, ot = Infinity;
         for (let i = 0; i < order.length; i++) {
@@ -189,12 +199,28 @@ const CarDraw = (function () {
     // ONE hoisted factory for the three team caches: the caller sets the pending
     // build, then putBoundedMesh calls it on a miss only. A per-call arrow here
     // was a fresh closure per drawn car per pass (~66 a frame) on the hit path.
+    let _pbMirror = false;
     let _pbTeam = null, _pbNum = null, _pbKind = 0, _pbSetup = null;   // 0 painted, 1 silhouette, 2 body-only
     function buildPendingTeamMesh() {
       const team = _pbTeam, num = _pbNum, setup = _pbSetup;
       const extra = _pbKind === 1 ? { num, silhouette: true, setup }
         : _pbKind === 2 ? { noWheels: true, num, setup } : { num, setup };
-      return G.gfx.createMesh(buildCarData(team, extra));
+      const data = buildCarData(team, extra);
+      const mesh = G.gfx.createMesh(data);
+      // Only the existing covered warm may prepare the partner. Failed/unavailable
+      // partners simply retain the detailed body; no CPU geometry is retained.
+      if (mesh && _pbKind === 2 && _pbMirror && !carModelBuf && data.pos && data.idx && data.nrm && data.col) {
+        try {
+          const low = mirrorBodyGeometry(data);
+          if (low.idx.length < data.idx.length * 0.8) {
+            let radius = 0;
+            for (let i = 0; i < data.pos.length; i += 3) radius = Math.max(radius, Math.hypot(data.pos[i], data.pos[i+1], data.pos[i+2]));
+            const lowMesh = G.gfx.createMesh(low);
+            if (lowMesh) _mirrorBodies.set(mesh, { mesh: lowMesh, radius });
+          }
+        } catch (e) { Log.warn("gfx", "mirror body preparation failed", e); }
+      }
+      return mesh;
     }
     // Painted full meshes are KEYED PER DRIVER (helmet design is opts.num). Shadow
     // casters pass silhouette:true — depth cannot see paint, and Car3D already
@@ -213,13 +239,77 @@ const CarDraw = (function () {
       return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKeyFor(team, sil ? shadow : painted),
         buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
     }
-    function teamBodyMesh(team, car) {
+    let _mirrorOptIn = null, _mirrorWarmAllowed = false;
+    function mirrorWarmPolicy() {
+      if (_mirrorOptIn === null) {
+        let v = 0;
+        try { v = G.store.get("mirrorBodyLod", 0); } catch (_) { /* explicit experiment off */ }
+        _mirrorOptIn = v === 1 || v === "1";
+      }
+      if (!_mirrorOptIn || !FieldLod.on || G.headlessMode) return false;
+      const mp = typeof MirrorPass !== "undefined" && MirrorPass.instance ? MirrorPass.instance() : null;
+      if (!mp || !mp.mode || !mp.state || !mp.drawing) return false;
+      // AUTO's camera/software eligibility is private to MirrorPass. Never
+      // duplicate it: AUTO may warm only if its rear-view is already drawing.
+      if (mp.mode() !== "on" && !mp.drawing()) return false;
+      if (!G.gfx || typeof G.gfx.mirrorBegin !== "function") return false;
+      if (document.body.classList.contains("bc-on")) return false;
+      if (typeof XrBoot !== "undefined" && XrBoot.comfort && XrBoot.comfort()) return false;
+      const state = mp.state();
+      return !state.collapsed && !(state.pip && state.pip.shown) && !(state.backend && state.backend.dead);
+    }
+    function teamBodyMesh(team, car, mirrorWarm) {
+      _pbMirror = !!mirrorWarm && _mirrorWarmAllowed && FieldLod.on;
+      if (_pbMirror && !_mirrorBodies) { _mirrorBodies = new WeakMap(); _mirrorBodyLow = new WeakMap(); }
       const num = carDecalNum(team, car);
       _pbTeam = team; _pbNum = num; _pbKind = 2;   // body-only: noWheels, num
       _pbSetup = (car && car.visualSetup) || null;
       const suffix = lidKey(team, (_pbSetup && car.visPaint) || _pbNum);
       return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKeyFor(team, suffix), buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
     }
+    // Fixed 6 cm clusters partitioned by exact paint+material, never averaged.
+    // One pass (not the 14-search far-body decimator). Each vertex moves at
+    // most sqrt(3)*.06 m; extremal incident triangles retain indexed body bounds.
+    function mirrorBodyGeometry(src) {
+      const cell = 0.06;
+      const groups = new Map(), out = { pos: [], nrm: [], col: [], idx: [] }, n = src.pos.length / 3;
+      if (src.mat) out.mat = [];
+      const remap = new Int32Array(n);
+      // Keep every corner of each triangle incident to an indexed extremum.
+      // Locking the extremum alone can collapse its triangle and leave it
+      // unreferenced: array bounds would survive while drawn bounds shrank.
+      const extreme = new Set(), locked = new Set();
+      for (let d = 0; d < 3; d++) {
+        let lo = src.idx[0], hi = src.idx[0];
+        for (const i of src.idx) {
+          if (src.pos[3*i+d] < src.pos[3*lo+d]) lo = i;
+          if (src.pos[3*i+d] > src.pos[3*hi+d]) hi = i;
+        }
+        extreme.add(lo); extreme.add(hi);
+      }
+      for (let t = 0; t < src.idx.length; t += 3) {
+        const a = src.idx[t], b = src.idx[t+1], c = src.idx[t+2];
+        if (extreme.has(a) || extreme.has(b) || extreme.has(c)) { locked.add(a); locked.add(b); locked.add(c); }
+      }
+      for (let i = 0; i < n; i++) {
+        const j = 3*i;
+        // Exact float paint and material values: no grey substitution / cross-paint averaging.
+        const key = `${Math.floor(src.pos[j]/cell)},${Math.floor(src.pos[j+1]/cell)},${Math.floor(src.pos[j+2]/cell)}:${src.col[j]},${src.col[j+1]},${src.col[j+2]}:${src.mat?.[i] ?? 0}` + (locked.has(i) ? `:locked${i}` : '');
+        let v = groups.get(key);
+        if (v === undefined) {
+          v = out.pos.length / 3; groups.set(key, v);
+          for (let d = 0; d < 3; d++) { out.pos.push(src.pos[j+d]); out.nrm.push(src.nrm[j+d]); out.col.push(src.col[j+d]); }
+          if (out.mat) out.mat.push(src.mat[i]);
+        }
+        remap[i] = v;
+      }
+      for (let i = 0; i < src.idx.length; i += 3) {
+        const a = remap[src.idx[i]], b = remap[src.idx[i+1]], c = remap[src.idx[i+2]];
+        if (a !== b && b !== c && a !== c) out.idx.push(a,b,c);
+      }
+      return out;
+    }
+
     // ONE procedural body for every rival past FieldLod tier 2 (~120 m, ±10 %
     // hysteresis on c._lodTier). Team livery stays on the planted wheels; the
     // mesh is neutral grey so we never pay a Car3D.build per seat at range.
@@ -718,6 +808,7 @@ const CarDraw = (function () {
       // caster with teamMesh(team, car, true) on the FIRST countdown frame: ~12 builds
       // there, unless they are built here behind the loading cover. Same gates as the passes.
       // prepareMenuCarAssets builds them in the menu, so these are normally hits.
+      _mirrorWarmAllowed = mirrorWarmPolicy();
       const casters = shadowCastersWanted();
       // FieldLod launch warm is VISUAL only. Skip it when there is no hitch to
       // hide: headlessMode, or an inert gfx stub (game-vm omits mirrorBegin /
@@ -768,7 +859,7 @@ const CarDraw = (function () {
     }
     function warmCarPhase(c, ph, casters, lodWarm, sliced, defer) {
       if (ph === 0) {
-        if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
+        if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c, true);
         if (c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c);
       } else if (ph === 1) {
         // A deferred car defers the whole phase — the paint too, since GLX, WGX and mobile TLX upload inside
@@ -820,6 +911,7 @@ const CarDraw = (function () {
       if (carModelBuf) return true;
       if (!carWarmSliceOn()) { warmCarAssets(); return true; }
       const at = performance.now(), budget = sliceMs > 0 ? sliceMs : 8;
+      _mirrorWarmAllowed = mirrorWarmPolicy();
       const casters = shadowCastersWanted(), gfx = G.gfx || {};
       const lodWarm = FieldLod.on && !G.headlessMode && !!(casters || typeof gfx.mirrorBegin === "function");
       const cars = G.cars.slice();
@@ -912,6 +1004,7 @@ const CarDraw = (function () {
       // Every car carries carVisual's stamp, so a caster keys as the race's car
       // does (the player's and a career rival's OWN build included).
       // warmCarAssets keeps its call, all hits after this (and the safety net).
+      _mirrorWarmAllowed = mirrorWarmPolicy();
       const casters = shadowCastersWanted();
       const steps = casters ? field.flatMap(c => [c, { caster: c }]) : field;
       // AND THE LAUNCH'S FIELD-LOD SET (perf hunt 4 F3.3, apex26.carWarmSlice): every
@@ -939,7 +1032,7 @@ const CarDraw = (function () {
               if (c.isPlayer) {
                 playerBodyMesh(c.team, c, visualKey);
                 if (["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c, visualKey);
-              } else teamBodyMesh(c.team, c);
+              } else teamBodyMesh(c.team, c, true);
               const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
               if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
             }
@@ -1453,6 +1546,9 @@ const CarDraw = (function () {
     // owns c.wheelSpin (traction), so keep this presentation state private.
     const _wheelPhases = new WeakMap();
     function advanceWheelPhases(dt) {
+      // game.js calls this exactly once before MirrorPass.render, including
+      // frozen/zero-dt draws. No default state/DOM reads or context allocation.
+      if (_mirrorBodies) { _mirrorViewRead = false; _mirrorViewContext = null; }
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         let phase = _wheelPhases.get(c);
@@ -1656,10 +1752,55 @@ const CarDraw = (function () {
     // BARE (drawPlayerWheels): the mirror is ~120 px tall. A GLB is one piece.
     // The main pass's _wheelOpts (game.js) values: TLX keys materials by value.
     const _mirWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
+    let _mirrorBodyLow = null, _mirrorViewRead = false, _mirrorViewContext = null, _mirrorContext = null;
+    function mirrorBodyContext() {
+      const mp = typeof MirrorPass !== "undefined" && MirrorPass.instance ? MirrorPass.instance() : null;
+      if (!mp || !mp.drawing || !mp.drawing() || !mp.state || document.body.classList.contains("bc-on")) return null;
+      if (_mirrorViewRead) return _mirrorViewContext;
+      _mirrorViewRead = true;
+      // G.frame is the live record MirrorPass borrows and restores around its
+      // pass. Missing metadata is a detailed fallback, never a main-camera guess.
+      const frame = G.frame;
+      if (!frame || !frame.view || !frame.proj || !frame.viewProj ||
+          frame.view.length !== 16 || frame.proj.length !== 16 || frame.viewProj.length !== 16 ||
+          typeof frame.mirrorLite !== "boolean") return null;
+      const state = mp.state();   // once per experimental render, never per car
+      if (!state.shown || !state.rect || (state.pip && state.pip.shown)) return null;
+      const canvas = document.getElementById("game");
+      if (!canvas || !canvas.getBoundingClientRect) return null;
+      // Match rectOf's coordinate space exactly (CSS transforms/zoom included).
+      // This one experimental layout read is a cost to measure before enabling.
+      const box = canvas.getBoundingClientRect();
+      const width = state.rect[2] * box.width, height = state.rect[3] * box.height;
+      if (!(width > 0 && height > 0)) return null;
+      const dpr = typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1;
+      const scale = Math.max(width * Math.abs(frame.proj[0]), height * Math.abs(frame.proj[5])) * dpr * 0.5;
+      if (!(scale > 0 && Number.isFinite(scale))) return null;
+      if (!_mirrorContext) _mirrorContext = { pixelScale: 0, view: null, vp: null };
+      _mirrorContext.pixelScale = scale; _mirrorContext.view = frame.view; _mirrorContext.vp = frame.viewProj;
+      return (_mirrorViewContext = _mirrorContext);
+    }
+    function mirrorBodyLow(c, mat, context, radius) {
+      const vp = context.vp, view = context.view;
+      const x = mat[12], y = mat[13], z = mat[14];
+      const w = vp[3]*x + vp[7]*y + vp[11]*z + vp[15];
+      const depth = w - radius;
+      if (!(depth > 0)) { _mirrorBodyLow.set(c, false); return false; }
+      const vx = Math.abs(view[0]*x + view[4]*y + view[8]*z + view[12]);
+      const vy = Math.abs(view[1]*x + view[5]*y + view[9]*z + view[13]);
+      // Bound perspective sensitivity over the original body sphere. At exit
+      // (5 px/m), sqrt(2)*sqrt(3)*.06*5 < .735 display pixels of displacement.
+      const px = context.pixelScale * (1 + (Math.max(vx, vy) + radius) / depth) / depth;
+      const low = px <= (_mirrorBodyLow.get(c) ? 5 : 4);
+      _mirrorBodyLow.set(c, low);
+      return low;
+    }
     function drawMirrorCar(c, mat, paint, night) {
       const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
       if (!body) { G.gfx.draw(teamMesh(c.team, c), mat, paint); return; }
-      G.gfx.draw(body, mat, paint);
+      const context = _mirrorBodies && !c.isPlayer && FieldLod.on ? mirrorBodyContext() : null;
+      const low = context ? _mirrorBodies.get(body) : null;
+      G.gfx.draw(low && mirrorBodyLow(c, mat, context, low.radius) ? low.mesh : body, mat, paint);
       // The moveable wing elements are not in the body: the static set (ONE
       // draw, the nearer rest pose), or every wing here was its main plane only.
       const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
@@ -1713,7 +1854,7 @@ const CarDraw = (function () {
         GLTF.toMesh(buf, { scale: CAR_MODEL_SCALE });   // validate before adopting
         carModelBuf = buf;
         for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
-        for (const k in teamBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamBodies[k]); delete teamBodies[k]; }
+        for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
         for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
         if (_sharedRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_sharedRivalBody);
         _sharedRivalBody = null;
@@ -1778,7 +1919,7 @@ const CarDraw = (function () {
     // that instrument builds call this after the hook so the next warm rebuilds.
     function invalidateFactoryMeshCaches() {
       for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }
-      for (const k in teamBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamBodies[k]); delete teamBodies[k]; }
+      for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
       for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
       for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
       playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = cockpitBodyOrder.length = 0;
