@@ -119,6 +119,15 @@ try{
       const o0=await snapshot(page);await page.evaluate(()=>document.querySelector('.cs-liv-create').click());
       await page.waitForSelector('input[data-liv-field]',{timeout:soft?180000:60000});await page.waitForTimeout(WINDOW_MS);
       const o1=await snapshot(page);row.openEditor={...await windowStats(page,o0.t,o1.t),delta:delta(o0.calls,o1.calls),alloc:delta(o0.alloc,o1.alloc)};
+      // livery_finish_sweep (B·H30): hold each listed finish on the turntable and time the frames, twice over, so a
+      // finish whose fragment cost drops the bay's frame rate shows against gloss on a real GPU.
+      if(Array.isArray(REQ.livery_finish_sweep)){row.finishSweep=[];
+        for(let pass=0;pass<2;pass++)for(const f of REQ.livery_finish_sweep){
+          const d=await page.evaluate(applyEdit,{kind:'finish',value:f});if(d.missing){row.finishSweep.push({finish:f,missing:true});continue;}
+          await page.waitForTimeout(2500);const a=await snapshot(page);await page.waitForTimeout(WINDOW_MS);const b=await snapshot(page);
+          row.finishSweep.push({finish:f,pass,...await windowStats(page,a.t,b.t),delta:delta(a.calls,b.calls),programs:b.programs});
+          log(`${arm} finish ${f} pass ${pass} ${JSON.stringify(row.finishSweep.at(-1))}`);save();}
+        if(REQ.livery_finish_only){row.ok=!row.pageErrors.length;save();continue;}}
       const {plan,available}=await page.evaluate(planEdits,[EDITS,+REQ.livery_cycle||0]);row.available=available;
       const parts=await page.evaluate(()=>{const t=[...document.querySelectorAll('#cs-tabs [data-cs-cat]')].map(b=>b.dataset.csCat).find(c=>!['team','tune','livery'].includes(c));return t||null;});
       row.phase='edits';row.before=await snapshot(page);
