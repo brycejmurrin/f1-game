@@ -941,6 +941,11 @@
       "presentation": "shared-levels",
       "preserve": "@c4"
     },
+    "tools/garage/author-crew-motion.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/assets.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
