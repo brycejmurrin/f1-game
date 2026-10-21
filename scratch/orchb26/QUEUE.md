@@ -166,3 +166,5 @@ OPEN follow-up: image-grade pass-on-retry cause unestablished → gpu-census mac
 12:21Z: #3395 READY 47a7a5d7 (H25). #3435 READY, full tier running.
 
 12:58Z: #3395 → 12ff726a and #3435 (fix) merged by Bryce. Watch Pages on tip 5bffc901: green → post `INCIDENT lifted` line → #3431 (last game PR). OrchB 26 at context cap → handoff.
+
+17:02Z: INCIDENT lifted. Live = 941b4791 (#3431). Merged by Bryce: #3395 12ff726a, #3435 5bffc901, #3431 941b4791. Game + non-game queues EMPTY. Open: follow-ups in SUCCESSOR-BRIEF.md.
