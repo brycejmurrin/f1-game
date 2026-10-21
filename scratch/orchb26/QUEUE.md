@@ -145,3 +145,4 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 09:14Z: Pages 7bcaca5c GREEN (#3422 live). Pages 6c631c57 (#3396) running → #3238 next. #3392 red fixed by H19 (3c64369b, data-lifecycle probe), re-running. #3391 fa80203b synced, CI running.
 
 09:18Z: INCIDENT: Pages RED on 6c631c57 (#3396): macOS Metal renderer specs (test:gfx). Game merges frozen; ci-red-triage running.
+09:24Z: Triage: image-grade-visual "blacks visibly change deepest detail" flaked on Metal (0.746 vs >1, retry pass) → FAIL_ON_FLAKY red. W14 owns quarantine PR + follow-up A/B tlxRoadSplit. Game merges frozen.
