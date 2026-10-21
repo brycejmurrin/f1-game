@@ -379,7 +379,7 @@ for (const [k, v] of Object.entries(parts)) qs.set(k, v);
 // livery ids, so --livery cannot reach them: sweeping one design across teams —
 // the thing "does spineLogo=saddle read on every car?" needs — had no way to ask
 // for it at all before this.
-const LIV_FIELDS = ['finish', 'finShape', 'finStyle', 'finBadge', 'spineLogo', 'spineSide',
+const LIV_FIELDS = ['bodyStyle', 'finish', 'finShape', 'finStyle', 'finBadge', 'spineLogo', 'spineSide',
                     'spineHeight', 'tcam', 'coverVents', 'wingCarbon', 'numFont',
                     'mirrorTint', 'rimTint', 'caliperTint', 'sidewallInk', 'helmetBase', 'helmetAccent',
                     'podFinish', 'finFinish', 'mirrorFinish', 'helmetStyle', 'coverFinish', 'wingFinish', 'haloFinish',

@@ -159,6 +159,8 @@ jobs:
       garage_ab: ${{ steps.split.outputs.garage_ab }}
       live_matrix: ${{ steps.split.outputs.live_matrix }}
       livery: ${{ steps.split.outputs.livery }}
+      live_frame: ${{ steps.split.outputs.live_frame }}
+      lf_backends: ${{ steps.split.outputs.lf_backends }}
       lrm_leg: ${{ steps.split.outputs.lrm_leg }}
       lrm_rows: ${{ steps.split.outputs.lrm_rows }}
       lrm_scale: ${{ steps.split.outputs.lrm_scale }}
@@ -273,6 +275,11 @@ jobs:
           print("live_matrix=" + str(req.get("leg") == "render-live-matrix-2572").lower())
           # Garage livery-edit census (B·P1 2026-10-20): TLX WebGPU vs WebGL2, ~30 editor edits. Push requests only.
           print("livery=" + str(req.get("leg") == "garage-livery-perf").lower())
+          # Race frame time at the phone shape (tools/gfx/live-frame-census.mjs, B·H10 2026-10-20). Push requests only;
+          # `track` is the comma-separated circuit list, `lf_backends` tlx-gl and/or tlx-gpu.
+          print("live_frame=" + str(req.get("leg") == "live-frame").lower())
+          lb = ",".join(b for b in str(req.get("lf_backends") or "tlx-gl,tlx-gpu").split(",") if b.strip() in ("tlx-gl", "tlx-gpu"))
+          print("lf_backends=" + (lb or "tlx-gl,tlx-gpu"))
           lg = str(req.get("lrm_leg") or "glx").strip()
           lg = lg if lg in ("glx", "tlx-gl", "tlx-native") else "glx"
           print("lrm_leg=" + lg)
@@ -484,6 +491,28 @@ jobs:
           path: |
             game-livery-*.json
             game-livery-*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Opt-in by request leg `live-frame`; pair with census_only=true. Never fails the job. One fresh browser per
+      # backend x track row (~4–8 min each on this runner): keep a request to <= 4 rows.
+      - name: Live race frame census
+        if: ${{ needs.plan.outputs.live_frame == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 27
+        shell: bash
+        env:
+          LF_TRACKS: ${{ needs.plan.outputs.track }}
+          LF_BACKENDS: ${{ needs.plan.outputs.lf_backends }}
+          LF_LS: ${{ needs.plan.outputs.ls }}
+        run: node tools/gfx/live-frame-census.mjs --tracks "$LF_TRACKS" --backends "$LF_BACKENDS" --ls "$LF_LS" --json live-frame.json || true
+
+      - name: Upload live race frame census
+        if: ${{ always() && needs.plan.outputs.live_frame == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-frame-${{ matrix.image }}
+          path: live-frame.json
           if-no-files-found: warn
           retention-days: 7
 

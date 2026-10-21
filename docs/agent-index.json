@@ -994,6 +994,7 @@
         "tests/unit/aero-shapes-d3c.test.mjs",
         "tests/unit/body-split.test.mjs",
         "tests/unit/car-materials.test.mjs",
+        "tests/unit/car-mesh-budget.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/fill-gating.test.mjs",
         "tests/unit/fin-design.test.mjs",

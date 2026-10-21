@@ -15,6 +15,7 @@
 //   node tools/ci/cursor-agents.mjs artifacts <agent-id>
 //   node tools/ci/cursor-agents.mjs artifact <agent-id> <artifacts/path> [--out DIR]
 //   node tools/ci/cursor-agents.mjs usage <agent-id>
+//   node tools/ci/cursor-agents.mjs handback <agent-id> [--timeout 600] [--interval 5]   (wait, cache every run while the 24 h stream lasts, bounded digest; exit as wait)
 //   node tools/ci/cursor-agents.mjs dump [<agent-id>...] [--limit 20]
 //   node tools/ci/cursor-agents.mjs digest [--dir artifacts/cursor-dumps]
 //   node tools/ci/cursor-agents.mjs transcript <agent-id> [--run ID | --all] [--only tools,errors,chat,turns] [--tool NAME]
@@ -64,7 +65,7 @@ export function retryAfterMs(headerValue, attempt, now = Date.now()) {
 }
 
 /** One API call. GETs retry 429/5xx; a write retries 429 only (the request was not processed), plus 5xx when `retry5xx` (idempotent create). */
-async function api(route, { accept = "application/json", tries = 6, method = "GET", body, retry5xx = false } = {}) {
+async function api(route, { accept = "application/json", tries = 6, method = "GET", body, retry5xx = false, signal } = {}) {
   const key = process.env.CURSOR_API_KEY;
   if (!key) {
     console.log("BLOCKED no CURSOR_API_KEY in the environment");
@@ -73,7 +74,7 @@ async function api(route, { accept = "application/json", tries = 6, method = "GE
   const headers = { Authorization: `Bearer ${key}`, Accept: accept };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   for (let a = 0; a < tries; a++) {
-    const r = await fetch(BASE + route, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await fetch(BASE + route, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal });
     const again = r.status === 429 || (r.status >= 500 && (method === "GET" || retry5xx));
     if (again) {
       await sleep(r.status === 429 ? retryAfterMs(r.headers.get("retry-after"), a, clock.now()) : retryAfterMs(null, a));
@@ -646,6 +647,8 @@ export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
   let got = 0;
   let skipped = 0;
   let expired = 0;
+  let live = 0;
+  let slow = 0;
   for (const id of agents) {
     for (const run of (await json(`/v1/agents/${id}/runs`)).items || []) {
       const out = path.join(dir, `${id.slice(-8)}_${run.id.slice(-8)}.sse`);
@@ -653,22 +656,39 @@ export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
         skipped++;
         continue;
       }
+      // A RUNNING run's stream stays open until the run ends: a 200-agent dump hung 5 min on the first one (2026-10-20).
+      // Count it and move on; dump again (or `transcript`, which caps a live read) once it finishes.
+      if (run.status === "RUNNING") {
+        live++;
+        continue;
+      }
       if (run.createdAt && clock.now() - Date.parse(run.createdAt) > retentionMs()) {
         expired++;
         continue;
       }
-      const r = await api(`/v1/agents/${id}/runs/${run.id}/stream`, { accept: "text/event-stream" });
-      if (r.status === 410) {
-        expired++;
+      // A FINISHED run's stream can stay open too: one on an agent with a live follow-up was still sending at 25 s, where
+      // a normal one replays in 2 s. A stream cut by the timeout is counted as slow and not written (it has no `done`).
+      let text;
+      try {
+        const signal = AbortSignal.timeout((Number(process.env.APEX_CURSOR_STREAM_TIMEOUT_S) || 60) * 1000);
+        const r = await api(`/v1/agents/${id}/runs/${run.id}/stream`, { accept: "text/event-stream", signal });
+        if (r.status === 410) {
+          expired++;
+          continue;
+        }
+        if (!r.ok) throw new Error(`stream ${run.id}: HTTP ${r.status}`);
+        text = await r.text();
+      } catch (e) {
+        if (e.name !== "TimeoutError") throw e;
+        slow++;
         continue;
       }
-      if (!r.ok) throw new Error(`stream ${run.id}: HTTP ${r.status}`);
-      fs.writeFileSync(out, await r.text());
+      fs.writeFileSync(out, text);
       got++;
       await sleep(gapMs);
     }
   }
-  return `DUMP dir=${path.relative(ROOT, dir)} written=${got} skipped=${skipped} expired=${expired}`;
+  return `DUMP dir=${path.relative(ROOT, dir)} written=${got} skipped=${skipped} expired=${expired} live=${live} slow=${slow}`;
 }
 
 /** Poll an agent until it is neither ACTIVE nor CREATING. Exit code: 0 last run FINISHED, 1 ERROR/CANCELLED/EXPIRED (or other), 124 timeout. */
@@ -684,6 +704,33 @@ export async function waitAgent(id, { timeoutS = 600, intervalS = 5 } = {}) {
     if (clock.now() + intervalS * 1000 > end) return { code: 124, line: `WAIT ${id} TIMEOUT after=${timeoutS}s status=${a.status} run=${a.latestRunId || "-"}` };
     await sleep(intervalS * 1000);
   }
+}
+
+/**
+ * Hand-back: wait for an agent to finish, then read and cache EVERY retrievable run while the stream is still there
+ * (retention is 24 h, so a transcript not read at hand-back is gone by the next day), and return a bounded digest:
+ * a header, one line per run, at most five failure lines, the artifact count. Read-only, so any agent id is allowed.
+ * A timeout returns code 124 with no dump (the agent is still working).
+ */
+export async function handback(id, { timeoutS = 600, intervalS = 5, dir, errors = 5, width = 120 } = {}) {
+  const w = await waitAgent(id, { timeoutS, intervalS });
+  if (w.code === 124) return { code: 124, lines: [w.line] };
+  const { parsed, expired, notCached } = await loadRuns(id, { dir, sel: "all" });
+  const calls = parsed.reduce((t, p) => t + p.stats.calls, 0);
+  const errs = parsed.reduce((t, p) => t + p.stats.errors, 0);
+  const lines = [`${w.line} HANDBACK runs=${parsed.length} expired=${expired} notCached=${notCached} calls=${calls} err=${errs}`];
+  for (const p of parsed) lines.push(summaryLine(p, width));
+  const failing = renderLines(parsed, { only: ["errors"], width }).slice(0, errors);
+  lines.push(...failing);
+  if (errs > failing.length) lines.push(`… ${errs - failing.length} more failures (transcript ${id} --only errors)`);
+  let arts = 0;
+  try {
+    arts = ((await json(`/v1/agents/${id}/artifacts`)).items || []).length;
+  } catch {
+    arts = -1;
+  }
+  lines.push(`ARTIFACTS ${arts < 0 ? "unreadable" : arts}${arts > 0 ? ` (artifacts ${id})` : ""}`);
+  return { code: w.code, lines };
 }
 
 /** Reject anything but a plain relative `artifacts/...` path before a request is made. */
@@ -833,6 +880,11 @@ async function main() {
     const w = await waitAgent(rest[0], { timeoutS: Number(flag(rest, "--timeout", 600)), intervalS: Number(flag(rest, "--interval", 5)) });
     console.log(w.line);
     process.exitCode = w.code;
+  } else if (cmd === "handback") {
+    if (!rest[0]) throw new Error("handback <agent-id> [--timeout S] [--interval S]");
+    const r = await handback(rest[0], { timeoutS: Number(flag(rest, "--timeout", 600)), intervalS: Number(flag(rest, "--interval", 5)), dir: flag(rest, "--dir") ? dir : undefined });
+    for (const l of r.lines) console.log(l);
+    process.exitCode = r.code;
   } else if (cmd === "artifacts") {
     for (const l of await listArtifacts(rest[0])) console.log(l);
   } else if (cmd === "artifact") {
