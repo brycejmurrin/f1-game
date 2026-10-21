@@ -3,7 +3,7 @@
 Live state, refreshed and pushed every tick (branch `cursor/orchb25-queue-o25q`, never merged).
 A successor reads this first. Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-21 03:52Z
+Updated: 2026-10-21 03:57Z
 
 ## Gate state
 - Deploy tip cfefcbf7 (#3383 + #3381). Pages run 39536139765: RED after its one rerun
@@ -12,16 +12,16 @@ Updated: 2026-10-21 03:52Z
 
 ## Merge order
 Non-game first (batch, each gated on the tip the previous produced):
-1. #3397 engine-audio seeded noise (tests) — owner B·H20 — READY, full tier running @04bdf7d9
+1. DONE #3397 → a437375b (03:54Z)
 2. #3398 pick-cost spec invariants (tests) — owner B·H13 → B·H17 — READY-pending @3ea15567 (draft fast tier running; 3/3 local)
-3. #3394 ci.yml guards timeout 12→18 — owner B·W13 — full tier PASSED @62c6b8836
-4. #3393 tools/ci D1/D6/D7 — owner B·W13 — full tier PASSED @5cd32a53b
+3. DONE #3394 → 54971095
+4. DONE #3393 → 142f52af. Pages: a437375b running, 142f52af pending.
 → the merge of 1–4 triggers a new Pages run; INCIDENT lifted only when it is green.
 
 Game, one per green Pages (GAME-SLOT on the bus first):
 5. #3390 PHONE TEST GPU preset — B·H15 — green @516d02e0
 6. #3377 memory pins + qualiField bug — B·H12 (wrapping up, handoff pending) — dirty, sync in progress
-7. #3385 race-entry cover (−1 s to lights) — B·H18 — CI RED @23fc878c3 (owner fixing)
+7. #3385 race-entry cover (−1 s to lights) — B·H18 — fix pushed 33ae2e355 (policies.json rows), CI running
 8. #3238 parts-livery (Bryce/Cursor author) — B·W13 watches — full tier re-running @c7fdcdc57
 9. #3382 boot/title — B·H16 — READY, full tier PASSED @d3531832 (move up: 2nd game after #3390)
 10. #3386 garage-prebuild quiet gate (+ Car3D build slice) — B·H16 — draft, stacked on #3382
@@ -55,7 +55,8 @@ New draft: #3400 W13 tools/CI (test-timeout + notes; shard split after #3394).
 H16: car-build slice PARKED (decision A); next = garage prebuild hidden-frame stall (4.5–5.8 s title task) on real GPU.
 H17: worktree off #3385 for atlas-drop + car render-cost hunt.
 Pending:
-- #3230 look sign-off.
 - W11 item 4: Android AUTO picks three-WebGPU — on-device A/B.
 - D2/D3 grant: type it into B·W13's session when it asks.
 - Delete throwaway branches: cursor/live-memory-h12a-hold, cursor/probe-tip-w12a, cursor/probe-3356-w12a, cursor/revert-prep-yield-h8r1.
+
+Memory branch cursor/orchb25-memory-o25m @24af5d72: W13 refused (.claude/**); OrchB carries it in its own PR.
