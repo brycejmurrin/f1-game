@@ -81,3 +81,7 @@ Next game order: #3382, #3385, #3230, #3377, #3238, O-G train, #3386, #3388, #33
 05:14Z: MERGED #3403 → 7b6a3a75 (non-game), #3385 → 50cc71dd (GAME). Pages: eda39fd5 SUCCESS; 7b6a3a75 running; 50cc71dd next. Game queue: #3377, #3386, #3238, #3230; then #3406 (H18, F6+F9), #3408 (H21, startProgramWarm + ctxLost regex), #3402 train, #3395 (H22, incl. far body — Bryce 'Ship on the numbers' 05:04Z), #3396, #3388, #3399. Non-game: #3391, #3301. Lanes: H17→B·H22 session_01Pn6fvwxngydHg9299ED2TQ; new B·H23 session_01NEB1N6hdJnAAFNPZC23NNu (phone TLX vs GLX side-by-side gallery; Bryce 05:12Z 'Keep both but test side by side first'). H19: pack-bytes + audio copies (mirror-release lever stays parked).
 
 05:17Z: OrchB 26 live (replaces OrchB 25). Pages: 7b6a3a75 running, 50cc71dd (#3385 game) pending. Next game: #3377 after green Pages on 50cc71dd.
+
+05:22Z (OrchB 26): Pages 7b6a3a75 SUCCESS; 50cc71dd (#3385) running. OrchB 25 archived. Lanes messaged (11).
+Game order now: #3386 (H21, only Plan tick missing) → #3377 (H19, CONFLICTING, syncing) → #3238, #3230 (W13, CONFLICTING, syncing) → #3406, #3408, #3402, #3395, #3396, #3388, #3399.
+Non-game: #3391 draft (gen conflict), #3301 draft (Structural guards pending). #3392 orchestrator sync running in OrchB 26 container (artifacts/logs/sync-3392.log).
