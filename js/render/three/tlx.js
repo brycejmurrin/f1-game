@@ -1940,13 +1940,15 @@ const TLX = (function () {
         r.geo = geo; r.m = m; r.mat = mat; r.em = em; r.al = al; r.lg = lg; r.chunked = chunked; r.instanced = instanced;
         // THE ROAD SPLIT (tlx-chunked.js splitRanges): its AABBs are world-space, so only an identity draw
         // (poolModelMat hands identity on as null) culls by them.
-        r.split = geo && geo.__tlxSplit && !m ? geo.__tlxSplit : null;
+        r.split = _roadSplitOn && geo && geo.__tlxSplit && !m ? geo.__tlxSplit : null;
       }
       // Draws the visible stretches of a split road through its few slot geometries (the road's own buffers and
       // material, each a drawRange) instead of the whole lap. Main pass: frustum only (cd 0), so the picture is
       // the one the full mesh drew. The mirror passes its own radial cap. One use per batch: a second record of the
       // same road in one pass draws whole rather than overwrite the slots' ranges before render().
       const SPLIT_TRIS = 1024, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
+      // apex26.tlxRoadSplit=0 pins the whole-lap draw for a reload A/B; __tlx.roadSplit(on) flips it live.
+      let _roadSplitOn = (function () { try { return localStorage.getItem("apex26.tlxRoadSplit") !== "0"; } catch (_) { return true; } })();
       function _drawSplit(rec, i, vp, eye, cd, fog) {
         const sp = rec.split;
         if (!chunkedSys || !TLXShaders.mergeRuns || sp.batch === _poolBatch) return false;
@@ -6133,6 +6135,7 @@ const TLX = (function () {
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
+          roadSplit(on) { if (on !== undefined) _roadSplitOn = !!on; return _roadSplitOn; },
           // Where the retained CPU bytes actually ARE, per attribute NAME and
           // per geometry kind. Deduped on the underlying ArrayBuffer, because a
           // chunked mesh shares ONE position/normal/colour/mat set across all
