@@ -126,10 +126,14 @@ try{
         await page.evaluate(()=>document.querySelector('#cs-tabs [data-cs-cat="livery"]').click());await page.waitForSelector('.cs-liv-create',{timeout:60000});
         await page.evaluate(()=>document.querySelector('.cs-liv-create').click());await page.waitForSelector('[data-cs-finish="brushed"]',{timeout:60000});
         await page.evaluate(()=>document.querySelector('[data-cs-finish="brushed"]').click());await page.waitForTimeout(1500);
-        await page.evaluate(()=>document.querySelector('.cs-liv-ed-save').click());await page.waitForSelector('.cs-liv-edit',{timeout:60000});await page.waitForTimeout(8000);
-        const {ids,custom}=await page.evaluate(()=>{const all=[...document.querySelectorAll('[data-cs-livery]')];
-          const own=all.find(b=>b.querySelector('.cs-liv-edit')||(b.parentNode&&b.parentNode.querySelector&&b.parentNode.querySelector('.cs-liv-edit')));
-          return {ids:all.map(b=>b.dataset.csLivery),custom:own?own.dataset.csLivery:all[all.length-1].dataset.csLivery};});const stock=ids.filter(i=>i!==custom);
+        const before=await page.evaluate(()=>[...document.querySelectorAll('[data-cs-livery]')].map(b=>b.dataset.csLivery));
+        await page.evaluate(()=>document.querySelector('.cs-liv-ed-save').click());
+        // a saved paint job's id is livIdCounter()'s Date.now()+seq: wait for a NEW id to appear in the list
+        await page.waitForFunction(b=>[...document.querySelectorAll('[data-cs-livery]')].some(x=>!b.includes(x.dataset.csLivery)),before,{polling:250,timeout:60000}).catch(()=>{});
+        await page.waitForTimeout(8000);
+        const {ids,custom}=await page.evaluate(b=>{const all=[...document.querySelectorAll('[data-cs-livery]')].map(x=>x.dataset.csLivery);
+          return {ids:all,custom:all.find(i=>!b.includes(i))||null};},before);
+        if(!custom){row.selectTrace={ids,error:'no saved custom livery appeared after SAVE & FIT'};log(`${arm} select trace: no custom ${JSON.stringify(ids)}`);save();continue;}const stock=ids.filter(i=>i!==custom&&i!=='default');
         const seq=[stock[1]||stock[0],custom,stock[2]||stock[0],custom,stock[1]||stock[0]];row.selectTrace={ids,custom,seq,picks:[]};
         for(const id of seq){const pick={id,buckets:[]};row.selectTrace.picks.push(pick);
           await page.evaluate(id=>{const b=[...document.querySelectorAll('[data-cs-livery]')].find(x=>x.dataset.csLivery===id);b&&b.click();},id);
