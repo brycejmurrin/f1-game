@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { sizeListing, estTokens, listServer } from "../../tools/mcp/mcp-listing-cost.mjs";
+import { SERVER_PREFACES, GATEWAY_INSTRUCTIONS } from "../../tools/mcp/output-level-mcp.mjs";
 
 const GATEWAY = fileURLToPath(new URL("../../tools/mcp/output-level-mcp.mjs", import.meta.url));
 const FIXTURE = String.raw`
@@ -57,4 +58,15 @@ test("the output-level gateway adds a bounded amount per tool to tools/list", as
   assert.ok(reader.inputSchema.properties.outputLevel.description, "output_read keeps the level prose, once per server");
   assert.ok(after.instructions.startsWith("fixture\n\n"), "upstream instructions come first");
   assert.ok(after.instructions.includes("outputLevel=compact"), "the gateway hint follows them");
+});
+
+test("a server with no instructions of its own gets its preface, then the gateway hint", async () => {
+  const silent = FIXTURE.replace(",instructions:'fixture'", "");
+  const as = (server) => listServer(process.execPath, [GATEWAY, "--server", server, "--", process.execPath, "-e", silent], { timeoutMs: 15000 });
+  for (const server of Object.keys(SERVER_PREFACES)) {
+    const { instructions } = await as(server);
+    assert.equal(instructions, `${SERVER_PREFACES[server]}\n\n${GATEWAY_INSTRUCTIONS}`, server);
+    assert.ok(SERVER_PREFACES[server].length <= 240, `${server}: preface stays one short sentence pair`);
+  }
+  assert.equal((await as("unlisted")).instructions, GATEWAY_INSTRUCTIONS, "no preface invented for an unlisted server");
 });
