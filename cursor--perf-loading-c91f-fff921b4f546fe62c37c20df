@@ -1,1 +1,0 @@
-1792560724	Bryce Murrin	C loading_assets: tests/unit/validation-cli.test.mjs only; stage-timeout fixture waits for detached child exit before stage exits (PID1 zombie); no sync-pr/tooling-fast edits  [cursor/perf-loading-c91f; session fff921b4f546fe62c37c20df]
