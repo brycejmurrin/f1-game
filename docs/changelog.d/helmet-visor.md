@@ -1,0 +1,1 @@
+New: Optional helmet visor under Settings → HUD & Camera → Cockpit. Choose CLEAR or TINTED, with Neutral, Amber, Ice Blue or Rose lenses at Light, Medium or Strong intensity. Settings persist and default to OFF.

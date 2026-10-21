@@ -51,6 +51,43 @@ function loadMesh(extra = {}, gfxExtra = {}) {
   });
   return { CarMesh: ctx.CarMesh, made, freed, draws };
 }
+
+test("helmet visor is opt-in, survives reload and validates stored and shot choices", () => {
+  const { opts, store } = loadOpts({});
+  assert.equal(opts.visor(), "off");
+  opts.setVisor("clear");
+  assert.equal(store.get("apex26.helmetVisor"), "clear");
+  assert.equal(loadOpts(Object.fromEntries(store)).opts.visor(), "clear");
+  assert.equal(loadOpts({ "apex26.helmetVisor": "smoke" }).opts.visor(), "smoke");
+  assert.equal(loadOpts({ "apex26.helmetVisor": "broken" }).opts.visor(), "off");
+  assert.equal(loadOpts({ "apex26.helmetVisor": "smoke" }, "?helmetvisor=clear").opts.visor(), "clear");
+  opts.setVisor("broken");
+  assert.equal(opts.visor(), "off");
+  assert.equal(store.get("apex26.helmetVisor"), "off");
+});
+
+test("visor colors and strengths persist independently and preserve legacy smoke", () => {
+  const { opts, store } = loadOpts({ "apex26.helmetVisor": "smoke" });
+  assert.equal(opts.visor(), "smoke");
+  assert.equal(opts.visorColor(), "neutral");
+  assert.equal(opts.visorIntensity(), "light");
+  for (const color of ["neutral", "amber", "ice", "rose"]) {
+    for (const intensity of ["light", "medium", "strong"]) {
+      opts.setVisorColor(color); opts.setVisorIntensity(intensity);
+      const restored = loadOpts(Object.fromEntries(store)).opts;
+      assert.equal(restored.visorColor(), color);
+      assert.equal(restored.visorIntensity(), intensity);
+    }
+  }
+  opts.setVisor("clear"); opts.setVisor("smoke");
+  assert.equal(opts.visorColor(), "rose");
+  assert.equal(opts.visorIntensity(), "strong");
+  opts.setVisorColor("invalid"); opts.setVisorIntensity("invalid");
+  assert.equal(opts.visorColor(), "neutral");
+  assert.equal(opts.visorIntensity(), "light");
+  const shot = loadOpts({}, "?helmetvisor=smoke&visorcolor=amber&visorintensity=strong").opts;
+  assert.deepEqual([shot.visor(), shot.visorColor(), shot.visorIntensity()], ["smoke", "amber", "strong"]);
+});
 const LIV = { c1: [0.8, 0.1, 0.1], c2: [0.9, 0.9, 0.9], accent: [1, 0.8, 0] };
 
 function bounds(d) {

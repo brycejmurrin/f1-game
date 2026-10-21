@@ -22,6 +22,12 @@ const LEAD_MAX = 1;
 //   INTERIOR  the trim car-mesh.js builds inside the tub (getCockpitCabin).
 //   HALO      OFF / SLIM / STANDARD / THICK / FAIRED: the hoop's tube (car3d.js, halo size).
 const CHOICES = {
+  visor:    { key: "apex26.helmetVisor", url: "helmetvisor", values: ["off", "clear", "smoke"],
+              labels: { off: "OFF", clear: "CLEAR", smoke: "TINTED" } },
+  visorColor: { key: "apex26.helmetVisorColor", url: "visorcolor", values: ["neutral", "amber", "ice", "rose"],
+              labels: { neutral: "NEUTRAL", amber: "AMBER", ice: "ICE BLUE", rose: "ROSE" } },
+  visorIntensity: { key: "apex26.helmetVisorIntensity", url: "visorintensity", values: ["light", "medium", "strong"],
+              labels: { light: "LIGHT", medium: "MEDIUM", strong: "STRONG" } },
   wheel:    { key: "apex26.cockpitWheel", url: "ckwheel", values: ["f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"],
               labels: { f1: "F1 2026", gt: "GT RIM", butterfly: "BUTTERFLY", yoke: "OPEN YOKE", endurance: "ENDURANCE", retro: "2000s", round: "CLASSIC", none: "NONE" } },
   body:     { key: "apex26.cockpitBody", url: "ckbody", values: ["standard", "sculpted", "wide", "tapered", "stepped"],
@@ -127,6 +133,7 @@ function setChoice(name, v) {
   const C = CHOICES[name];
   picked[name] = C.values.includes(v) ? v : C.values[0];
   GameStore.store.rawSet(C.key, picked[name]);
+  if (name === "visor" || name === "visorColor" || name === "visorIntensity") paintVisor();
   for (const fn of listeners) fn(name, picked[name]);
   return picked[name];
 }
@@ -139,6 +146,18 @@ function seat() { return choice("seat"); }
 function setSeat(v) { return setChoice("seat", v); }
 function interior() { return choice("interior"); }
 function setInterior(v) { return setChoice("interior", v); }
+function visor() { return choice("visor"); }
+function setVisor(v) { return setChoice("visor", v); }
+function visorColor() { return choice("visorColor"); }
+function setVisorColor(v) { return setChoice("visorColor", v); }
+function visorIntensity() { return choice("visorIntensity"); }
+function setVisorIntensity(v) { return setChoice("visorIntensity", v); }
+function paintVisor() {
+  if (typeof document === "undefined" || !document.body) return;
+  document.body.setAttribute("data-helmet-visor", visor());
+  document.body.setAttribute("data-helmet-visor-color", visorColor());
+  document.body.setAttribute("data-helmet-visor-intensity", visorIntensity());
+}
 
 // Does this wheel (default: the chosen one) carry the gear/speed LCD?
 function wheelHasScreen(style) { return !!SCREEN_WHEELS[style || wheel()]; }
@@ -200,6 +219,7 @@ function paintLead(inp, out) {
 function initUI() {
   Log.info("game", "CockpitOpts.initUI");
   if (typeof document === "undefined") return;
+  paintVisor();
   const panel = document.getElementById("pm-panel-display");
   const host = panel || (document.getElementById("pm-res") && document.getElementById("pm-res").parentNode);
   if (!host || document.getElementById("pm-halo")) return;
@@ -254,6 +274,12 @@ function initUI() {
   row("pm-ckpreset", "PRESET", ["custom","modern","historic"], {custom:"CUSTOM",modern:"MODERN F1",historic:"HISTORIC"},
     "Apply a coordinated cockpit, or mix individual options below. HISTORIC uses leather, gauges, a round wheel and no halo.", preset, setPreset);
   const C = CHOICES;
+  row("pm-helmet-visor", "HELMET VISOR", C.visor.values, C.visor.labels,
+    "Optional see-through shield in HELMET camera only. CLEAR adds a curved rim and faint reflections; TINTED adds your chosen lens color and intensity. OFF keeps the original helmet view.", visor, setVisor);
+  row("pm-visor-color", "TINT COLOR", C.visorColor.values, C.visorColor.labels,
+    "Lens color for TINTED visor: neutral, warm amber, ice blue or rose. CLEAR keeps an untinted centre.", visorColor, setVisorColor);
+  row("pm-visor-intensity", "TINT INTENSITY", C.visorIntensity.values, C.visorIntensity.labels,
+    "Tint strength for TINTED visor. LIGHT is subtle; MEDIUM and STRONG deepen the lens color. CLEAR keeps an untinted centre.", visorIntensity, setVisorIntensity);
   row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,
     "The steering wheel. CLASSIC and NONE have no screen, so the HUD shows gear and speed.", wheel, setWheel);
   row("pm-ckbody", "BODY", C.body.values, C.body.labels,
@@ -300,7 +326,7 @@ if (typeof document !== "undefined") {
 
 return {
   KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, WHEELS, CHOICES, HALO_VALUES,
-  PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
+  PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, visor, setVisor, visorColor, setVisorColor, visorIntensity, setVisorIntensity, wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();
 Object.freeze(CockpitOpts);
