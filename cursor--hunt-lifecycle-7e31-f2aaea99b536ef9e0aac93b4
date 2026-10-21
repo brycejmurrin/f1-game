@@ -1,1 +1,1 @@
-1792609306	Bryce Murrin	C lifecycle transactional GLX chunk upload cleanup: js/render/glx/chunked.js tests/unit/glx-resource-balance.test.mjs  [cursor/hunt-lifecycle-7e31; session f2aaea99b536ef9e0aac93b4]
+1792615772	Bryce Murrin	C lifecycle transactional GLX chunk upload cleanup: js/render/glx/chunked.js tests/unit/glx-resource-balance.test.mjs. PR3440 parent integration; source checkpoint pending remaining gate legs after environment restart.  [cursor/hunt-lifecycle-7e31; session f2aaea99b536ef9e0aac93b4]
