@@ -625,6 +625,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
   "tests/unit/harness-display.test.mjs",
+  // Helmet memo (B·H13): a replayed lid equals a freshly painted one, value for value. ~3 s.
+  "tests/unit/helmet-memo.test.mjs",
   "tests/unit/helmets.test.mjs",
   "tests/unit/home-world.test.mjs",
   "tests/unit/hooks-documented.test.mjs",
