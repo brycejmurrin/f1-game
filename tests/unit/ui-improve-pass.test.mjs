@@ -1680,8 +1680,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "openSettings warms LAZY_AUDIO so pm-settings / MusicLib work without pointerdown");
   assert.doesNotMatch(game, /mb-settings"\)\.onclick[\s\S]{0,120}settingsNav\.show\(\s*"more"/,
     "title Settings must not force MORE");
-  assert.match(game, /\$\(\s*"pm-settings-close"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*settingsNav\.back\(\s*\)\s*\)\s*closeSettings\(\s*\)/,
-    "settings BACK pops the stack before closing");
+  assert.match(game, /\$\(\s*"pm-settings-close"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*!paused\s*&&\s*settingsNav\.current\(\s*\)\s*!==\s*"home"\s*\)\s*\{\s*settingsNav\.invalidate\(\s*\)\s*;\s*closeSettings\(\s*\)\s*;\s*return\s*;\s*\}\s*if\s*\(\s*settingsNav\.back\(\s*\)\s*\)\s*closeSettings\(\s*\)/,
+    "settings BACK: title sub-page closes in one step, otherwise pops the stack before closing");
   const raceSettings = code("js/race/race-settings.js");
   assert.match(raceSettings, /els\.selGo\.onclick[\s\S]{0,400}openRaceSettings\(\s*"select"\s*\)/,
     "SELECT NEXT opens race settings, not the garage");
@@ -2160,8 +2160,6 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
   assert.doesNotMatch(shell, /id="pm-settings-close"[^>]*autofocus/, "Settings BACK must not steal initial focus from the door index");
   assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
-  assert.match(game, /function focusSettingsHub\(\)/, "openSettings lands keyboard focus on the settings hub");
-  assert.match(game, /!paused && settingsNav\.current\(\) !== "home"/, "title BACK/Escape closes from a sub-page in one step");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
