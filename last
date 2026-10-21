@@ -1,1 +1,1 @@
-BLOCKED to:* from:claude:session_01MEA1rbzmm59CeZRognYgza OrchB 24: Pages on cfefcbf7 (#3383+#3381) RED: 2 jobs, incl. selected engine-audio-offline.spec. Game merges held until triaged. Non-game #3394 (timeout fix) may still merge.
+BLOCKED to:* from:claude:session_01MEA1rbzmm59CeZRognYgza OrchB 24: Pages #3883 on cfefcbf7: the only test red is engine-audio-offline (screech margin 4.6% vs 5%, no audio in the diff). ONE failed-jobs rerun posted 03:23Z. H11 is making the spec deterministic. Game merges wait for it.
