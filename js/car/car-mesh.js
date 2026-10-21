@@ -1124,6 +1124,52 @@ function _wheelRimRound(out, GRIP, acc, grip) {
 // key: return before the tints, the toFixed map/joins and the concat (every
 // frame on the default camera). A draft or an edit is a new object and takes
 // the string path, which still owns the free-and-rebuild.
+// WHEEL FINISH (B·H33): which car surface each part of the wheel takes. Every rig part is born
+// panel (26) or carbon (21) and the rig drew it at roughness 0.88 / clearcoat 0, so the wheel read as one
+// flat grey-black lump whatever the parts were. A finish is a per-vertex surface remap (no geometry, no
+// texture) plus the draw opts that let those surfaces' own lobes through (cockpitWheelOpts).
+// Classes come from the builder's own constants: rubber grips, carbon structure, neutral alloy hardware,
+// the button bezels, the LCD glass. Gloves and legends keep their surfaces.
+const WHEEL_FINISHES = Object.freeze({
+  stock: null,
+  carbon:   Object.freeze({ grip: 22, structure: 21, hardware: 29, bezel: 29, screen: 24 }),
+  anodised: Object.freeze({ grip: 22, structure: 21, hardware: 44, bezel: 44, screen: 24, accent: true }),
+  suede:    Object.freeze({ grip: 42, structure: 28, hardware: 39, bezel: 39, screen: 24 }),
+});
+const WHEEL_DEFAULT = "stock";   // the shipped wheel finish (Bryce picks among the stills; note §Steering wheel finish)
+let _wheelFinish = WHEEL_DEFAULT;
+const _near = (c, r, i) => Math.abs(c[i] - r[0]) < 0.004 && Math.abs(c[i + 1] - r[1]) < 0.004 && Math.abs(c[i + 2] - r[2]) < 0.004;
+const _W_GLOVE = [[0.14,0.155,0.175],[0.34,0.36,0.38]], _W_SCREEN = [0.022,0.028,0.036], _W_BEZEL = [0.12,0.13,0.15];
+function wheelFinishPass(out, name, acc) {
+  const f = WHEEL_FINISHES[name];
+  if (!f) return out;
+  const M = out.mat, C = out.col;
+  for (let v = 0, i = 0; v < M.length; v++, i += 3) {
+    const s = M[v], hi = Math.max(C[i], C[i+1], C[i+2]), lo = Math.min(C[i], C[i+1], C[i+2]);
+    if (s === 22) { if (!_W_GLOVE.some((g) => _near(C, g, i))) M[v] = f.grip; }
+    else if (s === 21) M[v] = f.structure;
+    else if (s !== 26) continue;
+    else if (_near(C, _W_SCREEN, i)) M[v] = f.screen;
+    else if (_near(C, _W_BEZEL, i)) M[v] = f.bezel;
+    else if (hi > 0.2 && hi < 0.5 && hi - lo < 0.05) M[v] = f.hardware;   // fasteners, pivots, rotary pointers
+    else if (hi < 0.21 && hi - lo < 0.04 && lo > 0.1) M[v] = f.structure;   // paddles and clutch blades
+    else continue;
+    if (f.accent && acc && (M[v] === f.bezel || M[v] === f.hardware)) { C[i] = acc[0]; C[i+1] = acc[1]; C[i+2] = acc[2]; }
+  }
+  return out;
+}
+// The wheel's draw opts: the rig's 0.88-rough card for stock; a finish lets lacquer (carbon min 0.42 clearcoat),
+// alloy and glass through. Every response is clamped per surface in the lit shaders (tsl-lit/glsl-lit/WGSL).
+const _wheelOptsFin = { doubleSided: true, roughness: 0.5, metalness: 0.04, specular: 0.4, clearcoat: 0.7, emissive: 0 };
+function cockpitWheelOpts(rigOpts) {
+  if (!WHEEL_FINISHES[_wheelFinish]) return rigOpts;
+  _wheelOptsFin.emissive = rigOpts.emissive;
+  return _wheelOptsFin;
+}
+function wheelFinish(name) {
+  if (name !== undefined && Object.hasOwn(WHEEL_FINISHES, name) && name !== _wheelFinish) { _wheelFinish = name; _wheelLiv = undefined; _cockpitWheelKey = ""; }
+  return _wheelFinish;
+}
 let cockpitWheelMesh = null, _cockpitWheelKey = "", _wheelLiv, _wheelStyle;
 const _wheelTint = (c, k) => c ? [c[0] * k, c[1] * k, c[2] * k] : null;
 function getCockpitWheel(liv, style) {
@@ -1140,7 +1186,7 @@ function getCockpitWheel(liv, style) {
   // same ~55% the accent lands at. Unset = today's black rubber, and the key gains nothing.
   const gt = _wheelTint(liv && typeof CarMaterials !== "undefined" && CarMaterials.zoneColour(liv.gripTint), 0.55);
   const kc = (c) => c ? c.map((v) => v.toFixed(2)).join(",") : "-";
-  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2) + (gt ? "|g" + kc(gt) : "");
+  const wantKey = st + "|" + kc(c1) + "|" + kc(acc) + "|" + kc(c2) + (gt ? "|g" + kc(gt) : "") + "|" + _wheelFinish;
   if (cockpitWheelMesh && _cockpitWheelKey !== wantKey) {
     if (_gfx.freeMesh) _gfx.freeMesh(cockpitWheelMesh);
     cockpitWheelMesh = null;
@@ -1167,7 +1213,7 @@ function getCockpitWheel(liv, style) {
     }
   }
   _wheelHands(out, acc, c1);
-  cockpitWheelMesh = _gfx.createMesh(_rigMaterials(out));
+  cockpitWheelMesh = _gfx.createMesh(wheelFinishPass(_rigMaterials(out), _wheelFinish, acc));
   return cockpitWheelMesh;
 }
 // STEERING LOCK. The wheel used to roll a fixed 0.80 rad (±46 deg) at full
@@ -2032,7 +2078,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, releaseIdleFlaps, flapState, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, releaseIdleFlaps, flapState, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, cockpitWheelOpts, wheelFinish, WHEEL_FINISHES, WHEEL_DEFAULT, wheelFinishPass, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);

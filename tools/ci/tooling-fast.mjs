@@ -304,6 +304,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // stays in the edit loop where a cockpit geometry change is actually made.
   "tests/unit/cockpit-crest-stripe.test.mjs",
   "tests/unit/cockpit-preview.test.mjs",
+  "tests/unit/cockpit-wheel-finish.test.mjs",
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",

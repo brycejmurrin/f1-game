@@ -2354,6 +2354,7 @@
       ],
       "*": [
         "tests/specs/quali.spec.js",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -2423,6 +2424,7 @@
         "tests/unit/aero-flap-travel.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/cockpit-pale-surfaces.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-stations.test.mjs"
@@ -2430,6 +2432,9 @@
       "carDecalData": [
         "tests/specs/parts-physics.spec.js",
         "tests/unit/livery-stations.test.mjs"
+      ],
+      "cockpitWheelOpts": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
       ],
       "cockpitWheelRoll": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -2496,6 +2501,7 @@
       ],
       "getCockpitWheel": [
         "tests/unit/car-mesh-crew-cache.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "getCompoundRing": [
@@ -2529,6 +2535,7 @@
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/cockpit-pale-surfaces.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs"
@@ -2538,6 +2545,9 @@
       ],
       "stationCtx": [
         "tests/unit/livery-stations.test.mjs"
+      ],
+      "wheelFinish": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
       ],
       "*": [
         "tests/unit/hud-speed-parity.test.mjs",
@@ -4618,6 +4628,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
@@ -6032,7 +6043,8 @@
         "tests/unit/surface-id-parity.test.mjs"
       ],
       "*": [
-        "tests/unit/carve-a-modules.test.mjs"
+        "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs"
       ]
     },
     "js/fx/particles.js": {
@@ -6711,6 +6723,7 @@
         "tests/unit/change-kind.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/ci-pr-base.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/css-play.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
@@ -10159,6 +10172,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
