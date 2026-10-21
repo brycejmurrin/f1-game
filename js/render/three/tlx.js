@@ -4738,7 +4738,9 @@ const TLX = (function () {
             // caller's decoded layers (`images`, ~4.3 MB a strip) stay reachable for the texture's life unless
             // nulled here (measured 17 MB for the two strips at the shipped 256 px).
             const letGo = () => { data = null; images = null; };
-            t.onUpdate = (tex) => { tex.onUpdate = null; tex.image = { data: null, width: size, height: size, depth: n }; letGo(); };
+            t.onUpdate = (tex) => { tex.onUpdate = null; tex.image = { data: null, width: size, height: size, depth: n }; };
+            const dropImage = t.onUpdate;
+            t.onUpdate = (tex) => { dropImage(tex); letGo(); };
             if (!job) { t.needsUpdate = true; return t; }
             t.pending = true;
             t.addEventListener("dispose", () => { t._freed = true; });   // freeTexture / a superseding bind
