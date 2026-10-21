@@ -24,7 +24,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
-function boot(trackId = "t") {
+function boot(trackId = "t", { particles = false } = {}) {
   const sandbox = {
     console,
     Assets: { env: () => null },
@@ -37,13 +37,22 @@ function boot(trackId = "t") {
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/lighting/knobs.js", "js/lighting/presets.js", "js/lighting/atmosphere.js"])
     vm.runInContext(read(f), sandbox, { filename: absSrc(f) });
   vm.runInContext("LightTune = { LT: LightKnobs.LT, TUNE_DEFS: LightKnobs.TUNE_DEFS, buildTrackLights: () => [] };", sandbox);
+  // Exercise the real falling-rain producer only in the drizzle regression.
+  // A constant RNG puts every drop directly along the eye ray, where its
+  // zero-width billboard is correctly skipped, so use a deterministic stream.
+  let drawnRain = 0;
+  const rain = particles ? vm.runInContext(read("js/fx/particles.js") + ";Particles", sandbox, { filename: absSrc("js/fx/particles.js") }) : null;
+  if (rain) {
+    vm.runInContext("{ let seed = 0x51a7; Math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; }; }", sandbox);
+    rain.init({ drawParticles: (_data, floats, additive) => { if (!additive) drawnRain += floats; } });
+  }
   vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: absSrc("js/lighting/profiles.js") });
   const saved = {};
   const G = {
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
     store: { get: (k, d) => (k in saved ? saved[k] : d), set: (k, v) => { saved[k] = JSON.parse(JSON.stringify(v)); } },
     satAdjust: (c) => c, isRaining: () => G.raceWeather === "rain", isWetRoad: () => G.raceWeather === "rain" || G.raceWeather === "wet",
-    isFloodActiveSession: () => false, _nightAmbientBand: () => 0, initRainDrops: () => {},
+    isFloodActiveSession: () => false, _nightAmbientBand: () => 0, initRainDrops: () => { if (rain) rain.rainSeed(G.raceWeather === "wet"); },
     applyLightTune: (f, o) => ltStore.apply(f, o), applyRaceSettings: (b) => atmo.applyRaceSettings(b),
     frame: { ambientSky: [0.3, 0.3, 0.3], ambientGround: [0.1, 0.1, 0.1], sunDir: [0, 1, 0], sunColor: [1, 1, 1], fogColor: [0.5, 0.5, 0.5] },
     frameSky: { zenith: [0.1, 0.2, 0.5], horizon: [0.6, 0.7, 0.8], sunDir: [0, 1, 0], sunColor: [1, 1, 1] },
@@ -59,10 +68,55 @@ function boot(trackId = "t") {
   // was 80 % of this file's run time.
   const snapLt = vm.runInContext("(() => { const ids = LightKnobs.TUNE_DEFS.map((d) => d.id); " +
     "return () => { const r = new Float64Array(ids.length); for (let i = 0; i < ids.length; i++) r[i] = LightKnobs.LT[ids[i]]; return r; }; })()", sandbox);
-  return { G, atmo, ltStore, LT, DEFS, P, snapLt };
+  const drawRain = () => {
+    assert.ok(rain, "boot with particles enabled to inspect the rain producer");
+    rain.rainSeed(true); rain.rainShow(true);
+    rain.rainUpdate(1 / 60, [100, 5, -30], 0.5);
+    drawnRain = 0; rain.draw();
+    return drawnRain;
+  };
+  return { G, atmo, ltStore, LT, DEFS, P, snapLt, drawRain };
 }
 const host = (v) => JSON.parse(JSON.stringify(v));
 const sum = (a) => a.reduce((s, v) => s + v, 0);
+
+test("shipped dawn wet produces drizzle, while explicit player zero still suppresses it", () => {
+  for (const track of ["spa", "bahrain", "singapore"]) {
+    const b = boot(track, { particles: true });
+    b.G.raceTimeOfDay = "dawn"; b.G.raceWeather = "wet";
+    b.atmo.applyRaceSettings();
+    assert.ok(b.drawRain() > 0, `${track}: shipped dawn wet must contain falling drizzle`);
+
+    b.ltStore.set("drizzleCount", 0);
+    b.atmo.applyRaceSettings();
+    assert.equal(b.LT.drizzleCount, 0, `${track}: player zero survives profile resolution`);
+    assert.equal(b.drawRain(), 0, `${track}: the player's explicit suppression reaches the rain producer`);
+
+    b.ltStore.reset(); b.atmo.applyRaceSettings();
+    assert.ok(b.drawRain() > 0, `${track}: resetting player edits restores shipped drizzle`);
+    b.ltStore.set("particleMul", 0); b.atmo.applyRaceSettings();
+    assert.equal(b.LT.particleMul, 0);
+    assert.ok(b.drawRain() > 0, `${track}: the separate smoke/spray control does not suppress falling rain`);
+  }
+});
+
+test("dawn wet does not impose a crushing grade relative to rain, and reapplying does not compound it", () => {
+  for (const track of ["spa", "bahrain", "singapore"]) {
+    const b = boot(track);
+    b.G.raceTimeOfDay = "dawn"; b.G.raceWeather = "rain"; b.atmo.applyRaceSettings();
+    const rain = { contrast: b.LT.contrast, blacks: b.LT.blacks, midtones: b.LT.midtones };
+    b.G.raceWeather = "wet"; b.atmo.applyRaceSettings();
+    assert.ok(Math.abs(b.LT.contrast - rain.contrast) <= 0.2, `${track}: drizzle must not introduce a separate high-contrast grade`);
+    assert.ok(b.LT.blacks >= rain.blacks - 0.1, `${track}: drizzle must not crush substantially more blacks than rain`);
+    assert.ok(b.LT.midtones >= rain.midtones - 0.1, `${track}: drizzle must not suppress substantially more midtones than rain`);
+    const snapshot = () => host({ sun: b.G.frame.sunColor, sky: b.G.frameSky.zenith, fog: b.G.frame.fogColor,
+      ambient: b.G.frame.ambientSky, exposure: b.G.frame.exposure,
+      grade: [b.LT.contrast, b.LT.blacks, b.LT.midtones, b.LT.gammaB] });
+    const first = snapshot();
+    for (let i = 0; i < 3; i++) b.atmo.applyRaceSettings();
+    assert.deepEqual(snapshot(), first, `${track}: repeated weather/tuner applies reconstruct the same look`);
+  }
+});
 
 test("the arc's step starts on the old look, walks the sun, cloud, ambient and fog, and lands on the new one", () => {
   const { G, atmo } = boot();

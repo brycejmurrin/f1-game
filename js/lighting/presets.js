@@ -131,20 +131,20 @@ window.LightPresets = {
     "glowAmp": 2.2,
     "exposureMul": 0.93
   },
-  // Shared dawn|wet authenticity: fleet COPY-ALL stamped exposureMul 1.35 +
-  // ambientMul 1.45 across ~40 tracks → day-bright wash on wet early morning.
-  // One stamp keeps cool dawn fill, fading lamps, rain sheen; per-track keeps
-  // fogTint / mistHeight only (parallel to *|dusk|wet #1149).
+  // Shared dawn|wet: keep the dawn/rain family's grade instead of compensating
+  // warm ground fill with crushed blacks and a blue-channel gamma shift. Weather
+  // changes the light/air/surface; it does not switch to another film curve.
+  // Per-track fogTint / mistHeight and the player's final overrides still win.
   // Lamp-spread extremes (beamCone/bleedMul/lampWallSpill/lampRadiusMul at
   // range max) + ssrWetMul 0.53 made Spa dawn|wet read dry: neon bleed on
   // trees, purple clear sky, no road glints (Lighting R4 #3). Drop the four
   // spread pins to TUNE_DEFS defaults (1.0); stamp wet mirror like *|day|wet.
   "*|dawn|wet": {
-      "ambBalance": -5.838,
-      "ambTemp": -1.252,
+      "ambBalance": 0,
+      "ambTemp": 0,
       "ambientMul": 1.08,
-      "blackLift": 0,
-      "blacks": -0.6,
+      "blackLift": 0.005,
+      "blacks": -0.06,
       "bloomKnee": 0.904,
       "bloomMul": 0.34,
       "bounceK": 0.28325,
@@ -157,11 +157,12 @@ window.LightPresets = {
       "carSparkle": 3.24,
       "carSpecular": 0.686,
       "carSunGlint": 29.05,
-      "cloudCover": -0.287,
+      "cloudCover": 0,
       "cloudSilver": 1.778,
-      "contrast": 1.552,
+      "contrast": 1.12,
       "coronaAureole": 1.646,
-      "drizzleCount": 0,
+      // Fine visible drizzle by default; an explicit player zero remains valid.
+      "drizzleCount": 0.30,
       "exposureMul": 0.96,
       "flareMul": 2.473,
       "flareStreak": 3.35,
@@ -169,7 +170,7 @@ window.LightPresets = {
       "floodEmitMul": 0.22,
       "fogDensityMul": 1.765,
       "fogHeight": 0.0505,
-      "gammaB": 1.243,
+      "gammaB": 1,
       "glareStr": 0.297,
       "glowAmp": 2.35,
       "godrayAniso": 0.95,
@@ -177,7 +178,7 @@ window.LightPresets = {
       "godrayFloor": 0.1774,
       "godrayLowBoost": 0.086,
       "grMul": 1.616,
-      "highlights": -0.18,
+      "highlights": -0.06,
       "keyMul": 0.62,
       "lampCullFade": 0.855,
       "lampLevel": 0.13,
@@ -188,21 +189,21 @@ window.LightPresets = {
       "lampVolHaze": 1.365,
       "lampWarmup": 1.33,
       "lensDirt": 0.393,
-      "liftR": 0.0535,
-      "midtones": -0.386,
+      "liftR": 0,
+      "midtones": 0.03,
       "mistDensity": 1.5,
-      "particleMul": 0,
+      "particleMul": 1,
       "perChunkLights": 1,
       "poolEnergy": 0.614,
-      "rainCount": 20,
+      "rainCount": 360,
       "rainSpeed": 0.04,
       "rainStreak": 0.04,
       "saturation": 0.993,
       "shadowRange": 98,
       "shadowStr": 0.16,
-      "shadows": -0.293,
+      "shadows": 0.04,
       "sharpen": 0.034,
-      "shoulder": 0.145,
+      "shoulder": 0.14,
       "skyColorSat": 1.064,
       "skyRimGlow": 0.166,
       "ssrDryDay": 0.4685,
@@ -214,7 +215,7 @@ window.LightPresets = {
       "sunShaftDecay": 0.9,
       "sunShaftMul": 2.29,
       "sunSquash": 2.37,
-      "sunTemp": -1.771,
+      "sunTemp": -0.25,
       "surfDetail": 2.5,
       "tailFade": 8.5,
       "tint": -0.1,
@@ -222,7 +223,7 @@ window.LightPresets = {
       "twilightRamp": 5.95,
       "twilightWarm": 0.155,
       "wetDark": 1.22,
-      "whites": 0.244,
+      "whites": -0.08,
       "windowSunFlash": 1.912
     },
   // Shared day|wet authenticity: fleet pins keyMul 1.05–1.28 (dry sunny wash) or

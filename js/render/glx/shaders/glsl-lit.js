@@ -1356,6 +1356,9 @@ void main() {
   // reflection-side use below must key off this, not plain wet — otherwise soaked
   // grass still mirrors the lamps and the sky.
   float wetSheen = 0.0;
+  // Also classifies the post-process SSR receiver, even when the road is dry.
+  int wmid = int(vMat + 0.5);
+  float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
   // NOT on a car (classifiedCar): everything below is keyed to WORLD position —
   // value-noise puddles, ripple cells, the 0.42 tarmac absorb on every up face —
   // so in rain the car tops wore world-space puddles that slid across the moving
@@ -1368,8 +1371,6 @@ void main() {
     // canal with cyan banks. Porous ground drinks the water instead: it darkens
     // (more than tarmac, since wet soil is markedly darker) but never polishes.
     // This is only expressible now that road/terrain carry material ids.
-    int wmid = int(vMat + 0.5);
-    float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
     wet = uWetness * upFace;
     // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
     // reference (constants K, mask()); TLX tsl-lit.js and WGX wgsl-chunks.js
@@ -2279,7 +2280,10 @@ void main() {
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
   // channel is free): the composite SSR pass reflects the real world on car
   // bodywork every frame — the same world-mirror the wet road gets.
-  outColor = vec4(color, carPaint > 0.001 ? 0.35 : uAlpha);
+  // Opaque metadata: .35 car paint, .75 porous world, 1 sealed world.
+  // Blended/noAlphaWrite draws preserve destination alpha in glx.js.
+  float receiverTag = porous > 0.5 && uAlpha >= 1.0 ? 0.75 : uAlpha;
+  outColor = vec4(color, carPaint > 0.001 ? 0.35 : receiverTag);
 }`;
   window.GLXShaders = Object.assign(window.GLXShaders || {}, { LIT_VS, LIT_FS });
 })();

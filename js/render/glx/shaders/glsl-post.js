@@ -790,6 +790,8 @@ void main() {
   // Car-paint pixels (alpha tag < 0.5) reflect the world in EVERY session —
   // dry or wet — through the same march as the wet road.
   float carPx = 1.0 - smoothstep(0.42, 0.55, scn.a);
+  // Opaque .75 porous receivers reject road SSR; .35 car paint keeps its own path.
+  float roadPx = smoothstep(0.85, 0.95, scn.a);
   // TWO EXACT CHANGES TO THIS GATE, both about paying before rejecting.
   //
   // 1. 'carPx > 0.3' gained '&& uCarReflect > 0.001'. The outer gate never
@@ -809,7 +811,7 @@ void main() {
   //    onboard, so that is 38% / 18% of full-res pixels each dropping one
   //    discarded fetch on a wet frame. Both operands are pure and side-effect
   //    free, so the swap is exact.
-  if (uSsrOk > 0.5 && (uReflect > 0.001 || (carPx > 0.3 && uCarReflect > 0.001))
+  if (uSsrOk > 0.5 && (roadPx * uReflect > 0.001 || (carPx > 0.3 && uCarReflect > 0.001))
       && vUV.y < uSsrTopUV && texture(uDepth, vUV).r < 0.9999) {
     vec3 P = ssrViewPos(vUV);
     // View-space normal from depth derivatives (cheap; rough at silhouettes, but
@@ -886,6 +888,7 @@ void main() {
     // grazing-angle normal could drop genuine road below threshold — the other
     // half of the patchy/dropout mask failure at phone resolution.
     float roadMask = smoothstep(0.25, 0.55, upDot)
+                   * roadPx
                    * smoothstep(uSsrNear, uSsrNear * 2.8, P.z)
                    * (1.0 - smoothstep(-22.0, -78.0, P.z));
     // Car bodywork: up-facing-ish panels, allowed much nearer than the road

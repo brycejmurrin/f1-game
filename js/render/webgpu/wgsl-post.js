@@ -1241,6 +1241,11 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   let scnA = textureSampleLevel(sceneTex, sceneSamp, in.uv, 0.0).a;
   let carPx = 1.0 - smoothstep(0.42, 0.55, scnA);
+  // .75 porous world rejects road SSR; .35 car paint retains its own mask.
+  let roadPx = smoothstep(0.85, 0.95, scnA);
+  if (roadPx * strength <= 0.001 && (carPx <= 0.3 || carReflect <= 0.001)) {
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+  }
 
   let P = ssrViewPos(in.uv);
   // View-space normal from depth finite differences (cheap; the road mask +
@@ -1282,6 +1287,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // the whole visible mirror, so the literal made the knob's onboard case dead.
   let ssrNear = U.reflSkyHi.w;
   let roadMask = smoothstep(0.25, 0.55, upDot)
+               * roadPx
                * smoothstep(ssrNear, ssrNear * 2.8, P.z)
                * (1.0 - smoothstep(-22.0, -78.0, P.z));
   // Car bodywork: up-facing-ish panels, nearer than the road (chase sits ~5–8 m back).

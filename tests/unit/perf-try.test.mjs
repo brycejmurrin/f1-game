@@ -508,12 +508,39 @@ test("window sun flash skips pow(_,22) when wet or the knobs are off", () => {
   assert.match(tsl, /If\(\s*wetSheen\.oneMinus\(\)\.mul\(\s*U\.windowSunFlash\s*\)\.mul\(\s*U\.keyMul\s*\)\.greaterThan\(\s*0\.001\s*\)/);
 });
 
-test("sky golden-hour and low-sun band skip when sunE >= 0.72", () => {
-  // First factor is (1-smoothstep(0, 0.72, sunE)). Identically 0 on
-  // default day (~0.95) and night moon-key (~1). Dawn/dusk still enter.
-  assert.match(shader("js/render/glx/shaders/glsl-sky.js"), /if\s*\(\s*sunE\s*<\s*0\.72\s*\)\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
-  assert.match(shader("js/render/webgpu/wgsl-chunks.js"), /if\s*\(\s*sunE\s*<\s*0\.72\s*\)\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
-  assert.match(shader("js/render/three/tsl-sky.js"), /If\(\s*sunE\.lessThan\(\s*0\.72\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
+test("sky sunset-band guards admit low solar keys but reject high sun and every night moon key", () => {
+  // Evaluate the actual enclosing production predicate, not a mirrored gate.
+  // GLSL/WGSL scalar comparisons are also valid JS; TSL needs only two scalar
+  // node operations here. This does not execute the rest of the sky shader.
+  const scalar = (value) => ({ value,
+    lessThan: (other) => scalar(value < other),
+    and: (other) => scalar(value && other.value),
+  });
+  for (const file of ["js/render/glx/shaders/glsl-sky.js", "js/render/webgpu/wgsl-chunks.js", "js/render/three/tsl-sky.js"]) {
+    const source = shader(file), band = source.indexOf("goldenAmt");
+    assert.ok(band >= 0, file + ": sunset band exists");
+    const guards = [...source.slice(0, band).matchAll(/\b(if|If)\s*\(/g)];
+    const guard = guards.at(-1);
+    assert.ok(guard, file + ": sunset band has an enclosing guard");
+    const start = guard.index + guard[0].length;
+    let end = start, depth = 1;
+    for (; end < source.length && depth; end++) {
+      if (source[end] === "(") depth++;
+      if (source[end] === ")") depth--;
+    }
+    assert.equal(depth, 0, file + ": balanced guard expression");
+    const tsl = guard[1] === "If";
+    const expression = source.slice(start, end - 1).replace(/,\s*\(\)\s*=>[\s\S]*$/, "");
+    const permits = (nightSky, sunE) => {
+      const result = vm.runInNewContext(expression, tsl
+        ? { D: { nightSky: scalar(nightSky) }, sunE: scalar(sunE) }
+        : { nightSky, sunE });
+      return tsl ? result.value : result;
+    };
+    for (const sunE of [0, 0.15, 0.719999]) assert.equal(permits(0, sunE), true, file + ": low solar key");
+    for (const sunE of [0.72, 0.95, 1]) assert.equal(permits(0, sunE), false, file + ": high solar key");
+    for (const sunE of [0, 0.15, 0.719999, 0.72, 1]) assert.equal(permits(1, sunE), false, file + ": moon key cannot create sunset bands");
+  }
 });
 
 test("WGX composite godray fetch is gated on lift.w haveGR", () => {

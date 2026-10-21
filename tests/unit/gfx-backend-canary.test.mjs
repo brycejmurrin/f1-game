@@ -4914,7 +4914,7 @@ test("GLX and TLX road-marking mip use the raw footprint, like WGX", () => {
 
 test("WGX's canvas is opaque too — it writes the same tag with NO gate", () => {
   // The tag is not a TLX idea: WGX writes it from the same GLX lineage —
-  //   return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
+  //   return vec4<f32>(color, select(worldTag, 0.35, carPaint > 0.001));
   // — and unlike TLX's, that line has no ssrTag gate at all, so EVERY WGX frame
   // carries 0.35 over car paint whether or not anything reads it. What makes
   // that safe is one word in the context configure, and nothing was checking
@@ -4925,7 +4925,9 @@ test("WGX's canvas is opaque too — it writes the same tag with NO gate", () =>
     "WGX must configure an OPAQUE canvas — it tags alpha on every frame");
 
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(chunks, /select\(alpha,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
+  assert.match(chunks, /let worldTag\s*=\s*select\(alpha,\s*0\.75,\s*porousSurface\s*&&\s*alpha\s*>=\s*1\.0\)/,
+    "opaque porous world surfaces must carry the SSR exclusion tag without changing fractional opacity");
+  assert.match(chunks, /select\(worldTag,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
     "the ungated WGX car-paint tag moved — recheck what its canvas opacity is carrying");
 });
 
@@ -4981,11 +4983,10 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "lit mrtNode must write packed.a (the 0.35 tag) to the ssrTag attachment");
   assert.match(lit, /function setSsrMrt\(on\)/,
     "env / canvas paths must be able to drop mrtNode");
-  assert.match(lit, /mrtNode \? "-mrt"/,
-    "program key must fork when MRT is armed — one program cannot target both RTs");
+  // Real material/cache-key transitions are exercised in tlx-hunt3.test.mjs.
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // Re-pointed by perf hunt 3 R3: the attachment is dropped only where tlx.js's _wantTag() says nothing
-  // can read it (phone MEDIUM/LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
+  // can read it (eligible phone LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
   assert.match(post, /count:\s*tagOn \? 2 : 1/,
     "HDR scene target must allocate the ssrTag colour attachment whenever the tag can be read");
   assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,

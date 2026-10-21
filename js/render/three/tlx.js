@@ -1264,15 +1264,15 @@ const TLX = (function () {
       // The post chain's factory, callable AGAIN: a one-off throw in present()
       // retires the chain ("Post-only death") and the next render-target realloc
       // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
-      // R3 (perf hunt 3): does the scene pass need its ssrTag attachment? Only
-      // car-paint SSR (po.carReflect) and the exhaust haze read it; the wet-road
-      // march does not. On a mobileTier phone at GRAPHICS MEDIUM or LOW (userTier
-      // >= 2) game.js zeroes po.carReflect (tier() >= 2) and never sends a haze, so
-      // the composite never fetches the tag: build the scene target with one
-      // attachment and present() sets no MRT. Re-evaluated every begin(): a
+      // SSR receiver metadata serves road SSR as well as car paint and haze.
+      // MEDIUM (tier 2) still runs wet-road SSR: retain the existing attachment
+      // so porous verges cannot inherit the road mirror. At tier >= 3 both SSR
+      // paths are shed; eligible phones can use a one-attachment target.
+      // This retains an attachment on MEDIUM; measure its cost on real phones.
+      // Re-evaluated every begin(): a
       // live preset raise rebuilds the chain with the tag (one compile hitch).
       // apex26.tlxTagLess: unset = that rule, "0" = always tag, "1" = drop it
-      // at userTier >= 2 off phones too (desktop A/B lever: there the haze
+      // at userTier >= 3 off phones too (desktop A/B lever: there the haze
       // still runs and reads white = "not car" over cars — the only delta).
       let _tagLessKnob = "";
       try { _tagLessKnob = localStorage.getItem("apex26.tlxTagLess") || ""; } catch (_) { /* no storage: auto */ }
@@ -1280,7 +1280,7 @@ const TLX = (function () {
         if (_tagLessKnob === "0") return true;
         let ut = 0;
         try { ut = (typeof PerfGov !== "undefined" && PerfGov.userTier) ? PerfGov.userTier() : 0; } catch (_) { ut = 0; }
-        return !(ut >= 2 && (mobileTier || _tagLessKnob === "1"));
+        return !(ut >= 3 && (mobileTier || _tagLessKnob === "1"));
       }
       // A GRAPHICS change moved the rule: swap the chain for one with/without the
       // attachment (begin(), before the scene records). Not warmed: one compile hitch.

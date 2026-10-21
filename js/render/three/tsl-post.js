@@ -668,20 +668,24 @@
         });
 
         // Wet-road + car-paint screen-space reflection js/render/glx/shaders/glsl-post.js
-        // The tag is fetched only where carPx can matter: inside the SSR gate
-        // with carReflect != 0 (carTerm = carMask * carReflect). Elsewhere 0 is
-        // bit-identical — the gate's car term is false and carTerm stays 0 —
-        // and a car-SSR-off frame (mobile MEDIUM) never reads the attachment.
+        // SSR metadata: .35 car paint, .75 porous world, 1 sealed world.
+        // Road SSR needs the tag even when car SSR is shed (phone MEDIUM).
+        // The gap between categories bounds filtering/MSAA edge transitions.
         const carPx = float(0.0).toVar();
-        If(C.ssrOk.greaterThan(0.5).and(C.carReflect.notEqual(0.0)).and(vUV.y.lessThan(C.ssrTopUV)), () => {
-          carPx.assign(smoothstep(0.42, 0.55, tagT.sample(TL(hazeUV)).r).oneMinus());
+        const roadPx = float(0.0).toVar();
+        If(C.ssrOk.greaterThan(0.5)
+          .and(C.reflect.greaterThan(0.001).or(C.carReflect.greaterThan(0.001)))
+          .and(vUV.y.lessThan(C.ssrTopUV)), () => {
+          const receiverTag = tagT.sample(TL(hazeUV)).r;
+          carPx.assign(smoothstep(0.42, 0.55, receiverTag).oneMinus());
+          roadPx.assign(smoothstep(0.85, 0.95, receiverTag));
         });
         // Gate ported exactly from COMPOSITE_FS (js/render/glx/shaders/glsl-post.js):
         // car-paint pixels only march when the CAR reflection knob is live,
         // and the free top-UV compare runs before the depth fetch (generated
         // GLSL short-circuits, so operand order is cost order).
         If(C.ssrOk.greaterThan(0.5)
-          .and(C.reflect.greaterThan(0.001)
+          .and(roadPx.mul(C.reflect).greaterThan(0.001)
             .or(carPx.greaterThan(0.3).and(C.carReflect.greaterThan(0.001))))
           .and(vUV.y.lessThan(C.ssrTopUV))            // sky/horizon seam gate
           .and(depthAt(vUV).lessThan(0.9999)), () => {
@@ -707,6 +711,7 @@
           const upDot = dot(Nv, upVSn).toVar();
           // Relaxed up-facing test + far fade pushed out, matching GLX.
           const roadMask = smoothstep(0.25, 0.55, upDot)
+            .mul(roadPx)
             .mul(smoothstep(C.ssrNear, C.ssrNear.mul(2.8), P.z))
             .mul(smoothstep(-22.0, -78.0, P.z).oneMinus()).toVar();
           const carMask = carPx.mul(smoothstep(0.30, 0.65, upDot))

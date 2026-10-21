@@ -157,15 +157,29 @@ test("WGX carries every packed car id independently of indexed vertex_index with
   });
 });
 
-test("WGX car padding does not capture non-car material or FLAG fractional fields", () => {
-  const { pack } = wgxCarPacking(), ids = [0, 1, 15.4, 16, 19, 19.5, 85.5, 86, NaN, Infinity];
+test("WGX world prefix preserves natural surfaces and fractional fields without capturing invalid ids", () => {
+  const { pack, stride } = wgxCarPacking();
+  const ids = [...Array.from({ length: 17 }, (_, i) => i), 6.225, 6.45, 15.2, 15.4, 16.999,
+    -1, 17, 19, 19.5, 85.5, 86, NaN, Infinity];
   const data = carIdMesh(ids), packed = pack(data), short = new Int16Array(packed.vert.buffer);
-  ids.forEach((_, i) => {
-    assert.equal(short[i * 14 + 9], 0, "only exact integer car ids occupy normal.w");
+  const plain = pack({ ...data, mat: null });
+  const raw = new Uint8Array(packed.vert.buffer), baseline = new Uint8Array(plain.vert.buffer);
+  ids.forEach((id, i) => {
+    const encoded = short[i * 14 + 9], authored = data.mat[i];
+    if (Number.isFinite(authored) && authored >= 0 && authored < 17) {
+      const fetched = Math.fround(encoded / 32767);
+      const decoded = Math.round(Math.fround(fetched * 32767)) / 256 - 1;
+      assert.ok(encoded >= 256 && encoded <= 18 * 256, `world ${id}: code must stay disjoint from car codes`);
+      assert.ok(Math.abs(decoded - authored) <= 0.5 / 256, `world ${id}: fractional field error ${decoded - authored}`);
+      if (Number.isInteger(authored)) assert.equal(decoded, authored, `world ${id}: integer identity must be exact`);
+    } else assert.equal(encoded, 0, `invalid ${id}: preserve fallback sentinel`);
     assert.ok(Object.is(packed.attr[i * 4], data.mat[i]), "legacy storage material survives unchanged");
+    for (let b = 0; b < stride; b++) if (b !== 18 && b !== 19)
+      assert.equal(raw[i * stride + b], baseline[i * stride + b], `world ${id}: byte ${b} outside normal.w changed`);
   });
-  assert.ok(new Int16Array(pack({ ...data, mat: null }).vert.buffer).every((v, i) => i % 14 !== 9 || v === 0));
-
+  for (const mat of [null, new Float32Array(1)]) {
+    assert.ok(new Int16Array(pack({ ...data, mat }).vert.buffer).every((v, i) => i % 14 !== 9 || v === 0), "missing/malformed material arrays keep fallback codes");
+  }
 });
 
 
@@ -192,6 +206,13 @@ function wgxVertexTransport() {
   // Both scalar expressions are valid JS arithmetic too. Execute their source,
   // rather than recopying the decode scale, selection predicate or fallback.
   const decode = new vm.Script(expression("packedCarId"));
+  const worldDecode = new vm.Script(expression("packedWorldCode"));
+  const hasWorld = new vm.Script(expression("hasWorldMat"));
+  const worldSelect = new vm.Script(expression("worldMatId"));
+  const worldPresence = new vm.Script(expression("o.worldMatPresent").replace(/(\d+)u\b/g, "$1"));
+  const fragmentNames = ["isRoadDraw", "vsMat", "classified", "worldVertexMat", "resolvedMat", "vMatId"];
+  const fragment = fragmentNames.map((name) => [name,
+    new vm.Script(expression(name).replace(/\bin\./g, "input.").replace(/(\d+)u\b/g, "$1"))]);
   const select = new vm.Script(expression("o.matId"));
   const normal = expression("o.nrm").split("*").map((term) => term.trim());
   const normalLayout = layout("VERTEX_POS_LAYOUT").attributes.find((a) => a.shaderLocation === Number(input[1]));
@@ -211,10 +232,20 @@ function wgxVertexTransport() {
     const values = Array.from({ length: Number(input[2]) }, (_, c) =>
       Math.fround(Math.max(-1, bytes.getInt16(vertex * stride + normalLayout.offset + c * 2, true) / 32767)));
     const aNrm = Object.fromEntries([..."xyzw"].map((name, c) => [name, values[c]]));
-    const context = vm.createContext({ aNrm, pulled: { x: pulledId }, floor: Math.floor,
+    const context = vm.createContext({ aNrm, pulled: { x: pulledId }, floor: Math.floor, round: Math.round,
       select: (a, b, condition) => condition ? b : a });
     context.packedCarId = decode.runInContext(context);
+    context.packedWorldCode = worldDecode.runInContext(context);
+    context.hasWorldMat = hasWorld.runInContext(context);
+    context.worldMatId = worldSelect.runInContext(context);
     const matId = select.runInContext(context);
+    const worldMatPresent = worldPresence.runInContext(context);
+    const resolveMat = (drawId, lutAsphalt) => {
+      const fsContext = vm.createContext({ input: { matId, worldMatPresent }, D: { mat2: { z: drawId } }, lutAsphalt,
+        select: (a, b, condition) => condition ? b : a });
+      for (const [name, script] of fragment) fsContext[name] = script.runInContext(fsContext);
+      return fsContext.vMatId;
+    };
     // Interpret matrix-vector multiplication with explicit dimensions. A vec4
     // normal (including its material lane) cannot silently pass as a vec3.
     assert.equal(normal.length, 2, "normal transform must remain one matrix-vector product");
@@ -231,32 +262,42 @@ function wgxVertexTransport() {
     assert.equal(position.format, "float32x3");
     const shadowPos = Array.from({ length: 3 }, (_, c) =>
       bytes.getFloat32(vertex * shadow.arrayStride + position.offset + c * 4, true));
-    return { matId, nrm, shadowPos };
+    return { matId, nrm, shadowPos, resolveMat };
   };
 }
 
 test("WGX vertex transport delivers classified ids and rotates normals independently of normal.w", () => {
   const { pack } = wgxCarPacking(), transport = wgxVertexTransport();
-  const ids = Array.from({ length: 66 }, (_, i) => i + 20).concat([0, 15.4, 16, 19.5, 85.5, 86]);
+  const ids = Array.from({ length: 66 }, (_, i) => i + 20)
+    .concat([0, 1, 6, 8, 9, 10, 11, 15.4, 6.45, 16, 16.999, -1, 17, 19.5, 85.5, 86]);
   const data = carIdMesh(ids), packed = pack(data);
   const identity = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], yaw = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]];
   const base = transport(packed, 0, 21, identity).nrm;
   ids.forEach((id, i) => {
-    const pulled = i < 66 ? 21 : packed.attr[i * 4];
+    const pulled = 4; // Deliberately wrong indexed/LUT pull for every vertex.
     const result = transport(packed, i, pulled, yaw);
-    assert.equal(result.matId, i < 66 ? id : pulled,
-      `vertex ${i}: packed car classification must bypass stuck vertex_index, non-cars retain storage`);
+    if (i < 66) assert.equal(result.matId, id, `car ${id}: existing classification is byte-compatible`);
+    else if (id >= 0 && id < 17) assert.ok(Math.abs(result.matId - data.mat[i]) <= 0.5 / 256,
+      `world ${id}: authored material bypasses wrong storage, including explicit MAT.FLAT`);
+    else assert.equal(result.matId, pulled, `invalid ${id}: unknown material keeps fallback`);
     assert.deepEqual(result.shadowPos, Array.from(data.pos.slice(i * 3, i * 3 + 3)),
       `vertex ${i}: shadow fetch must preserve the authored position`);
     assert.deepEqual(result.nrm, [base[2], base[1], -base[0]],
       `vertex ${i}: material padding must not affect the transformed normal`);
   });
+  const flatIndex = ids.indexOf(0), missing = pack({ ...data, mat: null });
+  assert.equal(transport(packed, flatIndex, 0, identity).resolveMat(4, true), 0,
+    "explicit MAT.FLAT survives fragment fallback even over a road LUT cell");
+  assert.equal(transport(missing, flatIndex, 0, identity).resolveMat(4, false), 4,
+    "missing metadata still uses the draw material");
+  assert.equal(transport(packed, flatIndex, 0, identity).resolveMat(16, true), 16,
+    "road draws retain their existing asphalt LUT classification");
 });
 
 
-test("WGX indexed expansion preserves packed car surface bytes through triangle reordering", () => {
-  const { pack, expand, stride } = wgxCarPacking(), packed = pack(carIdMesh([21, 41, 25]));
-  const indices = Uint16Array.from([2, 1, 0, 0, 1, 2]), order = [2, 0, 1, 0, 2, 1];
+test("WGX indexed expansion preserves packed car/world/fractional surface bytes through triangle reordering", () => {
+  const { pack, expand, stride } = wgxCarPacking(), packed = pack(carIdMesh([21, 41, 25, 0, 9, 15.4]));
+  const indices = Uint16Array.from([5, 4, 3, 2, 1, 0]), order = [5, 3, 4, 2, 0, 1];
   const expanded = expand(packed.vert, packed.attr, indices);
   const source = new Uint8Array(packed.vert.buffer), result = new Uint8Array(expanded.vert.buffer);
   assert.equal(expanded.count, indices.length);

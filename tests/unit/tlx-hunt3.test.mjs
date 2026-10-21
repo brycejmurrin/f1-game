@@ -3,7 +3,7 @@
  * read the GLSL it generated (the hunt-1 codegen-dump method); the rest are source pins on tlx.js / tlx-post.js.
  * A unit test of a backend is not evidence it runs: the follow-up is gfx-probe + gpu-census.yml (macos).
  *   R4  no env cube target / sampler while TLX is opted out of the live env probe
- *   R3  phone MEDIUM: one-attachment scene target, no ssrTag MRT, a distinct fallback in the composite's tag slot
+ *   R3  phone LOW: one-attachment scene target; MEDIUM retains the porous/road SSR receiver tag
  *   R7  dry-day SSR gate on po.reflect (game.js, every backend), behind apex26.ssrDayGate (default OFF)
  *   R9  the particle / rain stream wraps the producer's array instead of copying it per upload
  *   R13 the chunk-cull scratch list keeps its backing store; refuseTab is minted once per renderer
@@ -54,6 +54,61 @@ async function litGLSL(ctxOver = {}, matOpts = { clearcoat: 0.8, carPaint: 1 }) 
   return { src, lit };
 }
 const cubeSamplers = (src) => (src.match(/uniform\s+(?:\w+\s+)?samplerCube\s+\w+/g) || []).length;
+
+test("lit receiver metadata survives translucent/noAlphaWrite overlays without changing their color blend", () => {
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, {
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), ssrTag: true, maxLights: 16,
+  });
+  const rows = [];
+  for (const variant of [{}, { chunked: true }, { instanced: true }]) {
+    const opaque = lit.makeMaterial(variant);
+    const glass = lit.makeMaterial({ ...variant, alpha: 0.4 });
+    const noAW = lit.makeMaterial({ ...variant, noAlphaWrite: true });
+    const glassAgain = lit.makeMaterial({ ...variant, alpha: 0.2, carPaint: 1 });
+    const plainKey = opaque.customProgramCacheKey();
+    lit.setSsrMrt(true);
+    const write = opaque.mrtNode, keep = glass.mrtNode;
+    assert.ok(write && keep);
+    assert.notEqual(opaque.customProgramCacheKey(), plainKey, "arming MRT must fork the single-target program key");
+    assert.notEqual(write, keep, "opaque metadata writes must not inherit the overlay's keep blend");
+    assert.equal(noAW.mrtNode, keep);
+    assert.equal(glassAgain.mrtNode, keep, "one keep node per graph, independent of alpha/car material values");
+    assert.equal(write.get("ssrTag"), keep.get("ssrTag"), "same metadata producer graph");
+    assert.equal(write.get("output"), keep.get("output"), "same real-opacity/color output graph");
+    const blend = keep.getBlendMode("ssrTag");
+    assert.equal(blend.blending, THREE.CustomBlending);
+    assert.equal(blend.blendSrc, THREE.ZeroFactor);
+    assert.equal(blend.blendDst, THREE.OneFactor);
+    assert.equal(blend.blendSrcAlpha, THREE.ZeroFactor);
+    assert.equal(blend.blendDstAlpha, THREE.OneFactor);
+    assert.equal(blend.blendEquation, THREE.AddEquation);
+    assert.equal(blend.blendEquationAlpha, THREE.AddEquation);
+    assert.notEqual(write.getBlendMode("ssrTag"), blend, "opaque path still writes road/porous/car tags");
+    // An attachment-specific keep must not turn the visible overlay into a no-op.
+    assert.equal(glass.blending, THREE.CustomBlending);
+    assert.equal(glass.blendSrc, THREE.SrcAlphaFactor);
+    assert.equal(glass.blendDst, THREE.OneMinusSrcAlphaFactor);
+    assert.equal(glass.userData.tlxAlpha, 0.4);
+    assert.equal(noAW.blendSrc, THREE.OneFactor);
+    assert.equal(noAW.blendDst, THREE.ZeroFactor);
+    assert.equal(opaque.blending, THREE.NoBlending);
+    assert.notEqual(opaque.customProgramCacheKey(), glass.customProgramCacheKey(), "distinct attachment blending keeps builder/pipeline cache variants separate");
+    rows.push({ opaque, glass, write, keep, plainKey });
+  }
+  for (let frame = 0; frame < 20; frame++) {
+    lit.setSsrMrt(false);
+    for (const r of rows) {
+      assert.equal(r.opaque.mrtNode, null, "single-target probe/canvas does not get MRT metadata");
+      assert.equal(r.glass.mrtNode, null);
+      assert.equal(r.opaque.customProgramCacheKey(), r.plainKey);
+    }
+    lit.setSsrMrt(true);
+    for (const r of rows) {
+      assert.equal(r.opaque.mrtNode, r.write);
+      assert.equal(r.glass.mrtNode, r.keep, "repeated frame toggles reuse node identity");
+    }
+  }
+});
 
 test("decal bake reads stay behind the enabled/extent and occupied-tile gates in WGSL and GLSL", () => {
   // Compile the production pool graph with the vendored builders. This checks
@@ -144,8 +199,19 @@ test("R3: ssrTag false builds a one-attachment scene target; the composite keeps
 });
 
 test("R3: tlx.js sets the ssrTag MRT only on a tagged chain (present + warm), and swaps the chain when the rule moves", () => {
-  assert.match(TLX, /function _wantTag\(\) \{[\s\S]{0,400}PerfGov\.userTier\(\)[\s\S]{0,120}return !\(ut >= 2 && \(mobileTier \|\| _tagLessKnob === "1"\)\);/,
-    "the rule: tag-less only at userTier >= 2 on a mobileTier phone (or the desktop A/B knob)");
+  const wantTagSource = fnSource(TLX, "function _wantTag() {");
+  const wantTag = (tier, mobileTier, knob = "") => new Function("PerfGov", "mobileTier", "_tagLessKnob",
+    `${wantTagSource}; return _wantTag();`)({ userTier: () => tier }, mobileTier, knob);
+  for (const mobileTier of [false, true]) {
+    for (const knob of ["", "0", "1"]) {
+      assert.equal(wantTag(2, mobileTier, knob), true, "MEDIUM wet-road SSR needs material eligibility, even with car SSR off");
+    }
+  }
+  assert.equal(wantTag(3, true), false, "LOW phone can omit metadata when road SSR is shed");
+  assert.equal(wantTag(4, true), false);
+  assert.equal(wantTag(3, false), true, "desktop retains its existing haze metadata");
+  assert.equal(wantTag(3, false, "1"), false, "desktop tag-less A/B still works once both SSR paths are shed");
+  assert.equal(wantTag(3, true, "0"), true, "explicit always-tag override is preserved");
   assert.match(TLX, /viz: vizMode, ssrTag: _wantTag\(\),/, "buildPost passes the rule to the chain");
   const at = TLX.indexOf("const _tag = !post.tagOn || post.tagOn();");
   assert.ok(at > 0, "present() reads the chain's tag state");
