@@ -46,7 +46,7 @@ export function loadCar(root = ROOT, smooth = true) {
     if (fs.existsSync(p)) vm.runInContext(fs.readFileSync(p, "utf8"), ctx, { filename: f });
   }
   const grab = (n) => { try { return vm.runInContext(n, ctx); } catch (_) { return null; } };
-  return { Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams") };
+  return { Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams"), CarGeometry: grab("CarGeometry") };
 }
 
 const count = (m) => ({ tris: (m.idx.length / 3) | 0, verts: (m.pos.length / 3) | 0 });
