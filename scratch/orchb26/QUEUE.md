@@ -127,3 +127,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 07:23Z: Pages cd8b4297 GREEN (#3408 live). MERGED #3419 → 4929f6fb (non-game, in cedf3811 gap). Next game #3388 on green cedf3811.
 
 07:28Z: #3238 READY again 60f0e020 (full 56/0). #3377 ddecc85f pushed (811/811 local), full tier running. Game order: #3388 → #3429 → #3422 → #3396 → #3238 → #3377.
+
+07:35Z: #3395 READY 28ad016b (H22 FINAL; F5 parked: needs game.js race-start hook). #3402 READY (O-G, full running). #3431 READY a6557422 (H15 FINAL, full running, no watcher). H15 flagged TLX spec "shipped unset backend boots TLX" failing alone on tip locally → W14 checking CI-red vs local-only. Open render follow-ups: #7 #8 #12 need measurements; GLX flareMaybe glx/post.js:536 same over-keep.
