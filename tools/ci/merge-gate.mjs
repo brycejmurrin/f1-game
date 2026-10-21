@@ -222,7 +222,9 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, deploy = DEP
   cleanup();
   const add = git(["worktree", "add", "--detach", wt, tip], cwd);
   if (add.status !== 0) return { ok: false, evidence: `worktree add failed: ${(add.stderr || "").trim().split("\n")[0]}`, tip, error: true };
-  const m = git(["merge", "--no-commit", "--no-ff", "--quiet", head], wt, { timeout: 300_000 });
+  // An identity of its own: a runner or fresh container has no user.name/user.email, and a merge without one fails
+  // with "Committer identity unknown" even under --no-commit (seen on CI, 2026-10-21). Nothing is committed.
+  const m = git(["-c", "user.name=merge-gate", "-c", "user.email=merge-gate@localhost", "merge", "--no-commit", "--no-ff", "--quiet", head], wt, { timeout: 300_000 });
   if (m.status !== 0) {
     const conflicted = git(["diff", "--name-only", "--diff-filter=U"], wt).stdout.split("\n").filter(Boolean);
     return fail(conflicted.length ? `conflicts with the current tip ${tip.slice(0, 8)}: ${conflicted.slice(0, 6).join(", ")}${conflicted.length > 6 ? ", …" : ""} — sync-pr.mjs first` : `merge onto ${tip.slice(0, 8)} failed: ${(m.stderr || m.stdout || "").trim().split("\n")[0]}`);
