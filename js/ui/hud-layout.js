@@ -156,11 +156,12 @@ const HudLayout = (function () {
     cockpit: { energy: 1, tyre: 1, ot: 1, aero: 1, bb: 1 },
     helmet: { gearbox: 1, energy: 1, tyre: 1, ot: 1, aero: 1, bb: 1 },
   };
-  // BIG and CORNERS are laid out for the desktop row and break a touch phone (hud-survey,
+  // BIG, CORNERS and CLEAN are laid out for the desktop row and break a touch phone (hud-survey,
   // chase, 844x390: CORNERS puts the gearbox at 791..897 past the 844 edge and ENERGY /
   // TYRES over the steer buttons; BIG puts the tower under the CHASE button and the gearbox
-  // over SPEED / ERS). Bryce, 2026-10-21: hide them on touch rather than design phone twins.
-  const TOUCH_UNFIT = Object.freeze({ big: 1, corners: 1 });
+  // over SPEED / ERS). CLEAN's 85-90 % scales leave 10 smaller overlaps there (map x tyre, tower x gap
+  // chips, gearbox x OT / AERO). Bryce, 2026-10-21: hide them on touch rather than design phone twins.
+  const TOUCH_UNFIT = Object.freeze({ big: 1, corners: 1, clean: 1 });
   const presetFits = (pid) => !(touch() && TOUCH_UNFIT[pid]);
   const PRESETS = Object.freeze([
     ["shipped", "SHIPPED", {}],
