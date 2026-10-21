@@ -60,12 +60,12 @@ costs and the GLX `_ensureScratchGl` row in minutes.
 
 Ideas:
 
-- I4. A `race-entry-profile` tool under `tools/perf/` (proposed, not yet written): boot → `race("monza")` → `info().track` under a CDP profile, writing
+- I4. `tools/perf/race-entry-timer.mjs` (landed with #3385: the session's timer, productised) does boot → `race("monza")` → `info().track` under an optional CDP profile; the proposed next step is writing
   `artifacts/perf/race-entry-<sha>.cpuprofile` plus a `summary.json` (self ms by file, top 40 functions,
   `raceEntryStages()`), on the headless project's launch args, with `APEX_PIN=webgl2|three` and `APEX_GL`.
   The `gpu-census.yml` macos leg should take the same profile on Metal, where the SwiftShader-only rows
   (copyExternalImageToTexture, program links) shrink and the real ones (Car3D.build, flap solves) stay.
-- I5. A `cpuprofile-diff` tool under `tools/perf/` (proposed) taking `<base> <head>`: per-function self-time table with deltas, sorted by |delta|,
+- I5. `tools/perf/cpuprofile-summary.mjs` (landed with #3385) prints one profile's self/inclusive tables; the proposed `cpuprofile-diff` taking `<base> <head>`: per-function self-time table with deltas, sorted by |delta|,
   and a per-file roll-up; print the top 15 and write the full table to artifacts. Run it in `ci.yml` on the
   deploy branch (not per PR) against the previous deploy's profile artifact, and post the table into the run
   summary. It would have named `rigWarm` → `warmDraws` at #3221 directly.
