@@ -92,3 +92,5 @@ Non-game: #3391 draft (gen conflict), #3301 draft (Structural guards pending). #
 Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396, #3388. Non-game: #3301, #3420, #3391, #3392.
 
 05:28Z: W13 HANDOFF (~145k) → launched B·W14 session_0144ZhHaiYCj81KpXwWcoeoh (Sonnet): #3238 @38ebaddf (full tier running) + tip red perf-frametime. #3230 already synced by W13 → 62bdd71e (full tier running); B·H24 watches → READY. #3388 H20 pushed 8441ed54 (fast tier). H15: #3396 clear of createTextureArray.
+
+05:38Z: MERGED #3301 → c0cf1bb8 (non-game). O-T done. #3422 H19 pack-bytes (game, draft). #3377 H19 syncing. Pages 50cc71dd still running (several workflow_dispatch runs on it).
