@@ -26,7 +26,7 @@ Plan closed, memory marker), ci (the required `CI` check-run success on the
 head), gen (the head merged onto the CURRENT deploy tip in a throw-away
 worktree, `npm run gen:check` 0 — a peer may have merged a minute ago), and
 for game PRs pacing (below). `github-mcp-guard.sh` and the `gh` door refuse
-`merge_pull_request` / `enable_pr_auto_merge` without a receipt under 30 min
+`merge_pull_request` / `enable_pr_auto_merge` without a receipt under 10 min
 old whose head is the call's `expectedHeadSha`; `update_pull_request draft:false`
 needs the `ready-gate --pr` receipt the same way. A refusal names the row.
 
