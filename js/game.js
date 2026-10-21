@@ -4262,7 +4262,9 @@ function quitToMenu() {
   if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
   if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
   if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();   // the auto-cut state is the race's, not the menu's
-  if (qualiField) { cars = qualiField; qualiField = null; }   // a mid-quali quit: the 1-car trim is not the menu's field
+  // A mid-quali quit: the 1-car trim is not the menu's field. A takeover is keyed by the TRIM's index, so it is
+  // handed back before the swap; after it, index 0 named the full field's first car (perf-debug-e5b2).
+  if (qualiField) { try { IncidentSim.reset(); } catch (_) { /* module absent */ } cars = qualiField; qualiField = null; }
   const forgetGp = !isChampionship() && !!season && season.qualiMode === "gp";   // read before setFlow: a one-off weekend ends here (RACE AGAIN never passes)
   stormFx._ltBase = null; stormFx._ltFlash = 0;   // the lightning's saved race base is not the menu's
   mirrorPass.cancelPreparation();
@@ -4303,7 +4305,9 @@ function quitToMenu() {
   GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
-  Particles.rainShow(false);
+  // The menu render returns before Particles.update and Droplets.tick: the lens canvas stayed painted over the
+  // title and the pool's smoke/sparks drew at the old circuit's coordinates in the next flyby (perf-debug-e5b2).
+  Particles.rainShow(false); Particles.clear(); Droplets.clear();
   // (#soundbtn returns with #overlay above — no write needed.)
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
