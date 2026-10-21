@@ -233,6 +233,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `post-fx-opts.js` | `PostFxOpts` | tag | PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent player settings (GRAPHICS). |
+| `low-mem-opts.js` | `LowMemOpts` | tag | LowMemOpts: GRAPHICS › LOW-MEMORY MODE (experimental, default OFF; Bryce 2026-10-21). |
 | `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |

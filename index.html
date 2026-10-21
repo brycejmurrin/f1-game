@@ -997,6 +997,15 @@
                 </div>
               </div>
               <p class="adv-help">Experimental. Builds the circuit on a second thread while the loading screen plays, so fewer frames stall. Takes effect on the next circuit you load.</p>
+              <div id="pm-lowmem" class="set-row" role="group" aria-labelledby="pm-lowmem-label">
+                <span class="tune-label" id="pm-lowmem-label">LOW-MEMORY MODE</span>
+                <div>
+                  <button id="pm-lowmem-prev" type="button" data-step="-1" aria-label="Previous low-memory setting">&lsaquo;</button>
+                  <select id="pm-lowmem-sel" aria-labelledby="pm-lowmem-label"></select>
+                  <button id="pm-lowmem-next" type="button" data-step="1" aria-label="Next low-memory setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Experimental, THREE.JS renderer only. Frees the copies of the circuit kept in memory once they are on the GPU, about 50 MB, so a phone is less likely to reload the page. Takes effect after a reload. If the road or a car goes missing, turn it OFF.</p>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
               <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to ULTRA. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
@@ -3818,6 +3827,7 @@
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/post-fx-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/low-mem-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/soak-run.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/gpu-test-run.js?v=dev"></script>

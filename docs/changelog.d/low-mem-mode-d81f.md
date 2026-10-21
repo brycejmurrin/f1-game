@@ -1,0 +1,1 @@
+New: SETTINGS › GRAPHICS › LOW-MEMORY MODE (experimental, off by default). On the three.js renderer it frees the copies of the circuit kept in memory once they are on the GPU, about 50 MB, so a phone is less likely to reload the page. It takes effect after a reload; if the road or a car goes missing, turn it off.

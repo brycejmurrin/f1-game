@@ -3238,8 +3238,9 @@ test("B·H26-R3: LOW-MEMORY MODE (apex26.tlxLowMem) is the one player opt-in for
   // Bryce 2026-10-21: an experimental SETTINGS toggle, phones included. It must open all three refusals the A/B knobs
   // open (chunk release past the env gate, the static sweep, the sweep's mobile refusal) and nothing when unset.
   const src = read("js/render/three/tlx.js");
-  assert.match(src, /const _lowMemOptIn = \(function \(\) \{\s*try \{ return localStorage\.getItem\("apex26\.tlxLowMem"\) === "1"; \} catch \(_\) \{ return false; \}/,
-    "read once, \"1\" only, storage failure = off");
+  assert.match(src, /const _lowMemOptIn = \(function \(\) \{\s*if \(typeof LowMemOpts !== "undefined"\) return LowMemOpts\.enabled\(\);[^\n]*\n\s*try \{ return localStorage\.getItem\("apex26\.tlxLowMem"\) === "1"; \} catch \(_\) \{ return false; \}/,
+    "read once from the SETTINGS row (storage fallback for harnesses), \"1\" only, storage failure = off");
+  assert.match(read("js/ui/low-mem-opts.js"), /on = store\.raw\(KEY\) === "1"/, "the row is off unless the player wrote \"1\"");
   assert.match(src, /const _chunkRelOptIn = _lowMemOptIn \|\|/, "it opens the chunk release");
   assert.match(src, /_mirrorSweepOptIn = _lowMemOptIn \|\| localStorage\.getItem\("apex26\.tlxMirrorSweep"\) === "1"/, "and the static sweep");
   const sw = src.indexOf("function sweepGeoMirrors(");

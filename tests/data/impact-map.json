@@ -15504,6 +15504,11 @@
         "tests/unit/loading-screen-pack-gate.test.mjs"
       ]
     },
+    "js/ui/low-mem-opts.js": {
+      "*": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ]
+    },
     "js/ui/menu-nav.js": {
       "activeLayer": [
         "tests/specs/menu-keyboard.spec.js",

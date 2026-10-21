@@ -408,6 +408,7 @@ const FULL = [
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/ui/post-fx-opts.js",   // PostFxOpts: GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS (game.js reads them per frame)
+  "js/ui/low-mem-opts.js",   // LowMemOpts: GRAPHICS › LOW-MEMORY MODE (apex26.tlxLowMem; tlx.js reads it at create)
   "js/perf/metrics-overlay.js",
   "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated; before game.js binds it)
   "js/perf/gpu-test-run.js",   // GpuTestRun: PHONE TEST > GPU TEST, one-tap phase run over SoakRun (scale sweep, mirror off, GPU timer, link counts)
@@ -699,6 +700,7 @@ const HARD_EDGES = [
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
   ["js/core/store.js", "js/ui/post-fx-opts.js"],   // binds GameStore.store at eval
+  ["js/core/store.js", "js/ui/low-mem-opts.js"],   // binds GameStore.store at eval
   ["js/core/i18n-pseudo.js", "js/core/i18n.js"],
   ["js/core/store.js", "js/core/i18n.js"],
   ["js/core/i18n.js", "js/core/dom-apply.js"],

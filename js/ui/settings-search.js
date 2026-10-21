@@ -55,6 +55,7 @@ const SettingsSearch = (function () {
     ["ssao", "Ambient occlusion", "graphics", "pm-ssao-sel", "ssao ao contact shadows performance"],
     ["godrays", "God-rays", "graphics", "pm-godrays-sel", "sun shafts volumetric light beams performance"],
     ["background-build", "Background build", "graphics", "pm-buildworker-sel", "worker loading performance"],
+    ["low-memory", "Low-memory mode", "graphics", "pm-lowmem-sel", "memory ram crash reload experimental performance"],
     ["renderer", "Renderer backend", "graphics", "pm-renderer", "webgl webgpu graphics troubleshooting"],
     ["lighting-tuner", "Lighting tuner", "visual", "pm-lighting", "sun shadows exposure visual studio"],
     ["camera-tuner", "Camera tuner", "visual", "pm-camtune", "framing field view fov visual studio"],

@@ -3862,7 +3862,8 @@ const TLX = (function () {
       // handset can test what the gates below refuse by default; its help line says to turn it off if the road
       // or car goes missing. Read once at create, so it applies from the next load.
       const _lowMemOptIn = (function () {
-        try { return localStorage.getItem("apex26.tlxLowMem") === "1"; } catch (_) { return false; }
+        if (typeof LowMemOpts !== "undefined") return LowMemOpts.enabled();   // the SETTINGS row (js/ui/low-mem-opts.js)
+        try { return localStorage.getItem("apex26.tlxLowMem") === "1"; } catch (_) { return false; }   // harnesses without the UI
       })();
       const _chunkRelOptIn = _lowMemOptIn || (function () {
         try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
