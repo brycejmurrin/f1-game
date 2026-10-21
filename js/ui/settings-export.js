@@ -353,8 +353,9 @@ function collect(mode, G) {
     // the file elsewhere keeps THAT device's default instead of pinning ours.
     let value = has ? stored : (all && row.perDevice ? null : def);
     if (diff && isObj(stored) && isObj(def) && Object.keys(def).length) {
-      value = objDiff(stored, def);
-      if (!Object.keys(value).length) diff = false;
+      const d = objDiff(stored, def);
+      if (!Object.keys(d).length) diff = false;
+      if (!all) value = d;   // CHANGES carries the moved fields; ALL the whole effective value (B·H11 hunt)
     }
     if (!diff && !all) continue;
     (settings[row.group] ||= {})[row.k] = value;
