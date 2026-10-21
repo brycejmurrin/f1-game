@@ -336,7 +336,7 @@ jobs:
   guards-a:
     name: Structural guards (tooling A)
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18   # 12 cancelled this job at load 6+ with every file passing (2026-10-21); the shards are balanced since #3389
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
@@ -423,7 +423,7 @@ jobs:
   guards-b:
     name: Structural guards (tooling B)
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18   # same budget as tooling A
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
