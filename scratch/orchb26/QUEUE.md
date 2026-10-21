@@ -186,3 +186,4 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 17:40Z: Hold lines removed on #3423 #3430 #3421 #3407 (byte-checked). O-A waits on Bryce answering in its own session (relay denied by classifier).
 
 18:05Z: MERGED #3428 → e385daa0 (GAME, O-B). Next game on green Pages e385daa0. O-B now on #3432 (VF6 in field-lod.test.mjs).
+18:28Z: #3424 conflict in wgsl-post.js vs d511a132 (same early-reject landed on tip) → OK: keep tip structure, re-apply #3424-only pieces (fade, masks, LOW reach, dead reads). #3432 ready, full tier running (O-B).
