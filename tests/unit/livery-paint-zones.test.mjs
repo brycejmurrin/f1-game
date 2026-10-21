@@ -328,7 +328,7 @@ function loadCustomLiveries(identity) {
     },
   };
   vm.createContext(sb);
-  vm.runInContext(read("js/car/custom-liveries.js") + "\n;globalThis.CustomLiveries = CustomLiveries;", sb);
+  vm.runInContext(read("js/car/custom-liveries.js") + "\n;globalThis.CustomLiveries = CustomLiveries;", sb, { filename: absSrc("js/car/custom-liveries.js") });
   const store = { rev: 0, get: (k, f) => f, set: () => true };
   return sb.CustomLiveries.create({ store });
 }
