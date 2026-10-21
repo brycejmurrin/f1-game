@@ -2595,8 +2595,8 @@ const LiveryTex = (function () {
   // the first paint lands in an offscreen canvas and later ones blit it. Cached only
   // once web fonts are in (a lockup painted in the fallback face must not stick);
   // a logo install or removal (markChanged) drops every card.
-  const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160, _swatchStats = { paints: 0, blits: 0 };
-  markReady.push(() => _swatchCache.clear());
+  const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160, _swatchStats = { paints: 0, blits: 0, reused: 0 };
+  markReady.push(() => { _swatchCache.clear(); _cardCanvas.clear(); });
   function paintSwatch(ctx, teamId, liv, w, h) {
     const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
     if (!fontsIn || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
@@ -2612,8 +2612,34 @@ const LiveryTex = (function () {
     }
     ctx.drawImage(c, 0, 0); _swatchStats.blits++;
   }
-  // Counters for tests/specs/garage-pick-cost.spec.js (a pick must blit, not repaint, its cards).
-  function swatchStats() { return { paints: _swatchStats.paints, blits: _swatchStats.blits, cached: _swatchCache.size }; }
+  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick still made 113 new canvases, each with
+  // a getContext and a drawImage: ~74 ms of a phone-throttled pick (CPU x4, B·H32 2026-10-21).
+  // swatchCanvas hands back the painted canvas a card used last build, for the new card to adopt
+  // (appendChild moves it out of the discarded sheet). `build` names the sheet build: a second card
+  // with the same look in one build gets a fresh canvas instead of stealing the first one's.
+  // Kept only once fonts are in, and dropped with the swatch cache on markChanged.
+  const _cardCanvas = new Map();
+  function swatchCanvas(teamId, liv, w, h, build) {
+    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
+    const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
+    let c = fontsIn ? _cardCanvas.get(key) : null;
+    if (c && c.__swatchBuild !== build) {
+      c.__swatchBuild = build; _swatchStats.reused++;
+      _cardCanvas.delete(key); _cardCanvas.set(key, c);   // most recent last: the trim below drops the oldest
+      return c;
+    }
+    c = document.createElement("canvas"); c.width = w; c.height = h;
+    const cx = c.getContext && c.getContext("2d");
+    if (cx) paintSwatch(cx, teamId, liv, w, h);
+    c.__swatchBuild = build;
+    if (fontsIn && cx && !_cardCanvas.has(key)) {
+      if (_cardCanvas.size >= SWATCH_CACHE_MAX) _cardCanvas.delete(_cardCanvas.keys().next().value);
+      _cardCanvas.set(key, c);
+    }
+    return c;
+  }
+  // Counters for tests/specs/garage-pick-cost.spec.js (a pick must reuse or blit, not repaint, its cards).
+  function swatchStats() { return { paints: _swatchStats.paints, blits: _swatchStats.blits, reused: _swatchStats.reused, cached: _swatchCache.size, cards: _cardCanvas.size }; }
   function paintSwatchNow(ctx, teamId, liv, w, h) {
     const c1 = (liv && liv.c1) || [0.20, 0.20, 0.22];
     const c2 = (liv && liv.c2) || c1;
@@ -2638,7 +2664,7 @@ const LiveryTex = (function () {
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
   return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
-           MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchStats,
+           MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchCanvas, swatchStats,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
