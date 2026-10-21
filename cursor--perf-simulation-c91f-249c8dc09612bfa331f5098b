@@ -1,1 +1,0 @@
-1792559084	Bryce Murrin	C·simulation perf-investigation-c91f: confirmed WheelState lateral-scale omission in low-speed substeps; js/physics/player-forces.js tests/unit/player-forces.test.mjs only  [cursor/perf-simulation-c91f; session 249c8dc09612bfa331f5098b]
