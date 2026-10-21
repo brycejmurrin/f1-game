@@ -5,8 +5,7 @@
 // count rather than by time (SwiftShader timings are noise here): the cards blit (LiveryTex.swatchStats),
 // and the car, atlas and texture work stays inside a fixed ceiling, so a regression that rebuilds the car
 // or the atlas twice, or repaints every card again, fails by name.
-import { sharedTest as test, expect } from "../helpers/fixtures.js";
-import { toMenu } from "../helpers/shared-page.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const PICKS = 4;
 // Measured on this branch (one pick = one card click, garage open, LIVERY tab): see the PR body.
@@ -17,13 +16,20 @@ test.describe("garage livery pick cost", () => {
 
   test("a livery pick blits its cards and keeps car / atlas / texture work under a ceiling", async ({ page }) => {
     test.setTimeout(240_000);
-    await toMenu(page);
-    await page.evaluate(() => document.getElementById("mb-garage").click());
-    await page.waitForFunction(() => { const el = document.getElementById("carsetup"); return el && !el.hidden; },
-      null, { polling: 100, timeout: 90_000 });
-    await page.evaluate(() => document.getElementById("cs-tab-livery").click());
-    await page.waitForFunction(() => document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)").length > PICKS + 1,
-      null, { polling: 100, timeout: 30_000 });
+    // Same entry as garage-livery-churn.spec.js: the shipped TLX backend (window.renderer is behind
+    // ?three-devtools=1), START, then CAR from the select screen.
+    await page.addInitScript(() => {
+      try { localStorage.setItem("apex26.gfxBackend", "three"); localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}
+    });
+    await page.goto("/?three-devtools=1");
+    await page.waitForFunction(() => window.__apex != null && typeof Teams !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.locator("#mb-race").click();
+    await page.locator("#select").waitFor({ state: "visible" });
+    await page.locator("#sel-car").click();
+    await page.locator("#carsetup").waitFor({ state: "visible", timeout: 90_000 });
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.waitForFunction((n) => document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)").length > n + 1,
+      PICKS, { polling: 100, timeout: 30_000 });
     // Count through the shared globals every pick path calls at call time (Car3D / LiveryTex are not
     // frozen), and the GPU textures three actually allocates when TLX is the backend.
     await page.evaluate(() => {
