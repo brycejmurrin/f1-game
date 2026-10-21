@@ -8,8 +8,9 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const PICKS = 4;
-// Measured on this branch (one pick = one card click, garage open, LIVERY tab): see the PR body.
-const CEIL = Object.freeze({ cardPaints: 2, car3dBuilds: 4, atlases: 4, textures: 8 });
+// Measured on this branch (TLX, 844x390 touch, 4 picks, 2026-10-21): every pick 0 card repaints + 113 blits,
+// 1 Car3D.build, 2 LiveryTex.buildAtlas, 1 GPU texture. The ceilings ARE those counts: one more is a regression.
+const CEIL = Object.freeze({ cardPaints: 0, car3dBuilds: 1, atlases: 2, textures: 1 });
 
 test.describe("garage livery pick cost", () => {
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -53,11 +54,11 @@ test.describe("garage livery pick cost", () => {
         textures: after.textures - before.textures });
     }
     test.info().annotations.push({ type: "pick-cost", description: JSON.stringify(rows) });
-    // Pick 1 may meet cards (new liveries' tags) for the first time; from pick 2 the sheet is known.
+    console.log("pick-cost " + JSON.stringify(rows));   // the measured counts behind CEIL, in the run log
     for (const [i, r] of rows.entries()) {
       expect(r.cardBlits, `pick ${i + 1}: the cards are drawn from the cache`).toBeGreaterThan(0);
-      if (i > 0) expect(r.cardPaints, `pick ${i + 1}: cards repainted ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.cardPaints);
-      expect(r.car3dBuilds, `pick ${i + 1}: meshes created ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.car3dBuilds);
+      expect(r.cardPaints, `pick ${i + 1}: cards repainted ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.cardPaints);
+      expect(r.car3dBuilds, `pick ${i + 1}: Car3D builds ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.car3dBuilds);
       expect(r.atlases, `pick ${i + 1}: atlases built ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.atlases);
       expect(r.textures, `pick ${i + 1}: textures created ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.textures);
     }
