@@ -87,8 +87,8 @@ test("OK_REL and FRESH_MS match bash-guard's shared verdict cache (#2889)", () =
   assert.equal(OK_REL, "artifacts/pre-commit-guards.ok");
   assert.equal(FRESH_MS, 10 * 60 * 1000);
   const bash = fs.readFileSync(path.join(ROOT, ".claude/hooks/bash-guard.sh"), "utf8");
-  assert.match(bash, /guards-verdict\.mjs check/);
-  assert.match(bash, /apex\.guardTimeout/);
+  assert.ok(/guards-verdict\.mjs check/.test(bash));
+  assert.ok(/apex\.guardTimeout/.test(bash));
 });
 
 test("check hits a fresh green write-tree and misses after re-stage", () => {
@@ -280,7 +280,7 @@ esac
     });
     assert.equal(r.status, 1, r.stderr + r.stdout);
     assert.match(r.stderr, /did not finish within 1s/);
-    assert.match(r.stderr, /apex\.guardTimeout/);
+    assert.ok(/apex\.guardTimeout/.test(r.stderr));
   } finally {
     repo.rm();
   }
@@ -350,14 +350,14 @@ esac
 
     let r = commit({ APEX_FIXTURE_CACHE_HIT: "1" });
     assert.equal(r.status, 0, r.stderr + r.stdout);
-    assert.match(r.stderr, /guards: cache hit/);
+    assert.ok(/guards: cache hit/.test(r.stderr));
     assert.equal(fs.existsSync(path.join(repo.dir, "npm-calls.log")), false);
 
     repo.g("config", "apex.guardTimeout", "1");
     r = commit({ APEX_FIXTURE_CACHE_HIT: "0" });
     assert.equal(r.status, 2, r.stderr + r.stdout);
-    assert.match(r.stderr, /npm run test:guards did not finish within 1 s/);
-    assert.match(r.stderr, /apex\.guardTimeout/);
+    assert.ok(/npm run test:guards did not finish within 1 s/.test(r.stderr));
+    assert.ok(/apex\.guardTimeout/.test(r.stderr));
   } finally {
     repo.rm();
   }
@@ -367,16 +367,16 @@ test("shipped pre-commit still early-exits on APEX_SKIP_GUARDS and CLAUDECODE", 
   const src = fs.readFileSync(HOOK, "utf8");
   assert.match(src, /APEX_SKIP_GUARDS/);
   assert.match(src, /CLAUDECODE/);
-  assert.match(src, /guards-verdict\.mjs check/);
-  assert.match(src, /apex\.guardTimeout/);
-  assert.match(src, /timeout -k 5/);
+  assert.ok(/guards-verdict\.mjs check/.test(src));
+  assert.ok(/apex\.guardTimeout/.test(src));
+  assert.ok(/timeout -k 5/.test(src));
 });
 
 test("shipped bash-guard shares guards-verdict check and apex.guardTimeout with pre-commit", () => {
   const src = fs.readFileSync(path.join(ROOT, ".claude/hooks/bash-guard.sh"), "utf8");
-  assert.match(src, /guards-verdict\.mjs check/);
-  assert.match(src, /apex\.guardTimeout/);
-  assert.match(src, /timeout -k 5/);
+  assert.ok(/guards-verdict\.mjs check/.test(src));
+  assert.ok(/apex\.guardTimeout/.test(src));
+  assert.ok(/timeout -k 5/.test(src));
 });
 
 
