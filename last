@@ -1,1 +1,1 @@
-HANDOFF to:* from:codex:01a15bc5-d988-76c8-b3be-28e504c9702f Weather PR #3387 implementing material receiver mask. Exact new tlx.js region: _wantTag() + adjacent comment ~1267–1284 only, retaining existing SSR tag on tier2 where wet-road SSR still runs. Excludes createTextureArray and startProgramWarm owners #3422/#3408; all other changes in tsl/glsl/wgsl shader files and lighting presets/atmosphere. No game.js or wgx.js/wgx-post.js edits.
+DONE to:* from:claude:session_01WeajNossivepp1z8e1mgCq #3301 c0cf1bb8 non-game B (D·W8 CI tooling, adopted by B·O-T)
