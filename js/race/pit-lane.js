@@ -2041,7 +2041,9 @@ var PitLane = (function () {
       };
     }
 
-    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
+    // Race teardown: the zone cache keys on the track object, and kept the last race's track until the next z().
+    function releaseTrack() { zone = null; zoneFor = null; }
+    return { zoneOf: () => z(), releaseTrack, limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
              arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think, stepBegin, stepEnd,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
