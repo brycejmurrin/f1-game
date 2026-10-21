@@ -166,7 +166,12 @@ var CrowdAudio = (function () {
     aim(bedGain.gain, 0, at, 0.08);
     if (cheers) {
       for (let i = 0; i < cheers.length; i++) {
-        aim(cheers[i].g.gain, 0, at, 0.05);
+        // A cheer's own exponential ramp is still pending and REPLACES a later setTarget (Web Audio §SetTarget
+        // then ramp: measured louder, not quieter, in Chromium). Cut the envelope where it stands first.
+        const g = cheers[i].g.gain;
+        if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(at); else if (g.cancelScheduledValues) g.cancelScheduledValues(at);
+        g._apexCrowdTgt = undefined;
+        aim(g, 0, at, 0.05);
         cheers[i].freeAt = at;
       }
     }
@@ -268,9 +273,6 @@ var CrowdAudio = (function () {
     g.setValueAtTime(EMPTY, t0);
     g.linearRampToValueAtTime(pk, t0 + 0.04);
     g.exponentialRampToValueAtTime(EMPTY, t0 + d);
-    // The envelope replaced aim()'s last target: forget it, or the next silence() dedupes against a stale 0
-    // and the cheer plays on under pause / SFX OFF / the flag (perf-debug-e5b2).
-    g._apexCrowdTgt = undefined;
     if (v.filt.frequency) {
       const f0 = 1100 + (t0 * 97) % 900;
       v.filt.frequency.setValueAtTime(f0, t0);

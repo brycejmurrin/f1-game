@@ -27,6 +27,7 @@ function param(v) {
     linearRampToValueAtTime(x) { p.value = x; p.ramped = true; },
     exponentialRampToValueAtTime(x) { p.value = x; },
     cancelScheduledValues() {},
+    cancelAndHoldAtTime(at) { p.holds = (p.holds || 0) + 1; p.heldAt = at; },
   };
   return p;
 }
@@ -234,7 +235,7 @@ test("setGridIdle and stopEngine silence the bed", () => {
   assert.equal(CrowdAudio.inspect().bed, 0, "stopEngine silences");
 });
 
-test("silence() quiets a cheer fired after an earlier silence (no stale dedupe)", () => {
+test("silence() cuts a sounding cheer's envelope, then aims it at 0 (also after an earlier silence)", () => {
   const { CrowdAudio, GameAudio, ctx, nodes } = boot();
   ctx.currentTime = 10;
   CrowdAudio.silence();   // every cheer gain aimed at 0 once
@@ -243,8 +244,11 @@ test("silence() quiets a cheer fired after an earlier silence (no stale dedupe)"
   assert.equal(CrowdAudio.fireCheer(0.05, 1), true, "cheer fires in a live race");
   const cheer = nodes.map((n) => n.gain).find((g) => g && g.ramped);
   assert.ok(cheer, "the fired cheer's gain ran its envelope");
-  const before = cheer.targets.length;
+  const before = cheer.targets.length, holds = cheer.holds || 0;
   GameAudio.stopEngine();   // the pause / quit / flag path
-  assert.equal(cheer.targets.length, before + 1, "the sounding cheer is aimed at silence again");
+  // A pending exponential ramp replaces a later setTarget (measured in Chromium): the envelope is cut first.
+  assert.equal(cheer.holds, holds + 1, "the cheer's own envelope is cancelled where it stands");
+  assert.equal(cheer.heldAt, ctx.currentTime);
+  assert.equal(cheer.targets.length, before + 1, "then the sounding cheer is aimed at silence");
   assert.equal(cheer.targets[cheer.targets.length - 1], 0);
 });

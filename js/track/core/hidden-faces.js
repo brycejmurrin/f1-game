@@ -591,9 +591,10 @@ const TrackHiddenFaces = (function () {
       }
       geo[key] = out;
     }
-    // A typed idx is this build's own (keptIndices' output or the sealed accumulator view): remap it in
-    // place instead of holding a second same-size copy at the peak (monza 3.5 MB, vegas 5.7 MB).
-    const ni = Array.isArray(idx) ? new Array(N) : idx;
+    // keptIndices' exact-size output is this build's own: remap it in place instead of holding a second
+    // same-size copy at the peak (monza 2 MB). A sealed accumulator VIEW still gets an exact copy, which
+    // lets its spare capacity go.
+    const ni = Array.isArray(idx) ? new Array(N) : idx.byteLength === idx.buffer.byteLength ? idx : new idx.constructor(N);
     for (let i = 0; i < N; i++) ni[i] = before[idx[i]];
     geo.idx = ni;
     // appendBuffer's provenance blocks: a block's surviving vertices stay
