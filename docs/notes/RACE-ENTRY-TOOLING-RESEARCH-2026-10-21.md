@@ -122,9 +122,10 @@ Two read-only subagents (prior-art-scout, code-hunter on the race-entry slice) a
 produced these; they are listed so nobody re-finds them. OrchB 24 routes F1 to H8's warm lane and the rest to a
 follow-up PR after #3385.
 
-- F1. A race-entry program warm never records into `_warmed`/`_warmKey` (`RaceEntryProfile.requestWarm` calls
-  `gfx.warm()`; only `warmPrograms()` writes the bookkeeping), so quali → grid, a pm-restart and NEXT RACE re-warm
-  the same world; `js/game.js` already measured a repeat TLX warm at 7.5 s SwiftShader that links nothing.
+- F1. REFUTED for the common paths by B·H8's verifier (2026-10-21, H8's boot-load tooling research note on PR
+  #3386): `startRaceBody` passes `_warmKey === menuKey(trackIdx)` to `requestWarm`, which skips `gfx.warm()` on
+  a match, so a restart, quali → grid and a retry do not re-warm; NEXT RACE is a new world. The residue is Daily,
+  lobby and agent starts that bypass `menuFinish` and never write the key; parked by OrchB 24.
 - F6. `startRace()` from Daily, Data Hub or season-continue does not stand the menu build down (introBuild does:
   `clearTimeout(flybyBuildTimer); _menuGate.generation++`), so the menu's timer can abandon the race's build and
   `startRaceBody` bounces to the title. Plausible; needs a VM repro first.
