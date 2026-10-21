@@ -431,10 +431,10 @@ test("a stage timeout stops the stage with SIGTERM, so a runner that leads its o
 const gc = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
 fs.writeFileSync(${JSON.stringify(pidFile)}, String(gc.pid));
 process.on("SIGTERM", () => {
-  // Reap our child before exiting: containers with a non-reaping PID 1 keep
-  // an adopted zombie visible to kill(pid, 0), even after its work has stopped.
-  gc.once("close", () => process.exit(143));
-  try { process.kill(-gc.pid, "SIGKILL"); } catch (_) {}
+  // Reap before exiting: PID 1 in a container may not reap an adopted zombie.
+  // https://nodejs.org/api/child_process.html#event-exit
+  gc.once("exit", () => process.exit(143));
+  try { process.kill(-gc.pid, "SIGKILL"); } catch (_) { process.exit(143); }
 });
 setInterval(() => {}, 1000);`);
   let gcPid = 0;

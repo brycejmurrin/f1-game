@@ -45,7 +45,9 @@ const WGXPost = (function () {
         }
         // SSR — reads scene colour + depth (depth via a NON-filtering sampler);
         // explicit layout like SSAO. Output rgba16float reflection buffer.
-        {
+        // Phone/WebKit never allocates an SSR target or runs its pass. Avoid
+        // compiling this unused shader and pipeline on that permanent tier.
+        if (!core.WGX_LITE) {
           const ssrG0 = core.device.createBindGroupLayout({ entries: [
             { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
             { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
@@ -122,7 +124,7 @@ const WGXPost = (function () {
         makeBuffer("godrayUBO", core.Post.GODRAY_UNIFORM_BYTES);
         makeBuffer("compositeUBO", core.Post.COMPOSITE_UNIFORM_BYTES);
         makeBuffer("fxaaUBO", core.Post.FXAA_UNIFORM_BYTES);
-        makeBuffer("ssrUBO", core.Post.SSR_UNIFORM_BYTES);
+        if (!core.WGX_LITE) makeBuffer("ssrUBO", core.Post.SSR_UNIFORM_BYTES);
         Object.assign(core, buffers);
       } catch (e) {
         for (const buffer of Object.values(buffers)) { try { buffer.destroy(); } catch (_) { /* continue rollback */ } }

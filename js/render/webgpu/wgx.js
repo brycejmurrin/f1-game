@@ -1732,7 +1732,7 @@ const WGX = (function () {
       get presentFormat() { return _presentFormat; },
       get Post() { return _Post; },
       POST_HDR_FORMAT, SCENE_FORMAT, SSAO_FORMAT, LDR_FORMAT,
-      WGX_MINIMAL,
+      WGX_MINIMAL, WGX_LITE,
       get UCD() { return _UCD; },
       get ADD_BLEND() { return ADD_BLEND; },
       get fsPipe() { return fsPipe; },
