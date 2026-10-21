@@ -383,7 +383,8 @@ function csLabel(text) {
 // (apex26.garageLook / crewLook / garageMood); a row whose module is absent is
 // skipped. Crew and mood tables are bare ids, so their names live here.
 const CREW_NAMES = { classic: "CLASSIC", sculpted: "SCULPTED", pitstop: "PIT STOP", workshop: "WORKSHOP", welcome: "WELCOME" };
-const MOOD_NAMES = { shipped: "STANDARD", broadcast: "BROADCAST", night: "NIGHT", showroom: "SHOWROOM", daylight: "DAYLIGHT" };
+const MOOD_NAMES = { shipped: "STANDARD", broadcast: "BROADCAST", night: "NIGHT", showroom: "SHOWROOM", daylight: "DAYLIGHT",
+  inspection: "INSPECTION", goldenhour: "GOLDEN HOUR", endurance: "ENDURANCE" };
 function lookRowSpecs() {
   const out = [];
   if (typeof GaragePrims !== "undefined" && GaragePrims.LOOK_IDS)

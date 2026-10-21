@@ -1,0 +1,1 @@
+Improved: the first tap on the title (RACE, GARAGE…) no longer lands in the garage pre-build: the car for the garage is now built only after a few seconds of no input on the title, instead of right after the buttons appear.

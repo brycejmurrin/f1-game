@@ -285,9 +285,9 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
  * gate on the merged tree and the tip sat red. `selected-verdict` has one
  * fixed name, runs whatever `selected` did, and reads the pair the way
  * poke-train did. Pinned so it cannot quietly stop covering a case. */
-test("the two CI guard shards stop starting files after their first failure (--bail)", () => {
+test("the CI guard shards stop starting files after their first failure (--bail)", () => {
   const parsed = parseYAML(ciWorkflow).jobs;
-  for (const [id, shard] of [["guards-a", "1/2"], ["guards-b", "2/2"]]) {
+  for (const [id, shard] of [["guards-a", "1/3"], ["guards-b", "2/3"], ["guards-c", "3/3"]]) {
     const step = parsed[id].steps.find((st) => /tooling-fast\.mjs/.test(st.run || ""));
     assert.ok(step, `${id} runs tooling-fast`);
     assert.match(step.run, new RegExp(`--shard=${shard.replace("/", "\\/")} --bail$`),

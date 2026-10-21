@@ -1,0 +1,1 @@
+New: Choose Garage Crew, Guide Crew, Welcome Crew or No Crew independently for garage entry and departure in the Enter & Leave tuner, with working Preview In/Out controls. Service crews switch to guides while the car moves so tools and cockpit workers stay out of its path.

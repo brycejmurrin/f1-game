@@ -1,0 +1,1 @@
+New: Service Crew for garage entry and departure. A front-jack operator rolls equipment into place after parking, and four mechanics carry and fit tyre covers. Departure removes the covers and rolls the jack clear before the car moves. Articulated workers share cached livery-coloured meshes and respect the preview stop controls.

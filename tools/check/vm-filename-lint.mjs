@@ -12,6 +12,10 @@
 // any call (`absSrc(f)`, `path.join(ROOT, f)`, `fileURLToPath(…)`) or an expression that mentions `ROOT`.
 // Informational (`missing`): a load with no `filename` at all; reported, not failed (a source string built at run time
 // has no single file to name; the R1 preload hashes those back to js/).
+// Ratcheted (`missing` with `src`): a filename-less load whose code is not a fixed snippet (a literal or a plain
+// template) — a source text read from a file, which V8 coverage then cannot attribute. SRC_CEILING is the count; it
+// only goes down: above it fails; below it prints the lower value (not a failure, so a PR that removes loads never
+// reddens another's run) (B·H11, PR #3388).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,6 +23,8 @@ import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const SCAN_DIRS = ["tests/unit", "tests/helpers"];
+
+export const SRC_CEILING = 599;
 
 // method -> index of the options argument
 const OPTS_AT = { runInContext: 2, runInNewContext: 2, runInThisContext: 1 };
@@ -82,7 +88,9 @@ export function lintSource(src, file = "<src>") {
     if (c.filenameProp) {
       if (!isAbsoluteExpr(c.filenameProp.value)) sites.push({ line: c.line, kind: "relative" });
     } else if (c.opts?.type === "ObjectExpression" || !c.opts) {
-      sites.push({ line: c.line, kind: "missing" });
+      const code = c.node.arguments[0];
+      const snippet = !code || code.type === "Literal" || (code.type === "TemplateLiteral" && code.expressions.length === 0);
+      sites.push({ line: c.line, kind: "missing", src: !snippet });
     }
   }
   return { file, sites };
@@ -110,12 +118,20 @@ export function count(results, kind) {
   return results.reduce((a, r) => a + r.sites.filter((s) => s.kind === kind).length, 0);
 }
 
+/** Filename-less loads of a source text (not a fixed snippet): the ratcheted count. */
+export function countSrc(results) {
+  return results.reduce((a, r) => a + r.sites.filter((s) => s.kind === "missing" && s.src).length, 0);
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const results = lintAll();
   const bad = results.flatMap((r) => r.sites.filter((s) => s.kind === "relative").map((s) => `${r.file}:${s.line}`));
   for (const b of bad) console.error(`vm-filename-lint: relative filename at ${b} (use absSrc(rel) from tests/helpers/abs-src.mjs)`);
   const unparsed = results.filter((r) => r.parseError).map((r) => r.file);
   for (const u of unparsed) console.error(`vm-filename-lint: could not parse ${u}`);
-  console.log(`vm-filename-lint: ${bad.length} relative, ${count(results, "missing")} without filename (informational), ${unparsed.length} unparsed`);
-  process.exit(bad.length || unparsed.length ? 1 : 0);
+  const src = countSrc(results);
+  if (src > SRC_CEILING) console.error(`vm-filename-lint: ${src} source loads without a filename, over the ceiling ${SRC_CEILING} (pass { filename: absSrc(rel) })`);
+  if (src < SRC_CEILING) console.log(`vm-filename-lint: ${src} source loads without a filename, under the ceiling ${SRC_CEILING}: lower SRC_CEILING to ${src}`);
+  console.log(`vm-filename-lint: ${bad.length} relative, ${count(results, "missing")} without filename (${src} source loads, ceiling ${SRC_CEILING}), ${unparsed.length} unparsed`);
+  process.exit(bad.length || unparsed.length || src > SRC_CEILING ? 1 : 0);
 }

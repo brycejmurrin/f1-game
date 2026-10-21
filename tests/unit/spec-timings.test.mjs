@@ -24,7 +24,7 @@ import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseJunit, parseLiveLog, mergeRows, emptyDb, serialise, saveDb, loadDb,
-  growth, median, envBucket, isoSecond, normaliseSpec, defaultSources,
+  growth, steps, bestSplit, mad, median, envBucket, isoSecond, normaliseSpec, defaultSources,
   KEEP, BUCKETS, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
 import { specSecPerTest, billing, MEASURED, MIN_SAMPLES, CI_BUCKETS,
   timings } from "../../tools/ci/select-budget.mjs";
@@ -71,6 +71,66 @@ test("a RETRIED test is billed once, at its final attempt", () => {
   assert.equal(rows[0].sec, 42);
 });
 
+test("isolated CI retries bill the final suite, not every failed attempt", () => {
+  // playwright.config.js retryStrategy: "isolated" on CI — each retry is its own
+  // <testsuite>, not another <testcase> in the first suite (playwright #1716).
+  const xml = `<testsuites>
+<testsuite name="specs/logging.spec.js" timestamp="2026-09-16T01:00:00Z">
+<testcase name="flaky" classname="specs/logging.spec.js" time="180"><failure/></testcase>
+</testsuite>
+<testsuite name="specs/logging.spec.js" timestamp="2026-09-16T01:00:00Z">
+<testcase name="flaky" classname="specs/logging.spec.js" time="42"/>
+</testsuite>
+</testsuites>`;
+  const rows = parseJunit(xml);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].sec, 42);
+});
+
+test("a FAILED final attempt is not billed — it measures the timeout (docs/BUGS.md)", () => {
+  const xml = `<testsuites><testsuite name="specs/logging.spec.js" timestamp="2026-09-16T01:00:00Z">
+<testcase name="ok" classname="specs/logging.spec.js" time="4"/>
+<testcase name="timeout" classname="specs/logging.spec.js" time="42"/>
+<testcase name="timeout" classname="specs/logging.spec.js" time="180"><failure message="Test timeout of 180000ms exceeded">y</failure></testcase>
+<testcase name="errored" classname="specs/logging.spec.js" time="9"><error message="boom"/></testcase>
+</testsuite></testsuites>`;
+  assert.deepEqual(parseJunit(xml).map((r) => [r.title, r.sec]), [["ok", 4]],
+    "a final failure clears the key, even over an earlier passing attempt");
+});
+
+test("STEP GATE: robust rule on the newest sample, report-only, one bucket", () => {
+  const db = emptyDb();
+  const F = (n) => `tests/specs/fixture-${n}.spec.js`; // fixtures, not real files
+  const series = (vals, env = "llvmpipe") =>
+    vals.map((v, i) => [`2026-10-20T0${i}:00:00Z`, env, v, 2]);
+  // monza-foundation's real shape on 2026-10-20: a flat window, then 3x.
+  db.specs[F("a")] = { s: series([12.4, 16.8, 13.0, 14.2, 13.6, 52.4]), t: {} };
+  db.specs[F("flat")] = { s: series([10, 11, 10, 12, 11, 12]), t: {} };
+  // A 0.4 -> 0.9 s spec doubled, but sits under the 3 s whole-spec floor.
+  db.specs[F("tiny")] = { s: series([0.4, 0.4, 0.4, 0.4, 0.4, 0.9]), t: {} };
+  db.specs[F("short")] = { s: series([1, 1, 50]), t: {} };
+  // The same jump in another bucket is not compared with llvmpipe.
+  db.specs[F("other")] = { s: series([1, 1, 1, 1, 1, 40], "swiftshader"), t: {} };
+  const rows = steps(db);
+  assert.deepEqual(rows.filter((r) => r.step).map((r) => r.spec), [F("a")]);
+  const a = rows[0];
+  assert.equal(a.latest, 26.2, "per test: 52.4 s over 2 tests");
+  assert.equal(a.median, 6.8);
+  assert.equal(a.split.ts, "2026-10-20T05:00:00Z", "the split names WHEN it moved");
+  assert.deepEqual(rows.map((r) => r.spec).sort(),
+    [F("a"), F("flat"), F("tiny")],
+    "fewer than 4 prior samples and other buckets are not judged");
+  assert.equal(steps(db, { buckets: ["swiftshader"] })[0].step, true);
+});
+
+test("bestSplit and mad are the plain definitions", () => {
+  assert.equal(mad([1, 2, 3, 4, 100]), 1);
+  assert.equal(bestSplit([1, 1, 1, 9, 9, 9]).at, 3);
+  assert.equal(bestSplit([5, 5, 5, 5]), null, "a flat series has no split");
+  assert.equal(bestSplit([1, 9]), null, "the window before keeps two samples");
+  assert.equal(bestSplit([1, 1, 9]).at, 2, "the newest sample alone can be the move");
+});
+
 test("parseLiveLog reads the reporter's own end lines, and only the FINAL ones", () => {
   const log = [
     "[06:06:01] = run start: 3 tests, 1 worker(s), heartbeat 30s",
@@ -82,8 +142,8 @@ test("parseLiveLog reads the reporter's own end lines, and only the FINAL ones",
   ].join("\n");
   const rows = parseLiveLog(log, "2026-09-16T06:09:12.000Z");
   assert.deepEqual(rows.map((r) => [r.title, r.sec]),
-    [["Smoke › first", 73], ["Smoke › second", 61.5]],
-    "a retry is not a result and a skip is not a duration");
+    [["Smoke › first", 73]],
+    "a retry is not a result, a skip is not a duration, and a FAIL bills its timeout");
   assert.deepEqual([...new Set(rows.map((r) => r.ts))], ["2026-09-16T06:06:01Z"],
     "the log's ts is the RUN START, so it collides with the same run's junit");
   // The log has clock times and no date. A run that started before midnight and

@@ -13,6 +13,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const loader = readFileSync(new URL("../../js/core/script-loader.js", import.meta.url), "utf8");
 const boot = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta.url), "utf8");
@@ -91,7 +92,7 @@ function bootRig({ local = {}, session = {}, gpu = false, throws = false } = {})
     ApexRoster: { DEFERRED: { webgl2: ["glx.js"], three: ["tlx.js"], webgpu: ["wgx.js"] } },
     ScriptLoader: { preload: (files) => { preloaded.push(...files); return files.length; } },
   });
-  vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx);
+  vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx, { filename: absSrc("js/render/renderer-boot.js") });
   return { guess: ctx.RendererBoot.guessBackend(), preloaded };
 }
 
@@ -117,4 +118,24 @@ test("renderer boot preloads the backend start() will most likely pick", () => {
     assert.equal(r.guess, guess, why);
     assert.deepEqual(r.preloaded, files, why + " (preloaded at eval)");
   }
+});
+
+test("a TLX guess modulepreloads the whole three vendor island at eval, three.core included", () => {
+  // three.webgpu imports three.core statically and modulepreload fetches no dependencies, so a hint list without
+  // core found it only after webgpu had downloaded and parsed. And start() runs after every deferred script and the
+  // adapter probe: hinting from there reached the network seconds late.
+  const run = (gpu) => {
+    const links = [];
+    const ctx = vm.createContext({
+      localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+      navigator: gpu ? { gpu: {} } : {},
+      ApexRoster: { DEFERRED: { webgl2: ["glx.js"], three: ["tlx.js"], webgpu: ["wgx.js"] } },
+      ScriptLoader: { preload: (files) => files.length },
+      document: { querySelector: () => null, createElement: () => ({}), head: { appendChild: (el) => links.push(el) } },
+    });
+    vm.runInContext(boot + "\nthis.RendererBoot = RendererBoot;", ctx, { filename: absSrc("js/render/renderer-boot.js") });
+    return links.filter((l) => l.rel === "modulepreload").map((l) => l.href);
+  };
+  assert.deepEqual(run(true), ["vendor/three-0.186.1/three.webgpu.min.js", "vendor/three-0.186.1/three.core.min.js", "vendor/three-0.186.1/three.tsl.min.js"]);
+  assert.deepEqual(run(false), [], "a GLX guess fetches no three vendor bytes");
 });

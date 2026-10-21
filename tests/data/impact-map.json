@@ -2244,6 +2244,9 @@
       "decalTextureFor": [
         "tests/unit/livery-tier.test.mjs"
       ],
+      "drainDeferredCarWarm": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "drawCarDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -4160,6 +4163,7 @@
       "*": [
         "tests/unit/changed-files.test.mjs",
         "tests/unit/node-plan.test.mjs",
+        "tests/unit/pick-tests.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
@@ -6602,6 +6606,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/results-cam.test.mjs"
@@ -6760,8 +6765,13 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
+      "duration": [
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew.test.mjs"
+      ],
       "pose": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew.test.mjs"
       ],
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -6776,6 +6786,28 @@
       ],
       "step": [
         "tests/unit/garage-arrival.test.mjs"
+      ]
+    },
+    "js/garage/crew-motion.js": {
+      "draw": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "free": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "sample": [
+        "tests/unit/garage-crew.test.mjs"
+      ]
+    },
+    "js/garage/crew-service.js": {
+      "draw": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "free": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "layout": [
+        "tests/unit/garage-crew.test.mjs"
       ]
     },
     "js/garage/experience.js": {
@@ -6815,6 +6847,7 @@
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -6922,6 +6955,9 @@
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
+      "free": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
       "init": [
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
@@ -6946,6 +6982,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -7001,6 +7038,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -7014,7 +7052,8 @@
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
-        "tests/unit/garage-sign-occlusion.test.mjs"
+        "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs"
       ]
     },
     "js/garage/scene-prims.js": {
@@ -7023,13 +7062,15 @@
       ],
       "setLook": [
         "tests/unit/garage-crew.test.mjs",
-        "tests/unit/garage-looks.test.mjs"
+        "tests/unit/garage-looks.test.mjs",
+        "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -7049,6 +7090,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ],
       "draw": [
@@ -7080,6 +7122,7 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "live": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -7089,6 +7132,7 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "moodCtx": [
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "moodDef": [
@@ -7788,6 +7832,7 @@
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -7893,6 +7938,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -7965,13 +8011,13 @@
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
         "tests/unit/pad-haptics.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs",
-        "tests/unit/touch-drag-anchor.test.mjs"
+        "tests/unit/phone-touch-surface.test.mjs"
       ]
     },
     "js/input/phone-pad.js": {
@@ -9367,15 +9413,18 @@
         "tests/unit/render-rate.test.mjs"
       ],
       "gate": [
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "init": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "observe": [
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs"
       ],
       "setMode": [
@@ -14117,6 +14166,7 @@
         "tests/unit/marshal-post-grounding.test.mjs",
         "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs"
       ]
@@ -14176,6 +14226,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/pit-signs.test.mjs",
         "tests/unit/scene-live.test.mjs"
@@ -14441,6 +14492,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
@@ -14992,11 +15044,13 @@
       ],
       "fmtGap": [
         "tests/unit/hud-gap-decimals.test.mjs",
-        "tests/unit/hud-relative.test.mjs"
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/input-hud-properties.test.mjs"
       ],
       "fmtGapSec": [
         "tests/unit/hud-gap-decimals.test.mjs",
-        "tests/unit/hud-relative.test.mjs"
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/input-hud-properties.test.mjs"
       ],
       "gapDecimals": [
         "tests/unit/hud-gap-decimals.test.mjs"

@@ -3,7 +3,7 @@
 // `git diff --name-only` lists a moved file's destination only, so a source
 // file moved out of js/circuits/ or js/track/ never fired the old directory's
 // rules. tools/lib/changed-files.mjs reads --name-status and returns the
-// rename/copy source too; select-specs, node-plan and pick-unit-slices use it.
+// rename/copy source too; pick-tests, select-specs, node-plan and pick-unit-slices use it.
 //
 // Run: node --test tests/unit/changed-files.test.mjs   (npm run test:tooling-fast)
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)

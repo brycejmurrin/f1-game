@@ -297,7 +297,8 @@ const TLX = (function () {
       let _gpuAdapterOk = false;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
-          const ad = await navigator.gpu.requestAdapter(); checkInit();
+          // The boot probe's adapter when it resolved one (renderer-boot.js): one GPU-process round trip fewer.
+          const ad = (opts && opts.adapter) || await navigator.gpu.requestAdapter(); checkInit();
           _gpuAdapterOk = !!ad;
           if (ad) {
             const info = ad.info || null;
@@ -685,7 +686,7 @@ const TLX = (function () {
         }
       }
       _abortRenderer = renderer;
-      try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
+      try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -994,7 +995,7 @@ const TLX = (function () {
       let _shownAt = -1e9;
       let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
       const _fallbackLossCount = () => {
-        try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
+        try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
         catch (_) { return 0; }
       };
       const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
@@ -4338,7 +4339,7 @@ const TLX = (function () {
           sessionStorage.setItem("apex26.ctxLostReloads", String(n));
         } catch (_) {
           let prior = 0;
-          try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
+          try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
           n = Math.max(++_sessLostN, prior + 1);
           try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
         }

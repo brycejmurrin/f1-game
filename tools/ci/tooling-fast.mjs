@@ -680,6 +680,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-clock-rotate.test.mjs",
   "tests/unit/input-ghost.test.mjs",
+  "tests/unit/input-hud-properties.test.mjs",
   // #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.
   "tests/unit/inputs-hash.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
@@ -1898,8 +1899,8 @@ function pinIndex() {
   return _pinIndex;
 }
 
-/** Which CI tooling-fast shards (1/2, 2/2) touch any of `files`. */
-export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 2) {
+/** Which CI tooling-fast shards (1/3 .. 3/3, ci.yml guards-a/b/c) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 3) {
   const want = new Set(files);
   const out = [];
   for (let i = 1; i <= shardCount; i++) {

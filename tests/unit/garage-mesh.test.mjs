@@ -818,3 +818,24 @@ test("workshop budget includes earned trophies and dry/wet equipment", () => {
     assert.equal(bay.mat.length, bay.pos.length / 3);
   }
 });
+
+test("reflection fade preserves each room's authored floor colours and markings", () => {
+  const { GarageScene, ctx, meshes, draws } = harness();
+  const Prims = vm.runInContext('GaragePrims', ctx), car = { car: true };
+  for (const look of ['porcelain', 'heritage', 'endurance', 'stock']) {
+    Prims.setLook(look); draws.length = 0;
+    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false }, car);
+    const floor = meshes[draws[0].mesh.id - 1];
+    const fade = meshes[draws[draws.findIndex(d => d.mesh === car) + 1].mesh.id - 1];
+    const authored = new Set();
+    const key = (data, i, lift = 0) => [data.pos[i], +(data.pos[i + 1] - lift).toFixed(6), data.pos[i + 2],
+      ...data.col.slice(i, i + 3), ...data.nrm.slice(i, i + 3), data.mat[i / 3]].join('|');
+    for (let i = 0; i < floor.pos.length; i += 3) authored.add(key(floor, i));
+    assert.ok(fade.pos.length > 36, look + ': retain joints and floor markings, not one recolouring quad');
+    for (let i = 0; i < fade.pos.length; i += 3)
+      assert.ok(authored.has(key(fade, i, .002)), look + ': every fade vertex matches the authored floor');
+    const count = meshes.length;
+    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false }, car);
+    assert.equal(meshes.length, count, look + ': stable frames reuse the fade mesh');
+  }
+});

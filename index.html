@@ -907,7 +907,7 @@
               <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
               <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
               <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
-              <button id="pm-garrival" aria-describedby="pm-visual-tuners-help">GARAGE ARRIVAL TUNER&hellip;</button>
+              <button id="pm-garrival" aria-describedby="pm-visual-tuners-help">GARAGE ENTER &amp; LEAVE&hellip;</button>
             </div>
           </details>
         </section>
@@ -3441,19 +3441,26 @@
 <!-- garage arrival tuner: the WORK ON CAR pit-visit animation's settings, as an
      ADVANCED VISUALS tool docked right like the others. Wired by
      GarageArrival.bindSettings (js/garage/arrival.js). -->
-<div id="garrival" role="region" aria-label="Garage arrival tuner" data-esc-close="ga-close" hidden>
+<div id="garrival" role="region" aria-label="Garage enter and leave tuner" data-esc-close="ga-close" hidden>
   <button id="ga-preview-stop" class="bigbtn" type="button" data-i18n="garage.preview.stop" hidden>STOP PREVIEW</button>
   <div id="garrival-inner" class="sheet">
-    <div id="ga-head"><h2>GARAGE ARRIVAL TUNER</h2></div>
+    <div id="ga-head"><h2>GARAGE ENTER &amp; LEAVE</h2></div>
     <div id="ga-rows" class="pane">
-      <p class="adv-help">Saved for WORK ON CAR pit visits (IN) and the drive-out every RACE! opens on (OUT). Reduced motion skips both. PREVIEW plays one here now, even with PLAY ARRIVAL off or reduced motion on; Escape stops it.</p>
-      <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ARRIVAL</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
+      <p class="adv-help">Saved for WORK ON CAR pit visits (IN) and the drive-out every RACE! opens on (OUT). Reduced motion skips entry and removes camera sway. PREVIEW plays either sequence here, even with animations off; Escape stops it.</p>
+      <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ANIMATIONS</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
       <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
-        <select id="ga-speed"><option value="0.5">SLOW · 17.4s</option><option value="1" selected>NORMAL · 8.7s</option><option value="2">FAST · 4.4s</option></select>
+        <select id="ga-speed"><option value="0.5">SLOW · 0.5×</option><option value="1" selected>NORMAL · 1×</option><option value="2">FAST · 2×</option></select>
       </div></div>
       <div class="set-row"><label class="tune-label" for="ga-angle">GARAGE ANGLE</label><div>
         <select id="ga-angle"><option value="cut">TWO CAMERA CUT</option><option value="left">LEFT BAY</option><option value="right">RIGHT BAY</option></select>
       </div></div>
+      <div class="set-row"><label class="tune-label" for="ga-crew-in">ENTER CREW</label><div>
+        <select id="ga-crew-in"><option value="current">GARAGE CREW</option><option value="guides">GUIDE CREW</option><option value="service">SERVICE CREW</option><option value="welcome">WELCOME CREW</option><option value="none">NO CREW</option></select>
+      </div></div>
+      <div class="set-row"><label class="tune-label" for="ga-crew-out">LEAVE CREW</label><div>
+        <select id="ga-crew-out"><option value="current">GARAGE CREW</option><option value="guides">GUIDE CREW</option><option value="service">SERVICE CREW</option><option value="welcome">WELCOME CREW</option><option value="none">NO CREW</option></select>
+      </div></div>
+      <p class="adv-help">GARAGE CREW follows the Team tab. SERVICE CREW brings a front jack, four tyre covers and a service cable after parking. An engineer works at the side monitors. Equipment clears before departure. GUIDE CREW signals the car. Suits and helmets follow the active livery.</p>
       <div class="set-row"><label class="tune-label" for="ga-fov">FIELD OF VIEW</label><div>
         <input id="ga-fov" type="number" min="40" max="75" step="1" value="54">
       </div></div>
@@ -3672,6 +3679,8 @@
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-dress.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/crew-motion.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/crew-service.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-crew.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/arrival.js?v=dev"></script>

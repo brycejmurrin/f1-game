@@ -169,3 +169,19 @@ test("refuseTab: bounded at two reloads per tab; past the cap the latch is kept 
   for (let i = 0; i < 5; i++) blocked.call();
   assert.equal(blocked.reloads, 2);
 });
+
+test("ctxLost window.name fallback: every reader regex parses the marker the writer stores (c91f)", () => {
+  // sessionStorage throws → the reload budget rides window.name as "apex26.ctxLostReloads=N".
+  // A double-escaped literal (/apex26\\.…\\d+/) wants a backslash and never matched, so the
+  // budget was never read back or cleared (report: codex perf-investigation-c91f, GLX twin).
+  const src = read("js/render/three/tlx.js");
+  const lits = [...src.matchAll(/\/\^apex26\\{1,2}\.ctxLostReloads=[^\n]*?\$\//g)].map((m) => m[0]);
+  assert.ok(lits.length >= 3, `expected the clear and two read regexes, found ${lits.length}`);
+  for (const lit of lits) {
+    const re = vm.runInNewContext(lit);
+    const m = "apex26.ctxLostReloads=2".match(re);
+    assert.ok(m, `${lit} does not match the stored marker`);
+    if (m[1] !== undefined) assert.equal(m[1], "2", `${lit} captures the count`);
+    assert.equal(re.test("apex26xctxLostReloads=2"), false, `${lit} must escape the dot`);
+  }
+});
