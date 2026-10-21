@@ -48,7 +48,7 @@ for (const pos of POS) {
     A.snapCam(true); await raf();
     if (D.err) D.by.err = D.err; D.by.raw = D.raw; D.by.rawOn = D.rawOn; D.by.same = GLX.__tlx.renderer.backend === be; D.by.tries = D.tries; return D.by;
   }, pos);
-  await page.screenshot({ path: `${outDir}/${track}-${tod}-${pos}.png` });
+  await page.screenshot({ path: `${outDir}/${track}-${tod}-${pos}.png`, timeout: 180000 });
   rows.push({ track, tod, pos, ...r });
   console.log(JSON.stringify({ tag, track, tod, pos, ...r }));
 }
