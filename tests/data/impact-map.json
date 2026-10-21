@@ -6832,6 +6832,7 @@
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -6966,6 +6967,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -7021,6 +7023,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -7034,7 +7037,8 @@
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
-        "tests/unit/garage-sign-occlusion.test.mjs"
+        "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs"
       ]
     },
     "js/garage/scene-prims.js": {
@@ -7051,6 +7055,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -7070,6 +7075,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ],
       "draw": [
@@ -14090,6 +14096,7 @@
         "tests/unit/marshal-post-grounding.test.mjs",
         "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs"
       ]
@@ -14149,6 +14156,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/pit-signs.test.mjs",
         "tests/unit/scene-live.test.mjs"
