@@ -331,7 +331,7 @@ test("setup sheet: a swap on an over-cap build is accepted only while G.unlimite
       addEventListener() {}, removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
       MutationObserver: class { observe() {} },
       GameAudio: { uiTick() {}, uiSelect() {}, uiReject() {}, init() {} }, ScrollFade: { refresh() {} },
-      Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
+      Car3D: { appearanceParts: p => p, PART_STYLE_FIELDS: { aeroShape: "aero", floorShape: "floor" }, FINISH_SURFACE: { satin: {}, chrome: {} } },
       GarageExperience: { partSummary: () => () => {}, statsOf: (t) => t.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 } },
       LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
       PhysicsConsts: ctx.PhysicsConsts || { WET_GRIP: { rain: [1, 1.2, 1.4] } },

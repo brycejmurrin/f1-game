@@ -86,7 +86,8 @@ const CarDraw = (function () {
     const teamMeshes = {}, teamMeshOrder = [];   // factory full mesh (shadows / ghost / glb)
     if (typeof CockpitPreview !== "undefined") CockpitPreview.bind(() => {
       const team = G.player ? G.player.team : Teams.LIST[G.teamIdx];
-      return { teamId: team.id, livery: deps.resolveLivery(team), parts: Parts.getVisualTiers(G.getTeamParts(team.id), team), units: AppearanceOpts.units() };
+      const liv = deps.resolveLivery(team);
+      return { teamId: team.id, livery: liv, parts: Car3D.appearanceParts(Parts.getVisualTiers(G.getTeamParts(team.id), team), liv), units: AppearanceOpts.units() };
     });
     const teamBodies = {}, teamBodyOrder = [];   // factory body-only (visible AI — wheels drawn planted)
     // Each team cache holds 40. teamMeshes: one ":sh" caster per team (the menu
@@ -652,19 +653,29 @@ const CarDraw = (function () {
     const _aeroCustom = new Map();   // team.id -> Map(stamp -> state); hit path allocates nothing
     const AERO_CUSTOM_CACHE_MAX = 32;
     let _aeroCustomTick = 0;
+    const partStyleFields = Object.keys(Car3D.PART_STYLE_FIELDS || { aeroShape: "aero", floorShape: "floor" });
+    function samePartStyles(state, liv) {
+      for (const key of partStyleFields) if (state.styles[key] !== liv[key]) return false;
+      return true;
+    }
+    function rememberPartStyles(liv) {
+      const styles = {};
+      for (const key of partStyleFields) styles[key] = liv[key];
+      return styles;
+    }
     function teamDecalState(team, usePlayerSetup, setup, stamp) {
-      const liv = deps.resolveLivery(team), aeroShape = liv.aeroShape, floorShape = liv.floorShape;
+      const liv = deps.resolveLivery(team);
       if (setup) {
         let byTeam = _aeroCustom.get(team.id);
         if (!byTeam) { byTeam = new Map(); _aeroCustom.set(team.id, byTeam); }
         const leg = Parts.legalityKey();
         const key = stamp || "";
         const c = byTeam.get(key);
-        if (c && c.leg === leg && c.aeroShape === aeroShape && c.floorShape === floorShape) { c.lastUse = ++_aeroCustomTick; return c; }
+        if (c && c.leg === leg && samePartStyles(c, liv)) { c.lastUse = ++_aeroCustomTick; return c; }
         const parts = Car3D.appearanceParts(Parts.getVisualTiers(setup, team), liv);
         const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                         aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                        parts, rev: -1, leg, aeroShape, floorShape, fwKey: null, fwKeyWt: null, fwKeyFull: "", lastUse: ++_aeroCustomTick };
+                        parts, rev: -1, leg, styles: rememberPartStyles(liv), fwKey: null, fwKeyWt: null, fwKeyFull: "", lastUse: ++_aeroCustomTick };
         byTeam.set(key, state);
         // Career upgrades change the stamp for years of builds. Retain the
         // recent recipes, including both seats of every active team, rather
@@ -682,7 +693,7 @@ const CarDraw = (function () {
       // Factory: the ruleset (Parts.setLegality) is the only thing that moves it.
       const rev = usePlayerSetup ? G.store.rev : -1, leg = Parts.legalityKey();
       const c = cache.get(team.id);
-      if (c && c.rev === rev && c.leg === leg && c.aeroShape === aeroShape && c.floorShape === floorShape) return c;
+      if (c && c.rev === rev && c.leg === leg && samePartStyles(c, liv)) return c;
       const resolved = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
       const parts = Car3D.appearanceParts(Parts.getVisualTiers(resolved, team), liv);
       // aero: the resolved RECIPE, resolved once here for every flap consumer.
@@ -690,7 +701,7 @@ const CarDraw = (function () {
       // every flap vertex and made the moveable wings invisible (see aeroStyleOf).
       const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                       aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                      parts, rev, leg, aeroShape, floorShape, fwKey: null, fwKeyWt: null, fwKeyFull: "" };
+                      parts, rev, leg, styles: rememberPartStyles(liv), fwKey: null, fwKeyWt: null, fwKeyFull: "" };
       cache.set(team.id, state);
       return state;
     }
@@ -1725,6 +1736,8 @@ const CarDraw = (function () {
     }
     // recomputePlayerMods hands over the player's resolved wheel spec + cosmetic key.
     function setPlayerParts(vt, visualKey) {
+      const team = G.player ? G.player.team : Teams.LIST[G.teamIdx];   // the same team recomputePlayerMods resolved
+      if (team) vt = Car3D.appearanceParts(vt, deps.resolveLivery(team));
       playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
       playerTyreId = vt._ids ? vt._ids.tyres : "medium";
       playerBrakeId = vt._ids ? vt._ids.brakes : "standard";

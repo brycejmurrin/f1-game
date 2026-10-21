@@ -192,6 +192,7 @@ export const GROUPS = [
   ["gfx", "Renderer and GPU probes — GLX, WGX, TLX, and the adapter census."],
   ["track", "Circuit geometry and scenery: the build guard, the baseline-gated audits, the survey and the start-line maths."],
   ["car", "The car and the garage: option sweeps, livery and crest rendering, career economics."],
+  ["garage", "Blender authoring and deterministic runtime motion exports for the garage crew."],
   ["ui", "Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) they share."],
   ["lighting", "The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign package."],
   ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair."],

@@ -1,0 +1,1 @@
+Improved: Guide Crew now steps with planted feet and articulated limbs using Blender-authored motion curves, then gives hand signals while the car enters or leaves. The marshal raises the board gradually before departure. Reduced motion holds decorative gestures, and cached meshes keep playback free of mesh rebuilds.

@@ -1,0 +1,127 @@
+{
+ "backend": "three",
+ "tier": "low",
+ "rows": [
+  {
+   "track": "monza",
+   "throttle": 1,
+   "secs": 30,
+   "frames": 12,
+   "p50": 2466.6,
+   "p95": 4933.1,
+   "p99": 4933.1,
+   "max": 4933.1,
+   "fps": 0.4,
+   "metres": 4,
+   "gov": {
+    "tier": 2,
+    "scale": 0.5,
+    "auto": false
+   },
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": false,
+    "renderScale": {
+     "scale": 0.5,
+     "fps": 1.9,
+     "floorMs": 126.9,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 15,
+      "maxMs": 4933.1,
+      "slow": 13
+     },
+     "frameTimes": {
+      "frames": 15,
+      "p50": 2366.5999999999985,
+      "p95": 4933.0999999999985,
+      "p99": 4933.0999999999985,
+      "maxMs": 4933.0999999999985,
+      "droppedSimS": 2.0333333333333337,
+      "physicsSteps": 67,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": false
+    },
+    "canvas": [
+     633,
+     293
+    ],
+    "coarse": true,
+    "dpr": 3
+   }
+  },
+  {
+   "track": "monaco",
+   "throttle": 1,
+   "secs": 30,
+   "frames": 8,
+   "p50": 4133.2,
+   "p95": 4416.5,
+   "p99": 4416.5,
+   "max": 4416.5,
+   "fps": 0.2,
+   "metres": 3,
+   "gov": {
+    "tier": 2,
+    "scale": 0.5,
+    "auto": false
+   },
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": false,
+    "renderScale": {
+     "scale": 0.5,
+     "fps": 1.9,
+     "floorMs": 146.3,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 12,
+      "maxMs": 4416.5,
+      "slow": 9
+     },
+     "frameTimes": {
+      "frames": 12,
+      "p50": 4033.199999999997,
+      "p95": 4416.5,
+      "p99": 4416.5,
+      "maxMs": 4416.5,
+      "droppedSimS": 1.5,
+      "physicsSteps": 48,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": false
+    },
+    "canvas": [
+     633,
+     293
+    ],
+    "coarse": true,
+    "dpr": 3
+   }
+  }
+ ],
+ "errors": []
+}

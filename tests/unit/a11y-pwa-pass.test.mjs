@@ -148,6 +148,23 @@ test("lockLandscape locks only on a touch device, and unlock releases only its o
   assert.deepEqual(calls, ["lock:landscape", "unlock"], "one lock, one unlock — the second unlock is a no-op");
 });
 
+test("an unlock (quit) that lands while the lock is still pending still releases it (B·H11 hunt)", async () => {
+  const calls = [];
+  let resolveLock;
+  const orientation = {
+    lock: (o) => { calls.push("lock:" + o); return new Promise((r) => { resolveLock = r; }); },
+    unlock: () => { calls.push("unlock"); },
+  };
+  const phone = bootInput({ coarse: true, orientation });
+  const locking = phone.lockLandscape();
+  phone.unlockLandscape();                      // quitToMenu before the lock settled
+  resolveLock();
+  assert.equal(await locking, false, "the lock does not stick once the race was left");
+  assert.deepEqual(calls, ["lock:landscape", "unlock"], "the late lock is released, so the menu can rotate");
+  phone.unlockLandscape();
+  assert.deepEqual(calls, ["lock:landscape", "unlock"], "and a second quit is a no-op");
+});
+
 test("lockLandscape swallows a rejection (not fullscreen, iPhone, unsupported) and never unlocks", async () => {
   const calls = [];
   const orientation = {

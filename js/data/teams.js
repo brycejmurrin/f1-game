@@ -349,6 +349,11 @@ const Teams = (function () {
   // Regional fields share the Finish suffix: new rows must not bypass finish-id validation.
   function liveryEnumOk(k, v) {
     if (typeof v !== "string" || v in Object.prototype) return false;
+    const category = typeof Car3D !== "undefined" && Car3D.PART_STYLE_FIELDS && Object.hasOwn(Car3D.PART_STYLE_FIELDS, k) && Car3D.PART_STYLE_FIELDS[k];
+    if (category && typeof Parts !== "undefined") {
+      const cat = Parts.CATALOG.find(c => c.id === category);
+      return v === "fitted" || !!(cat && cat.options.some(o => o.tag === "STYLE" && o.id === v));
+    }
     const ids = k === "finShape" ? (typeof Car3D !== "undefined" && Car3D.FIN_SHAPE_IDS)
       : k === "numFont" ? (typeof LiveryTex !== "undefined" && LiveryTex.NUM_FONT_IDS)
       : k === "finish" ? (typeof Car3D !== "undefined" && Car3D.FINISH_SURFACE && ["gloss"].concat(Object.keys(Car3D.FINISH_SURFACE)))

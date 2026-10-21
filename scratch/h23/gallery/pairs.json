@@ -1,0 +1,198 @@
+[
+ {
+  "pair": "garage-low",
+  "pctDiff": 13.6,
+  "mad": 5.6,
+  "crop": [
+   211,
+   582,
+   844,
+   390
+  ],
+  "cropMad": 22.6,
+  "lumTLX": 35.0,
+  "lumGLX": 36.8
+ },
+ {
+  "pair": "menu-low",
+  "pctDiff": 0.0,
+  "mad": 0.0,
+  "crop": [
+   0,
+   0,
+   844,
+   390
+  ],
+  "cropMad": 0.0,
+  "lumTLX": 45.4,
+  "lumGLX": 45.4
+ },
+ {
+  "pair": "monaco-kerb-low",
+  "pctDiff": 8.5,
+  "mad": 3.9,
+  "crop": [
+   633,
+   0,
+   844,
+   390
+  ],
+  "cropMad": 16.6,
+  "lumTLX": 91.9,
+  "lumGLX": 93.9
+ },
+ {
+  "pair": "monaco-kerb-med",
+  "pctDiff": 8.5,
+  "mad": 4.0,
+  "crop": [
+   633,
+   0,
+   844,
+   390
+  ],
+  "cropMad": 16.7,
+  "lumTLX": 92.0,
+  "lumGLX": 94.0
+ },
+ {
+  "pair": "monza-grid-low",
+  "pctDiff": 72.8,
+  "mad": 48.5,
+  "crop": [
+   1477,
+   679,
+   844,
+   390
+  ],
+  "cropMad": 73.0,
+  "lumTLX": 77.5,
+  "lumGLX": 78.1
+ },
+ {
+  "pair": "monza-helmet-low",
+  "pctDiff": 10.2,
+  "mad": 6.5,
+  "crop": [
+   1266,
+   194,
+   844,
+   390
+  ],
+  "cropMad": 32.8,
+  "lumTLX": 60.7,
+  "lumGLX": 59.3
+ },
+ {
+  "pair": "monza-helmet-med",
+  "pctDiff": 42.8,
+  "mad": 25.5,
+  "crop": [
+   1688,
+   194,
+   844,
+   390
+  ],
+  "cropMad": 66.8,
+  "lumTLX": 52.5,
+  "lumGLX": 59.7
+ },
+ {
+  "pair": "monza-mirror-low",
+  "pctDiff": 4.9,
+  "mad": 3.2,
+  "crop": [
+   844,
+   194,
+   844,
+   390
+  ],
+  "cropMad": 14.8,
+  "lumTLX": 59.0,
+  "lumGLX": 58.4
+ },
+ {
+  "pair": "monza-straight-low",
+  "pctDiff": 13.9,
+  "mad": 5.7,
+  "crop": [
+   1688,
+   194,
+   844,
+   390
+  ],
+  "cropMad": 9.6,
+  "lumTLX": 83.1,
+  "lumGLX": 83.7
+ },
+ {
+  "pair": "singapore-night-low",
+  "pctDiff": 3.1,
+  "mad": 1.9,
+  "crop": [
+   422,
+   194,
+   844,
+   390
+  ],
+  "cropMad": 4.9,
+  "lumTLX": 62.2,
+  "lumGLX": 62.7
+ },
+ {
+  "pair": "singapore-night-med",
+  "pctDiff": 2.0,
+  "mad": 1.4,
+  "crop": [
+   844,
+   194,
+   844,
+   390
+  ],
+  "cropMad": 4.2,
+  "lumTLX": 61.8,
+  "lumGLX": 62.3
+ },
+ {
+  "pair": "spa-chase-low",
+  "pctDiff": 6.8,
+  "mad": 3.3,
+  "crop": [
+   633,
+   0,
+   844,
+   390
+  ],
+  "cropMad": 9.1,
+  "lumTLX": 80.7,
+  "lumGLX": 81.2
+ },
+ {
+  "pair": "spa-chase-med",
+  "pctDiff": 6.8,
+  "mad": 3.3,
+  "crop": [
+   633,
+   0,
+   844,
+   390
+  ],
+  "cropMad": 9.1,
+  "lumTLX": 80.8,
+  "lumGLX": 81.3
+ },
+ {
+  "pair": "spa-rain-low",
+  "pctDiff": 12.0,
+  "mad": 4.2,
+  "crop": [
+   633,
+   0,
+   844,
+   390
+  ],
+  "cropMad": 12.8,
+  "lumTLX": 73.2,
+  "lumGLX": 71.5
+ }
+]
