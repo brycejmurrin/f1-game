@@ -2244,6 +2244,9 @@
       "decalTextureFor": [
         "tests/unit/livery-tier.test.mjs"
       ],
+      "drainDeferredCarWarm": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "drawCarDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -14441,6 +14444,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",

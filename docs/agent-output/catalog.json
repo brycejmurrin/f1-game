@@ -2683,6 +2683,12 @@
       "outputPolicy": "keep-native"
     },
     {
+      "path": "tools/perf/cpuprofile-summary.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/perf/diagnostics.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -2747,6 +2753,12 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/perf/race-entry-timer.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node"
     },
     {
       "path": "tools/perf/runtime-memory.mjs",
