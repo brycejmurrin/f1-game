@@ -168,3 +168,16 @@ OPEN follow-up: image-grade pass-on-retry cause unestablished → gpu-census mac
 12:58Z: #3395 → 12ff726a and #3435 (fix) merged by Bryce. Watch Pages on tip 5bffc901: green → post `INCIDENT lifted` line → #3431 (last game PR). OrchB 26 at context cap → handoff.
 
 17:02Z: INCIDENT lifted. Live = 941b4791 (#3431). Merged by Bryce: #3395 12ff726a, #3435 5bffc901, #3431 941b4791. Game + non-game queues EMPTY. Open: follow-ups in SUCCESSOR-BRIEF.md.
+
+## NEW QUEUE (17:10Z) — built from the 8 open drafts (all Codex/Cursor, heads 8–13 h idle, no live claims)
+Ready-ish (CI green, gate passed or close; need Plan tick + ready-gate + full tier):
+ 1. #3423 perf: repeated UI work + WebGPU lite startup — 18 files, CI green, gate passed, Plan 4/5, blocked (draft)
+ 2. #3430 fix: graphics recovery, controller + sim state bugs (Fleet C letter) — 14 files, CI green, gate passed, Plan 11/12
+ 3. #3421 fix: Inspector shutdown, trace bound, pit audio resume (Fleet R letter) — 10 files, CI green, Plan 8/9
+ 4. #3407 perf: repeated race/lighting/replay/UI work — 59 files (big), CI green, Plan 5/7
+Need sync / fix first:
+ 5. #3428 fix: quit leaves lens drops/particles; crowd cheer; per-step temps — 13 files, DIRTY (conflict), Plan 8/9
+ 6. #3424 fix: LOW wet-road reflections + shader work — 18 files, DIRTY, last CI cancelled, Plan 4/7 (overlaps #3387 wet SSR)
+ 7. #3432 perf(render): reject rear rivals pre-projection, share wheel phases — 13 files, stale-RED (Structural guards), Plan 13/15
+HOLD: #3387 dynamic rain/twilight — MERGE-HOLD (Bryce review of galleries), DIRTY.
+All are game PRs (js/) → one GAME-SLOT per green Pages.
