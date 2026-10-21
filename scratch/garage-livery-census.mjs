@@ -17,7 +17,8 @@ const soft=process.argv.includes('--software');
 let REQ={};try{REQ=JSON.parse(readFileSync('.github/gpu-census-request.json','utf8'));}catch(_){}
 const EDITS=soft?6:(+REQ.livery_edits||30),PARTS=+REQ.livery_parts||3,WINDOW_MS=soft?1500:(+REQ.livery_window_ms||2500),IDLE_MS=soft?1500:5000;
 const ONLY=(process.argv.find(a=>a.startsWith('--arm='))||'').slice(6)||REQ.livery_arm||'';
-const ARMS=[{arm:'tlx-webgpu',forceGL:'0'},{arm:'tlx-webgl2',forceGL:'1'}].filter(a=>!ONLY||a.arm===ONLY);
+const ARMS=[{arm:'tlx-webgpu',forceGL:'0'},{arm:'tlx-webgl2',forceGL:'1'},
+  ...(REQ.livery_hires_off_arms?[{arm:'tlx-webgpu-nohires',forceGL:'0',noHiRes:true},{arm:'tlx-webgl2-nohires',forceGL:'1',noHiRes:true}]:[])].filter(a=>!ONLY||a.arm===ONLY);
 const report={schema:'garage-livery-census/v1',parts:PARTS,request:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),software:soft,edits:EDITS,windowMs:WINDOW_MS,viewport:{width:844,height:390},arms:[],started:new Date().toISOString()};
 const save=()=>writeFileSync('game-livery-census.json',JSON.stringify(report,null,2));
 const log=x=>console.log(new Date().toISOString(),x);
@@ -92,13 +93,14 @@ try{
   const server=await startStaticServer(process.cwd());
   const browser=await launchChromium({...(soft?{}:{executablePath:chromium.executablePath()}),args:soft?[...WEBGPU_LAVAPE_CHROMIUM_ARGS,'--headless=new']:['--enable-unsafe-webgpu','--disable-background-timer-throttling','--enable-precise-memory-info']});
   report.browser=chromiumLaunchInfo(browser);report.browserVersion=browser.version();save();
-  for(const {arm,forceGL} of ARMS){
+  for(const {arm,forceGL,noHiRes} of ARMS){
     const row={arm,pageErrors:[],consoleErrors:[],gfxLog:[],edits:[]};report.arms.push(row);save();log(`${arm} boot`);
     const ctx=await browser.newContext({viewport:report.viewport,deviceScaleFactor:1,hasTouch:true,reducedMotion:'reduce'});
     try{
       const page=await ctx.newPage();page.on('pageerror',e=>row.pageErrors.push(String(e)));page.on('console',m=>{if(m.type()==='error')row.consoleErrors.push(m.text().slice(0,300));else if((m.type()==='warning'||/gfx|TLX|WebGPU|reload|device|lost/i.test(m.text()))&&!/experimental on this platform/.test(m.text())&&row.gfxLog.length<200)row.gfxLog.push(m.type()+' '+m.text().slice(0,/ctxprobe/.test(m.text())?1200:240));});
       await installProbeInit(page,{backend:'three',team:2,tlxForceGL:forceGL==='1'});
       await page.addInitScript(fgl=>{window.__TEST_MODE=true;localStorage.setItem('apex26.tlxForceGL',fgl);localStorage.setItem('apex26.wgxCapture','0');sessionStorage.setItem('apex26.wgxCapture','0');localStorage.setItem('apex26.gfxBootStepMs','45000');},forceGL);
+      if(noHiRes)await page.addInitScript(()=>{const t=setInterval(()=>{if(typeof LiveryTex!=='undefined'){LiveryTex.IS_PHONE=true;clearInterval(t);}},20);});
       await page.addInitScript(installGarageGpuAllocationProbe);await page.addInitScript(installCounters);await page.addInitScript(installPageCounters);
       page.on('framenavigated',f=>{if(f===page.mainFrame())row.navigations=(row.navigations||0)+1;(row.navLog||(row.navLog=[])).push({at:new Date().toISOString(),phase:row.phase||'boot'});});
       await gotoGame(page,server.url+'?three-devtools=1',120000);
@@ -116,10 +118,17 @@ try{
       row.idleGarage={...await windowStats(page,i0.t,i1.t),delta:delta(i0.calls,i1.calls)};
       // livery_idle_trace_ms (B·H30, Bryce 2026-10-21 "lagging happens in phases like every 10 seconds"): every frame
       // interval and long task over a long idle in the bay, timestamped, so a periodic stall shows its period.
-      if(+REQ.livery_idle_trace_ms>0){const t0=(await snapshot(page)).t;await page.waitForTimeout(+REQ.livery_idle_trace_ms);const t1=(await snapshot(page)).t;
+      if(+REQ.livery_idle_trace_ms>0){const t0=(await snapshot(page)).t;
+        // B·H26's discriminator: per-1 s TLX pool/render-object counts and the governor tier, so a step at ~15-20 s
+        // (prune / relink) or a tier move separates from a flat plateau (a newly sampled hi-res atlas).
+        const mem=[];for(let i=0;i<Math.round(+REQ.livery_idle_trace_ms/1000);i++){await page.waitForTimeout(1000);
+          mem.push(await page.evaluate(()=>{const m=window.GLX&&GLX.__tlx&&GLX.__tlx.memState?GLX.__tlx.memState():{};const P=typeof PerfGov!=='undefined'?PerfGov:null;
+            return {pool:m.pool,draws:m.draws,mats:m.mats,dropLater:m.dropLater&&m.dropLater.now,rObj:m.rObj,rGeo:m.rGeo,rTex:m.rTex,progs:m.progs,matMiss:m.matMiss,
+              tier:P&&P.tier?P.tier():null,autoTier:P&&P.autoTier?P.autoTier():null};}));}
+        const t1=(await snapshot(page)).t;
         row.idleTrace=await page.evaluate(([t0,t1])=>({frames:(__livCount.frames||[]).filter(([t])=>t>t0&&t<=t1).map(([t,d])=>[Math.round(t-t0),+d.toFixed(1)]),
           longs:__livCount.longs.filter(([s])=>s>t0&&s<t1).map(([s,d])=>[Math.round(s-t0),Math.round(d)])}),[t0,t1]);
-        row.idleTraceStats=await windowStats(page,t0,t1);log(`${arm} idle trace ${JSON.stringify(row.idleTraceStats)}`);save();}
+        row.idleTrace.mem=mem;row.idleTraceStats=await windowStats(page,t0,t1);log(`${arm} idle trace ${JSON.stringify(row.idleTraceStats)}`);save();}
       // livery_select_trace (B·H30, Bryce's 2026-10-21 recording: 6-9 fps for ~10 s after picking his BRUSHED custom
       // livery, then recovery): save a BRUSHED custom, then alternate stock and custom picks; per pick, ten 1 s buckets.
       if(REQ.livery_select_trace){
