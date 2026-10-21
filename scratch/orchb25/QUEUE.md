@@ -3,7 +3,7 @@
 Live state, refreshed and pushed every tick (branch `cursor/orchb25-queue-o25q`, never merged).
 A successor reads this first. Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-21 04:41Z
+Updated: 2026-10-21 04:47Z
 
 ## Gate state
 - Pages 39541119371 on a437375b SUCCESS → INCIDENT lifted 04:05Z.
@@ -73,3 +73,5 @@ Next game order: #3382, #3385, #3230, #3377, #3238, O-G train, #3386, #3388, #33
 04:18Z: Pages 142f52af SUCCESS; 9416abb3 (#3390) running since 04:06. GREEN+READY game: #3382, #3385 (full 43/0), #3377 (full 58/0) → merge in that order, one per green Pages. Train #3402 open (originals #3309/#3357/#3358/#3376 CLOSED as superseded). Non-game waiting on CI/Plan: #3398, #3400 (incl. D2/D3), #3310 (ready, full running), #3301 + #3359 (fixes committed by O-T), #3401, #3391 (separate, non-game).
 
 04:41Z: MERGED since 04:18 — #3400 153f4dae, #3310 c6535c78, #3398 2fc7a8fe (non-game). Pages 9416abb3 (#3390) RED = js-debugger-node R4 flake (not #3390; W13 deflaking); Pages c6535c78 running = verdict for #3390. Game queue (all READY+green): #3382, #3385, #3377, #3238, #3230. Non-game ready next: #3401 (after #3301), #3359 (hold lifted by Bryce 04:37Z; O-T readying). H13 archived; all old lanes archived.
+
+04:47Z: Pages c6535c78 SUCCESS (#3390 confirmed). MERGED #3382 → eda39fd5 (game). Pages 2fc7a8fe running; eda39fd5 next. Game queue: #3385, #3377, #3238, #3230 (all READY+green). Non-game: #3359 (full tier running), #3403 (R4 deflake, W13), #3301→#3401, #3391. Decisions: H16 owns tlx.js startProgramWarm fix (hidden-frame 3.8 s stall); W11 item 5 (physics catch-up cap) parked as Bryce's feel call. Roll call 04:42Z: 8/10 replied (H17, H18 pending).
