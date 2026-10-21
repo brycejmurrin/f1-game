@@ -371,6 +371,25 @@ test("A-P1: no SSAO / contact / godray / SSR / flare input -> the depth is not n
   assert.equal(post.needsDepth({ ...OFF, ssao: 0.5 }, { ...NIGHT, invProj: null }), false, "no invProj: SSAO cannot run");
 });
 
+// B·H26-R1 (GLX twin of B-H15): GLX's present() kept the scene depth (MSAA blit, or no invalidate on the direct
+// phone path) for ANY daytime sun, behind the camera included, though its composite taps texture(uDepth, uSunUV)
+// only under the same three terms as TLX. Both now ask the one shared predicate.
+test("B·H26-R1: PostCommon.flareTapsDepth is the composite's flare-tap guard; GLX keeps depth for the flare only through it", () => {
+  const sun = (F) => PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, {});
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY)), true, "a day sun on screen: the flare taps depth");
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY), 0), false, "LENS FLARE 0: uFlareStr is 0, no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun(DAY_OFF)), false, "in front, bright, off screen: no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun({ ...DAY, sunDir: [0, 0.3, 0.95] })), false, "behind the camera: no tap");
+  assert.equal(PostCommon.flareTapsDepth(sun(NIGHT)), false, "night: the brightness gate zeroes the flare");
+  const glx = read("js/render/glx/post.js");
+  assert.match(glx, /const flareMaybe = PostCommon\.flareTapsDepth\(sun, flareMul\);/);
+  assert.doesNotMatch(glx, /F\.sunDir\[1\] > -0\.02/, "the any-daytime-sun gate kept depth with the sun off screen");
+  assert.match(glx, /gl\.uniform1f\(compU\.uFlareStr, flareStr \* flareMul\)/, "the uniform uses the same flareMul");
+  // The predicate is exact only while the GLSL tap keeps these terms (glsl-post.js composite).
+  assert.match(read("js/render/glx/shaders/glsl-post.js"),
+    /float sunVis = \(uFlareStr > 0\.0 && uSunUV\.x >= 0\.0 && uSunUV\.x <= 1\.0 && uSunUV\.y >= 0\.0 && uSunUV\.y <= 1\.0\)\s*\? smoothstep\(0\.9990, 0\.9999, texture\(uDepth, uSunUV\)\.r\) : 0\.0;/);
+});
+
 test("A-P1: WebGL2 invalidates the scene FBO's depth after the scene pass only on frames that read none of it", async (t) => {
   const h = await postRig(t);
   const off = h.scenePass(OFF, NIGHT);

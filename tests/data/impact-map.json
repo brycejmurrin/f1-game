@@ -12519,6 +12519,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "present": [
@@ -12526,6 +12527,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "setup": [
@@ -12577,6 +12579,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ]
     },
@@ -12967,6 +12970,9 @@
       ]
     },
     "js/render/shared/post-common.js": {
+      "flareTapsDepth": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
       "keepNearest": [
         "tests/unit/godray-keep-nearest.test.mjs"
       ],

@@ -138,6 +138,19 @@ const PostCommon = (function () {
     return out;
   }
 
+  // True when the composite's flare occlusion tap (texture(uDepth, uSunUV))
+  // runs this frame: the sun is in front, its flare times the LENS FLARE knob
+  // is > 0, and its screen UV lies inside [0,1]^2. Every shader guards the tap
+  // with exactly those terms, so a CPU "keep the scene depth" decision that
+  // asks less (any daytime sun, even behind the camera) stores a full-res
+  // depth surface no pass reads. fround: the bound is tested on the float32
+  // the uniform will hold, so the CPU and shader gates cannot disagree.
+  function flareTapsDepth(sun, flareMul) {
+    if (!(sun && sun.visible && sun.flare * (flareMul != null ? flareMul : 1) > 0)) return false;
+    const ux = Math.fround(sun.ndcx * 0.5 + 0.5), uy = Math.fround(sun.ndcy * 0.5 + 0.5);
+    return ux >= 0 && ux <= 1 && uy >= 0 && uy <= 1;
+  }
+
   // Tune-knob read with the registry default: T[id] when the tuner set it,
   // else TUNE_DEFS' def for that id. The literal defaults the backends used to
   // restate (contrast 1.12, vignette 0.80, ...) are exactly those defs
@@ -190,6 +203,6 @@ const PostCommon = (function () {
     opts.ssrQuality = tier >= 3 ? 2 : (tier >= 2 ? 1 : 0);
   }
 
-  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, knob, roadReflection };
+  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, roadReflection };
 })();
 Object.freeze(PostCommon);
