@@ -10077,12 +10077,18 @@
       "body": [
         "tests/unit/contact-geometry.test.mjs"
       ],
+      "bodyAngle": [
+        "tests/unit/collision-contact-vm.test.mjs"
+      ],
       "create": [
         "tests/specs/physics-hotpath.spec.js",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/contact-geometry.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
+      ],
+      "extentAngle": [
+        "tests/unit/collision-contact-vm.test.mjs"
       ],
       "fillArcBuckets": [
         "tests/specs/physics-hotpath.spec.js",
