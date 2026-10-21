@@ -314,16 +314,16 @@ test('actual articulated boot transforms plant in both world axes during retreat
 });
 
 
-test('service crew is five workers with staged equipment and a clear departure lane', () => {
+test('service crew is seven workers with staged equipment and a clear departure lane', () => {
   const { Service, Arrival }=load(), cfg=Arrival.settings({enterCrew:'service',leaveCrew:'service'});
   assert.equal(cfg.enterCrew,'service');assert.equal(cfg.leaveCrew,'service');
   assert.equal(Arrival.duration(cfg),Arrival.DURATION+6);assert.equal(Arrival.duration(cfg,'out'),Arrival.OUT_DURATION+3);
   for(let t=0;t<8.4;t+=.2) {
     const p=Arrival.pose(t,cfg,true), q=Arrival.pose(t,Arrival.DEFAULT,true);
     assert.equal(p.x,q.x);assert.equal(p.z,q.z);
-    const a=Service.layout(p);assert.equal(a.length,5);assert.ok(a.slice(0,4).every(a=>Math.abs(a.x)>=2.69));assert.equal(a[4].x,4.05);
+    const a=Service.layout(p);assert.equal(a.length,7);assert.ok(a.slice(0,4).every(a=>Math.abs(a.x)>=2.69));assert.equal(a[4].x,4.05);
   }
-  const near=Service.layout(Arrival.pose(11.8,cfg,true));
+  const near=Service.layout(Arrival.pose(11.95,cfg,true));
   assert.ok(near.slice(0,4).every(a=>Math.abs(Math.abs(a.x)-1.45)<1e-5));
   assert.ok(near.slice(0,4).every(a=>!a.coverAttached));
   for(let t=0;t<=5.9;t+=.1)assert.equal(Arrival.poseOut(t,cfg,true).z,0,'car waits for equipment');
@@ -337,9 +337,9 @@ test('service playback reuses every mesh, keeps grounded props and clears the mo
   Crew.draw(LIV,[-3,2,-4],Arrival.pose(0,cfg,true));const built=meshes.length;
   for(const dir of ['in','out'])for(let t=0;t<Arrival.duration(cfg,dir);t+=.12) {
     const p=(dir==='in'?Arrival.pose:Arrival.poseOut)(t,cfg,true);draws.length=0;Crew.draw(LIV,[-3,2,-4],p);
-    assert.equal(draws.length,92);assert.equal(meshes.length,built,'no mesh creation during service');
+    assert.equal(draws.length,121);assert.equal(meshes.length,built,'no mesh creation during service');
     for(const d of draws)assert.ok(d.m.every(Number.isFinite));
-    for(const d of draws.slice(24,90))for(let k=0;k<d.mesh.d.pos.length;k+=3) {
+    for(const d of draws.slice(24,119))for(let k=0;k<d.mesh.d.pos.length;k+=3) {
       const v=d.mesh.d.pos,m=d.m,y=m[1]*v[k]+m[5]*v[k+1]+m[9]*v[k+2]+m[13];assert.ok(y>-.001,'worker and equipment stay above the floor');
       if(Math.abs(p.z)+Math.abs(p.x)>.03) {
         const x=m[0]*v[k]+m[4]*v[k+1]+m[8]*v[k+2]+m[12];assert.ok(Math.abs(x)>1.1,'service crew and props clear the moving car');
@@ -414,4 +414,42 @@ test('cover handlers crouch beside the tyres without putting knees inside them',
       }
     }
   }
+});
+
+
+test('covers lower outside the tyre before sliding in and withdraw before lifting', () => {
+  const {Crew,Arrival,Service,draws}=load(),cfg=Arrival.settings({enterCrew:'service',leaveCrew:'service'});
+  for(const dir of ['in','out'])for(let tick=0;tick<=630;tick++) {
+    const t=tick/100,p=(dir==='in'?Arrival.pose:Arrival.poseOut)(dir==='in'?t+8.4:t,cfg,true);
+    const actors=Service.layout(p);draws.length=0;Crew.draw(LIV,[-3,2,-4],p);
+    for(let worker=0;worker<4;worker++) {
+      const a=actors[worker],wx=(worker%2?-1:1)*(worker<2?.79:.76),wz=worker<2?1.7:-1.6;
+      const {mesh,m}=draws[36+worker*13];
+      if(a.coverY<.8799&&a.coverY>.3701)assert.ok(Math.abs(m[12]-wx)>.45,'vertical travel stays axially outside tyre');
+      if(Math.abs(m[12]-wx)<.45)assert.ok(Math.abs(m[13]-.37)<1e-6,'overlapping axial travel happens only at wheel height');
+      for(let k=0;k<mesh.d.pos.length;k+=3) {
+        const v=mesh.d.pos,x=m[0]*v[k]+m[4]*v[k+1]+m[8]*v[k+2]+m[12],y=m[1]*v[k]+m[5]*v[k+1]+m[9]*v[k+2]+m[13],z=m[2]*v[k]+m[6]*v[k+1]+m[10]*v[k+2]+m[14];
+        assert.ok(Math.abs(x-wx)>=.215||Math.hypot(y-.36,z-wz)>=.35,'cover shell stays outside tyre rubber through the complete path');
+      }
+    }
+  }
+});
+
+test('service cable follows both gloves and disconnects before moving; engineer types at side desk', () => {
+  const {Crew,Arrival,Service,draws,meshes}=load(),cfg=Arrival.settings({enterCrew:'service',leaveCrew:'service'});
+  const world=(m,p)=>[m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12],m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13],m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14]];
+  for(const dir of ['in','out'])for(let k=0;k<=60;k++) {
+    const t=k/10,p=(dir==='in'?Arrival.pose:Arrival.poseOut)(dir==='in'?t+8.4:t,cfg,true);
+    draws.length=0;Crew.draw(LIV,[-3,2,-4],p);
+    const a=Service.layout(p),plug=draws[102],centre=world(plug.m,[0,0,0]);
+    for(const i of [96,101]){const h=world(draws[i].m,[0,.3,0]);assert.ok(Math.abs(h[1]-centre[1])<1e-5);assert.ok(Math.abs(Math.hypot(h[0]-centre[0],h[2]-centre[2])-.22)<1e-5);}
+    const end=world(draws[105].m,[0,1,0]),socket=world(plug.m,[0,0,-.08]);
+    assert.ok(Math.hypot(...end.map((x,i)=>x-socket[i]))<1e-5,'hose end stays attached to connector');
+    for(const i of [112,117]){const h=world(draws[i].m,[0,.3,0]);assert.ok(h[0]<-4.7&&h[0]>-5.02);assert.ok(Math.abs(h[1]-.95)<1e-5);}
+    if(dir==='out'&&t>=2.5){assert.equal(a[5].connected,0);assert.equal(a[5].x,3);}
+    for(const start of [90,106])for(const offset of [2,3,5,6,7,8,10,11])assert.ok(Math.abs(Math.hypot(...draws[start+offset].m.slice(4,7))-1)<.001,'support crew limb lengths remain fixed');
+  }
+  const station=draws[118].mesh.d.pos;assert.equal(Math.min(...station.filter((_,i)=>i%3===1)),0,'service unit has visible supports touching the floor');
+  const count=meshes.length;draws.length=0;Crew.draw(LIV,[-3,2,-4],Arrival.pose(12,cfg,false));assert.equal(meshes.length,count);
+  const calm=Service.layout(Arrival.pose(12,cfg,true))[6].handY;assert.equal(calm,Service.layout(Arrival.pose(13,cfg,true))[6].handY,'reduced motion holds decorative typing');
 });
