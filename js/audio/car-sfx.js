@@ -46,7 +46,7 @@ var CarSfx = (() => {
       // A rewind / flashback restores an older raceT: re-seed the edge silently
       // so crossing a stop boundary in the jump does not replay the guns.
       if (Number.isFinite(rt) && Number.isFinite(lastRaceT) && rt + 0.02 < lastRaceT) {
-        lastCar = c; lastPit = ps;
+        lastCar = c; lastPit = ps; lastRaceT = rt;
       } else if (Number.isFinite(rt)) lastRaceT = rt;
       if (c !== lastCar) { lastCar = c; lastPit = ps; }
       if (ps !== lastPit) {
