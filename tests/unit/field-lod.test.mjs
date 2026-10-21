@@ -59,9 +59,9 @@ function carPoseRig() {
     loadingScreen: { active: () => false }, photoStudio: null,
     prepared,
   });
-  vm.runInContext(symbolSource("function renderPosOf(c)") + "\n" + symbolSource("function playerAnchor(c)"), ctx);
+  vm.runInContext(symbolSource("function renderPosOf(c)") + "\n" + symbolSource("function playerAnchor(c)"), ctx, { filename: absSrc("js/game.js") });
   const run = vm.runInContext(`(function () { ${render.slice(start, end)}
-    prepared.push({ car: c, x: rp.x, z: rp.z, world: rp.world, cS, cX }); } })`, ctx);
+    prepared.push({ car: c, x: rp.x, z: rp.z, world: rp.world, cS, cX }); } })`, ctx, { filename: absSrc("js/game.js") });
   return { ctx, projected, prepared, run };
 }
 
