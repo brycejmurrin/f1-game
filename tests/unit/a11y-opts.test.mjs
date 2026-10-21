@@ -44,8 +44,9 @@ function el(id) {
   return e;
 }
 
-function load({ stored = {}, osReduce = false, readyState = "complete" } = {}) {
+function load({ stored = {}, osReduce = false, readyState = "complete", withInput = false } = {}) {
   const written = {};
+  const holds = [];   // withInput: every Input.setHoldMode the module makes
   const wired = [];
   const ids = new Map();
   const panel = el("pm-panel-a11y");
@@ -99,13 +100,15 @@ function load({ stored = {}, osReduce = false, readyState = "complete" } = {}) {
     matches: osReduce,
     addEventListener() {},
   });
+  if (withInput) sb.Input = { setHoldMode: (m) => holds.push(JSON.parse(JSON.stringify(m))) };
   const ctx = vm.createContext(sb);
+  if (withInput) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/input/bindings.js"), "utf8"), ctx, { filename: absSrc("js/input/bindings.js") });
   vm.runInContext(TITLE, ctx, { filename: absSrc("js/ui/title-fx.js") });
   vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   return {
     A: vm.runInContext("A11yOpts", ctx),
     T: vm.runInContext("TitleFx", ctx),
-    html, written, wired, ids, panel, document, stored,
+    html, written, wired, ids, panel, document, stored, holds,
   };
 }
 
@@ -181,6 +184,17 @@ test("panel mounts five rows and wires them", () => {
   assert.equal(A.holdMode().throttle, "toggle");
   assert.equal(written.holdMode.throttle, "toggle");
   assert.equal(written.holdMode.lookBack, "hold");
+});
+
+test("a HOLD/TOGGLE choice reaches Input and survives a reload (B·H11 settings audit)", () => {
+  const a = load({ withInput: true });
+  a.ids.get("pm-hold-throttle")._spec.write("toggle");
+  assert.deepEqual(a.holds.at(-1), { throttle: "toggle", lookBack: "hold" }, "applied to Input at once");
+  const b = load({ withInput: true, stored: { holdMode: a.written.holdMode } });
+  assert.equal(b.A.holdMode().throttle, "toggle", "a fresh boot reads it back");
+  assert.deepEqual(b.holds.at(-1), { throttle: "toggle", lookBack: "hold" }, "and hands it to Input");
+  const c = load({ withInput: true, stored: { holdMode: { throttle: "sideways", lookBack: 3 } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.A.holdMode())), { throttle: "hold", lookBack: "hold" }, "junk falls back to HOLD");
 });
 
 test("HIGH focus CSS keys off data-focus", () => {

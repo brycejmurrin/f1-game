@@ -217,6 +217,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-fx.test.mjs",
   "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
+  // Car mesh budget (B·H13): per-body tris/verts for the drawn tiers, and the vertex weld is lossless. ~5 s.
+  "tests/unit/car-mesh-budget.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
@@ -673,6 +675,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
+  "tests/unit/input-clock-rotate.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/input-hud-properties.test.mjs",
   // #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.
@@ -1898,7 +1901,7 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
   const out = [];
   for (let i = 1; i <= shardCount; i++) {
     const spec = `${i}/${shardCount}`;
-    if (applyFileShard(allFiles, spec).some((f) => want.has(f))) out.push(spec);
+    if (ciShardFiles(allFiles, spec).some((f) => want.has(f))) out.push(spec);
   }
   return out;
 }
@@ -2214,14 +2217,41 @@ const TOOLING_FAST_FLAGS = Object.freeze([
 export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
 
-/** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
-export function applyFileShard(files, spec) {
+/** Split a file list across CI jobs (`--shard=1/2`).
+ *
+ *  Without `timings` the split is a stride (idx % n): cheap, but blind to cost. On 2026-10-20 the stride gave shard
+ *  1/2 about 1407 s of recorded work and shard 2/2 about 770 s (1.8x), with the two slowest files (flyby-shots 217 s,
+ *  real-replay-vm 186 s) in the same half; "Structural guards (tooling A)" ran 11.9 min against its 12 min cap and was
+ *  cancelled twice that night (Pages #3864, #3230's run), while tooling B finished in 8.4 min.
+ *
+ *  With `timings` ({ file: ms }, the COMMITTED table) the files are packed longest first onto the least-loaded shard
+ *  (Graham's LPT, the rule the runner and select-specs already use), unmeasured files costed at the table's median,
+ *  ties broken by list order, so every shard computes the same plan from the same inputs. Pass the committed table
+ *  only (`ciShardFiles`): a local measurement would make this box's split differ from CI's. Equal costs give the old
+ *  stride. Each shard keeps list order. */
+export function applyFileShard(files, spec, timings) {
   if (!spec) return files;
   const m = /^(\d+)\/(\d+)$/.exec(String(spec));
   if (!m) throw new Error(`bad --shard=${spec} (want i/n)`);
   const i = Number(m[1]), n = Number(m[2]);
   if (n < 1 || i < 1 || i > n) throw new Error(`bad --shard=${spec}`);
-  return files.filter((_, idx) => idx % n === i - 1);
+  const known = Object.values(timings || {}).filter((v) => typeof v === "number").sort((a, b) => a - b);
+  if (!known.length) return files.filter((_, idx) => idx % n === i - 1);
+  const fallback = known[known.length >> 1];
+  const cost = (f) => { const v = timings[path.isAbsolute(f) ? path.relative(ROOT, f) : f]; return typeof v === "number" ? v : fallback; };
+  const order = files.map((f, idx) => ({ idx, ms: cost(f) })).sort((a, b) => (b.ms - a.ms) || (a.idx - b.idx));
+  const load = new Array(n).fill(0), owner = new Array(files.length);
+  for (const x of order) {
+    let k = 0;
+    for (let j = 1; j < n; j++) if (load[j] < load[k]) k = j;
+    load[k] += x.ms; owner[x.idx] = k;
+  }
+  return files.filter((_, idx) => owner[idx] === i - 1);
+}
+
+/** The CI split: applyFileShard with the committed timings table and nothing else. */
+export function ciShardFiles(files, spec) {
+  return applyFileShard(files, spec, loadTimings([TIMINGS_FILE]));
 }
 
 /** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
@@ -2305,7 +2335,7 @@ if (isMain) {
   } else if (!files0) {
     files0 = [...TOOLING_FAST_FILES];
   }
-  const files = applyFileShard(files0, parsed.shard);
+  const files = ciShardFiles(files0, parsed.shard);
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,

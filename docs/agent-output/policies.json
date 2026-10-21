@@ -146,6 +146,11 @@
       "presentation": "native",
       "preserve": "Generated crest-path source, source bitmap provenance and explicit write mode."
     },
+    "tools/car/tri-census.mjs": {
+      "action": "targeted-summary",
+      "presentation": "shared-levels",
+      "preserve": "The header line naming the measured root, every body x aero x tier row (player/field tris and verts, caster and flap tris) and the far shared rival row; --json keeps every row."
+    },
     "tools/carview.html": {
       "action": "no-direct-output",
       "presentation": "native",

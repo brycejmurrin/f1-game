@@ -145,7 +145,7 @@ test("RELAX is the most forgiving bundle, which is the whole point of it", () =>
 // PRO's value. WEIGHT (carWeight, hand-wired) did the same. Only a preset-owned
 // row may clear the chip. SteerTuning.create runs in a VM against a stub DOM, a
 // disk-backed store and an Input whose every setter is a no-op.
-function bootTuning(input = {}) {
+function bootTuning(input = {}, disk = {}) {
   const els = {};
   const noop = () => {};
   const mk = () => {
@@ -155,7 +155,7 @@ function bootTuning(input = {}) {
     return el;
   };
   const $ = (id) => (els[id] ||= mk());
-  const disk = {};
+  const wires = {};
   const store = {
     get: (k, d) => (Object.prototype.hasOwnProperty.call(disk, k) ? disk[k] : d),
     set: (k, v) => { disk[k] = v; },
@@ -164,7 +164,7 @@ function bootTuning(input = {}) {
     Math, Object, Array, Number, String, JSON, isFinite,
     Log: { info: noop, warn: noop, debug: noop, error: noop },
     Input: new Proxy(input, { get: (target, key) => target[key] || noop }),
-    SettingRow: { wire: noop, paint: noop }, Dom: { paintFold: noop }, GameAudio: { uiSelect: noop },
+    SettingRow: { wire: (id, o) => { wires[typeof id === "string" ? id : id && id.id] = o; }, paint: noop }, Dom: { paintFold: noop }, GameAudio: { uiSelect: noop },
   };
   const listeners = {};
   sb.window = { matchMedia: () => ({ matches: false }), addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } };
@@ -173,7 +173,7 @@ function bootTuning(input = {}) {
   const api = vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
     clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   const move = (id, v) => $(id).oninput({ target: { value: String(v) } });
-  return { $, disk, move, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
+  return { $, disk, move, wires, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
 }
 
 test("the open settings haptics row follows phone capability changes and pad disconnects", () => {
@@ -189,6 +189,61 @@ test("the open settings haptics row follows phone capability changes and pad dis
   supported = false; fire("gamepaddisconnected");
   assert.equal($("pm-haptics-item").hidden, true);
 });
+// APPLY + PERSIST for the driving sliders that had neither (B·H11 settings audit, 2026-10-21).
+// Moving a slider must store `apex26.<key>` and call its Input setter; a fresh boot on the same
+// storage (a reload) must call that setter with the same arguments; and those must differ from
+// a defaults boot, so the stored value is what the car gets.
+test("each driving slider applies on input and re-applies from storage after a reload", () => {
+  const ROWS = [
+    ["pm-tiltcurve", "tiltCurve", 9, "setAnalogTrim", "tilt"],
+    ["pm-touchcurve", "touchCurve", 9, "setAnalogTrim", "touch"],
+    ["pm-padcurve", "padCurve", 2, "setAnalogTrim", "pad"],
+    ["pm-touchrange", "touchRange", 8, "setTouchRange"],
+    ["pm-touchdragspeed", "touchDragSpeed", 7, "setTouchSpeedMix"],
+    ["pm-dragsmooth", "dragSmooth", 6, "setDragSmoothing"],
+    ["pm-steerrate", "digitalRate", 9, "setKeyRampIn"],
+    ["pm-analogspeed", "analogSpeedSteer", 7, "setAnalogSpeedMix"],
+    ["pm-haptics", "haptics", 1, "setHaptics"],
+    ["pm-paddz", "padDeadzone", 20, "setPadDeadzone"],
+    ["pm-padsat", "padSaturation", 12, "setPadSaturation"],
+  ];
+  const recorder = (calls) => new Proxy({}, { get: (_, name) => (...args) => { calls.push([name, args]); } });
+  const last = (calls, setter, first) => {
+    const hit = calls.filter(([n, a]) => n === setter && (first == null || a[0] === first));
+    return hit.length ? hit[hit.length - 1][1] : undefined;
+  };
+  const defaults = [];
+  bootTuning(recorder(defaults)).apply();
+  for (const [id, key, v, setter, first] of ROWS) {
+    const disk = {}, live = [];
+    const ui = bootTuning(recorder(live), disk);
+    live.length = 0;
+    ui.move(id, v);
+    assert.equal(disk[key], v, `${id} stores apex26.${key}`);
+    const applied = last(live, setter, first);
+    assert.ok(applied, `${id} calls Input.${setter}`);
+    const reload = [];
+    bootTuning(recorder(reload), disk).apply();
+    assert.deepEqual(last(reload, setter, first), applied, `${key} re-applies after a reload`);
+    assert.notDeepEqual(last(defaults, setter, first), applied, `${key}=${v} differs from the default`);
+  }
+});
+
+test("FEEL › SIM on a fresh install does not light a preset its unset keys do not match (B·H11 hunt)", () => {
+  // matchPreset read an unset key as the CANDIDATE's own value, so a store holding only the four
+  // FEEL keys "matched" PRO (adaptiveButtons/brakeCue/tiltDeg still at their STANDARD fallbacks).
+  const disk = { drivingHelp: 1, raceLine: 0 };          // what the v2 migration stores on a fresh install
+  const ui = bootTuning({}, disk);
+  ui.wires["pm-feel"].write("sim");
+  assert.equal(disk.steerRate, 7, "SIM sets the quick rack");
+  assert.notEqual(disk.preset, "pro", "the car runs STANDARD assists with a quick rack, not PRO: " + disk.preset);
+  // Control: the same four keys PLUS PRO's own assists is PRO.
+  const pro = { drivingHelp: 1, raceLine: 0, adaptiveButtons: 4, brakeCue: 4, tiltDeg: 7 };
+  const ui2 = bootTuning({}, pro);
+  ui2.wires["pm-feel"].write("sim");
+  assert.equal(pro.preset, "pro", "every PRO key in effect lights PRO");
+});
+
 const PRESET_STORE = table("PRESET_STORE");
 const presetOwned = (key) => Object.prototype.hasOwnProperty.call(PRESET_STORE, key);
 // Every wireTune row, read from the source so a row added later is covered too.

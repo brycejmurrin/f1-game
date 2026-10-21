@@ -61,7 +61,8 @@ test("hinges are not TE-parked on the front (plan #5)", () => {
 });
 
 test("rear endplates carry window cut-outs and a louvre stack", () => {
-  const mesh = M.Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true });
+  // noWeld: the thresholds count emitted corners (CarGeometry.weld merges repeats).
+  const mesh = M.Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], { noWheels: true, noWeld: true });
   let intake = 0;
   const ys = new Set();
   for (let i = 0; i < mesh.pos.length / 3; i++) {
