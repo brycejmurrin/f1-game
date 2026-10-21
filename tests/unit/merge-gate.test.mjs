@@ -131,6 +131,11 @@ test("receiptVerdict (JS) and merge_policy.receipt_check (Python) agree on every
     assert.match(both("merge", 8, HEAD).why, /no merge-gate receipt for #8/);
     writeReceipt(dir, "merge", { pr: 7, head: HEAD, ok: true, at: at(MAX_AGE_MIN + 1) });
     assert.match(both("merge", 7, HEAD).why, /min old/);
+    // 2026-10-21 defect hunt rows 2+3: the hook cannot re-read a MERGE-HOLD or the PR head, so the receipt's age is its only
+    // lever; the JS and Python twins share it and it is short.
+    assert.equal(MAX_AGE_MIN, 10);
+    writeReceipt(dir, "merge", { pr: 7, head: HEAD, ok: true, at: at(MAX_AGE_MIN - 1) });
+    assert.equal(both("merge", 7, HEAD).ok, true, "just inside the window still merges");
     writeReceipt(dir, "merge", { pr: 7, head: HEAD, ok: false, evidence: "ci: CI failure", at: at(1) });
     assert.match(both("merge", 7, HEAD).why, /refused \(ci: CI failure\)/);
     writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, at: at(1) });

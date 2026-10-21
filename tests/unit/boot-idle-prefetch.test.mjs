@@ -18,7 +18,7 @@ test("raceAssets schedules scenery on microtask and LAZY_RACE on idle", () => {
   assert.match(src, /else setTimeout\(fn, Math\.min\(ms, 800\)\)/, "Safari timer fallback");
   assert.match(src, /function raceAssets\(\)/, "sync scheduler (not async await on critical path)");
   assert.match(src, /queueMicrotask\(kickScenery\)/, "scenery on microtask (game-vm rIC is a no-op)");
-  assert.match(src, /scheduleIdle\(\(\) => \{ ensureLightPresets\(\); \}, 2500\)/, "lights on idle");
+  assert.match(src, /scheduleIdle\(\(\) => \{ ensureLightPresets\(\); \}, 8000\)/, "lights on idle");
   assert.match(src, /function ensureLightPresets\(\) \{\s*if \(window\.LightPresets\) return/, "idle lights fetch is a no-op once the presets are resident");
   assert.doesNotMatch(src, /ensureCircuit\(deps\.getContext\(\)\.trackIdx\);\s*ensureScenery/,
     "no redundant ensureCircuit kick beside ensureScenery");
@@ -81,10 +81,10 @@ test("raceAssets microtask kicks scenery; idle injects lights", async () => {
   `, ctx);
   ctx.__raceAssets();
   assert.equal(idles.length, 3, "lights + race-session + audio-prefetch on idle");
-  const lightIdle = idles.find((i) => i.opts && i.opts.timeout === 2500);
-  assert.ok(lightIdle, "lights idle at 2500ms");
-  assert.ok(idles.some((i) => i.opts && i.opts.timeout === 2800), "race-session idle at 2800ms");
-  assert.ok(idles.some((i) => i.opts && i.opts.timeout === 4500), "audio HTTP prefetch idle at 4500ms");
+  const lightIdle = idles.find((i) => i.opts && i.opts.timeout === 8000);
+  assert.ok(lightIdle, "lights idle at 8000ms");
+  assert.ok(idles.some((i) => i.opts && i.opts.timeout === 9000), "race-session idle at 9000ms");
+  assert.ok(idles.some((i) => i.opts && i.opts.timeout === 12000), "audio HTTP prefetch idle at 12000ms");
   await new Promise((r) => queueMicrotask(r));
   assert.equal(lightLoads, 0, "lights not yet");
   await lightIdle.fn();
@@ -315,14 +315,14 @@ test("raceAssets skips the race-session and audio prefetches under Save-Data or 
     `, ctx);
     ctx.__lb.raceAssets();
     await new Promise((r) => setTimeout(r, 0));
-    return { idles: idles.sort(), sceneryKicks };
+    return { idles: idles.sort((a, b) => a - b), sceneryKicks };
   };
-  assert.deepEqual((await run(undefined)).idles, [2500, 2800, 4500], "no Network Information API: unchanged");
-  assert.deepEqual((await run({ saveData: false, effectiveType: "4g" })).idles, [2500, 2800, 4500], "a normal link prefetches");
-  assert.deepEqual((await run({ saveData: false, effectiveType: "3g" })).idles, [2500, 2800, 4500], "3G still prefetches");
+  assert.deepEqual((await run(undefined)).idles, [8000, 9000, 12000], "no Network Information API: unchanged");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "4g" })).idles, [8000, 9000, 12000], "a normal link prefetches");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "3g" })).idles, [8000, 9000, 12000], "3G still prefetches");
   const sd = await run({ saveData: true, effectiveType: "4g" });
-  assert.deepEqual(sd.idles, [2500], "Save-Data: only the lights prefetch");
+  assert.deepEqual(sd.idles, [8000], "Save-Data: only the lights prefetch");
   assert.ok(sd.sceneryKicks > 0, "the selected circuit's scenery still kicks under Save-Data");
-  assert.deepEqual((await run({ saveData: false, effectiveType: "slow-2g" })).idles, [2500], "slow-2g: only the lights prefetch");
-  assert.deepEqual((await run({ saveData: false, effectiveType: "2g" })).idles, [2500], "2g: only the lights prefetch");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "slow-2g" })).idles, [8000], "slow-2g: only the lights prefetch");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "2g" })).idles, [8000], "2g: only the lights prefetch");
 });

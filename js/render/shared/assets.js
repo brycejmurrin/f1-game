@@ -367,29 +367,32 @@ const Assets = (function () {
   // Otherwise resolves to the sorted layer indices that landed — the list
   // readLayerBytes returns — and never rejects.
   function readLayerBytesAsync(size, images, n, data, onLayer) {
-    const scratch = _ensureScratchGl(size);
-    const gl = scratch && scratch.gl;
-    if (!gl || typeof gl.fenceSync !== "function" || typeof gl.clientWaitSync !== "function" ||
-        typeof gl.getBufferSubData !== "function") return null;
-    // Consumers may refuse a layer. Their callbacks must not strand a queued
-    // readback, trigger a second fallback, or prevent owned buffers being freed.
-    const notifyLayer = (i, bytes) => {
-      if (onLayer) { try { onLayer(i, bytes); } catch (_) { /* consumer refused */ } }
-    };
     const page = size * size * 4;
-    const done = [];
+    const raws = [];
     const pending = [];
     for (let i = 0; i < n; i++) {
       const img = images[i];
       if (!img) continue;
       const raw = (ArrayBuffer.isView(img) && img.BYTES_PER_ELEMENT === 1) ? img
         : (typeof ImageData !== "undefined" && img instanceof ImageData) ? img.data : null;
-      if (raw) {
-        if (raw.length >= page) {
-          data.set(raw.subarray(0, page), i * page); done.push(i);
-          notifyLayer(i, data.subarray(i * page, (i + 1) * page));
-        }
-      } else pending.push(i);
+      if (raw) { if (raw.length >= page) raws.push([i, raw]); } else pending.push(i);
+    }
+    // The scratch context only for layers that need it: the byte decoder hands
+    // every layer over as raw bytes, and creating the context cost 0.16–0.79 s
+    // of main thread at race entry for no readback at all (B·H14 profile).
+    const scratch = pending.length ? _ensureScratchGl(size) : null;
+    const gl = scratch && scratch.gl;
+    if (pending.length && (!gl || typeof gl.fenceSync !== "function" || typeof gl.clientWaitSync !== "function" ||
+        typeof gl.getBufferSubData !== "function")) return null;
+    // Consumers may refuse a layer. Their callbacks must not strand a queued
+    // readback, trigger a second fallback, or prevent owned buffers being freed.
+    const notifyLayer = (i, bytes) => {
+      if (onLayer) { try { onLayer(i, bytes); } catch (_) { /* consumer refused */ } }
+    };
+    const done = [];
+    for (const [i, raw] of raws) {
+      data.set(raw.subarray(0, page), i * page); done.push(i);
+      notifyLayer(i, data.subarray(i * page, (i + 1) * page));
     }
     if (!pending.length) return Promise.resolve(done);
     const { tex, fbo } = scratch;

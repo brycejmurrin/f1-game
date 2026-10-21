@@ -2214,7 +2214,8 @@
     },
     "js/car/car-draw.js": {
       "beginDecals": [
-        "tests/unit/car-draw-decal-budget.test.mjs"
+        "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-draw-decal-sweep.test.mjs"
       ],
       "carDecalNum": [
         "tests/unit/livery-tier.test.mjs"
@@ -2241,8 +2242,14 @@
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "decalBytes": [
+        "tests/unit/car-draw-decal-sweep.test.mjs"
+      ],
       "decalTextureFor": [
         "tests/unit/livery-tier.test.mjs"
+      ],
+      "drainDeferredCarWarm": [
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "drawCarDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
@@ -2270,10 +2277,12 @@
       ],
       "flushDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-draw-decal-sweep.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
       "getCarDecalTexture": [
-        "tests/unit/car-draw-decal-budget.test.mjs"
+        "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-draw-decal-sweep.test.mjs"
       ],
       "glassState": [
         "tests/unit/car-presentation-vm.test.mjs"
@@ -2308,7 +2317,8 @@
         "tests/unit/car-presentation-vm.test.mjs"
       ],
       "queueCarDecals": [
-        "tests/unit/car-draw-decal-budget.test.mjs"
+        "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-draw-decal-sweep.test.mjs"
       ],
       "reapHiResGrave": [
         "tests/unit/livery-tier.test.mjs"
@@ -2728,6 +2738,9 @@
     },
     "js/car/field-lod.js": {
       "castsShadow": [
+        "tests/unit/field-lod.test.mjs"
+      ],
+      "farBody": [
         "tests/unit/field-lod.test.mjs"
       ],
       "flame": [
@@ -9147,6 +9160,14 @@
         "tests/unit/global-registry.test.mjs"
       ]
     },
+    "js/perf/gpu-test-run.js": {
+      "fillSlope": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
+      "phaseStats": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ]
+    },
     "js/perf/loop-health.js": {
       "*": [
         "tests/unit/loop-health.test.mjs"
@@ -14434,6 +14455,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
