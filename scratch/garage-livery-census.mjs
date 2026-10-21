@@ -122,7 +122,16 @@ try{
       row.idleGarage={...await windowStats(page,i0.t,i1.t),delta:delta(i0.calls,i1.calls)};
       // livery_idle_trace_ms (B·H30, Bryce 2026-10-21 "lagging happens in phases like every 10 seconds"): every frame
       // interval and long task over a long idle in the bay, timestamped, so a periodic stall shows its period.
-      if(+REQ.livery_idle_trace_ms>0){const t0=(await snapshot(page)).t;
+      if(+REQ.livery_idle_trace_ms>0){
+        // rev 18 (B·H32): the stall coincides with +7 pool wrappers / render objects; name them. Every 250 ms, note
+        // each scene mesh's first-seen time (window.scene: ?three-devtools=1) with its material, size and parents.
+        await page.evaluate(()=>{const seen=window.__h32Seen=new Map();const t00=performance.now();
+          const desc=(o)=>{const m=Array.isArray(o.material)?o.material[0]:o.material;const g=o.geometry;const chain=[];for(let p=o.parent;p&&chain.length<4;p=p.parent)chain.push(p.name||p.type);
+            return {name:o.name||'',type:o.type,mat:m?(m.type+(m.name?':'+m.name:'')):null,matId:m&&m.id,verts:g&&g.attributes&&g.attributes.position?g.attributes.position.count:0,
+              inst:o.count||0,visible:o.visible,parents:chain.join('<'),tex:m&&m.map?[m.map.image&&m.map.image.width,m.map.image&&m.map.image.height]:null};};
+          const tick=()=>{const S=window.scene;if(!S)return;const t=performance.now();S.traverse((o)=>{if((o.isMesh||o.isInstancedMesh||o.isLine||o.isPoints)&&!seen.has(o.uuid))seen.set(o.uuid,{t:Math.round(t),...desc(o)});});};
+          tick();window.__h32Base=seen.size;window.__h32T=setInterval(tick,250);});
+        const t0=(await snapshot(page)).t;
         // B·H26's discriminator: per-1 s TLX pool/render-object counts and the governor tier, so a step at ~15-20 s
         // (prune / relink) or a tier move separates from a flat plateau (a newly sampled hi-res atlas).
         const mem=[];for(let i=0;i<Math.round(+REQ.livery_idle_trace_ms/1000);i++){await page.waitForTimeout(1000);
@@ -133,6 +142,8 @@ try{
         row.idleTrace=await page.evaluate(([t0,t1])=>({frames:(__livCount.frames||[]).filter(([t])=>t>t0&&t<=t1).map(([t,d])=>[Math.round(t-t0),+d.toFixed(1)]),
           longs:__livCount.longs.filter(([s])=>s>t0&&s<t1).map(([s,d])=>[Math.round(s-t0),Math.round(d)])}),[t0,t1]);
         row.idleTrace.mem=mem;row.idleTrace.t0=t0;
+        row.idleTrace.newMeshes=await page.evaluate((t0)=>{clearInterval(window.__h32T);const all=[...window.__h32Seen.values()];
+          return {base:window.__h32Base,total:all.length,after:all.filter(e=>e.t>t0-1000).map(e=>({...e,rel:e.t-Math.round(t0)}))};},t0);
         // B·H26's discriminator for the cold stall (B·H32 rev 17): the TLX warm stage timeline, the env probe and the
         // title prebuild, on the same performance.now() clock as t0, so a stage landing at the stall names its owner.
         row.idleTrace.owners=await page.evaluate(()=>{const T=window.GLX&&GLX.__tlx;const m=T&&T.memState?T.memState():{};
