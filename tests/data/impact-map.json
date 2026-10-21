@@ -6902,6 +6902,9 @@
       "button": [
         "tests/unit/garage-followups.test.mjs"
       ],
+      "explain": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "insert": [
         "tests/unit/garage-followups.test.mjs"
       ],
@@ -7269,6 +7272,9 @@
       "holdSetupCtl": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "hullKeyOf": [
+        "tests/unit/setup-preview-hull.test.mjs"
+      ],
       "panelCover": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -7311,8 +7317,7 @@
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/image-grade-shaders.test.mjs",
-        "tests/unit/setup-preview-hull.test.mjs"
+        "tests/unit/image-grade-shaders.test.mjs"
       ]
     },
     "js/garage/setup-experiments.js": {
@@ -7363,6 +7368,9 @@
       ]
     },
     "js/garage/setup-sheet.js": {
+      "attrIf": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "buildSetup": [
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -7414,6 +7422,9 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-draft-mesh-cache.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
+      ],
+      "propIf": [
+        "tests/unit/livery-design.test.mjs"
       ],
       "renderStatBars": [
         "tests/unit/garage-followups.test.mjs"
