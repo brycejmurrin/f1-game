@@ -528,7 +528,7 @@ jobs:
   guards-c:
     name: Structural guards (tooling C)
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18   # same budget as tooling A
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
@@ -666,7 +666,7 @@ jobs:
       - name: Shader validation (glslang + naga)
         run: node tools/check/shader-validate.mjs
       - name: Planted-defect fixtures
-        run: node --test tests/unit/workflow-lint.test.mjs tests/unit/shader-validate.test.mjs
+        run: node --test --test-timeout=900000 tests/unit/workflow-lint.test.mjs tests/unit/shader-validate.test.mjs
 
   node-suites:
     # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
@@ -1171,7 +1171,7 @@ jobs:
           console.log(`--- suite shard ${shard}of${shards}: ${slice.length}/${all.length} suites (~${plan.seconds}s measured) ---`);
           for (const s of slice) console.log(s);
           console.log("--------------------");
-          pkg.scripts["test:sweeps"] = "node --test --test-concurrency=1" + (slice.length ? ` ${slice.join(" ")}` : "");
+          pkg.scripts["test:sweeps"] = "node --test --test-timeout=900000 --test-concurrency=1" + (slice.length ? ` ${slice.join(" ")}` : "");
           fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `count=${slice.length}\n`);
           NODE
@@ -1202,7 +1202,7 @@ jobs:
           MINE="${MINE# }"
           echo "targeted shard ${SHARD}of4: ${MINE:-"(none on this shard)"}"
           [ -z "$MINE" ] && exit 0
-          node --test --test-concurrency=1 $MINE
+          node --test --test-timeout=900000 --test-concurrency=1 $MINE
       # Once per matrix, not once per shard — shard 3 only (same work as the
       # old single job's trailing step). Shard 3 is the lightest (#3117 F2:
       # sweeps 276 s vs 374 s on shard 1), so the +77 s lands off the critical path.
