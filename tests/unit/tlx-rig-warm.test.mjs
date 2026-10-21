@@ -55,7 +55,7 @@ async function rig(t, { soft = false } = {}) {
     async function warmMirrorStage() { mirrorStages++; }
     function _mirWarmUnswap() { unswaps++; }
     let _coOn = true;
-    let _warmPending = null, _deviceLost = false, _gpuLastOperation = "";
+    let _warmPending = null, _warmRequested = false, _deviceLost = false, _gpuLastOperation = "";
     const mats = new Map();
     const materialFor = (o) => { let m = mats.get(o); if (!m) mats.set(o, m = lit.makeMaterial({ roughness: o.roughness })); return m; };
     const _gpuSettled = async () => {}, _ssrMrtNode = () => null, softOutRT = () => null;
@@ -67,10 +67,12 @@ async function rig(t, { soft = false } = {}) {
       drawList.n++;
     }
     function present() {
+      // A requested program warm (game.js startRaceBody asks for it just before the rig): this present runs it, paints nothing.
+      if (!_warmPending && !_deviceLost && _warmRequested) { _warmRequested = false; return false; }
       if (!_warmPending && !_deviceLost) { if (_rigWarm) startRigWarm(); }
       return !_warmPending;
     }
-    return { warmDraws, draw, present, pending: () => _warmPending, drawn: () => drawList.n, mats,
+    return { warmDraws, draw, present, pending: () => _warmPending, drawn: () => drawList.n, mats, requestWarm: () => { _warmRequested = true; },
       mirror: () => ({ stages: mirrorStages, unswaps }), stages: _warmStages };`);
   const R = mk(THREE, renderer, scene, camera, lit, globalThis.Log, soft);
   renderer.render(scene, camera);   // three's own first-render programs (the output pass), so a count isolates ours
@@ -140,6 +142,25 @@ test("a second warmDraws over pairs already compiled resolves at once and holds 
   assert.equal(h.R.present(), true, "nothing owed: the present paints");
   assert.equal(h.compiles.length, n, "no recompile");
   assert.equal(await h.R.warmDraws(() => {}), false, "an empty capture reports false");
+});
+
+test("behind a requested program warm, warmDraws resolves at once and the rig still compiles before any frame paints", async (t) => {
+  // Race entry requests the program warm, then awaits the rig warm. Awaiting a job that can only start after that
+  // warm held race entry for all of it, and past 20 s (a software-GL warm) the fallback dropped the job unwarmed.
+  const h = await rig(t);
+  const cab = { geo: geo(RIG_LAYOUT) };
+  h.R.requestWarm();
+  let settled = null;
+  h.R.warmDraws(() => h.R.draw(cab, I, CAB)).then((v) => { settled = v; });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(settled, true, "race entry is not held behind the program warm");
+  assert.equal(h.compiles.length, 0, "queued, not compiled yet");
+  assert.equal(h.R.present(), false, "this present runs the program warm and paints nothing");
+  assert.equal(h.R.present(), false, "the next present starts the queued rig warm and still paints nothing");
+  while (h.R.pending()) await h.R.pending();
+  assert.deepEqual(h.compiles.map((c) => c.geo === cab.geo), [true], "the rig's pair compiled");
+  assert.equal(h.R.present(), true, "only then does a frame paint");
+  assert.equal(await h.R.warmDraws(() => h.R.draw(cab, I, CAB)), true, "and it is recorded as done");
 });
 
 test("menu path: opts.mirror runs the mirror stage over the race scene once per world, never on a software GPU or without a key", async (t) => {

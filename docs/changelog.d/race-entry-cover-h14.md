@@ -1,0 +1,1 @@
+Improved: race entry is shorter — the track builds in 16 ms slices with a frame every third one under the cover (was 8 ms then a frame each), and the cars behind the player upload their livery atlas and build their shadow caster during the countdown instead of before it (one piece a frame, grid order; a far car's shadow can appear one frame late).

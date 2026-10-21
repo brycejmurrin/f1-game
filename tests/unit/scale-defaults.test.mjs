@@ -186,6 +186,27 @@ test("PANEL OPACITY: unset writes nothing; the slider clamps to 20-100 and rever
   assert.equal(bootScale({ hudPanelOpacity: 250 }).rootStyle.get("--hud-panel-a"), "1");
 });
 
+test("HUD SIZE / BUTTON SIZE / BUTTON + PANEL OPACITY survive a reload with the same CSS value (B·H11 settings audit)", () => {
+  // These were seed-only: a stored value was read, but nothing proved the slider's write round-trips.
+  const ROWS = [
+    ["pm-hudscale", "hudScale", "130", "--hud-scale"],
+    ["pm-btnscale", "hudBtnScale", "140", "--hud-btn-scale"],
+    ["pm-btnopacity", "hudBtnOpacity", "55", "--hud-btn-opacity"],
+    ["pm-panelopacity", "hudPanelOpacity", "60", "--hud-panel-a"],
+  ];
+  const defaults = bootScale().rootStyle;
+  for (const [id, key, v, prop] of ROWS) {
+    const a = bootScale();
+    a.el(id).oninput({ target: { value: v } });
+    assert.ok(key in a.stored, `${id} stores apex26.${key}`);
+    const live = a.rootStyle.get(prop);
+    assert.ok(live !== undefined, `${id} writes ${prop}`);
+    const b = bootScale({ ...a.stored });
+    assert.equal(b.rootStyle.get(prop), live, `${key} re-applies ${prop} after a reload`);
+    assert.notEqual(defaults.get(prop), live, `${key}=${v} differs from a defaults boot`);
+  }
+});
+
 test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST pins it at 1", () => {
   const hud = read("css/hud.css");
   assert.match(tokens, /--hud-panel-a-eff:\s*max\(0\.45, var\(--hud-panel-a, 1\)\);/,

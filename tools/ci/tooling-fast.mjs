@@ -28,6 +28,7 @@
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
  *   node tools/ci/tooling-fast.mjs --bail           # stop STARTING files after the first failure (CI guard shards)
+ *   node tools/ci/tooling-fast.mjs --changed --quiet  # console: FAIL lines, their detail and the verdict only (the log keeps START/PASS)
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
  *   … --order=list                                   # list order, not longest-first
  *   … --record                                       # rewrite tests/data/tooling-fast-timings.json
@@ -147,6 +148,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
   "tests/unit/audit-circuit.test.mjs",
+  "tests/unit/audit-summary.test.mjs",
   "tests/unit/backend-surface-parity.test.mjs",
   "tests/unit/badges.test.mjs",
   "tests/unit/bahrain-grandstand-rake.test.mjs",
@@ -215,6 +217,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-fx.test.mjs",
   "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
+  // Car mesh budget (B·H13): per-body tris/verts for the drawn tiers, and the vertex weld is lossless. ~5 s.
+  "tests/unit/car-mesh-budget.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
@@ -618,6 +622,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-resource-balance.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/gpu-allocation-estimator.test.mjs",
+  // PhoneRecorder (#1633): sampler cadence, JSON serializer, SHARE/COPY fallbacks. VM, < 0.5 s.
+  // GPU TEST (js/perf/gpu-test-run.js): the phase plan, phaseStats and the fill-slope fit. VM, ~0.1 s.
+  "tests/unit/gpu-test-run.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
   "tests/unit/harness-display.test.mjs",
@@ -671,7 +678,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
+  "tests/unit/input-clock-rotate.test.mjs",
   "tests/unit/input-ghost.test.mjs",
+  "tests/unit/input-hud-properties.test.mjs",
   // #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.
   "tests/unit/inputs-hash.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
@@ -694,6 +703,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The night lamp-shadow map holds one flood while the car sits between two:
   // the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.
   "tests/unit/lamp-shadow-pick.test.mjs",
+  "tests/unit/lane-preamble.test.mjs",
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/layers-nav-memo.test.mjs",
@@ -729,6 +739,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
   // livery-contrast (9.7 s) stays CI-only; cover-legibility is in test:node-slow (159 s measured).
+  // live-frame-census.mjs pure helpers (args, percentiles, trace/profile reducers). ~0.2 s.
+  "tests/unit/live-frame-census.test.mjs",
   "tests/unit/live-run-check.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
@@ -741,6 +753,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-stations.test.mjs",
+  // LIVERY card swatches painted once per look and blitted after (B·H13 garage pick cost). < 1 s.
+  "tests/unit/livery-swatch-cache.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
@@ -890,7 +904,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // phone sample reaching Input's tilt pipeline over the in-process loopback
   // transport — same VM harness, no browser, ~0.3 s.
   "tests/unit/phone-pad.test.mjs",
-  // PhoneRecorder (#1633): sampler cadence, JSON serializer, SHARE/COPY fallbacks. VM, < 0.5 s.
   "tests/unit/phone-recorder.test.mjs",
   "tests/unit/phone-touch-surface.test.mjs",
   "tests/unit/photo-kit.test.mjs",
@@ -1623,9 +1636,10 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   const timings = opts.order === "list" ? {} : (opts.timings || loadTimings());
   if (opts.order !== "list") files = scheduleLongestFirst(files, timings);
   const lines = [];
+  // --quiet keeps START/PASS lines in the log only: a 13-57K console was measured in Cursor agents' context (2026-10-21).
   const emit = (msg) => {
     const line = `[tooling-fast] ${msg}`;
-    console.log(line);
+    if (!opts.quiet || !/^(START|PASS) /.test(msg)) console.log(line);
     lines.push(line);
   };
 
@@ -1885,13 +1899,13 @@ function pinIndex() {
   return _pinIndex;
 }
 
-/** Which CI tooling-fast shards (1/2, 2/2) touch any of `files`. */
-export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 2) {
+/** Which CI tooling-fast shards (1/3 .. 3/3, ci.yml guards-a/b/c) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 3) {
   const want = new Set(files);
   const out = [];
   for (let i = 1; i <= shardCount; i++) {
     const spec = `${i}/${shardCount}`;
-    if (applyFileShard(allFiles, spec).some((f) => want.has(f))) out.push(spec);
+    if (ciShardFiles(allFiles, spec).some((f) => want.has(f))) out.push(spec);
   }
   return out;
 }
@@ -2201,20 +2215,47 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--stop", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
 
-/** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
-export function applyFileShard(files, spec) {
+/** Split a file list across CI jobs (`--shard=1/2`).
+ *
+ *  Without `timings` the split is a stride (idx % n): cheap, but blind to cost. On 2026-10-20 the stride gave shard
+ *  1/2 about 1407 s of recorded work and shard 2/2 about 770 s (1.8x), with the two slowest files (flyby-shots 217 s,
+ *  real-replay-vm 186 s) in the same half; "Structural guards (tooling A)" ran 11.9 min against its 12 min cap and was
+ *  cancelled twice that night (Pages #3864, #3230's run), while tooling B finished in 8.4 min.
+ *
+ *  With `timings` ({ file: ms }, the COMMITTED table) the files are packed longest first onto the least-loaded shard
+ *  (Graham's LPT, the rule the runner and select-specs already use), unmeasured files costed at the table's median,
+ *  ties broken by list order, so every shard computes the same plan from the same inputs. Pass the committed table
+ *  only (`ciShardFiles`): a local measurement would make this box's split differ from CI's. Equal costs give the old
+ *  stride. Each shard keeps list order. */
+export function applyFileShard(files, spec, timings) {
   if (!spec) return files;
   const m = /^(\d+)\/(\d+)$/.exec(String(spec));
   if (!m) throw new Error(`bad --shard=${spec} (want i/n)`);
   const i = Number(m[1]), n = Number(m[2]);
   if (n < 1 || i < 1 || i > n) throw new Error(`bad --shard=${spec}`);
-  return files.filter((_, idx) => idx % n === i - 1);
+  const known = Object.values(timings || {}).filter((v) => typeof v === "number").sort((a, b) => a - b);
+  if (!known.length) return files.filter((_, idx) => idx % n === i - 1);
+  const fallback = known[known.length >> 1];
+  const cost = (f) => { const v = timings[path.isAbsolute(f) ? path.relative(ROOT, f) : f]; return typeof v === "number" ? v : fallback; };
+  const order = files.map((f, idx) => ({ idx, ms: cost(f) })).sort((a, b) => (b.ms - a.ms) || (a.idx - b.idx));
+  const load = new Array(n).fill(0), owner = new Array(files.length);
+  for (const x of order) {
+    let k = 0;
+    for (let j = 1; j < n; j++) if (load[j] < load[k]) k = j;
+    load[k] += x.ms; owner[x.idx] = k;
+  }
+  return files.filter((_, idx) => owner[idx] === i - 1);
+}
+
+/** The CI split: applyFileShard with the committed timings table and nothing else. */
+export function ciShardFiles(files, spec) {
+  return applyFileShard(files, spec, loadTimings([TIMINGS_FILE]));
 }
 
 /** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
@@ -2240,6 +2281,7 @@ export function parseToolingFastArgv(argv) {
     files: args.length ? args : null, // null = full TOOLING_FAST_FILES
     changed: argv.includes("--changed"),
     bail: argv.includes("--bail"),
+    quiet: argv.includes("--quiet"),
     stop: argv.includes("--stop"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     order: val("order"),
@@ -2297,10 +2339,11 @@ if (isMain) {
   } else if (!files0) {
     files0 = [...TOOLING_FAST_FILES];
   }
-  const files = applyFileShard(files0, parsed.shard);
+  const files = ciShardFiles(files0, parsed.shard);
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,
+    quiet: parsed.quiet,
     order: parsed.order,
     record: parsed.record,
     testTimeoutMs: parsed.testTimeoutMs,

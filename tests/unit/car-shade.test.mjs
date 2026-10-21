@@ -289,7 +289,8 @@ test("Car3D: OFF is the build that never heard of CarShade; ON (the default) is 
 
 test("a shadow caster (silhouette build) keeps the rounded shape but skips the smoothing pass: depth never reads normals", () => {
   const { Car3D: Plain } = load(false);
-  const c1 = [0.9, 0.5, 0.1], c2 = [0.1, 0.1, 0.1], opts = { teamId: "mclaren", silhouette: true };
+  // noWeld: the mark below reads unshared corners, which CarGeometry.weld merges.
+  const c1 = [0.9, 0.5, 0.1], c2 = [0.1, 0.1, 0.1], opts = { teamId: "mclaren", silhouette: true, noWeld: true };
   // Triangles whose three normals differ: only a smoothing pass (or a tube) makes one.
   // A tube's ring vertices are SHARED (indexed) and smooth as built — and the rounded
   // car's halo is a finer tube than the plain one (12 sides along a spline), so tubes
@@ -302,7 +303,7 @@ test("a shadow caster (silhouette build) keeps the rounded shape but skips the s
       if (N[a] !== N[b] || N[a + 1] !== N[b + 1] || N[a + 2] !== N[b + 2] || N[a] !== N[c] || N[a + 1] !== N[c + 1] || N[a + 2] !== N[c + 2]) n++; }
     return n; };
   const caster = Car3D.build(c1, c2, opts), plainCaster = Plain.build(c1, c2, opts);
-  const painted = Car3D.build(c1, c2, { teamId: "mclaren" }), plainPainted = Plain.build(c1, c2, { teamId: "mclaren" });
+  const painted = Car3D.build(c1, c2, { teamId: "mclaren", noWeld: true }), plainPainted = Plain.build(c1, c2, { teamId: "mclaren", noWeld: true });
   assert.notDeepEqual(Array.from(caster.pos), Array.from(plainCaster.pos), "the caster is the ROUNDED shape (its shadow matches the body)");
   assert.equal(soft(caster), soft(plainCaster), "no smoothed triangles beyond what a plain caster already has");
   assert.ok(soft(painted) > soft(plainPainted) + 1000, "the painted car IS smoothed (its caster is the only build that skips it)");

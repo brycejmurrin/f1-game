@@ -498,7 +498,7 @@
       ...perspU(),   // ipXY/ipZW/pXY/pW: the SSR reconstruct + march (D11)
       upVS: uniform(new THREE.Vector3(0, 1, 0)),
       reflTexel: uniform(new THREE.Vector2()),
-      reflect: uniform(0), ssrOk: uniform(0),
+      reflect: uniform(0), ssrOk: uniform(0), ssrQuality: uniform(0), // 0 full, 1 medium, 2 low road budget
       reflSkyHi: uniform(new THREE.Vector3(0.05, 0.06, 0.09)),
       reflSkyLo: uniform(new THREE.Vector3(0.02, 0.025, 0.05)),
       ssrTopUV: uniform(0.62), ssrNear: uniform(-2.5),
@@ -709,11 +709,13 @@
           If(Nv.z.lessThan(0.0), () => { Nv.assign(Nv.negate()); });
           If(dot(Nv, upVSn).lessThan(-0.25), () => { Nv.assign(Nv.negate()); });
           const upDot = dot(Nv, upVSn).toVar();
-          // Relaxed up-facing test + far fade pushed out, matching GLX.
+          // A shorter road range bounds low-tier work; paint keeps its own mask.
+          const roadFar = select(C.ssrQuality.greaterThan(1.5), vec2(-12.0, -42.0),
+            select(C.ssrQuality.greaterThan(0.5), vec2(-18.0, -60.0), vec2(-22.0, -78.0))).toVar();
           const roadMask = smoothstep(0.25, 0.55, upDot)
             .mul(roadPx)
             .mul(smoothstep(C.ssrNear, C.ssrNear.mul(2.8), P.z))
-            .mul(smoothstep(-22.0, -78.0, P.z).oneMinus()).toVar();
+            .mul(smoothstep(roadFar.x, roadFar.y, P.z).oneMinus()).toVar();
           const carMask = carPx.mul(smoothstep(0.30, 0.65, upDot))
             .mul(smoothstep(-1.0, -3.0, P.z))
             .mul(smoothstep(-22.0, -55.0, P.z).oneMinus()).toVar();
@@ -728,20 +730,26 @@
             const V = normalize(P.negate()).toVar();
             const Nr = select(carDomEarly, Nv, normalize(mix(Nv, upVSn, 0.85))).toVar();
             const R = reflect(V.negate(), Nr).toVar();
+            // Budget is a stable uniform; car-dominant pixels keep the full march.
+            const quality = select(carDomEarly, float(0.0), C.ssrQuality).toVar();
+            const marchSteps = select(quality.greaterThan(1.5), int(8), select(quality.greaterThan(0.5), int(16), int(24)));
+            const refineSteps = select(quality.greaterThan(1.5), int(1), select(quality.greaterThan(0.5), int(2), int(4)));
+            const stepGrowth = select(quality.greaterThan(1.5), float(1.4), select(quality.greaterThan(0.5), float(1.22), float(1.16)));
             // Jittered fine march js/render/glx/shaders/glsl-post.js.
             const ign = ignoise(fragXY).toVar();
             const pos = vec3(P).toVar();
             const prevPos = vec3(P).toVar();
-            const stepLen = float(0.55).toVar();
+            const stepLen = select(quality.greaterThan(1.5), float(1.4), select(quality.greaterThan(0.5), float(0.75), float(0.55))).toVar();
             pos.addAssign(R.mul(stepLen.mul(ign)));
             const hit = float(0.0).toVar();
             const hitDist = float(0.0).toVar();
             const hitUV = vec2(0.0).toVar();
             const found = float(0.0).toVar();
-            Loop({ start: int(0), end: int(24), type: "int", condition: "<" }, () => {
+            Loop({ start: int(0), end: int(24), type: "int", condition: "<" }, ({ i }) => {
+              If(i.greaterThanEqual(marchSteps), () => { Break(); });
               prevPos.assign(pos);
               pos.addAssign(R.mul(stepLen));
-              stepLen.mulAssign(1.16);
+              stepLen.mulAssign(stepGrowth);
               const cp = clipXYW(C, pos).toVar();
               If(cp.z.lessThanEqual(0.0), () => { Break(); });
               const muv = cp.xy.div(cp.z).mul(0.5).add(0.5).toVar();
@@ -752,7 +760,8 @@
               If(dz.greaterThan(C.ssrThick).and(dz.lessThan(max(float(5.0), stepLen.mul(1.5)))), () => {
                 const aP = vec3(prevPos).toVar();
                 const bP = vec3(pos).toVar();
-                Loop({ start: int(0), end: int(4), type: "int", condition: "<" }, () => {
+                Loop({ start: int(0), end: int(4), type: "int", condition: "<" }, ({ i }) => {
+                  If(i.greaterThanEqual(refineSteps), () => { Break(); });
                   const mid = aP.add(bP).mul(0.5).toVar();
                   const mc = clipXYW(C, mid).toVar();
                   const midUV = mc.xy.div(mc.z).mul(0.5).add(0.5).toVar();
@@ -792,11 +801,16 @@
               streak.mulAssign(mix(float(0.3), float(1.6), clamp(hitDist.div(25.0), 0.0, 1.0)));
               const sTap = (k) => sceneT.sample(TL(hitUV.add(vec2(0.0, streak.mul(k))))).rgb;
               const w0 = 0.30, w1 = 0.24, w2 = 0.15, w3 = 0.08, w4 = 0.04;
-              hitCol.assign(sTap(0.0).mul(w0)
-                .add(sTap(-0.5).mul(w1)).add(sTap(-1.0).mul(w2))
-                .add(sTap(-1.6).mul(w3)).add(sTap(-2.3).mul(w4))
-                .add(sTap(0.5).mul(w1)).add(sTap(1.0).mul(w2)));
-              hitCol.divAssign(w0 + 2 * w1 + 2 * w2 + w3 + w4);
+              If(quality.greaterThan(1.5), () => { hitCol.assign(sTap(0.0)); })
+                .ElseIf(quality.greaterThan(0.5), () => {
+                  hitCol.assign(sTap(0.0).mul(w0).add(sTap(-0.5).add(sTap(0.5)).mul(w1)).div(w0 + 2 * w1));
+                }).Else(() => {
+                  hitCol.assign(sTap(0.0).mul(w0)
+                    .add(sTap(-0.5).mul(w1)).add(sTap(-1.0).mul(w2))
+                    .add(sTap(-1.6).mul(w3)).add(sTap(-2.3).mul(w4))
+                    .add(sTap(0.5).mul(w1)).add(sTap(1.0).mul(w2)));
+                  hitCol.divAssign(w0 + 2 * w1 + 2 * w2 + w3 + w4);
+                });
             });
             // Miss fallback: horizon-vs-zenith by the reflection's up-ness,
             // measured against the ROAD PLANE — R.y is view-space y, which only

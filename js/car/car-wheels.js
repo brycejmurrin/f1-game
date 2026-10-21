@@ -691,7 +691,7 @@ const CarWheels = (function () {
       const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
         grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor, rimSurf);
-      return out;
+      return CarGeometry.weld(out);   // exact repeat corners merged (car3d.js build)
     }
     function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
       const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
@@ -705,7 +705,7 @@ const CarWheels = (function () {
       addSpan(fixed, { z: 0.06, x: 0, y: 0, w: width * 0.72, h: 0.125, t: 0.60 },
                      { z: -0.06, x: 0, y: 0, w: width * 0.66, h: 0.110, t: 0.70 },
               [0.18, 0.18, 0.20], null, SURFACES.metal);
-      return { rotating, fixed };
+      return { rotating: CarGeometry.weld(rotating), fixed: CarGeometry.weld(fixed) };
     }
 
     return { addWheel, buildWheel, buildWheelLayers };

@@ -1,0 +1,56 @@
+{
+ "backend": "three",
+ "tier": "med",
+ "rows": [
+  {
+   "scene": "monza-helmet",
+   "path": "/home/user/f1-game/scratch/h23/out/stills/monza-helmet-med-three.png",
+   "ms": 27021,
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": true,
+    "renderScale": {
+     "scale": 0.75,
+     "fps": 44.1,
+     "floorMs": 15.4,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 3,
+      "maxMs": 99.9,
+      "slow": 1
+     },
+     "frameTimes": {
+      "frames": 3,
+      "p50": 16.700000000000728,
+      "p95": 99.89999999999964,
+      "p99": 99.89999999999964,
+      "maxMs": 99.89999999999964,
+      "droppedSimS": 0,
+      "physicsSteps": 7,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": true
+    },
+    "canvas": [
+     1266,
+     585
+    ],
+    "coarse": true,
+    "dpr": 3
+   },
+   "mirror": null
+  }
+ ],
+ "errors": []
+}

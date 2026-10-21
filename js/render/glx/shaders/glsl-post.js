@@ -560,6 +560,7 @@ uniform float uCarReflect;   // car-bodywork SSR strength (CAR tuner group; defa
 uniform float uCarGloss;     // car paint gloss (CAR tuner group; default 1.0) — widens the car's SSR streak as it drops
 uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
 uniform vec3 uReflSkyLo;     // zenith sky-glow
+uniform float uSsrQuality;   // road budget: 0 full, 1 medium, 2 low; car-dominant pixels stay full
 uniform float uSsrThick;     // wet-road SSR depth thickness gate (def 0.20)
 uniform float uSsrTopUV;     // top-of-screen SSR cutoff (def 0.62). The upper screen
                              //   is "never wet road" ONLY for a high, down-looking
@@ -887,10 +888,11 @@ void main() {
     // edge (already scraped by banked corners per LIGHTING-KNOBS) meant a noisy
     // grazing-angle normal could drop genuine road below threshold — the other
     // half of the patchy/dropout mask failure at phone resolution.
+    vec2 roadFar = uSsrQuality > 1.5 ? vec2(-12.0, -42.0) : (uSsrQuality > 0.5 ? vec2(-18.0, -60.0) : vec2(-22.0, -78.0));
     float roadMask = smoothstep(0.25, 0.55, upDot)
                    * roadPx
                    * smoothstep(uSsrNear, uSsrNear * 2.8, P.z)
-                   * (1.0 - smoothstep(-22.0, -78.0, P.z));
+                   * (1.0 - smoothstep(roadFar.x, roadFar.y, P.z));
     // Car bodywork: up-facing-ish panels, allowed much nearer than the road
     // (the chase camera sits ~5-8 m behind the car).
     float carMask = carPx * smoothstep(0.30, 0.65, upDot)
@@ -907,6 +909,10 @@ void main() {
     float ssrGate  = max(roadTerm, carTerm);
     if (ssrGate > 0.001) {
       bool carDom = carTerm > roadTerm;   // hoisted: the march needs it too
+      float ssrQ = carDom ? 0.0 : uSsrQuality;
+      int marchSteps = ssrQ > 1.5 ? 8 : (ssrQ > 0.5 ? 16 : 24);
+      int refineSteps = ssrQ > 1.5 ? 1 : (ssrQ > 0.5 ? 2 : 4);
+      float stepGrowth = ssrQ > 1.5 ? 1.4 : (ssrQ > 0.5 ? 1.22 : 1.16);
       vec3 V = normalize(-P);
       // The ROAD reflects off a near-FLAT plane, not its bumpy per-pixel normal.
       // Nv is reconstructed from depth derivatives, so it picks up the road's
@@ -938,16 +944,17 @@ void main() {
       // steps stay small enough for the refine to land on thin distant emitters.
       float ign = ignoise(gl_FragCoord.xy);
       vec3 pos = P, prevPos = P;
-      float stepLen = 0.55;
+      float stepLen = ssrQ > 1.5 ? 1.4 : (ssrQ > 0.5 ? 0.75 : 0.55);
       pos += R * (stepLen * ign);                  // sub-step start offset per pixel
       float hit = 0.0;
       float hitDist = 0.0;                       // march distance to the hit (contact hardening)
       vec2 hitUV = vec2(0.0);
       bool found = false;
       for (int i = 0; i < 24; i++) {
+        if (i >= marchSteps) break;
         prevPos = pos;
         pos += R * stepLen;
-        stepLen *= 1.16;                           // gentle growth
+        stepLen *= stepGrowth;
         vec4 cp = projP(pos);
         if (cp.w <= 0.0) break;
         vec2 suv = cp.xy / cp.w * 0.5 + 0.5;
@@ -960,6 +967,7 @@ void main() {
         if (dz > uSsrThick && dz < max(5.0, stepLen * 1.5)) {
           vec3 a = prevPos, b = pos;               // binary-search refine → crisp hit
           for (int j = 0; j < 4; j++) {
+            if (j >= refineSteps) break;
             vec3 mid = (a + b) * 0.5;
             vec4 mc = projP(mid);
             vec2 muv = mc.xy / mc.w * 0.5 + 0.5;
@@ -1014,15 +1022,23 @@ void main() {
         // near-crisp, a distant tower smears. Scale the streak by the march's
         // actual hit distance: sharp at contact (x0.3), softer far out (x1.6).
         streak *= mix(0.3, 1.6, clamp(hitDist / 25.0, 0.0, 1.0));
-        float w0 = 0.30, w1 = 0.24, w2 = 0.15, w3 = 0.08, w4 = 0.04;
-        hitCol  = texture(uScene, hitUV).rgb * w0;
-        hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 0.5)).rgb * w1;
-        hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 1.0)).rgb * w2;
-        hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 1.6)).rgb * w3;
-        hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 2.3)).rgb * w4;
-        hitCol += texture(uScene, hitUV + vec2(0.0,  streak * 0.5)).rgb * w1;
-        hitCol += texture(uScene, hitUV + vec2(0.0,  streak * 1.0)).rgb * w2;
-        hitCol /= (w0 + 2.0 * w1 + 2.0 * w2 + w3 + w4);
+        if (ssrQ > 1.5) {
+          hitCol = texture(uScene, hitUV).rgb;
+        } else if (ssrQ > 0.5) {
+          hitCol = (texture(uScene, hitUV).rgb * 0.30
+            + texture(uScene, hitUV + vec2(0.0, -streak * 0.5)).rgb * 0.24
+            + texture(uScene, hitUV + vec2(0.0,  streak * 0.5)).rgb * 0.24) / 0.78;
+        } else {
+          float w0 = 0.30, w1 = 0.24, w2 = 0.15, w3 = 0.08, w4 = 0.04;
+          hitCol  = texture(uScene, hitUV).rgb * w0;
+          hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 0.5)).rgb * w1;
+          hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 1.0)).rgb * w2;
+          hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 1.6)).rgb * w3;
+          hitCol += texture(uScene, hitUV + vec2(0.0, -streak * 2.3)).rgb * w4;
+          hitCol += texture(uScene, hitUV + vec2(0.0,  streak * 0.5)).rgb * w1;
+          hitCol += texture(uScene, hitUV + vec2(0.0,  streak * 1.0)).rgb * w2;
+          hitCol /= (w0 + 2.0 * w1 + 2.0 * w2 + w3 + w4);
+        }
       }
       // Miss fallback: reflect the dim night sky-glow, never a black hole.
       // R.y is the reflection's up-ness: grazing rays (R.y→0, far road) should

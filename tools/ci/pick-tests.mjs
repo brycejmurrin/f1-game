@@ -42,6 +42,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { changedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -466,8 +467,9 @@ function changedFiles(argv) {
   const explicit = argv.filter((a, n) => !a.startsWith("--") && !(since >= 0 && n === since + 1));
   if (explicit.length) return explicit;
   const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
-  if (argv.includes("--staged")) return git(["diff", "--cached", "--name-only"]).split("\n").filter(Boolean);
-  if (since >= 0 && argv[since + 1]) return git(["diff", "--name-only", argv[since + 1]]).split("\n").filter(Boolean);
+  // Rename sources too (ledger M36): --name-only lists only the destination.
+  if (argv.includes("--staged")) return changedPaths(["--cached"], { cwd: ROOT });
+  if (since >= 0 && argv[since + 1]) return changedPaths([argv[since + 1]], { cwd: ROOT });
   // Default: everything not yet on the branch point, plus the working tree.
   //
   // THE DEPLOY BRANCH IS THE BASE, not `main`. main is a stale diverged fork
@@ -480,8 +482,8 @@ function changedFiles(argv) {
   for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "origin/main", "main", "HEAD~1"]) {
     try { base = git(["merge-base", "HEAD", ref]); break; } catch (_) { /* try the next */ }
   }
-  const out = new Set(git(["diff", "--name-only", "HEAD"]).split("\n").filter(Boolean));
-  if (base) for (const f of git(["diff", "--name-only", base]).split("\n")) if (f) out.add(f);
+  const out = new Set(changedPaths(["HEAD"], { cwd: ROOT }));
+  if (base) for (const f of changedPaths([base], { cwd: ROOT })) out.add(f);
   for (const f of git(["ls-files", "--others", "--exclude-standard"]).split("\n")) if (f) out.add(f);
   return [...out];
 }

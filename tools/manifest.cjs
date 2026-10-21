@@ -266,6 +266,8 @@ const FULL = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
+  "js/garage/crew-motion.js",
+  "js/garage/crew-service.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "js/garage/arrival.js",
@@ -408,6 +410,7 @@ const FULL = [
   "js/ui/post-fx-opts.js",   // PostFxOpts: GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS (game.js reads them per frame)
   "js/perf/metrics-overlay.js",
   "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated; before game.js binds it)
+  "js/perf/gpu-test-run.js",   // GpuTestRun: PHONE TEST > GPU TEST, one-tap phase run over SoakRun (scale sweep, mirror off, GPU timer, link counts)
   "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633); reads PerfGov/GLX, writes neither
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
@@ -613,6 +616,8 @@ const TRACK_VM = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
+  "js/garage/crew-motion.js",
+  "js/garage/crew-service.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "@circuits",
@@ -751,6 +756,10 @@ const HARD_EDGES = [
   ["js/garage/scene-prims.js", "js/garage/scene.js"],             // the bay destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene.js"],         // ...GarageEquipment (the fan and screen anchors)
   ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
+  ["js/garage/scene-prims.js", "js/garage/crew-motion.js"],
+  ["js/garage/crew-motion.js", "js/garage/scene-crew.js"],
+  ["js/garage/scene-prims.js", "js/garage/crew-service.js"],
+  ["js/garage/crew-service.js", "js/garage/scene-crew.js"],
   ["js/garage/scene-prims.js", "js/garage/scene-crew.js"],        // the crew destructures GaragePrims at eval
   // The garage preview camera eases its flaps at the car's own X_OPEN_RATE /
   // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as

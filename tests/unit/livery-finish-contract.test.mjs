@@ -125,8 +125,8 @@ function wgxCarPacking() {
   const expandStart = source.indexOf("    function _expandPull(vert, attr, idx) {");
   const expandEnd = source.indexOf("    function _makeAttrBG(attr)", expandStart);
   assert.ok(expandStart >= 0 && expandEnd > expandStart, "real WGX indexed expansion body must be found");
-  return { pack: vm.runInContext(`(${source.slice(start, end)})`, context),
-    expand: vm.runInContext(`(${source.slice(expandStart, expandEnd)})`, context), stride };
+  return { pack: vm.runInContext(`(${source.slice(start, end)})`, context, { filename: absSrc("js/render/webgpu/wgx.js") }),
+    expand: vm.runInContext(`(${source.slice(expandStart, expandEnd)})`, context, { filename: absSrc("js/render/webgpu/wgx.js") }), stride };
 }
 function carIdMesh(ids) {
   const n = ids.length;
@@ -194,8 +194,8 @@ function wgxVertexTransport() {
     assert.ok(found, `backend declaration ${name} must exist`);
     return found[1];
   };
-  const stride = vm.runInNewContext(declaration("VERTEX_STRIDE"));
-  const layout = (name) => JSON.parse(JSON.stringify(vm.runInNewContext(`(${declaration(name)})`, { VERTEX_STRIDE: stride })));
+  const stride = vm.runInNewContext(declaration("VERTEX_STRIDE"), {}, { filename: absSrc("js/render/webgpu/wgx.js") });
+  const layout = (name) => JSON.parse(JSON.stringify(vm.runInNewContext(`(${declaration(name)})`, { VERTEX_STRIDE: stride }, { filename: absSrc("js/render/webgpu/wgx.js") })));
   const input = /@location\((\d+)\)\s+aNrm\s*:\s*vec(\d)<f32>/.exec(shader);
   assert.ok(input, "vertex normal input must be declared");
   const expression = (lhs) => {
@@ -205,15 +205,15 @@ function wgxVertexTransport() {
   };
   // Both scalar expressions are valid JS arithmetic too. Execute their source,
   // rather than recopying the decode scale, selection predicate or fallback.
-  const decode = new vm.Script(expression("packedCarId"));
-  const worldDecode = new vm.Script(expression("packedWorldCode"));
-  const hasWorld = new vm.Script(expression("hasWorldMat"));
-  const worldSelect = new vm.Script(expression("worldMatId"));
-  const worldPresence = new vm.Script(expression("o.worldMatPresent").replace(/(\d+)u\b/g, "$1"));
+  const decode = new vm.Script(expression("packedCarId"), { filename: absSrc("js/render/webgpu/wgsl-chunks.js") });
+  const worldDecode = new vm.Script(expression("packedWorldCode"), { filename: absSrc("js/render/webgpu/wgsl-chunks.js") });
+  const hasWorld = new vm.Script(expression("hasWorldMat"), { filename: absSrc("js/render/webgpu/wgsl-chunks.js") });
+  const worldSelect = new vm.Script(expression("worldMatId"), { filename: absSrc("js/render/webgpu/wgsl-chunks.js") });
+  const worldPresence = new vm.Script(expression("o.worldMatPresent").replace(/(\d+)u\b/g, "$1"), { filename: absSrc("js/render/webgpu/wgsl-chunks.js") });
   const fragmentNames = ["isRoadDraw", "vsMat", "classified", "worldVertexMat", "resolvedMat", "vMatId"];
   const fragment = fragmentNames.map((name) => [name,
-    new vm.Script(expression(name).replace(/\bin\./g, "input.").replace(/(\d+)u\b/g, "$1"))]);
-  const select = new vm.Script(expression("o.matId"));
+    new vm.Script(expression(name).replace(/\bin\./g, "input.").replace(/(\d+)u\b/g, "$1"), { filename: absSrc("js/render/webgpu/wgsl-chunks.js") })]);
+  const select = new vm.Script(expression("o.matId"), { filename: absSrc("js/render/webgpu/wgsl-chunks.js") });
   const normal = expression("o.nrm").split("*").map((term) => term.trim());
   const normalLayout = layout("VERTEX_POS_LAYOUT").attributes.find((a) => a.shaderLocation === Number(input[1]));
   assert.ok(normalLayout, "vertex input must have a bound layout attribute");

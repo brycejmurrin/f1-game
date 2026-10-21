@@ -433,13 +433,14 @@ async function warmRig(t, { ls = {}, soft = false } = {}) {
     const warmPlusOn = () => true, wantMirrorWarm = () => true, softOutRT = () => null;
     const I = new THREE.Matrix4().toArray();
     const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1] };
+    const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
     const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0 };
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "";
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
     ${tslice("      let _ssrMrt = null;", "      let _poolNow = ")}
     ${tslice("      // A-W1 (perf hunt 4): THE DRAW WARM.", "      const ENV_PROBE_TRIES")}
-    return { startProgramWarm, pending: () => _warmPending, stages: _warmStages, mrtNode: _ssrMrtNode, mirRT: () => mirRT };`);
+    return { startProgramWarm, pending: () => _warmPending, stages: _warmStages, history: _warmHistory, mrtNode: _ssrMrtNode, mirRT: () => mirRT };`);
   const W1 = mk(THREE, TSL, renderer, scene, camera, lit, post, shadowSys, { getItem: (k) => (k in ls ? ls[k] : null) },
     globalThis.Log, soft);
   const calls = [];
@@ -461,6 +462,8 @@ test("A-W1: the warm's last stage DRAWS the scene, the post chain, the mirror an
   await h.warm();
   const sceneRT = h.post.sceneTarget();
   assert.equal(h.W1.stages.failed, 0, "the warm did not throw");
+  assert.equal(h.W1.history.length, 1, "the warm left one stage record in the history (memState().warm.history)");
+  assert.equal(h.W1.history[0].total, h.W1.stages.total, "the record is this warm's own stages");
   assert.ok(h.calls.length > 3, `draws were issued (${h.calls.length})`);
   for (const c of h.calls) {
     assert.ok(c.tg, "never the canvas: a draw there would present a black frame for the rest of the warm");

@@ -201,7 +201,18 @@ const SPEC = [
       return clean.devices.length === raw.devices.length ? clean : undefined;
     } },
   { k: "conditionCues", lane: "json", group: "driving", def: false, src: "js/ui/condition-cue-controls.js" },
-  { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)" },
+  { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)",
+    // A legacy scalar OR the per-pad map (Input.setPadRest's rule); typeOk(map, 0) skipped every calibrated
+    // pad on LOAD SETTINGS, so the stick drifted on the new device (B·H11 hunt). `freeShape`: normalize owns it.
+    freeShape: true,
+    normalize: (v) => {
+      const ok = (x) => typeof x === "number" && isFinite(x) && Math.abs(x) <= 0.5;
+      if (ok(v)) return v;
+      if (!isObj(v)) return undefined;
+      const out = {};
+      for (const id of Object.keys(v).slice(0, 16)) if (ok(v[id])) out[id.slice(0, 120)] = v[id];
+      return Object.keys(out).length ? out : undefined;
+    } },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
   // DRIVING LINE prefs (js/ui/driving-line-opts.js) — separate from the mode
@@ -353,8 +364,9 @@ function collect(mode, G) {
     // the file elsewhere keeps THAT device's default instead of pinning ours.
     let value = has ? stored : (all && row.perDevice ? null : def);
     if (diff && isObj(stored) && isObj(def) && Object.keys(def).length) {
-      value = objDiff(stored, def);
-      if (!Object.keys(value).length) diff = false;
+      const d = objDiff(stored, def);
+      if (!Object.keys(d).length) diff = false;
+      if (!all) value = d;   // CHANGES carries the moved fields; ALL the whole effective value (B·H11 hunt)
     }
     if (!diff && !all) continue;
     (settings[row.group] ||= {})[row.k] = value;
@@ -536,7 +548,7 @@ function applySettings(file, G) {
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
-    if (!typeOk(v, def) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
+    if ((!row.freeShape && !typeOk(v, def)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
     try {
       // A write storage refused (full quota, private mode) is not APPLIED:
       // counting it reloaded the page into the values it had lost.

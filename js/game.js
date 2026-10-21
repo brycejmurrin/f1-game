@@ -1948,6 +1948,10 @@ function dropTrackWorld() {
 // newer build or live() going false abandons it and frees its partial uploads.
 // Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
+// Under a loading cover (startRaceBody's building card, introBuild's introCover, the title boot): 16 ms slices and
+// a frame every third one (~20 fps cover animation) instead of 8 ms then a frame — Tracks.buildPaced's pace note.
+// The menu picker's build (no cover: a tap is answered mid-build) keeps the default.
+const RACE_BUILD_PACE = { budgetMs: 16, rafEvery: 3 };
 async function loadTrackStepped(idx, live) {
   // LAZY_CIRCUIT + LAZY_TRACK_BUILD: path/pal/sectors and the build toolkit land
   // via ensureScenery before any build. Callers (flyby / startRace / intro)
@@ -1976,7 +1980,9 @@ async function loadTrackStepped(idx, live) {
     // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
     if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx, undefined, live); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
     if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
-    if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes); }
+    // Read before every slice (a function): a menu build RACE! joins takes the cover's pace at its next slice.
+    const pace = () => (loadingScreen.phase() ? RACE_BUILD_PACE : null);   // a cover is up: nobody taps the picker mid-build
+    if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes, undefined, pace); }
   } finally {
     try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
@@ -2512,6 +2518,7 @@ async function startRaceBody() {
   // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
   // live() stays true: this session owns the build (menu prep uses a generation gate).
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
+  if (_menuGate.join) { const step = _menuGate.join; _menuGate.join = null; await step.catch(() => false); if (stale()) return false; }   // startRace joined the menu's build
   if (vmNoFramePump) loadTrack(trackIdx);
   else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
   if (stale()) return false; rlap("loadTrack");
@@ -2526,7 +2533,7 @@ async function startRaceBody() {
   // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
   // chosen on the settings sheet and meant to stick until the player changes it.
   practiceMode = false;
-  makeCars(); rlap("makeCars");
+  releaseFieldScratch(); makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one flying lap.
   if (isQuali()) {
@@ -2620,7 +2627,9 @@ async function startRaceBody() {
   // game-vm pumps no timers: an endless slice there never yields (like yieldMain above).
   // A frame drawn between steps built the not-yet-warmed cars itself (census 502/503: GLX ~1 s tasks, steps <= 199 ms).
   _carWarm.busy = true;
-  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8)); } finally { _carWarm.busy = false; }
+  // deferRear: the cars behind the player hand their atlas upload and caster to the lights (car-draw.js
+  // drainDeferredCarWarm, one piece a countdown frame below); headless has no frames to drain them in.
+  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
   if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; skyViewOverride = null;
@@ -2712,6 +2721,13 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
+  // A DIRECT start (Daily, Data Hub, season, agent) stands the menu's build down as RACE! does (introBuild),
+  // JOINING one of this same world in flight: left live, it ran beside this race's own build (two buildPaced
+  // for one world, measured 2026-10-21), and a loadTrackStepped that finishes behind the other returns false.
+  const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;
+  if (join) mp.owner = () => key === entrySettings();
+  _menuGate.join = join ? mp.step : null;   // startRaceBody awaits it before its own load, which then reuses the world
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); if (e) announce("COULD NOT LOAD CIRCUIT — CHECK CONNECTION", 3, "info"); });
@@ -2895,7 +2911,7 @@ function endRace(forcedOrder) {
   // against the simulated field and becomes the grid. Mirrors the TT return
   // below — first branch out, before any race classification is built.
   if (isQuali()) {
-    cars = qualiField || cars;
+    cars = qualiField || cars; qualiField = null;   // handed back: left set, quitToMenu's mid-quali swap later replaced the RACE's field with this one
     const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
     // needs it to draw the same classification ours will.
@@ -4258,7 +4274,7 @@ function quitToMenu() {
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; releaseFieldScratch(); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4333,6 +4349,13 @@ function rankFinishers() {
   for (let i = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked.push(ranked[i]);
   _finRanked.sort(RaceControl.finishOrder);
   for (let i = 0, k = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked[k++].rank = i + 1;
+}
+// A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
+// Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
+function releaseFieldScratch() {
+  ranked.length = 0; parked.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
+  _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
+  for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
@@ -8251,7 +8274,7 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops dry + car-paint SSR (wet-road SSR at 3);
+  // slow at the scale floor sheds those instead. Tier 2 drops dry + car-paint SSR; wet roads use a reduced budget.
   // autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone.
   po.ssao = PerfGov.autoTier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.autoTier() >= 4 ? 0 : _gr;
@@ -8260,10 +8283,10 @@ function render(dt) {
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
   // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  // WET-road SSR sheds one tier later (3) than the dry sheens and car paint (2): tier 2 is every phone's
-  // GRAPHICS: MEDIUM, and rain with no mirror read as reflections broken. The governor still sheds it at 3.
-  const _ssrTier = (frame.wetness || 0) > 0.01 ? 3 : 2;
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= _ssrTier ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  // Wet-road SSR keeps a reduced budget even at user LOW (tier 4).
+  // Measured overload/crash tier 4 still falls back to material sky/lamp reflections. Dry sheen still sheds at 2.
+  PostCommon.roadReflection(po, frame.wetness || 0, _ssrPo, PerfGov.tier(), PerfGov.autoTier());
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   PostFxOpts.gate(po);   // GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS: the tier-4 exit, taken by choice
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
@@ -8350,8 +8373,8 @@ function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
   lastFrame = now;
-  // Adaptive resolution: only govern while actively rendering a race.
-  if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
+  // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
+  if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
   PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
@@ -8435,6 +8458,7 @@ function tickBody(now) {
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
     PerfGov.recordSimulation(steps, dropped);
     if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
+    if (state === "count" && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);   // the rear grid's atlases and casters, one budget a frame under the lights (no sim: the sim is above); typeof: tickBody runs in VM slices without CarDraw (results-cam.test)
     if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;

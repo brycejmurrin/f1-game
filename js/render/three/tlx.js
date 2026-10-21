@@ -256,6 +256,10 @@ const TLX = (function () {
       // gpu-census 207 spent its whole window inside the warm and no row said so.
       const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
         mirrorDeferred: false, mirrorLazy: null, rig: null };   // rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
+      // EVERY warm's stages, newest last (cap 6): the menu prep runs a world warm then the garage's, and
+      // _warmStages keeps only the last, so the census read the garage's 3.7 s as "the warm" while the
+      // world's ran 11-15 s on Metal (B·H8 prep timeline, gpu-census 39499541077).
+      const _warmHistory = [];
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -293,7 +297,8 @@ const TLX = (function () {
       let _gpuAdapterOk = false;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
-          const ad = await navigator.gpu.requestAdapter(); checkInit();
+          // The boot probe's adapter when it resolved one (renderer-boot.js): one GPU-process round trip fewer.
+          const ad = (opts && opts.adapter) || await navigator.gpu.requestAdapter(); checkInit();
           _gpuAdapterOk = !!ad;
           if (ad) {
             const info = ad.info || null;
@@ -681,7 +686,7 @@ const TLX = (function () {
         }
       }
       _abortRenderer = renderer;
-      try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
+      try { setTimeout(function () { if (/^apex26\.ctxLostReloads=\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -990,7 +995,7 @@ const TLX = (function () {
       let _shownAt = -1e9;
       let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
       const _fallbackLossCount = () => {
-        try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
+        try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
         catch (_) { return 0; }
       };
       const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
@@ -1265,25 +1270,16 @@ const TLX = (function () {
       // retires the chain ("Post-only death") and the next render-target realloc
       // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
       // SSR receiver metadata serves road SSR as well as car paint and haze.
-      // MEDIUM (tier 2) still runs wet-road SSR: retain the existing attachment
-      // so porous verges cannot inherit the road mirror. At tier >= 3 both SSR
-      // paths are shed; eligible phones can use a one-attachment target.
-      // This retains an attachment on MEDIUM; measure its cost on real phones.
-      // Re-evaluated every begin(): a
-      // live preset raise rebuilds the chain with the tag (one compile hitch).
-      // apex26.tlxTagLess: unset = that rule, "0" = always tag, "1" = drop it
-      // at userTier >= 3 off phones too (desktop A/B lever: there the haze
-      // still runs and reads white = "not car" over cars — the only delta).
-      let _tagLessKnob = "";
-      try { _tagLessKnob = localStorage.getItem("apex26.tlxTagLess") || ""; } catch (_) { /* no storage: auto */ }
+      // Wet-road SSR can run at every user tier, including LOW, with a reduced
+      // march budget. Keep its material eligibility attachment on every active
+      // post chain; white fallback would polish porous verges again. Retain it
+      // through temporary overload shedding to avoid render-target churn.
+      // The old tlxTagLess A/B override is incompatible with this requirement.
       function _wantTag() {
-        if (_tagLessKnob === "0") return true;
-        let ut = 0;
-        try { ut = (typeof PerfGov !== "undefined" && PerfGov.userTier) ? PerfGov.userTier() : 0; } catch (_) { ut = 0; }
-        return !(ut >= 3 && (mobileTier || _tagLessKnob === "1"));
+        return true;
       }
-      // A GRAPHICS change moved the rule: swap the chain for one with/without the
-      // attachment (begin(), before the scene records). Not warmed: one compile hitch.
+      // Preserve compatibility with a chain created without the attachment:
+      // upgrade it before the scene records, then retire the replaced chain.
       function _tagSwap() {
         if (!post || !post.tagOn || _warmPending || post.tagOn() === _wantTag()) return;
         const old = post; post = null;
@@ -3320,6 +3316,9 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
+            _warmHistory.push({ at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
+              mirror: _warmStages.mirror, draw: _warmStages.draw, total: _warmStages.total, failed: _warmStages.failed });
+            if (_warmHistory.length > 6) _warmHistory.shift();
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
@@ -3389,6 +3388,17 @@ const TLX = (function () {
         const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
         const mirror = !!(opts && opts.mirror) && opts.mirror !== _rigMirrorKey && _rigMirrorOn() ? opts.mirror : null;
         if (!todo.length && !mirror) return Promise.resolve(recs.length > 0);
+        // BEHIND A PROGRAM WARM, QUEUE AND RETURN. Race entry requests the program warm just before this, and the rig
+        // job may only start once it is done (present() starts one warm at a time), so awaiting it held race entry for
+        // the whole program warm, and on software GL (a ~17 s warm) the 20 s fallback fired first, dropped the job and
+        // left the rig unwarmed (+20 s per race entry; B·H14, monza-foundation 8.4 -> 26.2 s on CI llvmpipe at #3221).
+        // Queued, the job still runs before any frame paints: present() holds while either warm is pending.
+        if (_warmRequested || _warmPending) {
+          const job = _rigWarm = { recs: todo, mirror, done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; } };
+          // No present ever came (hidden tab, a race abandoned first): drop the queue, or every later warmDraws refuses.
+          job.timer = setTimeout(() => { if (!job.started) job.done(); }, 20000);
+          return Promise.resolve(true);
+        }
         return new Promise((resolve) => {
           const job = _rigWarm = { recs: todo, mirror, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
           job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
@@ -4320,7 +4330,7 @@ const TLX = (function () {
           sessionStorage.setItem("apex26.ctxLostReloads", String(n));
         } catch (_) {
           let prior = 0;
-          try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
+          try { const m = String(window.name || "").match(/^apex26\.ctxLostReloads=(\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
           n = Math.max(++_sessLostN, prior + 1);
           try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
         }
@@ -6327,7 +6337,7 @@ const TLX = (function () {
                        draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
-                       pending: !!_warmPending, done: _warmDone };
+                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice() };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the

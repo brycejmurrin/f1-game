@@ -100,7 +100,7 @@ function boot({ dragAnchor = true } = {}) {
   });
   Input.init(canvas);
   const onCanvas = (t, e) => (canvasL[t] || []).forEach((f) => f(Object.assign({ preventDefault() {} }, e)));
-  return { Input, onCanvas, dragEl, classOn, sb };
+  return { Input, onCanvas, dragEl, classOn, sb, listeners, clock };
 }
 
 function dragOff(dragEl) {
@@ -131,6 +131,28 @@ test("offset dot tracks horizontal drag and clamps at full lock", () => {
   onCanvas("touchmove", { changedTouches: [{ identifier: 2, clientX: pastLock, clientY: 200 }] });
   assert.equal(dragOff(dragEl), range + "px");
   assert.equal(Input.debugState().touchSteer, 1);
+});
+
+test("the drag range reads the viewport on resize, not on every touch (B·H11)", () => {
+  // innerWidth/innerHeight force a synchronous layout when the tree is dirty; touchRangePx ran on
+  // every touchmove. The long edge is cached until a resize (rotation fires one too).
+  const { Input, onCanvas, dragEl, sb, listeners } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  const lockAt = (id) => {
+    onCanvas("touchstart", { changedTouches: [{ identifier: id, clientX: 100, clientY: 200 }] });
+    onCanvas("touchmove", { changedTouches: [{ identifier: id, clientX: 100 + 2000, clientY: 200 }] });
+    const off = dragOff(dragEl);
+    onCanvas("touchend", { changedTouches: [{ identifier: id, clientX: 100, clientY: 200 }] });
+    return off;
+  };
+  const before = touchRangePx(sb);
+  assert.equal(lockAt(10), before + "px");
+  sb.innerWidth = 1200;                       // the viewport grew, no resize event yet
+  assert.equal(lockAt(11), before + "px", "no live viewport read per touch");
+  for (const f of listeners.resize || []) f({});
+  assert.equal(lockAt(12), touchRangePx(sb) + "px", "a resize re-reads the long edge");
+  assert.notEqual(touchRangePx(sb), before);
 });
 
 test("hides when the steering touch lifts", () => {
@@ -172,4 +194,43 @@ test("hides while a menu overlay is open", () => {
   sb.UiLayers = { anyOpen: () => true };
   onCanvas("touchstart", { changedTouches: [{ identifier: 6, clientX: 10, clientY: 10 }] });
   assert.ok(!classOn.has("on"));
+});
+
+test("reset() clears the drag smoothing so the next press starts at the finger (B·H20)", () => {
+  // The OneEuro filter kept dragOePrev/dragOeInit across reset(); a press that lands before the next
+  // steer() read (blur, then a fast re-touch) blended from the last full-lock drag: steer .788, not 0.
+  const { Input, onCanvas, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(2);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 100 + 2000, clientY: 200 }] });
+  for (let i = 0; i < 40; i++) { clock.t += 16; Input.steer(); }
+  assert.ok(Input.steer() > 0.9, "the drag reached lock");
+  Input.reset();
+  onCanvas("touchstart", { changedTouches: [{ identifier: 2, clientX: 300, clientY: 200 }] });
+  clock.t += 16;
+  assert.equal(Input.steer(), 0, "an anchored press reads 0, not the previous drag");
+});
+
+test("a window touchend with no fingers left frees a steering finger whose canvas touchend was lost (B·H20)", () => {
+  const { Input, onCanvas, listeners, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 100 + 2000, clientY: 200 }] });
+  assert.equal(Input.steer(), 1);
+  for (const f of listeners.touchend || []) f({ touches: [] });   // the canvas never saw its own touchend
+  for (let i = 0; i < 60; i++) { clock.t += 16; Input.steer(); }
+  assert.equal(Input.steer(), 0, "the ghost finger no longer pins the wheel");
+});
+
+test("a rotation drops a drag whose anchor lives in the old screen space (B·H20)", () => {
+  const { Input, onCanvas, listeners, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  for (const f of listeners.orientationchange || []) f({});
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 744, clientY: 200 }] });   // the same physical spot, mirrored x
+  for (let i = 0; i < 60; i++) { clock.t += 16; Input.steer(); }
+  assert.equal(Input.steer(), 0, "a finger that did not move reads no steer after a rotation");
 });

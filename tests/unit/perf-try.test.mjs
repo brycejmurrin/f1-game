@@ -534,7 +534,7 @@ test("sky sunset-band guards admit low solar keys but reject high sun and every 
     const permits = (nightSky, sunE) => {
       const result = vm.runInNewContext(expression, tsl
         ? { D: { nightSky: scalar(nightSky) }, sunE: scalar(sunE) }
-        : { nightSky, sunE });
+        : { nightSky, sunE }, { filename: absSrc(file) });
       return tsl ? result.value : result;
     };
     for (const sunE of [0, 0.15, 0.719999]) assert.equal(permits(0, sunE), true, file + ": low solar key");

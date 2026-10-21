@@ -688,7 +688,30 @@ test("autoTier still honours the crash-sentinel floor and a measured shed", () =
   assert.equal(PerfGov.autoTier(), 4, "ULTRA must not defeat the crash floor via autoTier either");
 });
 
-test("tier 2 sheds car-paint SSR and the dry sheens, not via po.reflect; the wet-road march survives to tier 3", () => {
+test("wet-road reflections survive every user tier while overload and dry shedding remain independent", () => {
+  const common = eval(fs.readFileSync(path.join(ROOT, "js/render/shared/post-common.js"), "utf8") + ";PostCommon");
+  const opts = { unrelated: 42 };
+  for (const [tier, quality] of [[0, 0], [1, 0], [2, 1], [3, 2], [4, 2]]) {
+    common.roadReflection(opts, 1, 1.4, tier, 0);
+    assert.equal(opts.reflect, 1.4, `wet user tier ${tier} retains scene reflections`);
+    assert.equal(opts.ssrQuality, quality);
+    assert.equal(opts.unrelated, 42, "existing per-frame options are preserved");
+  }
+  common.roadReflection(opts, 1, 1.4, 4, 4);
+  assert.equal(opts.reflect, 0, "measured overload or crash floor can use the material fallback");
+  common.roadReflection(opts, 1, 0, 4, 0);
+  assert.equal(opts.reflect, 0, "WET MIRROR zero remains a true off switch");
+  for (const tier of [0, 1, 2, 3, 4]) {
+    common.roadReflection(opts, 0, 0.08, tier, 0);
+    assert.equal(opts.reflect, tier >= 2 ? 0 : 0.08, `dry user tier ${tier} keeps its prior shedding`);
+  }
+  common.roadReflection(opts, 0.01, 0.08, 4, 0);
+  assert.equal(opts.reflect, 0, "the dry/wet boundary remains unchanged");
+  common.roadReflection(opts, 0.011, 0.08, 4, 0);
+  assert.equal(opts.reflect, 0.08, "a damp road receives the reduced budget");
+});
+
+test("tier 2 sheds car-paint SSR independently of the wet-road quality policy", () => {
   // po.reflect = 0 is ALSO a dry session, so pairing uCarReflect to it would
   // kill car-paint SSR on every dry lap. The governor must pass a separate
   // opts.carReflect = 0 at tier ≥ 2, and both present() paths must honour it.
@@ -696,14 +719,7 @@ test("tier 2 sheds car-paint SSR and the dry sheens, not via po.reflect; the wet
   const post = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
-  assert.match(game, /const _ssrTier = \(frame\.wetness \|\| 0\) > 0\.01 \? 3 : 2;/);
-  assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= _ssrTier \? 0 : _ssr/);
-  // Phone default GRAPHICS: MEDIUM is tier 2: a wet road keeps its mirror there, a dry one does not.
-  const tierExpr = game.match(/const _ssrTier = (.+);/)[1];
-  const shed = (tier, wetness) => tier >= new Function("frame", "return " + tierExpr)({ wetness });
-  assert.equal(shed(2, 0.9), false, "wet road at MEDIUM keeps SSR");
-  assert.equal(shed(2, 0), true, "dry sheen still sheds at tier 2");
-  assert.equal(shed(3, 0.9), true, "wet-road SSR sheds at tier 3");
+  assert.match(game, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\)\)/);
   assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/);
   assert.match(post, /opts && opts\.carReflect != null \? opts\.carReflect/);
   assert.match(tlx, /o\.carReflect != null \? o\.carReflect/);
@@ -1277,5 +1293,104 @@ test("preset changes expire scale attribution while keeping provisional resoluti
       feed(PerfGov, () => 33.3, 60);
       assert.equal(scale(), chosen, "existing cooldown protects the provisional scale while evidence settles");
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// REPLAYS: the real governor.js AND the real render-rate.js, driven the way
+// js/game.js tickBody() drives them — PerfGov.tick(rafMs, RenderRate.drew())
+// at the top of the rAF, RenderRate.observe() + gate() further down. `rafFn`
+// returns the next rAF interval from (frame, scale, previousRafDrew), so a
+// drawn frame's cost can decide the interval after it, as on a device.
+const RR_SRC = fs.readFileSync(path.join(ROOT, "js/perf/render-rate.js"), "utf8");
+function replay(rate, rafFn, n, { legacy = false } = {}) {
+  const mem = { "apex26.renderRate": rate };
+  globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+  globalThis.window = { __APEX_BUILD: 1 };
+  const PerfGov = eval(SRC + ";PerfGov");
+  const RenderRate = eval(RR_SRC + ";RenderRate");
+  RenderRate.init({ isMobile: true });
+  let scale = 1, moves = 0, futileSeen = false, wall = 0, slowWall = 0;
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale,
+    setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (Math.abs(s - scale) < SCALE_EPS) return false; scale = s; moves++; return true; } });
+  PerfGov.sentinelArm(true);
+  let drew = true;
+  for (let i = 0; i < n; i++) {
+    const ms = rafFn(i, scale, drew);
+    wall += ms; if (wall > 10000 && ms > 25) slowWall += ms;
+    if (legacy) PerfGov.tick(ms); else PerfGov.tick(ms, RenderRate.drew());
+    RenderRate.observe(ms);
+    drew = RenderRate.gate(ms / 1000, ms, false, true);
+    futileSeen = futileSeen || PerfGov.scaleFutile();
+  }
+  return { scale, moves, tier: PerfGov.tier(), autoShed: PerfGov.autoShed(), floor: PerfGov.floorMs(), ema: PerfGov.fpsEMA(),
+    futileSeen, slowShare: slowWall / Math.max(1, wall - 10000) };
+}
+// Vsync quantisation at 60 Hz: a frame costing c ms presents at the next 16.67 multiple.
+const quantised = (cost) => (i, s) => Math.max(1, Math.ceil(cost(s) / 16.667 - 1e-9)) * 16.667;
+const fill = (c) => (s) => c * (0.4 + 0.6 * s * s);   // 40 % fixed cost, 60 % scales with pixels
+
+test("replay A: a 120 Hz phone drawing every second rAF is judged on drawn frames (was 4 moves, floor 8.9)", () => {
+  // The interval after a DRAWN rAF overruns one 8.3 ms vsync (16.7), the one
+  // after a skipped rAF is the bare 8.3. Judged together, the floor sank to the
+  // fast cadence and a steady draw read as over budget.
+  for (const raf of [(i) => (i & 1 ? 16.67 : 8.33), (i, s, drew) => (drew ? 16.67 : 8.33)]) {
+    const r = replay("half", raf, 7200);
+    assert.equal(r.moves, 0, `no reallocation for a steady draw cadence (${JSON.stringify(r)})`);
+    assert.equal(r.scale, 1); assert.equal(r.tier, 0); assert.equal(r.autoShed, 0);
+  }
+  const old = replay("half", (i, s, drew) => (drew ? 16.67 : 8.33), 7200, { legacy: true });
+  assert.ok(old.moves >= 2 && old.floor < 10, `the un-gated feed still shows the defect (${JSON.stringify(old)})`);
+});
+
+test("replay B: the opt-in \"30\" tier on a 60 Hz phone never sheds (was 10 moves, tier 4)", () => {
+  // A drawn frame costing over 16.7 ms presents at 33.3; the credit pacing then
+  // draws every rAF, so this is the Low Power Mode shape and gets exactly its
+  // treatment: the race-start probe (one cut, one bigger cut, a revert), no shed.
+  const r = replay("30", (i, s, drew) => (drew ? 33.33 : 16.67), 3600);
+  assert.equal(r.scale, 1); assert.equal(r.tier, 0); assert.equal(r.autoShed, 0);
+  assert.ok(r.moves <= 3, `bounded race-start probe only (${r.moves})`);
+  assert.ok(Math.abs(r.floor - 33.3) < 0.5, `floor converges on the 30 fps cadence (${r.floor})`);
+  // The cheap tiers at 60 and 120 Hz: credit pacing draws some rAFs back to
+  // back, so a summed drawn-to-drawn interval would jitter by a vsync; judged
+  // per drawn frame they read as healthy.
+  for (const [rate, ms] of [["45", 16.67], ["30", 16.67], ["45", 8.33], ["30", 8.33]]) {
+    const t = replay(rate, () => ms, 3600);
+    assert.equal(t.moves, 0, `tier ${rate} at ${ms} ms: ${JSON.stringify(t)}`); assert.equal(t.autoShed, 0);
+  }
+});
+
+test("no frame skipped: tick(ms) and tick(ms, true) take identical decisions", () => {
+  const raf = (i, s) => (i < 600 ? 16.67 : Math.max(16.67, 22 * (0.4 + 0.6 * s * s)));   // replay D
+  const a = replay("off", raf, 7200, { legacy: true }), b = replay("off", raf, 7200);
+  assert.deepEqual(b, a);
+  assert.equal(a.moves, 7); assert.ok(Math.abs(a.scale - 0.9) < 1e-9);   // today's D outcome, unchanged
+  const c = replay("half", () => 8.33, 7200);                              // replay C: cheap half-rate
+  assert.equal(c.moves, 0); assert.equal(c.scale, 1);
+});
+
+test("replay Eq/Eq2: a vsync-quantised fill-bound phone crosses to 60 fps (was scale 1, floor 33.3)", () => {
+  // 22 / 20 ms at full res present at 33.3; a 0.1 cut still presents at 33.3,
+  // so the small step read as futile. The one bigger probe crosses the quantum.
+  for (const c of [22, 20]) {
+    const r = replay("off", quantised(fill(c)), 7200);
+    assert.ok(r.floor < 17.5 && r.ema < 18, `settles on the 16.7 ms quantum (c=${c}: ${JSON.stringify(r)})`);
+    assert.ok(r.scale >= 0.6 && r.scale < 1, `at a scale that holds 60 (c=${c}: ${r.scale})`);
+    assert.equal(r.tier, 0, "resolution alone accounts for it");
+    // Bounded: settled within three moves, then the ceiling's designed
+    // re-measure (30 s, then the doubling refused-climb patience).
+    assert.ok(r.moves <= 10, `bounded moves (c=${c}: ${r.moves})`);
+    assert.ok(r.slowShare < 0.15, `after 10 s, under 15 % of wall time at 30 fps (c=${c}: ${r.slowShare.toFixed(3)})`);
+  }
+});
+
+test("replay Eq3/LPM: when the bigger probe buys nothing too, the lever is futile and scale returns to 1", () => {
+  for (const raf of [quantised(() => 18), () => 33.33]) {   // CPU-bound quantised; an external 30 fps cap
+    const r = replay("off", raf, 7200);
+    assert.ok(r.futileSeen, "the scale lever is declared futile");
+    assert.equal(r.scale, 1, "sharpness is not traded for nothing");
+    assert.equal(r.tier, 0); assert.equal(r.autoShed, 0);
+    assert.ok(r.moves <= 3, `one cut, one bigger cut, one revert (${r.moves})`);
+    assert.ok(Math.abs(r.floor - 33.3) < 0.5);
   }
 });

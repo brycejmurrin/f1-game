@@ -3,7 +3,7 @@
  * read the GLSL it generated (the hunt-1 codegen-dump method); the rest are source pins on tlx.js / tlx-post.js.
  * A unit test of a backend is not evidence it runs: the follow-up is gfx-probe + gpu-census.yml (macos).
  *   R4  no env cube target / sampler while TLX is opted out of the live env probe
- *   R3  phone LOW: one-attachment scene target; MEDIUM retains the porous/road SSR receiver tag
+ *   R3  active post chains retain the porous/road SSR receiver tag at every user tier
  *   R7  dry-day SSR gate on po.reflect (game.js, every backend), behind apex26.ssrDayGate (default OFF)
  *   R9  the particle / rain stream wraps the producer's array instead of copying it per upload
  *   R13 the chunk-cull scratch list keeps its backing store; refuseTab is minted once per renderer
@@ -204,14 +204,21 @@ test("R3: tlx.js sets the ssrTag MRT only on a tagged chain (present + warm), an
     `${wantTagSource}; return _wantTag();`)({ userTier: () => tier }, mobileTier, knob);
   for (const mobileTier of [false, true]) {
     for (const knob of ["", "0", "1"]) {
-      assert.equal(wantTag(2, mobileTier, knob), true, "MEDIUM wet-road SSR needs material eligibility, even with car SSR off");
+      for (let tier = 0; tier <= 4; tier++) {
+        assert.equal(wantTag(tier, mobileTier, knob), true,
+          `tier ${tier}: wet-road SSR still needs receiver metadata, including LOW and legacy tag-less overrides`);
+      }
     }
   }
-  assert.equal(wantTag(3, true), false, "LOW phone can omit metadata when road SSR is shed");
-  assert.equal(wantTag(4, true), false);
-  assert.equal(wantTag(3, false), true, "desktop retains its existing haze metadata");
-  assert.equal(wantTag(3, false, "1"), false, "desktop tag-less A/B still works once both SSR paths are shed");
-  assert.equal(wantTag(3, true, "0"), true, "explicit always-tag override is preserved");
+  const roadPolicySource = fnSource(read("js/render/shared/post-common.js"), "function roadReflection(opts, wetness, strength, tier, autoTier) {");
+  const roadPolicy = new Function(`${roadPolicySource}; return roadReflection;`)();
+  const low = {};
+  roadPolicy(low, 1, 0.8, 4, 0);
+  assert.ok(low.reflect > 0, "user LOW retains wet-road SSR under the integrated quality policy");
+  assert.equal(wantTag(4, true), true, "that LOW mirror must receive material eligibility");
+  const tagSwapSource = fnSource(TLX, "function _tagSwap() {");
+  assert.doesNotThrow(() => new Function("post", "_wantTag", `${tagSwapSource}; return _tagSwap();`)
+    (null, () => { throw new Error("absent post chain must return before querying/rebuilding metadata"); }));
   assert.match(TLX, /viz: vizMode, ssrTag: _wantTag\(\),/, "buildPost passes the rule to the chain");
   const at = TLX.indexOf("const _tag = !post.tagOn || post.tagOn();");
   assert.ok(at > 0, "present() reads the chain's tag state");
@@ -243,7 +250,7 @@ test("R7: the dry-day SSR gate zeroes po.reflect only on a dry day below the 1/6
   assert.equal(gate(false, { lights: false, wetness: 0.02 }, 0.02 * 1.28, 2), 0, "drying road at tier 2: invisible, skipped");
   assert.equal(gate(false, wet, 0.4 * 1.28, 2), 0.4 * 1.28, "a properly wet road keeps its mirror at tier 2");
   assert.equal(gate(false, wet, 0.02, 0), 0.02, "tier 0 never applies the weight gate unless armed");
-  assert.match(G, /po\.reflect = PerfGov\.tier\(\) >= _ssrTier \? 0 : _ssrPo;/, "the one input every backend reads");
+  assert.match(G, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\)\)/, "the shared policy consumes the gated strength for every backend");
   assert.doesNotMatch(G, /po\.carReflect = [^;]*_ssrPo/, "car-paint SSR is not gated");
   assert.match(G, /const _ssrDayGate = \(\(\) => \{ try \{ return localStorage\.getItem\("apex26\.ssrDayGate"\) === "1"; \}/,
     "armed only by an explicit apex26.ssrDayGate=1");

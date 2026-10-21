@@ -75,11 +75,16 @@ const MirrorPass = (function () {
   // reuses the view heap. Was 2 m / 4 frames — at 60 m/s that still re-ranked
   // every other frame on top of the forward cull.
   const RERANK_M = 5, RERANK_EVERY = 8, RERANK_AIM_COS = 0.9994;
+  const LITE_CULL = 120;
+  // THE PHONE RUNG'S DRAW DISTANCE (B·H10, Bryce 2026-10-21: "shorter mirror draw distance"). Monza sweep, 7
+  // positions: the lite mirror drew 75k tris mean / 117k worst at 180 m, 65k / 71k at 120 m, and no less at 100 or 80 m
+  // — the floor is TLX's one unchunked whole-lap road (~51k tris, tlx.js chunkedTrackCoords:false), which no cull
+  // reaches. The low and min rungs never draw further than lite. QUALITY is exported so a probe can sweep it live.
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1, instEvery: _instEvery },
-    { name: "lite", lite: true,  res: 0.6, cull: 180, reach: 140, every: 1, instEvery: 1 },
-    { name: "low",  lite: true,  res: 0.5, cull: 150, reach: 120, every: 2, instEvery: 1 },
-    { name: "min",  lite: true,  res: 0.4, cull: 120, reach: 100, every: 3, instEvery: 1 },
+    { name: "lite", lite: true,  res: 0.6, cull: LITE_CULL, reach: Math.min(140, LITE_CULL), every: 1, instEvery: 1 },
+    { name: "low",  lite: true,  res: 0.5, cull: Math.min(150, LITE_CULL), reach: Math.min(120, LITE_CULL), every: 2, instEvery: 1 },
+    { name: "min",  lite: true,  res: 0.4, cull: Math.min(120, LITE_CULL), reach: Math.min(100, LITE_CULL), every: 3, instEvery: 1 },
   ];
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
@@ -763,6 +768,8 @@ const MirrorPass = (function () {
       prepareRace,
       preparing: () => !!_preparation,
       cancelPreparation,
+      // Race teardown: the lamp re-rank cache keys on the track, and a page-lifetime pass kept it alive.
+      releaseTrack() { _vlTrack = null; _vlSrc = null; _vlAge = Infinity; },
       standDown,
       toggle,
       setMode,
@@ -787,7 +794,7 @@ const MirrorPass = (function () {
 
   // The live instance, for __apex.mirror() (js/agent/apex.js) — game.js creates exactly one.
   let _instance = null;
-  return { create, MODES, instance: () => _instance };
+  return { create, MODES, QUALITY, instance: () => _instance };
 })();
 
 if (typeof window !== "undefined") window.MirrorPass = MirrorPass;
