@@ -114,12 +114,18 @@ const NetScan = (function () {
       if (detector) {
         if (detecting) return;                  // never stack detect() calls
         detecting = true;
-        const gen = generation;
-        Promise.resolve().then(() => detector.detect(video)).then((codes) => {
+        const gen = generation, activeDetector = detector, activeVideo = video;
+        Promise.resolve().then(() => {
+          if (stopped || gen !== generation) return null;
+          return activeDetector.detect(activeVideo);
+        }).then((codes) => {
+          // A stopped scan may settle after its replacement has started a new
+          // detect(). Only that replacement may release its in-flight guard.
+          if (stopped || gen !== generation) return;
           detecting = false;
           const hit = Array.isArray(codes) && codes.find((c) => c && c.rawValue);
           if (hit) found(gen, hit.rawValue);
-        }, () => { detecting = false; });       // a detector throw is not a scan failure
+        }, () => { if (gen === generation) detecting = false; }); // a detector throw is not a scan failure
         return;
       }
       const scale = Math.min(1, MAX_EDGE / Math.max(w, h));

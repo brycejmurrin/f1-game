@@ -8906,6 +8906,7 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "tick": [
+        "tests/unit/net-qr.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "*": [
@@ -9168,6 +9169,12 @@
       ],
       "fmtTime": [
         "tests/unit/lap-format-rollover.test.mjs"
+      ],
+      "frametimeBenchReset": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "frametimeBenchSnapshot": [
+        "tests/unit/metrics.test.mjs"
       ],
       "logLvl": [
         "tests/unit/metrics.test.mjs"
@@ -10506,6 +10513,7 @@
       ],
       "setEnabled": [
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/player-forces.test.mjs",
         "tests/unit/wheel-state.test.mjs"
       ],
       "stepPlayer": [
