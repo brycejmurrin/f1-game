@@ -94,3 +94,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 05:28Z: W13 HANDOFF (~145k) → launched B·W14 session_0144ZhHaiYCj81KpXwWcoeoh (Sonnet): #3238 @38ebaddf (full tier running) + tip red perf-frametime. #3230 already synced by W13 → 62bdd71e (full tier running); B·H24 watches → READY. #3388 H20 pushed 8441ed54 (fast tier). H15: #3396 clear of createTextureArray.
 
 05:38Z: MERGED #3301 → c0cf1bb8 (non-game). O-T done. #3422 H19 pack-bytes (game, draft). #3377 H19 syncing. Pages 50cc71dd still running (several workflow_dispatch runs on it).
+
+05:45Z: LESSON: Pages "running" on 50cc71dd was only the schedule/dispatch check; my #3301 push superseded the real gated deploy. #3385 verdict = Pages on c0cf1bb8 (push run 39550713769, running green so far). Extra workflow_dispatch runs were Fleet board (fleet.yml), not Pages. #3399 GREEN (W11 handing off after DONE). #3392 sync: tooling-fast timed out at 450/811 (0 fails, box load 6) → resumed --from=test:game-vm-a --push. #3420 ready, full tier running.
