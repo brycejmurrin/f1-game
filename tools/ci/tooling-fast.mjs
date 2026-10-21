@@ -747,6 +747,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // live-frame-census.mjs pure helpers (args, percentiles, trace/profile reducers). ~0.2 s.
   "tests/unit/live-frame-census.test.mjs",
   "tests/unit/live-run-check.test.mjs",
+  // Spine lightning / twoTone / keylineSplit clear the 2.0:1 large-area floor (#3425, #3426). ~3 s.
+  "tests/unit/livery-contrast-w13b.test.mjs",
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
@@ -1269,6 +1271,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
+  // W13a tooling batch: helmet-sheet nested --out mkdir, agent help collisions,
+  // quick-validate --help/port, probe-page shot-timeout + tiled CDP fallback. No browser.
+  "tests/unit/tools-w13a-agent-help.test.mjs",
+  "tests/unit/tools-w13a-helmet-sheet.test.mjs",
+  "tests/unit/tools-w13a-probe-page.test.mjs",
+  "tests/unit/tools-w13a-quick-validate.test.mjs",
   "tests/unit/touch-drag-anchor.test.mjs",
   // Drag range widens with speed by the same fraction digitalRateIn sheds.
   // Low / mid / high, the OFF knob, and the same finger travel. VM, < 0.2 s.

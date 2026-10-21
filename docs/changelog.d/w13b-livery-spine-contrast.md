@@ -1,0 +1,1 @@
+Fixed: Spine designs lightning, twoTone and keylineSplit now clear a 2.0:1 contrast floor on large crest and tail fields (lightning no longer paints the same colour on itself; Alpine/Audi two-colour layouts re-pick a readable second design colour in livery-design without changing team base paints).

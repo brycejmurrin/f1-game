@@ -19,7 +19,7 @@
 // (tools/shot/shot.mjs, a chase or cockpit view).
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import sharp from "sharp";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -213,8 +213,10 @@ for (let i = 0; i < nums.length; i++) {
 }
 
 const outDir = resolve(ROOT, "scratch", "renders");
-mkdirSync(outDir, { recursive: true });
 const out = resolve(outDir, flag("out", "helmet-sheet.png"));
+// Nested --out (e.g. panels/car-survey/test/nested.png) needs every parent under
+// scratch/renders — mkdir of outDir alone left those as ENOENT (#3427).
+mkdirSync(dirname(out), { recursive: true });
 const png = await sharp({ create: { width: W, height: H, channels: 3, background: { r: 20, g: 21, b: 25 } } })
   .composite(composites).png().toBuffer();
 writeFileSync(out, png);
