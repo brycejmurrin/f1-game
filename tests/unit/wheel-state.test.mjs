@@ -175,3 +175,17 @@ test("axleStep runaway brake drives κ negative within ~100 ms", () => {
   assert.ok(out.kappa < -0.1, `κ after stamp ${out.kappa}`);
   assert.ok(out.locked > 0.3, `locked ${out.locked}`);
 });
+
+test("reverse travel: a rim slower than the body is LOCKED, faster is SPINNING (travel direction, not raw κ sign)", () => {
+  const { WheelState } = load();
+  const run = (vw, vx) => {
+    const out = {};
+    WheelState.axleStep({ vw }, { dt: DT, vx, aReq: 0, muLong: 8, alphaN: 0 }, out);
+    return out;
+  };
+  const fwdLock = run(5, 40), revLock = run(-5, -40);
+  assert.ok(fwdLock.locked > 0 && fwdLock.spinning === 0, "forward sanity: slow rim reads locked");
+  assert.ok(revLock.locked > 0 && revLock.spinning === 0, `reverse slow rim reads locked, got locked=${revLock.locked} spinning=${revLock.spinning}`);
+  const revSpin = run(-60, -40);
+  assert.ok(revSpin.spinning > 0 && revSpin.locked === 0, `reverse fast rim reads spinning, got locked=${revSpin.locked} spinning=${revSpin.spinning}`);
+});
