@@ -10,7 +10,7 @@ gpu-census JSON (macos-latest, Apple GPU) and `__apex` race-entry marks. Softwar
 |---|---|---|---|---|
 | B1 | js/game.js startRaceBody (`RaceEntryProfile.requestWarm`) | info | BY-DESIGN | See §B1. TLX's 19.1 s entry from #3419 happens only on `entry=api`. Players take `entry=menu`, which enters in 2.0–2.5 s. |
 | B2 | js/game.js `introWarm` / js/render/three/tlx.js `startProgramWarm` | high | CONFIRMED (census) | See §B2. The player waits for the TLX menu warm: menu `prepWaitMs` is 19–35 s on TLX against 3.3–4.2 s on GLX. |
-| B3 | js/render/three/tlx.js `startProgramWarm` usePost | medium | measuring | See §B3. The noEnv rule (B·H16's 191630a2) is under a same-base census A/B, 2× per side. |
+| B3 | js/render/three/tlx.js `startProgramWarm` usePost | medium | CONFIRMED (same-base census, n=2) | See §B3. The TLX garage-prebuild frame drops from 4.9–8.3 s to 1.0–2.4 s. Race entry, fps and gpuErrors are unchanged. Fixed in #3436. |
 
 ### B1. The 19.1 s TLX race entry is the `api` path
 
@@ -57,9 +57,27 @@ The draw stage sits at the 5 s `_gpuSettled` cap in most runs. Per #3408, the fe
 PR is the same tip plus 191630a2, on `cursor/live-debug-boot-1-h29a`. Both run gpu-census `entry=menu` on
 macos-latest, 2× per side:
 
-| side | run | TLX-WebGL2 prepWait / garage frames | TLX-WebGPU prepWait / garage frames | GLX |
+All four runs succeeded with `gpuErrors` 0 on every leg. "Garage frame" is `menu.garage.last.frameMs`: the settings
+prebuild's hidden garage frame, a noEnv frame. "Garage warm" is `warmHistory[1].total`: the warm that frame requests.
+
+| side | run | TLX-WebGL2 garage frame / garage warm / prepWait / entry | TLX-WebGPU garage frame / garage warm / prepWait / entry | GLX garage frame (untouched) |
 |---|---|---|---|---|
-| base | 39656588971 | | | |
-| base | 39656626526 | | | |
-| PR | 39656593801 | | | |
-| PR | 39656631564 | | | |
+| base | 39656588971 | 5505 / 5345 / 30.5 s / 3.18 s | 8312 / 8152 / 28.4 s / 1.25 s | 95 |
+| base | 39656626526 | 4931 / 4740 / 26.9 s / 3.33 s | 5646 / 5570 / 24.7 s / 1.07 s | 99 |
+| PR | 39656593801 | 2247 / 2146 / 28.8 s / 3.47 s | 2415 / 2295 / 23.1 s / 1.16 s | 87 |
+| PR | 39656631564 | 1047 / 929 / 22.3 s / 1.83 s | 976 / 875 / 14.3 s / 0.91 s | 717 |
+
+Garage frames are in ms; the other columns are as labelled.
+
+**Verdict: CONFIRMED.** The rule cuts the TLX garage frame 2.3–8.5× on both TLX paths, and the garage warm shrinks with
+it. Before the fix, the garage warm compiled every program into the post scene target. A noEnv garage frame paints
+without post, so the frame then built its own programs. Its draw stage (2.7–4.6 s, at the settle cap) went to a
+target the frame never uses. With the fix, `usePost` is false for a noEnv frame. The warm compiles the frame's own
+target, and `drawWarmStage` returns early.
+
+#3408 raised a risk: a noEnv warm with no draw warm could leave the first frame to pay pipeline creation. That did
+not show on hardware, because the frame still got 2.3–8.5× faster.
+
+`menu.prepWaitMs` falls by 2–10 s, but the first (world) warm of 16–20 s still dominates it (§B2). Race entry is
+unchanged within noise (the menu path skips the race warm). The race-window fps and p95 overlap across sides. GLX
+and WGX do not run this code, and they moved only within noise.
