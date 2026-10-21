@@ -76,3 +76,16 @@ test("a frame and its fallback both firing resume the prep once", async () => {
   assert.equal(new Set(r.v.rec.builds.filter((b) => b.kind === "body").map((b) => b.team + ":" + b.num)).size, bodies,
     "no step ran twice (each body built once)");
 });
+
+test("LEGENDS preps the ONE picked legend, not its twelve picker seats", async () => {
+  const v = carDrawVm({ casters: true, legends: true });
+  let t = 0;
+  v.ctx.performance.now = () => (t += 5);
+  v.ctx.setTimeout = (fn) => { fn(); return 1; };
+  v.ctx.requestAnimationFrame = (fn) => { fn(); return 1; };
+  const li = v.ctx.Teams.LIST.findIndex((x) => x.legends);
+  v.G.teamIdx = li; v.G.driverIdx = 4;
+  const real = v.ctx.Teams.LIST.filter((x) => x.isReal || v.ctx.Teams.isReal(x)).reduce((s, x) => s + x.drivers.length, 0);
+  const out = await v.carDraw.prepareMenuCarAssets(() => true);
+  assert.equal(out.cars, real + 1, "every real seat plus the single picked legend (" + out.cars + ")");
+});

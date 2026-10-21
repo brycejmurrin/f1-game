@@ -2217,7 +2217,8 @@
     },
     "js/car/car-draw.js": {
       "beginDecals": [
-        "tests/unit/car-draw-decal-budget.test.mjs"
+        "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-draw-decal-sweep.test.mjs"
       ],
       "carDecalNum": [
         "tests/unit/livery-tier.test.mjs"
@@ -2243,6 +2244,9 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "decalBytes": [
+        "tests/unit/car-draw-decal-sweep.test.mjs"
       ],
       "decalTextureFor": [
         "tests/unit/livery-tier.test.mjs"
@@ -2276,10 +2280,12 @@
       ],
       "flushDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-draw-decal-sweep.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
       "getCarDecalTexture": [
-        "tests/unit/car-draw-decal-budget.test.mjs"
+        "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-draw-decal-sweep.test.mjs"
       ],
       "glassState": [
         "tests/unit/car-presentation-vm.test.mjs"
@@ -2314,7 +2320,8 @@
         "tests/unit/car-presentation-vm.test.mjs"
       ],
       "queueCarDecals": [
-        "tests/unit/car-draw-decal-budget.test.mjs"
+        "tests/unit/car-draw-decal-budget.test.mjs",
+        "tests/unit/car-draw-decal-sweep.test.mjs"
       ],
       "reapHiResGrave": [
         "tests/unit/livery-tier.test.mjs"
@@ -2616,7 +2623,8 @@
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-wing-foil.test.mjs"
+        "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs"
       ],
       "tints": [
         "tests/unit/livery-paint-zones.test.mjs",
@@ -2700,14 +2708,19 @@
       "create": [
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/team-livery.test.mjs"
+      ],
+      "getCustomLiveries": [
+        "tests/unit/livery-paint-zones.test.mjs"
       ],
       "pickLivery": [
         "tests/unit/livery-design.test.mjs"
       ],
       "resolveLivery": [
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "saveLiveryId": [
@@ -2727,13 +2740,15 @@
       "*": [
         "tests/unit/body-styles.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/share-code.test.mjs"
       ]
     },
     "js/car/field-lod.js": {
       "castsShadow": [
+        "tests/unit/field-lod.test.mjs"
+      ],
+      "farBody": [
         "tests/unit/field-lod.test.mjs"
       ],
       "flame": [
@@ -2877,6 +2892,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/helmet-memo.test.mjs",
         "tests/unit/helmets.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -5009,7 +5025,6 @@
       ],
       "parts": [
         "tests/specs/parts-physics.spec.js",
-        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
@@ -5198,6 +5213,9 @@
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "raceInstant": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
+      "sync": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "tick": [
@@ -7334,6 +7352,7 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/team-livery.test.mjs",
@@ -7387,7 +7406,6 @@
         "tests/unit/garage-perf-mesh-free.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
@@ -12910,10 +12928,12 @@
       "roadReflection": [
         "tests/unit/perf-governor.test.mjs"
       ],
+      "sunScreen": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
       "*": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
@@ -13011,12 +13031,18 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "mergeRuns": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
       "packAttr": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "releaseMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "splitRanges": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "*": [
         "tests/unit/frustum-buckets.test.mjs",
@@ -15313,10 +15339,12 @@
     },
     "js/ui/layers.js": {
       "anyOpen": [
+        "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "navOpen": [
+        "tests/unit/layers-anyopen-memo.test.mjs",
         "tests/unit/layers-nav-memo.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"

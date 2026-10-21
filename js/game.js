@@ -7967,7 +7967,7 @@ function render(dt) {
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
-      : (FieldLod.on && !c.isPlayer && _lod >= 2 ? carDraw.sharedRivalBodyMesh() : teamBodyMesh(c.team, c)));
+      : (FieldLod.on && !c.isPlayer && _lod >= 2 ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c)) : teamBodyMesh(c.team, c)));
     if (body) {
       gfx.draw(body, tmpMat, paint);
       if (_lod < 2) queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
@@ -8732,6 +8732,13 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
   $("pm-flyby").disabled = !inRace;
 }
+function focusSettingsHub() {
+  const hub = $("pm-settings-index");
+  if (!hub || hub.hidden) return;
+  for (const el of hub.querySelectorAll("button:not([disabled])")) {
+    try { el.focus({ preventScroll: true }); return; } catch (_) { /* detached */ }
+  }
+}
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here
   // AUTO is FULL" is written after the first HUD tick, not only at boot.
@@ -8741,6 +8748,9 @@ function openSettings() {
   ensureAudio(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
+  // showModal() runs after the hidden flip; defer so hub focus beats the dialog's
+  // default focus fixup (survey #3249 — not BACK).
+  requestAnimationFrame(() => requestAnimationFrame(() => focusSettingsHub()));
 }
 let keyBinds = null;   // KeyBinds.create(G), below
 function closeSettings() { settingsNav.invalidate(); if (keyBinds) keyBinds.disarmAll(); els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free

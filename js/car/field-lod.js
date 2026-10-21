@@ -23,7 +23,8 @@ const FieldLod = (function () {
                           // also draw ONE shared low-poly body mesh (CarDraw.sharedRivalBodyMesh),
                           // not a per-seat teamBodyMesh — pre-building a whole car per rival cost
                           // ~5 s of CPU at track build (game-vm).
-    SHADOW_CAST_M: 50,    // sun / lamp shadow-map caster within (blob shadow unchanged)
+    FAR_BODY_M: 250,      // beyond: the shared body is the decimated silhouette (<= ~1.5k tris, CarGeometry.decimate)
+    SHADOW_CAST_M: 50,   // sun / lamp shadow-map caster within (blob shadow unchanged)
     MIRROR_CARS: 6,       // nearest rivals the rear-view mirror / PiP redraws
     LEGACY_FLAPS_M: 150,  // the off-switch's flap gate
   });
@@ -80,6 +81,17 @@ const FieldLod = (function () {
     if (car) car._lodTier = t;
     return t;
   }
+  // FAR BODY: past FAR_BODY_M (reference-lens metres, same ±10 % stickiness as tier(), kept in _farOf, not on the car: one more CarFields key tips
+  // the cars out of V8 fast-properties mode, hunt-apex-aiplace-reset-vm) a
+  // rival is 1-3 px tall, so it draws the decimated silhouette body (CarDraw.sharedRivalBodyMesh(true)).
+  const _farOf = new WeakMap();   // car -> last far verdict
+  function farBody(dist2, fovY, car) {
+    if (!on) return false;
+    const d2 = dist2 * lensK2(fovY), was = car ? _farOf.get(car) === true : false;
+    const far = car ? crossed(d2, T.FAR_BODY_M, was, _farOf.has(car)) : d2 > sq(T.FAR_BODY_M);
+    if (car) _farOf.set(car, far);
+    return far;
+  }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
   function flame(dist2) { return !on || dist2 < sq(T.FLAME_M); }
@@ -119,6 +131,6 @@ const FieldLod = (function () {
       castsShadow: isPlayer || castsShadow(dist2),
     };
   }
-  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
+  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, farBody, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
 })();
 Object.freeze(FieldLod);

@@ -74,3 +74,24 @@ test("monza -> QUIT TO MENU -> spa: the monza track object is collected", async 
   await collect();
   assert.ok(ref.deref() === undefined, "the previous circuit is still reachable after the next one is built");
 });
+
+// Five circuits raced in a row (race → drive → QUIT TO MENU each time): once the last one is built,
+// every earlier circuit is collectable. The cross-race leak kept them ALL (one per stale traffic bucket).
+test("five circuits raced in a row: only the last stays reachable", async () => {
+  const ids = ["monza", "spa", "suzuka", "monaco", "silverstone"];
+  const refs = [];
+  for (const id of ids) {
+    g.G.session = "race";
+    await g.race(id);
+    drive(240);
+    refs.push([id, new WeakRef(g.G.track)]);
+    g.G.quitToMenu();
+  }
+  await g.race("monza");   // build one more so the last raced circuit is not merely the menu's backdrop
+  await collect();
+  const alive = refs.filter(([, r]) => r.deref() !== undefined).map(([id]) => id);
+  assert.ok(alive.length === 0, "circuits still reachable after a sixth build: " + alive.join(", "));
+});
+
+// A garage visit between races is covered by tests/specs/race-cycle-memory.spec.js: BACK rebuilds the
+// car-select DOM, which the VM harness does not carry.

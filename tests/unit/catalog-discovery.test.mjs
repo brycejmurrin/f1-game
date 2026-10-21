@@ -6,6 +6,16 @@ import { loadParts, catalogRows, sweep, sweepParallel } from "../../tools/car/pa
 import { TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS } from "../../tools/shot/lib/garage-camera-catalog.mjs";
 
 const M = loadParts();
+test("all cosmetic part styles are exposed with canonical ids and useful camera stations", () => {
+  const result = discoverCatalog({ section: "liveries", filter: "Shape", limit: 100 });
+  for (const [field, category] of Object.entries(M.Car3D.PART_STYLE_FIELDS)) {
+    const row = result.rows.find(r => r.kind === "field" && r.id === field);
+    const ids = Array.from(M.Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === "STYLE"), o => o.id);
+    assert.ok(row, field + " discoverable");
+    assert.deepEqual(row.values, ["fitted", ...ids]);
+    assert.ok(row.stations.length > 0, field + " offers a focused camera");
+  }
+});
 test("parts are canonical, paginated and never expose unavailable team options", () => {
   const first = discoverCatalog({ section: "parts", limit: 2 });
   const next = discoverCatalog({ section: "parts", limit: 2, offset: first.nextOffset });

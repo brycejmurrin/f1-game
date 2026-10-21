@@ -5,8 +5,8 @@
 // saved livery then builds a mesh where finishes and tints land on the right
 // sections. Entry path as parts-liveries.spec.js: McLaren (team 2), empty customs,
 // START, CAR, LIVERY, create.
-import { test, expect } from "../helpers/fixtures.js";
-import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
+import { test, expect, clickLive } from "../helpers/fixtures.js";
+import { ensureLive, toMenu, forgetStored, pinFreePlay, presentAndPause } from "../helpers/shared-page.js";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
@@ -19,23 +19,25 @@ async function reveal(page, sel) {
   return page.locator(sel);
 }
 
-async function openLiveryEditor(page, wheels) {
+async function openLiveryEditor(page, wheels, manualPreview = false) {
+  await page.evaluate(() => __apex.renderScale(0.5));
   const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
   await forgetStored(page, [key]);
   await page.evaluate((k) => GameStore.store.set(k, []), key);
   await toMenu(page);
   await pinFreePlay(page, { team: 2, click: false });
-  await page.locator("#mb-race").click();
+  await clickLive(page, "mb-race");
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-car").click();
+  await clickLive(page, "sel-car");
   await page.locator("#carsetup").waitFor({ state: "visible" });
   if (wheels) {
-    await page.locator('#cs-tabs [data-cs-cat="wheels"]').click();
-    await page.locator(`#cs-options [data-cs-opt="${wheels}"]`).click();
+    await page.locator('#cs-tabs [data-cs-cat="wheels"]').evaluate(b => b.click());
+    await page.locator(`#cs-options [data-cs-opt="${wheels}"]`).evaluate(b => b.click());
   }
-  await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-  await page.locator(".cs-liv-create").click();
+  await page.locator('#cs-tabs [data-cs-cat="livery"]').evaluate(b => b.click());
+  await page.locator(".cs-liv-create").evaluate(b => b.click());
   await expect(page.locator(".cs-liv-editor")).toBeVisible();
+  if (manualPreview) await presentAndPause(page);
   return key;
 }
 
@@ -47,14 +49,14 @@ const rebuiltSince = (page, since) => expect.poll(() => page.evaluate((s) => Log
 
 test("detail finishes: phone controls refinish the fitted parts and save all four choices", async ({ page }) => {
   await ensureLive(page);
-  const key = await openLiveryEditor(page, "works_rim");
+  const key = await openLiveryEditor(page, "works_rim", true);
   const choices = { ductFinish: "chrome", deflectorFinish: "brushed", cockpitFinish: "satin", boardFinish: "chrome" };
   for (const [field, value] of Object.entries(choices)) {
     const pill = await reveal(page, `[data-cs-pill="${field}:${value}"]`);
     await pill.scrollIntoViewIfNeeded();
-    await page.evaluate(() => __apex.awaitPresent(8000));
     const mark = await lastLogId(page);
     await pill.tap();
+    await presentAndPause(page);
     await expect(pill).toHaveAttribute("aria-pressed", "true");
     await rebuiltSince(page, mark);
     const events = await page.evaluate((s) => Log.records({ ns: "car", since: s }).map((r) => JSON.stringify(r)), mark);
@@ -70,7 +72,7 @@ test("detail finishes: phone controls refinish the fitted parts and save all fou
 
 test("finish controls explain absent fins and deflectors without discarding the fin choice", async ({ page }) => {
   await ensureLive(page);
-  await openLiveryEditor(page, "standard");
+  await openLiveryEditor(page, "standard", true);
   const deflector = await reveal(page, '[data-cs-pill="deflectorFinish:chrome"]');
   await expect(deflector).toBeDisabled();
   await expect(deflector.locator("xpath=../..")).toContainText("Needs wheel deflectors");
@@ -78,13 +80,14 @@ test("finish controls explain absent fins and deflectors without discarding the 
     const shape = await reveal(page, `[data-cs-pill="finShape:${id}"]`);
     await shape.scrollIntoViewIfNeeded();
     await shape.tap();
+    await presentAndPause(page);
     const finish = await reveal(page, '[data-cs-pill="finFinish:chrome"]');
     if (id === "none") {
       await expect(finish).toBeDisabled();
       await expect(finish.locator("xpath=../..")).toContainText("Needs a tail fin");
     } else {
       await expect(finish).toBeEnabled();
-      if (await finish.getAttribute("aria-pressed") !== "true") { await finish.scrollIntoViewIfNeeded(); await finish.tap(); }
+      if (await finish.getAttribute("aria-pressed") !== "true") { await finish.scrollIntoViewIfNeeded(); await finish.tap(); await presentAndPause(page); }
       await expect(finish).toHaveAttribute("aria-pressed", "true");
     }
   }
