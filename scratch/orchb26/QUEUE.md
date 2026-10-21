@@ -149,3 +149,4 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 
 09:55Z: #3433 (quarantine) READY 50a13bc4, full tier running → merge when gate passes, then Pages green before #3238.
 09:57Z: MERGED #3433 → 34827018 (quarantine). Game merges resume on green Pages 34827018: #3238 → #3392 → #3395 → #3402 → #3431.
+10:01Z: Pages 34827018 GREEN → INCIDENT lifted. #3238 → c79b7826 merged outside the bus (likely Bryce). Next game #3392 (3c64369b) on green Pages c79b7826; then #3395 #3402 #3431.
