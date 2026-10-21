@@ -1,1 +1,0 @@
-1792559125	Bryce Murrin	C·rendering c91f owns js/render/glx/glx.js + tests/unit/glx-failure-paths.test.mjs only: reproduce/fix window.name storage-denied context-loss retry regex; no TLX changes  [cursor/perf-rendering-c91f; session 249c8dc09612bfa331f5098b]
