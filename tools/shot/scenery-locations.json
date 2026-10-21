@@ -729,15 +729,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.737258,
       "target": [
-        -162.63,
-        103.07,
-        525.11
+        -161.72,
+        -25.12,
+        525.1
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/donington.js sAir",
       "projectedFrac": 0.61747,
-      "nearestRoadDistanceM": 340.5,
-      "viewDistanceM": 486.6,
+      "nearestRoadDistanceM": 339.9,
+      "viewDistanceM": 487,
       "source": "tests/data/landmarks/donington.json; js/circuits/scenery/donington.js"
     },
     {

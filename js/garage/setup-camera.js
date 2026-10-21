@@ -105,6 +105,26 @@ function glareScale(tune) {
   return _tuneNum(T, "glareStr", RACE_GLARE_DEF) / RACE_GLARE_DEF;
 }
 
+// Which livery fields can MOVE a vertex, as opposed to only recolouring one.
+// Measured (tests/unit/setup-preview-hull.test.mjs builds the car both ways and
+// compares positions byte for byte): a hue change never moves anything, and only
+// the PRESENCE of these four does — they gate optional strip geometry. finShape
+// is the one non-colour entry: it picks the shark fin's outline (or no fin).
+// coverVents and spineHeight are the other enums that move a vertex, and
+// spineSide moves the service panels aft of its flank band.
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle", "aeroShape", "floorShape", "engineShape", "suspensionShape", "brakesShape", "tyresShape", "ersShape", "gearboxShape", "fuelShape", "exhaustShape", "cockpitShape", "wheelsShape"];
+// The turntable silhouette's cache key. The hull depends on POSITIONS ONLY, so it is the
+// preview key WITHOUT the livery id (partsVisualKey ends "|L:<id>"; the catalog option ids
+// before it never hold "|L:") plus the geometry-gating fields: it survives the per-value
+// colour-drag busts livePreviewDraft issues, and a livery PICK whose fields match reuses it.
+// Keyed on the id, every first visit to a livery re-walked ~19k points in framingHull:
+// ~260 ms of a phone-throttled pick (CPU x4, B·H32 2026-10-21). Pure: tests/unit/setup-preview-hull.test.mjs.
+function hullKeyOf(teamId, partsKey, seat, liv) {
+  const at = partsKey.indexOf("|L:");
+  return teamId + ":" + (at < 0 ? partsKey : partsKey.slice(0, at)) + ":" + seat + "|"
+    + SP_HULL_GEOM_FIELDS.map((f) => (typeof liv[f] === "string" ? liv[f] : liv[f] ? 1 : 0)).join(",");
+}
+
 /** @param {*} G the js/game.js ctx façade.
  *  @param {*} deps car-drawing helpers that stay in game.js (the garage and the
  *  race share them) — the same seam js/car/car-draw.js and
@@ -493,14 +513,6 @@ function resetSetupCam() {
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
 let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null;
-// Which livery fields can MOVE a vertex, as opposed to only recolouring one.
-// Measured (tests/unit/setup-preview-hull.test.mjs builds the car both ways and
-// compares positions byte for byte): a hue change never moves anything, and only
-// the PRESENCE of these four does — they gate optional strip geometry. finShape
-// is the one non-colour entry: it picks the shark fin's outline (or no fin).
-// coverVents and spineHeight are the other enums that move a vertex, and
-// spineSide moves the service panels aft of its flank band.
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle", "aeroShape", "floorShape", "engineShape", "suspensionShape", "brakesShape", "tyresShape", "ersShape", "gearboxShape", "fuelShape", "exhaustShape", "cockpitShape", "wheelsShape"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
 // keyed on colour and finish: the old paint job's flaps go too, or a session of
@@ -525,10 +537,11 @@ function garageSeat() {
 // helmet of the seat you picked. In the key too, or switching seats keeps
 // the mesh you were already looking at. Career.gridDrivers() is the MY TEAM
 // pair when a second driver is hired.
+// Ten legends share num 1, so the player's Legends slot keys on the code too.
+function seatTag(team, seat) { return (seat && seat.num) + (team.legends && seat ? ":" + seat.code : ""); }
 function previewKey() {
   const team = Teams.LIST[G.teamIdx], seat = garageSeat();
-  // Ten legends share num 1, so the player's Legends slot keys on the code too.
-  return team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num) + (team.legends && seat ? ":" + seat.code : "");
+  return team.id + ":" + partsVisualKey(team.id) + ":" + seatTag(team, seat);
 }
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
@@ -536,9 +549,7 @@ function getSetupPreviewMesh() {
   const key = previewKey();
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
-    // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
-    // survives the per-value colour-drag busts livePreviewDraft issues.
-    const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (typeof liv[f] === "string" ? liv[f] : liv[f] ? 1 : 0)).join(",");
+    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv);
     // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
     const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
@@ -1129,6 +1140,6 @@ return {
 };
 }
 
-return { create, panelCover, presentOpts, glareScale };
+return { create, panelCover, presentOpts, glareScale, hullKeyOf };
 })();
 Object.freeze(SetupCamera);

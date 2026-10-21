@@ -880,6 +880,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pad-haptics.test.mjs",
   // particles.js dirty latch: parked rain skips expand/upload until eye cell moves.
   "tests/unit/particles-dirty.test.mjs",
+  // W13c: wheels/tyres catalog copy vs cover:1 and 2026 Pirelli role colours.
+  // ~0.1 s Node; catches picker lies that parts-distinct-mesh cannot see.
+  "tests/unit/parts-copy-w13c.test.mjs",
   // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
