@@ -656,6 +656,42 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # A dispatch of the existing, default-branch GPU census workflow with
+  # track=urban-gallery takes this opt-in photography path. The workflow file
+  # must exist on the default branch before GitHub will register a newly named
+  # workflow_dispatch workflow, so keep the hardware capture available through
+  # this established entry point until the dedicated workflow lands there.
+  urban_screenshots:
+    name: Capture verified 4K urban WebGPU scenes
+    needs: plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.track == 'urban-gallery' }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - name: Install full Chromium
+        run: npx playwright install chromium
+      - name: Require a real WebGPU adapter
+        run: |
+          mkdir -p artifacts/webgpu-urban-gallery
+          node tools/gfx/gpu-census.mjs --json artifacts/webgpu-urban-gallery/gpu-census.json
+          node -e 'const c=require("./artifacts/webgpu-urban-gallery/gpu-census.json"); if(c.anyHardware!==true) throw new Error("GPU census did not identify a hardware WebGPU adapter: "+JSON.stringify(c.runs.map(x=>({flags:x.flags,verdict:x.verdict,adapter:x.adapter}))));'
+      - name: Capture city traffic scenes at 4K
+        run: node tools/shot/webgpu-urban-gallery.mjs
+      - name: Upload full-resolution images and capture evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webgpu-urban-gallery-${{ github.sha }}
+          path: artifacts/webgpu-urban-gallery/
+          if-no-files-found: warn
+          retention-days: 14
+
   garage_reanalysis:
     name: Revalidate preserved native garage captures
     needs: plan
