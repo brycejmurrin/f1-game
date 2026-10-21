@@ -328,7 +328,7 @@ test("dump skips a 410 stream_expired, counts it, and keeps going", async () => 
   try {
     const line = await dumpRuns([ID], dir, { gapMs: 0 });
     assert.equal(calls.length, 3);
-    assert.ok(/ written=1 skipped=0 expired=1 live=0$/.test(line));
+    assert.ok(/ written=1 skipped=0 expired=1 live=0 slow=0$/.test(line));
     assert.equal(fs.readdirSync(dir).length, 1);
     stub([200, { items: [{ id: "run-cccccccc", status: "FINISHED" }] }], [403, err("forbidden")]);
     await assert.rejects(dumpRuns([ID], dir, { gapMs: 0 }), /HTTP 403/);
@@ -526,7 +526,7 @@ test("dump skips a run past the retention window without a request, and keeps a 
   try {
     const line = await dumpRuns([ID], dir, { gapMs: 0 });
     assert.deepEqual(calls.map((c) => c.url.split("/").slice(-2, -1)[0]), [ID, "run-bbbbbbbb", "run-cccccccc"]);
-    assert.ok(/ written=2 skipped=0 expired=1 live=0$/.test(line));
+    assert.ok(/ written=2 skipped=0 expired=1 live=0 slow=0$/.test(line));
   } finally {
     t.restore();
     after();
@@ -539,8 +539,31 @@ test("dump counts a RUNNING run as live without opening its stream (it would not
   try {
     const line = await dumpRuns([ID], dir, { gapMs: 0 });
     assert.deepEqual(calls.map((c) => c.url.split("/").slice(-2, -1)[0]), [ID, "run-bbbbbbbb"]);
-    assert.ok(/ written=1 skipped=0 expired=0 live=1$/.test(line));
+    assert.ok(/ written=1 skipped=0 expired=0 live=1 slow=0$/.test(line));
   } finally {
+    after();
+  }
+});
+
+test("dump cuts a stream that never closes at the timeout, counts it as slow, writes nothing for it and keeps going", async () => {
+  const dir = tmpDir();
+  const calls = stub([200, { items: [{ id: "run-aaaaaaaa", status: "FINISHED" }, { id: "run-bbbbbbbb", status: "FINISHED" }] }], [200, "event: status\ndata: {}\n\n"]);
+  const stubbed = globalThis.fetch;
+  globalThis.fetch = (url, init = {}) =>
+    String(url).includes("run-aaaaaaaa")
+      ? new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)))
+      : stubbed(url, init);
+  process.env.APEX_CURSOR_STREAM_TIMEOUT_S = "0.05";
+  // AbortSignal.timeout's timer is unref'd and this fake holds no socket, so keep the loop alive as a real fetch would.
+  const alive = setInterval(() => {}, 1000);
+  try {
+    const line = await dumpRuns([ID], dir, { gapMs: 0 });
+    assert.ok(/ written=1 skipped=0 expired=0 live=0 slow=1$/.test(line), line);
+    assert.deepEqual(fs.readdirSync(dir).map((f) => f.split("_")[1]), ["bbbbbbbb.sse"]);
+    assert.equal(calls.length, 2);
+  } finally {
+    clearInterval(alive);
+    delete process.env.APEX_CURSOR_STREAM_TIMEOUT_S;
     after();
   }
 });
