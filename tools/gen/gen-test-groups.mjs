@@ -36,6 +36,15 @@ export function loadGroups(file = GROUPS) {
 /** The files in `toolingFast`, without the interleaved note lines. */
 export const filesOnly = (entries) => entries.filter((e) => !e.startsWith("//"));
 
+/** Node's own per-test bound for a `node --test` group (ms). A hung test then fails by name instead of
+ * the job reporting `cancelled`; a group may carry its own `--test-timeout=` flag, which wins.
+ * https://nodejs.org/api/cli.html#--test-timeout */
+export const NODE_TEST_TIMEOUT_MS = 900000;
+export function nodeFlags(def) {
+  const flags = def.flags || [];
+  return flags.some((f) => f.startsWith("--test-timeout")) ? flags : [`--test-timeout=${NODE_TEST_TIMEOUT_MS}`, ...flags];
+}
+
 /** The command line one group runs, rebuilt from its definition. */
 export function commandFor(def, isolatedFiles = [], name) {
   if (def.kind === "command") return def.cmd;
@@ -46,7 +55,7 @@ export function commandFor(def, isolatedFiles = [], name) {
     return ["node tools/ci/run-node-group.mjs", name, ...def.files, "--"].join(" ");
   }
   const head = def.kind === "browser" ? "node tools/ci/run-playwright.mjs" : "node --test";
-  return [head, ...(def.flags || []), ...(def.files || [])].join(" ");
+  return [head, ...(def.kind === "node" ? nodeFlags(def) : def.flags || []), ...(def.files || [])].join(" ");
 }
 
 /** package.json with every `test:*` script rebuilt, key order preserved. */

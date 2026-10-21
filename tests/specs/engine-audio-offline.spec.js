@@ -12,6 +12,14 @@
 // formant EQ + lowpass move energy around the pure oscillator Hz, so a global
 // autocorr locks an octave low; a windowed peak within ±8 % or ±25 Hz of the
 // scheduled fundamental is the contract Offline render must keep.
+//
+// SEEDED NOISE: the skid voice loops a white-noise buffer that signal.js fills
+// with Math.random() once per context, through a narrow LFO-swept bandpass, so
+// the screech band's energy is a draw. Unseeded, 12 seeds gave on/off ratios
+// 1.046–1.094 (mean 1.07); one in twelve fell under the 1.05 margin, as Pages
+// on cfefcbf7 did (1.046). Each offline graph is built under a fixed-seed
+// Math.random (restored before the render), so every run renders the same
+// samples: seed 1 measured 1.066, off 0.0001948.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 async function waitApex(page) {
@@ -78,18 +86,34 @@ test("OfflineAudioContext engine pitch tracks rev; screech layer crossfade is au
       return c ? Math.sqrt(e / c) / n : 0;
     }
 
+    // mulberry32. The graph (initOffline, then startEngine's noise loops) is
+    // built under it; the page's own Math.random is back before the render.
+    const seeded = (a) => () => {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    function buildSeeded(build) {
+      const real = Math.random;
+      Math.random = seeded(1);
+      try {
+        if (!GameAudio.initOffline({ seconds: SEC, sampleRate: SR, channels: 1 })) throw new Error("initOffline failed");
+        return build();
+      } finally { Math.random = real; }
+    }
+
     async function renderAt(rev, layerPatch) {
-      if (!GameAudio.initOffline({ seconds: SEC, sampleRate: SR, channels: 1 })) {
-        throw new Error("initOffline failed");
-      }
-      const defs = GameAudio.layerDefaults();
-      for (const k of Object.keys(defs)) GameAudio.setLayer(k, defs[k]);
-      if (layerPatch) for (const [k, v] of Object.entries(layerPatch)) GameAudio.setLayer(k, v);
-      GameAudio.startEngine();
-      GameAudio.setEngine(rev, 0, false, 0.55, gear, {
-        slip: 1, ax: 0, onKerb: false, wet: false, throttle: 1, brake: 0,
+      const scheduled = buildSeeded(() => {
+        const defs = GameAudio.layerDefaults();
+        for (const k of Object.keys(defs)) GameAudio.setLayer(k, defs[k]);
+        if (layerPatch) for (const [k, v] of Object.entries(layerPatch)) GameAudio.setLayer(k, v);
+        GameAudio.startEngine();
+        GameAudio.setEngine(rev, 0, false, 0.55, gear, {
+          slip: 1, ax: 0, onKerb: false, wet: false, throttle: 1, brake: 0,
+        });
+        return GameAudio.fundamentalHz();
       });
-      const scheduled = GameAudio.fundamentalHz();
       const buf = await GameAudio.renderOffline();
       return { samples: buf.getChannelData(0), scheduled };
     }
@@ -108,17 +132,16 @@ test("OfflineAudioContext engine pitch tracks rev; screech layer crossfade is au
     // Screech layer crossfade: setSkid with screech off is silent; with it on
     // the bandpass tyre noise lands in ~600–1100 Hz and is loud vs the core.
     async function renderScreech(on) {
-      if (!GameAudio.initOffline({ seconds: SEC, sampleRate: SR, channels: 1 })) {
-        throw new Error("initOffline failed");
-      }
-      const defs = GameAudio.layerDefaults();
-      for (const k of Object.keys(defs)) GameAudio.setLayer(k, k === "screech" ? on : false);
-      GameAudio.startEngine();
-      GameAudio.setEngine(0.3, 0, false, 0.4, gear, {
-        slip: 1, ax: 0, onKerb: false, wet: false, throttle: 0.2, brake: 0,
+      const level = buildSeeded(() => {
+        const defs = GameAudio.layerDefaults();
+        for (const k of Object.keys(defs)) GameAudio.setLayer(k, k === "screech" ? on : false);
+        GameAudio.startEngine();
+        GameAudio.setEngine(0.3, 0, false, 0.4, gear, {
+          slip: 1, ax: 0, onKerb: false, wet: false, throttle: 0.2, brake: 0,
+        });
+        GameAudio.setSkid(0.85, false);
+        return GameAudio.skidLevel();
       });
-      GameAudio.setSkid(0.85, false);
-      const level = GameAudio.skidLevel();
       const buf = await GameAudio.renderOffline();
       return { level, samples: buf.getChannelData(0) };
     }
@@ -150,9 +173,9 @@ test("OfflineAudioContext engine pitch tracks rev; screech layer crossfade is au
 
   expect(result.skidOn, `skidLevel with screech on=${result.skidOn}`).toBeGreaterThan(0);
   expect(result.skidOff).toBe(0);
-  // Core harmonics already fill 500–1200 Hz; screech adds a measured ~10 % in
-  // that band (solo run 0.000198 vs 0.000180). Contract: on > off, plus the
-  // parametric skidLevel gate above.
+  // Core harmonics already fill 500–1200 Hz; screech adds a measured ~7 % in
+  // that band (seeded: 0.000208 vs 0.0001948; see SEEDED NOISE above). Contract:
+  // on > off, plus the parametric skidLevel gate above.
   expect(result.skidOnRms, `screech band on=${result.skidOnRms} off=${result.skidOffRms}`)
     .toBeGreaterThan(result.skidOffRms * 1.05);
 });

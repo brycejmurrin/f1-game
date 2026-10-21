@@ -11,6 +11,13 @@ import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { ciWorkflow, gpuWorkflow } from "../helpers/ci-workflow.mjs";
 
+// THE FOUR CONTROL LEGS. The opt-in relaunch step (#3235: the TLX/WebGPU check twice on one
+// profile, the returning player's launch) is not a fifth control; it is cut out here and pinned
+// on its own by "gpu-census relaunch" below.
+const RELAUNCH_NAME = "Game check — three.js / WebGPU, first and second launch (one profile)";
+const RELAUNCH_STEP = /\n      - name: Game check — three\.js \/ WebGPU, first and second launch \(one profile\)[\s\S]*?\n          done\n/;
+const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n");
+
 test("gpu-census runs nightly staggered from the boot group, with the full check and its dispatch defaults", () => {
   // 2026-09-29: both were `17 3 * * *` and stacked on the same ~20 slots with
   // the boot-group nightly. Stagger them (ci.yml 04:17, gpu-census 05:47) and
@@ -37,7 +44,7 @@ test("gpu-census runs nightly staggered from the boot group, with the full check
   const split = wf.jobs.plan.steps.find((s) => s.id === "split");
   assert.equal(split.env.INPUT_IMAGES, "${{ inputs.images || 'macos-latest' }}", "a scheduled run (no inputs) must get the real-GPU image");
   assert.match(split.run, /picked or \["macos-latest"\]/, "an images list with nothing valid falls back to the real GPU, not a software image");
-  const trackUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"/g) || [];
+  const trackUses = gpuControls.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"/g) || [];
   assert.equal(trackUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must use the plan-resolved track");
 });
 
@@ -86,7 +93,7 @@ test("gpu-census: the nightly skips an unchanged renderer, fail-safe; legs time 
   assert.equal(wf.jobs.census.if, "${{ needs.plan.outputs.run != 'false' }}", "an empty gate output (dispatch) must run");
   // G3: each leg ends red inside the job's 30-min cap, so a hang names its leg
   // instead of the whole job reading `cancelled`.
-  const legs = wf.jobs.census.steps.filter((s) => /^Game check — /.test(s.name || ""));
+  const legs = wf.jobs.census.steps.filter((s) => /^Game check — /.test(s.name || "") && s.name !== RELAUNCH_NAME);
   assert.equal(legs.length, 4);
   for (const s of legs) {
     assert.equal(s["timeout-minutes"], 6, `${s.name}: 6 min per leg (max measured 3.2)`);
@@ -101,7 +108,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
   // Appended last: every earlier input keeps its name, position and default.
-  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry"]);
+  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch"]);
   assert.equal(inputs.track.default, "montreal"); assert.equal(inputs.clock.default, "12"); assert.equal(inputs.tod.default, "");
   assert.equal(inputs.cam.type, "choice");
   assert.deepEqual(inputs.cam.options, ["helmet", "chase", "chase>cockpit"]);
@@ -112,7 +119,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const split = plan.steps.find((s) => s.id === "split");
   assert.equal(split.env.INPUT_CAM, "${{ inputs.cam || 'helmet' }}", "a scheduled run (no inputs) gets the default");
   assert.equal(wf.jobs.census.env.CENSUS_CAM, "${{ needs.plan.outputs.cam }}");
-  const camUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"[^\n]*--cam "\$\{CENSUS_CAM:-helmet\}"/g) || [];
+  const camUses = gpuControls.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"[^\n]*--cam "\$\{CENSUS_CAM:-helmet\}"/g) || [];
   assert.equal(camUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must drive the plan-resolved camera");
   // The plan's own allowlist, executed: a push request bypasses the choice list.
   const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
@@ -140,7 +147,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
 test("gpu-census threads an entry input (api default; menu / menu-full = the player's RACE!) to every game check (hunt 5 E)", () => {
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
-  assert.equal(Object.keys(inputs).at(-1), "entry", "appended LAST: every earlier input keeps its position");
+  assert.equal(Object.keys(inputs).at(-2), "entry", "appended last (before relaunch, #3235): every earlier input keeps its position");
   assert.equal(inputs.entry.type, "choice");
   assert.deepEqual(inputs.entry.options, ["api", "menu", "menu-full"]);
   assert.equal(inputs.entry.default, "api", "a default dispatch and the nightly enter as every earlier census did");
@@ -149,7 +156,7 @@ test("gpu-census threads an entry input (api default; menu / menu-full = the pla
   assert.equal(plan.outputs.entry, "${{ steps.split.outputs.entry }}");
   assert.equal(split.env.INPUT_ENTRY, "${{ inputs.entry || 'api' }}", "a scheduled run (no inputs) gets the default");
   assert.equal(wf.jobs.census.env.CENSUS_ENTRY, "${{ needs.plan.outputs.entry }}");
-  const uses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"[^\n]*--entry "\$\{CENSUS_ENTRY:-api\}"/g) || [];
+  const uses = gpuControls.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"[^\n]*--entry "\$\{CENSUS_ENTRY:-api\}"/g) || [];
   assert.equal(uses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must enter the plan-resolved way");
   // The plan's allowlist, executed, for a PUSH request too (the request JSON bypasses the choice list).
   const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
@@ -294,9 +301,32 @@ test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpu
   // legs pin SCREENSHOTS = NATIVE like the two three.js legs, BEFORE $LS so a
   // dispatcher can still override it. Without it WGX soft-presented every
   // frame (20.8 vs 36.7 fps pinned, spa dusk) and GLX shot one stale blit.
-  const pinned = gpuWorkflow.match(/^\s+--[^\n]*--ls apex26\.wgxCapture=0 [^\n]*$/gm) || [];
+  const pinned = gpuControls.match(/^\s+--[^\n]*--ls apex26\.wgxCapture=0 [^\n]*$/gm) || [];
   assert.equal(pinned.length, 4, `every game-check leg pins apex26.wgxCapture=0 on its command line, found ${pinned.length}`);
   for (const line of pinned) {
     if (line.includes("$LS")) assert.ok(line.indexOf("wgxCapture=0") < line.indexOf("$LS"), "the pin must precede $LS so a dispatch can override it");
   }
+});
+
+test("gpu-census relaunch: one profile, one origin, the TLX/WebGPU check twice (cold, then a returning player's) — opt-in (#3235)", () => {
+  const wf = parseYAML(gpuWorkflow);
+  const inp = wf.on.workflow_dispatch.inputs.relaunch;
+  assert.equal(inp.type, "boolean"); assert.equal(inp.default, false, "off by default: a default dispatch and the nightly are unchanged");
+  const plan = wf.jobs.plan, split = plan.steps.find((s) => s.id === "split");
+  assert.equal(plan.outputs.relaunch, "${{ steps.split.outputs.relaunch }}");
+  assert.equal(split.env.INPUT_RELAUNCH, "${{ inputs.relaunch || false }}");
+  const step = wf.jobs.census.steps.find((s) => s.name === RELAUNCH_NAME);
+  assert.ok(step, "the relaunch step exists");
+  assert.ok(step.if.split("&&").map((c) => c.trim()).includes("${{ needs.plan.outputs.relaunch == 'true'"), "opt-in: only a relaunch=true dispatch runs it");
+  assert.equal(step["continue-on-error"], true, "a measurement, never the job's verdict");
+  assert.ok(step["timeout-minutes"] <= 15, "two legs inside the job cap");
+  const argv = step.run.replace(/\\\n/g, " ").split(/\s+/), after = (flag) => argv[argv.indexOf(flag) + 1];
+  assert.equal(after("--profile"), '"$PROF"', "the SAME profile on both legs");
+  assert.ok(/^\d+$/.test(after("--port")), "a FIXED port: Chrome keys caches by origin");
+  assert.equal(after("--cam"), '"${CENSUS_CAM:-helmet}"', "the plan-resolved camera, like the controls");
+  assert.equal(after("--entry"), '"${CENSUS_ENTRY:-api}"', "the plan-resolved entry, like the controls");
+  const lines = step.run.split("\n").map((l) => l.trim());
+  assert.ok(lines.includes('PROF="$RUNNER_TEMP/tlx-relaunch-profile"; rm -rf "$PROF"'), "the first leg is a first-ever launch");
+  assert.ok(lines.includes("for leg in cold warm; do"), "two legs on the one profile: cold, then warm");
+  assert.ok(RELAUNCH_STEP.test(gpuWorkflow), "the controls' cut-out finds the step");
 });

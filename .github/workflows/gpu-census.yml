@@ -107,6 +107,11 @@ on:
         options: ["api", "menu", "menu-full"]
         required: false
         default: "api"
+      relaunch:
+        description: "Also run the TLX/WebGPU check twice on ONE persistent profile and origin: the first launch, then a returning player's (shader + HTTP caches warm). game-relaunch-{cold,warm}-*.json"
+        type: boolean
+        required: false
+        default: false
   push:
     branches: ["cursor/**", "claude/**"]
     paths: [".github/gpu-census-request.json"]
@@ -146,6 +151,7 @@ jobs:
       tod: ${{ steps.split.outputs.tod }}
       force: ${{ steps.split.outputs.force }}
       census_only: ${{ steps.split.outputs.census_only }}
+      relaunch: ${{ steps.split.outputs.relaunch }}
       cam: ${{ steps.split.outputs.cam }}
       entry: ${{ steps.split.outputs.entry }}
       run: ${{ steps.gate.outputs.run }}
@@ -153,6 +159,8 @@ jobs:
       garage_ab: ${{ steps.split.outputs.garage_ab }}
       live_matrix: ${{ steps.split.outputs.live_matrix }}
       livery: ${{ steps.split.outputs.livery }}
+      live_frame: ${{ steps.split.outputs.live_frame }}
+      lf_backends: ${{ steps.split.outputs.lf_backends }}
       lrm_leg: ${{ steps.split.outputs.lrm_leg }}
       lrm_rows: ${{ steps.split.outputs.lrm_rows }}
       lrm_scale: ${{ steps.split.outputs.lrm_scale }}
@@ -255,6 +263,10 @@ jobs:
           if co is None:
             co = (os.environ.get("INPUT_CENSUS_ONLY") or "").lower() in ("true", "1")
           print("census_only=" + ("true" if co else "false"))
+          rl = req.get("relaunch")
+          if rl is None:
+            rl = (os.environ.get("INPUT_RELAUNCH") or "").lower() in ("true", "1")
+          print("relaunch=" + ("true" if rl else "false"))
           # Historical exact-revision experiment: never part of an ordinary
           # dispatch/nightly or an unrelated pushed request. Its candidate pin
           # intentionally rejects newer product trees; the four controls do not.
@@ -263,6 +275,11 @@ jobs:
           print("live_matrix=" + str(req.get("leg") == "render-live-matrix-2572").lower())
           # Garage livery-edit census (B·P1 2026-10-20): TLX WebGPU vs WebGL2, ~30 editor edits. Push requests only.
           print("livery=" + str(req.get("leg") == "garage-livery-perf").lower())
+          # Race frame time at the phone shape (tools/gfx/live-frame-census.mjs, B·H10 2026-10-20). Push requests only;
+          # `track` is the comma-separated circuit list, `lf_backends` tlx-gl and/or tlx-gpu.
+          print("live_frame=" + str(req.get("leg") == "live-frame").lower())
+          lb = ",".join(b for b in str(req.get("lf_backends") or "tlx-gl,tlx-gpu").split(",") if b.strip() in ("tlx-gl", "tlx-gpu"))
+          print("lf_backends=" + (lb or "tlx-gl,tlx-gpu"))
           lg = str(req.get("lrm_leg") or "glx").strip()
           lg = lg if lg in ("glx", "tlx-gl", "tlx-native") else "glx"
           print("lrm_leg=" + lg)
@@ -298,6 +315,7 @@ jobs:
           INPUT_TOD: ${{ inputs.tod || '' }}
           INPUT_FORCE: ${{ inputs.force || '' }}
           INPUT_CENSUS_ONLY: ${{ inputs.census_only || false }}
+          INPUT_RELAUNCH: ${{ inputs.relaunch || false }}
           INPUT_CAM: ${{ inputs.cam || 'helmet' }}
           INPUT_ENTRY: ${{ inputs.entry || 'api' }}
 
@@ -476,6 +494,28 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # Opt-in by request leg `live-frame`; pair with census_only=true. Never fails the job. One fresh browser per
+      # backend x track row (~4–8 min each on this runner): keep a request to <= 4 rows.
+      - name: Live race frame census
+        if: ${{ needs.plan.outputs.live_frame == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 27
+        shell: bash
+        env:
+          LF_TRACKS: ${{ needs.plan.outputs.track }}
+          LF_BACKENDS: ${{ needs.plan.outputs.lf_backends }}
+          LF_LS: ${{ needs.plan.outputs.ls }}
+        run: node tools/gfx/live-frame-census.mjs --tracks "$LF_TRACKS" --backends "$LF_BACKENDS" --ls "$LF_LS" --json live-frame.json || true
+
+      - name: Upload live race frame census
+        if: ${{ always() && needs.plan.outputs.live_frame == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-frame-${{ matrix.image }}
+          path: live-frame.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Game check — three.js / WebGPU
         if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
@@ -500,6 +540,24 @@ jobs:
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
+
+      # THE RETURNING PLAYER (B·H8, #3235): the TLX/WebGPU check twice on ONE persistent
+      # profile and ONE origin (fixed port — Chrome keys storage and its GPU caches by
+      # origin), so the second launch meets the shader and HTTP caches the first one
+      # filled, as a player's second session does. Every other leg starts from a fresh
+      # profile: the first-ever launch. Opt-in (relaunch); never fails the job.
+      - name: Game check — three.js / WebGPU, first and second launch (one profile)
+        if: ${{ needs.plan.outputs.relaunch == 'true' && needs.plan.outputs.census_only != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 12
+        shell: bash
+        run: |   # zizmor: ignore[template-injection] matrix.image is one of the plan job's allow-listed runner-image names; census-verdict.test.mjs pins this form
+          PROF="$RUNNER_TEMP/tlx-relaunch-profile"; rm -rf "$PROF"
+          for leg in cold warm; do
+            node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
+              --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 10 --profile "$PROF" --port 47610 \
+              --json "game-relaunch-$leg-${{ matrix.image }}.json" || true
+          done
 
       # The control: the same pin (a no-op here — forceWebGL short-circuits
       # the blit), so the two TLX legs differ in exactly ONE variable.

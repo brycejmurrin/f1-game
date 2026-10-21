@@ -1,1 +1,1 @@
-Improved: Agent commits reuse a green `test:guards` verdict for the same staged tree (and can set `git config apex.guardTimeout`) so the commit hook no longer re-runs the full suite after a foreground guards pass (#2889).
+Improved: Agent commits reuse a green `test:guards` verdict for the same staged tree (and can set `git config apex.guardTimeout`) so the commit hook no longer re-runs the full suite after a foreground guards pass; Claude Code’s bash-guard now uses the same `guards-verdict` cache and timeout budget as `.githooks/pre-commit` (#2889).

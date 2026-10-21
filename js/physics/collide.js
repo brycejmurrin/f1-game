@@ -79,7 +79,9 @@ const Collide = (() => {
   // Arrays are reused: clear is length=0, a slot is allocated once per id.
   const _arcBuckets = [];
   const _arcBucketIds = [];
-  // Live length per bucket: truncating a bucket array frees V8's backing store, so every refill regrew it. Entries past _arcN[id] are stale.
+  // Live length per bucket: truncating a bucket array frees V8's backing store, so every refill regrew it.
+  // A cleared slot is nulled, never left stale: a slot a later race never refilled kept an earlier race's car,
+  // and through car._lk.track that whole track — every circuit raced stayed in the heap (LIVE-MEMORY-H12-2026-10-20).
   const _arcN = [];
   let _arcNB = 0, _arcWidth = LCAR_MAX, _arcL = 1;
   function _arcProg(c) {
@@ -88,11 +90,14 @@ const Collide = (() => {
   }
   function _arcClear() {
     for (let i = 0; i < _arcBucketIds.length; i++) {
-      const id = _arcBucketIds[i];
+      const id = _arcBucketIds[i], arr = _arcBuckets[id];
+      for (let j = 0, n = _arcN[id]; j < n; j++) arr[j] = null;
       _arcN[id] = 0;
     }
     _arcBucketIds.length = 0;
   }
+  // Race teardown: drop every car reference the buckets hold (the next fill rebuilds them).
+  function releaseArcBuckets() { _arcClear(); _ot.c = _ot.ahead = _ot.skip = null; }
   function fillArcBuckets(ranked, L, width, progOf) {
     _arcClear();
     L = L || 1;
@@ -856,5 +861,5 @@ const Collide = (() => {
     return best;
   }
 
-  return { create, LCAR, WCAR, fillArcBuckets, forArcNear, arcBackSpan, scanTraffic, scanOtAhead, scanTow, parkedAhead };
+  return { create, LCAR, WCAR, fillArcBuckets, releaseArcBuckets, forArcNear, arcBackSpan, scanTraffic, scanOtAhead, scanTow, parkedAhead };
 })();

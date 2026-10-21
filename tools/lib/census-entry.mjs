@@ -90,6 +90,41 @@ export function raceGate() {
   return w ? w.done === true : (!tlxNoTimeline || g.saw || (!!g.t0 && performance.now() - g.t0 > 5000));
 }
 
+/** THE PREP TIMELINE (B·H8 follow-up): which stage of the menu prep the wait is in.
+ *  Installed on the page at RACE SETTINGS, sampled every 50 ms: one row per change of
+ *  a menuPrep() field or the garage prewarm's readiness, `[ms, "field=value …"]`.
+ *  prepTimelineRead() stops it and adds the gfx/game Log lines of the window (the
+ *  "selector car assets ready" / "garage prewarm" records name the stage ends).
+ *  Serializable: both ship to the page through page.evaluate (no closures). */
+export function prepTimelineStart() {
+  const A = window.__apex, t0 = performance.now(), rows = [], last = {};
+  const mark = (window.Log && Log.records({}).slice(-1)[0] || { id: 0 }).id;
+  const tick = () => {
+    let p = null, g = null;
+    try { p = A.menuPrep(); } catch (_) { /* surface absent: a row says so */ }
+    try { g = A.garagePrebuild && A.garagePrebuild(); } catch (_) { /* */ }
+    const k = p ? { world: p.world, building: p.building, done: p.done, warmed: p.warmed, warmFrames: p.warmFrames,
+      warming: p.warming, cars: !!p.cars, garageReady: !!(g && g.garageReady) } : { prep: "absent" };
+    const ch = Object.keys(k).filter((x) => k[x] !== last[x]).map((x) => x + "=" + k[x]);
+    if (ch.length) rows.push([Math.round(performance.now() - t0), ch.join(" ")]);
+    Object.assign(last, k);
+  };
+  tick();
+  window.__apexPrepTl = { rows, mark, t0, timer: setInterval(tick, 50) };
+  return true;
+}
+export function prepTimelineRead() {
+  const T = window.__apexPrepTl;
+  if (!T) return null;
+  clearInterval(T.timer);
+  let logs = [];
+  try {
+    logs = Log.records({ since: T.mark }).filter((r) => (r.ns === "gfx" || r.ns === "game") && r.level !== "debug" && r.level !== "trace")
+      .slice(-60).map((r) => [Math.round(r.t - T.t0), r.ns + ": " + String(r.msg).slice(0, 160)]);
+  } catch (_) { /* Log absent */ }
+  return { rows: T.rows.slice(0, 200), logs };
+}
+
 /** The menu has prepared what START RACE will use: menuFinish ran to its end for the
  *  current selection, its hidden warm frames are drawn and nothing compiles. Serializable. */
 export function menuPrepReady() {

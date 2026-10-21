@@ -32,6 +32,7 @@
 //   node tools/ci/spec-timings.mjs a/junit.xml b.log     # merge named files
 //   node tools/ci/spec-timings.mjs --dry-run --json      # what would change
 //   node tools/ci/spec-timings.mjs --check               # growth flags, never fails
+//   node tools/ci/spec-timings.mjs --steps [--md]        # step gate + change points, never fails
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -124,10 +125,15 @@ export function parseJunit(xml) {
       if (!title || !Number.isFinite(sec)) continue;
       const spec = normaliseSpec(attr(a, "classname") || suiteName);
       if (!/\.spec\.js$/.test(spec)) continue;
-      last.set(keyOf(spec, title), { ts, spec, title, sec });
+      // A FAILED final attempt measures the timeout, not the test: billing a
+      // 180 s timeout pushed its spec over the selected-gate budget until the
+      // sample rolled off, a self-reinforcing drop (docs/BUGS.md, 15-F
+      // observations). It still overrides an earlier passing attempt.
+      const failed = /<(failure|error)\b/.test(inner);
+      last.set(keyOf(spec, title), failed ? null : { ts, spec, title, sec });
     }
   }
-  return [...last.values()];
+  return [...last.values()].filter(Boolean);
 }
 
 /** Rows from a live-reporter log (`artifacts/logs/*.log`).
@@ -150,15 +156,16 @@ export function parseLiveLog(text, endISO) {
   }
   const ts = `${stamp}T${start[1]}Z`;
   // `+ pass` and `x FAIL` are FINAL results; `! retry` is not, and `~ skip`
-  // measures nothing. That is the same set live-reporter.js records.
+  // measures nothing. A FAIL is final but bills its timeout (parseJunit), so it
+  // clears the key rather than recording a duration.
   const RE = /^\[\d{2}:\d{2}:\d{2}\]\s+([+x])\s+\S+\s+\d+\/\d+\s+(tests\/\S+\.spec\.js)\s+›\s+(.+?)\s+\((\d+(?:\.\d+)?)s\)\s*$/;
   const seen = new Map();
   for (const line of lines) {
     const m = RE.exec(line);
     if (!m) continue;
-    seen.set(keyOf(m[2], m[3]), { ts, spec: m[2], title: m[3], sec: Number(m[4]) });
+    seen.set(keyOf(m[2], m[3]), m[1] === "x" ? null : { ts, spec: m[2], title: m[3], sec: Number(m[4]) });
   }
-  return [...seen.values()];
+  return [...seen.values()].filter(Boolean);
 }
 
 export function emptyDb() {
@@ -313,6 +320,62 @@ export function growth(db, { factor = 2, minSamples = 3 } = {}) {
   return out.sort((a, b) => b.ratio - a.ratio);
 }
 
+/** Median absolute deviation (unscaled). */
+export function mad(xs) {
+  const m = median(xs);
+  return median(xs.map((x) => Math.abs(x - m)));
+}
+
+/** Best single split of a series by Welch's t on the two means — the one-split
+ *  case of the E-divisive / Hunter change-point view (docs/notes/
+ *  RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md I8). The window before keeps ≥ 2
+ *  samples and the one after ≥ 1, so the newest sample alone can be the move;
+ *  null when the series is too short or flat. */
+export function bestSplit(xs, { minBefore = 2, minAfter = 1 } = {}) {
+  const mean = (a) => a.reduce((p, x) => p + x, 0) / a.length;
+  const vari = (a, m) => a.reduce((p, x) => p + (x - m) ** 2, 0) / Math.max(1, a.length - 1);
+  let best = null;
+  for (let i = minBefore; i <= xs.length - minAfter; i++) {
+    const A = xs.slice(0, i), B = xs.slice(i);
+    const ma = mean(A), mb = mean(B);
+    const se = Math.sqrt(vari(A, ma) / A.length + vari(B, mb) / B.length);
+    const t = se > 0 ? Math.abs(mb - ma) / se : (mb === ma ? 0 : Infinity);
+    if (!best || t > best.t) best = { at: i, before: ma, after: mb, t };
+  }
+  return best && best.t > 0 ? best : null;
+}
+
+/** STEP GATE, report-only (RACE-ENTRY-TOOLING-RESEARCH I7).
+ *
+ *  For every spec's per-test series in one bucket with ≥ `minPrior` earlier
+ *  samples, the newest sample is a STEP when
+ *    new > median(prior) + max(3·MAD(prior), 0.5·median(prior), floor/tests)
+ *  — robust to the one busy-box outlier a mean is not, with a 3 s whole-spec
+ *  floor so a 0.4 → 0.9 s spec is not news. It never fails: its false-positive
+ *  rate on a 10-sample window is unmeasured. Each row carries the best split
+ *  of the whole window too, so a reviewer sees WHEN the spec moved. */
+export function steps(db, { buckets = ["llvmpipe"], minPrior = 4, floor = 3 } = {}) {
+  const out = [];
+  for (const spec of Object.keys(db.specs || {}).sort()) {
+    for (const bucket of buckets) {
+      const peers = inBuckets(db.specs[spec].s, [bucket]);
+      if (peers.length < minPrior + 1) continue;
+      const vals = peers.map((x) => (x[3] ? x[2] / x[3] : x[2]));
+      const prior = vals.slice(0, -1), now = vals[vals.length - 1];
+      const latest = peers[peers.length - 1];
+      const med = median(prior);
+      const limit = med + Math.max(3 * mad(prior), 0.5 * med, floor / (latest[3] || 1));
+      const split = bestSplit(vals);
+      out.push({ spec, bucket, ts: latest[0], latest: round(now), median: round(med),
+        limit: round(limit), factor: med ? round(now / med) : null, step: now > limit,
+        samples: peers.length,
+        split: split && { ts: peers[split.at][0], before: round(split.before), after: round(split.after),
+          t: Number.isFinite(split.t) ? round(split.t) : "inf" } });
+    }
+  }
+  return out.sort((a, b) => (b.step - a.step) || ((b.factor || 0) - (a.factor || 0)));
+}
+
 /** The junit files a run leaves behind, in both layouts: playwright.config.js
  *  writes `artifacts/test-results-<port>/junit.xml`, and CI's uploaded bundles
  *  land under `artifacts/report-<name>/`. */
@@ -339,7 +402,7 @@ function rowsFromFile(file) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
-  const VALUED = new Set(["--into", "--env", "--keep", "--factor"]);
+  const VALUED = new Set(["--into", "--env", "--keep", "--factor", "--bucket"]);
   const flag = (name, fallback = null) => {
     const i = argv.indexOf(name);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
@@ -359,6 +422,32 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       for (const r of rows)
         console.log(`  ${r.ratio}x  ${r.latest}s vs median ${r.median}s  [${r.bucket}, n=${r.samples}]  ` +
           `${r.spec}${r.title ? ` › ${r.title}` : " (per test)"}`);
+    }
+    process.exit(0);
+  }
+
+  if (argv.includes("--steps")) {
+    const buckets = flag("--bucket", "llvmpipe").split(",");
+    const rows = steps(loadDb(into), { buckets });
+    const hits = rows.filter((r) => r.step);
+    const fmt = (r) => `${r.spec} [${r.bucket}] ${r.latest}s/test vs median ${r.median}s (limit ${r.limit}, ` +
+      `${r.factor}x, n=${r.samples}, ${r.ts})` +
+      (r.split ? `; best split at ${r.split.ts}: ${r.split.before} -> ${r.split.after} (t=${r.split.t})` : "");
+    if (json) {
+      console.log(JSON.stringify({ file: path.relative(ROOT, into), buckets, steps: hits.length, rows }, null, 2));
+    } else if (argv.includes("--md")) {
+      console.log(`### Spec-timing step gate (report-only)\n\n${hits.length} step(s) of ${rows.length} spec series ` +
+        `[${buckets.join(",")}].\n`);
+      if (hits.length) {
+        console.log("| spec | new s/test | prior median | limit | factor | best split |\n|---|---|---|---|---|---|");
+        for (const r of hits)
+          console.log(`| ${r.spec} | ${r.latest} | ${r.median} | ${r.limit} | ${r.factor}x | ` +
+            (r.split ? `${r.split.ts}: ${r.split.before} → ${r.split.after}` : "—") + " |");
+      }
+    } else {
+      console.log(hits.length ? `STEP (report-only; ${hits.length} of ${rows.length}):` :
+        `OK: no step in ${rows.length} spec series [${buckets.join(",")}]`);
+      for (const r of hits) console.log("  " + fmt(r));
     }
     process.exit(0);
   }
