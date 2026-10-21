@@ -133,17 +133,18 @@ const Wind = (function () {
   }
 
   // ── The current race's wind (cached per clock tick) ───────────────────────
-  let _p = null, _key = "", _t = -1, _mean = 0, _tMean = 0;
+  // The race key as two scalars, not a "seed|track" string: sync runs per car per step (perf-debug-e5b2).
+  let _p = null, _kSeed = -1, _kTrack = null, _t = -1, _mean = 0, _tMean = 0;
   let _st = null, _pin = null;
   const CALM = Object.freeze({ on: false, dir: 0, ms: 0, wx: 0, wz: 0, gust: 0, gustMs: 0, mean: 0, kmh: 0, fromDeg: 0 });
   /** Advance the current wind to race time t; returns state(). Cheap when t has not moved. */
   function sync(seed, weather, trackId, t) {
     if (LEVELS[level] === 0) { _st = CALM; return CALM; }
     if (_pin) { _t = t; _st = _pin; return _pin; }
-    const key = (seed >>> 0) + "|" + trackId;
+    const kSeed = seed >>> 0;
     const w = wx(weather);
-    if (key !== _key || !_p || !(t >= _t)) {          // a new race (or the clock ran back): start settled
-      _key = key; _p = plan(seed, w, trackId); _mean = meanOf(_p, w); _tMean = t; _t = NaN;
+    if (kSeed !== _kSeed || trackId !== _kTrack || !_p || !(t >= _t)) {          // a new race (or the clock ran back): start settled
+      _kSeed = kSeed; _kTrack = trackId; _p = plan(seed, w, trackId); _mean = meanOf(_p, w); _tMean = t; _t = NaN;
     }
     if (t === _t && _st) return _st;
     const target = meanOf(_p, w);
@@ -205,7 +206,7 @@ const Wind = (function () {
     return _pin;
   }
 
-  function setLevel(v) { if (isLevel(v)) { level = v; _st = null; _key = ""; } return level; }
+  function setLevel(v) { if (isLevel(v)) { level = v; _st = null; _kSeed = -1; _kTrack = null; } return level; }
 
   return Object.freeze({
     LEVELS, MEAN, GUST_P, GUST_K, SITE, GUST_SLOT, MAX_SPEED, HEAD_K, SIDE_K, LAT_CAP, AI_TAU, GUST_CALL_MS,

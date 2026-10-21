@@ -591,7 +591,9 @@ const TrackHiddenFaces = (function () {
       }
       geo[key] = out;
     }
-    const ni = Array.isArray(idx) ? new Array(N) : new idx.constructor(N);
+    // A typed idx is this build's own (keptIndices' output or the sealed accumulator view): remap it in
+    // place instead of holding a second same-size copy at the peak (monza 3.5 MB, vegas 5.7 MB).
+    const ni = Array.isArray(idx) ? new Array(N) : idx;
     for (let i = 0; i < N; i++) ni[i] = before[idx[i]];
     geo.idx = ni;
     // appendBuffer's provenance blocks: a block's surviving vertices stay

@@ -323,6 +323,9 @@
       "bindHost": [
         "tests/unit/crowd-audio.test.mjs"
       ],
+      "fireCheer": [
+        "tests/unit/crowd-audio.test.mjs"
+      ],
       "inspect": [
         "tests/unit/crowd-audio.test.mjs"
       ],

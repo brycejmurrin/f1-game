@@ -24,7 +24,7 @@ function param(v) {
     value: v, targets: [],
     setTargetAtTime(x) { p.value = x; p.targets.push(x); p._apexCrowdTgt = x; },
     setValueAtTime(x) { p.value = x; },
-    linearRampToValueAtTime(x) { p.value = x; },
+    linearRampToValueAtTime(x) { p.value = x; p.ramped = true; },
     exponentialRampToValueAtTime(x) { p.value = x; },
     cancelScheduledValues() {},
   };
@@ -33,14 +33,17 @@ function param(v) {
 
 function countingContext() {
   let created = 0;
+  const nodes = [];
   function node(kind) {
     created++;
-    return {
+    const n = {
       kind, connect(t) { return t; }, disconnect() {}, start() {}, stop() {},
       type: "", loop: false, buffer: null,
       gain: param(0), frequency: param(900), Q: param(1),
       playbackRate: param(1),
     };
+    nodes.push(n);
+    return n;
   }
   const ctx = {
     currentTime: 0, state: "running", sampleRate: 44100, destination: node("dest"),
@@ -52,12 +55,12 @@ function countingContext() {
       getChannelData: () => new Float32Array(len),
     }),
   };
-  return { ctx, created: () => created, resetCreated: () => { created = 0; } };
+  return { ctx, nodes, created: () => created, resetCreated: () => { created = 0; } };
 }
 
 function boot(opts) {
   const o = opts || {};
-  const { ctx, created, resetCreated } = countingContext();
+  const { ctx, nodes, created, resetCreated } = countingContext();
   let sfxEnabled = true;
   const bus = ctx.createGain();
   resetCreated();
@@ -104,7 +107,7 @@ function boot(opts) {
   CrowdAudio.bind(G);
   CrowdAudio.attach(ctx, bus);
   resetCreated();
-  return { CrowdAudio, GameAudio, G, ctx, bus, results, created, resetCreated, sfx: {
+  return { CrowdAudio, GameAudio, G, ctx, nodes, bus, results, created, resetCreated, sfx: {
     get on() { return sfxEnabled; },
     set on(v) { sfxEnabled = !!v; },
   } };
@@ -229,4 +232,19 @@ test("setGridIdle and stopEngine silence the bed", () => {
   CrowdAudio.update();
   GameAudio.stopEngine();
   assert.equal(CrowdAudio.inspect().bed, 0, "stopEngine silences");
+});
+
+test("silence() quiets a cheer fired after an earlier silence (no stale dedupe)", () => {
+  const { CrowdAudio, GameAudio, ctx, nodes } = boot();
+  ctx.currentTime = 10;
+  CrowdAudio.silence();   // every cheer gain aimed at 0 once
+  ctx.currentTime += 1;
+  CrowdAudio._resetEvents();
+  assert.equal(CrowdAudio.fireCheer(0.05, 1), true, "cheer fires in a live race");
+  const cheer = nodes.map((n) => n.gain).find((g) => g && g.ramped);
+  assert.ok(cheer, "the fired cheer's gain ran its envelope");
+  const before = cheer.targets.length;
+  GameAudio.stopEngine();   // the pause / quit / flag path
+  assert.equal(cheer.targets.length, before + 1, "the sounding cheer is aimed at silence again");
+  assert.equal(cheer.targets[cheer.targets.length - 1], 0);
 });

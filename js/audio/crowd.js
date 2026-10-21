@@ -268,6 +268,9 @@ var CrowdAudio = (function () {
     g.setValueAtTime(EMPTY, t0);
     g.linearRampToValueAtTime(pk, t0 + 0.04);
     g.exponentialRampToValueAtTime(EMPTY, t0 + d);
+    // The envelope replaced aim()'s last target: forget it, or the next silence() dedupes against a stale 0
+    // and the cheer plays on under pause / SFX OFF / the flag (perf-debug-e5b2).
+    g._apexCrowdTgt = undefined;
     if (v.filt.frequency) {
       const f0 = 1100 + (t0 * 97) % 900;
       v.filt.frequency.setValueAtTime(f0, t0);
