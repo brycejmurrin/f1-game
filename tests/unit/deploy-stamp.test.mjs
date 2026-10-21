@@ -155,4 +155,27 @@ test("the repo shell keeps integrity-free initial tags (dev behaviour is unchang
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   assert.doesNotMatch(html, /<script\b[^>]*\bsrc="[^"]*\?v=dev"[^>]*\bintegrity=/);
   assert.doesNotMatch(html, /<link\b[^>]*rel="stylesheet"[^>]*\bintegrity=/);
+  assert.doesNotMatch(html, /<link\b[^>]*rel="preload"[^>]*\bintegrity=/);
+});
+
+test("staged title CSS preloads carry the same SHA-256 integrity as their stylesheets", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "preload-integrity-"));
+  const rel = "fx/a.css";
+  const sri = (file) => "sha256-" + createHash("sha256").update(fs.readFileSync(path.join(dir, file))).digest("base64");
+  const run = (...args) => spawnSync(process.execPath, ["tools/ci/bump-cache.mjs", ...args, "--root", dir, "--json"], { cwd: ROOT, encoding: "utf8" });
+  try {
+    fs.mkdirSync(path.join(dir, "fx"));
+    fs.writeFileSync(path.join(dir, rel), "body{margin:0}\n");
+    fs.writeFileSync(path.join(dir, "index.html"),
+      `<head><meta name="apex-build" content="1695">\n` +
+      `<link rel="preload" href="${rel}?v=dev" as="style">\n` +
+      `<link rel="stylesheet" href="${rel}?v=dev"></head>`);
+    fs.writeFileSync(path.join(dir, "version.json"), '{"build":1695}');
+    assert.equal(run("--apply").status, 0);
+    const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    const want = sri(rel);
+    assert.ok(/rel="preload" href="fx\/a\.css\?v=[0-9a-f]{12}" as="style"/.test(html) && html.includes(`integrity="${want}"`));
+    assert.ok(/rel="stylesheet" href="fx\/a\.css\?v=[0-9a-f]{12}"/.test(html) && html.includes(`integrity="${want}"`));
+    assert.equal(run("--check").status, 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

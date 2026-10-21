@@ -311,7 +311,10 @@ test("WATCH manual and automatic reel cuts release radio and reset timeline pres
 test("WATCH toolbar exposes working pointer controls, honest event labels and photo ownership, then tears down", () => {
   function element(tag) {
     const listeners = {}, attrs = {};
+    let disabled = false, disabledWrites = 0;
     return { tagName: tag.toUpperCase(), dataset: {}, children: [], style: {}, hidden: false,
+      get disabled() { return disabled; }, set disabled(v) { disabled = !!v; disabledWrites++; },
+      get disabledWrites() { return disabledWrites; },
       classList: { add() {}, remove() {} },
       appendChild(n) { this.children.push(n); n.parentNode = this; return n; },
       remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((n) => n !== this); },
@@ -335,6 +338,10 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
   assert.equal(find("play").textContent, "❚❚", "pause uses the same visible bars as the main game button");
   assert.equal(find("camera").value, "tv", "the dropdown reflects active replay AUTO ownership");
   assert.equal(find("prev").disabled, true); assert.equal(find("next").disabled, false);
+  const buttonWrites = () => find("prev").disabledWrites + find("next").disabledWrites;
+  const startWrites = buttonWrites();
+  for (let i = 0; i < 30; i++) ui.tick(0.1);
+  assert.equal(buttonWrites(), startWrites, "stable event bounds do not wake disabled-attribute observers");
   assert.match(find("event").textContent, /^NEXT · L2/, "an upcoming moment is explicitly marked NEXT");
   find("play").dispatch("click"); assert.equal(state.paused, true);
   assert.equal(find("play").getAttribute("aria-label"), "Play replay");
@@ -357,6 +364,15 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
   find("seek").value = "30"; find("seek").dispatch("input"); find("seek").dispatch("change");
   assert.equal(state.T, 30); assert.equal(find("seek").getAttribute("aria-valuetext"), "0:30 of 1:40");
   assert.equal(find("next").disabled, true);
+  assert.equal(find("prev").disabled, false, "forward seek enables previous event");
+  const endWrites = buttonWrites();
+  for (let i = 0; i < 30; i++) ui.tick(0.1);
+  assert.equal(buttonWrites(), endWrites, "stable final bounds do not rewrite disabled");
+  state.T = 0; ui.paint();
+  assert.equal(find("prev").disabled, true); assert.equal(find("next").disabled, false);
+  find("prev").disabled = false; ui.paint();
+  assert.equal(find("prev").disabled, true, "actual DOM state is repaired, not hidden behind a stale cache");
+  state.T = 30; ui.paint();
   assert.equal(find("event").textContent, "RACE IN PROGRESS", "running out of highlights does not finish the race");
   state.T = state.duration; ui.paint();
   assert.equal(find("event").textContent, "RACE IN PROGRESS", "a truncated trace endpoint is not an official flag");

@@ -251,6 +251,35 @@ test("warmCarAssetsAsync builds exactly warmCarAssets' set, one heavy piece per 
   const ready = b.v.ctx.Log.records({ ns: "gfx" }).filter((r) => /^race car assets ready/.test(r.msg || ""));
   assert.equal(ready.length, 1, "the end-of-build line quali.spec.js waits on, once");
 });
+// opts.deferRear (game.js race entry): a car more than one slot behind the player hands its atlas upload and
+// caster to drainDeferredCarWarm, which the countdown frames drain in grid order. The eager set is the player
+// and the cars it sees first; the drained total equals the eager warm's set (same atlases, casters and uploads).
+test("warmCarAssetsAsync deferRear: the rear grid's uploads and casters wait for the countdown drain", async () => {
+  const eager = warmRig(), rear = warmRig();
+  for (const r of [eager, rear]) { r.v.field((c, i) => 3000 - 9 * i); r.v.G.cars.forEach((c, i) => { c.gridPos = i + 1; }); }
+  const playerPos = rear.v.G.cars.find((c) => c.isPlayer).gridPos;
+  assert.equal(await eager.v.carDraw.warmCarAssetsAsync(() => true), true);
+  assert.equal(await rear.v.carDraw.warmCarAssetsAsync(() => true, 8, { deferRear: true }), true, "ran to the end");
+  const front = rear.v.G.cars.filter((c) => c.isPlayer || c.gridPos <= playerPos + 1).length;
+  assert.equal(rear.got.uploads, front, "uploads now: the player and the cars up to one slot behind it (" + front + " of 22)");
+  assert.equal(rear.got.atlases.length, front, "and only those atlases are painted under the cover (GLX/WGX/mobile TLX upload inside createTexture)");
+  const casters = (r) => r.v.rec.builds.filter((b) => b.kind === "sh").length;
+  assert.ok(casters(rear) < casters(eager), "fewer casters before the lights (" + casters(rear) + " < " + casters(eager) + ")");
+  assert.equal(rear.v.ctx.Log.records({ ns: "gfx" }).filter((r) => /^race car assets ready/.test(r.msg || "")).length, 1, "the ready line, once");
+  // The countdown drains one piece a frame (a 4 ms budget with the fake clock charging 20-40 ms a piece).
+  let left = rear.v.carDraw.drainDeferredCarWarm(4), frames = 1;
+  const first = left;
+  while (left > 0 && frames < 100) { left = rear.v.carDraw.drainDeferredCarWarm(4); frames++; }
+  assert.equal(left, 0, "drained");
+  // The fake clock moves only on a heavy piece (a caster build), so a frame drains the uploads before it and one caster.
+  assert.ok(frames > 1 && frames <= first, "the queue drains across frames, a budget each (" + frames + " frames for " + first + " pieces)");
+  assert.equal(rear.got.uploads, 22, "every atlas uploaded once the drain is done");
+  assert.deepEqual(rear.got.atlases.slice().sort(), eager.got.atlases.slice().sort(), "and every atlas painted, the same set");
+  const sig = (r) => r.v.rec.builds.map((b) => b.kind + ":" + b.team + ":" + b.num).sort();
+  assert.deepEqual(sig(rear), sig(eager), "the same bodies and casters in the end (order aside)");
+  assert.equal(rear.v.carDraw.drainDeferredCarWarm(4), 0, "idempotent when empty");
+  assert.deepEqual([eager.warns(), rear.warns()], ["[]", "[]"], "no phase threw");
+});
 test("warmCarAssetsAsync stops when current() goes false; carWarmSlice=0 is today's single task", async () => {
   {
     const r = warmRig();
@@ -311,11 +340,11 @@ test("the bounded team caches hold the menu prep, the race warm and the mirror w
     {
       const count = (k) => v.rec.builds.filter(b => b.kind === k).length;
       // Bodies: playerBodyMesh (its own cache) + teamBodyMesh per rival seat the
-      // menu lists: 21 real; LEGENDS lists its other 11 legends as well, keyed by
-      // number, and most carry 1 (js/data/legends.js): 22 + 2 keys.
+      // menu lists: 21 real; LEGENDS preps ONLY the picked legend, as the race
+      // grids one seat (game.js seatsFor): 21 + the picked legend's key = 22.
       const teamBodies = count("body") - 1, casters = count("sh");
       assert.deepEqual([pick, count("whole"), teamBodies, casters],
-        pick === "legends" ? [pick, 0, 24, 13] : [pick, 0, 21, 12],
+        pick === "legends" ? [pick, 0, 22, 12] : [pick, 0, 21, 12],
         "menu: no whole car; the rivals' bodies; a :sh per team (+ the picked team's) + the player's own build");
       assert.ok(teamBodies <= cap && casters <= cap, `teamBodies ${teamBodies} / teamMeshes ${casters} within ${cap}`);
       const menu = v.rec.builds.length;

@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 import * as espree from "espree";
 import { aggregate, diff, verdict, formatDiff, formatTable, median, intervalStats } from "../../tools/perf/lib.mjs";
 
@@ -106,7 +107,7 @@ function profileCallbacks(apex) {
     assert.ok(node, name); return source.slice(...node.range);
   });
   const ctx = vm.createContext({ window: { __apex: apex }, track: "monza", WAIT_MS: 30000, performance });
-  vm.runInContext(declarations.join("\n"), ctx);
+  vm.runInContext(declarations.join("\n"), ctx, { filename: absSrc("tools/perf/profile.mjs") });
   return ctx;
 }
 

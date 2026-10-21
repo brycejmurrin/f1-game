@@ -225,3 +225,35 @@ test("countdown ownership retires document observers and timers, including queue
   assert.equal(timers.size, 0);
   assert.equal(observers.size, 0);
 });
+
+
+// LIVE-MEMORY-H12: the countdown watched every child list in the document, so once the hub had been opened
+// (it keeps this node cached) sync() ran after every HUD text write for the rest of the session.
+test("countdown watches child lists inside the hub only, and `hidden` anywhere", async () => {
+  const calls = [];
+  class Observer { constructor(fn) { this.fn = fn; } observe(target, opts) { calls.push({ target, opts }); } disconnect() {} }
+  function el(tag, cls, text) {
+    return {tag, cls, text, attrs: {}, isConnected: false, parentElement: null, children: [],
+      addEventListener() {}, removeAttribute(k) { delete this.attrs[k]; },
+      setAttribute(k, value) { this.attrs[k] = value; },
+      appendChild(child) { child.parentElement = this; this.children.push(child); return child; },
+      classList: {add() {}}, scrollWidth: 0, clientWidth: 0};
+  }
+  const root = {}, hub = { id: "datahub" };
+  const context = vm.createContext({MutationObserver: Observer,
+    document: {documentElement: root, querySelector: () => null, getElementById: (id) => (id === "datahub" ? hub : null)},
+    queueMicrotask: () => {}, setInterval: () => 1, clearInterval: () => {},
+    F1API: {schedule: () => Promise.resolve([{...VEGAS, date: "2099-11-22"}])}});
+  vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context, { filename: absSrc("js/data/schedule.js") });
+  const {loadSchedule} = context.S.create({el, emptyMsg: t => el("div", "empty", t)});
+  const wrap = await loadSchedule();
+  const onRoot = calls.filter((c) => c.target === root), onHub = calls.filter((c) => c.target === hub);
+  assert.equal(onRoot.length, 1);
+  assert.equal(!!onRoot[0].opts.childList, false, "no document-wide child-list watch");
+  assert.equal(onRoot[0].opts.attributes, true);
+  assert.deepEqual(Array.from(onRoot[0].opts.attributeFilter), ["hidden"]);
+  assert.equal(onHub.length, 1);
+  assert.equal(onHub[0].opts.childList, true);
+  assert.equal(onHub[0].opts.subtree, true);
+  wrap.dispose();
+});

@@ -1,0 +1,127 @@
+{
+ "backend": "three",
+ "tier": "low",
+ "rows": [
+  {
+   "track": "monza",
+   "throttle": 4,
+   "secs": 30,
+   "frames": 9,
+   "p50": 2999.9,
+   "p95": 5516.5,
+   "p99": 5516.5,
+   "max": 5516.5,
+   "fps": 0.3,
+   "metres": 3,
+   "gov": {
+    "tier": 2,
+    "scale": 0.5,
+    "auto": false
+   },
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": false,
+    "renderScale": {
+     "scale": 0.5,
+     "fps": 1.7,
+     "floorMs": 165.7,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 12,
+      "maxMs": 5516.5,
+      "slow": 11
+     },
+     "frameTimes": {
+      "frames": 12,
+      "p50": 2999.9000000000015,
+      "p95": 5516.5,
+      "p99": 5516.5,
+      "maxMs": 5516.5,
+      "droppedSimS": 1.6500000000000001,
+      "physicsSteps": 56,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": false
+    },
+    "canvas": [
+     633,
+     293
+    ],
+    "coarse": true,
+    "dpr": 3
+   }
+  },
+  {
+   "track": "monaco",
+   "throttle": 4,
+   "secs": 30,
+   "frames": 6,
+   "p50": 5083.2,
+   "p95": 5133.1,
+   "p99": 5133.1,
+   "max": 5133.1,
+   "fps": 0.2,
+   "metres": 2,
+   "gov": {
+    "tier": 2,
+    "scale": 0.5,
+    "auto": false
+   },
+   "env": {
+    "backend": "three",
+    "api": null,
+    "mobileTier": true,
+    "isMobile": true,
+    "upscale": false,
+    "renderScale": {
+     "scale": 0.5,
+     "fps": 2.4,
+     "floorMs": 111.1,
+     "auto": false,
+     "tier": 2,
+     "autoTier": 0,
+     "autoShed": 0,
+     "open": {
+      "frames": 10,
+      "maxMs": 5133.1,
+      "slow": 7
+     },
+     "frameTimes": {
+      "frames": 10,
+      "p50": 4366.5,
+      "p95": 5133.100000000006,
+      "p99": 5133.100000000006,
+      "maxMs": 5133.100000000006,
+      "droppedSimS": 1.1666666666666665,
+      "physicsSteps": 38,
+      "windowFrames": 2048
+     },
+     "userTier": 2,
+     "tierFloor": 0,
+     "crashStrikes": 0,
+     "scaleFutile": false,
+     "tierFutile": false,
+     "tierHold": false
+    },
+    "canvas": [
+     633,
+     293
+    ],
+    "coarse": true,
+    "dpr": 3
+   }
+  }
+ ],
+ "errors": []
+}

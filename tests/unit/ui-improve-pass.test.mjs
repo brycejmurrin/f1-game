@@ -2201,6 +2201,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(titleFlow, /\^#htp-/);
   assert.doesNotMatch(readGameEntry(), /\^#htp-/);
   assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
+  assert.doesNotMatch(shell, /id="pm-settings-close"[^>]*autofocus/, "Settings BACK must not steal initial focus from the door index");
   assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");

@@ -3,11 +3,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { selectionReceipt, validateSelectionArgs } from "../../tools/ci/pick-tests.mjs";
-import { cachedPlan, returnTo, verifyStages, runStages, VERIFY_MODES } from "../../tools/ci/sync-pr.mjs";
+import { cachedPlan, returnTo, verifyStages, runStages, runStage, VERIFY_MODES } from "../../tools/ci/sync-pr.mjs";
 import { sessionId, main as whoMain } from "../../tools/ci/who-is-on-it.mjs";
 import { episodeLeaks } from "../../tools/check/episode-diff.mjs";
 import { update, updateReceipt, DATA } from "../../tools/check/ratchets.mjs";
@@ -15,6 +16,7 @@ import { project, meanError, main as importMain } from "../../tools/track/import
 import { validatePresets, presetChanges } from "../../tools/lighting/preset-validation.mjs";
 import { skyDepthErrors } from "../../tools/gfx/wgx-validate.mjs";
 import { encodePNG, decodePNG, sampleRadianceHdr } from "../../tools/gen/assets.mjs";
+import { alive as processAlive } from "../../tools/lib/process-tree.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = (file, args = [], env = {}) => spawnSync(process.execPath, [file, ...args], {
@@ -417,4 +419,38 @@ test("#2186: runStages stops at the first failure or timeout, names the stage, a
   assert.equal(runStages(stages, { from: "b", run: (st) => { again.push(st.name); return 0; } }).ok, true);
   assert.deepEqual(again, ["b", "c"], "--from skips the stages that passed");
   assert.match(runStages(stages, { from: "zz", run: () => 0 }).error, /no stage named zz/);
+});
+
+test("a stage timeout stops the stage with SIGTERM, so a runner that leads its own process groups can terminate them", () => {
+  // The stage stands in for tooling-fast: it starts a detached grandchild and kills that group on SIGTERM.
+  // SIGKILL (the old killSignal) never reaches the handler and leaves the grandchild running.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sync-stage-"));
+  const pidFile = path.join(tmp, "grandchild.pid");
+  const stage = path.join(tmp, "stage.cjs");
+  fs.writeFileSync(stage, `const { spawn } = require("node:child_process"), fs = require("node:fs");
+const gc = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
+fs.writeFileSync(${JSON.stringify(pidFile)}, String(gc.pid));
+process.on("SIGTERM", () => {
+  // Reap before exiting: PID 1 in a container may not reap an adopted zombie.
+  // https://nodejs.org/api/child_process.html#event-exit
+  gc.once("exit", () => process.exit(143));
+  try { process.kill(-gc.pid, "SIGKILL"); } catch (_) { process.exit(143); }
+});
+setInterval(() => {}, 1000);`);
+  let gcPid = 0;
+  try {
+    const code = runStage({ name: "t", cmd: process.execPath, args: [stage], timeoutMs: 1500 }, tmp);
+    assert.equal(code, 124, "a timed-out stage reads as 124");
+    gcPid = Number(fs.readFileSync(pidFile, "utf8"));
+    assert.ok(gcPid > 0);
+    // Container PID 1 may leave a killed grandchild as a zombie. Count only
+    // a running process, as the project's process supervisors already do.
+    const alive = () => processAlive(gcPid);
+    const until = Date.now() + 3000;
+    while (alive() && Date.now() < until) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    assert.equal(alive(), false, "the stage's own process groups were terminated, not left running");
+  } finally {
+    if (gcPid) try { process.kill(-gcPid, "SIGKILL"); } catch (_) { /* gone */ }
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

@@ -269,6 +269,54 @@ test("compare gaps stay at the reference finish while a slower lap keeps playing
   assert.equal(view.g.board[2].dl.textContent, "—");
 });
 
+test("telemetry gauges preserve stable text, update rounded/null values and repair external edits", () => {
+  const player = vm.runInContext("DataTelemetryPlayer", ctx).create({}, { paintFrame() {} });
+  let writes = 0;
+  const cell = () => {
+    let text = "";
+    const classes = new Set();
+    return { get textContent() { return text; }, set textContent(v) { text = String(v); writes++; },
+      style: {}, classList: { toggle(k, on) { if (on) classes.add(k); else classes.delete(k); }, contains: (k) => classes.has(k) } };
+  };
+  const lane = (finish) => ({
+    car: [0, finish].map((t) => ({ t, speed: 180.1, gear: 6, throttle: 100, brake: 0, rpm: 10000, drs: 12 })),
+    cum: { t: [0, finish], d: [0, 1000] },
+  });
+  const laps = [lane(80), lane(60), lane(84), lane(88)];
+  const view = { cursorT: 40, primary: laps[0], compare: laps[1], laps, rpmMax: 12000,
+    g: { speed: [cell(), cell()], gear: [cell(), cell()], thr: [cell(), cell()], brk: [cell(), cell()],
+      rpm: [cell(), cell()], drs: [cell(), cell()], delta: cell(),
+      board: laps.map((_, i) => ({ spd: cell(), dl: cell(), ref: i === 0 })) } };
+  player.paintFrame(view);
+  assert.equal(view.g.delta.textContent, "-10.00s");
+  assert.equal(view.g.delta.classList.contains("dh-neg"), true);
+  assert.equal(view.g.board[1].dl.textContent, "-10.00");
+  const stableWrites = writes;
+  for (let i = 0; i < 60; i++) player.paintFrame(view);
+  assert.equal(writes, stableWrites, "unchanged four-lane frames never replace gauge text nodes");
+  for (const sample of laps[0].car) sample.speed = 180.4;
+  player.paintFrame(view);
+  assert.equal(writes, stableWrites, "a changed sample with the same rounded display needs no text write");
+  for (const sample of laps[0].car) Object.assign(sample, { speed: 180.6, gear: 0, drs: 0 });
+  player.paintFrame(view);
+  assert.equal(view.g.speed[0].textContent, "181");
+  assert.equal(view.g.board[0].spd.textContent, "181");
+  assert.equal(view.g.gear[0].textContent, "N");
+  assert.equal(view.g.drs[0].textContent, "—");
+  assert.equal(view.g.drs[0].classList.contains("dh-on"), false);
+  for (const sample of laps[0].car) Object.assign(sample, { speed: null, gear: null, drs: null });
+  player.paintFrame(view);
+  assert.equal(view.g.speed[0].textContent, "—");
+  assert.equal(view.g.board[0].spd.textContent, "—");
+  assert.equal(view.g.gear[0].textContent, "—");
+  view.g.speed[1].textContent = "external edit";
+  player.paintFrame(view);
+  assert.equal(view.g.speed[1].textContent, "180", "DOM equality repairs outside edits on the next frame");
+  view.cursorT = 0; player.paintFrame(view);
+  assert.equal(view.g.delta.textContent, "+0.00s", "rewinding updates the gap");
+  assert.equal(view.g.delta.classList.contains("dh-neg"), false);
+});
+
 test("integrated distance retains unknown intervals and legitimate stops", () => {
   const model = vm.runInContext("DataTelemetryModel", ctx);
   for (const speed of [null, undefined, NaN, Infinity]) {
@@ -445,7 +493,7 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
     frames.delete(id); fn(ts);
   };
   tick(100); tick(1100);
-  assert.equal(popup.querySelector(".dh-gspeed").querySelector(".dh-gval").textContent, 200);
+  assert.equal(popup.querySelector(".dh-gspeed").querySelector(".dh-gval").textContent, "200");
   dom.dispatch(chart, { type: "pointerdown", pointerId: 1, clientX: 160 });
   assert.equal(frames.size, 0, "scrubbing cancels playback");
   dom.dispatch(chart, { type: "pointercancel", pointerId: 1 });

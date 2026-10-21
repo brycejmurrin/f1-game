@@ -596,7 +596,10 @@ test("the render loop keeps a remote TV/results subject even beyond the player's
   // Run the actual early render culls; the later frustum/LOD still handles the active view.
   const run = game.slice(start, end) + "seen.push(c.code); }";
   const player = { code: "ME", isPlayer: true, s: 50 };
+  // These arc-only fixtures reach the later sampled visibility test. Their
+  // world-pose gate cannot reject them before road projection.
   const ctx = vm.createContext({ state: "race", player, track: { total: 5000 }, dbgCam: null,
+    renderPosOf: () => ({ world: false }),
     cars: [player, { code: "NEAR", s: 4900 }, { code: "FAR", s: 2500 }], seen: [] });
   vm.runInContext(run, ctx);
   assert.deepEqual(Array.from(ctx.seen), ["ME", "NEAR"], "ordinary driving keeps the wrap-safe fog cull");

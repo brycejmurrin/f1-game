@@ -1,0 +1,1 @@
+Improved: on TLX the road (one ~51k-triangle mesh on Monza) now draws only the stretches in view, and the rear mirror only those within its short reach, so a phone draws far fewer road triangles per frame. The picture is the same.

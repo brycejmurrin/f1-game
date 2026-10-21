@@ -213,8 +213,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // flare / spray-plume discipline, in a VM with seeded Math.random; ~0.2 s.
   // Round-2: decal LRU trims by bytes, the hi-res grave is reaped on the garage path, failed hi-res builds stop retrying.
   "tests/unit/car-draw-decal-budget.test.mjs",
+  "tests/unit/car-draw-decal-sweep.test.mjs",
   "tests/unit/car-front-wing-width.test.mjs",
   "tests/unit/car-fx.test.mjs",
+  "tests/unit/car-geometry-decimate.test.mjs",
   "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
   // Car mesh budget (B·H13): per-body tris/verts for the drawn tiers, and the vertex weld is lossless. ~5 s.
@@ -622,9 +624,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-resource-balance.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/gpu-allocation-estimator.test.mjs",
+  // PhoneRecorder (#1633): sampler cadence, JSON serializer, SHARE/COPY fallbacks. VM, < 0.5 s.
+  // GPU TEST (js/perf/gpu-test-run.js): the phase plan, phaseStats and the fill-slope fit. VM, ~0.1 s.
+  "tests/unit/gpu-test-run.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
   "tests/unit/harness-display.test.mjs",
+  // Helmet memo (B·H13): a replayed lid equals a freshly painted one, value for value. ~3 s.
+  "tests/unit/helmet-memo.test.mjs",
   "tests/unit/helmets.test.mjs",
   "tests/unit/home-world.test.mjs",
   "tests/unit/hooks-documented.test.mjs",
@@ -677,6 +684,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-clock-rotate.test.mjs",
   "tests/unit/input-ghost.test.mjs",
+  "tests/unit/input-hud-properties.test.mjs",
   // #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.
   "tests/unit/inputs-hash.test.mjs",
   "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
@@ -702,6 +710,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lane-preamble.test.mjs",
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
+  "tests/unit/layers-anyopen-memo.test.mjs",
   "tests/unit/layers-nav-memo.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -900,7 +909,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // phone sample reaching Input's tilt pipeline over the in-process loopback
   // transport — same VM harness, no browser, ~0.3 s.
   "tests/unit/phone-pad.test.mjs",
-  // PhoneRecorder (#1633): sampler cadence, JSON serializer, SHARE/COPY fallbacks. VM, < 0.5 s.
   "tests/unit/phone-recorder.test.mjs",
   "tests/unit/phone-touch-surface.test.mjs",
   "tests/unit/photo-kit.test.mjs",
@@ -1896,8 +1904,8 @@ function pinIndex() {
   return _pinIndex;
 }
 
-/** Which CI tooling-fast shards (1/2, 2/2) touch any of `files`. */
-export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 2) {
+/** Which CI tooling-fast shards (1/3 .. 3/3, ci.yml guards-a/b/c) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 3) {
   const want = new Set(files);
   const out = [];
   for (let i = 1; i <= shardCount; i++) {

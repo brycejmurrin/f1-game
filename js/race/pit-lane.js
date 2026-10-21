@@ -376,8 +376,11 @@ var PitLane = (function () {
   // Is arc position `s` inside the window? The window wraps the start/finish
   // line by construction, so this is a wrapped-interval test and not a compare.
   function inWindow(zone, s, L) {
-    if (!zone) return false;
-    const a = zone.sIn, b = zone.sOut;
+    return !!zone && inSpan(zone.sIn, zone.sOut, s, L);
+  }
+  // inWindow on two bare arcs: roadOf asks it for every AI on every step (laneX), and a zone literal per ask
+  // was ~2.5k objects/s of garbage on a 22-car field (perf-debug-e5b2).
+  function inSpan(a, b, s, L) {
     const v = ((s % L) + L) % L;
     return a <= b ? (v >= a && v <= b) : (v >= a || v <= b);
   }
@@ -795,8 +798,8 @@ var PitLane = (function () {
       const p = G.track && G.track.pit;
       if (!p || !c || p.painted) return null;
       const L = G.track.total;
-      if (inWindow({ sIn: p.sA, sOut: p.sIn }, c.s, L)) return "entry";
-      if (inWindow({ sIn: p.sOut, sOut: p.sB }, c.s, L)) return "exit";
+      if (inSpan(p.sA, p.sIn, c.s, L)) return "entry";
+      if (inSpan(p.sOut, p.sB, c.s, L)) return "exit";
       return null;
     }
 
@@ -2041,7 +2044,9 @@ var PitLane = (function () {
       };
     }
 
-    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
+    // Race teardown: the zone cache keys on the track object, and kept the last race's track until the next z().
+    function releaseTrack() { zone = null; zoneFor = null; }
+    return { zoneOf: () => z(), releaseTrack, limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
              arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think, stepBegin, stepEnd,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S, boxBusy,

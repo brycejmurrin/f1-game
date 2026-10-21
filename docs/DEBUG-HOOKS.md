@@ -5346,6 +5346,13 @@ TLX also has its own probes: `__tlx.shader(idx)` dumps the generated GLSL/WGSL,
 `__tlx.chunkState()`, `__tlx.postState()`, and `?viz=mat|normal|lamp` debug
 views.
 
+The TLX road split (the road's lap drawn as at most 4 culled drawRange runs per
+pass, main and mirror) is on by default. `__tlx.roadSplit(false)` draws the whole
+lap from the next frame and stores `apex26.tlxRoadSplit = "0"`, so a reload (a
+phone A/B, say) keeps it; `__tlx.roadSplit(true)` removes the key, and
+`__tlx.roadSplit()` reads the state. The picture is identical either way (0 px on one
+frozen frame, `scratch/h15/split-pix.mjs`); only the triangle count changes.
+
 The manual TLX sharpening-limit prototype uses `apex26.tlxSharpenLimit`: set
 `localStorage.setItem("apex26.tlxSharpenLimit", "1")` and reload to enable it.
 Set it to `"0"` (or remove the key) and reload to restore the default off state.

@@ -255,6 +255,39 @@ const LOOKS = {
              band: () => [0.85, 0.66, 0.06], key: () => [0.08, 0.08, 0.08], outline: null },
     backWall: "none",
   },
+  // Clean assembly bay: pale ceramic panels, broad joints and a blue resin
+  // working floor. Flush light panels leave the car's silhouette uncluttered.
+  porcelain: {
+    label: "Porcelain lab",
+    wall: { dado: () => [0.48, 0.62, 0.65], stripe: (c1, c2) => mix([0.06, 0.38, 0.48], c2, 0.25),
+            panel: () => [0.76, 0.80, 0.79], skirt: GREY(0.12), seam: "joint", jointPitch: 2.70, back: null },
+    ceil: [0.70, 0.76, 0.77], truss: "rails", ceilLed: "grid",
+    floor: { slab: [0.16, 0.25, 0.29], inner: [0.24, 0.40, 0.46], paint: GREY(0.92), walk: [0.49, 0.65, 0.66],
+             band: (c1) => c1, key: GREY(0.90), outline: GREY(0.88) },
+    backWall: "header",
+  },
+  // Historic works garage: warm brick courses, a cream protective dado and
+  // ochre safety lanes beneath deep trusses and suspended enamel lamps.
+  heritage: {
+    label: "Heritage works",
+    wall: { dado: () => [0.70, 0.62, 0.48], stripe: (c1) => scale(c1, 0.55),
+            panel: () => [0.45, 0.24, 0.17], skirt: [0.12, 0.09, 0.07], seam: "block", back: null },
+    ceil: [0.24, 0.19, 0.14], truss: "heavy", ceilLed: "pendants",
+    floor: { slab: [0.27, 0.23, 0.18], inner: [0.38, 0.32, 0.24], paint: [0.88, 0.71, 0.28], walk: [0.72, 0.57, 0.24],
+             band: (c1) => scale(c1, 0.70), key: [0.08, 0.07, 0.06], outline: null },
+    backWall: "none",
+  },
+  // Endurance service bay: blue wall fields and slate flooring with amber
+  // access markings; slim rails and continuous strips keep the ceiling open.
+  endurance: {
+    label: "Endurance blue",
+    wall: { dado: () => [0.19, 0.27, 0.34], stripe: (c1, c2) => mix([0.92, 0.43, 0.07], c2, 0.20),
+            panel: () => [0.07, 0.14, 0.24], skirt: GREY(0.04), seam: "none", back: null },
+    ceil: [0.16, 0.23, 0.32], truss: "rails", ceilLed: "strips",
+    floor: { slab: [0.07, 0.11, 0.16], inner: [0.10, 0.16, 0.22], paint: GREY(0.92), walk: [0.92, 0.47, 0.10],
+             band: (c1) => c1, key: GREY(0.90), outline: [0.94, 0.55, 0.14] },
+    backWall: "frame",
+  },
 };
 const LOOK_IDS = Object.keys(LOOKS);
 let _look = "stock";

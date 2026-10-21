@@ -6,6 +6,10 @@ const DataTelemetryPlayer = (function () {
     const { clamp, laneRole, summaryTime, signed, summaryValue, dcode, drsOpen, sampleAt,
             PADL, PADR, distAtT, timeAtDist } = DataTelemetryModel;
 
+    // Unchanged feed samples must not replace text nodes every frame: those
+    // mutations also make AriaState rescan the containing Data Hub controls.
+    const setText = (node, value) => { const text = String(value); if (node.textContent !== text) node.textContent = text; };
+
     function paintFrame(view) {
       renderer.paintFrame(view);
       updateGauges(view);
@@ -197,13 +201,13 @@ const DataTelemetryPlayer = (function () {
       if (!cars[0]) return;
       for (let i = 0; i < g.speed.length; i++) {
         const c = cars[i]; if (!c) continue;
-        g.speed[i].textContent = c.speed === null ? "—" : Math.round(c.speed);
-        g.gear[i].textContent = (c.gear == null) ? "—" : (c.gear ? "G" + c.gear : "N");
+        setText(g.speed[i], c.speed === null ? "—" : Math.round(c.speed));
+        setText(g.gear[i], (c.gear == null) ? "—" : (c.gear ? "G" + c.gear : "N"));
         g.thr[i].style.width = (c.throttle === null ? 0 : clamp(c.throttle, 0, 100)) + "%";
         g.brk[i].style.width = (c.brake === null ? 0 : clamp(c.brake, 0, 100)) + "%";
         g.rpm[i].style.width = (c.rpm === null ? 0 : clamp(c.rpm / view.rpmMax * 100, 0, 100)) + "%";
         const open = c.drs != null && drsOpen(c.drs);
-        g.drs[i].textContent = open ? "OPEN" : "—";
+        setText(g.drs[i], open ? "OPEN" : "—");
         g.drs[i].classList.toggle("dh-on", open);
       }
       // Once the reference finishes, its distance and gap clock must stop together.
@@ -211,7 +215,7 @@ const DataTelemetryPlayer = (function () {
       if (g.delta && view.compare) {
         const dP = distAtT(view.primary.cum, refT);
         const delta = timeAtDist(view.compare.cum, dP) - refT;   // >0: compare is behind
-        g.delta.textContent = isFinite(delta) ? signed(delta, 2) + "s" : "—";
+        setText(g.delta, isFinite(delta) ? signed(delta, 2) + "s" : "—");
         g.delta.classList.toggle("dh-pos", delta > 0.02);
         g.delta.classList.toggle("dh-neg", delta < -0.02);
       }
@@ -221,10 +225,10 @@ const DataTelemetryPlayer = (function () {
         view.laps.forEach(function (lane, i) {
           const cell = g.board[i]; if (!cell) return;
           const cc = sampleAt(lane.car, t);
-          cell.spd.textContent = (cc && cc.speed !== null) ? Math.round(cc.speed) : "—";
+          setText(cell.spd, (cc && cc.speed !== null) ? Math.round(cc.speed) : "—");
           if (cell.ref) return;
           const dl = timeAtDist(lane.cum, dRef) - refT;   // >0: this lane is behind the ref
-          cell.dl.textContent = isFinite(dl) ? signed(dl, 2) : "—";
+          setText(cell.dl, isFinite(dl) ? signed(dl, 2) : "—");
           cell.dl.classList.toggle("dh-pos", dl > 0.02);
           cell.dl.classList.toggle("dh-neg", dl < -0.02);
         });

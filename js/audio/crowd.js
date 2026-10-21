@@ -166,7 +166,12 @@ var CrowdAudio = (function () {
     aim(bedGain.gain, 0, at, 0.08);
     if (cheers) {
       for (let i = 0; i < cheers.length; i++) {
-        aim(cheers[i].g.gain, 0, at, 0.05);
+        // A cheer's own exponential ramp is still pending and REPLACES a later setTarget (Web Audio §SetTarget
+        // then ramp: measured louder, not quieter, in Chromium). Cut the envelope where it stands first.
+        const g = cheers[i].g.gain;
+        if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(at); else if (g.cancelScheduledValues) g.cancelScheduledValues(at);
+        g._apexCrowdTgt = undefined;
+        aim(g, 0, at, 0.05);
         cheers[i].freeAt = at;
       }
     }
@@ -362,7 +367,7 @@ var CrowdAudio = (function () {
     };
     GameAudio.stopEngine = function () {
       const r = _orig.stopEngine.apply(this, arguments);
-      try { silence(); } catch (e) { /* */ }
+      try { silence(); standTrack = null; standN = 0; } catch (e) { /* */ }   // the stands cache held the race's whole track into the menu
       return r;
     };
     GameAudio.setGridIdle = function () {

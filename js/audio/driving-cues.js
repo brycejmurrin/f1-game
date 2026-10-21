@@ -18,6 +18,9 @@ var DrivingCues = (function () {
   const BRAKE_GATE = 0.14;
   const PERIOD_LO = 0.50, PERIOD_HI = 0.11;
   const clamp = M4.clamp;   // shared scalar helper (js/core/mat4.js)
+  // The PREDICTIVE brake cue owns the pulse (the drive tone ducks under it).
+  const brakeCueBusy = () => (typeof BrakeCue !== "undefined") && !!BrakeCue.on
+    && BrakeCue.on() && !!BrakeCue.debug && (BrakeCue.debug().urgency || 0) >= BRAKE_GATE;
 
   // v1 = OFF. v2..10 = cues on; lookahead grows with the notch.
   function fromSlider(v) {
@@ -190,9 +193,8 @@ var DrivingCues = (function () {
       lastU = u;
 
       // Braking tone — duck when the existing PREDICTIVE CUE owns the pulse.
-      const brakeCueBusy = (typeof BrakeCue !== "undefined") && BrakeCue.on
-        && BrakeCue.on() && BrakeCue.debug && (BrakeCue.debug().urgency || 0) >= BRAKE_GATE;
-      if (u >= BRAKE_GATE && !brakeCueBusy) {
+      // Asked only past the gate: debug() builds two objects and two strings, and this ran every frame.
+      if (u >= BRAKE_GATE && !brakeCueBusy()) {
         nextBrakeT -= dt;
         if (nextBrakeT <= 0) {
           nextBrakeT = PERIOD_LO + (PERIOD_HI - PERIOD_LO) * u;

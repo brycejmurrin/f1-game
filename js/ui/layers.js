@@ -211,7 +211,23 @@ window.UiLayers = (function () {
     return _gateEls;
   }
 
-  function anyOpen() {
+  /* anyOpen() walks every gated layer and may call shownLayer() (layout).
+     Input latches it once per poll(), but opening SETTINGS still asked it in a
+     burst while showModal() reflowed the sheet (gpu-census / survey #3248).
+     Share navOpen's observer + NAV_MEMO_MS window: drop the memo when a layer
+     attribute changes, otherwise reuse the last answer. */
+  const NAV_MEMO_MS = 250;
+  let gateMemo = null;
+  let gateMemoAt = 0;
+  let navMemo = null;
+  let navMemoAt = 0;
+  let navObs = null;
+  let navStale = false;
+  const navWatched = new WeakSet();
+  const NAV_ATTRS = ["hidden", "class", "style", "open", "inert"];
+  const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
+
+  function anyOpenLive() {
     const els = gateEls();
     for (let i = 0; i < els.length; i++) {
       const el = els[i];
@@ -219,6 +235,15 @@ window.UiLayers = (function () {
       if (shownLayer(el)) return true;
     }
     return false;
+  }
+
+  function anyOpen() {
+    if (!navObs) return anyOpenLive();
+    const now = clock();
+    if (gateMemo !== null && now - gateMemoAt < NAV_MEMO_MS && !navDirty()) return gateMemo;
+    gateMemo = anyOpenLive();
+    gateMemoAt = now;
+    return gateMemo;
   }
 
   /* Pad/keyboard chrome on the TITLE screen. anyOpen() stays false there
@@ -262,14 +287,6 @@ window.UiLayers = (function () {
      still seen. Resize/orientation (media queries) drop it too. The time
      bound is the net for anything the observer cannot see (a stylesheet
      arriving). No MutationObserver (isolated VM) means no memo. */
-  const NAV_MEMO_MS = 250;
-  let navMemo = null;
-  let navMemoAt = 0;
-  let navObs = null;
-  let navStale = false;
-  const navWatched = new WeakSet();
-  const NAV_ATTRS = ["hidden", "class", "style", "open", "inert"];
-  const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
 
   function navWatch(el, subtree) {
     if (!navObs || !el || navWatched.has(el)) return;
@@ -286,6 +303,7 @@ window.UiLayers = (function () {
     navWatch(document.getElementById("rotate-device"), true);
     const stale = navStale;
     navStale = false;
+    if (stale) { gateMemo = null; navMemo = null; } // one dirty flag, two memos: whoever reads it must drop both
     return stale;
   }
 

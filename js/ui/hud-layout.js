@@ -867,7 +867,11 @@ const HudLayout = (function () {
         best = r && findSlot(r);
         if (!best) { el.setAttribute("data-col-drop", ""); continue; }
       }
-      if (best) {
+      if (best && best === r) {
+        // No correction was needed: retain this measured obstacle without
+        // writing zero offsets and forcing another painted-box read.
+        blocks.push(r);
+      } else if (best) {
         el.style.setProperty("--hud-clear-x", (best.left - r.left).toFixed(2) + "px");
         el.style.setProperty("--hud-clear-y", (best.top - r.top).toFixed(2) + "px");
         // Read the actual painted box: zoom, saved scale and platform layout

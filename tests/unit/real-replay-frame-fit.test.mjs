@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 import { ROOT, FIXTURE, TOTAL_REAL, host, line } from "../helpers/real-replay-fixtures.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("Russell's real lap lands on the game's Baku centreline: mirrored, turned, forward, 5.9 km", async () => {
   const g = await createGame({ track: "baku" });
@@ -93,7 +94,7 @@ test("trackTrace reuses one transform while mapPoint still observes mutable fits
   for (const key of ["sin", "cos"]) math[key] = (x) => { calls[key]++; return Math[key](x); };
   const track = { total: 10000 }, fit = { refl: -1, th: 0.41, tx: 120, ty: -44 };
   const project = (_track, x, z) => ({ s: x + 500, lat: z });
-  const R = vm.runInNewContext(source + "; RealReplay", { Math: math, M4: { clamp: (x) => x }, Tracks: { project } });
+  const R = vm.runInNewContext(source + "; RealReplay", { Math: math, M4: { clamp: (x) => x }, Tracks: { project } }, { filename: absSrc("js/race/real-replay.js") });
   const raw = Float32Array.from(Array.from({ length: 1000 }, (_, i) => [i * 0.5, i * 2, Math.sin(i / 30)]).flat());
   const actual = R.trackTrace(track, fit, raw);
   assert.deepEqual(calls, { sin: 1, cos: 1 }, "one trig pair per trace, independent of sample count");

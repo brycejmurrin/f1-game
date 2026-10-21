@@ -46,6 +46,9 @@ function declaredGeomFields() {
 }
 
 const M = loadParts();
+for (const [key, category] of Object.entries(M.Car3D.PART_STYLE_FIELDS)) {
+  ENUM_GEOM[key] = M.Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === "STYLE").map(o => o.id);
+}
 const team = M.Teams.LIST[0];
 // Parts.DEFAULTS, the export (there is no Parts.defaults(): the old ternary
 // always fell back to {} and the hull was derived on no parts at all).
@@ -82,7 +85,7 @@ test("a HUE change never moves a vertex — only presence can", () => {
 test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex", () => {
   const base = build(BASE);
   const fields = OPTIONAL.concat(Object.keys(ENUM_GEOM));
-  const measured = fields.filter((k) => !samePos(base, build(withField(k, onValue(k)))));
+  const measured = fields.filter((k) => ENUM_GEOM[k] ? ENUM_GEOM[k].some(v => !samePos(base, build(withField(k, v)))) : !samePos(base, build(withField(k, onValue(k)))));
   const declared = declaredGeomFields();
   assert.deepEqual(measured.slice().sort(), declared.slice().sort(),
     `js/garage/setup-camera.js SP_HULL_GEOM_FIELDS is [${declared}] but Car3D.build moves geometry for ` +

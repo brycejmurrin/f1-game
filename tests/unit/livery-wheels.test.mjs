@@ -97,7 +97,7 @@ test("Car3D.build: no tint = byte-identical car; tint changes only wheel-vertex 
 test("wheel mesh caches key on the tints (source pins)", () => {
   const draw = read("js/car/car-draw.js");
   assert.match(draw, /playerWheelId \+ wt\.key/, "player wheel key lacks the tint key");
-  assert.match(draw, /wt\.key \? base \+ wt\.key : base/, "field wheel key lacks the tint key");
+  assert.match(draw, /st\.fwKeyFull = base \+ wt\.key/,"field wheel key lacks the tint key");
   assert.match(draw, /wt\.cal \|\| \(playerBrakeVisual/);
   assert.match(draw, /wt\.rim \|\| \(brake && brake\.rim\)/);
   assert.match(read("js/camera/cockpit-preview.js"), /CarWheels\.tints\(s\.livery\)/);

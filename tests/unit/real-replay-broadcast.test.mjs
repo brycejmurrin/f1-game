@@ -41,7 +41,7 @@ test("WATCH event cursor preserves equal-time dispatch, caption bounds, rewinds,
 // ── BROADCAST (js/race/broadcast.js): the timing tower and the AUTO director ──
 test("BROADCAST event windows retain stable ties and absolute shown indices without rereading race history", () => {
   const source = fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8");
-  const B = vm.runInNewContext(source + "; Broadcast", {});
+  const B = vm.runInNewContext(source + "; Broadcast", {}, { filename: absSrc("js/race/broadcast.js") });
   const rank = { out: 4, pass: 3, fastest: 2, pit: 1 };
   const list = Array.from({ length: 203 }, (_, i) => ({ t: Math.floor(i / 3), kind: ["pit", "pass", "out", "radio", "fastest"][i % 5], num: i % 7 ? i % 5 : null }));
   const old = (T, shown, lead, ok) => {

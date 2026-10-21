@@ -70,11 +70,13 @@ const KERB_SHIVER_R = 0.004;           // rad of roll jitter at full speed
 
 const ZERO = Object.freeze({ pitch: 0, roll: 0, heave: 0 });
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
+// Every car in a render shares dt. Retain only its latest clamped value and
+// the three pure decay factors, rather than evaluating each spring per car.
+let decayDt = NaN, pitchDecay = 1, rollDecay = 1, heaveDecay = 1;
 
-function crit(s, to, omega, dt) {
+function crit(s, to, omega, dt, e) {
   const c1 = s.x - to;
   const c2 = s.v + omega * c1;
-  const e = Math.exp(-omega * dt);
   const t = c1 + c2 * dt;
   s.x = to + t * e;
   s.v = (c2 - omega * t) * e;
@@ -114,6 +116,12 @@ function update(c, groundY, dt, ygV, dfFrac, vFrac) {
     return ZERO;
   }
   const dtc = Math.max(0, Math.min(dt || 0, MAX_DT));
+  if (dtc !== decayDt) {
+    pitchDecay = Math.exp(-PITCH_OMEGA * dtc);
+    rollDecay = Math.exp(-ROLL_OMEGA * dtc);
+    heaveDecay = Math.exp(-HEAVE_OMEGA * dtc);
+    decayDt = dtc;
+  }
   const vF = vFrac > 0 ? (vFrac < 1 ? vFrac : 1) : 0;
   const spd = Math.abs(c.speed || 0);
 
@@ -138,7 +146,7 @@ function update(c, groundY, dt, ygV, dfFrac, vFrac) {
   // updateCar), so since 2026-10-02 the field dives into braking zones too.
   const ax = c.human ? (c.axEstSm || 0) : (c.corridorAccel || 0);
   const pitchT = clamp(-ax * PITCH_GAIN, -PITCH_MAX, PITCH_MAX);
-  crit(s.p, pitchT, PITCH_OMEGA, dtc);
+  crit(s.p, pitchT, PITCH_OMEGA, dtc, pitchDecay);
 
   // roll ← lateral accel. HUMAN cars: real centripetal speed·yawRate (only they
   // run the slip model that produces yawRateCur). AI has no world heading, so
@@ -147,7 +155,7 @@ function update(c, groundY, dt, ygV, dfFrac, vFrac) {
   const aLat = c.human ? (c.speed || 0) * (c.yawRateCur || 0)
                           : -(c.speed || 0) * (c.speed || 0) * (c.kCur || 0);
   const rollT = clamp(aLat / LAT_MAX, -1, 1) * ROLL_MAX;
-  crit(s.r, rollT, ROLL_OMEGA, dtc);
+  crit(s.r, rollT, ROLL_OMEGA, dtc, rollDecay);
 
   // Downforce stiffens the (virtual) suspension: the caller passes the same
   // dimensionless load term the grip model uses, aeroDfMult(c)·(|v|/vTop())²,
@@ -157,7 +165,7 @@ function update(c, groundY, dt, ygV, dfFrac, vFrac) {
   const df = dfFrac > 0 ? (dfFrac < 1 ? dfFrac : 1) : 0;
   s.z.v -= (ygVSafe - s.ygV0) * HEAVE_GAIN * (1 - (1 - HEAVE_AERO_FLOOR) * df);
   s.ygV0 = ygVSafe;
-  crit(s.z, 0, HEAVE_OMEGA, dtc);
+  crit(s.z, 0, HEAVE_OMEGA, dtc, heaveDecay);
   s.prevYg = groundY;
   // soft saturation: approaches ±HEAVE_MAX asymptotically instead of flat-topping
   let heave = HEAVE_MAX * Math.tanh(s.z.x / HEAVE_MAX) - AERO_DROP * df;

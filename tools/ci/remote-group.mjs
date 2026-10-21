@@ -289,6 +289,10 @@ function api(method, pathQs, body, { raw = false } = {}) {
 }
 
 const git = (...a) => (spawnSync("git", a, { cwd: ROOT, encoding: "utf8" }).stdout || "").trim();
+/** Refresh origin/<branch> before anything reads it (the sha, the "already green" lookup, the workflow check). */
+export function fetchOrigin(branch, spawn = spawnSync, cwd = ROOT) {
+  return spawn("git", ["fetch", "-q", "origin", branch], { cwd });
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
@@ -379,8 +383,11 @@ async function main() {
   const branch = opt("--ref", git("rev-parse", "--abbrev-ref", "HEAD"));
   if (!branch || branch === "HEAD") { say("refused: detached HEAD — pass --ref <pushed branch>"); return 3; }
   // The runner tests origin/<branch>: an unpushed commit would silently not be tested.
+  // Fetch it in BOTH modes: with --ref the sha below, the "already green" lookup and the
+  // predates-workflow check all read origin/<branch>, and a stale local copy of it names a
+  // tip that has newer, untested commits.
+  fetchOrigin(branch);
   if (!argv.includes("--ref")) {
-    spawnSync("git", ["fetch", "-q", "origin", branch], { cwd: ROOT });
     const local = git("rev-parse", "HEAD"), remote = git("rev-parse", "--verify", "-q", `origin/${branch}`);
     if (local !== remote) { say(`refused: HEAD ${local.slice(0, 9)} is not origin/${branch} (${remote.slice(0, 9) || "not pushed"}) — push first; the runner tests the pushed branch`); return 3; }
   }

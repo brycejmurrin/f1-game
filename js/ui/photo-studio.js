@@ -373,6 +373,8 @@ function create(G, deps) {
     const target = focus, generation = st.generation;
     // Release the composed canvas (up to 2048 px, ~17 MB RGBA) and its preview data URL; open() rebuilds both.
     last = null; raw = null; capturedOptions = null; E["ps-preview"].removeAttribute("src"); E["ps-preview"].hidden = true;
+    // ...and the library rows: each held a thumbnail data URL and a DOWNLOAD closure over its photo blob. open() repaints them.
+    if (E["ps-library"]) E["ps-library"].replaceChildren();
     root.hidden = true; document.body.classList.remove("photo-studio-open");
     busy(false);
     if (back && returnTo) returnTo();

@@ -68,6 +68,132 @@ test("the shipped-before path, for contrast: teamMesh per mirror rival builds a 
   assert.ok(whole.every(b => b.kind === "whole"));
 });
 
+const WHEEL_BASE = new Float32Array([0.8, 0.2, -0.3, 0, -0.1, 0.9, 0.15, 0, 0.4, -0.05, 0.85, 0, 14, 2, -9, 1]);
+function wheelMatrices(v, draw) {
+  v.rec.draws.length = v.rec.mats.length = 0;
+  draw();
+  return v.rec.mats.filter((_, i) => v.rec.draws[i].kind === "wheel");
+}
+// Independent geometry oracle: rotate each basis vector about the axle, then
+// steer it, and transform that basis and the wheel centre into world space.
+function expectedWheels(v, c, rear, front, frontsOnly = false, offset = 0, width = 1) {
+  const radius = v.ctx.PhysicsConsts.WHEEL_STEER_VIS;
+  let steer = Math.max(-1, Math.min(1, c.steerVis || 0)) * radius;
+  if (!c.human) steer = Math.max(-radius, Math.min(radius, steer - Math.atan(3.3 * (c.kCur || 0))));
+  else if (v.G.STEER_SPEED_REF > 0) steer /= 1 + Math.abs(c.speed || 0) * 95 / (v.G.vTop() * v.G.STEER_SPEED_REF);
+  return v.carDraw.WHEELS.filter(w => !frontsOnly || w.front).map(w => {
+    const spin = w.front ? front : rear, yaw = w.front ? steer : 0;
+    const rotate = (x, y, z) => {
+      const yy = y * Math.cos(spin) - z * Math.sin(spin);
+      const zz = y * Math.sin(spin) + z * Math.cos(spin);
+      return [x * Math.cos(yaw) + zz * Math.sin(yaw), yy, -x * Math.sin(yaw) + zz * Math.cos(yaw), 0];
+    };
+    const flat = w.front ? (c.flatSpot || 0) * 0.004 * (0.5 + 0.5 * Math.cos(front)) : 0;
+    const local = new Float32Array([
+      ...rotate(width, 0, 0), ...rotate(0, 1, 0), ...rotate(0, 0, 1),
+      w.x + Math.sign(w.x) * (width - 1) * 0.16, w.y + flat, w.z + offset, 1,
+    ]);
+    return Array.from(new Float32Array(Array.from({ length: 16 }, (_, i) => {
+      const row = i % 4, col = Math.floor(i / 4);
+      return [0, 1, 2, 3].reduce((sum, k) => sum + WHEEL_BASE[k * 4 + row] * local[col * 4 + k], 0);
+    })));
+  });
+}
+function assertWheelMatrices(actual, expected, context) {
+  assert.equal(actual.length, expected.length, context + ": rotating wheel count");
+  for (let w = 0; w < actual.length; w++) for (let i = 0; i < 16; i++) {
+    assert.ok(Math.abs(actual[w][i] - expected[w][i]) <= 2e-6,
+      `${context}: wheel ${w}, matrix[${i}] = ${actual[w][i]}, expected ${expected[w][i]}`);
+  }
+}
+
+test("wheel phases advance once before any view, and mirror/main/cockpit draws never touch traction state", () => {
+  const v = carDrawVm();
+  v.field((c, i) => 1000 - 9 * i);
+  const c = v.G.player;
+  c.steerVis = 0.4; c.flatSpot = 0.6;
+  // Reading these would couple visual rotation back to the normalized slip
+  // signal; writing them would let rendering change physics.
+  for (const key of ["wheelSpin", "wheelSpinF"]) Object.defineProperty(c, key, {
+    get() { assert.fail("render read physics " + key); },
+    set() { assert.fail("render wrote physics " + key); },
+  });
+  const drawMain = () => v.carDraw.drawPlayerWheels(c, WHEEL_BASE, 0.02, {}, false, 0, 1);
+  assertWheelMatrices(wheelMatrices(v, drawMain), expectedWheels(v, c, 0, 0), "never advanced");
+  v.carDraw.advanceWheelPhases(0.02);
+  const phase = (c.speed / 0.33) * 0.02;
+  const mirror = wheelMatrices(v, () => v.carDraw.drawMirrorCar(c, WHEEL_BASE, {}, false));
+  const main = wheelMatrices(v, drawMain);
+  assertWheelMatrices(mirror, expectedWheels(v, c, phase, phase), "mirror first");
+  assert.deepEqual(main, mirror, "the main view reads the phase already used by the second camera");
+  assert.deepEqual(wheelMatrices(v, drawMain), main, "another draw does not integrate another frame");
+  // Drive the real cockpit consumer (VISOR has no steering-wheel telemetry).
+  Object.assign(v.ctx.CockpitOpts, { layout: () => ({ wheelS: 1, wheelY: 0, wheelZ: 0 }), interior: () => "carbon" });
+  v.ctx.Car3D.cockpitMirrorGlass = () => [];
+  const cockpit = () => v.carDraw.drawCockpitRig(c, WHEEL_BASE, 0.02, {}, true);
+  assertWheelMatrices(wheelMatrices(v, cockpit), expectedWheels(v, c, phase, phase, true, 0.30, 1.4), "cockpit front wheels");
+  assert.deepEqual(wheelMatrices(v, drawMain), main, "cockpit drawing leaves the shared phase unchanged");
+});
+
+test("wheel phases keep moving in mirror-only and offscreen frames, including lock-up, reverse and dt zero", () => {
+  const v = carDrawVm();
+  v.field((c, i) => 1000 - 9 * i);
+  const c = v.G.cars[1];
+  c.steerVis = -0.3; c.kCur = 0.025; c.flatSpot = 0.4;
+  c.wheelSpin = 0.82; c.wheelSpinF = 0.27;
+  const traction = [c.wheelSpin, c.wheelSpinF];
+  let rear = 0, front = 0;
+  const advance = (dt) => {
+    rear = (rear + c.speed / 0.33 * dt) % (2 * Math.PI);
+    front = (front + c.speed / 0.33 * dt * (1 - (c.wheelLock || 0))) % (2 * Math.PI);
+    v.carDraw.advanceWheelPhases(dt);
+  };
+  const mirror = () => v.carDraw.drawMirrorCar(c, WHEEL_BASE, {}, false);
+  advance(0.016);
+  const first = wheelMatrices(v, mirror);
+  assertWheelMatrices(first, expectedWheels(v, c, rear, front), "first mirror-only frame");
+  advance(0.025);
+  const second = wheelMatrices(v, mirror);
+  assertWheelMatrices(second, expectedWheels(v, c, rear, front), "second mirror-only frame");
+  assert.notDeepEqual(second, first, "a rival drawn only in the mirror still spins");
+  advance(0.04); advance(0.013);   // fully offscreen: no draw in either view
+  assertWheelMatrices(wheelMatrices(v, mirror), expectedWheels(v, c, rear, front), "offscreen re-entry");
+  c.wheelLock = 1;
+  const beforeLock = wheelMatrices(v, mirror);
+  advance(0.02);
+  const locked = wheelMatrices(v, mirror);
+  assertWheelMatrices(locked, expectedWheels(v, c, rear, front), "locked fronts");
+  assert.deepEqual(locked.slice(0, 2), beforeLock.slice(0, 2), "front rotation is frozen during a full lock");
+  assert.notDeepEqual(locked.slice(2), beforeLock.slice(2), "rear rotation continues");
+  c.wheelLock = 0.35; c.speed = -19;
+  advance(0.02);
+  const reverse = wheelMatrices(v, mirror);
+  assertWheelMatrices(reverse, expectedWheels(v, c, rear, front), "reverse with partial lock");
+  advance(0);
+  assert.deepEqual(wheelMatrices(v, mirror), reverse, "a zero-dt frame does not advance");
+  assert.deepEqual([c.wheelSpin, c.wheelSpinF], traction, "traction fields retain their physics values");
+});
+
+test("steering uses one sine/cosine pair per car while preserving all four wheel matrices", () => {
+  for (const human of [false, true]) {
+    const v = carDrawVm();
+    v.field((c, i) => 1000 - 9 * i);
+    const c = v.G.cars[1];
+    Object.assign(c, { human, steerVis: -0.55, kCur: 0.018, speed: 72, wheelLock: 0.4, flatSpot: 0.7 });
+    v.G.STEER_SPEED_REF = 45;
+    v.carDraw.advanceWheelPhases(0.013);
+    let trig = 0;
+    const countedMath = Object.create(Math);
+    countedMath.sin = (x) => { trig++; return Math.sin(x); };
+    countedMath.cos = (x) => { trig++; return Math.cos(x); };
+    v.ctx.Math = countedMath;
+    const actual = wheelMatrices(v, () => v.carDraw.drawPlayerWheels(c, WHEEL_BASE, 0, {}, false, 0, 1, true));
+    assert.equal(trig, 6, "four phase trig calls + one steering sine/cosine pair, human=" + human);
+    const phase = c.speed / 0.33 * 0.013;
+    assertWheelMatrices(actual, expectedWheels(v, c, phase, phase * 0.6), "steering, human=" + human);
+  }
+});
+
 // The layout re-read runs on the CLOCK (500 ms), not every 30 frames — a frame
 // count is not a clock (docs/notes/PERF-FINDINGS.md §2n) — and side() writes the
 // <body> class and custom properties only when they change: each write

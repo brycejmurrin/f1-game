@@ -16,6 +16,18 @@
   --compact-at: 480px;
 }
 #pmsettings-inner:not([data-shape="tall"]) { --fit-at: 220px; }
+/* UI SIZE 200%: breadcrumb/title band must wrap inside the zoomed sheet, not
+   clip under overflow:hidden on #pmsettings (survey #3253). */
+#pmsettings-inner > .sheet-head {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+#pmsettings-inner > .sheet-head h2 {
+  flex: 1 1 8rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 #pm-settings-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -192,22 +204,24 @@
    pill: BRAND, TEAM and CUSTOM can all be red, so the name tells them apart. */
 #pmsettings-inner #pm-panel-appearance .pm-accent-chip {
   width: 100%;
-  height: var(--chip-h);
+  height: auto;
   min-width: 0;
-  min-height: 0;
-  padding: 0 calc(var(--gap) * 0.25);
+  min-height: var(--chip-h);
+  padding: calc(var(--gap) * 0.12) calc(var(--gap) * 0.25);
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
   background: var(--chip, var(--plate));
   color: var(--chip-ink, var(--text));
   cursor: pointer;
-  font-size: var(--fs-1);
+  font-size: var(--fs-micro);
   font-weight: 800;
-  letter-spacing: var(--ls-2);
+  letter-spacing: var(--ls-3);
+  line-height: 1.15;
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
 }
 #pmsettings-inner #pm-panel-appearance .pm-accent-chip[aria-selected="true"] {
   border-color: var(--text);

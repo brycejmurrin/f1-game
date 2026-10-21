@@ -367,6 +367,59 @@ const CarGeometry = (function () {
     return out;
   }
 
-  return { create, weld };
+  // DECIMATE: vertex clustering for a body seen from far away (a rival past ~250 m is 1-3 px tall, so only its
+  // silhouette reads). Vertices fall into the cells of a cubic grid; a cell becomes one vertex (mean position,
+  // mean normal renormalised, mean colour, the first surface id); triangles that collapse onto <3 cells or repeat
+  // another are dropped. The cell size is searched so the result lands at or under `target` triangles, taking the
+  // finest grid that fits. Deterministic (no randomness, insertion-ordered cells). Returns a NEW out
+  // ({pos, nrm, col, idx[, mat]}), leaving the input alone.
+  function decimate(out, target) {
+    const n = out.pos.length / 3, tris = out.idx.length / 3;
+    if (!n || tris <= target) return out;
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const x = out.pos[i*3], y = out.pos[i*3+1], z = out.pos[i*3+2];
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
+    }
+    const ext = Math.max(x1 - x0, y1 - y0, z1 - z0) || 1;
+    const run = (cell) => {
+      const cellOf = new Map(), remap = new Int32Array(n), acc = [];
+      for (let i = 0; i < n; i++) {
+        const cx = Math.floor((out.pos[i*3] - x0) / cell), cy = Math.floor((out.pos[i*3+1] - y0) / cell), cz = Math.floor((out.pos[i*3+2] - z0) / cell);
+        const k = (cx * 4096 + cy) * 4096 + cz;
+        let a = cellOf.get(k);
+        if (a === undefined) { a = acc.length; cellOf.set(k, a); acc.push({ n: 0, p: [0, 0, 0], q: [0, 0, 0], c: [0, 0, 0], m: out.mat ? out.mat[i] : 0 }); }
+        const s = acc[a]; s.n++;
+        for (let d = 0; d < 3; d++) { s.p[d] += out.pos[i*3+d]; s.q[d] += out.nrm[i*3+d]; s.c[d] += out.col[i*3+d]; }
+        remap[i] = a;
+      }
+      const seen = new Set(), idx = [];
+      for (let t = 0; t < tris; t++) {
+        const a = remap[out.idx[t*3]], b = remap[out.idx[t*3+1]], c = remap[out.idx[t*3+2]];
+        if (a === b || b === c || a === c) continue;
+        const lo = Math.min(a, b, c), hi = Math.max(a, b, c), key = lo + "," + (a + b + c - lo - hi) + "," + hi;
+        if (seen.has(key)) continue;
+        seen.add(key); idx.push(a, b, c);
+      }
+      return { acc, idx };
+    };
+    let lo = ext / 4096, hi = ext, best = run(hi);
+    for (let it = 0; it < 14; it++) {
+      const mid = (lo + hi) / 2, r = run(mid);
+      if (r.idx.length / 3 <= target) { best = r; hi = mid; } else lo = mid;
+    }
+    const res = { pos: [], nrm: [], col: [], idx: best.idx };
+    if (out.mat) res.mat = [];
+    for (const s of best.acc) {
+      res.pos.push(s.p[0] / s.n, s.p[1] / s.n, s.p[2] / s.n);
+      const l = Math.hypot(s.q[0], s.q[1], s.q[2]);
+      if (l > 1e-6) res.nrm.push(s.q[0] / l, s.q[1] / l, s.q[2] / l); else res.nrm.push(0, 1, 0);   // opposed normals cancelled: face up
+      res.col.push(s.c[0] / s.n, s.c[1] / s.n, s.c[2] / s.n);
+      if (out.mat) res.mat.push(s.m);
+    }
+    return res;
+  }
+
+  return { create, weld, decimate };
 })();
 Object.freeze(CarGeometry);

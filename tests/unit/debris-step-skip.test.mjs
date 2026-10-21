@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/physics/debris-world.js"), "utf8");
@@ -323,7 +324,7 @@ test("the cone wake gate's sorted lookup answers exactly as the cones × cars sc
 
 function debrisDrawHarness(instancing = true) {
   const ctx = vm.createContext({});
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/debris-draw.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/debris-draw.js"), "utf8"), ctx, { filename: absSrc("js/physics/debris-draw.js") });
   const drawPool = vm.runInContext("DebrisDraw.drawPool", ctx);
   const calls = { translations: 0, rotations: 0, uploads: [], draws: 0, freed: 0, last: null };
   const gfx = {

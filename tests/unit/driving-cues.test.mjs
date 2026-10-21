@@ -392,3 +392,28 @@ test("condition mode delegates to the shared capacity estimate only while cues a
   cue.setLevel(1); const reads = ctx.curvatureCalls.length; cue.tick();
   assert.equal(estimates, 1); assert.equal(ctx.curvatureCalls.length, reads);
 });
+
+test("the predictive cue is asked whether it is busy only past the brake gate", () => {
+  const run = (speed, s, cueU) => {
+    const ctx = load();
+    let asked = 0;
+    ctx.BrakeCue = { on: () => true, debug: () => { asked++; return { urgency: cueU }; } };
+    const G = {
+      paused: false, state: "race", soundOn: true,
+      player: { s, speed, axEstSm: 0, finished: false, retired: false },
+      track: { total: 200 },
+      vTop: () => 72,
+    };
+    ctx.DrivingCues.create(G);
+    ctx.DrivingCues.setLevel(7);
+    for (let i = 0; i < 30; i++) { ctx._t = i * 16; ctx.DrivingCues.tick(); }
+    return { asked, tones: ctx._brakeN };
+  };
+  const crawl = run(4, 70, 0.9);
+  assert.equal(crawl.asked, 0, "below the gate the busy check is skipped");
+  const busy = run(70, 20, 0.9);
+  assert.ok(busy.asked > 0, "past the gate the predictive cue is consulted");
+  assert.equal(busy.tones, 0, "and its pulse ducks the drive tone");
+  const free = run(70, 20, 0);
+  assert.ok(free.tones > 0, "an idle predictive cue leaves the drive tone on");
+});

@@ -101,7 +101,7 @@ test("homeKind, packSettled and saveData read the real signals", () => {
 
 // A scripted page: the gate, the camera's prebuild surface and an explicit
 // slice clock (each menuSlice resolves when the test calls flush()).
-function page({ kind = "none", painted = true, surface = "title", worldWarm = 0 } = {}) {
+function page({ kind = "none", painted = true, surface = "title", worldWarm = 0, quiet = true, listeners = null } = {}) {
   let t = 0, team = "mclaren", meshKey = "", warms = 0, slices = [];
   const built = [];
   const els = {
@@ -129,6 +129,7 @@ function page({ kind = "none", painted = true, surface = "title", worldWarm = 0 
   const { GP, ctx, logs } = loadModule({
     performance: { now: () => t }, document: { hidden: false },
     navigator: {}, matchMedia: () => ({ matches: false }),
+    ...(listeners ? { addEventListener: (ev, fn) => { (listeners[ev] = listeners[ev] || []).push(fn); } } : {}),
     Assets: { state: () => ({ supported: true, uploaded: true }) },
   });
   const deps = {
@@ -137,6 +138,8 @@ function page({ kind = "none", painted = true, surface = "title", worldWarm = 0 
     menuSlice: () => new Promise((r) => slices.push(r)),
   };
   const pre = GP.create(G, deps);
+  pre.state();                   // the quiet clock starts at its first read (the first title poll)
+  if (quiet) t += GP.QUIET_MS;   // the title has sat untouched long enough (QUIET_MS); quiet:false starts at the wire
   return {
     GP, G, gate, cam, pre, built, logs, ctx, els,
     warms: () => warms, setTeam(v) { team = v; },
@@ -559,4 +562,37 @@ test("renderer replacement releases garage resources through their original owne
     "room release and crew reinit free each crew handle exactly once through its original renderer");
   assert.deepEqual(newCalls, [], "old handles never reach the new renderer");
   assert.equal(garage.prepared(TEAM, LIV, null, 0, {}), false);
+});
+
+// THE QUIET GATE (B-H8 2026-10-21): the title prebuild is one 1.0-1.5 s task at 4x CPU, and started at the
+// first idle after the title wired it sat where the first tap lands (a RACE tap waited 1.2-3.5 s). It waits for
+// QUIET_MS of no input on a visible title; input resets the clock and abandons a sequence in flight.
+test("quiet gate: the title prebuild waits QUIET_MS after the title shows, and any input restarts the wait", async () => {
+  const listeners = {};
+  const h = page({ quiet: false, listeners });
+  for (const ev of ["pointerdown", "keydown", "wheel", "touchstart", "visibilitychange"]) assert.ok(listeners[ev], ev + " resets the quiet clock");
+  assert.deepEqual([...h.pre.state().blockers], ["input-recent"], "a title that just wired is not quiet");
+  h.advance(h.GP.QUIET_MS - 1);
+  assert.deepEqual([...h.pre.state().blockers], ["input-recent"]);
+  listeners.pointerdown[0]();
+  h.advance(h.GP.QUIET_MS - 1);
+  assert.deepEqual([...h.pre.state().blockers], ["input-recent"], "a tap restarts the wait");
+  h.advance(1);
+  assert.deepEqual([...h.pre.state().blockers], [], "QUIET_MS untouched: go");
+  assert.deepEqual([...h.GP.blockers({ ...GO, quietMs: 0, want: "settings", surface: "settings" })], [], "race settings never waits on quiet");
+});
+
+test("quiet gate: input mid-sequence abandons the rest of a title prebuild, and it never starts on the input", async () => {
+  const listeners = {};
+  const h = page({ listeners });
+  const titleOwned = () => owned(h)() && h.pre.state().blockers.length === 0;
+  const done = h.pre.run(titleOwned, "title");
+  await h.flush(0);
+  assert.deepEqual(h.built, ["car"]);
+  listeners.keydown[0]();
+  await h.flush(2);
+  assert.equal(await done, false, "superseded by the input");
+  assert.deepEqual(h.built, ["car"], "no room after the input");
+  assert.equal(await h.pre.run(titleOwned, "title"), false, "the input's own moment starts nothing");
+  assert.deepEqual(h.built, ["car"]);
 });
