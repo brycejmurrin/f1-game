@@ -87,3 +87,6 @@ Game order now: #3386 (H21, only Plan tick missing) → #3377 (H19, CONFLICTING,
 Non-game: #3391 draft (gen conflict), #3301 draft (Structural guards pending). #3392 orchestrator sync running in OrchB 26 container (artifacts/logs/sync-3392.log).
 
 05:31Z: Bryce "have a new session and existing one get 3230 across the line" → launched B·H24 session_01NPqh5hrzzRJ4mnETEiWNwK (Sonnet, PR owner #3230: sync/CI/ready-gate); B·W13 hands notes + reviews, keeps #3238. #3420 memory PR: Bryce granted .claude edit; run-ci label added. Branch deletes (4) refused by bash-guard → Bryce deletes on GitHub.
+
+05:27Z: READY #3386 0a8e3803 (Plan ticked) = NEXT GAME after green Pages 50cc71dd. READY #3406 f53038dd (H18 HANDOFF/FINAL — no owner now; a red needs a new owner; F4/F5 → H22). #3377 9ce052aa: H19 says ready, gate says conflicting → H19 re-checks. #3301 O-T READY, full tier running. #3402 O-G remote-group ui running. #3396 H15 tooling-fast + gpu-census next. #3408 H21 A/B next. #3388 H20 pushing 8441ed54. H19 new: pack-bytes (tlx.js createTextureArray) draft coming; H15/H21 warned. H23 gpu-census run 39549012663 (approved by OrchB 25). Inherited tip red perf-frametime.spec.js frametimeBench → W13.
+Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396, #3388. Non-game: #3301, #3420, #3391, #3392.
