@@ -160,3 +160,4 @@ OPEN follow-up: image-grade pass-on-retry cause unestablished → gpu-census mac
 
 11:24Z: Pages 9ab83802 GREEN (#3392 live). INCIDENT lifted line posted. MERGED #3402 → 141be4bb (GAME, UI train). Next: #3431 on green Pages 141be4bb. #3395 CONFLICTING, owner H22 gone → needs a sync owner.
 11:32Z: #3395 sync STOPPED on real conflict js/car/car-draw.js → launched B·H25 session_01MjgeR2rfQBC3baMa2L7eCc (Sonnet, replaces H22) to resolve + CI + READY.
+11:33Z: O-G FINAL. #3402 follow-ups: one-step title BACK (+8 spec updates), landscape tap floor fitting 343px @844x390, menu-traversal 5 s wait flake (not quarantined). Not run on #3402: camera/hud-layout/time-trial groups → Pages 141be4bb is the check.
