@@ -118,3 +118,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 06:47Z: #3392 sync pushed 6545eee7 → H19 (run-ci). #3422 READY full 24/0. #3377 H19 verifying merge via --changed (box overload). Pages a013cbc6 running → #3238 next.
 
 06:53Z: Game next = #3399 (then #3388 #3408 #3422 #3396; #3238 re-CI 60f0e020 after #3230 dirtied it). #3396 full 40/0. H15 new draft #3431 (flare depth only when sun on screen); H15 FINAL after. Train #3402 abc37eae (fit wins applied) ui re-running.
+
+07:00Z: Pages a013cbc6 GREEN (#3406 live). MERGED #3399 → cedf3811 (GAME). Next game #3388 after green Pages cedf3811. #3419 READY (H23 stopped), CI running → non-game gap.
