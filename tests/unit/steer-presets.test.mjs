@@ -155,6 +155,7 @@ function bootTuning(input = {}, disk = {}) {
     return el;
   };
   const $ = (id) => (els[id] ||= mk());
+  const wires = {};
   const store = {
     get: (k, d) => (Object.prototype.hasOwnProperty.call(disk, k) ? disk[k] : d),
     set: (k, v) => { disk[k] = v; },
@@ -163,7 +164,7 @@ function bootTuning(input = {}, disk = {}) {
     Math, Object, Array, Number, String, JSON, isFinite,
     Log: { info: noop, warn: noop, debug: noop, error: noop },
     Input: new Proxy(input, { get: (target, key) => target[key] || noop }),
-    SettingRow: { wire: noop, paint: noop }, Dom: { paintFold: noop }, GameAudio: { uiSelect: noop },
+    SettingRow: { wire: (id, o) => { wires[typeof id === "string" ? id : id && id.id] = o; }, paint: noop }, Dom: { paintFold: noop }, GameAudio: { uiSelect: noop },
   };
   const listeners = {};
   sb.window = { matchMedia: () => ({ matches: false }), addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } };
@@ -172,7 +173,7 @@ function bootTuning(input = {}, disk = {}) {
   const api = vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
     clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   const move = (id, v) => $(id).oninput({ target: { value: String(v) } });
-  return { $, disk, move, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
+  return { $, disk, move, wires, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
 }
 
 test("the open settings haptics row follows phone capability changes and pad disconnects", () => {
@@ -226,6 +227,21 @@ test("each driving slider applies on input and re-applies from storage after a r
     assert.deepEqual(last(reload, setter, first), applied, `${key} re-applies after a reload`);
     assert.notDeepEqual(last(defaults, setter, first), applied, `${key}=${v} differs from the default`);
   }
+});
+
+test("FEEL › SIM on a fresh install does not light a preset its unset keys do not match (B·H11 hunt)", () => {
+  // matchPreset read an unset key as the CANDIDATE's own value, so a store holding only the four
+  // FEEL keys "matched" PRO (adaptiveButtons/brakeCue/tiltDeg still at their STANDARD fallbacks).
+  const disk = { drivingHelp: 1, raceLine: 0 };          // what the v2 migration stores on a fresh install
+  const ui = bootTuning({}, disk);
+  ui.wires["pm-feel"].write("sim");
+  assert.equal(disk.steerRate, 7, "SIM sets the quick rack");
+  assert.notEqual(disk.preset, "pro", "the car runs STANDARD assists with a quick rack, not PRO: " + disk.preset);
+  // Control: the same four keys PLUS PRO's own assists is PRO.
+  const pro = { drivingHelp: 1, raceLine: 0, adaptiveButtons: 4, brakeCue: 4, tiltDeg: 7 };
+  const ui2 = bootTuning({}, pro);
+  ui2.wires["pm-feel"].write("sim");
+  assert.equal(pro.preset, "pro", "every PRO key in effect lights PRO");
 });
 
 const PRESET_STORE = table("PRESET_STORE");
