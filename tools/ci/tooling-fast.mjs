@@ -741,6 +741,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-stations.test.mjs",
+  // LIVERY card swatches painted once per look and blitted after (B·H13 garage pick cost). < 1 s.
+  "tests/unit/livery-swatch-cache.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",

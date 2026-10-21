@@ -2588,7 +2588,30 @@ const LiveryTex = (function () {
   // Mini lockup for the LIVERY cards and TEAM picker tiles: paint + stripe +
   // the same crest buildAtlas puts on the car. One function so the two pickers
   // cannot drift from each other or from the atlas.
+  // PAINTED ONCE PER LOOK. A LIVERY pick rebuilds the sheet, and its 113 cards each
+  // repainted the paint + crest lockup: 370-450 ms of a phone-throttled pick (CPU x4,
+  // B·H13 2026-10-21). A card's pixels depend only on (team, livery fields, size), so
+  // the first paint lands in an offscreen canvas and later ones blit it. Cached only
+  // once web fonts are in (a lockup painted in the fallback face must not stick);
+  // a logo install or removal (markChanged) drops every card.
+  const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160;
+  markReady.push(() => _swatchCache.clear());
   function paintSwatch(ctx, teamId, liv, w, h) {
+    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
+    if (!fontsIn || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
+    const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
+    let c = _swatchCache.get(key);
+    if (!c) {
+      c = document.createElement("canvas"); c.width = w; c.height = h;
+      const cx = c.getContext && c.getContext("2d");
+      if (!cx) return paintSwatchNow(ctx, teamId, liv, w, h);
+      paintSwatchNow(cx, teamId, liv, w, h);
+      if (_swatchCache.size >= SWATCH_CACHE_MAX) _swatchCache.delete(_swatchCache.keys().next().value);
+      _swatchCache.set(key, c);
+    }
+    ctx.drawImage(c, 0, 0);
+  }
+  function paintSwatchNow(ctx, teamId, liv, w, h) {
     const c1 = (liv && liv.c1) || [0.20, 0.20, 0.22];
     const c2 = (liv && liv.c2) || c1;
     ctx.fillStyle = css(c1);
