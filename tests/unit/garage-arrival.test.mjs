@@ -107,7 +107,7 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   const out = cam.slice(cam.indexOf('function startDriveOut()'), cam.indexOf('function driveOutLeft()'));
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
-  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.OUT_DURATION \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
+  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.duration\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
   assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
   // Player pace: speed 1 (the default) → OUT_DURATION, ~10.6 s, never trimmed.
   assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 10600) <= 400, 'the default drive-out is the tuned ~10.6 s');
@@ -257,7 +257,7 @@ test('the first presented garage frame takes over its preparation cover, then ha
     else assert.ok(!events.some((e) => e.startsWith('fly')) && events.includes('stop'), 'a quit mid-drive-out lowers the screen and flies nothing');
   }
 });
-test('GARAGE ARRIVAL TUNER is an ADVANCED VISUALS tool: opens over the settings page, DONE gives it back', () => {
+test('GARAGE ENTER & LEAVE is an ADVANCED VISUALS tool: opens over the settings page, DONE gives it back', () => {
   const { $ } = harness();
   $('pmsettings').hidden = false; $('pm-panel-display').hidden = false;
   Arrival.bindSettings($, { get: () => null, set() {} });
@@ -272,7 +272,7 @@ test('GARAGE ARRIVAL TUNER is an ADVANCED VISUALS tool: opens over the settings 
   assert.equal($('pm-panel-display').hidden, false);
   assert.equal($('pm-garrival').focused, true, 'focus returns to the tool button');
   const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
-  assert.match(shell, /<button id="pm-garrival"[^>]*>GARAGE ARRIVAL TUNER&hellip;<\/button>/);
+  assert.match(shell, /<button id="pm-garrival"[^>]*>GARAGE ENTER &amp; LEAVE&hellip;<\/button>/);
   assert.match(shell, /id="garrival" role="region"[^>]*data-esc-close="ga-close"/);
   assert.ok(!shell.includes('id="ga-settings"'), 'no inline fold left in the tools list');
 });
@@ -1213,4 +1213,26 @@ test('garage aero keeps authored opening and closing rates at 10, 20 and 60 FPS'
   c.setupPreviewXOn = false; c.setupPreviewAeroX = 1;
   c.stepSetupAero(60);
   near(c.setupPreviewAeroX, 1 - c.window.PhysicsConsts.X_CLOSE_RATE * 0.1, 'background gap bounds closing');
+});
+
+test('entry and departure crew choices save independently and fall back safely for old settings', () => {
+  const { $ } = harness(); let saved = null;
+  const read = Arrival.bindSettings($, { get: () => saved, set: (_, value) => { saved = value; } });
+  assert.equal(read().enterCrew, 'current'); assert.equal(read().leaveCrew, 'current');
+  $('ga-crew-in').value = 'welcome'; $('ga-crew-in').onchange();
+  $('ga-crew-out').value = 'guides'; $('ga-crew-out').onchange();
+  assert.equal(Arrival.pose(2, read(), true).crew, 'welcome');
+  assert.equal(Arrival.poseOut(2, read(), true).crew, 'guides');
+  $('ga-crew-out').value = 'none'; $('ga-crew-out').onchange();
+  assert.equal(read().enterCrew, 'welcome'); assert.equal(Arrival.poseOut(2, read(), true).crew, 'none');
+  assert.equal(Arrival.settings({ enterCrew: 'unknown', leaveCrew: 3 }).leaveCrew, 'current');
+  $('ga-reset').onclick(); assert.equal(saved, null); assert.equal(read().enterCrew, 'current');
+});
+
+
+test('service entry completion uses the extended duration and skips to a finished parked state', () => {
+  const { $ }=harness();const cfg=Arrival.settings({enterCrew:'service'}), arrival=Arrival.create($,()=>false,()=>cfg);
+  arrival.start();for(let i=0;i<88;i++)arrival.step(.1);
+  assert.equal(arrival.state.active,true);assert.equal(arrival.state.z,0);assert.equal($('cs-inner').inert,true);
+  $('cs-arrival-skip').onclick();assert.equal(arrival.state.active,false);assert.equal(arrival.state.seconds,Arrival.duration(cfg));assert.equal($('cs-inner').inert,false);
 });

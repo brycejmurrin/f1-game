@@ -1521,6 +1521,12 @@
       ]
     },
     {
+      "path": "tools/garage/author-crew-motion.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/gen/assets.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
