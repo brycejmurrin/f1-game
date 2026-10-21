@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, REQUIRED_CHECK } from "../../tools/ci/merge-gate.mjs";
+import { ciVerdict, openVerdict, pacingVerdict, pagesVerdict, slotOf, isGamePath, gameFiles, verdictLine, main, REQUIRED_CHECK, ratchetsOnMerge, localMergeGenCheck } from "../../tools/ci/merge-gate.mjs";
 import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN } from "../../tools/lib/gate-receipt.mjs";
 import { TYPES, formatLine, parseLine } from "../../tools/ci/fleet-bus.mjs";
 
@@ -196,4 +196,95 @@ test("a gate run in a linked worktree also leaves its receipt in the main checko
     assert.equal(readReceipt(main, "ready", 9).pr, 9, "the hook's root has the receipt");
     assert.equal(readReceipt(wt, "ready", 9).pr, 9);
   } finally { fs.rmSync(wt, { recursive: true, force: true }); fs.rmSync(main, { recursive: true, force: true }); }
+});
+
+test("ratchetsOnMerge: an assert.match overage names its sites; a check that cannot run is a failure, not a pass", () => {
+  const out = (status, stdout = "", extra = {}) => ({ status, stdout, stderr: "", ...extra });
+  const runWith = (byScript) => (cmd, argv) => byScript[argv[0] === "--test" ? "assert" : "ratchets"];
+  const ok = ratchetsOnMerge({ run: runWith({ ratchets: out(0), assert: out(0) }) });
+  assert.equal(ok.ok, true);
+  const over = ratchetsOnMerge({ run: runWith({ ratchets: out(0), assert: out(1, "error: '7317 assert.match sites (ceiling 7316) — convert a source pin'") }) });
+  assert.equal(over.ok, false);
+  assert.match(over.evidence, /assert-match ceiling: 7317 assert\.match sites \(ceiling 7316\)/);
+  assert.match(over.evidence, /never raise the ceiling/);
+  const both = ratchetsOnMerge({ run: runWith({ ratchets: out(1, "css/hud.css codeLines 2300 > 2279"), assert: out(1, "7317 assert.match sites (ceiling 7316)") }) });
+  assert.match(both.evidence, /ratchets\.mjs: .*css\/hud\.css/);
+  assert.match(both.evidence, /assert-match ceiling: 7317/, "both overages are reported, not just the first");
+  const dead = ratchetsOnMerge({ run: runWith({ ratchets: out(null, "", { error: new Error("spawn ENOENT") }), assert: out(0) }) });
+  assert.equal(dead.ok, false);
+  assert.match(dead.evidence, /spawn ENOENT/);
+});
+
+test("main: a ratchet overage on the merge result refuses and shows as its own row", () => {
+  const dir = scratch("merge-gate-ratchets-");
+  try {
+    const pull = { state: "open", draft: false, mergeable_state: "clean", head: { sha: HEAD, ref: "cursor/x" }, body: "## Plan\n- [x] done\n", changed_files: 1 };
+    const request = (p) => {
+      if (p === "pulls/7") return { json: pull };
+      if (p.startsWith("pulls/7/files")) return { json: [{ filename: "tools/ci/ready-gate.mjs" }] };
+      if (p.startsWith("commits/")) return { json: { check_runs: [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", status: "completed", conclusion: "success" }], total_count: 2 } };
+      return { error: `unexpected ${p}` };
+    };
+    const logs = [];
+    const deps = { request, root: dir, env: { APEX_FLEET_AS: "claude:session_ME" }, bus: () => ({ entries: [] }), pages: () => true, log: (l) => logs.push(l) };
+    const merged = (ratchets) => () => ({ ok: true, evidence: "merges clean", tip: "t".repeat(40), ratchets });
+    assert.equal(main(["--pr", "7"], { ...deps, localMerge: merged({ ok: true, evidence: "hold" }) }), 0);
+    assert.match(logs.join("\n"), /gen=ok ratchets=ok pacing=ok/);
+    assert.equal(main(["--pr", "7"], { ...deps, localMerge: merged({ ok: false, evidence: "over a ratchet on the merge result: assert-match ceiling: 7317 assert.match sites (ceiling 7316)" }) }), 1);
+    const rc = readReceipt(dir, "merge", 7);
+    assert.equal(rc.ok, false);
+    assert.equal(rc.rows.gen.ok, true, "the merge and gen:check were fine");
+    assert.equal(rc.rows.ratchets.ok, false);
+    assert.match(rc.evidence, /ratchets: over a ratchet on the merge result/);
+    assert.match(logs.join("\n"), /ratchets=FAIL/);
+    // --skip-local-merge says so for BOTH local rows
+    assert.equal(main(["--pr", "7", "--skip-local-merge"], deps), 0);
+    assert.match(readReceipt(dir, "merge", 7).rows.ratchets.evidence, /NOT proven/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("two PRs that are each at the assert.match ceiling alone are over it on the merge (#3236 + #3237, 2026-10-20)", () => {
+  const T = scratch("merge-gate-shape-");
+  const git = (cwd, ...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (root, rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  const pins = (n) => Array.from({ length: n }, () => "assert.match(a, /b/);").join("\n") + "\n";
+  try {
+    const remote = path.join(T, "remote.git"), W = path.join(T, "w");
+    git(T, "init", "-q", "--bare", remote);
+    git(T, "clone", "-q", remote, W);
+    git(W, "checkout", "-q", "-b", "deploy-x");
+    // The real ratchet test, its ceiling lowered to 3 so the fixture stays small; ratchets.mjs is a no-op stand-in.
+    const real = fs.readFileSync(path.join(ROOT, "tests/unit/assert-match-ratchet.test.mjs"), "utf8");
+    assert.match(real, /const CEILING = \d+;/);
+    write(W, "tests/unit/assert-match-ratchet.test.mjs", real.replace(/const CEILING = \d+;/, "const CEILING = 3;"));
+    write(W, "tools/check/ratchets.mjs", "process.exit(0);\n");
+    const UNIT = "tests/unit";   // the fixture repo's own dir: built, not spelled, so the path-reference lint reads no phantom file
+    write(W, `${UNIT}/base.test.mjs`, pins(2));
+    git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base: 2 pins, ceiling 3");
+    git(W, "push", "-q", "origin", "deploy-x");
+    // Each PR adds one pin: 3 of 3 on its own base, so each is green alone.
+    for (const [name, file] of [["pr1", "one.test.mjs"], ["pr2", "two.test.mjs"]]) {
+      git(W, "checkout", "-q", "-b", name, "deploy-x");
+      write(W, `tests/unit/${file}`, pins(1));
+      git(W, "add", "-A"); git(W, "commit", "-q", "-m", `${name}: one pin`);
+      git(W, "push", "-q", "origin", name);
+    }
+    const head2 = git(W, "rev-parse", "pr2");
+    const gate = (pr, head, headRef) => localMergeGenCheck({
+      pr, head, headRef, cwd: W, deploy: "deploy-x",
+      run: (cmd, argv, o) => (cmd === "npm" ? { status: 0, stdout: "", stderr: "" } : spawnSync(cmd, argv, o)),
+    });
+    const alone = gate(2, head2, "pr2");
+    assert.equal(alone.ok, true, alone.evidence);
+    assert.equal(alone.ratchets.ok, true, `pr2 alone is at the ceiling, not over it: ${alone.ratchets.evidence}`);
+    // #3236 merges first (the deploy tip moves) ...
+    git(W, "checkout", "-q", "deploy-x");
+    git(W, "merge", "-q", "--no-ff", "-m", "merge pr1", "pr1");
+    git(W, "push", "-q", "origin", "deploy-x");
+    // ... and now #3237's head, unchanged and still green in its own CI, is one over on the merge result.
+    const together = gate(2, head2, "pr2");
+    assert.equal(together.ok, true, "the merge and gen:check are fine: only the ratchet row sees the overage");
+    assert.equal(together.ratchets.ok, false, together.ratchets.evidence);
+    assert.match(together.ratchets.evidence, /assert-match ceiling: 4 assert\.match sites \(ceiling 3\)/);
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
