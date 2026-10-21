@@ -60,11 +60,13 @@ const Collide = (() => {
   function extLong(c) {
     const psi = c.human ? (c.yawVis || 0) : 0;
     const k = yawMix(psi);
+    if (k === 0) return HL;
     return HL * Math.abs(Math.cos(psi * k)) + WL * Math.abs(Math.sin(psi * k));
   }
   function extLat(c) {
     const psi = c.human ? (c.yawVis || 0) : 0;
     const k = yawMix(psi);
+    if (k === 0) return WL;
     return HL * Math.abs(Math.sin(psi * k)) + WL * Math.abs(Math.cos(psi * k));
   }
   function bodyAngle(c) { const psi = c.human && Number.isFinite(c.yawVis) ? c.yawVis : 0; return psi * yawMix(psi); }

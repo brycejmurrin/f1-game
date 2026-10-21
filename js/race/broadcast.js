@@ -173,10 +173,11 @@ const Broadcast = (function () {
   /** The next event worth a cut: kind in EVENT_RANK, with a car `ok(num)` accepts (running), within `lead`
    *  race seconds ahead of T, not already shown. The highest rank in the window wins. */
   function nextEvent(list, T, shown, lead, ok) {
+    let lo = 0, hi = list.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid].t < T) lo = mid + 1; else hi = mid; }
     let best = null;
-    for (let i = 0; i < list.length; i++) {
+    for (let i = lo; i < list.length; i++) {
       const h = list[i];
-      if (h.t < T) continue;
       if (h.t > T + lead) break;
       if (shown.has(i) || h.num == null || !EVENT_RANK[h.kind] || (ok && !ok(h.num))) continue;
       if (!best || EVENT_RANK[h.kind] > EVENT_RANK[best.h.kind]) best = { i, h };

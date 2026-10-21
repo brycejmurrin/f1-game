@@ -299,8 +299,16 @@ const Particles = (function () {
   function _sprayRoll() {
     const N = sprayCars();
     if (_sprK <= N) { _sprThr = Infinity; _sprK = 0; return; }
-    const a = Array.prototype.slice.call(_sprD, 0, _sprK).sort((p, q) => p - q);
-    _sprThr = a[N - 1] * 1.05;   // 5 % hysteresis: two cars at equal range do not flicker
+    // Only the nearest N distances matter. Select them in the existing
+    // Float32 prefix: no boxed copy/comparator per wet frame, no full sort.
+    for (let i = 1; i < _sprK; i++) {
+      const d = _sprD[i];
+      let j = Math.min(i, N - 1);
+      if (i >= N && !(d < _sprD[j])) continue;
+      while (j > 0 && _sprD[j - 1] > d) { _sprD[j] = _sprD[j - 1]; j--; }
+      _sprD[j] = d;
+    }
+    _sprThr = _sprD[N - 1] * 1.05;   // 5 % hysteresis: two cars at equal range do not flicker
     _sprK = 0;
   }
 

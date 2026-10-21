@@ -275,7 +275,8 @@ const SettingDeps = (function () {
   }
 
   function describe(ctrl, rid, add) {
-    const cur = (ctrl.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    const before = ctrl.getAttribute("aria-describedby");
+    const cur = (before || "").split(/\s+/).filter(Boolean);
     const next = add ? (cur.includes(rid) ? cur : cur.concat(rid)) : cur.filter((x) => x !== rid);
     const joined = next.join(" ");
     if (!next.length) ctrl.removeAttribute("aria-describedby");

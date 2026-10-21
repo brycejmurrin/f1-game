@@ -105,6 +105,18 @@ const TrackSpline = (function () {
     return out;
   }
 
+  // Frenet stretch needs only ground position and the raw interpolated right.
+  // Match sample's wrapping/index/lerp exactly; the other six channels stay untouched.
+  function sampleXZ(track, s, out) {
+    const n = track.n, L = track.total;
+    s %= L; if (s < 0) s += L;
+    const fi = s / L * n;
+    const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
+    out.p[0] = lerp(track.px[i], track.px[j], f); out.p[2] = lerp(track.pz[i], track.pz[j], f);
+    out.r[0] = lerp(track.rx[i], track.rx[j], f); out.r[2] = lerp(track.rz[i], track.rz[j], f);
+    return out;
+  }
+
   // Direct curvature from the centreline heading over a ±12 m window. This is a
   // STATIC per-position quantity, so it's baked once into track.curv at build
   // (see buildCenterline) and read via O(1) index+lerp in curvature() below.
@@ -359,6 +371,6 @@ const TrackSpline = (function () {
     };
   }
 
-  return { SCALE, centerline, cr, crc, sample, curvatureRaw, curvature, project, wallAt, postLimits, surfaceFolds };
+  return { SCALE, centerline, cr, crc, sample, sampleXZ, curvatureRaw, curvature, project, wallAt, postLimits, surfaceFolds };
 })();
 Object.freeze(TrackSpline);
