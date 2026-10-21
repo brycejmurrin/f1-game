@@ -81,13 +81,15 @@ const FieldLod = (function () {
     if (car) car._lodTier = t;
     return t;
   }
-  // FAR BODY: past FAR_BODY_M (reference-lens metres, same ±10 % stickiness as tier(), kept on car._farBody) a
+  // FAR BODY: past FAR_BODY_M (reference-lens metres, same ±10 % stickiness as tier(), kept in _farOf, not on the car: one more CarFields key tips
+  // the cars out of V8 fast-properties mode, hunt-apex-aiplace-reset-vm) a
   // rival is 1-3 px tall, so it draws the decimated silhouette body (CarDraw.sharedRivalBodyMesh(true)).
+  const _farOf = new WeakMap();   // car -> last far verdict
   function farBody(dist2, fovY, car) {
     if (!on) return false;
-    const d2 = dist2 * lensK2(fovY), was = car ? car._farBody === true : false;
-    const far = car ? crossed(d2, T.FAR_BODY_M, was, car._farBody !== undefined) : d2 > sq(T.FAR_BODY_M);
-    if (car) car._farBody = far;
+    const d2 = dist2 * lensK2(fovY), was = car ? _farOf.get(car) === true : false;
+    const far = car ? crossed(d2, T.FAR_BODY_M, was, _farOf.has(car)) : d2 > sq(T.FAR_BODY_M);
+    if (car) _farOf.set(car, far);
     return far;
   }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
