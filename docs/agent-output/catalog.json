@@ -116,7 +116,10 @@
       "path": "tools/car/helmet-sheet.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
-      "interpreter": "node"
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
     },
     {
       "path": "tools/car/helmet-trace.mjs",

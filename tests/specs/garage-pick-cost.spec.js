@@ -2,13 +2,14 @@
 // GARAGE LIVERY PICK COST (B·H13, 2026-10-21; PR #3383). A LIVERY pick rebuilds the setup sheet, and before
 // the swatch cache every one of the ~113 cards repainted its paint + crest lockup: 286-590 ms of a pick at
 // CPU x4 on an 844x390 touch phone (scratch/h13/garage-probe.mjs). This pins the work ONE pick may do, by
-// count rather than by time (SwiftShader timings are noise here): the cards blit (LiveryTex.swatchStats),
+// count rather than by time (SwiftShader timings are noise here): the cards adopt last build's painted canvas or
+// blit the cached swatch (LiveryTex.swatchStats; B·H32 2026-10-21 made adoption the normal path),
 // and the car, atlas and atlas-texture work stays inside a fixed ceiling, so a regression that rebuilds the
 // car or the atlas twice, or repaints every card again, fails by name.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const PICKS = 4;
-// Measured on this branch (TLX, 844x390 touch, 4 picks, 2026-10-21): every pick 0 card repaints + 113 blits,
+// Measured on this branch (TLX, 844x390 touch, 4 picks, 2026-10-21): every pick 0 card repaints + 113 blits (113 adopted canvases since B·H32),
 // 1 Car3D.build, 2 LiveryTex.buildAtlas (the 1024 preview, then the deferred 2048). The ceilings ARE those
 // counts: one more is a regression. Atlas textures are held to one upload per atlas painted (below).
 const CEIL = Object.freeze({ cardPaints: 0, car3dBuilds: 1, atlases: 2 });
@@ -72,7 +73,7 @@ test.describe("garage livery pick cost", () => {
       // The pick's synchronous rebuild plus a few frames for the deferred preview mesh / atlas.
       await page.evaluate(() => new Promise((done) => { let f = 0; const t = () => (++f >= 8 ? done(null) : requestAnimationFrame(t)); requestAnimationFrame(t); }));
       const after = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
-      rows.push({ cardPaints: after.paints - before.paints, cardBlits: after.blits - before.blits,
+      rows.push({ cardPaints: after.paints - before.paints, cardBlits: after.blits - before.blits, cardReused: after.reused - before.reused,
         car3dBuilds: after.car3dBuilds - before.car3dBuilds, atlases: after.atlases - before.atlases,
         reuploads: after.reuploads - before.reuploads });
     }
@@ -85,7 +86,7 @@ test.describe("garage livery pick cost", () => {
     // Not vacuous: the attribution must still see the picks' own atlas uploads.
     expect(rows.reduce((a, r) => a + r.textures, 0), "livery atlas textures seen across the picks").toBeGreaterThan(0);
     for (const [i, r] of rows.entries()) {
-      expect(r.cardBlits, `pick ${i + 1}: the cards are drawn from the cache`).toBeGreaterThan(0);
+      expect(r.cardReused, `pick ${i + 1}: the cards adopt last build's canvases ${JSON.stringify(r)}`).toBeGreaterThan(0);
       expect(r.cardPaints, `pick ${i + 1}: cards repainted ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.cardPaints);
       expect(r.car3dBuilds, `pick ${i + 1}: Car3D builds ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.car3dBuilds);
       expect(r.atlases, `pick ${i + 1}: atlases built ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.atlases);

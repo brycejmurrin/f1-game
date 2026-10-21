@@ -76,8 +76,16 @@ if (!argv.length || argv[0] === "-h" || argv[0] === "--help") {
 parseFlags(argv, ["--at", "--brake", "--camera", "--cols", "--detail", "--edges", "--from", "--horizon", "--id", "--kind", "--kinds", "--lateral", "--lats", "--limit", "--near", "--north", "--offset", "--out", "--points", "--profile", "--radius", "--range", "--reach", "--rows", "--samples", "--seconds", "--seed", "--speed", "--ss", "--stations", "--steer", "--team", "--throttle", "--to", "--tod", "--visible", "--vm", "--weather", "--what"]);
 
 // `help` is the one command that needs no circuit, so allow it in either slot.
+// When argv[0] is `help` and argv[1] is ALSO a command name (world, track, …),
+// the old swap left cmd=world and booted Chromium for a colliding hook (#3327).
 let track = argv[0], cmd = argv[1] || "world";
-if (COMMANDS[argv[0]] && !COMMANDS[argv[1] || ""]) { cmd = argv[0]; track = "monza"; }
+if (argv[0] === "help") {
+  cmd = "help";
+  track = "monza";
+} else if (COMMANDS[argv[0]] && !COMMANDS[argv[1] || ""]) {
+  cmd = argv[0];
+  track = "monza";
+}
 if (!COMMANDS[cmd]) {
   console.error(`unknown command "${cmd}" — one of: ${Object.keys(COMMANDS).join(", ")}`);
   process.exit(1);
@@ -86,7 +94,9 @@ if (!COMMANDS[cmd]) {
 // Flags that take a following value (the rest of the known list are booleans).
 const FLAG_VALUE = new Set(["at", "camera", "cols", "detail", "from", "horizon", "id", "kind", "kinds", "lateral", "lats", "limit", "near", "offset", "out", "points", "radius", "range", "reach", "rows", "samples", "seconds", "seed", "speed", "ss", "stations", "steer", "team", "to", "tod", "weather", "what"]);
 
-/** The hook name in `help <hook>` / `<track> help <hook>`, or null for a full manifest. */
+/** The hook name in `help <hook>` / `<track> help <hook>`, or null for a full manifest.
+ *  Colliding CLI command names (world, track, …) still count as hook queries so
+ *  `help world` resolves docs/agent-index.json without booting Chromium (#3327). */
 function helpHookName(args) {
   const i = args.indexOf("help");
   if (i < 0) return null;
@@ -97,7 +107,6 @@ function helpHookName(args) {
       if (!a.includes("=") && FLAG_VALUE.has(name) && args[j + 1] && !args[j + 1].startsWith("--")) j++;
       continue;
     }
-    if (COMMANDS[a]) continue;
     return a.replace(/\(\)$/, "");
   }
   return null;
