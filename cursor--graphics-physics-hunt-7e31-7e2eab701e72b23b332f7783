@@ -1,1 +1,0 @@
-1792618386	Bryce Murrin	PR3440 follow-up: tests/specs/hud-mirror.spec.js backend identity guard and cold boot sequencing; existing mirror tests only, no physics/UI paths  [cursor/graphics-physics-hunt-7e31; session 7e2eab701e72b23b332f7783]
