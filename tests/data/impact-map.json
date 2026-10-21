@@ -12901,10 +12901,12 @@
       "roadReflection": [
         "tests/unit/perf-governor.test.mjs"
       ],
+      "sunScreen": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
       "*": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
         "tests/unit/wgx-free-retire.test.mjs"
