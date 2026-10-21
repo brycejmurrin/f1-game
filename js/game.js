@@ -97,7 +97,7 @@ const lazyBundles = LazyBundles.create({
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
     raceRadio = (eventJournal = EventJournal.create(G), RaceRadio.create(G, EventJournal.radioHooks(eventJournal)));
     flyingStart = FlyingStart.create(G, {
-      realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
+      realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.isActive()) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
     jumpStartPenalty = JumpStartPenalty.create(G, {
       autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
@@ -522,8 +522,8 @@ function worldFromTrack(s, x, out) {
   return _wf;
 }
 function frenetH(s, x) {
-  Tracks.sample(track, wrapS(s - H_D), _hA);
-  Tracks.sample(track, wrapS(s + H_D), _hB);
+  TrackSpline.sampleXZ(track, wrapS(s - H_D), _hA);
+  TrackSpline.sampleXZ(track, wrapS(s + H_D), _hB);
   const cx = _hB.p[0] - _hA.p[0], cz = _hB.p[2] - _hA.p[2];
   const ox = cx + (_hB.r[0] - _hA.r[0]) * x, oz = cz + (_hB.r[2] - _hA.r[2]) * x;
   const cLen = Math.hypot(cx, cz);
@@ -3464,7 +3464,7 @@ setupTrialSession = SetupTrialSession.create(G);
 let eventJournal = EventJournal.create(G), raceRadio = RaceRadio.create(G, EventJournal.radioHooks(eventJournal));   // LAZY_RACE_SESSION — journal + radio
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
-let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) });   // LAZY_RACE_SESSION
+let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) });   // LAZY_RACE_SESSION
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
@@ -4585,7 +4585,7 @@ function update(dt) {
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
-    postFinish.solo = session === "race" && !netPlay.active() && !realRace.status().watch;
+    postFinish.solo = session === "race" && !netPlay.active() && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
@@ -4720,7 +4720,7 @@ function collideFx(a, b, impact) {
 }
 
 // updateCar's per-step scratch: the locals its parts (below it) read and hand back; rewritten before every read.
-const _ucS = CarFields.warmDoubles({ recordInput: null, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
+const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
 function updateCar(c, dt, ranked) {
   const S = _ucS;
   // This scratch snapshot never supplies controls to physics. Native Input is
@@ -4785,7 +4785,7 @@ function updateCar(c, dt, ranked) {
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
   const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, wxArc ? wxArc.wetnessAt(c.s) : trackWetness());   // standing water UNDER the car (a local shower)
-  const vT = vTop(), trMul = tyres.tractionMul(c), gmC = gripMult(c) * aq.mul, gm0 = gripMult();
+  const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE, gmC = gripMult(c) * aq.mul, gm0 = gripMult();
   const perfMul = trMul * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
@@ -5024,7 +5024,7 @@ function updateCar(c, dt, ranked) {
   c.wasArmed = c.otArmed;
 
   // --- braking / target speed ---
-  let braking; let brakeLvl; let throttleLvl; S.hw = hw; S.dd = dd; S.vT = vT; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.queued = queued; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.towCar = towCar; S.towGap = towGap; S.aiT = aiT;
+  let braking; let brakeLvl; let throttleLvl; S.tyreGrip = tyreGrip; S.hw = hw; S.dd = dd; S.vT = vT; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.queued = queued; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.towCar = towCar; S.towGap = towGap; S.aiT = aiT;
   updateCarBrakePlan(c, dt, ranked, S); vmax = S.vmax, aiFreeSpeed = S.aiFreeSpeed, squeezed = S.squeezed, queued = S.queued, braking = S.braking, brakeLvl = S.brakeLvl, throttleLvl = S.throttleLvl;
 
   // --- active aero (X-mode / Z-mode) ---
@@ -5136,7 +5136,7 @@ function updateCar(c, dt, ranked) {
   // No Tracks.project() round-trip means progress can't snap onto the wrong leg at
   // a hairpin and (s, x) can't desync from a world position. c.px/c.pz are kept
   // only as a derived mirror for debug/telemetry. See the constants block.
-  S.hw = hw; S.slopeSin = slopeSin; S.k = k; S.mods = mods; S.vT = vT; S.gmC = gmC; S.perfMul = perfMul; S.vmax = vmax; S.unstuckActive = unstuckActive; S.alongO = alongO; S.alongDx = alongDx; S.aiT = aiT; S.deploy = deploy; S.braking = braking; S.throttleLvl = throttleLvl; S.gearMult = gearMult; S.surfaceMu = surfaceMu; S.brakeDecel = brakeDecel; S.onThrottle = onThrottle; S.steer = steer; S.gripScale = gripScale; S.latFac = latFac; S.kerbGrip = kerbGrip; S.bankMu = bankMu;
+  // Inputs persist in S; the preceding helpers already wrote their output fields.
   updateCarBicycle(c, dt, ranked, S); steer = S.steer;
   // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
   // human slide-along scrub + conditional road→world writeback when xPinned.
@@ -5199,7 +5199,6 @@ function updateCar(c, dt, ranked) {
 
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
-  S.vT = vT; S.inp = inp; S.roomL = roomL; S.roomR = roomR; S.unstuckActive = unstuckActive; S.queued = queued; S.aiT = aiT; S.braking = braking;
   if (S.recordInput) records.sampleInput(c, S.recordInput);
   updateCarAdvance(c, dt, ranked, S);
 }
@@ -5269,6 +5268,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // on the nodes, the window gains one node ahead and drops one behind per
     // node travelled, and the target moves as smoothly as the LUT.
     const dsN = track.total / track.n;
+    const directLook = look / dsN + 2 <= AI_LOOK_CAP;   // conservative capacity bound; unusual dense tracks retain the pooled path
     // FROM THE CAR, not 12 m ahead of it. The old floor meant the nearest
     // sample sat 12 m away, and brakeTarget's entry speed for a sample is
     // sqrt(vC² + 2·brake·0.85·d) — so the AI only ever had to be at
@@ -5289,7 +5289,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN, lkI++) {
       if (lkI < lk.n) {
         if (lk.a[lkI] > kMax) kMax = lk.a[lkI];
-        AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI], lk.m[lkI]);
+        if (!directLook) AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI], lk.m[lkI]);
         continue;
       }
       // Tracks.curvature / pathK / bankAngle all wrap s themselves.
@@ -5300,12 +5300,12 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       // signed/adverse bank must not boost the player while it cuts the AI.
       const lkV = onLine ? TrackLine.pathK(track, ss) : kk, lkB = Math.abs(Tracks.bankAngle(track, ss));
       const lkM = AiDrive.bankGrip(lkB);
-      AiDrive.pushLook(d, lkV, lkB, lkM);
+      if (!directLook) AiDrive.pushLook(d, lkV, lkB, lkM);
       if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.m[lkI] = lkM; lk.n = lkI + 1; }
     }
-    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0))) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
+    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0))) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = driveTune.PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
-    _aiBr.grip = gmC * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
+    _aiBr.grip = gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
     _aiBr.blockerSpeed = blocker ? blocker._snapSpeed : 0;
     _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
@@ -5914,7 +5914,7 @@ function updateCarLateral(c, dt, ranked, S) {
       // full-lock authority, so every existing multiplier on the step below
       // (grip taper, kerb, contact give, off-track fade) still applies.
       // These inputs stay fixed through the heading and lateral-authority calculations.
-      const steeringGrip = S.gmC * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);
+      const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
       const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const head0 = c.aiHead || 0;
@@ -5929,7 +5929,7 @@ function updateCarLateral(c, dt, ranked, S) {
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
-  if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, S.gmC * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), driveTune.PACE, VMAX, aeroDfMult(c));
+  if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed), driveTune.PACE, VMAX, aeroDfMult(c));
   // Riding a kerb loses a little grip — kerbGripSm already damped with the speed cut.
   const kerbGrip = c.kerbGripSm ?? 1;
   // Banking: computed once, shared between player and AI so both get grip boost.

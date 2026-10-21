@@ -38,7 +38,7 @@ const WHEN = {
   "photo-scene": (h, on) => { h.mode.scene = on ? "photo" : "garage"; },
 };
 
-function boot() {
+function boot(extra = {}) {
   const dom = makeDom({ readyState: "complete" });
   const d = dom.document;
   d.getElementById = (id) => d.querySelector("#" + id);
@@ -50,6 +50,7 @@ function boot() {
     Input: { touchControlsNeeded: () => mode.touch },
     GameStore: { store: { get: (k, fallback) => (k === "homeScene" ? mode.scene : k === "camMode" ? 0 : fallback) } },
     CamModes: { CAM_MODES: [{ id: "cockpit" }] },
+    ...extra,
   });
   // turnchase-cam OFF flips the mode id at the stored camMode index.
   Object.defineProperty(ctx.CamModes.CAM_MODES[0], "id", { get: () => mode.cam, enumerable: true });
@@ -247,6 +248,63 @@ test("EXPLAIN never speaks for a control SettingDeps greyed itself", () => {
   h.Deps.refresh();
   const reasons = (input.getAttribute("aria-describedby") || "").split(" ").filter(Boolean);
   assert.deepEqual(reasons, ["pm-smooth-dep"]);
+});
+
+test("stable dependencies and owner explanations make no metadata or reason writes", () => {
+  const h = boot();
+  const [tilt] = buildTarget(h, "pm-tiltcurve"), [gears] = buildTarget(h, "pm-gears");
+  const p = { id: "pm-steer", want: "tilt", off: "buttons" };
+  setParent(h, p, false); gears.disabled = true;
+  h.Deps.refresh();
+  let writes = 0;
+  const observe = (el) => {
+    const set = el.setAttribute, remove = el.removeAttribute;
+    el.setAttribute = (k, v) => { writes++; set(k, v); };
+    el.removeAttribute = (k) => { writes++; remove(k); };
+    for (const k of ["hidden", "disabled", "textContent"]) {
+      let value = el[k];
+      Object.defineProperty(el, k, { get: () => value, set: (v) => { writes++; value = v; } });
+    }
+    el.children.forEach(observe);
+  };
+  observe(h.dom.body);
+  for (let i = 0; i < 5; i++) h.Deps.refresh();
+  assert.equal(writes, 0, "unchanged dependency reasons, owner explanations and aria-describedby remain untouched");
+  setParent(h, p, true); gears.disabled = false; h.Deps.refresh();
+  assert.equal(tilt.disabled, false);
+  assert.equal(h.d.getElementById("pm-tiltcurve-dep").hidden, true);
+  assert.equal(h.d.getElementById("pm-tiltcurve-dep").textContent, "");
+  assert.equal(gears.getAttribute("aria-describedby"), null);
+  assert.equal(h.d.getElementById("pm-gears-why").hidden, true);
+  assert.ok(writes > 0, "real changes still update controls, reasons and descriptions");
+});
+
+test("disabled observer preserves dynamic owner explanations when disabled remains unchanged", () => {
+  const timers = [], observers = [];
+  const h = boot({
+    setTimeout: (fn) => { timers.push(fn); return timers.length; },
+    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe() {} },
+  });
+  const card = h.el("button", "cs-team-card"), observer = observers[0];
+  const description = () => (card.getAttribute("aria-describedby") || "").split(" ")
+    .map((id) => h.d.getElementById(id)?.textContent || "").join(" ");
+  card.setAttribute("disabled", ""); card.disabled = true; card.title = "Fixed by your career";
+  h.Deps.refresh();
+  assert.equal(description(), "Fixed by your career");
+  // The owner changes its reason while remaining disabled. A same-value
+  // reflected write is still its invalidation signal, so it must be followed.
+  card.title = "Fixed while in a race"; card.disabled = true;
+  observer.fn([{ target: card, attributeName: "disabled", oldValue: "" }]);
+  assert.equal(timers.length, 1, "an unchanged disabled value still schedules owner explanation refresh");
+  timers.shift()();
+  assert.equal(description(), "Fixed while in a race");
+  card.removeAttribute("disabled"); card.disabled = false;
+  observer.fn([{ target: card, attributeName: "disabled", oldValue: "" }]);
+  assert.equal(timers.length, 1, "a real owner transition still refreshes");
+  timers.shift()();
+  assert.equal(card.getAttribute("aria-describedby"), null);
+  h.dom.dispatch(card, { type: "input", bubbles: true });
+  assert.equal(timers.length, 1, "normal settings interaction keeps its deferred refresh");
 });
 
 // A refresh runs after EVERY input event anywhere (capture listener), so a pass

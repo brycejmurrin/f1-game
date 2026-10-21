@@ -91,6 +91,13 @@ const AiDrive = (function () {
   // The bank's lateral-grip factor for the brake planner: a banked node holds 1 + sin(bank)·0.8 of the flat grip.
   function bankGrip(bank) { return 1 + Math.sin(bank || 0) * 0.8; }
   function endLook() { return _look; }
+  // The game's node window already owns typed samples. Keep only its arrays here,
+  // never the per-car cache (which carries the track), and preserve d += step.
+  const _lookWindow = { v: null, mu: null, n: 0, d: 0, step: 0 };
+  function lookWindow(v, mu, n, d, step) {
+    _lookWindow.v = v; _lookWindow.mu = mu; _lookWindow.n = n; _lookWindow.d = d; _lookWindow.step = step;
+    return _lookWindow;
+  }
 
   // High awareness digs out sooner (sees the box); low awareness sits longer.
   function stuckThreshold(t) {
@@ -543,6 +550,9 @@ const AiDrive = (function () {
   function brakeTarget(ctx) {
     const t = ctx.traits;
     const samples = ctx.samples || [];
+    const window = samples === _lookWindow ? _lookWindow : null;
+    const sampleN = window ? window.n : samples.length;
+    let windowD = window ? window.d : 0;
     const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
     const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * 0.16);
     const brake = ctx.brake || 22;
@@ -556,18 +566,19 @@ const AiDrive = (function () {
     const scrub = 2 * brake * 0.85;   // the same ((2·brake)·0.85)·d product as before, so bit-identical
     // The game's pooled look-ahead arrives with d ascending, so dSq = scrub·max(d, 1) never falls while vLimSq
     // never rises: past the first skip every later sample skips too, and `break` returns the same answer (#3109).
-    const ascending = samples === _look && _lookSorted && scrub > 0;
-    for (let i = 0; i < samples.length; i++) {
-      const s = samples[i];
+    const ascending = (window ? Number.isFinite(windowD) && Number.isFinite(window.step) && window.step >= 0 : samples === _look && _lookSorted) && scrub > 0;
+    for (let i = 0; i < sampleN; i++) {
+      const s = window ? null : samples[i];
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
-      const d = Math.max(s.d || 0, 1);
+      const d = Math.max((window ? windowD : s.d) || 0, 1);
+      if (window) windowD += window.step;
       const dSq = scrub * d;
       // EXACT SKIP (PERF-HUNT-4 B-F4): entrySq = vC² + dSq >= dSq, so once the distance term alone reaches
       // the tightest budget so far this sample cannot win — skip its corner solve. `continue`, not `break`:
       // the result stays independent of sample order. A NaN dSq falls through to the original test.
       if (dSq >= vLimSq) { if (ascending) break; continue; }
-      const k = Math.max(Math.abs(s.k || 0), 1e-5);
-      const bankMu = s.mu !== undefined ? s.mu : bankGrip(s.bank);   // pooled samples carry it; hand-built ones may not
+      const k = Math.max(Math.abs((window ? window.v[i] : s.k) || 0), 1e-5);
+      const bankMu = window ? window.mu[i] : s.mu !== undefined ? s.mu : bankGrip(s.bank);   // indexed/pooled samples carry it; hand-built ones may not
       const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq) * skill * (ctx.diffCorner || 1);
       const entrySq = vC * vC + dSq;
       if (entrySq >= 0 && entrySq < vLimSq) { vLimSq = entrySq; bVC = vC; bD = d; }
@@ -1918,7 +1929,7 @@ const AiDrive = (function () {
     passHunger, coverConcede, paceEdgeN, pairEdgeN, softPairEdgeN, pullReachM,
     PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL, PULL_EDGE, PULL_EDGE_FULL, PULL_REACH,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
-    wallAiScrub, beginLook, pushLook, endLook, bankGrip, aiRescueDelay, otSide,
+    wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
     otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,

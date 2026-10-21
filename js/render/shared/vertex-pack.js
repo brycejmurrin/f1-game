@@ -114,6 +114,9 @@ const VertexPack = (function () {
   // WGSL and TSL alike, and holds every material id exactly (integers to 2048).
   // Sub-normals and the exponent clamp are handled: a value past 65504
   // saturates to Infinity rather than wrapping to a small number.
+  const halfFloat = new Float64Array(1), halfWords = new Uint32Array(halfFloat.buffer);
+  halfFloat[0] = 1;
+  const halfHigh = halfWords[0] === 0 ? 1 : 0;
   function toHalf(v) {
     if (!(v === v)) return 0x7e00;                       // NaN -> quiet NaN
     const sign = v < 0 || Object.is(v, -0) ? 0x8000 : 0;
@@ -123,14 +126,14 @@ const VertexPack = (function () {
     if (a < 6.103515625e-5) {                            // sub-normal
       return sign | Math.round(a / 5.960464477539063e-8);
     }
-    let e = Math.floor(Math.log2(a));
-    let m = a / Math.pow(2, e) - 1;
-    if (m >= 1) { m -= 1; e += 1; }                      // log2 rounding guard
-    let mant = Math.round(m * 1024);
-    if (mant === 1024) { mant = 0; e += 1; }
-    if (e > 15) return sign | 0x7c00;
-    if (e < -14) return sign | Math.round(a / 5.960464477539063e-8);
-    return sign | ((e + 15) << 10) | mant;
+    // Read the double directly: narrowing to f32 first double-rounds values
+    // beside a half midpoint. Preserve Math.round's existing ties-up-in-
+    // magnitude rule, rather than changing it to IEEE ties-even. The high
+    // word holds the exponent, all ten retained bits and the rounding bit;
+    // adding the rounded mantissa also carries into the exponent.
+    halfFloat[0] = a;
+    const hi = halfWords[halfHigh];
+    return sign | ((((hi >>> 20) - 1008) << 10) + (((hi & 0xfffff) + 0x200) >>> 10));
   }
 
   return { COL_SCALE, MAT_SCALE, COL_Q, MAT_Q, STRIDE, STRIDE_TRK,

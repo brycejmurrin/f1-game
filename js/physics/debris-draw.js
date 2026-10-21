@@ -48,6 +48,30 @@ const DebrisDraw = (function () {
   const _batch = { shard: null, marble: null, cone: null, panel: null };
   const _bMat = { shard: null, marble: null, cone: null, panel: null };
   const _bCap = { shard: 0, marble: 0, cone: 0, panel: 0 };
+  const _bIds = { shard: [], marble: [], cone: [], panel: [] };
+  const _bVersions = { shard: [], marble: [], cone: [], panel: [] };
+  const _bCount = { shard: 0, marble: 0, cone: 0, panel: 0 };
+  // Weak slot ownership: the draw cache must not retain a dropped Rapier world.
+  // Batch membership keeps numeric ids/versions, never bodies or slot objects.
+  const _poses = new WeakMap();
+  let _poseId = 0;
+
+  function slotPose(slot, scale, generation) {
+    const body = slot.body;
+    let p = _poses.get(slot);
+    if (!p) {
+      p = { id: ++_poseId, version: 0, body: null, scale: 0, generation: -1, asleep: false, mat: new Float32Array(16) };
+      _poses.set(slot, p);
+    }
+    const asleep = generation !== undefined && body.isSleeping && body.isSleeping();
+    if (!asleep || !p.asleep || p.generation !== generation || p.body !== body || p.scale !== scale) {
+      packBody(p.mat, 0, body, scale);
+      p.version++;
+      p.body = body; p.scale = scale; p.generation = generation;
+    }
+    p.asleep = !!asleep;
+    return p;
+  }
 
   function poolBatch(gfx, key, geom, cap) {
     // capFor() honours an apex26.debrisCap override of up to 256, so the cap can
@@ -56,6 +80,7 @@ const DebrisDraw = (function () {
     if (_batch[key] && _bCap[key] < cap) {
       if (gfx.freeInstancedBatch) gfx.freeInstancedBatch(_batch[key]);
       _batch[key] = null; _bMat[key] = null;
+      _bIds[key].length = _bVersions[key].length = 0; _bCount[key] = 0;
     }
     if (_batch[key] !== null) return _batch[key];
     if (!gfx || !gfx.createInstancedBatch || !gfx.updateInstances || !gfx.drawInstanced)
@@ -77,7 +102,7 @@ const DebrisDraw = (function () {
   // Pack one pool's live bodies to the front and draw them in one call. Packing
   // is not optional: WebGL2 has no baseInstance, so an instanced draw always
   // starts at instance 0 and a visible subset can only be expressed by position.
-  function drawPool(gfx, key, geom, cap, opts, list, liveOnly, unitScale) {
+  function drawPool(gfx, key, geom, cap, opts, list, liveOnly, unitScale, generation) {
     const b = poolBatch(gfx, key, geom, cap);
     if (!b) {
       const mesh = poolMesh(gfx, key, geom);
@@ -85,14 +110,22 @@ const DebrisDraw = (function () {
       return;
     }
     const m = _bMat[key], room = b.instances | 0;
+    const ids = _bIds[key], versions = _bVersions[key];
+    let dirty = false;
     let n = 0;
     for (const s of list) {
       if (liveOnly && !s.live) continue;
       if (n >= room) break;
-      packBody(m, n++, s.body, unitScale ? 1 : s.scale);
+      const p = slotPose(s, unitScale ? 1 : s.scale, generation);
+      if (ids[n] !== p.id || versions[n] !== p.version) {
+        m.set(p.mat, n * 16); ids[n] = p.id; versions[n] = p.version; dirty = true;
+      }
+      n++;
     }
+    if (_bCount[key] !== n) dirty = true;
+    _bCount[key] = n;
     if (!n) return;
-    gfx.updateInstances(b, m, n);
+    if (dirty) gfx.updateInstances(b, m, n);
     gfx.drawInstanced(b, opts);
   }
 
