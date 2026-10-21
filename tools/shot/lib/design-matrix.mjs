@@ -3,6 +3,7 @@
 // @doc Design-review matrix core: PART_BOXES, ANGLES, COLOURS, LIGHTS, expandMatrix, frameForPart, labelDiff, manifest.
 // @skill garage-parts-livery
 import { STATIONS } from "./garage-camera-catalog.mjs";
+import { assertSafePathToken } from "../../lib/output-paths.mjs";
 
 const D = Math.PI / 180;
 
@@ -75,9 +76,13 @@ export function cameraFor(partId, angleId, o = {}, boxes = PART_BOXES) {
 /** Variant "field=value" -> {field:value}; "factory" -> {}. */
 export function parseVariant(s) {
   if (s === "factory" || s === "") return {};
-  const i = s.indexOf("=");
-  if (i < 1) throw new Error(`variant "${s}" is not field=value or "factory"`);
-  return { [s.slice(0, i)]: s.slice(i + 1) };
+  const result = {};
+  for (const assignment of s.split(";")) {
+    const i = assignment.indexOf("="), field = assignment.slice(0, i), value = assignment.slice(i + 1);
+    if (i < 1 || !/^[A-Za-z][A-Za-z0-9.]*$/.test(field) || !value || Object.hasOwn(result, field)) throw new Error(`variant "${s}" needs unique field=value assignments`);
+    result[field] = value;
+  }
+  return result;
 }
 
 const slug = (s) => String(s).replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -88,7 +93,7 @@ const slug = (s) => String(s).replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "
  */
 export function expandMatrix({ parts, angles, colours, lights, variants, baseline = "factory" }, boxes = PART_BOXES) {
   const groups = [];
-  const vs = [baseline, ...variants.filter((v) => v !== baseline)];
+  const vs = [...new Set([baseline, ...variants])];
   for (const part of parts) {
     const box = boxes[part];
     if (!box) throw new Error(`no part "${part}" — ${Object.keys(boxes).join(", ")}`);
@@ -108,6 +113,8 @@ export function expandMatrix({ parts, angles, colours, lights, variants, baselin
       });
     }
   }
+  const keys = groups.flatMap(g => g.cells.map(c => c.key));
+  if (new Set(keys).size !== keys.length) throw new Error("matrix filenames collide; use distinct axis/variant names");
   return groups;
 }
 
@@ -127,7 +134,7 @@ export function labelDiff(frac, isBaseline = false) {
 
 /** Manifest: { run, cells: { key: { status, png, diff, ... } } }. Resume = groups with an unfinished cell. */
 export function pendingGroups(groups, manifest, exists = () => true) {
-  const done = (c) => manifest?.cells?.[c.key]?.status === "done" && exists(manifest.cells[c.key].png);
+  const done = (c) => manifest?.cells?.[c.key]?.status === "done" && exists(manifest.cells[c.key].png, manifest.cells[c.key]);
   return groups.filter((g) => !g.cells.every(done));
 }
 
@@ -139,20 +146,27 @@ export function parseBatch(s) {
 }
 
 /** Guards from the launch contract: dpr 1, <= 1600x900, loadavg < 3. */
-export function checkLimits({ viewport, dpr = 1, load }) {
+export function checkLimits({ viewport, dpr = 1, load, platform = "linux" }) {
   const [w, h] = viewport;
   if (dpr !== 1) throw new Error("dpr must be 1 (dpr > 1 starves SwiftShader)");
+  if (viewport.length !== 2 || !viewport.every(Number.isInteger) || w < 64 || h < 64) throw new Error("viewport needs integer dimensions >= 64");
   if (w > 1600 || h > 900) throw new Error(`viewport ${w}x${h} exceeds 1600x900`);
-  if (load != null && load >= 3) throw new Error(`loadavg ${load.toFixed(2)} >= 3; wait for the box to settle`);
+  // Match garage-angles' /proc/loadavg guard: this absolute threshold belongs
+  // to the Linux software-rendering container, not a shared macOS host.
+  if (platform === "linux" && load != null && load >= 3) throw new Error(`loadavg ${load.toFixed(2)} >= 3; wait for the box to settle`);
 }
 
 export function parseArgs(argv) {
   const o = {};
+  const switches = new Set(["resume", "index-only", "plan", "phone", "help", "h"]);
+  const values = new Set(["team", "part", "angles", "colours", "lights", "variants", "baseline", "fill", "fov", "viewport", "batch", "run", "out", "bounds", "dpr", "backend"]);
   for (const a of argv) {
     const m = /^--([\w.-]+)(?:=(.*))?$/.exec(a);
-    if (m) o[m[1]] = m[2] === undefined ? true : m[2];
+    if (!m || (!switches.has(m[1]) && !values.has(m[1]))) throw new Error(`unknown argument ${a}`);
+    if (switches.has(m[1]) ? m[2] !== undefined : !m[2]) throw new Error(`invalid ${a}; values require --flag=value`);
+    o[m[1]] = m[2] === undefined ? true : m[2];
   }
-  return {
+  const result = {
     team: o.team || "mercedes", parts: csv(o.part, ["sidepod"]), angles: csv(o.angles, ["headOn", "grazing", "specular"]),
     colours: csv(o.colours, ["dark", "light"]), lights: csv(o.lights, ["lamp"]),
     variants: csv(o.variants, ["factory"]), baseline: o.baseline || "factory",
@@ -160,7 +174,15 @@ export function parseArgs(argv) {
     viewport: String(o.viewport || (o.phone ? "844x390" : "1280x720")).split("x").map(Number),
     batch: parseBatch(o.batch), run: o.run || null, out: o.out || null, bounds: o.bounds || null,
     resume: !!o.resume, plan: !!o.plan, dpr: Number(o.dpr || 1), phone: !!o.phone, help: !!(o.help || o.h),
+    indexOnly: !!o["index-only"], backend: o.backend || "three",
   };
+  assertSafePathToken(result.team, "team");
+  if (result.run) assertSafePathToken(result.run, "run");
+  if (!["three", "webgl2", "webgpu"].includes(result.backend)) throw new Error("unknown backend");
+  if (!Number.isFinite(result.fill) || result.fill <= 0 || result.fill >= 1 || !Number.isFinite(result.fov) || result.fov < 10 || result.fov > 120) throw new Error("fill must be between 0 and 1; fov must be 10..120");
+  checkLimits(result);
+  if (result.batch) batchSlice([], ...result.batch);
+  return result;
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -173,6 +195,7 @@ export function sheetHtml(groups, manifest, { title = "design matrix", phone = f
     + `<style>:root{color-scheme:dark light}body{font:13px system-ui;margin:16px;background:#111;color:#ddd}`
     + `table{border-collapse:collapse}td,th{padding:4px;vertical-align:top}.c{width:300px}img{width:100%;${fr};object-fit:cover;background:#222;display:block}`
     + `.same{color:#f90;font-weight:600}.b{color:#8c8}</style><h1>${esc(title)}</h1>`;
+  h += `<p>${manifest.source ? `Source ${esc(manifest.source.revision)} · ${esc(manifest.request.backend)} · worktree ${esc(manifest.source.worktreeHash)}` : "Legacy collection — source not verified"}</p><p><a href="gallery.json">Download gallery index</a></p>`;
   for (const light of lights) {
     const gs = groups.filter((g) => g.light === light);
     const colsKey = [...new Set(gs.flatMap((g) => g.cells.map((c) => `${g.colour}|${c.variant}`)))];

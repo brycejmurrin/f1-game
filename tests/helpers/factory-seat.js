@@ -36,6 +36,14 @@ export async function syncFactoryMcLarenSeat(page) {
     S.set("team", 2);
     S.set("driver", 0);
     S.set("parts.mclaren", {});
+    // The teamIdx re-read is a TITLE gesture. On the shared page a previous test
+    // can leave a live race; clicking #mb-race then opened the picker over it and
+    // the picker's menu prep built its circuit beside race()'s own in-session
+    // switch, so race() lost to the newer build ("Race start did not reach the
+    // grid" / a stalled build: logging.spec after headless-api, hooks shard 3,
+    // reproduced on the deploy tip). Mid-session the store writes stand alone.
+    const st = window.__apex && window.__apex.info ? window.__apex.info().state : "menu";
+    if (st !== "menu") return;
     document.getElementById("mb-race").click();
     document.getElementById("sel-back").click();
   });

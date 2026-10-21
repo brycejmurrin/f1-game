@@ -1,0 +1,1 @@
+Fixed: TLX could throw "Cannot read properties of null (reading 'constructor')" in present about 30 s into a race after freeing car shadow-caster CPU mirrors before every attribute had its GPU buffer; the release now waits for the upload.

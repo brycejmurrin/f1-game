@@ -3,7 +3,7 @@ const GfxQuality = (function () {
   "use strict";
 
 // userTier is a FLOOR on the COST shedding ladder in js/perf/governor.js:
-//   0 nothing pinned off · 1 env probe · 2 +lamp shadow/dry SSR · 3 +car shadow/wet SSR
+//   0 nothing pinned off · 1 env probe · 2 +lamp shadow/dry SSR · 3 +car shadow; wet SSR uses a smaller budget
 // Look-defining post (bloom / SSAO / god rays / contact / lamp volumetrics)
 // reads PerfGov.autoTier() instead — GRAPHICS: LOW must not mute the lighting
 // tuner; the governor and crash-sentinel floor can still shed that stack when

@@ -197,6 +197,7 @@ become a full `layout-audit`.
 | `apex_session_status` | `session-status.mjs --json` | No args |
 | `apex_who_is_on_it` | `who-is-on-it.mjs --json [--hours N] [--no-fetch] [paths…]` | Never `--claim` / `--release`; a path starting `-` is refused |
 | `apex_ci_status` | `ci-watch.mjs --once --sha <hex\|HEAD>` | One poll; exits 0/1/2/124 are verdicts in `out.verdict` |
+| `apex_cursor_agents` | `cursor-agents.mjs <verb> …` | One tool, four published properties; no `--wait`, no `dump`; `cancel`/`delete` need `options.confirm`; files only under `scratch/` or `artifacts/`; exits 1/2/3/124 are verdicts |
 
 Live re-test of all twelve wraps (idle container, loadavg < 0.1) found three
 browser wraps broken and fixed them at the CLI, not the wrap:

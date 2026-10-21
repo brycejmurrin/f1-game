@@ -1176,6 +1176,7 @@
         "tests/unit/lsp-navigation-efficiency.test.mjs",
         "tests/unit/lsp-reference-fixes.test.mjs",
         "tests/unit/lsp-workflow-fixes.test.mjs",
+        "tests/unit/mcp-listing-cost.test.mjs",
         "tests/unit/ui-explorer-core.test.mjs",
         "tests/unit/ui-explorer-report.test.mjs",
         "tests/unit/ui-explorer.test.mjs",

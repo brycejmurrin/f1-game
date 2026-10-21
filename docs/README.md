@@ -29,6 +29,7 @@ drives it.
 [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.
 
 Local screenshot galleries: [builder and viewer workflow](notes/LOCAL-SURVEY-GALLERY.md).
+Car capture matrices and portable site exports: [capture review](CAPTURE-REVIEW.md).
 
 ## The area docs (load one on demand)
 

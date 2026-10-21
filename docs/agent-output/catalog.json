@@ -771,7 +771,10 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--limit"
+        "--json",
+        "--limit",
+        "--out",
+        "--summary"
       ]
     },
     {
@@ -1997,6 +2000,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/cursor-transcript.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/custom-survey-locations.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2312,7 +2320,9 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json",
-        "--out"
+        "--limit",
+        "--out",
+        "--summary"
       ]
     },
     {
@@ -2497,6 +2507,15 @@
     },
     {
       "path": "tools/mcp/mcp-cli.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/mcp/mcp-listing-cost.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
       "interpreter": "node",
@@ -2790,6 +2809,15 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/shot/capture-gallery.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/capture-options.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2915,6 +2943,11 @@
       ]
     },
     {
+      "path": "tools/shot/lib/design-matrix-run.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/shot/lib/design-matrix.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -2979,6 +3012,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/shot/run-capture-request.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
     },
     {
       "path": "tools/shot/scenery-locations.json",
@@ -3596,7 +3638,7 @@
     },
     {
       "name": "test:mcp",
-      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-node.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/js-debugger-tracks.test.mjs tests/unit/js-debugger-transport.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp-fixture.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs tests/unit/workflow-harness.test.mjs"
+      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-node.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/js-debugger-tracks.test.mjs tests/unit/js-debugger-transport.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp-fixture.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/mcp-listing-cost.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs tests/unit/workflow-harness.test.mjs"
     },
     {
       "name": "test:mobile-unit",
