@@ -1,1 +1,0 @@
-1792559144	Bryce Murrin	C native replay_audio_net: js/net/scan.js + tests/unit/net-qr.test.mjs only; stale BarcodeDetector completion clears restarted scanner busy latch. Parent cursor/perf-investigation-c91f; independent worktree cursor/perf-replay-audio-c91f.  [cursor/perf-replay-audio-c91f; session 249c8dc09612bfa331f5098b]
