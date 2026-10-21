@@ -1,0 +1,41 @@
+{"tag":"before","track":"monza","tod":"day","pos":0.05}
+{"tag":"before","track":"monza","tod":"day","pos":0.4}
+{"tag":"before","track":"monza","tod":"day","pos":0.75}
+gpuErrors null
+{"tag":"after","track":"monza","tod":"day","pos":0.05}
+{"tag":"after","track":"monza","tod":"day","pos":0.4}
+{"tag":"after","track":"monza","tod":"day","pos":0.75,"mirror":{"draws":15,"tris":22303},"mirrorSplit":{"draws":3,"tris":8192},"w422":{"draws":73,"tris":67867},"w422Split":{"draws":4,"tris":17104},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+gpuErrors null
+{"tag":"before","track":"monaco","tod":"day","pos":0.05,"mirror":{"draws":15,"tris":120054},"w422":{"draws":88,"tris":143831},"w422Split":{"draws":1,"tris":2636},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"before","track":"monaco","tod":"day","pos":0.4,"mirror":{"draws":14,"tris":61653},"w422":{"draws":70,"tris":76146},"w422Split":{"draws":2,"tris":2666},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"before","track":"monaco","tod":"day","pos":0.75,"mirror":{"draws":13,"tris":116829},"w422":{"draws":63,"tris":144047},"w422Split":{"draws":1,"tris":2636},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+gpuErrors null
+{"tag":"after","track":"monaco","tod":"day","pos":0.05}
+{"tag":"after","track":"monaco","tod":"day","pos":0.4}
+{"tag":"after","track":"monaco","tod":"day","pos":0.75}
+gpuErrors null
+{"tag":"before","track":"spa","tod":"day","pos":0.05,"mirror":{"draws":13,"tris":96005},"w422":{"draws":93,"tris":179055},"w422Split":{"draws":1,"tris":5558},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"before","track":"spa","tod":"day","pos":0.4,"mirror":{"draws":10,"tris":72605},"w422":{"draws":68,"tris":99941},"w422Split":{"draws":1,"tris":5558},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"before","track":"spa","tod":"day","pos":0.75,"mirror":{"draws":11,"tris":68757},"w422":{"draws":99,"tris":128216},"w422Split":{"draws":1,"tris":5558},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+gpuErrors null
+{"tag":"after","track":"spa","tod":"day","pos":0.05,"mirror":{"draws":16,"tris":40235},"mirrorSplit":{"draws":4,"tris":7168},"w422":{"draws":96,"tris":142191},"w422Split":{"draws":5,"tris":31632},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"after","track":"spa","tod":"day","pos":0.4,"mirror":{"draws":13,"tris":18883},"mirrorSplit":{"draws":4,"tris":9216},"w422":{"draws":71,"tris":53861},"w422Split":{"draws":5,"tris":22416},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"after","track":"spa","tod":"day","pos":0.75,"mirror":{"draws":14,"tris":13461},"mirrorSplit":{"draws":4,"tris":7642},"w422":{"draws":102,"tris":97496},"w422Split":{"draws":5,"tris":37776},"w211":{"draws":5,"tris":5},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+gpuErrors null
+{"tag":"before","track":"suzuka","tod":"night","pos":0.05,"mirror":{"draws":14,"tris":107871},"w422":{"draws":74,"tris":107504},"w422Split":{"draws":2,"tris":4636},"w211":{"draws":2,"tris":2},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"before","track":"suzuka","tod":"night","pos":0.4,"mirror":{"draws":12,"tris":78357},"w422":{"draws":92,"tris":160425},"w422Split":{"draws":2,"tris":4632},"w211":{"draws":2,"tris":2},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"before","track":"suzuka","tod":"night","pos":0.75,"mirror":{"draws":11,"tris":76324},"w422":{"draws":90,"tris":168947},"w422Split":{"draws":2,"tris":4632},"w211":{"draws":2,"tris":2},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+gpuErrors null
+{"tag":"after","track":"suzuka","tod":"night","pos":0.05,"mirror":{"draws":17,"tris":62691},"mirrorSplit":{"draws":4,"tris":8192},"w422":{"draws":77,"tris":67444},"w422Split":{"draws":6,"tris":17948},"w211":{"draws":2,"tris":2},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"after","track":"suzuka","tod":"night","pos":0.4,"mirror":{"draws":15,"tris":37273},"mirrorSplit":{"draws":4,"tris":12288},"w422":{"draws":95,"tris":134701},"w422Split":{"draws":6,"tris":32280},"w211":{"draws":2,"tris":2},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+{"tag":"after","track":"suzuka","tod":"night","pos":0.75,"mirror":{"draws":14,"tris":34216},"mirrorSplit":{"draws":4,"tris":11264},"w422":{"draws":93,"tris":149367},"w422Split":{"draws":6,"tris":38424},"w211":{"draws":2,"tris":2},"w105":{"draws":2,"tris":2},"w52":{"draws":1,"tris":1}}
+gpuErrors null
+{"tag":"before","track":"monza","tod":"night","pos":0.05}
+{"tag":"before","track":"monza","tod":"night","pos":0.4}
+{"tag":"before","track":"monza","tod":"night","pos":0.75}
+gpuErrors null
+{"tag":"after","track":"monza","tod":"night","pos":0.05}
+{"tag":"after","track":"monza","tod":"night","pos":0.4}
+{"tag":"after","track":"monza","tod":"night","pos":0.75}
+gpuErrors null
+= split-ab done
