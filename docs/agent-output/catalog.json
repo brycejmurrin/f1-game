@@ -3659,7 +3659,7 @@
     },
     {
       "name": "test:input",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/camera-driving-hooks.spec.js tests/specs/camera-hooks.spec.js tests/specs/camera-tuner.spec.js tests/specs/camera.spec.js tests/specs/gamepad.spec.js tests/specs/presets.spec.js tests/specs/sliders.spec.js tests/specs/steer-migration.spec.js tests/specs/steering.spec.js tests/specs/tilt-pipeline.spec.js tests/specs/touch-buttons.spec.js tests/specs/touch-pedals.spec.js tests/specs/touch-steer.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/camera-driving-hooks.spec.js tests/specs/camera-hooks.spec.js tests/specs/camera-tuner.spec.js tests/specs/camera.spec.js tests/specs/gamepad.spec.js tests/specs/presets.spec.js tests/specs/settings-reload.spec.js tests/specs/sliders.spec.js tests/specs/steer-migration.spec.js tests/specs/steering.spec.js tests/specs/tilt-pipeline.spec.js tests/specs/touch-buttons.spec.js tests/specs/touch-pedals.spec.js tests/specs/touch-steer.spec.js"
     },
     {
       "name": "test:lifecycle-unit",

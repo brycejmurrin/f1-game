@@ -1969,6 +1969,7 @@
         "tests/specs/camera.spec.js",
         "tests/specs/gamepad.spec.js",
         "tests/specs/presets.spec.js",
+        "tests/specs/settings-reload.spec.js",
         "tests/specs/sliders.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
