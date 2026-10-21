@@ -41,7 +41,7 @@ ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra 
              "of a SUPERSEDED run joins the branch's ci-<head.ref> group and cancels the live run; prefer "
              "`node tools/ci/ci-rerun.mjs`. Confirm by hand.")
 
-RECEIPT_MAX_MIN = 30
+RECEIPT_MAX_MIN = 10
 
 
 def squash_or_rebase(method):

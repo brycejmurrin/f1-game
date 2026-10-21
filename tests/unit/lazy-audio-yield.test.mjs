@@ -97,7 +97,7 @@ test("ensureAudio source yields before load and before onAudioReady; skips under
     "task yield before onAudioReady / panel init");
   assert.match(bundles, /Do NOT evaluate LAZY_AUDIO here/, "raceAssets still does not eval audio on title idle (#1135)");
   assert.match(bundles, /el\.rel = "prefetch"/, "late idle HTTP prefetch only");
-  assert.match(bundles, /scheduleIdle\(\(\) => \{ prefetchAudio\(\); \}, 4500\)/, "prefetch after typical title networkidle");
+  assert.match(bundles, /scheduleIdle\(\(\) => \{ prefetchAudio\(\); \}, 12000\)/, "prefetch after typical title networkidle");
   const game = src("js/game.js");
   assert.match(game, /pointerdown", \(\) => \{ ensureAudio\(\); \}, \{ once: true, capture: true \}/,
     "gesture hook still calls ensureAudio exactly once (capture once)");
