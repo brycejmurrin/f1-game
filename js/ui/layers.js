@@ -303,7 +303,7 @@ window.UiLayers = (function () {
     navWatch(document.getElementById("rotate-device"), true);
     const stale = navStale;
     navStale = false;
-    if (stale) gateMemo = null;
+    if (stale) { gateMemo = null; navMemo = null; } // one dirty flag, two memos: whoever reads it must drop both
     return stale;
   }
 

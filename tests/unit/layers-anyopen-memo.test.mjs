@@ -66,3 +66,12 @@ test("opening a gated layer is seen on the very next call", () => {
   settings.hidden = false; settings.shown = true; t.mutate(settings);
   assert.equal(t.U.anyOpen(), true);
 });
+
+test("anyOpen consuming the dirty flag does not leave navOpen on a stale answer", () => {
+  const t = boot();
+  assert.equal(t.U.navOpen(), false);
+  const overlay = t.els.get("overlay");
+  overlay.shown = true; t.mutate(overlay);
+  assert.equal(t.U.anyOpen(), false, "overlay is gate:false, so anyOpen stays false");
+  assert.equal(t.U.navOpen(), true, "navOpen must still see the overlay opened before anyOpen ran");
+});
