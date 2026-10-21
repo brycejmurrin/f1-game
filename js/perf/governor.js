@@ -531,7 +531,43 @@ function frameStats() {
     droppedSimS, physicsSteps, windowFrames: frameHistory.length };
 }
 
-function tick(dtMs) {
+// JUDGE DRAWN FRAMES ONLY. RenderRate (js/perf/render-rate.js) skips rAFs on
+// purpose: every second one on a 120 Hz phone, a credit-paced share in its
+// "45"/"30" tiers. The interval after a skipped rAF is the bare vsync, no draw
+// in it, and judging it dragged `_floorMs` down to the fast cadence: replayed
+// against this tick(), a 120 Hz phone holding a steady half-rate draw made 4
+// reallocations, and a 60 Hz phone on "30" (33.3/16.7 alternating) made 10 and
+// shed to tier 4. Judging the summed interval between DRAWN frames instead was
+// tried and is worse: the tiers' credit pacing draws some rAFs back to back, so
+// those intervals jitter by a whole vsync and a cheap 120 Hz phone on "45" shed
+// to tier 4. So `drawn === false` (game.js passes RenderRate.drew(), the
+// verdict on the rAF this interval began at) keeps only the wall clocks
+// running, since every hold in this file is a promise in ms, and the frame is
+// not evidence. Omitted or true: exactly the old path.
+function _ageClocks(stepMs) {
+  // Clamped at 0: the restore gate below tests `_downHold === 0`, and a ms
+  // decrement overshoots where a frame count landed exactly.
+  if (_downHold > 0) _downHold = Math.max(0, _downHold - stepMs);   // recovery hold runs down in wall time
+  // The survival clock runs on the same wall time as the holds, and for the
+  // same reason: a promise made in seconds must not run twice as fast on a
+  // 120 Hz display. Before the cooldown returns below, so a climb keeps ageing
+  // while the governor is not evaluating. Reaching the window means the climb
+  // was real — release the patience the refusals bought and stop watching it.
+  if (_sinceUp >= 0 && (_sinceUp += stepMs) >= CLIMB_SURVIVE_MS) { _sinceUp = -1; _upBackoff = UP_BACKOFF_MIN; }
+  // Headroom has to be UNBROKEN to age the ceiling: any frame back over the
+  // restore threshold restarts the two minutes, so a device that is merely
+  // between heavy sections never probes its way back up.
+  if (_scaleCap <= 1) {
+    if (_frameEMA < _floorMs + RESTORE_WITHIN) {
+      if ((_capProbeMs -= stepMs) <= 0) { _scaleCap = Infinity; _armCapProbe(); }
+    } else _armCapProbe();
+  }
+  if (_govCoolMs <= 0) return false;
+  _govCoolMs = Math.max(0, _govCoolMs - stepMs);
+  return true;   // was cooling: no evaluation this frame
+}
+
+function tick(dtMs, drawn) {
   // First race/count sample: the session existed. Menu loadTrackStepped arms
   // SENT_ACTIVE but never reaches here (game.js gates tick on race/count).
   if (!_raceTicked && _gfx && _gfx.isMobile) {
@@ -578,6 +614,8 @@ function tick(dtMs) {
   _live = true;
   // A zero / negative / NaN interval is a stamp artefact (pause -> resume: lastFrame is set in a handler, so the next rAF stamp can be earlier), not a frame: fed to the EMA and the derived floor it drags the floor under every healthy frame and trips a spurious step-down (then a revert). The history above already skips it.
   if (!(dtMs > 0)) return;
+  const stepMs = Number.isFinite(dtMs) ? Math.min(dtMs, COOL_STEP_MAX_MS) : 16.7;
+  if (drawn === false) { _ageClocks(stepMs); return; }   // see _ageClocks
   if (_drift && dtMs < SPIKE_MS && _drift.feed(dtMs) && driftStep()) _drift.stepped();
   // Before any smoothing: the opening window wants the raw frame, spikes and
   // all, because a spike in the first seconds IS the thing being reported.
@@ -595,25 +633,7 @@ function tick(dtMs) {
     _frameEMA += (s - _frameEMA) * 0.1;
     _floorMs += (s - _floorMs) * (s < _floorMs ? FLOOR_DOWN_A : FLOOR_UP_A);
   }
-  const stepMs = Number.isFinite(dtMs) && dtMs > 0 ? Math.min(dtMs, COOL_STEP_MAX_MS) : 16.7;
-  // Clamped at 0: the restore gate below tests `_downHold === 0`, and a ms
-  // decrement overshoots where a frame count landed exactly.
-  if (_downHold > 0) _downHold = Math.max(0, _downHold - stepMs);   // recovery hold runs down in wall time
-  // The survival clock runs on the same wall time as the holds, and for the
-  // same reason: a promise made in seconds must not run twice as fast on a
-  // 120 Hz display. Before the cooldown returns below, so a climb keeps ageing
-  // while the governor is not evaluating. Reaching the window means the climb
-  // was real — release the patience the refusals bought and stop watching it.
-  if (_sinceUp >= 0 && (_sinceUp += stepMs) >= CLIMB_SURVIVE_MS) { _sinceUp = -1; _upBackoff = UP_BACKOFF_MIN; }
-  // Headroom has to be UNBROKEN to age the ceiling: any frame back over the
-  // restore threshold restarts the two minutes, so a device that is merely
-  // between heavy sections never probes its way back up.
-  if (_scaleCap <= 1) {
-    if (_frameEMA < _floorMs + RESTORE_WITHIN) {
-      if ((_capProbeMs -= stepMs) <= 0) { _scaleCap = Infinity; _armCapProbe(); }
-    } else _armCapProbe();
-  }
-  if (_govCoolMs > 0) { _govCoolMs = Math.max(0, _govCoolMs - stepMs); return; }
+  if (_ageClocks(stepMs)) return;
   if (_govCool > 0) { _govCool--; return; }   // a verify window: frames, so the EMA has its samples
   if (++_govT < 45) return;   // evaluate ~every 45 frames (an EMA settling span, not a clock)
   _govT = 0;
@@ -640,6 +660,25 @@ function tick(dtMs) {
         return;
       }
       if (v.kind === "scale") {
+        // ONE QUANTUM PROBE BEFORE "FUTILE". The interval is vsync-quantised:
+        // a fill-bound phone whose frame costs 18-22 ms presents every 33.3 ms,
+        // and a 0.1 cut that takes it to 17-19.5 ms still presents at 33.3, so
+        // the EMA cannot move and the cut reads as buying nothing. Replayed, cost
+        // c*(0.4+0.6*s^2) with c = 22 or 20 ended at scale 1, floor 33.3: 30 fps
+        // for good where ~0.75 scale gives 60. So a small cut that failed is
+        // retried ONCE as a big one, to the scale that halves the pixel count
+        // (the smallest cut that could halve a fill-bound frame, i.e. drop it a
+        // whole quantum), judged against the same pre-cut EMA. A capped clock or
+        // a CPU-bound frame fails that too and is declared futile exactly as
+        // before, at the price of one more cut and revert; a cut that crossed
+        // climbs back through the usual verified restore steps under the ceiling.
+        const now = _gfx.getRenderScale ? _gfx.getRenderScale() : 1, big = Math.max(0.5, v.prev * Math.SQRT1_2);
+        if (!v.up && !v.big && _autoRes && big < now - 0.05 && _gfx.setRenderScale(big)) {
+          _scaleCap = Math.min(_scaleCap, now); _armCapProbe();   // the small cut's scale missed too
+          _pendingVerify = { kind: "scale", prev: v.prev, ema: v.ema, big: true };
+          _govCool = 30; _scaleMoves++;
+          return;
+        }
         _gfx.setRenderScale(v.prev);
         // The rung it just refused is a measured ceiling, not only a reason to wait.
         if (v.up && v.next) { _scaleCap = Math.min(_scaleCap, v.next); _armCapProbe(); }
