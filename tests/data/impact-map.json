@@ -2216,6 +2216,9 @@
       ]
     },
     "js/car/car-draw.js": {
+      "advanceWheelPhases": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "beginDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-draw-decal-sweep.test.mjs"
@@ -4536,6 +4539,7 @@
     "js/core/mat4.js": {
       "clamp": [
         "tests/unit/ai-drive.test.mjs",
+        "tests/unit/body-attitude.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
@@ -4598,7 +4602,6 @@
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
-        "tests/unit/body-attitude.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
@@ -6426,6 +6429,9 @@
       "paceVmax": [
         "tests/unit/ai-racecraft-vm.test.mjs"
       ],
+      "playerAnchor": [
+        "tests/unit/field-lod.test.mjs"
+      ],
       "quitToMenu": [
         "tests/specs/wake-lock.spec.js",
         "tests/unit/end-race-music-vm.test.mjs",
@@ -6492,6 +6498,9 @@
       ],
       "renderLightingPrep": [
         "tests/unit/render-lighting-prep.test.mjs"
+      ],
+      "renderPosOf": [
+        "tests/unit/field-lod.test.mjs"
       ],
       "rescuePlayer": [
         "tests/unit/debris-step-skip.test.mjs",
@@ -10002,6 +10011,9 @@
         "tests/unit/body-attitude.test.mjs"
       ],
       "offsets": [
+        "tests/unit/body-attitude.test.mjs"
+      ],
+      "reset": [
         "tests/unit/body-attitude.test.mjs"
       ],
       "setEnabled": [

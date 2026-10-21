@@ -4542,9 +4542,11 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
   const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && afF > lockOn/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), on the brake-bias-scaled front fraction afF with a speed-aware onset from PhysicsConsts");
-  // The planted wheels spin in the car-draw seam (js/car/car-draw.js), which reads WHEEL_R off PhysicsConsts.
+  // The car-draw frame step advances private visual phases. The numeric
+  // multi-view/traction-isolation checks live in mirror-pass-carbuild.test.mjs.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
+  const phases = fnSource(cd, "function advanceWheelPhases(dt)");
+  assert.match(phases, /const spin = \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt;[\s\S]*phase\.front = \(\(phase\.front \|\| 0\) \+ spin \* \(1 - \(c\.wheelLock \|\| 0\)\)\) % \(Math\.PI \* 2\)/, "locked fronts stop turning in the private visual phase");
   assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
   // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
   assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");
