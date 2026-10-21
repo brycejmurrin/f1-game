@@ -100,7 +100,7 @@ function boot({ dragAnchor = true } = {}) {
   });
   Input.init(canvas);
   const onCanvas = (t, e) => (canvasL[t] || []).forEach((f) => f(Object.assign({ preventDefault() {} }, e)));
-  return { Input, onCanvas, dragEl, classOn, sb, listeners };
+  return { Input, onCanvas, dragEl, classOn, sb, listeners, clock };
 }
 
 function dragOff(dragEl) {
@@ -194,4 +194,20 @@ test("hides while a menu overlay is open", () => {
   sb.UiLayers = { anyOpen: () => true };
   onCanvas("touchstart", { changedTouches: [{ identifier: 6, clientX: 10, clientY: 10 }] });
   assert.ok(!classOn.has("on"));
+});
+
+test("reset() clears the drag smoothing so the next press starts at the finger (B·H20)", () => {
+  // The OneEuro filter kept dragOePrev/dragOeInit across reset(); a press that lands before the next
+  // steer() read (blur, then a fast re-touch) blended from the last full-lock drag: steer .788, not 0.
+  const { Input, onCanvas, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(2);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 100 + 2000, clientY: 200 }] });
+  for (let i = 0; i < 40; i++) { clock.t += 16; Input.steer(); }
+  assert.ok(Input.steer() > 0.9, "the drag reached lock");
+  Input.reset();
+  onCanvas("touchstart", { changedTouches: [{ identifier: 2, clientX: 300, clientY: 200 }] });
+  clock.t += 16;
+  assert.equal(Input.steer(), 0, "an anchored press reads 0, not the previous drag");
 });

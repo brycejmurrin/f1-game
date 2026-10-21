@@ -1188,6 +1188,7 @@ const Input = (function () {
     dragMinCutoff = clamp(hz, 0, 8);
     if (dragMinCutoff <= 0) dragOeInit = false;
   }
+  function dragFilterClear() { dragOeInit = false; dragOePrev = 0; dragOeDPrev = 0; }
   function dragFilter(x, dt) {
     if (dragMinCutoff <= 0) return x;
     if (!dragOeInit) { dragOePrev = x; dragOeDPrev = 0; dragOeInit = true; return x; }
@@ -1945,6 +1946,7 @@ const Input = (function () {
     if (steerMode !== "touch") {
       touches.clear();
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+      dragFilterClear();
     }
     if (steerMode !== "tilt") detachGyro();
   }
@@ -2287,6 +2289,7 @@ const Input = (function () {
     touches.clear();
     hideDragAnchor();
     touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+    dragFilterClear();   // else a press right after a blur/reset blends from the last drag
     timeScale = 1;   // the loop re-reports it next frame; never leave it stalled slow
     // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
     // just the exported booleans — see InputHoldButtons for why both must happen.
