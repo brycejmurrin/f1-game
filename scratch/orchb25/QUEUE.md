@@ -3,7 +3,7 @@
 Live state, refreshed and pushed every tick (branch `cursor/orchb25-queue-o25q`, never merged).
 A successor reads this first. Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-21 04:47Z
+Updated: 2026-10-21 05:00Z
 
 ## Gate state
 - Pages 39541119371 on a437375b SUCCESS → INCIDENT lifted 04:05Z.
@@ -75,3 +75,5 @@ Next game order: #3382, #3385, #3230, #3377, #3238, O-G train, #3386, #3388, #33
 04:41Z: MERGED since 04:18 — #3400 153f4dae, #3310 c6535c78, #3398 2fc7a8fe (non-game). Pages 9416abb3 (#3390) RED = js-debugger-node R4 flake (not #3390; W13 deflaking); Pages c6535c78 running = verdict for #3390. Game queue (all READY+green): #3382, #3385, #3377, #3238, #3230. Non-game ready next: #3401 (after #3301), #3359 (hold lifted by Bryce 04:37Z; O-T readying). H13 archived; all old lanes archived.
 
 04:47Z: Pages c6535c78 SUCCESS (#3390 confirmed). MERGED #3382 → eda39fd5 (game). Pages 2fc7a8fe running; eda39fd5 next. Game queue: #3385, #3377, #3238, #3230 (all READY+green). Non-game: #3359 (full tier running), #3403 (R4 deflake, W13), #3301→#3401, #3391. Decisions: H16 owns tlx.js startProgramWarm fix (hidden-frame 3.8 s stall); W11 item 5 (physics catch-up cap) parked as Bryce's feel call. Roll call 04:42Z: 8/10 replied (H17, H18 pending).
+
+05:00Z: MERGED #3359 → e44df10d (hold lifted by Bryce 04:37Z); #3401 → 9d560b86 (merged by someone else). Pages: 2fc7a8fe SUCCESS, eda39fd5 (#3382) running. H16 → B·H21 session_01TWn85zRhZXGUL3FqTvdgno (Opus): #3386 (READY), #3408 (tlx startProgramWarm stall fix, draft). TLX heap lead (+59 MB ArrayBuffers: 27 MB BufferAttribute copies, pack bytes) → B·H19. H17 over context (231k) → HANDOFF pending; H18 ~170k → HANDOFF after #3406. Game queue: #3385, #3377, #3386, #3238, #3230. Non-game: #3403, #3391, #3301.
