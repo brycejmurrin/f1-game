@@ -9,8 +9,9 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const PICKS = 4;
 // Measured on this branch (TLX, 844x390 touch, 4 picks, 2026-10-21): every pick 0 card repaints + 113 blits,
-// 1 Car3D.build, 2 LiveryTex.buildAtlas, 1 GPU texture. The ceilings ARE those counts: one more is a regression.
-const CEIL = Object.freeze({ cardPaints: 0, car3dBuilds: 1, atlases: 2, textures: 1 });
+// 1 Car3D.build, 2 LiveryTex.buildAtlas (the 1024 preview, then the deferred 2048). The ceilings ARE those
+// counts: one more is a regression. Atlas textures are held to one upload per atlas painted (below).
+const CEIL = Object.freeze({ cardPaints: 0, car3dBuilds: 1, atlases: 2 });
 
 test.describe("garage livery pick cost", () => {
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -37,8 +38,8 @@ test.describe("garage livery pick cost", () => {
     // caught unrelated uploads on a slow runner (pack / model textures landing mid-pick: 11 on Pages
     // run cfefcbf7, shard selected-7), which says nothing about the pick.
     await page.evaluate(() => {
-      const n = (window.__pickCount = { car3dBuilds: 0, atlases: 0, textures: 0 });
-      const atlas = new WeakSet();
+      const n = (window.__pickCount = { car3dBuilds: 0, atlases: 0, textures: 0, reuploads: 0 });
+      const atlas = new WeakSet(), uploaded = new WeakSet();
       const wrap = (obj, key, field, after) => { const f = obj[key]; obj[key] = function () { n[field]++; const r = f.apply(this, arguments); if (after) after(r); return r; }; };
       wrap(Car3D, "build", "car3dBuilds");   // eslint-disable-line no-undef -- script-level const in the page
       wrap(LiveryTex, "buildAtlas", "atlases", (c) => { if (c && typeof c === "object") atlas.add(c); });   // eslint-disable-line no-undef
@@ -51,7 +52,10 @@ test.describe("garage livery pick cost", () => {
       }
       const b = window.renderer && window.renderer.backend;
       if (b && b.createTexture) { const c = b.createTexture.bind(b);
-        b.createTexture = function (t, o) { if (t && t.image && atlas.has(t.image)) n.textures++; return c(t, o); }; }
+        b.createTexture = function (t, o) {
+          if (t && t.image && atlas.has(t.image)) { n.textures++; if (uploaded.has(t.image)) n.reuploads++; uploaded.add(t.image); }
+          return c(t, o);
+        }; }
     });
     const rows = [];
     for (let i = 1; i <= PICKS; i++) {
@@ -62,7 +66,7 @@ test.describe("garage livery pick cost", () => {
       const after = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
       rows.push({ cardPaints: after.paints - before.paints, cardBlits: after.blits - before.blits,
         car3dBuilds: after.car3dBuilds - before.car3dBuilds, atlases: after.atlases - before.atlases,
-        textures: after.textures - before.textures });
+        textures: after.textures - before.textures, reuploads: after.reuploads - before.reuploads });
     }
     test.info().annotations.push({ type: "pick-cost", description: JSON.stringify(rows) });
     console.log("pick-cost " + JSON.stringify(rows));   // the measured counts behind CEIL, in the run log
@@ -73,7 +77,11 @@ test.describe("garage livery pick cost", () => {
       expect(r.cardPaints, `pick ${i + 1}: cards repainted ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.cardPaints);
       expect(r.car3dBuilds, `pick ${i + 1}: Car3D builds ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.car3dBuilds);
       expect(r.atlases, `pick ${i + 1}: atlases built ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.atlases);
-      expect(r.textures, `pick ${i + 1}: textures created ${JSON.stringify(r)}`).toBeLessThanOrEqual(CEIL.textures);
+      // One upload per atlas the pick painted, at most: three uploads on first draw, so the 1024 preview
+      // uploads only when a frame draws it before the deferred 2048 replaces it (1 or 2 by timing). An
+      // atlas uploaded twice, or more uploads than atlases, is the regression.
+      expect(r.reuploads, `pick ${i + 1}: an atlas uploaded twice ${JSON.stringify(r)}`).toBe(0);
+      expect(r.textures, `pick ${i + 1}: atlas textures created ${JSON.stringify(r)}`).toBeLessThanOrEqual(r.atlases);
     }
   });
 });
