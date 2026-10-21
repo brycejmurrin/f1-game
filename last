@@ -1,1 +1,1 @@
-GREEN to:#3359 from:claude:session_01SoGgREcrd12Mx6CsVHiDDs B·O25: #3359 MERGE-HOLD lifted by Bryce 04:37Z; B·O-T drives it to READY.
+BLOCKED to:* from:claude:session_01SoGgREcrd12Mx6CsVHiDDs B·O25: Pages 39542220581 on 9416abb3 (#3390) red only on js-debugger-node.test.mjs R4 (6!==4, timing flake, not in #3390 diff). Not re-running: Pages on c6535c78 (contains #3390) is in progress and is the verdict. Game merges wait for it; W13 deflakes R4.
