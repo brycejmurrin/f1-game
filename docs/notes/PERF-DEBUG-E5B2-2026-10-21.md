@@ -61,9 +61,12 @@ three AI pit calls): **identical** on bahrain dry, monza rain and vegas dry.
 - `tracks.js` `idx.every` + `Uint32Array.from` double scan, `surface.heightAt`
   duplicate pit-band call, debris `drainForces` per-step closures/`toFixed`
   (opt-in debris), weather-arc / race-control SC-only allocations: low.
-- `wheel-state.js` axle curve uses the FRONT lateral curve for both axles
-  (opt-in `apex26.wheelState`); overlaps c91f's WheelState claim — reported
-  there, not edited.
+- `wheel-state.js` evaluates the one-argument (FRONT) lateral curve in its
+  combined-slip Fx path, so zero-alpha Fx peaks near κ≈0.081 rather than
+  KAPPA_PEAK 0.10 (opt-in `apex26.wheelState`). c91f's source review (bus
+  f935d36) narrows it: PlayerForces keeps the rear pure-lateral plateau, so the
+  defect is rear combined-slip scaling. Needs per-axle force characterization;
+  not edited here.
 
 ## Limits
 
