@@ -87,6 +87,21 @@ true, so `schedulePlayerHiRes` returns at `js/car/car-draw.js:520` and the 2048 
 Guard: `tests/unit/livery-design.test.mjs` "a colour drag step writes nothing the editor already shows"
 (three colour-only drag steps: 100+ writes on the base, 0 after).
 
+## Before / after (G10), same base `76e45cb3`, n = 2 each
+
+`scratch/h32/pick-probe.mjs` (untracked): iPhone UA, `hasTouch`, 844x390, CPU x4, TLX GL-forced, `LiveryTex.IS_PHONE`
+true. Five LIVERY picks: `rb_matte`, `rb_holo`, `rb_matte` (cached), `rb_white`, `rb_matte` (cached). Base served
+from a worktree at the base commit.
+
+| metric | base run 1 / run 2 | fix run 1 / run 2 |
+|---|---|---|
+| `framingHull` inclusive over the five picks (CPU profile), ms | 781 / 619 | 195 / 130 |
+| first-visit picks: longest task minus that pick's `Car3D.build`, mean of 3, ms | 655 / 784 | 508 / 458 |
+
+`Car3D.build` itself swings 283–764 ms run to run on this box, so a pick's raw longest task is too noisy to carry
+the claim; the profile and the build-subtracted residual agree on ~200–250 ms per first visit. The remaining hull
+is `rb_white`, whose stripe presence differs (a real geometry change).
+
 ## Not measured
 
 - A real iPhone or a real GPU. The fix is main-thread DOM work, so a gpu-census Verdict is not the evidence

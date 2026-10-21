@@ -7258,6 +7258,9 @@
       "holdSetupCtl": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "hullKeyOf": [
+        "tests/unit/setup-preview-hull.test.mjs"
+      ],
       "panelCover": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -7300,8 +7303,7 @@
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/image-grade-shaders.test.mjs",
-        "tests/unit/setup-preview-hull.test.mjs"
+        "tests/unit/image-grade-shaders.test.mjs"
       ]
     },
     "js/garage/setup-experiments.js": {
