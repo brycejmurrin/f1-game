@@ -671,6 +671,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
+  "tests/unit/input-clock-rotate.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   // #1712: per-job inputs-hash path sets cover what guards / sweeps-parts read; ci.yml lookup-only cache + NO_MEMO nightly.
   "tests/unit/inputs-hash.test.mjs",

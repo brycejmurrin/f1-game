@@ -1435,6 +1435,7 @@
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/input-bindings.test.mjs",
+        "tests/unit/input-clock-rotate.test.mjs",
         "tests/unit/key-binds-calibration.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/key-binds-pad-menu.test.mjs",
