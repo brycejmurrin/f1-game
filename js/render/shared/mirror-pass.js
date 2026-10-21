@@ -79,18 +79,12 @@ const MirrorPass = (function () {
   // THE PHONE RUNG'S DRAW DISTANCE (B·H10, Bryce 2026-10-21: "shorter mirror draw distance"). Monza sweep, 7
   // positions: the lite mirror drew 75k tris mean / 117k worst at 180 m, 65k / 71k at 120 m, and no less at 100 or 80 m
   // — the floor is TLX's one unchunked whole-lap road (~51k tris, tlx.js chunkedTrackCoords:false), which no cull
-  // reaches. apex26.mirrorLiteCull: unset = LITE_CULL, 60..400 = that many metres (180 = the old rung). The low and min
-  // rungs never draw further than lite.
-  let _liteCull = LITE_CULL;
-  try {
-    const v = +localStorage.getItem("apex26.mirrorLiteCull");
-    if (v >= 60 && v <= 400) _liteCull = v;
-  } catch (_) { /* default */ }
+  // reaches. The low and min rungs never draw further than lite. QUALITY is exported so a probe can sweep it live.
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1, instEvery: _instEvery },
-    { name: "lite", lite: true,  res: 0.6, cull: _liteCull, reach: Math.min(140, _liteCull), every: 1, instEvery: 1 },
-    { name: "low",  lite: true,  res: 0.5, cull: Math.min(150, _liteCull), reach: Math.min(120, _liteCull), every: 2, instEvery: 1 },
-    { name: "min",  lite: true,  res: 0.4, cull: Math.min(120, _liteCull), reach: Math.min(100, _liteCull), every: 3, instEvery: 1 },
+    { name: "lite", lite: true,  res: 0.6, cull: LITE_CULL, reach: Math.min(140, LITE_CULL), every: 1, instEvery: 1 },
+    { name: "low",  lite: true,  res: 0.5, cull: Math.min(150, LITE_CULL), reach: Math.min(120, LITE_CULL), every: 2, instEvery: 1 },
+    { name: "min",  lite: true,  res: 0.4, cull: Math.min(120, LITE_CULL), reach: Math.min(100, LITE_CULL), every: 3, instEvery: 1 },
   ];
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
