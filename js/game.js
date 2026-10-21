@@ -8720,7 +8720,9 @@ function openSettings() {
   ensureAudio(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
-  focusSettingsHub();
+  // showModal() runs after the hidden flip; defer so hub focus beats the dialog's
+  // default focus fixup (survey #3249 — not BACK).
+  requestAnimationFrame(() => requestAnimationFrame(() => focusSettingsHub()));
 }
 let keyBinds = null;   // KeyBinds.create(G), below
 function closeSettings() { settingsNav.invalidate(); if (keyBinds) keyBinds.disarmAll(); els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
