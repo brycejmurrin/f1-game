@@ -1,0 +1,1 @@
+New: Three garage interiors — Porcelain Lab, Heritage Works and Endurance Blue — and Inspection, Golden Hour and Endurance lighting moods are available in the Team tab. Existing garage and lighting choices stay available.

@@ -850,6 +850,8 @@
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",
     "js/garage/scene-dress.js",
+    "js/garage/crew-motion.js",
+    "js/garage/crew-service.js",
     "js/garage/scene-crew.js",
     "js/garage/scene.js",
     "js/circuits/bahrain.js",

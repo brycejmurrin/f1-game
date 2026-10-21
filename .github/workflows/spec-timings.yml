@@ -143,6 +143,11 @@ jobs:
           mapfile -t JUNIT < <(find junit-in -name junit.xml | sort)
           node tools/ci/spec-timings.mjs "${JUNIT[@]}"
           node tools/ci/spec-timings.mjs --check || true
+          # STEP GATE, report-only (docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md
+          # I7): a 3x llvmpipe step on 2026-10-20 sat in this record for two
+          # deploys before Pages went red, because nothing read the series.
+          node tools/ci/spec-timings.mjs --steps --md >> "$GITHUB_STEP_SUMMARY" || true
+          node tools/ci/spec-timings.mjs --steps || true
           git --no-pager diff --stat tests/data/spec-timings.json || true
 
       - name: Push the record to its side branch

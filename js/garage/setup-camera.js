@@ -147,12 +147,12 @@ function startDriveOut() {
   const play = Object.assign({}, cfg, { enabled: true });
   driveOut = { t: 0, cfg: play };
   driveOutEngine(true);
-  return Math.round(GarageArrival.OUT_DURATION * 1000 / play.speed);
+  return Math.round(GarageArrival.duration(play, "out") * 1000 / play.speed);
 }
 // Wall ms of the drive-out still to play: it advances on the clamped frame dt, so a
 // stalled frame (a circuit build on the main thread) delays it rather than skipping it.
 function driveOutLeft() {
-  return driveOut ? Math.max(0, (GarageArrival.OUT_DURATION - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
+  return driveOut ? Math.max(0, (GarageArrival.duration(driveOut.cfg, "out") - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
 }
 // Stepped on the WALL clock, not the render dt the menu loop caps at 1/20 s: under
 // 20 fps that cap played the car in slow motion. A gap over 0.1 s (a synchronous

@@ -94,6 +94,28 @@ test("trackside bays (buildStatic) ignore the look", () => {
   assert.deepEqual(Array.from(sb.col), Array.from(sa.col), "pit rows keep the shipped room");
 });
 
+test("new room looks rebuild a live bay and restore its stock shell", () => {
+  const { GaragePrims, GarageScene, meshes } = harness();
+  const shellAfterDraw = () => {
+    const from = meshes.length;
+    GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+    const shell = meshes.slice(from).find((m) => !m.uv);
+    assert.ok(shell, "a changed room builds a new shell");
+    return shell;
+  };
+  const stock = shellAfterDraw();
+  for (const id of ["porcelain", "heritage", "endurance"]) {
+    assert.equal(GaragePrims.setLook(id), true, `${id} is selectable`);
+    const shell = shellAfterDraw();
+    assert.notDeepEqual(shell.col, stock.col, `${id} changes the current room`);
+    const count = meshes.length;
+    GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+    assert.equal(meshes.length, count, `${id} reuses its meshes on the next frame`);
+    GaragePrims.setLook("stock");
+    assert.deepEqual(shellAfterDraw().col, stock.col, `${id} leaves no colour override behind`);
+  }
+});
+
 test("a look's upper wall takes its panel colour, not the accent stripe", () => {
   const { plain } = build("flood");
   const shell = plain[0];
@@ -229,4 +251,23 @@ test("pickers: the crew and mood picks are saved by their scene modules", () => 
   assert.equal(scene.mood(), "night");
   assert.equal(saved.get("apex26.garageMood"), "night");
   assert.equal(scene.setMood("no-such-mood"), "shipped", "an unknown id falls back to the shipped rig");
+});
+
+test("new working-light moods preserve fixtures and restore the standard rig", () => {
+  const { GarageScene: scene } = harness();
+  const rig = () => Array.from(scene.live(LIV, 0, scene.moodCtx({ night: false, ambient: true })));
+  const base = rig();
+  const signatures = new Set();
+  for (const id of ["inspection", "goldenhour", "endurance"]) {
+    assert.equal(scene.setMood(id), id);
+    const lit = rig();
+    assert.ok(lit.every(Number.isFinite), `${id}: finite lighting records`);
+    assert.equal(lit.length % 15, 0, `${id}: complete fixture records`);
+    assert.ok(lit.length === base.length || (id === "endurance" && lit.length === base.length + 4 * 15),
+      `${id}: only the existing four night gantries may be enabled`);
+    signatures.add(JSON.stringify(lit));
+    scene.setMood("shipped");
+    assert.deepEqual(rig(), base, `${id}: no tint or gain leaks into standard lighting`);
+  }
+  assert.equal(signatures.size, 3, "each new mood changes the emitted light rig");
 });
