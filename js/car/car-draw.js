@@ -1631,7 +1631,7 @@ const CarDraw = (function () {
     }
     // recomputePlayerMods hands over the player's resolved wheel spec + cosmetic key.
     function setPlayerParts(vt, visualKey) {
-      const team = Teams.LIST[G.teamIdx];
+      const team = G.player ? G.player.team : Teams.LIST[G.teamIdx];   // the same team recomputePlayerMods resolved
       if (team) vt = Car3D.appearanceParts(vt, deps.resolveLivery(team));
       playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
       playerTyreId = vt._ids ? vt._ids.tyres : "medium";
