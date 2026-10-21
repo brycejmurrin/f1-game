@@ -201,3 +201,4 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 19:53Z: #3421 READY 4d70ee7c (full 31/0). NEW #3442 (H28, SettingDeps.refresh write-on-change from H30 G3; test fails→passes; no measured profile) full tier running. #3407 synced locally by O-C. Order: #3436 → #3424 → #3438 → #3439 → #3421 → #3442 → #3407.
 19:57Z: 89413c86 live. MERGED #3436 → 87246539 (GAME, H29). Next on green Pages 87246539: #3424. Bryce: garage lag in ~10 s phases → relayed to H30 as top angle.
 19:58Z: H29 FINAL at context cap (#3436 merged) → archived; launched B·H31 boot round 2 (Opus) session_016peTBzXhThg7o3UyBwSb34: TLX menu world warm 16-20 s. Branch to delete (Bryce, hook-blocked): cursor/live-debug-boot-1-base-h29a.
+20:09Z: #3421 → 185ab0ba merged by Bryce (on top of #3436 87246539). Live still 89413c86. Next: #3424 once 87246539 or 185ab0ba is live.
