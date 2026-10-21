@@ -1,0 +1,16 @@
+{
+ "date": "2026-10-21", "round": "1",
+ "setup": "Same frozen frames on both renderers in an emulated iPhone: 844×390 landscape, DPR 3, touch, iPhone Safari user agent (so phone memory caps apply), LOW resolution (0.5) by default and MED 0.75 + UPSCALE where marked. TLX runs three's WebGL2 path, which is what an iPhone runs. Software-rendered stills and memory; frame time from the one real GPU we can reach (the CI Mac, with phone caps forced).",
+ "recommendation": "RECO_PLACEHOLDER",
+ "tiles": [],
+ "memNote": "",
+ "memRows": [],
+ "perfNote": "",
+ "perfHead": [],
+ "perfRows": [],
+ "gapNote": "",
+ "gapRows": [],
+ "stillsNote": "",
+ "captions": {},
+ "footer": ""
+}

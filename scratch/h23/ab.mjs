@@ -76,7 +76,7 @@ const SCENES = [
   { id: "spa-chase", kind: "race", track: "spa", frac: 0.06, cam: "chase" },
   { id: "singapore-night", kind: "race", track: "singapore", frac: 0.05, tod: "night", cam: "chase" },
   { id: "spa-rain", kind: "race", track: "spa", frac: 0.06, weather: "rain", cam: "chase" },
-  { id: "monza-mirror", kind: "race", track: "monza", frac: 0.04, hud: true, cam: "chase" },
+  { id: "monza-mirror", kind: "race", track: "monza", frac: 0.04, hud: true, cam: "helmet", settle: 6000 },
 ];
 
 async function shoot(page, name) {
@@ -125,7 +125,7 @@ async function stills() {
         await sleep(2500);
         // re-park: a slow first build can let the start sequence put the car back on the grid after park()
         if (!sc.grid) await page.evaluate((sc) => { const a = window.__apex; a.park(sc.frac); a.freeze(true); if (sc.orbit) a.orbit(sc.frac, sc.orbit[0], sc.orbit[1], sc.orbit[2]); }, sc);
-        await sleep(1200);
+        await sleep(sc.settle || 1200);
         if (!sc.orbit) { await page.evaluate(() => window.__apex.snapCam()); await sleep(300); }
         await awaitPresentedFrame(page, 30000);
         await page.evaluate(() => window.__apex.headless(true));
