@@ -1,0 +1,1 @@
+Improved: on the WebGL2 fallback renderer the lens flare now keeps the scene depth only while the sun is on screen (as TLX already does), so a phone skips a full-screen depth write whenever the sun is behind or beside the camera. The picture is the same.
