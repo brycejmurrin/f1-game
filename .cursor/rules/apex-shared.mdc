@@ -19,20 +19,16 @@ alwaysApply: true
   live canvas → `mcp-probe`; host browser → `playwright-official`;
   bloat/extract/dead code → `slim-bloat` / `bloat-auditor`. Do not attach
   `mcp-probe` for a version.json check.
-- **MCP:** three servers in root `.mcp.json` (and `.cursor/mcp.json`):
-  `apex-tools`, `playwright-official`, `chrome-devtools`. Cloud host catalog
-  often does **not** auto-load them — then `tools/mcp/apex-tools-mcp.sh call`,
-  `tools/mcp/chrome-devtools-mcp.sh`, `python3 tools/mcp/probe-mcp.py chrome-start`
-  (CLI daemon, not attached). `tools/mcp/tinyfish-mcp.sh` is CLI-only and
-  egress-blocked in-container. Map: `docs/AGENT-SURFACE.md`.
-- **Cursor Cloud:** launch with model id `default` only. Cloud MCP is always
-  `cursor` / `cursor-cloud` / `cursor-subscriptions`, plus `apex-tools` /
-  `chrome-devtools` / `playwright-official` after Bootstrap §3; if only the
-  three `cursor*` appear, use the CLI fallbacks above, invent no namespace, and
-  re-Save when `environment-info` shows nameless bare-`bash` allowlist rows.
-  After every PR push: `subscribe_github_ci` + `subscribe_github_pr`; one timer
-  check-in (~1 h) only if the host lists `subscribe_timer` / `send_later`.
-  Serve locally for browser checks. AGENTS.md and the skills win.
+- **MCP:** five servers in `.mcp.json` / `.cursor/mcp.json` (`apex-tools`,
+  `playwright-official`, `chrome-devtools`, `js-debugger`, `apex-lsp`); plugin
+  MCPs (e.g. **browser-use**) → `mcpPluginServerAllowlist`. Catalog does **not** auto-load —
+  `tools/mcp/apex-tools-mcp.sh call`,
+  `tools/mcp/chrome-devtools-mcp.sh`, `probe-mcp.py chrome-start`; `tinyfish-mcp.sh`
+  CLI-only. Map: `docs/AGENT-SURFACE.md`.
+- **Cursor Cloud:** model `default` only. Namespaces: `cursor*` plus five repo
+  servers after Bootstrap §3; bare `cursor*` only → CLI fallbacks, re-Save when
+  `environment-info` shows nameless `bash` rows. PR push: `subscribe_github_ci` +
+  `subscribe_github_pr`. AGENTS.md and the skills win.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
   `test:tooling-fast` before screenshots or browser groups. Bootstrap / Cloud
   MCP: `docs/AGENT-SURFACE.md` §Bootstrap.

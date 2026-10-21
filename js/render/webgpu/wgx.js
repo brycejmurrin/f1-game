@@ -4463,8 +4463,9 @@ const WGX = (function () {
         // gloss.yz = FULL-res depth texel: the shader's finite-difference
         // normal strides read depthTex (full res); feeding them the half-res
         // OUTPUT texel doubled the stride the edge/self-hit thresholds were
-        // tuned at. gloss.w zeroed — postScratch is shared and uploads as-is.
-        s[49] = 1 / tw; s[50] = 1 / th; s[51] = 0;
+        // tuned at. gloss.w carries the road-only SSR budget: 0 full, 1 medium, 2 low.
+        s[49] = 1 / tw; s[50] = 1 / th;
+        s[51] = o.ssrQuality === 2 ? 2 : o.ssrQuality === 1 ? 1 : 0;
         device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });

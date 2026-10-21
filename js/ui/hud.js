@@ -413,6 +413,14 @@ const _gapFormShort = (arrow, code, t) => arrow + " " + t;
 // "+1.2s" in one box and "-1.2" in the other. Whole laps keep RELATIVE's own
 // spelling (slot 0 "+nL" = a lap up, slot 1 "-nL" = a lap down), so the two
 // never disagree.
+// BOTH LINES EMPTY collapses the plate (css/hud.css `.hud-gaps[data-empty]`). An
+// attribute written only when emptiness flips: the `:has(> div:not(:empty))` rule it
+// replaces re-ran root :has() invalidation on every gap text write (B·H11).
+function gapsEmptySync() {
+  const plate = els.gapA && els.gapA.parentNode;
+  if (!plate || !plate.dataset) return;
+  hData(plate, "empty", (els.gapA.textContent || (els.gapB && els.gapB.textContent)) ? null : "");
+}
 const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.test(t) ? "s" : "");   // "--" is not a number of seconds
 
 // THE HUD FITS ITSELF TO THE VIEWPORT.
@@ -2290,6 +2298,7 @@ function updateHud(force, dtMs) {
     };
     win(els.gapA, a); win(els.gapB, b);
   }
+  gapsEmptySync();
   // THE LANE IS STALE UNTIL THE STRINGS LAND. fitHud (above) clips #announce
   // from the gaps box as it was at the start of this tick — empty, or the
   // previous spelling. gapForm then drops the strip into the hanging band and

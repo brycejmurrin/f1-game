@@ -1,0 +1,45 @@
+name: Capture gallery
+run-name: Native capture gallery on ${{ github.ref_name }}
+
+# Bounded, opt-in native capture when a local browser/GPU is unavailable.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push
+# https://docs.github.com/en/actions/tutorials/store-and-share-data
+on:
+  workflow_dispatch:
+  push:
+    branches: ["cursor/**"]
+    paths: [".github/capture-gallery-request.json"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capture-gallery-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - name: Validate bounded capture request
+        run: node tools/shot/run-capture-request.mjs --plan
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Capture native frames and export gallery
+        run: node tools/shot/run-capture-request.mjs
+      - name: Upload images, camera receipts and portable gallery
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: capture-gallery-${{ github.sha }}
+          path: |
+            artifacts/design-matrix/ci-capture/
+            artifacts/capture-site/
+          if-no-files-found: warn
+          retention-days: 7

@@ -8,9 +8,29 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection, saveOutputArtifact, validateOutputLevel } from '../agent/output.mjs';
 
-const LEVEL = { type: 'string', enum: ['compact', 'diagnostic', 'full'], default: 'compact', description: 'Presentation only: compact (default), diagnostic, or original full result. The action executes once; use the saved-result retrieval tool for saved evidence.' };
+// tools/list is the text every schema-loading client pays, and a deferring client pays it per loaded
+// tool (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md: the per-tool prose was 56-68 % of each
+// server's listing). So LEVEL stays bare, the hint goes once into initialize's instructions, and only
+// output_read keeps the level prose.
+const LEVEL = { type: 'string', enum: ['compact', 'diagnostic', 'full'], default: 'compact' };
+const LEVEL_DOC = { ...LEVEL, description: 'Presentation only: compact (default), diagnostic, or the original full result.' };
 const ENVELOPE = { type: 'object', required: ['outputLevel', 'summary', 'artifact'], properties: { outputLevel: { enum: ['compact', 'diagnostic'] }, summary: {}, artifact: { type: 'object' } } };
 const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+// Third-party servers that send no instructions of their own: a deferring client sees only tool names and
+// instructions before it searches, so say when each server is the right one (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md).
+export const SERVER_PREFACES = {
+  'playwright-official': 'Host browser (browser_*): drive menus, HUD and UI flows like a player (phone landscape 844x390, touch first). browser_close before any apex_* browser tool; never while a Playwright test run or chrome-devtools is live.',
+  'chrome-devtools': 'Live working-tree canvas over Chrome DevTools: evaluate __apex hooks, console, network, performance traces, heap snapshots. One browser at a time: never while a Playwright test run or the host browser_* is live.',
+};
+export const GATEWAY_INSTRUCTIONS = 'Output gateway: every tool takes outputLevel=compact(default)|diagnostic|full, presentation only (the action runs once). Saved evidence: the final-page retrieval tool (output_read; underscore-prefixed on a name collision) reads structuredContent.artifact.path or _meta["apex/agent-output"].artifact.path.';
+// MCP 2025-06-18 ToolAnnotations defaults; a hint equal to its default says nothing.
+const HINT_DEFAULTS = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
+// annotations.title is the older display name; Tool.title, when present, takes precedence, so an equal copy is dropped too.
+export function withoutDefaultHints(annotations, toolTitle) {
+  if (!annotations || typeof annotations !== 'object' || Array.isArray(annotations)) return annotations;
+  return Object.fromEntries(Object.entries(annotations).filter(([k, v]) =>
+    !(own(HINT_DEFAULTS, k) && HINT_DEFAULTS[k] === v) && !(k === 'title' && toolTitle !== undefined && v === toolTitle)));
+}
 
 // Moving a schema into anyOf changes the root of document-local JSON pointers.
 // Rewrite only schema positions, leaving literal example/const payloads untouched.
@@ -65,10 +85,12 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
     remember(tool);
     const { parameter } = schemas.get(tool.name);
     const input = tool.inputSchema ?? { type: 'object' };
-    const description = `${tool.description ?? ''}\nOutput: ${parameter}=compact(default), diagnostic, full. Saved evidence: final-page retrieval tool; receipt in structuredContent.artifact.path or _meta["apex/agent-output"].artifact.path, when returned.${parameter !== 'outputLevel' ? ' Upstream outputLevel unchanged (collision).' : ''}`;
-    return { ...tool, description, inputSchema: inputWithLevel(input, parameter), ...(tool.outputSchema ? { outputSchema: resultSchema(tool.outputSchema) } : {}) };
+    // The general hint is in the server instructions; a renamed level key is per tool, so it stays here.
+    const collision = parameter !== 'outputLevel' ? { description: `${tool.description ?? ''}\nOutput level key: ${parameter} (upstream outputLevel unchanged; collision).` } : {};
+    const annotations = tool.annotations ? { annotations: withoutDefaultHints(tool.annotations, tool.title) } : {};
+    return { ...tool, ...collision, ...annotations, inputSchema: inputWithLevel(input, parameter), ...(tool.outputSchema ? { outputSchema: resultSchema(tool.outputSchema) } : {}) };
   }
-  const retrieval = () => ({ name: retrievalName, description: 'Read saved evidence without repeating its action. format=page returns byte pages. format=collection with pointer selects exact JSON rows (limit 1..100, max 262144 bytes/page); nextOffset advances within retained rows, never upstream pagination. format=original with outputLevel=full restores original MCP blocks including images up to 8 MiB. Artifact receipt is in structuredContent.artifact or _meta["apex/agent-output"].artifact for small native answers.', inputSchema: { type: 'object', properties: { artifact: { type: 'string', description: 'artifact.path returned by a previous tool call' }, format: { type: 'string', enum: ['page', 'collection', 'original'], default: 'page' }, pointer: { type: 'string', description: 'RFC 6901 pointer to retained array; embedded JSON text is decoded while traversing' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 65536 }, outputLevel: LEVEL }, required: ['artifact'], additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false } });
+  const retrieval = () => ({ name: retrievalName, description: 'Read saved evidence without repeating its action. format=page: byte pages. format=collection + pointer: exact JSON rows (limit 1..100, max 262144 bytes/page; nextOffset pages retained rows only). format=original + outputLevel=full: the original MCP blocks, images up to 8 MiB.', inputSchema: { type: 'object', properties: { artifact: { type: 'string', description: 'artifact.path returned by a previous tool call' }, format: { type: 'string', enum: ['page', 'collection', 'original'], default: 'page' }, pointer: { type: 'string', description: 'RFC 6901 pointer to retained array; embedded JSON text is decoded while traversing' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 65536 }, outputLevel: LEVEL_DOC }, required: ['artifact'], additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false } });
   function discover(cursor) {
     return new Promise((resolve, reject) => {
       const id = `output-gateway:${randomUUID()}`;
@@ -122,7 +144,7 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
         }
         if (own(message, 'id')) pending.set(key(message.id), { method: 'tools/call', level, name });
       } catch (e) { discovering.delete(key(message.id)); cancelled.delete(key(message.id)); error(message, -32602, e.message); return; }
-    } else if (message.method === 'tools/list' && own(message, 'id')) pending.set(key(message.id), { method: 'tools/list' });
+    } else if ((message.method === 'tools/list' || message.method === 'initialize') && own(message, 'id')) pending.set(key(message.id), { method: message.method });
     upstream(message);
   }
   function fromChild(message) {
@@ -133,7 +155,10 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
       const request = pending.get(key(message.id));
       pending.delete(key(message.id)); cancelled.delete(key(message.id));
       if (request && own(message, 'result')) {
-        if (request.method === 'tools/list') {
+        if (request.method === 'initialize') {
+          const upstreamText = typeof message.result?.instructions === 'string' && message.result.instructions ? message.result.instructions : SERVER_PREFACES[server] ?? '';
+          message = { ...message, result: { ...message.result, instructions: upstreamText ? `${upstreamText}\n\n${GATEWAY_INSTRUCTIONS}` : GATEWAY_INSTRUCTIONS } };
+        } else if (request.method === 'tools/list') {
           // Cache the whole page before descriptions are generated (including reserved-name collisions).
           for (const tool of message.result.tools ?? []) remember(tool);
           const tools = (message.result.tools ?? []).map(decorate);

@@ -63,6 +63,7 @@ test("a Gfx.create() that never settles resolves start() with GLX, canary left a
   assert.equal(h.ls.get("apex26.gfxBackendProbe"), "three",
     "a hang is a strike candidate: the next boot's canary reverts it, so a hung device costs two boots, not every boot");
   assert.equal(h.ls.get("apex26.gfxBackend"), "three", "the pick itself is untouched");
+  assert.equal(h.ls.get("apex26.gfxBootBound"), "webgl2", "the next boot's early preload guesses what this one bound: GLX");
 });
 
 test("a backend script fetch that never settles also falls through to GLX (network verdict: canary disarmed)", async () => {
@@ -91,6 +92,7 @@ test("steps that settle in time are untouched and leave no live timer", async ()
   const r = await h.rb.start();
   assert.equal(r.bound, true);
   assert.equal(r.gfx.api, "three");
+  assert.equal(h.ls.get("apex26.gfxBootBound"), "three", "the bound backend is recorded for the next boot's preload");
   assert.deepEqual(h.warns, []);
   // A leaked 8 s timer would fire later and strike a healthy backend (or keep the page alive).
   // (The ms=0 timer is the deliberate one-shot kick (setTimeout(kick, 0)) in renderer-boot.js, not a cap.)

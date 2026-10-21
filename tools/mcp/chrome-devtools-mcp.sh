@@ -192,7 +192,15 @@ cmd_clone() {
   fi
   if [[ ! -d "$REPO/.git" ]]; then
     mkdir -p "$(dirname "$REPO")"
-    git clone --depth 1 --branch "$MCP_PIN_TAG" "$REPO_URL" "$REPO"
+    rm -rf "$REPO"
+    # Tags are not branches on chrome-devtools-mcp; shallow --branch often 404s.
+    git clone --depth 1 "$REPO_URL" "$REPO"
+    (
+      cd "$REPO"
+      git fetch --depth 1 origin "refs/tags/${MCP_PIN_TAG}:refs/tags/${MCP_PIN_TAG}" \
+        || git fetch --depth 1 origin "$MCP_PIN_TAG"
+      git checkout -f "$MCP_PIN_TAG" 2>/dev/null || git checkout -f "tags/$MCP_PIN_TAG"
+    )
   fi
   cmd_build
 }

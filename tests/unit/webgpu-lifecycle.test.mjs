@@ -1389,7 +1389,9 @@ test("WGX R8 perf changes hold (SSR depth stride, pooled merge-run, lamp-mask ca
   // hN self-hit reject were tuned at.
   assert.match(POST_SOURCE, /let dTexel = select\(texel, U\.gloss\.yz/);
   assert.match(POST_SOURCE, /let nT = dTexel \* 3\.0;/);
-  assert.match(WGX_SOURCE, /s\[49\] = 1 \/ tw; s\[50\] = 1 \/ th; s\[51\] = 0;/);
+  assert.match(WGX_SOURCE, /s\[49\] = 1 \/ tw; s\[50\] = 1 \/ th;/);
+  assert.match(WGX_SOURCE, /s\[51\] = o\.ssrQuality === 2 \? 2 : o\.ssrQuality === 1 \? 1 : 0;/,
+    "the former pad lane must be written every frame so a reduced budget cannot leak into full quality");
   // F8: drawChunked's flush closure + per-state-change run object are hoisted
   // to module scope and pooled (the file's own _instDrawOpts / _litOptsBag
   // doctrine) — they were allocated per call, hundreds of times per frame.
