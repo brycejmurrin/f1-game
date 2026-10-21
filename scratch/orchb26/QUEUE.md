@@ -110,3 +110,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 06:1xZ: Pages b2457484 GREEN (#3386 confirmed). MERGED #3230 → 3d13be81 (GAME, Bryce priority). Next game #3406 after green Pages on 3d13be81; then #3238, #3377, #3399, #3408, #3422, #3388.
 
 06:22Z: GREEN game waiting: #3406 #3238 #3399 #3388 (H20 full 40/0) #3408 (H21 full 24/0). #3230 H24 FINAL. #3429 H20 input hunt draft. Pages 3d13be81 push run in_progress; watcher bbw0ad7dr armed → #3406 next.
+
+06:33Z: Pages 3d13be81 GREEN (#3230 live). MERGED #3406 → a013cbc6 (GAME). Next game #3238 after green Pages a013cbc6. #3396 READY (H15, full tier running). #3395 full tier red 1/516 vm-b2 (H22 triaging).
