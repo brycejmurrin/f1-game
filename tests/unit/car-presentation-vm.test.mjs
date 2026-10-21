@@ -262,7 +262,7 @@ test("warmCarAssetsAsync deferRear: the rear grid's uploads and casters wait for
   assert.equal(await rear.v.carDraw.warmCarAssetsAsync(() => true, 8, { deferRear: true }), true, "ran to the end");
   const front = rear.v.G.cars.filter((c) => c.isPlayer || c.gridPos <= playerPos + 1).length;
   assert.equal(rear.got.uploads, front, "uploads now: the player and the cars up to one slot behind it (" + front + " of 22)");
-  assert.equal(rear.got.atlases.length, eager.got.atlases.length, "every atlas is still painted under the cover");
+  assert.equal(rear.got.atlases.length, front, "and only those atlases are painted under the cover (GLX/WGX/mobile TLX upload inside createTexture)");
   const casters = (r) => r.v.rec.builds.filter((b) => b.kind === "sh").length;
   assert.ok(casters(rear) < casters(eager), "fewer casters before the lights (" + casters(rear) + " < " + casters(eager) + ")");
   assert.equal(rear.v.ctx.Log.records({ ns: "gfx" }).filter((r) => /^race car assets ready/.test(r.msg || "")).length, 1, "the ready line, once");
@@ -274,6 +274,7 @@ test("warmCarAssetsAsync deferRear: the rear grid's uploads and casters wait for
   // The fake clock moves only on a heavy piece (a caster build), so a frame drains the uploads before it and one caster.
   assert.ok(frames > 1 && frames <= first, "the queue drains across frames, a budget each (" + frames + " frames for " + first + " pieces)");
   assert.equal(rear.got.uploads, 22, "every atlas uploaded once the drain is done");
+  assert.deepEqual(rear.got.atlases.slice().sort(), eager.got.atlases.slice().sort(), "and every atlas painted, the same set");
   const sig = (r) => r.v.rec.builds.map((b) => b.kind + ":" + b.team + ":" + b.num).sort();
   assert.deepEqual(sig(rear), sig(eager), "the same bodies and casters in the end (order aside)");
   assert.equal(rear.v.carDraw.drainDeferredCarWarm(4), 0, "idempotent when empty");

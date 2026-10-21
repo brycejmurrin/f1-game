@@ -1948,10 +1948,11 @@ function dropTrackWorld() {
 // newer build or live() going false abandons it and frees its partial uploads.
 // Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
-// Under the race-entry cover (startRaceBody / introBuild): 16 ms slices and a frame every third one (~20 fps cover
-// animation) instead of 8 ms then a frame — Tracks.buildPaced's pace note. The menu picker keeps the default.
+// Under a loading cover (startRaceBody's building card, introBuild's introCover, the title boot): 16 ms slices and
+// a frame every third one (~20 fps cover animation) instead of 8 ms then a frame — Tracks.buildPaced's pace note.
+// The menu picker's build (no cover: a tap is answered mid-build) keeps the default.
 const RACE_BUILD_PACE = { budgetMs: 16, rafEvery: 3 };
-async function loadTrackStepped(idx, live, pace) {
+async function loadTrackStepped(idx, live) {
   // LAZY_CIRCUIT + LAZY_TRACK_BUILD: path/pal/sectors and the build toolkit land
   // via ensureScenery before any build. Callers (flyby / startRace / intro)
   // already await ensureScenery; these gates cover a direct stepped load and
@@ -1979,7 +1980,9 @@ async function loadTrackStepped(idx, live, pace) {
     // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
     if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx, undefined, live); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
     if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
-    if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes, pace && pace.budgetMs, pace); }
+    // Read before every slice (a function): a menu build RACE! joins takes the cover's pace at its next slice.
+    const pace = () => (loadingScreen.phase() ? RACE_BUILD_PACE : null);   // a cover is up: nobody taps the picker mid-build
+    if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes, undefined, pace); }
   } finally {
     try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
@@ -2516,7 +2519,7 @@ async function startRaceBody() {
   // live() stays true: this session owns the build (menu prep uses a generation gate).
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
   if (vmNoFramePump) loadTrack(trackIdx);
-  else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost(), RACE_BUILD_PACE)) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
+  else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
   if (stale()) return false; rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
@@ -3844,7 +3847,7 @@ function introBuild(go) {
         if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
         // In steps, a few ms per frame: the preparation card and skip remain responsive.
         if (join) await mp.step;
-        if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live, RACE_BUILD_PACE))) || !live()) return;
+        if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live))) || !live()) return;
         _menuGate.ready = key; _menuGate.track = track;
         // Assets, plans and shader warm all settle before the outgoing animation.
         const t1 = performance.now();

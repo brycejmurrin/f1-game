@@ -677,7 +677,9 @@ const CarDraw = (function () {
       while (_deferredCarWarm.length) {
         const it = _deferredCarWarm.shift();
         try {
-          if (it.tex) { if (typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(it.tex); }
+          // Through the caches, never a kept handle: a leftover drained by a later countdown (a red-flag restart)
+          // finds the atlas LRU may have dropped its texture since, and the cache rebuilds or hits as it should.
+          if (it.atlas) { const tex = getCarDecalTexture(it.c.team, carDecalNum(it.c.team, it.c), !!it.c.isPlayer); if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex); }
           else if (it.caster) teamMesh(it.c.team, it.c, true);
         } catch (e) { Log.warn("gfx", "deferred car warm failed for " + (it.c && it.c.team && it.c.team.id), e); }
         if (performance.now() - t0 >= budget) break;
@@ -689,11 +691,14 @@ const CarDraw = (function () {
         if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
         if (c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c);
       } else if (ph === 1) {
+        // A deferred car defers the whole phase — the paint too, since GLX, WGX and mobile TLX upload inside
+        // createTexture, so deferring only the upload would be a no-op there (code-hunter, 2026-10-21).
+        if (defer) { _deferredCarWarm.push({ c, atlas: true }); return; }
         const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
         // TLX defers every canvas to its first draw (gfx.js uploadTexture): push it
         // now, as the menu prep does, or the first warm frame uploads the field's
         // atlases in one go. GLX / WGX upload inside createTexture (no method).
-        if (sliced && tex && typeof G.gfx.uploadTexture === "function") { if (defer) _deferredCarWarm.push({ c, tex }); else G.gfx.uploadTexture(tex); }
+        if (sliced && tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
       } else if (ph === 2) {
         if (casters) { if (defer) _deferredCarWarm.push({ c, caster: true }); else teamMesh(c.team, c, true); }
         if (casters && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c);

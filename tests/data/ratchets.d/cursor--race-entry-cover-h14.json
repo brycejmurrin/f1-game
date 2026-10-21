@@ -1,11 +1,11 @@
 {
   "files": {
     "js/game.js": {
-      "codeLines": 2,
-      "lines": 6
+      "codeLines": 3,
+      "lines": 9
     },
     "js/track/tracks.js": {
-      "lines": 8
+      "lines": 11
     }
   }
 }

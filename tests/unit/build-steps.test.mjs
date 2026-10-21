@@ -101,6 +101,19 @@ test("buildPaced: pace.rafEvery keeps one frame wait per N slices, the rest are 
     assert.ok(Math.abs(frames * 2 - tasks) <= 2, "one frame per three slices: " + frames + " frames vs " + tasks + " tasks");
     for (let i = 2; i < paced.length; i += 3) assert.equal(paced[i], 16, "the third wait of each triple is the frame");
     assert.deepEqual(b.log, a.log, "the paced build uploads the same buffers in the same order");
+    // A FUNCTION pace is read before every slice: the picker's build that RACE! joins moves to the cover's pace.
+    waits.length = 0;
+    let covered = false;
+    const c = recorder();
+    const p = Tracks.buildPaced(def, { gfx: c.gfx }, () => true, () => { throw new Error("not abandoned"); }, 1, () => (covered ? { rafEvery: 3 } : null));
+    await new Promise((r) => setTimeout(r, 30));   // a few picker-paced slices in
+    const before = waits.length;
+    assert.ok(before >= 1 && waits.slice(0, before).every((ms) => ms === 16), "frame waits while uncovered (" + before + ")");
+    covered = true;
+    await p;
+    const after = waits.slice(before);
+    assert.ok(after.some((ms) => ms === 0), "task yields once the cover is up (" + after.filter((ms) => ms === 0).length + " of " + after.length + ")");
+    assert.deepEqual(c.log, a.log, "same uploads either way");
   } finally { Tracks._vmContext.setTimeout = vmSetTimeout; }
 });
 

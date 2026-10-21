@@ -456,15 +456,18 @@ const Tracks = (function () {
   // (race-entry CPU profile, B·H14 2026-10-21). With rafEvery N the build keeps a frame every Nth slice, so the
   // cover still animates, and yields to a task (scheduler.yield, else a 0 ms timer) in between. The menu's
   // picker build keeps every frame (rafEvery 1): a tap there is answered mid-build.
+  // `pace` is an object or a FUNCTION read before every slice: a menu build that RACE! joins mid-flight
+  // (game.js introBuild) moves to the cover's pace at its next slice instead of keeping the picker's.
   async function buildPaced(def, opts, alive, onAbandon, budgetMs, pace) {
-    const gen = ++_buildGen, it = buildSteps(def, opts), budget = budgetMs > 0 ? budgetMs : 8;
-    const rafEvery = pace && pace.rafEvery > 0 ? pace.rafEvery | 0 : 1;
+    const gen = ++_buildGen, it = buildSteps(def, opts);
+    const paceNow = () => (typeof pace === "function" ? pace() : pace) || null;
     const nextFrame = () => new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 16)));
     const nextTask = () => (typeof scheduler !== "undefined" && scheduler && typeof scheduler.yield === "function") ? scheduler.yield() : new Promise((res) => setTimeout(res, 0));
     let partial = null, r, slices = 0;
     _pacing++;
     try {
       for (;;) {
+        const p = paceNow(), budget = p && p.budgetMs > 0 ? p.budgetMs : budgetMs > 0 ? budgetMs : 8, rafEvery = p && p.rafEvery > 0 ? p.rafEvery | 0 : 1;
         const t0 = _now();
         do { r = it.next(); if (r.value) partial = r.value; } while (!r.done && _now() - t0 < budget);
         if (r.done) return r.value;
