@@ -36,38 +36,50 @@ test.describe("garage livery pick cost", () => {
     // frozen), and the GPU textures three allocates FOR A LIVERY ATLAS: a texture counts only when its
     // source is a canvas buildAtlas returned (or a bitmap made from one). Counting every createTexture
     // caught unrelated uploads on a slow runner (pack / model textures landing mid-pick: 11 on Pages
-    // run cfefcbf7, shard selected-7), which says nothing about the pick.
+    // run cfefcbf7, shard selected-7), which says nothing about the pick. Each upload is credited to the
+    // pick that PAINTED its atlas (window.__pick at buildAtlas time), not to the window it lands in: a
+    // pick's deferred upload can arrive during the next pick (B·H17's 3x run on 60118264).
     await page.evaluate(() => {
-      const n = (window.__pickCount = { car3dBuilds: 0, atlases: 0, textures: 0, reuploads: 0 });
-      const atlas = new WeakSet(), uploaded = new WeakSet();
+      const n = (window.__pickCount = { car3dBuilds: 0, atlases: 0, reuploads: 0, texByPick: {} });
+      window.__pick = 0;
+      const atlas = new WeakMap(), uploaded = new WeakSet();
       const wrap = (obj, key, field, after) => { const f = obj[key]; obj[key] = function () { n[field]++; const r = f.apply(this, arguments); if (after) after(r); return r; }; };
       wrap(Car3D, "build", "car3dBuilds");   // eslint-disable-line no-undef -- script-level const in the page
-      wrap(LiveryTex, "buildAtlas", "atlases", (c) => { if (c && typeof c === "object") atlas.add(c); });   // eslint-disable-line no-undef
+      wrap(LiveryTex, "buildAtlas", "atlases", (c) => { if (c && typeof c === "object") atlas.set(c, window.__pick); });   // eslint-disable-line no-undef
       if (typeof window.createImageBitmap === "function") {
         const cib = window.createImageBitmap;
         window.createImageBitmap = function (src) {
           const p = cib.apply(this, arguments);
-          return atlas.has(src) && p && p.then ? p.then((b) => { atlas.add(b); return b; }) : p;
+          return atlas.has(src) && p && p.then ? p.then((b) => { atlas.set(b, atlas.get(src)); return b; }) : p;
         };
       }
       const b = window.renderer && window.renderer.backend;
       if (b && b.createTexture) { const c = b.createTexture.bind(b);
         b.createTexture = function (t, o) {
-          if (t && t.image && atlas.has(t.image)) { n.textures++; if (uploaded.has(t.image)) n.reuploads++; uploaded.add(t.image); }
+          if (t && t.image && atlas.has(t.image)) {
+            const k = atlas.get(t.image);
+            n.texByPick[k] = (n.texByPick[k] || 0) + 1;
+            if (uploaded.has(t.image)) n.reuploads++;
+            uploaded.add(t.image);
+          }
           return c(t, o);
         }; }
     });
     const rows = [];
     for (let i = 1; i <= PICKS; i++) {
       const before = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
-      await page.evaluate((k) => { const s = [...document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)")][k]; s.click(); }, i);
+      await page.evaluate((k) => { window.__pick = k; const s = [...document.querySelectorAll(".cs-liv-swatch:not(.cs-liv-plus)")][k]; s.click(); }, i);
       // The pick's synchronous rebuild plus a few frames for the deferred preview mesh / atlas.
       await page.evaluate(() => new Promise((done) => { let f = 0; const t = () => (++f >= 8 ? done(null) : requestAnimationFrame(t)); requestAnimationFrame(t); }));
       const after = await page.evaluate(() => ({ ...window.__pickCount, ...LiveryTex.swatchStats() }));
       rows.push({ cardPaints: after.paints - before.paints, cardBlits: after.blits - before.blits,
         car3dBuilds: after.car3dBuilds - before.car3dBuilds, atlases: after.atlases - before.atlases,
-        textures: after.textures - before.textures, reuploads: after.reuploads - before.reuploads });
+        reuploads: after.reuploads - before.reuploads });
     }
+    // Late uploads settle, then each pick reads the uploads of the atlases IT painted.
+    await page.evaluate(() => new Promise((done) => { let f = 0; const t = () => (++f >= 16 ? done(null) : requestAnimationFrame(t)); requestAnimationFrame(t); }));
+    const texByPick = await page.evaluate(() => ({ ...window.__pickCount.texByPick }));
+    for (const [i, r] of rows.entries()) r.textures = texByPick[i + 1] || 0;
     test.info().annotations.push({ type: "pick-cost", description: JSON.stringify(rows) });
     console.log("pick-cost " + JSON.stringify(rows));   // the measured counts behind CEIL, in the run log
     // Not vacuous: the attribution must still see the picks' own atlas uploads.
