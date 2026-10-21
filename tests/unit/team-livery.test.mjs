@@ -263,7 +263,8 @@ test("resolveLivery and the live preview keep every editor tint", () => {
   assert.deepEqual(missing, [], "LIVERY_FIELDS drops fields Liveries.FIELDS publishes");
   assert.deepEqual(extra, [], "LIVERY_FIELDS names fields Liveries.FIELDS does not");
   // …and every read path folds a stored file's retired keys exactly once.
-  assert.match(CUSTOM_LIV_SRC, /return pickLivery\(migrateLivery\(livDraftOverride\.liv\)\)/,
+  // The draft result is memoised per draft object (livery-design.test.mjs pins that), still migrate-then-pick.
+  assert.match(CUSTOM_LIV_SRC, /val: pickLivery\(migrateLivery\(livDraftOverride\.liv\)\)/,
     "draft resolveLivery must migrate, then resolve through pickLivery");
   assert.match(CUSTOM_LIV_SRC, /pickLivery\(migrateLivery\(liv\)\)/,
     "cached resolveLivery must migrate, then resolve through pickLivery");

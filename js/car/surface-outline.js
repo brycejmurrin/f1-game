@@ -33,7 +33,7 @@ const GarageSurfaceOutline = (() => {
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const i = y * width + x;
       if (!allowed[i]) continue;
-      if (edge[i]) { pixels.set([255, 255, 255, 255], i * 4); continue; }
+      if (edge[i]) { const o = i * 4; pixels[o] = pixels[o + 1] = pixels[o + 2] = pixels[o + 3] = 255; continue; }
       // One dark keyline around the white contour, never a filled overlay.
       if ((x > 0 && edge[i - 1]) || (x + 1 < width && edge[i + 1]) ||
           (y > 0 && edge[i - width]) || (y + 1 < height && edge[i + width])) pixels[i * 4 + 3] = 235;
@@ -67,7 +67,8 @@ const GarageSurfaceOutline = (() => {
         const pixels = contour(a.data, b.data, a.width, a.height, regions, LiveryTex.SIZE, LiveryTex.SIZE_H);
         if (!pixels) return false;
         const canvas = document.createElement("canvas"); canvas.width = a.width; canvas.height = a.height;
-        const ctx = canvas.getContext("2d"), image = ctx.getImageData(0, 0, a.width, a.height);
+        // createImageData: the same transparent buffer, without reading back a blank canvas.
+        const ctx = canvas.getContext("2d"), image = ctx.createImageData(a.width, a.height);
         image.data.set(pixels); ctx.putImageData(image, 0, 0);
         texture = gfx.createTexture(canvas);
         if (!texture) return false;
