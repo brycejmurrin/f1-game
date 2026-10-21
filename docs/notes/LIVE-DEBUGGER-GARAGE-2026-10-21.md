@@ -29,8 +29,14 @@ records every MutationRecord over 20 drag steps.
 
 | G5 | `js/car/liverytex.js` BRUSHED finish / TLX livery material | medium | REFUTED | gpu-census 39668066437 (macos-latest, real GPU): `livery_finish_sweep` gloss vs brushed, TLX WebGPU p50 33.4 / 33.3 ms. No steady per-frame BRUSHED shader cost. | — |
 | G6 | `js/car/car-draw.js` `getCarDecalTexture` on a stock livery pick | low | REFUTED (stock picks) | gpu-census 39669394928 `livery_select_trace`: per pick, 0 `createRenderPipeline`, 1 `createTexture` and one 1–5 ms `buildAtlas`. A stock pick compiles nothing. The custom BRUSHED pick was never exercised (census bug, fixed in rev 16). | — |
-| G7 | `js/car/car-draw.js:515` `schedulePlayerHiRes` (desktop-only 2048 swap) vs `js/render/three/tlx.js:2881` `TEX_POOL_MS` age-out | high | G7_VERDICT | gpu-census 39668649598 (rev 12, 60 s idle in the bay): one 2.2 s (WebGPU) / 4.4 s (WebGL2) stall ~10 s after the bay opens, main thread idle. G7_EVIDENCE | G7_STATUS |
-| G8 | TLX WebGL2 idle plateau | medium | G8_VERDICT | rev 12: WebGL2 falls from ~25 to 13–17 fps after ~15 s idle and stays there; WebGPU does not. G8_EVIDENCE | G8_STATUS |
+| G7 | `js/car/car-draw.js:515` `schedulePlayerHiRes` (desktop-only 2048 swap) vs `js/render/three/tlx.js:2881` `TEX_POOL_MS` age-out | — | REFUTED (hi-res is not the cause) | gpu-census 39668649598 (rev 12, 60 s idle in the bay): one 2.2 s (WebGPU) / 4.4 s (WebGL2) stall ~10 s after the bay opens, main thread idle. Rev 15 (39671401662, hi-res arms first): 2200 / 3733 ms stalls on the two hi-res arms, none on the hi-res-off arms (max 150 / 167 ms). Rev 16 (39673751149) flipped the order: the FIRST arm, hi-res OFF, stalled 1933 ms at +2.35 s; the hi-res arms, run 3rd and 4th, max 150 / 133 ms. The stall follows the cold first launch(es), not the swap. | Not fixed (desktop-only anyway; Bryce 20:52Z: "focus on phone improvements only"). The cold stall is G9 |
+| G8 | TLX WebGL2 idle plateau | — | REFUTED (runner drift) | rev 12: WebGL2 falls from ~25 to 13–17 fps after ~15 s idle and stays there; WebGPU does not. Rev 15 and rev 16 together: whichever arms run LATER sit at 12–17 fps on any backend, hi-res on or off (rev 16's first arm, WebGPU hi-res off, held 25–32 fps; rev 15's last two, hi-res off, 12–15). memState pool / rObj / progs / tier stay flat across the drop. | — |
+| G9 | TLX render warm-up (`js/render/three/`) | medium | OPEN | The one-time 1.9–3.7 s GPU stall a few seconds into the first garage visit of a cold browser (G7's evidence), main thread idle. Points at a deferred program / pipeline compile or warm-up landing then. | Handed to B·H26 (render lane) by message, 21:05Z. Phone: unknown, iOS keeps its own shader cache |
+| G10 | `js/garage/setup-camera.js` hull key; `js/game.js:1293` `partsVisualKey` appends `"|L:" + liveryId` | medium | CONFIRMED-LIVE (phone path) | The turntable's framing-hull cache keyed on the preview key, which carries the livery id, so every first visit to a livery re-ran `framingHull` over ~19k points even when no geometry field differed. Phone-path probe (`scratch/h32/pick-probe.mjs`: iPhone UA, touch, 844x390, CPU x4, `LiveryTex.IS_PHONE` true): `framingHull` 781 ms inclusive over 3 first-visit picks (~260 ms each). | FIXED (this PR): `SetupCamera.hullKeyOf` drops the id and keeps team, parts, seat and `SP_HULL_GEOM_FIELDS`; guard in `setup-preview-hull.test.mjs` |
+| G11 | `js/garage/setup-sheet.js:893` `livSwatch` | low | CONFIRMED-LIVE (phone path) | A livery pick rebuilds the sheet (`row.onclick` → `buildSetup`, `:1041`), and every one of the 113 cards makes a new canvas + `getContext` + a cached-swatch `drawImage`: `livSwatch` 368 ms inclusive over 5 picks (~74 ms each). The painting itself is already cached (B·H13). | NOT CHANGED: reusing the card canvases changes `garage-pick-cost.spec.js`'s per-pick blit assertion; next lever |
+| G12 | `js/garage/setup-sheet.js:1041` `row.onclick` → full `buildSetup` + `focus()` | medium | CONFIRMED-LIVE (phone path) | ~283 ms per pick at CPU x4 on every pick, cached car or not: `buildSetup` 823 ms + `focus` 572 ms (the forced layout of the new sheet) over 5 picks. | NOT CHANGED: a targeted active-row update would need to reproduce everything `buildSetup` refreshes |
+| G13 | `js/garage/scene.js:1066` `roomKeys` keys the room geometry on paint | low | CONFIRMED-LIVE (phone path) | Every pick to a livery with other colours rebuilds the shell, LEDs, floor and props: `rebuild` 614 ms over 5 picks (~123 ms each), 15 `createMesh`. By design today: the bay wears the team colours. | NOT CHANGED |
+| G14 | custom BRUSHED pick (Bryce's trigger, recording 12:12 PT) | — | NOT REPRODUCED (Mac GPU) | Census rev 16 picked the saved custom on all four arms: 0 pipelines and 0 textures per pick, no sustained dip over ten 1 s buckets (only drift-level fps). Bryce's 6–9 fps for ~10 s is phone-GPU-specific or tied to that livery's content. | Needs his livery export or an on-device trace |
 
 ## ~10 s timers that could fire in the bay (Bryce, ~20:15Z: "lagging happens in phases like every 10 seconds")
 
@@ -46,6 +52,23 @@ records every MutationRecord over 20 drag steps.
 | garage radio | `js/ui/loading-screen.js:840` `GARAGE_RADIO_MS = 2600` | once | at the roll-out, not in the bay |
 
 Nothing in `js/garage/**` runs on a repeating ≥ 5 s timer. The two repeating candidates are TLX's pool age-out and prune, both in `js/render/three/` (B·H26's lane).
+
+## Which findings reach Bryce's iPhone
+
+Bryce plays on an iPhone (TLX; WebGPU when Safari exposes it). On a phone `GLX.isMobile` makes `LiveryTex.IS_PHONE`
+true, so `schedulePlayerHiRes` returns at `js/car/car-draw.js:520` and the 2048 swap never runs.
+
+| row | reaches the phone? |
+|---|---|
+| G1, G2 (drag DOM writes) | yes: main-thread DOM work, any device |
+| G3 (SettingDeps refresh) | yes (B·H28, #3442) |
+| G4 (colour edit rebuilds the car and the room) | yes: CPU-side |
+| G7 (2048 swap) | no: desktop only, and not the stall anyway |
+| G8 (late-arm plateau) | no: a runner artifact |
+| G9 (cold-start GPU stall) | unknown: the census GPU is a macOS VM; iOS keeps its own shader cache |
+| G10, G11, G12, G13 (per-pick CPU cost) | yes: measured on the phone path (`IS_PHONE` true) at CPU x4 |
+| G14 (custom BRUSHED pick dip) | his report is from the phone; not reproduced on the Mac GPU |
+| TLX texture pool age-out (`TEX_POOL_MS`) | yes, it runs everywhere; no stall seen at its 10 s mark in either census |
 
 ## Before / after (G1+G2), same base `e696b626`, n = 2 each
 
