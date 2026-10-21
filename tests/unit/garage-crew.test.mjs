@@ -24,11 +24,11 @@ function load() {
   const draws = [], meshes = [], freed = [];
   const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length, d }; meshes.push(mesh); return mesh; }, freeMesh: (mesh) => freed.push(mesh), draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
-  return { Crew, Arrival, draws, meshes, freed, Motion: vm.runInContext("GarageCrewMotion", ctx) };
+  return { Crew, Arrival, draws, meshes, freed, Service: vm.runInContext("GarageCrewService", ctx), Motion: vm.runInContext("GarageCrewMotion", ctx) };
 }
 const LIV = { c1: [1, 0.5, 0], c2: [0.1, 0.1, 0.1] };
 
@@ -87,7 +87,7 @@ test("design-preview crew looks: each builds valid, distinct geometry; classic s
   const meshes = [];
   const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
@@ -121,7 +121,7 @@ test("pit-stop front jack: saddle seated on each chassis' nose underside, clear 
   const STYLES = { base: {}, droop: { noseDroop: -0.03, noseSlim: 0.84 }, long: { noseTipZ: 0.55 }, short: { noseTipZ: -0.32, noseDroop: 0.04 } };
   const Car3D = { CHASSIS: { nose: [{ z: 2.60, y: 0.245, h: 0.072 }, { z: 2.00, y: 0.315, h: 0.235 }] }, teamStyleOf: (id) => STYLES[id] || {}, bodyStyleKey: (t, b) => b || t };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Car3D, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx); Crew.setLook("pitstop");
@@ -311,4 +311,107 @@ test('actual articulated boot transforms plant in both world axes during retreat
     prev=feet;
   }
   assert.ok(contacts>=10);
+});
+
+
+test('service crew is five workers with staged equipment and a clear departure lane', () => {
+  const { Service, Arrival }=load(), cfg=Arrival.settings({enterCrew:'service',leaveCrew:'service'});
+  assert.equal(cfg.enterCrew,'service');assert.equal(cfg.leaveCrew,'service');
+  assert.equal(Arrival.duration(cfg),Arrival.DURATION+6);assert.equal(Arrival.duration(cfg,'out'),Arrival.OUT_DURATION+3);
+  for(let t=0;t<8.4;t+=.2) {
+    const p=Arrival.pose(t,cfg,true), q=Arrival.pose(t,Arrival.DEFAULT,true);
+    assert.equal(p.x,q.x);assert.equal(p.z,q.z);
+    const a=Service.layout(p);assert.equal(a.length,5);assert.ok(a.slice(0,4).every(a=>Math.abs(a.x)>=2.69));assert.equal(a[4].x,4.05);
+  }
+  const near=Service.layout(Arrival.pose(11.8,cfg,true));
+  assert.ok(near.slice(0,4).every(a=>Math.abs(Math.abs(a.x)-1.45)<1e-5));
+  assert.ok(near.slice(0,4).every(a=>!a.coverAttached));
+  for(let t=0;t<=5.9;t+=.1)assert.equal(Arrival.poseOut(t,cfg,true).z,0,'car waits for equipment');
+  const clear=Service.layout(Arrival.poseOut(5.9,cfg,true));
+  assert.ok(clear.slice(0,4).every(a=>Math.abs(a.x)>2.69&&a.coverAttached));assert.equal(clear[4].x,4.05);
+  assert.ok(Arrival.poseOut(6.2,cfg,true).z>0);
+});
+
+test('service playback reuses every mesh, keeps grounded props and clears the moving car', () => {
+  const { Crew,Arrival,draws,meshes,freed }=load(), cfg=Arrival.settings({enterCrew:'service',leaveCrew:'service'});
+  Crew.draw(LIV,[-3,2,-4],Arrival.pose(0,cfg,true));const built=meshes.length;
+  for(const dir of ['in','out'])for(let t=0;t<Arrival.duration(cfg,dir);t+=.12) {
+    const p=(dir==='in'?Arrival.pose:Arrival.poseOut)(t,cfg,true);draws.length=0;Crew.draw(LIV,[-3,2,-4],p);
+    assert.equal(draws.length,92);assert.equal(meshes.length,built,'no mesh creation during service');
+    for(const d of draws)assert.ok(d.m.every(Number.isFinite));
+    for(const d of draws.slice(24,90))for(let k=0;k<d.mesh.d.pos.length;k+=3) {
+      const v=d.mesh.d.pos,m=d.m,y=m[1]*v[k]+m[5]*v[k+1]+m[9]*v[k+2]+m[13];assert.ok(y>-.001,'worker and equipment stay above the floor');
+      if(Math.abs(p.z)+Math.abs(p.x)>.03) {
+        const x=m[0]*v[k]+m[4]*v[k+1]+m[8]*v[k+2]+m[12];assert.ok(Math.abs(x)>1.1,'service crew and props clear the moving car');
+      }
+    }
+    for(let person=0;person<5;person++)for(const j of [2,3,5,6,7,8,10,11]) {
+      const d=draws[24+person*13+j];
+      // Every leg and arm segment retains its authored length.
+      assert.ok(Math.abs(Math.hypot(d.m[4],d.m[5],d.m[6])-1)<.001,'limbs do not stretch to reach equipment');
+    }
+  }
+  Crew.free();assert.equal(freed.length,built);assert.equal(new Set(freed).size,built);
+});
+
+test('jack operator hands follow the animated T-bar through insertion and withdrawal', () => {
+  const { Crew,Arrival,draws }=load(), cfg=Arrival.settings({enterCrew:'service',leaveCrew:'service'});
+  for(const [dir,t] of [['in',12.5],['in',12.8],['out',.6],['out',2.7],['out',5.3]]) {
+    draws.length=0;Crew.draw(LIV,[-3,2,-4],(dir==='in'?Arrival.pose:Arrival.poseOut)(t,cfg,true));
+    const bar=draws[89], positions=bar.mesh.d.pos.slice(-72), local=[0,0,0];
+    for(let k=0;k<positions.length;k+=3)for(let axis=0;axis<3;axis++)local[axis]+=positions[k+axis]/24;
+    const world=(m,p)=>[m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12],m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13],m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14]];
+    const centre=world(bar.m,local);
+    for(const hand of [draws[82],draws[87]]) {
+      const p=world(hand.m,[0,.30,0]);assert.ok(Math.abs(p[1]-centre[1])<1e-5);
+      assert.ok(Math.hypot(p[0]-centre[0],p[2]-centre[2])<.225,'both gloves grip the T-bar');
+    }
+  }
+});
+
+test('service workers keep translation contacts planted across multiple walking cycles', () => {
+  const { Crew,Arrival,draws }=load(), cfg=Arrival.settings({enterCrew:'service'});let prev=null,contacts=0;
+  for(let k=0;k<=200;k++) {
+    const t=8.7+2.2*k/200;draws.length=0;Crew.draw(LIV,[-3,2,-4],Arrival.pose(t,cfg,true));
+    const feet=[28,33,41,46,54,59,67,72,80,85].map(i=>[draws[i].m[12],draws[i].m[13],draws[i].m[14]]);
+    if(prev)for(let i=0;i<feet.length;i++)if(Math.abs(feet[i][1]-.08)<1e-5&&Math.abs(prev[i][1]-.08)<1e-5){assert.ok(Math.hypot(feet[i][0]-prev[i][0],feet[i][2]-prev[i][2])<.003);contacts++;}
+    prev=feet;
+  }
+  assert.ok(contacts>100);
+});
+
+
+test('jack turning steps lift one foot while the other stays fixed in world space', () => {
+  const { Crew,Arrival,draws }=load(), cfg=Arrival.settings({enterCrew:'service',leaveCrew:'service'});
+  for(const [dir,start,end] of [['in',10.4,11.1],['out',1.2,1.8]]) {
+    let prev=null,contact=0,lift=false;
+    for(let k=0;k<=100;k++) {
+      const t=start+(end-start)*k/100;draws.length=0;Crew.draw(LIV,[-3,2,-4],(dir==='in'?Arrival.pose:Arrival.poseOut)(t,cfg,true));
+      const feet=[draws[80],draws[85]].map(d=>d.m);
+      for(const f of feet)lift ||= f[13]>.12;
+      if(prev)for(let i=0;i<2;i++)if(Math.abs(feet[i][13]-.08)<1e-5&&Math.abs(prev[i][13]-.08)<1e-5) {
+        for(const j of [0,2,8,10,12,14])assert.ok(Math.abs(feet[i][j]-prev[i][j])<.0001,'grounded boot holds both its position and orientation');contact++;
+      }
+      prev=feet;
+    }
+    assert.ok(lift);assert.ok(contact>90);
+  }
+});
+
+
+test('cover handlers crouch beside the tyres without putting knees inside them', () => {
+  const { Crew,Arrival,draws }=load(), cfg=Arrival.settings({enterCrew:'service',leaveCrew:'service'});
+  for(const [dir,t] of [['in',11.2],['in',11.75],['in',12],['out',1.7],['out',2],['out',2.5]]) {
+    draws.length=0;Crew.draw(LIV,[-3,2,-4],(dir==='in'?Arrival.pose:Arrival.poseOut)(t,cfg,true));
+    for(let worker=0;worker<4;worker++) {
+      const wx=(worker%2?-1:1)*(worker<2?.79:.76),wz=worker<2?1.7:-1.6;
+      for(const part of [2,3,4,7,8,9]) {
+        const {mesh,m}=draws[24+worker*13+part],p=mesh.d.pos;
+        for(let k=0;k<p.length;k+=3) {
+          const x=m[0]*p[k]+m[4]*p[k+1]+m[8]*p[k+2]+m[12],y=m[1]*p[k]+m[5]*p[k+1]+m[9]*p[k+2]+m[13],z=m[2]*p[k]+m[6]*p[k+1]+m[10]*p[k+2]+m[14];
+          assert.ok(Math.abs(x-wx)>=.215||Math.hypot(y-.36,z-wz)>=.35,'leg geometry must remain outside tyre rubber');
+        }
+      }
+    }
+  }
 });

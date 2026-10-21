@@ -6750,6 +6750,10 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
+      "duration": [
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew.test.mjs"
+      ],
       "pose": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs"
@@ -6777,6 +6781,17 @@
         "tests/unit/garage-crew.test.mjs"
       ],
       "sample": [
+        "tests/unit/garage-crew.test.mjs"
+      ]
+    },
+    "js/garage/crew-service.js": {
+      "draw": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "free": [
+        "tests/unit/garage-crew.test.mjs"
+      ],
+      "layout": [
         "tests/unit/garage-crew.test.mjs"
       ]
     },

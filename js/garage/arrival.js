@@ -8,7 +8,7 @@ const GarageArrival = (function () {
     const v = value && typeof value === "object" ? value : {};
     const number = (key, lo, hi) => typeof v[key] === "number" && Number.isFinite(v[key])
       ? Math.max(lo, Math.min(hi, v[key])) : DEFAULT[key];
-    const crew = (key) => ["current", "guides", "welcome", "none"].includes(v[key]) ? v[key] : DEFAULT[key];
+    const crew = (key) => ["current", "guides", "service", "welcome", "none"].includes(v[key]) ? v[key] : DEFAULT[key];
     return { enabled: v.enabled !== false, speed: number("speed", 0.5, 2),
       angle: ["cut", "left", "right"].includes(v.angle) ? v.angle : "cut", fov: number("fov", 40, 75),
       enterCrew: crew("enterCrew"), leaveCrew: crew("leaveCrew") };
@@ -124,16 +124,20 @@ const GarageArrival = (function () {
   // along the drive-out's own arc (IN_BACK s) and parks, nose to the pit lane.
   const IN_LANE = 2.6, IN_LANE_M = 22, IN_PAUSE = 0.4, IN_BACK = 3.6;
   const DURATION = DOOR_S + IN_LANE + IN_PAUSE + IN_BACK + 0.3;
+  function duration(config = DEFAULT, dir = "in") {
+    const service = config && config[dir === "out" ? "leaveCrew" : "enterCrew"] === "service";
+    return (dir === "out" ? OUT_DURATION : DURATION) + (service ? (dir === "out" ? 3 : 6) : 0);
+  }
   function pose(seconds, config = DEFAULT, calm = false) {
-    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
+    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), end = duration(config);
     const left = config.angle === "left" || (config.angle !== "right" && t < DOOR_S);
     const side = config.angle === "left" ? 1 : -1;   // away from the eye that watches it in (after the door)
     const u = Math.max(0, Math.min(1, (t - DOOR_S) / IN_LANE)), lane = IN_LANE_M * (1 - (1 - u) * (1 - u));
     const back = ease((t - DOOR_S - IN_LANE - IN_PAUSE) / IN_BACK);
     const p = back > 0 ? pathAt(OUT_PATH * (1 - back), side)
       : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
-    return shot({ active: t < DURATION, seconds: t, direction: "in", calm, crewClear: 1 - ease((t - (DURATION - .6)) / .3), crew: config.enterCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
-      label: t < DOOR_S ? "OPENING GARAGE" : t < DURATION - 0.3 ? "BRINGING CAR IN" : "READY FOR WORK" },
+    return shot({ active: t < end, serviceTime: t - (DURATION - .3), seconds: t, direction: "in", calm, crewClear: 1 - ease((t - (DURATION - .6)) / .3), crew: config.enterCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+      label: t < DOOR_S ? "OPENING GARAGE" : t < DURATION - 0.3 ? "BRINGING CAR IN" : end > DURATION && t < end - .5 ? "CREW SERVICING CAR" : "READY FOR WORK" },
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
       left ? EYE_L : EYE_R,
@@ -164,21 +168,21 @@ const GarageArrival = (function () {
     return OUT_V * (Math.min(tm, OUT_RUN + OUT_EXIT) - OUT_ACCEL / 2);
   }
   function poseOut(seconds, config = DEFAULT, calm = false) {
-    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
+    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), end = duration(config,"out"), delay = end - OUT_DURATION, settle = OUT_SETTLE + delay;
     const right = config.angle === "right", side = right ? -1 : 1;   // turn away from the eye
     const opening = t < DOOR_S;
-    const p = pathAt(outDistance(Math.min(t, OUT_SETTLE) - DOOR_S - OUT_HOLD), side);
+    const p = pathAt(outDistance(Math.min(t, settle) - DOOR_S - OUT_HOLD - delay), side);
     const eye = right ? EYE_R : EYE_L;
     // The aim follows it round to the jamb and holds on the doorway as it goes.
     const aim = [side * Math.min(side * p.x * 0.7, 3.5), 0.8, opening ? 6.2 : Math.min(9, 1.2 + p.z * 0.62)];
     let e = eye;
-    if (!calm && t > OUT_SETTLE) {
-      const k = 1 - Math.exp(-(t - OUT_SETTLE) / HOLD_TAU);
+    if (!calm && t > settle) {
+      const k = 1 - Math.exp(-(t - settle) / HOLD_TAU);
       e = [eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, eye[2] + HOLD_PUSH * k];
       aim[0] -= side * 2.2 * k;
     }
-    return shot({ active: t < OUT_DURATION, seconds: t, direction: "out", calm, crewClear: ease((t - (DOOR_S + OUT_HOLD - .3)) / .3), crew: config.leaveCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
-      label: opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
+    return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", calm, crewClear: ease((t - (DOOR_S + OUT_HOLD + delay - .3)) / .3), crew: config.leaveCrew || "current", fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+      label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
   }
   function create($, reducedMotion, readSettings = () => DEFAULT) {
     let state = null, time = 0, config = DEFAULT;
@@ -192,7 +196,7 @@ const GarageArrival = (function () {
     }
     function finish() {
       if (!state) return;
-      state = pose(DURATION, config); time = DURATION;
+      time = duration(config); state = pose(time, config);
       chrome(false);
       $("cs-done").focus({ preventScroll: true });
     }
@@ -217,5 +221,5 @@ const GarageArrival = (function () {
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }
-  return Object.freeze({ create, pose, poseOut, angleMap, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
+  return Object.freeze({ create, pose, poseOut, duration, angleMap, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();

@@ -267,6 +267,7 @@ const FULL = [
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
   "js/garage/crew-motion.js",
+  "js/garage/crew-service.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "js/garage/arrival.js",
@@ -615,6 +616,7 @@ const TRACK_VM = [
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
   "js/garage/crew-motion.js",
+  "js/garage/crew-service.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "@circuits",
@@ -755,6 +757,8 @@ const HARD_EDGES = [
   ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
   ["js/garage/scene-prims.js", "js/garage/crew-motion.js"],
   ["js/garage/crew-motion.js", "js/garage/scene-crew.js"],
+  ["js/garage/scene-prims.js", "js/garage/crew-service.js"],
+  ["js/garage/crew-service.js", "js/garage/scene-crew.js"],
   ["js/garage/scene-prims.js", "js/garage/scene-crew.js"],        // the crew destructures GaragePrims at eval
   // The garage preview camera eases its flaps at the car's own X_OPEN_RATE /
   // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as

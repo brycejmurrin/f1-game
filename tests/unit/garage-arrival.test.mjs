@@ -107,7 +107,7 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   const out = cam.slice(cam.indexOf('function startDriveOut()'), cam.indexOf('function driveOutLeft()'));
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
-  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.OUT_DURATION \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
+  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.duration\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
   assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
   // Player pace: speed 1 (the default) → OUT_DURATION, ~10.6 s, never trimmed.
   assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 10600) <= 400, 'the default drive-out is the tuned ~10.6 s');
@@ -1227,4 +1227,12 @@ test('entry and departure crew choices save independently and fall back safely f
   assert.equal(read().enterCrew, 'welcome'); assert.equal(Arrival.poseOut(2, read(), true).crew, 'none');
   assert.equal(Arrival.settings({ enterCrew: 'unknown', leaveCrew: 3 }).leaveCrew, 'current');
   $('ga-reset').onclick(); assert.equal(saved, null); assert.equal(read().enterCrew, 'current');
+});
+
+
+test('service entry completion uses the extended duration and skips to a finished parked state', () => {
+  const { $ }=harness();const cfg=Arrival.settings({enterCrew:'service'}), arrival=Arrival.create($,()=>false,()=>cfg);
+  arrival.start();for(let i=0;i<88;i++)arrival.step(.1);
+  assert.equal(arrival.state.active,true);assert.equal(arrival.state.z,0);assert.equal($('cs-inner').inert,true);
+  $('cs-arrival-skip').onclick();assert.equal(arrival.state.active,false);assert.equal(arrival.state.seconds,Arrival.duration(cfg));assert.equal($('cs-inner').inert,false);
 });

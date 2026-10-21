@@ -16,6 +16,14 @@ const GarageCrewMotion = (function () {
     for (let i = 0; i < 7; i++) out[i] = KEYS[a][i] + (KEYS[b][i] - KEYS[a][i]) * f;
     return out;
   }
+  // Replay the authored planted gait over arbitrary travel, in 1.35 m cycles.
+  // Positive distance retreats along local -z; negative distance walks forward.
+  function walking(distance, out) {
+    const v=((distance/1.35)%1+1)%1;
+    let lo=0,hi=1;
+    for(let i=0;i<16;i++){const u=(lo+hi)/2;if(u*u*(3-2*u)<v)lo=u;else hi=u;}
+    return sample((lo+hi)/2,out);
+  }
   function create(gfx, c1, c2, helmet) {
     const mesh = {}, add = (name, data) => { mesh[name] = gfx.createMesh(data); };
     let a = acc();
@@ -30,7 +38,7 @@ const GarageCrewMotion = (function () {
     a = acc(); tube(a, [0, 0, 0], [0, THIGH, 0], .082, c1, 8); block(a, 0, THIGH, -.06, .06, .06, .02, DARK); add("thigh", a);
     a = acc(); tube(a, [0, 0, 0], [0, SHIN, 0], .062, scale(c1, .72), 8); add("shin", a);
     a = acc(); block(a, 0, -.03, .04, .065, .05, .12, DARK); add("boot", a);
-    return { mesh, m: new Float32Array(16), walk: new Float32Array(7), signal: new Float32Array(7), joint: new Float32Array(2), x: 0, z: 0, cy: 1, sy: 0 };
+    return { mesh, m: new Float32Array(16), walk: new Float32Array(7), signal: new Float32Array(7), joint: new Float32Array(2), knee: new Float32Array(3), x: 0, z: 0, cy: 1, sy: 0 };
   }
   function free(rig, gfx) {
     if (!rig) return 0;
@@ -46,30 +54,40 @@ const GarageCrewMotion = (function () {
     out[0] = y + uy * along + uz * h * bend; out[1] = z + uz * along - uy * h * bend;
     return out;
   }
-  function part(rig, gfx, name, x, y, z, dy, dz, length, opts) {
-    const m = rig.m, cy = rig.cy, sy = rig.sy, d = Math.hypot(dy, dz), ny = dy / d, nz = dz / d;
-    m[0] = cy; m[1] = 0; m[2] = -sy; m[3] = 0;
-    m[4] = sy * dz / length; m[5] = dy / length; m[6] = cy * dz / length; m[7] = 0;
-    m[8] = sy * ny; m[9] = -nz; m[10] = cy * ny; m[11] = 0;
-    m[12] = rig.x + cy * x + sy * z; m[13] = y; m[14] = rig.z - sy * x + cy * z; m[15] = 1;
-    gfx.draw(rig.mesh[name], m, opts);
+  // Three-dimensional knee solve keeps an ankle planted as the torso turns.
+  function leg(x,y,z,tx,ty,tz,out) {
+    const dx=tx-x,dy=ty-y,dz=tz-z,raw=Math.hypot(dx,dy,dz),d=Math.max(.001,Math.min(THIGH+SHIN-.0001,raw));
+    const ux=dx/raw,uy=dy/raw,uz=dz/raw,along=(THIGH*THIGH-SHIN*SHIN+d*d)/(2*d),h=Math.sqrt(Math.max(0,THIGH*THIGH-along*along)),n=Math.sqrt(1-uz*uz);
+    out[0]=x+ux*along-uz*ux*h/n;out[1]=y+uy*along-uz*uy*h/n;out[2]=z+uz*along+n*h;return out;
+  }
+  function part(rig, gfx, name, x, y, z, dy, dz, length, opts, dx=0, footYaw=null) {
+    const m=rig.m,cy=rig.cy,sy=rig.sy,d=Math.hypot(dx,dy,dz),nx=dx/d,ny=dy/d,nz=dz/d;
+    const h=Math.hypot(dx,dy),xx=h>.00001?Math.abs(dy)/h:1,xy=h>.00001?-(dy<0?-1:1)*dx/h:0,zx=xy*nz,zy=-xx*nz,zz=xx*ny-xy*nx;
+    m[0]=cy*xx;m[1]=xy;m[2]=-sy*xx;m[3]=0;
+    m[4]=(cy*dx+sy*dz)/length;m[5]=dy/length;m[6]=(-sy*dx+cy*dz)/length;m[7]=0;
+    m[8]=cy*zx+sy*zz;m[9]=zy;m[10]=-sy*zx+cy*zz;m[11]=0;
+    m[12]=rig.x+cy*x+sy*z;m[13]=y;m[14]=rig.z-sy*x+cy*z;m[15]=1;
+    if(footYaw!==null) { const c=Math.cos(footYaw),s=Math.sin(footYaw);m[0]=c;m[1]=0;m[2]=-s;m[4]=0;m[5]=1;m[6]=0;m[8]=s;m[9]=0;m[10]=c; }
+    gfx.draw(rig.mesh[name],m,opts);
   }
   function draw(rig, gfx, x, z, yaw, pose, side, opts) {
     rig.x = x; rig.z = z; rig.cy = Math.cos(yaw); rig.sy = Math.sin(yaw);
-    const walk = sample(pose.door, rig.walk), time = Number.isFinite(pose.seconds) ? pose.seconds : 0;
+    const walk = Number.isFinite(pose.walkDistance) ? walking(pose.walkDistance, rig.walk) : sample(pose.door, rig.walk), time = Number.isFinite(pose.seconds) ? pose.seconds : 0;
     const signal = sample(pose.calm ? 0 : (time / 2 + side * .17) % 1, rig.signal);
-    const ready = Math.max(0, Math.min(1, (pose.door - .8) * 5)), bob = pose.calm ? 0 : signal[6] * ready;
-    part(rig, gfx, "torso", 0, bob, 0, 1, 0, 1, opts);
-    part(rig, gfx, "head", 0, 1.62 + bob, 0, 1, 0, 1, opts);
+    const ready = Math.max(0, Math.min(1, (pose.door - .8) * 5)), custom = Number.isFinite(pose.handY), bob = pose.calm || custom ? 0 : signal[6] * ready;
+    const drop = Number.isFinite(pose.crouch) ? pose.crouch : 0, lean = Number.isFinite(pose.lean) ? pose.lean : 0, hipLean=Number.isFinite(pose.hipLean)?pose.hipLean:lean;
+    const bend=Math.asin(Math.max(-.9,Math.min(.9,(lean-hipLean)/.43))),bc=Math.cos(bend),bs=Math.sin(bend);
+    part(rig,gfx,"torso",0,bob-drop+.95*(1-bc),hipLean-.95*bs,bc,bs,1,opts);
+    part(rig,gfx,"head",0,.95+.67*bc+bob-drop,hipLean+.67*bs,bc,bs,1,opts);
     for (let i = 0; i < 2; i++) {
-      const s = i === 0 ? 1 : -1, lx = s * .10, fy = walk[i * 2], fz = walk[i * 2 + 1];
-      const knee = joint(.91 + bob, 0, fy, fz, THIGH, SHIN, 1, rig.joint), ky = knee[0], kz = knee[1];
-      part(rig, gfx, "thigh", lx, .91 + bob, 0, ky - .91 - bob, kz, THIGH, opts);
-      part(rig, gfx, "shin", lx, ky, kz, fy - ky, fz - kz, SHIN, opts);
-      part(rig, gfx, "boot", lx, fy, fz, 1, 0, 1, opts);
-      const sy = 1.38 + bob, hy = .85 + (signal[5] - .85) * ready + bob, hz = .03 + (signal[4] - .03) * ready;
-      const elbow = joint(sy, 0, hy, hz, ARM, ARM, -1, rig.joint), ey = elbow[0], ez = elbow[1];
-      part(rig, gfx, "upper", s * .22, sy, 0, ey - sy, ez, ARM, opts);
+      const s=i===0?1:-1,lx=s*.10,fx=pose.feet?pose.feet[i*3]:lx,fy=pose.feet?pose.feet[i*3+1]:walk[i*2],fz=pose.feet?pose.feet[i*3+2]:walk[i*2+1];
+      const knee=leg(lx,.91+bob-drop,hipLean,fx,fy,fz,rig.knee),kx=knee[0],ky=knee[1],kz=knee[2];
+      part(rig,gfx,"thigh",lx,.91+bob-drop,hipLean,ky-.91-bob+drop,kz-hipLean,THIGH,opts,kx-lx);
+      part(rig,gfx,"shin",kx,ky,kz,fy-ky,fz-kz,SHIN,opts,fx-kx);
+      part(rig,gfx,"boot",fx,fy,fz,1,0,1,opts,0,pose.footYaw?pose.footYaw[i]:null);
+      const sy = .95+.43*bc + bob-drop, hy = custom ? pose.handY : .85 + (signal[5] - .85) * ready + bob, hz = custom ? pose.reach : .03 + (signal[4] - .03) * ready;
+      const elbow = joint(sy, lean, hy, hz, ARM, ARM, -1, rig.joint), ey = elbow[0], ez = elbow[1];
+      part(rig, gfx, "upper", s * .22, sy, lean, ey - sy, ez-lean, ARM, opts);
       part(rig, gfx, "fore", s * .22, ey, ez, hy - ey, hz - ez, ARM, opts);
     }
   }

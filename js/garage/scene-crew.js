@@ -4,6 +4,7 @@
    holds his board across the car's path and lifts it as the car rolls. Built
    from the room's own primitives (GaragePrims), in the active livery's overalls, and
    drawn only while a pose is playing — a parked setup preview has no crew.
+   Optional service playback adds four blanket handlers and a front-jack operator.
    Split out of scene.js (the ratchet); GarageScene.draw calls draw(). */
 const GarageCrew = (function () {
   "use strict";
@@ -68,7 +69,7 @@ const GarageCrew = (function () {
   const LOOKS = ["classic", "sculpted", "pitstop", "workshop", "welcome"];
   const GLOVE = [0.07, 0.07, 0.08], RUBBER = [0.035, 0.035, 0.04], ALLOY = [0.62, 0.63, 0.66];
   const GUN = [0.10, 0.10, 0.11], HOSE = [0.08, 0.08, 0.09], JACK = [0.72, 0.12, 0.08], BLANKET = [0.16, 0.16, 0.18];
-  let look = "classic", lookMesh = null, motionRig = null;
+  let look = "classic", lookMesh = null, motionRig = null, serviceRig = null;
   const J0 = { foot: [0.11, 0.05, 0.03], knee: [0.11, 0.50, 0.02], hip: [0.10, 0.92, 0], pelvis: [0, 0.95, 0],
     chest: [0, 1.32, 0], neck: [0, 1.46, 0], head: [0, 1.62, 0], shoulder: [0.22, 1.38, 0],
     elbow: [0.26, 1.10, 0], hand: [0.27, 0.84, 0.03] };
@@ -171,7 +172,7 @@ const GarageCrew = (function () {
   // saddle's top sits ON the nose's underside — touching, never inside, and
   // never through the wing. Returns where the jack man's hands hold the bar.
   const WING_LE = 2.72;
-  function frontJack(out, nose) {
+  function frontJack(out, nose, handle = true) {
     const pz = Math.max(WING_LE, nose.z) + 0.14, py = nose.under - 0.03;
     const sz0 = nose.z - 0.10, sz1 = nose.z - 0.015;                          // saddle, under the tip
     // A round cradle laid along the cone's own slope: its top line IS the
@@ -182,8 +183,8 @@ const GarageCrew = (function () {
     tube(out, [0, py, pz], [0, 0.07, pz + 0.06], 0.026, JACK, 6);              // the frame to the axle
     for (const s of [-1, 1]) tube(out, [s * 0.10, 0.07, pz + 0.06], [s * 0.16, 0.07, pz + 0.06], 0.07, RUBBER, 10);
     const hz = pz + 1.06;
-    tube(out, [0, py, pz], [0, 0.92, hz], 0.03, ALLOY, 8);                     // the long handle
-    block(out, 0, 0.92, hz, 0.16, 0.025, 0.025, JACK);                         // its T-bar
+    if (handle) tube(out, [0, py, pz], [0, 0.92, hz], 0.03, ALLOY, 8);                     // the long handle
+    if (handle) block(out, 0, 0.92, hz, 0.16, 0.025, 0.025, JACK);                         // its T-bar
     return hz;
   }
   function tyre(out, c, ax, blanket, mark, alongZ) {
@@ -274,13 +275,15 @@ const GarageCrew = (function () {
     poleMesh = gfx.createMesh(p);
     if (style !== "classic" && style !== "welcome" && typeof GarageCrewMotion !== "undefined")
       motionRig = GarageCrewMotion.create(gfx, c1, c2, helmet);
+    if (style === "service" && typeof GarageCrewService !== "undefined") serviceRig = GarageCrewService.create(gfx, nose, frontJack, c2);
   }
   function free() {
     if (!gfx || !gfx.freeMesh) return 0;
     let n = 0;
     for (const mesh of [mechMesh, bodyMesh, poleMesh, lookMesh]) if (mesh) { gfx.freeMesh(mesh); n++; }
     if (motionRig && typeof GarageCrewMotion !== "undefined") n += GarageCrewMotion.free(motionRig, gfx);
-    motionRig = null;
+    if (serviceRig && typeof GarageCrewService !== "undefined") n += GarageCrewService.free(serviceRig, gfx);
+    motionRig = serviceRig = null;
     mechMesh = bodyMesh = poleMesh = lookMesh = null; key = null;
     return n;
   }
@@ -321,19 +324,20 @@ const GarageCrew = (function () {
   function draw(liv, eye, pose, opts, teamId) {
     if (!gfx || !pose || pose.crew === "none") return;
     // Per-direction animation choices never change the saved Team-tab crew.
-    const style = pose.crew === "guides" ? "sculpted" : pose.crew === "welcome" ? "welcome" : look;
+    const style = pose.crew === "service" ? "service" : pose.crew === "guides" ? "sculpted" : pose.crew === "welcome" ? "welcome" : look;
     build(liv, teamId, style);
     const L = layout(pose, eye && eye[0] > 0 ? 1 : -1);
     const moving = Math.abs(pose.z || 0) > 1e-6 || Math.abs(pose.x || 0) > 1e-6;
     // Service tools and people leaning into the cockpit belong to a parked
     // car. The already-built guides take over while it enters or leaves.
-    const guides = style === "classic" || style === "sculpted" || (moving && (style === "pitstop" || style === "workshop"));
+    const guides = style === "service" || style === "classic" || style === "sculpted" || (moving && (style === "pitstop" || style === "workshop"));
     if (guides)
       for (let i = 0; i < L.mechanics.length; i++) {
         const p = L.mechanics[i];
         if (motionRig) GarageCrewMotion.draw(motionRig, gfx, p[0], p[1], p[2], pose, i, opts || OPTS);
         else gfx.draw(mechMesh, mk(p[0], 0, p[1], p[2], 0), opts || OPTS);
       }
+    if (serviceRig && motionRig) GarageCrewService.draw(serviceRig, motionRig, gfx, pose, opts || OPTS);
     if (lookMesh && !guides) gfx.draw(lookMesh, mk(0, 0, 0, 0, 0), opts || OPTS);
     const lp = L.lollipop;
     gfx.draw(bodyMesh, mk(lp.x, 0, lp.z, lp.yaw + Math.PI, 0), opts || OPTS);   // facing the garage
