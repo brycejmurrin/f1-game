@@ -4,6 +4,8 @@
 // wheelStyle.cover is truthy (`useCover`). Catalog desc that says "cover" while
 // the recipe omits cover:1 is a picker lie (#3410 Standard, #3415 Dished/Aero).
 // Pure Node via loadParts — no browser.
+// Prefer assert.ok(rx.test(...)) over assert.match — the unit assert.match
+// ceiling (#1682) must not grow for catalog string pins.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
@@ -41,7 +43,7 @@ test("#3410 wheels/standard no longer claims an aero cover", () => {
   const o = opt("wheels", "standard");
   assert.equal(!!(o.visual && o.visual.cover), false);
   assert.equal(COVER_WORD.test(o.desc), false);
-  assert.match(o.desc, /open rim/i);
+  assert.ok(/open rim/i.test(o.desc), o.desc);
 });
 
 test("#3415 dished and aero_disc describe open dish, not a sealed cover", () => {
@@ -52,8 +54,8 @@ test("#3415 dished and aero_disc describe open dish, not a sealed cover", () => 
   assert.equal(COVER_WORD.test(dished.desc), false);
   assert.equal(COVER_WORD.test(dished.label), false);
   assert.equal(COVER_WORD.test(aero.desc), false);
-  assert.match(dished.desc, /open/i);
-  assert.match(aero.desc, /open/i);
+  assert.ok(/open/i.test(dished.desc), dished.desc);
+  assert.ok(/open/i.test(aero.desc), aero.desc);
 });
 
 test("#3409 role-colour compounds keep official white/yellow/red/green/blue wording", () => {
@@ -68,15 +70,15 @@ test("#3409 role-colour compounds keep official white/yellow/red/green/blue word
   const c4 = opt("tyres", "compound_c4");
   const c5 = opt("tyres", "compound_c5");
   const sprint = opt("tyres", "sprint_soft");
-  assert.match(hard.desc, /white/i);
-  assert.match(medium.desc, /yellow/i);
-  assert.match(soft.desc, /red/i);
-  assert.match(inter.desc, /green/i);
-  assert.match(inter.desc, /multi-groove/i);
-  assert.match(wet.desc, /blue/i);
-  assert.match(wet.desc, /multi-groove/i);
+  assert.ok(/white/i.test(hard.desc), hard.desc);
+  assert.ok(/yellow/i.test(medium.desc), medium.desc);
+  assert.ok(/red/i.test(soft.desc), soft.desc);
+  assert.ok(/green/i.test(inter.desc), inter.desc);
+  assert.ok(/multi-groove/i.test(inter.desc), inter.desc);
+  assert.ok(/blue/i.test(wet.desc), wet.desc);
+  assert.ok(/multi-groove/i.test(wet.desc), wet.desc);
   assert.doesNotMatch(c4.desc, /orange/i);
   assert.doesNotMatch(c5.desc, /magenta/i);
   assert.doesNotMatch(sprint.desc, /blue band/i);
-  assert.match(sprint.desc, /Full Wet/i);
+  assert.ok(/Full Wet/i.test(sprint.desc), sprint.desc);
 });
