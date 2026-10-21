@@ -135,17 +135,17 @@ const SoakRun = (function () {
       G.trackIdx = i; G.seasonMode = false; G.timeTrial = false; G.duel = false;
       G.raceLaps = LAPS;
       if (G.endWeatherSession) G.endWeatherSession();
-      G.raceWeather = "wet"; G.raceTimeOfDay = "default";
+      G.raceWeather = opts.weather || "wet"; G.raceTimeOfDay = "default";   // GPU TEST (gpu-test-run.js) runs it dry
     } catch (e) { try { Log.warn("game", "SoakRun start refused: " + (e && e.message)); } catch (_) { /* Log not loaded */ } return Promise.resolve(false); }
     _run = { raf: 0, t0: performance.now(), tRace: 0, prev: 0, started: false, minutes: opts.minutes > 0 ? opts.minutes : SOAK_MIN,
       st: { hold: 30, stalled: 0, lastS: null } };
     _last = { state: "starting", reason: "" };
     try { document.addEventListener("visibilitychange", onHidden); } catch (_) { /* no document */ }
-    log("start " + (opts.track || TRACK_ID) + " wet " + _run.minutes + " min");
+    log("start " + (opts.track || TRACK_ID) + " " + (opts.weather || "wet") + " " + _run.minutes + " min");
     return Promise.resolve(G.startRace()).then(() => {
       if (!_run) return false;
-      try {   // the chase camera (js/camera/mode-switch.js CAM_MODES)
-        const ix = CamModes.CAM_MODES.findIndex((m) => m.id === "chase");
+      try {   // the chase camera (js/camera/mode-switch.js CAM_MODES); GPU TEST asks for helmet, where the mirror is up
+        const ix = CamModes.CAM_MODES.findIndex((m) => m.id === (opts.cam || "chase"));
         if (ix >= 0) G.setCamMode(ix, { persist: false });   // the player's saved camera stays theirs
       } catch (_) { /* camera stays as the player had it */ }
       _run.raf = requestAnimationFrame(tick);

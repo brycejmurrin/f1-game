@@ -479,14 +479,23 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   # the commit through unguarded on a loaded box. The inner runs are capped
   # below it and rc 124 blocks with a reason; settings.json also sets
   # onFailure "block". APEX_GUARD_TIMEOUT (seconds) exists for the tests.
-  GUARD_T="${APEX_GUARD_TIMEOUT:-160}"
+  # Budget order matches .githooks/pre-commit (#2889): git config apex.guardTimeout,
+  # then APEX_GUARD_TIMEOUT, then the 160 s default (load bump only when neither is set).
+  GUARD_T="${APEX_GUARD_TIMEOUT:-}"
+  EXPLICIT_GUARD_BUDGET=0
+  [ -n "${GUARD_T:-}" ] && EXPLICIT_GUARD_BUDGET=1
+  if [ -z "${GUARD_T:-}" ]; then
+    GUARD_T=$(cd "$ROOT" && git config --get apex.guardTimeout 2>/dev/null || true)
+    [ -n "${GUARD_T:-}" ] && EXPLICIT_GUARD_BUDGET=1
+  fi
+  if [ -z "${GUARD_T:-}" ]; then GUARD_T=160; fi
   # H5 (retro 2026-10-17): at loadavg >= 3 the 160 s cap blocked a commit that was fine alone
   # (gfx-backend-canary, #2647). A loaded box gets the longer cap; settings.json's hook
-  # timeout (360 s) sits above it. An explicit APEX_GUARD_TIMEOUT always wins.
-  if [ -z "${APEX_GUARD_TIMEOUT:-}" ] && awk '{exit !($1 >= 3)}' /proc/loadavg 2>/dev/null; then GUARD_T=300; fi
+  # timeout (360 s) sits above it. An explicit apex.guardTimeout / APEX_GUARD_TIMEOUT wins.
+  if [ "$EXPLICIT_GUARD_BUDGET" = "0" ] && awk '{exit !($1 >= 3)}' /proc/loadavg 2>/dev/null; then GUARD_T=300; fi
   guard_timed_out() {
     if [ "$1" = 124 ] || [ "$1" = 137 ]; then
-      echo "BLOCKED: $2 did not finish within ${GUARD_T} s (the box is loaded: check /proc/loadavg and any live playwright run), so this commit was NOT guarded. Retry when the box is idle; APEX_SKIP_GUARDS=1 only when the guards themselves are the change." >&2
+      echo "BLOCKED: $2 did not finish within ${GUARD_T} s (apex.guardTimeout / APEX_GUARD_TIMEOUT; the box may be loaded: check /proc/loadavg and any live playwright run), so this commit was NOT guarded. Retry when the box is idle, raise the budget with \`git config apex.guardTimeout <sec>\`, or APEX_SKIP_GUARDS=1 only when the guards themselves are the change." >&2
       exit 2
     fi
   }
@@ -597,8 +606,9 @@ EOF
   # each ran the full suite, doubling the load and sharing $LOG, so one timed
   # out (160/300 s) while its twin went green in 202 s — seven blocked
   # commits in a row. Copies now queue on a lock, and a later copy reuses a
-  # GREEN verdict for the same staged tree (git write-tree) from the last
-  # 10 minutes. Red and timed-out runs are never reused.
+  # GREEN verdict via tools/ci/guards-verdict.mjs check (same cache as
+  # .githooks/pre-commit and npm run test:guards). Red and timed-out runs are
+  # never reused.
   if command -v flock >/dev/null 2>&1; then
     exec 9>"$ROOT/artifacts/pre-commit-guards.lock"
     flock -w $(( GUARD_T + 60 )) 9 || true
@@ -621,15 +631,17 @@ EOF
     exit 2
   fi
   T0=$(date +%s)
-  TREE=$(cd "$ROOT" && git write-tree 2>/dev/null)
-  OKF="$ROOT/artifacts/pre-commit-guards.ok"
   RAISED=$(grep -c '^RAISED\|^LOWERED' "$RLOG" 2>/dev/null)
-  if [ -n "$TREE" ] && [ -f "$OKF" ] && [ "$(cat "$OKF" 2>/dev/null)" = "$TREE" ] \
-     && [ -n "$(find "$OKF" -mmin -10 2>/dev/null)" ]; then
-    COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered); test:guards already green for staged tree $TREE (a concurrent copy of this hook ran it; log $LOG)."
+  CACHE_HIT=$(cd "$ROOT" && node tools/ci/guards-verdict.mjs check 2>/dev/null) || true
+  if [ -n "$CACHE_HIT" ]; then
+    printf '%s\n' "$CACHE_HIT" >&2
+    COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered); $CACHE_HIT (a concurrent copy of this hook or a foreground test:guards already certified this tree; log $LOG)."
     exit 0
   fi
-  (cd "$ROOT" && timeout -k 5 "$GUARD_T" npm run --silent test:guards >"$LOG" 2>&1); RC=$?
+  # test:guards builds throwaway fixture repos; unset this hook's GIT_* selectors
+  # for the suite only (#1807, same idiom as .githooks/pre-commit).
+  ( cd "$ROOT" && unset $(git rev-parse --local-env-vars 2>/dev/null) && timeout -k 5 "$GUARD_T" npm run --silent test:guards ) >"$LOG" 2>&1
+  RC=$?
   guard_timed_out "$RC" "npm run test:guards"
   if [ "$RC" != 0 ]; then
     echo "BLOCKED: npm run test:guards is red — AGENTS.md §Verification 3 forbids committing on a red guard. Last lines of $LOG:" >&2
@@ -637,7 +649,6 @@ EOF
     echo "Fix the guard (or prefix with APEX_SKIP_GUARDS=1 when the guards themselves are the change under test)." >&2
     exit 2
   fi
-  [ -n "$TREE" ] && printf '%s' "$TREE" > "$OKF"
   COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered) then npm run test:guards (green, $(( $(date +%s) - T0 )) s; log $LOG)."
 fi
 exit 0

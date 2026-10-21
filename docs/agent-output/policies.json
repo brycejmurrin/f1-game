@@ -1811,6 +1811,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/cpuprofile-summary.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/perf/live-render-matrix.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1849,6 +1854,11 @@
     "tools/perf/query.mjs": {
       "action": "keep-native",
       "presentation": "native",
+      "preserve": "@c1"
+    },
+    "tools/perf/race-entry-timer.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
       "preserve": "@c1"
     },
     "tools/perf/runtime-memory.mjs": {
