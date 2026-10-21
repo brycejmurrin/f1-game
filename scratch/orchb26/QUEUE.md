@@ -141,3 +141,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 08:47Z: Pages a2644006 GREEN (#3429 #3377 live). MERGED #3422 → 7bcaca5c (GAME). Next game #3396 on green Pages 7bcaca5c; then #3238 #3395 #3402 #3431.
 
 08:55Z: #3396 → 6c631c57 merged outside the bus (likely Bryce), on top of #3422. Next game #3238 on green Pages 6c631c57; then #3395 #3402 #3431 (H15 GREEN 24/0).
+
+09:14Z: Pages 7bcaca5c GREEN (#3422 live). Pages 6c631c57 (#3396) running → #3238 next. #3392 red fixed by H19 (3c64369b, data-lifecycle probe), re-running. #3391 fa80203b synced, CI running.
