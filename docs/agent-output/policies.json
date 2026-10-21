@@ -1151,6 +1151,11 @@
       "presentation": "native",
       "preserve": "Noise floor, actual knob values and verdict.json provenance; no visual pass from a screenshot path alone."
     },
+    "tools/gfx/live-frame-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Per-row frame/JS percentiles, slow-call and pipeline rows, and the --json file; paravirtual ms read as structure only."
+    },
     "tools/gfx/mem-census.mjs": {
       "action": "keep-native",
       "presentation": "native",
