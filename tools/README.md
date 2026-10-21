@@ -58,6 +58,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
 | **lib/conflict-cure.mjs** | Pure resolvers for deploy/sync-pr conflict cures: keep both sides' hand edits in index.html and package.json. | — |
 | **lib/css-source.mjs** | Reads logical stylesheet families in manifest order for source audits and ratchets. | — |
+| **lib/cursor-transcript.mjs** | Parse Cursor run streams into rows: chat, tool calls (args, outcome, result head), failures, results; modes + masking. | agent-fleet |
 | **lib/custom-survey-locations.mjs** | Native custom-design imports and source-located authored scenery targets (no browser). | — |
 | **lib/deploy-status.mjs** | deploy.mjs verdict markers (`= deploy start/done` in artifacts/logs/deploy.log) and the reader for --status/--wait. | — |
 | **lib/flicker-metric.mjs** | Pure per-pixel temporal-instability metric for `shot/flicker-gate.mjs`: luma, flip masks, 8-connected clusters, verdict. | playwright-probe |
@@ -107,7 +108,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/claude-usage.mjs** | Digests local Claude Code JSONL: deduped requests, input/cache/output tokens by turn trigger. | agent-fleet |
-| **ci/cursor-agents.mjs** | Read-only Cursor agents client: list, status, dump run transcripts to artifacts/, digest token-proxy metrics. | agent-fleet |
+| **ci/cursor-agents.mjs** | Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched. | agent-fleet |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/fleet-board-snapshot.mjs** | Writes the Fleet Board dashboard's six snapshot datasets to artifacts/fleet-board/; read-only, no bus cursor. | agent-fleet |
 | **ci/fleet-board.mjs** | Fleet board: current/stale claims, PR associations and backlog labels on one pinned issue. | ci-watch |

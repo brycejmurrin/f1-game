@@ -872,6 +872,7 @@
       // a raised top cutoff and a pulled-in near fade).
       C.ssrTopUV.value = o.ssrTopUV != null ? o.ssrTopUV : 0.62;
       C.ssrNear.value = o.ssrNear != null ? o.ssrNear : -2.5;
+      C.ssrQuality.value = o.ssrQuality >= 2 ? 2 : o.ssrQuality >= 1 ? 1 : 0;
       C.lensDirt.value = dirtTex ? gk("lensDirt") : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
       C.reflTexel.value.set(1 / W, 1 / H);
@@ -1104,6 +1105,7 @@
         on: true,
         hdr,
         attachments: tagOn ? 2 : 1,
+        ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
