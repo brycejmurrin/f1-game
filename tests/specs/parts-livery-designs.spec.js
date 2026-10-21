@@ -84,7 +84,7 @@ test("all catalog part styles and body shapes are reachable, previewed and saved
     field, options: Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === "STYLE").map(o => ({ id: o.id, label: o.label })),
   })));
   expect(groups).toHaveLength(12);
-  expect(groups.reduce((n, g) => n + g.options.length, 0)).toBe(56);
+  expect(groups.reduce((n, g) => n + g.options.length, 0)).toBe(60);   // 2+13+9+3+6+2+2+2+6+7+4+4 across the twelve categories (engine, aero, suspension, brakes, tyres, ers, gearbox, fuel, exhaust, floor, cockpit, wheels)
   const before = await page.evaluate(() => {
     const t = Teams.LIST[2], setup = GameStore.store.get("parts." + t.id, {});
     return { setup, cost: Parts.getCost(setup, t), mods: Parts.getMods(setup, t) };
@@ -128,7 +128,7 @@ test("all catalog part styles and body shapes are reachable, previewed and saved
     }
     return { bodies: bodies.length, finishes: finishes.length, regionalFields: Car3D.FINISH_FIELDS.length - 1 };
   });
-  expect(coverage).toEqual({ bodies: 27, finishes: 36, regionalFields: 14 });
+  expect(coverage).toEqual({ bodies: 31, finishes: 36, regionalFields: 14 });   // TEAM + 30 concepts
   const body = await reveal(page, '[data-cs-pill="bodyStyle:caldra"]');
   await body.scrollIntoViewIfNeeded(); await body.tap();
   await presentAndPause(page);
