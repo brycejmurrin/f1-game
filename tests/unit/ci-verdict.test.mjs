@@ -121,14 +121,14 @@ test("REQUIRE_SUCCESS: a required job that was skipped or missing fails the aggr
 
 test("the CLI reads REQUIRE_SUCCESS: the same needs JSON passes bare and fails strict (a replayed hollow draft-tier run)", () => {
   // shape of a real draft fast-tier run (run 39026875787: 8 jobs ran, smoke / sweeps / node-suites skipped)
-  const needs = JSON.stringify({ "guards-a": { result: "success" }, "guards-b": { result: "success" }, guards: { result: "success" }, select: { result: "success" },
+  const needs = JSON.stringify({ "guards-a": { result: "success" }, "guards-b": { result: "success" }, "guards-c": { result: "success" }, guards: { result: "success" }, select: { result: "success" },
     smoke: { result: "skipped" }, sweeps: { result: "skipped" }, "node-suites": { result: "skipped" }, "selected-verdict": { result: "success" } });
   const run = (extra) => {
     try { execFileSync("node", ["tools/ci/ci-verdict.mjs"], { cwd: ROOT, env: { ...process.env, NEEDS: needs, ...extra }, stdio: "pipe" }); return 0; }
     catch (e) { return e.status; }
   };
   assert.equal(run({}), 0);
-  assert.equal(run({ REQUIRE_SUCCESS: "guards-a,guards-b,guards,select,smoke" }), 1);
+  assert.equal(run({ REQUIRE_SUCCESS: "guards-a,guards-b,guards-c,guards,select,smoke" }), 1);
 });
 
 test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming jobs ci-verdict needs; the draft fast tier is not named `CI`", async () => {

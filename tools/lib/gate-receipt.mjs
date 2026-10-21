@@ -15,8 +15,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 export const KINDS = ["merge", "ready"];
-/** A receipt older than this is stale: the tip, CI or the body may have moved. */
-export const MAX_AGE_MIN = 30;
+/** A receipt older than this is stale: the tip, CI or the body may have moved. 10 min (was 30, 2026-10-21 defect hunt rows 2+3): the hook has no API, so a MERGE-HOLD added after the gate, or a push after a ready-gate, is only caught by the receipt aging out. */
+export const MAX_AGE_MIN = 10;
 
 export const receiptDir = (root, kind) => path.join(root, "artifacts", `${kind}-gate`);
 export const receiptPath = (root, kind, pr) => path.join(receiptDir(root, kind), `${Number(pr)}.json`);

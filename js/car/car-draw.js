@@ -503,6 +503,9 @@ const CarDraw = (function () {
     function schedulePlayerHiRes(team, num, key) {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
+      // A PHONE keeps the 1024 preview even at GRAPHICS: HIGH (Bryce 2026-10-21, "Cap garage only"):
+      // the 2048 upgrade was a ~21 MB ImageBitmap plus ~27 MB of GPU texture on an iOS jetsam budget.
+      if (LiveryTex.IS_PHONE) return;
       if (_hiResDone.has(key) || _hiResPending.has(key) || (_hiResFail.get(key) || 0) >= HIRES_TRIES) return;
       // A live garage paint draft gives every edit a new key: the preview only, or each edit the idle slot
       // reached paid a 2048 paint and a ~26.7 MB upload. Save / cancel / leave clear it: the next draw upgrades once.
@@ -510,11 +513,12 @@ const CarDraw = (function () {
       // The livery is resolved NOW, with the key (decalKeyFor embeds its id): the idle
       // slot can fire after the garage moved on, and building from the livery selected
       // THEN stored another livery's pixels under this key (A -> B -> A).
-      const livery = deps.resolveLivery(team);
+      const livery = deps.resolveLivery(team), pickAt = G.teamIdx;
       // Re-checked after every await: the idle slot and the bitmap can both land after the garage moved on.
       const owns = () => _hiResPending.get(key) === kick   // dropped, maybe re-scheduled: the newer kick owns the key
         && (key in _decalTexCache)                          // LRU / invalidate won the race
-        && decalKeyFor(team, num, true) === key;            // livery changed since: its next draw re-schedules
+        && decalKeyFor(team, num, true) === key             // livery changed since: its next draw re-schedules
+        && G.teamIdx === pickAt;                            // browsed to another team: no 2048 for the one left behind
       const done = () => { if (_hiResPending.get(key) === kick) _hiResPending.delete(key); };
       const fail = (e) => {
         _hiResFail.set(key, (_hiResFail.get(key) || 0) + 1);
@@ -599,6 +603,7 @@ const CarDraw = (function () {
           // Full 2048 is schedulePlayerHiRes only — never boot / garage-open.
           const canvas = LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer, false);
           t = G.gfx.createTexture(canvas, isPlayer ? { anisotropy: 8 } : undefined);
+          if (!t) throw new Error("createTexture returned no texture");   // a lost GLX context: retry, never cache a silent null
           if (isPlayer) t = crispPlayerDecal(t);
           _decalTexBytes[key] = atlasBytes(canvas);
         }

@@ -41,6 +41,7 @@ const LOCAL_LOG = path.join(ROOT, "artifacts/logs/tooling-fast-suite.log");
 export const GUARDS_JOB = "Structural guards";
 export const GUARDS_A = "Structural guards (tooling A)";
 export const GUARDS_B = "Structural guards (tooling B)";
+export const GUARDS_C = "Structural guards (tooling C)";
 
 const say = (...a) => console.log("[ready-gate]", ...a);
 
@@ -94,14 +95,15 @@ export function guardsVerdict(checkRuns) {
     }
     // cancelled / skipped / neutral — fall through to halves (reuse-draft path)
   }
-  const a = by.get(GUARDS_A), b = by.get(GUARDS_B);
+  const a = by.get(GUARDS_A), b = by.get(GUARDS_B), c = by.get(GUARDS_C);
   if (a && b) {
-    const pending = [a, b].some((j) => j.status && j.status !== "completed");
-    if (pending) return { state: "pending", evidence: `${GUARDS_A}/${GUARDS_B} still running`, code: 1 };
-    if (a.conclusion === "success" && b.conclusion === "success") {
-      return { state: "passed", evidence: `${GUARDS_A} + ${GUARDS_B} success`, code: 0 };
+    const halves = c ? [a, b, c] : [a, b];
+    const pending = halves.some((j) => j.status && j.status !== "completed");
+    if (pending) return { state: "pending", evidence: `${halves.map((j) => j.name).join("/")} still running`, code: 1 };
+    if (halves.every((j) => j.conclusion === "success")) {
+      return { state: "passed", evidence: `${halves.map((j) => j.name).join(" + ")} success`, code: 0 };
     }
-    const bad = [a, b].filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out");
+    const bad = halves.filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out");
     if (bad.length) {
       return { state: "failed", evidence: bad.map((j) => `${j.name} ${j.conclusion}`).join("; "), code: 1 };
     }

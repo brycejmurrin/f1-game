@@ -232,7 +232,9 @@ async function runRow(browser, server, backend, track) {
     const A = window.__apex;
     return { api: bs && bs.api, forceWebGL: bs && bs.forceWebGL, liteGpu: bs && bs.liteGpu, isMobile: bs && bs.isMobile, mobileTier: bs && bs.mobileTier,
       present: t && t.renderer && [t.renderer.domElement.width, t.renderer.domElement.height], gov: A.renderScale(), state: A.info().state,
-      gpuErrors: bs && bs.gpuErrors, preset: localStorage.getItem("apex26.gfxPreset"), gpuTimer: (() => { try { return A.gpuTimer(true); } catch (_) { return null; } })() };
+      gpuErrors: bs && bs.gpuErrors, preset: localStorage.getItem("apex26.gfxPreset"),
+      adapter: (() => { try { const c = document.createElement("canvas").getContext("webgl2"), d = c && c.getExtension("WEBGL_debug_renderer_info");
+        const s = d ? String(c.getParameter(d.UNMASKED_RENDERER_WEBGL)) : ""; const l = c && c.getExtension("WEBGL_lose_context"); if (l) l.loseContext(); return s; } catch (_) { return ""; } })(), gpuTimer: (() => { try { return A.gpuTimer(true); } catch (_) { return null; } })() };
   });
   await page.evaluate(() => { window.__apex.perf({ on: true, reset: true }); const H = window.__lf; H.ts = []; H.cb = []; H.lastT = -1; H.on = true; window.__lfSlow.on = true; });
   // Trace the middle TRACE s of the window.
@@ -292,7 +294,11 @@ async function main() {
         browser = await launchChromium({ args: ["--enable-unsafe-webgpu", "--disable-background-timer-throttling", "--enable-features=LongAnimationFrameTiming"] });
         Object.assign(row, await Promise.race([runRow(browser, server, backend, track), new Promise((_, rej) => setTimeout(() => rej(new Error("row cap 480 s")), 480000))]));
         const f = row.frame, c = row.cpu;
-        log(`${backend} ${track} ${JSON.stringify(row.env).slice(0, 400)}`);
+        // THE PARAVIRTUAL FLAG: macos-latest's Apple Paravirtual device answers frame time from its present path, not
+      // from pixels or passes (docs/notes/TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md §2). Its ms are structure, never GPU cost.
+      row.paravirtual = /paravirtual/i.test(row.env.adapter || "");
+      if (row.paravirtual) log("  PARAVIRTUAL adapter: frame ms here are the runner's present path, not GPU cost; read stalls, links and counts only");
+      log(`${backend} ${track} ${JSON.stringify(row.env).slice(0, 400)}`);
         log(`  frame p50 ${f.p50} p95 ${f.p95} p99 ${f.p99} max ${f.max} fps ${f.fps} >33 ${f.over33}% >50 ${f.over50}% | cpu p50 ${c.p50} p95 ${c.p95} max ${c.max} | drive ${JSON.stringify(row.drive)}`);
         log(`  spans ${JSON.stringify(row.spans)}`);
         log(`  trace ${JSON.stringify(row.trace)}`);

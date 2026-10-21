@@ -23,7 +23,8 @@ const LiveryTex = (function () {
   // typeof guard is the standalone-harness fallback (full-size atlas), never a
   // path the shipped shell takes.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.mobileTier;
-  // The DEVICE, not the tier: GRAPHICS: HIGH buys the player's car a bigger atlas,
+  // The DEVICE, not the tier: GRAPHICS: HIGH buys the player's car a bigger atlas (the 1024 preview:
+  // the deferred 2048 upgrade is not scheduled on a phone, car-draw.js schedulePlayerHiRes),
   // never 21 AI cars at desktop size on a phone (~33 MB, plan perf-memory M-10).
   const IS_PHONE = typeof GLX !== "undefined" && !!GLX.isMobile;
   // Which divisor family a build uses: the player follows the memory tier, an AI car the device.
@@ -2588,7 +2589,32 @@ const LiveryTex = (function () {
   // Mini lockup for the LIVERY cards and TEAM picker tiles: paint + stripe +
   // the same crest buildAtlas puts on the car. One function so the two pickers
   // cannot drift from each other or from the atlas.
+  // PAINTED ONCE PER LOOK. A LIVERY pick rebuilds the sheet, and its 113 cards each
+  // repainted the paint + crest lockup: 370-450 ms of a phone-throttled pick (CPU x4,
+  // B·H13 2026-10-21). A card's pixels depend only on (team, livery fields, size), so
+  // the first paint lands in an offscreen canvas and later ones blit it. Cached only
+  // once web fonts are in (a lockup painted in the fallback face must not stick);
+  // a logo install or removal (markChanged) drops every card.
+  const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160, _swatchStats = { paints: 0, blits: 0 };
+  markReady.push(() => _swatchCache.clear());
   function paintSwatch(ctx, teamId, liv, w, h) {
+    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
+    if (!fontsIn || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
+    const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
+    let c = _swatchCache.get(key);
+    if (!c) {
+      c = document.createElement("canvas"); c.width = w; c.height = h;
+      const cx = c.getContext && c.getContext("2d");
+      if (!cx) return paintSwatchNow(ctx, teamId, liv, w, h);
+      paintSwatchNow(cx, teamId, liv, w, h); _swatchStats.paints++;
+      if (_swatchCache.size >= SWATCH_CACHE_MAX) _swatchCache.delete(_swatchCache.keys().next().value);
+      _swatchCache.set(key, c);
+    }
+    ctx.drawImage(c, 0, 0); _swatchStats.blits++;
+  }
+  // Counters for tests/specs/garage-pick-cost.spec.js (a pick must blit, not repaint, its cards).
+  function swatchStats() { return { paints: _swatchStats.paints, blits: _swatchStats.blits, cached: _swatchCache.size }; }
+  function paintSwatchNow(ctx, teamId, liv, w, h) {
     const c1 = (liv && liv.c1) || [0.20, 0.20, 0.22];
     const c2 = (liv && liv.c2) || c1;
     ctx.fillStyle = css(c1);
@@ -2612,7 +2638,7 @@ const LiveryTex = (function () {
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
   return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
-           MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch,
+           MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchStats,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,

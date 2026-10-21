@@ -65,6 +65,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
 import { githubToken } from "./github-token.mjs";
+import { NODE_TEST_TIMEOUT_MS } from "../gen/gen-test-groups.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
@@ -87,18 +88,24 @@ function must(r, what) {
 }
 // Node supports parent file descriptors as child stdio: no maxBuffer or
 // in-memory capture. https://nodejs.org/api/child_process.html#optionsstdio
-export function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log } = {}) {
-  if (!json) return spawnSync(cmd, args, { cwd, env, stdio: "inherit" });
+// A hung child (a test file that never ends) used to hang the whole gate until the 30-minute background
+// ceiling killed it with no verdict line. Every child now stops at this ceiling, with SIGTERM so
+// tooling-fast can reap the process groups it leads, and run() turns that into a named failure.
+export const CHILD_TIMEOUT_MS = Math.max(1, Number(process.env.APEX_DEPLOY_CHILD_TIMEOUT_MIN) || 25) * 60e3;
+export function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
+  const stop = { timeout: timeoutMs, killSignal: "SIGTERM" };
+  if (!json) return spawnSync(cmd, args, { cwd, env, stdio: "inherit", ...stop });
   const artifact = saveOutputArtifact("", { root, tool: "deploy-child", kind: "log" });
   const fd = fs.openSync(path.resolve(root, artifact.path), fs.constants.O_WRONLY | fs.constants.O_NOFOLLOW);
   try {
     announce(`child stdout: ${artifact.path} (complete log; stderr remains live)`);
-    const result = spawnSync(cmd, args, { cwd, env, stdio: ["ignore", fd, "inherit"] });
+    const result = spawnSync(cmd, args, { cwd, env, stdio: ["ignore", fd, "inherit"], ...stop });
     return { ...result, stdoutArtifact: { ...artifact, bytes: fs.fstatSync(fd).size } };
   } finally { fs.closeSync(fd); }
 }
-function childFailure(result, message) {
-  const detail = result.error?.message || (result.signal ? `signal ${result.signal}` : `exit ${result.status}`);
+function childFailure(result, message, timeoutMs) {
+  const detail = result.error?.code === "ETIMEDOUT" ? `timed out after ${Math.round((timeoutMs ?? CHILD_TIMEOUT_MS) / 6e3) / 10} min, stopped with SIGTERM`
+    : result.error?.message || (result.signal ? `signal ${result.signal}` : `exit ${result.status}`);
   const error = new Error(`${message} (${detail})${result.stdoutArtifact ? ` — complete stdout: ${result.stdoutArtifact.path}` : ""}`);
   if (result.stdoutArtifact) error.stdoutArtifact = result.stdoutArtifact;
   return error;
@@ -106,7 +113,7 @@ function childFailure(result, message) {
 export function run(cmd, args, what, options) {
   log(`${what}: ${cmd} ${args.join(" ")}`);
   const r = spawnDeployChild(cmd, args, options);
-  if (r.status !== 0) throw childFailure(r, `${what} failed`);
+  if (r.status !== 0) throw childFailure(r, `${what} failed`, options?.timeoutMs);
 }
 
 export function preflight(cwd = ROOT) {
@@ -307,7 +314,7 @@ export function targetedFor(base, cwd) {
 
 function runTargeted(suites, why) {
   const names = suites.map((s) => path.basename(s));
-  run("node", ["--test", "--test-concurrency=1", ...suites], `${why}: targeted sweeps (${names.join(", ")}) — no fleet rebuild`);
+  run("node", ["--test", `--test-timeout=${NODE_TEST_TIMEOUT_MS}`, "--test-concurrency=1", ...suites], `${why}: targeted sweeps (${names.join(", ")}) — no fleet rebuild`);
   return names.map((n) => `sweeps:${n}`);
 }
 
