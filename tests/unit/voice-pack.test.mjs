@@ -1004,7 +1004,7 @@ test("the pit garage halts every radio channel the way the pause card does", () 
   assert.match(body, /GameAudio\.stopRain\(\)/,
     "openPitWork stops rain with the engine — the garage is a pause without the card");
   const close = game.slice(game.indexOf("function closePitWork() {"), game.indexOf("function leaveGarage() {"));
-  assert.match(close, /if \(isRaining\(\)\) GameAudio\.startRain\(\)/,
+  assert.match(close, /if \(wxArc\.viewRainfall\(\) > 0\.01\) GameAudio\.startRain\(\)/,
     "leaving the pit garage restarts rain the way RESUME does");
 });
 
