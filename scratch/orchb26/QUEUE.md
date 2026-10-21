@@ -106,3 +106,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 05:59Z: MERGED #3420 → 91098189 (non-game, in b2457484 Pages gap). Pages b2457484 push run 39552066410 in_progress.
 
 06:06Z: READY #3230 e33054a9 (H24, full 47/0, ready-gate ok) = NEXT GAME on green Pages b2457484 (watcher armed). Also READY/green game: #3406 f53038dd, #3238 38ebaddf (W14), #3399 e105abe5; READY full-running: #3388 75ba1a2c (H20), #3408 985ac0f4 (H21 FINAL), #3422 acb2d060 (H19). #3377 H19 resyncing. W11 archived (Bryce OK).
+
+06:1xZ: Pages b2457484 GREEN (#3386 confirmed). MERGED #3230 → 3d13be81 (GAME, Bryce priority). Next game #3406 after green Pages on 3d13be81; then #3238, #3377, #3399, #3408, #3422, #3388.
