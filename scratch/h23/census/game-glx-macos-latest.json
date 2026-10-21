@@ -1,0 +1,2546 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "track": "monza",
+  "backend": "webgl2",
+  "path": "webgpu",
+  "glErrDrain": "beat",
+  "entry": "api",
+  "phase": "done",
+  "elapsedMs": 115116,
+  "adapter": {
+    "hasGpu": true,
+    "vendor": "apple",
+    "architecture": "",
+    "description": ""
+  },
+  "cam": {
+    "asked": "helmet",
+    "set": "helmet",
+    "atWindowEnd": "helmet"
+  },
+  "raceCall": {
+    "track": "monza",
+    "timeOfDay": "default",
+    "weather": "dry"
+  },
+  "timeOfDay": "(default)",
+  "trackReady": {
+    "_type": "JSHandle",
+    "_guid": "handle@7d9454fb422f2a5b5808dbf8691505b7"
+  },
+  "parkCall": {
+    "s": 577.7579011126661,
+    "total": 5777.579011126656
+  },
+  "gpuTimerStart": {
+    "supported": true,
+    "on": true,
+    "ms": -1,
+    "software": false
+  },
+  "race": {
+    "beats": 20,
+    "drive": true,
+    "reached": true,
+    "gateMs": 24,
+    "warmMark": null,
+    "warmRequested": false,
+    "warm": null,
+    "driver": "started",
+    "driven": {
+      "frames": 547,
+      "distM": 824,
+      "meanSpeed": 42.2,
+      "offRoadFrames": 0,
+      "error": null
+    }
+  },
+  "raceEntryProfile": {
+    "supported": true,
+    "armed": false,
+    "windowMs": 5447.6,
+    "winT0": 5055.9,
+    "clockErrMs": 0,
+    "blockMs": 3389,
+    "maxBlockMs": 1439,
+    "longTasks": 13,
+    "legs": [
+      {
+        "n": "scenery",
+        "ms": 29.5
+      },
+      {
+        "n": "resets",
+        "ms": 939.6
+      },
+      {
+        "n": "loadTrack",
+        "ms": 937.5
+      },
+      {
+        "n": "makeCars",
+        "ms": 15
+      },
+      {
+        "n": "settings",
+        "ms": 1.8
+      },
+      {
+        "n": "gridUp",
+        "ms": 22.3
+      },
+      {
+        "n": "finish",
+        "ms": 0.5
+      }
+    ],
+    "marks": [
+      {
+        "n": "begin:startRace",
+        "t": 0.3
+      },
+      {
+        "n": "ensureScenery:start",
+        "t": 0.3
+      },
+      {
+        "n": "ensureScenery:end",
+        "t": 29.1
+      },
+      {
+        "n": "body:yield",
+        "t": 29.5
+      },
+      {
+        "n": "gridCountdown:start",
+        "t": 1923.7
+      },
+      {
+        "n": "handoff:raise",
+        "t": 1949
+      },
+      {
+        "n": "warmCarAssets:start",
+        "t": 1949.3
+      },
+      {
+        "n": "warmCarAssets:steps yields=38 maxStepMs=221 cpuMs=1417",
+        "t": 3378.7
+      },
+      {
+        "n": "warmCarAssets:end",
+        "t": 3378.7
+      },
+      {
+        "n": "debrisPrime:start",
+        "t": 3378.8
+      },
+      {
+        "n": "debrisPrime:end",
+        "t": 3380.4
+      },
+      {
+        "n": "gridCountdown:end",
+        "t": 3380.5
+      },
+      {
+        "n": "rigWarm:start",
+        "t": 3400.8
+      },
+      {
+        "n": "rigWarm:end",
+        "t": 3401.1
+      },
+      {
+        "n": "mirrorPrepare:start",
+        "t": 3401.1
+      },
+      {
+        "n": "present:warming",
+        "t": 4848.7
+      },
+      {
+        "n": "present:ready",
+        "t": 4910.4
+      },
+      {
+        "n": "handoff:lower",
+        "t": 4910.4
+      },
+      {
+        "n": "mirrorPrepare:end",
+        "t": 4910.7
+      },
+      {
+        "n": "session:committed",
+        "t": 4910.8
+      },
+      {
+        "n": "end",
+        "t": 5447.6
+      }
+    ]
+  },
+  "beats": [
+    {
+      "s": 13.7,
+      "ge": 0,
+      "t": "monza",
+      "f": 26,
+      "ms": 21.6,
+      "ti": 2,
+      "sc": 1,
+      "gms": 53.75,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 183.3,
+        "p95": 1349.9,
+        "p99": 1349.9,
+        "max": 1349.9,
+        "n": 10
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 10,
+        "frames": 10
+      }
+    },
+    {
+      "s": 14.7,
+      "ge": 0,
+      "t": "monza",
+      "f": 23,
+      "ms": 22.8,
+      "ti": 2,
+      "sc": 1,
+      "gms": 14.97,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 66.6,
+        "p95": 666.7,
+        "p99": 1349.9,
+        "max": 1349.9,
+        "n": 27
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 18,
+        "frames": 27
+      }
+    },
+    {
+      "s": 15.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 24,
+      "ms": 21,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 13.08,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 50,
+        "p95": 366.7,
+        "p99": 1349.9,
+        "max": 1349.9,
+        "n": 50
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 31,
+        "frames": 50
+      }
+    },
+    {
+      "s": 16.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 27,
+      "ms": 19.7,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 21.9,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 50,
+        "p95": 349.9,
+        "p99": 1349.9,
+        "max": 1349.9,
+        "n": 77
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 43,
+        "frames": 77
+      }
+    },
+    {
+      "s": 17.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 28,
+      "ms": 20.1,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 13.23,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 49.9,
+        "p95": 183.3,
+        "p99": 666.7,
+        "max": 1349.9,
+        "n": 104
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 53,
+        "frames": 104
+      }
+    },
+    {
+      "s": 18.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 23,
+      "ms": 22.2,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 13.01,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 49.9,
+        "p95": 83.4,
+        "p99": 666.7,
+        "max": 1349.9,
+        "n": 129
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 65,
+        "frames": 129
+      }
+    },
+    {
+      "s": 19.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 30,
+      "ms": 17.8,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 15.44,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 83.4,
+        "p99": 666.7,
+        "max": 1349.9,
+        "n": 156
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 77,
+        "frames": 156
+      }
+    },
+    {
+      "s": 20.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 27,
+      "ms": 20,
+      "ti": 2,
+      "sc": 0.8,
+      "gms": 9.5,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 83.3,
+        "p99": 666.7,
+        "max": 1349.9,
+        "n": 187
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 87,
+        "frames": 187
+      }
+    },
+    {
+      "s": 21.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 35,
+      "ms": 17.6,
+      "ti": 2,
+      "sc": 0.8,
+      "gms": 10.26,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 83.3,
+        "p99": 366.7,
+        "max": 1349.9,
+        "n": 220
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 96,
+        "frames": 220
+      }
+    },
+    {
+      "s": 22.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 28,
+      "ms": 19.5,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 12.46,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.8,
+        "p99": 366.7,
+        "max": 1349.9,
+        "n": 249
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 106,
+        "frames": 249
+      }
+    },
+    {
+      "s": 23.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 28,
+      "ms": 18.8,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 12.9,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 366.7,
+        "max": 1349.9,
+        "n": 276
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 118,
+        "frames": 276
+      }
+    },
+    {
+      "s": 24.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 29,
+      "ms": 18.7,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 10.49,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 349.9,
+        "max": 1349.9,
+        "n": 301
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 129,
+        "frames": 301
+      }
+    },
+    {
+      "s": 25.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 33,
+      "ms": 18.4,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 12.73,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 349.9,
+        "max": 1349.9,
+        "n": 333
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 138,
+        "frames": 333
+      }
+    },
+    {
+      "s": 26.8,
+      "ge": 0,
+      "t": "monza",
+      "f": 24,
+      "ms": 21.4,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 15.11,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 349.9,
+        "max": 1349.9,
+        "n": 359
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 149,
+        "frames": 359
+      }
+    },
+    {
+      "s": 27.9,
+      "ge": 0,
+      "t": "monza",
+      "f": 32,
+      "ms": 17.6,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 9.5,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 349.9,
+        "max": 1349.9,
+        "n": 388
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 162,
+        "frames": 388
+      }
+    },
+    {
+      "s": 28.9,
+      "ge": 0,
+      "t": "monza",
+      "f": 26,
+      "ms": 21.2,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 15.06,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 233.3,
+        "max": 1349.9,
+        "n": 418
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 171,
+        "frames": 418
+      }
+    },
+    {
+      "s": 29.9,
+      "ge": 0,
+      "t": "monza",
+      "f": 31,
+      "ms": 18.3,
+      "ti": 2,
+      "sc": 0.9,
+      "gms": 11.95,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 233.3,
+        "max": 1349.9,
+        "n": 447
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 182,
+        "frames": 447
+      }
+    },
+    {
+      "s": 30.9,
+      "ge": 0,
+      "t": "monza",
+      "f": 26,
+      "ms": 20.5,
+      "ti": 3,
+      "sc": 0.9,
+      "gms": 10.76,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 233.3,
+        "max": 1349.9,
+        "n": 476
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 192,
+        "frames": 476
+      }
+    },
+    {
+      "s": 31.9,
+      "ge": 0,
+      "t": "monza",
+      "f": 27,
+      "ms": 22,
+      "ti": 3,
+      "sc": 0.9,
+      "gms": 10.72,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 183.3,
+        "max": 1349.9,
+        "n": 502
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 203,
+        "frames": 502
+      }
+    },
+    {
+      "s": 32.9,
+      "ge": 0,
+      "t": "monza",
+      "f": 25,
+      "ms": 23.2,
+      "ti": 3,
+      "sc": 0.9,
+      "gms": 11.15,
+      "ubo": null,
+      "mm": null,
+      "ft": {
+        "p50": 33.4,
+        "p95": 66.7,
+        "p99": 183.3,
+        "max": 1349.9,
+        "n": 529
+      },
+      "open": {
+        "maxMs": 1349.9,
+        "slow": 215,
+        "frames": 529
+      }
+    }
+  ],
+  "drive": true,
+  "reached": true,
+  "gateMs": 24,
+  "warmMark": null,
+  "warmRequested": false,
+  "warm": null,
+  "driver": "started",
+  "mirror": {
+    "mode": "auto",
+    "shown": true,
+    "cam": "helmet",
+    "drawn": 549,
+    "backend": {
+      "ready": true,
+      "renders": 549,
+      "glass": 548,
+      "w": 276,
+      "h": 79
+    }
+  },
+  "warmEnd": null,
+  "cpu": {
+    "totalMs": 21639.1,
+    "samples": 7963,
+    "rows": [
+      {
+        "site": "(idle) @ :0",
+        "ms": 17360.3,
+        "share": 0.802
+      },
+      {
+        "site": "(program) @ :0",
+        "ms": 1950.1,
+        "share": 0.09
+      },
+      {
+        "site": "getError @ :0",
+        "ms": 511,
+        "share": 0.024
+      },
+      {
+        "site": "updateCar @ js/game.js:4710",
+        "ms": 120.9,
+        "share": 0.006
+      },
+      {
+        "site": "render @ js/game.js:7110",
+        "ms": 67.5,
+        "share": 0.003
+      },
+      {
+        "site": "resize @ js/render/glx/glx.js:992",
+        "ms": 53,
+        "share": 0.002
+      },
+      {
+        "site": "getBoundingClientRect @ :0",
+        "ms": 44.1,
+        "share": 0.002
+      },
+      {
+        "site": "updateCarLateral @ js/game.js:5586",
+        "ms": 43.5,
+        "share": 0.002
+      },
+      {
+        "site": "querySelectorAll @ :0",
+        "ms": 39,
+        "share": 0.002
+      },
+      {
+        "site": "update @ js/game.js:4361",
+        "ms": 30.1,
+        "share": 0.001
+      },
+      {
+        "site": "aabbInFrustum @ js/render/shared/frustum.js:30",
+        "ms": 28.3,
+        "share": 0.001
+      },
+      {
+        "site": "updateCarBrakePlan @ js/game.js:5194",
+        "ms": 27.9,
+        "share": 0.001
+      },
+      {
+        "site": "(anonymous) @ :348",
+        "ms": 26.5,
+        "share": 0.001
+      },
+      {
+        "site": "uniform1f @ :0",
+        "ms": 19.2,
+        "share": 0.001
+      },
+      {
+        "site": "_onTrafO @ js/physics/collide.js:193",
+        "ms": 17.1,
+        "share": 0.001
+      },
+      {
+        "site": "updateCarAdvance @ js/game.js:6134",
+        "ms": 16.9,
+        "share": 0.001
+      },
+      {
+        "site": "present @ js/render/glx/post.js:505",
+        "ms": 16.7,
+        "share": 0.001
+      },
+      {
+        "site": "GameAudio.setEngine @ js/audio/crowd.js:358",
+        "ms": 16.7,
+        "share": 0.001
+      },
+      {
+        "site": "updateHud @ js/ui/hud.js:1994",
+        "ms": 15.8,
+        "share": 0.001
+      },
+      {
+        "site": "tickBody @ js/game.js:8364",
+        "ms": 15.5,
+        "share": 0.001
+      },
+      {
+        "site": "drawMinimap @ js/ui/hud-minimap.js:23",
+        "ms": 15.3,
+        "share": 0.001
+      },
+      {
+        "site": "bindVAO @ js/render/glx/glx.js:425",
+        "ms": 14.7,
+        "share": 0.001
+      },
+      {
+        "site": "setEngine @ js/audio/engine.js:1615",
+        "ms": 14.5,
+        "share": 0.001
+      },
+      {
+        "site": "requestAnimationFrame @ :0",
+        "ms": 13.3,
+        "share": 0.001
+      }
+    ],
+    "files": [
+      {
+        "file": "(native)",
+        "ms": 20153.6,
+        "share": 0.931
+      },
+      {
+        "file": "js/game.js",
+        "ms": 441.8,
+        "share": 0.02
+      },
+      {
+        "file": "js/render/glx/glx.js",
+        "ms": 153.2,
+        "share": 0.007
+      },
+      {
+        "file": "js/physics/ai-drive.js",
+        "ms": 99.6,
+        "share": 0.005
+      },
+      {
+        "file": "js/physics/collide.js",
+        "ms": 58.5,
+        "share": 0.003
+      },
+      {
+        "file": "js/ui/hud.js",
+        "ms": 54.2,
+        "share": 0.003
+      },
+      {
+        "file": "js/physics/tyre-model.js",
+        "ms": 44.2,
+        "share": 0.002
+      },
+      {
+        "file": "js/render/glx/post.js",
+        "ms": 41,
+        "share": 0.002
+      },
+      {
+        "file": "js/car/car-draw.js",
+        "ms": 37.3,
+        "share": 0.002
+      },
+      {
+        "file": "js/render/shared/frustum.js",
+        "ms": 31.3,
+        "share": 0.001
+      }
+    ],
+    "verdict": "TOP SELF TIME: (idle) @ :0 — 80% of 21639 ms"
+  },
+  "window": {
+    "ms": 21937,
+    "callbacks": 554,
+    "source": "LoopHealth.frames",
+    "frames": 546,
+    "fps": 24.9,
+    "msPerFrame": 40.18,
+    "callbacksPerFrame": 1.01,
+    "p50": 33.4,
+    "p95": 78,
+    "p99": 86.2,
+    "max": 1394.5,
+    "intervals": 545
+  },
+  "gapWork": {
+    "gaps": 4,
+    "thresholdMs": 500,
+    "byPhase": {
+      "track build": 2,
+      "driven window": 1,
+      "before race()": 1
+    },
+    "rows": [
+      {
+        "phase": "track build",
+        "atMs": 3419,
+        "gapMs": 1474,
+        "prevFrameMs": 1436.3,
+        "prevCallbacks": 1,
+        "outsideMs": 38,
+        "longTaskMs": 1439,
+        "armed": false,
+        "prev": "bufferData=112 bufferSubData=53 texImage2D=7 texSubImage3D=1 bufferData=1048KB bufferSubData=466KB texImage2D=0KB",
+        "between": "-"
+      },
+      {
+        "phase": "driven window",
+        "atMs": 6652,
+        "gapMs": 1354,
+        "prevFrameMs": 18.2,
+        "prevCallbacks": 2,
+        "outsideMs": 1336,
+        "longTaskMs": 1,
+        "armed": true,
+        "prev": "bufferSubData=22 bufferData=3 generateMipmap=1 bufferSubData=135KB bufferData=2KB",
+        "between": "-"
+      },
+      {
+        "phase": "track build",
+        "atMs": 5051,
+        "gapMs": 670,
+        "prevFrameMs": 635.3,
+        "prevCallbacks": 1,
+        "outsideMs": 35,
+        "longTaskMs": 646,
+        "armed": false,
+        "prev": "texImage2D=1 generateMipmap=1 texImage2D=320KB",
+        "between": "-"
+      },
+      {
+        "phase": "before race()",
+        "atMs": -618,
+        "gapMs": 593,
+        "prevFrameMs": 0.1,
+        "prevCallbacks": 1,
+        "outsideMs": 593,
+        "longTaskMs": 566,
+        "armed": false,
+        "prev": "-",
+        "between": "bufferSubData=1424 bufferData=100 texImage2D=1 generateMipmap=1 bufferData=7847KB bufferSubData=1911KB texImage2D=1024KB"
+      }
+    ],
+    "summary": "4 rAF gap(s) >= 500 ms (track build: 2, driven window: 1, before race(): 1); worst 1474 ms [track build], 1436.3 ms of it in the step before, 1439 ms in long tasks"
+  },
+  "raceEntrySpans": {
+    "fromMark": "census:raceCall",
+    "windowMs": 6370,
+    "spans": [
+      {
+        "n": "leg:scenery (ensureScenery + yield)",
+        "kind": "leg",
+        "atMs": 894.9,
+        "ms": 29.5
+      },
+      {
+        "n": "leg:resets (ensureRaceSession + ensureAudio lazy bundles)",
+        "kind": "leg",
+        "atMs": 924.4,
+        "ms": 939.6
+      },
+      {
+        "n": "leg:loadTrack (paced build)",
+        "kind": "leg",
+        "atMs": 1864,
+        "ms": 937.5
+      },
+      {
+        "n": "leg:makeCars",
+        "kind": "leg",
+        "atMs": 2801.5,
+        "ms": 15
+      },
+      {
+        "n": "leg:settings (applyRaceSettings)",
+        "kind": "leg",
+        "atMs": 2816.5,
+        "ms": 1.8
+      },
+      {
+        "n": "leg:gridUp",
+        "kind": "leg",
+        "atMs": 2818.3,
+        "ms": 22.3
+      },
+      {
+        "n": "leg:finish",
+        "kind": "leg",
+        "atMs": 2840.6,
+        "ms": 0.5
+      },
+      {
+        "n": "ensureScenery",
+        "kind": "span",
+        "atMs": 895.2,
+        "ms": 28.8
+      },
+      {
+        "n": "gridCountdown",
+        "kind": "span",
+        "atMs": 2818.6,
+        "ms": 1456.8
+      },
+      {
+        "n": "warmCarAssets",
+        "kind": "span",
+        "atMs": 2844.2,
+        "ms": 1429.4
+      },
+      {
+        "n": "debrisPrime",
+        "kind": "span",
+        "atMs": 4273.7,
+        "ms": 1.6
+      },
+      {
+        "n": "rigWarm",
+        "kind": "span",
+        "atMs": 4295.7,
+        "ms": 0.3
+      },
+      {
+        "n": "mirrorPrepare",
+        "kind": "span",
+        "atMs": 4296,
+        "ms": 1509.6
+      }
+    ],
+    "events": [
+      {
+        "kind": "gap",
+        "atMs": 3418.8,
+        "ms": 1473.9,
+        "span": "gridCountdown",
+        "spanKind": "span",
+        "overlapMs": 856.6,
+        "share": 0.58,
+        "also": [
+          "warmCarAssets 855ms",
+          "mirrorPrepare 597ms",
+          "debrisPrime 2ms"
+        ],
+        "after": "warmCarAssets:start (+575 ms)",
+        "before": "warmCarAssets:steps yields=38 maxStepMs=221 cpuMs=1417",
+        "prevFrameMs": 1436.3
+      },
+      {
+        "kind": "longtask",
+        "atMs": 3418.7,
+        "ms": 1439,
+        "span": "gridCountdown",
+        "spanKind": "span",
+        "overlapMs": 856.7,
+        "share": 0.6,
+        "also": [
+          "warmCarAssets 855ms",
+          "mirrorPrepare 562ms",
+          "debrisPrime 2ms"
+        ],
+        "after": "warmCarAssets:start (+575 ms)",
+        "before": "warmCarAssets:steps yields=38 maxStepMs=221 cpuMs=1417"
+      },
+      {
+        "kind": "gap",
+        "atMs": 5051.2,
+        "ms": 670.4,
+        "span": "mirrorPrepare",
+        "spanKind": "span",
+        "overlapMs": 670.4,
+        "share": 1,
+        "also": [],
+        "after": "mirrorPrepare:start (+755 ms)",
+        "before": "present:warming",
+        "prevFrameMs": 635.3
+      },
+      {
+        "kind": "longtask",
+        "atMs": 5051.1,
+        "ms": 646,
+        "span": "mirrorPrepare",
+        "spanKind": "span",
+        "overlapMs": 646,
+        "share": 1,
+        "also": [],
+        "after": "mirrorPrepare:start (+755 ms)",
+        "before": "present:warming"
+      },
+      {
+        "kind": "longtask",
+        "atMs": 41,
+        "ms": 337,
+        "span": null,
+        "spanKind": null,
+        "overlapMs": 0,
+        "share": 0,
+        "also": [],
+        "after": "census:raceCall (+41 ms)",
+        "before": "begin:startRace"
+      },
+      {
+        "kind": "longtask",
+        "atMs": 5963.3,
+        "ms": 335,
+        "span": null,
+        "spanKind": null,
+        "overlapMs": 0,
+        "share": 0,
+        "also": [],
+        "after": "census:parked (+9 ms)",
+        "before": "end"
+      },
+      {
+        "kind": "longtask",
+        "atMs": 705.8,
+        "ms": 307,
+        "span": "leg:resets (ensureRaceSession + ensureAudio lazy bundles)",
+        "spanKind": "leg",
+        "overlapMs": 88.4,
+        "share": 0.29,
+        "also": [
+          "leg:scenery (ensureScenery + yield) 30ms",
+          "ensureScenery 29ms"
+        ],
+        "after": "census:raceCall (+706 ms)",
+        "before": "begin:startRace"
+      },
+      {
+        "kind": "longtask",
+        "atMs": 1913.7,
+        "ms": 264,
+        "span": "leg:loadTrack (paced build)",
+        "spanKind": "leg",
+        "overlapMs": 264,
+        "share": 1,
+        "also": [],
+        "after": "body:yield (+989 ms)",
+        "before": "gridCountdown:start"
+      },
+      {
+        "kind": "longtask",
+        "atMs": 420.8,
+        "ms": 225,
+        "span": null,
+        "spanKind": null,
+        "overlapMs": 0,
+        "share": 0,
+        "also": [],
+        "after": "census:raceCall (+421 ms)",
+        "before": "begin:startRace"
+      },
+      {
+        "kind": "longtask",
+        "atMs": 1305.2,
+        "ms": 214,
+        "span": "leg:resets (ensureRaceSession + ensureAudio lazy bundles)",
+        "spanKind": "leg",
+        "overlapMs": 214,
+        "share": 1,
+        "also": [],
+        "after": "body:yield (+381 ms)",
+        "before": "gridCountdown:start"
+      },
+      {
+        "kind": "longtask",
+        "atMs": 5721.6,
+        "ms": 193,
+        "span": "mirrorPrepare",
+        "spanKind": "span",
+        "overlapMs": 84,
+        "share": 0.44,
+        "also": [],
+        "after": "mirrorPrepare:start (+1426 ms)",
+        "before": "present:warming"
+      },
+      {
+        "kind": "longtask",
+        "atMs": 2515.6,
+        "ms": 149,
+        "span": "leg:loadTrack (paced build)",
+        "spanKind": "leg",
+        "overlapMs": 149,
+        "share": 1,
+        "also": [],
+        "after": "body:yield (+1591 ms)",
+        "before": "gridCountdown:start"
+      }
+    ],
+    "eventCount": 18,
+    "bySpan": {
+      "gridCountdown": {
+        "tasks": 1,
+        "ms": 856.7,
+        "longestMs": 1439
+      },
+      "mirrorPrepare": {
+        "tasks": 3,
+        "ms": 841,
+        "longestMs": 646
+      },
+      "leg:loadTrack (paced build)": {
+        "tasks": 4,
+        "ms": 549,
+        "longestMs": 264
+      },
+      "leg:resets (ensureRaceSession + ensureAudio lazy bundles)": {
+        "tasks": 4,
+        "ms": 440.4,
+        "longestMs": 307
+      },
+      "warmCarAssets": {
+        "tasks": 1,
+        "ms": 69,
+        "longestMs": 69
+      }
+    },
+    "unattributedMs": 897,
+    "summary": "16 long task(s) (4563 ms) + 2 rAF gap(s) in 6370 ms of race entry; gridCountdown 857 ms/1, mirrorPrepare 841 ms/3, leg:loadTrack (paced build) 549 ms/4, leg:resets (ensureRaceSession + ensureAudio lazy bundles) 440 ms/4; 897 ms in no span"
+  },
+  "passes": {
+    "frames": 554,
+    "drewFrames": 0,
+    "ok": false,
+    "reason": "too few rendering frames"
+  },
+  "gpuWork": {
+    "gl.bufferSubDataKB": 8194.43359375,
+    "gl.bufferSubData": 1234,
+    "gl.texSubImage3DKB": 896,
+    "gl.generateMipmap": 547,
+    "gl.bufferDataKB": 102.765625,
+    "gl.bufferData": 70,
+    "gl.texImage2D": 36,
+    "gl.texSubImage3D": 14
+  },
+  "compileStacks": [],
+  "passKinds": {
+    "note": "too few rendering frames to compare compositions"
+  },
+  "spikeCpu": {
+    "spikes": 2,
+    "thresholdMs": 100,
+    "spikeMs": 535.5,
+    "sampledMs": 0,
+    "coverage": 0,
+    "rows": [],
+    "files": [],
+    "verdict": "no samples inside the spikes — the clock join failed"
+  },
+  "spikeWork": {
+    "frames": 2,
+    "restFrames": 552,
+    "thresholdMs": 100,
+    "inSpike": {
+      "gl.generateMipmap": 2,
+      "gl.generateMipmapMs": 0,
+      "gpu.wrappedMs": 0.10000000000582077,
+      "gl.bufferSubData": 34,
+      "gl.bufferSubDataKB": 150.80859375,
+      "gl.bufferSubDataMs": 0.10000000000582077,
+      "gl.bufferData": 1,
+      "gl.bufferDataMs": 0
+    },
+    "inRest": {
+      "gl.generateMipmap": 545,
+      "gl.generateMipmapMs": 1.5000000001164153,
+      "gpu.wrappedMs": 9.299999999784632,
+      "gl.bufferSubData": 1200,
+      "gl.bufferSubDataKB": 8043.625,
+      "gl.bufferSubDataMs": 6.899999999761349,
+      "gl.bufferData": 69,
+      "gl.bufferDataKB": 102.765625,
+      "gl.bufferDataMs": 0.2999999999301508,
+      "gl.texSubImage3D": 14,
+      "gl.texSubImage3DKB": 896,
+      "gl.texSubImage3DMs": 0.39999999990686774,
+      "gl.texImage2D": 36,
+      "gl.texImage2DMs": 0.2000000000698492
+    },
+    "summary": "bufferData=1 (0.5/f vs 0.13/f) bufferDataKB=0 (0.0/f vs 0.19/f) bufferSubData=34 (17.0/f vs 2.17/f) bufferSubDataKB=151 (75.4/f vs 14.57/f) generateMipmap=2 (1.0/f vs 0.99/f) texImage2D=0 (0.0/f vs 0.07/f) texSubImage3D=0 (0.0/f vs 0.03/f) texSubImage3DKB=0 (0.0/f vs 1.62/f)",
+    "timed": "bufferSubData=0ms (0.1/f vs 0.01/f) bufferData=0ms (0.0/f vs 0.00/f) generateMipmap=0ms (0.0/f vs 0.00/f) texImage2D=0ms (0.0/f vs 0.00/f) texSubImage3D=0ms (0.0/f vs 0.00/f)",
+    "wrappedMs": {
+      "spike": 0.1,
+      "rest": 9.3,
+      "spikeDur": 535.5,
+      "restDur": 2194.5
+    },
+    "remainder": "wrapped GPU calls 0 ms of 536 ms inside the spikes (0%) vs 9 of 2195 ms outside (0%)"
+  },
+  "spikePasses": {
+    "spikeFrames": 0,
+    "restFrames": 0,
+    "thresholdMs": 100,
+    "note": "no rendering frame at or over 100 ms"
+  },
+  "hitch": {
+    "frames": 554,
+    "ok": true,
+    "p50": 2.9,
+    "p95": 9.8,
+    "p99": 37.9,
+    "max": 353.8,
+    "spikeThresholdMs": 10.9,
+    "spikes": 25,
+    "spikeMs": [
+      181.7,
+      78.2,
+      18,
+      56.5,
+      42.3,
+      19.9,
+      19.8,
+      37.9,
+      353.8,
+      25.1,
+      18.8,
+      11.6,
+      11.5,
+      13.7,
+      15.5,
+      11.2,
+      32.9,
+      18.6,
+      12.3,
+      13.6,
+      13.7,
+      11.5,
+      34.7,
+      15.9,
+      11
+    ],
+    "spikeAtS": [
+      10.53,
+      10.72,
+      10.81,
+      12.17,
+      12.25,
+      12.3,
+      12.33,
+      12.36,
+      12.4,
+      12.76,
+      12.79,
+      12.9,
+      12.97,
+      13.19,
+      13.28,
+      13.35,
+      14.1,
+      14.14,
+      14.32,
+      15.4,
+      15.89,
+      16.43,
+      18.5,
+      21.02,
+      27.84
+    ],
+    "gapsS": [
+      0.19,
+      0.1,
+      1.36,
+      0.08,
+      0.05,
+      0.03,
+      0.03,
+      0.04,
+      0.36,
+      0.03,
+      0.11,
+      0.06,
+      0.23,
+      0.09,
+      0.07,
+      0.75,
+      0.04,
+      0.18,
+      1.08,
+      0.5,
+      0.53,
+      2.08,
+      2.52,
+      6.82
+    ],
+    "gapMedianS": 0.18,
+    "gapCV": 2.025,
+    "periodic": false,
+    "verdict": "25 spikes, irregular (CV 2.03)"
+  },
+  "depth": {
+    "supported": false,
+    "note": "no TLX post state on this leg (GLX/WGX, or the read failed)"
+  },
+  "raceEntry": {
+    "supported": true,
+    "marks": {
+      "raceCall": 4161,
+      "trackReady": 10077.199999999983,
+      "parked": 10115.599999999977
+    },
+    "longTasksSeen": 22,
+    "entryMs": 5916.2,
+    "blockMs": 4228,
+    "longestBlockMs": 1439,
+    "otherBlockMs": 2789,
+    "tasks": 15,
+    "longest5": [
+      {
+        "at": 7579.7,
+        "ms": 1439
+      },
+      {
+        "at": 9212.1,
+        "ms": 646
+      },
+      {
+        "at": 4202,
+        "ms": 337
+      },
+      {
+        "at": 4866.8,
+        "ms": 307
+      },
+      {
+        "at": 6074.7,
+        "ms": 264
+      }
+    ],
+    "loaf": {
+      "supported": true,
+      "windowMs": 6370,
+      "frames": 27,
+      "framesMs": 6294,
+      "byInvokerType": {
+        "user-callback": {
+          "scripts": 19,
+          "ms": 2990.2
+        },
+        "resolve-promise": {
+          "scripts": 59,
+          "ms": 2784.9
+        },
+        "event-listener": {
+          "scripts": 1,
+          "ms": 224.7
+        }
+      },
+      "longest": [
+        {
+          "atMs": 3316.3,
+          "startTime": 7477.3,
+          "duration": 1541.6,
+          "renderStart": 3418.7,
+          "blockingDuration": 1419.4,
+          "span": "gridCountdown",
+          "scripts": [
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 3418.8,
+              "duration": 1436.3
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3351.7,
+              "duration": 30.3
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3382,
+              "duration": 23
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3316.3,
+              "duration": 20.6
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3336.9,
+              "duration": 14.7
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Response.arrayBuffer.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/audio/voice-pack.js?v=1695",
+              "startTime": 3410.1,
+              "duration": 7.7
+            }
+          ]
+        },
+        {
+          "atMs": 5004.5,
+          "startTime": 9165.5,
+          "duration": 690.4,
+          "renderStart": 5051.2,
+          "blockingDuration": 600,
+          "span": "mirrorPrepare",
+          "scripts": [
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 5051.2,
+              "duration": 639
+            },
+            {
+              "invokerType": "user-callback",
+              "invoker": "TimerHandler:setTimeout",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/ui/aria-state.js?v=dev",
+              "startTime": 5038.8,
+              "duration": 6.2
+            }
+          ]
+        },
+        {
+          "atMs": 30.2,
+          "startTime": 4191.2,
+          "duration": 348.6,
+          "renderStart": 378.5,
+          "blockingDuration": 287.8,
+          "span": null,
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/render/shared/assets.js?v=dev",
+              "startTime": 41,
+              "duration": 337.4
+            }
+          ]
+        },
+        {
+          "atMs": 5954,
+          "startTime": 10115,
+          "duration": 344.4,
+          "renderStart": 5963.3,
+          "blockingDuration": 285.2,
+          "span": null,
+          "scripts": [
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 5963.3,
+              "duration": 327.5
+            }
+          ]
+        },
+        {
+          "atMs": 705.5,
+          "startTime": 4866.5,
+          "duration": 311.7,
+          "renderStart": 1014.2,
+          "blockingDuration": 260.8,
+          "span": "leg:resets (ensureRaceSession + ensureAudio lazy bundles)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/core/lazy-bundles.js?v=dev",
+              "startTime": 705.8,
+              "duration": 307.8
+            }
+          ]
+        },
+        {
+          "atMs": 1913.7,
+          "startTime": 6074.7,
+          "duration": 266.3,
+          "renderStart": 2177.9,
+          "blockingDuration": 216.2,
+          "span": "leg:loadTrack (paced build)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/game.js?v=dev",
+              "startTime": 1913.8,
+              "duration": 264
+            }
+          ]
+        },
+        {
+          "atMs": 1280.5,
+          "startTime": 5441.5,
+          "duration": 262.8,
+          "renderStart": 1520.1,
+          "blockingDuration": 187.9,
+          "span": "leg:resets (ensureRaceSession + ensureAudio lazy bundles)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/track/tracks.js?v=dev",
+              "startTime": 1305.3,
+              "duration": 214.7
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/track/tracks.js?v=dev",
+              "startTime": 1280.5,
+              "duration": 24.7
+            },
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 1520.4,
+              "duration": 22.8
+            }
+          ]
+        },
+        {
+          "atMs": 6313.7,
+          "startTime": 10474.7,
+          "duration": 238.6,
+          "renderStart": 6369.6,
+          "blockingDuration": 140.8,
+          "span": null,
+          "scripts": [
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 6369.6,
+              "duration": 181.8
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/render/shared/assets.js?v=dev",
+              "startTime": 6322.2,
+              "duration": 8
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/render/shared/assets.js?v=dev",
+              "startTime": 6363.1,
+              "duration": 6
+            }
+          ]
+        },
+        {
+          "atMs": 420.3,
+          "startTime": 4581.3,
+          "duration": 231.7,
+          "renderStart": 646,
+          "blockingDuration": 181.1,
+          "span": null,
+          "scripts": [
+            {
+              "invokerType": "event-listener",
+              "invoker": "SCRIPT[src=\"js/audio/engine.js?v=1695\"].onload",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/core/script-loader.js?v=dev",
+              "startTime": 421.2,
+              "duration": 224.7
+            },
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 646.1,
+              "duration": 5.7
+            }
+          ]
+        },
+        {
+          "atMs": 5697.1,
+          "startTime": 9858.1,
+          "duration": 217.7,
+          "renderStart": 5721.6,
+          "blockingDuration": 146.3,
+          "span": "mirrorPrepare",
+          "scripts": [
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 5721.7,
+              "duration": 193
+            }
+          ]
+        },
+        {
+          "atMs": 1660.8,
+          "startTime": 5821.8,
+          "duration": 179.4,
+          "renderStart": 1794.5,
+          "blockingDuration": 64.3,
+          "span": "leg:resets (ensureRaceSession + ensureAudio lazy bundles)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/track/tracks.js?v=dev",
+              "startTime": 1660.8,
+              "duration": 68.5
+            },
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 1794.6,
+              "duration": 45.5
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "BaseAudioContext.decodeAudioData.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/audio/engine.js?v=1695",
+              "startTime": 1751.6,
+              "duration": 42.8
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/track/tracks.js?v=dev",
+              "startTime": 1729.3,
+              "duration": 17.5
+            }
+          ]
+        },
+        {
+          "atMs": 2503.9,
+          "startTime": 6664.9,
+          "duration": 161.4,
+          "renderStart": 2665.2,
+          "blockingDuration": 99.7,
+          "span": "leg:loadTrack (paced build)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2515.8,
+              "duration": 149.3
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2503.9,
+              "duration": 11.7
+            }
+          ]
+        },
+        {
+          "atMs": 1017.4,
+          "startTime": 5178.4,
+          "duration": 121.2,
+          "renderStart": 1119.8,
+          "blockingDuration": 11,
+          "span": "leg:resets (ensureRaceSession + ensureAudio lazy bundles)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/track/tracks.js?v=dev",
+              "startTime": 1017.4,
+              "duration": 42.2
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/track/tracks.js?v=dev",
+              "startTime": 1059.6,
+              "duration": 17.1
+            },
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 1122,
+              "duration": 16.5
+            },
+            {
+              "invokerType": "user-callback",
+              "invoker": "TimerHandler:setTimeout",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/ui/aria-state.js?v=dev",
+              "startTime": 1101.4,
+              "duration": 10
+            },
+            {
+              "invokerType": "user-callback",
+              "invoker": "PerformanceObserverCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 1111.5,
+              "duration": 8.2
+            }
+          ]
+        },
+        {
+          "atMs": 1543.4,
+          "startTime": 5704.4,
+          "duration": 117.2,
+          "renderStart": 1643.6,
+          "blockingDuration": 37.1,
+          "span": "leg:resets (ensureRaceSession + ensureAudio lazy bundles)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/track/tracks.js?v=dev",
+              "startTime": 1543.4,
+              "duration": 70.1
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/track/tracks.js?v=dev",
+              "startTime": 1613.6,
+              "duration": 25.7
+            },
+            {
+              "invokerType": "user-callback",
+              "invoker": "FrameRequestCallback",
+              "sourceFunctionName": null,
+              "sourceURL": null,
+              "startTime": 1643.8,
+              "duration": 16.7
+            }
+          ]
+        },
+        {
+          "atMs": 2180.2,
+          "startTime": 6341.2,
+          "duration": 115,
+          "renderStart": 2294.9,
+          "blockingDuration": 11.2,
+          "span": "leg:loadTrack (paced build)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2193.6,
+              "duration": 60.8
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2254.5,
+              "duration": 40.3
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2180.2,
+              "duration": 13.4
+            }
+          ]
+        },
+        {
+          "atMs": 2665.6,
+          "startTime": 6826.6,
+          "duration": 114.7,
+          "renderStart": 2780.2,
+          "blockingDuration": 26.2,
+          "span": "leg:loadTrack (paced build)",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2704.1,
+              "duration": 76
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2674.1,
+              "duration": 30
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2665.6,
+              "duration": 8.5
+            }
+          ]
+        },
+        {
+          "atMs": 2993.2,
+          "startTime": 7154.2,
+          "duration": 109.5,
+          "renderStart": 3102.5,
+          "blockingDuration": 0,
+          "span": "warmCarAssets",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3028.9,
+              "duration": 28.2
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3057.2,
+              "duration": 24
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3081.2,
+              "duration": 21.2
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3010.2,
+              "duration": 18.7
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2993.2,
+              "duration": 17
+            }
+          ]
+        },
+        {
+          "atMs": 3207.1,
+          "startTime": 7368.1,
+          "duration": 109,
+          "renderStart": 3315.9,
+          "blockingDuration": 20.1,
+          "span": "warmCarAssets",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3207.1,
+              "duration": 69.8
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 3277,
+              "duration": 38.8
+            }
+          ]
+        },
+        {
+          "atMs": 2886.2,
+          "startTime": 7047.2,
+          "duration": 106.9,
+          "renderStart": 2993,
+          "blockingDuration": 0,
+          "span": "warmCarAssets",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2931.7,
+              "duration": 37.3
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2969.1,
+              "duration": 23.9
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2908.5,
+              "duration": 23.2
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2886.2,
+              "duration": 22.3
+            }
+          ]
+        },
+        {
+          "atMs": 2780.4,
+          "startTime": 6941.4,
+          "duration": 105.7,
+          "renderStart": 2885.8,
+          "blockingDuration": 0,
+          "span": "gridCountdown",
+          "scripts": [
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2807.3,
+              "duration": 41
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2780.5,
+              "duration": 26.8
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2863.4,
+              "duration": 22.4
+            },
+            {
+              "invokerType": "resolve-promise",
+              "invoker": "Scheduler.yield.then",
+              "sourceFunctionName": null,
+              "sourceURL": "http://127.0.0.1:49254/js/car/car-draw.js?v=dev",
+              "startTime": 2848.4,
+              "duration": 15
+            }
+          ]
+        }
+      ],
+      "summary": "27 LoAF(s), 6294 ms in 6370 ms of race entry; scripts by invoker: user-callback 2990 ms/19, resolve-promise 2785 ms/59, event-listener 225 ms/1; longest 1541.6 ms at +3316 ms in gridCountdown"
+    },
+    "warmRequested": false,
+    "warmMark": null
+  },
+  "buildProfile": {
+    "totalMs": 763.2,
+    "geoMs": 660.6,
+    "upMs": 102.6,
+    "geoShare": 0.866,
+    "top": [
+      "props/geo=324",
+      "terrain/geo=128.4",
+      "propsHidden/geo=102.6",
+      "props/up=45.4"
+    ],
+    "rows": [
+      {
+        "n": "centerline",
+        "k": "geo",
+        "ms": 36.6
+      },
+      {
+        "n": "pit",
+        "k": "geo",
+        "ms": 0.4
+      },
+      {
+        "n": "surface",
+        "k": "geo",
+        "ms": 0.1
+      },
+      {
+        "n": "floor",
+        "k": "geo",
+        "ms": 0.2
+      },
+      {
+        "n": "floor",
+        "k": "up",
+        "ms": 0.1
+      },
+      {
+        "n": "road",
+        "k": "geo",
+        "ms": 41.3
+      },
+      {
+        "n": "road",
+        "k": "up",
+        "ms": 7.9
+      },
+      {
+        "n": "terrain",
+        "k": "geo",
+        "ms": 128.4
+      },
+      {
+        "n": "terrain",
+        "k": "up",
+        "ms": 8
+      },
+      {
+        "n": "props",
+        "k": "geo",
+        "ms": 324
+      },
+      {
+        "n": "propsSeal",
+        "k": "geo",
+        "ms": 25.7
+      },
+      {
+        "n": "propsHidden",
+        "k": "geo",
+        "ms": 102.6
+      },
+      {
+        "n": "props",
+        "k": "up",
+        "ms": 45.4
+      },
+      {
+        "n": "batches",
+        "k": "up",
+        "ms": 22.4
+      },
+      {
+        "n": "glassWater",
+        "k": "geo",
+        "ms": 1.3
+      },
+      {
+        "n": "trim",
+        "k": "up",
+        "ms": 9.7
+      },
+      {
+        "n": "pitSigns",
+        "k": "up",
+        "ms": 9.1
+      }
+    ]
+  },
+  "raceProfile": {
+    "totalMs": 1946.2,
+    "top": [
+      "resets=939.6",
+      "loadTrack=937.5",
+      "scenery=29.5",
+      "gridUp=22.3"
+    ],
+    "rows": [
+      {
+        "n": "scenery",
+        "ms": 29.5
+      },
+      {
+        "n": "resets",
+        "ms": 939.6
+      },
+      {
+        "n": "loadTrack",
+        "ms": 937.5
+      },
+      {
+        "n": "makeCars",
+        "ms": 15
+      },
+      {
+        "n": "settings",
+        "ms": 1.8
+      },
+      {
+        "n": "gridUp",
+        "ms": 22.3
+      },
+      {
+        "n": "finish",
+        "ms": 0.5
+      }
+    ]
+  },
+  "frameTail": {
+    "p50": 33.4,
+    "p95": 1349.9,
+    "p99": 1349.9,
+    "max": 1349.9,
+    "p99OverP50": 40.4,
+    "beats": 20
+  },
+  "gpuFrame": {
+    "medianMs": 12.9,
+    "samples": 20,
+    "scale": 0.9,
+    "canvas": {
+      "w": 1152,
+      "h": 648
+    },
+    "span": "main+post",
+    "spanNote": "one TIME_ELAPSED query from begin() to the end of post: main scene + post; sun/lamp/car shadow, env and mirror passes run before begin()"
+  },
+  "occlusion": {
+    "supported": null,
+    "on": false,
+    "tested": 0,
+    "culled": 0,
+    "queries": 0,
+    "passes": 0,
+    "lagMax": 0,
+    "lagAvg": 0
+  },
+  "occlusionAB": {
+    "feature": "occlusionCull",
+    "clock": 12,
+    "clockPinned": true,
+    "simFrozen": true,
+    "off": {
+      "median": 13.05,
+      "n": 12,
+      "stats": {
+        "supported": null,
+        "on": false,
+        "tested": 0,
+        "culled": 0,
+        "queries": 0,
+        "passes": 0,
+        "lagMax": 0,
+        "lagAvg": 0
+      },
+      "frames": 50,
+      "present": {
+        "mode": "native",
+        "waitMs": 98
+      },
+      "shot": "game-glx-macos-latest.occlusionCull-off.png"
+    },
+    "off2": {
+      "median": 11,
+      "n": 12,
+      "stats": {
+        "supported": null,
+        "on": false,
+        "tested": 0,
+        "culled": 0,
+        "queries": 0,
+        "passes": 0,
+        "lagMax": 0,
+        "lagAvg": 0
+      },
+      "frames": 43,
+      "present": {
+        "mode": "native",
+        "waitMs": 26
+      },
+      "shot": "game-glx-macos-latest.occlusionCull-off2.png"
+    },
+    "on": {
+      "median": 13.02,
+      "n": 12,
+      "stats": {
+        "supported": true,
+        "on": true,
+        "tested": 176,
+        "culled": 143,
+        "queries": 176,
+        "passes": 82,
+        "lagMax": 2,
+        "lagAvg": 1.31
+      },
+      "frames": 82,
+      "present": {
+        "mode": "native",
+        "waitMs": 99
+      },
+      "shot": "game-glx-macos-latest.occlusionCull-on.png"
+    },
+    "noiseFloor": {
+      "differing": 5607,
+      "ofTotal": 921600,
+      "pctDiffering": 0.608,
+      "maxChannelDelta": 255,
+      "meanAbsDelta": 0.272
+    },
+    "pixels": {
+      "differing": 679904,
+      "ofTotal": 921600,
+      "pctDiffering": 73.774,
+      "maxChannelDelta": 255,
+      "meanAbsDelta": 8.135
+    },
+    "freshFrames": true,
+    "aboveFloor": true,
+    "paired": {
+      "off": 11.82,
+      "on": 12.54,
+      "samples": 40
+    },
+    "gpuDeltaPct": 6.1,
+    "gpuNoisePct": -15.7
+  },
+  "multiDrawAB": {
+    "feature": "multiDraw",
+    "clock": 12,
+    "clockPinned": true,
+    "simFrozen": true,
+    "off": {
+      "median": 15.52,
+      "n": 12,
+      "stats": {
+        "supported": null,
+        "on": false,
+        "multiCalls": 0,
+        "rangesSubmitted": 0,
+        "drawElementsAvoided": 0,
+        "perChunkDraws": 0,
+        "consecutiveGroups": 0,
+        "setGroups": 0,
+        "lampFrames": 0,
+        "plainFrames": 252,
+        "perChunkKnob": 0,
+        "allLightsLen": -1
+      },
+      "frames": 42,
+      "present": {
+        "mode": "native",
+        "waitMs": 79
+      },
+      "shot": "game-glx-macos-latest.multiDraw-off.png"
+    },
+    "off2": {
+      "median": 13.71,
+      "n": 12,
+      "stats": {
+        "supported": null,
+        "on": false,
+        "multiCalls": 0,
+        "rangesSubmitted": 0,
+        "drawElementsAvoided": 0,
+        "perChunkDraws": 0,
+        "consecutiveGroups": 0,
+        "setGroups": 0,
+        "lampFrames": 0,
+        "plainFrames": 252,
+        "perChunkKnob": 0,
+        "allLightsLen": -1
+      },
+      "frames": 42,
+      "present": {
+        "mode": "native",
+        "waitMs": 81
+      },
+      "shot": "game-glx-macos-latest.multiDraw-off2.png"
+    },
+    "on": {
+      "median": 12.73,
+      "n": 12,
+      "stats": {
+        "supported": true,
+        "on": true,
+        "multiCalls": 468,
+        "rangesSubmitted": 2652,
+        "drawElementsAvoided": 2184,
+        "perChunkDraws": 0,
+        "consecutiveGroups": 0,
+        "setGroups": 0,
+        "lampFrames": 0,
+        "plainFrames": 468,
+        "perChunkKnob": 0,
+        "allLightsLen": -1
+      },
+      "frames": 78,
+      "present": {
+        "mode": "native",
+        "waitMs": 63
+      },
+      "shot": "game-glx-macos-latest.multiDraw-on.png"
+    },
+    "noiseFloor": {
+      "differing": 2630,
+      "ofTotal": 921600,
+      "pctDiffering": 0.285,
+      "maxChannelDelta": 254,
+      "meanAbsDelta": 0.329
+    },
+    "pixels": {
+      "differing": 2739,
+      "ofTotal": 921600,
+      "pctDiffering": 0.297,
+      "maxChannelDelta": 254,
+      "meanAbsDelta": 0.346
+    },
+    "freshFrames": true,
+    "aboveFloor": false,
+    "paired": {
+      "off": 16.96,
+      "on": 16.94,
+      "samples": 40
+    },
+    "gpuDeltaPct": -0.1,
+    "gpuNoisePct": -11.7
+  },
+  "occlusionMoving": {
+    "supported": true,
+    "on": true,
+    "tested": 182,
+    "culled": 161,
+    "queries": 182,
+    "passes": 1428,
+    "lagMax": 2,
+    "lagAvg": 1.36
+  },
+  "overlay": "COPY\nAPEX 26 GFX  build 1695\npick=webgl2  live=webgl2  threePath=AUTO  bound=webgl2\nengine=(unstamped)\ngpuErrors=0\nmem heap=72.6MB rObj=? geo=? tex=? tier=2 crashStrikes=0\nframe: native swapchain (no 2D readback)\nsoftPresent={\"on\":false,\"gen\":0,\"maxPx\":0,\"display\":null,\"post\":{\"on\":true,\"fxaa\":true,\"upscale\":false,\"toLdr\":true,\"bloom\":0.6,\"ao\":0.95,\"readFb\":\"default\"}}\nloop: +5 frames/403ms  total=2347 staleMs=4  faults=0/240 run=0/8\ntrack=monza fps=0",
+  "gfx": {
+    "glx": true,
+    "gpuErrors": 0,
+    "gpuFirstError": null,
+    "wgx": false,
+    "api": "webgl2",
+    "softPresent": false,
+    "softPresentState": {
+      "on": false,
+      "gen": 0,
+      "maxPx": 0,
+      "display": null,
+      "post": {
+        "on": true,
+        "fxaa": true,
+        "upscale": false,
+        "toLdr": true,
+        "bloom": 0.6,
+        "ao": 0.95,
+        "readFb": "default"
+      }
+    },
+    "headlessUa": true,
+    "gov": {
+      "scale": 0.9,
+      "fps": 22.6,
+      "floorMs": 24.3,
+      "auto": true,
+      "tier": 2,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 1349.9,
+        "slow": 241
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 33.39999999999418,
+        "p95": 100.09999999999127,
+        "p99": 133.3000000000029,
+        "maxMs": 716.6000000000058,
+        "droppedSimS": 5.383333333333327,
+        "physicsSteps": 4527,
+        "windowFrames": 2048
+      },
+      "userTier": 2,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": true,
+      "tierFutile": true,
+      "tierHold": false
+    },
+    "engine": null,
+    "mem": {
+      "usedJSHeapSize": 78116788,
+      "tier": 2,
+      "crashStrikes": 0
+    }
+  },
+  "present": {
+    "mode": "native",
+    "waitMs": 187
+  },
+  "softBlitAtShot": "no-soft-canvas",
+  "softBlitWaitMs": 14,
+  "shot": "game-glx-macos-latest.png",
+  "frame": {
+    "meanLuma": 52,
+    "maxLuma": 255,
+    "w": 1280,
+    "h": 720
+  },
+  "ok": true,
+  "console": [
+    "warning: [scenery] bahrain: suppressed mountain=3",
+    "warning: [scenery] monza: suppressed wall=2 tree=19 pine=1 grandstand=1 building=2"
+  ],
+  "root": "/Users/runner/work/f1-game/f1-game",
+  "pageClosed": true,
+  "browserGone": true
+}
