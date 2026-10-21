@@ -99,12 +99,15 @@ async function stills() {
         await sleep(4000); await awaitPresentedFrame(page, 15000); await sleep(800);
       } else if (sc.kind === "garage") {
         await openGarage(page, { team: "mercedes" });
-        await sleep(5000); await awaitPresentedFrame(page, 20000); await sleep(800);
+        await sleep(10000);   // let the arrival camera settle, then reset to the default framing
+        await page.evaluate(() => document.getElementById("cs-view-reset")?.click());
+        await sleep(6000); await awaitPresentedFrame(page, 20000); await sleep(800);
       } else {
         const key = `${sc.track}|${sc.tod || "day"}|${sc.weather || "dry"}`;
         if (key !== curKey) {
-          await page.evaluate(({ t, tod, w }) => window.__apex.race(t, tod || "day", w || "dry"), { t: sc.track, tod: sc.tod, w: sc.weather });
+          await page.evaluate(({ t, tod, w }) => window.__apex.race(t, tod || "day", w || "dry", { grid: "tier" }), { t: sc.track, tod: sc.tod, w: sc.weather });
           await page.waitForFunction((t) => window.__apex.info().track === t || window.__apex.info().track?.id === t || !!window.__apex.info().track, sc.track, { polling: 200, timeout: 120_000 });
+          if (sc.grid) await page.evaluate(() => window.__apex.freeze(true));   // lights stay at their pre-start state on both backends
           await sleep(3000);
           curKey = key; curTrack = sc.track;
         }
@@ -120,6 +123,9 @@ async function stills() {
           a.step && a.step(1 / 60, 4);
         }, sc);
         await sleep(2500);
+        // re-park: a slow first build can let the start sequence put the car back on the grid after park()
+        if (!sc.grid) await page.evaluate((sc) => { const a = window.__apex; a.park(sc.frac); a.freeze(true); if (sc.orbit) a.orbit(sc.frac, sc.orbit[0], sc.orbit[1], sc.orbit[2]); }, sc);
+        await sleep(1200);
         if (!sc.orbit) { await page.evaluate(() => window.__apex.snapCam()); await sleep(300); }
         await awaitPresentedFrame(page, 30000);
         await page.evaluate(() => window.__apex.headless(true));
@@ -143,10 +149,25 @@ async function sample(cdp, page, label) {
   const h = await cdp.send("Runtime.getHeapUsage");
   const tlx = await page.evaluate(() => { try { const m = GLX.__tlx?.memState?.(); return m ? { geometries: m.geometries ?? m.geo, textures: m.textures ?? m.tex, progs: m.progs } : null; } catch (_) { return null; } });
   const st = await page.evaluate(() => window.__apex.info().state);
+  const pm = await page.evaluate(() => performance.memory ? +(performance.memory.usedJSHeapSize / 2 ** 20).toFixed(1) : null);
   const row = { label, state: st, usedMB: +(h.usedSize / 2 ** 20).toFixed(1), arrayBufMB: +((h.backingStorageSize || 0) / 2 ** 20).toFixed(1),
-    embedderMB: +((h.embedderHeapUsedSize || 0) / 2 ** 20).toFixed(1), totalMB: +(((h.usedSize || 0) + (h.backingStorageSize || 0)) / 2 ** 20).toFixed(1), tlx };
+    embedderMB: +((h.embedderHeapUsedSize || 0) / 2 ** 20).toFixed(1), totalMB: +(((h.usedSize || 0) + (h.backingStorageSize || 0)) / 2 ** 20).toFixed(1), perfMemMB: pm, tlx };
   console.log(JSON.stringify(row));
   return row;
+}
+
+// race() from a live race can throw "Race start did not reach the grid": freeze first, retry once.
+async function raceTo(page, t) {
+  for (let i = 0; i < 3; i++) {
+    try {
+      await page.evaluate(() => { try { window.__h23?.stop?.(); window.__apex.freeze(true); } catch (_) {} });
+      await page.evaluate((t) => window.__apex.race(t, "day", "dry", { grid: "tier" }), t);
+      await page.waitForFunction(() => !!window.__apex.info().track, null, { polling: 200, timeout: 120_000 });
+      await page.evaluate(() => window.__apex.freeze(false));
+      return;
+    } catch (e) { console.error("race retry", t, String(e.message).slice(0, 120)); await sleep(3000); }
+  }
+  throw new Error("race() failed 3x for " + t);
 }
 
 async function toMenu(page) {
@@ -162,8 +183,7 @@ async function mem() {
     const tracks = ["monza", "monaco", "spa"];
     for (let c = 0; c < 3; c++) {
       const t = tracks[c];
-      await page.evaluate((t) => window.__apex.race(t), t);
-      await page.waitForFunction(() => !!window.__apex.info().track, null, { polling: 200, timeout: 120_000 });
+      await raceTo(page, t);
       await page.evaluate(() => { const a = window.__apex; a.go(); });
       await sleep(10_000);
       rows.push(await sample(cdp, page, `race${c + 1}-${t}`));
@@ -182,8 +202,7 @@ async function perf() {
   const rows = [];
   try {
     for (const t of tracks) {
-      await page.evaluate((t) => window.__apex.race(t), t);
-      await page.waitForFunction(() => !!window.__apex.info().track, null, { polling: 200, timeout: 120_000 });
+      await raceTo(page, t);
       await sleep(4000);
       await page.evaluate(installDriver);
       await page.evaluate(() => window.__h23.start());
