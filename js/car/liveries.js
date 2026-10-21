@@ -622,6 +622,7 @@ const Liveries = (function () {
     "crestTone", "crestFrame",
     // BODY (2026-10-18): the chassis shape, Car3D.bodyStyleKey — geometry, like finShape.
     "bodyStyle", "aeroShape", "floorShape",
+    "engineShape", "suspensionShape", "brakesShape", "tyresShape", "ersShape", "gearboxShape", "fuelShape", "exhaustShape", "cockpitShape", "wheelsShape",
     // PAINT ZONES (CarMaterials.PAINT_ZONES; header above): new surfaces, each optional.
     "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
     "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint",

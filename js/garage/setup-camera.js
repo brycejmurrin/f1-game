@@ -147,12 +147,12 @@ function startDriveOut() {
   const play = Object.assign({}, cfg, { enabled: true });
   driveOut = { t: 0, cfg: play };
   driveOutEngine(true);
-  return Math.round(GarageArrival.OUT_DURATION * 1000 / play.speed);
+  return Math.round(GarageArrival.duration(play, "out") * 1000 / play.speed);
 }
 // Wall ms of the drive-out still to play: it advances on the clamped frame dt, so a
 // stalled frame (a circuit build on the main thread) delays it rather than skipping it.
 function driveOutLeft() {
-  return driveOut ? Math.max(0, (GarageArrival.OUT_DURATION - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
+  return driveOut ? Math.max(0, (GarageArrival.duration(driveOut.cfg, "out") - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
 }
 // Stepped on the WALL clock, not the render dt the menu loop caps at 1/20 s: under
 // 20 fps that cap played the car in slow motion. A gap over 0.1 s (a synchronous
@@ -500,7 +500,7 @@ let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null;
 // is the one non-colour entry: it picks the shark fin's outline (or no fin).
 // coverVents and spineHeight are the other enums that move a vertex, and
 // spineSide moves the service panels aft of its flank band.
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle", "aeroShape", "floorShape"];
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "bodyStyle", "aeroShape", "floorShape", "engineShape", "suspensionShape", "brakesShape", "tyresShape", "ersShape", "gearboxShape", "fuelShape", "exhaustShape", "cockpitShape", "wheelsShape"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
 // keyed on colour and finish: the old paint job's flaps go too, or a session of

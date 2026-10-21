@@ -315,3 +315,33 @@ test("every new field is published, copied, offered in the garage, hinted and fi
   assert.deepEqual(Array.from(junk.mat), Array.from(base.mat));
   assert.equal(W.CarWheels.tints({ rimFinish: "constructor" }).surf, null);
 });
+
+// A MY TEAM identity captured before any livery was saved holds null under "livery.custom.<id>", not the []
+// fallback; getCustomLiveries must still hand back an array or resolveLivery's list.find throws on the null row.
+function loadCustomLiveries(identity) {
+  const sb = {
+    console,
+    Career: { inCareer: () => true, data: () => ({ flavour: "myteam" }), identityValue: (k, f) => (k in identity ? identity[k] : f), identityRevision: () => 0 },
+    Liveries: {
+      forTeam: (t) => [{ id: "default", name: "Team Livery", c1: t.color, c2: t.color2 }],
+      migratePaint: (l) => l, FIELDS: ["c1", "c2"], UNIVERSAL: [], BY_TEAM: {},
+    },
+  };
+  vm.createContext(sb);
+  vm.runInContext(read("js/car/custom-liveries.js") + "\n;globalThis.CustomLiveries = CustomLiveries;", sb, { filename: absSrc("js/car/custom-liveries.js") });
+  const store = { rev: 0, get: (k, f) => f, set: () => true };
+  return sb.CustomLiveries.create({ store });
+}
+
+test("a null identity value reads as an empty custom list and resolveLivery does not throw", () => {
+  const cl = loadCustomLiveries({ "livery.custom.custom": null });
+  assert.deepEqual(Array.from(cl.getCustomLiveries("custom")), []);
+  const team = { id: "custom", color: [1, 0, 0], color2: [0, 0, 1] };
+  assert.doesNotThrow(() => cl.resolveLivery(team));
+});
+
+test("a stored array of custom liveries still comes back untouched", () => {
+  const row = { id: "mine", name: "Mine", c1: [0, 1, 0], c2: [0, 0, 1] };
+  const cl = loadCustomLiveries({ "livery.custom.custom": [row] });
+  assert.deepEqual(Array.from(cl.getCustomLiveries("custom")), [row]);
+});

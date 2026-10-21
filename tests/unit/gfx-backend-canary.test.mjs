@@ -885,6 +885,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBootBound",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
+    // The road-split A/B arm: __tlx.roadSplit(false) writes "0" (tlx.js); RESET restores the split.
+    "apex26.tlxRoadSplit",
     "apex26.wgxCapture",
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
@@ -4391,7 +4393,8 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // …and each FULL key (prefix + seat [+ ":P"]) is memoised on that entry, so a hit concatenates nothing.
   assert.match(cd, /const key = decalKeyFor\(team, num, isPlayer\);/, "getCarDecalTexture builds its key from the memoised prefix");
   assert.match(cd, /k = e\.val \+ \(num == null \? "_" : num\) \+ \(isPlayer \? ":P" : ""\)/, "the full key is the prefix + seat (+ :P), as before");
-  assert.match(cd, /if \(c && c\.rev === G\.store\.rev\) return c;[\s\S]{0,200}team\.id \+ ":" \+ G\.getLiveryId\(team\.id\) \+ ":"/, "decalKeyEntry invalidates on store.rev");
+  // A live paint draft swaps the livery id for its own tag (B·H13 hunter finding 3), memoised the same way.
+  assert.match(cd, /if \(c && c\.rev === G\.store\.rev && c\.tag === tag\) return c;[\s\S]{0,200}team\.id \+ ":" \+ \(tag \|\| G\.getLiveryId\(team\.id\)\) \+ ":"/, "decalKeyEntry invalidates on store.rev and on the draft tag");
 });
 
 test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
@@ -4807,7 +4810,7 @@ test("SSR mask expressions have portable bounds and preserve near/far fades", ()
         upDot: scalar(1), carPx: scalar(1), P: { z: scalar(0) }
       };
       const context = vm.createContext(scope);
-      const evaluate = expr => vm.runInContext(expr, context, { timeout: 1000 });
+      const evaluate = expr => vm.runInContext(expr, context, { timeout: 1000, filename: absSrc(file) });
       if (backend === "WGX") {
         scope.roadFadeStart = evaluate(expression(source, "roadFadeStart"));
         scope.roadFadeEnd = evaluate(expression(source, "roadFadeEnd"));
@@ -6447,7 +6450,8 @@ test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX
   lib.pushRec("G2", null, "FXMAT", undefined, undefined, 0, null, null);
   assert.equal(drawList[0], slot, "the slot is reused");
   assert.equal(slot.em, undefined); assert.equal(slot.al, undefined); assert.equal(slot.lg, 0);
-  assert.deepEqual(Object.keys(slot), ["geo", "m", "mat", "em", "al", "lg", "chunked", "instanced"], "one fixed shape");
+  assert.deepEqual(Object.keys(slot), ["geo", "m", "mat", "em", "al", "lg", "chunked", "instanced", "split"], "one fixed shape");
+  assert.equal(slot.split, null, "a model-matrix-free record without a split road carries no split");
 });
 
 test("GLX racing-line chevrons keep vAlong at highp, and a restored context obeys the reload budget", () => {

@@ -1210,13 +1210,14 @@ fn ssrDepth(uv : vec2<f32>) -> f32 {
   let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
   return textureLoad(depthTex, px, 0);
 }
-fn ssrViewPosAtDepth(uv : vec2<f32>, d : f32) -> vec3<f32> {
+fn ssrViewPosFromDepth(uv : vec2<f32>, d : f32) -> vec3<f32> {
   let ndc = vec3<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d);
   let v = U.invProj * vec4<f32>(ndc, 1.0);
   return v.xyz / v.w;
 }
+
 fn ssrViewPos(uv : vec2<f32>) -> vec3<f32> {
-  return ssrViewPosAtDepth(uv, ssrDepth(uv));
+  return ssrViewPosFromDepth(uv, ssrDepth(uv));
 }
 
 // Project a view-space point to a texture-space uv (y-down).
@@ -1234,24 +1235,27 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let carReflect = U.upVS.w;
   let yCut       = U.reflSkyLo.w;   // upper-screen sky cutoff (GLX 0.62)
 
-  // Reject the upper screen and disabled paths before any texture read.
-  // yCut is GLX's uSsrTopUV in GL's y-UP uv space (keep vUV.y < 0.62 = the
-  // bottom 62%); our uv is y-DOWN, so test the flipped 1 - in.uv.y against it.
+  // Reject the upper screen before fetching depth. WGSL uses y-down UV.
   if ((1.0 - in.uv.y) >= yCut || (strength <= 0.0 && carReflect <= 0.0)) {
-    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    return vec4<f32>(0.0);
   }
   let dC = ssrDepth(in.uv);
-  if (dC >= 0.9999) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
+  if (dC >= 0.9999) { return vec4<f32>(0.0); }
 
-  // LOW/MEDIUM road-only SSR has no use for the car tag. Below the car
-  // contribution gate carTerm cannot win or make ssrGate pass its threshold.
   var carPx = 0.0;
   if (carReflect > 0.001) {
     let scnA = textureSampleLevel(sceneTex, sceneSamp, in.uv, 0.0).a;
     carPx = 1.0 - smoothstep(0.42, 0.55, scnA);
   }
-
-  let P = ssrViewPosAtDepth(in.uv, dC);
+  let P = ssrViewPosFromDepth(in.uv, dC);
+  let ssrNear = U.reflSkyHi.w;
+  let roadQuality = clamp(U.gloss.w, 0.0, 2.0);
+  let roadFadeStart = select(-22.0, select(-18.0, -12.0, roadQuality > 1.5), roadQuality > 0.5);
+  let roadFadeEnd = select(-78.0, select(-60.0, -42.0, roadQuality > 1.5), roadQuality > 0.5);
+  // Only reject where both existing masks cannot contribute. Keep fade math below unchanged.
+  let roadOut = strength <= 0.001 || P.z >= ssrNear || P.z <= roadFadeEnd;
+  let carOut = carReflect <= 0.001 || carPx <= 0.0 || P.z >= -1.0 || P.z <= -55.0;
+  if (roadOut && carOut) { return vec4<f32>(0.0); }
   // View-space normal from depth finite differences (cheap; the road mask +
   // thickness test reject the noisy silhouette cases). No dpdx/dpdy so this is
   // safe below the early returns above.
@@ -1289,10 +1293,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // same pair tsl-post.js derives). game.js halves it for a low onboard eye —
   // a cockpit camera sits close enough to the road that a -2.5 start fades out
   // the whole visible mirror, so the literal made the knob's onboard case dead.
-  let ssrNear = U.reflSkyHi.w;
-  let roadQuality = clamp(U.gloss.w, 0.0, 2.0);
-  let roadFadeStart = select(-22.0, select(-18.0, -12.0, roadQuality > 1.5), roadQuality > 0.5);
-  let roadFadeEnd = select(-78.0, select(-60.0, -42.0, roadQuality > 1.5), roadQuality > 0.5);
   let roadMask = smoothstep(0.25, 0.55, upDot)
                * (1.0 - smoothstep(ssrNear * 2.8, ssrNear, P.z))
                * smoothstep(roadFadeEnd, roadFadeStart, P.z);

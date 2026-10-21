@@ -210,9 +210,10 @@ async function shellAtLeast(b) {
 // lifetime once it succeeds, under the same rules `activate` keeps:
 //   - only when the CURRENT generation finished its install (never strand a
 //     client on an incomplete cache — the test holds activate to that too), and
-//   - only generations OLDER than the current one: a worker whose memoised
-//     name is stale must never delete the newer cache the next worker is
-//     installing into.
+//   - only generations OLDER than the current one (and never the single prior
+//     SETTLED generation while a window client remains — #2194 lazy ?v= keys):
+//     a worker whose memoised name is stale must never delete the newer cache
+//     the next worker is installing into.
 let _sweepDone = false, _sweepBusy = false;
 async function sweepStaleCaches() {
   const name = _cacheNameKnown;
@@ -225,7 +226,27 @@ async function sweepStaleCaches() {
   // own cache while the new install is still seeding (an old-shell tab offline
   // then lost its lazy ?v=<old> assets).
   if (!(await caches.match(INSTALL_SETTLED_URL, { cacheName: name }))) return;
-  const stale = keys.filter((k) => cacheBuild(k) < build);
+  // #2194: an old tab still runs the previous shell after activate; its lazy
+  // non-script fetches keep the booted ?v= keys. Keep exactly one prior SETTLED
+  // generation while any window client remains (closed tabs → matchAll is
+  // empty and the predecessor can go). Older than N-1 is always deleted.
+  const prev = build - 1;
+  const prevName = CACHE_PREFIX + prev;
+  let retainPrev = false;
+  if (prev > 0 && keys.includes(prevName)
+    && (await caches.match(INSTALL_SETTLED_URL, { cacheName: prevName }))) {
+    const cl = self.clients;
+    if (cl && typeof cl.matchAll === "function") {
+      const list = await cl.matchAll({ includeUncontrolled: true, type: "window" });
+      retainPrev = list.length > 0;
+    } else retainPrev = true;
+  }
+  const stale = keys.filter((k) => {
+    const b = cacheBuild(k);
+    if (!(b > 0 && b < build)) return false;
+    if (retainPrev && b === prev) return false;
+    return true;
+  });
   await Promise.all(stale.map((k) => caches.delete(k)));
   if (stale.length) invalidateCacheOrder();
   _sweepDone = true;

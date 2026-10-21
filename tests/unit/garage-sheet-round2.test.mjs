@@ -45,7 +45,7 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
   run("js/garage/setup-tune.js");
   run("js/garage/setup-experiments.js");
   sb.LiveryTex = { NUM_FONT_IDS: ["default"], SPONSOR_PACK_IDS: ["default"] };
-  sb.Car3D = { FINISH_SURFACE: {} };
+  sb.Car3D = { appearanceParts: p => p, PART_STYLE_FIELDS: { aeroShape: "aero", floorShape: "floor" }, FINISH_SURFACE: {} };
   sb.GarageScene = { pulse() {} };
   const owned = career ? new Set(sb.Parts.CATALOG.flatMap((c) => c.options.map((o) => o.id))) : null;
   sb.Career = {

@@ -128,3 +128,13 @@ test("physics is untouched: the fixed-step loop runs before the gate and the gat
   assert.match(block, /render\(/);
   assert.match(block, /updateHud\(/);
 });
+
+test("drew() reports the last gate verdict (PerfGov.tick judges only intervals that began at a draw)", () => {
+  const R = load({ mobile: true, store: { "apex26.renderRate": "half" } });
+  assert.equal(R.drew(), true, "before any gate: every interval counts (identical to no RenderRate)");
+  const seen = [];
+  for (let i = 0; i < 6; i++) { R.observe(8.33); seen.push(R.gate(0.00833, 8.33, false, true) === R.drew()); }
+  assert.ok(seen.every(Boolean));
+  const off = load({ mobile: true, store: { "apex26.renderRate": "off" } });
+  for (let i = 0; i < 20; i++) { off.observe(8.33); off.gate(0.00833, 8.33, false, true); assert.equal(off.drew(), true); }
+});

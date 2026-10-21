@@ -81,6 +81,42 @@ test("a stepped build abandoned part-way leaves the module able to build again",
   assert.deepEqual(a.log, b.log, "no state leaked from the abandoned build");
 });
 
+// pace.rafEvery: under the race cover the build takes a frame every Nth slice and a 0 ms task between (the
+// sandbox has no requestAnimationFrame, so a frame wait is a 16 ms timer and a task wait a 0 ms one). The
+// result is the same track either way; only the waits differ.
+test("buildPaced: pace.rafEvery keeps one frame wait per N slices, the rest are task yields; same uploads", async () => {
+  const def = Tracks.LIST[0];
+  const waits = [];
+  const vmSetTimeout = Tracks._vmContext.setTimeout;
+  Tracks._vmContext.setTimeout = (fn, ms) => { waits.push(ms | 0); return setTimeout(fn, 0); };
+  try {
+    const a = recorder(), b = recorder();
+    await Tracks.buildPaced(def, { gfx: a.gfx }, () => true, () => { throw new Error("not abandoned"); }, 1);
+    const plain = waits.slice(); waits.length = 0;
+    await Tracks.buildPaced(def, { gfx: b.gfx }, () => true, () => { throw new Error("not abandoned"); }, 1, { rafEvery: 3 });
+    const paced = waits.slice();
+    assert.ok(plain.length > 6 && plain.every((ms) => ms === 16), "every wait is a frame by default (" + plain.length + ")");
+    const frames = paced.filter((ms) => ms === 16).length, tasks = paced.filter((ms) => ms === 0).length;
+    assert.ok(frames > 0 && tasks > 0, "both kinds of wait with rafEvery 3 (" + frames + " frames, " + tasks + " tasks)");
+    assert.ok(Math.abs(frames * 2 - tasks) <= 2, "one frame per three slices: " + frames + " frames vs " + tasks + " tasks");
+    for (let i = 2; i < paced.length; i += 3) assert.equal(paced[i], 16, "the third wait of each triple is the frame");
+    assert.deepEqual(b.log, a.log, "the paced build uploads the same buffers in the same order");
+    // A FUNCTION pace is read before every slice: the picker's build that RACE! joins moves to the cover's pace.
+    waits.length = 0;
+    let covered = false;
+    const c = recorder();
+    const p = Tracks.buildPaced(def, { gfx: c.gfx }, () => true, () => { throw new Error("not abandoned"); }, 1, () => (covered ? { rafEvery: 3 } : null));
+    await new Promise((r) => setTimeout(r, 30));   // a few picker-paced slices in
+    const before = waits.length;
+    assert.ok(before >= 1 && waits.slice(0, before).every((ms) => ms === 16), "frame waits while uncovered (" + before + ")");
+    covered = true;
+    await p;
+    const after = waits.slice(before);
+    assert.ok(after.some((ms) => ms === 0), "task yields once the cover is up (" + after.filter((ms) => ms === 0).length + " of " + after.length + ")");
+    assert.deepEqual(c.log, a.log, "same uploads either way");
+  } finally { Tracks._vmContext.setTimeout = vmSetTimeout; }
+});
+
 test("buildPaced: a newer synchronous build supersedes a paced one in flight, which hands back its partial track", async () => {
   const def = Tracks.LIST.find((d) => d.id === "monaco");
   let abandoned = null, calls = 0;
