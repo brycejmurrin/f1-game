@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import vm from "node:vm";
 import { performance, PerformanceObserver } from "node:perf_hooks";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const src = fs.readFileSync(new URL("../../js/perf/spans.js", import.meta.url), "utf8");
@@ -104,7 +105,7 @@ test("measure(true) tags each phase with a detail.devtools track-entry; off emit
 });
 
 test("trace measures stay bounded without losing observer entries or unrelated timeline data", () => {
-  const ctx = vm.runInNewContext(src + ";PerfSpans", { performance });
+  const ctx = vm.runInNewContext(src + ";PerfSpans", { performance }, { filename: absSrc("js/perf/spans.js") });
   const ps = ctx.create();
   const observer = new PerformanceObserver(() => {});
   observer.observe({ type: "measure" });
@@ -135,7 +136,7 @@ test("trace measures stay bounded without losing observer entries or unrelated t
 });
 
 test("reset and disabling trace measures release partial batches without disabling span recording", () => {
-  const ctx = vm.runInNewContext(src + ";PerfSpans", { performance });
+  const ctx = vm.runInNewContext(src + ";PerfSpans", { performance }, { filename: absSrc("js/perf/spans.js") });
   const ps = ctx.create();
   const names = ["reset-test", "toggle-test"];
   const emit = (name) => { ps.begin(name); ps.end(name); };
