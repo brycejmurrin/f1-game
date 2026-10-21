@@ -7,7 +7,8 @@ const LiveryDesign = (function () {
     // Paint layouts after classic schemes (docs/notes/LIVERY-LAYOUTS-2026-10-19.md): generic geometry, no marks.
     "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
   const SECOND_COLOR = Object.freeze(["gradient", "twoTone", "segments", "checker", "diamonds", "dots", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade",
-    "keylineSplit", "chevronStack", "slashBlock", "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
+    // lightning alternates primary/secondary so overlapping zig-zags never score 1.00:1 on themselves.
+    "lightning", "keylineSplit", "chevronStack", "slashBlock", "tartanBand", "borderedStripe", "tricolour", "spearhead", "deckSplit"]);
   const LINE_PATTERNS = Object.freeze(["contours", "honeycomb", "waves", "herringbone", "circuit", "speedlines", "keylineSplit",
     "tartanBand", "borderedStripe", "spearhead", "deckSplit"]);
   // Single-figure layouts: REPEATS (patternRepeat) changes none of their pixels, so the editor greys it.
@@ -45,6 +46,51 @@ const LiveryDesign = (function () {
     return Array.isArray(v) && v.length === 3 && v.every(Number.isFinite)
       ? "rgb(" + v.map((n) => Math.round(Math.max(0, Math.min(1, n)) * 255)).join(",") + ")" : fallback;
   }
+  // Same WCAG floor liverytex uses for metre-long bands (BAND_ON_COVER = 2.0). Kept
+  // here so lightning / twoTone / keylineSplit can clear the sweep without editing
+  // held liverytex.js (Fleet B #3455 owns that path for swatch adoption).
+  const DESIGN_FLOOR = 2.0;
+  const INK_DARK = [0.06, 0.06, 0.08], INK_LIGHT = [0.97, 0.97, 0.98];
+  function lumArr(c) {
+    if (!Array.isArray(c) || c.length < 3) return null;
+    const f = (v) => { v = Math.max(0, Math.min(1, +v)); return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  }
+  function contrastArr(a, b) {
+    const la = lumArr(a), lb = lumArr(b);
+    if (la == null || lb == null) return 0;
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  function pickOnArr(cands, bg, floor) {
+    const bgs = Array.isArray(bg) && bg.length && Array.isArray(bg[0]) ? bg.filter(Boolean) : (bg ? [bg] : []);
+    const list = (cands || []).filter((c) => Array.isArray(c) && c.length >= 3);
+    const worst = (c) => bgs.length ? bgs.reduce((m, b) => Math.min(m, contrastArr(c, b)), Infinity) : 0;
+    for (const c of list) if (worst(c) >= floor) return c;
+    let best = list[0] || INK_LIGHT, score = worst(best);
+    for (const c of list) { const v = worst(c); if (v > score) { score = v; best = c; } }
+    return best;
+  }
+  // Derived DESIGN / SECOND colours for large-area layouts. Authored patternTint /
+  // patternSecond win (player pick); defaults must clear DESIGN_FLOOR on the cover
+  // and against each other (#3425 lightning, #3426 Alpine/Audi twoTone+keylineSplit).
+  function designPair(liv, kind) {
+    const cover = Array.isArray(liv.cover) ? liv.cover : liv.c1;
+    const pool = [liv.c2, liv.c1, liv.accent, INK_LIGHT, INK_DARK];
+    // Only the layouts that failed the sweep: keep other SECOND_COLOR looks byte-stable.
+    const needsFloor = kind === "lightning" || kind === "twoTone" || kind === "keylineSplit";
+    let prim = Array.isArray(liv.patternTint) ? liv.patternTint : null;
+    let sec = Array.isArray(liv.patternSecond) ? liv.patternSecond : null;
+    if (needsFloor) {
+      if (!prim) prim = pickOnArr(pool, cover, DESIGN_FLOOR);
+      if (!sec) sec = pickOnArr(pool, prim, DESIGN_FLOOR);
+    }
+    if (!prim) prim = liv.c2;
+    if (!sec) sec = liv.c1;
+    return {
+      primary: color(prim, color(liv.c2, "#ffffff")),
+      secondary: color(sec, color(liv.c1, "#161b25")),
+    };
+  }
   // No textures, timers or random state: identical inputs produce identical art at every atlas tier.
   function paint(ctx, liv) {
     const kind = liv.spineLogo;
@@ -52,8 +98,7 @@ const LiveryDesign = (function () {
     const offset = value(liv, "patternOffset") / 100;
     const taper = value(liv, "patternTaper") / 100;
     const step = 1.5 / Math.round(value(liv, "patternRepeat"));
-    const primary = color(liv.patternTint, color(liv.c2, "#ffffff"));
-    const secondary = color(liv.patternSecond, color(liv.c1, "#161b25"));
+    const { primary, secondary } = designPair(liv, kind);
     const half = (z) => width * (1 - taper * Math.max(0, Math.min(1, (z - 0.5) / 1.5)));
     ctx.save(); ctx.globalAlpha *= value(liv, "patternOpacity") / 100;
     ctx.beginPath(); ctx.moveTo(offset - half(0.5), 0.5); ctx.lineTo(offset + half(0.5), 0.5);
@@ -102,7 +147,10 @@ const LiveryDesign = (function () {
     } else if (kind === "pinstripes") {
       for (let col = -12; col <= 12; col++) ctx.fillRect(offset + col * step - step * 0.09, 0.5, step * 0.18, 1.5);
     } else if (kind === "slashes" || kind === "lightning") {
-      for (let z = -1; z < 3; z += step) {
+      // lightning zig-zags overlap heavily: one fill colour on itself scores 1.00:1
+      // (issue #3425). Alternate primary/secondary so each band sits on the other.
+      for (let z = -1, band = 0; z < 3; z += step, band++) {
+        if (kind === "lightning") ctx.fillStyle = band % 2 ? secondary : primary;
         ctx.beginPath(); ctx.moveTo(-1.2, z);
         if (kind === "lightning") { ctx.lineTo(offset + 0.1, z + 0.3); ctx.lineTo(offset - 0.1, z + 0.48); }
         ctx.lineTo(1.2, z + 0.8); ctx.lineTo(1.2, z + 0.8 + step * 0.3);

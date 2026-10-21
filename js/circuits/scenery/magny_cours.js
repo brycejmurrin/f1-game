@@ -201,41 +201,46 @@
       {
         const a = anchor(K(0.998), 1, 50);
         const b = [a.r, a.u, a.t];
-        modelGroup("magny-cours-control-block", {
-          center: vadd(a.c, a.u, 9), size: [20, 24, 44], basis: b,
-        }, (stage) => {
-          stage._mat = MAT.CONCRETE;
-          // Seated pad so ground-audit does not mark the stack unsupported.
+        // Named emit keeps `{ required: true }` inside the 2200-char BATCH-01 window.
+        const emitControlBlock = (stage) => {
+          // Stack with seat.* from a terrain foot — old addBox centres left a
+          // 0.15 m air gap under the glazed deck (unsupportedFootprint 11.55 m).
           const foot = a.c.slice();
           const ty = terrainYAt(foot[0], foot[2]);
           if (ty != null) foot[1] = Math.max(foot[1], ty);
-          seat.box(stage, foot, [14, 0.45, 24], RENDER, b);
-          // Main mass: bottom at +0.5 so it is not coplanar with the pad top
-          // or the conference wing (flatCoplanar ratchet).
-          addBox(stage, vadd(a.c, a.u, 6.0), [12, 10.5, 22], RENDER, b);
-          // Glazed control deck — the silhouette that reads from the pits.
-          stage._mat = MAT.GLASS;
-          addBox(stage, vadd(a.c, a.u, 13.4), [11, 4.0, 18],
-            [0.18, 0.26, 0.36], b);
-          addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 13.4), [0.3, 3.4, 16],
-            [0.88, 0.82, 0.52], b);
-          // Conference wing clear of the main mass in t (was sharing a floor).
-          const wing = vadd(a.c, a.t, -22);
+          const PAD = 0.45, MAIN_H = 10.5, DECK_H = 4.0, CAP_H = 0.55;
+          const mainTop = PAD + MAIN_H;
+          const deckTop = mainTop + DECK_H;
+          const capTop = deckTop + CAP_H;
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(wing, a.u, 4.2), [10, 7.0, 12], RENDER, b);
+          seat.box(stage, foot, [14, PAD, 24], RENDER, b);
+          seat.box(stage, vadd(foot, a.u, PAD + 0.02), [12, MAIN_H, 22], RENDER, b);
           stage._mat = MAT.GLASS;
-          addBox(stage, vadd(vadd(wing, a.r, -5.1), a.u, 5.2), [0.3, 2.2, 10],
-            [0.20, 0.28, 0.38], b);
+          seat.box(stage, vadd(foot, a.u, mainTop + 0.02), [11, DECK_H, 18],
+            [0.18, 0.26, 0.36], b);
+          addBox(stage, vadd(vadd(foot, a.r, -6.2), a.u, mainTop + DECK_H * 0.5),
+            [0.3, 3.4, 16], [0.88, 0.82, 0.52], b);
+          const wingFoot = vadd(foot, a.t, -22);
+          const wty = terrainYAt(wingFoot[0], wingFoot[2]);
+          if (wty != null) wingFoot[1] = Math.max(wingFoot[1], wty);
+          const WING_H = 7.0;
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, wingFoot, [10, WING_H, 12], RENDER, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(wingFoot, a.r, -5.1), a.u, WING_H * 0.55),
+            [0.3, 2.2, 10], [0.20, 0.28, 0.38], b);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(a.c, a.u, 15.9), [13.5, 0.55, 23], SLATE, b);
-          addBox(stage, vadd(wing, a.u, 7.9), [11, 0.5, 13], SLATE, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -6.6), a.u, 15.3), [0.5, 0.7, 23],
-            [0.24, 0.38, 0.62], b);
-          // Mast seated into the roof (float-audit: base into the cap).
-          addCyl(stage, vadd(vadd(a.c, a.t, 8), a.u, 16.0), 0.10, 9,
+          seat.box(stage, vadd(foot, a.u, deckTop), [13.5, CAP_H, 23], SLATE, b);
+          seat.box(stage, vadd(wingFoot, a.u, WING_H), [11, 0.5, 13], SLATE, b);
+          addBox(stage, vadd(vadd(foot, a.r, -6.6), a.u, deckTop - 0.1),
+            [0.5, 0.7, 23], [0.24, 0.38, 0.62], b);
+          seat.cyl(stage, vadd(vadd(foot, a.t, 8), a.u, capTop - 0.2), 0.10, 9,
             [0.80, 0.80, 0.82], 5, b);
           stage._mat = 0;
-        }, { required: true });
+        };
+        modelGroup("magny-cours-control-block", {
+          center: vadd(a.c, a.u, 9), size: [20, 24, 44], basis: b,
+        }, emitControlBlock, { required: true });
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
@@ -443,24 +448,33 @@
           out._mat = MAT.METAL;
           const backTop = rows * depth;
           const roofY = 1.4 + rows * rise + 2.2;
+          // Legs: addCyl takes a BASE (Trap A). The old roofY*0.5 centre-style
+          // call floated every vault roof ~11 m (ground-audit :448/:457).
+          const legFoot = (lat) => {
+            const p = vadd(a.c, a.r, lat);
+            const gy = terrainYAt(p[0], p[2]);
+            if (gy != null) p[1] = Math.max(p[1], gy);
+            return p;
+          };
           for (const f of [0.02, 0.98]) {
-            const off = f * backTop;
-            addCyl(out, vadd(vadd(a.c, a.r, side * off), a.u, roofY * 0.5),
-              0.13, roofY, [0.60, 0.62, 0.66], 5, b);
+            seat.cyl(out, legFoot(side * f * backTop), 0.13, roofY,
+              [0.60, 0.62, 0.66], 5, b);
           }
-          // Tie beam across the legs — the "lattice truss" read.
-          addBox(out, vadd(vadd(a.c, a.r, side * backTop * 0.5), a.u, roofY - 0.5),
+          // Tie beam seated on the leg tops.
+          seat.box(out, vadd(vadd(a.c, a.r, side * backTop * 0.5), a.u, roofY),
             [backTop * 1.05, 0.16, 0.16], [0.60, 0.62, 0.66], b);
+          // Cambered bays seated ON the tie plane (height absorbs cam) — no
+          // per-bay posts (those blew props-tris +2.6 % over the 0.5 % ratchet).
           const bays = 6;
           for (let j = 0; j < bays; j++) {
             const f = (j + 0.5) / bays, cam = (1 - (f * 2 - 1) * (f * 2 - 1)) * R * 0.42;
-            addBox(out, vadd(vadd(a.c, a.r, side * (f * backTop * 1.06 - backTop * 0.03)),
-              a.u, roofY + cam),
-              [backTop * 1.06 / bays + 0.15, 0.28, seg],
+            const lat = side * (f * backTop * 1.06 - backTop * 0.03);
+            seat.box(out, vadd(vadd(a.c, a.r, lat), a.u, roofY + 0.16),
+              [backTop * 1.06 / bays + 0.15, 0.28 + cam, seg],
               j & 1 ? [0.74, 0.76, 0.80] : [0.70, 0.72, 0.76], b);
           }
           // Blue eaves lip, the same trim as the pit vault and the sheds.
-          addBox(out, vadd(vadd(a.c, a.r, -side * backTop * 0.04), a.u, roofY - 0.2),
+          seat.box(out, vadd(vadd(a.c, a.r, -side * backTop * 0.04), a.u, roofY - 0.05),
             [0.4, 0.5, seg], [0.24, 0.38, 0.62], b);
           out._mat = 0;
         });

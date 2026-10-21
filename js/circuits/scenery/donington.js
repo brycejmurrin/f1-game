@@ -18,7 +18,7 @@
     10  s 0.4552 +1  Starkey's Bridge
     11  s 0.5162 -1  Schwantz Curve, trees only
      12  s 0.5713 +1  McLeans
-    12b s 0.640  -1  East Midlands Airport airliner (departure path)
+    12b s 0.640  -1  East Midlands Airport airliner (parked, eastern apron)
     13  s 0.6803 -1  Coppice
     14  s 0.7592 -1  The Esses
     15  s 0.7887 +1  Melbourne Hairpin
@@ -439,32 +439,44 @@
       hedge(0.548, 0.606, 1, 56, 2.0, HEDGE_L);
       rank(0.544, 0.610, 1, 66, 16, 1600, 9.0, 15.5);
 
-      // 12b. EAST MIDLANDS AIRPORT — departure path over McLeans / Coppice
+      // 12b. EAST MIDLANDS AIRPORT — parked airliner, eastern apron
       //    Wikipedia: EMA runway west end is ~365 m from the track's east end.
-      //    PPRuNe / spotters: McLeans and Coppice sit under the departure path;
-      //    aircraft overhead are the venue's distinctive sky cue (Madrid Barajas
-      //    / Mexico Benito Juárez pattern). One low-poly airliner on climb-out,
-      //    outside the eastern parkland — never a trackside prop. Dunlop
-      //    Bridge is NOT modelled: Adroit rebuild (2010) left it out (Wikipedia).
+      //    Was authored as climb-out at +130 m (Madrid Barajas / Mexico pattern)
+      //    and floated as two unsupported clusters (~128 m gap at racing frac
+      //    0.617; #3341). Float-audit has no "airborne on purpose" flag, so the
+      //    circuit-only fix seats it on a tarmac pad east of Coppice — still the
+      //    EMA cue, never a trackside prop. Dunlop Bridge is NOT modelled:
+      //    Adroit rebuild (2010) left it out (Wikipedia).
       {
         const sAir = 0.640;                         // between McLeans and Coppice
         const a = anchor(K(sAir), -1, 480);          // east of Coppice woods; ~EMA side
-        const alt = 130;                            // low departure — "fairly low overhead"
-        const c = [a.c[0], a.c[1] + alt, a.c[2]];
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const groundY = gy == null ? a.c[1] : gy;
+        // Fuselage centre ~2.1 m above apron (narrow-body parked height).
+        const c = [a.c[0], groundY + 2.1, a.c[2]];
         const bn = [a.r, a.u, a.t];
         const bf = [a.r, a.t, a.u];                 // cylinder axis along fuselage
         // Mid-grey fuselage (Mexico pattern): pale skin disappears into the
-        // overcast English sky on the soft blit; dark reads as a sky silhouette.
+        // overcast English sky on the soft blit; dark reads as a silhouette.
         const FUSE = [0.58, 0.60, 0.64];
         const DARK = [0.28, 0.29, 0.32];
         const TAIL = [0.14, 0.34, 0.52];             // cool EMA-ish fin
+        const APRON = [0.32, 0.32, 0.33];
         modelGroup("donington-ema-airliner", {
-          center: c, size: [48, 16, 48], basis: bn,
+          center: [c[0], groundY + 4, c[2]], size: [48, 12, 48], basis: bn,
         }, (stage) => {
+          const pad = [a.c[0], groundY + 0.12, a.c[2]];
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, pad, [40, 0.28, 52], APRON, bn);               // apron footing
+          stage._mat = MAT.METAL;
           addCyl(stage, vadd(c, a.t, -16), 1.85, 34, FUSE, 8, bf);
           addBox(stage, c, [32, 0.65, 4.4], DARK, bn);                    // wings
           addBox(stage, vadd(c, a.t, 14.5), [0.55, 4.8, 3.8], TAIL, bn);  // fin
           addBox(stage, vadd(c, a.t, 13.6), [9.5, 0.5, 2.6], DARK, bn);   // tailplane
+          // Short gear stubs so the silhouette reads parked, not hovering.
+          for (const off of [-6, 4]) {
+            addCyl(stage, vadd(vadd(c, a.t, off), a.u, -2.0), 0.18, 1.6, DARK, 4, bn);
+          }
         }, { required: true });
       }
 

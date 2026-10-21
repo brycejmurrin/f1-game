@@ -2,6 +2,12 @@
 "use strict";
 const GarageLiveryDesignEditor = (function () {
   const sessions = new WeakMap();
+  // WRITE ON CHANGE. A dragged colour picker or slider runs sync() at the input rate, and every
+  // DOM write queues a MutationRecord even when the value is unchanged; AriaState, ScrollFade and
+  // SettingDeps observe #carsetup, so each no-op write re-walked or re-measured the whole sheet
+  // (B·H30, docs/notes/LIVE-DEBUGGER-GARAGE-2026-10-21.md). Only a real change touches the DOM.
+  const attr = (el, k, v) => { if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
+  const prop = (el, k, v) => { if (el[k] !== v) el[k] = v; };
   const LABELS = { ribbon: "Ribbon", brokenChevron: "Broken chevrons", contours: "Contour lines",
     honeycomb: "Honeycomb", segments: "Segmented panels", gradient: "Gradient", twoTone: "Two-tone sweep",
     checker: "Checkered flag", diamonds: "Diamond tiles", slashes: "Diagonal slashes",
@@ -19,18 +25,24 @@ const GarageLiveryDesignEditor = (function () {
       const b = document.createElement("button"); b.type = "button"; b.className = "cs-liv-ed-none";
       b.textContent = label; b.onclick = action; host.appendChild(b); return b;
     }
+    // The editor's controls are fixed once attach() returns: list them once, not per input event.
+    let inputs = null, choiceButtons = null;
     function sync() {
-      undo.disabled = !h.canUndo(); redo.disabled = !h.canRedo();
-      compare.textContent = comparing ? "SHOW EDITED" : "COMPARE ORIGINAL";
-      compare.setAttribute("aria-pressed", String(comparing));
-      for (const input of root.querySelectorAll("input[data-liv-field]")) {
+      prop(undo, "disabled", !h.canUndo()); prop(redo, "disabled", !h.canRedo());
+      prop(compare, "textContent", comparing ? "SHOW EDITED" : "COMPARE ORIGINAL");
+      attr(compare, "aria-pressed", String(comparing));
+      if (!inputs) {
+        inputs = Array.from(root.querySelectorAll("input[data-liv-field]"));
+        choiceButtons = Array.from(root.querySelectorAll("[data-cs-pill], [data-cs-finish]"));
+      }
+      for (const input of inputs) {
         const key = input.dataset.livField;
-        input.value = draft[key] || (input.type === "color" ? "#000000" : "");
+        prop(input, "value", draft[key] || (input.type === "color" ? "#000000" : ""));
         if (input.type === "color") input.classList.toggle("cs-liv-off", !draft[key]);
       }
-      for (const b of root.querySelectorAll("[data-cs-pill], [data-cs-finish]")) {
+      for (const b of choiceButtons) {
         const pair = b.dataset.csPill ? b.dataset.csPill.split(":") : ["finish", b.dataset.csFinish];
-        const on = draft[pair[0]] === pair[1]; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+        const on = draft[pair[0]] === pair[1]; b.classList.toggle("active", on); attr(b, "aria-pressed", String(on));
       }
       for (const bind of bindings) bind();
     }
@@ -82,15 +94,16 @@ const GarageLiveryDesignEditor = (function () {
       input.onchange = () => { api.changed(); api.flush(); };
       r.append(label, input); insert(r);
       patternRows.push({ row: r, when: () => key === "patternWeight" ? LiveryDesign.LINE_PATTERNS.includes(draft.spineLogo) : key !== "patternRepeat" || !LiveryDesign.NO_REPEAT.includes(draft.spineLogo) });
-      bindings.push(() => { input.value = LiveryDesign.value(draft, key); output.textContent = input.value + (key === "patternRepeat" ? "" : key === "patternRotation" ? "°" : "%"); });
+      bindings.push(() => { prop(input, "value", String(LiveryDesign.value(draft, key))); prop(output, "textContent", input.value + (key === "patternRepeat" ? "" : key === "patternRotation" ? "°" : "%")); });
     }
     bindings.push(() => {
       const enabled = LiveryDesign.PATTERNS.includes(draft.spineLogo);
       for (const item of patternRows) {
         const off = !enabled || !item.when();
-        item.row.setAttribute("aria-disabled", String(off)); item.row.classList.toggle("tune-off", off);
-        item.row.title = !enabled ? "Choose an adjustable design in SPINE TOP" : off ? "Not used by the current design or area" : "";
-        for (const input of item.row.querySelectorAll("button, input")) input.disabled = off;
+        attr(item.row, "aria-disabled", String(off)); item.row.classList.toggle("tune-off", off);
+        prop(item.row, "title", !enabled ? "Choose an adjustable design in SPINE TOP" : off ? "Not used by the current design or area" : "");
+        // SWAP and RESET are set by their own binding below; writing them here too flipped SWAP every sync.
+        for (const input of item.row.querySelectorAll("button, input")) if (input !== swap && input !== reset) prop(input, "disabled", off);
       }
     });
     const palettes = row("PALETTE"), paletteButtons = document.createElement("span"); paletteButtons.className = "cs-liv-ed-finish";
@@ -119,9 +132,9 @@ const GarageLiveryDesignEditor = (function () {
     }, actions);
     patternRows.push({ row: actionRow, when: () => true });
     bindings.push(() => {
-      reset.disabled = !LiveryDesign.PATTERNS.includes(draft.spineLogo);
-      swap.disabled = !LiveryDesign.SECOND_COLOR.includes(draft.spineLogo);
-      swap.title = swap.disabled ? "Needs a two-colour design in SPINE TOP" : "";
+      prop(reset, "disabled", !LiveryDesign.PATTERNS.includes(draft.spineLogo));
+      prop(swap, "disabled", !LiveryDesign.SECOND_COLOR.includes(draft.spineLogo));
+      prop(swap, "title", swap.disabled ? "Needs a two-colour design in SPINE TOP" : "");
     });
     // Keep each setting and its paint beside the part it changes. Move the
     // original nodes, so their handlers, dependency rules and keyboard state survive.
@@ -262,10 +275,10 @@ const GarageLiveryDesignEditor = (function () {
       for (const rule of rules) {
         const off = !rule.when();
         if (rule.pill === null) continue;
-        if (rule.pill) { rule.pill.disabled = off; rule.pill.title = off ? rule.why : ""; continue; }
+        if (rule.pill) { prop(rule.pill, "disabled", off); prop(rule.pill, "title", off ? rule.why : ""); continue; }
         if (!rule.row) continue;
-        rule.row.setAttribute("aria-disabled", String(off)); rule.row.title = off ? rule.why : "";
-        for (const input of rule.row.querySelectorAll("button, input")) input.disabled = off;
+        attr(rule.row, "aria-disabled", String(off)); prop(rule.row, "title", off ? rule.why : "");
+        for (const input of rule.row.querySelectorAll("button, input")) prop(input, "disabled", off);
       }
     });
     // WHY IT IS GREY, ON SCREEN. Every dependency wrote its reason to `title`, a hover tooltip:
@@ -277,9 +290,10 @@ const GarageLiveryDesignEditor = (function () {
     const reasons = new Map();
     let reasonSeq = 0;
     function describe(el, id, on) {
-      const ids = (el.getAttribute("aria-describedby") || "").split(" ").filter((x) => x && x !== id);
+      const was = el.getAttribute("aria-describedby"), ids = (was || "").split(" ").filter((x) => x && x !== id);
       if (on) ids.push(id);
-      if (ids.length) el.setAttribute("aria-describedby", ids.join(" ")); else el.removeAttribute("aria-describedby");
+      if (ids.length) { if (was !== ids.join(" ")) el.setAttribute("aria-describedby", ids.join(" ")); }
+      else if (was !== null) el.removeAttribute("aria-describedby");
     }
     function explain() {
       for (const r of root.querySelectorAll(".cs-liv-ed-row, .tune-row")) {
@@ -299,7 +313,7 @@ const GarageLiveryDesignEditor = (function () {
         for (const c of [r, ...r.querySelectorAll("button, input")]) if (c !== line) describe(c, line.id, !!text);
         if (!text) { line.remove(); reasons.delete(r); continue; }
         if (line.parentNode !== r) r.appendChild(line);
-        line.textContent = text;
+        prop(line, "textContent", text);
       }
     }
     // TAIL STYLE "team" paints one of the named motifs (McLaren's is CHEVRON), so it says which:

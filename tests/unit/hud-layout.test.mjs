@@ -1585,3 +1585,21 @@ test("clearance reuses an unchanged slot as an obstacle without writing zero cor
   const restored = damage.getBoundingClientRect();
   assert.equal(restored.left, 20); assert.equal(restored.top, 20);
 });
+
+test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x390: gearbox off-screen, readouts over the steer buttons)", () => {
+  const T = load3({ classes: [], live: false });
+  assert.equal(T.H.presetFits("big"), false);
+  assert.equal(T.H.presetFits("corners"), false);
+  assert.equal(T.H.presetFits("clean"), false, "CLEAN left 10 overlaps on the phone chase cell");
+  assert.equal(T.H.presetFits("shipped"), true);
+  assert.equal(T.H.applyPreset("big", "other"), false, "refused, not half-applied");
+  assert.equal(T.H.applyPreset("corners", "other"), false);
+  assert.equal(T.H.presetOf("other"), "shipped");
+  assert.equal(T.written.hudLayout || null, null, "nothing written");
+  assert.equal(T.H.applyPreset("clean", "other"), false);
+  const D = load3({ classes: ["desktop"], live: false });
+  assert.equal(D.H.presetFits("big"), true);
+  assert.equal(D.H.applyPreset("big", "other"), true, "desktop keeps BIG");
+  assert.equal(D.H.applyPreset("corners", "other"), true, "desktop keeps CORNERS");
+  assert.equal(D.H.applyPreset("clean", "other"), true, "desktop keeps CLEAN");
+});

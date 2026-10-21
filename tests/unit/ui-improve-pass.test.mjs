@@ -2475,3 +2475,34 @@ test("the camera preset a part fit triggers is silent — click() must not repla
   assert.ok(/finally\s*\{\s*G\.soundOn\s*=/.test(body),
     "…and restored in a finally, so a throwing handler cannot leave the game mute");
 });
+
+test("AriaState sync writes aria-pressed / aria-current only when the value changes", () => {
+  // Every write is a mutation record that wakes AriaState and ScrollFade again
+  // (B·H30: 15 no-op aria-pressed writes on #cs-unlimited per livery drag).
+  const dom = makeDom({ readyState: "loading" });
+  const group = dom.document.createElement("div");
+  const one = dom.document.createElement("button"), two = dom.document.createElement("button");
+  one.classList.add("active"); group.append(one, two); dom.byId("overlay").appendChild(group);
+  const nav = dom.document.createElement("nav");
+  nav.id = "htp-contents";
+  const link = dom.document.createElement("a");
+  link.setAttribute("href", "#htp-racing");
+  nav.appendChild(link);
+  dom.byId("howtoplay").appendChild(nav);
+  const sb = uiSandbox(dom, { location: { hash: "#htp-racing" } });
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb, { filename: absSrc("js/ui/aria-state.js") });
+  sb.AriaState.sync();
+  assert.equal(one.getAttribute("aria-pressed"), "true");
+  assert.equal(two.getAttribute("aria-pressed"), "false");
+  assert.equal(link.getAttribute("aria-current"), "true");
+  const writes = [];
+  for (const el of [one, two, link]) {
+    const set = el.setAttribute;
+    el.setAttribute = (k, v) => { writes.push(k); return set(k, v); };
+  }
+  sb.AriaState.sync();
+  assert.deepEqual(writes, [], "an unchanged second pass writes nothing");
+  two.classList.add("active");
+  sb.AriaState.sync();
+  assert.deepEqual(writes, ["aria-pressed"], "only the button whose state changed is written");
+});
