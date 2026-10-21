@@ -177,7 +177,7 @@ test("R7: the dry-day SSR gate zeroes po.reflect only on a dry day below the 1/6
   assert.equal(gate(false, { lights: false, wetness: 0.02 }, 0.02 * 1.28, 2), 0, "drying road at tier 2: invisible, skipped");
   assert.equal(gate(false, wet, 0.4 * 1.28, 2), 0.4 * 1.28, "a properly wet road keeps its mirror at tier 2");
   assert.equal(gate(false, wet, 0.02, 0), 0.02, "tier 0 never applies the weight gate unless armed");
-  assert.match(G, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\)\)/, "the shared policy consumes the gated strength for every backend");
+  assert.match(G, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\),\s*_roadReflectionTransition,/, "the shared policy consumes the gated strength for every backend");
   assert.doesNotMatch(G, /po\.carReflect = [^;]*_ssrPo/, "car-paint SSR is not gated");
   assert.match(G, /const _ssrDayGate = \(\(\) => \{ try \{ return localStorage\.getItem\("apex26\.ssrDayGate"\) === "1"; \}/,
     "armed only by an explicit apex26.ssrDayGate=1");

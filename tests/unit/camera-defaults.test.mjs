@@ -6,6 +6,7 @@ import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { loadRig, makeTrack, BEND } from "../helpers/camera-rig.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -576,4 +577,86 @@ test("JSON and APXC1 camera packs round-trip track and car overrides", () => {
   assert.equal(decoded.ok, true);
   assert.equal(restored.importPack(decoded.pack).ok, true);
   assert.deepEqual(plain(restored.exportPack()), pack);
+});
+
+
+test("helmet inherits the production onboard SSR range and releases it outside race views", () => {
+  const game = gameSource();
+  // Execute the production classification and option assignments. Keeping
+  // these statements together catches an omitted helmet mode as well as a
+  // stale option left by a previous camera without duplicating either rule.
+  const statements = [
+    /^  const racing = .*;$/m, /^  const camId = .*;$/m, /^  const onboard = .*;$/m,
+    /^  const _ssrLow = .*;$/m, /^  po\.ssrTopUV = .*;$/m, /^  po\.ssrNear  = .*;$/m,
+  ].map(pattern => {
+    const match = game.match(pattern);
+    assert.ok(match, "production camera/SSR statement exists: " + pattern);
+    return match[0];
+  });
+  const ctx = { document: null };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8") +
+    "\nthis.CAM_MODES = CamModes.CAM_MODES;", ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  const run = new vm.Script("(() => {" + statements.join("\n") + "\nreturn onboard; })()",
+    { filename: absSrc("js/game.js") });
+  ctx.po = { ssrTopUV: -99, ssrNear: -99 };
+  const cases = [
+    ["helmet", "race", true, 0.82, -1],
+    ["chase", "race", false, 0.62, -2.5],
+    ["cockpit", "count", true, 0.82, -1],
+    ["helmet", "count", true, 0.82, -1],
+    ["helmet", "title", false, 0.62, -2.5],
+    ["cockpit", "title", false, 0.62, -2.5],
+    ["helmet", "race", true, 0.82, -1],
+  ];
+  for (const [id, state, onboard, top, near] of cases) {
+    ctx.camMode = ctx.CAM_MODES.findIndex(mode => mode.id === id);
+    assert.ok(ctx.camMode >= 0, "camera exists in production CAM_MODES: " + id);
+    ctx.state = state;
+    assert.equal(run.runInContext(ctx), onboard, id + " / " + state + " classification");
+    assert.equal(ctx.po.ssrTopUV, top, id + " / " + state + " top boundary");
+    assert.equal(ctx.po.ssrNear, near, id + " / " + state + " near boundary");
+  }
+});
+
+test("SSR fade keeps inverse projection current at measured tier 4, then releases the work", () => {
+  const statement = gameSource().match(/^  if \([^\n]+\) M4\.invertTo\(_mInvProj, _mProj\);$/m);
+  assert.ok(statement, "production inverse-projection update exists");
+  const math = {};
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/core/mat4.js"), "utf8") +
+    "\nthis.exported = M4;", math, { filename: absSrc("js/core/mat4.js") });
+  const M4 = math.exported, projection = new Float32Array(16), inverse = new Float32Array(16);
+  let calls = 0, tier = 0;
+  const ctx = { _mProj: projection, _mInvProj: inverse,
+    _roadReflectionTransition: { value: 1 }, PerfGov: { autoTier: () => tier },
+    M4: { invertTo(out, input) { calls++; return M4.invertTo(out, input); } } };
+  const run = new vm.Script(statement[0], { filename: absSrc("js/game.js") });
+  vm.createContext(ctx);
+  M4.perspectiveTo(projection, 1.1, 2.16, 0.3, 900);
+  run.runInContext(ctx);
+  const before = Array.from(inverse);
+  // Switching from helmet to an external camera changes FOV and near plane
+  // while the tier-4 transition can still be rendering wet-road SSR.
+  tier = 4;
+  ctx._roadReflectionTransition.value = 0.5;
+  M4.perspectiveTo(projection, 0.8, 1.9, 0.9, 900);
+  run.runInContext(ctx);
+  assert.equal(calls, 2, "active fade refreshes the inverse despite measured tier 4");
+  assert.notDeepEqual(Array.from(inverse), before, "the camera change is reflected in the inverse");
+  const identity = new Float32Array(16);
+  M4.mulTo(identity, projection, inverse);
+  for (let i = 0; i < 16; i++) {
+    assert.ok(Math.abs(identity[i] - (i % 5 === 0 ? 1 : 0)) < 1e-5,
+      "current projection and inverse cancel at element " + i);
+  }
+  const settled = Array.from(inverse);
+  ctx._roadReflectionTransition.value = 0;
+  M4.perspectiveTo(projection, 1.3, 2.16, 0.3, 500);
+  run.runInContext(ctx);
+  assert.equal(calls, 2, "settled tier 4 still skips the unused inversion");
+  assert.deepEqual(Array.from(inverse), settled);
+  tier = 0;
+  run.runInContext(ctx);
+  assert.equal(calls, 3, "restoring normal post work refreshes the camera inverse");
 });

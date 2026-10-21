@@ -2491,6 +2491,7 @@ async function startRaceBody() {
     return false;
   }
   resultsCam.reset(); eventJournal.reset();   // restore a montage before replacing the previous field
+  _roadReflectionTransition.value = NaN;   // a new race starts from its current reflection policy
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
@@ -6841,6 +6842,7 @@ const _gradeDawn  = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0
 const _gradeDay   = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
 const _gradeOut = { shadow: null, hi: null, str: 0 };
 const _presentOpts = {};
+const _roadReflectionTransition = { value: NaN, target: 1, time: 0, gfx: null };
 // ---------- render ----------
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 // The lens the last frame was built with — see where it is filled, below.
@@ -7437,10 +7439,10 @@ function render(dt) {
   }
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
   M4.mulTo(_mVP, _mProj, _mView);
-  // inv VP: sky rays always; god-rays when live. inv Proj: SSAO only — both post
-  // consumers shed at autoTier>=4 (see po.ssao/godray below).
+  // inv VP: sky rays always; god-rays when live. inv Proj: SSAO and SSR,
+  // including the reflection fade after the governor sheds the other effects.
   M4.invertTo(_mInvVP, _mVP);
-  if (PerfGov.autoTier() < 4) M4.invertTo(_mInvProj, _mProj);
+  if (PerfGov.autoTier() < 4 || _roadReflectionTransition.value > 0) M4.invertTo(_mInvProj, _mProj);
   // Sun direction in VIEW space (for screen-space contact shadows): mat3(view)·sunDir.
   {
     const sd = frame.sunDir || [0, 1, 0];
@@ -8291,7 +8293,12 @@ function render(dt) {
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
   // Wet-road SSR keeps a reduced budget even at user LOW (tier 4).
   // Measured overload/crash tier 4 still falls back to material sky/lamp reflections. Dry sheen still sheds at 2.
-  PostCommon.roadReflection(po, frame.wetness || 0, _ssrPo, PerfGov.tier(), PerfGov.autoTier());
+  if (_roadReflectionTransition.gfx !== gfx) {
+    _roadReflectionTransition.value = NaN;
+    _roadReflectionTransition.gfx = gfx;
+  }
+  PostCommon.roadReflection(po, frame.wetness || 0, _ssrPo, PerfGov.tier(), PerfGov.autoTier(),
+    _roadReflectionTransition, performance.now(), PerfGov.tierFloor() >= 4);
   po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   PostFxOpts.gate(po);   // GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS: the tier-4 exit, taken by choice
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band

@@ -163,10 +163,30 @@ const PostCommon = (function () {
     return d;
   }
 
-  // User LOW retains nearby wet-road mirrors; measured overload/crash shedding
-  // can still use the lit shader's sky/lamp fallback. No per-frame allocation.
-  function roadReflection(opts, wetness, strength, tier, autoTier) {
-    opts.reflect = (wetness > 0.01 ? autoTier >= 4 : tier >= 2) ? 0 : strength;
+  // User LOW retains wet-road mirrors. Optional caller-owned state softens
+  // measured cuts, then reaches exact zero so every backend can skip SSR.
+  // Crash safety and explicit off/dry policy remain immediate. No allocation.
+  function roadReflection(opts, wetness, strength, tier, autoTier, transition, nowMs, emergency) {
+    const wet = wetness > 0.01, target = autoTier >= 4 ? 0 : 1;
+    let available = target;
+    if (transition) {
+      const now = Number.isFinite(nowMs) ? nowMs : transition.time;
+      const initial = !Number.isFinite(transition.value);
+      const changed = transition.target !== target;
+      const elapsed = !initial && !changed && Number.isFinite(now - transition.time)
+        ? Math.max(0, now - transition.time) : 0;
+      if (emergency) transition.value = 0;
+      else if (initial || !wet || !(strength > 0)) transition.value = target;
+      else if (target < transition.value) transition.value = transition.value - target <= elapsed / 180 + 1e-9
+        ? target : transition.value - elapsed / 180;
+      else transition.value = target - transition.value <= elapsed / 400 + 1e-9
+        ? target : transition.value + elapsed / 400;
+      transition.target = target;
+      if (Number.isFinite(now)) transition.time = initial || !Number.isFinite(transition.time)
+        ? now : Math.max(transition.time, now);
+      available = transition.value;
+    }
+    opts.reflect = emergency ? 0 : wet ? strength * available : tier >= 2 ? 0 : strength;
     opts.ssrQuality = tier >= 3 ? 2 : (tier >= 2 ? 1 : 0);
   }
 
