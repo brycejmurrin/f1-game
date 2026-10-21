@@ -615,6 +615,6 @@ test('every cosmetic style field is enumerable, validated and carried by capture
     assert.ok(p.jobs.every(j => j.state.livery[field] === ids[0]));
     assert.throws(() => planCustomization({ M, livery: { [field]: 'missing-style' } }), /Unknown/);
   }
-  for (const [field, count] of [['aeroShape', 10], ['wheelsShape', 5]])
-    assert.equal(cli('--plan', `--${field}=all`, '--views=hero').shotCount, count);
+  for (const field of ['aeroShape', 'wheelsShape'])   // the whole enum, FITTED included, so a new style cannot go uncounted
+    assert.equal(cli('--plan', `--${field}=all`, '--views=hero').shotCount, enums[field].length);
 });
