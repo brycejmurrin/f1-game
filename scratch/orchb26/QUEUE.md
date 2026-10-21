@@ -184,3 +184,5 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 17:08Z: Bryce "Two adopter lanes" → B·O-A session_01VrEd1yN1fsozZrWGomnfW5 (#3423 #3430 #3421 #3407), B·O-B session_01BnvkGjvhMSkNzRf3yQaU1M (#3428 #3432 #3424). Merge one game PR per green Pages as READYs arrive.
 17:37Z: #3423 #3430 #3421 #3407 all had author MERGE-HOLDs → Bryce "Lift all four, finish them" (typed here) → OrchB 26 removing hold lines; O-A order #3430 #3421 #3423 #3407. O-B: #3428 synced, tooling-fast running.
 17:40Z: Hold lines removed on #3423 #3430 #3421 #3407 (byte-checked). O-A waits on Bryce answering in its own session (relay denied by classifier).
+
+18:05Z: MERGED #3428 → e385daa0 (GAME, O-B). Next game on green Pages e385daa0. O-B now on #3432 (VF6 in field-lod.test.mjs).
