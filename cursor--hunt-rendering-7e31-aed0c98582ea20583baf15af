@@ -1,0 +1,1 @@
+1792609635	Bryce Murrin	C·rendering 7e31 owns js/render/shared/mirror-pass.js + tests/unit/mirror-pass.test.mjs only: standDown resets full mirror instance-pack cadence; owner carve-out from OrchB26, H26 stands out  [cursor/hunt-rendering-7e31; session aed0c98582ea20583baf15af]
