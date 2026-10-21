@@ -29,3 +29,4 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Orchestrator tick every 3 min](orchestrator-tick-3min.md) — 2026-10-19: Bryce wants orchestrator check-ins every 3 min, self-rescheduled, changes only
 - [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it
 - [Short PR check-ins](short-pr-check-ins.md) — PR safety-net check-ins every ~15 min, never hours (Bryce 2026-10-19)
+- [Orchestrator saves queue](orchestrator-saves-queue.md) — persist tasks + merge order to a pushed state branch every tick (Bryce 2026-10-21)
