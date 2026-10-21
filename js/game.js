@@ -8450,7 +8450,7 @@ function tickBody(now) {
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
     PerfGov.recordSimulation(steps, dropped);
     if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
-    if (state === "count") carDraw.drainDeferredCarWarm(4);   // the rear grid's atlases and casters, one piece a frame under the lights (no sim: the sim is above)
+    if (state === "count" && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);   // the rear grid's atlases and casters, one budget a frame under the lights (no sim: the sim is above); typeof: tickBody runs in VM slices without CarDraw (results-cam.test)
     if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
