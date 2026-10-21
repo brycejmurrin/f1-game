@@ -1815,6 +1815,13 @@ test("phone touch steering restores the remaining held arrow and ignores old-key
     await ctl.connect("ABC234");
     receive("event", PhonePad.encodeHello("host", false, true));
     assert.equal(ctl.setSteeringMode("touch"), true);
+    dom.steer.dispatch("pointerdown", { pointerId: 41, pointerType: "mouse", button: 2, clientX: 10 });
+    dom.steer.dispatch("pointermove", { pointerId: 41, clientX: 100 });
+    assert.equal(ctl.state().steer, 0, "a secondary mouse press cannot own the touch strip");
+    dom.steer.dispatch("pointerdown", { pointerId: 42, pointerType: "touch", button: 0, clientX: 10 });
+    dom.steer.dispatch("pointermove", { pointerId: 42, clientX: 50 });
+    assert.equal(ctl.state().steer, 1, "an ignored secondary press cannot block the next touch");
+    dom.steer.dispatch("pointerup", { pointerId: 42 });
     const key = (type, name, repeat = false) => dom.steer.dispatch(type, { key: name, repeat });
     for (const [first, last, sign] of [["ArrowLeft", "ArrowRight", -1], ["ArrowRight", "ArrowLeft", 1]]) {
       key("keydown", first); key("keydown", last);
@@ -1869,4 +1876,58 @@ test("last-touch fallback releases fingers while preserving keyboard pedals and 
       if (old === undefined) delete globalThis[key]; else globalThis[key] = old;
     }
   }
+});
+
+test("menu stick releases outside its target when pointer capture is refused", () => {
+  const previous = { document: globalThis.document, window: globalThis.window };
+  const docListeners = {}, winListeners = {};
+  globalThis.document = { hidden: false, addEventListener(type, fn) { (docListeners[type] ||= []).push(fn); } };
+  globalThis.window = { addEventListener(type, fn) { (winListeners[type] ||= []).push(fn); } };
+  const fire = (listeners, type, pointerId) => { for (const fn of listeners[type] || []) fn({ pointerId }); };
+  const dom = { stick: fakeEl(), nub: fakeEl(), gas: fakeEl() };
+  dom.stick.setPointerCapture = () => { throw new Error("capture unavailable"); };
+  const timers = fakeTimers();
+  let ctl;
+  try {
+    ctl = PhonePad.pad(dom, { timers });
+    dom.gas.dispatch("pointerdown", { pointerId: 11, clientY: 200 });
+    for (const [listeners, type] of [[docListeners, "pointerup"], [winListeners, "pointercancel"]]) {
+      dom.stick.dispatch("pointerdown", { pointerId: 21, pointerType: "mouse", button: 0, clientX: 95, clientY: 200 });
+      assert.equal(timers.pending(), 1, "holding the stick schedules repeats");
+      fire(listeners, type, 22);
+      assert.equal(timers.pending(), 1, "another pointer cannot release the stick");
+      fire(listeners, type, 21);
+      assert.equal(timers.pending(), 0, type + " outside the stick cancels repeat");
+      assert.ok(!dom.stick.classes.has("on"), "the outside lift frees the pointer slot");
+      assert.equal(ctl.state().thr, 1, "the other finger still holds GAS");
+    }
+  } finally {
+    if (ctl) ctl.cancel();
+    for (const [key, old] of Object.entries(previous)) {
+      if (old === undefined) delete globalThis[key]; else globalThis[key] = old;
+    }
+  }
+});
+
+test("phone controls ignore secondary mouse presses while keeping primary and touch input", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), stick: fakeEl(), buttons: { navDown: fakeEl() } };
+  const timers = fakeTimers();
+  const ctl = PhonePad.pad(dom, { timers });
+  try {
+    for (const button of [1, 2]) {
+      for (const el of [dom.gas, dom.brake, dom.lookBack, dom.stick, dom.buttons.navDown])
+        el.dispatch("pointerdown", { pointerId: 30, pointerType: "mouse", button, clientX: 95, clientY: 200 });
+      assert.equal(ctl.state().thr, 0, "a context/auxiliary press cannot stamp GAS");
+      assert.equal(ctl.state().brk, 0, "a context/auxiliary press cannot stamp BRAKE");
+      assert.equal(ctl.state().held, 0, "a context/auxiliary press cannot hold LOOK BACK");
+      assert.equal(timers.pending(), 0, "a context/auxiliary press cannot navigate or repeat");
+      for (const el of [dom.gas, dom.brake, dom.lookBack, dom.stick, dom.buttons.navDown]) assert.ok(!el.classes.has("on"));
+    }
+    for (const pointerType of ["mouse", "touch", "pen"]) {
+      dom.gas.dispatch("pointerdown", { pointerId: 31, pointerType, button: 0, clientY: 200 });
+      assert.equal(ctl.state().thr, 1, pointerType + " primary press remains full travel");
+      dom.gas.dispatch("pointerup", { pointerId: 31 });
+      assert.equal(ctl.state().thr, 0);
+    }
+  } finally { ctl.cancel(); }
 });

@@ -261,3 +261,48 @@ test("rear cue compares each axle to its own edge without changing any force int
   assert.equal(weakBrakes.car._cueBraking, .5);
   assert.deepEqual(weakBrakes.force, rear.force, "advisory braking-capacity field cannot feed forces");
 });
+
+// A releasing locked front still spends its grip on longitudinal slip. The
+// low-speed integrator must use that same combined-slip budget in every substep.
+test("WheelState front-slip grip loss reaches yaw below the substep boundary", () => {
+  const { ctx, PlayerForces, TyreModel, PhysicsConsts } = load();
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/wheel-state.js"), "utf8"), ctx, { filename: absSrc("js/physics/wheel-state.js") });
+  vm.runInContext("WheelState.setEnabled(true)", ctx);
+  const api = PlayerForces.create({
+    PLAYER_GRIP: 1.15, FRONT_GRIP: 0.94, DRIFT: 0, YAW_INERTIA: 0.58, YAW_DAMP: 1,
+  });
+  const tyres = TyreModel.create({
+    raceTyreWear: "off", store: { get: () => "off", set: () => {} },
+  });
+  const loadF = PhysicsConsts.FRONT_WEIGHT, ar = 3.2 * loadF, af = 3.2 - ar;
+  const opts = {
+    dt: DT, driverDelta: 0.34, assistDelta: 0, lineDelta: 0,
+    onThrottle: false, throttleLvl: 0, gearMult: 1, deploy: 0, braking: false,
+    surfaceMu: 1, kerbGrip: 1, bankMu: 1, modsCornering: 1,
+    loadF, loadR: 1 - loadF, vertLoad: 0, af, ar, sp: 1, steer: 1,
+    weatherGrip: 1, aeroDf: 1, dirtyMul: 1, coastCut: 0, vTopNow: 72, tyres,
+  };
+  function step(speed, locked) {
+    const c = {
+      human: true, isPlayer: false, speed, axEstSm: 0, aeroX: 0, wake: 0,
+      vLat: 0, yawRateCur: 0, head: 0, brakeStab: 1, rearUtil: 0,
+      brakeBias: null, rollBalance: 0.5, lateralAccel: 0, offroad: false,
+      tread: 0, flatSpot: 0, vwF: locked ? 0 : speed,
+      kappaF: locked ? -1 : 0, vwR: speed, kappaR: 0,
+    };
+    api.step(c, opts);
+    return c;
+  }
+  for (const speed of [3, 4, 6, 8, 10]) {
+    const free = step(speed, false), locked = step(speed, true);
+    const forceRatio = locked.forceFront / free.forceFront;
+    const yawRatio = locked.yawRateCur / free.yawRateCur;
+    assert.ok(locked.kappaF < -0.5, `front still slipping at ${speed} m/s`);
+    assert.ok(forceRatio < 0.5, `slip must reduce the front force at ${speed} m/s`);
+    // Initial rear slip and yaw are zero, so the front supplies the first yaw
+    // impulse. Substeps may change its slip slightly; they cannot restore most
+    // of the force that WheelState removed (before: yawRatio .65 at 4 m/s).
+    assert.ok(yawRatio <= forceRatio * 1.1,
+      `${speed} m/s: yaw retains ${yawRatio}, front force retains ${forceRatio}`);
+  }
+});
