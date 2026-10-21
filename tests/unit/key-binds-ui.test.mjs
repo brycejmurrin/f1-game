@@ -95,6 +95,25 @@ test("Backspace from the keyboard unbinds an armed CONTROLLER slot and disarms t
   assert.equal(Input.debugState().pad.throttle, false, "and A does not drive");
 });
 
+test("a key captured on the CONTROLS page is stored and drives the car after a reload (B·H11 settings audit)", () => {
+  const disk = {};
+  const a = bootUi(true, {}, disk);
+  const host = a.$("pm-keys");
+  const chip = (h, id, slot) => h.kids.flatMap((row) => row.kids || []).flatMap((c) => c.kids || [])
+    .find((b) => b.dataset && b.dataset.action === id && b.dataset.slot === String(slot));
+  chip(host, "throttle", 0).onclick();           // armed
+  a.press("KeyQ");                               // captured
+  assert.ok(disk.keys, "the capture is stored as apex26.keys");
+  const map = (I) => Object.fromEntries(I.keyBindings().map((r) => [r.id, r.codes]));
+  assert.equal(map(a.Input).throttle[0], "KeyQ", "applies in this session");
+  const b = bootUi(true, {}, { keys: disk.keys });
+  assert.equal(map(b.Input).throttle[0], "KeyQ", "a fresh boot loads the binding");
+  const ev = { code: "KeyQ", isTrusted: true, repeat: false, preventDefault() {}, stopPropagation() {} };
+  b.fire("keydown", ev);                         // held, not tapped
+  assert.equal(b.Input.throttle(), true, "and the stored key drives");
+  b.fire("keyup", ev);
+});
+
 test("CALIBRATE STICK is stored and applied on the next boot; a garbage value is ignored", () => {
   // Bug hunt 2026-09-30: the hint promised the offset applies "from then on",
   // and it was lost on reload.

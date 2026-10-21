@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // merge-gate.mjs — the one gate before a PR merge: proves the PR's state and writes the receipt the hook requires.
-// @doc Gate before a PR merge: ready-gate, CI on the head, no hold, gen:check on a local merge, bus pacing; writes the receipt.
+// @doc Gate before a PR merge: ready-gate, CI, no hold, gen:check + ratchets on a local merge, pacing; writes the receipt.
 // @section runner
 // @skill agent-fleet
 //
@@ -24,7 +24,9 @@
 // unknown / blocked), hold (no `MERGE-HOLD:` body line outside HTML comments),
 // ready (ready-gate: Structural guards green, Plan closed, memory marker),
 // ci (the required `CI` check-run success on the head), gen (local merge onto
-// the fetched deploy tip + gen:check), pacing (game PRs only — js/ css/ assets/
+// the fetched deploy tip + gen:check), ratchets (the shrink-only ratchets on
+// that same merge result: two PRs under a ceiling alone can be over it
+// together, #3236 + #3237 on 2026-10-20), pacing (game PRs only — js/ css/ assets/
 // index.html sw.js: no open INCIDENT freeze on the bus, the newest GAME-SLOT
 // line names this PR and comes from this session, and the last game DONE's
 // merge sha has a green pages.yml run). Identity: `--as`, APEX_FLEET_AS or the
@@ -170,10 +172,43 @@ export function pagesGreenFor(sha, request = api, contains = isAncestor()) {
 const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, encoding: "utf8", timeout: 120_000, ...extra });
 
 /**
- * Merge `head` (fetched from `headRef`) onto the fetched deploy tip in a throw-away worktree and run gen:check there.
- * Returns { ok, evidence, tip }.
+ * The shrink-only ratchets, run on the MERGE RESULT (cwd = the merged worktree). Two PRs that each sit at or under
+ * a ceiling on their own base can exceed it together: #3236 and #3237 took assert.match from 7316 to 7317 on the
+ * deploy tip, and two Pages trains went red (2026-10-20). The PR's own CI tests the merge ref as of ITS last run,
+ * so a base that moved afterwards is not covered; this reruns the checks against the base as it is now.
+ * Two checks: tools/check/ratchets.mjs (file and tree-wide metrics; exit 1 on overage) and the assert.match
+ * ceiling test. Returns { ok, evidence }; a check that cannot run is a failure, never a pass.
  */
-export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, deploy = DEPLOY_BRANCH, run = spawnSync } = {}) {
+export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
+  const tail = (r) => `${r.stdout || ""}\n${r.stderr || ""}`.split("\n").map((l) => l.trim()).filter(Boolean).slice(-2).join(" | ").slice(0, 220);
+  const steps = [
+    { name: "ratchets.mjs", argv: ["tools/check/ratchets.mjs"] },
+    { name: "assert-match ceiling", argv: ["--test", "tests/unit/assert-match-ratchet.test.mjs"] },
+  ];
+  // `node --test` started inside another node test inherits NODE_TEST_CONTEXT and then exits 0 on a failing
+  // test (measured 2026-10-21: inherited exit 0, stripped exit 1), which would turn this gate into a pass.
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const bad = [];
+  for (const s of steps) {
+    const r = run(process.execPath, s.argv, { cwd, env, encoding: "utf8", timeout: 180_000, maxBuffer: 16 << 20 });
+    if (r.error || r.status !== 0) {
+      // The assert-match test prints its own "N assert.match sites (ceiling M)" line: that is the evidence worth keeping.
+      const sites = `${r.stdout || ""}`.match(/\d+ assert\.match sites \(ceiling \d+\)/);
+      bad.push(`${s.name}: ${sites ? sites[0] : r.error ? r.error.message : tail(r) || "exit " + r.status}`);
+    }
+  }
+  return bad.length
+    ? { ok: false, evidence: `over a ratchet on the merge result: ${bad.join("; ")} — convert the pins or extract, never raise the ceiling for someone else's overage` }
+    : { ok: true, evidence: "ratchets.mjs and the assert.match ceiling hold on the merge result" };
+}
+
+/**
+ * Merge `head` (fetched from `headRef`) onto the fetched deploy tip in a throw-away worktree and run gen:check there,
+ * then the ratchets (`ratchets`, see ratchetsOnMerge). Returns { ok, evidence, tip, ratchets? }; `ratchets` is
+ * absent when the merge or gen:check already refused.
+ */
+export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, deploy = DEPLOY_BRANCH, run = spawnSync, ratchets = ratchetsOnMerge } = {}) {
   const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
   const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
   const fail = (why) => { cleanup(); return { ok: false, evidence: why, tip: "" }; };
@@ -187,7 +222,9 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, deploy = DEP
   cleanup();
   const add = git(["worktree", "add", "--detach", wt, tip], cwd);
   if (add.status !== 0) return { ok: false, evidence: `worktree add failed: ${(add.stderr || "").trim().split("\n")[0]}`, tip, error: true };
-  const m = git(["merge", "--no-commit", "--no-ff", "--quiet", head], wt, { timeout: 300_000 });
+  // An identity of its own: a runner or fresh container has no user.name/user.email, and a merge without one fails
+  // with "Committer identity unknown" even under --no-commit (seen on CI, 2026-10-21). Nothing is committed.
+  const m = git(["-c", "user.name=merge-gate", "-c", "user.email=merge-gate@localhost", "merge", "--no-commit", "--no-ff", "--quiet", head], wt, { timeout: 300_000 });
   if (m.status !== 0) {
     const conflicted = git(["diff", "--name-only", "--diff-filter=U"], wt).stdout.split("\n").filter(Boolean);
     return fail(conflicted.length ? `conflicts with the current tip ${tip.slice(0, 8)}: ${conflicted.slice(0, 6).join(", ")}${conflicted.length > 6 ? ", …" : ""} — sync-pr.mjs first` : `merge onto ${tip.slice(0, 8)} failed: ${(m.stderr || m.stdout || "").trim().split("\n")[0]}`);
@@ -198,8 +235,9 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, deploy = DEP
     const first = `${gen.stdout || ""}\n${gen.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => l && !/^>|^npm /.test(l)).slice(-3).join(" | ");
     return fail(`gen:check fails on the merge onto ${tip.slice(0, 8)}: ${first || "see output"} — sync-pr.mjs (it runs npm run gen) and push`);
   }
+  const rat = ratchets({ cwd: wt, run });
   cleanup();
-  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check 0`, tip };
+  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check 0`, tip, ratchets: rat };
 }
 
 // ---- CLI -------------------------------------------------------------------
@@ -212,7 +250,8 @@ export function verdictLine(v) {
 
 const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--skip-local-merge] [--as <host>:<id>] [--json]
   Exit 0 only when the PR is open and ready, ready-gate exits 0, the required CI check is green on the head,
-  the body carries no MERGE-HOLD: line, the head merges clean onto the CURRENT deploy tip with gen:check 0,
+  the body carries no MERGE-HOLD: line, the head merges clean onto the CURRENT deploy tip with gen:check 0 and
+  the ratchets (tools/check/ratchets.mjs, the assert.match ceiling) holding on that merge result,
   and (game PRs) the bus shows no INCIDENT freeze, this session's GAME-SLOT for the PR, and a green Pages run on
   the last game merge. Writes artifacts/merge-gate/<n>.json, which github-mcp-guard.sh requires on merge_pull_request
   with expectedHeadSha pinned to the gated head (docs/plans/2026-10-19-fleet-redesign.md).`;
@@ -248,11 +287,15 @@ export function main(argv, { request = api, root = ROOT, env = process.env, now 
   rows.ci = ciVerdict(checks.list);
 
   let tip = "";
-  if (skipLocal) rows.gen = row(true, "skipped (--skip-local-merge): gen:check on the merge result is NOT proven");
-  else {
+  if (skipLocal) {
+    rows.gen = row(true, "skipped (--skip-local-merge): gen:check on the merge result is NOT proven");
+    rows.ratchets = row(true, "skipped (--skip-local-merge): the ratchets on the merge result are NOT proven");
+  } else {
     const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root });
     if (g.error) { log(`[merge-gate] = merge-gate unknown — ${g.evidence}`); return 3; }
     rows.gen = row(g.ok, g.evidence);
+    // Absent only when the merge or gen:check refused above: that refusal already blocks the merge.
+    if (g.ratchets) rows.ratchets = row(g.ratchets.ok, g.ratchets.evidence);
     tip = g.tip;
   }
 
