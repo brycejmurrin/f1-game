@@ -215,7 +215,7 @@ function _flSteadyFn() { return _flSteady; }
 function _flSettled(o) {
   const flick = _flFlick, tNow = _flTNow;
   const hsh = _hshOf(o);
-  const amp = hsh > 0.90 ? flick : flick * 0.2;
+  const amp = flick * (hsh > 0.90 ? 1 : 0.2);
   const f = 1 + amp * Math.sin(tNow * (6 + hsh * 9) + hsh * 40)
             + flick * 0.15 * Math.sin(tNow * (0.35 + hsh * 0.5) + hsh * 20);
   _flScr[0] = f; _flScr[1] = f; _flScr[2] = f;
