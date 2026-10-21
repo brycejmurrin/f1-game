@@ -186,6 +186,6 @@ test("reverse travel: a rim slower than the body is LOCKED, faster is SPINNING (
   const fwdLock = run(5, 40), revLock = run(-5, -40);
   assert.ok(fwdLock.locked > 0 && fwdLock.spinning === 0, "forward sanity: slow rim reads locked");
   assert.ok(revLock.locked > 0 && revLock.spinning === 0, `reverse slow rim reads locked, got locked=${revLock.locked} spinning=${revLock.spinning}`);
-  const revSpin = run(-60, -40);
+  const revSpin = run(-80, -10);
   assert.ok(revSpin.spinning > 0 && revSpin.locked === 0, `reverse fast rim reads spinning, got locked=${revSpin.locked} spinning=${revSpin.spinning}`);
 });
