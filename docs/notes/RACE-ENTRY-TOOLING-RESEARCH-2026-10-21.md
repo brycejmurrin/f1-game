@@ -116,6 +116,31 @@ Ideas (the one OrchB called most valuable first):
   moved, and on real hardware, which the llvmpipe series cannot (the GLX-vs-TLX mode split shows why: the same
   tree reads 9 s or 28 s depending on which backend the adapter probe picked).
 
+## 4. Rows from the hunters, for PR C (code-traced, not measured)
+
+Two read-only subagents (prior-art-scout, code-hunter on the race-entry slice) and B·H8's hunter/verifier pass
+produced these; they are listed so nobody re-finds them. OrchB 24 routes F1 to H8's warm lane and the rest to a
+follow-up PR after #3385.
+
+- F1. A race-entry program warm never records into `_warmed`/`_warmKey` (`RaceEntryProfile.requestWarm` calls
+  `gfx.warm()`; only `warmPrograms()` writes the bookkeeping), so quali → grid, a pm-restart and NEXT RACE re-warm
+  the same world; `js/game.js` already measured a repeat TLX warm at 7.5 s SwiftShader that links nothing.
+- F6. `startRace()` from Daily, Data Hub or season-continue does not stand the menu build down (introBuild does:
+  `clearTimeout(flybyBuildTimer); _menuGate.generation++`), so the menu's timer can abandon the race's build and
+  `startRaceBody` bounces to the title. Plausible; needs a VM repro first.
+- F4/F5. `prepareMenuCarAssets` preps all 12 LEGENDS seats (makeCars fields one) and the whole field for a DUEL
+  (two cars race), eating the intro's 1.5 s car-prep cap.
+- F2 (H8's row 2). introBuild awaits `loadTrackStepped`, THEN `prepareMenuCarAssets` with its 1.5 s cap measured
+  from after the build; the car prep is track-independent and could fill the build's frame gaps.
+- F3 (H8's row 3). `menuSlice` is a fixed `setTimeout(32)` used by introPlan (a 32 ms sleep per ≥ 3 ms of planning),
+  awaitIntroWarm, studioDone, menuFinish and prebuild — the same shape #3216 removed from the car prep.
+- F7. rigWarm and mirrorPrepare are awaited one after the other; the mirror's priming frame could overlap the rig's.
+- F8. `ensureScenery` awaits the build toolkit before `sceneryModels(def)`, which needs only the resident closure.
+- F9. `RaceEntryProfile.continueWindow`'s resume branch does not reset `lapT0`, so a `beginUi` race's first leg
+  ("scenery") absorbs the garage-out, flyby and intro build in `raceProfile()`.
+- F10 (closed in #3385's 12e3832dc). The deferred car-warm queue drains through the caches, never a kept texture
+  handle, so a leftover drained by a later countdown cannot upload a texture the LRU dropped.
+
 ## Sources
 
 - MDN, `Scheduler.yield()`: https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/yield
