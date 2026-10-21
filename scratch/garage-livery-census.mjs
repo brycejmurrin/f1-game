@@ -120,6 +120,25 @@ try{
         row.idleTrace=await page.evaluate(([t0,t1])=>({frames:(__livCount.frames||[]).filter(([t])=>t>t0&&t<=t1).map(([t,d])=>[Math.round(t-t0),+d.toFixed(1)]),
           longs:__livCount.longs.filter(([s])=>s>t0&&s<t1).map(([s,d])=>[Math.round(s-t0),Math.round(d)])}),[t0,t1]);
         row.idleTraceStats=await windowStats(page,t0,t1);log(`${arm} idle trace ${JSON.stringify(row.idleTraceStats)}`);save();}
+      // livery_select_trace (B·H30, Bryce's 2026-10-21 recording: 6-9 fps for ~10 s after picking his BRUSHED custom
+      // livery, then recovery): save a BRUSHED custom, then alternate stock and custom picks; per pick, ten 1 s buckets.
+      if(REQ.livery_select_trace){
+        await page.evaluate(()=>document.querySelector('#cs-tabs [data-cs-cat="livery"]').click());await page.waitForSelector('.cs-liv-create',{timeout:60000});
+        await page.evaluate(()=>document.querySelector('.cs-liv-create').click());await page.waitForSelector('[data-cs-finish="brushed"]',{timeout:60000});
+        await page.evaluate(()=>document.querySelector('[data-cs-finish="brushed"]').click());await page.waitForTimeout(1500);
+        await page.evaluate(()=>document.querySelector('.cs-liv-ed-save').click());await page.waitForSelector('.cs-liv-edit',{timeout:60000});await page.waitForTimeout(8000);
+        const {ids,custom}=await page.evaluate(()=>{const all=[...document.querySelectorAll('[data-cs-livery]')];
+          const own=all.find(b=>b.querySelector('.cs-liv-edit')||(b.parentNode&&b.parentNode.querySelector&&b.parentNode.querySelector('.cs-liv-edit')));
+          return {ids:all.map(b=>b.dataset.csLivery),custom:own?own.dataset.csLivery:all[all.length-1].dataset.csLivery};});const stock=ids.filter(i=>i!==custom);
+        const seq=[stock[1]||stock[0],custom,stock[2]||stock[0],custom,stock[1]||stock[0]];row.selectTrace={ids,custom,seq,picks:[]};
+        for(const id of seq){const pick={id,buckets:[]};row.selectTrace.picks.push(pick);
+          await page.evaluate(id=>{const b=[...document.querySelectorAll('[data-cs-livery]')].find(x=>x.dataset.csLivery===id);b&&b.click();},id);
+          for(let i=0;i<10;i++){const a=await snapshot(page);await page.waitForTimeout(1000);const b=await snapshot(page);
+            const w=await windowStats(page,a.t,b.t);pick.buckets.push({s:i,frames:w.frames,p50:w.p50Ms,max:w.maxMs,longMs:w.longTaskMs,calls:delta(a.calls,b.calls),
+              alloc:Object.fromEntries(Object.entries(delta(a.alloc,b.alloc)).filter(([k])=>/pipeline|shader|texture/i.test(k)))});}
+          log(`${arm} select ${id} ${JSON.stringify(pick.buckets.map(x=>[x.frames,x.longMs,x.alloc.pipelineCreated||0,x.alloc.textureCreated||0,x.calls.buildAtlas||0]))}`);save();}
+        if(REQ.livery_finish_only){row.ok=!row.pageErrors.length;save();continue;}
+        await page.evaluate(()=>document.querySelector('#cs-tabs [data-cs-cat="team"]')?.click());await page.waitForTimeout(1500);}
       row.phase='editor';await page.evaluate(()=>document.querySelector('#cs-tabs [data-cs-cat="livery"]').click());
       await page.waitForSelector('.cs-liv-create',{timeout:soft?180000:60000});
       const o0=await snapshot(page);await page.evaluate(()=>document.querySelector('.cs-liv-create').click());
