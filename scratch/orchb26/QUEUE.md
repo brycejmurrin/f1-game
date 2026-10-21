@@ -202,3 +202,4 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 19:57Z: 89413c86 live. MERGED #3436 → 87246539 (GAME, H29). Next on green Pages 87246539: #3424. Bryce: garage lag in ~10 s phases → relayed to H30 as top angle.
 19:58Z: H29 FINAL at context cap (#3436 merged) → archived; launched B·H31 boot round 2 (Opus) session_016peTBzXhThg7o3UyBwSb34: TLX menu world warm 16-20 s. Branch to delete (Bryce, hook-blocked): cursor/live-debug-boot-1-base-h29a.
 20:09Z: #3421 → 185ab0ba merged by Bryce (on top of #3436 87246539). Live still 89413c86. Next: #3424 once 87246539 or 185ab0ba is live.
+20:17Z: H30 lead (Bryce recording): garage on TLX/WebGPU drops to 6-9 fps ~10 s after selecting a custom BRUSHED livery; GPU-side, scales with screen coverage, drawn twice (car + floor mirror). Suspect tsl-lit.js BRUSHED branch (H26 file) + tlx.js TEX_POOL_MS 10 s age-out. Census 39668066437. H26 + H30 coordinating. #3442 verified (SettingDeps writes 1000+ to 0).
