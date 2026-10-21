@@ -14,7 +14,22 @@ resolution defaults to LOW (0.5). TLX is pinned to three's WebGL2 path (`apex26.
 iPhone path (`PHONE-GPU-TEST-2026-10-21.md`, `facts.backendPick.api`). It renders on SwiftShader. Pixels and
 memory counts from this box are valid. Its frame times are not (§3), so frame time comes from the macOS GPU census.
 
-## Recommendation
+## Decision
+
+Bryce, 2026-10-21 05:48Z (relayed by OrchB 26): **keep TLX as the default on phones.** GLX stays available through RENDERER.
+The measurements below stand as the record. The TLX phone gaps they found are open follow-ups:
+
+1. **Missing clouds and night stars on the TLX phone tier.** GLX draws them; TLX's frames at phone settings show a flat sky
+   (Spa, Monza, Singapore, §1). First probe `__tlx.memState().sky.cache` on the phone profile to tell "off" from "empty", then
+   decide whether it is a defect.
+2. **Memory gap.** TLX holds 30 MiB more than GLX at the menu and 42–53 MiB more in a race (§2), and 59 MiB more JS heap on
+   the Mac GPU (§3). This is mostly three's CPU geometry copies (`tlx.js` ~176), the cost that has jetsam-killed an iPhone
+   tab before. Releasing them has failed four times (`CEILING-HISTORY.md` ~1478).
+3. **Race entry takes 19.1 s on TLX against 5.9 s on GLX** (Mac GPU, phone caps, §3). It also let the start sequence override
+   a `park()` in this harness.
+4. Minor: TLX garage edges are more stair-stepped than GLX's at LOW (§1).
+
+## Recommendation (as sent before the decision)
 
 Default phones to GLX and keep TLX one tap away in RENDERER.
 
