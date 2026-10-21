@@ -1,0 +1,1 @@
+1792560778	Bryce Murrin	Weather implementation: receiver-specific wet SSR in lit/post shaders, semantic night sky solar gating, dawn precipitation profiles and atmosphere; js/render/{three,glx,webgpu}, js/lighting/{presets,atmosphere}. Parent owns serial browser.  [cursor/dynamic-weather-a71c; session c65f2fd2a4947400330ace34]
