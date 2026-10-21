@@ -9144,6 +9144,14 @@
         "tests/unit/global-registry.test.mjs"
       ]
     },
+    "js/perf/gpu-test-run.js": {
+      "fillSlope": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
+      "phaseStats": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ]
+    },
     "js/perf/loop-health.js": {
       "*": [
         "tests/unit/loop-health.test.mjs"

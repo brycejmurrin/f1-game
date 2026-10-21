@@ -28,6 +28,7 @@ const PhoneRecorder = (function () {
   const MAX_EVENTS = 50;
   const MAX_SAVE_CHARS = 600000;
 
+  const HOWTO_GPU = "GPU TEST: one tap, about 3 min hands-free (dry Monza, helmet camera). It times the frame at resolution 0.5 / 0.75 / 1.0 and with the mirror off, then stops; tap SHARE and send the file.";
   const HOWTO_AUTO = "AUTO SOAK: one tap runs a hands-free 15 min wet Monza race. Set the phone down, screen on, this page in front (a locked or backgrounded page pauses), Low Power Mode off; it stops itself, then tap SHARE.";
   const HOWTO = [
     "1. Low Power Mode OFF, brightness fixed, note charging and case.",
@@ -116,7 +117,7 @@ const PhoneRecorder = (function () {
       inner: safe(() => [w.innerWidth, w.innerHeight], null),
       standalone: safe(() => !!(nav.standalone || (w.matchMedia && w.matchMedia("(display-mode: standalone)").matches)), false),
       hwConcurrency: nav.hardwareConcurrency || null, deviceMemory: nav.deviceMemory || null,
-      webgpu: !!nav.gpu, webgpuF16: null,
+      webgpu: !!nav.gpu, webgpuF16: null, webgpuTimestamp: null,
       build: safe(() => document.querySelector('meta[name="apex-build"]').content, null),
       backend: safe(() => (L.RendererPicker && L.RendererPicker.liveBackend && L.RendererPicker.liveBackend()) || "", ""),
       backendState: safe(() => {
@@ -137,7 +138,8 @@ const PhoneRecorder = (function () {
     };
     if (nav.gpu && nav.gpu.requestAdapter) {
       try {
-        Promise.resolve(nav.gpu.requestAdapter()).then((a) => { f.webgpuF16 = !!(a && a.features && a.features.has("shader-f16")); }, () => { f.webgpuF16 = false; });
+        Promise.resolve(nav.gpu.requestAdapter()).then((a) => { f.webgpuF16 = !!(a && a.features && a.features.has("shader-f16"));
+          f.webgpuTimestamp = !!(a && a.features && a.features.has("timestamp-query")); }, () => { f.webgpuF16 = false; f.webgpuTimestamp = false; });
       } catch (_) { /* no adapter */ }
     }
     return f;
@@ -168,6 +170,10 @@ const PhoneRecorder = (function () {
       spans: safe(() => { const st = L.PerfSpans.stats(); const o = {};
         for (const k of Object.keys(st)) o[k] = { p50: st[k].p50, p95: st[k].p95 }; return o; }, null),
       visibility: safe(() => document.visibilityState, null),
+      // The backend's GPU frame timer (three's timestamp feature: WebGPU timestamp-query or
+      // EXT_disjoint_timer_query_webgl2). Read only; GPU TEST turns it on. ms -1 = no result.
+      gpu: safe(() => { const B = L.GLX && (L.GLX.__tlx || L.GLX); if (!B || !B.gpuTimer) return null;
+        const t = B.gpuTimer(); return { supported: !!t.supported, on: !!t.on, ms: r2(B.gpuMs ? B.gpuMs() : -1) }; }, null),
     };
     return o;
   }
@@ -255,8 +261,10 @@ const PhoneRecorder = (function () {
       if (!o || o.schema !== SCHEMA || on) return false;
       rec = o; return true;
     }
+    // A finished sub-run (GPU TEST, gpu-test-run.js) files its result on the record; SHARE carries it.
+    function attach(key, val) { if (!rec) return false; rec[key] = val; persist(); return true; }
     return {
-      start, stop, frame, event, sample, serialize, adopt,
+      start, stop, frame, event, sample, serialize, adopt, attach,
       isOn: () => on, record: () => rec,
       elapsedMs: () => (on ? env.now() - t0 : 0),
       count: () => (rec ? rec.samples.length : 0),
@@ -368,12 +376,16 @@ const PhoneRecorder = (function () {
     _ui.rec.textContent = r.isOn() ? "STOP" : "RECORD";
     _ui.quick.disabled = r.isOn();
     const auto = typeof SoakRun !== "undefined" && SoakRun.active();
-    _ui.auto.textContent = auto ? "STOP AUTO" : "AUTO SOAK";
+    const gpu = typeof GpuTestRun !== "undefined" && GpuTestRun.active();
+    _ui.gpu.textContent = gpu ? "STOP GPU TEST" : "GPU TEST";
+    _ui.gpu.disabled = auto && !gpu;
+    _ui.auto.disabled = gpu;
+    _ui.auto.textContent = auto && !gpu ? "STOP AUTO" : "AUTO SOAK";
     _ui.rec.disabled = auto;
     _ui.rec.setAttribute("aria-pressed", r.isOn() ? "true" : "false");
     _ui.share.disabled = !have; _ui.copy.disabled = !have;
     if (!_ui.status.dataset.msg) {
-      _ui.status.textContent = auto ? "auto soak " + (SoakRun.status().state || "") + " · " + fmt(r.elapsedMs()) + " · " + r.count() + " samples" : r.isOn() ? "recording · " + fmt(r.elapsedMs()) + " · " + r.count() + " samples"
+      _ui.status.textContent = gpu ? "GPU test " + (GpuTestRun.status().state || "") + " · " + fmt(r.elapsedMs()) : auto ? "auto soak " + (SoakRun.status().state || "") + " · " + fmt(r.elapsedMs()) + " · " + r.count() + " samples" : r.isOn() ? "recording · " + fmt(r.elapsedMs()) + " · " + r.count() + " samples"
         : (have ? "saved run: " + r.count() + " samples" : "idle — nothing runs until you tap RECORD");
     }
   }
@@ -397,6 +409,12 @@ const PhoneRecorder = (function () {
     if (SoakRun.active()) { SoakRun.stop("stopped"); flash("auto soak stopped"); paintUI(); return; }
     flash("auto soak: building a wet Monza race, keep this screen on");
     SoakRun.start().then((ok) => { if (!ok) flash("auto soak could not start"); paintUI(); });
+  }
+  function onGpuTest() {
+    if (typeof GpuTestRun === "undefined") { flash("GPU test unavailable on this build"); return; }
+    if (GpuTestRun.active()) { GpuTestRun.stop(); flash("GPU test stopped · tap SHARE"); paintUI(); return; }
+    flash("GPU test: dry Monza, helmet cam, ~" + GpuTestRun.TOTAL_MIN + " min — keep this screen on");
+    GpuTestRun.start({ onDone: () => { flash("GPU test done · tap SHARE"); paintUI(); } }).then((ok) => { if (!ok) flash("GPU test could not start"); paintUI(); });
   }
   function current() { const r = recorder(); return { text: r.serialize(), name: fileName(r.record()) }; }
   function onShare() {
@@ -430,7 +448,7 @@ const PhoneRecorder = (function () {
     const h = document.createElement("p"); h.className = "adv-help"; h.style.fontWeight = "700"; h.textContent = "PHONE TEST";
     const how = document.createElement("ol"); how.className = "adv-help";
     HOWTO.forEach((l) => { const li = document.createElement("li"); li.textContent = l.replace(/^\d\. /, ""); how.appendChild(li); });
-    const au = document.createElement("p"); au.className = "adv-help"; au.textContent = HOWTO_AUTO;
+    const au = document.createElement("p"); au.className = "adv-help"; au.textContent = HOWTO_GPU + " " + HOWTO_AUTO;
     const ab = document.createElement("ol"); ab.className = "adv-help";
     HOWTO_AB.forEach((l) => { const li = document.createElement("li"); li.textContent = l; ab.appendChild(li); });
     const row = document.createElement("div"); row.style.margin = "0";
@@ -440,7 +458,7 @@ const PhoneRecorder = (function () {
       b.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
       row.appendChild(b); return b;
     };
-    _ui = { auto: mk("pm-phonerec-auto", "AUTO SOAK", onAuto), rec: mk("pm-phonerec-rec", "RECORD", onRecord), quick: mk("pm-phonerec-quick", "QUICK 30s", () => onRecord(true)), share: mk("pm-phonerec-share", "SHARE", onShare), copy: mk("pm-phonerec-copy", "COPY", onCopy) };
+    _ui = { gpu: mk("pm-phonerec-gpu", "GPU TEST", onGpuTest), auto: mk("pm-phonerec-auto", "AUTO SOAK", onAuto), rec: mk("pm-phonerec-rec", "RECORD", onRecord), quick: mk("pm-phonerec-quick", "QUICK 30s", () => onRecord(true)), share: mk("pm-phonerec-share", "SHARE", onShare), copy: mk("pm-phonerec-copy", "COPY", onCopy) };
     _ui.status = document.createElement("p"); _ui.status.className = "adv-help"; _ui.status.setAttribute("role", "status");
     _ui.link = document.createElement("p"); _ui.link.className = "adv-help";
     [h, au, how, ab, row, _ui.status, _ui.link].forEach((n) => box.appendChild(n));
@@ -463,10 +481,11 @@ const PhoneRecorder = (function () {
   init();
 
   return {
-    KEY, SCHEMA, QUICK_MS, HOWTO_AB, SAMPLE_MS, WINDOW_FRAMES, CADENCE_FRAMES, MAX_SAMPLES, HOWTO,
+    KEY, SCHEMA, QUICK_MS, HOWTO_AB, HOWTO_GPU, SAMPLE_MS, WINDOW_FRAMES, CADENCE_FRAMES, MAX_SAMPLES, HOWTO,
     create, liveEnv, numericLeaves, fileName, share, copy, download, mount,
     start: () => { const ok = recorder().start(); kick(); paintBadge(); paintUI(); return ok; },
     stop: () => { const ok = recorder().stop(); paintBadge(); paintUI(); return ok; },
+    attach: (key, val) => recorder().attach(key, val),
     isOn: () => recorder().isOn(), json: () => recorder().serialize(),
   };
 })();
