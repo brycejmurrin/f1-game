@@ -14982,11 +14982,13 @@
       ],
       "fmtGap": [
         "tests/unit/hud-gap-decimals.test.mjs",
-        "tests/unit/hud-relative.test.mjs"
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/input-hud-properties.test.mjs"
       ],
       "fmtGapSec": [
         "tests/unit/hud-gap-decimals.test.mjs",
-        "tests/unit/hud-relative.test.mjs"
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/input-hud-properties.test.mjs"
       ],
       "gapDecimals": [
         "tests/unit/hud-gap-decimals.test.mjs"
