@@ -273,7 +273,7 @@ const CarDraw = (function () {
       if (tex && G.gfx.freeTexture) G.gfx.freeTexture(tex);
       delete _decalTexCache[key]; delete _decalTexFail[key]; delete _decalTexBytes[key];
       _decalTexUse.delete(key); _photoKeys.delete(key);
-      _hiResDone.delete(key); _hiResPending.delete(key); _hiResFail.delete(key);
+      _hiResDone.delete(key); _hiResPending.delete(key); _hiResFail.delete(key); _decalSeen.delete(key);
       const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
       // A deferred hi-res swap parks the preview in _hiResGrave until the next
       // bind. Invalidate / LRU / photo-release must free that parked tex now
@@ -286,6 +286,40 @@ const CarDraw = (function () {
           _hiResGrave.splice(i, 1);
         }
       }
+    }
+    // RACE SWEEP. A garage browse leaves up to the byte cap of atlases nobody will draw in the race (each
+    // one stays until the LRU needs the room). While a race draws, an atlas not drawn for DECAL_STALE_FRAMES
+    // flushes is freed; a car that comes back re-mints through getCarDecalTexture. Counted in flushDecals
+    // frames, so the garage (which never flushes) and photo mode (planPhotoAtlases owns its ":P" keys) keep
+    // their own rules. Every key is stamped when it is minted or drawn, so a warmed-but-not-yet-drawn one
+    // is not stale on frame one.
+    const DECAL_STALE_FRAMES = 600, DECAL_SWEEP_EVERY = 120;
+    const _decalSeen = new Map();   // key -> flush frame it was last minted / drawn
+    let _flushFrame = 0;
+    function sweepStaleDecals() {
+      if (G.photoMode || (G.state !== "race" && G.state !== "count")) return 0;
+      // The field keeps its atlases whether or not a decal was queued lately: a rival past the LOD range, behind
+      // the eye or outside the frustum queues none, yet re-mints mid-frame (a hitch) when it closes up.
+      const field = new Set(), cars = G.cars || [];
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i];
+        if (c && c.team) field.add(decalKeyFor(c.team, carDecalNum(c.team, c), !!c.isPlayer));
+      }
+      let n = 0;
+      for (const key of _decalTexOrder.slice()) {
+        if (field.has(key)) continue;
+        const seen = _decalSeen.get(key);
+        if (seen === undefined) { _decalSeen.set(key, _flushFrame); continue; }
+        if (_flushFrame - seen <= DECAL_STALE_FRAMES || _photoKeys.has(key) || _hiResPending.has(key)) continue;
+        dropDecalTexture(key); n++;
+      }
+      return n;
+    }
+    // Live decal-atlas bytes: _decalTexBytes summed over exactly the cached keys (a test hook; the trim reads the same sum).
+    function decalBytes() {
+      let b = 0;
+      for (let i = 0; i < _decalTexOrder.length; i++) b += _decalTexBytes[_decalTexOrder[i]] || 0;
+      return { bytes: b, live: _decalTexOrder.length, recorded: Object.keys(_decalTexBytes).length };
     }
     function invalidateDecalTextures(teamId) {
       const prefix = teamId + ":";
@@ -536,6 +570,7 @@ const CarDraw = (function () {
       const wantHi = !!isPlayer && allowHiRes !== false;
       if (key in _decalTexCache) {
         _decalTexUse.set(key, ++_decalTexTick);   // a hit promotes
+        _decalSeen.set(key, _flushFrame);
         // A cache hit that never got a hi-res pass (e.g. warmed as preview)
         // still schedules — idempotent via _hiResPending / _hiResDone.
         if (wantHi) schedulePlayerHiRes(team, num, key);
@@ -557,7 +592,7 @@ const CarDraw = (function () {
           if (n === 1) Log.warn("gfx", "decal atlas build failed for " + key, e);
           if (n < 3) return null;
         }
-        _decalTexCache[key] = t; _decalTexOrder.push(key); _decalTexUse.set(key, ++_decalTexTick);
+        _decalTexCache[key] = t; _decalTexOrder.push(key); _decalTexUse.set(key, ++_decalTexTick); _decalSeen.set(key, _flushFrame);
         if (wantHi && t) schedulePlayerHiRes(team, num, key);
         // LRU: browsing liveries minted page-lifetime ~7 MB atlases; the least
         // recently drawn goes, never one the field drew this frame (nor, by the
@@ -1641,6 +1676,7 @@ const CarDraw = (function () {
     let _decalFlushing = false;   // inside flushDecals: it reaps once, after the last bind
     function flushDecals(night) {
       planPhotoAtlases();
+      if (++_flushFrame % DECAL_SWEEP_EVERY === 0) sweepStaleDecals();
       _decalFlushing = true;
       try {
         for (let i = 0; i < _decalCount; i++)
@@ -1692,7 +1728,7 @@ const CarDraw = (function () {
     let _menuCarPrep = null;   // the last prepareMenuCarAssets that ran to its end (menuCarAssets)
     return (_instance = {
       teamMesh, teamBodyMesh, sharedRivalBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
-      teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
+      teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures, sweepStaleDecals, decalBytes,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, warmCockpitRig, drainDeferredCarWarm, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
