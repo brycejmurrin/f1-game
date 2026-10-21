@@ -86,7 +86,12 @@ const CustomLiveries = (function () {
     function getLiveryId(teamId) { return identityValue(teamId, "livery." + teamId, "default"); }
     function saveLiveryId(teamId, id) { return setIdentityValue(teamId, "livery." + teamId, id); }
     // Player-created liveries, stored per team as [{id,name,c1,c2,stripe?}].
-    function getCustomLiveries(teamId) { return identityValue(teamId, "livery.custom." + teamId, []); }
+    function getCustomLiveries(teamId) {
+      // A MY TEAM identity captured before any livery was saved holds null here, not the [] fallback;
+      // concat(null) puts a null row in the list and resolveLivery's find throws on it.
+      const v = identityValue(teamId, "livery.custom." + teamId, []);
+      return Array.isArray(v) ? v : [];
+    }
     function setCustomLiveries(teamId, arr) { return setIdentityValue(teamId, "livery.custom." + teamId, arr); }
     // Full paint-job list for a team: catalog (default + specials + universal) + the
     // player's own creations.
