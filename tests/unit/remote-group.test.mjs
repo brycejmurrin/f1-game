@@ -2,6 +2,7 @@
 // browser group on GitHub's runners, sharded, instead of 30-45 min of local
 // SwiftShader. Pure parts only — no network, no dispatch.
 // Run: node --test tests/unit/remote-group.test.mjs   (npm run test:tooling-fast)
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
