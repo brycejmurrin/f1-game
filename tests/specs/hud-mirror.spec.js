@@ -102,7 +102,7 @@ async function glassBands(page, screen, rect) {
   }, { scr: screen, r: rect });
 }
 
-async function mirrorRace(page) {
+async function mirrorRace(page, backend = "webgl2") {
   await page.addInitScript(() => {
     try {
       localStorage.setItem("apex26.hudMirror", '"auto"');
@@ -111,6 +111,14 @@ async function mirrorRace(page) {
   });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  // A saved preference is only a request: cold initialization can fall back.
+  // Never report the GLX mirror as TLX coverage after that fallback.
+  const binding = await page.evaluate(() => ({
+    bound: sessionStorage.getItem("apex26.gfxBound") || GLX.backend,
+    fallback: sessionStorage.getItem("apex26.gfxFallbackWhy"),
+  }));
+  test.info().annotations.push({ type: "mirror-backend", description: JSON.stringify(binding) });
+  expect(binding.bound, `requested ${backend}; ${JSON.stringify(binding)}`).toBe(backend);
   await page.evaluate(() => window.__apex.race("redbull", "day", "dry", { laps: 3 }));
   await awaitTrackBuild(page);
   // Freeze after AUTO->ON in mirrorCase: TLX on software never composites a
@@ -418,8 +426,20 @@ test.describe("HUD rear-view mirror", () => {
       expect(visible.m.backend.dead, vd).toBe(false);
     });
     test("TLX renders the mirror pass, composites it into #hud-mirror, and the key turns it off", async ({ page }) => {
-      await mirrorRace(page);
+      await mirrorRace(page, "three");
       await mirrorCase(page);
+    });
+    // Keep PiP's independent transition contract out of the mirror case's
+    // budget: on software rendering the mirror assertions alone took 278 s
+    // of its 300 s limit. Each case still has the same limit and assertions.
+    test("TLX reuses the mirror target for WATCH PiP and restores the rear view on exit", async ({ page }) => {
+      await mirrorRace(page, "three");
+      await page.evaluate(() => window.__apex.mirror("on"));
+      await page.waitForFunction(() => {
+        const m = window.__apex.mirror();
+        return m.shown && m.backend && m.backend.renders >= 1 && m.backend.composites >= 1;
+      }, null, { polling: 100, timeout: FRAME_MS });
+      await page.evaluate(() => window.__apex.freeze(true));
       await pipCase(page);
     });
   });

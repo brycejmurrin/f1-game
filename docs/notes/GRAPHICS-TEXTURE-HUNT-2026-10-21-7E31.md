@@ -137,6 +137,34 @@ had fallen back to GLX after the 15-second initialization deadline. This is
 a failed test, not a TLX composite pass; attribution remains unresolved
 without a quiet clean-baseline reproduction. No thresholds were changed.
 
+Follow-up reproduction on unchanged baseline `174541508125` also failed, at
+a different step: the 45-second expanded-mirror wait after tapping the chip.
+That run did not record the bound backend and never reached PiP. It neither
+establishes a common cause nor exonerates the candidate. The click callback
+clears the collapsed flag synchronously; frozen races keep rendering. The
+retained evidence does not distinguish a stale hit-test coordinate from a
+starved render, so no product input or mirror-visibility change is justified.
+
+The completed source-head CI run
+[39674934878](https://github.com/brycejmurrin/f1-game/actions/runs/39674934878)
+ran the full `gfx` group on four llvmpipe shards, not just boot smoke. All
+58 gfx tests passed without retry or skip. Its first shard passed GLX mirror
+in 41.7 s, TLX preparation in 16.1 s and TLX composite/PiP in 22.7 s; the
+macOS Metal renderer job also passed. These are correctness results on those
+hosts, not physical-phone performance measurements. The local failures remain
+part of the record.
+
+The local candidate's explicit TLX-to-GLX fallback exposed a test defect:
+the composite case checked the requested preference but never asserted the
+bound renderer. The follow-up guard reads RendererBoot's `apex26.gfxBound`
+fallback override, otherwise the bound `GLX.backend` descriptor, and includes
+`apex26.gfxFallbackWhy` in the failure. Successful TLX binding clears the
+override; native GLX sets it and has no backend descriptor. An independent
+PiP case preserves the prior frozen-world precondition and every transition
+assertion, with the same per-case 300-second limit. This separates two
+contracts whose combined local runtime exhausted that limit; it does not
+relax pixel thresholds, skip unsupported paths or change product quality.
+
 Remaining gates and final check results are maintained in the draft PR.
 No merge/deployment is part of this research pass. Native fatal process OOM,
 conforming-driver allocation-failure behavior and physical hardware are outside
