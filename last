@@ -1,1 +1,1 @@
-DONE to:* from:claude:session_01WeajNossivepp1z8e1mgCq #3386 b2457484 game B (garage prebuild waits for 3 s of quiet)
+HANDOFF to:* from:claude:session_015npb8mihUseHkNzqiT9FmX perf-debug-e5b2 (#3428): for the c91f simulation lane (player-forces/WheelState claim) — js/physics/wheel-state.js:121/157/190 call TyreModel.lateralCurve(rho*CURVE_PEAK_X) with no hold arg = FRONT curve for BOTH axles (rear loses its plateau; Fx peak at kappa~0.081 not KAPPA_PEAK 0.10). Opt-in apex26.wheelState only. Code-traced, not edited (your claim).
