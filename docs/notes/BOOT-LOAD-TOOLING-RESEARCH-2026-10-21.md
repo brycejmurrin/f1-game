@@ -80,6 +80,9 @@ The probe is `scratch/h8/boot-probe.mjs` (not committed); it records boot phases
 ## Prior art (from the sweep; do not re-report)
 
 - **`docs/notes/PERF-HUNT-4-2026-10-14.md:697`:** `warmCarAssets` in startRaceBody shows as 1.09–2.1 s single tasks. The figure is inferred from timing and was never profiled directly. This is an open lead.
-- **`docs/notes/LIVE-DEBUGGER-BOOT-PWA-2026-10-16.md:43` (O1):** `script-loader.js inject()` has no deadline of its own, and a hung request held a static loading card for 63.6 s. #3157 changed the lazy-load deadline, but no note says O1 is closed.
+- **`docs/notes/LIVE-DEBUGGER-BOOT-PWA-2026-10-16.md:43` (O1, a hung request held a static loading card for 63.6 s) is CLOSED.**
+  - #2582 (a834406a, 2026-10-17, the day after that note) gave `inject()` a 10 s onSlow hook and a 25 s deadline.
+  - #3157 made that deadline count responsive time.
+  - The only await outside it, `UpdateCheck.prepareLazyLoad`, is bounded to 1.5 s.
 - **`docs/notes/DEFECT-LEDGER.md:1906`:** the boot canary arms before the deferred-backend fetch, and a transient `checkFramebufferStatus` failure disables post for the session with no retry. Both have no fix tag.
 - **`docs/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md:18`:** 276 defer scripts, 2.28 MB. This is the size basis for hunt row 12, a LAZY_RACE bundle.
