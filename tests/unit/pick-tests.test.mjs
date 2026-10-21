@@ -1,5 +1,6 @@
 // pick-tests — the selector's contract (--json shape, --since ref handling).
 // test-groups.test.mjs covers the output vocabulary; this file guards upstream.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import { load as loadRatchets } from "../../tools/check/ratchets.mjs";
 import assert from "node:assert/strict";
