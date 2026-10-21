@@ -364,3 +364,47 @@ test.describe("garage-out before race/session card", () => {
     assertGarageThenCard(tl, "jump-in");
   });
 });
+
+// A DIRECT start (Daily, Data Hub without its intro, season, agent hooks) while the picker is building the
+// same circuit JOINS that build: before startRace stood the menu down, the menu's build kept running beside
+// the race's own (two buildPaced for one world, 2026-10-21), and whichever loadTrackStepped finished second
+// returned false, which startRaceBody turns into quitToMenu.
+test.describe("direct start during the picker's build", () => {
+  // The project default (reduce) has the picker skip its preview build, so there would be nothing to join.
+  test.use({ viewport: { width: 844, height: 390 }, reducedMotion: "no-preference" });
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      const q = document.getElementById("pm-quit");
+      if (q) { q.click(); if (q.classList.contains("armed")) q.click(); }
+    }).catch(() => {});
+  });
+
+  test("joins the menu's build: one track build, and the race reaches the lights", async ({ page }) => {
+    test.setTimeout(BOOT_MS + 320_000);
+    await toMenu(page);
+    await page.waitForFunction(() => window.__apex && window.__apex.info().state === "menu", null, { polling: 100, timeout: 60_000 });
+    const r = await page.evaluate(async () => {
+      const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+      // eslint-disable-next-line no-undef
+      const T = Tracks, real = T.buildPaced, seen = [];
+      T.buildPaced = function (def, ...rest) { seen.push(def && def.id); return real.call(this, def, ...rest); };
+      try {
+        document.getElementById("mb-race").click();
+        // The title already pre-built the saved pick: tap another circuit so the picker starts a fresh build.
+        const built = (window.__apex.menuPrep() || {}).trackId;
+        const row = [...document.querySelectorAll(".track-row[data-track-idx]")].find((el) => T.LIST[+el.dataset.trackIdx].id !== built);
+        if (row) row.click();
+        const t0 = performance.now();   // the picker builds once a boot warm still compiling has settled
+        for (let i = 0; i < 800 && !seen.length; i++) await sleep(25);
+        const startedMs = Math.round(performance.now() - t0);
+        if (!seen.length) return { seen, state: window.__apex.info().state, building: T.building(), picker: !document.getElementById("select").hidden, prep: window.__apex.menuPrep(), motion: document.documentElement.getAttribute("data-motion") };
+        window.__apex.race(seen[0]);   // the Daily / Data Hub door: startRace with no RACE! intro
+        for (let i = 0; i < 3600 && !/^(count|race)$/.test(window.__apex.info().state); i++) await sleep(50);
+        return { seen, startedMs, state: window.__apex.info().state };
+      } finally { T.buildPaced = real; }
+    });
+    expect(r.seen.length, "the picker started a build of its circuit: " + JSON.stringify(r)).toBeGreaterThan(0);
+    expect(r.state, "the race reached the lights, not the title").toMatch(/^(count|race)$/);
+    expect(r.seen, "the race joined the picker's build instead of building the same world again").toEqual([r.seen[0]]);
+  });
+});
