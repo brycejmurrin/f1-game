@@ -76,3 +76,20 @@ A gate should fail on GROWTH per race, not on an absolute MB figure.
 7. Fix the two verified low findings: the Data Hub schedule MutationObserver stays connected after the hub closes
    (`js/data/schedule.js:154`); photo-studio library rows and blob closures stay after close (`finishClose`).
 8. Gate messages quote growth per race against the ~300 MB practical budget on a 2–4 year old iPhone.
+
+## The gate, measured (2026-10-21)
+
+`tests/specs/race-cycle-memory.spec.js` (test:gfx; 844×390 touch, TLX; monza and spa raced three times through
+RESULTS → MENU, a garage visit after monza; ~47 s here):
+
+| tree | verdict |
+|---|---|
+| 2eda36c6 (before #3241) | **failed**: cycle 1, spa built, `aliveTracks` = monza + spa |
+| 30bccdad (#3241) | passed |
+| #3377 merged with the deploy tip | passed (twice) |
+
+TLX `renderer.info.memory` at the menu after spa, seven cycles: geometries 26 → 117 → 168 → 232 → 278 → 281 → 253,
+textures 40 → 41 → 50 → 53 → 54 → 57 → 57. It climbs for ~five cycles, then flattens: caches filling, not a leak, and
+too slow to settle for a cycle-on-cycle gate, so the spec logs it. The post-GC JS heap with TLX bound was 160–275 MB
+here against ~40 MB with GLX bound on the same phone profile (the mobile UA binds GLX on this software adapter): a
+lead for the TLX lane, not measured on a phone.
