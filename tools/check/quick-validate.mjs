@@ -86,8 +86,40 @@ export async function evaluateLiveProbe(
   return out;
 }
 
+const USAGE = `Usage: node tools/check/quick-validate.mjs [port]
+
+Boots the game once headless and probes globals, race, physics and lighting
+(~30–60 s). Default port is 3477.
+`;
+
+/** Parse the optional port argv. Returns { ok, port?, error? }. Pure — unit-tested. */
+export function parseQuickValidatePort(argv = process.argv.slice(2)) {
+  const args = argv.filter((a) => a !== "--");
+  if (args.includes("--help") || args.includes("-h")) return { ok: true, help: true };
+  const raw = args[0];
+  if (raw == null || raw === "") return { ok: true, port: 3477 };
+  if (!/^\d+$/.test(raw)) {
+    return { ok: false, error: `port must be an integer 0–65535, got ${JSON.stringify(raw)}` };
+  }
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 0 || port >= 65536) {
+    return { ok: false, error: `port out of range: ${port}` };
+  }
+  return { ok: true, port };
+}
+
 async function main() {
- const PORT = Number(process.argv[2] || 3477);
+ const parsed = parseQuickValidatePort(process.argv.slice(2));
+ if (parsed.help) {
+  console.log(USAGE.trim());
+  process.exit(0);
+ }
+ if (!parsed.ok) {
+  console.error("quick-validate: " + parsed.error);
+  console.error(USAGE.trim());
+  process.exit(2);
+ }
+ const PORT = parsed.port;
  const srv = await startStaticServer(ROOT, { port: PORT });
  const errors = [];
  try {

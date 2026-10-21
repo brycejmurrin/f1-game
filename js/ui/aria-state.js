@@ -68,7 +68,8 @@ window.AriaState = (function () {
     if (!btns.length || (!anyOn && !known)) return;
     for (const b of btns) {
       labelled.add(b);
-      b.setAttribute("aria-pressed", isOn(b) ? "true" : "false");
+      const next = isOn(b) ? "true" : "false";
+      if (b.getAttribute("aria-pressed") !== next) b.setAttribute("aria-pressed", next);   // write on change: each write is a mutation record that re-wakes this observer and ScrollFade
     }
   }
 
@@ -120,7 +121,7 @@ window.AriaState = (function () {
     navs.forEach((nav) => {
       nav.querySelectorAll("a").forEach((a) => {
         const href = a.getAttribute("href") || "";
-        if (href.charAt(0) === "#" && hash === href) a.setAttribute("aria-current", "true");
+        if (href.charAt(0) === "#" && hash === href) { if (a.getAttribute("aria-current") !== "true") a.setAttribute("aria-current", "true"); }
         else a.removeAttribute("aria-current");
       });
     });
