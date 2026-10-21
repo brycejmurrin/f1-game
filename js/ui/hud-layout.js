@@ -156,6 +156,12 @@ const HudLayout = (function () {
     cockpit: { energy: 1, tyre: 1, ot: 1, aero: 1, bb: 1 },
     helmet: { gearbox: 1, energy: 1, tyre: 1, ot: 1, aero: 1, bb: 1 },
   };
+  // BIG and CORNERS are laid out for the desktop row and break a touch phone (hud-survey,
+  // chase, 844x390: CORNERS puts the gearbox at 791..897 past the 844 edge and ENERGY /
+  // TYRES over the steer buttons; BIG puts the tower under the CHASE button and the gearbox
+  // over SPEED / ERS). Bryce, 2026-10-21: hide them on touch rather than design phone twins.
+  const TOUCH_UNFIT = Object.freeze({ big: 1, corners: 1 });
+  const presetFits = (pid) => !(touch() && TOUCH_UNFIT[pid]);
   const PRESETS = Object.freeze([
     ["shipped", "SHIPPED", {}],
     ["clean", "CLEAN", { tower: { s: 85 }, map: { s: 85 }, gaps: { s: 90 }, sectors: { s: 90 },
@@ -980,6 +986,7 @@ const HudLayout = (function () {
   function applyPreset(pid, setName, pn) {
     const sn = setArg(setName), p = profArg(pn);
     if (pid === "shipped") { resetSet(sn, p); return true; }
+    if (!presetFits(pid)) return false;
     const lay = presetLayout(pid, sn, p);
     if (!lay) return false;
     const st = stored();
@@ -1265,7 +1272,10 @@ const HudLayout = (function () {
     resetAll.addEventListener("click", () => { resetSet(editing, editingProf); paintAll(); peek(true, 900); });
     body.appendChild(el("div", { className: "opt-row" }, [resetOne, resetAll]));
 
-    function paintPreset() { const p = presetOf(editing, editingProf); if (presetPick.value !== p) presetPick.value = p; }
+    function paintPreset() {
+      for (const pid in TOUCH_UNFIT) SettingRow.optionDisabled("pm-hl-preset", pid, !presetFits(pid));
+      const p = presetOf(editing, editingProf); if (presetPick.value !== p) presetPick.value = p;
+    }
     // The picker says which elements the current mode does not draw; a HARD
     // reason greys the sliders (they would move nothing), a soft one only notes it.
     function paintHidden() {
@@ -1320,7 +1330,7 @@ const HudLayout = (function () {
   }
 
   return {
-    KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS,
+    KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
     PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
