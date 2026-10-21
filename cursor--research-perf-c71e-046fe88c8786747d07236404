@@ -1,1 +1,0 @@
-1792560732	Bryce Murrin	Research c71e draft3421: js/perf/spans.js, three-inspector.js, audio/car-sfx.js + corresponding tests. Also isolated tests/unit/validation-cli.test.mjs fixture child reaping gate bug, no timeout/assertion weakening; no production CI tool edits. Parent-only browser. No merge/deploy.  [cursor/research-perf-c71e; session 046fe88c8786747d07236404]
