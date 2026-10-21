@@ -45,7 +45,7 @@ const R = (left, top, w, h) => ({ left, top, right: left + w, bottom: top + h, w
  *  columns. Top-band pieces are painted at `z`; `cssZoom: false` models a browser
  *  without Element.currentCSSZoom (iOS Safari before 26.4), which still paints
  *  CSS zoom into getBoundingClientRect. */
-function boot({ W = 844, H = 390, scale = 1, cssZoom = true, camInRow = true } = {}) {
+function boot({ W = 844, H = 390, scale = 1, cssZoom = true, camInRow = true, clock = null, ro = null } = {}) {
   const INTRINSIC = { map: 110, top: 300, sectors: 140, gaps: 84 };
   const dom = makeDom();
   const rawCreate = dom.document.createElement;
@@ -65,13 +65,14 @@ function boot({ W = 844, H = 390, scale = 1, cssZoom = true, camInRow = true } =
     GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
     TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
     setTimeout: () => 1, clearTimeout: () => {},
-    performance: { now: () => 1000 },
+    performance: { now: () => (clock ? clock.t : 1000) },
     matchMedia: () => ({ matches: false, addListener() {}, removeListener() {} }),
     getComputedStyle: () => ({
       getPropertyValue: (k) => TOKENS[k] || "",
       columnGap: "0px", rowGap: "0px", transform: "none",
     }),
   };
+  if (ro) sb.ResizeObserver = ro;
   sb.window = sb;
   // Old Safari is a real DOM whose Element.prototype lacks currentCSSZoom; the
   // other harnesses here (and mini-dom suites) define no Element at all.
@@ -168,7 +169,7 @@ function boot({ W = 844, H = 390, scale = 1, cssZoom = true, camInRow = true } =
   for (let i = 0; i < 3; i++) hud.updateHud(true);
 
   return {
-    root, announce, strat, docksLit, pub, paintAt, G, els, gaps, hud,
+    root, announce, strat, docksLit, pub, paintAt, G, els, gaps, hud, dom,
     lane: () => ({
       x: root.style.getPropertyValue("--announce-lane-x"),
       w: root.style.getPropertyValue("--announce-lane-w"),
@@ -198,6 +199,35 @@ test("pin: the gap plate's empty flag follows its two lines (no root :has(), B·
   h.G.cars.pop(); h.G.ranked.pop();
   h.hud.updateHud(true);
   assert.ok(empty(), "both lines empty again -> data-empty returns");
+});
+
+test("pin: the 3 s same-key backstop re-fits only after a fitted box resized (B·H11)", () => {
+  // A fake ResizeObserver: the test delivers size entries by hand.
+  const obs = [];
+  class RO { constructor(cb) { this.cb = cb; this.els = []; obs.push(this); } observe(el) { this.els.push(el); } }
+  const deliver = (size, pick = () => true) => { for (const o of obs) o.cb(o.els.filter(pick).map((el) => ({ target: el, contentRect: { width: size(el), height: 10 } }))); };
+  const clock = { t: 1000 };
+  const h = boot({ clock, ro: RO });
+  // A full fit is the one place that re-reads [data-hl]: count those queries.
+  // (mini-dom has no child combinator: answer the observer's selector with real HUD boxes)
+  const doc = h.dom.document, qsa = doc.querySelectorAll.bind(doc);
+  const boxes = [h.gaps, h.strat, h.announce, h.els.minimap, h.els.hudSectors];
+  let fits = 0;
+  doc.querySelectorAll = (sel) => { if (sel === "[data-hl]") fits++; return /#hud > \*/.test(sel) ? boxes : qsa(sel); };
+  h.refit();                                           // one full fit through the wrapper starts the watch
+  assert.ok(obs.length === 1 && obs[0].els.length === boxes.length, "the fit observes its boxes");
+  fits = 0;
+  clock.t += 1000;
+  deliver(() => 50);                                   // first sizes: the baseline, not a change
+  const ticks = (n) => { for (let i = 0; i < n; i++) { clock.t += 100; h.hud.updateHud(false, 100); } };
+  ticks(35);
+  assert.equal(fits, 0, "nothing resized: the 3 s backstop does not re-fit");
+  deliver(() => 60, (el) => el === obs[0].els[0]);     // one fitted box grew
+  ticks(35);
+  assert.equal(fits, 1, "a resized box re-fits at the next backstop");
+  fits = 0;
+  ticks(30 * 11);
+  assert.equal(fits, 1, "and every tenth backstop re-fits regardless (~30 s)");
 });
 
 test("pin: a HIDDEN readout never bounds the radio lane (visible-element-only obstacles)", () => {
