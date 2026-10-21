@@ -12569,7 +12569,8 @@
         "tests/unit/puddles.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/track-graph.test.mjs",
-        "tests/unit/vertex-pack.test.mjs"
+        "tests/unit/vertex-pack.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-post.js": {

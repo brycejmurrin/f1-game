@@ -1455,11 +1455,17 @@ test("WGX R8 perf changes hold (SSR depth stride, pooled merge-run, lamp-mask ca
   assert.match(WGX_SOURCE, /DOCTRINE \(F7, deferred\)/);
 });
 
-test("WGX ground mist matches GLX band/strength", () => {
+test("WGX ground mist matches GLX band/strength", async () => {
   // lit.js: exp(-lowH * (0.09 / mh)), no *0.5, clamp 0.45 — not exp(-lowH/(mh*20)).
   assert.match(CHUNKS_SOURCE, /exp\(-lowH \* \(0\.09 \/ mh\)\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /mh \* 20\.0/);
-  assert.match(CHUNKS_SOURCE, /clamp\(mistAmt, 0\.0, 0\.45\)/);
+  // Heavy-mist fill (fog weather, 2026-10-21): the 0.45 ceiling lifts by 0.2 x the
+  // same smoothstep(1.1, 1.5) gate GLX uses, so light mist keeps exactly 0.45.
+  assert.match(CHUNKS_SOURCE, /clamp\(mistAmt, 0\.0, 0\.45 \+ 0\.2 \* mistFill\)/);
+  assert.match(CHUNKS_SOURCE, /let mistFill = smoothstep\(1\.1, 1\.5, mistK\);/);
+  const glx = await readFile(new URL("js/render/glx/shaders/glsl-lit.js", ROOT), "utf8");
+  assert.match(glx, /float mistFill = smoothstep\(1\.1, 1\.5, uGroundMist\);/);
+  assert.match(glx, /clamp\(mist, 0\.0, 0\.45 \+ 0\.2 \* mistFill\)/);
 });
 
 
