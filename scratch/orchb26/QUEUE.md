@@ -164,3 +164,5 @@ OPEN follow-up: image-grade pass-on-retry cause unestablished → gpu-census mac
 11:42Z: INCIDENT 3: Pages RED 141be4bb HARD: photo-studio-conditions lighting + menu-traversal pause/DISPLAY timeout, from #3402 train (suspect layers.js anyOpen gateMemo). O-G fix-forward or targeted revert. Live stays 9ab83802.
 11:50Z: OrchB 26 near 200k context → SUCCESSOR-BRIEF.md written; asking Bryce to approve OrchB 27.
 12:21Z: #3395 READY 47a7a5d7 (H25). #3435 READY, full tier running.
+
+12:58Z: #3395 → 12ff726a and #3435 (fix) merged by Bryce. Watch Pages on tip 5bffc901: green → post `INCIDENT lifted` line → #3431 (last game PR). OrchB 26 at context cap → handoff.
