@@ -593,3 +593,22 @@ test("editor greys REPEATS / LINE WEIGHT / KEYLINE per layout", () => {
     assert.equal(key.disabled, keyline, label + " KEYLINE");
   }
 });
+
+// One resolved object per live draft (B·H13): setup-sheet replaces livDraftOverride on every effective
+// edit, so the resolver keys on its identity and identity memos downstream (CarWheels.tints) can hit.
+test("a live draft resolves to the same object until the draft is replaced", () => {
+  const { ctx } = load({ arrToHex: () => "#000000", hexToArr: () => [0, 0, 0] });
+  vm.runInContext(source("js/car/liveries.js") + source("js/car/custom-liveries.js"), ctx);
+  const r = vm.runInContext(`(() => {
+    const L = CustomLiveries.create({ store: { get: () => null, rev: 1 } }), team = { id: "ferrari", color: [1, 0, 0], color2: [1, 1, 1] };
+    L.livDraftOverride = { teamId: "ferrari", liv: { id: "d", c1: [0, 0, 1], c2: [1, 1, 1] } };
+    const a = L.resolveLivery(team), b = L.resolveLivery(team);
+    L.livDraftOverride = { teamId: "ferrari", liv: { id: "d", c1: [0, 1, 0], c2: [1, 1, 1] } };
+    const c = L.resolveLivery(team);
+    return { same: a === b, changed: a !== c, c1: c.c1.join(",") };
+  })()`, ctx);
+  assert.equal(r.same, true, "same draft object: same resolved livery");
+  assert.equal(r.changed, true, "a replaced draft resolves afresh");
+  assert.equal(r.c1, "0,1,0");
+});
+

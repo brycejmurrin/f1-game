@@ -23,6 +23,7 @@
 //
 //   # One screen
 //   node tools/ui/layout-audit.mjs --screen=settings
+//   node tools/ui/layout-audit.mjs --screen=settings --lang=en-XA
 //   node tools/ui/layout-audit.mjs --screen=garage --viewport=ios-iphone-portrait
 //
 //   # Title-path recipe (six screens @ play-shape landscape + shots)
@@ -52,6 +53,7 @@ import {
   runMenuShot,
   reportMenuGallery,
   printMenuCatalog,
+  urlWithLang,
 } from "./menu-capture.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -73,6 +75,7 @@ function printHelp() {
   --shots / --dom                add PNG / structured DOM to geometry cells
   --screens=a,b / --viewports=   filter cells (wildcards: ios-*)
   --scale=100,130 / --circuits=  UI-scale and map-circuit axes
+  --lang=TAG                     I18n query (?lang=); en-XA = pseudo-locale stress
   --json                         print this run's rows as one JSON object on stdout
   --jobs=N                       parallel viewports (default 3 geometry / 2 gallery)
 
@@ -123,6 +126,7 @@ function parseArgv(argv) {
     viewport: arg("--viewport=") || "ios-iphone-landscape",
     scales: parseScales(argv),
     circuits: parseCircuits(argv),
+    lang: arg("--lang=") || null,
     outDir: arg("--out=")
       ? path.resolve(ROOT, arg("--out="))
       : (gallery || screen || has("--report") ? GALLERY_OUT : GEOM_OUT),
@@ -626,6 +630,7 @@ if (opts.screen) {
     scale: opts.scales[0],
     outDir: opts.outDir,
     force: opts.force,
+    lang: opts.lang,
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(result.ok ? 0 : 1);
@@ -639,6 +644,7 @@ if (opts.gallery) {
     jobs: opts.jobs,
     force: opts.force,
     outDir: opts.outDir,
+    lang: opts.lang,
   });
   console.log(`\n${result.rows.length} cells -> ${path.relative(ROOT, result.outDir)}/ (${result.skipped} skipped)`);
   process.exit(result.ok ? 0 : 1);
@@ -661,6 +667,7 @@ if (wantDom) fs.mkdirSync(DOM_DIR, { recursive: true });
 
 const server = await startStaticServer(ROOT);
 const base = server.url;
+const bootUrl = urlWithLang(base, opts.lang);
 
 const browser = await launchChromium({
   args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
@@ -714,11 +721,19 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     // competing against each other on a 4-core SwiftShader box: the failure is a
     // measurement of the machine, not of the page. docs/LAYOUT-AUDIT.md already
     // records the same trap costing 98 cells once before.
-    await page.goto(base, { waitUntil: "domcontentloaded", timeout: 90000 });
+    await page.goto(bootUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 60000 });
     // Stop the render loop first: the 3D scene starves the compositor, which
     // makes every later wait and every screenshot an order slower.
     await page.evaluate(() => window.__apex.headless(true));
+    if (opts.lang) {
+      const wantLang = opts.lang;
+      await page.waitForFunction(
+        (expected) => window.I18n && window.I18n.lang() === expected,
+        wantLang,
+        { polling: 100, timeout: 15000 },
+      ).catch(() => {});
+    }
     // Persisted to localStorage, so it survives the reload recovery below.
     await applyScale(page, scale);
     // A cell that cannot be reached should cost seconds, not the 30s default —
@@ -781,7 +796,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
         return !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
       });
       if (!titleUsable) {
-        await page.goto(base, { waitUntil: "domcontentloaded" });
+        await page.goto(bootUrl, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60000 });
         await page.evaluate(() => window.__apex.headless(true));
         await page.waitForTimeout(300);
@@ -901,6 +916,7 @@ const merged = [...prior.filter((p) => !rows.some((r) => key(r) === key(p))), ..
   .sort((a, b) => { const [as, av] = rank(a), [bs, bv] = rank(b); return as - bs || av - bv; });
 fs.writeFileSync(path.join(OUT, "audit.json"), JSON.stringify({
   when: null, build: JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf8")).build,
+  lang: opts.lang || null,
   viewports: viewports.flatMap(([n, , w]) => SCALES.map((s) => ({ name: n + scaleTag(s), why: w }))),
   screens: screens.map((s) => ({ id: s.id, name: s.name })),
   rows: merged,

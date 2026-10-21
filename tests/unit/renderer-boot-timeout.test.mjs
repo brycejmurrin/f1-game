@@ -257,3 +257,17 @@ test("an explicit WEBGL2 pick records no fallback, and a later bind clears an ol
   await b.rb.start();
   assert.equal(b.ss.get(WHY), undefined, "a bound pick clears the previous boot's reason");
 });
+
+test("the boot probe's adapter rides to Gfx.create, so TLX need not ask the GPU process again", async () => {
+  const adapter = { tag: "probe" };
+  let asked = 0, seen;
+  const h = boot({ stored: null, requestAdapter: async () => { asked++; return adapter; }, gfxCreate: async (_c, opts) => { seen = opts; return { api: "three" }; } });
+  await h.rb.start();
+  assert.equal(asked, 1, "the unset default probes once");
+  assert.equal(seen && seen.adapter, adapter, "Gfx.create got the probe's adapter");
+  // An explicit pick skips the probe: no stale adapter rides along, TLX asks itself.
+  let seen2;
+  const pick = boot({ stored: "three", requestAdapter: async () => adapter, gfxCreate: async (_c, opts) => { seen2 = opts; return { api: "three" }; } });
+  await pick.rb.start();
+  assert.equal(seen2 && seen2.adapter, null, "an explicit pick hands no adapter");
+});

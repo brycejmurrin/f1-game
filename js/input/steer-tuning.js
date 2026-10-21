@@ -334,7 +334,10 @@ function clearPresetFor(key) { if (Object.prototype.hasOwnProperty.call(PRESET_S
 function matchPreset() {
   for (const name of ["rookie", "relax", "standard", "pro"]) {
     const p = PRESETS[name];
-    if (Object.keys(PRESET_STORE).every((k) => store.get(k, p[k]) === p[k])) return name;
+    // An UNSET key is its effective value (applySteerTuning's fallback = PRESETS.standard), never
+    // the candidate's own: on a fresh install FEEL › SIM matched PRO on four keys and lit the
+    // PRO chip over STANDARD assists (B·H11 hunt).
+    if (Object.keys(PRESET_STORE).every((k) => store.get(k, PRESETS.standard[k]) === p[k])) return name;
   }
   return null;
 }

@@ -2244,6 +2244,9 @@
       "decalTextureFor": [
         "tests/unit/livery-tier.test.mjs"
       ],
+      "drainDeferredCarWarm": [
+        "tests/unit/car-presentation-vm.test.mjs"
+      ],
       "drawCarDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -2701,6 +2704,7 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "resolveLivery": [
+        "tests/unit/livery-design.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "saveLiveryId": [
@@ -7468,6 +7472,7 @@
         "tests/unit/input-bindings.test.mjs"
       ],
       "*": [
+        "tests/unit/a11y-opts.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
@@ -9145,6 +9150,14 @@
       "*": [
         "tests/specs/image-grade-visual.spec.js",
         "tests/unit/global-registry.test.mjs"
+      ]
+    },
+    "js/perf/gpu-test-run.js": {
+      "fillSlope": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
+      "phaseStats": [
+        "tests/unit/gpu-test-run.test.mjs"
       ]
     },
     "js/perf/loop-health.js": {
@@ -14434,6 +14447,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
