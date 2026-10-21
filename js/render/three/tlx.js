@@ -1947,7 +1947,7 @@ const TLX = (function () {
       // the one the full mesh drew. The mirror passes its own radial cap. One use per batch: a second record of the
       // same road in one pass draws whole rather than overwrite the slots' ranges before render().
       const SPLIT_TRIS = 1024, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
-      // apex26.tlxRoadSplit=0 pins the whole-lap draw for a reload A/B; __tlx.roadSplit(on) flips it live.
+      // apex26.tlxRoadSplit=0 pins the whole-lap draw; __tlx.roadSplit(on) flips it live and writes the pin.
       let _roadSplitOn = (function () { try { return localStorage.getItem("apex26.tlxRoadSplit") !== "0"; } catch (_) { return true; } })();
       function _drawSplit(rec, i, vp, eye, cd, fog) {
         const sp = rec.split;
@@ -6135,7 +6135,13 @@ const TLX = (function () {
           chunkState() {
             return { on: !!chunkedSys, total: _chunkLast.total, visible: _chunkLast.visible };
           },
-          roadSplit(on) { if (on !== undefined) _roadSplitOn = !!on; return _roadSplitOn; },
+          roadSplit(on) {   // persists: a reload keeps the A/B arm (apex26.tlxRoadSplit)
+            if (on !== undefined) {
+              _roadSplitOn = !!on;
+              try { if (_roadSplitOn) localStorage.removeItem("apex26.tlxRoadSplit"); else localStorage.setItem("apex26.tlxRoadSplit", "0"); } catch (_) { /* no storage: session only */ }
+            }
+            return _roadSplitOn;
+          },
           // Where the retained CPU bytes actually ARE, per attribute NAME and
           // per geometry kind. Deduped on the underlying ArrayBuffer, because a
           // chunked mesh shares ONE position/normal/colour/mat set across all
