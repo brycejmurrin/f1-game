@@ -1210,11 +1210,13 @@ fn ssrDepth(uv : vec2<f32>) -> f32 {
   let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
   return textureLoad(depthTex, px, 0);
 }
-fn ssrViewPos(uv : vec2<f32>) -> vec3<f32> {
-  let d = ssrDepth(uv);
+fn ssrViewPosAtDepth(uv : vec2<f32>, d : f32) -> vec3<f32> {
   let ndc = vec3<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d);
   let v = U.invProj * vec4<f32>(ndc, 1.0);
   return v.xyz / v.w;
+}
+fn ssrViewPos(uv : vec2<f32>) -> vec3<f32> {
+  return ssrViewPosAtDepth(uv, ssrDepth(uv));
 }
 
 // Project a view-space point to a texture-space uv (y-down).
@@ -1232,18 +1234,24 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let carReflect = U.upVS.w;
   let yCut       = U.reflSkyLo.w;   // upper-screen sky cutoff (GLX 0.62)
 
-  let dC = ssrDepth(in.uv);
-  // Cheap early-outs: sky (far plane), upper screen, both paths off.
+  // Reject the upper screen and disabled paths before any texture read.
   // yCut is GLX's uSsrTopUV in GL's y-UP uv space (keep vUV.y < 0.62 = the
   // bottom 62%); our uv is y-DOWN, so test the flipped 1 - in.uv.y against it.
-  if (dC >= 0.9999 || (1.0 - in.uv.y) >= yCut || (strength <= 0.0 && carReflect <= 0.0)) {
+  if ((1.0 - in.uv.y) >= yCut || (strength <= 0.0 && carReflect <= 0.0)) {
     return vec4<f32>(0.0, 0.0, 0.0, 0.0);
   }
+  let dC = ssrDepth(in.uv);
+  if (dC >= 0.9999) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
 
-  let scnA = textureSampleLevel(sceneTex, sceneSamp, in.uv, 0.0).a;
-  let carPx = 1.0 - smoothstep(0.42, 0.55, scnA);
+  // LOW/MEDIUM road-only SSR has no use for the car tag. Below the car
+  // contribution gate carTerm cannot win or make ssrGate pass its threshold.
+  var carPx = 0.0;
+  if (carReflect > 0.001) {
+    let scnA = textureSampleLevel(sceneTex, sceneSamp, in.uv, 0.0).a;
+    carPx = 1.0 - smoothstep(0.42, 0.55, scnA);
+  }
 
-  let P = ssrViewPos(in.uv);
+  let P = ssrViewPosAtDepth(in.uv, dC);
   // View-space normal from depth finite differences (cheap; the road mask +
   // thickness test reject the noisy silhouette cases). No dpdx/dpdy so this is
   // safe below the early returns above.
@@ -1286,12 +1294,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let roadFadeStart = select(-22.0, select(-18.0, -12.0, roadQuality > 1.5), roadQuality > 0.5);
   let roadFadeEnd = select(-78.0, select(-60.0, -42.0, roadQuality > 1.5), roadQuality > 0.5);
   let roadMask = smoothstep(0.25, 0.55, upDot)
-               * smoothstep(ssrNear, ssrNear * 2.8, P.z)
-               * (1.0 - smoothstep(roadFadeStart, roadFadeEnd, P.z));
+               * (1.0 - smoothstep(ssrNear * 2.8, ssrNear, P.z))
+               * smoothstep(roadFadeEnd, roadFadeStart, P.z);
   // Car bodywork: up-facing-ish panels, nearer than the road (chase sits ~5–8 m back).
   var carMask = carPx * smoothstep(0.30, 0.65, upDot)
-              * smoothstep(-1.0, -3.0, P.z)
-              * (1.0 - smoothstep(-22.0, -55.0, P.z));
+              * (1.0 - smoothstep(-3.0, -1.0, P.z))
+              * smoothstep(-55.0, -22.0, P.z);
   let edgeGrad = (length(dpx) + length(dpy)) * (1.0 / 3.0);
   carMask = carMask * (1.0 - smoothstep(0.35, 0.9, edgeGrad));
   let roadTerm = roadMask * strength;
@@ -1332,7 +1340,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     if (i >= marchSteps) { break; }
     prevPos = pos;
     pos = pos + R * stepLen;
-    if (roadLow) { stepLen = stepLen * 1.4; }
+    if (roadLow) { stepLen = stepLen * 1.5; }
     else if (roadReduced) { stepLen = stepLen * 1.22; }
     else { stepLen = stepLen * 1.16; }
     let sp = ssrProjUV(pos);

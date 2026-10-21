@@ -711,6 +711,40 @@ test("wet-road reflections survive every user tier while overload and dry sheddi
   assert.equal(opts.reflect, 0.08, "a damp road receives the reduced budget");
 });
 
+test("LOW wet-road reflection switches off and back on when a real governor cut is rolled back", (t) => {
+  const gov = makeGovAtFloor();
+  gov.setUserTier(4);
+  const common = eval(fs.readFileSync(path.join(ROOT, "js/render/shared/post-common.js"), "utf8") + ";PostCommon");
+  const opts = {}, transitions = [];
+  let elapsedMs = 0;
+  const capture = (frame) => {
+    common.roadReflection(opts, 0.9, 0.9, gov.tier(), gov.autoTier());
+    if (!transitions.length || transitions.at(-1).autoTier !== gov.autoTier()) {
+      transitions.push({ frame, elapsedMs: Math.round(elapsedMs), tier: gov.tier(),
+        autoTier: gov.autoTier(), autoShed: gov.autoShed(), reflect: opts.reflect,
+        ssrQuality: opts.ssrQuality });
+    }
+  };
+  capture(0);
+  // A capped 30 Hz clock cannot improve when effects are shed. The genuine
+  // tick/EMA/verify path must try the LOW cut, see no gain, then roll it back.
+  // No private state setter forces either transition; dt drives the fake clock.
+  for (let frame = 1; frame <= 600 && transitions.length < 3; frame++) {
+    elapsedMs += 33.3;
+    gov.tick(33.3);
+    capture(frame);
+  }
+  t.diagnostic("LOW wet-road governor transitions: " + JSON.stringify(transitions));
+  assert.deepEqual(transitions.map(s => s.autoTier), [0, 4, 0],
+    "a measured LOW cut must actually be attempted and causally rolled back");
+  assert.deepEqual(transitions.map(s => s.autoShed), [0, 1, 0]);
+  assert.deepEqual(transitions.map(s => s.tier), [4, 4, 4], "the user never changes graphics quality");
+  assert.deepEqual(transitions.map(s => s.ssrQuality), [2, 2, 2], "the LOW march budget stays selected");
+  assert.deepEqual(transitions.map(s => s.reflect), [0.9, 0, 0.9],
+    "current policy abruptly removes and restores SSR at fixed wetness and quality");
+  assert.ok(transitions[2].elapsedMs > transitions[1].elapsedMs, "rollback follows a real verification window");
+});
+
 test("tier 2 sheds car-paint SSR independently of the wet-road quality policy", () => {
   // po.reflect = 0 is ALSO a dry session, so pairing uCarReflect to it would
   // kill car-paint SSR on every dry lap. The governor must pass a separate
@@ -719,7 +753,7 @@ test("tier 2 sheds car-paint SSR independently of the wet-road quality policy", 
   const post = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
-  assert.match(game, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\)\)/);
+  assert.match(game, /PostCommon\.roadReflection\(po, frame\.wetness \|\| 0, _ssrPo, PerfGov\.tier\(\), PerfGov\.autoTier\(\),\s*_roadReflectionTransition,/);
   assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/);
   assert.match(post, /opts && opts\.carReflect != null \? opts\.carReflect/);
   assert.match(tlx, /o\.carReflect != null \? o\.carReflect/);

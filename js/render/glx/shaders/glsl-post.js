@@ -813,6 +813,9 @@ void main() {
   if (uSsrOk > 0.5 && (uReflect > 0.001 || (carPx > 0.3 && uCarReflect > 0.001))
       && vUV.y < uSsrTopUV && texture(uDepth, vUV).r < 0.9999) {
     vec3 P = ssrViewPos(vUV);
+    vec2 roadFar = uSsrQuality > 1.5 ? vec2(-12.0, -42.0) : (uSsrQuality > 0.5 ? vec2(-18.0, -60.0) : vec2(-22.0, -78.0));
+    // Both masks below are zero outside these ranges: skip their normal depth taps.
+    if ((uReflect > 0.001 && P.z > roadFar.y) || (uCarReflect > 0.001 && P.z > -55.0)) {
     // View-space normal from depth derivatives (cheap; rough at silhouettes, but
     // the road-mask + march thickness test reject the bad cases).
     // 3-TEXEL baseline, not 1: at phone resolution (~2500 px wide, DPR 2-3) one
@@ -886,15 +889,14 @@ void main() {
     // edge (already scraped by banked corners per LIGHTING-KNOBS) meant a noisy
     // grazing-angle normal could drop genuine road below threshold — the other
     // half of the patchy/dropout mask failure at phone resolution.
-    vec2 roadFar = uSsrQuality > 1.5 ? vec2(-12.0, -42.0) : (uSsrQuality > 0.5 ? vec2(-18.0, -60.0) : vec2(-22.0, -78.0));
     float roadMask = smoothstep(0.25, 0.55, upDot)
-                   * smoothstep(uSsrNear, uSsrNear * 2.8, P.z)
-                   * (1.0 - smoothstep(roadFar.x, roadFar.y, P.z));
+                   * (1.0 - smoothstep(uSsrNear * 2.8, uSsrNear, P.z))
+                   * smoothstep(roadFar.y, roadFar.x, P.z);
     // Car bodywork: up-facing-ish panels, allowed much nearer than the road
     // (the chase camera sits ~5-8 m behind the car).
     float carMask = carPx * smoothstep(0.30, 0.65, upDot)
-                  * smoothstep(-1.0, -3.0, P.z)
-                  * (1.0 - smoothstep(-22.0, -55.0, P.z));
+                  * (1.0 - smoothstep(-3.0, -1.0, P.z))
+                  * smoothstep(-55.0, -22.0, P.z);
     // Reject the noisy car silhouette rim: dpx/dpy (already computed above for Nv)
     // spike at edge pixels, which is exactly where the cheap upDot normal is worst.
     // ÷3 compensates the 3-texel derivative baseline so the rejection threshold
@@ -909,7 +911,7 @@ void main() {
       float ssrQ = carDom ? 0.0 : uSsrQuality;
       int marchSteps = ssrQ > 1.5 ? 8 : (ssrQ > 0.5 ? 16 : 24);
       int refineSteps = ssrQ > 1.5 ? 1 : (ssrQ > 0.5 ? 2 : 4);
-      float stepGrowth = ssrQ > 1.5 ? 1.4 : (ssrQ > 0.5 ? 1.22 : 1.16);
+      float stepGrowth = ssrQ > 1.5 ? 1.5 : (ssrQ > 0.5 ? 1.22 : 1.16);
       vec3 V = normalize(-P);
       // The ROAD reflects off a near-FLAT plane, not its bumpy per-pixel normal.
       // Nv is reconstructed from depth derivatives, so it picks up the road's
@@ -1135,6 +1137,7 @@ void main() {
                              : c * 0.10 + reflCol * 0.92;
       c = mix(c, mirrored, mixAmt);
     }
+    } // receiver range
   }
 
   // Exposure multiply before tone-mapping (default 1.0 = no change).

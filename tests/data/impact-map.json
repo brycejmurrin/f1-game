@@ -4527,6 +4527,7 @@
         "tests/unit/xr-phase0.test.mjs"
       ],
       "invertTo": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
       "lerp": [
@@ -4540,6 +4541,7 @@
         "tests/unit/shared-math.test.mjs"
       ],
       "mulTo": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/shared-math.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
@@ -4553,6 +4555,7 @@
         "tests/unit/shared-math.test.mjs"
       ],
       "perspectiveTo": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/shared-math.test.mjs"
@@ -6668,6 +6671,7 @@
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
@@ -9116,6 +9120,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
+        "tests/unit/road-reflection-transition.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "recordSimulation": [
@@ -9139,6 +9144,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
+        "tests/unit/road-reflection-transition.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "*": [
@@ -12856,7 +12862,8 @@
         "tests/unit/godray-keep-nearest.test.mjs"
       ],
       "roadReflection": [
-        "tests/unit/perf-governor.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/road-reflection-transition.test.mjs"
       ],
       "*": [
         "tests/unit/renderer-soft-lifecycle.test.mjs",
