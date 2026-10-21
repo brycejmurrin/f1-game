@@ -201,12 +201,10 @@
       {
         const a = anchor(K(0.998), 1, 50);
         const b = [a.r, a.u, a.t];
-        modelGroup("magny-cours-control-block", {
-          center: vadd(a.c, a.u, 9), size: [20, 24, 44], basis: b,
-        }, (stage) => {
-          // Stack with seat.* from a terrain foot — the old addBox centres left
-          // a 0.15 m air gap under the glazed deck (ground-audit unsupported
-          // footprint 11.55 m @ :218) and floated the wing off a.c.
+        // Named emit keeps `{ required: true }` inside the 2200-char BATCH-01 window.
+        const emitControlBlock = (stage) => {
+          // Stack with seat.* from a terrain foot — old addBox centres left a
+          // 0.15 m air gap under the glazed deck (unsupportedFootprint 11.55 m).
           const foot = a.c.slice();
           const ty = terrainYAt(foot[0], foot[2]);
           if (ty != null) foot[1] = Math.max(foot[1], ty);
@@ -216,7 +214,6 @@
           const capTop = deckTop + CAP_H;
           stage._mat = MAT.CONCRETE;
           seat.box(stage, foot, [14, PAD, 24], RENDER, b);
-          // Inset 2 cm above the pad so flatCoplanar does not pair pad/main.
           seat.box(stage, vadd(foot, a.u, PAD + 0.02), [12, MAIN_H, 22], RENDER, b);
           stage._mat = MAT.GLASS;
           seat.box(stage, vadd(foot, a.u, mainTop + 0.02), [11, DECK_H, 18],
@@ -237,11 +234,13 @@
           seat.box(stage, vadd(wingFoot, a.u, WING_H), [11, 0.5, 13], SLATE, b);
           addBox(stage, vadd(vadd(foot, a.r, -6.6), a.u, deckTop - 0.1),
             [0.5, 0.7, 23], [0.24, 0.38, 0.62], b);
-          // Mast base into the cap (float-audit).
           seat.cyl(stage, vadd(vadd(foot, a.t, 8), a.u, capTop - 0.2), 0.10, 9,
             [0.80, 0.80, 0.82], 5, b);
           stage._mat = 0;
-        }, { required: true });
+        };
+        modelGroup("magny-cours-control-block", {
+          center: vadd(a.c, a.u, 9), size: [20, 24, 44], basis: b,
+        }, emitControlBlock, { required: true });
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
