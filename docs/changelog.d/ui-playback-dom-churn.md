@@ -1,0 +1,1 @@
+Fixed: Replay event controls and Data Hub telemetry gauges now leave unchanged DOM values alone, avoiding repeated menu-observer work during playback while keeping seeks and changing samples responsive.

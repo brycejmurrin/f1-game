@@ -86,7 +86,7 @@ const AppearanceStudio = (function () {
     if (ui) { if (["static", "photo"].includes(value.mode)) ui.preview.style.removeProperty("--studio-scene-image"); invoke("previewScene", value, ui.preview); }
   }
   function onSceneChange(fn) { if (typeof fn !== "function") return () => {}; sceneListeners.push(fn); return () => { const i = sceneListeners.indexOf(fn); if (i >= 0) sceneListeners.splice(i, 1); }; }
-  function remember(before) { if (JSON.stringify(before) === JSON.stringify(snapshot())) return; undoStack.push(clone(before)); if (undoStack.length > 30) undoStack.shift(); activePreset = ""; last = snapshot(); render(); }
+  function remember(before) { if (JSON.stringify(before) === JSON.stringify(snapshot())) return false; undoStack.push(clone(before)); if (undoStack.length > 30) undoStack.shift(); activePreset = ""; last = snapshot(); return true; }
   function refreshOwners(values) {
     if (typeof AppearanceOpts !== "undefined" && AppearanceOpts.restore) AppearanceOpts.restore(values);
     if (typeof TitleFx !== "undefined") { TitleFx.apply(); TitleFx.wireRows(); }
@@ -113,14 +113,14 @@ const AppearanceStudio = (function () {
     }
     finally { muted = false; }
     if (options.history !== false) remember(before);
-    last = snapshot(); render();
+    last = snapshot(); if (options.render !== false) render();
     return { ok: true, durable };
   }
   function applyPreset(id, chosenScope = scope) {
     const p = PRESETS.find((v) => v.id === id); if (!p) return false;
     const current = snapshot(), next = Object.assign({}, DEFAULTS, p.values);
     for (const key of PRESET_PRESERVE) next[key] = current[key];
-    const result = applySnapshot(next, { scope: chosenScope });
+    const result = applySnapshot(next, { scope: chosenScope, render: false });
     activePreset = id; render(); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + (result.durable ? "." : " for this session; browser storage is unavailable.")); return true;
   }
   function setScene(mode, motion) {
@@ -128,8 +128,8 @@ const AppearanceStudio = (function () {
     return applySnapshot(next);
   }
   function durabilityNote(result) { return result.durable ? "." : " for this session; browser storage is unavailable."; }
-  function undo() { const previous = undoStack.pop(); if (!previous) return false; const result = applySnapshot(previous, { history: false }); activePreset = ""; say("Previous visual settings restored" + durabilityNote(result)); return true; }
-  function reset(chosenScope = scope) { const result = applySnapshot(DEFAULTS, { scope: chosenScope }); activePreset = ""; render(); say((chosenScope === "screen" ? pageLabel() : "All visual settings") + " reset" + durabilityNote(result) + " Undo restores your previous choices."); }
+  function undo() { const previous = undoStack.pop(); if (!previous) return false; activePreset = ""; const result = applySnapshot(previous, { history: false }); say("Previous visual settings restored" + durabilityNote(result)); return true; }
+  function reset(chosenScope = scope) { const result = applySnapshot(DEFAULTS, { scope: chosenScope, render: false }); activePreset = ""; render(); say((chosenScope === "screen" ? pageLabel() : "All visual settings") + " reset" + durabilityNote(result) + " Undo restores your previous choices."); }
   function normalizeProfiles(raw) {
     if (!Array.isArray(raw)) return [];
     const ids = new Set();
@@ -299,9 +299,9 @@ const AppearanceStudio = (function () {
     for (const child of [...panel.children]) if (child !== studio && child !== advanced) body.appendChild(child);
     // The adopted shell rows (data-studio-home) record undo like any other fold.
     const own = (t) => studio.contains(t) && !(t.closest && t.closest("[data-studio-home]"));
-    panel.addEventListener("input", (e) => { if (own(e.target)) return; clearTimeout(pending); pending = setTimeout(() => { remember(last); last = snapshot(); }, 350); });
-    panel.addEventListener("click", (e) => { if (own(e.target)) return; queueMicrotask(() => { remember(last); last = snapshot(); }); });
-    if (store.subscribe) store.subscribe((change) => { if (!muted && VISUAL_KEYS.includes(change.key)) { clearTimeout(pending); pending = setTimeout(() => { remember(last); last = snapshot(); render(); if (["homeScene", "homeCamera", "backgroundMotion", "motion"].includes(change.key)) sceneChanged(); }, 80); } });
+    panel.addEventListener("input", (e) => { if (own(e.target)) return; clearTimeout(pending); pending = setTimeout(() => { const changed = remember(last); last = snapshot(); if (changed) render(); }, 350); });
+    panel.addEventListener("click", (e) => { if (own(e.target)) return; queueMicrotask(() => { const changed = remember(last); last = snapshot(); if (changed) render(); }); });
+    if (store.subscribe) store.subscribe((change) => { if (!muted && VISUAL_KEYS.includes(change.key)) { clearTimeout(pending); pending = setTimeout(() => { const changed = remember(last); last = snapshot(); if (changed) render(); if (["homeScene", "homeCamera", "backgroundMotion", "motion"].includes(change.key)) sceneChanged(); }, 80); } });
     if (typeof MutationObserver !== "undefined") {
       const settings = document.getElementById("pmsettings");
       let openGen = 0;

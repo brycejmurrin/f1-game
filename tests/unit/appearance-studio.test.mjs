@@ -465,3 +465,106 @@ test("saved photo refresh ignores superseded responses and responses after Appea
   pending[2]([{ id: "closed", title: "Closed", thumb: "data:image/jpeg;base64,CCCC" }]); await photoTick();
   assert.equal(h.select.children[1].value, "new"); assert.equal(h.box.hasAttribute("aria-busy"), false);
 });
+
+// Count real Studio DOM rebuilds, while keeping timers deterministic and avoiding
+// scene rendering. The assertions also check the state those renders must show.
+function loadStudioRenderCounts() {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance");
+  panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const advanced = dom.document.createElement("input"); panel.appendChild(advanced);
+  const values = { homeScene: "static" }, subscribers = [], timers = new Map(), microtasks = [];
+  let timerId = 0;
+  const store = { get: (key, fallback) => key in values ? values[key] : fallback,
+    set(key, value) { values[key] = value; for (const fn of subscribers) fn({ key }); return true; },
+    subscribe: fn => subscribers.push(fn) };
+  const { studio } = load({}, true, false, dom.document, {
+    GameStore: { store }, setTimeout: fn => { const id = ++timerId; timers.set(id, fn); return id; },
+    clearTimeout: id => timers.delete(id), queueMicrotask: fn => microtasks.push(fn),
+  });
+  const descendants = node => [node, ...node.children.flatMap(descendants)];
+  const root = dom.byId("appearance-studio"), nodes = descendants(root);
+  const preview = nodes.find(node => node.dataset.as === "preview");
+  const profiles = nodes.find(node => node.getAttribute("aria-label") === "Saved appearance profiles");
+  const counts = { preview: 0, profiles: 0 };
+  for (const [key, node] of Object.entries({ preview, profiles })) {
+    const replace = node.replaceChildren;
+    node.replaceChildren = (...children) => { counts[key]++; return replace(...children); };
+  }
+  const flush = () => {
+    while (microtasks.length) microtasks.shift()();
+    for (const [id, fn] of timers) { timers.delete(id); fn(); }
+  };
+  function expectRenders(action, expected = 1) {
+    counts.preview = counts.profiles = 0; action(); flush();
+    assert.deepEqual(counts, { preview: expected, profiles: expected });
+  }
+  return { studio, dom, root, nodes, profiles, values, store, advanced, expectRenders };
+}
+
+test("Studio renders choices, presets, Undo, reset and profile application once with final state", () => {
+  const h = loadStudioRenderCounts(), { studio, expectRenders } = h;
+  const preset = h.nodes.find(node => node.dataset.preset === "broadcast");
+  const camera = h.nodes.find(node => node.id === "as-homeCamera").children;
+  const front = camera.find(node => node.textContent === "Front");
+  front.focus();
+  expectRenders(() => h.dom.dispatch(front, { type: "click", bubbles: true }));
+  assert.equal(studio.homeCamera(), "front");
+  assert.equal(front.getAttribute("aria-pressed"), "true");
+  assert.equal(h.dom.document.activeElement, front);
+  assert.equal(h.root.contains(front), true, "choice and focused node survive preview rendering");
+  const beforePreset = plain(studio.snapshot());
+  expectRenders(() => studio.applyPreset("broadcast"));
+  assert.equal(preset.getAttribute("aria-pressed"), "true");
+  expectRenders(() => assert.equal(studio.undo(), true));
+  assert.deepEqual(plain(studio.snapshot()), beforePreset);
+  assert.equal(preset.getAttribute("aria-pressed"), "false", "Undo paints the cleared preset immediately");
+  studio.saveProfile("Front camera");
+  expectRenders(() => studio.setHomeCamera("rear"));
+  expectRenders(() => assert.equal(studio.loadProfile("profile-1"), true));
+  assert.equal(studio.homeCamera(), "front");
+  assert.equal(h.profiles.value, "profile-1", "profile selection is set before rendering");
+  expectRenders(() => studio.reset());
+  assert.equal(studio.homeCamera(), "side");
+  assert.equal(h.profiles.value, "profile-1");
+  expectRenders(() => assert.equal(studio.undo(), true));
+  assert.equal(studio.homeCamera(), "front");
+});
+
+test("Studio renders external changes and advanced input/click history without losing updates", () => {
+  const h = loadStudioRenderCounts(), { studio, expectRenders } = h;
+  expectRenders(() => h.store.set("homeCamera", "rear"));
+  assert.equal(studio.homeCamera(), "rear");
+  // These advanced owners predate store subscriptions: exercise their event path
+  // independently so removing rendering from remember() cannot drop the update.
+  for (const [type, value] of [["input", "front"], ["click", "hero"]]) {
+    const before = plain(studio.snapshot());
+    expectRenders(() => {
+      h.values.homeCamera = value;
+      h.dom.dispatch(h.advanced, { type, bubbles: true });
+    });
+    const choices = h.nodes.find(node => node.id === "as-homeCamera").children;
+    assert.equal(choices.find(node => node.textContent.toLowerCase() === value).getAttribute("aria-pressed"), "true");
+    expectRenders(() => assert.equal(studio.undo(), true));
+    assert.deepEqual(plain(studio.snapshot()), before);
+  }
+  expectRenders(() => h.dom.dispatch(h.advanced, { type: "click", bubbles: true }), 0);
+});
+
+test("Studio coalesces an advanced click and its store notification while preserving scene events and Undo", () => {
+  const h = loadStudioRenderCounts(), { studio, expectRenders } = h;
+  const before = plain(studio.snapshot()), scenes = [];
+  studio.attach({}); // Establish the initial scene key before counting changes.
+  studio.onSceneChange(() => scenes.push(studio.homeCamera()));
+  h.advanced.addEventListener("click", () => h.store.set("homeCamera", "front"));
+  expectRenders(() => h.dom.dispatch(h.advanced, { type: "click", bubbles: true }));
+  assert.equal(studio.homeCamera(), "front");
+  assert.deepEqual(scenes, ["front"], "the delayed subscription still notifies scene owners after the click rendered");
+  const choices = h.nodes.find(node => node.id === "as-homeCamera").children;
+  assert.equal(choices.find(node => node.textContent === "Front").getAttribute("aria-pressed"), "true");
+  expectRenders(() => h.dom.dispatch(h.advanced, { type: "click", bubbles: true }), 0);
+  assert.deepEqual(scenes, ["front"], "an unchanged click neither renders nor repeats scene notification");
+  expectRenders(() => assert.equal(studio.undo(), true));
+  assert.deepEqual(plain(studio.snapshot()), before);
+  assert.deepEqual(scenes, ["front", "side"]);
+  expectRenders(() => assert.equal(studio.undo(), false), 0);
+});
