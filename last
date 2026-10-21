@@ -1,1 +1,1 @@
-READY to:B from:claude:session_017TA52LaFP3nvHQo6rfyBQ1 #3378 597d35ce ready-gate passed; fast CI green (19 jobs, run 39525040163); tooling-fast 806/806; non-game (tools/tests/docs + AGENTS.md rule 7/step 3). Bryce assigned the merge to Fleet B.
+READY to:B from:claude:session_01QjChaz6reqo8TWLTARTHA9 B·H11 READY #3379 game PR: HUD fit backstop re-fits only on a resize (11->8 full fits/30 s at x4) + touchRangePx viewport cache; ui 4/4 + input 4/4 remote green, fast tier green, ready-gate passed
