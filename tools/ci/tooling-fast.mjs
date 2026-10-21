@@ -1896,8 +1896,8 @@ function pinIndex() {
   return _pinIndex;
 }
 
-/** Which CI tooling-fast shards (1/2, 2/2) touch any of `files`. */
-export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 2) {
+/** Which CI tooling-fast shards (1/3 .. 3/3, ci.yml guards-a/b/c) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 3) {
   const want = new Set(files);
   const out = [];
   for (let i = 1; i <= shardCount; i++) {
