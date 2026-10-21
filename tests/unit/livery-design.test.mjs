@@ -470,6 +470,7 @@ test("optional colour inheritance and palette selection stay accessible through 
     palRows: [], surfaceControls: null, flushLivPreview() {} });
   const sheet = source("js/garage/setup-sheet.js");
   vm.runInContext('let paletteKey = null; const paletteColours = () => ["#ff0000", "#00ff00"];'
+    + fnSource(sheet, "function attrIf(") + ";\n" + fnSource(sheet, "function propIf(") + ";\n"
     + fnSource(sheet, "const refreshPalettes = (drag) => {")
     + ';\nfunction applyPreview(drag) { refreshPalettes(drag); }\n'
     + fnSource(sheet, "const colorRow = (label, key, allowNone) => {"), ctx);
@@ -612,3 +613,30 @@ test("a live draft resolves to the same object until the draft is replaced", () 
   assert.equal(r.c1, "0,1,0");
 });
 
+
+// B·H30 (docs/notes/LIVE-DEBUGGER-GARAGE-2026-10-21.md): a dragged colour picker runs the editor's
+// sync at the input rate. Every DOM write queues a MutationRecord even when the value is unchanged,
+// and AriaState / ScrollFade / SettingDeps observe #carsetup, so a no-op write re-walked or
+// re-measured the sheet per drag step (CPU x4, 844x390: ~22 ms per input event). A drag step that
+// changes only a colour must not write one attribute, text, title, disabled or hidden.
+test("a colour drag step writes nothing the editor already shows", async () => {
+  const { root, draft, editor, click } = editorFixture();
+  click("CONTOUR LINES");   // pattern rows, readouts and reasons all live
+  await Promise.resolve(); await Promise.resolve();
+  const writes = [];
+  const walk = (el) => { const out = [el]; for (const c of el.children) out.push(...walk(c)); return out; };
+  for (const el of walk(root)) {
+    const set = el.setAttribute, rm = el.removeAttribute;
+    el.setAttribute = (k, v) => { writes.push(k); return set(k, v); };
+    el.removeAttribute = (k) => { writes.push("-" + k); return rm(k); };
+    for (const k of ["textContent", "title", "disabled", "hidden"]) {
+      let v = el[k];
+      Object.defineProperty(el, k, { get: () => v, set: (x) => { writes.push(k + " " + (el.textContent || el.tagName)); v = x; }, configurable: true });
+    }
+  }
+  for (const hex of ["#102030", "#405060", "#708090"]) {
+    draft.c1 = hex; editor.changed(true);
+    await Promise.resolve(); await Promise.resolve();   // explain() runs a microtask later
+  }
+  assert.deepEqual(writes, [], "no DOM write on a colour-only drag step");
+});

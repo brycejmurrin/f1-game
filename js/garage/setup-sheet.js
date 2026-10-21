@@ -7,6 +7,14 @@ Log.info("ui", "SetupUI.create");
 const tuneExperiments = SetupExperiments.create(G, (team) => renderStatBars($("cs-stats-inner"), team));
 let surfaceControls = null;
 function clearSurfaceControls() { if (surfaceControls) surfaceControls.dispose(); surfaceControls = null; }
+// Write on change: the livery editor's per-input passes would otherwise queue a MutationRecord per
+// unchanged attribute or text, and each wakes the #carsetup observers (livery-design-editor.js).
+function attrIf(el, k, v) {
+  if (el.getAttribute(k) !== v) el.setAttribute(k, v);
+}
+function propIf(el, k, v) {
+  if (el[k] !== v) el[k] = v;
+}
 // Stable helpers from the game.js closure.
 const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
@@ -1062,6 +1070,7 @@ function buildLiveryCreator(container, team) {
 
   // Live swatch preview of the current draft (built from hex strings directly).
   const prev = document.createElement("span"); prev.className = "cs-liv-swatch cs-liv-ed-prev";
+  let prevStripe = null;
   wrap.appendChild(prev);
 
   // CONDITIONAL ROWS. A field that paints onto a part the draft does not have
@@ -1093,18 +1102,22 @@ function buildLiveryCreator(container, team) {
     if (typeof markAdvice === "function") markAdvice();
     for (const dep of deps) {
       const off = !dep.when();
-      if (dep.pill) { dep.pill.disabled = off; dep.pill.title = off ? dep.why : ""; continue; }
-      dep.row.setAttribute("aria-disabled", String(off));
-      dep.row.title = off ? dep.why : "";
+      if (dep.pill) { propIf(dep.pill, "disabled", off); propIf(dep.pill, "title", off ? dep.why : ""); continue; }
+      attrIf(dep.row, "aria-disabled", String(off));
+      propIf(dep.row, "title", off ? dep.why : "");
       const ctl = dep.row.querySelectorAll("button, input");
-      for (let i = 0; i < ctl.length; i++) ctl[i].disabled = off;
+      for (let i = 0; i < ctl.length; i++) propIf(ctl[i], "disabled", off);
     }
   };
   const applyPreview = (defer3d) => {
     if (designTools) designTools.changed(defer3d);
     prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
-    prev.textContent = "";
-    if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
+    // One stripe span, recoloured in place: a fresh child per input event was a childList record per drag step.
+    if (d.stripe) {
+      if (!prevStripe) { prevStripe = document.createElement("span"); prevStripe.className = "cs-liv-stripe"; }
+      prevStripe.style.background = d.stripe;
+      if (prevStripe.parentNode !== prev) prev.appendChild(prevStripe);
+    } else if (prevStripe && prevStripe.parentNode === prev) prev.removeChild(prevStripe);
     const restorePaletteFocus = refreshPalettes(defer3d);   // a slot's new colour becomes matchable from every other slot
     syncDeps();
     if (restorePaletteFocus && !restorePaletteFocus.disabled) restorePaletteFocus.focus({ preventScroll: true });
@@ -1148,7 +1161,7 @@ function buildLiveryCreator(container, team) {
     if (key === paletteKey || (drag && paletteKey !== null)) {
       for (const pr of palRows) for (const chip of pr.el.children) {
         const on = (d[pr.key] || "").toLowerCase() === chip.dataset.csColour;
-        chip.classList.toggle("active", on); chip.setAttribute("aria-pressed", String(on));
+        chip.classList.toggle("active", on); attrIf(chip, "aria-pressed", String(on));
       }
       return null;   // unchanged chips keep their handlers and keyboard focus
     }
@@ -1200,8 +1213,8 @@ function buildLiveryCreator(container, team) {
     const pal = document.createElement("span"); pal.className = "cs-liv-pal";
     const sync = () => {
       const inherited = allowNone && !d[key];
-      inp.setAttribute("aria-description", inherited ? "Inherited colour" : "Custom colour " + inp.value);
-      if (off) off.setAttribute("aria-pressed", String(inherited));
+      attrIf(inp, "aria-description", inherited ? "Inherited colour" : "Custom colour " + inp.value);
+      if (off) attrIf(off, "aria-pressed", String(inherited));
     };
     sync();
     palRows.push({ el: pal, key, label, sync,
@@ -1283,17 +1296,17 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(markNote);
   const markAdvice = () => {
     const LTn = typeof LiveryTex !== "undefined" ? LiveryTex : null;
-    if (!LTn || !LTn.contrast || !d.logo) { markNote.hidden = true; return; }
+    if (!LTn || !LTn.contrast || !d.logo) { propIf(markNote, "hidden", true); return; }
     const logo = hexToArr(d.logo);
     const field = hexToArr(d.cover || d.c1);
     const ratio = LTn.contrast(logo, field);
     const rim = d.logo3 ? LTn.contrast(hexToArr(d.logo3), field) : 0;
     const weak = ratio < (LTn.MARK_FLOOR || 4.2) && rim < (LTn.MARK_FLOOR || 4.2);
-    markNote.hidden = !weak;
+    propIf(markNote, "hidden", !weak);
     if (weak) {
-      markNote.textContent = "TEAM LOGO reads " + ratio.toFixed(1) + ":1 on ENGINE COVER — it is painted as picked. "
+      propIf(markNote, "textContent", "TEAM LOGO reads " + ratio.toFixed(1) + ":1 on ENGINE COVER — it is painted as picked. "
         + (d.logo3 ? "The OUTLINE does not separate either; pick a darker or lighter one."
-                   : "Add an OUTLINE to keep it legible.");
+                   : "Add an OUTLINE to keep it legible."));
     }
   };
   wrap.appendChild(section("COCKPIT"));
