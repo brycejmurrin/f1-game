@@ -282,14 +282,17 @@ test("blueWatch.tick gets the pooled _blueCtx, never a per-step literal (issue #
   assert.equal(/blueWatch\.tick\([^)]*\{/.test(g), false, "a literal is back in the race step");
 });
 
-test("car loop: a world-posed rival behind the eye is culled before sampleAt (perf plan C-10)", () => {
-  const g = gameSource();
-  const early = g.indexOf("rp.world && (rp.x - camEye[0]) * _camFwdX + (rp.z - camEye[2]) * _camFwdZ < -6) continue;");
-  assert.notEqual(early, -1, "the early behind-camera cull moved");
-  const sample = g.indexOf("sampleAt(cS, smp2);", early);
-  assert.ok(sample > early && sample - early < 200, "it must sit right before the field's track sample");
+test("car loop: a world-posed rival behind the eye is culled before playerAnchor and sampleAt (perf plan C-10)", () => {
+  const code = lift(gameSource(), "render").replace(/\/\/.*$/gm, "").replace(/\s+/g, "");
+  const pose = code.indexOf("constrp=renderPosOf(c);");
+  const early = code.indexOf("if(!c.isPlayer&&rp.world&&(rp.x-camEye[0])*_camFwdX+(rp.z-camEye[2])*_camFwdZ<-6)continue;");
+  const anchor = code.indexOf("playerAnchor(c)", pose);
+  const sample = code.indexOf("sampleAt(cS,smp2);", pose);
+  assert.ok(pose >= 0 && early > pose, "the cull must use the interpolated world pose, exempt players, and keep the 6 m grace");
+  assert.ok(anchor > early, "reject the rival before playerAnchor projects onto the track");
+  assert.ok(sample > anchor, "track sampling follows the surviving rival's anchor");
   // Same predicate as the full cull it front-runs (tmpP x/z ARE rp.x/rp.z for a world pose).
-  assert.match(g, /if \(dx \* _camFwdX \+ dz \* _camFwdZ < -6\) continue;/);
+  assert.ok(code.includes("if(dx*_camFwdX+dz*_camFwdZ<-6)continue;"));
 });
 
 test("Collide relaxation stops after a pass that reached no contact (hunt-2 P6)", () => {

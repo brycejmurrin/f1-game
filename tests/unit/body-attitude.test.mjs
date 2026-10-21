@@ -42,10 +42,10 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
 
-function load() {
+function load(math = Math) {
   const raw = new Map();
   const ctx = vm.createContext({
-    Math, JSON, Object, Array, Number, isNaN, isFinite, console,
+    Math: math, JSON, Object, Array, Number, isNaN, isFinite, console,
     GameStore: { store: { raw: (k) => (raw.has(k) ? raw.get(k) : null), rawSet: (k, v) => raw.set(k, v) } },
   });
   ctx.window = ctx;   // js/physics/consts.js assigns window.PhysicsConsts
@@ -121,6 +121,86 @@ test("a stalled frame is clamped: dt=10 s behaves like dt=MAX_DT and stays finit
   const clamped = api.update(b, 0, 0.05, 0, 0).pitch;
   assert.ok(Number.isFinite(big));
   assert.equal(big, clamped);
+});
+
+test("cars reuse only the latest clamped dt's three spring decay factors", () => {
+  const math = Object.create(Math), calls = [];
+  math.exp = (x) => { calls.push(x); return Math.exp(x); };
+  const { api } = load(math);
+  calls.length = 0;
+  const cars = Array.from({ length: 4 }, () => ({ human: true, speed: 40, axEstSm: -8, yawRateCur: 0.2 }));
+  let previous = NaN;
+  for (const dt of [DT, DT, 0.02, DT, 0.05, 10, Infinity, 0, -1, NaN, undefined, 0.03]) {
+    const before = calls.length, clamped = Math.max(0, Math.min(dt || 0, 0.05));
+    for (const c of cars) api.update(c, 0, dt, 0, 0);
+    assert.equal(calls.length - before, clamped === previous ? 0 : 3, `dt=${dt}`);
+    if (clamped !== previous) assert.deepEqual(calls.slice(before), [-9 * clamped, -7 * clamped, -20 * clamped]);
+    previous = clamped;
+  }
+});
+
+test("shared decay preserves the uncached closed-form spring state and body offsets exactly", () => {
+  const { api, consts } = load();
+  // Independent analytical oracle: solve each critically damped spring with
+  // its own exp() on every car/update, with no source rewriting or cache.
+  function spring(s, target, omega, dt) {
+    const displacement = s.x - target, velocity = s.v + omega * displacement;
+    const e = Math.exp(-omega * dt), position = displacement + velocity * dt;
+    return { x: target + position * e, v: (velocity - omega * position) * e };
+  }
+  const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+  const cars = Array.from({ length: 4 }, (_, i) => ({ human: i % 2 === 0, speed: 40 + i, onKerb: false }));
+  const refs = cars.map(() => ({ p: { x: 0, v: 0 }, r: { x: 0, v: 0 }, z: { x: 0, v: 0 }, ygV: 0, ground: null }));
+  const dts = [DT, DT, 0.02, 0.05, 10, Infinity, 0, -1, NaN, undefined, 0.03];
+  for (let frame = 0; frame < 44; frame++) {
+    const dt = dts[frame % dts.length], dtc = Math.max(0, Math.min(dt || 0, 0.05));
+    const ground = frame < 20 ? frame * 0.01 : 3 + frame * 0.01;   // include a teleport/reseed
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i], r = refs[i], ygV = Math.sin(frame / 7 + i) * 4, df = (frame % 5) / 4;
+      c.axEstSm = c.corridorAccel = Math.cos(frame / 9 + i) * 12;
+      c.yawRateCur = Math.sin(frame / 13 + i) * 0.3;
+      c.kCur = Math.sin(frame / 11 + i) * 0.01;
+      if (r.ground == null || Math.abs(ground - r.ground) > 1.5) { r.z = { x: 0, v: 0 }; r.ygV = ygV; }
+      r.p = spring(r.p, clamp(-c.axEstSm * 0.00095, -0.024, 0.024), 9, dtc);
+      const lateral = c.human ? c.speed * c.yawRateCur : -c.speed * c.speed * c.kCur;
+      r.r = spring(r.r, clamp(lateral / consts.LAT_MAX, -1, 1) * 0.055, 7, dtc);
+      r.z.v -= (ygV - r.ygV) * 0.55 * (1 - (1 - 0.35) * df);
+      r.z = spring(r.z, 0, 20, dtc); r.ygV = ygV; r.ground = ground;
+      const pitch = clamp(r.p.x + 0.003 * df, -0.024, 0.024), roll = clamp(r.r.x, -0.075, 0.075);
+      let heave = 0.05 * Math.tanh(r.z.x / 0.05) - 0.012 * df;
+      const clear = 0.04 + heave + Math.min(-1.3 * pitch, 1.9 * pitch);
+      const scrape = clamp((0.014 - clear) / 0.02, 0, 1);
+      if (clear < 0.008) heave += 0.008 - clear;
+      const actual = api.update(c, ground, dt, ygV, df, 0);
+      assert.deepEqual({ ...actual }, { pitch, roll, heave }, `offsets frame=${frame}, car=${i}`);
+      assert.deepEqual({ ...c._ba.p }, r.p);
+      assert.deepEqual({ ...c._ba.r }, r.r);
+      assert.deepEqual({ ...c._ba.z }, r.z);
+      assert.equal(c.baScrape, scrape);
+    }
+  }
+});
+
+test("disabled and null cars do no decay work, and re-enabling refreshes the current dt", () => {
+  let calls = 0;
+  const math = Object.create(Math);
+  math.exp = (x) => { calls++; return Math.exp(x); };
+  const { api, cars } = load(math);
+  const c = { human: true, speed: 40, axEstSm: -8 };
+  cars.push(c);
+  api.update(c, 0, DT, 0, 0);
+  assert.equal(calls, 3);
+  api.setEnabled(false);
+  api.update(c, 0, 0.02, 0, 0);
+  api.update(null, 0, 0.03, 0, 0);
+  assert.equal(calls, 3);
+  assert.equal(c.baPitch, 0);
+  api.setEnabled(true);
+  api.update(c, 0, 0.02, 0, 0);
+  assert.equal(calls, 6);
+  api.reset(c);
+  api.update(c, 0, 0.02, 0, 0);
+  assert.equal(calls, 6, "resetting a car cannot invalidate pure dt factors");
 });
 
 test("downforce stiffens heave: the same impulse moves the body less at full load", () => {

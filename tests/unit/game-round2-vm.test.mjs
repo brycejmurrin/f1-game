@@ -139,6 +139,40 @@ test("S6: quitToMenu mid-quali gives the menu the whole field back", async () =>
   } finally { g.close(); }
 });
 
+test("QUIT-FX: quitToMenu empties the particle pool and hides the lens drops (perf-debug-e5b2)", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    g.apex.setInput({ throttle: true, steer: 0 });
+    g.step(60);
+    ev(g, `Particles.sparks(${G.player.px}, 0.3, ${G.player.pz}, 0, 1, 40, 30)`);
+    // The lens canvas needs a 2D context the VM does not have: spy the hide (the browser repro is in the PR).
+    ev(g, `globalThis.__dropClear = 0; Droplets = Object.assign({}, Droplets, { clear() { __dropClear++; } })`);
+    assert.ok(ev(g, "Particles.count()") > 0, "a race leaves live particles");
+    G.quitToMenu();
+    assert.equal(G.state, "menu");
+    // The menu render returns before Particles.update / Droplets.tick, so nothing after this point would clear them.
+    assert.equal(ev(g, "Particles.count()"), 0, "no smoke or sparks wait for the next flyby");
+    assert.equal(ev(g, "__dropClear"), 1, "the lens canvas is hidden, not left over the title");
+  } finally { g.close(); }
+});
+
+test("QUIT-INC: a mid-quali quit hands takeovers back against the 1-car trim, before the field swap", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    g.ctx.__G = G;
+    ev(g, `globalThis.__incN = []; IncidentSim = Object.assign({}, IncidentSim, { reset() { __incN.push(__G.cars.length); } })`);
+    G.flow = "gp"; G.timeTrial = false; G.session = "quali";
+    await G.startRace();
+    assert.equal(G.cars.length, 1, "qualifying trims the grid to the player");
+    ev(g, "__incN.length = 0");
+    G.quitToMenu();
+    const seen = ev(g, "__incN.slice()");
+    assert.equal(seen[0], 1, "the first hand-back sees the trim its indexes belong to (" + JSON.stringify(seen) + ")");
+  } finally { g.close(); }
+});
+
 test("S1: quitToMenu forgets a one-off GP's quali order; a season's stays", async () => {
   const g = await createGame({ track: "monza" });
   try {

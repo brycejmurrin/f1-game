@@ -985,7 +985,12 @@
       const car = o.carReflect != null ? o.carReflect : PostCommon.knob(o.tune || null, "carReflect");
       if (F.invProj && F.proj && F.upVS && ((o.reflect || 0) > 0.001 || car > 0.001)) return true;   // SSR's depthAt gate
       const sun = PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, _sunScr);   // present() recomputes it
-      return !!(sun.visible && sun.flare * (o.flareMul != null ? o.flareMul : 1) > 0);   // the flare's depthAt(sunUV)
+      if (!(sun.visible && sun.flare * (o.flareMul != null ? o.flareMul : 1) > 0)) return false;
+      // The flare's depthAt(sunUV) runs only while sunUV is ON SCREEN (tsl-post.js composite), but sunScreen
+      // calls any sun in front of the camera visible: off screen it kept the full-res depth store for nothing.
+      // fround: the test is on the float32 the uniform will hold, so the two bounds cannot disagree.
+      const ux = Math.fround(sun.ndcx * 0.5 + 0.5), uy = Math.fround(sun.ndcy * 0.5 + 0.5);
+      return ux >= 0 && ux <= 1 && uy >= 0 && uy <= 1;
     }
     // Before the scene pass (tlx.js present): decide, and tell an MSAA target whether to resolve depth.
     function depthBegin(opts, F) {

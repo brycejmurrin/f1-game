@@ -151,6 +151,35 @@ test("no player hi-res while a garage paint draft is live; exactly one after it 
   assert.equal(r.carDraw.getCarDecalTexture(t, 1, true).canvas.id, "me#1:hi", "the 2048 atlas arrives after save/close");
 });
 
+// Hunter finding 3 (B·H13, 2026-10-21): the draft shared the saved livery's key, so setup-sheet invalidated
+// the WHOLE team on editor open and on CANCEL — the saved atlas (its finished 2048 too) was freed only to be
+// repainted on the way back. A draft now keys "<team>:~d<gen>:", and open/edit/cancel drop draft keys only.
+test("open the paint editor, edit, cancel: the saved atlas and its 2048 survive", () => {
+  const r = rig(), t = team("me"), m = new Float32Array(16);
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  r.drain();
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);   // reaps the parked preview
+  const saved = r.carDraw.getCarDecalTexture(t, 1, true);
+  assert.equal(saved.canvas.id, "me#1:hi");
+  const builtBefore = r.built.length, freedBefore = r.freed.length;
+  for (let i = 0; i < 3; i++) {                           // open (applyPreview) + two edits: a new draft object each
+    r.carDraw.invalidateDecalTextures("me", true);
+    r.G.livDraftOverride = { teamId: "me", liv: { n: i } };
+    r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+    r.drain();
+  }
+  assert.equal(r.built.length - builtBefore, 3, "one preview per draft object, no 2048");
+  assert.deepEqual(names(r.freed.slice(freedBefore)), ["me#1:prev", "me#1:prev"], "each edit frees only the previous draft atlas");
+  r.G.livDraftOverride = null;                            // CANCEL (endLivPreview)
+  r.carDraw.invalidateDecalTextures("me", true);
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  r.drain();
+  assert.equal(r.carDraw.getCarDecalTexture(t, 1, true), saved, "the saved 2048 handle draws again");
+  assert.equal(r.built.length - builtBefore, 3, "CANCEL repaints nothing");
+  assert.equal(r.hiBuilds.length, 1, "the one 2048 paint is the original");
+  assert.ok(!r.freed.includes(saved.canvas), "the saved atlas was never freed");
+});
+
 test("a hi-res createTexture that returns nothing keeps the preview instead of caching a null", () => {
   const r = rig();
   const t = team("me"), m = new Float32Array(16);

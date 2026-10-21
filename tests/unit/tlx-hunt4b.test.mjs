@@ -347,6 +347,9 @@ const VP = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 1000).projectionMatrix.t
 const NIGHT = { proj: I16, invProj: I16, invVP: I16, viewProj: VP, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1],
   sunDir: [0, -0.9, 0.3], sunColor: [0.05, 0.05, 0.08] };
 const DAY = { ...NIGHT, sunDir: [0, 0.3, -0.95], sunColor: [1, 0.95, 0.9] };
+// The same low sun in FRONT of the camera (sunScreen visible) but ~78 deg off axis: outside the 60 deg frustum.
+/* global PostCommon */
+const DAY_OFF = { ...DAY, sunDir: [0.95, 0.25, -0.2] };
 const OFF = { ssao: 0, contact: 0, godray: 0, reflect: 0, carReflect: 0, bloom: 0.5, exposure: 1 };
 
 test("A-P1: no SSAO / contact / godray / SSR / flare input -> the depth is not needed; each one alone brings it back", async (t) => {
@@ -360,6 +363,11 @@ test("A-P1: no SSAO / contact / godray / SSR / flare input -> the depth is not n
   assert.equal(post.needsDepth(noCar, NIGHT), true, "an omitted carReflect is the 0.05 knob default: car SSR still marches");
   assert.equal(post.needsDepth(OFF, DAY), true, "a day sun in front of the camera: the lens flare taps depth at sunUV");
   assert.equal(post.needsDepth({ ...OFF, flareMul: 0 }, DAY), false, "LENS FLARE 0: no tap");
+  // B-H15: the composite taps depthAt(sunUV) only with sunUV inside [0,1]^2, so an in-front sun OFF screen keeps none.
+  const offSun = PostCommon.sunScreen(DAY_OFF.sunDir, DAY_OFF.viewProj, DAY_OFF.sunColor, {});
+  assert.ok(offSun.visible && offSun.flare > 0, "fixture: in front and bright, so only the screen bound decides");
+  assert.ok(Math.abs(offSun.ndcx) > 1, "fixture: off screen");
+  assert.equal(post.needsDepth(OFF, DAY_OFF), false, "a sun in front but off screen: the flare never taps depth");
   assert.equal(post.needsDepth({ ...OFF, ssao: 0.5 }, { ...NIGHT, invProj: null }), false, "no invProj: SSAO cannot run");
 });
 

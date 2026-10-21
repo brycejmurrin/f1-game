@@ -4261,7 +4261,9 @@ function quitToMenu() {
   if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
   if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
   if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();   // the auto-cut state is the race's, not the menu's
-  if (qualiField) { cars = qualiField; qualiField = null; }   // a mid-quali quit: the 1-car trim is not the menu's field
+  // A mid-quali quit: the 1-car trim is not the menu's field. A takeover is keyed by the TRIM's index, so it is
+  // handed back before the swap; after it, index 0 named the full field's first car (perf-debug-e5b2).
+  if (qualiField) { try { IncidentSim.reset(); } catch (_) { /* module absent */ } cars = qualiField; qualiField = null; }
   const forgetGp = !isChampionship() && !!season && season.qualiMode === "gp";   // read before setFlow: a one-off weekend ends here (RACE AGAIN never passes)
   stormFx._ltBase = null; stormFx._ltFlash = 0;   // the lightning's saved race base is not the menu's
   mirrorPass.cancelPreparation();
@@ -4302,7 +4304,9 @@ function quitToMenu() {
   GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
-  Particles.rainShow(false);
+  // The menu render returns before Particles.update and Droplets.tick: the lens canvas stayed painted over the
+  // title and the pool's smoke/sparks drew at the old circuit's coordinates in the next flyby (perf-debug-e5b2).
+  Particles.rainShow(false); Particles.clear(); Droplets.clear();
   // (#soundbtn returns with #overlay above — no write needed.)
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
@@ -7604,6 +7608,8 @@ function render(dt) {
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) {
     gfx.envProbeReset(); _envHold = false; _envFace = -1;   // tier 1 sheds PRODUCER; envReady latches
   }
+  // Advance render-only wheel phases once, shared by mirror, PiP and main view.
+  carDraw.advanceWheelPhases(dt);
   // REAR-VIEW MIRROR: its own camera and target, BEFORE the main begin() like the probe above.
   mirrorPass.render(frame, frameSky, night, wet, _floodEmit);
   let _b;
@@ -7706,13 +7712,16 @@ function render(dt) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
     }
-    // Player: reuse frame-cached (s,x). Field: playerAnchor (world px). Cull first.
+    // Reject world-space rivals before playerAnchor projects onto the road.
+    // Keep the same interpolated pose and 6 m grace as the later fallback cull.
+    const rp = renderPosOf(c);
+    if (!c.isPlayer && rp.world && (rp.x - camEye[0]) * _camFwdX + (rp.z - camEye[2]) * _camFwdZ < -6) continue;
+    // Player: reuse frame-cached (s,x). Field: playerAnchor (world px).
     let cS, cX;
     if (c.isPlayer && _plOk) { cS = _plCS; cX = _plCX; }
     else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
     c.xVis = cX;   // dump/net field only — pose comes from interpolated px/pz
     const renderX = cX;
-    const rp = renderPosOf(c);
     let bankC;
     if (c.isPlayer && _plBodyOk) {
       // Shadow already sampled/banked the player — restore (env probe may clobber smp2).
@@ -7723,10 +7732,6 @@ function render(dt) {
       tmpP[1] = p[1] + bankC.dy;
       tmpP[2] = rp.world ? rp.z : p[2] + r[2] * renderX;
     } else {
-      // A world pose answers the behind-camera cull below before the track sample
-      // (perf plan C-10): the same predicate on the same tmpP x/z, so a rival
-      // behind the eye skips sampleAt + the normalise.
-      if (!c.isPlayer && rp.world && (rp.x - camEye[0]) * _camFwdX + (rp.z - camEye[2]) * _camFwdZ < -6) continue;
       sampleAt(cS, smp2);
       // sample() lerps unit node vectors, so mid-segment |t|,|r| dip to cos(θ/2)
       // (up to ~4.7% on Spa's tightest) — used un-normalized they SCALE the drawn
@@ -7741,8 +7746,8 @@ function render(dt) {
       tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
       tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
       tmpP[1] = smp2.p[1];
-      // Behind-camera cull: AI cars strictly behind the view are never visible
-      // (no mirrors). Near-eye: only an eye INSIDE the body box (GameCams.eyeInsideCar,
+      // Main-view behind-camera cull (mirrors have their own car pass).
+      // Near-eye: only an eye INSIDE the body box (GameCams.eyeInsideCar,
       // grown by the near plane) — a 3.4 m radius hid a rival ALONGSIDE in the onboard
       // views as the player drew level. Local player is never culled. Y without bank is
       // fine for the near-eye test.
@@ -7962,7 +7967,7 @@ function render(dt) {
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
-      : (FieldLod.on && !c.isPlayer && _lod >= 2 ? carDraw.sharedRivalBodyMesh() : teamBodyMesh(c.team, c)));
+      : (FieldLod.on && !c.isPlayer && _lod >= 2 ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c)) : teamBodyMesh(c.team, c)));
     if (body) {
       gfx.draw(body, tmpMat, paint);
       if (_lod < 2) queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
@@ -8727,6 +8732,13 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
   $("pm-flyby").disabled = !inRace;
 }
+function focusSettingsHub() {
+  const hub = $("pm-settings-index");
+  if (!hub || hub.hidden) return;
+  for (const el of hub.querySelectorAll("button:not([disabled])")) {
+    try { el.focus({ preventScroll: true }); return; } catch (_) { /* detached */ }
+  }
+}
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here
   // AUTO is FULL" is written after the first HUD tick, not only at boot.
@@ -8736,6 +8748,9 @@ function openSettings() {
   ensureAudio(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
+  // showModal() runs after the hidden flip; defer so hub focus beats the dialog's
+  // default focus fixup (survey #3249 — not BACK).
+  requestAnimationFrame(() => requestAnimationFrame(() => focusSettingsHub()));
 }
 let keyBinds = null;   // KeyBinds.create(G), below
 function closeSettings() { settingsNav.invalidate(); if (keyBinds) keyBinds.disarmAll(); els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
