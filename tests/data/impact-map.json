@@ -14537,6 +14537,9 @@
       "profiles": [
         "tests/unit/appearance-studio.test.mjs"
       ],
+      "remember": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
       "reset": [
         "tests/unit/appearance-studio.test.mjs"
       ],

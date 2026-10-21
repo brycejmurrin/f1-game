@@ -1214,8 +1214,9 @@ test("all temporarily corrected readouts restrict transitions to paint propertie
 
 test("optional strategy compacts, explains a drop, and restores when space returns", () => {
   const attrs = {}, props = {}, viewport = { innerWidth: 300, innerHeight: 200 };
+  let correctionWrites = 0;
   const strat = {
-    style: { setProperty(k,v) { props[k]=v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
+    style: { setProperty(k,v) { props[k]=v; if (k === "--hud-clear-x" || k === "--hud-clear-y") correctionWrites++; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
     setAttribute(k,v) { attrs[k]=v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
     getBoundingClientRect() {
       const height = "data-col-drop" in attrs ? 0 : "data-col-compact" in attrs ? 25 : 90;
@@ -1237,9 +1238,11 @@ test("optional strategy compacts, explains a drop, and restores when space retur
   viewport.innerHeight = 170;ctx.HudLayout.clearReadouts();
   assert.ok(strat.hasAttribute("data-col-drop"));
   assert.equal(ctx.HudLayout.hiddenReason("strat").reason,"not enough room");
+  correctionWrites = 0;
   viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
   assert.ok(!strat.hasAttribute("data-col-drop") && !strat.hasAttribute("data-col-compact"), "full panel returns without changing settings");
   assert.equal(strat.getBoundingClientRect().height,90);
+  assert.equal(correctionWrites, 2, "restored full panel still receives the required correction around the control");
 });
 
 test("clearance keeps an unobstructed readout inside hardware safe areas", () => {
@@ -1534,4 +1537,51 @@ test('ARRANGE keeps the selected camera preview while settings are hidden, then 
   visible = false; H.fit();
   assert.equal(H.shown(), 'other', 'leaving settings still cleans up the preview');
   assert.equal(fold.open, false);
+});
+
+
+test("clearance reuses an unchanged slot as an obstacle without writing zero corrections", () => {
+  const elements = {}, counters = {};
+  const make = (id) => {
+    const props = {}, attrs = {}, count = counters[id] = { reads: 0, writes: 0 };
+    const el = {
+      id, hidden: false,
+      style: {
+        setProperty(k, v) { props[k] = v; count.writes++; },
+        removeProperty(k) { delete props[k]; },
+        getPropertyValue(k) { return props[k] || ""; },
+      },
+      setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; },
+      hasAttribute(k) { return k in attrs; },
+      getBoundingClientRect() {
+        count.reads++;
+        const left = 20 + parseFloat(props["--hud-clear-x"] || 0);
+        const top = 20 + parseFloat(props["--hud-clear-y"] || 0);
+        return { left, top, right: left + 100, bottom: top + 30, width: 100, height: 30 };
+      },
+    };
+    elements["#" + id] = el;
+    return el;
+  };
+  const limits = make("hud-limits"), damage = make("hud-damage");
+  const ctx = { console, window: { innerWidth: 400, innerHeight: 300 },
+    document: { readyState: "loading", addEventListener() {}, getElementById: () => null,
+      body: { classList: { contains: () => false }, setAttribute() {} },
+      querySelector: (sel) => elements[sel] || null, querySelectorAll: () => [] },
+    GameStore: { store: { get: (k, d) => d, set() { throw new Error("clearance must not save"); } } } };
+  vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  const resetCounts = () => { for (const count of Object.values(counters)) count.reads = count.writes = 0; };
+  resetCounts();
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(counters["hud-limits"], { reads: 1, writes: 0 }, "a fitting readout needs only its original measured box");
+  assert.deepEqual(counters["hud-damage"], { reads: 2, writes: 2 }, "a shifted readout still measures its painted correction");
+  const a = limits.getBoundingClientRect(), b = damage.getBoundingClientRect();
+  assert.ok(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top,
+    "the reused box still blocks the following readout");
+  limits.hidden = true;
+  resetCounts();
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(counters["hud-damage"], { reads: 1, writes: 0 }, "removing the blocker restores the original slot without zero writes");
+  const restored = damage.getBoundingClientRect();
+  assert.equal(restored.left, 20); assert.equal(restored.top, 20);
 });
