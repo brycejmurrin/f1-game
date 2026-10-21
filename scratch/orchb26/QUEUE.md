@@ -181,3 +181,4 @@ Need sync / fix first:
  7. #3432 perf(render): reject rear rivals pre-projection, share wheel phases — 13 files, stale-RED (Structural guards), Plan 13/15
 HOLD: #3387 dynamic rain/twilight — MERGE-HOLD (Bryce review of galleries), DIRTY.
 All are game PRs (js/) → one GAME-SLOT per green Pages.
+17:08Z: Bryce "Two adopter lanes" → B·O-A session_01VrEd1yN1fsozZrWGomnfW5 (#3423 #3430 #3421 #3407), B·O-B session_01BnvkGjvhMSkNzRf3yQaU1M (#3428 #3432 #3424). Merge one game PR per green Pages as READYs arrive.
