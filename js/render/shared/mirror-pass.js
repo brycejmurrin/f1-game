@@ -75,11 +75,20 @@ const MirrorPass = (function () {
   // reuses the view heap. Was 2 m / 4 frames — at 60 m/s that still re-ranked
   // every other frame on top of the forward cull.
   const RERANK_M = 5, RERANK_EVERY = 8, RERANK_AIM_COS = 0.9994;
+  const LITE_CULL = 180;
+  // THE PHONE RUNG'S DRAW DISTANCE (B·H10, Bryce 2026-10-21). At 180 m the lite mirror drew ~34 % of a phone
+  // frame's triangles into a ~337x96 target (the B·H10 mirror sweep, PR #3243's note). apex26.mirrorLiteCull:
+  // unset = LITE_CULL, 60..400 = that many metres (180 = the old rung).
+  let _liteCull = LITE_CULL;
+  try {
+    const v = +localStorage.getItem("apex26.mirrorLiteCull");
+    if (v >= 60 && v <= 400) _liteCull = v;
+  } catch (_) { /* default */ }
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1, instEvery: _instEvery },
-    { name: "lite", lite: true,  res: 0.6, cull: 180, reach: 140, every: 1, instEvery: 1 },
-    { name: "low",  lite: true,  res: 0.5, cull: 150, reach: 120, every: 2, instEvery: 1 },
-    { name: "min",  lite: true,  res: 0.4, cull: 120, reach: 100, every: 3, instEvery: 1 },
+    { name: "lite", lite: true,  res: 0.6, cull: _liteCull, reach: Math.min(140, _liteCull), every: 1, instEvery: 1 },
+    { name: "low",  lite: true,  res: 0.5, cull: Math.min(150, _liteCull), reach: Math.min(120, _liteCull), every: 2, instEvery: 1 },
+    { name: "min",  lite: true,  res: 0.4, cull: Math.min(120, _liteCull), reach: Math.min(100, _liteCull), every: 3, instEvery: 1 },
   ];
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
@@ -787,7 +796,7 @@ const MirrorPass = (function () {
 
   // The live instance, for __apex.mirror() (js/agent/apex.js) — game.js creates exactly one.
   let _instance = null;
-  return { create, MODES, instance: () => _instance };
+  return { create, MODES, QUALITY, instance: () => _instance };
 })();
 
 if (typeof window !== "undefined") window.MirrorPass = MirrorPass;
