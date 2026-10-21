@@ -41,6 +41,12 @@ const RenderRate = (function () {
   let accDt = 0, accMs = 0;  // skipped frames' time, paid into the next drawn frame
   let outDt = 0, outMs = 0;
   let skipped = 0, drawn = 0;
+  // The last gate() verdict. PerfGov.tick() is handed the rAF interval that ENDS at
+  // this tick, i.e. the one that began at the PREVIOUS rAF: only when that rAF drew
+  // does the interval measure a frame's cost. After a skipped rAF it is just the
+  // display's vsync (8.3 ms at 120 Hz), and judging those dragged the governor's
+  // derived floor down to the fast cadence (js/perf/governor.js tick(), `drawn`).
+  let last = true;
 
   function init(opts) {
     mobile = !!(opts && opts.isMobile);
@@ -48,7 +54,7 @@ const RenderRate = (function () {
     try { v = localStorage.getItem(KEY) || ""; } catch (_) { /* no storage: auto */ }
     mode = MODES.indexOf(v) >= 0 ? v : "auto";
     credit = 0; live = 0;
-    ema = 16.7; fast = 0; half = false; phase = 0; accDt = 0; accMs = 0; skipped = 0; drawn = 0;
+    ema = 16.7; fast = 0; half = false; phase = 0; accDt = 0; accMs = 0; skipped = 0; drawn = 0; last = true;
   }
 
   const tierRate = () => mode === "45" ? 45 : mode === "30" ? 30 : 0;
@@ -78,7 +84,8 @@ const RenderRate = (function () {
   /** True when this rAF should draw. After a true, dt() / ms() hold the time to render
    *  and update the HUD with (this frame's plus any skipped frame's). `presenting` is
    *  XrBoot.comfort(): an immersive session is never gated. */
-  function gate(dt, ms, presenting, racing) {
+  function gate(dt, ms, presenting, racing) { return (last = gateOnce(dt, ms, presenting, racing)); }
+  function gateOnce(dt, ms, presenting, racing) {
     const rate = tierRate();
     if (rate && !presenting) {
       if (!racing) { live = 0; credit = 0; } else {
@@ -102,6 +109,7 @@ const RenderRate = (function () {
   return {
     init, observe, gate, setMode,
     dt: () => outDt,
+    drew: () => last,
     ms: () => outMs,
     active,
     state: () => ({ mode, tier: tierRate() || 60, mobile, half, active: active(), emaMs: +ema.toFixed(2), skipped, drawn }),

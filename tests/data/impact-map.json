@@ -6606,6 +6606,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/results-cam.test.mjs"
@@ -9410,15 +9411,18 @@
         "tests/unit/render-rate.test.mjs"
       ],
       "gate": [
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "init": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "observe": [
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/render-rate.test.mjs"
       ],
       "setMode": [
