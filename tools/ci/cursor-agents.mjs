@@ -647,11 +647,18 @@ export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
   let got = 0;
   let skipped = 0;
   let expired = 0;
+  let live = 0;
   for (const id of agents) {
     for (const run of (await json(`/v1/agents/${id}/runs`)).items || []) {
       const out = path.join(dir, `${id.slice(-8)}_${run.id.slice(-8)}.sse`);
       if (run.status === "CREATING" || (fs.existsSync(out) && fs.statSync(out).size > 2000)) {
         skipped++;
+        continue;
+      }
+      // A RUNNING run's stream stays open until the run ends: a 200-agent dump hung 5 min on the first one (2026-10-20).
+      // Count it and move on; dump again (or `transcript`, which caps a live read) once it finishes.
+      if (run.status === "RUNNING") {
+        live++;
         continue;
       }
       if (run.createdAt && clock.now() - Date.parse(run.createdAt) > retentionMs()) {
@@ -669,7 +676,7 @@ export async function dumpRuns(agents, dir, { gapMs = 1500 } = {}) {
       await sleep(gapMs);
     }
   }
-  return `DUMP dir=${path.relative(ROOT, dir)} written=${got} skipped=${skipped} expired=${expired}`;
+  return `DUMP dir=${path.relative(ROOT, dir)} written=${got} skipped=${skipped} expired=${expired} live=${live}`;
 }
 
 /** Poll an agent until it is neither ACTIVE nor CREATING. Exit code: 0 last run FINISHED, 1 ERROR/CANCELLED/EXPIRED (or other), 124 timeout. */

@@ -89,7 +89,8 @@ exercised; none changes the ranked list above.
 Gaps 1 to 6 are closed; each has a stubbed-fetch test in `tests/unit/cursor-agents.test.mjs`. Gap 7 (launch options)
 stays open on purpose, and gap 8 is a caller convention (`--name`).
 
-1. `dump` counts a 410 as `expired=N` and continues (`DUMP dir=... written= skipped= expired=`); other statuses throw.
+1. `dump` counts a 410 as `expired=N` and continues (`DUMP dir=... written= skipped= expired= live=`); other statuses throw. A RUNNING run is counted `live` and not
+   opened: its stream stays open until the run ends.
 2. `api()` honours `Retry-After` (seconds or HTTP date) via `retryAfterMs`, capped by `APEX_CURSOR_BACKOFF_CAP_MS`.
 3. `list` follows `nextCursor` (100 per page), takes `--pr` (`prUrl`) and `--include-archived`.
 4. `wait <id>` (exit 0 FINISHED, 1 ERROR/CANCELLED/EXPIRED, 124 timeout) and `launch --wait`.
