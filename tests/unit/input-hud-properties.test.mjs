@@ -77,7 +77,7 @@ test("gap chip magnitude: unsigned, within its printed precision, monotone", () 
   fc.assert(fc.property(secs, profile, (s, p) => {
     const out = HR.fmtGapSec(s, p);
     assert.equal(out, HR.fmtGapSec(-s, p), "no sign on the chip");
-    assert.match(out, /^\d+\.\d{1,2}$/);
+    assert.ok(/^\d+\.\d{1,2}$/.test(out), `digits.digits: ${out}`);
     const dp = out.split(".")[1].length;
     assert.ok(Math.abs(parseFloat(out) - Math.abs(s)) <= 0.5 * 10 ** -dp + 1e-9, `${s} -> ${out}`);
   }), RUNS);
