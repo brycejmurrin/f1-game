@@ -10,6 +10,7 @@ import vm from "node:vm";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { WebGPURenderer, InspectorBase } from "../../vendor/three-0.186.1/three.webgpu.min.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -37,18 +38,21 @@ test("nothing ships the inspector eagerly: sw.js, index.html preloads, ApexRoste
   assert.ok(!/inspector/i.test(read("js/core/lazy-bundles.js")));
 });
 
-function load(search, { hostname = "localhost", protocol = "http:", webdriver = false, store = {} } = {}) {
+function load(search, { hostname = "localhost", protocol = "http:", webdriver = false, store = {}, importInspector, document } = {}) {
   const disk = new Map(Object.entries(store));
   const sb = {
     location: { search, hostname, protocol },
     navigator: { webdriver },
     localStorage: { getItem: (k) => (disk.has(k) ? disk.get(k) : null), setItem: (k, v) => disk.set(k, String(v)) },
     Log: { info() {} },
-    document: { body: { appendChild() {} }, createElement: () => ({ style: {}, setAttribute() {}, addEventListener() {}, parentNode: null }) },
+    document: document || { body: { appendChild() {} }, createElement: () => ({ style: {}, setAttribute() {}, addEventListener() {}, parentNode: null }) },
+    __importInspector: importInspector || (() => Promise.reject(new Error("unexpected inspector import"))),
     window: {},
   };
   vm.createContext(sb);
-  vm.runInContext(read("js/perf/three-inspector.js") + "\nthis.TI = ThreeInspector;", sb, { filename: absSrc("js/perf/three-inspector.js") });
+  // Inject the asynchronous module boundary, preserving the real lifecycle code and the installed renderer setter.
+  const source = read("js/perf/three-inspector.js").replace("await import(URL_ID)", "await __importInspector(URL_ID)");
+  vm.runInContext(source + "\nthis.TI = ThreeInspector;", sb, { filename: absSrc("js/perf/three-inspector.js") });
   sb.disk = disk;
   return sb;
 }
@@ -85,4 +89,139 @@ test("hook is wired: tlx holds gpuTimer off for the inspector; apex + help + doc
   assert.match(read("js/agent/agentview.js"), /inspector\(on\)/);
   assert.match(read("docs/DEBUG-HOOKS.md"), /inspector\(/);
   assert.match(read("tools/manifest.cjs"), /js\/perf\/three-inspector\.js/);
+});
+
+function lifecycle({ fail = null, timestamp = false } = {}) {
+  const nodes = [], instances = [], holds = [];
+  const body = {
+    appendChild(n) { if (fail === "append") throw new Error("append failed"); nodes.push(n); n.parentNode = this; },
+    removeChild(n) { nodes.splice(nodes.indexOf(n), 1); n.parentNode = null; },
+  };
+  const document = { body, createElement() {
+    return { style: {}, parentNode: null, listeners: {}, setAttribute() {}, addEventListener(name, fn) { this.listeners[name] = fn; } };
+  } };
+  class Inspector extends InspectorBase {
+    constructor() {
+      super();
+      if (fail === "constructor") throw new Error("constructor failed");
+      this.domElement = document.createElement();
+      this.detached = 0;
+      instances.push(this);
+    }
+    setRenderer(r) {
+      super.setRenderer(r);
+      if (!r) this.detached++;
+      else { r.backend.trackTimestamp = true; if (fail === "attach") throw new Error("attach failed"); }
+      return this;
+    }
+  }
+  const renderer = Object.create(WebGPURenderer.prototype);
+  const base = new InspectorBase();
+  renderer._inspector = base;
+  base.setRenderer(renderer);
+  renderer.backend = { trackTimestamp: timestamp };
+  const host = { renderer, hold(on) { holds.push(on); } };
+  const gfx = { inspectorHost: () => host };
+  const sb = load("", { document, importInspector: async () => ({ Inspector }) });
+  return Object.assign(sb, { renderer, base, gfx, host, instances, nodes, holds, Inspector });
+}
+const settle = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
+test("closing the inspector restores the actual r186 InspectorBase and timestamp state", async () => {
+  for (const timestamp of [false, true]) {
+    const f = lifecycle({ timestamp });
+    for (let i = 0; i < 3; i++) {
+      f.TI.set(f.gfx, true);
+      await settle();
+      assert.equal(f.renderer.inspector, f.instances[i]);
+      assert.equal(f.renderer.backend.trackTimestamp, true);
+      // Exercise the real close button callback as well as the public stop/toggle paths.
+      if (i === 0) f.nodes[0].listeners.click();
+      else if (i === 1) f.TI.stop();
+      else f.TI.set(f.gfx, false);
+      assert.equal(f.renderer.inspector, f.base);
+      assert.equal(f.base.getRenderer(), f.renderer);
+      assert.equal(f.renderer.backend.trackTimestamp, timestamp);
+      assert.equal(f.instances[i].detached, 1);
+      assert.equal(f.nodes.length, 0);
+      assert.doesNotThrow(() => { f.renderer.inspector.begin(); f.renderer.inspector.finish(); });
+    }
+    f.TI.set(f.gfx, false);
+    assert.equal(f.renderer.inspector, f.base, "repeated close is harmless");
+    assert.deepEqual(f.holds, [true, false, true, false, true, false]);
+  }
+});
+
+test("initialization failures return renderer ownership and release the timer hold", async () => {
+  for (const fail of ["constructor", "attach", "append"]) {
+    const f = lifecycle({ fail });
+    f.TI.set(f.gfx, true);
+    await settle();
+    assert.equal(f.TI.status().on, false, fail);
+    assert.match(f.TI.status().reason, /init failed/, fail);
+    assert.equal(f.renderer.inspector, f.base, fail);
+    assert.equal(f.renderer.backend.trackTimestamp, false, fail);
+    assert.deepEqual(f.holds, [true, false], fail);
+  }
+});
+
+test("teardown preserves an inspector installed by a later owner", async () => {
+  const f = lifecycle();
+  f.TI.set(f.gfx, true);
+  await settle();
+  const replacement = new InspectorBase();
+  f.renderer.inspector = replacement;
+  f.renderer.backend.trackTimestamp = true;
+  f.TI.set(f.gfx, false);
+  assert.equal(f.renderer.inspector, replacement);
+  assert.equal(replacement.getRenderer(), f.renderer);
+  assert.equal(f.renderer.backend.trackTimestamp, true);
+  assert.equal(f.instances[0].detached, 1, "the replacement already detached the panel");
+  assert.deepEqual(f.holds, [true, false]);
+});
+
+test("switching renderer or unsupported backend detaches the previous panel", async () => {
+  const a = lifecycle(), b = lifecycle();
+  a.TI.set(a.gfx, true);
+  await settle();
+  a.TI.set(b.gfx, true);
+  await settle();
+  assert.equal(a.renderer.inspector, a.base);
+  assert.equal(a.renderer.backend.trackTimestamp, false);
+  assert.notEqual(b.renderer.inspector, b.base);
+  a.TI.set({}, true);
+  assert.equal(b.renderer.inspector, b.base);
+  assert.equal(b.renderer.backend.trackTimestamp, false);
+  assert.equal(a.TI.status().supported, false);
+  assert.deepEqual(a.holds, [true, false]);
+  assert.deepEqual(b.holds, [true, false]);
+});
+
+test("an import resolving after close cannot reattach or claim a timer hold", async () => {
+  const f = lifecycle();
+  let resolve;
+  f.__importInspector = () => new Promise(r => { resolve = r; });
+  f.TI.set(f.gfx, true);
+  f.TI.set(f.gfx, false);
+  resolve({ Inspector: f.Inspector });
+  await settle();
+  assert.equal(f.renderer.inspector, f.base);
+  assert.equal(f.TI.status().on, false);
+  assert.equal(f.instances.length, 0);
+  assert.deepEqual(f.holds, []);
+});
+
+test("a stale import rejection cannot overwrite a newer attached inspector", async () => {
+  const f = lifecycle();
+  let reject, n = 0;
+  f.__importInspector = () => ++n === 1 ? new Promise((_, r) => { reject = r; }) : Promise.resolve({ Inspector: f.Inspector });
+  f.TI.set(f.gfx, true);
+  f.TI.set(f.gfx, true);
+  await settle();
+  reject(new Error("stale import failed"));
+  await settle();
+  assert.equal(f.TI.status().on, true);
+  assert.equal(f.TI.status().reason, "on");
+  assert.equal(f.renderer.inspector, f.instances[0]);
+  f.TI.set(f.gfx, false);
 });

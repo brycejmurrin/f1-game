@@ -429,7 +429,10 @@ test("a stage timeout stops the stage with SIGTERM, so a runner that leads its o
   fs.writeFileSync(stage, `const { spawn } = require("node:child_process"), fs = require("node:fs");
 const gc = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
 fs.writeFileSync(${JSON.stringify(pidFile)}, String(gc.pid));
-process.on("SIGTERM", () => { try { process.kill(-gc.pid, "SIGKILL"); } catch (_) {} process.exit(143); });
+process.on("SIGTERM", () => {
+  gc.once("exit", () => process.exit(143));
+  try { process.kill(-gc.pid, "SIGKILL"); } catch (_) { process.exit(143); }
+});
 setInterval(() => {}, 1000);`);
   let gcPid = 0;
   try {

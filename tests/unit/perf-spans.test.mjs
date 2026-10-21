@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import vm from "node:vm";
+import { performance, PerformanceObserver } from "node:perf_hooks";
 
 const require = createRequire(import.meta.url);
 const src = fs.readFileSync(new URL("../../js/perf/spans.js", import.meta.url), "utf8");
@@ -100,4 +101,59 @@ test("measure(true) tags each phase with a detail.devtools track-entry; off emit
   assert.ok(calls[1][1].detail.devtools.color, "unknown phases fall back to a colour");
   ps.on(false); ps.begin("audio"); t += 1; ps.end("audio");
   assert.equal(calls.length, 2, "off = no measure");
+});
+
+test("trace measures stay bounded without losing observer entries or unrelated timeline data", () => {
+  const ctx = vm.runInNewContext(src + ";PerfSpans", { performance });
+  const ps = ctx.create();
+  const observer = new PerformanceObserver(() => {});
+  observer.observe({ type: "measure" });
+  const outside = "other:perf-spans-test", untouched = "apex:untouched-test";
+  const name = "retention-test", own = "apex:" + name;
+  performance.measure(outside);
+  performance.measure(untouched);
+  try {
+    ps.on(true); ps.measure(true);
+    for (let i = 0; i < 1300; i++) {
+      ps.begin(name); ps.end(name);
+      assert.ok(performance.getEntriesByName(own).length < 512, "own browser entries are bounded per phase");
+    }
+    const queued = observer.takeRecords().filter((e) => e.name === own);
+    assert.equal(queued.length, 1300, "named clears leave the active observer's queue intact");
+    assert.equal(queued[0].detail.devtools.track, name, "trace metadata survives clearing");
+    assert.equal(queued[0].detail.devtools.trackGroup, "Apex 26");
+    assert.equal(ps.stats()[name].n, 1300, "clearing timeline entries preserves span statistics");
+    ps.on(false);
+    assert.equal(performance.getEntriesByName(own).length, 0, "stopping releases the partial batch");
+    assert.equal(ps.measure(), true, "stopping preserves the chosen trace setting");
+    assert.equal(performance.getEntriesByName(outside).length, 1);
+    assert.equal(performance.getEntriesByName(untouched).length, 1, "never clear a phase this recorder did not emit");
+  } finally {
+    ps.on(false); observer.disconnect();
+    performance.clearMeasures(outside); performance.clearMeasures(untouched); performance.clearMeasures(own);
+  }
+});
+
+test("reset and disabling trace measures release partial batches without disabling span recording", () => {
+  const ctx = vm.runInNewContext(src + ";PerfSpans", { performance });
+  const ps = ctx.create();
+  const names = ["reset-test", "toggle-test"];
+  const emit = (name) => { ps.begin(name); ps.end(name); };
+  try {
+    ps.on(true); ps.measure(true);
+    for (const name of names) emit(name);
+    ps.reset();
+    for (const name of names) assert.equal(performance.getEntriesByName("apex:" + name).length, 0);
+    assert.equal(Object.keys(ps.stats()).length, 0);
+    for (const name of names) emit(name);
+    ps.measure(false);
+    for (const name of names) assert.equal(performance.getEntriesByName("apex:" + name).length, 0);
+    assert.equal(ps.isOn(), true);
+    emit(names[0]);
+    assert.equal(ps.stats()[names[0]].n, 2, "span recording continues without trace allocation");
+    assert.equal(performance.getEntriesByName("apex:" + names[0]).length, 0);
+  } finally {
+    ps.on(false);
+    for (const name of names) performance.clearMeasures("apex:" + name);
+  }
 });
