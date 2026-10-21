@@ -3241,7 +3241,9 @@ const TLX = (function () {
         _warmAt = performance.now(); _warmAttempts++;
         _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
         const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
-        const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
+        // present()'s post rule, noEnv included: a garage/menu frame keeps proj (SSAO) but paints without post,
+        // and a warm compiled into the post target left that frame to re-link every program synchronously (B·H16).
+        const usePost = !!(post && post.enabled() && _postF.proj && !_postF.noEnv && !vizMat);
         const useTag = usePost && (!post.tagOn || post.tagOn());   // R3: present()'s MRT rule
         // r185 reads renderer target/MRT again AFTER awaits while building nodes.
         // Keep all render state owned by this task until compilation settles.
