@@ -596,3 +596,44 @@ test("quiet gate: input mid-sequence abandons the rest of a title prebuild, and 
   assert.equal(await h.pre.run(titleOwned, "title"), false, "the input's own moment starts nothing");
   assert.deepEqual(h.built, ["car"]);
 });
+
+// THE CAR IN STEPS (cam.prebuildSteps, Car3D.buildSteps): the car step runs about SLICE_MS of
+// build per task, so a tap mid-build waits one slice, and input between slices abandons the car.
+function steppedCar(h, sections = 12, msPer = 5) {
+  let made = 0;
+  h.cam.prebuildSteps = function* () {
+    for (let i = 0; i < sections; i++) { h.advance(msPer); yield; }
+    made++; h.built.push("car"); h.cam.meshKey = "mclaren:parts:4";
+    return true;
+  };
+  return () => made;
+}
+test("sliced car: about SLICE_MS of build per task, then the room as before", async () => {
+  const h = page();
+  const made = steppedCar(h, 12, 5);
+  const done = h.pre.run(owned(h), "title");
+  await h.flush(0);
+  assert.equal(made(), 0, "the first slice does not finish a 60 ms car");
+  await h.flush(10);
+  assert.equal(made(), 1);
+  h.gate.garageReady = true; await h.flush(4);
+  assert.equal(await done, true);
+  const last = h.pre.state().last;
+  assert.ok(last.carSlices >= 60 / (h.GP.SLICE_MS + 5) && last.carSlices <= 12, `${last.carSlices} slices for 12 × 5 ms at ${h.GP.SLICE_MS} ms each`);
+  assert.equal(last.carMs, 60);
+  assert.deepEqual(h.built, ["car", "room"]);
+});
+test("sliced car: input between slices abandons the car — no room, no frames", async () => {
+  const listeners = {};
+  const h = page({ listeners });
+  const made = steppedCar(h, 12, 5);
+  const titleOwned = () => owned(h)() && h.pre.state().blockers.length === 0;
+  const done = h.pre.run(titleOwned, "title");
+  await h.flush(0);
+  listeners.pointerdown[0]();
+  await h.flush(3);
+  assert.equal(await done, false, "superseded mid-car");
+  assert.equal(made(), 0, "the car never finished");
+  assert.deepEqual(h.built, [], "no room after the input");
+  assert.equal(h.pre.state().last.result, "superseded");
+});

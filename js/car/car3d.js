@@ -231,7 +231,7 @@ const Car3D = (function () {
     return out;
   }
 
-  function build(color, color2, opts) {
+  function* buildSteps(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
     const teamId = opts && opts.teamId;
     // Field body / silhouette = mid & far track LODs: keep the cheap cover.
@@ -356,7 +356,7 @@ const Car3D = (function () {
     const nosePaint = teamStyle.noseCurve ? noseC || c1 : c1;
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt, floorEdgeAt, opts && opts.measure, nosePaint);
 
-    part("hood");
+    yield; part("hood");
     // Driver-eye deck and shoulders (official F1 / Sky visor cams).
     const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.50, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
@@ -385,7 +385,7 @@ const Car3D = (function () {
               ersC2, null, SURFACES.paint);
     }
 
-    part("bolsters");
+    yield; part("bolsters");
     if (ckpt) {
       for (const s of [-1, 1]) {
         // Six shoulder stations resolve the curvature beside the driver's arms.
@@ -428,7 +428,7 @@ const Car3D = (function () {
       }
     }
 
-    part("sidepods");
+    yield; part("sidepods");
     const podSkinFrom = out.pos.length / 3;
     const podGeom = buildSidepodBodywork(out, podC || c1, engStyle, anchors, !!teamStyle.facet);
     if (opts && opts.measure) out.podSkin = { from: podSkinFrom, to: out.pos.length / 3 };
@@ -519,7 +519,7 @@ const Car3D = (function () {
       }
     }
 
-    part("engineCover");
+    yield; part("engineCover");
     let coverGeom = null, finTail = null;   // finTail: the fin's rear stations, for the sail into the rear wing
     if (!ckpt) {
       const engT = tier("engine");
@@ -986,7 +986,7 @@ const Car3D = (function () {
       }
     }
 
-    part("bodyDetail");
+    yield; part("bodyDetail");
     const engInlet = engStyle && engStyle.inlet != null ? engStyle.inlet
                    : (tier("engine") === 2 ? 2 : tier("engine") === 0 ? 0 : 1);
     for (const s of [-1, 1]) {
@@ -1141,7 +1141,7 @@ const Car3D = (function () {
                0.035 + 0.030 * (sk - 1), 0.07 + 0.04 * (sk - 1), skF - skR, sk >= 2 ? accentC : c2);
     }
 
-    part("livery");
+    yield; part("livery");
     // Nose TIP z moves per team (TEAM_STYLE.noseTipZ, ±0.10): the cap and both
     // stripes must end at the STYLED tip, not a shared literal, or the paint
     // floats past a short nose (haas) / stops short of a long one (williams).
@@ -1333,7 +1333,7 @@ const Car3D = (function () {
       if (liv.upper) CarShade.upperZone(out, bodySplitFrom, out.pos.length / 3, c1, liv.upper, anchors, SURFACES.paint);
     }
 
-    part("cockpit");
+    yield; part("cockpit");
     // Exterior head surround stays out of the dedicated driver-eye mesh.
     if (!ckpt) zone("headrest", () => {
       // Recipe-gated HEADREST behind the helmet: 0 flat rim (shipped) / 1 raised
@@ -1467,7 +1467,7 @@ const Car3D = (function () {
       }
     }
 
-    part("mirrors");
+    yield; part("mirrors");
     const mSty = ckpt ? 0 : teamStyle.mirror;
     // Placement is REGULATION (docs/notes/COCKPIT-DATUMS.md): the body must lie inside
     // RV-MIRROR-BODY, Y 470..680 x Z 640..720. At x 0.44 / y 0.735 ours sat
@@ -1561,7 +1561,7 @@ const Car3D = (function () {
       }
     }
 
-    part("driver");
+    yield; part("driver");
     // A DRIVER, not a floating head. The aperture was the right size and still
     // did not read as a cockpit, because a cockpit reads as an OCCUPIED SPACE:
     // a hole with one helmet hovering in it is a hole. Shoulders rising out of
@@ -1604,7 +1604,7 @@ const Car3D = (function () {
       addBox(out, 0, 0.512, 0.206, 0.086, 0.062, 0.022, [0.14, 0.15, 0.17], SURFACES.carbon);
     }
 
-    part("helmet");
+    yield; part("helmet");
     if (!(opts && opts.noDriver)) {
       // The driver's head: helmets.js owns the lid. cy is the TEMPLE line. At
       // 0.630 the crown sat at 0.749 under a cockpit surround topping out at
@@ -1633,7 +1633,7 @@ const Car3D = (function () {
 
     // T-camera bar + LED live next to the snorkel-aware pod in part("engineCover").
 
-    part("halo");
+    yield; part("halo");
     if (exHalo) {
       const haloC = haloTint || HALO, haloS = haloTint && Math.max(...haloTint) - Math.min(...haloTint) > 0.15 ? SURFACES.paint : PH_HOOP;   // a COLOURED livery hoop is paint (Alpine pink: the metal env mirror washed it white); grey stays metal (titanium, Cadillac chrome)
       // Round titanium hoop with a LEVEL, gently arched top bar: one
@@ -1674,7 +1674,7 @@ const Car3D = (function () {
       }
     }
 
-    part("exhaust");
+    yield; part("exhaust");
     // Tip radius for the rain light. Cockpit: cheap stub (!ckpt has full tips).
     let exhTipRForLamp = 0.07;
     let exhTipLowY = 1, exhSleeveTopY = 0;   // a single tip: its bell's lowest point (Smooth Case plate) and its heat sleeve's top (DRS pod)
@@ -1871,7 +1871,7 @@ const Car3D = (function () {
     }
     }
 
-    part("sharkFin");
+    yield; part("sharkFin");
     // liv.finShape picks the outline (FIN_SHAPES); "none" builds no blade at
     // all, and car-mesh reads the same field to leave the decal off too.
     const finShape = liv.finShape || "standard";
@@ -1941,7 +1941,7 @@ const Car3D = (function () {
       if (p) addBox(out, 0, p.top + COVER_STACK.vent - vh / 2, zc, 0.05, vh, len, CARBON, SURFACES.carbon);
     }
 
-    part("sponsorBoard");
+    yield; part("sponsorBoard");
     const aeroT = tier("aero");
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
@@ -1956,7 +1956,7 @@ const Car3D = (function () {
       addBox(out, s*0.527, nb.cy, -2.42, 0.012, nb.h, 0.30, c1);
     }
 
-    part("frontWing");
+    yield; part("frontWing");
     // COCKPIT-ONLY front wing. The real cascade below is correct and, from a
     // seated eye, invisible: MEASURED 12.9 deg below the sightline, which is
     // UNDER the hood crest (9.8), so it rasterised 0.01% of frame. The
@@ -2216,7 +2216,7 @@ const Car3D = (function () {
       }
     });
 
-    part("rearAssembly");
+    yield; part("rearAssembly");
     if (!ckpt) {
       const rwLift = (aLvl - 2) * 0.045;        // gentler vertical shift (beam-wing ref)
       const _ep    = endplateGeom(aLvl, aeroStyle);
@@ -2581,7 +2581,7 @@ const Car3D = (function () {
       addBox(out, s * 0.28, 0.58, -2.50, 0.018, 0.22, 0.10, accentC, SURFACES.paint);
     }
 
-    part("brakeDucts");
+    yield; part("brakeDucts");
     const brakesT = tier("brakes");
     const ductMul = brakeStyle ? brakeStyle.duct : (brakesT === 0 ? 0.5 : brakesT === 2 ? 1.9 : 1.0);
     const brakeScoop = Math.max(0, Math.min(2, Math.round(
@@ -2630,7 +2630,7 @@ const Car3D = (function () {
       }
     }
 
-    part("suspension");
+    yield; part("suspension");
     const wbMul = suspStyle ? suspStyle.arm : (suspT === 0 ? 0.85 : suspT === 2 ? 1.3 : 1.0);
     const wbPush = suspStyle ? suspStyle.push : (suspT === 2 ? 1 : 0);
     const wbPull = suspStyle && suspStyle.pull ? 1 : 0;
@@ -2793,7 +2793,7 @@ const Car3D = (function () {
       }
     }
 
-    part("wheels");
+    yield; part("wheels");
     if (!noWheels) {
       const tyreBand = tyreStyle && tyreStyle.band || TYRE_BAND[tier("tyres")];
       // Per-option caliper accent peeking through the rim spokes, else tier.
@@ -2857,6 +2857,15 @@ const Car3D = (function () {
     return out;
   }
 
+  // THE BUILD IN STEPS (B·H8 2026-10-21): buildSteps is the build as a generator that
+  // pauses at each section boundary, so a caller with an idle budget (the garage's
+  // title prebuild) can spread one 0.7 s car over many tasks and stop when input
+  // arrives. build() drains it in one go: the same output, byte for byte.
+  function build(color, color2, opts) {
+    const steps = buildSteps(color, color2, opts);
+    for (;;) { const r = steps.next(); if (r.done) return r.value; }
+  }
+
   function buildComplete(color, color2, opts) {
     const out = build(color, color2, opts);
     const info = out.flapInfo;
@@ -2879,7 +2888,7 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildComplete, refinish, FINISH_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  return { build, buildSteps, buildComplete, refinish, FINISH_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,

@@ -530,30 +530,54 @@ function previewKey() {
   // Ten legends share num 1, so the player's Legends slot keys on the code too.
   return team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num) + (team.legends && seat ? ":" + seat.code : "");
 }
-function getSetupPreviewMesh() {
-  const team = Teams.LIST[G.teamIdx];
-  const seat = garageSeat();
+// What the preview car is built from: its cache keys and Car3D.build's inputs.
+function previewBuild(key) {
+  const team = Teams.LIST[G.teamIdx], seat = garageSeat(), liv = resolveLivery(team);
+  // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
+  // survives the per-value colour-drag busts livePreviewDraft issues.
+  const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (typeof liv[f] === "string" ? liv[f] : liv[f] ? 1 : 0)).join(",");
+  // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
+  // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
+  const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
+  const opts = {
+    livery: liv, refinish: true,
+    teamId: team.id,   // per-team chassis style shows in the setup turntable too
+    num: seat && seat.num,
+    helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
+    parts: Parts.getVisualTiers(getTeamParts(team.id), team),
+  };
+  return { liv, hullKey, baseKey, opts };
+}
+// `fresh`: a build setupPreviewMeshSteps just finished for this key, used as the build itself.
+function getSetupPreviewMesh(fresh) {
   const key = previewKey();
   if (key !== _spMeshKey) {
-    const liv = resolveLivery(team);
-    // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
-    // survives the per-value colour-drag busts livePreviewDraft issues.
-    const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (typeof liv[f] === "string" ? liv[f] : liv[f] ? 1 : 0)).join(",");
-    // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
-    // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
-    const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
-    const ent = GarageScene.previewMesh(key, hullKey, () => _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
-      : (_spBase = { key: baseKey, data: Car3D.build(liv.c1, liv.c2, {
-        livery: liv, refinish: true,
-        teamId: team.id,   // per-team chassis style shows in the setup turntable too
-        num: seat && seat.num,
-        helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
-        parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-      }) }).data);
+    const { liv, hullKey, baseKey, opts } = previewBuild(key);
+    const ent = GarageScene.previewMesh(key, hullKey, () => fresh ? (_spBase = { key: baseKey, data: fresh }).data
+      : _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
+      : (_spBase = { key: baseKey, data: Car3D.build(liv.c1, liv.c2, opts) }).data);
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
   return _spMesh;
+}
+// THE SAME CAR IN STEPS (GaragePrebuild on the title): Car3D.buildSteps paused at each
+// section, so the 0.7 s build (4x CPU) spreads over the caller's slices and stops when
+// they do. The last step hands the finished build to getSetupPreviewMesh (hull + upload).
+// A key that moved mid-build (a pick) drops the work: the next idle run starts again.
+function* setupPreviewMeshSteps() {
+  const key = previewKey();
+  if (key === _spMeshKey) return true;
+  const { liv, baseKey, opts } = previewBuild(key);
+  if (!(_spBase && _spBase.key === baseKey) && Car3D.buildSteps) {
+    const steps = Car3D.buildSteps(liv.c1, liv.c2, opts);
+    let r;
+    while (!(r = steps.next()).done) yield;
+    if (previewKey() !== key) return false;
+    yield;
+    return previewKey() === key && !!getSetupPreviewMesh(r.value);
+  }
+  return !!getSetupPreviewMesh();
 }
 // The ROOM's view of the game beyond the car (GarageScene.draw's ctx): the
 // circuit the next race runs at — the career's calendar, the free-play season's,
@@ -1111,6 +1135,7 @@ return {
   // GaragePrebuild (js/garage/prebuild.js): the setup garage's car and room,
   // built ahead of the GARAGE tap — keyed exactly as the first garage frame keys them.
   previewKey, prebuildKey: () => previewKey() + "|" + GarageScene.ctxKey(garageCtx(true)),
+  prebuildSteps: setupPreviewMeshSteps,   // the car step, sliced (prebuild.js)
   prebuild(part) {
     if (part === "car") return !!getSetupPreviewMesh();
     const team = Teams.LIST[G.teamIdx];

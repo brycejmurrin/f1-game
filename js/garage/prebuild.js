@@ -57,6 +57,7 @@ const GaragePrebuild = (function () {
   // 2026-10-21). It waits for this much REAL quiet on a visible title: no
   // pointer, key, wheel or visibility change. Input never starts it.
   const QUIET_MS = 3000;
+  const SLICE_MS = 8;        // build work per task for the sliced car step (cam.prebuildSteps)
   const GIVE_UP_MS = 30000;  // a hidden frame withheld this long (a TLX compile) is logged as pending
 
   // Settled = uploaded, failed or unsupported (js/render/shared/assets.js state()).
@@ -196,7 +197,21 @@ const GaragePrebuild = (function () {
         gate.garageReady = false; gate.garageKey = rec.key;
         let t = now();
         if (!had || cam.meshKey !== cam.previewKey()) {
-          cam.prebuild("car"); rec.carMs = ms(now() - t);
+          if (cam.prebuildSteps) {
+            // The car in STEPS (Car3D.buildSteps): about SLICE_MS of build per task, so a
+            // tap that lands mid-build waits one slice, not the whole 0.7 s car.
+            const steps = cam.prebuildSteps();
+            for (;;) {
+              const t0 = now();
+              let r;
+              do { r = steps.next(); } while (!r.done && now() - t0 < SLICE_MS);
+              rec.carMs += now() - t0; rec.carSlices = (rec.carSlices || 0) + 1;
+              if (r.done) break;
+              await d.menuSlice();
+              if (!current()) { rec.carMs = ms(rec.carMs); return finish(rec, "superseded"); }
+            }
+            rec.carMs = ms(rec.carMs);
+          } else { cam.prebuild("car"); rec.carMs = ms(now() - t); }
           await d.menuSlice();
           if (!current()) return finish(rec, "superseded");
         }
@@ -282,6 +297,6 @@ const GaragePrebuild = (function () {
   // The page's one instance, for __apex.garagePrebuild() (the MirrorPass.instance() idiom: no G member).
   let _instance = null;
 
-  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, POLL_MS, GIVE_UP_MS, QUIET_MS };
+  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, POLL_MS, GIVE_UP_MS, QUIET_MS, SLICE_MS };
 })();
 Object.freeze(GaragePrebuild);
