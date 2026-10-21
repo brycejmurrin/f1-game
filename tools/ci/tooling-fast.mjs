@@ -706,6 +706,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lane-preamble.test.mjs",
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
+  "tests/unit/layers-anyopen-memo.test.mjs",
   "tests/unit/layers-nav-memo.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",

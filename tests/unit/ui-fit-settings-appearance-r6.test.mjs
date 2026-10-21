@@ -104,6 +104,23 @@ test("layout-audit SCREENS opens #pm-panel-appearance", () => {
   );
 });
 
+test("menu accent chips keep preset names readable at UI 200%", () => {
+  const settings = fs.readFileSync(path.join(ROOT, "css/settings.css"), "utf8");
+  const rules = cssRules(settings);
+  const CHIP = "#pmsettings-inner #pm-panel-appearance .pm-accent-chip";
+  assert.equal(decl(rules, CHIP, "white-space"), "normal");
+  assert.equal(decl(rules, CHIP, "text-overflow"), "clip");
+  assert.equal(decl(rules, CHIP, "overflow"), "visible");
+  assert.equal(decl(rules, CHIP, "height"), "auto");
+});
+
+test("settings sheet head wraps at high UI scale", () => {
+  const settings = fs.readFileSync(path.join(ROOT, "css/settings.css"), "utf8");
+  const rules = cssRules(settings);
+  assert.equal(decl(rules, "#pmsettings-inner > .sheet-head h2", "min-width"), "0");
+  assert.equal(decl(rules, "#pmsettings-inner > .sheet-head h2", "max-width"), "100%");
+});
+
 test("r6 carve stays Settings APPEARANCE (no foreign selectors)", () => {
   const m = css.match(/UI Fit r6: Settings APPEARANCE[\s\S]*?#appearance-studio \[data-as="preview-content"\]\s*\{[^}]*\}/);
   assert.ok(m, "r6 appearance block present with studio / pad / shape selectors");
