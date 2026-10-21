@@ -172,7 +172,7 @@ const PhoneRecorder = (function () {
       visibility: safe(() => document.visibilityState, null),
       // The backend's GPU frame timer (three's timestamp feature: WebGPU timestamp-query or
       // EXT_disjoint_timer_query_webgl2). Read only; GPU TEST turns it on. ms -1 = no result.
-      gpu: safe(() => { const B = L.GLX && (L.GLX.__tlx || L.GLX); if (!B || !B.gpuTimer) return null;
+      gpu: safe(() => { const B = L.GLX; if (!B || !B.gpuTimer) return null;
         const t = B.gpuTimer(); return { supported: !!t.supported, on: !!t.on, ms: r2(B.gpuMs ? B.gpuMs() : -1) }; }, null),
     };
     return o;

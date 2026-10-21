@@ -50,7 +50,7 @@ const GpuTestRun = (function () {
   }
 
   let _run = null, _last = { state: "idle" };
-  const backend = () => (typeof GLX !== "undefined" ? (GLX.__tlx || GLX) : null);
+  const backend = () => (typeof GLX !== "undefined" ? GLX : null);   // the façade forwards to the bound backend (TLX / WGX / GLX)
   function log(msg) { try { Log.info("game", "GpuTestRun " + msg); } catch (_) { /* Log not loaded */ } }
 
   // Counts program links and render pipelines while the run is up (prototype wraps, removed at the end).
