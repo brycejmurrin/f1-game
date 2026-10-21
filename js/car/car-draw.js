@@ -451,6 +451,9 @@ const CarDraw = (function () {
     function schedulePlayerHiRes(team, num, key) {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
+      // A PHONE keeps the 1024 preview even at GRAPHICS: HIGH (Bryce 2026-10-21, "Cap garage only"):
+      // the 2048 upgrade was a ~21 MB ImageBitmap plus ~27 MB of GPU texture on an iOS jetsam budget.
+      if (LiveryTex.IS_PHONE) return;
       if (_hiResDone.has(key) || _hiResPending.has(key) || (_hiResFail.get(key) || 0) >= HIRES_TRIES) return;
       // A live garage paint draft gives every edit a new key: the preview only, or each edit the idle slot
       // reached paid a 2048 paint and a ~26.7 MB upload. Save / cancel / leave clear it: the next draw upgrades once.

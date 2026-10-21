@@ -23,7 +23,8 @@ const LiveryTex = (function () {
   // typeof guard is the standalone-harness fallback (full-size atlas), never a
   // path the shipped shell takes.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.mobileTier;
-  // The DEVICE, not the tier: GRAPHICS: HIGH buys the player's car a bigger atlas,
+  // The DEVICE, not the tier: GRAPHICS: HIGH buys the player's car a bigger atlas (the 1024 preview:
+  // the deferred 2048 upgrade is not scheduled on a phone, car-draw.js schedulePlayerHiRes),
   // never 21 AI cars at desktop size on a phone (~33 MB, plan perf-memory M-10).
   const IS_PHONE = typeof GLX !== "undefined" && !!GLX.isMobile;
   // Which divisor family a build uses: the player follows the memory tier, an AI car the device.

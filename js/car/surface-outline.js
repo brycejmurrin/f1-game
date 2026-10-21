@@ -67,7 +67,8 @@ const GarageSurfaceOutline = (() => {
         const pixels = contour(a.data, b.data, a.width, a.height, regions, LiveryTex.SIZE, LiveryTex.SIZE_H);
         if (!pixels) return false;
         const canvas = document.createElement("canvas"); canvas.width = a.width; canvas.height = a.height;
-        const ctx = canvas.getContext("2d"), image = ctx.getImageData(0, 0, a.width, a.height);
+        // createImageData: the same transparent buffer, without reading back a blank canvas.
+        const ctx = canvas.getContext("2d"), image = ctx.createImageData(a.width, a.height);
         image.data.set(pixels); ctx.putImageData(image, 0, 0);
         texture = gfx.createTexture(canvas);
         if (!texture) return false;
