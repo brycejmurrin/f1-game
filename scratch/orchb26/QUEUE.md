@@ -159,3 +159,4 @@ OPEN follow-up: image-grade pass-on-retry cause unestablished → gpu-census mac
 11:03Z: Pages d067d17b GREEN → INCIDENT 2 lifted. #3392 → 9ab83802 merged outside the bus (likely Bryce). Next game #3395 on green Pages 9ab83802; then #3402, #3431.
 
 11:24Z: Pages 9ab83802 GREEN (#3392 live). INCIDENT lifted line posted. MERGED #3402 → 141be4bb (GAME, UI train). Next: #3431 on green Pages 141be4bb. #3395 CONFLICTING, owner H22 gone → needs a sync owner.
+11:32Z: #3395 sync STOPPED on real conflict js/car/car-draw.js → launched B·H25 session_01MjgeR2rfQBC3baMa2L7eCc (Sonnet, replaces H22) to resolve + CI + READY.
