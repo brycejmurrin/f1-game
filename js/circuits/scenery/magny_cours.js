@@ -463,17 +463,14 @@
           // Tie beam seated on the leg tops.
           seat.box(out, vadd(vadd(a.c, a.r, side * backTop * 0.5), a.u, roofY),
             [backTop * 1.05, 0.16, 0.16], [0.60, 0.62, 0.66], b);
+          // Cambered bays seated ON the tie plane (height absorbs cam) — no
+          // per-bay posts (those blew props-tris +2.6 % over the 0.5 % ratchet).
           const bays = 6;
           for (let j = 0; j < bays; j++) {
             const f = (j + 0.5) / bays, cam = (1 - (f * 2 - 1) * (f * 2 - 1)) * R * 0.42;
             const lat = side * (f * backTop * 1.06 - backTop * 0.03);
-            const plane = vadd(vadd(a.c, a.r, lat), a.u, roofY + 0.16);
-            // Short post from the tie plane up to the cambered bay underside.
-            if (cam > 0.05) {
-              seat.cyl(out, plane, 0.07, cam, [0.60, 0.62, 0.66], 5, b);
-            }
-            seat.box(out, vadd(plane, a.u, cam),
-              [backTop * 1.06 / bays + 0.15, 0.28, seg],
+            seat.box(out, vadd(vadd(a.c, a.r, lat), a.u, roofY + 0.16),
+              [backTop * 1.06 / bays + 0.15, 0.28 + cam, seg],
               j & 1 ? [0.74, 0.76, 0.80] : [0.70, 0.72, 0.76], b);
           }
           // Blue eaves lip, the same trim as the pit vault and the sheds.
