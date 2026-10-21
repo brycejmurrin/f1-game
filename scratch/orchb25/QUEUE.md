@@ -3,12 +3,12 @@
 Live state, refreshed and pushed every tick (branch `cursor/orchb25-queue-o25q`, never merged).
 A successor reads this first. Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-21 04:02Z
+Updated: 2026-10-21 04:07Z
 
 ## Gate state
-- Deploy tip cfefcbf7 (#3383 + #3381). Pages run 39536139765: RED after its one rerun
-  (att 1 engine-audio-offline flake, att 2 garage-pick-cost flake). INCIDENT posted on the bus 03:34Z.
-- ALL merges held until the flake fixes land and a fresh Pages run is green.
+- Pages 39541119371 on a437375b SUCCESS → INCIDENT lifted 04:05Z.
+- Last game merge: #3390 → 9416abb3 (04:06Z). Next game merge waits for green Pages on 9416abb3.
+- Pages 142f52af (non-game) running.
 
 ## Merge order
 Non-game first (batch, each gated on the tip the previous produced):
@@ -19,7 +19,7 @@ Non-game first (batch, each gated on the tip the previous produced):
 → the merge of 1–4 triggers a new Pages run; INCIDENT lifted only when it is green.
 
 Game, one per green Pages (GAME-SLOT on the bus first):
-5. #3390 PHONE TEST GPU preset — B·H15 — green @516d02e0
+5. DONE #3390 → 9416abb3
 6. #3377 memory pins + qualiField bug — B·H12 (wrapping up, handoff pending) — dirty, sync in progress
 7. #3385 race-entry cover (−1 s to lights) — B·H18 — fix pushed 33ae2e355 (policies.json rows), CI running
 8. #3238 parts-livery (Bryce/Cursor author) — B·W13 watches — full tier re-running @c7fdcdc57
@@ -66,3 +66,6 @@ Memory branch cursor/orchb25-memory-o25m @24af5d72: W13 refused (.claude/**); Or
 - B·O-G session_01WpNcoEk9bXpGLimvzhLSV4 (Sonnet): #3376 #3309 #3357 #3358 — proposes a train
 - B·H19 memory session_016TYNhEamegWQ9c5jxQCqhg (Sonnet): #3377 #3391 #3392 (H12 archived)
 - Left alone: #3387 (MERGE-HOLD by Bryce). New drafts: #3400 (W13, incl. D2/D3 receipt 30→10 min), #3401 (H18 step gate).
+
+Decisions 04:05Z: O-G train = A+3376 (#3309+#3357+#3358+#3376 in one train PR; originals closed as superseded). O-T: #3301 before #3401. #3359 has MERGE-HOLD (Bryce review of commit gate) — ask Bryce.
+Next game order: #3382, #3385, #3230, #3377, #3238, O-G train, #3386, #3388, #3391/#3392, #3395, #3396. Non-game gaps: #3398, #3301, #3310, #3400, #3401.
