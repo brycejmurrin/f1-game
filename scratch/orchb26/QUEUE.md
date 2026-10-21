@@ -146,3 +146,5 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 
 09:18Z: INCIDENT: Pages RED on 6c631c57 (#3396): macOS Metal renderer specs (test:gfx). Game merges frozen; ci-red-triage running.
 09:24Z: Triage: image-grade-visual "blacks visibly change deepest detail" flaked on Metal (0.746 vs >1, retry pass) → FAIL_ON_FLAKY red. W14 owns quarantine PR + follow-up A/B tlxRoadSplit. Game merges frozen.
+
+09:55Z: #3433 (quarantine) READY 50a13bc4, full tier running → merge when gate passes, then Pages green before #3238.
