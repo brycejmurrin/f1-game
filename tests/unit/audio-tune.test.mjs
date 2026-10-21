@@ -1774,9 +1774,16 @@ test("a rewind that jumps the race clock across a pit edge re-seeds wheel guns s
   G.raceT = 48; car.pitState = "none"; S.update(car);
   G.raceT = 49; car.pitState = "lane"; S.update(car);
   assert.equal(guns.length, 1, "rewind across edges does not replay wheel guns");
-  G.raceT = 53; car.pitState = "box"; S.update(car);
-  G.raceT = 54; car.pitState = "out"; S.update(car);
-  assert.deepEqual(guns, [false, false, true], "forward stop edges after a rewind still fire once each");
+  G.raceT = 50; car.pitState = "box"; S.update(car); S.update(car);
+  G.raceT = 51; car.pitState = "out"; S.update(car);
+  assert.deepEqual(guns, [false, false, true], "forward stop edges below the old clock still fire once each");
+  // The instance survives race changes too: a fresh car quietly seeds its
+  // current state, then its forward release must not wait out the old race.
+  const nextCar = { speed: 0, pitState: "box" };
+  G.raceT = 0; S.update(nextCar);
+  assert.equal(guns.length, 3, "a new race's initial pit state stays silent");
+  G.raceT = 1; nextCar.pitState = "out"; S.update(nextCar);
+  assert.deepEqual(guns, [false, false, true, true], "new race pit edges resume immediately");
 });
 
 test("setCarSfx and pitGun are safe with the engine off, and drive their layers with it on", async () => {
