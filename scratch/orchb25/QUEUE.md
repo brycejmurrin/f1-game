@@ -3,7 +3,7 @@
 Live state, refreshed and pushed every tick (branch `cursor/orchb25-queue-o25q`, never merged).
 A successor reads this first. Times UTC (Pacific = UTC−7).
 
-Updated: 2026-10-21 03:57Z
+Updated: 2026-10-21 04:02Z
 
 ## Gate state
 - Deploy tip cfefcbf7 (#3383 + #3381). Pages run 39536139765: RED after its one rerun
@@ -60,3 +60,9 @@ Pending:
 - Delete throwaway branches: cursor/live-memory-h12a-hold, cursor/probe-tip-w12a, cursor/probe-3356-w12a, cursor/revert-prep-yield-h8r1.
 
 Memory branch cursor/orchb25-memory-o25m @24af5d72: W13 refused (.claude/**); OrchB carries it in its own PR.
+
+## Adopted unowned PRs (04:01Z, Bryce "pick up any prs not owned")
+- B·O-T session_0154i4afT4VnyosoG3TD6N4Q (Sonnet): #3301 #3310 #3359 (D·W8 tools)
+- B·O-G session_01WpNcoEk9bXpGLimvzhLSV4 (Sonnet): #3376 #3309 #3357 #3358 — proposes a train
+- B·H19 memory session_016TYNhEamegWQ9c5jxQCqhg (Sonnet): #3377 #3391 #3392 (H12 archived)
+- Left alone: #3387 (MERGE-HOLD by Bryce). New drafts: #3400 (W13, incl. D2/D3 receipt 30→10 min), #3401 (H18 step gate).
