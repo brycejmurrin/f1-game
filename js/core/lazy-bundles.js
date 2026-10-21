@@ -687,12 +687,10 @@ function raceAssets() {
       try { TrackBuildClient.idleWarm(wantAgentSurface()); } catch (_) { /* warm is best-effort */ }
     }
   };
-  // ON IDLE, NOT A MICROTASK: the kick evaluates LAZY_TRACK_BUILD (~535 KB raw, one 40-150 ms task per big file on a
-  // 4x phone) the moment the title takes taps, and the default title builds no world. RACE! / openQuali / the
-  // flyby await ensureScenery themselves (shared in flight), so this only moves a prefetch. game-vm stubs
-  // requestIdleCallback as a no-op: it keeps the microtask (the audioIsGameVm pattern below).
-  if (audioIsGameVm()) queueMicrotask(kickScenery);
-  else scheduleIdle(kickScenery, 6000);
+  // A MICROTASK, NOT IDLE: the default track builds at boot, and __apex.mapPts() / trackBounds() (map-hooks.spec)
+  // read it the moment __apex exists. Deferring it to idle (B·H8 row 5) moved no measured boot number.
+  if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);
+  else Promise.resolve().then(kickScenery);
   // Title prefetches on idle with LONG deadlines: a short one forced the eval as an ordinary task in the first
   // seconds of title input. RACE! awaits all three, so a late prefetch costs nothing but the prefetch.
   // Lights stay on every link: a race start re-asks only after a FAILED fetch.
