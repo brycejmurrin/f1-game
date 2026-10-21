@@ -207,3 +207,8 @@ All are game PRs (js/) → one GAME-SLOT per green Pages.
 ## 20:36Z tick
 - #3424 merged 8f03f188 (2 parents, DONE posted). Watcher bmcwb7bx9 on 8f03f188. Next: #3438 (ready, aa0e5963) → #3439 → #3442 → #3441 (READY 21d8c84a) → #3407.
 - H26 granted tlxLowMem settings-row carve-out (index.html row, settings-search, settings-export, new js/ui/low-mem-opts.js); H28 told.
+
+## 21:09Z
+- #3439 4e046389 (Bryce, carries #3438). Watcher b8bd2ats5. Queue: #3442 → #3441 → #3443 → #3407 → #3445; #3447 (H26 docs-only, orphaned: I ready-gate + merge it in a non-game gap).
+- B·H26 STOPPED (handoff 21:08Z, quota allowed_warning → no relaunch). Leads: TLX/WebGPU race-entry 6477 ms in mirrorPrepare (census 39670971466; mirror-pass.js = codex 7e31); garage cold ~10 s GPU stall (B·H32); chunk IB zero-gap merge; CPU profile 844x390.
+- B·H33 cockpit/helmet finishes launched 21:04Z (session_01Vq7FQpCWj2QSApSZeSq61N) on Bryce ask. tlxLowMem carve-out cancelled (#3444 closed).
