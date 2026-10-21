@@ -244,7 +244,7 @@ test("countdown watches child lists inside the hub only, and `hidden` anywhere",
     document: {documentElement: root, querySelector: () => null, getElementById: (id) => (id === "datahub" ? hub : null)},
     queueMicrotask: () => {}, setInterval: () => 1, clearInterval: () => {},
     F1API: {schedule: () => Promise.resolve([{...VEGAS, date: "2099-11-22"}])}});
-  vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context);
+  vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context, { filename: absSrc("js/data/schedule.js") });
   const {loadSchedule} = context.S.create({el, emptyMsg: t => el("div", "empty", t)});
   const wrap = await loadSchedule();
   const onRoot = calls.filter((c) => c.target === root), onHub = calls.filter((c) => c.target === hub);

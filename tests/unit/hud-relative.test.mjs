@@ -15,7 +15,8 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-relative.js"), "utf8");
 function load(extra = {}) {
   const ctx = { console, ...extra };
   vm.createContext(ctx);
-  vm.runInContext(SRC + "; this.HudRelative = HudRelative;", ctx);
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-relative.js") });   // a filename, so V8 coverage attributes the run to the file
+  vm.runInContext("this.HudRelative = HudRelative;", ctx);
   return ctx.HudRelative;
 }
 const L = 5000;

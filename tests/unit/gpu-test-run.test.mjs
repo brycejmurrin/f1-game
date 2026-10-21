@@ -6,10 +6,11 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/perf/gpu-test-run.js"), "utf8");
-const load = () => vm.runInNewContext(SRC + "\n;GpuTestRun", { performance: { now: () => 0 } });
+const load = () => vm.runInNewContext(SRC + "\n;GpuTestRun", { performance: { now: () => 0 } }, { filename: absSrc("js/perf/gpu-test-run.js") });
 const J = (x) => JSON.parse(JSON.stringify(x));   // the VM's arrays and objects carry its realm's prototypes
 
 test("gpu-test-run: the plan is default, the 0.5/0.75/1.0 sweep, mirror off, default again, under 3 min", () => {

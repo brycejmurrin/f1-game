@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 const source = fs.readFileSync(new URL("../../js/ui/photo-studio.js", import.meta.url), "utf8").replace(/^const PhotoStudio/m, "var PhotoStudio");
 function boot(options = {}) {
@@ -603,16 +604,16 @@ test("Time & weather group stays out of the garage subject", () => {
 // GARAGE & LIGHTING (Bryce 2026-10-20): a garage visit offers the Team tab's GARAGE / CREW / LIGHTING pickers. Runs the
 // REAL lookRowSpecs from setup-sheet.js against stateful scene stubs, so a pick in the studio must land in the same
 // state the Team tab reads back on its next build.
-function teamLooks() {
+function teamLooks(tables = {}) {
   const src = fs.readFileSync(new URL("../../js/garage/setup-sheet.js", import.meta.url), "utf8");
   const start = src.indexOf("const CREW_NAMES"), end = src.indexOf("function buildLookRows");
   assert.ok(start > 0 && end > start, "lookRowSpecs source found in setup-sheet.js");
   const state = { room: "stock", crew: "classic", mood: "shipped" }, saved = [];
   const ctx = vm.createContext({
-    GaragePrims: { LOOK_IDS: ["stock", "studio"], LOOKS: { stock: null, studio: { label: "Silver studio" } },
+    GaragePrims: { LOOK_IDS: Object.keys(tables.rooms || { stock: null, studio: {} }), LOOKS: tables.rooms || { stock: null, studio: { label: "Silver studio" } },
       lookId: () => state.room, setLook: (id) => { state.room = id; saved.push("garageLook=" + id); } },
     GarageCrew: { LOOKS: ["classic", "pitstop"], look: () => state.crew, setLook: (id) => { state.crew = id; saved.push("crewLook=" + id); } },
-    GarageScene: { MOODS: { shipped: {}, night: {}, daylight: {} }, mood: () => state.mood, setMood: (id) => { state.mood = id; saved.push("garageMood=" + id); } },
+    GarageScene: { MOODS: tables.moods || { shipped: {}, night: {}, daylight: {} }, mood: () => state.mood, setMood: (id) => { state.mood = id; saved.push("garageMood=" + id); } },
   });
   vm.runInContext(src.slice(start, end), ctx);
   return { specs: vm.runInContext("lookRowSpecs", ctx), state, saved };
@@ -671,4 +672,34 @@ test("closing the studio drops the library rows; reopening repaints them", async
   b.api.open({ source: "garage" });
   await new Promise((r) => setImmediate(r));
   assert.ok(b.dom.byId("ps-library").children.length >= 1, "open() repaints the library");
+});
+
+test("all shipped garage styles and lighting remain shared by Team and both garage photo entry points", () => {
+  const ctx = vm.createContext({ Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array, Uint32Array,
+    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false } });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
+    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
+    vm.runInContext(fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8"), ctx, { filename: absSrc(f) });
+  const team = teamLooks(vm.runInContext("({rooms: GaragePrims.LOOKS, moods: GarageScene.MOODS})", ctx));
+  const pairs = [["porcelain", "inspection"], ["heritage", "goldenhour"], ["endurance", "endurance"]];
+  let repaints = 0;
+  const b = boot({ looks: team.specs, looked: () => repaints++ });
+  for (const source of ["home", "garage"]) for (let i = 0; i < pairs.length; i++) {
+    // Team chooses one combination before the photo studio borrows the garage.
+    const [room, mood] = pairs[i], [nextRoom, nextMood] = pairs[(i + 1) % pairs.length];
+    team.specs().find(s => s.key === "room").apply(room);
+    team.specs().find(s => s.key === "mood").apply(mood);
+    b.api.open({ source });
+    for (const key of ["room", "mood"]) {
+      const row = b.dom.byId("ps-look-" + key), spec = team.specs().find(s => s.key === key);
+      assert.deepEqual(row.children.map(o => o.value), Array.from(spec.ids), "photo lists every production catalog option");
+      assert.deepEqual(row.children.map(o => o.textContent), Array.from(spec.ids, spec.name), "labels use the shared Team definitions");
+      assert.equal(row.value, key === "room" ? room : mood, "Team selection is current in Photo");
+      row.value = key === "room" ? nextRoom : nextMood;b.dom.dispatch(row, { type: "change" });
+    }
+    b.api.close(true);
+    assert.equal(team.specs().find(s => s.key === "room").cur, nextRoom, "Photo room remains selected in Team");
+    assert.equal(team.specs().find(s => s.key === "mood").cur, nextMood, "Photo lighting remains selected in Team");
+  }
+  assert.equal(repaints, 6, "each changed photo visit refreshes the garage panel");
 });

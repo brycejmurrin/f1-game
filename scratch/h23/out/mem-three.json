@@ -1,0 +1,98 @@
+{
+ "backend": "three",
+ "tier": "low",
+ "env": {
+  "backend": "three",
+  "api": null,
+  "mobileTier": true,
+  "isMobile": true,
+  "upscale": false,
+  "renderScale": {
+   "scale": 0.5,
+   "fps": 4.9,
+   "floorMs": 55.6,
+   "auto": false,
+   "tier": 2,
+   "autoTier": 0,
+   "autoShed": 0,
+   "open": {
+    "frames": 4,
+    "maxMs": 4033.2,
+    "slow": 4
+   },
+   "frameTimes": {
+    "frames": 4,
+    "p50": 3666.5,
+    "p95": 4033.199999999997,
+    "p99": 4033.199999999997,
+    "maxMs": 4033.199999999997,
+    "droppedSimS": 0.6,
+    "physicsSteps": 20,
+    "windowFrames": 2048
+   },
+   "userTier": 2,
+   "tierFloor": 0,
+   "crashStrikes": 0,
+   "scaleFutile": false,
+   "tierFutile": false,
+   "tierHold": false
+  },
+  "canvas": [
+   633,
+   293
+  ],
+  "coarse": true,
+  "dpr": 3
+ },
+ "rows": [
+  {
+   "label": "menu",
+   "state": "menu",
+   "usedMB": 38.9,
+   "arrayBufMB": 44.2,
+   "embedderMB": 11,
+   "totalMB": 83.1,
+   "perfMemMB": 83.2,
+   "tlx": {
+    "progs": 24
+   }
+  },
+  {
+   "label": "race1-monza",
+   "state": "race",
+   "usedMB": 37.6,
+   "arrayBufMB": 73.4,
+   "embedderMB": 10.9,
+   "totalMB": 111,
+   "perfMemMB": 111.1,
+   "tlx": {
+    "progs": 46
+   }
+  },
+  {
+   "label": "race2-monaco",
+   "state": "race",
+   "usedMB": 28.4,
+   "arrayBufMB": 72.9,
+   "embedderMB": 10.7,
+   "totalMB": 101.2,
+   "perfMemMB": 101.3,
+   "tlx": {
+    "progs": 45
+   }
+  },
+  {
+   "label": "race3-spa",
+   "state": "race",
+   "usedMB": 45.4,
+   "arrayBufMB": 73.6,
+   "embedderMB": 11.8,
+   "totalMB": 119,
+   "perfMemMB": 119,
+   "tlx": {
+    "progs": 45
+   }
+  }
+ ],
+ "errors": []
+}
