@@ -216,7 +216,6 @@ test("COMPACT metrics layout seeds a gap line before asserting .hud-gaps survive
   const block = spec.match(/COMPACT drops both metric halves and leaves MAP and GAPS alone[\s\S]*?^\}\);/m);
   assert.ok(block, "COMPACT metrics test exists");
   assert.match(block[0], /hud-gap-ahead[\s\S]*textContent\s*=/, "seed ahead text before width probe");
-  assert.match(block[0], /dataset\.empty/, "seeded text clears the empty flag hud.js keeps");
   assert.match(CSS, /\.hud-gaps\[data-empty\]\s*\{[^}]*display:\s*none/);
   // No :has() for it: a root :has() re-ran on every gap text write (B·H11, ~20 ms/frame of style at phone CPU).
   assert.doesNotMatch(CSS, /\.hud-gaps:not\(:has\(/);

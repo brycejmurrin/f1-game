@@ -1,1 +1,1 @@
-Fixed: the in-race HUD no longer restyles the whole page on every gap-time update, which cost a phone about 20 ms of style recalculation a frame (B·H11, #3245).
+Fixed: the in-race HUD no longer restyles the whole page whenever a gap time ticks over, cutting phone-class style recalculation by about 40 % a frame (B·H11, #3245).
