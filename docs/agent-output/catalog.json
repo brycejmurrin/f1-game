@@ -771,7 +771,10 @@
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--limit"
+        "--json",
+        "--limit",
+        "--out",
+        "--summary"
       ]
     },
     {
@@ -1997,6 +2000,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/cursor-transcript.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/custom-survey-locations.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2312,7 +2320,9 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json",
-        "--out"
+        "--limit",
+        "--out",
+        "--summary"
       ]
     },
     {
