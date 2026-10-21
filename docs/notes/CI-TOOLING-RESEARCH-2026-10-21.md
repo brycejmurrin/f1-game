@@ -98,3 +98,23 @@ leads, ordered by how likely they are to give a wrong verdict.
 
 Smaller things seen and not filed: merge-gate's ready row skips the fleet-block check that the `ready-gate` CLI applies;
 merge-gate fetches `pulls/<n>` twice, so head and file list can come from different moments.
+
+## Outcomes (B·W13, 2026-10-21)
+
+Read against the tree, not the web; each row says what was checked.
+
+- **Idea 5 / I5 (`--fail-on-flaky-tests`): not adopted.** `tests/helpers/flaky-policy.mjs` already implements
+  `APEX_FAIL_ON_FLAKY=1` and says why: Playwright's flag is all-or-nothing, so it would red the dated, owned entries in
+  `tests/data/flaky-quarantine.json` that the policy deliberately lets through. Swapping would delete the quarantine ledger's
+  effect. Revisit only if Playwright adds a per-test allow-list.
+- **I6 (durations artifact): already shipped.** `ci.yml` uploads `spec-timings-junit-*` artifacts per shard and the
+  timings merge folds them into `tests/data/spec-timings.json` (`tools/ci/spec-timings.mjs`). The open gap is F12 in
+  `CI-WALL-TIME-HUNT-2026-10-21.md` (mixed key formats), not a missing artifact.
+- **(b) `--test-timeout` on node groups: done.** `tools/gen/gen-test-groups.mjs` now emits
+  `--test-timeout=900000` (`NODE_TEST_TIMEOUT_MS`) for every `kind: node` group unless the group carries its own
+  `--test-timeout=`; `run-node-group.mjs` and the targeted sweeps in `deploy.mjs` use the same value. tooling-fast keeps
+  its own 540 s bound (`tooling-fast.mjs`). 15 min is under every node-group job's `timeout-minutes` (>= 20), so a hung
+  test fails by name instead of the job reading `cancelled`.
+- **I1 (merge queue): write-up only.** A queue needs `merge_group` in `ci.yml` and a ruleset on the deploy branch, which
+  are repository settings outside this lane. The local `merge-gate.mjs` ratchets row covers one PR at a time; a queue
+  would cover several in flight. Test on a throwaway repo first (idea 1 above).

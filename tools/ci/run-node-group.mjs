@@ -7,7 +7,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadGroups } from "../gen/gen-test-groups.mjs";
+import { loadGroups, nodeFlags } from "../gen/gen-test-groups.mjs";
 
 export function nodeGroupPhases(def, isolatedFiles = [], extraArgs = []) {
   if (!def || def.kind !== "node" || !def.files?.length) throw new Error("expected a nonempty Node test group");
@@ -18,7 +18,7 @@ export function nodeGroupPhases(def, isolatedFiles = [], extraArgs = []) {
   const phases = def.files.filter(file => isolated.has(file)).map(file => [file]);
   const ordinary = def.files.filter(file => !isolated.has(file));
   if (ordinary.length) phases.push(ordinary);
-  return phases.map(files => ["--test", ...(def.flags || []), ...extraArgs, ...files]);
+  return phases.map(files => ["--test", ...nodeFlags(def), ...extraArgs, ...files]);
 }
 
 export async function runNodeGroup(name, extraArgs = [], { doc = loadGroups() } = {}) {

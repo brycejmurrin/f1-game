@@ -65,6 +65,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
 import { githubToken } from "./github-token.mjs";
+import { NODE_TEST_TIMEOUT_MS } from "../gen/gen-test-groups.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
@@ -307,7 +308,7 @@ export function targetedFor(base, cwd) {
 
 function runTargeted(suites, why) {
   const names = suites.map((s) => path.basename(s));
-  run("node", ["--test", "--test-concurrency=1", ...suites], `${why}: targeted sweeps (${names.join(", ")}) — no fleet rebuild`);
+  run("node", ["--test", `--test-timeout=${NODE_TEST_TIMEOUT_MS}`, "--test-concurrency=1", ...suites], `${why}: targeted sweeps (${names.join(", ")}) — no fleet rebuild`);
   return names.map((n) => `sweeps:${n}`);
 }
 
