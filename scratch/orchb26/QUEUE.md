@@ -85,3 +85,5 @@ Next game order: #3382, #3385, #3230, #3377, #3238, O-G train, #3386, #3388, #33
 05:22Z (OrchB 26): Pages 7b6a3a75 SUCCESS; 50cc71dd (#3385) running. OrchB 25 archived. Lanes messaged (11).
 Game order now: #3386 (H21, only Plan tick missing) → #3377 (H19, CONFLICTING, syncing) → #3238, #3230 (W13, CONFLICTING, syncing) → #3406, #3408, #3402, #3395, #3396, #3388, #3399.
 Non-game: #3391 draft (gen conflict), #3301 draft (Structural guards pending). #3392 orchestrator sync running in OrchB 26 container (artifacts/logs/sync-3392.log).
+
+05:31Z: Bryce "have a new session and existing one get 3230 across the line" → launched B·H24 session_01NPqh5hrzzRJ4mnETEiWNwK (Sonnet, PR owner #3230: sync/CI/ready-gate); B·W13 hands notes + reviews, keeps #3238. #3420 memory PR: Bryce granted .claude edit; run-ci label added. Branch deletes (4) refused by bash-guard → Bryce deletes on GitHub.
