@@ -9649,7 +9649,8 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "bankGrip": [
-        "tests/unit/ai-drive.test.mjs"
+        "tests/unit/ai-drive.test.mjs",
+        "tests/unit/physics-rows-vm.test.mjs"
       ],
       "beginLook": [
         "tests/unit/ai-drive.test.mjs"
@@ -10013,7 +10014,6 @@
         "tests/unit/duel.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/mechanics-race-vm.test.mjs",
-        "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs"
