@@ -17,8 +17,11 @@ const soft=process.argv.includes('--software');
 let REQ={};try{REQ=JSON.parse(readFileSync('.github/gpu-census-request.json','utf8'));}catch(_){}
 const EDITS=soft?6:(+REQ.livery_edits||30),PARTS=+REQ.livery_parts||3,WINDOW_MS=soft?1500:(+REQ.livery_window_ms||2500),IDLE_MS=soft?1500:5000;
 const ONLY=(process.argv.find(a=>a.startsWith('--arm='))||'').slice(6)||REQ.livery_arm||'';
-const ARMS=[{arm:'tlx-webgpu',forceGL:'0'},{arm:'tlx-webgl2',forceGL:'1'},
-  ...(REQ.livery_hires_off_arms?[{arm:'tlx-webgpu-nohires',forceGL:'0',noHiRes:true},{arm:'tlx-webgl2-nohires',forceGL:'1',noHiRes:true}]:[])].filter(a=>!ONLY||a.arm===ONLY);
+const ARMS_ON=[{arm:'tlx-webgpu',forceGL:'0'},{arm:'tlx-webgl2',forceGL:'1'}];
+const ARMS_OFF=REQ.livery_hires_off_arms?[{arm:'tlx-webgpu-nohires',forceGL:'0',noHiRes:true},{arm:'tlx-webgl2-nohires',forceGL:'1',noHiRes:true}]:[];
+// livery_arms_off_first (B·H32): rev 15 ran the hi-res-off arms last and they sat at the 12-15 fps plateau the
+// WebGL2 arm fell to mid-run; flip the order to tell runner drift from the game.
+const ARMS=(REQ.livery_arms_off_first?[...ARMS_OFF,...ARMS_ON]:[...ARMS_ON,...ARMS_OFF]).filter(a=>!ONLY||a.arm===ONLY);
 const report={schema:'garage-livery-census/v1',parts:PARTS,request:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),software:soft,edits:EDITS,windowMs:WINDOW_MS,viewport:{width:844,height:390},arms:[],started:new Date().toISOString()};
 const save=()=>writeFileSync('game-livery-census.json',JSON.stringify(report,null,2));
 const log=x=>console.log(new Date().toISOString(),x);
