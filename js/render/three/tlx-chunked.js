@@ -660,6 +660,46 @@
     return { build, cull, visList: _visList, releaseMirrors, free };
   }
 
+  // THE ROAD SPLIT (B·H10, docs/notes/LIVE-FRAME-H10-2026-10-20.md). TLX draws the road as ONE mesh
+  // (chunkedTrackCoords:false: the chunked material has no `trk`/markings), so its whole lap, ~51k tris
+  // on monza, went into every pass, the phone mirror included, where it was 3/4 of the triangles. The
+  // ribbon's index runs along the lap, so contiguous index ranges are contiguous stretches of road:
+  // splitRanges gives each one an AABB for cull(), and mergeRuns folds the visible ones into at most
+  // maxRuns contiguous [start, count] draw ranges. A merged gap only draws real road triangles that are
+  // off-screen, so the picture is unchanged. Pure; tests/unit/tlx-chunked-lifecycle.test.mjs.
+  function splitRanges(pos, idx, triPer) {
+    const out = [], per = Math.max(3, (triPer | 0) * 3);
+    for (let s = 0; s < idx.length; s += per) {
+      const e = Math.min(idx.length, s + per);
+      const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+      for (let k = s; k < e; k++) {
+        const v = idx[k] * 3;
+        for (let a = 0; a < 3; a++) { const p = pos[v + a]; if (p < min[a]) min[a] = p; if (p > max[a]) max[a] = p; }
+      }
+      out.push({ min, max, start: s, count: e - s });
+    }
+    return out;
+  }
+  // vis[0..n): chunks from cull(), each {start, count}. Writes runs as flat [start, count, ...] into
+  // `runs`; returns the run count. Sorts vis in place (n is tens).
+  function mergeRuns(vis, n, maxRuns, runs) {
+    for (let i = 1; i < n; i++) { const c = vis[i]; let j = i - 1; while (j >= 0 && vis[j].start > c.start) { vis[j + 1] = vis[j]; j--; } vis[j + 1] = c; }
+    let r = 0;
+    for (let i = 0; i < n; i++) {
+      const c = vis[i];
+      if (r && runs[2 * r - 2] + runs[2 * r - 1] === c.start) runs[2 * r - 1] += c.count;
+      else { runs[2 * r] = c.start; runs[2 * r + 1] = c.count; r++; }
+    }
+    while (r > maxRuns) {   // close the smallest gap
+      let best = 1, gap = Infinity;
+      for (let i = 1; i < r; i++) { const g = runs[2 * i] - (runs[2 * i - 2] + runs[2 * i - 1]); if (g < gap) { gap = g; best = i; } }
+      runs[2 * best - 1] = runs[2 * best] + runs[2 * best + 1] - runs[2 * best - 2];
+      for (let i = best; i < r - 1; i++) { runs[2 * i] = runs[2 * i + 2]; runs[2 * i + 1] = runs[2 * i + 3]; }
+      r--;
+    }
+    return r;
+  }
+
   // The cull helpers ride alongside the factory, NOT on its instance: tlx.js
   // must be able to re-export them in GLX's shape even when the factory itself
   // failed and chunkedSys is null. See the note at their definition.
@@ -667,5 +707,5 @@
     { chunked,
       makeFrustumPlanes: Frustum.makeFrustumPlanes,
       aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2,
-      packAttr, packIndex, packStats });
+      packAttr, packIndex, packStats, splitRanges, mergeRuns });
 })();

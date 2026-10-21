@@ -13008,12 +13008,18 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "mergeRuns": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
       "packAttr": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "releaseMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "splitRanges": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "*": [
         "tests/unit/frustum-buckets.test.mjs",
