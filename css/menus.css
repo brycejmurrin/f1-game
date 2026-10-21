@@ -719,8 +719,8 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   /* Rooms used to sit on --tap (52px on touch) so a 2×2 of DATA / GARAGE /
      SETTINGS / HELP overflowed the column (measured gallery 2026-09-03:
      scrollH 388 → 323 vs clientH 306 at 734×343 after the first cut).
-     Doors now floor at --tap-paint (painted 52 on touch) like the rest of
-     compact UI; reachability is #menu-buttons scroll, not sub-44px tiles. */
+     Second cut clears the remaining ~17px so sf-b fade does not eat the
+     rooms. Same compact floor family the pause stack already uses. */
   gap: calc(var(--gap) * 0.35);
 }
 /* The wordmark is the only thing in the brand column tall enough to answer the
@@ -783,7 +783,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
      var(--ui-compact-text))`) is later at equal specificity and wins, so a
      value on this line is dead — the doors paint 17px, which the phone
      screenshots were taken at. */
-  min-height: max(var(--tap-min), var(--tap-paint));
+  min-height: max(32px, var(--tap-min));
 }
 :where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore) .bigbtn {
   display: flex; align-items: center; justify-content: center;
@@ -803,7 +803,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { margin: 0; flex: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
   padding: 3px 6px 3px 10px;   /* size comes from the compact :is() rule below */
-  min-height: max(var(--tap-min), var(--tap-paint));
+  min-height: max(26px, var(--tap-min));
 }
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */
