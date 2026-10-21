@@ -270,15 +270,17 @@ const SettingDeps = (function () {
       }
       r.setAttribute("id", rid);
     }
-    r.textContent = text;
+    if (r.textContent !== text) r.textContent = text;
     return r;
   }
 
   function describe(ctrl, rid, add) {
-    const cur = (ctrl.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    const before = ctrl.getAttribute("aria-describedby");
+    const cur = (before || "").split(/\s+/).filter(Boolean);
     const next = add ? (cur.includes(rid) ? cur : cur.concat(rid)) : cur.filter((x) => x !== rid);
-    if (next.length) ctrl.setAttribute("aria-describedby", next.join(" "));
-    else ctrl.removeAttribute("aria-describedby");
+    const value = next.join(" ");
+    if (value) { if (before !== value) ctrl.setAttribute("aria-describedby", value); }
+    else if (before !== null) ctrl.removeAttribute("aria-describedby");
   }
 
   function apply(id, rule, off) {
@@ -294,8 +296,8 @@ const SettingDeps = (function () {
     const rid = id + "-dep";
     if (off) {
       const r = reasonEl(id, el, row, rule.reason);
-      r.hidden = false;
-      row.setAttribute("data-dep-off", rule.key);
+      if (r.hidden) r.hidden = false;
+      if (mine !== rule.key) row.setAttribute("data-dep-off", rule.key);
       // Write only on change: the EXPLAIN observer watches these attributes.
       for (const c of ctrls) {
         if (!c.disabled) { c.setAttribute("data-dep-disabled", ""); c.disabled = true; }
@@ -306,7 +308,7 @@ const SettingDeps = (function () {
     }
     row.removeAttribute("data-dep-off");
     const r = byId(rid);
-    if (r) { r.hidden = true; r.textContent = ""; }
+    if (r) { if (!r.hidden) r.hidden = true; if (r.textContent) r.textContent = ""; }
     for (const c of ctrls) {
       if (c.hasAttribute("data-dep-disabled")) { c.disabled = false; c.removeAttribute("data-dep-disabled"); }
       if (c.hasAttribute("aria-disabled")) c.removeAttribute("aria-disabled");
@@ -395,9 +397,9 @@ const SettingDeps = (function () {
       const r = why || greyed ? whyEl(rule, el, n) : null;
       if (greyed && why) {
         if (r.textContent !== why) r.textContent = why;
-        r.hidden = false;
+        if (r.hidden) r.hidden = false;
         shown.add(r);
-      } else if (r && !shown.has(r)) { r.hidden = true; r.textContent = ""; }
+      } else if (r && !shown.has(r)) { if (!r.hidden) r.hidden = true; if (r.textContent) r.textContent = ""; }
       for (const x of ctrls) {
         if (r) describe(x, r.id, greyed && !!why);
         if (rule.link && byId(rule.link)) describe(x, rule.link, greyed);

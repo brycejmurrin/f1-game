@@ -57,7 +57,8 @@ test("frame-fit spatial search preserves exhaustive nearest matches, ties, and t
   // exhaustive oracle. Compare every returned float, not a looser RMS bound.
   const exhaustive = "    const near = (x, y) => { let b = 0, bd = Infinity; for (let i = 0; i < C.length; i++) { const dx = C[i][0] - x, dy = C[i][1] - y, d = dx * dx + dy * dy; if (d < bd) { bd = d; b = i; } } return b; };\n";
   const load = (code) => vm.runInNewContext(code + "; RealReplay", { M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } });
-  const linear = load(source.slice(0, start) + exhaustive + source.slice(end));
+  const oldMapper = "    const mapper = (refl, th, tx, ty) => (p) => { const x = p[0], y = refl * p[1], cos = Math.cos(th), sin = Math.sin(th); return [cos * x - sin * y + tx, sin * x + cos * y + ty]; };\n";
+  const linear = load((source.slice(0, start) + exhaustive + source.slice(end)).replace(/    const mapper = [\s\S]*?(?=    let best = null;)/, oldMapper));
   // Observe just the nearest indices as well, so duplicate points and exact
   // distance ties cannot hide behind an otherwise acceptable final fit.
   const nearest = load(source.replace("    const cs = centroid(S), ct = centroid(C);", "    return pts.map((p) => near(p[0], p[1]));"));
@@ -84,4 +85,25 @@ test("frame-fit spatial search preserves exhaustive nearest matches, ties, and t
       assert.deepEqual(host(R.fitFrame(track, trace)), host(linear.fitFrame(track, trace)), "same fit on a repeated, crossing centreline with handedness " + refl);
     }
   } finally { g.close(); }
+});
+
+test("trackTrace reuses one transform while mapPoint still observes mutable fits", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8");
+  const calls = { sin: 0, cos: 0 }, math = Object.create(Math);
+  for (const key of ["sin", "cos"]) math[key] = (x) => { calls[key]++; return Math[key](x); };
+  const track = { total: 10000 }, fit = { refl: -1, th: 0.41, tx: 120, ty: -44 };
+  const project = (_track, x, z) => ({ s: x + 500, lat: z });
+  const R = vm.runInNewContext(source + "; RealReplay", { Math: math, M4: { clamp: (x) => x }, Tracks: { project } });
+  const raw = Float32Array.from(Array.from({ length: 1000 }, (_, i) => [i * 0.5, i * 2, Math.sin(i / 30)]).flat());
+  const actual = R.trackTrace(track, fit, raw);
+  assert.deepEqual(calls, { sin: 1, cos: 1 }, "one trig pair per trace, independent of sample count");
+  const expected = Array.from({ length: actual.n }, (_, i) => {
+    const w = R.mapPoint(fit, raw[i * 3 + 1], raw[i * 3 + 2]);
+    return project(track, w[0], w[1]);
+  });
+  assert.deepEqual(Array.from(actual.prog), Array.from(Float32Array.from(expected.map((p) => p.s))), "unchanged projection floats");
+  assert.deepEqual(Array.from(actual.x), Array.from(Float32Array.from(expected.map((p) => p.lat))), "unchanged lateral floats");
+  const first = Array.from(R.mapPoint(fit, 123, 456));
+  fit.th += 0.25;
+  assert.notDeepEqual(Array.from(R.mapPoint(fit, 123, 456)), first, "public single-point transforms do not cache mutable fit angles");
 });

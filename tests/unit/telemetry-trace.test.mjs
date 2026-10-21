@@ -286,6 +286,49 @@ test("integrated distance retains unknown intervals and legitimate stops", () =>
   assert.equal(model.distAtT(stopped, 2), 50);
 });
 
+test("distance inversion respects every finite-prefix boundary and complete-lap clamping", () => {
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  for (const n of [0, 1, 2, 3, 4, 7, 8, 9, 63, 64, 65]) {
+    for (const missing of [-1, 0, 1, Math.floor(n / 2), n - 1]) {
+      const car = Array.from({ length: n }, (_, t) => ({ t, speed: t === missing ? null : 180 }));
+      const cum = model.cumDist(car);
+      const end = missing < 0 ? n : Math.min(n, Math.max(1, missing));
+      const label = `${n} samples, missing speed at ${missing}`;
+      if (!n) { assert.ok(Number.isNaN(model.timeAtDist(cum, 0)), label); continue; }
+      assert.equal(model.timeAtDist(cum, -1), 0, label);
+      assert.equal(model.timeAtDist(cum, 0), 0, label);
+      assert.equal(model.timeAtDist(cum, (end - 1) * 25), (end - 1) / 2, label);
+      assert.equal(model.timeAtDist(cum, (end - 1) * 50), end - 1, label);
+      if (end < n) assert.ok(Number.isNaN(model.timeAtDist(cum, (end - 1) * 50 + .01)), label);
+      else assert.equal(model.timeAtDist(cum, n * 50), n - 1, label);
+      for (const invalid of [NaN, Infinity, -Infinity]) assert.ok(Number.isNaN(model.timeAtDist(cum, invalid)), label);
+    }
+  }
+  const stopped = model.cumDist([{ t: 0, speed: 180 }, { t: 1, speed: 0 },
+    { t: 2, speed: 0 }, { t: 3, speed: 180 }, { t: 4, speed: null }]);
+  assert.equal(model.timeAtDist(stopped, 0), 0, "the first timestamp owns a stationary plateau");
+  assert.equal(model.timeAtDist(stopped, 25), 2.5);
+  assert.equal(model.timeAtDist(stopped, 50), 3);
+  assert.ok(Number.isNaN(model.timeAtDist(stopped, 51)));
+});
+
+test("distance inversion reads current arrays when a finite prefix is replaced or extended", () => {
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  const cum = model.cumDist([{ t: 0, speed: 180 }, { t: 1, speed: 180 },
+    { t: 2, speed: null }, { t: 3, speed: 180 }]);
+  assert.ok(Number.isNaN(model.timeAtDist(cum, 75)));
+  cum.d[2] = 100; cum.d[3] = 150;
+  assert.equal(model.timeAtDist(cum, 75), 1.5, "repairing the suffix cannot reuse a stale prefix boundary");
+  cum.d.push(200); cum.t.push(4);
+  assert.equal(model.timeAtDist(cum, 175), 3.5, "appending a sample is visible without rebuilding the object");
+  cum.d.splice(1, 4, NaN, NaN, NaN, NaN);
+  assert.ok(Number.isNaN(model.timeAtDist(cum, 25)), "a newly unknown suffix invalidates the old domain");
+  cum.d = [0, 100, 200]; cum.t = [0, 2, 4];
+  assert.equal(model.timeAtDist(cum, 50), 1, "replacing both channels changes the interpolation clock");
+  cum.d.length = cum.t.length = 0;
+  assert.ok(Number.isNaN(model.timeAtDist(cum, 0)));
+});
+
 // Exercise the real controller -> view -> player -> renderer wiring with a
 // synthetic feed. Canvas methods are inert: this checks state and lifecycle,
 // while the browser telemetry-compare spec owns layout and visible pixels.

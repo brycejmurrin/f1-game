@@ -69,6 +69,44 @@ test("buildTable truncates each chunk's list at the knob's cap", () => {
   assert.equal(half.lists[0].length, 12);
 });
 
+test("bounded selection matches the stable full-sort lists and packed bytes", () => {
+  // Independent legacy oracle: keep ALL reaching records, stable-sort, truncate.
+  const Frustum = new Function(DEPS + "; return Frustum;")();
+  let seed = 0x26f1;
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  const lights = lampSet(Array.from({ length: 180 }, () => [
+    Math.floor(random() * 25) * 10, Math.floor(random() * 4) * 5,
+    Math.floor(random() * 25) * 10, Math.floor(random() * 12) * 30,
+  ]));
+  // More than cap equal-distance hits, including Infinity: retain the EARLIEST
+  // source indices at the boundary, regardless of heap replacement history.
+  const tied = lampSet(Array.from({ length: 70 }, (_, i) => [i < 35 ? 5 : Infinity, 0, 0, Infinity]));
+  const infinite = lampSet(Array.from({ length: 70 }, (_, i) => [i < 5 ? 5 : Infinity, 0, 0, Infinity]));
+  tied[6] = NaN; tied[21] = -1; tied[32] = NaN;
+  const chunks = Array.from({ length: 25 }, () => {
+    const x = random() * 220, z = random() * 220;
+    return chunk([x, -5, z], [x + 20, 20, z + 20]);
+  });
+  for (const src of [lights, tied, infinite]) for (const knob of [0, 0.01, 0.34, 0.5, 0.7, 0.9, 1]) {
+    const expected = chunks.map(ch => {
+      const hits = [];
+      for (let i = 0; i < src.length / 15; i++) {
+        const o = i * 15, rad = src[o + 6];
+        if (!(rad > 0)) continue;
+        const d2 = Frustum.aabbDist2(ch.min, ch.max, src[o], src[o + 1], src[o + 2]);
+        if (d2 <= rad * rad) hits.push({ i, d2 });
+      }
+      return hits.sort((a, b) => a.d2 - b.d2).slice(0, LampChunks.capFor(knob)).map(h => h.i);
+    });
+    const actual = LampChunks.buildTable(src, chunks, knob), packed = expected.flat();
+    assert.deepEqual(actual.lists.map(a => Array.from(a)), expected);
+    assert.deepEqual(Buffer.from(actual.concat.buffer), Buffer.from(Uint32Array.from(packed).buffer));
+    assert.deepEqual(Array.from(actual.counts), expected.map(a => a.length));
+    let off = 0;
+    assert.deepEqual(Array.from(actual.offsets), expected.map(a => { const start = off; off += a.length; return start; }));
+  }
+});
+
 test("concat/offsets/counts are exactly the per-chunk lists back to back", () => {
   const lights = lampSet([[0, 0, 0, 30], [100, 0, 0, 30], [50, 0, 0, 200]]);
   const chunks = [

@@ -33,20 +33,51 @@ const LampChunks = (function () {
   function buildTable(lights, chunks, knob) {
     const cap = capFor(knob), n = (lights.length / 15) | 0, nc = chunks.length;
     const lists = new Array(nc);
+    // Retain only the nearest cap, not an object for every reaching lamp. The
+    // max-heap puts the farthest (latest source index on a tie) at the root;
+    // sorting that bounded heap gives the old stable nearest-first order.
+    const idx = new Int32Array(cap), dist = new Float64Array(cap);
+    const worse = (a, b) => dist[a] > dist[b] || (dist[a] === dist[b] && idx[a] > idx[b]);
+    const swap = (a, b) => { const i = idx[a], d = dist[a]; idx[a] = idx[b]; dist[a] = dist[b]; idx[b] = i; dist[b] = d; };
+    const sink = (size) => {
+      let p = 0;
+      for (;;) {
+        const l = p * 2 + 1, r = l + 1;
+        let w = p;
+        if (l < size && worse(l, w)) w = l;
+        if (r < size && worse(r, w)) w = r;
+        if (w === p) break;
+        swap(p, w); p = w;
+      }
+    };
     let total = 0;
     for (let c = 0; c < nc; c++) {
-      const ch = chunks[c], hits = [];
+      const ch = chunks[c];
+      let m = 0;
       for (let i = 0; i < n; i++) {
         const o = i * 15, rad = lights[o + 6];
         if (!(rad > 0)) continue;
         // Frustum.aabbDist2 (js/render/shared/frustum.js): the same reach test the
         // chunk culls use, call-time so this module still evaluates alone.
         const d2 = Frustum.aabbDist2(ch.min, ch.max, lights[o], lights[o + 1], lights[o + 2]);
-        if (d2 <= rad * rad) hits.push({ i, d2 });
+        if (!(d2 <= rad * rad)) continue;
+        if (m < cap) {
+          let p = m++;
+          idx[p] = i; dist[p] = d2;
+          while (p > 0) {
+            const up = (p - 1) >> 1;
+            if (!worse(p, up)) break;
+            swap(p, up); p = up;
+          }
+        } else if (d2 < dist[0]) {
+          // Source indices arrive in ascending order, so an equal-distance
+          // newcomer always loses the stable tie, including Infinity.
+          idx[0] = i; dist[0] = d2; sink(m);
+        }
       }
-      hits.sort((a, b) => a.d2 - b.d2);
-      const m = Math.min(cap, hits.length), li = new Int32Array(m);
-      for (let k = 0; k < m; k++) li[k] = hits[k].i;
+      for (let end = m - 1; end > 0; end--) { swap(0, end); sink(end); }
+      const li = new Int32Array(m);
+      for (let k = 0; k < m; k++) li[k] = idx[k];
       lists[c] = li; total += m;
     }
     const concat = new Uint32Array(total);

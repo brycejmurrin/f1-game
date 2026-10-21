@@ -89,7 +89,7 @@ var DrivingCues = (function () {
 
   /** Real-race WATCH (js/race/real-race.js): nobody is driving — same gate as the spotter. */
   function watchPlayback() {
-    return typeof RealRace !== "undefined" && RealRace.status && !!RealRace.status().watch;
+    return typeof RealRace !== "undefined" && RealRace.isWatch && RealRace.isWatch();
   }
 
   function create(G) {

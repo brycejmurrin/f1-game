@@ -11,7 +11,63 @@ const { createGame } = require("../../tools/lib/game-vm.cjs");
 import { ROOT, host, scriptIn, line, transportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
+test("WATCH event cursor preserves equal-time dispatch, caption bounds, rewinds, restart and reel cuts", () => {
+  const { replay, G, options } = transportReplay({}, { completeSubject: true });
+  const seen = [], cards = [];
+  G.raceRadio = { commentates: () => true, replayEvent: (h) => { seen.push(h.t); return true; } };
+  G.announce = (...args) => cards.push(args);
+  options.script.passes = [0, 1, 4, 4, 5, 12, 20].map((t, i) => ({ t, lap: i + 1, by: 1, over: 2 }));
+  replay.start(options);
+  replay.tick(0);
+  replay.tick(4);
+  replay.tick(0);
+  assert.deepEqual(seen, [0, 1, 4, 4], "inclusive time boundary and same-time order, once each");
+  replay.seek(8); replay.tick(0);
+  assert.deepEqual(seen.slice(4), [5], "caption window includes exactly T minus three seconds");
+  replay.tick(0); assert.equal(seen.length, 5, "no repeated event while the clock holds");
+  replay.seek(1); replay.tick(0);
+  assert.deepEqual(seen.slice(5), [0, 1], "rewind releases the previous cursor history");
+  replay.setSpeed(8); replay.seek(4); replay.tick(0);
+  assert.equal(cards.length, 3, "fast playback captions both equal-time events and the window's earlier event");
+  const valid = cards.at(-1)[3];
+  replay.seek(20); assert.equal(valid(), false, "seek still invalidates accepted caption callbacks");
+  replay.setSpeed(1); replay.tick(0); assert.equal(seen.at(-1), 20);
+  replay.start({ ...options, reel: true });
+  seen.length = 0; replay.tick(0); replay.skip(); replay.skip(); replay.tick(8);
+  assert.deepEqual(seen, [0, 12], "restart and explicit reel cuts reset to the new event window");
+  replay.stop();
+});
+
 // ── BROADCAST (js/race/broadcast.js): the timing tower and the AUTO director ──
+test("BROADCAST event windows retain stable ties and absolute shown indices without rereading race history", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8");
+  const B = vm.runInNewContext(source + "; Broadcast", {});
+  const rank = { out: 4, pass: 3, fastest: 2, pit: 1 };
+  const list = Array.from({ length: 203 }, (_, i) => ({ t: Math.floor(i / 3), kind: ["pit", "pass", "out", "radio", "fastest"][i % 5], num: i % 7 ? i % 5 : null }));
+  const old = (T, shown, lead, ok) => {
+    let best = null;
+    for (let i = 0; i < list.length; i++) {
+      const h = list[i];
+      if (h.t < T) continue;
+      if (h.t > T + lead) break;
+      if (shown.has(i) || h.num == null || !rank[h.kind] || (ok && !ok(h.num))) continue;
+      if (!best || rank[h.kind] > rank[best.h.kind]) best = { i, h };
+    }
+    return best;
+  };
+  for (const T of [-1, 0, 1, 25, 25.5, 66, 67, 100]) for (const lead of [0, 1, 8]) for (const shown of [new Set(), new Set([2, 75, 77, 200])]) {
+    for (const ok of [undefined, (num) => num !== 1, (num) => num === 1]) {
+      const actual = B.nextEvent(list, T, shown, lead, ok), expected = old(T, shown, lead, ok);
+      assert.equal(actual?.i, expected?.i, "same stable absolute event index at " + T);
+      if (actual) assert.equal(actual.h, expected.h, "the original event object is retained");
+    }
+  }
+  let reads = 0;
+  const counted = list.map((h) => ({ ...h, get t() { reads++; return h.t; } }));
+  assert.equal(B.nextEvent(counted, 100, new Set(), 8), null);
+  assert.ok(reads <= 8, "a fully past 203-event history takes logarithmic timestamp reads: " + reads);
+});
+
 test("BROADCAST tower: the grid at lights out, the leader and gaps at the last line, the car out last, the fastest lap once it is set", async () => {
   const g = await createGame({ track: "baku" });
   try {
