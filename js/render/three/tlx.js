@@ -3396,6 +3396,17 @@ const TLX = (function () {
         const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
         const mirror = !!(opts && opts.mirror) && opts.mirror !== _rigMirrorKey && _rigMirrorOn() ? opts.mirror : null;
         if (!todo.length && !mirror) return Promise.resolve(recs.length > 0);
+        // BEHIND A PROGRAM WARM, QUEUE AND RETURN. Race entry requests the program warm just before this, and the rig
+        // job may only start once it is done (present() starts one warm at a time), so awaiting it held race entry for
+        // the whole program warm, and on software GL (a ~17 s warm) the 20 s fallback fired first, dropped the job and
+        // left the rig unwarmed (+20 s per race entry; B·H14, monza-foundation 8.4 -> 26.2 s on CI llvmpipe at #3221).
+        // Queued, the job still runs before any frame paints: present() holds while either warm is pending.
+        if (_warmRequested || _warmPending) {
+          const job = _rigWarm = { recs: todo, mirror, done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; } };
+          // No present ever came (hidden tab, a race abandoned first): drop the queue, or every later warmDraws refuses.
+          job.timer = setTimeout(() => { if (!job.started) job.done(); }, 20000);
+          return Promise.resolve(true);
+        }
         return new Promise((resolve) => {
           const job = _rigWarm = { recs: todo, mirror, done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; resolve(ok); } };
           job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it

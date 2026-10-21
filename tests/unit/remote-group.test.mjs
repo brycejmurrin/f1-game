@@ -2,14 +2,16 @@
 // browser group on GitHub's runners, sharded, instead of 30-45 min of local
 // SwiftShader. Pure parts only — no network, no dispatch.
 // Run: node --test tests/unit/remote-group.test.mjs   (npm run test:tooling-fast)
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import { browserGroups, planMatrix, parseWorkers, resolveWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE,
-  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE } from "../../tools/ci/remote-group.mjs";
+  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin } from "../../tools/ci/remote-group.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -238,4 +240,26 @@ test("groupVerdict: a red shard is a red even when the run is still going; cance
   assert.equal(groupVerdict({ status: "completed", conclusion: "failure" }, [job("Plan shards", "completed", "failure")]).code, 1, "a refused plan is a red");
   assert.equal(groupVerdict({ status: "completed", conclusion: "cancelled" }, [plan]).code, 2);
   assert.equal(groupVerdict({ status: "completed", conclusion: "success" }, [plan, job("ui (1/4)", "completed", "success")]).code, 0);
+});
+
+test("--ref still refreshes origin/<branch>: the sha, the green lookup and the workflow check read it", () => {
+  // A stale local origin/<branch> names a tip that has newer, untested commits; with --ref the fetch used to be skipped.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rg-fetch-"));
+  const g = (cwd, ...a) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd, encoding: "utf8" });
+  try {
+    const bare = path.join(tmp, "o.git"), a = path.join(tmp, "a"), b = path.join(tmp, "b");
+    g(tmp, "init", "-q", "--bare", "-b", "main", bare);
+    g(tmp, "clone", "-q", bare, a);
+    g(a, "commit", "-q", "--allow-empty", "-m", "one"); g(a, "push", "-q", "origin", "HEAD:refs/heads/feat");
+    g(tmp, "clone", "-q", bare, b);
+    const old = g(b, "rev-parse", "origin/feat").stdout.trim();
+    g(a, "commit", "-q", "--allow-empty", "-m", "two"); g(a, "push", "-q", "origin", "HEAD:refs/heads/feat");
+    const tip = g(a, "rev-parse", "HEAD").stdout.trim();
+    assert.notEqual(old, tip);
+    fetchOrigin("feat", spawnSync, b);
+    assert.equal(g(b, "rev-parse", "origin/feat").stdout.trim(), tip);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/remote-group.mjs"), "utf8");
+  const call = src.indexOf("fetchOrigin(branch);"), refGate = src.indexOf('if (!argv.includes("--ref")) {', call);
+  assert.ok(call > 0 && refGate > call, "main fetches before it branches on --ref");
 });

@@ -620,7 +620,8 @@ test("expanded nose roots meet the chassis nose root without moving their tip or
     }
   }
   const wasp = Car3D.bodyAnchors(tiers, "wasp").noseAt(2.2016);
-  assert.ok(Math.abs(wasp.side - 0.11115) < 1e-10 && Math.abs(wasp.top - 0.38155625) < 1e-10,
+  // B·H13 (2026-10-20) widened the nose in plan (side 0.11115 -> 0.15858) and kept its height.
+  assert.ok(Math.abs(wasp.side - 0.15858) < 1e-6 && Math.abs(wasp.top - 0.38185) < 1e-6,
     "Wasp keeps its shaped mid-nose when cover lift is zero");
 });
 

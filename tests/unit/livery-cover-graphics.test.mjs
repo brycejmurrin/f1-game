@@ -218,7 +218,7 @@ test("inspection probes do not mutate the draft, survive scratch canvas reuse, a
     },
   };
   const doc = { createElement: () => { const cv = {width:0,height:0}; cv.getContext = () => ({
-    getImageData: () => ({data:new Uint8ClampedArray(cv.width*cv.height*4)}), putImageData(image) { cv.pixels=Uint8ClampedArray.from(image.data); },
+    getImageData: () => ({data:new Uint8ClampedArray(cv.width*cv.height*4)}), createImageData: (w, h) => ({data:new Uint8ClampedArray(w*h*4)}), putImageData(image) { cv.pixels=Uint8ClampedArray.from(image.data); },
   }); return cv; } };
   const outline = vm.runInNewContext(fs.readFileSync(path.join(ROOT,"js/car/surface-outline.js"),"utf8")+";GarageSurfaceOutline",{LiveryTex:atlas,document:doc}, { filename: absSrc("js/car/surface-outline.js") });
   const api = outline.create({ createTexture(cv) { const tex={pixels:cv.pixels};textures.push(tex);return tex; },freeTexture:(t)=>freed.push(t),drawDecal:(...args)=>draws.push(args) });

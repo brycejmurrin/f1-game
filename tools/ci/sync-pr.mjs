@@ -75,10 +75,15 @@ function must(r, what) {
   if (r.code !== 0) throw new Error(`${what} failed: ${r.err || r.out}`);
   return r.out;
 }
-/** One stage, killed at its timeout. Returns the exit code (124 on timeout). */
-function runStage(st) {
+/**
+ * One stage, stopped at its timeout. Returns the exit code (124 on timeout).
+ * SIGTERM, not SIGKILL: tooling-fast leads every test file in its own process group and reaps
+ * them only on SIGINT/SIGTERM, so a SIGKILL on the stage orphans each `node --test` in flight
+ * and the `--resume` that follows overlaps with them.
+ */
+export function runStage(st, cwd = ROOT) {
   log(`${st.name}: ${st.cmd} ${st.args.join(" ")} (timeout ${Math.round(st.timeoutMs / 60000)} min)`);
-  const r = spawnSync(st.cmd, st.args, { cwd: ROOT, stdio: "inherit", timeout: st.timeoutMs, killSignal: "SIGKILL" });
+  const r = spawnSync(st.cmd, st.args, { cwd, stdio: "inherit", timeout: st.timeoutMs, killSignal: "SIGTERM" });
   if (r.error?.code === "ETIMEDOUT" || (r.status === null && r.signal)) return 124;
   return r.status ?? 1;
 }

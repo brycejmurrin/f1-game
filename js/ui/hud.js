@@ -448,6 +448,23 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitTrace = "", _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+// THE 3 s BACKSTOP RE-FITS ONLY WHAT RESIZED, seen by a ResizeObserver (no layout read); why and the settle window: docs/notes/LIVE-INPUT-H11-2026-10-20.md.
+const FIT_SETTLE_MS = 400, FIT_SKIP_MAX = 9, _fitSeen = new WeakSet(), _fitSize = new WeakMap();
+let _fitObs = null, _fitObsDirty = true, _fitAt = 0, _fitSkips = 0;
+const _fitNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+function fitWatch() {
+  if (typeof ResizeObserver !== "function" || !document.querySelectorAll) return;
+  if (!_fitObs) _fitObs = new ResizeObserver((entries) => {
+    const settling = _fitNow() - _fitAt < FIT_SETTLE_MS;
+    for (const e of entries) {
+      const b = e.borderBoxSize && e.borderBoxSize[0], s = b ? b.inlineSize + "x" + b.blockSize : e.contentRect.width + "x" + e.contentRect.height;
+      if (!settling && _fitSize.has(e.target) && _fitSize.get(e.target) !== s) _fitObsDirty = true;
+      _fitSize.set(e.target, s);
+    }
+  });
+  for (const el of document.querySelectorAll("#hud > *, #hud-dock > *, .dock > *, [data-hl]")) if (!_fitSeen.has(el)) { _fitSeen.add(el); _fitObs.observe(el); }
+}
+function fitBoxesSettled() { return !!_fitObs && !_fitObsDirty && ++_fitSkips <= FIT_SKIP_MAX; }
 let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-stamp until the next fitHud
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
@@ -1078,7 +1095,9 @@ function fitHud() {
   for (const d of [_dockL, _dockR]) if (d) for (const b of d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")) dockSig += b.hidden ? "0" : "1";
   const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "." + dockSig + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
-  if (head + hlKey() + tail === _fitKey && --_fitWait > 0) {
+  const sameKey = head + hlKey() + tail === _fitKey;
+  if (sameKey && _fitWait === 1 && fitBoxesSettled()) _fitWait = 31;   // backstop due, nothing resized: wait another 3 s
+  if (sameKey && --_fitWait > 0) {
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
     // still crawls BOOST left under load (CI oversize APEX_WORKERS=2:
     // #hud-sectors+btn-boost after the wait already saw clearance).
@@ -1116,6 +1135,7 @@ function fitHud() {
   if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30; _stampKey = "";   // a full fit ran: the next stamp tick probes
   _fitPending = false;
+  fitWatch(); _fitObsDirty = false; _fitAt = _fitNow(); _fitSkips = 0;
   // CAPS AT A CANONICAL ZOOM, LENGTHS AT THE PAINTED ONE (#2882, #2941). Font metrics
   // quantize with zoom, so caps read at the zoom on screen were path-dependent (844x390:
   // 0.95 from HUD 100, 0.94 from 200). The cap pass reads both bands at zoom 1: one cap

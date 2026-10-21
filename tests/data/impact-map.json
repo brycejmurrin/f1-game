@@ -2701,6 +2701,7 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "resolveLivery": [
+        "tests/unit/livery-design.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "saveLiveryId": [
@@ -6697,6 +6698,7 @@
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
+        "tests/unit/live-frame-census.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/merge-gate.test.mjs",
@@ -7464,6 +7466,7 @@
         "tests/unit/input-bindings.test.mjs"
       ],
       "*": [
+        "tests/unit/a11y-opts.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
@@ -9141,6 +9144,14 @@
       "*": [
         "tests/specs/image-grade-visual.spec.js",
         "tests/unit/global-registry.test.mjs"
+      ]
+    },
+    "js/perf/gpu-test-run.js": {
+      "fillSlope": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
+      "phaseStats": [
+        "tests/unit/gpu-test-run.test.mjs"
       ]
     },
     "js/perf/loop-health.js": {
