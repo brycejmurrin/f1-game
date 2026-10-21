@@ -2309,6 +2309,9 @@
       "menuStepYield": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "mirrorWarmPolicy": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "planPhotoAtlases": [
         "tests/unit/livery-tier.test.mjs"
       ],

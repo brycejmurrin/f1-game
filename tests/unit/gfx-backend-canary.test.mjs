@@ -4387,7 +4387,7 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
-  assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c\);/, "same mesh cache keys the draw uses — the CAR, so the warm-up fills the per-driver key the draw asks for");
+  assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c, true\);/, "same mesh cache keys the draw uses — the CAR, plus the covered-warm hint");
   assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
   // …and each FULL key (prefix + seat [+ ":P"]) is memoised on that entry, so a hit concatenates nothing.
@@ -5865,10 +5865,11 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
 test("selector car assets yield for costly work, skip cached waits, and cancel stale settings", async () => {
   for (const cancel of ["none", "screen", "store", "team", "driver", "compile", "model", "solo", "headless"]) {
     let carModelBuf = null;
+    let _mirrorOptIn = null, _mirrorWarmAllowed = false;
     let active = true, compiling = false, solo = false, yields = 0;
     // js/car/car-draw.js reads race state through the G façade; the seam's four
     // game.js helpers arrive through deps.
-    const G = { headlessMode: false, teamIdx: 0, driverIdx: 1, camMode: 0, store: { rev: 1 },
+    const G = { headlessMode: false, teamIdx: 0, driverIdx: 1, camMode: 0, store: { rev: 1, get: (_key, fallback) => fallback },
                 cars: [{ live: true }], gfx: { warming: () => compiling } };
     const cars = G.cars, player = cars[0];
     const Teams = { LIST: [
@@ -5902,6 +5903,7 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     G.getTeamParts = () => ({ aero: "hi" });
     // makeCars' and the prep's ONE stamp helper, the real one (it reads Career / Parts above).
     const carVisual = eval("(" + fnSource(read("js/car/car-draw.js"), "function carVisual(") + ")");
+    const mirrorWarmPolicy = eval("(" + fnSource(read("js/car/car-draw.js"), "function mirrorWarmPolicy(") + ")");
     const setTimeout = fn => {
       yields++;
       if (yields === 2) {
@@ -5920,6 +5922,7 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     const menuStepYield = eval("(" + fnSource(read("js/car/car-draw.js"), "function menuStepYield(") + ")");
     const prepare = eval("(async function(current){" + fnBody(read("js/car/car-draw.js"), "prepareMenuCarAssets") + "})");
     await prepare(current);
+    assert.equal(_mirrorWarmAllowed, false, "default settings keep experimental mirror warming off");
     assert.deepEqual(calls.slice(0, 3), [["player", 99, "parts:a"], ["cockpit", 99, "parts:a"], ["atlas", 99, true]]);
     assert.equal(calls.length, cancel === "none" ? 7 : 3, cancel);
     assert.equal(yields, cancel === "none" ? 3 : 2, "one driver per yielded task");
