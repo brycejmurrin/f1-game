@@ -1296,12 +1296,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // the whole visible mirror, so the literal made the knob's onboard case dead.
   let roadMask = smoothstep(0.25, 0.55, upDot)
                * roadPx
-               * smoothstep(ssrNear, ssrNear * 2.8, P.z)
-               * (1.0 - smoothstep(roadFadeStart, roadFadeEnd, P.z));
+               * (1.0 - smoothstep(ssrNear * 2.8, ssrNear, P.z))
+               * smoothstep(roadFadeEnd, roadFadeStart, P.z);
   // Car bodywork: up-facing-ish panels, nearer than the road (chase sits ~5–8 m back).
   var carMask = carPx * smoothstep(0.30, 0.65, upDot)
-              * smoothstep(-1.0, -3.0, P.z)
-              * (1.0 - smoothstep(-22.0, -55.0, P.z));
+              * (1.0 - smoothstep(-3.0, -1.0, P.z))
+              * smoothstep(-55.0, -22.0, P.z);
   let edgeGrad = (length(dpx) + length(dpy)) * (1.0 / 3.0);
   carMask = carMask * (1.0 - smoothstep(0.35, 0.9, edgeGrad));
   let roadTerm = roadMask * strength;
@@ -1342,7 +1342,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     if (i >= marchSteps) { break; }
     prevPos = pos;
     pos = pos + R * stepLen;
-    if (roadLow) { stepLen = stepLen * 1.4; }
+    if (roadLow) { stepLen = stepLen * 1.5; }
     else if (roadReduced) { stepLen = stepLen * 1.22; }
     else { stepLen = stepLen * 1.16; }
     let sp = ssrProjUV(pos);
