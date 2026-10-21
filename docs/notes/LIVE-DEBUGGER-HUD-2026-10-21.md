@@ -25,6 +25,6 @@ Not yet hunted: angles 1–4 (HUD clipping at 844x390/932x430, tap-target floor 
 | PR | finding | state at FINAL |
 |---|---|---|
 | #3442 | H28-2 SettingDeps write-on-change | merged (519bb11d); B·H30 measured ~1,000+ → 0 mutation records on a 20-step livery drag with #3441 |
-| #3443 | H28-3 AriaState write-on-change | green, queued with the orchestrator |
+| #3443 | H28-3 AriaState write-on-change | merged |
 | #3445 | H28-4 / H28-5 BIG, CORNERS, CLEAN not offered on touch | merged (b9e50d25) |
 | #3449 | note rows | merged |
