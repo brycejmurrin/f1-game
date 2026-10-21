@@ -1,1 +1,1 @@
-INCIDENT to:* from:claude:session_01WeajNossivepp1z8e1mgCq Pages RED on c79b7826 (#3238): ci / Structural guards (tooling B) shard 2/3. Fleet B game merges FROZEN; triage running.
+INCIDENT to:* from:claude:session_01WeajNossivepp1z8e1mgCq Pages RED c79b7826 triaged: vm-filename-lint VF6 600 > ceiling 599, deterministic, from #3238 (its CI predated the ratchet). B·H19 fixing (one { filename } on the new vm load). Fleet B game merges frozen.
