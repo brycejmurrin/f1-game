@@ -27,12 +27,14 @@ const TUNE_DEFS = LightTune.TUNE_DEFS || [];
 
 const CLEAR_FOG_SCALE = 0.45;
 // FOG-weather EFFECTIVE density band (frame.fogDensity x LT.fogDensityMul, what the shaders
-// and the chunk cull use) at the default FOG BOOST: the floor is 80 % at 300 m / 99 % at
-// 500 m; the ceiling keeps ~40 % visibility at 150 m. Both scale with the boost knob.
-// #2256: every shipped <track>|<tod>|fog row pins fogDensityMul ~2, so a pre-multiplier
-// floor x3 boost ran 0.011-0.026 effective — the frame went white within ~150 m.
-const FOG_WX_MIN_DENSITY = 0.0042;
-const FOG_WX_MAX_DENSITY = 0.0065;
+// and the chunk cull use) at the default FOG BOOST: the floor hazes 30 % at 100 m, 55 % at
+// 150 m and 96 % at 300 m; the ceiling keeps ~36 % visibility at 150 m. Both scale with the
+// boost knob. #2256: every shipped <track>|<tod>|fog row pins fogDensityMul ~2, so a
+// pre-multiplier floor x3 boost ran 0.011-0.026 effective — the frame went white within
+// ~150 m. The old 0.0042 floor (16 % at 100 m) read as overcast on Bryce's 2026-10-21
+// matrices: day fog and day overcast were the same picture.
+const FOG_WX_MIN_DENSITY = 0.006;
+const FOG_WX_MAX_DENSITY = 0.0067;
 const FOG_WX_DEF_BOOST = 1.5;
 
 // ── Blended weather ──────────────────────────────────────────────────────────

@@ -486,6 +486,8 @@ test("FOG weather effective density stays in the readable band on shipped preset
       seen.push(`${id}|${tod} ${eff.toFixed(5)}`);
       assert.ok(at(500) > 0.97, `${id}|${tod}|fog not opaque by 500 m (eff ${eff})`);
       assert.ok(at(150) < 0.65, `${id}|${tod}|fog is a white wall by 150 m (eff ${eff})`);
+      // Bryce 2026-10-21: a 0.0042 floor (16 % at 100 m) read as plain overcast.
+      assert.ok(at(150) > 0.5, `${id}|${tod}|fog does not read as fog by 150 m (eff ${eff})`);
     }
   }
   assert.equal(seen.length, 16);
