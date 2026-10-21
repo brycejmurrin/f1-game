@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "66f7b125b255f94d5c1957364d96e6de8c9bbbb397127d8c41d1e8ea17335130",
+  "sourceDigest": "53ef83ba598963cb6b3121de78169e20949ce97035c0cd258638ab5cedc270da",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -729,15 +729,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.737258,
       "target": [
-        -162.63,
-        103.07,
-        525.11
+        -161.72,
+        -25.12,
+        525.1
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/donington.js sAir",
       "projectedFrac": 0.61747,
-      "nearestRoadDistanceM": 340.5,
-      "viewDistanceM": 486.6,
+      "nearestRoadDistanceM": 339.9,
+      "viewDistanceM": 487,
       "source": "tests/data/landmarks/donington.json; js/circuits/scenery/donington.js"
     },
     {
