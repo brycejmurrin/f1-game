@@ -405,6 +405,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/spine-station.mjs** | Measures + rasterises where every spine design lands on the cover flank, and the crown's own mark — offline, no browser. | garage-parts-livery |
 | **car/trace-car.mjs** | Trace the ISOLATED car into SVG: carview beauty + empty-stage plate -> exact matte -> contours + interior edges. | garage-parts-livery |
 | **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
+| **car/tri-census.mjs** | Car mesh census: tris/verts per body style × aero × draw tier (player, field, caster, far); --root = another checkout. | garage-parts-livery |
 
 ### `tools/ui/`
 

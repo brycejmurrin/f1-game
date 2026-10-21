@@ -217,6 +217,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-fx.test.mjs",
   "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
+  // Car mesh budget (B·H13): per-body tris/verts for the drawn tiers, and the vertex weld is lossless. ~5 s.
+  "tests/unit/car-mesh-budget.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
