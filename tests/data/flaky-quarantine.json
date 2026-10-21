@@ -36,6 +36,16 @@
       "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39415873380",
       "expires": "2026-10-27",
       "review": "By 2026-10-27, name the texture from the diag run's creation stack, fix its cause, and remove this row once the exact test passes without retry on three cold llvmpipe car runs. No automatic extension; a new deadline needs fresh failed-run evidence. Every other assertion in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/image-grade-visual.spec.js",
+      "since": "2026-10-21",
+      "owner": "brycejmurrin",
+      "why": "Passed on retry on the macOS Metal real-GPU job: attempt 1 saw Expected > 1, Received 0.7457 signed delta (baseline p05 53.86 / p95 142.34); the same job passed first try on 7bcaca5c. Cause not yet established; #3396 (TLX road split) landed between and is the unproven suspect. Only this test is exempt; the other image-grade assertions stay blocking.",
+      "title": "rendered image grade \u203a blacks visibly change the deepest image detail",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39572745503/job/119136972411",
+      "expires": "2026-11-04",
+      "review": "By 2026-11-04, A/B apex26.tlxRoadSplit=0 vs 1 on gpu-census macOS to see whether #3396's road split changes the image-grade frame; fix the cause and remove this row once the exact test passes without retry on three macOS real-GPU runs. No automatic extension; a new deadline needs fresh failed-run evidence."
     }
   ]
 }

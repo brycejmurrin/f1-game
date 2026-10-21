@@ -96,6 +96,16 @@
       "presentation": "shared-levels",
       "preserve": "Generated fitted-zone/source output when requested, original photo provenance and exact mappings."
     },
+    "tools/car/lib/carview-capture.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/car/lib/customization-plan.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/car/lib/fit-checks.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

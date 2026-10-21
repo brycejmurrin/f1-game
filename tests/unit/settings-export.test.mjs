@@ -1574,6 +1574,24 @@ const REGIONAL_FINISH_FIELDS = [
 ];
 const finishImportModel = loadParts();
 
+test("garage import preserves every cosmetic part style and rejects mismatched or performance ids", () => {
+  const M = finishImportModel;
+  const b = boot({ teams: true, globals: { Car3D: M.Car3D, Parts: M.Parts } });
+  for (const [field, category] of Object.entries(M.Car3D.PART_STYLE_FIELDS)) {
+    const styles = M.Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === "STYLE");
+    const values = ["fitted", ...styles.map(o => o.id)];
+    const rows = values.map((value, i) => sound("style_" + category + "_" + i, { [field]: value }));
+    const kept = garageLiveries(b, rows);
+    assert.equal(kept.length, rows.length);
+    for (let i = 0; i < values.length; i++) assert.equal(kept[i][field], values[i], field + " keeps " + values[i]);
+    const other = M.Parts.CATALOG.find(c => c.id !== category).options.find(o => o.tag === "STYLE").id;
+    for (const invalid of ["missing", "constructor", M.Parts.DEFAULTS[category], other]) {
+      const bad = garageLiveries(b, [sound("invalid_style", { [field]: invalid })]);
+      assert.equal(Object.hasOwn(bad[0], field), false, field + " drops " + invalid);
+    }
+  }
+});
+
 test("garage import validates all regional finishes against the real current registry", () => {
   const b = boot({ teams: true, globals: { Car3D: finishImportModel.Car3D } });
   const values = ["inherit", "gloss", ...Object.keys(finishImportModel.Car3D.FINISH_SURFACE)];

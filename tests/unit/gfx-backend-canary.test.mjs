@@ -885,6 +885,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBootBound",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
+    // The road-split A/B arm: __tlx.roadSplit(false) writes "0" (tlx.js); RESET restores the split.
+    "apex26.tlxRoadSplit",
     "apex26.wgxCapture",
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
@@ -6364,7 +6366,8 @@ test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX
   lib.pushRec("G2", null, "FXMAT", undefined, undefined, 0, null, null);
   assert.equal(drawList[0], slot, "the slot is reused");
   assert.equal(slot.em, undefined); assert.equal(slot.al, undefined); assert.equal(slot.lg, 0);
-  assert.deepEqual(Object.keys(slot), ["geo", "m", "mat", "em", "al", "lg", "chunked", "instanced"], "one fixed shape");
+  assert.deepEqual(Object.keys(slot), ["geo", "m", "mat", "em", "al", "lg", "chunked", "instanced", "split"], "one fixed shape");
+  assert.equal(slot.split, null, "a model-matrix-free record without a split road carries no split");
 });
 
 test("GLX racing-line chevrons keep vAlong at highp, and a restored context obeys the reload budget", () => {
