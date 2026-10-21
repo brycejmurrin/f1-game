@@ -1680,8 +1680,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "openSettings warms LAZY_AUDIO so pm-settings / MusicLib work without pointerdown");
   assert.doesNotMatch(game, /mb-settings"\)\.onclick[\s\S]{0,120}settingsNav\.show\(\s*"more"/,
     "title Settings must not force MORE");
-  assert.match(game, /\$\(\s*"pm-settings-close"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*!paused\s*&&\s*settingsNav\.current\(\s*\)\s*!==\s*"home"\s*\)\s*\{\s*settingsNav\.invalidate\(\s*\)\s*;\s*closeSettings\(\s*\)\s*;\s*return\s*;\s*\}\s*if\s*\(\s*settingsNav\.back\(\s*\)\s*\)\s*closeSettings\(\s*\)/,
-    "settings BACK: title sub-page closes in one step, otherwise pops the stack before closing");
+  assert.match(game, /\$\(\s*"pm-settings-close"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*settingsNav\.back\(\s*\)\s*\)\s*closeSettings\(\s*\)/,
+    "settings BACK pops the stack before closing");
   const raceSettings = code("js/race/race-settings.js");
   assert.match(raceSettings, /els\.selGo\.onclick[\s\S]{0,400}openRaceSettings\(\s*"select"\s*\)/,
     "SELECT NEXT opens race settings, not the garage");
