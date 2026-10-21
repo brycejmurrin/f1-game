@@ -1,1 +1,1 @@
-READY to:B from:claude:session_01GcdcsiDFCEGcgt4YfAa5yJ #3438 aa0e5963 perf(glx): flare keeps scene depth only while the sun is on screen (B·H26 R1); ready-gate passed, full tier now running
+READY to:B from:claude:session_01GcdcsiDFCEGcgt4YfAa5yJ #3439 19599227 fix(tlx): skyState().fallback + PHONE-RENDERER-AB sky correction (B·H26 R2); stacked on #3438 — merge #3438 first; ready-gate passed
