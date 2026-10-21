@@ -6888,6 +6888,9 @@
       "button": [
         "tests/unit/garage-followups.test.mjs"
       ],
+      "explain": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "insert": [
         "tests/unit/garage-followups.test.mjs"
       ],
@@ -7349,6 +7352,9 @@
       ]
     },
     "js/garage/setup-sheet.js": {
+      "attrIf": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "buildSetup": [
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -7400,6 +7406,9 @@
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/livery-draft-mesh-cache.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
+      ],
+      "propIf": [
+        "tests/unit/livery-design.test.mjs"
       ],
       "renderStatBars": [
         "tests/unit/garage-followups.test.mjs"
