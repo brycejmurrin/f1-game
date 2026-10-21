@@ -30,8 +30,8 @@ its MirrorPass overlap request and uses its existing car-draw seam instead.
 | 3 | Decompressing the shipped material PNG strips | All stream chunks were retained until a full output buffer was allocated and filled | Stream into a bounded scanline-prefix buffer, still draining and validating the whole stream. Less simultaneous application-buffer retention; copied bytes unchanged | Parent Assets claim; H26 carve-out | Four real PNGs, 9,175,040 decoded layer bytes identical to baseline and independent sharp; native Chromium chunk accounting below |
 | 4 | Three full mirror passes, then standDown and a different eye | StandDown leaves the consecutive-pass counter odd, so first new full pass freezes the old resident instance pack | Reset cadence on interruption. Actual GLX pack changes from old z=80 to required z=1080 at eye z=1100 | Rendering lane claim; H26 carve-out | Two fail-before regressions; normal alternating reuse and repeated standDown preserved. Same-world restart's first visible frame was already refreshed: no visible restart improvement claim |
 | 5 | WheelState enabled while travelling backwards | Lock/spin classification uses kappa sign without travel direction; mirrored axle cases swap labels. Actual wet-grass reverse case body -4 m/s, rim slows toward zero to -0.487 m/s, yet wheelSpin=1 | New confirmed telemetry classification bug, default feature OFF. H27 owns physics; owner handoff only | Held by H27 physics owner | Actual axleStep and PlayerForces source fixture; rendered FX/handling impact unmeasured |
-| 6 | WGX decal minification | Shared sampler defaults to nearest mip and anisotropy 1, while GLX/TLX use trilinear filtering and higher anisotropy | Held cross-backend quality hypothesis, not a demonstrated visual defect; handoff to #3423/#3387 | Held by WGX #3423/#3387 owners | Actual descriptor/consumer and WebGPU default contracts checked; no rendered comparison |
-| 7 | WGX instance tail becomes visible/hidden | Synthetic 5-to-4 instance change recopies 64 matrix values and uploads 320 bytes despite shared prefix; same cells do no upload | Held operation-count opportunity for #3423; actual camera-workload cost unknown | Held by WGX #3423 owner | Exact packed values and invalidation checks pass; no CPU/FPS or GC saving established |
+| 6 | WGX decal minification | Shared sampler defaults to nearest mip and anisotropy 1, while GLX/TLX use trilinear filtering and higher anisotropy | Cross-backend quality hypothesis, not a demonstrated visual defect; Fleet B/#3387 handoff (#3423 was the initial hold) | Fleet B WGX handoff; #3387 still open | Actual descriptor/consumer and WebGPU default contracts checked; no rendered comparison |
+| 7 | WGX instance tail becomes visible/hidden | Synthetic 5-to-4 instance change recopies 64 matrix values and uploads 320 bytes despite shared prefix; same cells do no upload | Operation-count opportunity handed to Fleet B; #3423 was the initial hold; actual camera-workload cost unknown | Fleet B WGX handoff; recheck claims before edits | Exact packed values and invalidation checks pass; no CPU/FPS or GC saving established |
 
 ## Texture memory evidence and limits
 
@@ -90,6 +90,18 @@ bytes, and disables the debugger before sampling. Diagnostic `diag()` calls
 are outside the retained recording: an earlier recording incorrectly included
 its expensive GPU getParameter calls and was discarded as a render profile.
 No timings from those operator attempts justify any improvement claim.
+Host load was not recorded alongside the retained source-controlled capture;
+the earlier cached capture's load observation is not substituted. This is
+another reason the retained profile is diagnostic, not comparative timing.
+
+Retained evidence paths: `artifacts/hunt-7e31/fresh-profile.json`,
+`fresh-monza-fixed.cpuprofile`, `fresh-monza-render.cpuprofile`,
+`compiled-source-proof.json` and `profiled-candidate.patch` in that directory.
+The executable driver is `scratch/hunt-7e31-fresh-profile.mjs`; the curated
+bundle copies it under `reproduction-scripts/`.
+[The durable patch/evidence comment](https://github.com/brycejmurrin/f1-game/pull/3440#issuecomment-6324623628)
+and [final native source/backing proof](https://github.com/brycejmurrin/f1-game/pull/3440#issuecomment-6324840405)
+preserve the core results; the final PR handoff identifies the full archive.
 
 In the retained render capture, 36.79% of samples are in native getError
 through GLX.present -> drainGlErrors and 62.68% idle. These are sample counts,

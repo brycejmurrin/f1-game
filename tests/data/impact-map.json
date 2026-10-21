@@ -12720,10 +12720,12 @@
       ],
       "state": [
         "tests/unit/assets-pack.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
       "unload": [
-        "tests/unit/assets-pack.test.mjs"
+        "tests/unit/assets-pack.test.mjs",
+        "tests/unit/pack-png-bytes.test.mjs"
       ],
       "*": [
         "tests/unit/baked-model-road-guard.test.mjs",
@@ -12914,6 +12916,9 @@
       "pose": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "prepareRace": [
+        "tests/unit/mirror-pass.test.mjs"
+      ],
       "render": [
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -12924,6 +12929,9 @@
       ],
       "softGpu": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "standDown": [
+        "tests/unit/mirror-pass.test.mjs"
       ],
       "toggle": [
         "tests/unit/field-lod.test.mjs"

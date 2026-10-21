@@ -34,10 +34,10 @@ const manifest = JSON.parse(fs.readFileSync(path.join(PACK, "manifest.json"), "u
 
 // A loader over the real assets.js: fetch serves the shipped pack from disk, createImageBitmap counts calls
 // (it must not be reached on the bytes path), and the backend records what createTextureArray was handed.
-function loader({ ls = {}, decompress = true, files = {} } = {}) {
+function loader({ ls = {}, decompress = true, files = {}, stream = DecompressionStream, byteArray = Uint8Array } = {}) {
   const calls = { bitmaps: 0, uploads: [] };
   const sandbox = {
-    Blob, TextDecoder, DataView, Uint8Array, ArrayBuffer, Promise, setTimeout,
+    Blob, TextDecoder, DataView, Uint8Array: byteArray, ArrayBuffer, Promise, setTimeout,
     localStorage: { getItem: (k) => (k in ls ? ls[k] : null), setItem() {}, removeItem() {} },
     async fetch(url) {
       const name = url.split("/").pop();
@@ -47,7 +47,7 @@ function loader({ ls = {}, decompress = true, files = {} } = {}) {
     },
     async createImageBitmap(_blob, ...crop) { calls.bitmaps++; return { crop, close() {} }; },
   };
-  if (decompress) sandbox.DecompressionStream = DecompressionStream;
+  if (decompress) sandbox.DecompressionStream = stream;
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
@@ -121,7 +121,7 @@ function makePng(size, layers, { filter = (r) => r % 5, extra = [], colorType = 
   // Split the stream over two IDAT chunks, as encoders do for big images.
   const half = z.length >> 1;
   return { png: Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), ...extra.map(([t, d]) => chunk(t, d)),
-    chunk("IDAT", z.subarray(0, half)), chunk("IDAT", z.subarray(half)), chunk("IEND", Buffer.alloc(0))]), img };
+    chunk("IDAT", z.subarray(0, half)), chunk("IDAT", z.subarray(half)), chunk("IEND", Buffer.alloc(0))]), img, raw };
 }
 function syntheticManifest(size) {
   return { materials: { size, albedo: "a.png", layers: [{ mat: 1, scale: 1 }, { mat: 3, scale: 2 }] } };
@@ -141,6 +141,110 @@ test("every PNG filter type (none/sub/up/average/paeth), split IDATs and an anci
       assert.ok(Buffer.from(calls.uploads[0].images[i]).equals(img.subarray(i * page, (i + 1) * page)), `layer ${i}`);
     }
     assert.equal(calls.uploads[0].images[2], undefined);
+  } finally { manifest.materials = saved; }
+});
+
+// Streams may split between any filter/pixel bytes. Deliver offset views too:
+// no chunk-size or fresh-buffer assumption is part of DecompressionStream.
+function scriptedStream(raw, stats, { chunkSize = 31, tailError = false, onRead } = {}) {
+  return class {
+    constructor() {
+      let offset = 0;
+      this.writable = { getWriter: () => ({ write: async () => { stats.writes++; }, close: async () => { stats.closed = true; } }) };
+      this.readable = { getReader: () => ({ read: async () => {
+        stats.reads++;
+        if (onRead) onRead(stats.reads);
+        if (offset === raw.length) {
+          if (tailError) throw Error("late deflate checksum failure");
+          stats.drained = true; return { done: true };
+        }
+        const end = Math.min(raw.length, offset + chunkSize);
+        const backing = Buffer.concat([Buffer.alloc(3), raw.subarray(offset, end), Buffer.alloc(5)]);
+        offset = end;
+        return { done: false, value: backing.subarray(3, -5) };
+      } }) };
+    }
+  };
+}
+
+test("sparse PNG decode bounds its raw destination to needed rows and drains unused stream bytes", async () => {
+  const size = 8, { png, img } = makePng(size, MAT_N), allocations = [];
+  class ByteArray extends Uint8Array { constructor(value, ...args) { super(value, ...args); if (typeof value === "number") allocations.push(value); } }
+  const saved = manifest.materials;
+  manifest.materials = syntheticManifest(size).materials;
+  try {
+    const { A, calls } = loader({ files: { "a.png": png }, byteArray: ByteArray });
+    assert.equal(await A.load(), true);
+    assert.equal(calls.bitmaps, 0);
+    const page = size * size * 4, neededRows = 4 * size;
+    assert.ok(Math.max(...allocations) <= neededRows * (size * 4 + 1), "unused rows cannot require a full inflated image destination");
+    for (const i of [1, 3]) assert.ok(Buffer.from(calls.uploads[0].images[i]).equals(img.subarray(i * page, (i + 1) * page)));
+  } finally { manifest.materials = saved; }
+});
+
+test("fragmented PNG output keeps exact layer bytes and consumes the whole stream after its prefix fills", async () => {
+  const size = 8, { png, img, raw } = makePng(size, MAT_N), saved = manifest.materials;
+  manifest.materials = syntheticManifest(size).materials;
+  try {
+    for (const chunkSize of [1, 3, 31, 65]) {
+      const stats = { writes: 0, reads: 0 }, { A, calls } = loader({ files: { "a.png": png }, stream: scriptedStream(raw, stats, { chunkSize }) });
+      assert.equal(await A.load(), true);
+      assert.equal(calls.bitmaps, 0);
+      for (const i of [1, 3]) assert.ok(Buffer.from(calls.uploads[0].images[i]).equals(img.subarray(i * size * size * 4, (i + 1) * size * size * 4)));
+      assert.equal(stats.reads, Math.ceil(raw.length / chunkSize) + 1, "the decoder drains even unused trailing rows");
+      assert.equal(stats.drained, true); assert.equal(stats.closed, true); assert.equal(stats.writes, 2);
+    }
+  } finally { manifest.materials = saved; }
+});
+
+test("raw destination allocation failure falls back before starting a decompression stream", async () => {
+  const size = 8, { png, raw } = makePng(size, MAT_N), saved = manifest.materials;
+  const needed = 4 * size * (size * 4 + 1), stats = { constructed: 0, writes: 0, reads: 0 };
+  class ByteArray extends Uint8Array {
+    constructor(value, ...args) {
+      if (value === needed) throw new RangeError("injected raw destination allocation failure");
+      super(value, ...args);
+    }
+  }
+  class Stream extends scriptedStream(raw, stats) {
+    constructor() { super(); stats.constructed++; }
+  }
+  manifest.materials = syntheticManifest(size).materials;
+  try {
+    const { A, calls } = loader({ files: { "a.png": png }, stream: Stream, byteArray: ByteArray });
+    assert.equal(await A.load(), true);
+    assert.equal(calls.bitmaps, 2, "recoverable raw allocation failure keeps bitmap fallback");
+    assert.ok(!ArrayBuffer.isView(calls.uploads[0].images[1]));
+    assert.equal(stats.constructed, 0, "no stream can be left backpressured by allocation failure");
+    assert.equal(stats.writes, 0);
+  } finally { manifest.materials = saved; }
+});
+
+test("short or late-failing PNG streams keep the ImageBitmap fallback", async () => {
+  const size = 8, { png, raw } = makePng(size, MAT_N), saved = manifest.materials;
+  manifest.materials = syntheticManifest(size).materials;
+  try {
+    for (const tailError of [false, true]) {
+      const stats = { writes: 0, reads: 0 }, input = tailError ? raw : raw.subarray(0, 4 * size * (size * 4 + 1) - 1);
+      const { A, calls } = loader({ files: { "a.png": png }, stream: scriptedStream(input, stats, { tailError }) });
+      assert.equal(await A.load(), true);
+      assert.equal(calls.bitmaps, 2, "a short prefix or error beyond it cannot publish byte layers");
+      assert.ok(!ArrayBuffer.isView(calls.uploads[0].images[1]));
+    }
+  } finally { manifest.materials = saved; }
+});
+
+test("unload during PNG inflation drains but never uploads or starts bitmap fallback", async () => {
+  const size = 8, { png, raw } = makePng(size, MAT_N), saved = manifest.materials, stats = { writes: 0, reads: 0 };
+  manifest.materials = syntheticManifest(size).materials;
+  try {
+    let A;
+    const loaded = loader({ files: { "a.png": png }, stream: scriptedStream(raw, stats, { onRead: n => { if (n === 1) A.unload(); } }) });
+    A = loaded.A;
+    assert.equal(await A.load(), false);
+    assert.equal(stats.drained, true);
+    assert.equal(loaded.calls.uploads.length, 0); assert.equal(loaded.calls.bitmaps, 0);
+    assert.equal(A.state().uploaded, false);
   } finally { manifest.materials = saved; }
 });
 
