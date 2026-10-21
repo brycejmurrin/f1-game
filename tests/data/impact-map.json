@@ -7464,6 +7464,7 @@
         "tests/unit/input-bindings.test.mjs"
       ],
       "*": [
+        "tests/unit/a11y-opts.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
