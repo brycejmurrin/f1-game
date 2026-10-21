@@ -151,3 +151,4 @@ Game order: #3386, #3377, #3406, #3238, #3230, #3399, #3408, #3402, #3395, #3396
 09:57Z: MERGED #3433 → 34827018 (quarantine). Game merges resume on green Pages 34827018: #3238 → #3392 → #3395 → #3402 → #3431.
 10:01Z: Pages 34827018 GREEN → INCIDENT lifted. #3238 → c79b7826 merged outside the bus (likely Bryce). Next game #3392 (3c64369b) on green Pages c79b7826; then #3395 #3402 #3431.
 OPEN follow-up: image-grade pass-on-retry cause unestablished → gpu-census macOS A/B apex26.tlxRoadSplit=0 vs 1 (#3396 suspect); quarantine row expires 2026-11-04. W14 FINAL.
+10:07Z: INCIDENT 2: Pages RED c79b7826, VF6 vm-filename-lint 600>599 from #3238. H19 owns fix PR. Game frozen.
