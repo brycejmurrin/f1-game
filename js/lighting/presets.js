@@ -123,6 +123,13 @@ window.LightPresets = {
   // road third out-lit a clear day's (106 vs 98) in broad bright pools.
   "*|night|overcast": { "lampLevel": 0.2, "poolEnergy": 0.6, "lampRadiusMul": 0.8 },
   "*|night|fog": { "lampLevel": 0.2, "poolEnergy": 0.6, "lampRadiusMul": 0.8 },
+  // Shared day rain grade (Bryce 2026-10-21: rain/storm "still too washed out").
+  // Per-track rows desaturated rain to 0.80-0.92 with almost no contrast, so a
+  // wet scene read paler than a dry one (Monza saturation 0.27 vs dry 0.41) under
+  // a sky as bright as a clear day's. Wet surfaces deepen colour: one stamp lifts
+  // saturation and contrast and trims exposure (Monza sat 0.27 -> 0.35, sky third
+  // 111 -> 100). Storm resolves the rain presets, so it inherits this grade.
+  "*|day|rain": { "saturation": 1.05, "contrast": 1.12, "exposureMul": 0.92 },
   // Shared dusk|dry authenticity: fleet COPY-ALL stamped lampLevel 0.24 /
   // floodEmitMul 0.5 with default floodEmit 1.0 on unpinned tracks, sunElev -8
   // burying the sun (Spa #1136 class). One stamp lifts twilight ambient/key fill,
@@ -347,8 +354,7 @@ window.LightPresets = {
     "rainCount": 520,
     "lightning": 1.35,
     "tint": -0.1,
-    "fogTint": 0.12,
-    "saturation": 0.9
+    "fogTint": 0.12
   },
     "abudhabi|day|wet": {},
   "abudhabi|dusk|dry": {"sunElev":-5,"sunTemp":-0.6,"grMul":1.5,"cityGlowMul":0.8,"tint":0.1},
@@ -514,7 +520,6 @@ window.LightPresets = {
     "wetDark": 1.18,
     "fogDensityMul": 1.38,
     "mistDensity": 1.42,
-    "saturation": 0.8,
     "tint": -0.22,
     "rainCount": 490,
     "lightning": 1.25
@@ -684,7 +689,6 @@ window.LightPresets = {
     "lightning": 1.4,
     "tint": -0.12,
     "fogTint": 0.1,
-    "saturation": 0.88,
     "cloudCover": 0.35
   },
     "bahrain|day|wet": {},
@@ -861,7 +865,6 @@ window.LightPresets = {
     "rainCount": 500,
     "rainWind": 0.45,
     "tint": -0.3,
-    "saturation": 0.85,
     "cloudCover": 0.25
   },
     "baku|day|wet": {"fogDensityMul":1.08},
@@ -1019,8 +1022,7 @@ window.LightPresets = {
     "fogDensityMul": 1.48,
     "rainCount": 540,
     "lightning": 1.4,
-    "tint": -0.24,
-    "saturation": 0.86
+    "tint": -0.24
   },
     "buenos_aires|day|wet": {"fogDensityMul":1.18},
   "buenos_aires|dusk|dry": {"sunTemp":-0.42,"sunElev":-5,"grMul":1.48,"tint":0.28,"poolEnergy":0.66,"fogTint":0.1},
@@ -1164,7 +1166,6 @@ window.LightPresets = {
     "rainCount": 490,
     "tint": -0.16,
     "keyMul": 0.84,
-    "saturation": 0.88,
     "cloudCover": 0.2
   },
     "catalunya|day|wet": {"fogDensityMul":1.16},
@@ -1315,9 +1316,7 @@ window.LightPresets = {
     "wetDark": 1.18,
     "fogDensityMul": 1.4,
     "rainCount": 450,
-    "tint": -0.25,
-    "saturation": 0.87,
-    "contrast": 1.08
+    "tint": -0.25
   },
     "cota|day|wet": {},
   "cota|dusk|dry": {"sunTemp":-0.45,"sunElev":-5,"grMul":1.4,"tint":0.08,"poolEnergy":0.7},
@@ -1475,7 +1474,6 @@ window.LightPresets = {
     "rainCount": 480,
     "rainWind": 0.32,
     "tint": -0.22,
-    "saturation": 0.86,
     "weatherSunMute": 1.12,
     "cloudCover": 0.22
   },
@@ -1639,7 +1637,6 @@ window.LightPresets = {
     "rainCount": 520,
     "lightning": 1.4,
     "tint": -0.28,
-    "saturation": 0.84,
     "weatherSunMute": 1.15
   },
     "hockenheim|day|wet": {},
@@ -1801,7 +1798,6 @@ window.LightPresets = {
     "lightning": 1.4,
     "tint": -0.08,
     "fogTint": 0.05,
-    "saturation": 0.86,
     "ssrWetMul": 1.25,
     "weatherSunMute": 1.15
   },
@@ -1951,7 +1947,6 @@ window.LightPresets = {
     "fogDensityMul": 1.6,
     "rainCount": 550,
     "tint": -0.3,
-    "saturation": 0.9,
     "keyMul": 0.8,
     "ambientMul": 1.1,
     "cloudCover": 0.4,
@@ -2113,7 +2108,6 @@ window.LightPresets = {
     "rainCount": 580,
     "lightning": 1.65,
     "tint": -0.22,
-    "saturation": 0.88,
     "weatherSunMute": 1.25,
     "cloudCover": 0.35
   },
@@ -2732,7 +2726,6 @@ window.LightPresets = {
     "rainCount": 460,
     "lightning": 1.25,
     "tint": -0.1,
-    "saturation": 0.88,
     "cloudCover": 0.32
   },
     "jeddah|day|wet": {},
@@ -3067,7 +3060,6 @@ window.LightPresets = {
     "fogDensityMul": 1.45,
     "rainCount": 480,
     "tint": -0.18,
-    "saturation": 0.88,
     "cloudCover": 0.2
   },
     "madrid|day|wet": {},
@@ -3233,7 +3225,6 @@ window.LightPresets = {
     "rainCount": 430,
     "lightning": 1.2,
     "tint": -0.2,
-    "saturation": 0.88,
     "keyMul": 0.82
   },
     "magny_cours|day|wet": {},
@@ -3391,7 +3382,6 @@ window.LightPresets = {
     "rainCount": 520,
     "lightning": 1.22,
     "tint": -0.16,
-    "saturation": 0.88,
     "fogTint": -0.12
   },
     "mexico|day|wet": {"fogDensityMul":1.22},
@@ -3550,9 +3540,7 @@ window.LightPresets = {
     "keyMul": 0.7,
     "tint": -0.15,
     "ssrWetMul": 1.3,
-    "wetDark": 1.15,
-    "saturation": 0.9,
-    "exposureMul": 0.92
+    "wetDark": 1.15
   },
     "miami|day|wet": {},
   "miami|dusk|dry": {"sunElev":-6,"sunTemp":-0.28,"grMul":1.25,"tint":0.08,"cityGlowMul":0.55},
@@ -3704,7 +3692,6 @@ window.LightPresets = {
     "rainCount": 520,
     "keyMul": 0.78,
     "tint": -0.18,
-    "saturation": 0.82,
     "ssrWetMul": 1.4,
     "wetDark": 1.2,
     "lightning": 1.25,
@@ -4066,9 +4053,7 @@ window.LightPresets = {
     "keyMul": 0.85,
     "rainCount": 450,
     "lightning": 1.1,
-    "tint": -0.2,
-    "saturation": 0.9,
-    "contrast": 1.05
+    "tint": -0.2
   },
     "monza|day|wet": {},
   "monza|dusk|dry": {"sunElev":-4.5,"sunTemp":-0.28,"grMul":1.35,"tint":0.08,"cloudCover":0.05},
@@ -4226,7 +4211,6 @@ window.LightPresets = {
     "fogDensityMul": 1.28,
     "rainCount": 420,
     "tint": -0.08,
-    "saturation": 0.92,
     "lightning": 1.25,
     "keyMul": 0.86
   },
@@ -4387,7 +4371,6 @@ window.LightPresets = {
     "rainCount": 560,
     "lightning": 1.55,
     "tint": -0.32,
-    "saturation": 0.82,
     "weatherSunMute": 1.18
   },
     "nurburgring|day|wet": {"fogDensityMul":1.22},
@@ -4541,8 +4524,6 @@ window.LightPresets = {
     "fogDensityMul": 1.28,
     "rainCount": 280,
     "tint": -0.22,
-    "saturation": 0.86,
-    "contrast": 1.06,
     "cloudCover": 0.28
   },
     "paul_ricard|day|wet": {"fogDensityMul":0.82},
@@ -4706,7 +4687,6 @@ window.LightPresets = {
     "rainWind": 0.28,
     "tint": -0.12,
     "keyMul": 0.82,
-    "saturation": 0.88,
     "weatherSunMute": 1.08
   },
     "portimao|day|wet": {"fogDensityMul":1.18},
@@ -4881,7 +4861,6 @@ window.LightPresets = {
     "rainCount": 440,
     "fogDensityMul": 1.48,
     "tint": 0.08,
-    "saturation": 0.84,
     "lightning": 1.25,
     "cloudCover": 0.32
   },
@@ -5072,9 +5051,7 @@ window.LightPresets = {
     "lightning": 1.18,
     "tint": -0.14,
     "wetDark": 1.12,
-    "keyMul": 0.92,
-    "saturation": 0.92,
-    "contrast": 1.08
+    "keyMul": 0.92
   },
     "redbull|day|wet": {"ambTemp":0.08},
   "redbull|dusk|dry": {"sunTemp":-0.28,"grMul":1.42,"sunElev":-4.5,"tint":0.08},
@@ -5239,7 +5216,6 @@ window.LightPresets = {
     "wetDark": 1.25,
     "keyMul": 0.7,
     "weatherSunMute": 1.4,
-    "saturation": 0.86,
     "tint": -0.2
   },
     "sepang|day|wet": {"fogDensityMul":1.48,"mistDensity":1.35,"daySkyBlue":0.78},
@@ -5725,7 +5701,6 @@ window.LightPresets = {
     "lightning": 1.25,
     "mistDensity": 1.45,
     "tint": -0.2,
-    "saturation": 0.88,
     "weatherSunMute": 1.2
   },
     "singapore|day|wet": {"fogDensityMul":1.32,"mistDensity":1.28},
@@ -5908,8 +5883,7 @@ window.LightPresets = {
     "rainCount": 520,
     "keyMul": 0.78,
     "weatherSunMute": 1.15,
-    "tint": -0.22,
-    "saturation": 0.88
+    "tint": -0.22
   },
     "sochi|day|wet": {"fogDensityMul":1.28},
   "sochi|dusk|dry": {"sunTemp":-0.38,"sunElev":-5,"grMul":1.55,"tint":0.08,"cityGlowMul":0.55},
@@ -6245,7 +6219,6 @@ window.LightPresets = {
     "fogDensityMul": 1.42,
     "rainCount": 480,
     "lightning": 1.12,
-    "saturation": 0.88,
     "keyMul": 0.88
   },
     "suzuka|day|wet": {},
@@ -6407,7 +6380,6 @@ window.LightPresets = {
     "rainCount": 480,
     "lightning": 1.25,
     "tint": -0.18,
-    "saturation": 0.9,
     "weatherSunMute": 1.15,
     "cloudCover": 0.4
   },
@@ -6577,7 +6549,6 @@ window.LightPresets = {
     "rainCount": 520,
     "lightning": 1.35,
     "tint": -0.28,
-    "saturation": 0.86,
     "weatherSunMute": 1.12
   },
     "watkins_glen|day|wet": {"fogDensityMul":1.18},
@@ -6733,9 +6704,7 @@ window.LightPresets = {
     "mistDensity": 1.5,
     "rainCount": 500,
     "tint": -0.3,
-    "saturation": 0.88,
     "keyMul": 0.82,
-    "exposureMul": 0.97,
     "cloudCover": 0.35
   },
     "zandvoort|day|wet": {"mistDensity":1.3},
@@ -6888,7 +6857,7 @@ window.LightPresets = {
   "jerez|day|dry": {"keyMul":1.35,"sunElev":12,"shadowTintAmt":0.28,"tint":0.18,"sunTemp":-0.18,"ambientMul":0.72,"contrast":1.22,"grMul":0.25,"exposureMul":1.08},
   "jerez|day|fog": {"fogDensityMul":1.85,"mistDensity":1.6,"fogTint":0.4,"keyMul":0.9,"saturation":0.85,"tint":0.1,"shadowStr":0.85,"ambientMul":1.05},
   "jerez|day|overcast": {"keyMul":0.88,"ambientMul":1.2,"cloudCover":0.4,"shadowStr":0.7,"tint":-0.05,"fogTint":0.12,"saturation":0.94,"shadowTintAmt":0.05},
-  "jerez|day|rain": {"keyMul":0.95,"ssrWetMul":1.4,"wetDark":1.2,"fogDensityMul":1.45,"rainCount":480,"lightning":1.4,"tint":-0.12,"fogTint":0.1,"saturation":0.88,"cloudCover":0.35},
+  "jerez|day|rain": {"keyMul":0.95,"ssrWetMul":1.4,"wetDark":1.2,"fogDensityMul":1.45,"rainCount":480,"lightning":1.4,"tint":-0.12,"fogTint":0.1,"cloudCover":0.35},
     "jerez|day|wet": {},
   "jerez|dusk|dry": {"sunElev":-5,"sunTemp":-0.35,"grMul":2,"tint":0.08,"saturation":1.15,"cityGlowMul":0.5},
   "jerez|dusk|fog": {"fogDensityMul":1.9,"mistDensity":1.7,"fogTint":0.35,"keyMul":0.75,"saturation":0.84,"tint":0.08,"lampLevel":0.24,"glowAmp":2.1,"bloomMul":0.9,"cityGlowMul":0.5},
@@ -6922,7 +6891,7 @@ window.LightPresets = {
   "korea|day|dry": {"keyMul":1.12,"sunTemp":-0.18,"tint":0.12,"fogTint":0.12,"fogDensityMul":0.85,"contrast":1.16,"saturation":1.04},
   "korea|day|fog": {"fogDensityMul":2.1,"mistDensity":1.8,"saturation":0.78,"keyMul":0.7,"tint":-0.16,"shadowStr":0.8,"fogTint":-0.12},
   "korea|day|overcast": {"keyMul":0.88,"ambientMul":1.2,"shadowStr":0.75,"cloudCover":0.35,"saturation":0.92,"contrast":1.08,"shadowTintAmt":0.05},
-  "korea|day|rain": {"keyMul":0.82,"ssrWetMul":1.35,"wetDark":1.15,"fogDensityMul":1.45,"rainCount":480,"tint":-0.18,"saturation":0.88,"cloudCover":0.2},
+  "korea|day|rain": {"keyMul":0.82,"ssrWetMul":1.35,"wetDark":1.15,"fogDensityMul":1.45,"rainCount":480,"tint":-0.18,"cloudCover":0.2},
     "korea|day|wet": {},
   "korea|dusk|dry": {"sunTemp":-0.5,"sunElev":-5,"grMul":1.8,"tint":0.08,"mistDensity":0.8},
   "korea|dusk|fog": {"sunTemp":-0.3,"fogDensityMul":1.9,"mistDensity":1.85,"keyMul":0.7,"tint":-0.1,"saturation":0.84,"lampLevel":0.36,"bloomMul":1.08},
@@ -6989,7 +6958,7 @@ window.LightPresets = {
   "anderstorp|day|dry": {"keyMul":1.2,"sunElev":5,"shadowTintAmt":0.16,"daySkyBlue":1.02,"cloudCover":-0.08,"shadowStr":1.05},
   "anderstorp|day|fog": {"fogDensityMul":2.25,"mistDensity":2.35,"mistHeight":0.38,"saturation":0.78,"tint":-0.3,"fogTint":-0.24,"keyMul":0.7,"shadowStr":0.72,"ambientMul":1.16},
   "anderstorp|day|overcast": {"keyMul":0.72,"ambientMul":1.24,"cloudCover":0.38,"shadowStr":0.64,"tint":-0.18,"saturation":0.9,"fogDensityMul":1.28,"contrast":1.06,"weatherSunMute":1.12},
-  "anderstorp|day|rain": {"keyMul":0.76,"ssrWetMul":1.42,"wetDark":1.18,"fogDensityMul":1.58,"rainCount":560,"lightning":1.55,"tint":-0.32,"saturation":0.82,"weatherSunMute":1.18},
+  "anderstorp|day|rain": {"keyMul":0.76,"ssrWetMul":1.42,"wetDark":1.18,"fogDensityMul":1.58,"rainCount":560,"lightning":1.55,"tint":-0.32,"weatherSunMute":1.18},
     "anderstorp|day|wet": {"fogDensityMul":1.22},
   "anderstorp|dusk|dry": {"sunTemp":-0.32,"sunElev":4.6,"grMul":2.376,"tint":0.04,"poolEnergy":0.778,"ambTemp":1.212,"beamCone":1.938,"bleedMul":2.475,"bounceK":0.3,"glareStr":0.286,"godrayAniso":0.947,"godrayBase":0.088,"godrayFloor":0.2,"godrayLowBoost":0.057,"lampFlicker":0.062,"lampRadiusMul":1.832,"lampTemp":-0.161,"sunAzim":96.5,"sunShaftMul":2.23},
   "anderstorp|dusk|fog": {"fogDensityMul":2.05,"mistDensity":2.25,"keyMul":0.68,"tint":-0.2,"saturation":0.8,"lampLevel":0.35,"lampVolHaze":0.95,"fogTint":-0.18,"grMul":1.15},
@@ -7057,7 +7026,7 @@ window.LightPresets = {
   "buddh|day|dry": {"fogDensityMul":1.4,"keyMul":1.18,"sunElev":8,"saturation":1.12,"daySkyBlue":0.7,"skyColorSat":0.76,"mieScatter":1.42,"mistDensity":1.25,"tint":0.05},
   "buddh|day|fog": {"fogDensityMul":2.25,"mistDensity":2.2,"keyMul":0.72,"saturation":0.8,"tint":-0.25,"shadowStr":0.72,"daySkyBlue":0.65,"mieScatter":1.55,"ambientMul":1.1},
   "buddh|day|overcast": {"keyMul":0.78,"ambientMul":1.22,"cloudCover":0.38,"shadowStr":0.7,"fogDensityMul":1.45,"mistDensity":1.4,"tint":-0.14,"saturation":0.92,"weatherSunMute":1.15},
-  "buddh|day|rain": {"rainCount":740,"lightning":1.9,"fogDensityMul":1.9,"mistDensity":1.6,"ssrWetMul":1.48,"wetDark":1.25,"keyMul":0.7,"weatherSunMute":1.4,"saturation":0.86,"tint":-0.2},
+  "buddh|day|rain": {"rainCount":740,"lightning":1.9,"fogDensityMul":1.9,"mistDensity":1.6,"ssrWetMul":1.48,"wetDark":1.25,"keyMul":0.7,"weatherSunMute":1.4,"tint":-0.2},
     "buddh|day|wet": {"fogDensityMul":1.48,"mistDensity":1.35,"daySkyBlue":0.78},
   "buddh|dusk|dry": {"sunTemp":-0.42,"sunElev":-6,"grMul":1.5,"fogDensityMul":1.32,"mistDensity":1.4,"tint":0.22,"poolEnergy":0.62},
   "buddh|dusk|fog": {"sunTemp":-0.3,"fogDensityMul":2.05,"mistDensity":2.15,"keyMul":0.7,"tint":-0.12,"saturation":0.84,"lampLevel":0.34,"lampFogBase":0.58,"bloomMul":1.1},
@@ -7095,7 +7064,7 @@ window.LightPresets = {
   "dijon|day|dry": {"shadowTintAmt":0.1,"tint":-0.08,"saturation":0.96,"cloudCover":0.12,"keyMul":0.93,"contrast":1.09,"ambTemp":0.06,"shadowStr":0.95},
   "dijon|day|fog": {"fogDensityMul":1.85,"mistDensity":2.05,"keyMul":0.74,"saturation":0.84,"tint":-0.24,"shadowStr":0.78,"fogTint":-0.14,"ambientMul":1.14},
   "dijon|day|overcast": {"keyMul":0.8,"ambientMul":1.18,"cloudCover":0.32,"shadowStr":0.72,"tint":-0.14,"saturation":0.94,"contrast":1.08,"weatherSunMute":1.08},
-  "dijon|day|rain": {"ssrWetMul":1.32,"wetDark":1.14,"fogDensityMul":1.28,"rainCount":430,"lightning":1.2,"tint":-0.2,"saturation":0.88,"keyMul":0.82},
+  "dijon|day|rain": {"ssrWetMul":1.32,"wetDark":1.14,"fogDensityMul":1.28,"rainCount":430,"lightning":1.2,"tint":-0.2,"keyMul":0.82},
     "dijon|day|wet": {},
   "dijon|dusk|dry": {"sunTemp":-0.48,"sunElev":-5,"grMul":1.55,"tint":0.16,"poolEnergy":0.62,"ambTemp":-0.12},
   "dijon|dusk|fog": {"sunTemp":-0.32,"fogDensityMul":1.8,"mistDensity":2,"keyMul":0.72,"tint":-0.06,"saturation":0.86,"lampLevel":0.33,"bloomMul":1.1},
@@ -7198,7 +7167,7 @@ window.LightPresets = {
   "mosport|day|dry": {"shadowTintAmt":0.16,"tint":-0.12,"ambTemp":0.1,"contrast":1.14,"daySkyBlue":1.06,"shadowStr":1.05},
   "mosport|day|fog": {"fogDensityMul":2.05,"mistDensity":2.25,"mistHeight":0.36,"fogHeight":0.014,"saturation":0.8,"tint":-0.26,"fogTint":-0.22,"keyMul":0.74,"shadowStr":0.78},
   "mosport|day|overcast": {"keyMul":0.76,"ambientMul":1.22,"cloudCover":0.32,"shadowStr":0.68,"tint":-0.18,"saturation":0.92,"fogDensityMul":1.22,"contrast":1.08},
-  "mosport|day|rain": {"keyMul":0.78,"ssrWetMul":1.38,"wetDark":1.16,"fogDensityMul":1.48,"rainCount":520,"lightning":1.35,"tint":-0.28,"saturation":0.86,"weatherSunMute":1.12},
+  "mosport|day|rain": {"keyMul":0.78,"ssrWetMul":1.38,"wetDark":1.16,"fogDensityMul":1.48,"rainCount":520,"lightning":1.35,"tint":-0.28,"weatherSunMute":1.12},
     "mosport|day|wet": {"fogDensityMul":1.18},
   "mosport|dusk|dry": {"sunTemp":-0.22,"sunElev":-5,"grMul":1.42,"tint":-0.06,"ambTemp":0.1},
   "mosport|dusk|fog": {"fogDensityMul":1.95,"mistDensity":2.15,"keyMul":0.7,"tint":-0.22,"saturation":0.82,"lampLevel":0.33,"lampVolHaze":0.9,"fogTint":-0.2},

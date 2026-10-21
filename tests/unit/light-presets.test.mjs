@@ -282,6 +282,20 @@ test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () 
   assert.deepEqual(pinned, [], "per-track night|dry must defer core authenticity knobs to *|night|dry");
 });
 
+test("day rain resolves the shared wet grade on every track (storm inherits it)", () => {
+  // Bryce 2026-10-21: per-track saturation 0.80-0.92 washed rain out paler than dry.
+  const P = presets(), stamp = P["*|day|rain"], drift = [];
+  assert.deepEqual({ ...stamp }, { saturation: 1.05, contrast: 1.12, exposureMul: 0.92 });
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
+  for (const track of circuits) {
+    const { LT } = resolveLive(track, "day", "rain");
+    for (const [id, want] of Object.entries(stamp)) if (LT[id] !== want) drift.push(`${track}|day|rain.${id}=${LT[id]} want ${want}`);
+  }
+  assert.deepEqual(drift, []);
+});
+
 test("overcast and fog nights resolve the dry night's lamp pools on every track", () => {
   // Weather does not brighten a street lamp: per-track lampLevel 0.28-0.50 made
   // an overcast/foggy night out-light a clear one (Bryce's 2026-10-21 matrices).
